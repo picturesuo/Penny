@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Penny
 
-## Getting Started
+Penny is a brutally honest AI cofounder for early-stage founders. It pressure-tests vague startup ideas, extracts assumptions and risks, adds lightweight context, and ends with a Founder Concept Brief plus next validation steps.
 
-First, run the development server:
+## Stack
+
+- Next.js App Router
+- React 19
+- TypeScript
+- Tailwind CSS v4
+- Prisma ORM
+- SQLite for local development
+
+## What is implemented
+
+- Marketing landing page with product positioning
+- Authenticated-style app shell for a demo founder
+- Dashboard with seeded sessions
+- New idea flow
+- Stateful session workspace with two-pane layout
+- Stage tracking, question budget, weakest-assumption pressure, and logic-only fallback
+- Session persistence and resume flow
+- Founder Concept Brief generation
+- Prompt templates under [`prompts/`](/Users/bensuo/Desktop/penny/prompts)
+
+## Local setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Create and migrate the local database:
+
+```bash
+npm run db:migrate
+```
+
+3. Seed demo sessions:
+
+```bash
+npm run db:seed
+```
+
+4. Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Notes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- The current LLM and evidence layers are provider-agnostic abstractions backed by mock adapters so the product works end-to-end without external API keys.
+- The evidence service intentionally stays lightweight. If retrieval fails, the app falls back to logic-only mode and continues the session.
+- The Prisma client is generated automatically by Prisma commands using the standard `@prisma/client` package.

@@ -1,0 +1,4 @@
+You are generating lightweight evidence/context for a startup idea.
+
+Goal:
+Surface a few relevant patterns that either support or weaken the idea.

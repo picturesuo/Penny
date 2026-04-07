@@ -1,0 +1,17 @@
+Given the user's raw idea and any answers so far, extract the current structure.
+
+Return strict JSON with:
+{
+  "ideaSummary": "",
+  "targetUser": "",
+  "problem": "",
+  "solution": "",
+  "assumptions": [],
+  "risks": [],
+  "unknowns": [],
+  "confidence": {
+    "targetUser": 0,
+    "problem": 0,
+    "solution": 0
+  }
+}

@@ -1,0 +1,45 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Session {
+  id                  String   @id @default(cuid())
+  userId              String
+  title               String
+  rawIdea             String
+  category            String?
+  status              String   @default("active")
+  currentStage        String   @default("intake")
+  questionBudget      Int      @default(5)
+  clarityScore        Int      @default(18)
+  extractedProblem    String?
+  extractedCustomer   String?
+  extractedSolution   String?
+  ideaSummary         String?
+  targetUser          String?
+  problem             String?
+  solution            String?
+  assumptions         String   @default("[]")
+  resolvedAssumptions String   @default("[]")
+  risks               String   @default("[]")
+  unknowns            String   @default("[]")
+  evidenceFor         String   @default("[]")
+  evidenceAgainst     String   @default("[]")
+  marketPatterns      String   @default("[]")
+  questionsAsked      String   @default("[]")
+  answers             String   @default("[]")
+  conversation        String   @default("[]")
+  conceptBrief        String?
+  logicOnlyMode       Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
