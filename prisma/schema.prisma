@@ -43,3 +43,41 @@ model Session {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
+
+model ThoughtMap {
+  id         String      @id @default(cuid())
+  userId     String
+  title      String
+  rawThought String
+  status     String      @default("ready")
+  nodes      ThoughtNode[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([userId, updatedAt])
+}
+
+model ThoughtNode {
+  id              String       @id @default(cuid())
+  mapId           String
+  parentId        String?
+  kind            String
+  nodeStatus      String       @default("active")
+  actionOrigin    String?
+  supersedesNodeId String?
+  content         String
+  note            String?
+  branchOrder     Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  map             ThoughtMap   @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  parent          ThoughtNode? @relation("ThoughtNodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children        ThoughtNode[] @relation("ThoughtNodeChildren")
+  supersedes      ThoughtNode? @relation("ThoughtNodeSupersedes", fields: [supersedesNodeId], references: [id], onDelete: SetNull)
+  supersededBy    ThoughtNode[] @relation("ThoughtNodeSupersedes")
+
+  @@index([mapId, branchOrder])
+  @@index([parentId])
+  @@index([kind])
+  @@index([nodeStatus])
+}
