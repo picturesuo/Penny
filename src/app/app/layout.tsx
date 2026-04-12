@@ -20,7 +20,7 @@ export default function AppLayout({
                 Penny
               </Link>
               <p className="text-sm text-[var(--muted-ink)]">
-                Demo founder shell. Signed in and ready to pressure-test.
+                Visual thinking workspace. Signed in and ready to sharpen the graph.
               </p>
             </div>
           </div>
@@ -31,7 +31,7 @@ export default function AppLayout({
             <Link href="/app/new">
               <Button className="gap-2">
                 <Plus className="size-4" />
-                Start new idea
+                Start thought map
               </Button>
             </Link>
           </div>

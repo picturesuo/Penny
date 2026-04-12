@@ -1,42 +1,63 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
-import { SessionCard } from "@/components/penny/session-card";
+import { ArrowRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { listSessions } from "@/server/penny";
+import { listThoughtMaps } from "@/server/thought-map";
 
 export default async function DashboardPage() {
-  const sessions = await listSessions();
+  const maps = await listThoughtMaps();
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Dashboard</p>
-          <h1 className="mt-2 text-4xl font-semibold text-[var(--ink)]">Pressure-test before you build.</h1>
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Thought Maps</p>
+          <h1 className="mt-2 text-4xl font-semibold text-[var(--ink)]">See weak logic in the graph.</h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-ink)]">
-            Penny remembers prior sessions, keeps the pressure structured, and lets you continue where the logic got interesting.
+            Penny now shows active, weak, and superseded branches directly in the map so you can click any node and improve the structure live.
           </p>
         </div>
         <Link href="/app/new">
           <Button className="gap-2">
             <Plus className="size-4" />
-            Start new idea
+            Start thought map
           </Button>
         </Link>
       </div>
 
-      {sessions.length ? (
+      {maps.length ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {sessions.map((session) => (
-            <SessionCard key={session.id} session={session} />
-          ))}
+          {maps.map((map) => {
+            const active = map.nodes.filter((node) => node.nodeStatus === "active").length;
+            const weak = map.nodes.filter((node) => node.nodeStatus === "weak").length;
+            const superseded = map.nodes.filter((node) => node.nodeStatus === "superseded").length;
+
+            return (
+              <Card key={map.id} className="p-6">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Map</p>
+                <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">{map.title}</h2>
+                <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">{map.rawThought}</p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Badge className="bg-[#d9ead8] text-[#355b32]">Active {active}</Badge>
+                  <Badge className="bg-[#f5d6b3] text-[#8b4d1f]">Weak {weak}</Badge>
+                  <Badge className="bg-black/8 text-[var(--muted-ink)]">Superseded {superseded}</Badge>
+                </div>
+                <Link href={`/app/maps/${map.id}`} className="mt-6 inline-flex">
+                  <Button className="gap-2">
+                    Open map
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </Link>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card className="p-10">
-          <h2 className="text-2xl font-semibold text-[var(--ink)]">No sessions yet</h2>
+          <h2 className="text-2xl font-semibold text-[var(--ink)]">No thought maps yet</h2>
           <p className="mt-3 max-w-xl text-base leading-7 text-[var(--muted-ink)]">
-            Penny takes a rough idea, asks hard questions, extracts assumptions and risks, then leaves you with a sharper validation path.
+            Start with one raw thought. Penny will branch it into claims, stakes, assumptions, counterarguments, and research paths you can improve node by node.
           </p>
         </Card>
       )}

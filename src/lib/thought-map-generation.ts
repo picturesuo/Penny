@@ -541,6 +541,8 @@ function generateInitialNotes(rawThought: string): GeneratedThoughtNote[] {
     content: rawThought,
     note: null,
     branchOrder: 0,
+    scores: null,
+    psychology: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -1226,7 +1228,10 @@ export function generateActionNotes(params: {
           ? diversificationNotes(targetNode)
           : [];
 
-  const candidates = [...qualityCandidates, ...targetedGapCandidates, ...baseCandidates];
+  const candidates =
+    analysis.actionSelection.mode === "replace_weak_branch"
+      ? qualityCandidates
+      : [...qualityCandidates, ...targetedGapCandidates, ...baseCandidates];
 
   const notes = finalizeNotes(candidates, {
     desiredMin: 2,

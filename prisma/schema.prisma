@@ -45,39 +45,85 @@ model Session {
 }
 
 model ThoughtMap {
-  id         String      @id @default(cuid())
-  userId     String
-  title      String
-  rawThought String
-  status     String      @default("ready")
-  nodes      ThoughtNode[]
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  id            String                    @id @default(cuid())
+  userId        String
+  title         String
+  rawThought    String
+  status        String                    @default("ready")
+  nodes         ThoughtNode[]
+  interventions ThoughtMapIntervention[]
+  events        ThoughtMapEvent[]
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
 
   @@index([userId, updatedAt])
 }
 
 model ThoughtNode {
-  id              String       @id @default(cuid())
-  mapId           String
-  parentId        String?
-  kind            String
-  nodeStatus      String       @default("active")
-  actionOrigin    String?
+  id               String                  @id @default(cuid())
+  mapId            String
+  parentId         String?
+  kind             String
+  nodeStatus       String                  @default("active")
+  actionOrigin     String?
   supersedesNodeId String?
-  content         String
-  note            String?
-  branchOrder     Int          @default(0)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  map             ThoughtMap   @relation(fields: [mapId], references: [id], onDelete: Cascade)
-  parent          ThoughtNode? @relation("ThoughtNodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
-  children        ThoughtNode[] @relation("ThoughtNodeChildren")
-  supersedes      ThoughtNode? @relation("ThoughtNodeSupersedes", fields: [supersedesNodeId], references: [id], onDelete: SetNull)
-  supersededBy    ThoughtNode[] @relation("ThoughtNodeSupersedes")
+  content          String
+  note             String?
+  branchOrder      Int                     @default(0)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  map              ThoughtMap              @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  parent           ThoughtNode?            @relation("ThoughtNodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children         ThoughtNode[]           @relation("ThoughtNodeChildren")
+  supersedes       ThoughtNode?            @relation("ThoughtNodeSupersedes", fields: [supersedesNodeId], references: [id], onDelete: SetNull)
+  supersededBy     ThoughtNode[]           @relation("ThoughtNodeSupersedes")
+  interventions    ThoughtMapIntervention[] @relation("ThoughtNodeInterventions")
+  events           ThoughtMapEvent[]       @relation("ThoughtNodeEvents")
 
   @@index([mapId, branchOrder])
   @@index([parentId])
   @@index([kind])
   @@index([nodeStatus])
+}
+
+model ThoughtMapIntervention {
+  id            String      @id @default(cuid())
+  dedupeKey     String      @unique
+  mapId         String
+  targetNodeId  String
+  type          String
+  detector      String
+  triggerReason String
+  prompt        String
+  inputMode     String
+  status        String      @default("open")
+  outcomeDelta  String?
+  shownAt       DateTime    @default(now())
+  completedAt   DateTime?
+  dismissedAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  map           ThoughtMap  @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  targetNode    ThoughtNode @relation("ThoughtNodeInterventions", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  events        ThoughtMapEvent[] @relation("InterventionEvents")
+
+  @@index([mapId, status, updatedAt])
+  @@index([targetNodeId, status])
+}
+
+model ThoughtMapEvent {
+  id             String                 @id @default(cuid())
+  mapId          String
+  nodeId         String?
+  interventionId String?
+  eventType      String
+  payload        String?
+  createdAt      DateTime               @default(now())
+  map            ThoughtMap             @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  node           ThoughtNode?           @relation("ThoughtNodeEvents", fields: [nodeId], references: [id], onDelete: SetNull)
+  intervention   ThoughtMapIntervention? @relation("InterventionEvents", fields: [interventionId], references: [id], onDelete: SetNull)
+
+  @@index([mapId, eventType, createdAt])
+  @@index([interventionId])
+  @@index([nodeId])
 }

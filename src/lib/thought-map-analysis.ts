@@ -52,8 +52,12 @@ export interface GraphGapAnalysis {
   };
 }
 
+function analyzableNodes(map: ThoughtMapModel) {
+  return map.nodes.filter((node) => node.nodeStatus !== "superseded");
+}
+
 function countKinds(map: ThoughtMapModel) {
-  return map.nodes.reduce<Record<ThoughtNodeKind, number>>(
+  return analyzableNodes(map).reduce<Record<ThoughtNodeKind, number>>(
     (acc, node) => {
       acc[node.kind] += 1;
       return acc;
@@ -169,7 +173,7 @@ function scoreTension(node: ThoughtNodeModel) {
 }
 
 function redundancyPenalty(node: ThoughtNodeModel, map: ThoughtMapModel) {
-  const comparable = map.nodes.filter((candidate) => candidate.id !== node.id);
+  const comparable = analyzableNodes(map).filter((candidate) => candidate.id !== node.id);
   let highestOverlap = 0;
 
   for (const candidate of comparable) {
@@ -182,7 +186,7 @@ function redundancyPenalty(node: ThoughtNodeModel, map: ThoughtMapModel) {
   return 100;
 }
 
-function scoreNodeQuality(node: ThoughtNodeModel, map: ThoughtMapModel): NodeQualityScore {
+export function scoreNodeQuality(node: ThoughtNodeModel, map: ThoughtMapModel): NodeQualityScore {
   const dimensions = {
     specificity: scoreSpecificity(node),
     concreteness: scoreConcreteness(node),
@@ -218,12 +222,12 @@ function scoreNodeQuality(node: ThoughtNodeModel, map: ThoughtMapModel): NodeQua
 }
 
 function scoreConcretenessCoverage(map: ThoughtMapModel) {
-  const concrete = map.nodes.filter((node) => hasConcreteSignal(node.content)).length;
+  const concrete = analyzableNodes(map).filter((node) => hasConcreteSignal(node.content)).length;
   return Math.min(100, concrete * 18);
 }
 
 function scoreStakesCoverage(map: ThoughtMapModel) {
-  const stakes = map.nodes.filter((node) => node.kind === "why_it_matters" && hasStakeSignal(node.content))
+  const stakes = analyzableNodes(map).filter((node) => node.kind === "why_it_matters" && hasStakeSignal(node.content))
     .length;
   return Math.min(100, stakes * 35);
 }
@@ -233,7 +237,7 @@ function scoreOpposition(nodeCounts: Record<ThoughtNodeKind, number>) {
 }
 
 function scoreEvidence(nodeCounts: Record<ThoughtNodeKind, number>, map: ThoughtMapModel) {
-  const researchNodes = map.nodes.filter((node) => node.kind === "research");
+  const researchNodes = analyzableNodes(map).filter((node) => node.kind === "research");
   const researchQuality = researchNodes.filter((node) => hasEvidenceSignal(node.content)).length;
   return Math.min(100, Math.max(nodeCounts.research * 10, researchQuality * 25));
 }
@@ -333,8 +337,9 @@ export function analyzeThoughtMap(params: {
   node: ThoughtNodeModel;
   action: NodeAction;
 }): GraphGapAnalysis {
+  const activeNodes = analyzableNodes(params.map);
   const nodeCounts = countKinds(params.map);
-  const nodeQuality = params.map.nodes
+  const nodeQuality = activeNodes
     .filter((node) => node.kind !== "root")
     .map((node) => scoreNodeQuality(node, params.map))
     .sort((a, b) => a.total - b.total);
