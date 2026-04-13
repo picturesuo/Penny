@@ -1,5 +1,6 @@
 import type { Prisma, ThoughtMap, ThoughtMapIntervention, ThoughtNode } from "@prisma/client";
 import { prisma } from "@/db/prisma";
+import { buildFounderBrief, getFounderBriefReadiness } from "@/lib/founder-brief";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
 import {
   createRootNodeContent,
@@ -11,6 +12,7 @@ import { cleanSentence } from "@/lib/penny";
 import type {
   CognitiveIntervention,
   CreateThoughtMapInput,
+  FounderBriefModel,
   GeneratedActionBundle,
   NodeAction,
   ThoughtMapModel,
@@ -38,6 +40,14 @@ function mapNode(record: ThoughtNode): ThoughtNodeModel {
 }
 
 function buildThoughtMapModel(record: ThoughtMap & { nodes: ThoughtNode[] }): ThoughtMapModel {
+  const founderBriefPayload = parseJson<Omit<FounderBriefModel, "generatedAt">>(record.founderBrief);
+  const founderBrief =
+    founderBriefPayload && record.founderBriefGeneratedAt
+      ? {
+          ...founderBriefPayload,
+          generatedAt: record.founderBriefGeneratedAt,
+        }
+      : null;
   const mapped: ThoughtMapModel = {
     id: record.id,
     userId: record.userId,
@@ -45,6 +55,11 @@ function buildThoughtMapModel(record: ThoughtMap & { nodes: ThoughtNode[] }): Th
     rawThought: record.rawThought,
     status: record.status,
     nodes: record.nodes.map(mapNode),
+    founderBrief,
+    founderBriefReadiness: {
+      eligible: false,
+      missingRequirements: ["assumption", "counter_argument", "research"],
+    },
     graphSnapshot: null,
     recommendedNextMove: null,
     interventions: [],
@@ -53,9 +68,15 @@ function buildThoughtMapModel(record: ThoughtMap & { nodes: ThoughtNode[] }): Th
     updatedAt: record.updatedAt,
   };
 
-  return {
+  const judgedMap = {
     ...mapped,
     ...buildThoughtMapJudgment(mapped),
+  };
+
+  return {
+    ...judgedMap,
+    founderBrief,
+    founderBriefReadiness: getFounderBriefReadiness(judgedMap),
   };
 }
 
@@ -67,13 +88,13 @@ function serializeJson(value: Record<string, unknown> | null) {
   return value ? JSON.stringify(value) : null;
 }
 
-function parseJson(value: string | null): Record<string, unknown> | null {
+function parseJson<T>(value: string | null): T | null {
   if (!value) {
     return null;
   }
 
   try {
-    return JSON.parse(value) as Record<string, unknown>;
+    return JSON.parse(value) as T;
   } catch {
     return null;
   }
@@ -556,6 +577,35 @@ export async function applyRecommendedNextMove(mapId: string) {
     nodeId: map.recommendedNextMove.targetNodeId,
     action: map.recommendedNextMove.action,
   });
+}
+
+export async function generateFounderBrief(mapId: string) {
+  const map = await getThoughtMap(mapId);
+
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  if (!map.founderBriefReadiness.eligible) {
+    throw new Error("Founder brief unavailable: map not ready");
+  }
+
+  const founderBrief = buildFounderBrief(map);
+  const { generatedAt, ...storedFounderBrief } = founderBrief;
+  const updatedRecord = await prisma.thoughtMap.update({
+    where: { id: mapId },
+    data: {
+      founderBrief: serializeJson(storedFounderBrief),
+      founderBriefGeneratedAt: generatedAt,
+    },
+    include: {
+      nodes: {
+        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+    },
+  });
+
+  return hydrateThoughtMap(updatedRecord, map);
 }
 
 export async function dismissThoughtMapIntervention(params: { mapId: string; interventionId: string }) {

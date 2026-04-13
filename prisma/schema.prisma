@@ -45,16 +45,18 @@ model Session {
 }
 
 model ThoughtMap {
-  id            String                    @id @default(cuid())
-  userId        String
-  title         String
-  rawThought    String
-  status        String                    @default("ready")
-  nodes         ThoughtNode[]
-  interventions ThoughtMapIntervention[]
-  events        ThoughtMapEvent[]
-  createdAt     DateTime                  @default(now())
-  updatedAt     DateTime                  @updatedAt
+  id                     String                    @id @default(cuid())
+  userId                 String
+  title                  String
+  rawThought             String
+  status                 String                    @default("ready")
+  founderBrief           String?
+  founderBriefGeneratedAt DateTime?
+  nodes                  ThoughtNode[]
+  interventions          ThoughtMapIntervention[]
+  events                 ThoughtMapEvent[]
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
 
   @@index([userId, updatedAt])
 }

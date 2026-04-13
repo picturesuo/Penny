@@ -70,6 +70,23 @@ export type InteractionMode =
   | "rank_choices"
   | "forced_contrast";
 
+export type FounderBriefRequirement = "assumption" | "counter_argument" | "research";
+
+export interface FounderBriefReadiness {
+  eligible: boolean;
+  missingRequirements: FounderBriefRequirement[];
+}
+
+export interface FounderBriefModel {
+  ideaSummary: string;
+  targetUser: string;
+  coreClaim: string;
+  keyAssumptions: string[];
+  strongestCounterarguments: string[];
+  nextValidationSteps: string[];
+  generatedAt: Date;
+}
+
 export interface ThoughtNodeScores {
   strength: number;
   evidence: number;
@@ -229,6 +246,8 @@ export interface ThoughtMapModel {
   rawThought: string;
   status: string;
   nodes: ThoughtNodeModel[];
+  founderBrief: FounderBriefModel | null;
+  founderBriefReadiness: FounderBriefReadiness;
   graphSnapshot: ThoughtMapGraphSnapshot | null;
   recommendedNextMove: ThoughtMapRecommendedMove | null;
   interventions: CognitiveIntervention[];

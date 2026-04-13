@@ -2,11 +2,13 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { AlertCircle, ArrowRightLeft, CircleDot, GitBranchPlus, Link2, Sparkles } from "lucide-react";
+import { FounderBriefCard } from "@/components/penny/founder-brief-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type {
   CognitiveIntervention,
+  FounderBriefModel,
   ThoughtMapGraphSnapshot,
   ThoughtMapModel,
   ThoughtMapRecommendedMove,
@@ -21,13 +23,18 @@ type SerializableThoughtNode = Omit<ThoughtNodeModel, "createdAt" | "updatedAt">
 
 type SerializableThoughtMap = Omit<
   ThoughtMapModel,
-  "nodes" | "createdAt" | "updatedAt" | "interventions" | "recommendedIntervention"
+  "nodes" | "createdAt" | "updatedAt" | "interventions" | "recommendedIntervention" | "founderBrief"
 > & {
   nodes: SerializableThoughtNode[];
+  founderBrief: SerializableFounderBrief | null;
   interventions: SerializableIntervention[];
   recommendedIntervention: SerializableIntervention | null;
   createdAt: Date | string;
   updatedAt: Date | string;
+};
+
+type SerializableFounderBrief = Omit<FounderBriefModel, "generatedAt"> & {
+  generatedAt: Date | string;
 };
 
 type SerializableIntervention = Omit<
@@ -78,6 +85,10 @@ type ActionResponse = {
   };
 };
 
+type FounderBriefResponse = {
+  map: SerializableThoughtMap;
+};
+
 function toDate(value: Date | string) {
   return value instanceof Date ? value : new Date(value);
 }
@@ -101,10 +112,18 @@ function normalizeNode(node: SerializableThoughtNode): ThoughtNodeModel {
   };
 }
 
+function normalizeFounderBrief(brief: SerializableFounderBrief): FounderBriefModel {
+  return {
+    ...brief,
+    generatedAt: toDate(brief.generatedAt),
+  };
+}
+
 function normalizeMap(map: SerializableThoughtMap): ThoughtMapModel {
   return {
     ...map,
     nodes: map.nodes.map(normalizeNode),
+    founderBrief: map.founderBrief ? normalizeFounderBrief(map.founderBrief) : null,
     interventions: map.interventions.map(normalizeIntervention),
     recommendedIntervention: map.recommendedIntervention ? normalizeIntervention(map.recommendedIntervention) : null,
     createdAt: toDate(map.createdAt),
@@ -163,6 +182,8 @@ export function ThoughtMapWorkspace({ initialMap }: { initialMap: SerializableTh
   const [lastAction, setLastAction] = useState<ActionResponse | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [runningRecommendedMove, setRunningRecommendedMove] = useState(false);
+  const [runningFounderBrief, setRunningFounderBrief] = useState(false);
+  const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const nodesByParent = useMemo(() => {
@@ -251,6 +272,41 @@ export function ThoughtMapWorkspace({ initialMap }: { initialMap: SerializableTh
       setLastAction(payload);
       mergeMapUpdate(payload);
       setRunningRecommendedMove(false);
+    });
+  }
+
+  function founderBriefReadinessMessage() {
+    if (map.founderBriefReadiness.eligible) {
+      return "Ready to generate. The map has at least one active assumption, counterargument, and research branch.";
+    }
+
+    const missing = map.founderBriefReadiness.missingRequirements.map((requirement) =>
+      requirement.replaceAll("_", " "),
+    );
+
+    return `Add at least one active ${missing.join(", ")} branch before generating the founder brief.`;
+  }
+
+  function runFounderBrief() {
+    setFounderBriefError(null);
+    setRunningFounderBrief(true);
+
+    startTransition(async () => {
+      const response = await fetch(`/api/maps/${map.id}/founder-brief`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        setFounderBriefError(
+          response.status === 409 ? founderBriefReadinessMessage() : "Penny could not generate the founder brief.",
+        );
+        setRunningFounderBrief(false);
+        return;
+      }
+
+      const payload = (await response.json()) as FounderBriefResponse;
+      setMap(normalizeMap(payload.map));
+      setRunningFounderBrief(false);
     });
   }
 
@@ -429,6 +485,28 @@ export function ThoughtMapWorkspace({ initialMap }: { initialMap: SerializableTh
         </div>
         <div className="mt-6 space-y-4">{renderNode(rootNode)}</div>
       </Card>
+
+      <Card className="p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Founder brief</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Turn the map into a decision artifact.</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-ink)]">{founderBriefReadinessMessage()}</p>
+            {founderBriefError ? <p className="mt-2 text-sm leading-6 text-[#8b4d1f]">{founderBriefError}</p> : null}
+          </div>
+
+          <Button
+            className="gap-2"
+            disabled={!map.founderBriefReadiness.eligible || runningFounderBrief || isPending}
+            onClick={runFounderBrief}
+          >
+            <Sparkles className="size-4" />
+            Generate founder brief
+          </Button>
+        </div>
+      </Card>
+
+      {map.founderBrief ? <FounderBriefCard brief={map.founderBrief} /> : null}
     </div>
   );
 }
