@@ -1,6 +1,6 @@
 # Penny
 
-Penny is a brutally honest AI cofounder for early-stage founders. It pressure-tests vague startup ideas, extracts assumptions and risks, adds lightweight context, and ends with a Founder Concept Brief plus next validation steps.
+Penny is a brutally honest ideation instrument for people who need to understand and resolve ideas. It pressure tests vague ideas by extracting assumptions and risks and adding context to give you true levels of validation compared to performative commendation. 
 
 ## Stack
 
