@@ -249,6 +249,17 @@ export function ThoughtMapWorkspace({
   const statusCounts = countByStatus(map.nodes);
   const nodesById = useMemo(() => new Map(map.nodes.map((node) => [node.id, node])), [map.nodes]);
   const defaultGraphNodeId = preferredGraphNodeId(map);
+  const unresolvedGaps = [
+    ...(map.graphSnapshot?.weakestNodeIds.length
+      ? [`${map.graphSnapshot.weakestNodeIds.length} weak ${map.graphSnapshot.weakestNodeIds.length === 1 ? "branch" : "branches"}`]
+      : []),
+    ...(map.graphSnapshot?.criticalDependencyIds.length
+      ? [
+          `${map.graphSnapshot.criticalDependencyIds.length} critical ${map.graphSnapshot.criticalDependencyIds.length === 1 ? "dependency" : "dependencies"}`,
+        ]
+      : []),
+    ...map.founderBriefReadiness.missingRequirements.map((requirement) => `missing ${requirement.replaceAll("_", " ")}`),
+  ];
   const graphCanvas = useMemo(() => {
     const sortedNodes = [...map.nodes].sort(
       (a, b) => a.branchOrder - b.branchOrder || a.createdAt.getTime() - b.createdAt.getTime(),
@@ -591,7 +602,7 @@ export function ThoughtMapWorkspace({
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Thought Map</p>
           <h1 className="mt-2 max-w-4xl text-4xl font-semibold text-[var(--ink)]">{map.title}</h1>
           <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--muted-ink)]">
-            Click any branch to expand it, challenge it, replace weak logic, or connect it to stronger evidence.
+            One rough wiki entry becomes a live reasoning map here. Keep the source thought visible, tighten weak branches, and use the next move to keep momentum.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -600,6 +611,50 @@ export function ThoughtMapWorkspace({
           <Badge className="bg-black/8 text-[var(--muted-ink)]">Superseded {statusCounts.superseded}</Badge>
         </div>
       </div>
+
+      <Card className="p-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Source entry</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--ink)]">The original wiki note stays in view.</h2>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{map.rawThought}</p>
+            <p className="mt-4 text-sm leading-6 text-[var(--muted-ink)]">
+              Penny turns that entry into claims, assumptions, counterarguments, research paths, and decision support without losing the original thought that started the map.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="rounded-[24px] bg-[var(--panel)] p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Unresolved gaps</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {unresolvedGaps.length ? (
+                  unresolvedGaps.slice(0, 4).map((gap) => (
+                    <Badge key={gap} className="bg-white text-[var(--ink)]">
+                      {gap}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge className="bg-white text-[var(--ink)]">No major gap flags yet</Badge>
+                )}
+              </div>
+              <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                Weak branches, dependency pressure, and missing map coverage stay visible so the note keeps getting sharpened instead of archived.
+              </p>
+            </div>
+
+            <div className="rounded-[24px] bg-[var(--panel)] p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Next action</p>
+              <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+                {map.recommendedNextMove?.headline ?? "Keep building the map until Penny can recommend the next move."}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                {map.recommendedNextMove?.explanation ??
+                  "The next move card below will become the operating loop once the map has enough structure to judge."}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {map.recommendedNextMove ? (
         <Card className="p-6">
