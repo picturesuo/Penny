@@ -13,9 +13,9 @@ export default async function DashboardPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Thought Maps</p>
-          <h1 className="mt-2 text-4xl font-semibold text-[var(--ink)]">See weak logic in the graph.</h1>
+          <h1 className="mt-2 text-4xl font-semibold text-[var(--ink)]">Build a second brain that shows weak logic fast.</h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-ink)]">
-            Penny now shows active, weak, and superseded branches directly in the map so you can click any node and improve the structure live.
+            Each map starts from one rough entry, then turns into claims, assumptions, counterarguments, research paths, and next actions you can sharpen live.
           </p>
         </div>
         <Link href="/app/new">
@@ -57,7 +57,7 @@ export default async function DashboardPage() {
         <Card className="p-10">
           <h2 className="text-2xl font-semibold text-[var(--ink)]">No thought maps yet</h2>
           <p className="mt-3 max-w-xl text-base leading-7 text-[var(--muted-ink)]">
-            Start with one raw thought. Penny will branch it into claims, stakes, assumptions, counterarguments, and research paths you can improve node by node.
+            Start with one rough second-brain entry. Penny will branch it into claims, stakes, assumptions, counterarguments, research paths, and the next node worth improving.
           </p>
         </Card>
       )}

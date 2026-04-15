@@ -14,5 +14,5 @@ export default async function ThoughtMapPage({
     notFound();
   }
 
-  return <ThoughtMapWorkspace initialMap={map} />;
+  return <ThoughtMapWorkspace initialMap={map} initialView="outline" />;
 }

@@ -730,7 +730,7 @@ export function buildThoughtMapJudgment(map: ThoughtMapModel) {
         scoredMap,
       ),
     )
-    .sort((a, b) => interventionPriority(b) - interventionPriority(a) || a.createdAt.getTime() - b.createdAt.getTime());
+    .sort((a, b) => interventionPriority(b) - interventionPriority(a) || b.createdAt.getTime() - a.createdAt.getTime());
 
   return {
     nodes: scoredNodes,
