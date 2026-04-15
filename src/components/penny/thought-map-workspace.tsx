@@ -356,6 +356,51 @@ export function ThoughtMapWorkspace({
     ),
   );
   const activeBiasDetectors = Array.from(new Set(map.interventions.map((intervention) => intervention.detector)));
+  const weakestLearningNode =
+    (map.graphSnapshot?.weakestNodeIds ?? [])
+      .map((nodeId) => nodesById.get(nodeId) ?? null)
+      .find((node): node is ThoughtNodeModel => node != null) ?? null;
+  const missingLearningKinds = map.graphSnapshot?.missingNodeTypes.slice(0, 3) ?? [];
+  const learningPrompts = [
+    ...(weakestLearningNode
+      ? [
+          {
+            label: "Learn next",
+            title: `Understand why this ${kindLabel(weakestLearningNode.kind)} is still weak.`,
+            body: weakestLearningNode.content,
+            helper:
+              weakestLearningNode.note ??
+              "Study what evidence, specificity, or counterweight would make this branch hold up under pressure.",
+          },
+        ]
+      : []),
+    ...(missingLearningKinds.length
+      ? [
+          {
+            label: "Fill the gap",
+            title: `Add missing ${missingLearningKinds.map(kindLabel).join(", ")} coverage.`,
+            body: "The map still lacks enough contrast across the key branch types Penny uses to judge quality.",
+            helper: "Learning here means adding the missing branch type, not just reading more broadly.",
+          },
+        ]
+      : []),
+    ...(map.recommendedNextMove
+      ? [
+          {
+            label: "Validate next",
+            title: map.recommendedNextMove.headline,
+            body: map.recommendedNextMove.targetNodeContent,
+            helper: map.recommendedNextMove.explanation,
+          },
+        ]
+      : []),
+  ];
+  const learningLoopSteps = [
+    "Capture the rough note.",
+    "Stress-test the weak branch.",
+    "Learn what the weakest gap is actually asking for.",
+    "Turn that learning into the next validation move.",
+  ];
   const graphCanvas = useMemo(() => {
     const sortedNodes = [...map.nodes].sort(
       (a, b) => a.branchOrder - b.branchOrder || a.createdAt.getTime() - b.createdAt.getTime(),
@@ -826,6 +871,75 @@ export function ThoughtMapWorkspace({
             )}
             {map.interventions.length ? (
               <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{map.interventions.length} active intervention prompts</Badge>
+            ) : null}
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Learning loop</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Learn from the weakest branch, then turn that into the next move.</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted-ink)]">
+              Penny uses the current map to point at what you should understand next, what branch needs better coverage, and what validation step follows from that learning.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {weakestLearningNode ? (
+              <Badge className="bg-[#fff6ed] text-[#8b4d1f]">learning from weakest {kindLabel(weakestLearningNode.kind)}</Badge>
+            ) : (
+              <Badge className="bg-[var(--panel)] text-[var(--ink)]">Build a little more structure to unlock learning guidance</Badge>
+            )}
+            {missingLearningKinds.map((kind) => (
+              <Badge key={`learn-${kind}`} className="bg-[var(--panel)] text-[var(--ink)]">
+                missing {kindLabel(kind)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <div className="grid gap-4">
+            {learningPrompts.length ? (
+              learningPrompts.map((prompt) => (
+                <div key={prompt.label + prompt.title} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{prompt.label}</p>
+                  <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">{prompt.title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{prompt.body}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{prompt.helper}</p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+                <p className="text-sm leading-6 text-[var(--muted-ink)]">
+                  Keep building the map. Once Penny can see a weak branch or missing branch type, this section will tell you what to learn next and what to validate after that.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-[24px] bg-white p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Loop</p>
+            <div className="mt-4 space-y-3">
+              {learningLoopSteps.map((step, index) => (
+                <div key={step} className="rounded-[20px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Step {index + 1}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{step}</p>
+                </div>
+              ))}
+            </div>
+            {map.founderBrief?.nextValidationSteps.length ? (
+              <>
+                <p className="mt-5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Validation path</p>
+                <div className="mt-3 space-y-2">
+                  {map.founderBrief.nextValidationSteps.slice(0, 2).map((step) => (
+                    <p key={step} className="text-sm leading-6 text-[var(--muted-ink)]">
+                      {step}
+                    </p>
+                  ))}
+                </div>
+              </>
             ) : null}
           </div>
         </div>
