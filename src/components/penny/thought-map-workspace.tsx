@@ -216,6 +216,25 @@ function formatScore(score: number | null | undefined) {
   return `${Math.round(score * 100)}`;
 }
 
+function topNodesBy(
+  nodes: ThoughtNodeModel[],
+  selector: (node: ThoughtNodeModel) => number,
+  predicate?: (node: ThoughtNodeModel) => boolean,
+) {
+  return nodes
+    .filter((node) => node.kind !== "root" && (predicate ? predicate(node) : true))
+    .sort((a, b) => selector(b) - selector(a))
+    .slice(0, 3);
+}
+
+function labelAction(action: ThoughtNodeModel["actionOrigin"]) {
+  return action?.replaceAll("_", " ") ?? "";
+}
+
+function labelBias(bias: string) {
+  return bias.replaceAll("_", " ");
+}
+
 export function ThoughtMapWorkspace({
   initialMap,
   initialView = "outline",
@@ -249,6 +268,7 @@ export function ThoughtMapWorkspace({
   const statusCounts = countByStatus(map.nodes);
   const nodesById = useMemo(() => new Map(map.nodes.map((node) => [node.id, node])), [map.nodes]);
   const defaultGraphNodeId = preferredGraphNodeId(map);
+  const activeNodes = map.nodes.filter((node) => node.nodeStatus !== "superseded");
   const unresolvedGaps = [
     ...(map.graphSnapshot?.weakestNodeIds.length
       ? [`${map.graphSnapshot.weakestNodeIds.length} weak ${map.graphSnapshot.weakestNodeIds.length === 1 ? "branch" : "branches"}`]
@@ -260,6 +280,82 @@ export function ThoughtMapWorkspace({
       : []),
     ...map.founderBriefReadiness.missingRequirements.map((requirement) => `missing ${requirement.replaceAll("_", " ")}`),
   ];
+  const weakEvidenceNodes = topNodesBy(
+    activeNodes,
+    (node) => 1 - (node.scores?.evidence ?? 0),
+    (node) => (node.scores?.evidence ?? 1) < 0.55,
+  );
+  const contradictionNodes = topNodesBy(
+    activeNodes,
+    (node) =>
+      Math.max(
+        1 - (node.psychology?.falsificationCoverageScore ?? 1),
+        node.psychology?.likelyBiases.includes("confirmation_bias") ? 0.95 : 0,
+      ),
+    (node) =>
+      (node.psychology?.falsificationCoverageScore ?? 1) < 0.55 ||
+      node.psychology?.likelyBiases.includes("confirmation_bias") === true,
+  );
+  const riskyDependencyNodes = topNodesBy(
+    activeNodes,
+    (node) => node.scores?.dependencyRisk ?? 0,
+    (node) => (node.scores?.dependencyRisk ?? 0) > 0.55,
+  );
+  const missingComparisonNodes = topNodesBy(
+    activeNodes,
+    (node) =>
+      Math.max(
+        1 - (node.psychology?.comparisonCoverageScore ?? 1),
+        node.psychology?.likelyBiases.includes("option_overload") ? 0.9 : 0,
+      ),
+    (node) =>
+      (node.psychology?.comparisonCoverageScore ?? 1) < 0.55 ||
+      node.psychology?.likelyBiases.includes("option_overload") === true,
+  );
+  const stressTestPasses = [
+    {
+      title: "Weak evidence",
+      description: "Branches that still lack enough real support.",
+      empty: "No obvious evidence gaps are dominating the map right now.",
+      nodes: weakEvidenceNodes,
+      metric: (node: ThoughtNodeModel) => `evidence ${formatScore(node.scores?.evidence ?? null)}`,
+    },
+    {
+      title: "Contradictions",
+      description: "Claims that still need stronger falsification or counterweight.",
+      empty: "No major contradiction pressure is leading the map right now.",
+      nodes: contradictionNodes,
+      metric: (node: ThoughtNodeModel) =>
+        node.psychology?.likelyBiases.includes("confirmation_bias")
+          ? "confirmation bias risk"
+          : `falsification ${formatScore(node.psychology?.falsificationCoverageScore ?? null)}`,
+    },
+    {
+      title: "Risky dependencies",
+      description: "Important branches that can break the map if they are wrong.",
+      empty: "No dependency-risk hotspot is standing out yet.",
+      nodes: riskyDependencyNodes,
+      metric: (node: ThoughtNodeModel) => `dependency ${formatScore(node.scores?.dependencyRisk ?? null)}`,
+    },
+    {
+      title: "Missing comparisons",
+      description: "Places where the map still needs contrast, ranking, or alternatives.",
+      empty: "Comparison coverage looks healthy in the current map slice.",
+      nodes: missingComparisonNodes,
+      metric: (node: ThoughtNodeModel) =>
+        node.psychology?.likelyBiases.includes("option_overload")
+          ? "option overload risk"
+          : `comparison ${formatScore(node.psychology?.comparisonCoverageScore ?? null)}`,
+    },
+  ];
+  const challengedActions = Array.from(
+    new Set(
+      map.nodes
+        .map((node) => node.actionOrigin)
+        .filter((action): action is NonNullable<ThoughtNodeModel["actionOrigin"]> => action != null),
+    ),
+  );
+  const activeBiasDetectors = Array.from(new Set(map.interventions.map((intervention) => intervention.detector)));
   const graphCanvas = useMemo(() => {
     const sortedNodes = [...map.nodes].sort(
       (a, b) => a.branchOrder - b.branchOrder || a.createdAt.getTime() - b.createdAt.getTime(),
@@ -652,6 +748,85 @@ export function ThoughtMapWorkspace({
                   "The next move card below will become the operating loop once the map has enough structure to judge."}
               </p>
             </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Stress testing</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Run explicit pressure passes, not one generic critique.</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted-ink)]">
+              Penny now treats stress testing as a visible lane on the workspace: weak evidence, contradictions, risky dependencies, and missing comparisons.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {challengedActions.length ? (
+              challengedActions.map((action) => (
+                <Badge key={action} className="bg-[var(--panel)] text-[var(--ink)]">
+                  challenged via {labelAction(action)}
+                </Badge>
+              ))
+            ) : (
+              <Badge className="bg-[var(--panel)] text-[var(--ink)]">No prior challenge actions yet</Badge>
+            )}
+            {activeBiasDetectors.map((detector) => (
+              <Badge key={detector} className="bg-[#fff6ed] text-[#8b4d1f]">
+                watching {labelBias(detector)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 xl:grid-cols-2">
+          {stressTestPasses.map((pass) => (
+            <div key={pass.title} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{pass.title}</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{pass.description}</p>
+              <div className="mt-4 space-y-3">
+                {pass.nodes.length ? (
+                  pass.nodes.map((node) => (
+                    <div key={`${pass.title}-${node.id}`} className="rounded-[20px] bg-white p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={statusBadge(node.nodeStatus)}>{node.nodeStatus}</Badge>
+                        <Badge>{kindLabel(node.kind)}</Badge>
+                        <Badge className="bg-[var(--panel)] text-[var(--ink)]">{pass.metric(node)}</Badge>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{node.content}</p>
+                      {node.psychology?.likelyBiases.length ? (
+                        <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">
+                          Bias signals: {node.psychology.likelyBiases.map(labelBias).join(" · ")}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-[20px] bg-white p-4 text-sm leading-6 text-[var(--muted-ink)]">{pass.empty}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 rounded-[24px] bg-white p-5">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Challenge history</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+            Already-challenged branches stay visible here so future pressure can go deeper instead of repeating the same surface critique.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {challengedActions.length ? (
+              challengedActions.map((action) => (
+                <Badge key={`history-${action}`} className="bg-[var(--panel)] text-[var(--ink)]">
+                  {labelAction(action)}
+                </Badge>
+              ))
+            ) : (
+              <Badge className="bg-[var(--panel)] text-[var(--ink)]">No challenge history yet</Badge>
+            )}
+            {map.interventions.length ? (
+              <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{map.interventions.length} active intervention prompts</Badge>
+            ) : null}
           </div>
         </div>
       </Card>
