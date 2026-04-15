@@ -401,6 +401,7 @@ export function ThoughtMapWorkspace({
     "Learn what the weakest gap is actually asking for.",
     "Turn that learning into the next validation move.",
   ];
+  const validationPreview = map.founderBrief?.nextValidationSteps.slice(0, 2) ?? [];
   const graphCanvas = useMemo(() => {
     const sortedNodes = [...map.nodes].sort(
       (a, b) => a.branchOrder - b.branchOrder || a.createdAt.getTime() - b.createdAt.getTime(),
@@ -743,7 +744,7 @@ export function ThoughtMapWorkspace({
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Thought Map</p>
           <h1 className="mt-2 max-w-4xl text-4xl font-semibold text-[var(--ink)]">{map.title}</h1>
           <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--muted-ink)]">
-            One rough wiki entry becomes a live reasoning map here. Keep the source thought visible, tighten weak branches, and use the next move to keep momentum.
+            A personal thinking wiki for founders: keep the source thought visible, tighten weak branches, and use the next move to keep momentum.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -752,6 +753,118 @@ export function ThoughtMapWorkspace({
           <Badge className="bg-black/8 text-[var(--muted-ink)]">Superseded {statusCounts.superseded}</Badge>
         </div>
       </div>
+
+      <Card className="p-6 sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge>Best next move</Badge>
+              {map.recommendedNextMove ? (
+                <>
+                  <Badge className="bg-[#e7defa] text-[#5c4c88]">{map.recommendedNextMove.action.replaceAll("_", " ")}</Badge>
+                  <Badge>{map.recommendedNextMove.targetNodeKind.replaceAll("_", " ")}</Badge>
+                </>
+              ) : (
+                <Badge className="bg-[var(--panel)] text-[var(--ink)]">Needs more map structure</Badge>
+              )}
+            </div>
+            <h2 className="mt-4 text-3xl font-semibold text-[var(--ink)]">
+              {map.recommendedNextMove?.headline ?? "Keep shaping the map until Penny can point to one decisive next move."}
+            </h2>
+            <p className="mt-3 text-base leading-7 text-[var(--muted-ink)]">
+              {map.recommendedNextMove?.explanation ??
+                "The map is still gathering enough structure to decide what to do next. Add clearer branches, stronger contrast, or more evidence so Penny can recommend the next action."}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            {unresolvedGaps.slice(0, 4).map((gap) => (
+              <Badge key={`next-gap-${gap}`} className="bg-[var(--panel)] text-[var(--ink)]">
+                {gap}
+              </Badge>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <div className="grid gap-4">
+            <div className="rounded-[24px] bg-[var(--panel)] p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Target branch</p>
+              <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+                {map.recommendedNextMove?.targetNodeContent ?? map.rawThought}
+              </p>
+              <div className="mt-4 space-y-2">
+                {map.recommendedNextMove?.reasoning.why.slice(0, 2).map((reason) => (
+                  <p key={reason} className="text-sm leading-6 text-[var(--muted-ink)]">
+                    {reason}
+                  </p>
+                ))}
+                {map.recommendedIntervention ? (
+                  <p className="text-sm leading-6 text-[var(--muted-ink)]">
+                    Intervention: <span className="font-medium text-[var(--ink)]">{map.recommendedIntervention.type.replaceAll("_", " ")}</span>{" "}
+                    because {map.recommendedIntervention.triggerReason.toLowerCase()}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              {learningPrompts.length ? (
+                learningPrompts.slice(0, 2).map((prompt) => (
+                  <div key={prompt.label + prompt.title} className="rounded-[24px] border border-black/8 bg-white p-5">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{prompt.label}</p>
+                    <h3 className="mt-2 text-lg font-semibold text-[var(--ink)]">{prompt.title}</h3>
+                    <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{prompt.body}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{prompt.helper}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[24px] border border-black/8 bg-white p-5 lg:col-span-2">
+                  <p className="text-sm leading-6 text-[var(--muted-ink)]">
+                    Keep building the map. Once Penny can see a weak branch or missing branch type, this section will tell you what to learn next and what to validate after that.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-white p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Operating loop</p>
+            <div className="mt-4 space-y-3">
+              {learningLoopSteps.map((step, index) => (
+                <div key={step} className="rounded-[20px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Step {index + 1}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{step}</p>
+                </div>
+              ))}
+            </div>
+
+            {validationPreview.length ? (
+              <>
+                <p className="mt-5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Validation path</p>
+                <div className="mt-3 space-y-2">
+                  {validationPreview.map((step) => (
+                    <p key={step} className="text-sm leading-6 text-[var(--muted-ink)]">
+                      {step}
+                    </p>
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            <div className="mt-5">
+              <Button
+                className="gap-2"
+                disabled={!map.recommendedNextMove || runningRecommendedMove || isPending}
+                onClick={runRecommendedNextMove}
+              >
+                <Sparkles className="size-4" />
+                {map.recommendedNextMove ? "Do the best next move" : "Best next move pending"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <Card className="p-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -875,113 +988,6 @@ export function ThoughtMapWorkspace({
           </div>
         </div>
       </Card>
-
-      <Card className="p-6 sm:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Learning loop</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Learn from the weakest branch, then turn that into the next move.</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted-ink)]">
-              Penny uses the current map to point at what you should understand next, what branch needs better coverage, and what validation step follows from that learning.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {weakestLearningNode ? (
-              <Badge className="bg-[#fff6ed] text-[#8b4d1f]">learning from weakest {kindLabel(weakestLearningNode.kind)}</Badge>
-            ) : (
-              <Badge className="bg-[var(--panel)] text-[var(--ink)]">Build a little more structure to unlock learning guidance</Badge>
-            )}
-            {missingLearningKinds.map((kind) => (
-              <Badge key={`learn-${kind}`} className="bg-[var(--panel)] text-[var(--ink)]">
-                missing {kindLabel(kind)}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-          <div className="grid gap-4">
-            {learningPrompts.length ? (
-              learningPrompts.map((prompt) => (
-                <div key={prompt.label + prompt.title} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{prompt.label}</p>
-                  <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">{prompt.title}</h3>
-                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{prompt.body}</p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{prompt.helper}</p>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
-                <p className="text-sm leading-6 text-[var(--muted-ink)]">
-                  Keep building the map. Once Penny can see a weak branch or missing branch type, this section will tell you what to learn next and what to validate after that.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-[24px] bg-white p-5">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Loop</p>
-            <div className="mt-4 space-y-3">
-              {learningLoopSteps.map((step, index) => (
-                <div key={step} className="rounded-[20px] bg-[var(--panel)] p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Step {index + 1}</p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{step}</p>
-                </div>
-              ))}
-            </div>
-            {map.founderBrief?.nextValidationSteps.length ? (
-              <>
-                <p className="mt-5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Validation path</p>
-                <div className="mt-3 space-y-2">
-                  {map.founderBrief.nextValidationSteps.slice(0, 2).map((step) => (
-                    <p key={step} className="text-sm leading-6 text-[var(--muted-ink)]">
-                      {step}
-                    </p>
-                  ))}
-                </div>
-              </>
-            ) : null}
-          </div>
-        </div>
-      </Card>
-
-      {map.recommendedNextMove ? (
-        <Card className="p-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge>Best next move</Badge>
-            <Badge className="bg-[#e7defa] text-[#5c4c88]">{map.recommendedNextMove.action.replaceAll("_", " ")}</Badge>
-            <Badge>{map.recommendedNextMove.targetNodeKind.replaceAll("_", " ")}</Badge>
-          </div>
-          <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{map.recommendedNextMove.headline}</p>
-          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{map.recommendedNextMove.explanation}</p>
-          <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
-            Target: <span className="font-medium">{map.recommendedNextMove.targetNodeContent}</span>
-          </p>
-          <div className="mt-4 space-y-2">
-            {map.recommendedNextMove.reasoning.why.slice(0, 2).map((reason) => (
-              <p key={reason} className="text-sm leading-6 text-[var(--muted-ink)]">
-                {reason}
-              </p>
-            ))}
-            {map.recommendedIntervention ? (
-              <p className="text-sm leading-6 text-[var(--muted-ink)]">
-                Intervention: <span className="font-medium text-[var(--ink)]">{map.recommendedIntervention.type.replaceAll("_", " ")}</span>{" "}
-                because {map.recommendedIntervention.triggerReason.toLowerCase()}
-              </p>
-            ) : null}
-          </div>
-          <div className="mt-4">
-            <Button
-              className="gap-2"
-              disabled={runningRecommendedMove || isPending}
-              onClick={runRecommendedNextMove}
-            >
-              <Sparkles className="size-4" />
-              Do the best next move
-            </Button>
-          </div>
-        </Card>
-      ) : null}
 
       {lastAction?.reasoning.graphAnalysis ? (
         <Card className="p-6">
