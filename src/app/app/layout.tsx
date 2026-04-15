@@ -20,7 +20,7 @@ export default function AppLayout({
                 Penny
               </Link>
               <p className="text-sm text-[var(--muted-ink)]">
-                Pressure-tested second brain. Signed in and ready to sharpen the map.
+                Pressure-tested personal idea wiki. Signed in and ready to sharpen the map.
               </p>
             </div>
           </div>

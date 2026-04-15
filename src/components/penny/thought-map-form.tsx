@@ -76,12 +76,12 @@ export function ThoughtMapForm() {
           What should Penny map first?
         </label>
         <p className="text-sm leading-6 text-[var(--muted-ink)]">
-          Start with one second-brain entry: a claim, assumption, evidence fragment, counterargument, or open question.
+          Start with one wiki-style entry: a claim, assumption, evidence fragment, counterargument, or open question.
         </p>
         <div className="rounded-[24px] border border-black/8 bg-white p-4">
           <div className="flex items-center gap-2">
             <BookOpenText className="size-4 text-[var(--muted-ink)]" />
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Wiki starters</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Idea wiki starters</p>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {CAPTURE_STARTERS.map((starter) => (
@@ -120,7 +120,7 @@ export function ThoughtMapForm() {
           rows={8}
           value={rawThought}
           onChange={(event) => setRawThought(event.target.value)}
-          placeholder="Example: Assumption: Founders will keep using a second-brain tool only if it pressure-tests their notes instead of just storing them. Dependency: The critique has to stay actionable, not abstract."
+          placeholder="Example: Assumption: Founders will keep using a personal idea wiki only if it pressure-tests their notes instead of just storing them. Dependency: The critique has to stay actionable, not abstract."
           className="w-full rounded-[28px] border border-black/10 bg-[var(--panel)] px-5 py-5 text-base leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
         />
       </div>
@@ -128,7 +128,7 @@ export function ThoughtMapForm() {
       {error ? <p className="text-sm text-[#8b3d33]">{error}</p> : null}
 
       <Button type="submit" className="gap-2 px-6 py-3 text-base" disabled={isPending || rawThought.trim().length < 12}>
-        {isPending ? "Starting map..." : "Start second-brain map"}
+        {isPending ? "Starting map..." : "Start idea-wiki map"}
         <ArrowRight className="size-4" />
       </Button>
     </form>
