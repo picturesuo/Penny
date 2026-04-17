@@ -106,6 +106,11 @@ export interface FounderBriefModel {
   keyAssumptions: string[];
   strongestCounterarguments: string[];
   nextValidationSteps: string[];
+  stakesLevel: "light" | "moderate" | "heavy";
+  preMortem: string;
+  ifYouWereRight: string;
+  twinCheck: string;
+  dependencyCompleteness: string;
   generatedAt: Date;
 }
 
