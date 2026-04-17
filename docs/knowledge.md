@@ -83,6 +83,11 @@
 - `user`: The outline should be the daily workspace and the graph should be a periodic zoom-out, not the primary surface.
 - `user`: Smart defaults should preselect stress-test type, critique depth, and learning scaffold based on claim type, confidence, and topic while still allowing override.
 - `user`: Clean endings should be treated as a trust signal because the product is optimized for finished work, not engagement.
+- `user`: Structural health should be visible on the graph through node weight, saturation, border thickness, and density indicators that reflect how well-stress-tested a claim is.
+- `user`: Edge styling should carry meaning by encoding dependency strength, support versus contradiction, recency, and downstream cascade potential.
+- `user`: Load-bearing highlighting should let the graph isolate the claims that other claims depend on so the user can see the skeleton of the map.
+- `user`: Assumption auto-extraction should infer implicit assumptions on capture and offer them as confirmable yellow nodes so structural richness appears immediately.
+- `user`: Density preview should warn the user about the structural consequence of creating a new dependency before they commit to it.
 - `user`: The current build should preserve the landing page thesis, the server-backed thought-map model, the outline plus graph workspace, best-next-move as a central decision surface, stress testing as a visible lane, and the founder brief flow as one instance of structured output.
 - `user`: Traps to avoid are letting the graph become the product, turning best-next-move into a task list, adding a chatbot sidebar, letting stress-testing become contrarianism, and treating learning as a reading list.
 - `user`: Near-term direction before more inspector, triage, or dashboard work is to define the learning loop spec and the moves layer so the self-iterating second brain has the right substrate.
