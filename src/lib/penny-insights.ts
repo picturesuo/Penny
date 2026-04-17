@@ -3,6 +3,8 @@ import type {
   BayesianPropagationStep,
   ClaimCaptureMetadata,
   ClaimProvenance,
+  ClaimStructureSnapshot,
+  ClaimStructureKind,
   ClaimStatus,
   ClaimStake,
   ThoughtMapEvent,
@@ -959,6 +961,9 @@ export function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetad
     stakes: [],
     dependencyNotes: "",
     status: "open",
+    temporalScope: "",
+    conditionalStatement: "",
+    structureKind: "assertion",
   };
 
   for (const line of match[1].split("\n")) {
@@ -998,6 +1003,15 @@ export function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetad
       case "status":
         metadata.status = value as ClaimStatus;
         break;
+      case "temporal scope":
+        metadata.temporalScope = value === "not specified" ? "" : value;
+        break;
+      case "conditional statement":
+        metadata.conditionalStatement = value === "not specified" ? "" : value;
+        break;
+      case "structure kind":
+        metadata.structureKind = value.replaceAll(" ", "_") as ClaimStructureKind;
+        break;
       default:
         break;
     }
@@ -1010,7 +1024,10 @@ export function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetad
     metadata.provenanceDetail == null ||
     metadata.stakes == null ||
     metadata.dependencyNotes == null ||
-    metadata.status == null
+    metadata.status == null ||
+    metadata.temporalScope == null ||
+    metadata.conditionalStatement == null ||
+    metadata.structureKind == null
   ) {
     return null;
   }
@@ -1030,6 +1047,110 @@ export function captureSnapshotForMap(map: ThoughtMapModel): ClaimCaptureSnapsho
     title: map.title,
     updatedAt: map.updatedAt,
     ...capture,
+  };
+}
+
+function claimStructureKindForText(text: string, capture: ClaimCaptureSnapshot | null): ClaimStructureKind {
+  if (capture?.structureKind) {
+    return capture.structureKind;
+  }
+
+  const lower = text.toLowerCase();
+
+  if (/if\s+.+\s+then|when\s+.+\s+then/.test(lower)) {
+    return "conditional";
+  }
+
+  if (/\b(and|or|but|while|plus)\b/.test(lower) && lower.split(/\b(and|or|but|while|plus)\b/).length > 3) {
+    return "compound";
+  }
+
+  if (/\b(5-year|long run|long-run|this quarter|next year|month|week|today|now|by \d{4})\b/.test(lower)) {
+    return "temporal";
+  }
+
+  return "assertion";
+}
+
+function similarityScore(a: string, b: string) {
+  const normalizeTokens = (value: string) =>
+    Array.from(
+      new Set(
+        normalize(value)
+          .split(/\s+/)
+          .filter((token) => token.length > 2),
+      ),
+    );
+
+  const aTokens = normalizeTokens(a);
+  const bTokens = normalizeTokens(b);
+
+  if (!aTokens.length || !bTokens.length) {
+    return 0;
+  }
+
+  const overlap = aTokens.filter((token) => bTokens.includes(token)).length;
+  return overlap / Math.max(aTokens.length, bTokens.length);
+}
+
+export function buildClaimStructureSnapshot(map: ThoughtMapModel, node: ThoughtNodeModel | null): ClaimStructureSnapshot {
+  const capture = captureSnapshotForMap(map);
+  const nodeText = node?.content ?? map.rawThought;
+  const temporalScope = capture?.temporalScope?.trim() || null;
+  const conditionalStatement = capture?.conditionalStatement?.trim() || null;
+  const claimKind = claimStructureKindForText(nodeText, capture);
+  const candidateNodes = map.nodes.filter((candidate) => candidate.id !== node?.id && candidate.kind !== "root");
+  const mergeCandidates = candidateNodes
+    .filter((candidate) => {
+      const score = similarityScore(nodeText, candidate.content);
+      return score >= 0.34;
+    })
+    .sort((a, b) => similarityScore(nodeText, b.content) - similarityScore(nodeText, a.content))
+    .slice(0, 3)
+    .map((candidate) => candidate.content);
+  const splitCandidates = [] as string[];
+
+  if (claimKind === "compound" || /\b(and|or|but|while|plus)\b/.test(nodeText.toLowerCase())) {
+    splitCandidates.push("Split around the conjunction that carries two different claims.");
+  }
+
+  if (claimKind === "conditional" || /\bif\s+.+\s+then|when\s+.+\s+then/.test(nodeText.toLowerCase())) {
+    splitCandidates.push("Keep the if-part separate from the then-part so the stress test can hit each piece.");
+  }
+
+  if (temporalScope) {
+    splitCandidates.push(`Keep the ${temporalScope} horizon explicit so long-run and short-run versions do not blur together.`);
+  }
+
+  const whyNowTrigger =
+    node?.nodeStatus === "weak"
+      ? "This critique is appearing now because the claim is weak enough to deserve pressure."
+      : node && node.parentId
+        ? "This critique is appearing now because the claim sits inside an active dependency chain."
+        : "This critique is appearing now because the claim is the current focus of the map.";
+
+  const dependencyWeight = node?.scores?.dependencyRisk != null ? Number(node.scores.dependencyRisk.toFixed(2)) : null;
+  const directConfidence = node?.scores?.confidence != null ? Number(node.scores.confidence.toFixed(2)) : null;
+  const propagatedConfidence = node?.scores?.confidence != null ? Number(node.scores.confidence.toFixed(2)) : null;
+
+  return {
+    whyNowTrigger,
+    confidenceMath: null,
+    dependencyWeight,
+    directConfidence,
+    propagatedConfidence,
+    temporalScope,
+    conditionalStatement,
+    mergeCandidates,
+    splitCandidates,
+    whyNowReason:
+      claimKind === "conditional"
+        ? "Conditional claims need the if-part and then-part separated before critique can be honest."
+        : claimKind === "compound"
+          ? "Compound claims hide multiple commitments, so Penny surfaces a split before the critique hardens."
+          : temporalScope
+            ? "Temporal scope matters because the same statement can be true on one horizon and false on another."
+            : "The claim is live enough that the critique should surface now rather than later.",
   };
 }
 
