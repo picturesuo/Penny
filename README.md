@@ -142,6 +142,11 @@ The visual and interaction model should feel like a built city, not a notes dump
 - Outline first: make the outline the daily workspace and the graph a periodic zoom-out.
 - Smart defaults: preselect stress-test type, critique depth, and learning scaffold based on the current claim, confidence, and topic.
 - Clean endings should read as a trust signal: the product should be optimized for finished work, not engagement.
+- Structural health should be visible on the graph through node weight, saturation, border thickness, and density indicators.
+- Edge styling should encode dependency strength, support versus contradiction, recency, and cascade risk.
+- Load-bearing highlighting should isolate the claims other claims depend on so the user can see the skeleton of the map.
+- Assumption auto-extraction should turn implicit assumptions into confirmable nodes at capture time.
+- Density preview should warn the user about the structural consequence of creating a new dependency before they commit to it.
 
 ## Stack
 
