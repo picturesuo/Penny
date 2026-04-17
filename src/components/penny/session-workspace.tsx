@@ -18,6 +18,8 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
   const isCaptureMode = session.currentStage === "intake" || session.currentStage === "clarify" || session.currentStage === "assumptions";
   const isReflectionMode = !isCaptureMode;
   const isDeepWork = session.currentStage === "pressure-test" || session.currentStage === "evidence";
+  const deepWorkMinutes = 50;
+  const deepWorkFocus = session.problem || session.ideaSummary || session.targetUser || session.rawIdea;
   const shouldStopSoon =
     session.currentStage === "brief" ||
     session.questionBudget - session.questionsAsked.length <= 1 ||
@@ -57,13 +59,24 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
               {modeTitle} mode
             </Badge>
             {isDeepWork ? (
-              <Badge className="bg-[#fff6ed] text-[#8b4d1f]">Cognitive protection on</Badge>
+              <Badge className="bg-[#fff6ed] text-[#8b4d1f]">Deep work protected</Badge>
             ) : null}
             {analysisFatigue ? <Badge className="bg-[#fff6ed] text-[#8b4d1f]">System 2 may be overloaded</Badge> : null}
             {shouldStopSoon ? <Badge className="bg-white text-[var(--ink)]">Honest ending likely</Badge> : null}
           </div>
           <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{modeDescription}</p>
           <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{processingPrompt}</p>
+          {isDeepWork ? (
+            <div className="mt-4 rounded-[22px] border border-dashed border-[#e0cfa8] bg-[#fffaf0] px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="bg-white text-[var(--ink)]">{deepWorkMinutes}-minute stretch</Badge>
+                <Badge className="bg-white text-[var(--ink)]">Interruptions batched</Badge>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Focus this block on {deepWorkFocus}. Penny will suppress non-critical prompts, secondary surfaces, and new shapes until the end-of-session review.
+              </p>
+            </div>
+          ) : null}
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
           {session.conversation.map((message) => (
@@ -102,16 +115,35 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
               </p>
             </div>
           )}
-          <form action={regenerateChallengeAction.bind(null, session.id)} className="mt-3">
-            <Button variant="secondary" className="gap-2">
-              <RefreshCcw className="size-4" />
-              Regenerate challenge
-            </Button>
-          </form>
+          {isDeepWork ? (
+            <div className="mt-3 rounded-[24px] border border-dashed border-black/10 bg-[var(--panel)] px-5 py-4">
+              <p className="text-sm font-medium text-[var(--ink)]">Secondary prompts are paused.</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                If something needs a follow-up, Penny will batch it for the session-end review instead of interrupting the block.
+              </p>
+            </div>
+          ) : (
+            <form action={regenerateChallengeAction.bind(null, session.id)} className="mt-3">
+              <Button variant="secondary" className="gap-2">
+                <RefreshCcw className="size-4" />
+                Regenerate challenge
+              </Button>
+            </form>
+          )}
         </div>
       </Card>
 
       <div className="space-y-6">
+        {isDeepWork ? (
+          <Card className="border-[#e0cfa8] bg-[#fffaf0] p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Deep work session</p>
+            <h3 className="mt-1 text-xl font-semibold text-[var(--ink)]">Clean block, clean pause</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+              Hold this as a {deepWorkMinutes}-minute stretch on the current claim or cluster. Penny keeps unrelated prompts out of the way until the block closes.
+            </p>
+          </Card>
+        ) : null}
+
         <Card className="p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -202,7 +234,7 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
             <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{processingPrompt}</p>
             <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
               {analysisFatigue
-                ? "The reflective system looks taxed. If you’re only accepting critiques because they sound right, stop and come back fresh."
+                ? "Reflective bandwidth looks thin. If you’re only accepting critiques because they sound right, stop and come back fresh."
                 : "Penny keeps the prompt context-sensitive instead of pretending there is a clean System 1 / System 2 split."}
             </p>
           </Card>
@@ -234,38 +266,38 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
 
             <form action={submitReflectionAction.bind(null, session.id)} className="mt-4 space-y-4">
               <div className="space-y-2">
-                <label className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]" htmlFor="surprised">
-                  What surprised you today?
+                <label className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]" htmlFor="worked">
+                  What was worked?
                 </label>
                 <textarea
-                  id="surprised"
-                  name="surprised"
+                  id="worked"
+                  name="worked"
                   rows={2}
-                  placeholder="Name the thing that changed your mind or attention."
+                  placeholder="Name the claim, cluster, or decision you actually worked."
                   className="w-full rounded-[20px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none ring-0 placeholder:text-[var(--muted-ink)] focus:border-black/20"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]" htmlFor="resisted">
-                  What did you resist?
+                <label className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]" htmlFor="resolved">
+                  What was resolved?
                 </label>
                 <textarea
-                  id="resisted"
-                  name="resisted"
+                  id="resolved"
+                  name="resolved"
                   rows={2}
-                  placeholder="Name the critique, shift, or conclusion you kept pushing away."
+                  placeholder="Name what is now settled, narrowed, or clearly answered."
                   className="w-full rounded-[20px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none ring-0 placeholder:text-[var(--muted-ink)] focus:border-black/20"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]" htmlFor="returnTo">
-                  What do you want to come back to?
+                <label className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]" htmlFor="remains">
+                  What remains?
                 </label>
                 <textarea
-                  id="returnTo"
-                  name="returnTo"
+                  id="remains"
+                  name="remains"
                   rows={2}
-                  placeholder="Name the claim or decision you want to reopen next time."
+                  placeholder="Name the unresolved edge that should open the next block."
                   className="w-full rounded-[20px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none ring-0 placeholder:text-[var(--muted-ink)] focus:border-black/20"
                 />
               </div>
