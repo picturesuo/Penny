@@ -116,6 +116,14 @@ Friction should scale with stakes so the product does not flatten important deci
 - Provenance tracing: show the original source, capture session, and shapes present when the belief formed.
 - Inherited-claim markers: render inherited claims distinctly and give them automatic extra scrutiny.
 
+### Calibration
+
+- Probability commitment: every claim should have a confidence value at capture time, and very high confidence should trigger a soft challenge.
+- Brier trajectory: the product should show whether the user is getting sharper over time, not just whether the tool feels useful.
+- Domain-partitioned feedback: calibration should be visible by domain so the user can see where their 80%s land reliably and where they do not.
+- Private self-bets: users should be able to stake credibility points against themselves on time-bound claims.
+- Bayesian update prompts: new evidence should nudge confidence in small increments instead of letting the user swing wildly.
+
 ## Psychology-Backed Design
 
 The product should reflect research-backed learning and judgment principles:
