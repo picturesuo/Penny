@@ -22,6 +22,7 @@ import {
   buildSessionRhythmSnapshot,
   collectShapeFeedback,
   captureSnapshotForMap,
+  buildClaimStructureSnapshot,
   inheritedClaimSnapshots,
   buildOldSelfTimeline,
   findActiveShapeCallout,
@@ -31,6 +32,7 @@ import {
   retrieveSurvivorPrecedentsForCase,
   traceContradictionCascade,
   buildShapeTimeline,
+  type ClaimStructureSnapshot,
   type PennyShape,
   type PennyShapeFeedback,
   type MapTimelineSnapshot,
@@ -1199,6 +1201,9 @@ export function ThoughtMapWorkspace({
 
     const sourceNode = nodesById.get(strongestStep.sourceNodeId) ?? null;
     const targetNode = nodesById.get(strongestStep.targetNodeId) ?? null;
+    const confidenceMath = `${formatScore(strongestStep.sourceConfidence)}% × ${Math.round(strongestStep.edgeFactor * 100)}% = ${formatScore(
+      strongestStep.propagatedConfidence,
+    )}%`;
 
     return {
       sourceNodeId: strongestStep.sourceNodeId,
@@ -1209,11 +1214,17 @@ export function ThoughtMapWorkspace({
       afterConfidence: strongestStep.propagatedConfidence,
       delta: strongestStep.delta,
       reasoning: strongestStep.reasoning,
+      confidenceMath,
+      dependencyWeight: strongestStep.edgeFactor,
     };
   }, [nodesById, selectedPropagation]);
   const selectedKnowledgeSurface = useMemo(
     () => knowledgeSurface(selectedGraphNode?.node ?? null, selectedGenealogy),
     [selectedGenealogy, selectedGraphNode?.node],
+  );
+  const selectedClaimStructure = useMemo<ClaimStructureSnapshot>(
+    () => buildClaimStructureSnapshot(map, selectedGraphNode?.node ?? null),
+    [map, selectedGraphNode?.node],
   );
   const selectedOldSelves = useMemo(
     () => buildOldSelfTimeline(map.nodes, map.events, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
@@ -1670,7 +1681,12 @@ export function ThoughtMapWorkspace({
     }));
   }
 
-  function recordConfidenceOverride(sourceNodeId: string, targetNodeId: string, reasoning: string) {
+  function recordConfidenceOverride(
+    sourceNodeId: string,
+    targetNodeId: string,
+    reasoning: string,
+    mode: "hold" | "reduce" | "decouple" = "hold",
+  ) {
     const trimmedReasoning = reasoning.trim();
     if (trimmedReasoning.length < 8) {
       return;
@@ -1686,7 +1702,7 @@ export function ThoughtMapWorkspace({
           body: JSON.stringify({
             sourceNodeId,
             targetNodeId,
-            mode: "hold",
+            mode,
             reasoning: trimmedReasoning,
           }),
         });
@@ -3306,6 +3322,9 @@ export function ThoughtMapWorkspace({
               <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
                 When the seed claim moves, dependents should move too. Overrides let the user explain why a specific drop should be softened instead of blindly accepted.
               </p>
+              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                Why now: {selectedClaimStructure.whyNowTrigger}
+              </p>
 
               {selectedPropagation ? (
                 <>
@@ -3321,6 +3340,16 @@ export function ThoughtMapWorkspace({
                       <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
                         Penny is surfacing the downstream update instead of hiding it. Do you accept this implication, or do you want to argue that the propagation is too strong?
                       </p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                        Why now: {selectedClaimStructure.whyNowReason}
+                      </p>
+                      <div className="mt-3 rounded-[16px] bg-white px-4 py-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Confidence math</p>
+                        <p className="mt-1 text-sm leading-6 text-[var(--ink)]">{selectedPropagationImplication.confidenceMath}</p>
+                        <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
+                          Dependency weight {Math.round(selectedPropagationImplication.dependencyWeight * 100)}% · change {formatScore(Math.abs(selectedPropagationImplication.delta))} points
+                        </p>
+                      </div>
                       {propagationAcknowledged[selectedPropagationImplication.targetNodeId] ? (
                         <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#355b32]">
                           Implication accepted
@@ -3360,10 +3389,26 @@ export function ThoughtMapWorkspace({
                                 selectedPropagationImplication.sourceNodeId,
                                 selectedPropagationImplication.targetNodeId,
                                 confidenceOverrideReasons[selectedPropagationImplication.targetNodeId] ?? "",
+                                "reduce",
                               )
                             }
                           >
                             Argue propagation is too strong
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            className="px-3 py-2 text-xs"
+                            disabled={isPending || (confidenceOverrideReasons[selectedPropagationImplication.targetNodeId] ?? "").trim().length < 8}
+                            onClick={() =>
+                              recordConfidenceOverride(
+                                selectedPropagationImplication.sourceNodeId,
+                                selectedPropagationImplication.targetNodeId,
+                                confidenceOverrideReasons[selectedPropagationImplication.targetNodeId] ?? "",
+                                "decouple",
+                              )
+                            }
+                          >
+                            Decouple claims
                           </Button>
                         </div>
                       </div>
@@ -3496,6 +3541,53 @@ export function ThoughtMapWorkspace({
                       ? "Scrutiny automatically goes up on the source chain because inherited beliefs can hide borrowed errors."
                       : "Penny still records provenance so later revisions can trace where the belief came from."}
                   </p>
+                  <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Claim structure</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {claimCapture.temporalScope ? (
+                        <Badge className="bg-white text-[var(--ink)]">{claimCapture.temporalScope}</Badge>
+                      ) : (
+                        <Badge className="bg-white text-[var(--ink)]">No temporal scope yet</Badge>
+                      )}
+                      <Badge className="bg-[#e7defa] text-[#5c4c88]">{claimCapture.structureKind?.replaceAll("_", " ") ?? "assertion"}</Badge>
+                      {claimCapture.conditionalStatement ? (
+                        <Badge className="bg-[#fff6ed] text-[#8b4d1f]">conditional claim</Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                      Temporal scope keeps forecasts honest, and conditional structure keeps the if-part visible instead of flattening it into a single assertion.
+                    </p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-[16px] bg-white p-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Merge candidates</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {selectedClaimStructure.mergeCandidates.length ? (
+                            selectedClaimStructure.mergeCandidates.map((candidate) => (
+                              <Badge key={candidate} className="bg-[var(--panel)] text-[var(--ink)]">
+                                {candidate}
+                              </Badge>
+                            ))
+                          ) : (
+                            <Badge className="bg-[var(--panel)] text-[var(--ink)]">No merge candidate yet</Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="rounded-[16px] bg-white p-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Split candidates</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {selectedClaimStructure.splitCandidates.length ? (
+                            selectedClaimStructure.splitCandidates.map((candidate) => (
+                              <Badge key={candidate} className="bg-[#fff6ed] text-[#8b4d1f]">
+                                {candidate}
+                              </Badge>
+                            ))
+                          ) : (
+                            <Badge className="bg-[#fff6ed] text-[#8b4d1f]">No split candidate yet</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
