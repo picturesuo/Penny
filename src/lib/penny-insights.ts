@@ -75,6 +75,7 @@ export interface PrecedentCase {
   name: string;
   domain: string;
   failureMode: string;
+  failureTrajectory: string;
   riskTags: string[];
   killAssumption: string;
   whatKilledIt: string;
@@ -391,6 +392,7 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     name: "Quibi",
     domain: "consumer media",
     failureMode: "network-effects mismatch",
+    failureTrajectory: "novelty spike, weak repeat behavior, distribution never compounds",
     riskTags: ["network effects", "adoption", "distribution", "attention"],
     killAssumption: "People would pay for short-form premium video on mobile without a stronger habit loop.",
     whatKilledIt: "The product bet on a weak behavior change and a crowded attention environment, so distribution never compensated for the missing habit.",
@@ -404,6 +406,7 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     name: "Juicero",
     domain: "hardware",
     failureMode: "operational overbuild",
+    failureTrajectory: "complexity expands, unit economics stay ugly, simpler workaround wins",
     riskTags: ["operations", "money", "time", "dependency"],
     killAssumption: "A premium machine would create enough value to justify expensive hardware and proprietary supply.",
     whatKilledIt: "The system optimized for complexity and capital burn, but the underlying job could be done more cheaply without the machine.",
@@ -417,6 +420,7 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     name: "WeWork",
     domain: "real estate / platform",
     failureMode: "premise-rejection",
+    failureTrajectory: "story outruns economics, governance weakens, premise becomes indefensible",
     riskTags: ["reputation", "money", "operational", "governance"],
     killAssumption: "Community and brand would outrun the basic economics of space and occupancy.",
     whatKilledIt: "The story outgrew the economics and governance structure, so the business became impossible to defend on its own terms.",
@@ -430,6 +434,7 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     name: "Theranos",
     domain: "health / science",
     failureMode: "evidence failure",
+    failureTrajectory: "hidden measurement layer, validation missing, confidence outruns proof",
     riskTags: ["reputation", "relationship", "self-image", "money"],
     killAssumption: "The promise would hold even if the core measurement system could not be independently validated.",
     whatKilledIt: "The claim depended on hidden test validity, and when the measurement layer was exposed, the rest of the structure collapsed.",
@@ -443,6 +448,7 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     name: "Google Glass",
     domain: "wearable computing",
     failureMode: "norm friction",
+    failureTrajectory: "utility exists, but social cost becomes visible before adoption can normalize",
     riskTags: ["relationship", "self-image", "political", "social"],
     killAssumption: "The product could be useful even if it violated everyday social norms and made people uncomfortable.",
     whatKilledIt: "The social cost became visible faster than the utility, so the norm violation itself became the blocking issue.",
@@ -456,6 +462,7 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     name: "Clubhouse",
     domain: "social audio",
     failureMode: "retention collapse",
+    failureTrajectory: "attention arrives first, repeat behavior never compounds, novelty fades",
     riskTags: ["network effects", "time", "attention", "social"],
     killAssumption: "Novelty plus invite scarcity would create durable engagement and real network effects.",
     whatKilledIt: "The product got attention before it earned repeat behavior, so the network thinned once the novelty faded.",
@@ -845,6 +852,10 @@ export function retrievePrecedentsForNode(node: ThoughtNodeModel, limit = 3): Pr
       let score = 0;
 
       if (precedent.riskTags.some((tag) => tags.has(tag))) score += 3;
+      if (precedent.failureTrajectory && /compound|repeat|retention|habit|distribution/.test(text) && /repeat|retention|habit|compounds/.test(precedent.failureTrajectory)) score += 3;
+      if (precedent.failureTrajectory && /economics|unit economics|burn|cost/.test(text) && /economics|cost|unit economics|complexity/.test(precedent.failureTrajectory)) score += 3;
+      if (precedent.failureTrajectory && /validation|measure|evidence|proof/.test(text) && /validation|measure|proof|measurement/.test(precedent.failureTrajectory)) score += 3;
+      if (precedent.failureTrajectory && /norm|social|public|wear|social cost/.test(text) && /social cost|norm/.test(precedent.failureTrajectory)) score += 3;
       if (precedent.failureMode.includes("evidence") && (node.psychology?.falsificationCoverageScore ?? 1) < 0.6) score += 2;
       if (precedent.failureMode.includes("network") && tags.has("network effects")) score += 2;
       if (precedent.failureMode.includes("norm") && tags.has("norm")) score += 2;
@@ -859,6 +870,49 @@ export function retrievePrecedentsForNode(node: ThoughtNodeModel, limit = 3): Pr
     .filter((item) => item.score > 0)
     .slice(0, limit)
     .map(({ precedent }) => precedent);
+}
+
+export interface AdversarialFinalPassSnapshot {
+  claimCount: number;
+  loadBearingAssumption: ThoughtNodeModel | null;
+  quietKeystoneIndex: number | null;
+  quietKeystoneReason: string;
+  collapseWarning: string;
+  dependentCount: number;
+}
+
+export function buildAdversarialFinalPass(map: ThoughtMapModel): AdversarialFinalPassSnapshot {
+  const activeNodes = map.nodes.filter((node) => node.nodeStatus !== "superseded");
+  const dependencyGraph = buildClaimDependencyGraph(map);
+  const loadBearingCandidates = dependencyGraph.loadBearingNodeIds
+    .map((nodeId) => map.nodes.find((node) => node.id === nodeId) ?? null)
+    .filter((node): node is ThoughtNodeModel => node != null);
+  const loadBearingAssumption =
+    loadBearingCandidates
+      .sort((a, b) => {
+        const aScore = (a.scores?.dependencyRisk ?? 0) + (a.scores?.centrality ?? 0) + (a.parentId ? 0.1 : 0);
+        const bScore = (b.scores?.dependencyRisk ?? 0) + (b.scores?.centrality ?? 0) + (b.parentId ? 0.1 : 0);
+        return bScore - aScore;
+      })[0] ?? null;
+  const quietKeystoneIndex = loadBearingAssumption ? activeNodes.findIndex((node) => node.id === loadBearingAssumption.id) + 1 : null;
+  const dependentCount = loadBearingAssumption
+    ? activeNodes.filter(
+        (node) => node.parentId === loadBearingAssumption.id || node.supersedesNodeId === loadBearingAssumption.id,
+      ).length
+    : 0;
+
+  return {
+    claimCount: activeNodes.length,
+    loadBearingAssumption,
+    quietKeystoneIndex,
+    quietKeystoneReason: loadBearingAssumption
+      ? `Penny found the quiet keystone by prioritizing central, dependency-heavy claims instead of the loudest branch.`
+      : "Penny could not isolate a single keystone yet.",
+    collapseWarning: loadBearingAssumption
+      ? `If #${quietKeystoneIndex ?? "?"} fails, the entire argument collapses.`
+      : "The dependency structure is not yet rich enough for a confident collapse warning.",
+    dependentCount,
+  };
 }
 
 export function buildConfidenceDecaySnapshot(node: ThoughtNodeModel, dependentsCount = 0): ConfidenceDecaySnapshot {
