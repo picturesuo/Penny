@@ -97,6 +97,9 @@ Learn should be just-in-time and claim-anchored.
 - Penny should track response latency, response length, and specificity during a session and warn when the user is getting tired.
 - Break prompts should appear at natural breakpoints so the product supports incubation instead of forcing continuous critique.
 - When the user returns to a session after a break or after time away, Penny should restore context: where they left off, what they were working on, what was open, and what aged while they were gone.
+- Calendar awareness should let Penny recommend work that fits the uninterrupted time the user actually has.
+- Decision deadline tracking should escalate pressure as resolution dates approach.
+- Commitment tracking should record whether the actions implied by if-you-were-right mode actually happened.
 - The product should protect deep work, detect depletion, and suggest stopping when it has enough signal.
 - Reflection after synthesis should be optional but rewarded.
 
