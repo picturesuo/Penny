@@ -218,6 +218,10 @@
 - `user`: Aging foundations monitoring should decay base claims in large dependency structures more aggressively because their failure cascades outward.
 - `user`: Contradiction cascade tracing should walk forward through dependents when a foundational claim changes so the user knows what else needs revisiting.
 - `user`: Session rhythm should detect approaching cognitive depletion and suggest stopping instead of optimizing for engagement.
+- `user`: Mood and state tagging at session start should optionally capture whether the user is fresh, tired, defensive, or curious so Penny can bias its behavior honestly for that session.
+- `user`: Cognitive load detection should watch response latency, length, and specificity over a session and warn when the user is getting tired instead of quietly increasing pressure.
+- `user`: Break prompts should appear at natural breakpoints so Penny can suggest short incubation pauses instead of keeping the user in continuous critique.
+- `user`: Return-to-session context restoration should show where the user left off, what they were working on, what open question was in front of them, and what changed while they were away.
 - `user`: Just-in-time learning should happen at the point of confusion during stress-testing, with minimum viable explanation, why-it-matters context, teach-back, and optional deeper anchors.
 - `user`: Every learning moment should generate moves and should feed a knowledge shape for what the user understands, repeats, or needs to relearn.
 - `user`: Teach-back should default to a minimum scaffold plus user-generated explanation, with targeted gap detection feeding the next follow-up.
