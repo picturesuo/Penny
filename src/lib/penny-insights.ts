@@ -129,6 +129,8 @@ export interface ConfusionLogEntry {
   confusion: string;
   nextStep: string;
   severity: number;
+  ageDays: number;
+  revisitPrompt: string;
 }
 
 export type CalibrationDomain = "technical" | "market" | "operational" | "research" | "people" | "general";
@@ -1239,6 +1241,7 @@ export function buildConfusionLog(map: ThoughtMapModel): ConfusionLogEntry[] {
     .slice(0, 4);
   const capture = captureSnapshotForMap(map);
   const entries: ConfusionLogEntry[] = weakNodes.map(({ node, severity }) => {
+    const ageDays = Math.max(0, Math.floor((Date.now() - node.updatedAt.getTime()) / (1000 * 60 * 60 * 24)));
     const why = [];
 
     if ((node.scores?.evidence ?? 1) < 0.55) why.push("evidence is still thin");
@@ -1257,6 +1260,13 @@ export function buildConfusionLog(map: ThoughtMapModel): ConfusionLogEntry[] {
             ? "Add the strongest version of the opposing case before you refine the claim."
             : "Force a specific test or a missing dependency before treating this as stable.",
       severity,
+      ageDays,
+      revisitPrompt:
+        ageDays >= 90
+          ? "You sat with this question months ago. Revisit whether anything has changed."
+          : ageDays >= 30
+            ? "This confusion has aged enough to deserve another pass."
+            : "Keep the confusion open until the next useful signal appears.",
     };
   });
 
@@ -1267,6 +1277,8 @@ export function buildConfusionLog(map: ThoughtMapModel): ConfusionLogEntry[] {
       confusion: `The capture includes dependency notes that should be pulled into the graph: ${capture.dependencyNotes}.`,
       nextStep: "Turn the note into a concrete dependency edge or a revisiting task.",
       severity: 42,
+      ageDays: 0,
+      revisitPrompt: "Dependency notes should be translated into the graph before they go stale.",
     });
   }
 
