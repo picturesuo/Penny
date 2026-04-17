@@ -38,11 +38,12 @@
 - `user`: Knowledge shape tracking should record what the user has mastered, what they keep needing to relearn, and what is solid, so future critiques can pitch at the user’s actual level per topic.
 - `user`: Research-mode expansion should exist as an optional follow-up after the inline learning moment, clearly separated so it never turns into a tangent and always stays anchored to the triggering claim.
 - `user`: Decision and synthesis features should include a pre-mortem synthesis gate, an if-you-were-right mode, stakes-proportional friction, a twin-check output, and a post-mortem protocol on resolved claims.
-- `user`: The pre-mortem should be the default synthesis gate before any output artifact is generated, so the user imagines how the result fails in six months before Penny synthesizes.
+- `user`: The pre-mortem should be the default synthesis gate before any output artifact is generated, should be short, should be stored as a first-class artifact, and should ask the user to imagine how the result fails in six months before Penny synthesizes.
 - `user`: The if-you-were-right mode should assume the claim holds and ask what becomes possible, what becomes necessary, and what the user would do in 30 days, because it reveals when the user does not fully believe their own claim.
 - `user`: Stakes-proportional friction should make load-bearing claims incur more stress-testing, pre-mortems, and revisit cadence, while lightweight claims stay lightweight.
 - `user`: Twin-check output should have Penny produce the strongest version of the user’s current thinking so the user can decide whether it actually represents what they believe.
 - `user`: Post-mortem protocol on resolved claims should turn outcomes into first-class artifacts so the richest shape input comes from what actually happened.
+- `user`: Dependency-completeness checks should block synthesis only when load-bearing claims have not been stress-tested, framing the block as a visible risk review rather than pure gatekeeping.
 - `user`: Tunnel and workflow features should make each stage explicitly completable with exit criteria for capture, structure, stress-test, synthesize, and reflect.
 - `user`: Dual-surface architecture should separate capture mode from reflection mode so low-friction intake and critique-heavy review do not contaminate each other.
 - `user`: Cognitive protection mode should detect deep work on load-bearing claims and suppress secondary prompts, notifications, and unrelated surfaces.
