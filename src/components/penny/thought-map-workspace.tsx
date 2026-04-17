@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
+  buildDependencyChainTimeline,
+  buildMapTimeline,
   buildClaimMoveHistory,
   buildClaimDependencyGraph,
   buildBeliefGenealogy,
@@ -26,8 +28,12 @@ import {
   interleaveStressNodes,
   retrievePrecedentsForNode,
   traceContradictionCascade,
+  buildShapeTimeline,
   type PennyShape,
   type PennyShapeFeedback,
+  type MapTimelineSnapshot,
+  type ShapeTimelineSnapshot,
+  type DependencyChainTimelineSnapshot,
 } from "@/lib/penny-insights";
 import { cn } from "@/lib/utils";
 import type {
@@ -923,6 +929,13 @@ export function ThoughtMapWorkspace({
     () => buildClaimMoveHistory(map.nodes, map.events, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map.events, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
   );
+  const mapTimeline = useMemo<MapTimelineSnapshot>(() => buildMapTimeline(map), [map]);
+  const timelineShape = activeShapeCallout ?? derivedShapes[0] ?? null;
+  const shapeTimeline = useMemo<ShapeTimelineSnapshot | null>(() => buildShapeTimeline(map, timelineShape), [map, timelineShape]);
+  const dependencyTimeline = useMemo<DependencyChainTimelineSnapshot | null>(
+    () => buildDependencyChainTimeline(map, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
+    [defaultGraphNodeId, map, rootNode?.id, selectedGraphNode?.node.id],
+  );
   const selectedCritiqueStrength = critiqueStrengthLabel(selectedGraphNode?.node.scores?.strength ?? null);
   const selectedPrecedents = selectedGraphNode ? retrievePrecedentsForNode(selectedGraphNode.node, lens) : [];
   const selectedPrecedentSummary = selectedPrecedents[0] ?? null;
@@ -1463,6 +1476,8 @@ export function ThoughtMapWorkspace({
     return null;
   }
 
+  const graphMinimapScale = 0.36;
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -1470,7 +1485,7 @@ export function ThoughtMapWorkspace({
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Thought Map</p>
           <h1 className="mt-2 max-w-4xl text-4xl font-semibold text-[var(--ink)]">{map.title}</h1>
           <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--muted-ink)]">
-            A personal thinking wiki for founders: keep the source thought visible, tighten weak branches, and use the next move to keep momentum.
+            A knowledge-card workbench: keep a single claim visible, tighten weak branches, and let the graph act as a structural minimap instead of the hero.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -2340,6 +2355,98 @@ export function ThoughtMapWorkspace({
         </div>
 
         <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div className="rounded-[24px] border border-black/8 bg-white p-5 xl:col-span-2">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Timeline views</p>
+                <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Watch the map move in time.</h3>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted-ink)]">
+                  Penny already stores the move layer, so the same history can become a time-lapse of claims appearing,
+                  shapes hardening, and dependency chains changing shape.
+                </p>
+              </div>
+              <Badge className="bg-[#e7defa] text-[#5c4c88]">{mapTimeline.entries.length} visible events</Badge>
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-3">
+              <TimelinePanel
+                title="Whole map timeline"
+                subtitle={mapTimeline.summary}
+                count={`${mapTimeline.entries.length} entries`}
+                highlight="Claims, stress tests, revisions, confidence shifts, and shape feedback."
+              >
+                {mapTimeline.entries.slice(-6).map((entry) => (
+                  <TimelineRow key={entry.id} accent={entry.accent} label={entry.label} when={entry.createdAt} summary={entry.summary} />
+                ))}
+              </TimelinePanel>
+
+              <TimelinePanel
+                title="Shape timeline"
+                subtitle={
+                  shapeTimeline
+                    ? `Follow when ${shapeTimeline.label} first showed up, how its confidence moved, and what confirmed or weakened it.`
+                    : "Select a shape to see how Penny noticed it over time."
+                }
+                count={shapeTimeline ? `${shapeTimeline.trail.length} steps` : "No active shape"}
+                highlight={
+                  shapeTimeline
+                    ? `Confidence now ${shapeTimeline.confidence}%. Range ${shapeTimeline.confidenceRange.min ?? "n/a"}-${shapeTimeline.confidenceRange.max ?? "n/a"}.`
+                    : "Shape timelines appear when a live pattern is active."
+                }
+              >
+                {shapeTimeline ? (
+                  shapeTimeline.trail.slice(-5).map((step) => (
+                    <TimelineRow
+                      key={step.id}
+                      accent={step.tone === "feedback" ? "shape" : step.tone === "strengthened" ? "revision" : step.tone === "weakened" ? "stress" : "confidence"}
+                      label={step.label}
+                      when={step.createdAt}
+                      summary={step.summary}
+                      note={step.confidence != null ? `Confidence ${step.confidence}%` : null}
+                    />
+                  ))
+                ) : (
+                  <p className="rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                    No shape selected yet.
+                  </p>
+                )}
+              </TimelinePanel>
+
+              <TimelinePanel
+                title="Dependency chain timeline"
+                subtitle={
+                  dependencyTimeline
+                    ? `Watch the load-bearing structure for ${selectedGraphNode ? kindLabel(selectedGraphNode.node.kind) : "this claim"}.`
+                    : "Select a claim to inspect its dependency chain."
+                }
+                count={dependencyTimeline ? `${dependencyTimeline.steps.length} steps` : "No chain"}
+                highlight={
+                  dependencyTimeline
+                    ? dependencyTimeline.steps.some((step) => step.loadBearing)
+                      ? "Load-bearing claims are marked along the chain."
+                      : "No obvious load-bearing node yet, but the chain is still readable."
+                    : "Dependency timelines follow the selected claim."
+                }
+              >
+                {dependencyTimeline ? (
+                  dependencyTimeline.steps.slice(-5).map((step) => (
+                    <TimelineRow
+                      key={step.id}
+                      accent={step.relation === "root" ? "claim" : step.loadBearing ? "revision" : "stress"}
+                      label={`${step.label}${step.loadBearing ? " · load-bearing" : ""}`}
+                      when={step.createdAt}
+                      summary={step.summary}
+                    />
+                  ))
+                ) : (
+                  <p className="rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                    No dependency chain yet.
+                  </p>
+                )}
+              </TimelinePanel>
+            </div>
+          </div>
+
           <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -2970,12 +3077,12 @@ export function ThoughtMapWorkspace({
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Map view</p>
             <h2 className="mt-2 text-2xl font-semibold text-[var(--ink)]">
-              {view === "outline" ? "Outline view keeps the active workflow intact." : "Graph view turns the same map into a decision lens."}
+              {view === "outline" ? "Outline view keeps the active workflow intact." : "Claim card view keeps one claim primary while the graph becomes a minimap."}
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted-ink)]">
               {view === "outline"
                 ? "Keep expanding, challenging, or connecting branches here while Penny’s best-next-move and founder-brief guidance stay visible above and below the map."
-                : "Select a node to inspect its status, score highlights, and available outline actions. Graph interactions stay selection-only in this first slice."}
+                : "Select a node to inspect the claim card first. The graph stays available as a structural overview, while outline actions remain available from the card."}
             </p>
           </div>
           <div className="inline-flex rounded-full border border-black/10 bg-white p-1 shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
@@ -2991,7 +3098,7 @@ export function ThoughtMapWorkspace({
               className={cn("px-4", view === "graph" && "shadow-none")}
               onClick={() => changeView("graph")}
             >
-              Graph view
+              Claim card
             </Button>
           </div>
         </div>
@@ -3009,10 +3116,10 @@ export function ThoughtMapWorkspace({
             <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-2">
                 <Link2 className="size-4 text-[var(--muted-ink)]" />
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Graph</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Structure minimap</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Badge>Selection only</Badge>
+                <Badge>Card first</Badge>
                 {map.graphSnapshot ? (
                   <>
                     <Badge className="bg-[#e7defa] text-[#5c4c88]">Overall score {formatScore(map.graphSnapshot.overallScore)}</Badge>
@@ -3025,14 +3132,28 @@ export function ThoughtMapWorkspace({
               </div>
             </div>
 
-            <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_340px]">
+            <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.45fr)]">
               <div className="overflow-hidden rounded-[28px] border border-black/10 bg-[linear-gradient(180deg,#fffdf8_0%,#f7f2ea_100%)]">
                 <div className="border-b border-black/8 px-5 py-4 text-sm leading-6 text-[var(--muted-ink)]">
-                  Graph view highlights weak branches and dependency pressure. Use <span className="font-medium text-[var(--ink)]">Outline view</span> to run actions.
+                  Structure minimap highlights weak branches and dependency pressure. Use <span className="font-medium text-[var(--ink)]">Outline view</span> to run actions.
                 </div>
                 <div className="overflow-x-auto">
-                  <div className="relative min-h-[400px]" style={{ width: graphCanvas.width, height: graphCanvas.height }}>
-                    <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
+                  <div
+                    className="relative overflow-hidden"
+                    style={{
+                      width: Math.max(320, Math.round(graphCanvas.width * graphMinimapScale)),
+                      height: Math.max(220, Math.round(graphCanvas.height * graphMinimapScale)),
+                    }}
+                  >
+                    <div
+                      className="relative origin-top-left"
+                      style={{
+                        width: graphCanvas.width,
+                        height: graphCanvas.height,
+                        transform: `scale(${graphMinimapScale})`,
+                      }}
+                    >
+                      <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
                       {graphCanvas.edges.map((edge) => {
                         const startX = edge.from.x + GRAPH_NODE_WIDTH / 2 - 8;
                         const endX = edge.to.x - GRAPH_NODE_WIDTH / 2 + 8;
@@ -3077,16 +3198,16 @@ export function ThoughtMapWorkspace({
                           />
                         );
                       })}
-                    </svg>
+                      </svg>
 
-                    {graphCanvas.nodes.map((graphNode) => {
-                      const isSelected = graphNode.node.id === selectedGraphNodeId;
+                      {graphCanvas.nodes.map((graphNode) => {
+                        const isSelected = graphNode.node.id === selectedGraphNodeId;
 
-                      return (
-                        <button
-                          key={graphNode.node.id}
-                          type="button"
-                          aria-pressed={isSelected}
+                        return (
+                          <button
+                            key={graphNode.node.id}
+                            type="button"
+                            aria-pressed={isSelected}
                         className={cn(
                           "absolute -translate-x-1/2 -translate-y-1/2 rounded-[24px] border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)] focus-visible:ring-offset-2",
                           "w-[188px] shadow-[0_16px_36px_rgba(15,23,42,0.08)]",
@@ -3114,8 +3235,9 @@ export function ThoughtMapWorkspace({
                             <Badge className="bg-white text-[var(--ink)]">saturation {graphNode.saturationScore}%</Badge>
                           </div>
                         </button>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3123,12 +3245,12 @@ export function ThoughtMapWorkspace({
               <div className="rounded-[28px] border border-black/10 bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Inspector</p>
-              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">
-                {selectedGraphNode ? "Selected node" : "Select a node"}
-              </h3>
-            </div>
-            {selectedGraphNode ? <Badge>{kindLabel(selectedGraphNode.node.kind)}</Badge> : null}
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Knowledge card</p>
+                    <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">
+                      {selectedGraphNode ? "Selected claim" : "Select a claim"}
+                    </h3>
+                  </div>
+                  {selectedGraphNode ? <Badge>{kindLabel(selectedGraphNode.node.kind)}</Badge> : null}
                 </div>
 
                 {selectedGraphNode ? (
@@ -3241,6 +3363,72 @@ export function ThoughtMapWorkspace({
       </Card>
 
       {map.founderBrief ? <FounderBriefCard brief={map.founderBrief} /> : null}
+    </div>
+  );
+}
+
+function TimelinePanel({
+  title,
+  subtitle,
+  count,
+  highlight,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  count: string;
+  highlight: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-[22px] border border-black/8 bg-white p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{title}</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{subtitle}</p>
+        </div>
+        <Badge className="bg-[var(--panel)] text-[var(--ink)]">{count}</Badge>
+      </div>
+      <p className="mt-3 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{highlight}</p>
+      <div className="mt-4 space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function TimelineRow({
+  accent,
+  label,
+  summary,
+  when,
+  note,
+}: {
+  accent: "claim" | "stress" | "revision" | "confidence" | "shape" | "resolution";
+  label: string;
+  summary: string;
+  when: Date;
+  note?: string | null;
+}) {
+  const accentClass =
+    accent === "claim"
+      ? "bg-[#d9ead8] text-[#355b32]"
+      : accent === "stress"
+        ? "bg-[#fff6ed] text-[#8b4d1f]"
+        : accent === "revision"
+          ? "bg-[#e7defa] text-[#5c4c88]"
+          : accent === "confidence"
+            ? "bg-[#dff0f7] text-[#1f5d73]"
+            : accent === "resolution"
+              ? "bg-white text-[var(--ink)]"
+              : "bg-[var(--panel)] text-[var(--ink)]";
+
+  return (
+    <div className="rounded-[18px] border-l-2 border-dashed border-black/10 bg-[var(--panel)] p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge className={accentClass}>{label}</Badge>
+        <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{when.toLocaleDateString()}</span>
+        {note ? <Badge className="bg-white text-[var(--ink)]">{note}</Badge> : null}
+      </div>
+      <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{summary}</p>
     </div>
   );
 }
