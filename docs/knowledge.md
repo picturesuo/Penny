@@ -152,6 +152,8 @@
 - `user`: The failure mode taxonomy should cover weak evidence, false certainty, omitted counterargument, dependency failure, bad comparison set, reversible decision, irreversible decision, and pattern mismatch.
 - `user`: Precedent retrieval should be mechanism-based: search first by failure trajectory and move type, then by domain and outcome, and finally by semantic similarity only as a fallback.
 - `user`: The precedent corpus is an asset that compounds separately from any individual user history.
+- `user`: The precedent moment should expose real, selectable failure cases with claim equivalents, load-bearing assumptions, structural lessons, and failure-type tags, then follow them with survivor analogs that share the same structural shape.
+- `user`: Precedent retrieval should stay failure-trajectory-first, but once a case is selected Penny should also show what survived the same structure so the user can compare collapse to rescue instead of reading failure in isolation.
 - `user`: Stress tests should draw from different critique lenses by default, including game theory, network effects, operational, psychological, political, and historical frames, so the system avoids a single-voice hedgehog mode.
 - `user`: Named voices critique should let Penny attack a claim as a skeptical investor, thesis committee, skeptical academic, or GTM operator, grounded in how that archetype historically attacks similar structures.
 - `user`: The adversarial final pass should attack the dependency structure rather than individual claims, identify the quiet load-bearing assumption, and check whether the whole output collapses if that assumption fails.
@@ -266,6 +268,7 @@
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a round-tracked dialectic scaffold, a synthesis-gate surface, a move-query lens, and confidence drift indicators in the old-selves timeline.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a first-class timeline block for whole-map events, per-shape confidence trails, and dependency-chain progression.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces propagated confidence implications explicitly so downstream belief changes must be accepted or defended instead of happening silently.
+- `repo`: `src/lib/penny-insights.ts` now enriches precedent cases with claim equivalents, load-bearing assumptions, structural lessons, and failure-type tags, and it adds survivor analog retrieval for the same structural shape; `src/components/penny/thought-map-workspace.tsx` lets the user select a precedent and compare it with surviving analogs.
 - `repo`: `src/lib/thought-map-generation.ts` now performs claim-type-aware assumption extraction with a sharpness filter, and `src/components/penny/thought-map-form.tsx` now surfaces the extracted assumptions as interactive capture-time preview nodes.
 - `repo`: `src/components/penny/thought-map-form.tsx` now soft-challenges very high confidence claims and surfaces assumption suggestions at capture time.
 - `repo`: `src/app/app/page.tsx` now includes a curriculum and education surface for student mode, instructor views, classroom shape views, metacognition rubrics, and curriculum packs.
