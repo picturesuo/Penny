@@ -185,6 +185,11 @@
 - `user`: Aging foundations monitoring should decay base claims in large dependency structures more aggressively because their failure cascades outward.
 - `user`: Cross-project shape transfer should let shapes learned in one project inform stress-testing in the next so the user gets sharper across contexts, not only within a single map.
 - `user`: Session rhythm memory should remember where the user left off, what has aged, and what they still believe when they return after time away.
+- `user`: Old selves timeline per node should show content over time, confidence over time, and moves over time so the moves architecture becomes felt experience.
+- `user`: Confidence drift indicators should surface recent shifts in confidence directly on the graph as directional cues.
+- `user`: Contradiction cascade preview should appear at revision time so users can see the downstream structural debt they are incurring.
+- `user`: Provenance tracing should show the original source, capture session, and the shapes Penny knew at the time the belief was formed.
+- `user`: Inherited-claim markers should render with a distinct visual treatment and trigger automatic extra scrutiny.
 - `user`: The shapes dashboard should be a periodic surface for patterns the system has learned about the user’s thinking, with each shape confirmable, rejectable, and refinable.
 - `user`: In-context shape callouts should name the active pattern inside a critique so personalization feels honest rather than mysterious.
 - `user`: The old-selves view should surface a claim’s confidence and content over time and make the moves layer emotionally legible.
