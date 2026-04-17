@@ -962,6 +962,8 @@ export function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetad
     resolutionDate: null,
     provenance: "intuition",
     provenanceDetail: "",
+    sourceCitation: "",
+    sourceTrustLevel: "self",
     stakes: [],
     dependencyNotes: "",
     status: "open",
@@ -991,6 +993,12 @@ export function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetad
         break;
       case "provenance detail":
         metadata.provenanceDetail = value === "not specified" ? "" : value;
+        break;
+      case "source citation":
+        metadata.sourceCitation = value === "not specified" ? "" : value;
+        break;
+      case "source reliability":
+        metadata.sourceTrustLevel = value === "not specified" ? "self" : (value.replaceAll(" ", "_") as ClaimCaptureMetadata["sourceTrustLevel"]);
         break;
       case "stakes":
         metadata.stakes =
@@ -1026,6 +1034,8 @@ export function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetad
     metadata.resolutionDate == null ||
     metadata.provenance == null ||
     metadata.provenanceDetail == null ||
+    metadata.sourceCitation == null ||
+    metadata.sourceTrustLevel == null ||
     metadata.stakes == null ||
     metadata.dependencyNotes == null ||
     metadata.status == null ||
@@ -2205,12 +2215,16 @@ export function buildMapTimeline(map: ThoughtMapModel): MapTimelineSnapshot {
     if (event.eventType === "dialectic_round") {
       const title = typeof event.payload?.title === "string" ? String(event.payload.title) : "Dialectic round";
       const response = typeof event.payload?.response === "string" ? String(event.payload.response).trim() : "";
+      const critiqueType =
+        typeof event.payload?.critiqueType === "string" && String(event.payload.critiqueType).trim().length > 0
+          ? String(event.payload.critiqueType).trim()
+          : "";
 
       entries.push({
         id: event.id,
         label: title,
         summary: response
-          ? `Stress-test response: ${response.slice(0, 140)}${response.length > 140 ? "…" : ""}`
+          ? `Stress-test response${critiqueType ? ` · ${critiqueType}` : ""}: ${response.slice(0, 140)}${response.length > 140 ? "…" : ""}`
           : "A dialectic round was recorded against this branch.",
         createdAt: event.createdAt,
         nodeId: event.nodeId,
@@ -2476,18 +2490,22 @@ export function buildClaimMoveHistory(
         } satisfies ClaimMoveHistoryEntry;
       }
 
-      if (event.eventType === "dialectic_round") {
-        const round = typeof event.payload?.round === "string" ? String(event.payload.round) : "round";
-        const responsePath = typeof event.payload?.responsePath === "string" ? String(event.payload.responsePath) : "response";
-        const response = typeof event.payload?.response === "string" ? String(event.payload.response).trim() : "";
-        const critiqueStrength = typeof event.payload?.critiqueStrength === "string" ? String(event.payload.critiqueStrength) : "unknown";
+    if (event.eventType === "dialectic_round") {
+      const round = typeof event.payload?.round === "string" ? String(event.payload.round) : "round";
+      const responsePath = typeof event.payload?.responsePath === "string" ? String(event.payload.responsePath) : "response";
+      const response = typeof event.payload?.response === "string" ? String(event.payload.response).trim() : "";
+      const critiqueStrength = typeof event.payload?.critiqueStrength === "string" ? String(event.payload.critiqueStrength) : "unknown";
+      const critiqueType =
+        typeof event.payload?.critiqueType === "string" && String(event.payload.critiqueType).trim().length > 0
+          ? String(event.payload.critiqueType).trim()
+          : "";
 
         return {
           id: event.id,
           label: `${round} recorded`,
           summary: response
-            ? `The ${round.toLowerCase()} thread persisted a ${responsePath} response at ${critiqueStrength} strength: ${response.slice(0, 120)}${response.length > 120 ? "…" : ""}`
-            : `The ${round.toLowerCase()} thread persisted a ${responsePath} response at ${critiqueStrength} strength.`,
+            ? `The ${round.toLowerCase()} thread persisted a ${responsePath} response at ${critiqueStrength} strength${critiqueType ? ` (${critiqueType})` : ""}: ${response.slice(0, 120)}${response.length > 120 ? "…" : ""}`
+            : `The ${round.toLowerCase()} thread persisted a ${responsePath} response at ${critiqueStrength} strength${critiqueType ? ` (${critiqueType})` : ""}.`,
           createdAt: event.createdAt,
           accent: "feedback",
         } satisfies ClaimMoveHistoryEntry;
