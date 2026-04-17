@@ -48,6 +48,10 @@
 - `user`: Assumption extraction should be claim-type aware, category-based, and sharp enough to surface hidden operational assumptions rather than obvious tautologies.
 - `user`: The assumption extraction moment should render the unstated assumptions as yellow branching nodes with a confidence rating and accept/reject/refine interactions.
 - `user`: The assumption extraction moment should tell the user that one claim often carries several commitments, then invite them to inspect the weakest one.
+- `user`: Image and diagram capture should be able to turn an uploaded diagram into claims with the diagram attached as evidence.
+- `user`: Voice capture should transcribe a memo and parse it into claim-structure candidates for confirmation.
+- `user`: Reading import should let highlights from articles or books become claims or evidence with provenance and citation preserved.
+- `user`: Meeting transcript processing should extract decisions, claims, disagreements, and action items into Brain as structured material.
 
 ## Product Vision & Direction
 - `user`: Penny is an ideation instrument, meaning a personal thinking system that captures raw ideas, stress-tests them against evidence and precedent, teaches the user what they do not understand at the moment they need it, and reflects thinking patterns back to the user so learning compounds over time.
