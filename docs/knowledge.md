@@ -56,6 +56,9 @@
 - `user`: Session rhythm detection should notice approaching cognitive depletion and suggest stopping instead of pushing engagement.
 - `user`: Clean endings should make Penny say the tunnel traversal is complete, hand over the artifact, and stop pulling for more engagement.
 - `user`: Reflection should remain optional-but-rewarded after synthesis, surfacing shapes from the session in a short and skippable way.
+- `user`: Capture and reflection should be distinct modes, with capture optimized for low-friction raw input and reflection optimized for critique-heavy work.
+- `user`: In reflection mode, Penny should suppress new capture so the user can work the current artifact without mode contamination.
+- `user`: Honest endings should appear when a session is draining or complete so Penny can send the user away at the right moment instead of extending engagement.
 - `user`: The data model should treat `Claims`, `Moves`, and `Shapes` as first-class layers.
 - `user`: `Claims` are the nodes: beliefs, evidence, provenance, confidence, and status.
 - `user`: The capture form should collect the root claim with a normalized metadata envelope so the same raw thought also carries confidence, resolution timing, provenance, stakes, dependencies, and status.
