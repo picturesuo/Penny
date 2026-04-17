@@ -108,6 +108,14 @@ Learn should be just-in-time and claim-anchored.
 - Old selves, belief genealogy, inheritance markers, contradiction cascades, confidence drift, and aging foundations should all be visible.
 - Shapes should be visible, reviewable, and capable of changing the lens quickly enough that the next critique feels different.
 
+## Trust and Control
+
+- Penny should periodically self-audit to check where it has been too lenient, too harsh, or miscalibrated.
+- Users should be able to export their full Brain at any time, including claims, moves, shapes, artifacts, and learnings, in structured form.
+- Penny should import from Roam, Obsidian, Notion, and Google Docs by parsing existing notes into claim-candidates for user confirmation.
+- Claims should support privacy tiers so extra-private material never enters aggregate shape libraries or community features unless the user explicitly allows it.
+- Users should be able to archive and hide things they truly want to forget without deleting historical integrity from the system.
+
 ## Curriculum and Education
 
 - Student mode should apply the tunnel to essay writing: capture claims, stress-test structure, teach through confusion, synthesize an outline, then hand off prose to downstream AI.
