@@ -238,6 +238,7 @@
 - `repo`: `src/components/penny/shape-dashboard.tsx` now surfaces structured post-mortems for resolved claims so calibration has a first-class end state and shape input.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now weights critique depth by claim confidence so high-confidence claims get heavier pressure and low-confidence claims stay lighter and more targeted.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now adds a claim-anchored teach-back surface, a per-claim knowledge gap surface, and explicit metacognition teaching for active shapes.
+- `repo`: `src/app/app/page.tsx` now surfaces a derived community commons snapshot with review-gated precedent contributions, privacy-safe contradiction signals, aggregate open questions, an anonymized shape library, and bounded thought-partner matching.
 
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.
