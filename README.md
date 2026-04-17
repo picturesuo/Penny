@@ -26,6 +26,7 @@ Penny is built around three core functions:
 - Stakes-proportional friction: load-bearing claims get more stress-testing, more pre-mortems, and a tighter revisit cadence.
 - Twin-check output: Penny produces the strongest version of the user’s current thinking, then the user decides whether it actually represents what they believe.
 - Post-mortem protocol: when outcomes resolve, Penny turns them into first-class artifacts so the system learns from reality.
+- Dependency-completeness check: synthesis should block only when load-bearing claims have not been stress-tested, and the block should be framed as a risk review rather than pure gatekeeping.
 
 ### Tunnel & Workflow
 
