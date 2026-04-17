@@ -1,4 +1,10 @@
-import type { Prisma, ThoughtMap, ThoughtMapIntervention, ThoughtNode } from "@prisma/client";
+import type {
+  Prisma,
+  ThoughtMap,
+  ThoughtMapEvent as ThoughtMapEventRecord,
+  ThoughtMapIntervention,
+  ThoughtNode,
+} from "@prisma/client";
 import { prisma } from "@/db/prisma";
 import { buildFounderBrief, getFounderBriefReadiness } from "@/lib/founder-brief";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
@@ -16,6 +22,7 @@ import type {
   FounderBriefModel,
   GeneratedActionBundle,
   NodeAction,
+  ThoughtMapEvent as ThoughtMapEventModel,
   ThoughtMapModel,
   ThoughtMapEventType,
   ThoughtNodeModel,
@@ -40,7 +47,9 @@ function mapNode(record: ThoughtNode): ThoughtNodeModel {
   };
 }
 
-function buildThoughtMapModel(record: ThoughtMap & { nodes: ThoughtNode[] }): ThoughtMapModel {
+function buildThoughtMapModel(
+  record: ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+): ThoughtMapModel {
   const founderBriefPayload = parseJson<Omit<FounderBriefModel, "generatedAt">>(record.founderBrief);
   const founderBrief =
     founderBriefPayload && record.founderBriefGeneratedAt
@@ -56,6 +65,15 @@ function buildThoughtMapModel(record: ThoughtMap & { nodes: ThoughtNode[] }): Th
     rawThought: record.rawThought,
     status: record.status,
     nodes: record.nodes.map(mapNode),
+    events: record.events.map((event): ThoughtMapEventModel => ({
+      id: event.id,
+      mapId: event.mapId,
+      nodeId: event.nodeId,
+      interventionId: event.interventionId,
+      eventType: event.eventType as ThoughtMapEventType,
+      payload: parseJson<Record<string, unknown>>(event.payload),
+      createdAt: event.createdAt,
+    })),
     founderBrief,
     founderBriefReadiness: {
       eligible: false,
@@ -334,7 +352,10 @@ async function syncThoughtMapInterventions(params: {
   };
 }
 
-async function hydrateThoughtMap(record: ThoughtMap & { nodes: ThoughtNode[] }, beforeMap?: ThoughtMapModel | null) {
+async function hydrateThoughtMap(
+  record: ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+  beforeMap?: ThoughtMapModel | null,
+) {
   const judgedMap = buildThoughtMapModel(record);
   const interventionState = await syncThoughtMapInterventions({
     map: judgedMap,
@@ -353,6 +374,9 @@ export async function listThoughtMaps() {
     include: {
       nodes: {
         orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
       },
     },
     take: 12,
@@ -405,6 +429,9 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
         nodes: {
           orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
         },
+        events: {
+          orderBy: [{ createdAt: "asc" }],
+        },
       },
     });
   });
@@ -418,6 +445,9 @@ export async function getThoughtMap(mapId: string) {
     include: {
       nodes: {
         orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
       },
     },
   });
@@ -531,6 +561,21 @@ export async function applyNodeAction(params: {
       orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
     });
 
+    await createThoughtMapEvent(tx, {
+      mapId: map.id,
+      nodeId: generated.execution.targetNodeId,
+      eventType: "move_applied",
+      payload: {
+        action: params.action,
+        executionMode: generated.execution.mode,
+        targetNodeKind: generated.execution.targetNodeKind,
+        targetParentId: generated.execution.targetParentId,
+        supersededNodeId,
+        createdNodeIds: inserts.map((insert) => insert.id),
+        updatedNodeIds: updatedNodes.map((updatedNode) => updatedNode.id),
+      },
+    });
+
     return {
       createdNodes: inserts,
       updatedNodes: updatedNodes.map(mapNode),
@@ -543,6 +588,9 @@ export async function applyNodeAction(params: {
       nodes: {
         orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
       },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
     },
   });
 
@@ -550,7 +598,10 @@ export async function applyNodeAction(params: {
     throw new Error("Map not found after update");
   }
 
-  const updatedMap = await hydrateThoughtMap(updatedRecord, map);
+  const updatedMap = await hydrateThoughtMap(
+    updatedRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+    map,
+  );
 
   const actionResult = buildThoughtMapActionResult({
     action: params.action,
@@ -622,10 +673,16 @@ export async function generateFounderBrief(mapId: string) {
       nodes: {
         orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
       },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
     },
   });
 
-  return hydrateThoughtMap(updatedRecord, map);
+  return hydrateThoughtMap(
+    updatedRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+    map,
+  );
 }
 
 export async function dismissThoughtMapIntervention(params: { mapId: string; interventionId: string }) {

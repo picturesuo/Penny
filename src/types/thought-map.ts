@@ -69,7 +69,8 @@ export type ThoughtMapEventType =
   | "intervention_completed"
   | "intervention_dismissed"
   | "bias_detected"
-  | "bias_resolved";
+  | "bias_resolved"
+  | "move_applied";
 
 export type RecommendationReason =
   | "low_evidence"
@@ -265,6 +266,7 @@ export interface ThoughtMapModel {
   rawThought: string;
   status: string;
   nodes: ThoughtNodeModel[];
+  events: ThoughtMapEvent[];
   founderBrief: FounderBriefModel | null;
   founderBriefReadiness: FounderBriefReadiness;
   graphSnapshot: ThoughtMapGraphSnapshot | null;

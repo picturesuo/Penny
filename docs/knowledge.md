@@ -81,6 +81,11 @@
 - `user`: The failure mode taxonomy should cover weak evidence, false certainty, omitted counterargument, dependency failure, bad comparison set, reversible decision, irreversible decision, and pattern mismatch.
 - `user`: Precedent retrieval should be mechanism-based: search first by failure trajectory and move type, then by domain and outcome, and finally by semantic similarity only as a fallback.
 - `user`: The precedent corpus is an asset that compounds separately from any individual user history.
+- `user`: Stress tests should draw from different critique lenses by default, including game theory, network effects, operational, psychological, political, and historical frames, so the system avoids a single-voice hedgehog mode.
+- `user`: Named voices critique should let Penny attack a claim as a skeptical investor, thesis committee, skeptical academic, or GTM operator, grounded in how that archetype historically attacks similar structures.
+- `user`: The adversarial final pass should attack the dependency structure rather than individual claims, identify the quiet load-bearing assumption, and check whether the whole output collapses if that assumption fails.
+- `user`: The steel-manning gym should give the user a position they disagree with, ask them to argue its strongest form, and score the result against Penny’s best version as explicit skill training.
+- `user`: Diversified retrieval should be the default for critique: each pass should widen the lens set before narrowing to a single verdict.
 - `user`: Just-in-time learning should happen at the point of confusion during stress-testing, with minimum viable explanation, why-it-matters context, teach-back, and optional deeper anchors.
 - `user`: Every learning moment should generate moves and should feed a knowledge shape for what the user understands, repeats, or needs to relearn.
 - `user`: Shapes must be visible to the user as metacognitive feedback, both in-context and through periodic reflection surfaces.
