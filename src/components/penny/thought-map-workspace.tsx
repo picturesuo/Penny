@@ -478,6 +478,246 @@ function knowledgeSurface(node: ThoughtNodeModel | null, genealogy: ReturnType<t
   };
 }
 
+type TeachBackTone = "correct" | "needs-work" | "missing";
+
+type TeachBackAnnotation = {
+  phrase: string;
+  note: string;
+  tone: TeachBackTone;
+};
+
+type TeachBackAnalysis = {
+  concept: string;
+  scaffold: string;
+  correction: string;
+  whyItMatters: string;
+  restatementPrompt: string;
+  summary: string;
+  annotations: TeachBackAnnotation[];
+  responseStatus: "empty" | "partial" | "aligned";
+  responseLength: number;
+};
+
+function teachBackFocusForNode(
+  node: ThoughtNodeModel | null,
+  surface: ReturnType<typeof knowledgeSurface>,
+): {
+  concept: string;
+  scaffold: string;
+  correction: string;
+  whyItMatters: string;
+  restatementPrompt: string;
+  annotations: TeachBackAnnotation[];
+} {
+  const content = node?.content ?? "";
+
+  if (/network effects|direct|indirect/i.test(content)) {
+    return {
+      concept: "direct vs indirect network effects",
+      scaffold: "Direct network effects require users interacting with each other; indirect network effects come from complements or adjacent users.",
+      correction:
+        "You were tracking the direction of value correctly, but your wording fits indirect network effects better than direct ones. Direct effects need user-to-user interaction, so the competitive dynamics are different.",
+      whyItMatters:
+        "That changes the moat story: direct effects ask for interaction density, while indirect effects ask for two-sided or complementary adoption.",
+      restatementPrompt: "Now restate the network effects in this claim using the correction: is this direct, indirect, or neither?",
+      annotations: [
+        {
+          phrase: "more users",
+          note: "This usually points to indirect network effects or complement-driven value, not necessarily direct interaction.",
+          tone: "needs-work",
+        },
+        {
+          phrase: "users interact with each other",
+          note: "This is the direct-network-effects test: value rises because users directly create value for one another.",
+          tone: "correct",
+        },
+        {
+          phrase: "critical mass",
+          note: "This is the consequence, not the definition. Direct and indirect effects reach it differently.",
+          tone: "needs-work",
+        },
+      ],
+    };
+  }
+
+  const focus = surface.teachBackGap[0] ?? "the core concept";
+
+  return {
+    concept: focus,
+    scaffold: `Define ${focus}, connect it to the claim, and name one thing that would make the claim stronger or weaker.`,
+    correction:
+      `You had part of ${focus} right, but the explanation needs one tighter claim-specific link before it becomes durable.`,
+    whyItMatters:
+      "The correction matters because the user should be able to use the concept on this exact claim, not only in the abstract.",
+    restatementPrompt: `Now restate ${focus} in the context of this claim, with the correction integrated.`,
+    annotations: [
+      {
+        phrase: focus,
+        note: "This is the concept Penny wants you to anchor in the current claim.",
+        tone: "needs-work",
+      },
+    ],
+  };
+}
+
+function analyzeTeachBackResponse(response: string, focus: ReturnType<typeof teachBackFocusForNode>) {
+  const clean = response.trim();
+  const responseLength = clean.length;
+
+  if (!clean) {
+    return {
+      concept: focus.concept,
+      scaffold: focus.scaffold,
+      responseStatus: "empty" as const,
+      summary: "Write your explanation in the same surface. Penny will annotate the specific gap once it can see your wording.",
+      correction: focus.correction,
+      whyItMatters: focus.whyItMatters,
+      restatementPrompt: focus.restatementPrompt,
+      annotations: focus.annotations,
+      responseLength,
+    };
+  }
+
+  const hasDirectLanguage = /direct/i.test(clean);
+  const hasInteractionLanguage = /(interact|interaction|user-to-user)/i.test(clean);
+  const hasIndirectLanguage = /(indirect|complement|complementary|adjacent users)/i.test(clean);
+  const hasValueShiftLanguage = /(more users|more value|value rises|network effect|critical mass)/i.test(clean);
+  const directMismatch = hasValueShiftLanguage && !hasInteractionLanguage && !hasDirectLanguage;
+  const restatementAligned = hasDirectLanguage && hasInteractionLanguage && hasIndirectLanguage;
+
+  const annotations: TeachBackAnnotation[] = [...focus.annotations];
+
+  if (hasValueShiftLanguage) {
+    annotations.unshift({
+      phrase: clean.match(/[^.?!]*(more users[^.?!]*)/i)?.[1]?.trim() ?? "more users create more value",
+      note: "This phrase describes value increasing with adoption. That is closer to indirect effects unless the users themselves are directly interacting.",
+      tone: (directMismatch ? "needs-work" : "correct") as TeachBackTone,
+    });
+  }
+
+  if (hasInteractionLanguage) {
+    annotations.push({
+      phrase: clean.match(/[^.?!]*(interaction[^.?!]*)/i)?.[1]?.trim() ?? "user-to-user interaction",
+      note: "This is the direct-network-effects criterion Penny is looking for.",
+      tone: "correct",
+    });
+  }
+
+  if (directMismatch) {
+    return {
+      concept: focus.concept,
+      scaffold: focus.scaffold,
+      responseStatus: "partial" as const,
+      summary: "You described the value increasing with more users, but you have not yet pinned down the direct-interaction part that makes it direct network effects.",
+      correction: focus.correction,
+      whyItMatters: focus.whyItMatters,
+      restatementPrompt: focus.restatementPrompt,
+      annotations,
+      responseLength,
+    };
+  }
+
+  if (restatementAligned || responseLength >= 90) {
+    return {
+      concept: focus.concept,
+      scaffold: focus.scaffold,
+      responseStatus: "aligned" as const,
+      summary: "The explanation now separates interaction from adoption and ties the concept back to the claim.",
+      correction: "Keep the distinction explicit so you can tell direct and indirect effects apart the next time the claim changes.",
+      whyItMatters: focus.whyItMatters,
+      restatementPrompt: "Try the same explanation one more time with a concrete example from your own claim.",
+      annotations,
+      responseLength,
+    };
+  }
+
+  return {
+    concept: focus.concept,
+    scaffold: focus.scaffold,
+    responseStatus: "partial" as const,
+    summary: "You have part of it, but the explanation still needs the claim-specific distinction Penny asked for.",
+    correction: focus.correction,
+    whyItMatters: focus.whyItMatters,
+    restatementPrompt: focus.restatementPrompt,
+    annotations,
+    responseLength,
+  };
+}
+
+function highlightTeachBackResponse(response: string, annotations: TeachBackAnnotation[]) {
+  if (!response.trim()) {
+    return [<span key="empty" className="text-[var(--muted-ink)]">Your explanation will appear here once you write it.</span>];
+  }
+
+  const sorted = [...annotations]
+    .filter((annotation) => annotation.phrase.trim().length > 0)
+    .sort((a, b) => b.phrase.length - a.phrase.length);
+
+  if (!sorted.length) {
+    return [response];
+  }
+
+  const used = new Set<string>();
+  const parts: ReactNode[] = [];
+  let remaining = response;
+  let cursor = 0;
+
+  while (remaining.length > 0) {
+    let match: TeachBackAnnotation | null = null;
+    let matchIndex = -1;
+
+    for (const annotation of sorted) {
+      if (used.has(annotation.phrase)) {
+        continue;
+      }
+
+      const index = remaining.toLowerCase().indexOf(annotation.phrase.toLowerCase());
+      if (index !== -1 && (matchIndex === -1 || index < matchIndex)) {
+        match = annotation;
+        matchIndex = index;
+      }
+    }
+
+    if (!match || matchIndex === -1) {
+      parts.push(
+        <span key={`teachback-${cursor}-${remaining.slice(0, 24)}`}>
+          {remaining}
+        </span>,
+      );
+      break;
+    }
+
+    if (matchIndex > 0) {
+      const before = remaining.slice(0, matchIndex);
+      parts.push(<span key={`teachback-before-${cursor}-${before.slice(0, 24)}`}>{before}</span>);
+      cursor += before.length;
+    }
+
+    const phrase = remaining.slice(matchIndex, matchIndex + match.phrase.length);
+    parts.push(
+      <span
+        key={`teachback-hit-${cursor}-${phrase.slice(0, 24)}`}
+        className={cn(
+          "rounded-md px-1.5 py-0.5 ring-1",
+          match.tone === "correct"
+            ? "bg-[#d9ead8] text-[#355b32] ring-[#9fc09a]"
+            : match.tone === "needs-work"
+              ? "bg-[#fff6ed] text-[#8b4d1f] ring-[#d7b07c]"
+              : "bg-[var(--panel)] text-[var(--ink)] ring-black/10",
+        )}
+        title={match.note}
+      >
+        {phrase}
+      </span>,
+    );
+    used.add(match.phrase);
+    cursor += phrase.length;
+    remaining = remaining.slice(matchIndex + match.phrase.length);
+  }
+
+  return parts;
+}
+
 function shapeMetacognition(shape: PennyShape | null) {
   if (!shape) {
     return null;
@@ -516,6 +756,9 @@ export function ThoughtMapWorkspace({
   );
   const [peerAudience, setPeerAudience] = useState<PeerAudience>("skeptical investor");
   const [selectedPrecedentId, setSelectedPrecedentId] = useState<string | null>(null);
+  const [teachBackDrafts, setTeachBackDrafts] = useState<Record<string, string>>({});
+  const [teachBackFeedback, setTeachBackFeedback] = useState<Record<string, TeachBackAnalysis>>({});
+  const [teachBackAttempts, setTeachBackAttempts] = useState<Record<string, string[]>>({});
   const [elicitationMode, setElicitationMode] = useState<ElicitationMode>("devils advocate");
   const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
     collectShapeFeedback(normalizeMap(initialMap).events),
@@ -1006,6 +1249,36 @@ export function ThoughtMapWorkspace({
   const selectedSurvivorPrecedents = selectedPrecedentSummary
     ? retrieveSurvivorPrecedentsForCase(selectedPrecedentSummary)
     : [];
+  const selectedTeachBackFocus = useMemo(
+    () => teachBackFocusForNode(selectedGraphNode?.node ?? null, selectedKnowledgeSurface),
+    [selectedGraphNode?.node, selectedKnowledgeSurface],
+  );
+  const selectedTeachBackAnalysis = useMemo(
+    () => analyzeTeachBackResponse(teachBackDrafts[selectedGraphNode?.node.id ?? ""] ?? "", selectedTeachBackFocus),
+    [selectedGraphNode?.node.id, selectedTeachBackFocus, teachBackDrafts],
+  );
+  const currentTeachBackNodeId = selectedGraphNode?.node.id ?? null;
+  const currentTeachBackDraft = currentTeachBackNodeId ? teachBackDrafts[currentTeachBackNodeId] ?? "" : "";
+  const currentTeachBackFeedback = currentTeachBackNodeId ? teachBackFeedback[currentTeachBackNodeId] ?? null : null;
+  const currentTeachBackAttempts = currentTeachBackNodeId ? teachBackAttempts[currentTeachBackNodeId] ?? [] : [];
+  const currentTeachBackAnalysis = currentTeachBackFeedback ?? selectedTeachBackAnalysis;
+  const handleTeachBackCheck = () => {
+    if (!currentTeachBackNodeId) {
+      return;
+    }
+
+    const response = currentTeachBackDraft;
+    const analysis = analyzeTeachBackResponse(response, selectedTeachBackFocus);
+
+    setTeachBackFeedback((prev) => ({
+      ...prev,
+      [currentTeachBackNodeId]: analysis,
+    }));
+    setTeachBackAttempts((prev) => ({
+      ...prev,
+      [currentTeachBackNodeId]: [...(prev[currentTeachBackNodeId] ?? []), response],
+    }));
+  };
   const elicitationPatterns = [
     {
       key: "devils advocate" as const,
@@ -1744,15 +2017,53 @@ export function ThoughtMapWorkspace({
                 Penny gives the minimum scaffold, then asks you to generate the explanation yourself so the gap shows up where it matters.
               </p>
               {selectedGraphNode ? (
-                <div className="mt-4 rounded-[20px] bg-[var(--panel)] p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Minimum scaffold</p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
-                    Define the concept, connect it to this claim, and name one thing that would make the claim stronger or weaker.
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
-                    Now explain how it applies to: <span className="font-medium text-[var(--ink)]">{selectedGraphNode.node.content}</span>
-                  </p>
-                </div>
+                <>
+                  <div className="mt-4 rounded-[20px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Concept handle</p>
+                    <p className="mt-2 text-sm font-medium text-[var(--ink)]">{selectedTeachBackFocus.concept}</p>
+                    <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{selectedTeachBackFocus.scaffold}</p>
+                    <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                      Apply it to <span className="font-medium text-[var(--ink)]">{selectedGraphNode.node.content}</span>
+                    </p>
+                  </div>
+                  <div className="mt-4 rounded-[20px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Explain it back</p>
+                    <textarea
+                      className="mt-3 min-h-28 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                      placeholder={`Before I explain, tell me what you think ${selectedTeachBackFocus.concept} means in this claim.`}
+                      value={currentTeachBackDraft}
+                      onChange={(event) =>
+                        setTeachBackDrafts((prev) => ({
+                          ...prev,
+                          [currentTeachBackNodeId ?? ""]: event.target.value,
+                        }))
+                      }
+                    />
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button className="gap-2" onClick={handleTeachBackCheck} disabled={!currentTeachBackNodeId || isPending}>
+                        Check explanation
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="gap-2"
+                        onClick={() => {
+                          if (!currentTeachBackNodeId) {
+                            return;
+                          }
+
+                          setTeachBackDrafts((prev) => ({ ...prev, [currentTeachBackNodeId]: selectedTeachBackFocus.scaffold }));
+                        }}
+                        disabled={!currentTeachBackNodeId}
+                      >
+                        Use scaffold
+                      </Button>
+                    </div>
+                    <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Your text, annotated</p>
+                    <div className="mt-2 rounded-[18px] border border-black/8 bg-white p-4 text-sm leading-7 text-[var(--ink)]">
+                      {highlightTeachBackResponse(currentTeachBackDraft, currentTeachBackAnalysis.annotations)}
+                    </div>
+                  </div>
+                </>
               ) : (
                 <p className="mt-4 rounded-[20px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
                   Select a node to turn this into a claim-anchored teach-back prompt.
@@ -1772,7 +2083,36 @@ export function ThoughtMapWorkspace({
                       <Badge className="bg-[#d9ead8] text-[#355b32]">No obvious gap</Badge>
                     )}
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{selectedKnowledgeSurface.reviewPrompt}</p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.summary}</p>
+                </div>
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Why it matters</p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.whyItMatters}</p>
+                  <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Restate with the correction</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.restatementPrompt}</p>
+                </div>
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Correction</p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.correction}</p>
+                  {currentTeachBackAnalysis.annotations.length ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {currentTeachBackAnalysis.annotations.map((annotation) => (
+                        <Badge
+                          key={`${annotation.phrase}-${annotation.note}`}
+                          className={
+                            annotation.tone === "correct"
+                              ? "bg-[#d9ead8] text-[#355b32]"
+                              : annotation.tone === "needs-work"
+                                ? "bg-[#fff6ed] text-[#8b4d1f]"
+                                : "bg-white text-[var(--ink)]"
+                          }
+                          title={annotation.note}
+                        >
+                          {annotation.phrase}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="rounded-[18px] bg-[var(--panel)] p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Level match</p>
@@ -1784,6 +2124,11 @@ export function ThoughtMapWorkspace({
                   <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
                     Future critique pitches at this level instead of repeating basics or skipping the missing pieces.
                   </p>
+                  {currentTeachBackAttempts.length ? (
+                    <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                      {currentTeachBackAttempts.length} teach-back round{currentTeachBackAttempts.length === 1 ? "" : "s"} logged
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
