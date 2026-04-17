@@ -177,6 +177,12 @@
 - `user`: Penny’s voice should be an invested sparring partner that wants the user sharp without being sycophantic or brutal.
 - `user`: The visual language should feel like a built city, with structure emerging from thinking and density beating breadth.
 - `user`: Three especially important additions are an adversarial pass on the overall structure, an optional peer-simulation mode, and a twin-check mode that produces the strongest version of the user’s thinking for calibration.
+- `user`: Emotional-structure shapes should derive from stakes tags so Penny can notice where self-image, reputation, money, relationship, or time changes the shape of the critique.
+- `user`: Confusion should remain a first-class surface rather than being forced closed, because unresolved questions are often the productive state before a breakthrough.
+- `user`: Assumption archaeology should make hidden scaffolding visible on each claim so the user can inspect what is being quietly presumed.
+- `user`: Counter-shape mode should periodically critique against Penny’s own dominant user-shape so the lens does not become an echo chamber.
+- `user`: Honest confidence resets should periodically force recalibration on stale foundational claims to combat drift and anchoring.
+- `user`: Cross-project stress-test pattern memory should use personal precedent from previous projects to show recurring structural weaknesses and how the user handled them before.
 - `user`: The system only becomes real if the loop closes fast enough to feel, the precedent corpus is actually maintained and growing, and the lens meaningfully changes outputs.
 - `user`: Near-term architectural work should define what a learning recommendation contains, what the user does with it, how success is measured, and what gets captured in the moves layer so the self-iterating second brain has a durable substrate.
 - `user`: The single addition to push hardest for is the old selves feature, which shows users their past beliefs and confidence levels over time and makes the moves layer emotionally legible, shareable, and product-defining.
