@@ -133,6 +133,10 @@
 - `user`: Classroom shape views should aggregate patterns across a class so instructors can see bottlenecks like students abandoning at the counterargument stage.
 - `user`: Metacognition grading rubrics should evaluate thinking by the shapes visible in the tunnel traversal rather than by output quality alone.
 - `user`: Curriculum packs should be pre-built tunnel variants for common tasks such as investment thesis, research proposal, product spec, and argumentative essay, with stage exit criteria tailored to the task instead of content templates.
+- `user`: Literature review mode should specialize import of papers, claim extraction from abstracts, and synthesis toward a structured argument about the state of a field.
+- `user`: Pitch deck mode should drive toward the structural frame of a deck, with each slide mapping to a cluster of stress-tested claims.
+- `user`: Book proposal mode should specialize the structural frame for publishing, including hook, thesis, chapter-level arguments, and market positioning.
+- `user`: Career decision mode should use gates calibrated to life decisions, including personal values clarification, identity claims, and what-if-wrong modes.
 - `user`: Penny’s voice should be an invested sparring partner: genuinely helpful, not sycophantic, not brutal.
 - `user`: The visual language should feel like a built city rather than a notes dump, with structure emerging from thinking and density beating breadth.
 - `user`: The interface should use a density-over-breadth visual language, where well-stress-tested nodes render with richer color and more confident lines while shallow nodes stay thin and provisional.
