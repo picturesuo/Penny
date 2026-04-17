@@ -87,6 +87,7 @@
 - `user`: The interface should use a density-over-breadth visual language, where well-stress-tested nodes render with richer color and more confident lines while shallow nodes stay thin and provisional.
 - `user`: Organization should emerge from stress-testing and relationship inference rather than upfront tagging or ceremony.
 - `user`: Progressive disclosure should keep the active tunnel stage front and center while other stages remain accessible but quiet.
+- `user`: Knowledge cards should be the primary decision surface for single claims, with the graph demoted to a structural minimap instead of the hero.
 - `user`: The outline should be the daily workspace and the graph should be a periodic zoom-out, not the primary surface.
 - `user`: Smart defaults should preselect stress-test type, critique depth, and learning scaffold based on claim type, confidence, and topic while still allowing override.
 - `user`: Clean endings should be treated as a trust signal because the product is optimized for finished work, not engagement.
@@ -260,6 +261,7 @@
 - `repo`: `src/app/app/page.tsx` now includes a curriculum and education surface for student mode, instructor views, classroom shape views, metacognition rubrics, and curriculum packs.
 - `repo`: `src/components/penny/shape-dashboard.tsx` now records shape feedback back to the map through `POST /api/maps/[id]/shape-feedback`, and `src/server/thought-map.ts` now persists that feedback as a `shape_feedback` move event.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now captures reasoning for the active shape override, surfaces a first-class claim dependency graph, and shows a confusion log for weak or unclear branches.
+- `repo`: `src/components/penny/thought-map-workspace.tsx` now presents the selected claim as the primary knowledge card and keeps the graph as a structural minimap.
 - `repo`: `src/lib/thought-map-analysis.ts` now exposes explicit critique tags alongside the older coverage buckets, and `src/lib/penny-insights.ts` tightened the market-overconfidence shape rule so it only fires in genuinely market-facing text.
 - `repo`: `src/components/penny/shape-dashboard.tsx` now surfaces structured post-mortems for resolved claims so calibration has a first-class end state and shape input.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now weights critique depth by claim confidence so high-confidence claims get heavier pressure and low-confidence claims stay lighter and more targeted.
