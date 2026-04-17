@@ -88,6 +88,14 @@ export function ThoughtMapForm() {
       [...assumptionSnapshot.assumptions].sort((a, b) => a.confidence - b.confidence)[0] ?? null,
     [assumptionSnapshot.assumptions],
   );
+  const assumptionSuggestions = useMemo(
+    () =>
+      assumptionSnapshot.assumptions
+        .slice(0, 3)
+        .map((assumption) => assumption.text)
+        .filter((text): text is string => text.trim().length > 0),
+    [assumptionSnapshot.assumptions],
+  );
   const confidenceChallenge =
     claim.confidence > 90
       ? "You’re committing to a very high confidence. What specifically would have to be true for you to revise down to 70%?"
@@ -323,21 +331,22 @@ export function ThoughtMapForm() {
                 className="w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
               />
               <div className="flex flex-wrap gap-2">
-                {assumptionSuggestions.map((suggestion) => (
+                {assumptionSnapshot.assumptions.map((assumption) => (
                   <button
-                    key={suggestion}
+                    key={assumption.text}
                     type="button"
                     className="rounded-full border border-[#d7c06c] bg-[#fff6d8] px-3 py-2 text-left text-xs leading-5 text-[#6f5612] transition hover:border-[#b79412] hover:bg-[#fff1b8]"
                     onClick={() =>
                       setClaim((current) => ({
                         ...current,
                         dependencyNotes: current.dependencyNotes
-                          ? `${current.dependencyNotes}\n${suggestion}`
-                          : suggestion,
+                          ? `${current.dependencyNotes}\n${assumption.text}`
+                          : assumption.text,
                       }))
                     }
+                    title={assumption.explanation}
                   >
-                    {suggestion}
+                    {assumption.category} · {assumption.confidence}%
                   </button>
                 ))}
               </div>
