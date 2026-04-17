@@ -17,6 +17,7 @@ Penny is built around three core functions:
 - Round-tracked counterargument threads: Penny should critique in explicit rounds so it can escalate, concede, or pivot based on the user’s response.
 - Critique strength disclosure: every counterargument should label itself weak, moderate, or strong.
 - Why-this-critique transparency: the user should be able to expand a critique to see the failure type, shape pattern, precedent, and framework behind it.
+- Argument-as-explanation: every critique should be explainable as a causal chain over the claim graph, with assumptions, propagated confidence, and precedent cases spelled out in natural language.
 - Three-path response: the user should be able to defend, revise, or absorb a critique instead of being forced into one text box.
 - Counterargument provenance tags: critiques should show where they came from, whether from precedent, dependency analysis, behavioral science, or shape-derived patterns.
 
