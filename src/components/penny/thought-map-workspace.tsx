@@ -28,6 +28,7 @@ import {
   formatShapeVerdict,
   interleaveStressNodes,
   retrievePrecedentsForNode,
+  retrieveSurvivorPrecedentsForCase,
   traceContradictionCascade,
   buildShapeTimeline,
   type PennyShape,
@@ -514,6 +515,7 @@ export function ThoughtMapWorkspace({
     preferredGraphNodeId(normalizeMap(initialMap)),
   );
   const [peerAudience, setPeerAudience] = useState<PeerAudience>("skeptical investor");
+  const [selectedPrecedentId, setSelectedPrecedentId] = useState<string | null>(null);
   const [elicitationMode, setElicitationMode] = useState<ElicitationMode>("devils advocate");
   const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
     collectShapeFeedback(normalizeMap(initialMap).events),
@@ -999,7 +1001,11 @@ export function ThoughtMapWorkspace({
   );
   const selectedCritiqueStrength = critiqueStrengthLabel(selectedGraphNode?.node.scores?.strength ?? null);
   const selectedPrecedents = selectedGraphNode ? retrievePrecedentsForNode(selectedGraphNode.node, lens) : [];
-  const selectedPrecedentSummary = selectedPrecedents[0] ?? null;
+  const selectedPrecedentSummary =
+    selectedPrecedents.find((precedent) => precedent.id === selectedPrecedentId) ?? selectedPrecedents[0] ?? null;
+  const selectedSurvivorPrecedents = selectedPrecedentSummary
+    ? retrieveSurvivorPrecedentsForCase(selectedPrecedentSummary)
+    : [];
   const elicitationPatterns = [
     {
       key: "devils advocate" as const,
@@ -2117,20 +2123,66 @@ export function ThoughtMapWorkspace({
                   ? `${peerAudience} mode: Penny searches for failure cases that match this claim’s risk profile before it gives the critique.`
                   : "Select a claim to retrieve failure cases that match its risk profile."}
               </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Pick the precedent that feels most structurally similar. Penny will then compare it with the cases that survived the same shape.
+              </p>
               {selectedGraphNode ? (
                 <Badge className="mt-3 bg-[#e7defa] text-[#5c4c88]">critique {critiqueDepthLabel(selectedGraphNode.node)}</Badge>
               ) : null}
               {selectedPrecedents.length ? (
                 <div className="mt-4 space-y-3">
                   {selectedPrecedents.map((precedent) => (
-                    <div key={precedent.id} className="rounded-[18px] bg-[var(--panel)] p-4">
-                      <p className="text-sm font-medium text-[var(--ink)]">{precedent.name}</p>
+                    <div
+                      key={precedent.id}
+                      className={cn(
+                        "rounded-[18px] bg-[var(--panel)] p-4",
+                        selectedPrecedentSummary?.id === precedent.id ? "ring-2 ring-[#5c4c88]/35" : "",
+                      )}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium text-[var(--ink)]">{precedent.name}</p>
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                            {precedent.domain} · {precedent.failureMode}
+                          </p>
+                        </div>
+                        <Button
+                          variant={selectedPrecedentSummary?.id === precedent.id ? "primary" : "secondary"}
+                          className="px-3 py-1 text-[11px]"
+                          onClick={() => setSelectedPrecedentId(precedent.id)}
+                        >
+                          Compare this case
+                        </Button>
+                      </div>
                       <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
-                        {precedent.domain} · {precedent.failureMode}
+                        Claim equivalent
                       </p>
-                      <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">
-                        Failure trajectory: {precedent.failureTrajectory}
+                      <p className="mt-1 text-sm leading-6 text-[var(--ink)]">{precedent.claimEquivalent}</p>
+                      <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                        Failure trajectory
                       </p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--muted-ink)]">{precedent.failureTrajectory}</p>
+                      <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                        Load-bearing assumptions
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        {precedent.loadBearingAssumptions.map((assumption) => (
+                          <p key={`${precedent.id}-${assumption}`} className="rounded-[14px] bg-white px-3 py-2 text-sm leading-6 text-[var(--ink)]">
+                            {assumption}
+                          </p>
+                        ))}
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{precedent.whatKilledIt}</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{precedent.killAssumption}</p>
+                      <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Structural lesson</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{precedent.structuralLesson}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {precedent.failureTypeTags.map((tag) => (
+                          <Badge key={`${precedent.id}-type-${tag}`} className="bg-[#efe7fc] text-[#5c4c88]">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {precedent.riskTags.map((tag) => (
                           <Badge key={`${precedent.id}-${tag}`} className="bg-white text-[var(--ink)]">
@@ -2138,8 +2190,6 @@ export function ThoughtMapWorkspace({
                           </Badge>
                         ))}
                       </div>
-                      <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{precedent.whatKilledIt}</p>
-                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{precedent.killAssumption}</p>
                     </div>
                   ))}
                 </div>
@@ -2162,6 +2212,39 @@ export function ThoughtMapWorkspace({
                 ) : (
                   <p className="text-sm leading-6 text-[var(--muted-ink)]">
                     Choose an audience to simulate how that audience historically attacks similar structures.
+                  </p>
+                )}
+              </div>
+              <div className="mt-6 rounded-[18px] bg-[var(--panel)] p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What survived this structure</p>
+                {selectedPrecedentSummary ? (
+                  <>
+                    <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                      {selectedPrecedentSummary.name} is the failure case. These are the cases that survived similar structural pressure.
+                    </p>
+                    {selectedSurvivorPrecedents.length ? (
+                      <div className="mt-3 space-y-2">
+                        {selectedSurvivorPrecedents.map((survivor) => (
+                          <div key={survivor.id} className="rounded-[16px] bg-white px-4 py-3">
+                            <p className="text-sm font-medium text-[var(--ink)]">{survivor.name}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{survivor.domain}</p>
+                            <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{survivor.whatSavedIt}</p>
+                            <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">{survivor.structuralLesson}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                        No survivor analog found yet for this structural shape.
+                      </p>
+                    )}
+                    <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                      Which of these surviving structures is closest to what you’re trying to do?
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                    Select a failure precedent to see what survived the same shape.
                   </p>
                 )}
               </div>
