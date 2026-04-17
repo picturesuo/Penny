@@ -90,6 +90,15 @@ Friction should scale with stakes so the product does not flatten important deci
 - Shape confidence thresholds: only shapes above threshold should feed the lens; provisional shapes stay tracked but inactive.
 - Override-derived shapes: disagreement data should produce its own shape signals, separate from behavior-derived patterns.
 
+### Memory & Time
+
+- Old selves expansion: show confidence deltas over time, active shapes at the moment a claim was made, and what precedent Penny would have shown then versus now.
+- Belief genealogy: trace where a belief came from, what depends on it, and whether its source has been contradicted since.
+- Inheritance markers: explicitly tag claims received from someone else and raise default scrutiny on that source chain.
+- Contradiction cascade tracing: when a foundational claim changes, show which downstream claims need revisiting.
+- Cross-project shape transfer: let shapes learned in one project inform stress-testing in the next.
+- Session rhythm memory: when the user returns after time away, show what aged, what’s still believed, and where they left off.
+
 ## Psychology-Backed Design
 
 The product should reflect research-backed learning and judgment principles:
