@@ -217,6 +217,7 @@
 - `repo`: `src/lib/thought-map-analysis.ts` now exposes explicit critique tags alongside the older coverage buckets, and `src/lib/penny-insights.ts` tightened the market-overconfidence shape rule so it only fires in genuinely market-facing text.
 - `repo`: `src/components/penny/shape-dashboard.tsx` now surfaces structured post-mortems for resolved claims so calibration has a first-class end state and shape input.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now weights critique depth by claim confidence so high-confidence claims get heavier pressure and low-confidence claims stay lighter and more targeted.
+- `repo`: `src/components/penny/thought-map-workspace.tsx` now adds a claim-anchored teach-back surface, a per-claim knowledge gap surface, and explicit metacognition teaching for active shapes.
 
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.
