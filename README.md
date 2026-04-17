@@ -190,6 +190,11 @@ Friction should scale with stakes so the product does not flatten important deci
 - Contradiction cascade preview: when a claim is revised, show the downstream debt before the user commits.
 - Provenance tracing: show the original source, capture session, and shapes present when the belief formed.
 - Inherited-claim markers: render inherited claims distinctly and give them automatic extra scrutiny.
+- Time-lapse of the map: let users watch claims appear, relationships form, stress-tests resolve, and shapes emerge over weeks and months.
+- Seasonal views: snapshot the map by month, quarter, or year so users can compare me-then to me-now structurally.
+- Shape evolution: show when each shape was first detected, how its confidence changed, and which moves strengthened or weakened it.
+- Sphere-level health: gently indicate whether each sphere is active, dormant, or full of unresolved questions.
+- Dead zones: surface long-ignored clusters so the graph does not quietly accrete cruft.
 
 ### Calibration
 
