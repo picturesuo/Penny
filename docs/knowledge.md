@@ -182,6 +182,11 @@
 - `user`: Shape inspection and correction should let users inspect and edit shapes directly so they can disagree with Penny’s model and revise it.
 - `user`: Lens reset should let the user ask Penny to treat them as new and rebuild the lens from recent moves when life changes invalidate old patterns.
 - `user`: Reasoning replay should let the user replay the full move trajectory that led to an artifact or decision so the work product has full provenance.
+- `user`: Predicted futures view should simulate likely, keystone-corrected, and failure trajectories based on the current claim structure and shapes.
+- `user`: Archetype surfacing should identify which historical or contemporary thinker the user most resembles in reasoning patterns, without turning it into flattery.
+- `user`: What would your hero think should let the user pick a thinker they admire and have Penny model that thinker’s likely response using the thinker’s actual work.
+- `user`: Blind-spot cartography should map structural absences in the user’s thinking instead of only showing the present nodes.
+- `user`: The thinking twin should let advanced users compare their actual reasoning to a generated twin that follows their shape patterns.
 - `user`: The system must use a closed loop, not an open loop.
 - `user`: Generation uses the lens.
 - `user`: User response becomes a move.
