@@ -27,6 +27,14 @@ Penny is built around three core functions:
 - Twin-check output: Penny produces the strongest version of the user’s current thinking, then the user decides whether it actually represents what they believe.
 - Post-mortem protocol: when outcomes resolve, Penny turns them into first-class artifacts so the system learns from reality.
 
+### Tunnel & Workflow
+
+- Explicit stage exit criteria: capture, structure, stress-test, synthesize, and reflect should each feel completable.
+- Dual-surface architecture: keep capture mode low-friction and critique-free, and keep reflection mode slow, structured, and stress-test heavy.
+- Cognitive protection mode: when the user is deep in a load-bearing claim, Penny should suppress secondary prompts and unrelated surfaces.
+- Clean endings: when a tunnel traversal completes, Penny should say so, hand over the artifact, and stop pulling for more engagement.
+- Reflection stage: optional but rewarded, with a short shapes surface after synthesis that is easy to skip but high value when used.
+
 What the user should leave with:
 
 - A structured result, such as a brief, outline, decision memo, or plan.
@@ -87,6 +95,7 @@ The visual and interaction model should feel like a built city, not a notes dump
 - Density should beat breadth.
 - The graph should remain a lens, not the product.
 - Best next move should remain the central decision surface.
+- The tunnel should feel complete at the end of a traversal, not like an endless loop of prompts.
 
 ## Stack
 
@@ -143,4 +152,5 @@ Then open `http://localhost:3000`.
 - The evidence service intentionally stays lightweight. If retrieval fails, the app falls back to logic-only mode and continues the session.
 - The Prisma client is generated automatically by Prisma commands using the standard `@prisma/client` package.
 - The product direction is intentionally opinionated: Penny is a pressure-tested second brain, not a general-purpose chatbot or note system.
+- The tunnel/workflow model is intentionally opinionated: separate capture from reflection, respect deep work, and end cleanly after synthesis.
 - Workflow rule: when work moves from one file to another, commit and push the finished file before starting the next one. Use `scripts/codex-commit.sh --each-path <paths...>` so each file gets its own short commit message and push. Keep commits non-private and do not stage personal, secret, scratch, or machine-specific files. Push straight to the configured GitHub remote only and fail instead of guessing if no safe remote exists.
