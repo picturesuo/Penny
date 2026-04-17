@@ -149,7 +149,11 @@
 - `user`: The memory and time layer should unify old selves, genealogy, inheritance, contradiction cascade tracing, aging foundations, cross-project transfer, and session rhythm into one compounding system.
 - `user`: Interleaved stress-testing should mix related claims across a queue rather than drilling one claim sequentially, because discrimination is stronger than pattern-matching.
 - `user`: Calibration and forecasting should include Brier scoring on resolved claims, private bets with yourself, Bayesian update prompts, and probability calibration feedback by domain.
+- `user`: Probability commitment should be required at capture with a default 60% and soft challenge above 90% so overconfidence gets questioned immediately.
 - `user`: Brier scoring should be visible as a measurable improvement signal on resolved claims, not hidden in the background.
+- `user`: Brier trajectory should be visible in an insights dashboard and broken down by domain so the user can see themselves getting sharper over time.
+- `user`: Domain-partitioned calibration feedback should tell the user how their 80% confidence maps perform in different domains.
+- `user`: Private self-bets should let the user stake credibility points against themselves with resolution dates and outcomes.
 - `user`: Private bets should use personal-credibility stakes rather than real money so the training remains sticky without becoming financial advice.
 - `user`: Bayesian update prompts should nudge confidence in small increments when new evidence appears, teaching the rhythm of superforecasting instead of dramatic swings.
 - `user`: Probability calibration feedback should be domain-specific so Penny can tell the user where they are well-calibrated and where their 80%s are overconfident.
