@@ -130,6 +130,7 @@ type FounderBriefResponse = {
 type MapView = "outline" | "graph";
 
 type PeerAudience = "skeptical investor" | "thesis advisor" | "skeptical academic" | "gtm operator";
+type ElicitationMode = "devils advocate" | "naive questioner" | "integrator" | "skeptic";
 
 type PositionedGraphNode = {
   node: ThoughtNodeModel;
@@ -513,6 +514,7 @@ export function ThoughtMapWorkspace({
     preferredGraphNodeId(normalizeMap(initialMap)),
   );
   const [peerAudience, setPeerAudience] = useState<PeerAudience>("skeptical investor");
+  const [elicitationMode, setElicitationMode] = useState<ElicitationMode>("devils advocate");
   const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
     collectShapeFeedback(normalizeMap(initialMap).events),
   );
@@ -973,6 +975,50 @@ export function ThoughtMapWorkspace({
   const selectedCritiqueStrength = critiqueStrengthLabel(selectedGraphNode?.node.scores?.strength ?? null);
   const selectedPrecedents = selectedGraphNode ? retrievePrecedentsForNode(selectedGraphNode.node, lens) : [];
   const selectedPrecedentSummary = selectedPrecedents[0] ?? null;
+  const elicitationPatterns = [
+    {
+      key: "devils advocate" as const,
+      label: "Devil's advocate",
+      prompt: selectedGraphNode
+        ? `Attack ${kindLabel(selectedGraphNode.node.kind)} from the sharpest possible opposing angle.`
+        : "Attack the active claim from the sharpest possible opposing angle.",
+      description: "Useful when you want the strongest counterargument and the most explicit load-bearing failure point.",
+      note: selectedPrecedentSummary
+        ? `Ground the critique in ${selectedPrecedentSummary.name} so the pushback is precedent-backed instead of rhetorical.`
+        : "If precedent is thin, Penny falls back to the dependency chain and the quiet keystone.",
+    },
+    {
+      key: "naive questioner" as const,
+      label: "Naive questioner",
+      prompt: selectedGraphNode
+        ? `Explain this like I have never heard of ${kindLabel(selectedGraphNode.node.kind)} before.`
+        : "Explain the claim like I have never heard of the domain before.",
+      description: "Useful when the structure feels obvious but may actually be hiding jargon, leaps, or missing steps.",
+      note: selectedKnowledgeSurface.teachBackGap.length
+        ? `The teach-back gaps suggest where a novice would get lost: ${selectedKnowledgeSurface.teachBackGap.join(", ")}.`
+        : "This mode often exposes assumptions that expert-style critique misses.",
+    },
+    {
+      key: "integrator" as const,
+      label: "Integrator",
+      prompt: selectedGraphNode
+        ? `How does this connect to the claim you made in a different project, and what changes when the two are considered together?`
+        : "How does this connect to a claim you made in a different project?",
+      description: "Useful when the user needs cross-project pattern transfer or wants to combine separate lines of thought.",
+      note: `Cross-project shape transfer is how Penny turns one map’s lesson into a reusable pattern on the next map.`,
+    },
+    {
+      key: "skeptic" as const,
+      label: "Skeptic",
+      prompt: selectedGraphNode
+        ? `What is the version of this claim that only a contrarian would say, and what would they attack first?`
+        : "What is the version of this claim that only a contrarian would say?",
+      description: "Useful when you want the contrarian version without letting the critique become performative.",
+      note: activeShapeCallout
+        ? `The active shape ${activeShapeCallout.label} decides whether Penny should sharpen the attack or change the line of questioning.`
+        : "Skeptic mode should stay structurally grounded, not just oppositional.",
+    },
+  ];
   const critiqueArgument = useMemo(() => {
     const targetContent = selectedGraphNode?.node.content ?? "the active claim";
     const seedConfidence = selectedGraphNode?.node.scores?.confidence != null ? formatScore(selectedGraphNode.node.scores.confidence) : "n/a";
@@ -1932,6 +1978,53 @@ export function ThoughtMapWorkspace({
               <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{voice.attackStyle}</p>
             </div>
           ))}
+        </div>
+
+        <div className="mt-6 rounded-[24px] border border-black/8 bg-white p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Collaborative elicitation</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Solo versions of collaborative network-building moves.</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Different elicitation patterns reveal different structure. Penny can switch between them on demand instead of forcing every claim through one critique style.
+              </p>
+            </div>
+            <Badge className="bg-[var(--panel)] text-[var(--ink)]">On-demand roles</Badge>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {elicitationPatterns.map((pattern) => (
+              <Button
+                key={pattern.key}
+                variant={elicitationMode === pattern.key ? "primary" : "secondary"}
+                className="px-4 py-2 text-xs"
+                onClick={() => setElicitationMode(pattern.key)}
+              >
+                {pattern.label}
+              </Button>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            {elicitationPatterns
+              .filter((pattern) => pattern.key === elicitationMode)
+              .map((pattern) => (
+                <div key={pattern.key} className="rounded-[20px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{pattern.label}</p>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{pattern.prompt}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{pattern.description}</p>
+                </div>
+              ))}
+            {elicitationPatterns
+              .filter((pattern) => pattern.key === elicitationMode)
+              .map((pattern) => (
+                <div key={`${pattern.key}-note`} className="rounded-[20px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Why this role helps</p>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{pattern.note}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                    That makes the elicitation pattern explicit, so the user can choose the structural lens they need instead of getting one generic critique mode.
+                  </p>
+                </div>
+              ))}
+          </div>
         </div>
 
         <div className="mt-6 rounded-[24px] border border-black/8 bg-white p-5">
