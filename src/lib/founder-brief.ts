@@ -1,4 +1,5 @@
 import { cleanSentence } from "@/lib/penny";
+import { buildPennyLens, type PennyLensSnapshot } from "@/lib/penny-insights";
 import type {
   FounderBriefModel,
   FounderBriefReadiness,
@@ -64,24 +65,42 @@ function chooseCoreClaim(map: ThoughtMapModel) {
     ?? cleanSentence(map.rawThought);
 }
 
-function topAssumptions(map: ThoughtMapModel) {
+function lensSignals(lens: PennyLensSnapshot | null) {
+  return new Set(
+    lens
+      ? [
+          ...lens.activeShapes.flatMap((shape) => shape.signals),
+          ...lens.provisionalShapes.flatMap((shape) => shape.signals),
+          ...lens.overrideShapes.flatMap((shape) => shape.signals),
+        ]
+      : [],
+  );
+}
+
+function topAssumptions(map: ThoughtMapModel, lens: PennyLensSnapshot | null) {
   const assumptions = activeNodes(map).filter((node) => node.kind === "assumption");
+  const signals = lensSignals(lens);
   return byPriority(
     assumptions,
-    (node) => (node.scores?.dependencyRisk ?? 0) * 0.65 + (node.scores?.centrality ?? 0) * 0.35,
+    (node) =>
+      (node.scores?.dependencyRisk ?? 0) * 0.65 +
+      (node.scores?.centrality ?? 0) * 0.35 +
+      (Array.from(signals).some((signal) => node.content.toLowerCase().includes(signal)) ? 0.08 : 0),
   )
     .slice(0, 3)
     .map((node) => node.content);
 }
 
-function topCounterarguments(map: ThoughtMapModel) {
+function topCounterarguments(map: ThoughtMapModel, lens: PennyLensSnapshot | null) {
   const counterarguments = activeNodes(map).filter((node) => node.kind === "counter_argument");
+  const signals = lensSignals(lens);
   return byPriority(
     counterarguments,
     (node) =>
       (node.scores?.centrality ?? 0) * 0.4 +
       (node.scores?.specificity ?? 0) * 0.35 +
-      (node.scores?.tension ?? 0) * 0.25,
+      (node.scores?.tension ?? 0) * 0.25 +
+      (Array.from(signals).some((signal) => node.content.toLowerCase().includes(signal)) ? 0.08 : 0),
   )
     .slice(0, 3)
     .map((node) => node.content);
@@ -107,7 +126,12 @@ function fallbackValidationSteps(map: ThoughtMapModel, assumptions: string[], co
   return fallbacks.map(normalizeValidationStep);
 }
 
-function nextValidationSteps(map: ThoughtMapModel, assumptions: string[], counterarguments: string[]) {
+function nextValidationSteps(
+  map: ThoughtMapModel,
+  assumptions: string[],
+  counterarguments: string[],
+  lens: PennyLensSnapshot | null,
+) {
   const researchNodes = byPriority(
     activeNodes(map).filter((node) => node.kind === "research"),
     (node) =>
@@ -117,6 +141,14 @@ function nextValidationSteps(map: ThoughtMapModel, assumptions: string[], counte
   ).map((node) => normalizeValidationStep(node.content));
 
   const steps = [...researchNodes];
+
+  if (lens?.freshness.stale) {
+    const freshnessStep = `Refresh the lens before freezing the brief; the latest override is ${lens.freshness.lagMinutes ?? 0} minutes behind the latest move.`;
+
+    if (!steps.includes(freshnessStep)) {
+      steps.unshift(freshnessStep);
+    }
+  }
 
   for (const fallback of fallbackValidationSteps(map, assumptions, counterarguments)) {
     if (steps.length >= 3) {
@@ -240,9 +272,9 @@ export function getFounderBriefReadiness(map: ThoughtMapModel): FounderBriefRead
   };
 }
 
-export function buildFounderBrief(map: ThoughtMapModel): FounderBriefModel {
-  const keyAssumptions = topAssumptions(map);
-  const strongestCounterarguments = topCounterarguments(map);
+export function buildFounderBrief(map: ThoughtMapModel, lens: PennyLensSnapshot | null = buildPennyLens(map)): FounderBriefModel {
+  const keyAssumptions = topAssumptions(map, lens);
+  const strongestCounterarguments = topCounterarguments(map, lens);
   const loadBearingCount = loadBearingClaims(map).length;
 
   return {
@@ -251,7 +283,7 @@ export function buildFounderBrief(map: ThoughtMapModel): FounderBriefModel {
     coreClaim: chooseCoreClaim(map),
     keyAssumptions,
     strongestCounterarguments,
-    nextValidationSteps: nextValidationSteps(map, keyAssumptions, strongestCounterarguments),
+    nextValidationSteps: nextValidationSteps(map, keyAssumptions, strongestCounterarguments, lens),
     stakesLevel: stakesLevel(map, loadBearingCount),
     preMortem: preMortem(map, keyAssumptions, strongestCounterarguments),
     ifYouWereRight: ifYouWereRight(map),

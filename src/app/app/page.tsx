@@ -84,8 +84,8 @@ export default async function DashboardPage() {
   const allNodes = maps.flatMap((map) => map.nodes);
   const shapes = derivePennyShapes(allNodes).sort((a, b) => b.confidence - a.confidence).slice(0, 4);
   const calibration = buildCalibrationDashboard(maps);
-  const communitySnapshot = buildCommunityCommonsDashboard(maps);
-  const advancedSnapshot = buildAdvancedThinkingDashboard(maps);
+  const communitySnapshot = buildCommunityCommonsDashboard(maps, allNodes);
+  const advancedSnapshot = buildAdvancedThinkingDashboard(maps, allNodes);
   const mapCards = maps.map((map) => ({
     map,
     counts: summarizeNodeStatus(map.nodes),

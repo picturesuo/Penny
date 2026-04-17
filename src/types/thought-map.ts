@@ -73,6 +73,7 @@ export type ThoughtMapEventType =
   | "bias_resolved"
   | "move_applied"
   | "dialectic_round"
+  | "challenge_calibration"
   | "confidence_override"
   | "shape_feedback";
 

@@ -159,6 +159,18 @@ type PositionedGraphEdge = {
   recencyDays: number;
 };
 
+type ChallengeCalibrationEntry = {
+  id: string;
+  createdAt: Date;
+  nodeId: string | null;
+  masteryLevel: "solid" | "growing" | "unmeasured";
+  label: string;
+  direction: "increase challenge" | "reduce challenge" | "hold steady";
+  note: string;
+  responseLength: number;
+  roundIndex: number;
+};
+
 const GRAPH_NODE_WIDTH = 188;
 const GRAPH_NODE_HEIGHT = 104;
 const GRAPH_COLUMN_GAP = 232;
@@ -357,10 +369,26 @@ function challengeSkillState(params: {
   responseTrail: string[];
   critiqueStrength: string;
   teachBackGap: string[];
+  calibrationTrail: Array<{
+    masteryLevel: "unmeasured" | "growing" | "solid";
+    label: string;
+    direction: "increase challenge" | "reduce challenge" | "hold steady";
+    note: string;
+    responseLength: number;
+  }>;
 }) {
+  const latestCalibration = params.calibrationTrail[0] ?? null;
   const responseLength = params.responseTrail.reduce((sum, item) => sum + item.length, 0);
   const shortResponses = params.responseTrail.filter((item) => item.length < 45).length;
   const recentQuickResponses = params.responseTrail.slice(-5).filter((item) => item.length < 80).length;
+
+  if (latestCalibration) {
+    return {
+      label: latestCalibration.label,
+      direction: latestCalibration.direction,
+      note: `${latestCalibration.note} Recent response length: ${latestCalibration.responseLength} characters.`,
+    };
+  }
 
   if (params.masteryLevel === "solid" && recentQuickResponses >= 4) {
     return {
@@ -1012,6 +1040,7 @@ export function ThoughtMapWorkspace({
     "Turn that learning into the next validation move.",
   ];
   const validationPreview = map.founderBrief?.nextValidationSteps.slice(0, 2) ?? [];
+  const claimDependencyGraph = useMemo(() => buildClaimDependencyGraph(map), [map]);
   const graphCanvas = useMemo(() => {
     const sortedNodes = [...map.nodes].sort(
       (a, b) => a.branchOrder - b.branchOrder || a.createdAt.getTime() - b.createdAt.getTime(),
@@ -1094,45 +1123,29 @@ export function ThoughtMapWorkspace({
         },
       ];
     });
-    const edges: PositionedGraphEdge[] = sortedNodes.flatMap((node) => {
-      if (!node.parentId) {
-        return [];
-      }
+    const edges: PositionedGraphEdge[] = claimDependencyGraph.edges
+      .map((edge) => {
+        const from = positions.get(edge.fromNodeId);
+        const to = positions.get(edge.toNodeId);
 
-      const from = positions.get(node.parentId);
-      const to = positions.get(node.id);
+        if (!from || !to) {
+          return null;
+        }
 
-      if (!from || !to) {
-        return [];
-      }
-
-      const parentNode = nodesById.get(node.parentId) ?? null;
-      const ageDays = nodeAgeDays(node);
-      const strengthScore = clampPercent(
-        (node.scores?.strength ?? 0) * 45 + (node.scores?.confidence ?? 0) * 35 + (node.scores?.dependencyRisk ?? 0) * 20,
-      );
-      const contradictionScore = clampPercent(
-        (node.kind === "counter_argument" ? 55 : 0) +
-          (node.psychology?.falsificationCoverageScore != null ? (1 - node.psychology.falsificationCoverageScore) * 45 : 0) +
-          (node.nodeStatus === "weak" ? 12 : 0) +
-          (parentNode?.kind === "counter_argument" ? 8 : 0),
-      );
-
-      return [
-        {
-          id: `${node.parentId}-${node.id}`,
-          parentId: node.parentId,
-          childId: node.id,
+        return {
+          id: `${edge.fromNodeId}-${edge.toNodeId}`,
+          parentId: edge.fromNodeId,
+          childId: edge.toNodeId,
           from,
           to,
-          isWeak: weakestNodeIds.has(node.id),
-          isCritical: criticalDependencyIds.has(node.id),
-          strengthScore,
-          contradictionScore,
-          recencyDays: ageDays,
-        },
-      ];
-    });
+          isWeak: weakestNodeIds.has(edge.toNodeId),
+          isCritical: criticalDependencyIds.has(edge.toNodeId),
+          strengthScore: edge.strengthScore,
+          contradictionScore: edge.contradictionScore,
+          recencyDays: edge.recencyDays,
+        };
+      })
+      .filter((edge): edge is PositionedGraphEdge => edge != null);
 
     return {
       width,
@@ -1140,7 +1153,7 @@ export function ThoughtMapWorkspace({
       nodes,
       edges,
     };
-  }, [map.graphSnapshot, map.nodes, nodesById, nodesByParent, rootNode]);
+  }, [claimDependencyGraph, map.graphSnapshot, map.nodes, nodesByParent, rootNode]);
 
   useEffect(() => {
     if (!selectedGraphNodeId || !nodesById.has(selectedGraphNodeId)) {
@@ -1383,6 +1396,35 @@ export function ThoughtMapWorkspace({
         .sort((a, b) => a.roundIndex - b.roundIndex || a.createdAt.getTime() - b.createdAt.getTime()),
     [map.events],
   );
+  const challengeCalibrationEvents = useMemo(
+    (): ChallengeCalibrationEntry[] =>
+      map.events
+        .filter((event) => event.eventType === "challenge_calibration")
+        .map((event) => ({
+          id: event.id,
+          createdAt: event.createdAt,
+          nodeId: event.nodeId,
+          masteryLevel:
+            event.payload?.masteryLevel === "solid" ||
+            event.payload?.masteryLevel === "growing" ||
+            event.payload?.masteryLevel === "unmeasured"
+              ? (event.payload.masteryLevel as ChallengeCalibrationEntry["masteryLevel"])
+              : "unmeasured",
+          label: typeof event.payload?.label === "string" ? String(event.payload.label) : "challenge calibration",
+          direction:
+            event.payload?.direction === "increase challenge" ||
+            event.payload?.direction === "reduce challenge" ||
+            event.payload?.direction === "hold steady"
+              ? (event.payload.direction as ChallengeCalibrationEntry["direction"])
+              : "hold steady",
+          note: typeof event.payload?.note === "string" ? String(event.payload.note) : "",
+          responseLength:
+            typeof event.payload?.responseLength === "number" ? Number(event.payload.responseLength) : 0,
+          roundIndex: typeof event.payload?.roundIndex === "number" ? Number(event.payload.roundIndex) : 0,
+        }))
+        .sort((a, b) => b.roundIndex - a.roundIndex || b.createdAt.getTime() - a.createdAt.getTime()),
+    [map.events],
+  );
   const challengeSkill = useMemo(
     () =>
       challengeSkillState({
@@ -1390,8 +1432,10 @@ export function ThoughtMapWorkspace({
         responseTrail: dialecticRoundEvents.map((event) => event.response).filter((response) => response.length > 0),
         critiqueStrength: selectedCritiqueStrength.label,
         teachBackGap: selectedKnowledgeSurface.teachBackGap,
+        calibrationTrail: challengeCalibrationEvents,
       }),
     [
+      challengeCalibrationEvents,
       dialecticRoundEvents,
       selectedCritiqueStrength.label,
       selectedKnowledgeSurface.masteryLevel,
@@ -1488,7 +1532,6 @@ export function ThoughtMapWorkspace({
     critiqueArgument,
     selectedPropagation?.cascade,
   ]);
-  const claimDependencyGraph = useMemo(() => buildClaimDependencyGraph(map), [map]);
   const selectedReceiptVoices = useMemo(
     () => buildDevilsAdvocateReceipts(selectedGraphNodeModel),
     [selectedGraphNodeModel],

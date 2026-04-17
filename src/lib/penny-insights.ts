@@ -81,6 +81,9 @@ export interface ClaimDependencyEdge {
   fromNodeId: string;
   toNodeId: string;
   relation: "parent" | "supersedes";
+  strengthScore: number;
+  contradictionScore: number;
+  recencyDays: number;
 }
 
 export interface ClaimDependencyGraph {
@@ -94,12 +97,52 @@ function confidenceFromScore(score: number | null | undefined) {
   return Math.max(0, Math.min(1, score ?? 0));
 }
 
+function recencyDaysFromDates(from: Date, to: Date) {
+  return Math.max(0, Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
 function nodeLabel(node: ThoughtNodeModel | null | undefined) {
   if (!node) {
     return "unknown claim";
   }
 
   return `${node.kind.replaceAll("_", " ")}: ${node.content}`;
+}
+
+function dependencyStrengthScore(source: ThoughtNodeModel, target: ThoughtNodeModel, relation: "parent" | "supersedes") {
+  const sourceConfidence = confidenceFromScore(source.scores?.confidence);
+  const targetConfidence = confidenceFromScore(target.scores?.confidence);
+  const sourceStrength = confidenceFromScore(source.scores?.strength);
+  const targetStrength = confidenceFromScore(target.scores?.strength);
+  const confidenceBlend = (sourceConfidence + targetConfidence) / 2;
+  const structuralBlend = (sourceStrength + targetStrength) / 2;
+  const relationBias = relation === "supersedes" ? 0.08 : 0.03;
+
+  return Math.max(
+    0,
+    Math.min(100, Math.round((confidenceBlend * 0.45 + structuralBlend * 0.4 + relationBias) * 100)),
+  );
+}
+
+function dependencyContradictionScore(source: ThoughtNodeModel, target: ThoughtNodeModel, relation: "parent" | "supersedes") {
+  const targetFalsification = target.psychology?.falsificationCoverageScore ?? 1;
+  const sourceFalsification = source.psychology?.falsificationCoverageScore ?? 1;
+  const relationBias = relation === "supersedes" ? 32 : 8;
+  const weakBias = target.nodeStatus === "weak" ? 10 : 0;
+  const counterArgumentBias = target.kind === "counter_argument" || source.kind === "counter_argument" ? 14 : 0;
+
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        relationBias +
+          (1 - Math.min(targetFalsification, sourceFalsification)) * 45 +
+          weakBias +
+          counterArgumentBias,
+      ),
+    ),
+  );
 }
 
 function collectBayesianOverrides(events: ThoughtMapEvent[]) {
@@ -182,11 +225,20 @@ export function buildBayesianPropagationSnapshot(
       const edge = dependencyGraph.edges.find(
         (candidate) => candidate.fromNodeId === current.nodeId && candidate.toNodeId === childId,
       );
-      const baseEdgeFactor = edge?.relation === "supersedes" ? 0.88 : 0.94;
+      const strengthFactor = (edge?.strengthScore ?? 50) / 100;
+      const contradictionPenalty = (edge?.contradictionScore ?? 0) / 100 * 0.28;
+      const recencyPenalty = Math.min((edge?.recencyDays ?? 0) / 180, 0.12);
+      const relationBias = edge?.relation === "supersedes" ? 0.06 : 0.02;
       const override = overrides.get(`${current.nodeId}:${childId}`);
       const overrideBoost = override?.mode === "hold" ? 0.08 : 0;
-      const edgeFactor = Math.min(1, baseEdgeFactor + overrideBoost);
-      const propagatedConfidence = Math.max(0, Math.min(1, baseConfidence * current.propagatedConfidence * edgeFactor));
+      const edgeFactor = Math.max(
+        0.42,
+        Math.min(0.98, 0.44 + strengthFactor * 0.36 + relationBias + overrideBoost - contradictionPenalty - recencyPenalty),
+      );
+      const propagatedConfidence = Math.max(
+        0,
+        Math.min(1, (baseConfidence * 0.6 + current.propagatedConfidence * 0.4) * edgeFactor),
+      );
       const delta = propagatedConfidence - baseConfidence;
 
       cascade.push({
@@ -1896,10 +1948,15 @@ export function buildClaimDependencyGraph(map: ThoughtMapModel): ClaimDependency
       const key = `parent:${node.parentId}->${node.id}`;
       if (!seenEdges.has(key)) {
         seenEdges.add(key);
+        const targetNode = node;
+        const sourceNode = nodes.find((candidate) => candidate.id === node.parentId) ?? null;
         edges.push({
           fromNodeId: node.parentId,
           toNodeId: node.id,
           relation: "parent",
+          strengthScore: sourceNode ? dependencyStrengthScore(sourceNode, targetNode, "parent") : 50,
+          contradictionScore: sourceNode ? dependencyContradictionScore(sourceNode, targetNode, "parent") : 20,
+          recencyDays: sourceNode ? recencyDaysFromDates(sourceNode.updatedAt, targetNode.updatedAt) : 0,
         });
       }
     }
@@ -1908,10 +1965,15 @@ export function buildClaimDependencyGraph(map: ThoughtMapModel): ClaimDependency
       const key = `supersedes:${node.supersedesNodeId}->${node.id}`;
       if (!seenEdges.has(key)) {
         seenEdges.add(key);
+        const targetNode = node;
+        const sourceNode = nodes.find((candidate) => candidate.id === node.supersedesNodeId) ?? null;
         edges.push({
           fromNodeId: node.supersedesNodeId,
           toNodeId: node.id,
           relation: "supersedes",
+          strengthScore: sourceNode ? dependencyStrengthScore(sourceNode, targetNode, "supersedes") : 58,
+          contradictionScore: sourceNode ? dependencyContradictionScore(sourceNode, targetNode, "supersedes") : 38,
+          recencyDays: sourceNode ? recencyDaysFromDates(sourceNode.updatedAt, targetNode.updatedAt) : 0,
         });
       }
     }
@@ -2028,6 +2090,24 @@ export function buildMapTimeline(map: ThoughtMapModel): MapTimelineSnapshot {
         createdAt: event.createdAt,
         nodeId: event.nodeId,
         accent: "stress",
+      });
+      continue;
+    }
+
+    if (event.eventType === "challenge_calibration") {
+      const label = typeof event.payload?.label === "string" ? String(event.payload.label) : "challenge calibration";
+      const direction = typeof event.payload?.direction === "string" ? String(event.payload.direction) : "hold steady";
+      const note = typeof event.payload?.note === "string" ? String(event.payload.note).trim() : "";
+
+      entries.push({
+        id: event.id,
+        label: "Challenge calibration",
+        summary: note
+          ? `${label}: ${direction}. ${note.slice(0, 120)}${note.length > 120 ? "…" : ""}`
+          : `${label}: ${direction}.`,
+        createdAt: event.createdAt,
+        nodeId: event.nodeId,
+        accent: "confidence",
       });
       continue;
     }
@@ -2285,6 +2365,22 @@ export function buildClaimMoveHistory(
             : `The ${round.toLowerCase()} thread persisted a ${responsePath} response at ${critiqueStrength} strength.`,
           createdAt: event.createdAt,
           accent: "feedback",
+        } satisfies ClaimMoveHistoryEntry;
+      }
+
+      if (event.eventType === "challenge_calibration") {
+        const label = typeof event.payload?.label === "string" ? String(event.payload.label) : "challenge calibration";
+        const direction = typeof event.payload?.direction === "string" ? String(event.payload.direction) : "hold steady";
+        const note = typeof event.payload?.note === "string" ? String(event.payload.note).trim() : "";
+
+        return {
+          id: event.id,
+          label: "Challenge calibration",
+          summary: note
+            ? `${label} nudged Penny to ${direction}. ${note.slice(0, 120)}${note.length > 120 ? "…" : ""}`
+            : `${label} nudged Penny to ${direction}.`,
+          createdAt: event.createdAt,
+          accent: "signal",
         } satisfies ClaimMoveHistoryEntry;
       }
 

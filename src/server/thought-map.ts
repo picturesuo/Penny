@@ -201,8 +201,48 @@ async function createThoughtMapEvent(
       interventionId: input.interventionId ?? null,
       eventType: input.eventType,
       payload: serializeJson(input.payload ?? null),
-    },
-  });
+      },
+    });
+}
+
+function deriveChallengeCalibration(params: {
+  response: string;
+  responsePath: "defend" | "revise" | "absorb";
+}) {
+  const responseLength = params.response.trim().length;
+  const masteryLevel = responseLength >= 160 ? "solid" : responseLength >= 90 ? "growing" : "unmeasured";
+  const quickResponse = responseLength < 80;
+
+  if (masteryLevel === "solid" && params.responsePath !== "absorb") {
+    return {
+      masteryLevel,
+      label: "under-challenged",
+      direction: "increase challenge" as const,
+      note: "The response is long and sustained enough to tolerate a sharper next round.",
+      responseLength,
+      quickResponse,
+    };
+  }
+
+  if (quickResponse || params.responsePath === "absorb") {
+    return {
+      masteryLevel,
+      label: "scaffolded",
+      direction: "reduce challenge" as const,
+      note: "The response is still short or absorbent, so the next round should stay gentler.",
+      responseLength,
+      quickResponse,
+    };
+  }
+
+  return {
+    masteryLevel,
+    label: "near the flow zone",
+    direction: "hold steady" as const,
+    note: "The response shows enough traction to keep challenge at the current level.",
+    responseLength,
+    quickResponse,
+  };
 }
 
 export async function recordShapeFeedback(params: {
@@ -273,7 +313,7 @@ export async function recordDialecticRound(params: {
   response: string;
 }) {
   const created = await prisma.$transaction(async (tx) => {
-    return tx.thoughtMapEvent.create({
+    const event = await tx.thoughtMapEvent.create({
       data: {
         mapId: params.mapId,
         nodeId: params.nodeId ?? null,
@@ -290,6 +330,32 @@ export async function recordDialecticRound(params: {
         }),
       },
     });
+
+    const calibration = deriveChallengeCalibration({
+      response: params.response,
+      responsePath: params.responsePath,
+    });
+
+    await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.nodeId ?? null,
+        eventType: "challenge_calibration",
+        payload: serializeJson({
+          round: params.round,
+          roundIndex: params.roundIndex,
+          masteryLevel: calibration.masteryLevel,
+          label: calibration.label,
+          direction: calibration.direction,
+          note: calibration.note,
+          responseLength: calibration.responseLength,
+          quickResponse: calibration.quickResponse,
+          responsePath: params.responsePath,
+        }),
+      },
+    });
+
+    return event;
   });
 
   return mapEventRecord(created);
