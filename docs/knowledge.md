@@ -97,6 +97,12 @@
 - `user`: Lens token budget should stay bounded and explicit so the system can prioritize relevance over bulk, trim stale context, and reserve room for the live prompt and output instructions.
 - `user`: `Lens` is the live current model of the user, derived from shapes and optimized for injection into generation so every critique, learning recommendation, and precedent retrieval is personalized.
 - `user`: Relationships matter: claims relate to claims, moves reference claims and moves, shapes derive from moves, and the lens is derived from shapes.
+- `user`: The next-wave loop-tightening layer should come after critique-tag refactors, shape-feedback stabilization, old selves, and tunnel wiring are in place.
+- `user`: Lens injection pipeline is load-bearing: the structured slice of the lens must be included in every stress-test, learning, and precedent retrieval call so generation actually changes.
+- `user`: Lens freshness monitoring is load-bearing: Penny should track the lag between a move happening and it affecting generation, with a target of under a week.
+- `user`: A/B testing the lens internally is the honest non-wrappability check: compare generic critique against lens-informed critique and verify that the difference is visible to a third party.
+- `user`: Shape confidence thresholds are load-bearing: only shapes above threshold should feed the lens, while provisional shapes remain tracked but inactive.
+- `user`: Override-derived shapes are distinct from behavior-derived shapes and should be computed separately so disagreement can change the lens in ways behavior alone cannot.
 - `user`: The system must use a closed loop, not an open loop.
 - `user`: Generation uses the lens.
 - `user`: User response becomes a move.
