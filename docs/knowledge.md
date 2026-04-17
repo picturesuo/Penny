@@ -167,6 +167,7 @@
 - `user`: Private bets should use personal-credibility stakes rather than real money so the training remains sticky without becoming financial advice.
 - `user`: Bayesian update prompts should nudge confidence in small increments when new evidence appears, teaching the rhythm of superforecasting instead of dramatic swings.
 - `user`: Probability calibration feedback should be domain-specific so Penny can tell the user where they are well-calibrated and where their 80%s are overconfident.
+- `user`: Propagated confidence changes should be surfaced explicitly so when one claim moves the downstream implication is shown, and the user must either accept the update or argue that the propagation is too strong.
 - `user`: Social and community features must be handled carefully with opt-in, anonymized, and privacy-preserving defaults.
 - `user`: Precedent corpus contributions should let users optionally submit anonymized, structured post-mortems so the failure corpus can grow as a commons.
 - `user`: Belief provenance across users should only flag shared-source contradictions when privacy-safe and should never expose another user’s private claim graph directly.
@@ -257,6 +258,7 @@
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces precedent-grounded critique, peer simulation, norm-challenge scrutiny, confidence decay, and interleaved stress-testing as first-class critique surfaces.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a round-tracked dialectic scaffold, a synthesis-gate surface, a move-query lens, and confidence drift indicators in the old-selves timeline.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a first-class timeline block for whole-map events, per-shape confidence trails, and dependency-chain progression.
+- `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces propagated confidence implications explicitly so downstream belief changes must be accepted or defended instead of happening silently.
 - `repo`: `src/components/penny/thought-map-form.tsx` now soft-challenges very high confidence claims and surfaces assumption suggestions at capture time.
 - `repo`: `src/app/app/page.tsx` now includes a curriculum and education surface for student mode, instructor views, classroom shape views, metacognition rubrics, and curriculum packs.
 - `repo`: `src/components/penny/shape-dashboard.tsx` now records shape feedback back to the map through `POST /api/maps/[id]/shape-feedback`, and `src/server/thought-map.ts` now persists that feedback as a `shape_feedback` move event.
