@@ -343,6 +343,47 @@ function critiqueStrengthLabel(score: number | null | undefined) {
   };
 }
 
+function challengeSkillState(params: {
+  masteryLevel: "unmeasured" | "growing" | "solid";
+  responseTrail: string[];
+  critiqueStrength: string;
+  teachBackGap: string[];
+}) {
+  const responseLength = params.responseTrail.reduce((sum, item) => sum + item.length, 0);
+  const shortResponses = params.responseTrail.filter((item) => item.length < 45).length;
+  const recentQuickResponses = params.responseTrail.slice(-5).filter((item) => item.length < 80).length;
+
+  if (params.masteryLevel === "solid" && recentQuickResponses >= 4) {
+    return {
+      label: "under-challenged",
+      direction: "increase challenge",
+      note: "The user is handling critique quickly, so Penny can sharpen the attack a notch.",
+    };
+  }
+
+  if (params.masteryLevel === "unmeasured" || params.teachBackGap.length > 0) {
+    return {
+      label: "scaffolded",
+      direction: "keep support",
+      note: "The user is still new enough here that Penny should scaffold more and keep the critique gentler.",
+    };
+  }
+
+  if (shortResponses >= 3 || responseLength < 90) {
+    return {
+      label: "anxiety risk",
+      direction: "reduce challenge",
+      note: "Responses have gotten shorter, so Penny should notch difficulty down and ask one simpler question.",
+    };
+  }
+
+  return {
+    label: params.critiqueStrength === "strong" ? "in the flow zone" : "near the flow zone",
+    direction: "hold steady",
+    note: "The current challenge appears to match the user’s demonstrated skill closely enough to keep pressure honest.",
+  };
+}
+
 function nodeAgeDays(node: ThoughtNodeModel) {
   return Math.max(0, Math.floor((Date.now() - node.updatedAt.getTime()) / (1000 * 60 * 60 * 24)));
 }
@@ -409,7 +450,7 @@ function knowledgeSurface(node: ThoughtNodeModel | null, genealogy: ReturnType<t
   const uniqueUnderstood = Array.from(new Set(understood));
   const uniqueNeedsWork = Array.from(new Set(needsWork));
   const teachBackGap = uniqueNeedsWork.slice(0, 3);
-  const masteryLevel =
+  const masteryLevel: "unmeasured" | "growing" | "solid" =
     uniqueUnderstood.length >= 4 && uniqueNeedsWork.length <= 1
       ? "solid"
       : uniqueUnderstood.length >= 2
@@ -910,6 +951,21 @@ export function ThoughtMapWorkspace({
         }))
         .sort((a, b) => a.roundIndex - b.roundIndex || a.createdAt.getTime() - b.createdAt.getTime()),
     [map.events],
+  );
+  const challengeSkill = useMemo(
+    () =>
+      challengeSkillState({
+        masteryLevel: selectedKnowledgeSurface.masteryLevel,
+        responseTrail: dialecticRoundEvents.map((event) => event.response).filter((response) => response.length > 0),
+        critiqueStrength: selectedCritiqueStrength.label,
+        teachBackGap: selectedKnowledgeSurface.teachBackGap,
+      }),
+    [
+      dialecticRoundEvents,
+      selectedCritiqueStrength.label,
+      selectedKnowledgeSurface.masteryLevel,
+      selectedKnowledgeSurface.teachBackGap,
+    ],
   );
   const dialecticRounds = useMemo(() => {
     const responseTrail = dialecticRoundEvents.map((event) => summarizeText(event.response, 96)).filter(Boolean);
@@ -1999,11 +2055,15 @@ export function ThoughtMapWorkspace({
           <Badge>Dialectic rounds</Badge>
           <Badge className="bg-[#e7defa] text-[#5c4c88]">round-tracked</Badge>
           <Badge className="bg-[#d9ead8] text-[#355b32]">{selectedCritiqueStrength.label}</Badge>
+          <Badge className={challengeSkill.direction === "increase challenge" ? "bg-[#d9ead8] text-[#355b32]" : challengeSkill.direction === "reduce challenge" ? "bg-[#fff6ed] text-[#8b4d1f]" : "bg-white text-[var(--ink)]"}>
+            {challengeSkill.label}
+          </Badge>
         </div>
         <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">Counterargument as explicit rounds, not a one-shot critique.</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
           Penny should remember every round, carry the user’s response history forward, and change the next attack instead of reusing the same line.
         </p>
+        <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{challengeSkill.note}</p>
         <div className="mt-4 grid gap-4 xl:grid-cols-3">
           {dialecticRounds.map((round) => {
             const draft = dialecticResponseDrafts[round.round] ?? "";
@@ -3064,11 +3124,11 @@ export function ThoughtMapWorkspace({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Inspector</p>
-                    <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">
-                      {selectedGraphNode ? "Selected node" : "Select a node"}
-                    </h3>
-                  </div>
-                  {selectedGraphNode ? <Badge>{kindLabel(selectedGraphNode.node.kind)}</Badge> : null}
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">
+                {selectedGraphNode ? "Selected node" : "Select a node"}
+              </h3>
+            </div>
+            {selectedGraphNode ? <Badge>{kindLabel(selectedGraphNode.node.kind)}</Badge> : null}
                 </div>
 
                 {selectedGraphNode ? (
@@ -3140,6 +3200,14 @@ export function ThoughtMapWorkspace({
                       <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
                         Keep graph interactions selection-only in this slice. Switch back to <span className="font-medium text-[var(--ink)]">Outline view</span> to run a move.
                       </p>
+                    </div>
+                    <div className="mt-6 rounded-[20px] bg-[var(--panel)] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Challenge-skill calibration</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge className="bg-white text-[var(--ink)]">{challengeSkill.label}</Badge>
+                        <Badge className="bg-[#e7defa] text-[#5c4c88]">{challengeSkill.direction}</Badge>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{challengeSkill.note}</p>
                     </div>
                   </>
                 ) : (
