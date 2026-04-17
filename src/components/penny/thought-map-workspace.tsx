@@ -173,6 +173,28 @@ type ChallengeCalibrationEntry = {
   roundIndex: number;
 };
 
+type CritiqueMode = "direct" | "socratic" | "red_team";
+type CritiqueFailureType =
+  | "weak evidence"
+  | "missing counterargument"
+  | "shaky assumption"
+  | "analogy break"
+  | "dependency risk"
+  | "unaddressed precedent"
+  | "premise rejection"
+  | "definition failure";
+
+const CRITIQUE_FAILURE_TYPES: CritiqueFailureType[] = [
+  "weak evidence",
+  "missing counterargument",
+  "shaky assumption",
+  "analogy break",
+  "dependency risk",
+  "unaddressed precedent",
+  "premise rejection",
+  "definition failure",
+];
+
 const GRAPH_NODE_WIDTH = 188;
 const GRAPH_NODE_HEIGHT = 104;
 const GRAPH_COLUMN_GAP = 232;
@@ -420,6 +442,100 @@ function challengeSkillState(params: {
     label: params.critiqueStrength === "strong" ? "in the flow zone" : "near the flow zone",
     direction: "hold steady",
     note: "The current challenge appears to match the user’s demonstrated skill closely enough to keep pressure honest.",
+  };
+}
+
+function critiqueModeLabel(mode: CritiqueMode) {
+  if (mode === "socratic") {
+    return "Socratic";
+  }
+
+  if (mode === "red_team") {
+    return "Red-team";
+  }
+
+  return "Direct";
+}
+
+function critiqueIntensityLabel(intensity: number) {
+  if (intensity < 35) {
+    return "gentle";
+  }
+
+  if (intensity < 70) {
+    return "firm";
+  }
+
+  return "brutal";
+}
+
+function critiqueTypePrompt(critiqueType: CritiqueFailureType, nodeLabel: string) {
+  switch (critiqueType) {
+    case "weak evidence":
+      return `What evidence would actually move the confidence on ${nodeLabel}?`;
+    case "missing counterargument":
+      return `What is the strongest counterargument to ${nodeLabel} that you have not yet written down?`;
+    case "shaky assumption":
+      return `Which assumption in ${nodeLabel} is carrying too much weight?`;
+    case "analogy break":
+      return `Where does the analogy around ${nodeLabel} stop matching reality?`;
+    case "dependency risk":
+      return `Which downstream dependency makes ${nodeLabel} fragile?`;
+    case "unaddressed precedent":
+      return `What real precedent would be uncomfortable to compare with ${nodeLabel}?`;
+    case "premise rejection":
+      return `If the premise behind ${nodeLabel} were false, what would collapse first?`;
+    case "definition failure":
+      return `Which term in ${nodeLabel} is still too vague to defend under pressure?`;
+  }
+}
+
+function critiqueModePrompt(mode: CritiqueMode, critiqueType: CritiqueFailureType, target: string, intensity: number) {
+  const intensityWord = critiqueIntensityLabel(intensity);
+
+  if (mode === "socratic") {
+    return [
+      `What would have to be true for ${target} to fail?`,
+      `What is the weakest part of ${target} that you have been avoiding?`,
+      `If you had to kill ${target}, what would be the grounds?`,
+      `${critiqueTypePrompt(critiqueType, target)} Answer this in your own words before Penny explains.`,
+    ].join(" ");
+  }
+
+  if (mode === "red_team") {
+    return `Run a ${intensityWord} red-team session on the whole structure around ${target}. Attack the dependency chain, the precedent story, and the weakest assumption for 20-30 minutes before you let the synthesis move forward.`;
+  }
+
+  return `${critiqueTypePrompt(critiqueType, target)} Penny should be ${intensityWord} about this pass and keep the failure type explicit.`;
+}
+
+function critiqueVarietySuggestion(recentTypes: CritiqueFailureType[]) {
+  const recent = recentTypes.slice(-5);
+  const counts = recent.reduce<Record<string, number>>((acc, type) => {
+    acc[type] = (acc[type] ?? 0) + 1;
+    return acc;
+  }, {});
+  const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0] ?? null;
+
+  if (!dominant) {
+    return {
+      dominant: null as CritiqueFailureType | null,
+      next: "missing counterargument" as CritiqueFailureType,
+      note: "No critique history yet. Start with a failure type that makes the claim defend itself.",
+    };
+  }
+
+  const dominantType = dominant[0] as CritiqueFailureType;
+  const dominantCount = dominant[1];
+  const next = CRITIQUE_FAILURE_TYPES.find((type) => !recent.includes(type)) ?? CRITIQUE_FAILURE_TYPES[(CRITIQUE_FAILURE_TYPES.indexOf(dominantType) + 1) % CRITIQUE_FAILURE_TYPES.length];
+
+  return {
+    dominant: dominantType,
+    next,
+    note:
+      dominantCount >= 4
+        ? `You've been over-rotating on ${dominantType}. The next critique should force ${next} instead.`
+        : `Recent critique mix: ${recent.join(", ") || "none yet"}. Penny should diversify toward ${next}.`,
   };
 }
 
@@ -790,11 +906,15 @@ export function ThoughtMapWorkspace({
   const [teachBackFeedback, setTeachBackFeedback] = useState<Record<string, TeachBackAnalysis>>({});
   const [teachBackAttempts, setTeachBackAttempts] = useState<Record<string, string[]>>({});
   const [elicitationMode, setElicitationMode] = useState<ElicitationMode>("devils advocate");
+  const [critiqueMode, setCritiqueMode] = useState<CritiqueMode>("direct");
+  const [critiqueIntensity, setCritiqueIntensity] = useState(62);
+  const [selectedCritiqueType, setSelectedCritiqueType] = useState<CritiqueFailureType>("weak evidence");
   const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
     collectShapeFeedback(normalizeMap(initialMap).events),
   );
   const [shapeOverrideReasons, setShapeOverrideReasons] = useState<Record<string, string>>({});
   const [confidenceOverrideReasons, setConfidenceOverrideReasons] = useState<Record<string, string>>({});
+  const [critiqueCorrectionDrafts, setCritiqueCorrectionDrafts] = useState<Record<string, string>>({});
   const [propagationAcknowledged, setPropagationAcknowledged] = useState<Record<string, string>>({});
   const [dialecticResponseDrafts, setDialecticResponseDrafts] = useState<Record<string, string>>({});
   const [runningRecommendedMove, setRunningRecommendedMove] = useState(false);
@@ -1394,6 +1514,10 @@ export function ThoughtMapWorkspace({
           title: typeof event.payload?.title === "string" ? String(event.payload.title) : "Dialectic round",
           critiqueStrength:
             typeof event.payload?.critiqueStrength === "string" ? String(event.payload.critiqueStrength) : "unknown",
+          critiqueType:
+            typeof event.payload?.critiqueType === "string" && event.payload.critiqueType.trim().length > 0
+              ? String(event.payload.critiqueType)
+              : null,
           prompt: typeof event.payload?.prompt === "string" ? String(event.payload.prompt) : "",
           why: typeof event.payload?.why === "string" ? String(event.payload.why) : "",
           responsePath:
@@ -1453,37 +1577,131 @@ export function ThoughtMapWorkspace({
       selectedKnowledgeSurface.teachBackGap,
     ],
   );
+  const recentCritiqueTypes = useMemo(
+    () =>
+      dialecticRoundEvents
+        .map((event) => event.critiqueType)
+        .filter((critiqueType): critiqueType is CritiqueFailureType => critiqueType != null && CRITIQUE_FAILURE_TYPES.includes(critiqueType as CritiqueFailureType))
+        .map((critiqueType) => critiqueType as CritiqueFailureType),
+    [dialecticRoundEvents],
+  );
+  const critiqueVariety = useMemo(() => critiqueVarietySuggestion(recentCritiqueTypes), [recentCritiqueTypes]);
+  const activeCritiqueType = useMemo(() => {
+    const recent = recentCritiqueTypes.slice(-5);
+    if (recent.length === 5 && recent.every((type) => type === selectedCritiqueType) && critiqueVariety.next !== selectedCritiqueType) {
+      return critiqueVariety.next;
+    }
+
+    return selectedCritiqueType;
+  }, [critiqueVariety.next, recentCritiqueTypes, selectedCritiqueType]);
+  const critiqueEngagementStyle = useMemo(() => {
+    const absorbCount = dialecticRoundEvents.filter((event) => event.responsePath === "absorb").length;
+    const reviseCount = dialecticRoundEvents.filter((event) => event.responsePath === "revise").length;
+    const defendCount = dialecticRoundEvents.filter((event) => event.responsePath === "defend").length;
+
+    if (absorbCount >= reviseCount + defendCount && absorbCount >= 2) {
+      return "defensive";
+    }
+
+    if (reviseCount >= defendCount + 2) {
+      return "integrative";
+    }
+
+    if (dialecticRoundEvents.length >= 3 && challengeSkill.direction === "reduce challenge") {
+      return "protective";
+    }
+
+    return "balanced";
+  }, [challengeSkill.direction, dialecticRoundEvents]);
+  const critiqueMetaCritique = useMemo(() => {
+    if (!recentCritiqueTypes.length) {
+      return {
+        headline: "Critique history is still empty.",
+        body: "Start with a failure type, then let Penny diversify away from it instead of repeating the same pressure.",
+      };
+    }
+
+    const counts = recentCritiqueTypes.reduce<Record<string, number>>((acc, type) => {
+      acc[type] = (acc[type] ?? 0) + 1;
+      return acc;
+    }, {});
+    const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    const dominantCount = dominant ? counts[dominant] ?? 0 : 0;
+
+    return {
+      headline:
+        dominant && dominantCount >= 4
+          ? `You have been overusing ${dominant}.`
+          : "Your critique mix is still narrowing too much.",
+      body:
+        critiqueEngagementStyle === "defensive"
+          ? `You've been stress-testing in a defensive way, so Penny should slow down and pivot to ${critiqueVariety.next}.`
+          : critiqueEngagementStyle === "integrative"
+            ? `You're integrating critique well, but the next pass should force ${critiqueVariety.next} so the lens stays sharp.`
+            : `The next pass should force ${critiqueVariety.next} so Penny doesn't stay stuck on ${dominant ?? "one"} failure mode.`,
+    };
+  }, [critiqueEngagementStyle, critiqueVariety.next, recentCritiqueTypes]);
+  const critiqueCorrectionNodeId = selectedGraphNode?.node.id ?? null;
+  const currentCritiqueCorrectionDraft = critiqueCorrectionNodeId ? critiqueCorrectionDrafts[critiqueCorrectionNodeId] ?? "" : "";
+  function captureCritiqueCorrection() {
+    const correction = currentCritiqueCorrectionDraft.trim();
+
+    if (!critiqueCorrectionNodeId || correction.length < 12) {
+      return;
+    }
+
+    recordDialecticRound({
+      round: "Correction capture",
+      roundIndex: dialecticRoundEvents.length,
+      title: "Penny is wrong",
+      critiqueStrength: `high-priority correction · ${critiqueModeLabel(critiqueMode)}`,
+      critiqueType: "correction",
+      prompt: "Capture the factual correction Penny got wrong so it can be treated as high-priority signal.",
+      why: "Dedicated correction capture is the highest-priority critique signal because it corrects the product’s own mistake.",
+      responsePath: "revise",
+    });
+
+    setCritiqueCorrectionDrafts((current) => {
+      const next = { ...current };
+      delete next[critiqueCorrectionNodeId];
+      return next;
+    });
+  }
   const dialecticRounds = useMemo(() => {
     const responseTrail = dialecticRoundEvents.map((event) => summarizeText(event.response, 96)).filter(Boolean);
     const lastResponse = responseTrail[responseTrail.length - 1] ?? null;
     const priorResponse = responseTrail[responseTrail.length - 2] ?? null;
+    const nodeLabel = selectedGraphNode ? selectedGraphNode.node.content : "the active claim";
+    const intensityLabel = critiqueIntensityLabel(critiqueIntensity);
 
     return [
       {
         round: "Round 1",
-        title: "Opening critique",
-        strength: selectedCritiqueStrength.label,
-        prompt: selectedGraphNode
-          ? `Penny opens with its sharpest attack on ${kindLabel(selectedGraphNode.node.kind)}.`
-          : "Penny opens with its sharpest attack on the active claim.",
+        title: critiqueMode === "socratic" ? "Socratic opening" : critiqueMode === "red_team" ? "Red-team opening" : "Opening critique",
+        strength: `${selectedCritiqueStrength.label} · ${critiqueModeLabel(critiqueMode)} · ${intensityLabel}`,
+        prompt: critiqueModePrompt(critiqueMode, activeCritiqueType, nodeLabel, critiqueIntensity),
         why: lastAction?.reasoning.graphAnalysis?.primaryGap
-          ? `Failure type: ${lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")}`
-          : "Failure type: not yet selected",
+          ? `Failure type: ${lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")} · critique type: ${activeCritiqueType}`
+          : `Failure type: not yet selected · critique type: ${activeCritiqueType}`,
         argument: critiqueArgument,
         responsePath: "defend / revise / absorb",
       },
       {
         round: "Round 2",
-        title: "User response",
-        strength: "response-driven",
+        title: critiqueMode === "socratic" ? "Teach-back response" : "User response",
+        strength: `response-driven · ${critiqueModeLabel(critiqueMode)}`,
         prompt: lastResponse
           ? `Penny re-reads the last response and pushes on the new weak point it introduced: ${lastResponse}.`
-          : "The user’s reply becomes a move. Penny reads the reasoning, stores the disagreement, and avoids repeating itself.",
+          : critiqueMode === "socratic"
+            ? "The user explains the concept back in context, and Penny looks for the specific gap in that explanation."
+            : "The user’s reply becomes a move. Penny reads the reasoning, stores the disagreement, and avoids repeating itself.",
         why: lastResponse
           ? `This round reacts to the prior recorded response: ${lastResponse}.`
           : selectedPrecedentSummary
             ? `Precedent source: ${selectedPrecedentSummary.name} · ${selectedPrecedentSummary.domain}`
-            : "Precedent source: none selected yet",
+            : critiqueMode === "socratic"
+              ? "Precedent source: the user’s own explanation in context."
+              : "Precedent source: none selected yet",
         argument: {
           premise: "The user’s response becomes a move, so Penny reads the reply as new evidence instead of replaying the original attack.",
           assumption: lastResponse
@@ -1504,14 +1722,16 @@ export function ThoughtMapWorkspace({
       },
       {
         round: "Round 3",
-        title: "Escalate or pivot",
-        strength: selectedPrecedentSummary ? "precedent-backed" : "open",
+        title: critiqueMode === "red_team" ? "Sustained red-team" : "Escalate or pivot",
+        strength: selectedPrecedentSummary ? `precedent-backed · ${intensityLabel}` : `open · ${intensityLabel}`,
         prompt:
           lastResponse || priorResponse
             ? `Penny escalates from the recorded thread. Prior response: ${priorResponse ?? lastResponse}; current response: ${lastResponse ?? "none yet"}.`
             : selectedPrecedentSummary
               ? `Penny escalates using ${selectedPrecedentSummary.failureMode} precedent or pivots to the next risk angle.`
-              : "Penny escalates to a stronger critique or pivots to a different angle of attack.",
+              : critiqueMode === "red_team"
+                ? "Penny keeps pressure on the whole structure instead of stopping at a single claim."
+                : "Penny escalates to a stronger critique or pivots to a different angle of attack.",
         why: activeShapeCallout ? `Shape pattern: ${activeShapeCallout.label}` : "Shape pattern: no active pattern yet",
         argument: {
           premise: "By round three, Penny should have enough response history to either escalate or pivot without repeating itself.",
@@ -1536,7 +1756,10 @@ export function ThoughtMapWorkspace({
   }, [
     activeShapeCallout,
     dialecticRoundEvents,
+    activeCritiqueType,
     lastAction?.reasoning.graphAnalysis?.primaryGap,
+    critiqueIntensity,
+    critiqueMode,
     selectedCritiqueStrength.label,
     selectedGraphNode,
     selectedPrecedentSummary,
@@ -1783,6 +2006,7 @@ export function ThoughtMapWorkspace({
     roundIndex: number;
     title: string;
     critiqueStrength: string;
+    critiqueType?: CritiqueFailureType | string;
     prompt: string;
     why: string;
     responsePath: "defend" | "revise" | "absorb";
@@ -1806,6 +2030,7 @@ export function ThoughtMapWorkspace({
             roundIndex: params.roundIndex,
             title: params.title,
             critiqueStrength: params.critiqueStrength,
+            critiqueType: params.critiqueType ?? null,
             prompt: params.prompt,
             why: params.why,
             responsePath: params.responsePath,
@@ -2829,6 +3054,163 @@ export function ThoughtMapWorkspace({
       </Card>
 
       <Card className="p-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Critique layer</p>
+            <h2 className="mt-1 text-2xl font-semibold text-[var(--ink)]">Mode, intensity, and variety need to be explicit.</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+              Socratic mode asks the user to critique their own claim, intensity sets how sharp the attack should be, and the failure-type selector keeps Penny from repeating the same critique surface.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge className="bg-[#e7defa] text-[#5c4c88]">{critiqueModeLabel(critiqueMode)} mode</Badge>
+            <Badge className="bg-[#d9ead8] text-[#355b32]">{critiqueIntensityLabel(critiqueIntensity)} intensity</Badge>
+            <Badge className="bg-[var(--panel)] text-[var(--ink)]">forced {critiqueVariety.next}</Badge>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)]">
+          <div className="rounded-[20px] bg-[var(--panel)] p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Critique mode</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {([
+                ["direct", "Direct"],
+                ["socratic", "Socratic"],
+                ["red_team", "Red-team"],
+              ] as const).map(([mode, label]) => (
+                <Button
+                  key={mode}
+                  variant={critiqueMode === mode ? "primary" : "secondary"}
+                  className="px-4 py-2 text-xs"
+                  onClick={() => setCritiqueMode(mode)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Critique intensity</p>
+                <Badge className="bg-white text-[var(--ink)]">{critiqueIntensityLabel(critiqueIntensity)}</Badge>
+              </div>
+              <input
+                className="mt-3 w-full accent-[var(--ink)]"
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={critiqueIntensity}
+                onChange={(event) => setCritiqueIntensity(Number(event.target.value))}
+              />
+              <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">
+                {critiqueIntensity < 35 ? "Gentle probing" : critiqueIntensity < 70 ? "Firm attack" : "Brutal pressure"}
+              </p>
+            </div>
+
+            <div className="mt-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Failure type</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {CRITIQUE_FAILURE_TYPES.map((type) => (
+                  <Button
+                    key={type}
+                    variant={selectedCritiqueType === type ? "primary" : "secondary"}
+                    className="px-3 py-2 text-[11px]"
+                    onClick={() => setSelectedCritiqueType(type)}
+                  >
+                    {type}
+                  </Button>
+                ))}
+              </div>
+              <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{critiqueVariety.note}</p>
+              {activeCritiqueType !== selectedCritiqueType ? (
+                <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[#8b4d1f]">
+                  Penny is forcing variety: {activeCritiqueType}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[#355b32]">
+                  Active failure type: {activeCritiqueType}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-[20px] bg-[var(--panel)] p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Socratic mode</p>
+              <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+                {critiqueMode === "socratic"
+                  ? critiqueModePrompt("socratic", activeCritiqueType, selectedGraphNode?.node.content ?? "the active claim", critiqueIntensity)
+                  : `When selected, Socratic mode asks the user to critique their own claim instead of letting Penny generate the critique directly.`}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Self-generated critique tends to produce more durable reasoning change, so this stays selectable rather than becoming the default.
+              </p>
+            </div>
+
+            <div className="rounded-[20px] bg-[var(--panel)] p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Meta-critique</p>
+              <h3 className="mt-2 text-lg font-semibold text-[var(--ink)]">{critiqueMetaCritique.headline}</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{critiqueMetaCritique.body}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {recentCritiqueTypes.length ? (
+                  recentCritiqueTypes.slice(-5).map((type, index) => (
+                    <Badge key={`${type}-${index}`} className="bg-white text-[var(--ink)]">
+                      {type}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge className="bg-white text-[var(--ink)]">No critique history yet</Badge>
+                )}
+              </div>
+              <p className="mt-3 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">
+                Engagement style: {critiqueEngagementStyle}
+              </p>
+            </div>
+
+            <div className="rounded-[20px] border border-[#e0cfa8] bg-[#fffaf0] p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Penny is wrong</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                If Penny mis-cited a precedent or mis-described a mechanism, capture the correction here as a high-priority signal.
+              </p>
+              <textarea
+                className="mt-3 min-h-[92px] w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                placeholder="State the factual correction, the mis-described mechanism, or the inaccurate precedent."
+                value={currentCritiqueCorrectionDraft}
+                onChange={(event) =>
+                  setCritiqueCorrectionDrafts((current) => ({
+                    ...current,
+                    [critiqueCorrectionNodeId ?? "global"]: event.target.value,
+                  }))
+                }
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  className="px-3 py-2 text-xs"
+                  disabled={!critiqueCorrectionNodeId || currentCritiqueCorrectionDraft.trim().length < 12}
+                  onClick={captureCritiqueCorrection}
+                >
+                  Capture correction
+                </Button>
+                <Badge className="bg-white text-[var(--ink)]">high-priority signal</Badge>
+              </div>
+            </div>
+
+            <div className="rounded-[20px] bg-[var(--panel)] p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Red-team session</p>
+              <h3 className="mt-2 text-lg font-semibold text-[var(--ink)]">Attack the whole structure for 20-30 minutes.</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                {critiqueMode === "red_team"
+                  ? "Penny is in sustained attack mode: no single-claim hopping, no soft landings, just dependency-structure pressure until the board-level failure surface is visible."
+                  : "Switch here when the stakes are high and the normal round-by-round critique is too shallow."}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6">
         <div className="flex flex-wrap items-center gap-2">
           <Badge>Dialectic rounds</Badge>
           <Badge className="bg-[#e7defa] text-[#5c4c88]">round-tracked</Badge>
@@ -2908,6 +3290,7 @@ export function ThoughtMapWorkspace({
                         roundIndex: Number(round.round.replace(/[^0-9]/g, "")) || 0,
                         title: round.title,
                         critiqueStrength: round.strength,
+                        critiqueType: activeCritiqueType,
                         prompt: round.prompt,
                         why: round.why,
                         responsePath: path,
@@ -2933,6 +3316,7 @@ export function ThoughtMapWorkspace({
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge className="bg-white text-[var(--ink)]">{entry.round}</Badge>
                     <Badge className="bg-[#e7defa] text-[#5c4c88]">{entry.critiqueStrength}</Badge>
+                    {entry.critiqueType ? <Badge className="bg-white text-[var(--ink)]">{entry.critiqueType}</Badge> : null}
                     {entry.responsePath ? (
                       <Badge className="bg-[#d9ead8] text-[#355b32]">{entry.responsePath}</Badge>
                     ) : null}
