@@ -30,6 +30,12 @@
 - `user`: The second brain must store claims, assumptions, evidence, counterarguments, and open questions in structured form, and it must also learn the user over time by recording recurring blind spots, assumptions, and failure patterns.
 - `user`: The stress-test layer should surface weak evidence, shaky assumptions, missing comparisons, risky dependencies, and precedent from real history so critique is grounded and not merely hypothetical.
 - `user`: Stress testing should remain reasoning-focused even for unconventional ideas, and it should help users produce the strongest version of their thinking rather than merely opposing them.
+- `user`: The dialectic interaction should turn counterargument into explicit rounds instead of a one-shot critique so Penny can escalate, concede, or pivot based on the user’s response.
+- `user`: Round-tracked counterargument threads should timestamp each exchange, preserve the full response history, and make survival depth a property of the claim.
+- `user`: Critique strength disclosure should label each counterargument as weak, moderate, or strong so users can calibrate how seriously to treat it.
+- `user`: A "why this critique" transparency panel should expose the failure type, shape-level pattern, precedent cases, and applied framework behind a counterargument.
+- `user`: Responses to counterarguments should have three distinct paths: defend, revise, or absorb, and each path should generate different downstream signals.
+- `user`: Counterargument provenance tags should show where a critique came from, such as precedent, dependency analysis, behavioral science, or shape-derived patterns.
 - `user`: Learning should be just-in-time and downstream of capture plus stress-testing, tied to the exact point of confusion instead of a separate reading list.
 - `user`: The three outputs a user should leave with are a structured result, real learning, and clearer self-knowledge.
 - `user`: Learning features should be just-in-time, not a reading list.
