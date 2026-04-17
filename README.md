@@ -19,6 +19,14 @@ Penny is built around three core functions:
 - Knowledge shape tracking: Penny should remember what the user has mastered, what they keep needing to relearn, and what is solid.
 - Research-mode expansion: optional follow-up only, clearly separated from the inline learning moment so it stays anchored to the triggering claim.
 
+### Decision & Synthesis Features
+
+- Pre-mortem as a synthesis gate: before any output artifact is generated, the user imagines how it fails in six months.
+- If-you-were-right mode: assume the claim is true and ask what becomes possible, what becomes necessary, and what the user would do in 30 days.
+- Stakes-proportional friction: load-bearing claims get more stress-testing, more pre-mortems, and a tighter revisit cadence.
+- Twin-check output: Penny produces the strongest version of the user’s current thinking, then the user decides whether it actually represents what they believe.
+- Post-mortem protocol: when outcomes resolve, Penny turns them into first-class artifacts so the system learns from reality.
+
 What the user should leave with:
 
 - A structured result, such as a brief, outline, decision memo, or plan.
@@ -33,6 +41,7 @@ The underlying product bet is psychology-backed:
 - Confidence decay and revisitation should keep beliefs current.
 - Calibration should improve over time, not just perceived speed.
 - The most important flagship addition is an old selves view that shows past beliefs and confidence levels over time, turning the moves layer into something users can feel and share.
+- Decision synthesis should be load-bearing too: pre-mortems, if-you-were-right mode, stakes-proportional friction, twin-check output, and post-mortems should make the output step feel real, not generic.
 
 The design aim is an invested sparring partner, not a sycophantic assistant and not a brutal critic.
 
@@ -55,6 +64,8 @@ The loop should close fast enough to feel real:
 6. The next interaction is meaningfully different.
 
 The goal is not friction for its own sake. The goal is to preserve the effort that makes thinking durable while removing avoidable UI friction.
+
+Friction should scale with stakes so the product does not flatten important decisions into lightweight ones.
 
 ## Psychology-Backed Design
 
