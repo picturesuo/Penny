@@ -705,10 +705,6 @@ export async function generateFounderBrief(mapId: string) {
     throw new Error("Map not found");
   }
 
-  if (!map.founderBriefReadiness.eligible) {
-    throw new Error("Founder brief unavailable: map not ready");
-  }
-
   const founderBrief = buildFounderBrief(map);
   const { generatedAt, ...storedFounderBrief } = founderBrief;
   const updatedRecord = await prisma.thoughtMap.update({
