@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpenText } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,27 @@ function prettyLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function suggestAssumptions(rawThought: string) {
+  const text = rawThought.toLowerCase();
+  if (!text.trim()) {
+    return [] as string[];
+  }
+
+  const prompts = [
+    /\b(can|could|will|would|should|must)\b/.test(text) ? "What must be true for this to work?" : null,
+    /\b(faster|cheaper|better|more|less)\b/.test(text) ? "What evidence would show the tradeoff is real?" : null,
+    /\b(ai|automation|workflow|tool|product)\b/.test(text) ? "What adoption assumption is most load-bearing?" : null,
+    /\b(student|teacher|classroom)\b/.test(text) ? "What behavior change is required for this to stick?" : null,
+    /\b(scale|market|distribution|launch)\b/.test(text) ? "What distribution assumption could break this?" : null,
+  ].filter((value): value is string => value != null);
+
+  if (prompts.length === 0) {
+    prompts.push("What is the load-bearing assumption here?");
+  }
+
+  return prompts.slice(0, 4);
+}
+
 export function ThoughtMapForm() {
   const router = useRouter();
   const [rawThought, setRawThought] = useState("");
@@ -77,6 +98,13 @@ export function ThoughtMapForm() {
   });
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const assumptionSuggestions = useMemo(() => suggestAssumptions(rawThought), [rawThought]);
+  const confidenceChallenge =
+    claim.confidence > 90
+      ? "You’re committing to a very high confidence. What specifically would have to be true for you to revise down to 70%?"
+      : claim.confidence < 25
+        ? "Very low confidence is fine, but Penny will treat this as a provisional claim until it gets more structure."
+        : null;
 
   function toggleStake(stake: ClaimStake) {
     setClaim((current) => ({
@@ -195,6 +223,13 @@ export function ThoughtMapForm() {
                 }
                 className="w-full accent-[var(--ink)]"
               />
+              {confidenceChallenge ? (
+                <p className="text-xs leading-5 text-[#8b4d1f]">{confidenceChallenge}</p>
+              ) : (
+                <p className="text-xs leading-5 text-[var(--muted-ink)]">
+                  Every claim gets a probability so Penny can score it later and challenge overconfidence early.
+                </p>
+              )}
             </label>
 
             <label className="space-y-2">
@@ -298,6 +333,25 @@ export function ThoughtMapForm() {
                 placeholder="What other claims must be true for this one to hold?"
                 className="w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
               />
+              <div className="flex flex-wrap gap-2">
+                {assumptionSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    className="rounded-full border border-[#d7c06c] bg-[#fff6d8] px-3 py-2 text-left text-xs leading-5 text-[#6f5612] transition hover:border-[#b79412] hover:bg-[#fff1b8]"
+                    onClick={() =>
+                      setClaim((current) => ({
+                        ...current,
+                        dependencyNotes: current.dependencyNotes
+                          ? `${current.dependencyNotes}\n${suggestion}`
+                          : suggestion,
+                      }))
+                    }
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
             </label>
           </div>
         </div>

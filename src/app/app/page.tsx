@@ -46,6 +46,29 @@ const community = [
   },
 ] as const;
 
+const curriculum = [
+  {
+    title: "Student mode tunnel",
+    copy: "Capture claims, stress-test structure, teach through confusion, synthesize an outline, then hand prose off to downstream AI.",
+  },
+  {
+    title: "Instructor surface",
+    copy: "With permission, teachers can inspect the structural progression of thinking across a project and grade process, not just output.",
+  },
+  {
+    title: "Classroom shape views",
+    copy: "Aggregate patterns across a class so instructors can see bottlenecks like students abandoning at the counterargument stage.",
+  },
+  {
+    title: "Metacognition rubrics",
+    copy: "Evaluate the shapes visible in the traversal, not only the final artifact, so students are rewarded for better thinking.",
+  },
+  {
+    title: "Curriculum packs",
+    copy: "Pre-built tunnel variants for investment theses, research proposals, product specs, and argumentative essays with task-specific exit criteria.",
+  },
+] as const;
+
 function summarizeNodeStatus(nodes: Awaited<ReturnType<typeof listThoughtMaps>>[number]["nodes"]) {
   return nodes.reduce(
     (counts, node) => {
@@ -238,6 +261,26 @@ export default async function DashboardPage() {
               )}
             </div>
           </div>
+        </div>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <div className="max-w-3xl">
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Curriculum & education</p>
+          <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
+            The tunnel can be tuned for students, instructors, and classrooms.
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
+            Penny should work as a learning instrument, not only a personal thinking tool. These variants keep the same core workflow but change the exit criteria for the task at hand.
+          </p>
+        </div>
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {curriculum.map((item) => (
+            <div key={item.title} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+              <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">{item.title}</p>
+              <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{item.copy}</p>
+            </div>
+          ))}
         </div>
       </Card>
 
