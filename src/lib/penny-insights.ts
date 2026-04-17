@@ -1,4 +1,6 @@
 import type {
+  BayesianPropagationSnapshot,
+  BayesianPropagationStep,
   ClaimCaptureMetadata,
   ClaimProvenance,
   ClaimStatus,
@@ -86,6 +88,143 @@ export interface ClaimDependencyGraph {
   rootNodeIds: string[];
   loadBearingNodeIds: string[];
   edges: ClaimDependencyEdge[];
+}
+
+function confidenceFromScore(score: number | null | undefined) {
+  return Math.max(0, Math.min(1, score ?? 0));
+}
+
+function nodeLabel(node: ThoughtNodeModel | null | undefined) {
+  if (!node) {
+    return "unknown claim";
+  }
+
+  return `${node.kind.replaceAll("_", " ")}: ${node.content}`;
+}
+
+function collectBayesianOverrides(events: ThoughtMapEvent[]) {
+  const overrides = new Map<
+    string,
+    { sourceNodeId: string; targetNodeId: string; reasoning: string; mode: string }
+  >();
+
+  for (const event of events) {
+    if (event.eventType !== "confidence_override") {
+      continue;
+    }
+
+    const sourceNodeId = typeof event.payload?.sourceNodeId === "string" ? event.payload.sourceNodeId : null;
+    const targetNodeId = typeof event.payload?.targetNodeId === "string" ? event.payload.targetNodeId : null;
+    const reasoning = typeof event.payload?.reasoning === "string" ? event.payload.reasoning.trim() : "";
+    const mode = typeof event.payload?.mode === "string" ? event.payload.mode.trim() : "hold";
+
+    if (!sourceNodeId || !targetNodeId) {
+      continue;
+    }
+
+    overrides.set(`${sourceNodeId}:${targetNodeId}`, {
+      sourceNodeId,
+      targetNodeId,
+      reasoning,
+      mode,
+    });
+  }
+
+  return overrides;
+}
+
+export function buildBayesianPropagationSnapshot(
+  map: ThoughtMapModel,
+  seedNodeId: string,
+): BayesianPropagationSnapshot | null {
+  const seedNode = map.nodes.find((node) => node.id === seedNodeId && node.nodeStatus !== "superseded") ?? null;
+
+  if (!seedNode) {
+    return null;
+  }
+
+  const seedConfidence = confidenceFromScore(seedNode.scores?.confidence);
+  const dependencyGraph = buildClaimDependencyGraph(map);
+  const overrides = collectBayesianOverrides(map.events);
+  const nodesById = new Map(map.nodes.map((node) => [node.id, node] as const));
+  const outgoingByNode = new Map<string, string[]>();
+
+  for (const edge of dependencyGraph.edges) {
+    const outgoing = outgoingByNode.get(edge.fromNodeId) ?? [];
+    outgoing.push(edge.toNodeId);
+    outgoingByNode.set(edge.fromNodeId, outgoing);
+  }
+
+  const cascade: BayesianPropagationStep[] = [];
+  const visited = new Set<string>([seedNode.id]);
+  const queue: Array<{ nodeId: string; propagatedConfidence: number; depth: number }> = [
+    { nodeId: seedNode.id, propagatedConfidence: seedConfidence, depth: 0 },
+  ];
+
+  while (queue.length) {
+    const current = queue.shift();
+
+    if (!current) {
+      continue;
+    }
+
+    const children = outgoingByNode.get(current.nodeId) ?? [];
+
+    for (const childId of children) {
+      const child = nodesById.get(childId);
+
+      if (!child || child.nodeStatus === "superseded") {
+        continue;
+      }
+
+      const source = nodesById.get(current.nodeId);
+      const baseConfidence = confidenceFromScore(child.scores?.confidence);
+      const edge = dependencyGraph.edges.find(
+        (candidate) => candidate.fromNodeId === current.nodeId && candidate.toNodeId === childId,
+      );
+      const baseEdgeFactor = edge?.relation === "supersedes" ? 0.88 : 0.94;
+      const override = overrides.get(`${current.nodeId}:${childId}`);
+      const overrideBoost = override?.mode === "hold" ? 0.08 : 0;
+      const edgeFactor = Math.min(1, baseEdgeFactor + overrideBoost);
+      const propagatedConfidence = Math.max(0, Math.min(1, baseConfidence * current.propagatedConfidence * edgeFactor));
+      const delta = propagatedConfidence - baseConfidence;
+
+      cascade.push({
+        sourceNodeId: current.nodeId,
+        targetNodeId: childId,
+        depth: current.depth + 1,
+        sourceConfidence: current.propagatedConfidence,
+        baseConfidence,
+        propagatedConfidence,
+        delta,
+        edgeFactor,
+        reasoning: override
+          ? override.reasoning
+          : `The confidence on ${nodeLabel(source)} carries forward into ${nodeLabel(child)} through the dependency edge.`,
+        overrideReasoning: override?.reasoning || null,
+        pathLabel: `${nodeLabel(source)} → ${nodeLabel(child)}`,
+      });
+
+      if (!visited.has(childId)) {
+        visited.add(childId);
+        queue.push({ nodeId: childId, propagatedConfidence, depth: current.depth + 1 });
+      }
+    }
+  }
+
+  const supporterChain = buildBeliefGenealogy(map.nodes, seedNodeId).lineage.map((node) => ({
+    nodeId: node.id,
+    label: nodeLabel(node),
+    confidence: node.scores?.confidence ?? null,
+  }));
+
+  return {
+    seedNodeId: seedNode.id,
+    seedConfidence,
+    overrideCount: overrides.size,
+    cascade: cascade.sort((a, b) => a.depth - b.depth || b.delta - a.delta),
+    supporterChain,
+  };
 }
 
 export interface OldSelfSnapshot {
@@ -1542,6 +1681,21 @@ export function buildClaimMoveHistory(
           summary: response
             ? `The ${round.toLowerCase()} thread persisted a ${responsePath} response at ${critiqueStrength} strength: ${response.slice(0, 120)}${response.length > 120 ? "…" : ""}`
             : `The ${round.toLowerCase()} thread persisted a ${responsePath} response at ${critiqueStrength} strength.`,
+          createdAt: event.createdAt,
+          accent: "feedback",
+        } satisfies ClaimMoveHistoryEntry;
+      }
+
+      if (event.eventType === "confidence_override") {
+        const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
+        const mode = typeof event.payload?.mode === "string" ? String(event.payload.mode).trim() : "hold";
+
+        return {
+          id: event.id,
+          label: "Confidence override",
+          summary: reasoning
+            ? `The user asked Penny to ${mode === "reduce" ? "tighten" : "soften"} the cascade and said: ${reasoning.slice(0, 120)}${reasoning.length > 120 ? "…" : ""}`
+            : `The user asked Penny to ${mode === "reduce" ? "tighten" : "soften"} the cascade.`,
           createdAt: event.createdAt,
           accent: "feedback",
         } satisfies ClaimMoveHistoryEntry;
