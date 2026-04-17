@@ -509,10 +509,63 @@ export default async function DashboardPage() {
             </div>
           </div>
 
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Shared sphere with a co-thinker</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              A shared sphere keeps authorship visible and disagreement first-class without turning the product into a public feed.
+            </p>
+            <div className="mt-4 space-y-3">
+              {communitySnapshot.sharedSpherePreviews.length ? (
+                communitySnapshot.sharedSpherePreviews.map((item) => (
+                  <div key={`${item.mapIds.join("-")}-${item.titles.join("-")}`} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {item.authorshipMarkers.map((marker) => (
+                        <Badge key={marker} className={marker === "You" ? "bg-[#d9ead8] text-[#355b32]" : "bg-[#e7defa] text-[#5c4c88]"}>
+                          {marker}
+                        </Badge>
+                      ))}
+                      <Badge className="bg-white text-[var(--muted-ink)]">{item.mapIds.length} maps</Badge>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{item.summary}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.guardrail}</p>
+                    <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">{item.privacyNote}</p>
+                    <p className="mt-3 text-sm font-medium text-[var(--ink)]">{item.titles.join(" + ")}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No bounded shared sphere is strong enough to suggest yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Advisor review mode</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              Advisors can critique the map without editing it, which keeps ownership clean while still making review useful.
+            </p>
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              {communitySnapshot.advisorReviewModes.length ? (
+                communitySnapshot.advisorReviewModes.map((item) => (
+                  <div key={`${item.title}-${item.updatedAt.toISOString()}`} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[#e7defa] text-[#5c4c88]">{item.reviewerLabel}</Badge>
+                      <Badge className="bg-white text-[var(--muted-ink)]">critique-only</Badge>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{item.critiqueOnly}</p>
+                    <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">{item.permissionsNote}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{item.reviewPrompt}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No advisor-review mode is strong enough to suggest yet.</p>
+              )}
+            </div>
+          </div>
+
           <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5 xl:col-span-2">
             <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Thought-partner matching</p>
             <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
-              Matching stays one-to-one and bounded to structurally similar questions.
+              Matching stays one-to-one, bounded, and time-limited to structurally similar questions rather than broad social discovery.
             </p>
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
               {communitySnapshot.thoughtPartnerMatches.length ? (
