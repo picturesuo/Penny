@@ -152,7 +152,8 @@ The visual and interaction model should feel like a built city, not a notes dump
 - Density over breadth: well-stress-tested nodes should look richer and more confident, while shallow nodes stay thin and provisional.
 - Emergent structure: avoid upfront tagging; let organization accrete from stress-testing and relationship inference.
 - Progressive disclosure: keep the active stage front and center and keep other stages accessible but quiet.
-- Outline first: make the outline the daily workspace and the graph a periodic zoom-out.
+- Knowledge cards first: make the selected claim the primary working surface and keep the graph as a structural minimap.
+- Outline first: make the outline the daily workspace and keep it separate from card-first reflection.
 - Smart defaults: preselect stress-test type, critique depth, and learning scaffold based on the current claim, confidence, and topic.
 - Clean endings should read as a trust signal: the product should be optimized for finished work, not engagement.
 - Structural health should be visible on the graph through node weight, saturation, border thickness, and density indicators.
@@ -181,7 +182,7 @@ The visual and interaction model should feel like a built city, not a notes dump
 - Session persistence and resume flow
 - Founder Concept Brief generation
 - Capture form with probability, provenance, stakes, dependency notes, and assumption suggestions
-- Workspace surfaces for dialectic rounds, synthesis gates, move query, old selves, belief genealogy, and confidence drift
+- Workspace surfaces for dialectic rounds, synthesis gates, move query, old selves, belief genealogy, confidence drift, and a card-first graph minimap
 - Bayesian propagation through the claim graph with overrideable cascade previews
 - Belief archaeology panel and session-end reflection ritual for deeper memory and close-out
 - Challenge-skill calibration on the critique surface so Penny can pitch difficulty to the user's current state
