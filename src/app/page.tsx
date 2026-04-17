@@ -100,7 +100,7 @@ export default function LandingPage() {
         <header className="flex items-center justify-between py-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Penny</p>
-            <p className="mt-1 text-sm text-[var(--muted-ink)]">Not another chatbot. A pressure test for startup ideas.</p>
+            <p className="mt-1 text-sm text-[var(--muted-ink)]">Not another chatbot. A pressure-tested second brain for personal ideas.</p>
           </div>
           <Link href="/app">
             <Button variant="secondary">Open dashboard</Button>
@@ -113,15 +113,15 @@ export default function LandingPage() {
               A second brain that pushes back
             </p>
             <h1 className="mt-6 max-w-4xl font-display text-6xl leading-[0.95] text-[var(--ink)] sm:text-7xl">
-              Build a pressure-tested second brain, not a passive note pile.
+              Build a pressure-tested second brain for personal ideas, not a passive note pile.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-[var(--muted-ink)]">
-              Penny starts with messy ideas, turns them into structured reasoning, stress-tests the weak logic, and keeps pointing you to the best next thing to learn or validate.
+              Penny starts with messy notes and ideas, turns them into structured reasoning, stress-tests the weak logic, and keeps pointing you to the best next thing to learn or validate.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link href="/app/new">
                 <Button className="gap-2 px-6 py-3 text-base">
-                  Start the first map
+                  Start your first map
                   <ArrowRight className="size-4" />
                 </Button>
               </Link>

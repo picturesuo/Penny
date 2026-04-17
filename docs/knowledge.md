@@ -48,6 +48,10 @@
 - `user`: Shape confidence should rise only when the supporting move set is diverse enough and temporally stable enough, and it should stay below publishable thresholds until the shape survives repeated corroboration.
 - `user`: Shape update cadence should be hybrid: recompute opportunistically after meaningful moves, then consolidate on a slower periodic schedule so noisy one-off events do not dominate the user model.
 - `user`: Shape derivation should keep provenance visible by linking each shape back to the supporting moves, claims, and time windows that justified it.
+- `user`: The Lens spec should define what the lens contains, how it is injected, and the token budget it can consume in each generation pass.
+- `user`: The lens should contain a compact user model built from high-confidence shapes, current goals, active claims, salient moves, known blind spots, and the smallest precedent set needed for the request.
+- `user`: Lens injection should be task-aware: generation should receive the current decision context first, then only the shapes, moves, and precedents needed to change the answer, with older or redundant material excluded by default.
+- `user`: Lens token budget should stay bounded and explicit so the system can prioritize relevance over bulk, trim stale context, and reserve room for the live prompt and output instructions.
 - `user`: `Lens` is the live current model of the user, derived from shapes and optimized for injection into generation so every critique, learning recommendation, and precedent retrieval is personalized.
 - `user`: Relationships matter: claims relate to claims, moves reference claims and moves, shapes derive from moves, and the lens is derived from shapes.
 - `user`: The system must use a closed loop, not an open loop.
@@ -58,9 +62,15 @@
 - `user`: The next generation uses the new lens, closing the loop.
 - `user`: The loop must be perceptible; a Tuesday override should change critique quality by the following week or the system is decorative.
 - `user`: Override is the richest signal in the product because it reveals exactly where Penny’s model of the user is wrong.
+- `user`: The override pipeline should convert disagreement into signal by classifying the reason for the override, attaching it to the originating move, and using it to update candidate shapes, precedent retrieval, and future critique behavior.
+- `user`: Overrides should be normalized into explicit disagreement types such as missing evidence, wrong framing, premature recommendation, confidence mismatch, and scope mismatch.
+- `user`: Override processing should preserve the user’s reasoning, the target claim or move, the old recommendation, and the revised signal so the system can learn from the exact failure mode rather than only the fact of disagreement.
 - `user`: Overrides must be stored as moves with the user’s reasoning, parsed for the kind of disagreement, and used to update candidate shapes and future related generations.
 - `user`: Overrides should be reviewable so the user can see repeated disagreement patterns and refine them into metacognition.
 - `user`: Penny needs a real precedent corpus, not generic web search. The corpus should contain cases, structured post-mortems, and failure-mode taxonomy, with retrieval based on failure trajectories rather than surface similarity.
+- `user`: Precedent corpus v1 should be seeded with a small set of canonical cases, each tagged with outcome, failure mode, domain, and the reasoning pattern that made the case relevant.
+- `user`: The failure mode taxonomy should cover weak evidence, false certainty, omitted counterargument, dependency failure, bad comparison set, reversible decision, irreversible decision, and pattern mismatch.
+- `user`: Precedent retrieval should be mechanism-based: search first by failure trajectory and move type, then by domain and outcome, and finally by semantic similarity only as a fallback.
 - `user`: The precedent corpus is an asset that compounds separately from any individual user history.
 - `user`: Just-in-time learning should happen at the point of confusion during stress-testing, with minimum viable explanation, why-it-matters context, teach-back, and optional deeper anchors.
 - `user`: Every learning moment should generate moves and should feed a knowledge shape for what the user understands, repeats, or needs to relearn.
@@ -99,6 +109,7 @@
 - `repo`: `src/server/thought-map.ts` keeps `getThoughtMap()` as the authoritative server hydration path for map-page work. It maps persisted nodes, applies `buildThoughtMapJudgment()`, computes `founderBriefReadiness`, and then syncs/open-orders interventions before returning the `ThoughtMapModel`.
 - `repo`: The first outline/graph map-page slice should reuse the existing `ThoughtMapModel` payload from `getThoughtMap()` instead of introducing a graph-only transport. The current payload already includes `parentId`, judged `scores`, `nodeStatus`, `graphSnapshot`, `recommendedNextMove`, interventions, founder brief data, and founder-brief readiness.
 - `repo`: `src/app/page.tsx` now leads with the pressure-tested second-brain frame and keeps the landing copy aligned with the wiki-first product direction instead of centering startup-idea critique.
+- `repo`: `src/app/app/page.tsx` now surfaces a small foundation stack for Lens, overrides, and precedents, and `src/components/penny/thought-map-workspace.tsx` now frames triage and the override trail with that same foundation language.
 
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.

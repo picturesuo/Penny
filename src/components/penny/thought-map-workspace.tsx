@@ -821,7 +821,7 @@ export function ThoughtMapWorkspace({
               ) : (
                 <div className="rounded-[24px] border border-black/8 bg-white p-5 lg:col-span-2">
                   <p className="text-sm leading-6 text-[var(--muted-ink)]">
-                    Keep building the map. Once Penny can see a weak branch or missing branch type, this section will tell you what to learn next and what to validate after that.
+                    Keep building the map. Once Penny can see a weak branch or missing branch type, this section will tell you what to learn next, which precedent to compare against, and what to validate after that.
                   </p>
                 </div>
               )}
@@ -913,10 +913,10 @@ export function ThoughtMapWorkspace({
       <Card className="p-6 sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Stress testing</p>
-            <h2 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Run explicit pressure passes, not one generic critique.</h2>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Weak-node triage</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Push the weakest branches first, then widen to the rest of the map.</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted-ink)]">
-              Penny now treats stress testing as a visible lane on the workspace: weak evidence, contradictions, risky dependencies, and missing comparisons.
+              Penny now treats triage as a visible lane on the workspace: weak evidence, contradictions, risky dependencies, and missing comparisons are prioritized before they become a bigger repair job.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -931,7 +931,7 @@ export function ThoughtMapWorkspace({
             )}
             {activeBiasDetectors.map((detector) => (
               <Badge key={detector} className="bg-[#fff6ed] text-[#8b4d1f]">
-                watching {labelBias(detector)}
+                override signal {labelBias(detector)}
               </Badge>
             ))}
           </div>
@@ -968,7 +968,7 @@ export function ThoughtMapWorkspace({
         </div>
 
         <div className="mt-6 rounded-[24px] bg-white p-5">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Challenge history</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Override trail</p>
           <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
             Already-challenged branches stay visible here so future pressure can go deeper instead of repeating the same surface critique.
           </p>
