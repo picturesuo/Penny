@@ -157,6 +157,15 @@ export interface ContradictionCascadeStep {
   reason: string;
 }
 
+export interface ProspectiveHindsightSnapshot {
+  targetNodeId: string;
+  targetLabel: string;
+  failurePrompt: string;
+  omissionPrompt: string;
+  outsideViewNote: string;
+  repeatableNote: string;
+}
+
 export interface SessionRhythmSnapshot {
   depletionScore: number;
   shouldStop: boolean;
@@ -887,9 +896,33 @@ function riskProfile(node: ThoughtNodeModel) {
   return Array.from(tags);
 }
 
-export function retrievePrecedentsForNode(node: ThoughtNodeModel, limit = 3): PrecedentCase[] {
+export function retrievePrecedentsForNode(
+  node: ThoughtNodeModel,
+  limitOrLens: number | PennyLensSnapshot = 3,
+  maybeLens?: PennyLensSnapshot | null,
+): PrecedentCase[] {
+  const limit = typeof limitOrLens === "number" ? limitOrLens : 3;
+  const lens = typeof limitOrLens === "number" ? maybeLens ?? null : limitOrLens;
   const tags = new Set(riskProfile(node));
   const text = normalize(node.content);
+  const lensSignals = new Set(
+    lens
+      ? [
+          ...lens.activeShapes.flatMap((shape) => shape.signals),
+          ...lens.provisionalShapes.flatMap((shape) => shape.signals),
+          ...lens.overrideShapes.flatMap((shape) => shape.signals),
+        ]
+      : [],
+  );
+  const lensLabels = new Set(
+    lens
+      ? [
+          ...lens.activeShapes.map((shape) => normalize(shape.label)),
+          ...lens.provisionalShapes.map((shape) => normalize(shape.label)),
+          ...lens.overrideShapes.map((shape) => normalize(shape.label)),
+        ]
+      : [],
+  );
 
   return [...PRECEDENT_CORPUS]
     .map((precedent) => {
@@ -905,6 +938,12 @@ export function retrievePrecedentsForNode(node: ThoughtNodeModel, limit = 3): Pr
       if (precedent.failureMode.includes("norm") && tags.has("norm")) score += 2;
       if (precedent.failureMode.includes("operational") && tags.has("operations")) score += 2;
       if (precedent.failureMode.includes("premise") && (node.scores?.confidence ?? 0) > 0.7) score += 1;
+      if (
+        lensSignals.size > 0 &&
+        precedent.riskTags.some((tag) => lensSignals.has(tag) || lensLabels.has(normalize(tag)))
+      ) {
+        score += 2;
+      }
       if (precedent.name.toLowerCase().includes("wework") && text.includes("governance")) score += 1;
       if (precedent.name.toLowerCase().includes("theranos") && text.includes("validation")) score += 1;
 
@@ -956,6 +995,24 @@ export function buildAdversarialFinalPass(map: ThoughtMapModel): AdversarialFina
       ? `If #${quietKeystoneIndex ?? "?"} fails, the entire argument collapses.`
       : "The dependency structure is not yet rich enough for a confident collapse warning.",
     dependentCount,
+  };
+}
+
+export function buildProspectiveHindsightSnapshot(node: ThoughtNodeModel | null): ProspectiveHindsightSnapshot | null {
+  if (!node) {
+    return null;
+  }
+
+  const targetLabel = node.content;
+
+  return {
+    targetNodeId: node.id,
+    targetLabel,
+    failurePrompt: `Imagine this claim has been definitively disproven six months from now. What was the story?`,
+    omissionPrompt: `Imagine you didn't pursue this and it turned out to be right. What did you miss?`,
+    outsideViewNote:
+      "Prospective hindsight pushes the claim into an outside-view frame so the risk story is less inside-story and more objective.",
+    repeatableNote: "This mode is available on any claim at any time, not just at synthesis.",
   };
 }
 
@@ -1090,7 +1147,7 @@ export function interleaveStressNodes(nodes: ThoughtNodeModel[]): ThoughtNodeMod
   return interleaved;
 }
 
-export function derivePennyShapes(nodes: ThoughtNodeModel[]): PennyShape[] {
+function buildPennyShapeCandidates(nodes: ThoughtNodeModel[]): PennyShape[] {
   return SHAPE_RULES.reduce<PennyShape[]>((acc, rule) => {
     const supportingNodes = nodes.filter(rule.matches);
 
@@ -1118,6 +1175,171 @@ export function derivePennyShapes(nodes: ThoughtNodeModel[]): PennyShape[] {
 
     return acc;
   }, []);
+}
+
+function buildOverrideShapeLayer(map: ThoughtMapModel): PennyLensOverrideShape[] {
+  const latestByShapeId = new Map<string, PennyLensOverrideShape>();
+
+  for (const event of map.events) {
+    if (event.eventType !== "shape_feedback") {
+      continue;
+    }
+
+    const shapeId = typeof event.payload?.shapeId === "string" ? String(event.payload.shapeId) : null;
+    const verdict = event.payload?.verdict;
+    const shapeLabel = typeof event.payload?.shapeLabel === "string" ? String(event.payload.shapeLabel).trim() : "";
+    const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
+    const nodeId = typeof event.payload?.nodeId === "string" ? String(event.payload.nodeId) : null;
+
+    if (!shapeId || (verdict !== "confirmed" && verdict !== "rejected" && verdict !== "refined")) {
+      continue;
+    }
+
+    const overrideShape: PennyLensOverrideShape = {
+      id: shapeId,
+      label: shapeLabel || shapeId,
+      verdict,
+      confidence: verdict === "confirmed" ? 92 : verdict === "refined" ? 74 : 38,
+      reasoning: reasoning || "The shape was explicitly overridden.",
+      nodeId,
+      sourceMapId: map.id,
+      signals: Array.from(
+        new Set(
+          `${shapeLabel} ${reasoning}`
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, " ")
+            .split(/\s+/)
+            .filter((token) => token.length >= 4),
+        ),
+      ).slice(0, 6),
+    };
+
+    const existing = latestByShapeId.get(shapeId);
+
+    if (!existing || existing.confidence <= overrideShape.confidence) {
+      latestByShapeId.set(shapeId, overrideShape);
+    }
+  }
+
+  return Array.from(latestByShapeId.values()).sort((a, b) => b.confidence - a.confidence);
+}
+
+function adjustLensShapes(shapes: PennyShape[], overrideShapes: PennyLensOverrideShape[]) {
+  const overrideById = new Map(overrideShapes.map((shape) => [shape.id, shape] as const));
+  const promotedShapeIds: string[] = [];
+  const suppressedShapeIds: string[] = [];
+
+  const adjusted = shapes.reduce<PennyShape[]>((acc, shape) => {
+    const override = overrideById.get(shape.id);
+
+    if (override?.verdict === "rejected") {
+      suppressedShapeIds.push(shape.id);
+      return acc;
+    }
+
+    if (override) {
+      promotedShapeIds.push(shape.id);
+      const lift = override.verdict === "confirmed" ? 12 : 6;
+      acc.push({
+        ...shape,
+        confidence: clampConfidence(shape.confidence + lift),
+        verdict: override.verdict === "confirmed" ? "confirmed" : override.verdict === "refined" ? "refined" : shape.verdict,
+        explanation: `${shape.explanation} Override reasoning: ${override.reasoning}`,
+      });
+      return acc;
+    }
+
+    acc.push(shape);
+    return acc;
+  }, []);
+
+  for (const override of overrideShapes) {
+    if (!shapes.some((shape) => shape.id === override.id) && override.verdict !== "rejected") {
+      promotedShapeIds.push(override.id);
+      adjusted.push({
+        id: override.id,
+        label: override.label,
+        summary: override.reasoning,
+        kind: "domain",
+        primaryMapId: override.sourceMapId,
+        sourceMapIds: override.sourceMapId ? [override.sourceMapId] : [],
+        verdict: override.verdict === "confirmed" ? "confirmed" : override.verdict === "refined" ? "refined" : "provisional",
+        confidence: override.confidence,
+        evidenceNodeIds: override.nodeId ? [override.nodeId] : [],
+        supportingNodes: [],
+        explanation: override.reasoning,
+        signals: override.signals,
+      });
+    }
+  }
+
+  const activeShapes = adjusted.filter((shape) => shape.confidence >= ACTIVE_SHAPE_CONFIDENCE);
+  const provisionalShapes = adjusted.filter(
+    (shape) => shape.confidence >= PROVISIONAL_SHAPE_CONFIDENCE && shape.confidence < ACTIVE_SHAPE_CONFIDENCE,
+  );
+
+  return {
+    activeShapes,
+    provisionalShapes,
+    effectiveShapes: [...activeShapes, ...provisionalShapes],
+    promotedShapeIds,
+    suppressedShapeIds,
+  };
+}
+
+export function buildPennyLens(map: ThoughtMapModel): PennyLensSnapshot {
+  const shapeCandidates = buildPennyShapeCandidates(map.nodes);
+  const overrideShapes = buildOverrideShapeLayer(map);
+  const adjusted = adjustLensShapes(shapeCandidates, overrideShapes);
+  const latestMoveAt =
+    map.events
+      .filter((event) => event.eventType === "move_applied")
+      .map((event) => event.createdAt)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  const latestOverrideAt =
+    map.events
+      .filter((event) => event.eventType === "shape_feedback")
+      .map((event) => event.createdAt)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  const lagReferenceAt =
+    latestMoveAt == null
+      ? null
+      : latestOverrideAt && latestOverrideAt.getTime() > latestMoveAt.getTime()
+        ? latestOverrideAt
+        : new Date();
+  const lagMinutes =
+    latestMoveAt == null || lagReferenceAt == null
+      ? null
+      : Math.max(0, Math.round((lagReferenceAt.getTime() - latestMoveAt.getTime()) / (1000 * 60)));
+
+  return {
+    mapId: map.id,
+    generatedAt: new Date(),
+    publishConfidenceThreshold: ACTIVE_SHAPE_CONFIDENCE,
+    activeConfidenceThreshold: PROVISIONAL_SHAPE_CONFIDENCE,
+    activeShapes: adjusted.activeShapes.sort((a, b) => b.confidence - a.confidence),
+    provisionalShapes: adjusted.provisionalShapes.sort((a, b) => b.confidence - a.confidence),
+    overrideShapes,
+    effectiveShapes: adjusted.effectiveShapes.sort((a, b) => b.confidence - a.confidence),
+    freshness: {
+      latestMoveAt,
+      latestOverrideAt,
+      lagMinutes,
+      stale: lagMinutes != null ? lagMinutes >= LENS_FRESHNESS_STALE_MINUTES : false,
+    },
+    comparison: {
+      genericShapeCount: shapeCandidates.length,
+      activeShapeCount: adjusted.activeShapes.length,
+      provisionalShapeCount: adjusted.provisionalShapes.length,
+      overrideShapeCount: overrideShapes.length,
+      promotedShapeIds: adjusted.promotedShapeIds,
+      suppressedShapeIds: adjusted.suppressedShapeIds,
+    },
+  };
+}
+
+export function derivePennyShapes(nodes: ThoughtNodeModel[]): PennyShape[] {
+  return buildPennyShapeCandidates(nodes).filter((shape) => shape.confidence >= PROVISIONAL_SHAPE_CONFIDENCE);
 }
 
 export function buildBeliefGenealogy(nodes: ThoughtNodeModel[], nodeId: string): BeliefGenealogy {
@@ -1308,6 +1530,23 @@ export function buildClaimMoveHistory(
         } satisfies ClaimMoveHistoryEntry;
       }
 
+      if (event.eventType === "dialectic_round") {
+        const round = typeof event.payload?.round === "string" ? String(event.payload.round) : "round";
+        const responsePath = typeof event.payload?.responsePath === "string" ? String(event.payload.responsePath) : "response";
+        const response = typeof event.payload?.response === "string" ? String(event.payload.response).trim() : "";
+        const critiqueStrength = typeof event.payload?.critiqueStrength === "string" ? String(event.payload.critiqueStrength) : "unknown";
+
+        return {
+          id: event.id,
+          label: `${round} recorded`,
+          summary: response
+            ? `The ${round.toLowerCase()} thread persisted a ${responsePath} response at ${critiqueStrength} strength: ${response.slice(0, 120)}${response.length > 120 ? "…" : ""}`
+            : `The ${round.toLowerCase()} thread persisted a ${responsePath} response at ${critiqueStrength} strength.`,
+          createdAt: event.createdAt,
+          accent: "feedback",
+        } satisfies ClaimMoveHistoryEntry;
+      }
+
       return {
         id: event.id,
         label: event.eventType.replaceAll("_", " "),
@@ -1422,16 +1661,20 @@ export function shapeFeedbackPayload(params: {
 export function findActiveShapeCallout(
   node: ThoughtNodeModel | null,
   shapes: PennyShape[],
+  lens?: PennyLensSnapshot | null,
 ): PennyShape | null {
   if (!node || !shapes.length) {
     return null;
   }
 
   const nodeText = node.content.toLowerCase();
+  const activeThreshold = lens?.publishConfidenceThreshold ?? ACTIVE_SHAPE_CONFIDENCE;
+  const lensShapes = lens?.effectiveShapes ?? shapes;
+  const activeShapes = lensShapes.filter((shape) => shape.confidence >= activeThreshold);
 
   return (
-    shapes.find((shape) => shape.evidenceNodeIds.includes(node.id)) ??
-    shapes.find((shape) => shape.signals.some((signal) => nodeText.includes(signal))) ??
+    activeShapes.find((shape) => shape.evidenceNodeIds.includes(node.id)) ??
+    activeShapes.find((shape) => shape.signals.some((signal) => nodeText.includes(signal))) ??
     null
   );
 }
@@ -1586,12 +1829,14 @@ function communitySourceLabel(snapshot: ClaimCaptureSnapshot) {
   return snapshot.provenanceDetail.trim() || snapshot.provenance;
 }
 
-export function buildCommunityCommonsDashboard(maps: ThoughtMapModel[]): CommunityCommonsDashboard {
+export function buildCommunityCommonsDashboard(
+  maps: ThoughtMapModel[],
+  allNodes: ThoughtNodeModel[] = maps.flatMap((map) => map.nodes),
+): CommunityCommonsDashboard {
   const calibration = buildCalibrationDashboard(maps);
   const captures = maps
     .map((map) => captureSnapshotForMap(map))
     .filter((snapshot): snapshot is ClaimCaptureSnapshot => snapshot !== null);
-  const allNodes = maps.flatMap((map) => map.nodes);
   const shapes = derivePennyShapes(allNodes);
   const mapDomainById = new Map(
     maps.map((map) => {
@@ -1767,8 +2012,10 @@ function counterShapePrompt(label: string, summary: string) {
   return "Force the opposite test: what critique would matter if this pattern were exactly backwards?";
 }
 
-export function buildAdvancedThinkingDashboard(maps: ThoughtMapModel[]): AdvancedThinkingDashboard {
-  const allNodes = maps.flatMap((map) => map.nodes);
+export function buildAdvancedThinkingDashboard(
+  maps: ThoughtMapModel[],
+  allNodes: ThoughtNodeModel[] = maps.flatMap((map) => map.nodes),
+): AdvancedThinkingDashboard {
   const allShapes = derivePennyShapes(allNodes);
   const emotionalStructureShapes = Array.from(
     maps.reduce((accumulator, map) => {
@@ -1909,7 +2156,7 @@ export function buildAdvancedThinkingDashboard(maps: ThoughtMapModel[]): Advance
       mapCount: bucket.maps.size,
       summary:
         bucket.maps.size >= 2
-          ? `Three other projects have shown a version of this weakness across ${bucket.maps.size} maps.`
+          ? `${bucket.maps.size} project${bucket.maps.size === 1 ? "" : "s"} have shown a version of this weakness.`
           : bucket.summary,
       handleItLikeThis: bucket.handleItLikeThis,
     }))
