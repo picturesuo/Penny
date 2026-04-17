@@ -59,6 +59,9 @@
 - `user`: Capture and reflection should be distinct modes, with capture optimized for low-friction raw input and reflection optimized for critique-heavy work.
 - `user`: In reflection mode, Penny should suppress new capture so the user can work the current artifact without mode contamination.
 - `user`: Honest endings should appear when a session is draining or complete so Penny can send the user away at the right moment instead of extending engagement.
+- `user`: Dual-process should be implemented as context-sensitive prompts, not a rigid System 1 versus System 2 mode split.
+- `user`: Capture prompts should stay intuition-friendly, stress-test prompts should slow the user down, and synthesis prompts should ask for metacognitive checking against critiques.
+- `user`: Penny should detect when reflective work is exhausting the user and protect against automatic critique acceptance by pausing, simplifying, or suggesting a stop.
 - `user`: The data model should treat `Claims`, `Moves`, and `Shapes` as first-class layers.
 - `user`: `Claims` are the nodes: beliefs, evidence, provenance, confidence, and status.
 - `user`: The capture form should collect the root claim with a normalized metadata envelope so the same raw thought also carries confidence, resolution timing, provenance, stakes, dependencies, and status.
