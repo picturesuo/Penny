@@ -33,6 +33,7 @@ Penny is built around three core functions:
 - Explicit stage exit criteria: capture, structure, stress-test, synthesize, and reflect should each feel completable.
 - Dual-surface architecture: keep capture mode low-friction and critique-free, and keep reflection mode slow, structured, and stress-test heavy.
 - Cognitive protection mode: when the user is deep in a load-bearing claim, Penny should suppress secondary prompts and unrelated surfaces.
+- Session rhythm detection: when Penny detects cognitive depletion, it should suggest stopping instead of trying to extend engagement.
 - Clean endings: when a tunnel traversal completes, Penny should say so, hand over the artifact, and stop pulling for more engagement.
 - Reflection stage: optional but rewarded, with a short shapes surface after synthesis that is easy to skip but high value when used.
 
@@ -130,6 +131,7 @@ The visual and interaction model should feel like a built city, not a notes dump
 - Progressive disclosure: keep the active stage front and center and keep other stages accessible but quiet.
 - Outline first: make the outline the daily workspace and the graph a periodic zoom-out.
 - Smart defaults: preselect stress-test type, critique depth, and learning scaffold based on the current claim, confidence, and topic.
+- Clean endings should read as a trust signal: the product should be optimized for finished work, not engagement.
 
 ## Stack
 
