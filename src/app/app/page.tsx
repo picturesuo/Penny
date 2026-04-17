@@ -95,10 +95,10 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Thought Maps</p>
-          <h1 className="mt-2 text-4xl font-semibold text-[var(--ink)]">Build a personal idea wiki that shows weak logic fast.</h1>
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Brain</p>
+          <h1 className="mt-2 text-4xl font-semibold text-[var(--ink)]">Brain is the product. Challenge and Learn live on the same graph.</h1>
           <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-ink)]">
-            Each map starts like a wiki note, then turns into claims, assumptions, counterarguments, research paths, and next actions you can sharpen live.
+            Each map starts as raw thought, then turns into claims, moves, shapes, and next actions the user can sharpen live.
           </p>
         </div>
         <Link href="/app/new">
@@ -113,7 +113,7 @@ export default async function DashboardPage() {
         <div className="max-w-3xl">
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Foundation stack</p>
           <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
-            Lens, overrides, and precedents are the substrate under the dashboard.
+            Lens, overrides, and precedents are the substrate under Brain.
           </h2>
           <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
             The dashboard stays decision-oriented by keeping the user model bounded, disagreement explicit, and retrieval grounded in real failure patterns.
