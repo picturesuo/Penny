@@ -12,6 +12,14 @@ Penny is built around three core functions:
 - Stress-test: challenge weak evidence, shaky assumptions, missing comparisons, risky dependencies, and unsupported leaps, with precedent where possible.
 - Learning: teach at the point of confusion, using the claim graph to drive just-in-time explanations instead of a separate reading list.
 
+### Dialectic Interaction
+
+- Round-tracked counterargument threads: Penny should critique in explicit rounds so it can escalate, concede, or pivot based on the user’s response.
+- Critique strength disclosure: every counterargument should label itself weak, moderate, or strong.
+- Why-this-critique transparency: the user should be able to expand a critique to see the failure type, shape pattern, precedent, and framework behind it.
+- Three-path response: the user should be able to defend, revise, or absorb a critique instead of being forced into one text box.
+- Counterargument provenance tags: critiques should show where they came from, whether from precedent, dependency analysis, behavioral science, or shape-derived patterns.
+
 ### Learning Features
 
 - Teach-back by default: Penny gives a minimum scaffold, then asks the user to explain the concept in the context of the current claim.
