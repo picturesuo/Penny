@@ -76,6 +76,11 @@ Learn should be just-in-time and claim-anchored.
 - Sessions should have explicit exit criteria and a clean ending.
 - Capture, structure, stress-test, synthesize, and reflect should each feel completable.
 - Synthesis should be gated by pre-mortem, if-you-were-right, twin-check, stakes-proportional friction, and dependency-completeness review.
+- Synthesis should also track artifact versions and drift so later drafts can be checked against the claims they rest on.
+- Domain templates should stay structural: founder brief, essay spine, research proposal, policy memo, product spec, design review, investment thesis, and career-transition framework all need different gates.
+- Multi-output synthesis should let one claim base produce multiple artifacts for different audiences without losing structural consistency.
+- The output should visually reflect confidence propagation so weak or unexamined claims are marked inside the artifact itself.
+- Penny should optionally generate a counter-version artifact so the user can inspect the strongest opposite case before committing.
 - The product should protect deep work, detect depletion, and suggest stopping when it has enough signal.
 - Reflection after synthesis should be optional but rewarded.
 
