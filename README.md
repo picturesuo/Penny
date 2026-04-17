@@ -43,6 +43,13 @@ Every session should leave the user with three things:
 - `Sphere`: a contextual graph boundary so work, writing, life, and learning can remain distinct while still allowing pull-based cross-sphere connection.
 - `Session`: a first-class unit of cognitive work with a start, an end, a rhythm, and a protected focus window.
 
+Capture is intentionally broad:
+
+- Upload diagrams or images and turn them into claims with the visual artifact attached as evidence.
+- Record voice memos and parse them into claim-structure candidates for confirmation.
+- Import highlights from reading so claims or evidence preserve provenance and citation.
+- Process meeting transcripts into decisions, claims, disagreements, and action items.
+
 ## Brain
 
 Brain has two primary views of the same data:
