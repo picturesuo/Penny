@@ -140,9 +140,11 @@
 - `user`: Stress tests should draw from different critique lenses by default, including game theory, network effects, operational, psychological, political, and historical frames, so the system avoids a single-voice hedgehog mode.
 - `user`: Named voices critique should let Penny attack a claim as a skeptical investor, thesis committee, skeptical academic, or GTM operator, grounded in how that archetype historically attacks similar structures.
 - `user`: The adversarial final pass should attack the dependency structure rather than individual claims, identify the quiet load-bearing assumption, and check whether the whole output collapses if that assumption fails.
+- `user`: The adversarial final pass should happen before synthesis and should surface the quiet keystone assumption as a distinct pre-synthesis gate.
 - `user`: The steel-manning gym should give the user a position they disagree with, ask them to argue its strongest form, and score the result against Penny’s best version as explicit skill training.
 - `user`: Diversified retrieval should be the default for critique: each pass should widen the lens set before narrowing to a single verdict.
 - `user`: Precedent-grounded critique should retrieve real failure cases that match the claim’s risk profile, so Penny can say what specifically killed similar companies or ideas before.
+- `user`: Precedent retrieval should match by failure trajectory first, then domain and outcome, because structural collapse patterns are more defensible than topic similarity.
 - `user`: Peer simulation should let the user choose a named audience mode such as skeptical investor or thesis advisor, and Penny should critique in that voice using precedent for how that audience attacks similar structures.
 - `user`: Norm-challenge scrutiny should hold firm on whether a challenged norm is actually load-bearing and should articulate the strongest case for the norm before entertaining the counter-case.
 - `user`: Confidence decay should surface untouched beliefs for revisit after a threshold, with foundational beliefs decaying faster because their failure cascades through the rest of the model.
