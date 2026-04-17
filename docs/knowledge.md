@@ -2,6 +2,7 @@
 
 ## User-Provided Knowledge
 - Capture durable user guidance, preferences, and constraints that should survive past a single task.
+- `user`: The four core object types are `Claim`, `Move`, `Shape`, and `Lens`; `Claim` is the assertion substrate, `Move` records user response and change, `Shape` captures recurring patterns, and `Lens` is the live personalized model used for generation.
 - `user`: Penny’s three main use cases should be framed as: a pressure-tested second brain/personal idea wiki, stress testing the ideas inside that wiki, and a learning loop that recommends the best next thing to learn.
 - `user`: The first priority is the pressure-tested second brain. Product structure and trackers should make that active focus explicit while still keeping stress testing and learning visible as planned lanes.
 - `user`: The second-brain framing should draw from Karpathy’s LLM wiki as inspiration, but Penny should emphasize pressure testing and actionable progress rather than passive note storage.
@@ -11,10 +12,93 @@
 - `user`: Users should both revisit/refine existing maps repeatedly and open new ones often, more like a high-intensity ChatGPT workflow.
 - `user`: Near-term priority is frontend hierarchy and polish because the workspace currently feels chopped.
 
+## Product Vision & Direction
+- `user`: Penny is an ideation instrument, meaning a personal thinking system that captures raw ideas, stress-tests them against evidence and precedent, teaches the user what they do not understand at the moment they need it, and reflects thinking patterns back to the user so learning compounds over time.
+- `user`: Penny is not a note-taking app, not a chatbot, and not a wiki. It is a workbench for raw thought that should produce structured creativity, load-bearing outputs, and compounding self-knowledge.
+- `user`: The three core functions are capture and self-iteration, stress-test and challenge, and just-in-time learning.
+- `user`: The second brain must store claims, assumptions, evidence, counterarguments, and open questions in structured form, and it must also learn the user over time by recording recurring blind spots, assumptions, and failure patterns.
+- `user`: The stress-test layer should surface weak evidence, shaky assumptions, missing comparisons, risky dependencies, and precedent from real history so critique is grounded and not merely hypothetical.
+- `user`: Stress testing should remain reasoning-focused even for unconventional ideas, and it should help users produce the strongest version of their thinking rather than merely opposing them.
+- `user`: Learning should be just-in-time and downstream of capture plus stress-testing, tied to the exact point of confusion instead of a separate reading list.
+- `user`: The three outputs a user should leave with are a structured result, real learning, and clearer self-knowledge.
+- `user`: The data model should treat `Claims`, `Moves`, and `Shapes` as first-class layers.
+- `user`: `Claims` are the nodes: beliefs, evidence, provenance, confidence, and status.
+- `user`: `Moves` are the history of what the user did with claims, including stress tests, revisions, learnings, and overrides; this is the key substrate for self-iteration.
+- `user`: `Shapes` are emergent thinking patterns derived from moves over time, and they should be visible to the user as metacognitive feedback.
+- `user`: Key mechanisms include failure-type routing, teach-back over summary, disagreement as signal, confidence decay, and surfacing shapes back to the user.
+- `user`: The product shape is a tunnel from raw thought to structured creativity, with bounded stages and exit criteria for capture, stress-test, learn, and synthesize.
+- `user`: Penny’s voice should be an invested sparring partner: genuinely helpful, not sycophantic, not brutal.
+- `user`: The visual language should feel like a built city rather than a notes dump, with structure emerging from thinking and density beating breadth.
+- `user`: The current build should preserve the landing page thesis, the server-backed thought-map model, the outline plus graph workspace, best-next-move as a central decision surface, stress testing as a visible lane, and the founder brief flow as one instance of structured output.
+- `user`: Traps to avoid are letting the graph become the product, turning best-next-move into a task list, adding a chatbot sidebar, letting stress-testing become contrarianism, and treating learning as a reading list.
+- `user`: Near-term direction before more inspector, triage, or dashboard work is to define the learning loop spec and the moves layer so the self-iterating second brain has the right substrate.
+
+## Complete Architectural & Product Spec
+- `user`: Penny must be genuinely non-wrappable by satisfying three conditions at once: accumulating value over time, replication cost that stays high even for a well-funded competitor with the same model family, and loss aversion such that leaving means losing the model of how the user thinks, not just their notes.
+- `user`: The data model alone does not create the moat; the moat comes from mechanisms operating on top of the model.
+- `user`: The core object types are `Claim`, `Move`, `Shape`, `Lens`, and their relationships.
+- `user`: `Claim` is a belief, hypothesis, or assertion with content, provenance, confidence, status, and structural links to other claims such as supports, contradicts, depends-on, and refines.
+- `user`: `Move` is an immutable, timestamped event in the self-iteration history, including stress tests, accepted critiques, overrides with reasoning, learning moments, revisions, confidence shifts, abandonment, and revisitation after decay.
+- `user`: `Move` is the most important substrate in the system because it records how the user actually responds to Penny.
+- `user`: The Moves spec should define an exhaustive event schema, stable addressability for every move, and retrieval patterns that can query by claim, time range, event type, decision outcome, override, and recency.
+- `user`: Move addressability should make each event retrievable as a first-class object, with links back to the affected claims, related moves, and the originating session or map context.
+- `user`: Move retrieval should support both direct lookup and pattern-based views, so the same event log can power timelines, revision history, override review, learning recaps, and shape derivation.
+- `user`: `Shape` is a pattern derived from moves, including cognitive shapes and domain shapes, each with confidence and references to supporting moves so the user can inspect the evidence.
+- `user`: Shape computation should aggregate related moves into candidate shapes by clustering repeated patterns in disagreement, revision, override, learning, and revisit behavior across claims and sessions.
+- `user`: Shape confidence should rise only when the supporting move set is diverse enough and temporally stable enough, and it should stay below publishable thresholds until the shape survives repeated corroboration.
+- `user`: Shape update cadence should be hybrid: recompute opportunistically after meaningful moves, then consolidate on a slower periodic schedule so noisy one-off events do not dominate the user model.
+- `user`: Shape derivation should keep provenance visible by linking each shape back to the supporting moves, claims, and time windows that justified it.
+- `user`: `Lens` is the live current model of the user, derived from shapes and optimized for injection into generation so every critique, learning recommendation, and precedent retrieval is personalized.
+- `user`: Relationships matter: claims relate to claims, moves reference claims and moves, shapes derive from moves, and the lens is derived from shapes.
+- `user`: The system must use a closed loop, not an open loop.
+- `user`: Generation uses the lens.
+- `user`: User response becomes a move.
+- `user`: Moves update shapes on a schedule and on demand.
+- `user`: Shapes update the lens with bounded size and relevance selection.
+- `user`: The next generation uses the new lens, closing the loop.
+- `user`: The loop must be perceptible; a Tuesday override should change critique quality by the following week or the system is decorative.
+- `user`: Override is the richest signal in the product because it reveals exactly where Penny’s model of the user is wrong.
+- `user`: Overrides must be stored as moves with the user’s reasoning, parsed for the kind of disagreement, and used to update candidate shapes and future related generations.
+- `user`: Overrides should be reviewable so the user can see repeated disagreement patterns and refine them into metacognition.
+- `user`: Penny needs a real precedent corpus, not generic web search. The corpus should contain cases, structured post-mortems, and failure-mode taxonomy, with retrieval based on failure trajectories rather than surface similarity.
+- `user`: The precedent corpus is an asset that compounds separately from any individual user history.
+- `user`: Just-in-time learning should happen at the point of confusion during stress-testing, with minimum viable explanation, why-it-matters context, teach-back, and optional deeper anchors.
+- `user`: Every learning moment should generate moves and should feed a knowledge shape for what the user understands, repeats, or needs to relearn.
+- `user`: Shapes must be visible to the user as metacognitive feedback, both in-context and through periodic reflection surfaces.
+- `user`: Confidence decay is required because beliefs rot; old or superseded claims should surface for revisit, especially foundational ones with many downstream dependencies.
+- `user`: The product UX is a tunnel from raw thought to structured creativity with explicit stages and exit criteria: capture, structure, stress-test, synthesize, and reflect.
+- `user`: The three outputs from a completed tunnel traversal are a structured result, learning, and self-knowledge.
+- `user`: Penny’s voice should be an invested sparring partner that wants the user sharp without being sycophantic or brutal.
+- `user`: The visual language should feel like a built city, with structure emerging from thinking and density beating breadth.
+- `user`: Three especially important additions are an adversarial pass on the overall structure, an optional peer-simulation mode, and a twin-check mode that produces the strongest version of the user’s thinking for calibration.
+- `user`: The system only becomes real if the loop closes fast enough to feel, the precedent corpus is actually maintained and growing, and the lens meaningfully changes outputs.
+- `user`: Near-term architectural work should define what a learning recommendation contains, what the user does with it, how success is measured, and what gets captured in the moves layer so the self-iterating second brain has a durable substrate.
+
+## Psychology-Backed Design
+- `user`: Penny’s design should be grounded in learning science, metacognition research, judgment research, and cognitive load theory rather than generic AI-product assumptions.
+- `user`: The core bet is that durable thinking requires effortful, generative processing, distributed over time, with honest calibration feedback.
+- `user`: Most AI tools fail by reducing effort, collapsing time, and skipping calibration; Penny should do the opposite in the places where learning and judgment matter.
+- `user`: Self-explanation should be the core learning mechanism, so the user explains a concept in the context of their current claim and Penny identifies gaps.
+- `user`: Teach-back should beat summary, and learning prompts should connect new material to the user’s existing claim graph rather than ask generic why-questions.
+- `user`: Desirable difficulties should be the system-wide philosophy: spacing, interleaving, variation, retrieval practice, and generation should be used where they create durable understanding.
+- `user`: Spacing should apply to claims through revisit scheduling and confidence decay.
+- `user`: Interleaving should apply to stress-testing so related but distinct claims are mixed instead of tested in a repetitive sequence.
+- `user`: Generation should be preferred over recognition whenever Penny can either hand the user an answer or prompt the user to produce one.
+- `user`: Retrieval practice should be built into periodic recall of claims and outcomes before showing the source material again.
+- `user`: Metacognition should be treated as trainable and measurable, split between local claim confidence and global shapes about how the user thinks.
+- `user`: Shapes should be visible, named, and reviewable so the user can see their own recurring patterns and revise them.
+- `user`: Calibration matters: Penny should track whether confidence and outcomes line up, ideally with measurable scoring over time.
+- `user`: The product should support fast feedback loops, especially around overrides, so changed reasoning shows up in future critiques soon enough to feel real.
+- `user`: Cognitive load should be managed intentionally: preserve intrinsic difficulty, eliminate extraneous UI friction, and maximize effort that builds understanding.
+- `user`: The UX should separate capture from reflection when that reduces interference, while preserving a clean tunnel from raw thought to structured output.
+- `user`: The psychology-backed feature set should include probability-rated claims, post-mortems on resolved claims, teach-back learning, spacing and interleaving, confidence decay, multi-framework stress-testing, metacognition surfacing, generation-first interaction, cognitive protection during deep work, and calibration tracking over time.
+- `user`: Penny’s psychology layer should make the tool feel like an invested sparring partner and a training instrument for thinking, not a chatbot or a passive knowledge base.
+
 ## Project Facts
 - Capture stable project facts, decisions, and summaries worth reusing across tasks.
 - `repo`: `src/server/thought-map.ts` keeps `getThoughtMap()` as the authoritative server hydration path for map-page work. It maps persisted nodes, applies `buildThoughtMapJudgment()`, computes `founderBriefReadiness`, and then syncs/open-orders interventions before returning the `ThoughtMapModel`.
 - `repo`: The first outline/graph map-page slice should reuse the existing `ThoughtMapModel` payload from `getThoughtMap()` instead of introducing a graph-only transport. The current payload already includes `parentId`, judged `scores`, `nodeStatus`, `graphSnapshot`, `recommendedNextMove`, interventions, founder brief data, and founder-brief readiness.
+- `repo`: `src/app/page.tsx` now leads with the pressure-tested second-brain frame and keeps the landing copy aligned with the wiki-first product direction instead of centering startup-idea critique.
 
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.
