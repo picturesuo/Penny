@@ -97,6 +97,14 @@ The visual and interaction model should feel like a built city, not a notes dump
 - Best next move should remain the central decision surface.
 - The tunnel should feel complete at the end of a traversal, not like an endless loop of prompts.
 
+## Interface & Aesthetic
+
+- Density over breadth: well-stress-tested nodes should look richer and more confident, while shallow nodes stay thin and provisional.
+- Emergent structure: avoid upfront tagging; let organization accrete from stress-testing and relationship inference.
+- Progressive disclosure: keep the active stage front and center and keep other stages accessible but quiet.
+- Outline first: make the outline the daily workspace and the graph a periodic zoom-out.
+- Smart defaults: preselect stress-test type, critique depth, and learning scaffold based on the current claim, confidence, and topic.
+
 ## Stack
 
 - Next.js App Router
