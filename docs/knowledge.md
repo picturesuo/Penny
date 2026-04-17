@@ -47,6 +47,7 @@
 - `user`: Tunnel and workflow features should make each stage explicitly completable with exit criteria for capture, structure, stress-test, synthesize, and reflect.
 - `user`: Dual-surface architecture should separate capture mode from reflection mode so low-friction intake and critique-heavy review do not contaminate each other.
 - `user`: Cognitive protection mode should detect deep work on load-bearing claims and suppress secondary prompts, notifications, and unrelated surfaces.
+- `user`: Session rhythm detection should notice approaching cognitive depletion and suggest stopping instead of pushing engagement.
 - `user`: Clean endings should make Penny say the tunnel traversal is complete, hand over the artifact, and stop pulling for more engagement.
 - `user`: Reflection should remain optional-but-rewarded after synthesis, surfacing shapes from the session in a short and skippable way.
 - `user`: The data model should treat `Claims`, `Moves`, and `Shapes` as first-class layers.
@@ -73,6 +74,7 @@
 - `user`: Progressive disclosure should keep the active tunnel stage front and center while other stages remain accessible but quiet.
 - `user`: The outline should be the daily workspace and the graph should be a periodic zoom-out, not the primary surface.
 - `user`: Smart defaults should preselect stress-test type, critique depth, and learning scaffold based on claim type, confidence, and topic while still allowing override.
+- `user`: Clean endings should be treated as a trust signal because the product is optimized for finished work, not engagement.
 - `user`: The current build should preserve the landing page thesis, the server-backed thought-map model, the outline plus graph workspace, best-next-move as a central decision surface, stress testing as a visible lane, and the founder brief flow as one instance of structured output.
 - `user`: Traps to avoid are letting the graph become the product, turning best-next-move into a task list, adding a chatbot sidebar, letting stress-testing become contrarianism, and treating learning as a reading list.
 - `user`: Near-term direction before more inspector, triage, or dashboard work is to define the learning loop spec and the moves layer so the self-iterating second brain has the right substrate.
@@ -211,6 +213,7 @@
 - `repo`: `src/components/penny/shape-dashboard.tsx` now records shape feedback back to the map through `POST /api/maps/[id]/shape-feedback`, and `src/server/thought-map.ts` now persists that feedback as a `shape_feedback` move event.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now captures reasoning for the active shape override, surfaces a first-class claim dependency graph, and shows a confusion log for weak or unclear branches.
 - `repo`: `src/lib/thought-map-analysis.ts` now exposes explicit critique tags alongside the older coverage buckets, and `src/lib/penny-insights.ts` tightened the market-overconfidence shape rule so it only fires in genuinely market-facing text.
+- `repo`: `src/components/penny/shape-dashboard.tsx` now surfaces structured post-mortems for resolved claims so calibration has a first-class end state and shape input.
 
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.
