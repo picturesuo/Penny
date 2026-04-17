@@ -50,6 +50,8 @@
 - `user`: Prior-knowledge anchoring should tie every learning moment to an existing claim in the graph, so the user connects new material to what they already believe instead of receiving generic explanation.
 - `user`: Knowledge shape tracking should record what the user has mastered, what they keep needing to relearn, and what is solid, so future critiques can pitch at the user’s actual level per topic.
 - `user`: Research-mode expansion should exist as an optional follow-up after the inline learning moment, clearly separated so it never turns into a tangent and always stays anchored to the triggering claim.
+- `user`: The teach-back moment should happen inline on the same claim surface, with a concept handle, the user’s explanation, inline annotation of the user’s own words, a correction that explains why the gap matters for the claim, and a restatement prompt that asks the user to try again with the correction integrated.
+- `user`: Teach-back should feel intimate and specific: Penny should distinguish the exact misunderstanding, highlight the user’s imprecise phrase, and require a claim-anchored restatement instead of giving a generic answer.
 - `user`: Decision and synthesis features should include a pre-mortem synthesis gate, an if-you-were-right mode, stakes-proportional friction, a twin-check output, and a post-mortem protocol on resolved claims.
 - `user`: The pre-mortem should be the default synthesis gate before any output artifact is generated, should be short, should be stored as a first-class artifact, and should ask the user to imagine how the result fails in six months before Penny synthesizes.
 - `user`: The if-you-were-right mode should assume the claim holds and ask what becomes possible, what becomes necessary, and what the user would do in 30 days, because it reveals when the user does not fully believe their own claim.
@@ -282,6 +284,7 @@
 - `repo`: `src/components/penny/shape-dashboard.tsx` now surfaces structured post-mortems for resolved claims so calibration has a first-class end state and shape input.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now weights critique depth by claim confidence so high-confidence claims get heavier pressure and low-confidence claims stay lighter and more targeted.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now adds a claim-anchored teach-back surface, a per-claim knowledge gap surface, and explicit metacognition teaching for active shapes.
+- `repo`: `src/components/penny/thought-map-workspace.tsx` now turns teach-back into an inline draft/check/rewrite loop with concept-specific correction, annotated user text, and a restatement prompt, including a special network-effects example that distinguishes direct from indirect effects when that is the active confusion.
 - `repo`: `src/app/app/page.tsx` now surfaces a derived community commons snapshot with review-gated precedent contributions, privacy-safe contradiction signals, aggregate open questions, an anonymized shape library, and bounded thought-partner matching.
 
 ## Retrieval Hints
