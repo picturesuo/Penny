@@ -965,6 +965,31 @@ export function ThoughtMapWorkspace({
     () => buildClaimMoveHistory(map.nodes, map.events, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map.events, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
   );
+  const quietFragility = useMemo(() => {
+    if (!selectedGraphNode || !selectedGenealogy.lineage.length) {
+      return null;
+    }
+
+    const supportConfidences = selectedGenealogy.lineage
+      .map((node) => node.scores?.confidence ?? null)
+      .filter((confidence): confidence is number => confidence != null);
+
+    if (!supportConfidences.length) {
+      return null;
+    }
+
+    const structuralCap = Math.min(...supportConfidences);
+    const feltConfidence = selectedGraphNode.node.scores?.confidence ?? structuralCap;
+    const gap = Math.max(0, feltConfidence - structuralCap);
+
+    return {
+      structuralCap,
+      feltConfidence,
+      gap,
+      weakestLayer: selectedGenealogy.lineage.find((node) => (node.scores?.confidence ?? 1) <= structuralCap) ?? selectedGenealogy.lineage[0] ?? null,
+      isFragile: gap >= 0.18 || structuralCap <= 0.35,
+    };
+  }, [selectedGenealogy.lineage, selectedGraphNode]);
   const mapTimeline = useMemo<MapTimelineSnapshot>(() => buildMapTimeline(map), [map]);
   const timelineShape = activeShapeCallout ?? derivedShapes[0] ?? null;
   const shapeTimeline = useMemo<ShapeTimelineSnapshot | null>(() => buildShapeTimeline(map, timelineShape), [map, timelineShape]);
@@ -1226,6 +1251,13 @@ export function ThoughtMapWorkspace({
   const adversarialFinalPass = useMemo(() => buildAdversarialFinalPass(map), [map]);
   const synthesisMissingCoverage = map.founderBriefReadiness.missingRequirements.map((requirement) =>
     requirement.replaceAll("_", " "),
+  );
+  const quietKeystoneCascade = useMemo(
+    () =>
+      adversarialFinalPass.loadBearingAssumption
+        ? traceContradictionCascade(map.nodes, adversarialFinalPass.loadBearingAssumption.id)
+        : [],
+    [adversarialFinalPass.loadBearingAssumption, map.nodes],
   );
   const inspectorScores = selectedGraphNode
     ? [
@@ -2224,17 +2256,64 @@ export function ThoughtMapWorkspace({
         </div>
 
         <div className="mt-6 rounded-[24px] bg-white p-5">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Adversarial final pass</p>
-          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-            Penny attacks the dependency structure before synthesis so it can find the quiet keystone that would collapse the output if it were wrong.
-          </p>
-          {loadBearingAssumption ? (
-            <div className="mt-4 rounded-[20px] bg-[var(--panel)] p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Load-bearing assumption</p>
-              <p className="mt-2 text-sm leading-7 text-[var(--ink)]">{loadBearingAssumption.content}</p>
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Quiet keystone moment</p>
               <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-                If this assumption fails, the map’s strongest branch loses its support. Are you sure this is the quiet keystone?
+                Penny attacks the dependency structure before synthesis so it can find the single claim the rest of the map is leaning on.
               </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {adversarialFinalPass.isQuietKeystone ? (
+                <Badge className="bg-[#fff6ed] text-[#8b4d1f] animate-pulse">rare moment</Badge>
+              ) : (
+                <Badge className="bg-[var(--panel)] text-[var(--ink)]">keystone candidate</Badge>
+              )}
+              <Badge className="bg-[#e7defa] text-[#5c4c88]">{adversarialFinalPass.loadBearingCount} load-bearing claims</Badge>
+            </div>
+          </div>
+          {loadBearingAssumption ? (
+            <div className={cn("mt-4 rounded-[20px] p-4", adversarialFinalPass.isQuietKeystone ? "bg-[#fff6ed]" : "bg-[var(--panel)]")}>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Load-bearing assumption</p>
+              <p className="mt-2 text-sm leading-7 text-[var(--ink)]">
+                {adversarialFinalPass.isQuietKeystone
+                  ? `This one. If #${adversarialFinalPass.quietKeystoneIndex} fails, the map collapses: ${loadBearingAssumption.content}`
+                  : loadBearingAssumption.content}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{adversarialFinalPass.quietKeystoneReason}</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                {adversarialFinalPass.collapseWarning} It currently has {adversarialFinalPass.dependentCount} direct dependents.
+              </p>
+              {adversarialFinalPass.isQuietKeystone ? (
+                <div className="mt-4 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="bg-white text-[var(--ink)]">score {adversarialFinalPass.keystoneScore != null ? formatScore(adversarialFinalPass.keystoneScore) : "n/a"}</Badge>
+                    <Badge className="bg-white text-[var(--ink)]">
+                      gap {adversarialFinalPass.scoreGap != null ? formatScore(adversarialFinalPass.scoreGap) : "n/a"}
+                    </Badge>
+                  </div>
+                  <div className="rounded-[18px] bg-white p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Cascade preview</p>
+                    <div className="mt-3 space-y-2">
+                      {quietKeystoneCascade.slice(1, 5).map((step) => (
+                        <div key={step.nodeId} className="rounded-[16px] border border-[#d7c06c] bg-[#fffaf0] px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[#8b4d1f]">depth {step.depth}</p>
+                          <p className="mt-1 text-sm leading-6 text-[var(--ink)]">{step.content}</p>
+                          <p className="mt-1 text-xs leading-5 text-[var(--muted-ink)]">{step.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <Button
+                    className="gap-2"
+                    disabled={isPending || !loadBearingAssumption}
+                    onClick={() => runAction(loadBearingAssumption.id, "challenge")}
+                  >
+                    <AlertCircle className="size-4" />
+                    Stress-test the keystone
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <p className="mt-4 rounded-[20px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
@@ -2838,6 +2917,31 @@ export function ThoughtMapWorkspace({
                       ))}
                     </div>
                   </div>
+                  {quietFragility && quietFragility.isFragile ? (
+                    <div className="mt-4 rounded-[18px] border border-[#d7c06c] bg-[#fff9df] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#8b4d1f]">Quiet fragility</p>
+                      <p className="mt-2 text-sm leading-7 text-[var(--ink)]">
+                        You feel {formatScore(quietFragility.feltConfidence)} confident here, but the support chain caps this at about{" "}
+                        {formatScore(quietFragility.structuralCap)}.
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                        That gap is {formatScore(quietFragility.gap)}. Penny is surfacing the mismatch between felt confidence and the math of the dependency chain.
+                      </p>
+                      {quietFragility.weakestLayer ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Badge className="bg-white text-[var(--ink)]">weakest layer: {kindLabel(quietFragility.weakestLayer.kind)}</Badge>
+                          <Badge className="bg-white text-[var(--ink)]">{quietFragility.weakestLayer.scores?.confidence != null ? formatScore(quietFragility.weakestLayer.scores.confidence) : "n/a"}</Badge>
+                          <Button
+                            variant="secondary"
+                            className="px-3 py-2 text-xs"
+                            onClick={() => setSelectedGraphNodeId(quietFragility.weakestLayer?.id ?? selectedGraphNode?.node.id ?? defaultGraphNodeId ?? null)}
+                          >
+                            Inspect weakest support
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="mt-4 space-y-3">
                     {selectedPropagation.cascade.slice(0, 4).map((step) => (
                       <div key={`${step.sourceNodeId}:${step.targetNodeId}`} className="rounded-[18px] bg-[var(--panel)] p-4">

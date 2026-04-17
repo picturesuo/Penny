@@ -1161,6 +1161,11 @@ export interface AdversarialFinalPassSnapshot {
   quietKeystoneReason: string;
   collapseWarning: string;
   dependentCount: number;
+  loadBearingCount: number;
+  keystoneScore: number | null;
+  runnerUpScore: number | null;
+  scoreGap: number | null;
+  isQuietKeystone: boolean;
 }
 
 export function buildAdversarialFinalPass(map: ThoughtMapModel): AdversarialFinalPassSnapshot {
@@ -1169,31 +1174,59 @@ export function buildAdversarialFinalPass(map: ThoughtMapModel): AdversarialFina
   const loadBearingCandidates = dependencyGraph.loadBearingNodeIds
     .map((nodeId) => map.nodes.find((node) => node.id === nodeId) ?? null)
     .filter((node): node is ThoughtNodeModel => node != null);
-  const loadBearingAssumption =
-    loadBearingCandidates
-      .sort((a, b) => {
-        const aScore = (a.scores?.dependencyRisk ?? 0) + (a.scores?.centrality ?? 0) + (a.parentId ? 0.1 : 0);
-        const bScore = (b.scores?.dependencyRisk ?? 0) + (b.scores?.centrality ?? 0) + (b.parentId ? 0.1 : 0);
-        return bScore - aScore;
-      })[0] ?? null;
+  const scoreForNode = (node: ThoughtNodeModel) =>
+    (node.scores?.dependencyRisk ?? 0) + (node.scores?.centrality ?? 0) + (node.parentId ? 0.1 : 0);
+  const scoredLoadBearing = [...loadBearingCandidates].sort((a, b) => scoreForNode(b) - scoreForNode(a));
+  const loadBearingAssumption = scoredLoadBearing[0] ?? null;
+  const keystoneScore = loadBearingAssumption
+    ? scoreForNode(loadBearingAssumption)
+    : null;
+  const runnerUpScore = scoredLoadBearing[1] ? scoreForNode(scoredLoadBearing[1]) : null;
   const quietKeystoneIndex = loadBearingAssumption ? activeNodes.findIndex((node) => node.id === loadBearingAssumption.id) + 1 : null;
   const dependentCount = loadBearingAssumption
     ? activeNodes.filter(
         (node) => node.parentId === loadBearingAssumption.id || node.supersedesNodeId === loadBearingAssumption.id,
       ).length
     : 0;
+  const scoreGap = keystoneScore != null && runnerUpScore != null ? keystoneScore - runnerUpScore : null;
+  const scorePercentile = keystoneScore == null
+    ? null
+    : (() => {
+        const activeScores = activeNodes
+          .map(scoreForNode)
+          .sort((a, b) => b - a);
+        if (activeScores.length <= 1) {
+          return 100;
+        }
+        const betterCount = activeScores.filter((score) => score > keystoneScore).length;
+        return Math.max(0, 100 - (betterCount / Math.max(1, activeScores.length - 1)) * 100);
+      })();
+  const isQuietKeystone =
+    loadBearingAssumption != null &&
+    scorePercentile != null &&
+    scorePercentile >= 95 &&
+    ((scoreGap != null && scoreGap >= 0.12) || dependentCount >= 5);
 
   return {
     claimCount: activeNodes.length,
     loadBearingAssumption,
     quietKeystoneIndex,
     quietKeystoneReason: loadBearingAssumption
-      ? `Penny found the quiet keystone by prioritizing central, dependency-heavy claims instead of the loudest branch.`
+      ? isQuietKeystone
+        ? `Penny found a rare quiet keystone by prioritizing central, dependency-heavy claims instead of the loudest branch.`
+        : `Penny found a candidate keystone, but it is not yet rare enough to treat as the dramatic collapse point.`
       : "Penny could not isolate a single keystone yet.",
     collapseWarning: loadBearingAssumption
-      ? `If #${quietKeystoneIndex ?? "?"} fails, the entire argument collapses.`
+      ? isQuietKeystone
+        ? `If #${quietKeystoneIndex ?? "?"} fails, the entire argument collapses.`
+        : `This claim is structurally important, but Penny is waiting for a clearer keystone signal before treating it as the whole-map failure point.`
       : "The dependency structure is not yet rich enough for a confident collapse warning.",
     dependentCount,
+    loadBearingCount: loadBearingCandidates.length,
+    keystoneScore,
+    runnerUpScore,
+    scoreGap,
+    isQuietKeystone,
   };
 }
 
