@@ -272,6 +272,34 @@ function labelBias(bias: string) {
   return bias.replaceAll("_", " ");
 }
 
+function critiqueDepthLabel(node: ThoughtNodeModel) {
+  const confidence = node.scores?.confidence ?? 0;
+
+  if (confidence >= 0.8) {
+    return "heavy";
+  }
+
+  if (confidence >= 0.6) {
+    return "medium";
+  }
+
+  return "light";
+}
+
+function critiqueDepthNote(node: ThoughtNodeModel) {
+  const confidence = node.scores?.confidence ?? 0;
+
+  if (confidence >= 0.8) {
+    return "High confidence deserves heavier critique because motivated reasoning hides there.";
+  }
+
+  if (confidence >= 0.6) {
+    return "Moderate confidence gets balanced pressure so uncertainty still has room to resolve.";
+  }
+
+  return "Low confidence already carries uncertainty, so Penny keeps the critique lighter and more targeted.";
+}
+
 export function ThoughtMapWorkspace({
   initialMap,
   initialView = "outline",
@@ -1228,6 +1256,7 @@ export function ThoughtMapWorkspace({
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge className={statusBadge(node.nodeStatus)}>{node.nodeStatus}</Badge>
                         <Badge>{kindLabel(node.kind)}</Badge>
+                        <Badge className="bg-[#e7defa] text-[#5c4c88]">critique {critiqueDepthLabel(node)}</Badge>
                       </div>
                       <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{node.content}</p>
                       <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">
@@ -1241,10 +1270,11 @@ export function ThoughtMapWorkspace({
                                 ? "Check whether adoption compounds or stalls at the edge."
                                 : framework.label === "Operational"
                                   ? "Find the handoff or process step most likely to fail."
-                                  : framework.label === "Psychological"
-                                    ? "Ask what bias or self-protection is steering the answer."
-                                    : "Identify the coalition or resistance pressure first."}
+                            : framework.label === "Psychological"
+                              ? "Ask what bias or self-protection is steering the answer."
+                              : "Identify the coalition or resistance pressure first."}
                       </p>
+                      <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">{critiqueDepthNote(node)}</p>
                     </div>
                   ))
                 ) : (
@@ -1323,6 +1353,9 @@ export function ThoughtMapWorkspace({
                   ? `${peerAudience} mode: Penny searches for failure cases that match this claim’s risk profile before it gives the critique.`
                   : "Select a claim to retrieve failure cases that match its risk profile."}
               </p>
+              {selectedGraphNode ? (
+                <Badge className="mt-3 bg-[#e7defa] text-[#5c4c88]">critique {critiqueDepthLabel(selectedGraphNode.node)}</Badge>
+              ) : null}
               {selectedPrecedents.length ? (
                 <div className="mt-4 space-y-3">
                   {selectedPrecedents.map((precedent) => (
