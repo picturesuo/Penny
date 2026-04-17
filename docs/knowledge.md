@@ -32,6 +32,11 @@
 - `user`: Stress testing should remain reasoning-focused even for unconventional ideas, and it should help users produce the strongest version of their thinking rather than merely opposing them.
 - `user`: Learning should be just-in-time and downstream of capture plus stress-testing, tied to the exact point of confusion instead of a separate reading list.
 - `user`: The three outputs a user should leave with are a structured result, real learning, and clearer self-knowledge.
+- `user`: Learning features should be just-in-time, not a reading list.
+- `user`: Teach-back should be the default learning interaction: when the user hits confusion, Penny gives a minimum scaffold and asks the user to explain the concept in the context of the current claim, then Penny identifies gaps.
+- `user`: Prior-knowledge anchoring should tie every learning moment to an existing claim in the graph, so the user connects new material to what they already believe instead of receiving generic explanation.
+- `user`: Knowledge shape tracking should record what the user has mastered, what they keep needing to relearn, and what is solid, so future critiques can pitch at the user’s actual level per topic.
+- `user`: Research-mode expansion should exist as an optional follow-up after the inline learning moment, clearly separated so it never turns into a tangent and always stays anchored to the triggering claim.
 - `user`: The data model should treat `Claims`, `Moves`, and `Shapes` as first-class layers.
 - `user`: `Claims` are the nodes: beliefs, evidence, provenance, confidence, and status.
 - `user`: The capture form should collect the root claim with a normalized metadata envelope so the same raw thought also carries confidence, resolution timing, provenance, stakes, dependencies, and status.
