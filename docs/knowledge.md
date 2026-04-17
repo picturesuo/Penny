@@ -1,5 +1,28 @@
 # Knowledge
 
+## Penny — Comprehensive Product Specification
+- Penny is a pressure-tested second brain: it captures how its user thinks, stress-tests that thinking against evidence and precedent, teaches the user what they do not understand at the moment they need it, and surfaces patterns in their cognition back to them.
+- The product has one architectural noun and two specialized verbs: `Brain` is the product, `Challenge` is what happens when the user stress-tests part of the graph, and `Learn` is what happens when the user hits confusion and needs understanding without leaving the work.
+- Penny is for people whose work is making half-formed thinking rigorous: founders mid-pivot, PhD students, authors, policy analysts, people in career transitions, people post-quitting a major thing, engineers interrogating design choices, and serious students writing essays.
+- The product outputs three things on every meaningful traversal: a structured artifact, durable learning, and self-knowledge about how the user thinks.
+- Every piece of information in Penny belongs to one of four object types: `Claim`, `Move`, `Shape`, or `Lens`, with `Sphere` and `Session` as first-class organizing layers.
+- `Claim` is the node substrate, `Move` is the immutable event history, `Shape` is the recurring pattern derived from moves, and `Lens` is the live user model that gets injected into generation.
+- `Brain` has two primary views of the same data: the `Map`, which is the spatial knowledge graph, and the `Stream`, which is the reverse-chronological activity feed that surfaces what needs attention next.
+- The `Map` is for topology, structural health, and screenshots; the `Stream` is for daily work, resurfacing aged claims, open questions, shape changes, and suggested next moves.
+- `Challenge` is the dialectic interaction: claim, counterargument, response, with explicit rounds, critique strength disclosure, provenance, why-this-critique transparency, three-path responses, Bayesian propagation, and quiet-keystone surfacing.
+- `Learn` is just-in-time, claim-anchored, and teach-back driven: Penny gives a minimum scaffold, asks the user to explain the concept in the context of the current claim, and then closes the gap inline.
+- Synthesis should be gated by pre-mortem, if-you-were-right, twin-check, stakes-proportional friction, and dependency-completeness review so the output step feels load-bearing.
+- Sessions are first-class objects with a declared focus, protected deep-work windows, cognitive protection, depletion detection, and a clean ending ritual that hands over the artifact and stops pulling.
+- Calibration is first-class: every claim has a probability, high-confidence claims get challenged, resolved claims feed Brier tracking, and private self-bets make calibration emotionally sticky.
+- Memory and time should be visible: old selves, belief genealogy, inheritance markers, contradiction cascades, aging foundations, confidence drift, and session rhythm should all surface as felt product, not hidden infrastructure.
+- Shapes must be visible and reviewable, and the lens must update quickly enough that a Tuesday override visibly changes critique quality by the following week.
+- The design should feel like a built city: density over breadth, emergent structure, progressive disclosure, knowledge cards first, outline-first daily work, smart defaults, and clean endings.
+- Penny should not try to be a generic note-taking app, chatbot, wiki, or journaling tool. Those modes should remain deliberately excluded because they dilute the people the product is actually for.
+- The first session must produce immediate value: hidden assumptions revealed, a quiet keystone surfaced, precedent cases retrieved, and a piece of structured work the user can actually use.
+- The moat is not the data model alone. It is the closed loop between input, challenge, response, memory, updated critique, and better synthesis, plus a real precedent corpus and a lens that changes behavior.
+
+## User-Provided Knowledge
+
 ## User-Provided Knowledge
 - Capture durable user guidance, preferences, and constraints that should survive past a single task.
 - `user`: The four core object types are `Claim`, `Move`, `Shape`, and `Lens`; `Claim` is the assertion substrate, `Move` records user response and change, `Shape` captures recurring patterns, and `Lens` is the live personalized model used for generation.
