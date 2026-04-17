@@ -208,6 +208,10 @@
 - `user`: Cross-project shape transfer should let shapes learned in one project inform stress-testing in the next so the user gets sharper across contexts, not only within a single map.
 - `user`: Session rhythm memory should remember where the user left off, what has aged, and what they still believe when they return after time away.
 - `user`: Old selves timeline per node should show content over time, confidence over time, and moves over time so the moves architecture becomes felt experience.
+- `user`: Timeline views should be first-class across the whole map, per shape, and per dependency chain so the user can see claims, pattern confidence, and load-bearing structure unfold over time.
+- `user`: The whole-map timeline should show claims appearing, getting stress-tested, changing confidence, getting revised, and resolving as a time-lapse of thinking.
+- `user`: The per-shape timeline should show when Penny first noticed a pattern, how its confidence evolved, and which moves strengthened or weakened it.
+- `user`: The per-dependency-chain timeline should show the load-bearing structure emerging over time so the user can see how an argument was assembled.
 - `user`: Confidence drift indicators should surface recent shifts in confidence directly on the graph as directional cues.
 - `user`: Contradiction cascade preview should appear at revision time so users can see the downstream structural debt they are incurring.
 - `user`: Provenance tracing should show the original source, capture session, and the shapes Penny knew at the time the belief was formed.
@@ -251,6 +255,7 @@
 - `repo`: `src/app/app/page.tsx` now surfaces a small foundation stack for Lens, overrides, and precedents, and `src/components/penny/thought-map-workspace.tsx` now frames triage and the override trail with that same foundation language.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces precedent-grounded critique, peer simulation, norm-challenge scrutiny, confidence decay, and interleaved stress-testing as first-class critique surfaces.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a round-tracked dialectic scaffold, a synthesis-gate surface, a move-query lens, and confidence drift indicators in the old-selves timeline.
+- `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a first-class timeline block for whole-map events, per-shape confidence trails, and dependency-chain progression.
 - `repo`: `src/components/penny/thought-map-form.tsx` now soft-challenges very high confidence claims and surfaces assumption suggestions at capture time.
 - `repo`: `src/app/app/page.tsx` now includes a curriculum and education surface for student mode, instructor views, classroom shape views, metacognition rubrics, and curriculum packs.
 - `repo`: `src/components/penny/shape-dashboard.tsx` now records shape feedback back to the map through `POST /api/maps/[id]/shape-feedback`, and `src/server/thought-map.ts` now persists that feedback as a `shape_feedback` move event.
