@@ -43,10 +43,15 @@ export async function resolveAssumptionAction(sessionId: string, assumption: str
 }
 
 export async function submitReflectionAction(sessionId: string, formData: FormData) {
+  const readText = (primaryKey: string, fallbackKey: string) => {
+    const value = formData.get(primaryKey) ?? formData.get(fallbackKey);
+    return typeof value === "string" ? value : "";
+  };
+
   const payload = {
-    surprised: z.string().min(2, "Say what surprised you.").parse(formData.get("surprised")),
-    resisted: z.string().min(2, "Say what you resisted.").parse(formData.get("resisted")),
-    returnTo: z.string().min(2, "Say what you want to come back to.").parse(formData.get("returnTo")),
+    worked: z.string().min(2, "Say what you worked.").parse(readText("worked", "surprised")),
+    resolved: z.string().min(2, "Say what you resolved.").parse(readText("resolved", "resisted")),
+    remains: z.string().min(2, "Say what remains.").parse(readText("remains", "returnTo")),
   };
 
   await submitSessionReflection(sessionId, payload);
