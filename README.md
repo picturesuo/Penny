@@ -21,6 +21,8 @@ Penny is built around three core functions:
 - Three-path response: the user should be able to defend, revise, or absorb a critique instead of being forced into one text box.
 - Counterargument provenance tags: critiques should show where they came from, whether from precedent, dependency analysis, behavioral science, or shape-derived patterns.
 - Collaborative elicitation patterns: Penny should offer solo versions of devil's advocate, naive questioner, integrator, and skeptic roles so the user can choose the structural prompt they need on demand.
+- Quiet keystone moment: when the dependency graph is rich enough, Penny should surface the single load-bearing claim that collapses the rest of the map and offer a one-click stress-test of that keystone.
+- Quiet fragility: Penny should also surface cases where the user’s felt confidence outruns the structural confidence supported by the dependency chain.
 
 ### Learning Features
 
