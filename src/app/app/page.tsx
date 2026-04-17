@@ -4,7 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ShapeDashboard } from "@/components/penny/shape-dashboard";
-import { buildCalibrationDashboard, buildCommunityCommonsDashboard, derivePennyShapes } from "@/lib/penny-insights";
+import {
+  buildAdvancedThinkingDashboard,
+  buildCalibrationDashboard,
+  buildCommunityCommonsDashboard,
+  derivePennyShapes,
+} from "@/lib/penny-insights";
 import { listThoughtMaps } from "@/server/thought-map";
 
 const foundation = [
@@ -57,6 +62,7 @@ export default async function DashboardPage() {
   const shapes = derivePennyShapes(allNodes).sort((a, b) => b.confidence - a.confidence).slice(0, 4);
   const calibration = buildCalibrationDashboard(maps);
   const communitySnapshot = buildCommunityCommonsDashboard(maps);
+  const advancedSnapshot = buildAdvancedThinkingDashboard(maps);
   const mapCards = maps.map((map) => ({
     map,
     counts: summarizeNodeStatus(map.nodes),
@@ -97,6 +103,141 @@ export default async function DashboardPage() {
               <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{item.copy}</p>
             </div>
           ))}
+        </div>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <div className="max-w-3xl">
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Advanced features</p>
+          <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
+            Emotional stakes, confusion, assumptions, and counter-shapes become explicit surfaces.
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
+            These surfaces are meant to keep the product honest when the user is under pressure, drifting into certainty, or repeating the same blind spot across projects.
+          </p>
+        </div>
+        <div className="mt-6 grid gap-4 xl:grid-cols-2">
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Emotional-structure shapes</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">Patterns derived directly from stakes tags, especially where emotion changes the critique shape.</p>
+            <div className="mt-4 space-y-3">
+              {advancedSnapshot.emotionalStructureShapes.length ? (
+                advancedSnapshot.emotionalStructureShapes.map((item) => (
+                  <div key={item.stake} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[#e7defa] text-[#5c4c88]">{item.stake}</Badge>
+                      <Badge className="bg-white text-[var(--muted-ink)]">{item.mapCount} maps</Badge>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{item.summary}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{item.prompt}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No stakes-tagged emotional shapes are ready yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Confusion log</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">Dedicated unresolved questions stay visible instead of being prematurely closed.</p>
+            <div className="mt-4 space-y-3">
+              {advancedSnapshot.confusionLog.length ? (
+                advancedSnapshot.confusionLog.map((item) => (
+                  <div key={item.nodeId} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <p className="text-sm font-medium text-[var(--ink)]">{item.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.confusion}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{item.nextStep}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No unresolved-question surface is strong enough to promote yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Assumption archaeology</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">Hidden scaffolding is surfaced before it hardens into invisible structure.</p>
+            <div className="mt-4 space-y-3">
+              {advancedSnapshot.assumptionArchaeology.length ? (
+                advancedSnapshot.assumptionArchaeology.map((item) => (
+                  <div key={item.mapId} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <p className="text-sm font-medium text-[var(--ink)]">{item.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.hiddenScaffold}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.assumptions.slice(0, 3).map((assumption) => (
+                        <Badge key={assumption} className="bg-white text-[var(--muted-ink)]">
+                          {assumption}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No explicit assumptions are ready to excavate yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Counter-shape mode</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">The lens periodically turns against its own favorite pattern so it doesn’t become an echo chamber.</p>
+            <div className="mt-4 space-y-3">
+              {advancedSnapshot.counterShapes.length ? (
+                advancedSnapshot.counterShapes.map((item) => (
+                  <div key={item.label} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <p className="text-sm font-medium text-[var(--ink)]">{item.label}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.reason}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{item.counterTest}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No dominant shape exists yet to flip against.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Honest confidence reset</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">Long-lived claims should be forced back into review before confidence drifts into habit.</p>
+            <div className="mt-4 space-y-3">
+              {advancedSnapshot.confidenceResets.length ? (
+                advancedSnapshot.confidenceResets.map((item) => (
+                  <div key={item.mapId} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <p className="text-sm font-medium text-[var(--ink)]">{item.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.resetPrompt}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">
+                      {item.ageDays} days old · {item.confidence}% confidence
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No claims are stale enough to force a reset yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5 xl:col-span-2">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Cross-project stress-test pattern library</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">Repeated structural weaknesses should compound into personal precedent, not disappear between projects.</p>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              {advancedSnapshot.crossProjectPatterns.length ? (
+                advancedSnapshot.crossProjectPatterns.map((item) => (
+                  <div key={item.label} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[#d9ead8] text-[#355b32]">{item.mapCount} maps</Badge>
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-[var(--ink)]">{item.label}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.summary}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{item.handleItLikeThis}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No cross-project pattern is stable enough to promote yet.</p>
+              )}
+            </div>
+          </div>
         </div>
       </Card>
 
