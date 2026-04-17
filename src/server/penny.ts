@@ -347,9 +347,12 @@ export async function markAssumptionResolved(sessionId: string, assumption: stri
 export async function submitSessionReflection(
   sessionId: string,
   reflection: {
-    surprised: string;
-    resisted: string;
-    returnTo: string;
+    worked?: string;
+    resolved?: string;
+    remains?: string;
+    surprised?: string;
+    resisted?: string;
+    returnTo?: string;
   },
 ) {
   const session = await getSession(sessionId);
@@ -357,11 +360,11 @@ export async function submitSessionReflection(
     throw new Error("Session not found");
   }
 
-  const surprised = cleanSentence(reflection.surprised);
-  const resisted = cleanSentence(reflection.resisted);
-  const returnTo = cleanSentence(reflection.returnTo);
+  const worked = cleanSentence(reflection.worked || reflection.surprised || "");
+  const resolved = cleanSentence(reflection.resolved || reflection.resisted || "");
+  const remains = cleanSentence(reflection.remains || reflection.returnTo || "");
 
-  if (!surprised || !resisted || !returnTo) {
+  if (!worked || !resolved || !remains) {
     throw new Error("Reflection fields are required");
   }
 
@@ -371,9 +374,9 @@ export async function submitSessionReflection(
       "reflection",
       [
         "Session-end reflection ritual",
-        `What surprised you today: ${surprised}`,
-        `What did you resist: ${resisted}`,
-        `What do you want to come back to: ${returnTo}`,
+        `What was worked: ${worked}`,
+        `What was resolved: ${resolved}`,
+        `What remains: ${remains}`,
       ].join("\n"),
     ),
   );
