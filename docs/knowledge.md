@@ -107,6 +107,10 @@
 - `user`: Belief genealogy should show where a belief came from, what depends on it, and whether its source has been contradicted.
 - `user`: The shapes dashboard should be a periodic surface for patterns the system has learned about the user’s thinking, with each shape confirmable, rejectable, and refinable.
 - `user`: In-context shape callouts should name the active pattern inside a critique so personalization feels honest rather than mysterious.
+- `user`: The old-selves view should surface a claim’s confidence and content over time and make the moves layer emotionally legible.
+- `user`: Shape feedback should persist as first-class events so confirmations, rejections, and refinements become part of the user’s memory trail.
+- `user`: The move-history view should make the claim timeline readable as a sequence of move, signal, and feedback events.
+- `user`: Belief genealogy should explicitly expose supersession chains and contradicted source claims, not just the current lineage.
 
 ## Psychology-Backed Design
 - `user`: Penny’s design should be grounded in learning science, metacognition research, judgment research, and cognitive load theory rather than generic AI-product assumptions.
