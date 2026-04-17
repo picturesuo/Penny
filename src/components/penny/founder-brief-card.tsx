@@ -21,6 +21,11 @@ export function FounderBriefCard({ brief }: { brief: FounderBriefModel }) {
         <ListSection title="Key assumptions" items={brief.keyAssumptions} />
         <ListSection title="Strongest counterarguments" items={brief.strongestCounterarguments} />
         <OrderedSection title="Next 3 validation steps" items={brief.nextValidationSteps} />
+        <Section title="Stakes level" content={brief.stakesLevel} />
+        <Section title="Pre-mortem" content={brief.preMortem} />
+        <Section title="If you were right" content={brief.ifYouWereRight} />
+        <Section title="Twin-check" content={brief.twinCheck} />
+        <Section title="Dependency completeness" content={brief.dependencyCompleteness} />
       </div>
     </Card>
   );
