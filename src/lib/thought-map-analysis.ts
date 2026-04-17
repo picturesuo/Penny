@@ -1,15 +1,19 @@
 import { cleanSentence } from "@/lib/penny";
 import type { NodeAction, ThoughtMapModel, ThoughtNodeKind, ThoughtNodeModel } from "@/types/thought-map";
 
-export const GAP_TYPES = [
-  "opposition",
-  "evidence",
-  "concreteness",
-  "stakes",
-  "balance",
+export const CRITIQUE_TAGS = [
+  "weak-evidence",
+  "missing-counterargument",
+  "shaky-assumption",
+  "analogy-break",
+  "dependency-risk",
+  "unaddressed-precedent",
+  "premise-rejection",
+  "definition-failure",
 ] as const;
 
-export type GapType = (typeof GAP_TYPES)[number];
+export type CritiqueTag = (typeof CRITIQUE_TAGS)[number];
+export type GapType = CritiqueTag;
 
 export interface GraphCoverageScore {
   opposition: number;
@@ -35,8 +39,9 @@ export interface NodeQualityScore {
 }
 
 export interface GraphGapAnalysis {
-  primaryGap: GapType;
-  secondaryGap: GapType | null;
+  primaryGap: CritiqueTag;
+  secondaryGap: CritiqueTag | null;
+  critiqueTags: CritiqueTag[];
   coverage: GraphCoverageScore;
   reasons: string[];
   missingKinds: ThoughtNodeKind[];
@@ -252,10 +257,64 @@ function scoreBalance(nodeCounts: Record<ThoughtNodeKind, number>) {
   return Math.max(0, Math.min(100, Math.round(ratio * 100)));
 }
 
-function rankGaps(coverage: GraphCoverageScore) {
-  return Object.entries(coverage)
-    .sort((a, b) => a[1] - b[1])
-    .map(([gap]) => gap as GapType);
+function rankCritiqueTags(params: {
+  coverage: GraphCoverageScore;
+  nodeCounts: Record<ThoughtNodeKind, number>;
+  weakNodes: NodeQualityScore[];
+  repetitiveNodes: NodeQualityScore[];
+  missingKinds: ThoughtNodeKind[];
+}) {
+  const weakestAssumption = params.weakNodes.find((node) => node.kind === "assumption");
+  const weakestResearch = params.weakNodes.find((node) => node.kind === "research");
+  const weakestCoreClaim = params.weakNodes.find((node) => node.kind === "core_claim" || node.kind === "why_it_matters");
+  const hasResearchBranch = params.nodeCounts.research > 0;
+  const hasCounterweight = params.nodeCounts.counter_argument > 0;
+  const missingResearchBranch = params.missingKinds.includes("research");
+  const tagScores: Array<{ tag: CritiqueTag; score: number }> = [
+    { tag: "weak-evidence", score: 100 - params.coverage.evidence },
+    { tag: "missing-counterargument", score: 100 - params.coverage.opposition },
+    {
+      tag: "shaky-assumption",
+      score: weakestAssumption ? Math.max(0, 92 - weakestAssumption.total) : params.nodeCounts.assumption > 0 ? 25 : 0,
+    },
+    {
+      tag: "analogy-break",
+      score: params.repetitiveNodes.length
+        ? Math.max(0, 100 - params.repetitiveNodes[0].dimensions.redundancy)
+        : Math.max(0, 58 - params.coverage.balance),
+    },
+    { tag: "dependency-risk", score: 100 - params.coverage.stakes },
+    {
+      tag: "unaddressed-precedent",
+      score: !hasResearchBranch || missingResearchBranch ? 100 : Math.max(0, 70 - params.coverage.evidence),
+    },
+    { tag: "premise-rejection", score: 100 - params.coverage.balance },
+    { tag: "definition-failure", score: 100 - params.coverage.concreteness },
+  ];
+
+  if (!hasCounterweight && weakestCoreClaim) {
+    tagScores.push({ tag: "premise-rejection", score: Math.max(60, 100 - weakestCoreClaim.total) });
+  }
+
+  if (weakestResearch) {
+    tagScores.push({
+      tag: "weak-evidence",
+      score: Math.max(70, 100 - weakestResearch.total),
+    });
+  }
+
+  const strongestByTag = new Map<CritiqueTag, number>();
+
+  for (const entry of tagScores) {
+    const current = strongestByTag.get(entry.tag);
+    if (current == null || entry.score > current) {
+      strongestByTag.set(entry.tag, entry.score);
+    }
+  }
+
+  return Array.from(strongestByTag.entries())
+    .map(([tag, score]) => ({ tag, score }))
+    .sort((a, b) => b.score - a.score);
 }
 
 function targetWeakNode(params: {
@@ -359,16 +418,23 @@ export function analyzeThoughtMap(params: {
     .map(([kind]) => kind)
     .filter((kind) => kind !== "root");
 
-  const ranked = rankGaps(coverage);
-  const primaryGap = ranked[0];
-  const secondaryGap = ranked[1] ?? null;
+  const ranked = rankCritiqueTags({
+    coverage,
+    nodeCounts,
+    weakNodes,
+    repetitiveNodes,
+    missingKinds,
+  }).filter((entry) => entry.score > 0);
+  const primaryGap = ranked[0]?.tag ?? "weak-evidence";
+  const secondaryGap = ranked[1]?.tag ?? null;
+  const critiqueTags = ranked.map((entry) => entry.tag);
   const reasons: string[] = [];
 
-  if (coverage.opposition < 40) reasons.push("The map has too little real opposition relative to supportive branches.");
-  if (coverage.evidence < 40) reasons.push("The map has too few concrete research questions or validation prompts.");
-  if (coverage.concreteness < 40) reasons.push("Too many nodes are abstract and lack concrete users, tests, or time bounds.");
-  if (coverage.stakes < 40) reasons.push("The map does not clearly show why this matters or what is at risk.");
-  if (coverage.balance < 45) reasons.push("Support currently outweighs opposition too heavily.");
+  if (coverage.opposition < 40) reasons.push("missing-counterargument: the map has too little real opposition relative to supportive branches.");
+  if (coverage.evidence < 40) reasons.push("weak-evidence: the map has too few concrete research questions or validation prompts.");
+  if (coverage.concreteness < 40) reasons.push("definition-failure: too many nodes are abstract and lack concrete users, tests, or time bounds.");
+  if (coverage.stakes < 40) reasons.push("dependency-risk: the map does not clearly show why this matters or what is at risk.");
+  if (coverage.balance < 45) reasons.push("premise-rejection: support currently outweighs opposition too heavily.");
   if (weakNodes.length > 0) reasons.push(`The weakest branch scores only ${weakNodes[0].total}, so branch quality is now part of the selection.`);
 
   const actionSelection = chooseActionSelection({
@@ -381,6 +447,7 @@ export function analyzeThoughtMap(params: {
   return {
     primaryGap,
     secondaryGap,
+    critiqueTags,
     coverage,
     reasons,
     missingKinds,

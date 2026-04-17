@@ -209,6 +209,7 @@ export async function recordShapeFeedback(params: {
   verdict: "confirmed" | "rejected" | "refined";
   shapeLabel: string;
   source: string;
+  reasoning: string;
   nodeId?: string | null;
 }) {
   const created = await prisma.$transaction(async (tx) => {
@@ -222,6 +223,7 @@ export async function recordShapeFeedback(params: {
           verdict: params.verdict,
           shapeLabel: params.shapeLabel,
           source: params.source,
+          reasoning: params.reasoning,
         }),
       },
     });
@@ -457,6 +459,16 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
         note: node.note,
         branchOrder: index + 1,
       })),
+    });
+
+    await createThoughtMapEvent(tx, {
+      mapId: map.id,
+      nodeId: root.id,
+      eventType: "map_created",
+      payload: {
+        rawThought,
+        claim: input.claim,
+      },
     });
 
     return tx.thoughtMap.findUniqueOrThrow({

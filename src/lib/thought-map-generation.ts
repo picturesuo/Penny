@@ -1,5 +1,5 @@
 import { cleanSentence, dedupeStrings } from "@/lib/penny";
-import { analyzeThoughtMap, isNearDuplicate, type GapType } from "@/lib/thought-map-analysis";
+import { analyzeThoughtMap, isNearDuplicate, type CritiqueTag } from "@/lib/thought-map-analysis";
 import type {
   GeneratedActionBundle,
   GeneratedThoughtNote,
@@ -19,10 +19,10 @@ type ContextSignals = {
   outcome: string;
 };
 
-function gapTargetKind(gap: GapType): ThoughtNodeKind {
-  if (gap === "opposition" || gap === "balance") return "counter_argument";
-  if (gap === "evidence") return "research";
-  if (gap === "concreteness") return "research";
+function gapTargetKind(gap: CritiqueTag): ThoughtNodeKind {
+  if (gap === "missing-counterargument" || gap === "premise-rejection" || gap === "analogy-break") return "counter_argument";
+  if (gap === "weak-evidence" || gap === "unaddressed-precedent" || gap === "definition-failure") return "research";
+  if (gap === "shaky-assumption" || gap === "dependency-risk") return "assumption";
   return "why_it_matters";
 }
 
@@ -211,9 +211,10 @@ function fallbackSpecificNote(
   });
 }
 
-function gapDrivenNotes(gap: GapType, signals: ContextSignals): GeneratedThoughtNote[] {
+function gapDrivenNotes(gap: CritiqueTag, signals: ContextSignals): GeneratedThoughtNote[] {
   switch (gap) {
-    case "opposition":
+    case "missing-counterargument":
+    case "premise-rejection":
       return [
         makeNote("counter_argument", `${signals.currentAlternative} may still win because it is faster than explicit structure`, {
           strategy: "gap_opposition_speed",
@@ -226,7 +227,7 @@ function gapDrivenNotes(gap: GapType, signals: ContextSignals): GeneratedThought
           anchors: ["logic", "momentum"],
         }),
       ];
-    case "evidence":
+    case "weak-evidence":
       return [
         makeNote("research", `Compare one blank-doc session against one node-action session with 5 ${signals.userType}`, {
           strategy: "gap_evidence_comparison",
@@ -239,7 +240,7 @@ function gapDrivenNotes(gap: GapType, signals: ContextSignals): GeneratedThought
           anchors: ["decision", "pressure-tested"],
         }),
       ];
-    case "concreteness":
+    case "definition-failure":
       return [
         makeNote("research", `Define one 10-minute workflow: paste thought, click challenge, leave with one test`, {
           strategy: "gap_concreteness_workflow",
@@ -252,7 +253,7 @@ function gapDrivenNotes(gap: GapType, signals: ContextSignals): GeneratedThought
           anchors: [signals.userType, "build sprint"],
         }),
       ];
-    case "stakes":
+    case "dependency-risk":
       return [
         makeNote("why_it_matters", `Without sharper structure, teams can waste a week building around a weak assumption`, {
           strategy: "gap_stakes_time",
@@ -265,17 +266,43 @@ function gapDrivenNotes(gap: GapType, signals: ContextSignals): GeneratedThought
           anchors: ["customer", "confidence"],
         }),
       ];
-    case "balance":
+    case "shaky-assumption":
       return [
-        makeNote("counter_argument", `If the graph mostly supports the idea, it may be rewarding belief instead of testing it`, {
-          strategy: "gap_balance_self_confirmation",
-          why: "Restores tension when the graph is too one-sided.",
-          anchors: ["supports", "testing"],
+        makeNote("assumption", `What assumption is doing the most work in ${signals.subjectPhrase}?`, {
+          strategy: "gap_assumption_core",
+          why: "Pulls the shaky assumption into the open.",
+          anchors: [signals.subjectPhrase, "assumption"],
         }),
-        makeNote("counter_argument", `A useful thinking tool should increase disagreement before it increases confidence`, {
-          strategy: "gap_balance_disagreement",
-          why: "Adds opposition to rebalance the map.",
-          anchors: ["disagreement", "confidence"],
+        makeNote("counter_argument", `What would make that assumption collapse?`, {
+          strategy: "gap_assumption_collapse",
+          why: "Adds a direct counterweight to the fragile premise.",
+          anchors: [signals.subjectPhrase, "collapse"],
+        }),
+      ];
+    case "analogy-break":
+      return [
+        makeNote("counter_argument", `Which familiar pattern is this idea borrowing, and where does the analogy break?`, {
+          strategy: "gap_analogy_break",
+          why: "Forces the team to test the borrowed analogy instead of trusting it.",
+          anchors: [signals.subjectPhrase, "analogy"],
+        }),
+        makeNote("research", `What precedent shows this pattern failing in a different context?`, {
+          strategy: "gap_analogy_precedent",
+          why: "Adds a precedent check when the branch is repeating a pattern too closely.",
+          anchors: [signals.subjectPhrase, "precedent"],
+        }),
+      ];
+    case "unaddressed-precedent":
+      return [
+        makeNote("research", `What precedent already tested this idea in the past, and what happened?`, {
+          strategy: "gap_precedent_history",
+          why: "Turns the missing precedent into a concrete retrieval task.",
+          anchors: [signals.subjectPhrase, "precedent"],
+        }),
+        makeNote("research", `Which prior failure should be compared against this branch before it gets stronger?`, {
+          strategy: "gap_precedent_failure",
+          why: "Adds a historical comparison so the branch has somewhere real to land.",
+          anchors: [signals.subjectPhrase, "failure"],
         }),
       ];
   }
@@ -1281,6 +1308,7 @@ export function generateActionNotes(params: {
       graphAnalysis: {
         primaryGap: analysis.primaryGap,
         secondaryGap: analysis.secondaryGap,
+        critiqueTags: analysis.critiqueTags,
         coverage: analysis.coverage,
         reasons: analysis.reasons,
         missingKinds: analysis.missingKinds,

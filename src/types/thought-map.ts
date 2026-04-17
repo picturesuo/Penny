@@ -65,6 +65,7 @@ export type CognitiveInterventionType =
 export type CognitiveInterventionStatus = "open" | "completed" | "dismissed";
 
 export type ThoughtMapEventType =
+  | "map_created"
   | "intervention_shown"
   | "intervention_completed"
   | "intervention_dismissed"
@@ -176,6 +177,7 @@ export interface ThoughtMapRecommendedMove {
   reasoning: {
     primaryGap: string;
     secondaryGap: string | null;
+    critiqueTags: string[];
     coverage: {
       opposition: number;
       evidence: number;
@@ -323,6 +325,7 @@ export interface GeneratedActionBundle {
     graphAnalysis?: {
       primaryGap: string;
       secondaryGap: string | null;
+      critiqueTags: string[];
       coverage: {
         opposition: number;
         evidence: number;

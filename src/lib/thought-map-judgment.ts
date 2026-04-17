@@ -546,6 +546,7 @@ function buildMove(
     reasoning: {
       primaryGap: graphAnalysis.primaryGap,
       secondaryGap: graphAnalysis.secondaryGap,
+      critiqueTags: graphAnalysis.critiqueTags,
       coverage: graphAnalysis.coverage,
       why: graphAnalysis.actionSelection.why,
       reasons: graphAnalysis.reasons,

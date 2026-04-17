@@ -35,6 +35,19 @@ export interface BeliefGenealogy {
   dependents: ThoughtNodeModel[];
 }
 
+export interface ClaimDependencyEdge {
+  fromNodeId: string;
+  toNodeId: string;
+  relation: "parent" | "supersedes";
+}
+
+export interface ClaimDependencyGraph {
+  nodeIds: string[];
+  rootNodeIds: string[];
+  loadBearingNodeIds: string[];
+  edges: ClaimDependencyEdge[];
+}
+
 export interface OldSelfSnapshot {
   id: string;
   nodeId: string;
@@ -108,6 +121,14 @@ export interface SessionRhythmSnapshot {
   shouldStop: boolean;
   note: string;
   signals: string[];
+}
+
+export interface ConfusionLogEntry {
+  nodeId: string;
+  title: string;
+  confusion: string;
+  nextStep: string;
+  severity: number;
 }
 
 export type CalibrationDomain = "technical" | "market" | "operational" | "research" | "people" | "general";
@@ -187,11 +208,13 @@ const SHAPE_RULES: Array<{
     matches: (node) => {
       const text = node.content.toLowerCase();
       const psychology = node.psychology;
-      const marketText = /market|distribution|adoption|pricing|launch|go[- ]to[- ]market/.test(text);
+      const marketText = /\b(market|distribution|pricing|go[- ]to[- ]market)\b/.test(text);
+      const launchContext = /\blaunch\b/.test(text) && /\b(customer|buyer|adoption|distribution|market)\b/.test(text);
       const highConfidence = (node.scores?.confidence ?? 0) >= 0.75;
       const thinEvidence = (node.scores?.evidence ?? 1) < 0.7;
+      const overconfidenceBias = psychology?.likelyBiases.includes("overconfidence") === true;
 
-      return marketText && ((highConfidence && thinEvidence) || psychology?.likelyBiases.includes("overconfidence") === true);
+      return (marketText || launchContext) && ((highConfidence && thinEvidence) || overconfidenceBias);
     },
   },
   {
@@ -555,11 +578,16 @@ export function buildDevilsAdvocateReceipts(node: ThoughtNodeModel | null): Devi
     if (receipt.thinker === "Elinor Ostrom" && tags.has("norm")) score += 2;
     if (receipt.thinker === "Charlie Munger" && (tags.has("operations") || tags.has("dependency"))) score += 2;
 
+    void score;
     return { ...receipt, score };
   })
     .sort((a, b) => b.score - a.score)
     .slice(0, 2)
-    .map(({ score: _score, ...receipt }) => receipt);
+    .map((receipt) => {
+      const { score, ...rest } = receipt;
+      void score;
+      return rest;
+    });
 }
 
 function shapeVerdict(confidence: number, supportCount: number): ShapeVerdict {
@@ -644,7 +672,7 @@ export function retrievePrecedentsForNode(node: ThoughtNodeModel, limit = 3): Pr
     .sort((a, b) => b.score - a.score)
     .filter((item) => item.score > 0)
     .slice(0, limit)
-    .map((item) => item.precedent);
+    .map(({ precedent }) => precedent);
 }
 
 export function buildConfidenceDecaySnapshot(node: ThoughtNodeModel, dependentsCount = 0): ConfidenceDecaySnapshot {
@@ -725,8 +753,8 @@ export function traceContradictionCascade(nodes: ThoughtNodeModel[], nodeId: str
 export function buildSessionRhythmSnapshot(map: ThoughtMapModel): SessionRhythmSnapshot {
   const activeNodes = map.nodes.filter((node) => node.nodeStatus !== "superseded");
   const unresolved = [
-    ...(map.graphSnapshot?.weakestNodeIds.length ?? 0 ? map.graphSnapshot?.weakestNodeIds : []),
-    ...(map.graphSnapshot?.criticalDependencyIds.length ?? 0 ? map.graphSnapshot?.criticalDependencyIds : []),
+    ...(map.graphSnapshot?.weakestNodeIds ?? []),
+    ...(map.graphSnapshot?.criticalDependencyIds ?? []),
     ...map.founderBriefReadiness.missingRequirements,
   ];
   const weakNodes = activeNodes.filter(
@@ -848,6 +876,65 @@ export function buildBeliefGenealogy(nodes: ThoughtNodeModel[], nodeId: string):
   };
 }
 
+export function buildClaimDependencyGraph(map: ThoughtMapModel): ClaimDependencyGraph {
+  const nodes = map.nodes.filter((node) => node.nodeStatus !== "superseded");
+  const rootNodeIds = nodes.filter((node) => node.parentId == null || node.kind === "root").map((node) => node.id);
+  const edges: ClaimDependencyEdge[] = [];
+  const seenEdges = new Set<string>();
+
+  for (const node of nodes) {
+    if (node.parentId) {
+      const key = `parent:${node.parentId}->${node.id}`;
+      if (!seenEdges.has(key)) {
+        seenEdges.add(key);
+        edges.push({
+          fromNodeId: node.parentId,
+          toNodeId: node.id,
+          relation: "parent",
+        });
+      }
+    }
+
+    if (node.supersedesNodeId) {
+      const key = `supersedes:${node.supersedesNodeId}->${node.id}`;
+      if (!seenEdges.has(key)) {
+        seenEdges.add(key);
+        edges.push({
+          fromNodeId: node.supersedesNodeId,
+          toNodeId: node.id,
+          relation: "supersedes",
+        });
+      }
+    }
+  }
+
+  const outgoingCounts = new Map<string, number>();
+  for (const edge of edges) {
+    outgoingCounts.set(edge.fromNodeId, (outgoingCounts.get(edge.fromNodeId) ?? 0) + 1);
+  }
+
+  const loadBearingNodeIds = Array.from(
+    new Set(
+      nodes
+        .filter(
+          (node) =>
+            rootNodeIds.includes(node.id) ||
+            (outgoingCounts.get(node.id) ?? 0) >= 2 ||
+            (node.scores?.dependencyRisk ?? 0) > 0.55 ||
+            (node.scores?.centrality ?? 0) > 0.58,
+        )
+        .map((node) => node.id),
+    ),
+  );
+
+  return {
+    nodeIds: nodes.map((node) => node.id),
+    rootNodeIds,
+    loadBearingNodeIds,
+    edges,
+  };
+}
+
 export function buildOldSelfTimeline(
   nodes: ThoughtNodeModel[],
   events: ThoughtMapEvent[],
@@ -946,6 +1033,60 @@ export function buildClaimMoveHistory(
       } satisfies ClaimMoveHistoryEntry;
     })
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
+export function buildConfusionLog(map: ThoughtMapModel): ConfusionLogEntry[] {
+  const activeNodes = map.nodes.filter((node) => node.nodeStatus !== "superseded" && node.kind !== "root");
+  const weakNodes = activeNodes
+    .map((node) => ({
+      node,
+      severity: Math.round(
+        Math.max(
+          0,
+          (1 - (node.scores?.evidence ?? 1)) * 40 +
+            (1 - (node.psychology?.falsificationCoverageScore ?? 1)) * 30 +
+            (1 - (node.psychology?.comparisonCoverageScore ?? 1)) * 20 +
+            Math.min(10, (node.scores?.dependencyRisk ?? 0) * 10),
+        ),
+      ),
+    }))
+    .filter(({ severity }) => severity >= 25)
+    .sort((a, b) => b.severity - a.severity)
+    .slice(0, 4);
+  const capture = captureSnapshotForMap(map);
+  const entries: ConfusionLogEntry[] = weakNodes.map(({ node, severity }) => {
+    const why = [];
+
+    if ((node.scores?.evidence ?? 1) < 0.55) why.push("evidence is still thin");
+    if ((node.psychology?.falsificationCoverageScore ?? 1) < 0.55) why.push("the counter-case is not load-bearing yet");
+    if ((node.scores?.dependencyRisk ?? 0) > 0.55) why.push("the branch carries hidden dependency risk");
+    if ((node.psychology?.comparisonCoverageScore ?? 1) < 0.55) why.push("the comparison set is too weak");
+
+    return {
+      nodeId: node.id,
+      title: `${node.kind.replaceAll("_", " ")} needs another pass`,
+      confusion: `${node.content}${why.length ? ` because ${why.join(", ")}.` : "."}`,
+      nextStep:
+        node.kind === "research"
+          ? "Ask for one concrete test, one source, and one way this claim could fail."
+          : node.kind === "counter_argument"
+            ? "Add the strongest version of the opposing case before you refine the claim."
+            : "Force a specific test or a missing dependency before treating this as stable.",
+      severity,
+    };
+  });
+
+  if (capture?.dependencyNotes?.trim()) {
+    entries.push({
+      nodeId: map.nodes.find((node) => node.kind === "root")?.id ?? map.id,
+      title: "Capture dependency note",
+      confusion: `The capture includes dependency notes that should be pulled into the graph: ${capture.dependencyNotes}.`,
+      nextStep: "Turn the note into a concrete dependency edge or a revisiting task.",
+      severity: 42,
+    });
+  }
+
+  return entries.sort((a, b) => b.severity - a.severity).slice(0, 5);
 }
 
 export function collectShapeFeedback(events: ThoughtMapEvent[]) {

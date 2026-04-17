@@ -7,6 +7,7 @@ const shapeFeedbackSchema = z.object({
   verdict: z.enum(["confirmed", "rejected", "refined"]),
   shapeLabel: z.string().min(1),
   source: z.string().min(1),
+  reasoning: z.string().trim().min(8).max(1000),
   nodeId: z.string().min(1).optional().nullable(),
 });
 
@@ -24,6 +25,7 @@ export async function POST(
       verdict: input.verdict,
       shapeLabel: input.shapeLabel,
       source: input.source,
+      reasoning: input.reasoning,
       nodeId: input.nodeId ?? null,
     });
 
