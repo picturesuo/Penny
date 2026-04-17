@@ -170,6 +170,9 @@
 - `user`: Session rhythm should detect approaching cognitive depletion and suggest stopping instead of optimizing for engagement.
 - `user`: Just-in-time learning should happen at the point of confusion during stress-testing, with minimum viable explanation, why-it-matters context, teach-back, and optional deeper anchors.
 - `user`: Every learning moment should generate moves and should feed a knowledge shape for what the user understands, repeats, or needs to relearn.
+- `user`: Teach-back should default to a minimum scaffold plus user-generated explanation, with targeted gap detection feeding the next follow-up.
+- `user`: Knowledge shapes should track mastery, relearn pressure, and the user’s current level so future critiques do not over-explain or under-challenge.
+- `user`: Confusion logs should remain first-class surfaces for productive unresolved questions and should resurface old confusions after enough time has passed.
 - `user`: Shapes must be visible to the user as metacognitive feedback, both in-context and through periodic reflection surfaces.
 - `user`: Confidence decay is required because beliefs rot; old or superseded claims should surface for revisit, especially foundational ones with many downstream dependencies.
 - `user`: The product UX is a tunnel from raw thought to structured creativity with explicit stages and exit criteria: capture, structure, stress-test, synthesize, and reflect.
