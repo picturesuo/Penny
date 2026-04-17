@@ -838,6 +838,12 @@ export function ThoughtMapWorkspace({
     : "If this claim holds, what becomes possible and what becomes necessary?";
   const synthesisTwinCheck = steelmanTargetText;
   const synthesisDependencyCount = claimDependencyGraph.loadBearingNodeIds.length;
+  const synthesisStakesLevel =
+    synthesisDependencyCount >= 6 || map.founderBriefReadiness.missingRequirements.length >= 2
+      ? "heavy"
+      : synthesisDependencyCount >= 3 || map.founderBriefReadiness.missingRequirements.length === 1
+        ? "moderate"
+        : "light";
   const adversarialFinalPass = useMemo(() => buildAdversarialFinalPass(map), [map]);
   const synthesisMissingCoverage = map.founderBriefReadiness.missingRequirements.map((requirement) =>
     requirement.replaceAll("_", " "),
@@ -1070,14 +1076,10 @@ export function ThoughtMapWorkspace({
 
   function founderBriefReadinessMessage() {
     if (map.founderBriefReadiness.eligible) {
-      return "Ready to generate. The map has at least one active assumption, counterargument, and research branch.";
+      return "Ready to generate. The map has at least one active assumption, counterargument, and research branch, but Penny still keeps the synthesis gates visible so the user can judge the risk.";
     }
 
-    const missing = map.founderBriefReadiness.missingRequirements.map((requirement) =>
-      requirement.replaceAll("_", " "),
-    );
-
-    return `Add at least one active ${missing.join(", ")} branch before generating the founder brief.`;
+    return `Still at risk: ${synthesisMissingCoverage.join(", ")}. Penny should warn the user and let them choose to proceed anyway if the output is worth the risk.`;
   }
 
   function runFounderBrief() {
@@ -1875,6 +1877,7 @@ export function ThoughtMapWorkspace({
           <Badge>Calibration gate</Badge>
           <Badge className="bg-[#e7defa] text-[#5c4c88]">synthesis</Badge>
           <Badge className="bg-[#d9ead8] text-[#355b32]">{synthesisDependencyCount} load-bearing claims</Badge>
+          <Badge className="bg-white text-[var(--ink)]">stakes {synthesisStakesLevel}</Badge>
         </div>
         <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">
           Pre-mortem, if-you-were-right, twin-check, and dependency completeness.
@@ -2623,14 +2626,13 @@ export function ThoughtMapWorkspace({
             {founderBriefError ? <p className="mt-2 text-sm leading-6 text-[#8b4d1f]">{founderBriefError}</p> : null}
           </div>
 
-          <Button
-            className="gap-2"
-            disabled={!map.founderBriefReadiness.eligible || runningFounderBrief || isPending}
-            onClick={runFounderBrief}
-          >
-            <Sparkles className="size-4" />
-            Generate founder brief
-          </Button>
+          <div className="flex flex-col items-end gap-2">
+            <Badge className="bg-white text-[var(--ink)]">Stakes {synthesisStakesLevel}</Badge>
+            <Button className="gap-2" disabled={runningFounderBrief || isPending} onClick={runFounderBrief}>
+              <Sparkles className="size-4" />
+              Generate founder brief
+            </Button>
+          </div>
         </div>
       </Card>
 
