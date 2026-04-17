@@ -15,6 +15,8 @@ import {
   buildBeliefGenealogy,
   buildBayesianPropagationSnapshot,
   buildDevilsAdvocateReceipts,
+  buildAudienceCritiqueSurface,
+  buildAdvisorReviewSurface,
   buildConfidenceDecaySnapshot,
   buildConfusionLog,
   buildAdversarialFinalPass,
@@ -901,6 +903,13 @@ export function ThoughtMapWorkspace({
     preferredGraphNodeId(normalizeMap(initialMap)),
   );
   const [peerAudience, setPeerAudience] = useState<PeerAudience>("skeptical investor");
+  const [specificAudienceName, setSpecificAudienceName] = useState("your board next Tuesday");
+  const [specificAudienceContext, setSpecificAudienceContext] = useState(
+    "They already know the history and will push on downside, timing, and what happens if this claim is wrong.",
+  );
+  const [advisorReviewerName, setAdvisorReviewerName] = useState("advisor");
+  const [advisorReviewDraft, setAdvisorReviewDraft] = useState("");
+  const [advisorReviewNotes, setAdvisorReviewNotes] = useState<string[]>([]);
   const [selectedPrecedentId, setSelectedPrecedentId] = useState<string | null>(null);
   const [teachBackDrafts, setTeachBackDrafts] = useState<Record<string, string>>({});
   const [teachBackFeedback, setTeachBackFeedback] = useState<Record<string, TeachBackAnalysis>>({});
@@ -1826,6 +1835,20 @@ export function ThoughtMapWorkspace({
     () => buildDevilsAdvocateReceipts(selectedGraphNodeModel),
     [selectedGraphNodeModel],
   );
+  const selectedAudienceCritique = useMemo(
+    () =>
+      buildAudienceCritiqueSurface(
+        selectedGraphNodeModel,
+        specificAudienceName,
+        specificAudienceContext,
+        selectedReceiptVoices[0] ?? null,
+      ),
+    [selectedGraphNodeModel, selectedReceiptVoices, specificAudienceContext, specificAudienceName],
+  );
+  const selectedAdvisorReview = useMemo(
+    () => buildAdvisorReviewSurface(selectedGraphNodeModel, advisorReviewerName, selectedAudienceCritique),
+    [advisorReviewerName, selectedAudienceCritique, selectedGraphNodeModel],
+  );
   const selectedGraphNodeParent = selectedGraphNode?.node.parentId
     ? nodesById.get(selectedGraphNode.node.parentId) ?? null
     : null;
@@ -2747,6 +2770,211 @@ export function ThoughtMapWorkspace({
                   </p>
                 </div>
               ))}
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Specific audience critique</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Critique this claim for the exact audience you are about to face.</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Penny uses the audience, the context you give it, and the current precedent set to make the pushback concrete instead of generic.
+              </p>
+            </div>
+            <Badge className="bg-[var(--panel)] text-[var(--ink)]">{selectedAudienceCritique.lensLabel}</Badge>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <div className="rounded-[20px] bg-white p-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Audience</span>
+                  <input
+                    className="mt-2 w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                    value={specificAudienceName}
+                    onChange={(event) => setSpecificAudienceName(event.target.value)}
+                    placeholder="your board next Tuesday"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Context</span>
+                  <input
+                    className="mt-2 w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                    value={specificAudienceContext}
+                    onChange={(event) => setSpecificAudienceContext(event.target.value)}
+                    placeholder="what they already know, fear, or expect"
+                  />
+                </label>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-[var(--muted-ink)]">{selectedAudienceCritique.reviewPrompt}</p>
+              <div className="mt-4 space-y-3">
+                {selectedPrecedents.length ? (
+                  selectedPrecedents.map((precedent) => (
+                    <div
+                      key={precedent.id}
+                      className={cn(
+                        "rounded-[18px] bg-[var(--panel)] p-4",
+                        selectedPrecedentSummary?.id === precedent.id ? "ring-2 ring-[#5c4c88]/35" : "",
+                      )}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium text-[var(--ink)]">{precedent.name}</p>
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                            {precedent.domain} · {precedent.failureMode}
+                          </p>
+                        </div>
+                        <Button
+                          variant={selectedPrecedentSummary?.id === precedent.id ? "primary" : "secondary"}
+                          className="px-3 py-1 text-[11px]"
+                          onClick={() => setSelectedPrecedentId(precedent.id)}
+                        >
+                          Compare this case
+                        </Button>
+                      </div>
+                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Claim equivalent</p>
+                      <p className="mt-1 text-sm leading-6 text-[var(--ink)]">{precedent.claimEquivalent}</p>
+                      <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Failure trajectory</p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--muted-ink)]">{precedent.failureTrajectory}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                    Select a claim to retrieve precedent-backed critique.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[20px] bg-[var(--panel)] p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What this audience will do</p>
+              <div className="mt-3 space-y-3">
+                <div className="rounded-[16px] bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">Push on</p>
+                  <div className="mt-2 space-y-2">
+                    {selectedAudienceCritique.pushOn.map((item) => (
+                      <p key={item} className="rounded-[14px] bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)]">
+                        {item}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-[16px] bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">Likely to skip</p>
+                  <div className="mt-2 space-y-2">
+                    {selectedAudienceCritique.likelySkip.map((item) => (
+                      <p key={item} className="rounded-[14px] bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)]">
+                        {item}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-[16px] bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">Likely objections</p>
+                  <div className="mt-2 space-y-2">
+                    {selectedAudienceCritique.likelyObjections.map((item) => (
+                      <p key={item} className="rounded-[14px] bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)]">
+                        {item}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-[var(--muted-ink)]">{selectedAudienceCritique.audienceContext}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Advisor review mode</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Let an advisor critique without editing the claim graph.</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Review stays critique-only. The advisor can add pressure, but the owner still controls the claims themselves.
+              </p>
+            </div>
+            <Badge className="bg-[#d9ead8] text-[#355b32]">review-only</Badge>
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
+            <div className="rounded-[20px] bg-white p-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Reviewer</span>
+                  <input
+                    className="mt-2 w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                    value={advisorReviewerName}
+                    onChange={(event) => setAdvisorReviewerName(event.target.value)}
+                    placeholder="advisor"
+                  />
+                </label>
+                <div className="rounded-[16px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">Permissions</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedAdvisorReview.permissionsNote}</p>
+                </div>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-[var(--muted-ink)]">{selectedAdvisorReview.reviewPrompt}</p>
+              <textarea
+                className="mt-4 min-h-[108px] w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                placeholder="Write the critique-only note your advisor should see."
+                value={advisorReviewDraft}
+                onChange={(event) => setAdvisorReviewDraft(event.target.value)}
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  className="px-3 py-2 text-xs"
+                  disabled={advisorReviewDraft.trim().length < 12}
+                  onClick={() => {
+                    const note = advisorReviewDraft.trim();
+
+                    if (note.length < 12) {
+                      return;
+                    }
+
+                    setAdvisorReviewNotes((current) => [note, ...current].slice(0, 4));
+                    setAdvisorReviewDraft("");
+                  }}
+                >
+                  Add critique-only note
+                </Button>
+                <Badge className="bg-white text-[var(--ink)]">no claim edits</Badge>
+              </div>
+            </div>
+
+            <div className="rounded-[20px] bg-[var(--panel)] p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Advisor review surface</p>
+              <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{selectedAdvisorReview.critiqueOnly}</p>
+              <div className="mt-4 space-y-3">
+                {advisorReviewNotes.length ? (
+                  advisorReviewNotes.map((note, index) => (
+                    <div key={`${index}-${note}`} className="rounded-[18px] bg-white p-4">
+                      <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">Recorded note</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{note}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-[18px] bg-white p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                    No critique-only advisor notes captured yet.
+                  </p>
+                )}
+              </div>
+              {selectedSurvivorPrecedents.length ? (
+                <div className="mt-4 rounded-[18px] bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">What survived this structure</p>
+                  <div className="mt-2 space-y-2">
+                    {selectedSurvivorPrecedents.map((survivor) => (
+                      <div key={survivor.id} className="rounded-[16px] bg-[var(--panel)] px-4 py-3">
+                        <p className="text-sm font-medium text-[var(--ink)]">{survivor.name}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{survivor.domain}</p>
+                        <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{survivor.whatSavedIt}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
