@@ -233,14 +233,16 @@ export function buildBayesianPropagationSnapshot(
       const relationBias = edge?.relation === "supersedes" ? 0.06 : 0.02;
       const override = overrides.get(`${current.nodeId}:${childId}`);
       const overrideBoost = override?.mode === "hold" ? 0.08 : 0;
-      const edgeFactor = Math.max(
-        0.42,
-        Math.min(0.98, 0.44 + strengthFactor * 0.36 + relationBias + overrideBoost - contradictionPenalty - recencyPenalty),
-      );
-      const propagatedConfidence = Math.max(
-        0,
-        Math.min(1, (baseConfidence * 0.6 + current.propagatedConfidence * 0.4) * edgeFactor),
-      );
+      const decoupled = override?.mode === "decouple";
+      const edgeFactor = decoupled
+        ? 1
+        : Math.max(
+            0.42,
+            Math.min(0.98, 0.44 + strengthFactor * 0.36 + relationBias + overrideBoost - contradictionPenalty - recencyPenalty),
+          );
+      const propagatedConfidence = decoupled
+        ? baseConfidence
+        : Math.max(0, Math.min(1, (baseConfidence * 0.6 + current.propagatedConfidence * 0.4) * edgeFactor));
       const delta = propagatedConfidence - baseConfidence;
 
       cascade.push({
@@ -253,7 +255,9 @@ export function buildBayesianPropagationSnapshot(
         delta,
         edgeFactor,
         reasoning: override
-          ? override.reasoning
+          ? override.mode === "decouple"
+            ? `You decoupled ${nodeLabel(child)} from ${nodeLabel(source)}, so the downstream claim keeps its own base confidence instead of inheriting this edge's drop.`
+            : override.reasoning
           : `The confidence on ${nodeLabel(source)} carries forward into ${nodeLabel(child)} through the dependency edge.`,
         overrideReasoning: override?.reasoning || null,
         pathLabel: `${nodeLabel(source)} → ${nodeLabel(child)}`,
