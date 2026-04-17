@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ShapeDashboard } from "@/components/penny/shape-dashboard";
-import { buildCalibrationDashboard, derivePennyShapes } from "@/lib/penny-insights";
+import { buildCalibrationDashboard, buildCommunityCommonsDashboard, derivePennyShapes } from "@/lib/penny-insights";
 import { listThoughtMaps } from "@/server/thought-map";
 
 const foundation = [
@@ -56,6 +56,7 @@ export default async function DashboardPage() {
   const allNodes = maps.flatMap((map) => map.nodes);
   const shapes = derivePennyShapes(allNodes).sort((a, b) => b.confidence - a.confidence).slice(0, 4);
   const calibration = buildCalibrationDashboard(maps);
+  const communitySnapshot = buildCommunityCommonsDashboard(maps);
   const mapCards = maps.map((map) => ({
     map,
     counts: summarizeNodeStatus(map.nodes),
@@ -120,6 +121,123 @@ export default async function DashboardPage() {
         <p className="mt-5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
           Privacy guardrails: no raw cross-user claim graphs, no feed, no default publication, and no matching without explicit user intent.
         </p>
+        <div className="mt-8 grid gap-4 xl:grid-cols-2">
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Precedent corpus</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              Anonymized post-mortems are review-gated before they join the commons.
+            </p>
+            <div className="mt-4 space-y-3">
+              {communitySnapshot.contributions.length ? (
+                communitySnapshot.contributions.map((item) => (
+                  <div key={`${item.displayLabel}-${item.updatedAt.toISOString()}`} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[#e7defa] text-[#5c4c88]">{item.displayLabel}</Badge>
+                      <Badge className="bg-white text-[var(--muted-ink)]">Review-gated</Badge>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{item.summary}</p>
+                    <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">{item.sourceHint}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{item.reviewGate}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No review-gated post-mortems are ready for the commons yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Cross-user contradiction signals</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              Penny surfaces source-level disagreement only when it can stay privacy-aware.
+            </p>
+            <div className="mt-4 space-y-3">
+              {communitySnapshot.contradictionSignals.length ? (
+                communitySnapshot.contradictionSignals.map((item) => (
+                  <div key={`${item.sourceLabel}-${item.updatedAt.toISOString()}`} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[#d9ead8] text-[#355b32]">{item.sourceLabel}</Badge>
+                      <Badge className="bg-white text-[var(--muted-ink)]">{item.mapCount} captures</Badge>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{item.summary}</p>
+                    <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">{item.privacyNote}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No source-level contradiction signals are strong enough to surface yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Aggregate open questions</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              Repeated unresolved patterns can be exported as a public-good research surface.
+            </p>
+            <div className="mt-4 space-y-3">
+              {communitySnapshot.openQuestions.length ? (
+                communitySnapshot.openQuestions.map((item) => (
+                  <div key={`${item.topic}-${item.updatedAt.toISOString()}`} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <p className="text-sm font-medium text-[var(--ink)]">{item.topic}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.summary}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{item.researchPrompt}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No aggregate open-question surface is ready yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Anonymized shape library</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              Opt-in shared shapes help users calibrate against common thinking patterns without exposing the underlying graph.
+            </p>
+            <div className="mt-4 space-y-3">
+              {communitySnapshot.shapeLibrary.length ? (
+                communitySnapshot.shapeLibrary.map((item) => (
+                  <div key={`${item.label}-${item.kind}`} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-white text-[var(--ink)]">{item.kind}</Badge>
+                      <Badge className="bg-[#f5d6b3] text-[#8b4d1f]">{item.mapCount} maps</Badge>
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-[var(--ink)]">{item.label}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.summary}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No anonymized shapes are strong enough to share yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5 xl:col-span-2">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Thought-partner matching</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              Matching stays one-to-one and bounded to structurally similar questions.
+            </p>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              {communitySnapshot.thoughtPartnerMatches.length ? (
+                communitySnapshot.thoughtPartnerMatches.map((item) => (
+                  <div key={`${item.mapIds.join("-")}-${item.sharedShapes.join("-")}`} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[#e7defa] text-[#5c4c88]">Potential match</Badge>
+                      <Badge className="bg-white text-[var(--muted-ink)]">{item.sharedShapes.length} shared shapes</Badge>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
+                      {item.titles.join(" + ")}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.reason}</p>
+                    <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">{item.privacyNote}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No bounded partner matches are strong enough to suggest yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
       </Card>
 
       <Card className="p-6 sm:p-8">
