@@ -23,10 +23,21 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
     session.questionBudget - session.questionsAsked.length <= 1 ||
     (session.clarityScore >= 78 && session.answers.length >= 3);
   const showReflectionRitual = shouldStopSoon || session.currentStage === "brief";
+  const processingPrompt =
+    session.currentStage === "brief"
+      ? "Check your reasoning against the critiques. Where did you lean on instinct vs. evidence?"
+      : isCaptureMode
+        ? "What's your gut say? Don't overthink it."
+        : "Walk through this slowly. What's the weakest link?";
+  const analysisFatigue =
+    isReflectionMode &&
+    (session.logicOnlyMode || shouldStopSoon || (session.answers.length >= 4 && session.questionsAsked.length >= 3));
   const modeTitle = isCaptureMode ? "Capture" : "Reflection";
   const modeDescription = isCaptureMode
-    ? "Dump raw thought here. Critique, evidence, and secondary prompts stay out of the way until the structure is real enough to reflect on."
-    : "Work over what was captured. New capture is intentionally paused so critique can stay focused and cognitive load stays honest.";
+    ? "Dump raw thought here. Start with instinct, keep it loose, and let structure harden later."
+    : session.currentStage === "brief"
+      ? "Now the tunnel is asking for metacognition: compare instinct with evidence, then check whether Penny’s critiques are actually changing your view."
+      : "Work over what was captured. New capture is intentionally paused so critique can stay focused and cognitive load stays honest.";
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -48,9 +59,11 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
             {isDeepWork ? (
               <Badge className="bg-[#fff6ed] text-[#8b4d1f]">Cognitive protection on</Badge>
             ) : null}
+            {analysisFatigue ? <Badge className="bg-[#fff6ed] text-[#8b4d1f]">System 2 may be overloaded</Badge> : null}
             {shouldStopSoon ? <Badge className="bg-white text-[var(--ink)]">Honest ending likely</Badge> : null}
           </div>
           <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{modeDescription}</p>
+          <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{processingPrompt}</p>
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
           {session.conversation.map((message) => (
@@ -76,7 +89,7 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
               <textarea
                 name="answer"
                 rows={4}
-                placeholder="Capture raw thought. Keep it fast and unpolished."
+                placeholder={processingPrompt}
                 className="w-full rounded-[24px] border border-black/10 bg-[var(--panel)] px-5 py-4 text-sm text-[var(--ink)] outline-none ring-0 placeholder:text-[var(--muted-ink)] focus:border-black/20"
               />
               <Button type="submit">Save capture</Button>
@@ -176,6 +189,25 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
           </Card>
         ) : null}
 
+        {isReflectionMode ? (
+          <Card className="p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Processing mode</p>
+            <h3 className="mt-1 text-xl font-semibold text-[var(--ink)]">
+              {session.currentStage === "brief"
+                ? "Metacognitive synthesis"
+                : isDeepWork
+                  ? "Analytical stress-test"
+                  : "Reflection without capture"}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{processingPrompt}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+              {analysisFatigue
+                ? "The reflective system looks taxed. If you’re only accepting critiques because they sound right, stop and come back fresh."
+                : "Penny keeps the prompt context-sensitive instead of pretending there is a clean System 1 / System 2 split."}
+            </p>
+          </Card>
+        ) : null}
+
         {shouldStopSoon ? (
           <Card className="border-[#e0b8a8] bg-[#fff5ef] p-5">
             <div className="flex gap-3 text-sm text-[#6f2c25]">
@@ -194,7 +226,7 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
                 <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Session-end reflection ritual</p>
                 <h3 className="mt-1 text-xl font-semibold text-[var(--ink)]">Close the loop in 60 seconds.</h3>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-                  Capture the surprise, the resistance, and the thing worth returning to. Penny keeps this as a reflection artifact instead of letting it disappear.
+                  Check your reasoning against the critiques. Where did you lean on instinct vs. evidence? Penny keeps this as a reflection artifact instead of letting it disappear.
                 </p>
               </div>
               <Badge className="bg-[#e7defa] text-[#5c4c88]">shape data</Badge>
