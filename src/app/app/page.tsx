@@ -8,6 +8,7 @@ import {
   buildAdvancedThinkingDashboard,
   buildCalibrationDashboard,
   buildCommunityCommonsDashboard,
+  buildMemoryTimeDashboard,
   derivePennyShapes,
 } from "@/lib/penny-insights";
 import { listThoughtMaps } from "@/server/thought-map";
@@ -86,6 +87,7 @@ export default async function DashboardPage() {
   const calibration = buildCalibrationDashboard(maps);
   const communitySnapshot = buildCommunityCommonsDashboard(maps, allNodes);
   const advancedSnapshot = buildAdvancedThinkingDashboard(maps, allNodes);
+  const memoryTime = buildMemoryTimeDashboard(maps);
   const mapCards = maps.map((map) => ({
     map,
     counts: summarizeNodeStatus(map.nodes),
@@ -258,6 +260,117 @@ export default async function DashboardPage() {
                 ))
               ) : (
                 <p className="text-sm leading-7 text-[var(--muted-ink)]">No cross-project pattern is stable enough to promote yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <div className="max-w-3xl">
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Memory & time</p>
+          <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
+            Beliefs, predictions, and decisions should have a visible rhythm.
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
+            Penny should make change over time legible: what the user used to believe, what happened on the resolution date, how quickly beliefs move by domain, and where Penny actually changed the user’s direction.
+          </p>
+        </div>
+        <div className="mt-6 grid gap-4 xl:grid-cols-2">
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">What I used to believe</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">A digest of recently updated beliefs, pushed on a reflection rhythm instead of waiting for on-demand recall.</p>
+            <div className="mt-4 space-y-3">
+              {memoryTime.beliefDigests.length ? (
+                memoryTime.beliefDigests.map((item) => (
+                  <div key={item.mapId} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[#e7defa] text-[#5c4c88]">{item.updatedBeliefCount} updated beliefs</Badge>
+                      <Badge className="bg-white text-[var(--muted-ink)]">{item.updatedAt.toLocaleDateString()}</Badge>
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-[var(--ink)]">{item.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.summary}</p>
+                    <div className="mt-3 space-y-2">
+                      {item.updatedBeliefs.map((belief) => (
+                        <p key={belief} className="rounded-2xl bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)]">
+                          {belief}
+                        </p>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{item.reviewPrompt}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No belief digest is ready yet. Penny needs a few updates before the rhythm becomes visible.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Prediction retrospectives</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">On the resolution date, Penny should ask what happened and what it says about calibration.</p>
+            <div className="mt-4 space-y-3">
+              {memoryTime.predictionRetrospectives.length ? (
+                memoryTime.predictionRetrospectives.map((item) => (
+                  <div key={`${item.mapId}-${item.updatedAt.toISOString()}`} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[#d9ead8] text-[#355b32]">{item.domain}</Badge>
+                      <Badge className="bg-white text-[var(--muted-ink)]">{item.resolutionDate ?? "no date"}</Badge>
+                      <Badge className="bg-[#e7defa] text-[#5c4c88]">Brier {item.brierScore.toFixed(3)}</Badge>
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-[var(--ink)]">{item.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                      You predicted this with {item.confidence}% confidence. {item.summary}
+                    </p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{item.reviewPrompt}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No resolved claims have reached a retrospective prompt yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Belief velocity</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">Some domains should change quickly, while others should harden slowly. Penny should show both.</p>
+            <div className="mt-4 space-y-3">
+              {memoryTime.beliefVelocity.length ? (
+                memoryTime.beliefVelocity.map((item) => (
+                  <div key={item.domain} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-white text-[var(--ink)]">{item.domain}</Badge>
+                      <Badge className={item.velocityLabel === "volatile" ? "bg-[#fff6ed] text-[#8b4d1f]" : item.velocityLabel === "rigid" ? "bg-[#d9ead8] text-[#355b32]" : "bg-[#e7defa] text-[#5c4c88]"}>{item.velocityLabel}</Badge>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{item.summary}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">
+                      {item.updateCount} belief updates · {item.sampleSize} maps · avg lag {item.averageLagDays != null ? `${item.averageLagDays}d` : "n/a"}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">Belief velocity will appear once there is enough update history to compare domains.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Decisions under Penny</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">A running log of moments when critique changed the user’s direction instead of simply adding commentary.</p>
+            <div className="mt-4 space-y-3">
+              {memoryTime.decisionInfluence.length ? (
+                memoryTime.decisionInfluence.map((item) => (
+                  <div key={`${item.mapId}-${item.updatedAt.toISOString()}`} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[#e7defa] text-[#5c4c88]">{item.changedDirection}</Badge>
+                      <Badge className="bg-white text-[var(--muted-ink)]">{item.updatedAt.toLocaleDateString()}</Badge>
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-[var(--ink)]">{item.title}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{item.summary}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No direction-change log is strong enough to promote yet.</p>
               )}
             </div>
           </div>
