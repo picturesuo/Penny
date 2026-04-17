@@ -22,6 +22,9 @@
 - `user`: Stakes tagging is high leverage because it exposes what is at risk when a claim is wrong.
 - `user`: Dependency information is load-bearing because it shows which claims hold up other claims and where scrutiny should concentrate.
 - `user`: Claim status should explicitly support open, stress-tested, resolved, abandoned, revisiting, and stale states so the system can query exit criteria and revisit paths.
+- `user`: Assumption extraction should be claim-type aware, category-based, and sharp enough to surface hidden operational assumptions rather than obvious tautologies.
+- `user`: The assumption extraction moment should render the unstated assumptions as yellow branching nodes with a confidence rating and accept/reject/refine interactions.
+- `user`: The assumption extraction moment should tell the user that one claim often carries several commitments, then invite them to inspect the weakest one.
 
 ## Product Vision & Direction
 - `user`: Penny is an ideation instrument, meaning a personal thinking system that captures raw ideas, stress-tests them against evidence and precedent, teaches the user what they do not understand at the moment they need it, and reflects thinking patterns back to the user so learning compounds over time.
@@ -261,6 +264,7 @@
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a round-tracked dialectic scaffold, a synthesis-gate surface, a move-query lens, and confidence drift indicators in the old-selves timeline.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a first-class timeline block for whole-map events, per-shape confidence trails, and dependency-chain progression.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces propagated confidence implications explicitly so downstream belief changes must be accepted or defended instead of happening silently.
+- `repo`: `src/lib/thought-map-generation.ts` now performs claim-type-aware assumption extraction with a sharpness filter, and `src/components/penny/thought-map-form.tsx` now surfaces the extracted assumptions as interactive capture-time preview nodes.
 - `repo`: `src/components/penny/thought-map-form.tsx` now soft-challenges very high confidence claims and surfaces assumption suggestions at capture time.
 - `repo`: `src/app/app/page.tsx` now includes a curriculum and education surface for student mode, instructor views, classroom shape views, metacognition rubrics, and curriculum packs.
 - `repo`: `src/components/penny/shape-dashboard.tsx` now records shape feedback back to the map through `POST /api/maps/[id]/shape-feedback`, and `src/server/thought-map.ts` now persists that feedback as a `shape_feedback` move event.
