@@ -6,18 +6,18 @@ import { Card } from "@/components/ui/card";
 const steps = [
   {
     icon: Target,
-    title: "Bring your messy idea",
-    copy: "Drop the vague concept, half-formed market, or dangerous hunch on the table.",
+    title: "Start in Brain",
+    copy: "Drop the half-formed claim, decision, or hunch into a spatial second brain that keeps accumulating over time.",
   },
   {
     icon: ShieldAlert,
-    title: "Penny pressure-tests it",
-    copy: "The system attacks weak assumptions, calls out fuzzy logic, and pulls in lightweight context.",
+    title: "Turn on Challenge",
+    copy: "Pressure-test the idea against evidence, precedent, dependencies, and the strongest version of the counterargument.",
   },
   {
     icon: Waypoints,
-    title: "Leave with a validation path",
-    copy: "Get a Founder Concept Brief with concrete next steps you can run this week.",
+    title: "Invoke Learn",
+    copy: "When something is unclear, teach through the exact claim you are working on and leave with the concept attached.",
   },
 ];
 
@@ -25,40 +25,40 @@ const useCases = [
   {
     icon: BookOpenText,
     eyebrow: "01",
-    title: "Pressure-tested second brain",
+    title: "Brain is the product",
     copy:
-      "Build a personal idea wiki inspired by Karpathy’s LLM wiki, but designed to challenge your thinking instead of just storing notes.",
+      "A spatial, accumulating knowledge graph for the user’s thinking over time, not a passive note pile or chatbot sidebar.",
     focus: "Current focus",
     bullets: [
-      "Capture claims, assumptions, evidence, counterarguments, and open questions in one place.",
-      "Make each note pressure-testable instead of letting it sit as passive documentation.",
-      "Turn the wiki into a living map that keeps track of what still needs to be proved.",
+      "Capture claims, moves, shapes, and confidence in one living graph.",
+      "Keep the map structurally healthy, not just visually interesting.",
+      "Let the user revisit old selves, genealogy, and contradictions as part of the product.",
     ],
   },
   {
     icon: BrainCircuit,
     eyebrow: "02",
-    title: "Stress-test the reasoning",
+    title: "Challenge is the dialectic",
     copy:
-      "Push directly on weak branches, shaky logic, missing evidence, and unchallenged beliefs so the map becomes more honest over time.",
+      "Focus a region of Brain and turn on the stress-test machinery so Penny can push on the claim until the structure is honest.",
     focus: "Next",
     bullets: [
-      "Surface counterarguments, weak dependencies, and unsupported leaps.",
-      "Run structured pressure from multiple angles instead of one-shot critique.",
-      "Keep the map decision-oriented, not just visually interesting.",
+      "Run explicit critique rounds with defend, revise, or absorb responses.",
+      "Surface quiet keystones, quiet fragility, and the strongest available precedent.",
+      "Show why each critique exists so the system stays auditable.",
     ],
   },
   {
     icon: GraduationCap,
     eyebrow: "03",
-    title: "Learn the best next step",
+    title: "Learn is just-in-time",
     copy:
-      "Use the map to decide what to learn next, what to validate next, and which gap matters most right now.",
+      "When the user hits confusion, Penny explains the concept in the context of the claim they are already working on.",
     focus: "Later",
     bullets: [
-      "Recommend the next concept, question, or test worth learning.",
-      "Tie learning back to a weak branch or decision bottleneck.",
-      "Keep progress concrete with a small next move instead of broad advice.",
+      "Teach back from the live claim instead of from a generic reading list.",
+      "Anchor new understanding to the user’s existing graph.",
+      "Track mastery, relearning, and gaps so future critiques pitch at the right level.",
     ],
   },
 ];
@@ -66,29 +66,29 @@ const useCases = [
 const tracker = [
   {
     lane: "Now",
-    title: "Pressure-tested second brain",
+    title: "Brain",
     items: [
-      "Define the personal idea wiki structure: claim, assumption, evidence, counterargument, research, and open question.",
-      "Make wiki entries first-class objects that can be pressure-tested instead of plain notes.",
-      "Show how one idea turns into a living map with actionable unresolved gaps.",
+      "Keep the graph as the accumulating substrate for claims, moves, shapes, and confidence.",
+      "Treat the Map as the visual payoff and the Stream as the daily work surface.",
+      "Make Brain feel like a place the user returns to, not a set of disposable notes.",
     ],
   },
   {
     lane: "Next",
-    title: "Stress testing",
+    title: "Challenge",
     items: [
-      "Add multi-angle pressure paths for contradiction, evidence weakness, dependency risk, and missing comparison.",
-      "Sequence stress tests so Penny can push deeper instead of repeating surface critique.",
-      "Track which weak branches have already been challenged and what changed.",
+      "Keep dialectic rounds, critique strength, provenance, and the why-this-critique panel visible.",
+      "Use Bayesian propagation so a confidence change actually moves the rest of the graph.",
+      "Surface the quiet keystone and the load-bearing assumptions before synthesis.",
     ],
   },
   {
     lane: "Later",
-    title: "Learning engine",
+    title: "Learn",
     items: [
-      "Recommend the best thing to learn based on the current weakest branch.",
-      "Connect learning suggestions to concrete map gaps and validation tasks.",
-      "Turn the learning loop into a repeatable next-step system instead of a static reading list.",
+      "Make teach-back the default learning motion at the exact point of confusion.",
+      "Anchor every explanation to an existing claim in the graph.",
+      "Let the user leave with understanding, not a reading list.",
     ],
   },
 ];
@@ -100,7 +100,7 @@ export default function LandingPage() {
         <header className="flex items-center justify-between py-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Penny</p>
-            <p className="mt-1 text-sm text-[var(--muted-ink)]">Not another chatbot. A pressure-tested second brain for personal ideas.</p>
+            <p className="mt-1 text-sm text-[var(--muted-ink)]">Not another chatbot. Brain, Challenge, and Learn for personal thinking.</p>
           </div>
           <Link href="/app">
             <Button variant="secondary">Open dashboard</Button>
@@ -110,13 +110,13 @@ export default function LandingPage() {
         <section className="grid flex-1 items-center gap-12 py-16 lg:grid-cols-[1fr_0.92fr]">
           <div className="max-w-3xl">
             <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted-ink)]">
-              A second brain that pushes back
+              Brain, Challenge, Learn
             </p>
             <h1 className="mt-6 max-w-4xl font-display text-6xl leading-[0.95] text-[var(--ink)] sm:text-7xl">
-              Build a pressure-tested second brain for personal ideas, not a passive note pile.
+              Build a pressure-tested second brain that challenges your thinking and teaches you what you do not know.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-[var(--muted-ink)]">
-              Penny starts with messy notes and ideas, turns them into structured reasoning, stress-tests the weak logic, and keeps pointing you to the best next thing to learn or validate.
+              Penny starts with raw thought, turns it into a spatial graph of claims and moves, pressure-tests weak logic, and teaches you in the moment you hit confusion.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link href="/app/new">
@@ -137,7 +137,7 @@ export default function LandingPage() {
             <div className="rounded-[24px] bg-[var(--ink)] p-5 text-[var(--paper)]">
               <p className="text-xs uppercase tracking-[0.22em] text-white/60">Penny says</p>
               <p className="mt-3 text-lg leading-8">
-                “This note is not done because it exists. Show the claim, the dependency, the counterargument, and what would prove you wrong.”
+                “This thought is not done because it exists. Show the claim, the dependency, the counterargument, and what would prove you wrong.”
               </p>
             </div>
             <div className="mt-6 grid gap-4">
@@ -189,7 +189,7 @@ export default function LandingPage() {
                 What Penny is working toward.
               </h2>
               <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
-                The first priority is the pressure-tested second brain. Stress testing and the learning engine stay in the tracker so the product direction remains explicit.
+                Brain is the product, Challenge is the dialectic, and Learn is the just-in-time understanding layer. The tracker keeps the direction explicit.
               </p>
             </div>
             <div className="mt-8 grid gap-4 lg:grid-cols-3">
