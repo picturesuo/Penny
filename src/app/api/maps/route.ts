@@ -21,6 +21,9 @@ const createThoughtMapSchema = z.object({
     stakes: z.array(z.enum(CLAIM_STAKES)).default([]),
     dependencyNotes: z.string().max(300).optional().default(""),
     status: z.enum(CLAIM_STATUSES),
+    temporalScope: z.string().max(120).optional().default(""),
+    conditionalStatement: z.string().max(200).optional().default(""),
+    structureKind: z.enum(["assertion", "conditional", "compound", "temporal", "merged_candidate", "split_candidate"]).optional().default("assertion"),
   }),
 });
 
