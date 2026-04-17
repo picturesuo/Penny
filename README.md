@@ -20,6 +20,7 @@ Penny is built around three core functions:
 - Argument-as-explanation: every critique should be explainable as a causal chain over the claim graph, with assumptions, propagated confidence, and precedent cases spelled out in natural language.
 - Three-path response: the user should be able to defend, revise, or absorb a critique instead of being forced into one text box.
 - Counterargument provenance tags: critiques should show where they came from, whether from precedent, dependency analysis, behavioral science, or shape-derived patterns.
+- Collaborative elicitation patterns: Penny should offer solo versions of devil's advocate, naive questioner, integrator, and skeptic roles so the user can choose the structural prompt they need on demand.
 
 ### Learning Features
 
