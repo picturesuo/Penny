@@ -81,6 +81,10 @@ Learn should be just-in-time and claim-anchored.
 - Multi-output synthesis should let one claim base produce multiple artifacts for different audiences without losing structural consistency.
 - The output should visually reflect confidence propagation so weak or unexamined claims are marked inside the artifact itself.
 - Penny should optionally generate a counter-version artifact so the user can inspect the strongest opposite case before committing.
+- Session start should optionally capture mood and state: fresh, tired, defensive, or curious, so Penny can adapt critique honestly to the user’s actual mode.
+- Penny should track response latency, response length, and specificity during a session and warn when the user is getting tired.
+- Break prompts should appear at natural breakpoints so the product supports incubation instead of forcing continuous critique.
+- When the user returns to a session after a break or after time away, Penny should restore context: where they left off, what they were working on, what was open, and what aged while they were gone.
 - The product should protect deep work, detect depletion, and suggest stopping when it has enough signal.
 - Reflection after synthesis should be optional but rewarded.
 
