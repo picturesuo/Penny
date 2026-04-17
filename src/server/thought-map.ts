@@ -319,6 +319,7 @@ export async function recordDialecticRound(params: {
   roundIndex: number;
   title: string;
   critiqueStrength: string;
+  critiqueType?: string | null;
   prompt: string;
   why: string;
   responsePath: "defend" | "revise" | "absorb";
@@ -335,6 +336,7 @@ export async function recordDialecticRound(params: {
           roundIndex: params.roundIndex,
           title: params.title,
           critiqueStrength: params.critiqueStrength,
+          critiqueType: params.critiqueType ?? null,
           prompt: params.prompt,
           why: params.why,
           responsePath: params.responsePath,
