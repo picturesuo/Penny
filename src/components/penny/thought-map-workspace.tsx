@@ -301,9 +301,38 @@ function critiqueDepthNote(node: ThoughtNodeModel) {
   return "Low confidence already carries uncertainty, so Penny keeps the critique lighter and more targeted.";
 }
 
+function critiqueStrengthLabel(score: number | null | undefined) {
+  const value = score ?? 0;
+
+  if (value >= 0.75) {
+    return {
+      label: "strong",
+      note: "Attacks a load-bearing structure instead of a surface detail.",
+    };
+  }
+
+  if (value >= 0.5) {
+    return {
+      label: "moderate",
+      note: "Challenges an assumption the user could potentially operationalize away.",
+    };
+  }
+
+  return {
+    label: "weak",
+    note: "Mostly rhetorical, useful as a prompt but not yet the hardest attack.",
+  };
+}
+
 function knowledgeSurface(node: ThoughtNodeModel | null, genealogy: ReturnType<typeof buildBeliefGenealogy>) {
   if (!node) {
-    return { understood: [] as string[], needsWork: [] as string[] };
+    return {
+      understood: [] as string[],
+      needsWork: [] as string[],
+      masteryLevel: "unmeasured" as "unmeasured" | "growing" | "solid",
+      teachBackGap: [] as string[],
+      reviewPrompt: "Select a node to see what Penny thinks you already know and what still needs teach-back.",
+    };
   }
 
   const understood = [
@@ -312,6 +341,7 @@ function knowledgeSurface(node: ThoughtNodeModel | null, genealogy: ReturnType<t
     node.scores?.testability != null && node.scores.testability >= 0.6 ? "test design" : null,
     genealogy.contradictions.length > 0 ? "counterargument handling" : null,
     genealogy.dependents.length > 0 ? "dependency tracing" : null,
+    (node.psychology?.falsificationCoverageScore ?? 0) >= 0.65 ? "falsification" : null,
   ].filter((value): value is string => value != null);
 
   const needsWork = [
@@ -320,11 +350,29 @@ function knowledgeSurface(node: ThoughtNodeModel | null, genealogy: ReturnType<t
     node.scores?.testability != null && node.scores.testability < 0.6 ? "test design" : null,
     node.scores?.dependencyRisk != null && node.scores.dependencyRisk > 0.55 ? "dependency reasoning" : null,
     genealogy.contradictions.length === 0 ? "counterargument handling" : null,
+    (node.psychology?.comparisonCoverageScore ?? 1) < 0.6 ? "comparison set quality" : null,
+    (node.psychology?.falsificationCoverageScore ?? 1) < 0.6 ? "falsification" : null,
   ].filter((value): value is string => value != null);
 
+  const uniqueUnderstood = Array.from(new Set(understood));
+  const uniqueNeedsWork = Array.from(new Set(needsWork));
+  const teachBackGap = uniqueNeedsWork.slice(0, 3);
+  const masteryLevel =
+    uniqueUnderstood.length >= 4 && uniqueNeedsWork.length <= 1
+      ? "solid"
+      : uniqueUnderstood.length >= 2
+        ? "growing"
+        : "unmeasured";
+
   return {
-    understood: Array.from(new Set(understood)),
-    needsWork: Array.from(new Set(needsWork)),
+    understood: uniqueUnderstood,
+    needsWork: uniqueNeedsWork,
+    masteryLevel,
+    teachBackGap,
+    reviewPrompt:
+      uniqueNeedsWork.length > 0
+        ? `Teach-back gap: ${uniqueNeedsWork.slice(0, 2).join(" and ")} need another pass in this claim’s context.`
+        : "Teach-back gap: none obvious. Explain the concept back at the same level of difficulty to prove it stays solid.",
   };
 }
 
@@ -778,10 +826,55 @@ export function ThoughtMapWorkspace({
     : selectedGraphNode?.node ?? weakestLearningNode ?? map.nodes.find((node) => node.kind === "core_claim") ?? rootNode ?? null;
   const steelmanTargetText = bestSteelmanTarget?.content ?? map.rawThought;
   const steelmanPrompt = `Argue the strongest possible version of this position: ${steelmanTargetText}`;
+  const selectedCritiqueStrength = critiqueStrengthLabel(selectedGraphNode?.node.scores?.strength ?? null);
   const selectedNormChallengeNode =
     selectedGraphNode?.node ?? map.nodes.find((node) => /norm|should|must|rule/i.test(node.content)) ?? null;
   const selectedPrecedentSummary =
     selectedPrecedents[0] ?? null;
+  const synthesisPreMortem = selectedGraphNode?.node.content ?? map.recommendedNextMove?.summary ?? map.rawThought;
+  const synthesisIfRight = selectedGraphNode
+    ? `If this claim holds, what becomes possible and what becomes necessary for ${kindLabel(selectedGraphNode.node.kind)} work?`
+    : "If this claim holds, what becomes possible and what becomes necessary?";
+  const synthesisTwinCheck = steelmanTargetText;
+  const synthesisDependencyCount = claimDependencyGraph.loadBearingNodeIds.length;
+  const synthesisMissingCoverage = map.founderBriefReadiness.missingRequirements.map((requirement) =>
+    requirement.replaceAll("_", " "),
+  );
+  const dialecticRounds = [
+    {
+      round: "Round 1",
+      title: "Opening critique",
+      strength: selectedCritiqueStrength.label,
+      prompt: selectedGraphNode
+        ? `Penny opens with its sharpest attack on ${kindLabel(selectedGraphNode.node.kind)}.`
+        : "Penny opens with its sharpest attack on the active claim.",
+      why: lastAction?.reasoning.graphAnalysis?.primaryGap
+        ? `Failure type: ${lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")}`
+        : "Failure type: not yet selected",
+      responsePath: "Defend, revise, or absorb.",
+    },
+    {
+      round: "Round 2",
+      title: "User response",
+      strength: "response-driven",
+      prompt:
+        "The user’s reply becomes a move. Penny reads the reasoning, stores the disagreement, and avoids repeating itself.",
+      why: selectedPrecedentSummary
+        ? `Precedent source: ${selectedPrecedentSummary.name} · ${selectedPrecedentSummary.domain}`
+        : "Precedent source: none selected yet",
+      responsePath: "Defend / revise / absorb change the downstream record differently.",
+    },
+    {
+      round: "Round 3",
+      title: "Escalate or pivot",
+      strength: selectedPrecedentSummary ? "precedent-backed" : "open",
+      prompt: selectedPrecedentSummary
+        ? `Penny escalates using ${selectedPrecedentSummary.failureMode} precedent or pivots to the next risk angle.`
+        : "Penny escalates to a stronger critique or pivots to a different angle of attack.",
+      why: activeShapeCallout ? `Shape pattern: ${activeShapeCallout.label}` : "Shape pattern: no active pattern yet",
+      responsePath: "Future rounds inherit the full history of the thread.",
+    },
+  ] as const;
   const inspectorScores = selectedGraphNode
     ? [
         { label: "Strength", value: selectedGraphNode.node.scores?.strength ?? null },
@@ -1179,6 +1272,34 @@ export function ThoughtMapWorkspace({
                   Select a node to turn this into a claim-anchored teach-back prompt.
                 </p>
               )}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Gap detection</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedKnowledgeSurface.teachBackGap.length ? (
+                      selectedKnowledgeSurface.teachBackGap.map((gap) => (
+                        <Badge key={gap} className="bg-[#fff6ed] text-[#8b4d1f]">
+                          {gap}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge className="bg-[#d9ead8] text-[#355b32]">No obvious gap</Badge>
+                    )}
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{selectedKnowledgeSurface.reviewPrompt}</p>
+                </div>
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Level match</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge className="bg-white text-[var(--ink)]">{selectedKnowledgeSurface.masteryLevel}</Badge>
+                    <Badge className="bg-[#e7defa] text-[#5c4c88]">{selectedKnowledgeSurface.understood.length} mastered</Badge>
+                    <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{selectedKnowledgeSurface.needsWork.length} to relearn</Badge>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                    Future critique pitches at this level instead of repeating basics or skipping the missing pieces.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
@@ -1214,6 +1335,9 @@ export function ThoughtMapWorkspace({
                   </div>
                 </div>
               </div>
+              <p className="mt-4 text-sm leading-6 text-[var(--muted-ink)]">
+                {selectedKnowledgeSurface.reviewPrompt}
+              </p>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
@@ -1640,6 +1764,95 @@ export function ThoughtMapWorkspace({
         </div>
       </Card>
 
+      <Card className="p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge>Dialectic rounds</Badge>
+          <Badge className="bg-[#e7defa] text-[#5c4c88]">round-tracked</Badge>
+          <Badge className="bg-[#d9ead8] text-[#355b32]">{selectedCritiqueStrength.label}</Badge>
+        </div>
+        <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">Counterargument as explicit rounds, not a one-shot critique.</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+          Penny should remember every round, carry the user’s response history forward, and change the next attack instead of reusing the same line.
+        </p>
+        <div className="mt-4 grid gap-4 xl:grid-cols-3">
+          {dialecticRounds.map((round) => (
+            <div key={round.round} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="bg-white text-[var(--ink)]">{round.round}</Badge>
+                <Badge className="bg-[#e7defa] text-[#5c4c88]">{round.strength}</Badge>
+              </div>
+              <p className="mt-3 text-sm font-medium text-[var(--ink)]">{round.title}</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{round.prompt}</p>
+              <details className="mt-3 rounded-[18px] bg-white p-4">
+                <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">Why this critique</summary>
+                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{round.why}</p>
+              </details>
+              <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{round.responsePath}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(["defend", "revise", "absorb"] as const).map((path) => (
+            <Badge key={path} className="bg-white text-[var(--ink)]">
+              {path}
+            </Badge>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge>Calibration gate</Badge>
+          <Badge className="bg-[#e7defa] text-[#5c4c88]">synthesis</Badge>
+          <Badge className="bg-[#d9ead8] text-[#355b32]">{synthesisDependencyCount} load-bearing claims</Badge>
+        </div>
+        <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">
+          Pre-mortem, if-you-were-right, twin-check, and dependency completeness.
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+          These gates keep synthesis honest by forcing failure thinking, consequence thinking, a calibrated steelman, and a visible review of what is still at risk.
+        </p>
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Pre-mortem</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">Six months later, this failed because {synthesisPreMortem}.</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+              This should be short, stored, and reviewed before Penny synthesizes any artifact.
+            </p>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">If you were right</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{synthesisIfRight}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+              If the user cannot generate consequences, the belief is still performative rather than load-bearing.
+            </p>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-white p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Twin-check</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{synthesisTwinCheck}</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+              Penny should expose its strongest version of the user’s thinking and let the user decide whether it actually matches their intent.
+            </p>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-white p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Dependency completeness</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              {synthesisDependencyCount
+                ? `${synthesisDependencyCount} load-bearing claims are visible here.`
+                : "No load-bearing claims have been isolated yet."}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+              {synthesisMissingCoverage.length
+                ? `Still at risk: ${synthesisMissingCoverage.join(", ")}. Penny should ask whether to proceed anyway.`
+                : "The map has the minimum structure Penny expects before synthesis."}
+            </p>
+          </div>
+        </div>
+      </Card>
+
       {lastAction?.reasoning.graphAnalysis ? (
         <Card className="p-6">
           <div className="flex flex-wrap items-center gap-2">
@@ -1722,13 +1935,23 @@ export function ThoughtMapWorkspace({
             </div>
 
             <div className="mt-4 space-y-3">
-              {selectedOldSelves.map((snapshot) => (
+              {selectedOldSelves.map((snapshot, index) => {
+                const previousConfidence = index > 0 ? selectedOldSelves[index - 1]?.confidence : null;
+                const drift =
+                  previousConfidence != null && snapshot.confidence != null ? snapshot.confidence - previousConfidence : null;
+
+                return (
                 <div key={snapshot.id} className={cn("rounded-[20px] bg-white p-4", snapshot.isCurrent && "ring-2 ring-[var(--ink)] ring-offset-1")}>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge className="bg-[var(--panel)] text-[var(--ink)]">{snapshot.versionLabel}</Badge>
                     <Badge className={statusBadge(snapshot.status)}>{snapshot.status}</Badge>
                     {snapshot.confidence != null ? (
                       <Badge className="bg-[#d9ead8] text-[#355b32]">confidence {formatScore(snapshot.confidence)}</Badge>
+                    ) : null}
+                    {drift != null && drift !== 0 ? (
+                      <Badge className={drift > 0 ? "bg-[#d9ead8] text-[#355b32]" : "bg-[#fff6ed] text-[#8b4d1f]"}>
+                        {drift > 0 ? "↑" : "↓"} {Math.round(Math.abs(drift) * 100)} drift
+                      </Badge>
                     ) : null}
                   </div>
                   <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{snapshot.content}</p>
@@ -1739,7 +1962,8 @@ export function ThoughtMapWorkspace({
                   </div>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{snapshot.moveSummary}</p>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -1917,6 +2141,22 @@ export function ThoughtMapWorkspace({
               </div>
             </div>
 
+            <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Move query lens</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Query the move layer like a real substrate.</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                The view should be addressable by claim, time range, event type, decision outcome, override, and recency so the same event log can power timelines and review.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge className="bg-white text-[var(--ink)]">Claim: {selectedGraphNode?.node.kind.replaceAll("_", " ") ?? "current node"}</Badge>
+                <Badge className="bg-white text-[var(--ink)]">Time: recent history</Badge>
+                <Badge className="bg-white text-[var(--ink)]">Events: move / feedback / signal</Badge>
+                <Badge className="bg-white text-[var(--ink)]">Decision: {lastAction?.action ?? "n/a"}</Badge>
+                <Badge className="bg-white text-[var(--ink)]">Override: {shapeFeedback[activeShapeCallout?.id ?? ""] ? "logged" : "pending"}</Badge>
+                <Badge className="bg-white text-[var(--ink)]">Recency: {selectedMoveHistory.length ? `${selectedMoveHistory.slice(-5).length} visible` : "n/a"}</Badge>
+              </div>
+            </div>
+
             <div className="rounded-[24px] border border-black/8 bg-[linear-gradient(180deg,#fffdf8_0%,#f8f2e8_100%)] p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Shape callout</p>
               <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">
@@ -2081,15 +2321,17 @@ export function ThoughtMapWorkspace({
                   <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Confusion log</p>
                     <div className="mt-3 space-y-2">
-                      {confusionLog.length ? (
-                        confusionLog.map((entry) => (
+                  {confusionLog.length ? (
+                    confusionLog.map((entry) => (
                           <div key={entry.nodeId} className="rounded-[16px] bg-white px-4 py-3">
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge className="bg-[#e7defa] text-[#5c4c88]">severity {entry.severity}</Badge>
+                              <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{entry.ageDays} days old</Badge>
                               <Badge className="bg-white text-[var(--ink)]">{entry.title}</Badge>
                             </div>
                             <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{entry.confusion}</p>
                             <p className="mt-1 text-xs leading-5 text-[var(--muted-ink)]">{entry.nextStep}</p>
+                            <p className="mt-1 text-xs leading-5 text-[var(--muted-ink)]">{entry.revisitPrompt}</p>
                           </div>
                         ))
                       ) : (
