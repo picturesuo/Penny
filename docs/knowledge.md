@@ -44,6 +44,9 @@
 - `user`: Provenance on every claim is load-bearing because it creates belief genealogy and lets the system apply differentiated scrutiny.
 - `user`: Stakes tagging is high leverage because it exposes what is at risk when a claim is wrong.
 - `user`: Dependency information is load-bearing because it shows which claims hold up other claims and where scrutiny should concentrate.
+- `user`: Claim structure should capture temporal scope, conditional form, merge candidates, and split candidates so Penny can separate horizon, if-part, and compound claims before critique.
+- `user`: The why-now signal should explain why a critique appears at this moment, not just what the critique is, so the user can read Penny’s trigger over time.
+- `user`: Propagation math should be explicit, with confidence deltas shown as arithmetic and disagreement pathways for accept, reduce, or decouple.
 - `user`: Claim status should explicitly support open, stress-tested, resolved, abandoned, revisiting, and stale states so the system can query exit criteria and revisit paths.
 - `user`: Assumption extraction should be claim-type aware, category-based, and sharp enough to surface hidden operational assumptions rather than obvious tautologies.
 - `user`: The assumption extraction moment should render the unstated assumptions as yellow branching nodes with a confidence rating and accept/reject/refine interactions.
