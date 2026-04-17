@@ -193,6 +193,7 @@ export function buildBayesianPropagationSnapshot(
   const overrides = collectBayesianOverrides(map.events);
   const nodesById = new Map(map.nodes.map((node) => [node.id, node] as const));
   const outgoingByNode = new Map<string, string[]>();
+  const edgeByKey = new Map(dependencyGraph.edges.map((edge) => [`${edge.fromNodeId}:${edge.toNodeId}`, edge] as const));
 
   for (const edge of dependencyGraph.edges) {
     const outgoing = outgoingByNode.get(edge.fromNodeId) ?? [];
@@ -224,9 +225,7 @@ export function buildBayesianPropagationSnapshot(
 
       const source = nodesById.get(current.nodeId);
       const baseConfidence = confidenceFromScore(child.scores?.confidence);
-      const edge = dependencyGraph.edges.find(
-        (candidate) => candidate.fromNodeId === current.nodeId && candidate.toNodeId === childId,
-      );
+      const edge = edgeByKey.get(`${current.nodeId}:${childId}`) ?? null;
       const strengthFactor = (edge?.strengthScore ?? 50) / 100;
       const contradictionPenalty = (edge?.contradictionScore ?? 0) / 100 * 0.28;
       const recencyPenalty = Math.min((edge?.recencyDays ?? 0) / 180, 0.12);
@@ -1211,11 +1210,14 @@ export function buildClaimStructureSnapshot(map: ThoughtMapModel, node: ThoughtN
 
   const dependencyWeight = node?.scores?.dependencyRisk != null ? Number(node.scores.dependencyRisk.toFixed(2)) : null;
   const directConfidence = node?.scores?.confidence != null ? Number(node.scores.confidence.toFixed(2)) : null;
-  const propagatedConfidence = node?.scores?.confidence != null ? Number(node.scores.confidence.toFixed(2)) : null;
+  const propagatedConfidence = directConfidence;
 
   return {
     whyNowTrigger,
-    confidenceMath: null,
+    confidenceMath:
+      directConfidence != null && dependencyWeight != null
+        ? `${directConfidence}% direct confidence · ${Math.round(dependencyWeight * 100)}% dependency risk`
+        : null,
     dependencyWeight,
     directConfidence,
     propagatedConfidence,
@@ -2270,6 +2272,7 @@ export function buildBeliefGenealogy(nodes: ThoughtNodeModel[], nodeId: string):
 
 export function buildClaimDependencyGraph(map: ThoughtMapModel): ClaimDependencyGraph {
   const nodes = map.nodes.filter((node) => node.nodeStatus !== "superseded");
+  const nodesById = new Map(nodes.map((node) => [node.id, node] as const));
   const rootNodeIds = nodes.filter((node) => node.parentId == null || node.kind === "root").map((node) => node.id);
   const edges: ClaimDependencyEdge[] = [];
   const seenEdges = new Set<string>();
@@ -2280,7 +2283,7 @@ export function buildClaimDependencyGraph(map: ThoughtMapModel): ClaimDependency
       if (!seenEdges.has(key)) {
         seenEdges.add(key);
         const targetNode = node;
-        const sourceNode = nodes.find((candidate) => candidate.id === node.parentId) ?? null;
+        const sourceNode = nodesById.get(node.parentId) ?? null;
         edges.push({
           fromNodeId: node.parentId,
           toNodeId: node.id,
@@ -2297,7 +2300,7 @@ export function buildClaimDependencyGraph(map: ThoughtMapModel): ClaimDependency
       if (!seenEdges.has(key)) {
         seenEdges.add(key);
         const targetNode = node;
-        const sourceNode = nodes.find((candidate) => candidate.id === node.supersedesNodeId) ?? null;
+        const sourceNode = nodesById.get(node.supersedesNodeId) ?? null;
         edges.push({
           fromNodeId: node.supersedesNodeId,
           toNodeId: node.id,

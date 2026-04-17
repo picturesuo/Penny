@@ -1724,6 +1724,7 @@ export function ThoughtMapWorkspace({
       prompt: "Capture the factual correction Penny got wrong so it can be treated as high-priority signal.",
       why: "Dedicated correction capture is the highest-priority critique signal because it corrects the product’s own mistake.",
       responsePath: "revise",
+      response: correction,
     });
 
     setCritiqueCorrectionDrafts((current) => {
@@ -2089,8 +2090,9 @@ export function ThoughtMapWorkspace({
     prompt: string;
     why: string;
     responsePath: "defend" | "revise" | "absorb";
+    response?: string;
   }) {
-    const response = (dialecticResponseDrafts[params.round] ?? "").trim();
+    const response = (params.response ?? dialecticResponseDrafts[params.round] ?? "").trim();
 
     if (response.length < 8) {
       return;
@@ -4086,12 +4088,19 @@ export function ThoughtMapWorkspace({
                           <Button
                             variant="secondary"
                             className="px-3 py-2 text-xs"
-                            onClick={() =>
+                            onClick={() => {
                               setPropagationAcknowledged((current) => ({
                                 ...current,
                                 [selectedPropagationImplication.targetNodeId]: "accepted",
-                              }))
-                            }
+                              }));
+                              recordConfidenceOverride(
+                                selectedPropagationImplication.sourceNodeId,
+                                selectedPropagationImplication.targetNodeId,
+                                confidenceOverrideReasons[selectedPropagationImplication.targetNodeId]?.trim() ||
+                                  "Accepted the propagated implication.",
+                                "hold",
+                              );
+                            }}
                           >
                             Accept implication
                           </Button>
