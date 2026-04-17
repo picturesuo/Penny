@@ -7,6 +7,7 @@ import {
   createSession,
   markAssumptionResolved,
   regenerateChallenge,
+  submitSessionReflection,
   submitAnswer,
 } from "@/server/penny";
 
@@ -38,5 +39,16 @@ export async function regenerateChallengeAction(sessionId: string) {
 
 export async function resolveAssumptionAction(sessionId: string, assumption: string) {
   await markAssumptionResolved(sessionId, assumption);
+  revalidatePath(`/app/session/${sessionId}`);
+}
+
+export async function submitReflectionAction(sessionId: string, formData: FormData) {
+  const payload = {
+    surprised: z.string().min(2, "Say what surprised you.").parse(formData.get("surprised")),
+    resisted: z.string().min(2, "Say what you resisted.").parse(formData.get("resisted")),
+    returnTo: z.string().min(2, "Say what you want to come back to.").parse(formData.get("returnTo")),
+  };
+
+  await submitSessionReflection(sessionId, payload);
   revalidatePath(`/app/session/${sessionId}`);
 }
