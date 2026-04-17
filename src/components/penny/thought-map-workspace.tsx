@@ -755,6 +755,19 @@ export function ThoughtMapWorkspace({
 
   function recordShapeFeedback(shape: { id: string; label: string; primaryMapId: string | null }, verdict: PennyShapeFeedback) {
     const mapId = shape.primaryMapId ?? map.id;
+    const previousVerdict = shapeFeedback[shape.id];
+    const restoreFeedback = () =>
+      setShapeFeedback((current) => {
+        const next = { ...current };
+
+        if (previousVerdict) {
+          next[shape.id] = previousVerdict;
+        } else {
+          delete next[shape.id];
+        }
+
+        return next;
+      });
 
     setShapeFeedback((current) => ({ ...current, [shape.id]: verdict }));
 
@@ -775,12 +788,14 @@ export function ThoughtMapWorkspace({
         });
 
         if (!response.ok) {
+          restoreFeedback();
           return;
         }
 
         const payload = (await response.json()) as { event: SerializableThoughtMapEvent };
         mergeShapeFeedbackEvent(payload.event);
       } catch {
+        restoreFeedback();
         return;
       }
     });
