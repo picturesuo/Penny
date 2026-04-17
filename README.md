@@ -120,6 +120,14 @@ Learn should be just-in-time and claim-anchored.
 - Lens reset should let the user ask Penny to rebuild from recent moves when major life changes invalidate older patterns.
 - Reasoning replay should let the user trace the full move history behind a decision or artifact.
 
+## Predictive Surfaces
+
+- Penny should simulate likely, keystone-corrected, and failure trajectories based on the current claim structure and shapes.
+- Penny should surface reasoning archetypes over time so the user can see which thinker they most resemble, without turning it into flattery.
+- Users should be able to ask what a specific hero thinker would think, grounded in that thinker’s actual published work.
+- Penny should map structural absences in the user’s thinking, not just the present nodes.
+- Advanced users should be able to compare their actual reasoning to a generated thinking twin built from their shapes.
+
 ## Curriculum and Education
 
 - Student mode should apply the tunnel to essay writing: capture claims, stress-test structure, teach through confusion, synthesize an outline, then hand off prose to downstream AI.
