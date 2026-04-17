@@ -253,6 +253,53 @@ export interface CommunityCommonsDashboard {
   thoughtPartnerMatches: ThoughtPartnerMatchSnapshot[];
 }
 
+export interface EmotionalStructureShapeSnapshot {
+  stake: string;
+  mapCount: number;
+  summary: string;
+  prompt: string;
+}
+
+export interface AssumptionArchaeologySnapshot {
+  mapId: string;
+  title: string;
+  assumptions: string[];
+  hiddenScaffold: string;
+  updatedAt: Date;
+}
+
+export interface CounterShapeSnapshot {
+  label: string;
+  reason: string;
+  counterTest: string;
+  updatedAt: Date;
+}
+
+export interface ConfidenceResetSnapshot {
+  mapId: string;
+  title: string;
+  ageDays: number;
+  confidence: number;
+  resetPrompt: string;
+  updatedAt: Date;
+}
+
+export interface CrossProjectPatternSnapshot {
+  label: string;
+  mapCount: number;
+  summary: string;
+  handleItLikeThis: string;
+}
+
+export interface AdvancedThinkingDashboard {
+  emotionalStructureShapes: EmotionalStructureShapeSnapshot[];
+  confusionLog: ConfusionLogEntry[];
+  assumptionArchaeology: AssumptionArchaeologySnapshot[];
+  counterShapes: CounterShapeSnapshot[];
+  confidenceResets: ConfidenceResetSnapshot[];
+  crossProjectPatterns: CrossProjectPatternSnapshot[];
+}
+
 const SHAPE_RULES: Array<{
   id: string;
   label: string;
@@ -1581,5 +1628,191 @@ export function buildCommunityCommonsDashboard(maps: ThoughtMapModel[]): Communi
     openQuestions,
     shapeLibrary,
     thoughtPartnerMatches,
+  };
+}
+
+function stakeLabel(stake: string) {
+  return stake.replaceAll("_", " ");
+}
+
+function counterShapePrompt(label: string, summary: string) {
+  const lower = `${label} ${summary}`.toLowerCase();
+
+  if (lower.includes("market") || lower.includes("distribution")) {
+    return "Force the opposite test: what if the real failure is operational, not market?";
+  }
+
+  if (lower.includes("confidence") || lower.includes("overconfident")) {
+    return "Force the opposite test: what evidence would make the claim stronger rather than weaker?";
+  }
+
+  if (lower.includes("abstraction") || lower.includes("specificity")) {
+    return "Force the opposite test: what concrete decision would break if this stayed abstract?";
+  }
+
+  if (lower.includes("confirmation") || lower.includes("familiar")) {
+    return "Force the opposite test: what is the strongest disconfirming case this shape keeps missing?";
+  }
+
+  return "Force the opposite test: what critique would matter if this pattern were exactly backwards?";
+}
+
+export function buildAdvancedThinkingDashboard(maps: ThoughtMapModel[]): AdvancedThinkingDashboard {
+  const allNodes = maps.flatMap((map) => map.nodes);
+  const allShapes = derivePennyShapes(allNodes);
+  const emotionalStructureShapes = Array.from(
+    maps.reduce((accumulator, map) => {
+      const capture = captureSnapshotForMap(map);
+
+      if (!capture?.stakes.length) {
+        return accumulator;
+      }
+
+      for (const stake of capture.stakes) {
+        const bucket = accumulator.get(stake) ?? [];
+        bucket.push(map);
+        accumulator.set(stake, bucket);
+      }
+
+      return accumulator;
+    }, new Map<ClaimStake, ThoughtMapModel[]>()),
+  )
+    .map(([stake, stakeMaps]) => {
+      const relevantNodes = stakeMaps.flatMap((map) =>
+        map.nodes.filter(
+          (node) =>
+            node.kind !== "root" &&
+            ((node.scores?.dependencyRisk ?? 0) > 0.48 ||
+              (node.psychology?.falsificationCoverageScore ?? 1) < 0.68 ||
+              (node.scores?.confidence ?? 0) > 0.68),
+        ),
+      );
+
+      return {
+        stake: stakeLabel(stake),
+        mapCount: stakeMaps.length,
+        summary:
+          stake === "self_image"
+            ? "You under-stress-test claims when self-image is on the line, so the first challenge often needs to be gentler but firmer."
+            : stake === "reputation"
+              ? "You should slow down and pressure-test the public cost before treating this as a routine claim."
+              : stake === "money"
+                ? "The financial risk should trigger more explicit downside testing than ordinary claims."
+                : stake === "relationship"
+                  ? "Relationship stakes usually hide in tone and timing, so the emotional cost deserves its own review."
+                  : "This stake changes the shape of the critique and deserves its own explicit pressure test.",
+        prompt:
+          relevantNodes.length > 0
+            ? `Use the ${stakeLabel(stake)} stake to ask where the stress-test got softer than it should have been.`
+            : `Watch for new claims tagged with ${stakeLabel(stake)} and turn them into a specific stress-test.`,
+      } satisfies EmotionalStructureShapeSnapshot;
+    })
+    .sort((a, b) => b.mapCount - a.mapCount)
+    .slice(0, 5);
+
+  const confusionLog = maps.flatMap((map) => buildConfusionLog(map)).sort((a, b) => b.severity - a.severity).slice(0, 5);
+
+  const assumptionArchaeology = maps
+    .map((map) => {
+      const assumptions = map.nodes
+        .filter((node) => node.kind === "assumption" && node.nodeStatus !== "superseded")
+        .map((node) => node.content)
+        .slice(0, 3);
+      const capture = captureSnapshotForMap(map);
+      const hiddenScaffold = assumptions.length
+        ? `You're assuming ${assumptions.slice(0, 3).join("; ")}.`
+        : capture?.dependencyNotes.trim()
+          ? `You're assuming ${capture.dependencyNotes.trim()}.`
+          : "The map is still hiding its scaffold. Add at least one explicit assumption.";
+
+      return {
+        mapId: map.id,
+        title: map.title,
+        assumptions,
+        hiddenScaffold,
+        updatedAt: map.updatedAt,
+      };
+    })
+    .filter((item) => item.assumptions.length > 0 || item.hiddenScaffold !== "The map is still hiding its scaffold. Add at least one explicit assumption.")
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, 4);
+
+  const counterShapes = allShapes
+    .slice()
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 4)
+    .map((shape) => ({
+      label: shape.label,
+      reason: `Counter-shape mode deliberately tests against "${shape.label}" so the lens does not become an echo chamber.`,
+      counterTest: counterShapePrompt(shape.label, shape.summary),
+      updatedAt: new Date(),
+    }));
+
+  const confidenceResets = maps
+    .map((map) => {
+      const capture = captureSnapshotForMap(map);
+      const confidence = capture?.confidence ?? null;
+
+      if (confidence == null) {
+        return null;
+      }
+
+      const ageDays = Math.max(0, Math.floor((Date.now() - map.updatedAt.getTime()) / (1000 * 60 * 60 * 24)));
+
+      return {
+        mapId: map.id,
+        title: map.title,
+        ageDays,
+        confidence,
+        resetPrompt:
+          ageDays >= 90
+            ? `You have not revisited confidence on this claim in ${ageDays} days. Reassess it now.`
+            : ageDays >= 30
+              ? `This claim is aging. Recheck whether ${confidence}% still feels right.`
+              : `Confidence is still fresh enough to keep monitoring, not resetting.`,
+        updatedAt: map.updatedAt,
+      };
+    })
+    .filter((item): item is ConfidenceResetSnapshot => item !== null && item.ageDays >= 30)
+    .sort((a, b) => b.ageDays - a.ageDays)
+    .slice(0, 5);
+
+  const patternCounts = new Map<string, { count: number; maps: Set<string>; summary: string; handleItLikeThis: string }>();
+  for (const shape of allShapes) {
+    const bucket = patternCounts.get(shape.label) ?? {
+      count: 0,
+      maps: new Set<string>(),
+      summary: shape.summary,
+      handleItLikeThis: `You handled this pattern by using ${shape.explanation.toLowerCase()}`,
+    };
+
+    bucket.count += 1;
+    for (const mapId of shape.sourceMapIds) {
+      bucket.maps.add(mapId);
+    }
+    patternCounts.set(shape.label, bucket);
+  }
+
+  const crossProjectPatterns = Array.from(patternCounts.entries())
+    .map(([label, bucket]) => ({
+      label,
+      mapCount: bucket.maps.size,
+      summary:
+        bucket.maps.size >= 2
+          ? `Three other projects have shown a version of this weakness across ${bucket.maps.size} maps.`
+          : bucket.summary,
+      handleItLikeThis: bucket.handleItLikeThis,
+    }))
+    .filter((pattern) => pattern.mapCount >= 2)
+    .sort((a, b) => b.mapCount - a.mapCount)
+    .slice(0, 5);
+
+  return {
+    emotionalStructureShapes,
+    confusionLog,
+    assumptionArchaeology,
+    counterShapes,
+    confidenceResets,
+    crossProjectPatterns,
   };
 }
