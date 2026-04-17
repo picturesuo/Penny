@@ -110,6 +110,11 @@ Friction should scale with stakes so the product does not flatten important deci
 - Contradiction cascade tracing: when a foundational claim changes, show which downstream claims need revisiting.
 - Cross-project shape transfer: let shapes learned in one project inform stress-testing in the next.
 - Session rhythm memory: when the user returns after time away, show what aged, what’s still believed, and where they left off.
+- Old selves per node: show content, confidence, and moves over time so the moves architecture becomes felt experience.
+- Confidence drift indicators: surface recent confidence shifts directly on the graph.
+- Contradiction cascade preview: when a claim is revised, show the downstream debt before the user commits.
+- Provenance tracing: show the original source, capture session, and shapes present when the belief formed.
+- Inherited-claim markers: render inherited claims distinctly and give them automatic extra scrutiny.
 
 ## Psychology-Backed Design
 
