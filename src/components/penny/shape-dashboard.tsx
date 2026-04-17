@@ -143,6 +143,7 @@ export function ShapeDashboard({
             <Badge className="bg-[var(--panel)] text-[var(--ink)]">Brier scoring</Badge>
             <Badge className="bg-[var(--panel)] text-[var(--ink)]">Private bets</Badge>
             <Badge className="bg-[var(--panel)] text-[var(--ink)]">Bayesian updates</Badge>
+            <Badge className="bg-[var(--panel)] text-[var(--ink)]">Post-mortems</Badge>
           </div>
         </div>
 
@@ -283,12 +284,44 @@ export function ShapeDashboard({
                 </p>
               )}
             </div>
-          </div>
         </div>
+      </div>
 
-        <div className="mt-6 rounded-[24px] bg-[var(--panel)] p-5">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Bayesian update prompts</p>
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      <div className="mt-6 rounded-[24px] border border-black/8 bg-white p-5">
+        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Post-mortem protocol</p>
+        <h3 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Make resolved claims into calibration artifacts.</h3>
+        <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--muted-ink)]">
+          When a claim resolves, Penny turns the outcome into a structured post-mortem so the miss, the lesson, and the next confidence cue become part of the record instead of disappearing into history.
+        </p>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {calibration.postMortems.length ? (
+            calibration.postMortems.slice(0, 4).map((postMortem) => (
+              <div key={postMortem.mapId} className="rounded-[18px] bg-[var(--panel)] p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="bg-white text-[var(--ink)]">{postMortem.domain}</Badge>
+                  <Badge className="bg-[#e7defa] text-[#5c4c88]">{postMortem.missType}</Badge>
+                  <Badge className="bg-[#d9ead8] text-[#355b32]">Brier {postMortem.brierScore.toFixed(3)}</Badge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{postMortem.title}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{postMortem.lesson}</p>
+                <div className="mt-3 rounded-[16px] bg-white p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Shape input</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{postMortem.shapeSignal}</p>
+                  <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">{postMortem.reviewPrompt}</p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+              No resolved claims yet. Once outcomes arrive, Penny will generate structured post-mortems from the resolved claim trail.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-[24px] bg-[var(--panel)] p-5">
+        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Bayesian update prompts</p>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {calibration.prompts.length ? (
               calibration.prompts.slice(0, 4).map((prompt) => (
                 <div key={prompt.mapId} className="rounded-[18px] bg-white p-4">
