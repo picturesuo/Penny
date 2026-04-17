@@ -22,6 +22,25 @@ const foundation = [
   },
 ];
 
+const community = [
+  {
+    title: "Precedent contributions",
+    copy: "Users can optionally contribute anonymized, structured post-mortems so the failure corpus grows as a commons instead of a private stash.",
+  },
+  {
+    title: "Cross-user provenance",
+    copy: "When two users hold claims from the same source, Penny can flag source-level contradiction only through privacy-safe aggregation.",
+  },
+  {
+    title: "Research mode",
+    copy: "Aggregate unresolved patterns can surface as public anonymized research for researchers, journalists, and funders.",
+  },
+  {
+    title: "Thought-partner matching",
+    copy: "Optional one-to-one matching connects users with structurally similar questions without turning the product into a feed.",
+  },
+] as const;
+
 function summarizeNodeStatus(nodes: Awaited<ReturnType<typeof listThoughtMaps>>[number]["nodes"]) {
   return nodes.reduce(
     (counts, node) => {
@@ -78,6 +97,29 @@ export default async function DashboardPage() {
             </div>
           ))}
         </div>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <div className="max-w-3xl">
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Community commons</p>
+          <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
+            Social features are opt-in, targeted, and privacy-first.
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
+            Penny can grow a shared failure commons without becoming a public feed. The design stays high-trust by default: anonymize before contribution, aggregate before publication, and keep matching one-to-one.
+          </p>
+        </div>
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {community.map((item) => (
+            <div key={item.title} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+              <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">{item.title}</p>
+              <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{item.copy}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+          Privacy guardrails: no raw cross-user claim graphs, no feed, no default publication, and no matching without explicit user intent.
+        </p>
       </Card>
 
       <ShapeDashboard shapes={shapes} calibration={calibration} initialFeedback={{}} />
