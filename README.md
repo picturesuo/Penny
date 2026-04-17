@@ -134,6 +134,10 @@ Learn should be just-in-time and claim-anchored.
 - Instructor surface should let teachers inspect the structural progression of student thinking with permission.
 - Classroom shape views should show aggregate bottlenecks.
 - Curriculum packs should be tuned tunnel variants with task-specific exit criteria, not just content templates.
+- Literature review mode should specialize paper import, abstract claim extraction, and field-level synthesis for PhD work.
+- Pitch deck mode should frame the work around slide clusters like problem, solution, market, traction, team, and ask.
+- Book proposal mode should frame the work around hook, thesis, chapter arguments, and market positioning.
+- Career decision mode should calibrate gates to life decisions, especially values, identity, and what-if-wrong questions.
 
 ## Design Principles
 
