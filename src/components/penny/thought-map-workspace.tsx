@@ -518,6 +518,7 @@ export function ThoughtMapWorkspace({
   );
   const [shapeOverrideReasons, setShapeOverrideReasons] = useState<Record<string, string>>({});
   const [confidenceOverrideReasons, setConfidenceOverrideReasons] = useState<Record<string, string>>({});
+  const [propagationAcknowledged, setPropagationAcknowledged] = useState<Record<string, string>>({});
   const [dialecticResponseDrafts, setDialecticResponseDrafts] = useState<Record<string, string>>({});
   const [runningRecommendedMove, setRunningRecommendedMove] = useState(false);
   const [runningFounderBrief, setRunningFounderBrief] = useState(false);
@@ -918,6 +919,38 @@ export function ThoughtMapWorkspace({
     () => buildBayesianPropagationSnapshot(map, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map, rootNode?.id, selectedGraphNode?.node.id],
   );
+  const selectedPropagationImplication = useMemo(() => {
+    if (!selectedPropagation) {
+      return null;
+    }
+
+    const strongestStep =
+      [...selectedPropagation.cascade]
+        .filter((step) => step.delta !== 0)
+        .sort(
+          (a, b) =>
+            Math.abs(b.delta) - Math.abs(a.delta) ||
+            Number(b.propagatedConfidence < b.baseConfidence) - Number(a.propagatedConfidence < a.baseConfidence),
+        )[0] ?? selectedPropagation.cascade[0] ?? null;
+
+    if (!strongestStep) {
+      return null;
+    }
+
+    const sourceNode = nodesById.get(strongestStep.sourceNodeId) ?? null;
+    const targetNode = nodesById.get(strongestStep.targetNodeId) ?? null;
+
+    return {
+      sourceNodeId: strongestStep.sourceNodeId,
+      targetNodeId: strongestStep.targetNodeId,
+      sourceLabel: sourceNode?.content ?? strongestStep.pathLabel.split(" → ")[0] ?? "source claim",
+      targetLabel: targetNode?.content ?? strongestStep.pathLabel.split(" → ")[1] ?? "downstream claim",
+      beforeConfidence: strongestStep.baseConfidence,
+      afterConfidence: strongestStep.propagatedConfidence,
+      delta: strongestStep.delta,
+      reasoning: strongestStep.reasoning,
+    };
+  }, [nodesById, selectedPropagation]);
   const selectedKnowledgeSurface = useMemo(
     () => knowledgeSurface(selectedGraphNode?.node ?? null, selectedGenealogy),
     [selectedGenealogy, selectedGraphNode?.node],
@@ -2538,6 +2571,66 @@ export function ThoughtMapWorkspace({
 
               {selectedPropagation ? (
                 <>
+                  {selectedPropagationImplication ? (
+                    <div className="mt-4 rounded-[18px] border border-[#e0cfa8] bg-[#fffaf0] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Propagated implication</p>
+                      <h4 className="mt-2 text-lg font-semibold text-[var(--ink)]">
+                        Because you changed {selectedPropagationImplication.sourceLabel.slice(0, 72)}
+                        {selectedPropagationImplication.sourceLabel.length > 72 ? "…" : ""}, {selectedPropagationImplication.targetLabel.slice(0, 72)}
+                        {selectedPropagationImplication.targetLabel.length > 72 ? "…" : ""} moved from{" "}
+                        {formatScore(selectedPropagationImplication.beforeConfidence)} to {formatScore(selectedPropagationImplication.afterConfidence)}.
+                      </h4>
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                        Penny is surfacing the downstream update instead of hiding it. Do you accept this implication, or do you want to argue that the propagation is too strong?
+                      </p>
+                      {propagationAcknowledged[selectedPropagationImplication.targetNodeId] ? (
+                        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#355b32]">
+                          Implication accepted
+                        </p>
+                      ) : null}
+                      <div className="mt-4 space-y-3">
+                        <textarea
+                          className="min-h-[84px] w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                          placeholder="If the propagation is too strong, explain why the downstream confidence should stay higher."
+                          value={confidenceOverrideReasons[selectedPropagationImplication.targetNodeId] ?? ""}
+                          onChange={(event) =>
+                            setConfidenceOverrideReasons((current) => ({
+                              ...current,
+                              [selectedPropagationImplication.targetNodeId]: event.target.value,
+                            }))
+                          }
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="secondary"
+                            className="px-3 py-2 text-xs"
+                            onClick={() =>
+                              setPropagationAcknowledged((current) => ({
+                                ...current,
+                                [selectedPropagationImplication.targetNodeId]: "accepted",
+                              }))
+                            }
+                          >
+                            Accept implication
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            className="px-3 py-2 text-xs"
+                            disabled={isPending || (confidenceOverrideReasons[selectedPropagationImplication.targetNodeId] ?? "").trim().length < 8}
+                            onClick={() =>
+                              recordConfidenceOverride(
+                                selectedPropagationImplication.sourceNodeId,
+                                selectedPropagationImplication.targetNodeId,
+                                confidenceOverrideReasons[selectedPropagationImplication.targetNodeId] ?? "",
+                              )
+                            }
+                          >
+                            Argue propagation is too strong
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Badge className="bg-[#d9ead8] text-[#355b32]">
                       Seed {formatScore(selectedPropagation.seedConfidence)}
