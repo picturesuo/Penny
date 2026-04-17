@@ -180,6 +180,10 @@ The visual and interaction model should feel like a built city, not a notes dump
 - Stage tracking, question budget, weakest-assumption pressure, and logic-only fallback
 - Session persistence and resume flow
 - Founder Concept Brief generation
+- Capture form with probability, provenance, stakes, dependency notes, and assumption suggestions
+- Workspace surfaces for dialectic rounds, synthesis gates, move query, old selves, belief genealogy, and confidence drift
+- Curriculum and education surface for student mode, instructor views, classroom shape views, and curriculum packs
+- Shapes dashboard with Brier trajectory, domain calibration, private bets, Bayesian updates, and post-mortems
 - Prompt templates under [`prompts/`](/Users/bensuo/Desktop/penny/prompts)
 
 ## Local setup
