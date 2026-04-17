@@ -25,6 +25,7 @@ The underlying product bet is psychology-backed:
 - Metacognition should be visible and measurable, not hidden.
 - Confidence decay and revisitation should keep beliefs current.
 - Calibration should improve over time, not just perceived speed.
+- The most important flagship addition is an old selves view that shows past beliefs and confidence levels over time, turning the moves layer into something users can feel and share.
 
 The design aim is an invested sparring partner, not a sycophantic assistant and not a brutal critic.
 

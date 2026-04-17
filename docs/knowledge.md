@@ -83,6 +83,8 @@
 - `user`: Three especially important additions are an adversarial pass on the overall structure, an optional peer-simulation mode, and a twin-check mode that produces the strongest version of the user’s thinking for calibration.
 - `user`: The system only becomes real if the loop closes fast enough to feel, the precedent corpus is actually maintained and growing, and the lens meaningfully changes outputs.
 - `user`: Near-term architectural work should define what a learning recommendation contains, what the user does with it, how success is measured, and what gets captured in the moves layer so the self-iterating second brain has a durable substrate.
+- `user`: The single addition to push hardest for is the old selves feature, which shows users their past beliefs and confidence levels over time and makes the moves layer emotionally legible, shareable, and product-defining.
+- `user`: Old selves should turn the moves layer into visible value, create resonant moments when users see how their thinking changed, and justify the storage and modeling cost of tracking moves.
 
 ## Psychology-Backed Design
 - `user`: Penny’s design should be grounded in learning science, metacognition research, judgment research, and cognitive load theory rather than generic AI-product assumptions.
