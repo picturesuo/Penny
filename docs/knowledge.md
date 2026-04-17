@@ -12,6 +12,9 @@
 - `user`: Users should both revisit/refine existing maps repeatedly and open new ones often, more like a high-intensity ChatGPT workflow.
 - `user`: Near-term priority is frontend hierarchy and polish because the workspace currently feels chopped.
 - `user`: For multi-part code tasks, each distinct finished change should be committed and pushed before starting the next distinct change, so the repo records each completed subtask as its own publishable step.
+- `user`: When work moves from one file to another, commit and push the finished file before starting the next one, using `scripts/codex-commit.sh --each-path <paths...>` so each file gets its own short commit message and push.
+- `user`: Commits must stay non-private, must not stage personal, secret, scratch, or machine-specific files, and should push straight to the configured GitHub remote only; if no safe remote exists, fail instead of guessing.
+- `user`: Updated workflow rule: when work moves from one file to another, commit and push the finished file before starting the next one; use `scripts/codex-commit.sh --each-path <paths...>` so each file gets its own short commit message and push; keep commits non-private and do not stage personal, secret, scratch, or machine-specific files; push straight to the configured GitHub remote only and fail instead of guessing if no safe remote exists.
 - `user`: The capture layer should make the root claim explicit with a probability slider defaulting to 60%, optional resolution date, provenance, stakes tags, dependency notes, and a claim status lifecycle selector.
 - `user`: Probability on every claim is load-bearing because it unlocks calibration, revisit ranking, and shape confidence later.
 - `user`: Resolution date is high leverage because it makes claims eventually scorable instead of permanently vague.
