@@ -1531,6 +1531,62 @@ export function ThoughtMapWorkspace({
         .sort((a, b) => a.roundIndex - b.roundIndex || a.createdAt.getTime() - b.createdAt.getTime()),
     [map.events],
   );
+  const selectedPrecedentAdherence = useMemo(() => {
+    if (!selectedPrecedentSummary) {
+      return null;
+    }
+
+    const evidenceText = [
+      selectedGraphNode?.node.content ?? "",
+      ...dialecticRoundEvents.flatMap((event) => [event.prompt, event.response, event.why]),
+      selectedPrecedentSummary.name,
+      selectedPrecedentSummary.failureMode,
+      selectedPrecedentSummary.failureTrajectory,
+      selectedPrecedentSummary.whatKilledIt,
+      selectedPrecedentSummary.killAssumption,
+      selectedPrecedentSummary.structuralLesson,
+      ...selectedPrecedentSummary.loadBearingAssumptions,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    const addressedFailureModes = selectedPrecedentSummary.failureTypeTags.filter((tag) => {
+      const normalizedTag = tag.toLowerCase().replaceAll("-", " ");
+      const compactTag = tag.toLowerCase().replaceAll("-", "");
+      const tokens = normalizedTag.split(/\s+/).filter((token) => token.length >= 4);
+
+      return (
+        evidenceText.includes(normalizedTag) ||
+        evidenceText.includes(compactTag) ||
+        tokens.some((token) => evidenceText.includes(token))
+      );
+    });
+    const remainingFailureModes = selectedPrecedentSummary.failureTypeTags.filter((tag) => !addressedFailureModes.includes(tag));
+    const addressedAssumptions = selectedPrecedentSummary.loadBearingAssumptions.filter((assumption) => {
+      const fragments = assumption
+        .toLowerCase()
+        .replaceAll(/[^a-z0-9]+/g, " ")
+        .split(/\s+/)
+        .filter((fragment) => fragment.length >= 5);
+
+      return fragments.some((fragment) => evidenceText.includes(fragment));
+    });
+
+    return {
+      addressedFailureModes,
+      remainingFailureModes,
+      addressedAssumptions,
+      summary:
+        addressedFailureModes.length || addressedAssumptions.length
+          ? `You have started to answer ${selectedPrecedentSummary.name}'s failure profile, but some structural pressure is still open.`
+          : `You have not yet addressed the specific failure modes that killed ${selectedPrecedentSummary.name}.`,
+      nextPrompt: remainingFailureModes.length
+        ? `Respond directly to ${remainingFailureModes[0]}: what in your claim keeps that failure from happening here?`
+        : addressedAssumptions.length
+          ? "You have addressed the named failure types. Now check whether the load-bearing assumptions themselves still hold."
+          : "Take one specific failure mode and answer it in the context of your current claim, not in the abstract.",
+    };
+  }, [dialecticRoundEvents, selectedGraphNode?.node.content, selectedPrecedentSummary]);
   const challengeCalibrationEvents = useMemo(
     (): ChallengeCalibrationEntry[] =>
       map.events
@@ -2871,12 +2927,59 @@ export function ThoughtMapWorkspace({
                       Which of these surviving structures is closest to what you’re trying to do?
                     </p>
                   </>
-                ) : (
+              ) : (
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
                     Select a failure precedent to see what survived the same shape.
                   </p>
                 )}
               </div>
+            </div>
+
+            <div className="rounded-[20px] bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Precedent adherence tracking</p>
+              {selectedPrecedentSummary ? (
+                <>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{selectedPrecedentAdherence?.summary}</p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                    Penny checks whether your current replies actually address the failure modes from {selectedPrecedentSummary.name}, not just whether the case sounded familiar.
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Addressed</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {selectedPrecedentAdherence?.addressedFailureModes.length ? (
+                          selectedPrecedentAdherence.addressedFailureModes.map((tag) => (
+                            <Badge key={`${selectedPrecedentSummary.id}-addressed-${tag}`} className="bg-[#d9ead8] text-[#355b32]">
+                              {tag}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge className="bg-white text-[var(--ink)]">No precedent mode addressed yet</Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Still open</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {selectedPrecedentAdherence?.remainingFailureModes.length ? (
+                          selectedPrecedentAdherence.remainingFailureModes.map((tag) => (
+                            <Badge key={`${selectedPrecedentSummary.id}-remaining-${tag}`} className="bg-[#fff6ed] text-[#8b4d1f]">
+                              {tag}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge className="bg-white text-[var(--ink)]">All tagged failure modes have been touched</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{selectedPrecedentAdherence?.nextPrompt}</p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                  Select a failure precedent to see whether the current critique actually addresses the same collapse pattern.
+                </p>
+              )}
             </div>
 
             <div className="rounded-[20px] bg-white p-4">
