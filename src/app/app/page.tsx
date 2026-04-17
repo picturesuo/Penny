@@ -122,6 +122,38 @@ export default async function DashboardPage() {
         </p>
       </Card>
 
+      <Card className="p-6 sm:p-8">
+        <div className="max-w-3xl">
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Cross-project transfer</p>
+          <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
+            Shapes learned in one map carry into the next one.
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
+            Penny derives shapes across all maps, so the next project starts with a sharper stress-test lens instead of a blank slate. The user gets better across contexts, not just within one workspace.
+          </p>
+        </div>
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          {shapes.length ? (
+            shapes.map((shape) => (
+              <div key={shape.id} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="bg-white text-[var(--ink)]">{shape.kind}</Badge>
+                  <Badge className="bg-[#e7defa] text-[#5c4c88]">{shape.sourceMapIds.length} maps</Badge>
+                </div>
+                <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{shape.label}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{shape.summary}</p>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5 lg:col-span-3">
+              <p className="text-sm leading-7 text-[var(--muted-ink)]">
+                No reusable shapes yet. Once a few maps exist, Penny will start carrying the strongest patterns into new projects.
+              </p>
+            </div>
+          )}
+        </div>
+      </Card>
+
       <ShapeDashboard shapes={shapes} calibration={calibration} initialFeedback={{}} />
 
       {mapCards.length ? (
