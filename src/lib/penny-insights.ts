@@ -77,6 +77,39 @@ export interface ConfidenceDecaySnapshot {
   isFoundational: boolean;
 }
 
+export interface ClaimCaptureSnapshot extends ClaimCaptureMetadata {
+  mapId: string;
+  title: string;
+  updatedAt: Date;
+}
+
+export interface InheritedClaimSnapshot extends ClaimCaptureSnapshot {
+  sourceLabel: string;
+  scrutinyNote: string;
+}
+
+export interface DevilAdvocateReceipt {
+  thinker: string;
+  position: string;
+  precedent: string;
+  lesson: string;
+}
+
+export interface ContradictionCascadeStep {
+  nodeId: string;
+  depth: number;
+  label: string;
+  content: string;
+  reason: string;
+}
+
+export interface SessionRhythmSnapshot {
+  depletionScore: number;
+  shouldStop: boolean;
+  note: string;
+  signals: string[];
+}
+
 export type CalibrationDomain = "technical" | "market" | "operational" | "research" | "people" | "general";
 
 export interface ForecastClaimSnapshot {
@@ -305,7 +338,7 @@ function clampConfidence(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetadata | null {
+export function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetadata | null {
   const match = rawThought.match(/## Claim capture([\s\S]*?)\n## Raw thought/);
 
   if (!match) {
@@ -379,6 +412,36 @@ function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetadata | n
   return metadata as ClaimCaptureMetadata;
 }
 
+export function captureSnapshotForMap(map: ThoughtMapModel): ClaimCaptureSnapshot | null {
+  const capture = parseClaimCaptureMetadata(map.rawThought);
+
+  if (!capture) {
+    return null;
+  }
+
+  return {
+    mapId: map.id,
+    title: map.title,
+    updatedAt: map.updatedAt,
+    ...capture,
+  };
+}
+
+export function inheritedClaimSnapshots(maps: ThoughtMapModel[]): InheritedClaimSnapshot[] {
+  return maps
+    .map((map) => captureSnapshotForMap(map))
+    .filter((snapshot): snapshot is ClaimCaptureSnapshot => snapshot !== null && snapshot.provenance === "inherited")
+    .map((snapshot) => ({
+      ...snapshot,
+      sourceLabel: snapshot.provenanceDetail || "Inherited from another person",
+      scrutinyNote:
+        snapshot.provenanceDetail.trim().length > 0
+          ? `Level up scrutiny on ${snapshot.provenanceDetail}.`
+          : "Level up scrutiny because the belief was inherited from someone else.",
+    }))
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+}
+
 function classifyCalibrationDomain(text: string): CalibrationDomain {
   if (/(market|distribution|pricing|buyer|customer acquisition|adoption|retention)/i.test(text)) {
     return "market";
@@ -436,6 +499,67 @@ function bayesianShift(params: { confidence: number; evidenceSignal: number; out
   }
 
   return Math.max(-10, Math.min(10, Math.round(delta / 6)));
+}
+
+const DEVILS_ADVOCATE_RECEIPTS: Array<{
+  thinker: string;
+  position: string;
+  precedent: string;
+  lesson: string;
+  riskTags: string[];
+}> = [
+  {
+    thinker: "Charlie Munger",
+    position: "Invert first: incentives and obvious failure modes matter more than elegant narratives.",
+    precedent: "Juicero and WeWork both show how expensive stories collapse when economics and incentives are not load-bearing.",
+    lesson: "If the claim ignores incentives or unit economics, assume the failure will show up there first.",
+    riskTags: ["operations", "money", "dependency"],
+  },
+  {
+    thinker: "Daniel Kahneman",
+    position: "Confidence is not accuracy, and intuition needs calibration under uncertainty.",
+    precedent: "Theranos shows how strong conviction can outrun evidence until the measurement layer is exposed.",
+    lesson: "When confidence is high and evidence is thin, demand a smaller update and a clearer falsifier.",
+    riskTags: ["evidence", "confidence", "research"],
+  },
+  {
+    thinker: "Clay Christensen",
+    position: "Incumbents often miss low-end or adjacent disruption because the first buyers are not the obvious ones.",
+    precedent: "Quibi and Clubhouse both chased attention before durable behavior changed, then stalled when novelty faded.",
+    lesson: "If the user side of the bet is too easy to admire and too hard to sustain, ask what repeats after novelty.",
+    riskTags: ["adoption", "network effects", "market"],
+  },
+  {
+    thinker: "Elinor Ostrom",
+    position: "Commons can work, but only when governance, local rules, and repeated interaction are designed deliberately.",
+    precedent: "Google Glass shows what happens when a technically neat idea collides with social norm friction.",
+    lesson: "If the norm layer is load-bearing, a pure product argument is not enough.",
+    riskTags: ["norm", "social", "political"],
+  },
+];
+
+export function buildDevilsAdvocateReceipts(node: ThoughtNodeModel | null): DevilAdvocateReceipt[] {
+  if (!node) {
+    return [];
+  }
+
+  const text = node.content.toLowerCase();
+  const tags = new Set(riskProfile(node));
+
+  return DEVILS_ADVOCATE_RECEIPTS.map((receipt) => {
+    let score = 0;
+
+    if (receipt.riskTags.some((tag) => tags.has(tag))) score += 3;
+    if (receipt.thinker === "Daniel Kahneman" && (node.scores?.confidence ?? 0) > 0.7) score += 2;
+    if (receipt.thinker === "Clay Christensen" && /market|adoption|distribution|retention/.test(text)) score += 2;
+    if (receipt.thinker === "Elinor Ostrom" && tags.has("norm")) score += 2;
+    if (receipt.thinker === "Charlie Munger" && (tags.has("operations") || tags.has("dependency"))) score += 2;
+
+    return { ...receipt, score };
+  })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2)
+    .map(({ score: _score, ...receipt }) => receipt);
 }
 
 function shapeVerdict(confidence: number, supportCount: number): ShapeVerdict {
@@ -523,14 +647,15 @@ export function retrievePrecedentsForNode(node: ThoughtNodeModel, limit = 3): Pr
     .map((item) => item.precedent);
 }
 
-export function buildConfidenceDecaySnapshot(node: ThoughtNodeModel): ConfidenceDecaySnapshot {
+export function buildConfidenceDecaySnapshot(node: ThoughtNodeModel, dependentsCount = 0): ConfidenceDecaySnapshot {
   const untouchedDays = Math.max(0, Math.floor((Date.now() - node.updatedAt.getTime()) / (1000 * 60 * 60 * 24)));
   const isFoundational = node.kind === "root" || node.kind === "core_claim" || node.kind === "why_it_matters";
-  const revisitThresholdDays = isFoundational ? 9 : 21;
+  const foundationPressure = Math.min(6, Math.floor(dependentsCount / 2));
+  const revisitThresholdDays = isFoundational ? Math.max(4, 9 - foundationPressure) : Math.max(10, 21 - Math.floor(dependentsCount / 3));
   const decayMultiplier =
     untouchedDays <= revisitThresholdDays
       ? 1
-      : Math.max(0.45, 1 - (untouchedDays - revisitThresholdDays) * (isFoundational ? 0.05 : 0.03));
+      : Math.max(0.35, 1 - (untouchedDays - revisitThresholdDays) * (isFoundational ? 0.08 : 0.03));
   const confidence = node.scores?.confidence ?? null;
 
   return {
@@ -540,6 +665,90 @@ export function buildConfidenceDecaySnapshot(node: ThoughtNodeModel): Confidence
     decayMultiplier,
     decayedConfidence: confidence == null ? null : Math.max(0, Math.round(confidence * decayMultiplier * 100) / 100),
     isFoundational,
+  };
+}
+
+export function traceContradictionCascade(nodes: ThoughtNodeModel[], nodeId: string): ContradictionCascadeStep[] {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const root = byId.get(nodeId);
+
+  if (!root) {
+    return [];
+  }
+
+  const visited = new Set<string>();
+  const queue: Array<{ node: ThoughtNodeModel; depth: number }> = [{ node: root, depth: 0 }];
+  const steps: ContradictionCascadeStep[] = [];
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current || visited.has(current.node.id)) {
+      continue;
+    }
+
+    visited.add(current.node.id);
+    const label = current.depth === 0 ? "foundation changed" : current.node.kind.replaceAll("_", " ");
+    const reason =
+      current.depth === 0
+        ? "This is the claim whose change can cascade through the map."
+        : current.node.supersedesNodeId === nodeId
+          ? "This branch directly replaces the foundation."
+          : current.node.parentId === nodeId
+            ? "This branch depends directly on the foundation."
+            : "This branch is downstream and should be revisited.";
+
+    steps.push({
+      nodeId: current.node.id,
+      depth: current.depth,
+      label,
+      content: current.node.content,
+      reason,
+    });
+
+    const dependents = nodes.filter(
+      (candidate) =>
+        candidate.parentId === current.node.id ||
+        candidate.supersedesNodeId === current.node.id ||
+        candidate.parentId === root.id && current.depth === 0,
+    );
+
+    for (const dependent of dependents) {
+      if (!visited.has(dependent.id)) {
+        queue.push({ node: dependent, depth: current.depth + 1 });
+      }
+    }
+  }
+
+  return steps.slice(0, 10);
+}
+
+export function buildSessionRhythmSnapshot(map: ThoughtMapModel): SessionRhythmSnapshot {
+  const activeNodes = map.nodes.filter((node) => node.nodeStatus !== "superseded");
+  const unresolved = [
+    ...(map.graphSnapshot?.weakestNodeIds.length ?? 0 ? map.graphSnapshot?.weakestNodeIds : []),
+    ...(map.graphSnapshot?.criticalDependencyIds.length ?? 0 ? map.graphSnapshot?.criticalDependencyIds : []),
+    ...map.founderBriefReadiness.missingRequirements,
+  ];
+  const weakNodes = activeNodes.filter(
+    (node) =>
+      (node.scores?.evidence ?? 1) < 0.55 ||
+      (node.scores?.dependencyRisk ?? 0) > 0.55 ||
+      (node.psychology?.falsificationCoverageScore ?? 1) < 0.55,
+  );
+  const depletionScore = Math.min(100, unresolved.length * 12 + weakNodes.length * 9 + Math.max(0, activeNodes.length - 10) * 2);
+  const shouldStop = depletionScore >= 68;
+
+  return {
+    depletionScore,
+    shouldStop,
+    note: shouldStop
+      ? "You are likely past the useful edge. Stop, capture the artifact, and come back with a fresher lens."
+      : "You still have room to press the map, but keep the session short if the load-bearing branches keep piling up.",
+    signals: [
+      `${unresolved.length} unresolved gaps`,
+      `${weakNodes.length} weak or fragile nodes`,
+      `${activeNodes.length} active nodes`,
+    ],
   };
 }
 
@@ -715,11 +924,14 @@ export function buildClaimMoveHistory(
 
       if (event.eventType === "shape_feedback") {
         const verdict = typeof event.payload?.verdict === "string" ? String(event.payload.verdict) : "feedback";
+        const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
 
         return {
           id: event.id,
           label: "Shape feedback",
-          summary: `The user marked the associated shape as ${verdict}.`,
+          summary: reasoning
+            ? `The user marked the associated shape as ${verdict} and said: ${reasoning.slice(0, 120)}${reasoning.length > 120 ? "…" : ""}`
+            : `The user marked the associated shape as ${verdict}.`,
           createdAt: event.createdAt,
           accent: "feedback",
         } satisfies ClaimMoveHistoryEntry;
@@ -759,6 +971,7 @@ export function shapeFeedbackPayload(params: {
   verdict: PennyShapeFeedback;
   shapeLabel: string;
   source: string;
+  reasoning: string;
   nodeId?: string | null;
 }) {
   return {
@@ -766,6 +979,7 @@ export function shapeFeedbackPayload(params: {
     verdict: params.verdict,
     shapeLabel: params.shapeLabel,
     source: params.source,
+    reasoning: params.reasoning,
     nodeId: params.nodeId ?? null,
   };
 }
