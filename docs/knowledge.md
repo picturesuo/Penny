@@ -130,6 +130,7 @@
 - `user`: Peer simulation should let the user choose a named audience mode such as skeptical investor or thesis advisor, and Penny should critique in that voice using precedent for how that audience attacks similar structures.
 - `user`: Norm-challenge scrutiny should hold firm on whether a challenged norm is actually load-bearing and should articulate the strongest case for the norm before entertaining the counter-case.
 - `user`: Confidence decay should surface untouched beliefs for revisit after a threshold, with foundational beliefs decaying faster because their failure cascades through the rest of the model.
+- `user`: The memory and time layer should unify old selves, genealogy, inheritance, contradiction cascade tracing, aging foundations, cross-project transfer, and session rhythm into one compounding system.
 - `user`: Interleaved stress-testing should mix related claims across a queue rather than drilling one claim sequentially, because discrimination is stronger than pattern-matching.
 - `user`: Calibration and forecasting should include Brier scoring on resolved claims, private bets with yourself, Bayesian update prompts, and probability calibration feedback by domain.
 - `user`: Brier scoring should be visible as a measurable improvement signal on resolved claims, not hidden in the background.
@@ -161,6 +162,13 @@
 - `user`: The single addition to push hardest for is the old selves feature, which shows users their past beliefs and confidence levels over time and makes the moves layer emotionally legible, shareable, and product-defining.
 - `user`: Old selves should turn the moves layer into visible value, create resonant moments when users see how their thinking changed, and justify the storage and modeling cost of tracking moves.
 - `user`: Belief genealogy should show where a belief came from, what depends on it, and whether its source has been contradicted.
+- `user`: Old selves expansion should go beyond a simple timeline and show confidence deltas across periods, which shapes were active when the claim was made, and what precedent Penny would have shown then versus now.
+- `user`: Belief genealogy should pair with provenance data so the user can see the origin of a belief, the claims that depend on it, and whether the source has been contradicted since.
+- `user`: Inheritance markers should explicitly tag claims received from someone else and raise default scrutiny on that source chain.
+- `user`: Contradiction cascade tracing should walk forward through dependents when a foundational claim changes so the user can see what else needs revisiting.
+- `user`: Aging foundations monitoring should decay base claims in large dependency structures more aggressively because their failure cascades outward.
+- `user`: Cross-project shape transfer should let shapes learned in one project inform stress-testing in the next so the user gets sharper across contexts, not only within a single map.
+- `user`: Session rhythm memory should remember where the user left off, what has aged, and what they still believe when they return after time away.
 - `user`: The shapes dashboard should be a periodic surface for patterns the system has learned about the user’s thinking, with each shape confirmable, rejectable, and refinable.
 - `user`: In-context shape callouts should name the active pattern inside a critique so personalization feels honest rather than mysterious.
 - `user`: The old-selves view should surface a claim’s confidence and content over time and make the moves layer emotionally legible.
