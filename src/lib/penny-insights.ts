@@ -1773,8 +1773,6 @@ export function buildMapTimeline(map: ThoughtMapModel): MapTimelineSnapshot {
     });
   }
 
-  entries.push(...eventEntries);
-
   const sortedEntries = entries.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   return {
