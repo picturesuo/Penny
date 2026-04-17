@@ -973,6 +973,40 @@ export function ThoughtMapWorkspace({
   const selectedCritiqueStrength = critiqueStrengthLabel(selectedGraphNode?.node.scores?.strength ?? null);
   const selectedPrecedents = selectedGraphNode ? retrievePrecedentsForNode(selectedGraphNode.node, lens) : [];
   const selectedPrecedentSummary = selectedPrecedents[0] ?? null;
+  const critiqueArgument = useMemo(() => {
+    const targetContent = selectedGraphNode?.node.content ?? "the active claim";
+    const seedConfidence = selectedGraphNode?.node.scores?.confidence != null ? formatScore(selectedGraphNode.node.scores.confidence) : "n/a";
+    const parentLabel = selectedGraphNode?.node.parentId ? nodesById.get(selectedGraphNode.node.parentId)?.content ?? "its parent claim" : "no parent claim";
+    const axiomLabel = selectedArchaeologyAxiom?.content ?? parentLabel;
+    const downstreamCount = selectedGenealogy.dependents.length;
+    const precedentLabel = selectedPrecedentSummary
+      ? `${selectedPrecedentSummary.name} (${selectedPrecedentSummary.failureMode})`
+      : "no precedent case selected yet";
+    const shapeLabel = activeShapeCallout?.label ?? "no active shape";
+    const propagationStep = selectedPropagation?.cascade[0] ?? null;
+
+    return {
+      premise: `Penny starts from "${targetContent}" because it currently sits on ${downstreamCount} downstream claims and its seed confidence is ${seedConfidence}.`,
+      assumption: `The load-bearing assumption underneath it is "${axiomLabel}", which Penny treats as the quiet point where the dependency chain can fail.`,
+      pressure: propagationStep
+        ? `Propagation shows the strongest downstream pressure when ${propagationStep.pathLabel} drops from ${formatScore(propagationStep.baseConfidence)} to ${formatScore(propagationStep.propagatedConfidence)}.`
+        : `Penny has not yet computed a cascade step, so it explains the critique from the dependency structure and confidence score alone.`,
+      precedent: `Penny pulls ${precedentLabel} to ground the critique in a real failure trajectory instead of a hypothetical objection.`,
+      shape: `The active shape is ${shapeLabel}, so the critique also checks whether this is a recurring pattern in the user’s thinking.`,
+      conclusion:
+        "That combination means Penny is not just saying the claim is weak; it is explaining which dependency, precedent, and repeated user pattern make the critique load-bearing.",
+    };
+  }, [
+    activeShapeCallout?.label,
+    nodesById,
+    selectedArchaeologyAxiom?.content,
+    selectedGenealogy.dependents.length,
+    selectedGraphNode?.node.content,
+    selectedGraphNode?.node.parentId,
+    selectedGraphNode?.node.scores?.confidence,
+    selectedPropagation?.cascade,
+    selectedPrecedentSummary,
+  ]);
   const dialecticRoundEvents = useMemo(
     () =>
       map.events
@@ -1030,6 +1064,7 @@ export function ThoughtMapWorkspace({
         why: lastAction?.reasoning.graphAnalysis?.primaryGap
           ? `Failure type: ${lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")}`
           : "Failure type: not yet selected",
+        argument: critiqueArgument,
         responsePath: "defend / revise / absorb",
       },
       {
@@ -1044,6 +1079,22 @@ export function ThoughtMapWorkspace({
           : selectedPrecedentSummary
             ? `Precedent source: ${selectedPrecedentSummary.name} · ${selectedPrecedentSummary.domain}`
             : "Precedent source: none selected yet",
+        argument: {
+          premise: "The user’s response becomes a move, so Penny reads the reply as new evidence instead of replaying the original attack.",
+          assumption: lastResponse
+            ? `The response "${lastResponse}" still leaves an open causal gap, and Penny attacks that gap instead of the old one.`
+            : "Until the user responds, Penny keeps the critique open and waits for a real move.",
+          pressure: selectedPrecedentSummary
+            ? `The next attack is tuned by ${selectedPrecedentSummary.name} and its failure mode ${selectedPrecedentSummary.failureMode}.`
+            : "Without precedent, Penny explains the critique through the current dependency chain alone.",
+          precedent: selectedPrecedentSummary
+            ? `This round inherits the precedent lesson from ${selectedPrecedentSummary.name}, so the critique can move from abstract concern to concrete failure pattern.`
+            : "No precedent case is attached yet, so the critique remains open-ended.",
+          shape: activeShapeCallout
+            ? `The current shape callout, ${activeShapeCallout.label}, tells Penny which recurring thinking pattern to test for in the reply.`
+            : "No active shape has been selected yet, so the response is judged only against the claim structure.",
+          conclusion: "The point of the round is not to repeat the opening attack. It is to explain why the user’s response changes what Penny should worry about next.",
+        },
         responsePath: "defend / revise / absorb",
       },
       {
@@ -1057,6 +1108,23 @@ export function ThoughtMapWorkspace({
               ? `Penny escalates using ${selectedPrecedentSummary.failureMode} precedent or pivots to the next risk angle.`
               : "Penny escalates to a stronger critique or pivots to a different angle of attack.",
         why: activeShapeCallout ? `Shape pattern: ${activeShapeCallout.label}` : "Shape pattern: no active pattern yet",
+        argument: {
+          premise: "By round three, Penny should have enough response history to either escalate or pivot without repeating itself.",
+          assumption: priorResponse || lastResponse
+            ? `The remaining weak point is whatever the user's earlier responses did not resolve: ${priorResponse ?? lastResponse}.`
+            : "With no prior response, the critique remains a first-pass structural attack.",
+          pressure: selectedPropagation?.cascade.length
+            ? `The cascade shows the sharpest remaining pressure through ${selectedPropagation.cascade[0]?.pathLabel}, so Penny can explain why the next attack lands there.`
+            : "No cascade step is available yet, so Penny falls back to the strongest dependency and precedent signals.",
+          precedent: selectedPrecedentSummary
+            ? `The strongest precedent remains ${selectedPrecedentSummary.name}, which keeps the explanation tied to a concrete historical failure path.`
+            : "No precedent is selected yet, so the escalation is driven by structure and shape history only.",
+          shape: activeShapeCallout
+            ? `The active shape, ${activeShapeCallout.label}, tells Penny whether to deepen the same critique or pivot to a different pattern of concern.`
+            : "No active shape is available yet, so Penny defaults to the structural dependency chain.",
+          conclusion:
+            "This is the point where the critique should feel like an explanation of the argument's failure surface, not a repetition of an earlier warning.",
+        },
         responsePath: "future rounds inherit prior responses",
       },
     ] as const;
@@ -1067,6 +1135,8 @@ export function ThoughtMapWorkspace({
     selectedCritiqueStrength.label,
     selectedGraphNode,
     selectedPrecedentSummary,
+    critiqueArgument,
+    selectedPropagation?.cascade,
   ]);
   const claimDependencyGraph = useMemo(() => buildClaimDependencyGraph(map), [map]);
   const selectedReceiptVoices = useMemo(
@@ -2127,7 +2197,32 @@ export function ThoughtMapWorkspace({
               <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{round.prompt}</p>
               <details className="mt-3 rounded-[18px] bg-white p-4">
                 <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">Why this critique</summary>
-                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{round.why}</p>
+                <div className="mt-3 space-y-3">
+                  <p className="text-sm leading-6 text-[var(--muted-ink)]">{round.why}</p>
+                  <div className="rounded-[16px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Argument as explanation</p>
+                    <div className="mt-3 space-y-2">
+                      <p className="text-sm leading-6 text-[var(--ink)]">
+                        <span className="font-medium">Premise:</span> {round.argument.premise}
+                      </p>
+                      <p className="text-sm leading-6 text-[var(--ink)]">
+                        <span className="font-medium">Assumption:</span> {round.argument.assumption}
+                      </p>
+                      <p className="text-sm leading-6 text-[var(--ink)]">
+                        <span className="font-medium">Pressure:</span> {round.argument.pressure}
+                      </p>
+                      <p className="text-sm leading-6 text-[var(--ink)]">
+                        <span className="font-medium">Precedent:</span> {round.argument.precedent}
+                      </p>
+                      <p className="text-sm leading-6 text-[var(--ink)]">
+                        <span className="font-medium">Shape:</span> {round.argument.shape}
+                      </p>
+                      <p className="text-sm leading-6 text-[var(--ink)]">
+                        <span className="font-medium">Conclusion:</span> {round.argument.conclusion}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </details>
               <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{round.responsePath}</p>
               <textarea
