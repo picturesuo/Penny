@@ -12,6 +12,13 @@
 - `user`: Users should both revisit/refine existing maps repeatedly and open new ones often, more like a high-intensity ChatGPT workflow.
 - `user`: Near-term priority is frontend hierarchy and polish because the workspace currently feels chopped.
 - `user`: For multi-part code tasks, each distinct finished change should be committed and pushed before starting the next distinct change, so the repo records each completed subtask as its own publishable step.
+- `user`: The capture layer should make the root claim explicit with a probability slider defaulting to 60%, optional resolution date, provenance, stakes tags, dependency notes, and a claim status lifecycle selector.
+- `user`: Probability on every claim is load-bearing because it unlocks calibration, revisit ranking, and shape confidence later.
+- `user`: Resolution date is high leverage because it makes claims eventually scorable instead of permanently vague.
+- `user`: Provenance on every claim is load-bearing because it creates belief genealogy and lets the system apply differentiated scrutiny.
+- `user`: Stakes tagging is high leverage because it exposes what is at risk when a claim is wrong.
+- `user`: Dependency information is load-bearing because it shows which claims hold up other claims and where scrutiny should concentrate.
+- `user`: Claim status should explicitly support open, stress-tested, resolved, abandoned, revisiting, and stale states so the system can query exit criteria and revisit paths.
 
 ## Product Vision & Direction
 - `user`: Penny is an ideation instrument, meaning a personal thinking system that captures raw ideas, stress-tests them against evidence and precedent, teaches the user what they do not understand at the moment they need it, and reflects thinking patterns back to the user so learning compounds over time.
@@ -24,6 +31,7 @@
 - `user`: The three outputs a user should leave with are a structured result, real learning, and clearer self-knowledge.
 - `user`: The data model should treat `Claims`, `Moves`, and `Shapes` as first-class layers.
 - `user`: `Claims` are the nodes: beliefs, evidence, provenance, confidence, and status.
+- `user`: The capture form should collect the root claim with a normalized metadata envelope so the same raw thought also carries confidence, resolution timing, provenance, stakes, dependencies, and status.
 - `user`: `Moves` are the history of what the user did with claims, including stress tests, revisions, learnings, and overrides; this is the key substrate for self-iteration.
 - `user`: `Shapes` are emergent thinking patterns derived from moves over time, and they should be visible to the user as metacognitive feedback.
 - `user`: Key mechanisms include failure-type routing, teach-back over summary, disagreement as signal, confidence decay, and surfacing shapes back to the user.
