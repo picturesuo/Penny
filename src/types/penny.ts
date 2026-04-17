@@ -17,6 +17,7 @@ export type ConversationKind =
   | "challenge"
   | "answer"
   | "brief"
+  | "reflection"
   | "system";
 
 export interface ConversationMessage {
