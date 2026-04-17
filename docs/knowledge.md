@@ -266,6 +266,11 @@
 - `user`: Contradiction cascade preview should appear at revision time so users can see the downstream structural debt they are incurring.
 - `user`: Provenance tracing should show the original source, capture session, and the shapes Penny knew at the time the belief was formed.
 - `user`: Inherited-claim markers should render with a distinct visual treatment and trigger automatic extra scrutiny.
+- `user`: The aesthetic and feeling of Brain should include a time-lapse of the map so users can watch claims appear, relationships form, stress-tests resolve, and shapes emerge over weeks and months.
+- `user`: Seasonal views should snapshot the map at the end of each month, quarter, or year so users can compare me-then to me-now structurally.
+- `user`: Shape evolution visualization should show when each shape was first detected, how its confidence changed, and which moves strengthened or weakened it.
+- `user`: Sphere-level health metrics should gently indicate how alive each sphere is without turning the product into a dashboard.
+- `user`: Dead zones should surface long-ignored clusters or claims so the graph does not accrete invisible cruft.
 - `user`: The shapes dashboard should be a periodic surface for patterns the system has learned about the user’s thinking, with each shape confirmable, rejectable, and refinable.
 - `user`: In-context shape callouts should name the active pattern inside a critique so personalization feels honest rather than mysterious.
 - `user`: The old-selves view should surface a claim’s confidence and content over time and make the moves layer emotionally legible.
