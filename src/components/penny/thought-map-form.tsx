@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpenText } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   CLAIM_PROVENANCES,
@@ -13,6 +14,7 @@ import {
   type ClaimStatus,
   type CreateThoughtMapInput,
 } from "@/types/thought-map";
+import { extractAssumptionSnapshot } from "@/lib/thought-map-generation";
 
 const STARTER_IDEAS = [
   "Compliance teams at mid-sized fintechs need a faster way to turn regulatory changes into concrete action plans without hiring more analysts.",
@@ -55,27 +57,6 @@ function prettyLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
-function suggestAssumptions(rawThought: string) {
-  const text = rawThought.toLowerCase();
-  if (!text.trim()) {
-    return [] as string[];
-  }
-
-  const prompts = [
-    /\b(can|could|will|would|should|must)\b/.test(text) ? "What must be true for this to work?" : null,
-    /\b(faster|cheaper|better|more|less)\b/.test(text) ? "What evidence would show the tradeoff is real?" : null,
-    /\b(ai|automation|workflow|tool|product)\b/.test(text) ? "What adoption assumption is most load-bearing?" : null,
-    /\b(student|teacher|classroom)\b/.test(text) ? "What behavior change is required for this to stick?" : null,
-    /\b(scale|market|distribution|launch)\b/.test(text) ? "What distribution assumption could break this?" : null,
-  ].filter((value): value is string => value != null);
-
-  if (prompts.length === 0) {
-    prompts.push("What is the load-bearing assumption here?");
-  }
-
-  return prompts.slice(0, 4);
-}
-
 export function ThoughtMapForm() {
   const router = useRouter();
   const [rawThought, setRawThought] = useState("");
@@ -98,7 +79,15 @@ export function ThoughtMapForm() {
   });
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const assumptionSuggestions = useMemo(() => suggestAssumptions(rawThought), [rawThought]);
+  const [assumptionVerdicts, setAssumptionVerdicts] = useState<Record<string, "accepted" | "rejected" | "refined">>({});
+  const [assumptionCorrections, setAssumptionCorrections] = useState<Record<string, string>>({});
+  const [focusedAssumptionId, setFocusedAssumptionId] = useState<string | null>(null);
+  const assumptionSnapshot = useMemo(() => extractAssumptionSnapshot(rawThought), [rawThought]);
+  const weakestAssumption = useMemo(
+    () =>
+      [...assumptionSnapshot.assumptions].sort((a, b) => a.confidence - b.confidence)[0] ?? null,
+    [assumptionSnapshot.assumptions],
+  );
   const confidenceChallenge =
     claim.confidence > 90
       ? "You’re committing to a very high confidence. What specifically would have to be true for you to revise down to 70%?"
@@ -365,6 +354,137 @@ export function ThoughtMapForm() {
           placeholder="Example: Founders will keep using a personal idea wiki only if it pressure-tests their notes instead of just storing them."
           className="w-full rounded-[28px] border border-black/10 bg-[var(--panel)] px-5 py-5 text-base leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
         />
+
+        {rawThought.trim() ? (
+          <div className="rounded-[28px] border border-[#d7c06c] bg-[#fff9df] p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-[#6f5612]">Assumption extraction</p>
+                <h3 className="mt-1 text-xl font-semibold text-[#5a460d]">
+                  Penny thinks this is a {assumptionSnapshot.claimType} claim
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-[#6f5612]">
+                  Sharp extraction means specific assumptions, not generic ones. Penny is surfacing the scaffolding it thinks you were carrying implicitly.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge className="bg-white text-[#5a460d]">
+                  {assumptionSnapshot.claimTypeConfidence}% type confidence
+                </Badge>
+                <Badge className="bg-white text-[#5a460d]">
+                  {assumptionSnapshot.assumptions.length + 1} commitments
+                </Badge>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-full border border-[#d7c06c] bg-white px-3 py-2 text-xs uppercase tracking-[0.18em] text-[#6f5612] transition hover:border-[#b79412]"
+                onClick={() => {
+                  if (weakestAssumption) {
+                    setFocusedAssumptionId(weakestAssumption.text);
+                  }
+                }}
+              >
+                See weakest
+              </button>
+              <p className="text-sm leading-6 text-[#6f5612]">
+                You stated one claim. You are actually committing to {assumptionSnapshot.assumptions.length} unstated assumptions.
+              </p>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {assumptionSnapshot.assumptions.map((assumption, index) => {
+                const verdict = assumptionVerdicts[assumption.text];
+                const correction = assumptionCorrections[assumption.text] ?? "";
+                const focused = focusedAssumptionId === assumption.text || (!focusedAssumptionId && weakestAssumption?.text === assumption.text);
+
+                return (
+                  <div
+                    key={`${assumption.category}-${index}`}
+                    className={[
+                      "rounded-[22px] border px-4 py-4 transition-all duration-200",
+                      focused ? "border-[#b79412] bg-white shadow-[0_10px_30px_rgba(183,148,18,0.12)]" : "border-[#e0ca7a] bg-[#fffef5]",
+                    ].join(" ")}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[#fff1b8] text-[#6f5612]">{assumption.category}</Badge>
+                      <Badge className="bg-white text-[#5a460d]">{assumption.confidence}% confident</Badge>
+                      <Badge className="bg-white text-[#5a460d]">{assumption.sharpness}</Badge>
+                      {verdict ? <Badge className="bg-white text-[#355b32]">{verdict}</Badge> : null}
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[#5a460d]">{assumption.text}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[#6f5612]">{assumption.explanation}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="px-3 py-2 text-xs"
+                        onClick={() =>
+                          setAssumptionVerdicts((current) => ({
+                            ...current,
+                            [assumption.text]: "accepted",
+                          }))
+                        }
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="px-3 py-2 text-xs"
+                        onClick={() =>
+                          setAssumptionVerdicts((current) => ({
+                            ...current,
+                            [assumption.text]: "rejected",
+                          }))
+                        }
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="px-3 py-2 text-xs"
+                        onClick={() =>
+                          setAssumptionVerdicts((current) => ({
+                            ...current,
+                            [assumption.text]: "refined",
+                          }))
+                        }
+                      >
+                        Refine
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="px-3 py-2 text-xs"
+                        onClick={() => setFocusedAssumptionId(assumption.text)}
+                      >
+                        Focus
+                      </Button>
+                    </div>
+                    {verdict === "refined" ? (
+                      <textarea
+                        rows={2}
+                        value={correction}
+                        onChange={(event) =>
+                          setAssumptionCorrections((current) => ({
+                            ...current,
+                            [assumption.text]: event.target.value,
+                          }))
+                        }
+                        placeholder="Write the sharper version of this assumption."
+                        className="mt-4 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {error ? <p className="text-sm text-[#8b3d33]">{error}</p> : null}
