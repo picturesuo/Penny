@@ -131,6 +131,92 @@ function nextValidationSteps(map: ThoughtMapModel, assumptions: string[], counte
   return steps.slice(0, 3);
 }
 
+function loadBearingClaims(map: ThoughtMapModel) {
+  return map.nodes
+    .filter((node) => node.nodeStatus === "active" && node.kind !== "root")
+    .filter((node) => {
+      const centrality = node.scores?.centrality ?? 0;
+      const dependencyRisk = node.scores?.dependencyRisk ?? 0;
+
+      return (
+        node.kind === "assumption" ||
+        node.kind === "core_claim" ||
+        node.kind === "why_it_matters" ||
+        centrality >= 0.55 ||
+        dependencyRisk >= 0.55
+      );
+    })
+    .sort((a, b) => {
+      const aScore = (a.scores?.centrality ?? 0) * 0.55 + (a.scores?.dependencyRisk ?? 0) * 0.45;
+      const bScore = (b.scores?.centrality ?? 0) * 0.55 + (b.scores?.dependencyRisk ?? 0) * 0.45;
+
+      return bScore - aScore || a.branchOrder - b.branchOrder || a.createdAt.getTime() - b.createdAt.getTime();
+    });
+}
+
+function stakesLevel(map: ThoughtMapModel, loadBearingCount: number) {
+  const missingRequirements = getFounderBriefReadiness(map).missingRequirements.length;
+  const load = loadBearingCount + missingRequirements;
+
+  if (load >= 6) {
+    return "heavy" as const;
+  }
+
+  if (load >= 3) {
+    return "moderate" as const;
+  }
+
+  return "light" as const;
+}
+
+function preMortem(map: ThoughtMapModel, assumptions: string[], counterarguments: string[]) {
+  const coreClaim = chooseCoreClaim(map);
+  const failureCase = assumptions[0] ?? "the hidden assumption that the map looked stronger than it really was";
+  const counterCase = counterarguments[0] ?? "the strongest critique was never turned into a real test";
+  const loadBearing = loadBearingClaims(map)[0]?.content ?? coreClaim;
+
+  return cleanSentence(
+    `Six months later, this went badly because the strongest-sounding claim '${coreClaim}' outpaced the evidence. The load-bearing branch '${loadBearing}' never got a serious stress test, so the structure felt coherent while hiding the real risk. The team kept treating '${failureCase}' as if it were already validated, and '${counterCase}' was acknowledged but not operationalized. By the time reality arrived, the synthesis artifact looked polished but rested on a brittle dependency chain. The mistake was not a lack of ideas. It was moving to synthesis before the map had earned trust.`,
+  );
+}
+
+function ifYouWereRight(map: ThoughtMapModel) {
+  const coreClaim = chooseCoreClaim(map);
+  const targetUser = inferTargetUser(map);
+
+  return cleanSentence(
+    `Assume '${coreClaim}' is true. What becomes possible for ${targetUser}, what becomes necessary in the next 30 days, and what would you do differently today if this were already load-bearing?`,
+  );
+}
+
+function twinCheck(map: ThoughtMapModel, assumptions: string[], counterarguments: string[]) {
+  const coreClaim = chooseCoreClaim(map);
+  const assumption = assumptions[0] ?? "the most important assumption stays intact";
+  const counterargument = counterarguments[0] ?? "the strongest objection still does not break the structure";
+  const loadBearing = loadBearingClaims(map).slice(0, 3).map((node) => node.content);
+  const loadBearingLine = loadBearing.length
+    ? `The load-bearing claims are ${loadBearing.join("; ")}.`
+    : "The map does not yet expose a clearly load-bearing skeleton.";
+
+  return cleanSentence(
+    `The strongest version of this thinking is that '${coreClaim}' can hold because '${assumption}' remains true and because Penny has already pressure-tested the main objection that '${counterargument}'. ${loadBearingLine} This is the version Penny should use if the user says, "yes, that is what I actually believe."`,
+  );
+}
+
+function dependencyCompleteness(map: ThoughtMapModel, loadBearingCount: number) {
+  const readiness = getFounderBriefReadiness(map);
+
+  if (readiness.eligible) {
+    return cleanSentence(
+      `${loadBearingCount} load-bearing claims are visible and the core founder-brief requirements are present. Penny can proceed, but it should still ask whether the user wants the heavier synthesis gates for a higher-stakes decision.`,
+    );
+  }
+
+  return cleanSentence(
+    `Still at risk: ${readiness.missingRequirements.map((requirement) => requirement.replaceAll("_", " ")).join(", ")}. Penny should warn the user and ask whether to proceed anyway instead of pretending the structure is complete.`,
+  );
+}
+
 export function getFounderBriefReadiness(map: ThoughtMapModel): FounderBriefReadiness {
   const counts = activeNodes(map).reduce<Record<FounderBriefRequirement, number>>(
     (acc, node) => {
@@ -157,6 +243,7 @@ export function getFounderBriefReadiness(map: ThoughtMapModel): FounderBriefRead
 export function buildFounderBrief(map: ThoughtMapModel): FounderBriefModel {
   const keyAssumptions = topAssumptions(map);
   const strongestCounterarguments = topCounterarguments(map);
+  const loadBearingCount = loadBearingClaims(map).length;
 
   return {
     ideaSummary: cleanSentence(map.rawThought),
@@ -165,6 +252,11 @@ export function buildFounderBrief(map: ThoughtMapModel): FounderBriefModel {
     keyAssumptions,
     strongestCounterarguments,
     nextValidationSteps: nextValidationSteps(map, keyAssumptions, strongestCounterarguments),
+    stakesLevel: stakesLevel(map, loadBearingCount),
+    preMortem: preMortem(map, keyAssumptions, strongestCounterarguments),
+    ifYouWereRight: ifYouWereRight(map),
+    twinCheck: twinCheck(map, keyAssumptions, strongestCounterarguments),
+    dependencyCompleteness: dependencyCompleteness(map, loadBearingCount),
     generatedAt: new Date(),
   };
 }
@@ -188,5 +280,12 @@ export function formatFounderBrief(brief: FounderBriefModel) {
     "",
     "## Next 3 Validation Steps",
     ...brief.nextValidationSteps.map((item, index) => `${index + 1}. ${item}`),
+    "",
+    "## Synthesis Gate",
+    `- Stakes level: ${brief.stakesLevel}`,
+    `- Pre-mortem: ${brief.preMortem}`,
+    `- If you were right: ${brief.ifYouWereRight}`,
+    `- Twin-check: ${brief.twinCheck}`,
+    `- Dependency completeness: ${brief.dependencyCompleteness}`,
   ].join("\n");
 }
