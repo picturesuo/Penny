@@ -28,6 +28,46 @@ export interface PennyShape {
   signals: string[];
 }
 
+export interface PennyLensOverrideShape {
+  id: string;
+  label: string;
+  verdict: PennyShapeFeedback;
+  confidence: number;
+  reasoning: string;
+  nodeId: string | null;
+  sourceMapId: string | null;
+  signals: string[];
+}
+
+export interface PennyLensFreshness {
+  latestMoveAt: Date | null;
+  latestOverrideAt: Date | null;
+  lagMinutes: number | null;
+  stale: boolean;
+}
+
+export interface PennyLensComparison {
+  genericShapeCount: number;
+  activeShapeCount: number;
+  provisionalShapeCount: number;
+  overrideShapeCount: number;
+  promotedShapeIds: string[];
+  suppressedShapeIds: string[];
+}
+
+export interface PennyLensSnapshot {
+  mapId: string;
+  generatedAt: Date;
+  publishConfidenceThreshold: number;
+  activeConfidenceThreshold: number;
+  activeShapes: PennyShape[];
+  provisionalShapes: PennyShape[];
+  overrideShapes: PennyLensOverrideShape[];
+  effectiveShapes: PennyShape[];
+  freshness: PennyLensFreshness;
+  comparison: PennyLensComparison;
+}
+
 export interface BeliefGenealogy {
   current: ThoughtNodeModel | null;
   lineage: ThoughtNodeModel[];
@@ -385,6 +425,10 @@ const SHAPE_RULES: Array<{
       node.scores?.tension === null,
   },
 ];
+
+const PROVISIONAL_SHAPE_CONFIDENCE = 60;
+const ACTIVE_SHAPE_CONFIDENCE = 76;
+const LENS_FRESHNESS_STALE_MINUTES = 12 * 60;
 
 const PRECEDENT_CORPUS: PrecedentCase[] = [
   {
