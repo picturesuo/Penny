@@ -182,11 +182,27 @@ export interface BayesianUpdatePrompt {
   prompt: string;
 }
 
+export interface ClaimPostMortemSnapshot {
+  mapId: string;
+  title: string;
+  domain: CalibrationDomain;
+  confidence: number;
+  outcome: 0 | 1;
+  brierScore: number;
+  resolutionDate: string | null;
+  missType: "overconfident" | "underconfident" | "well-calibrated";
+  lesson: string;
+  shapeSignal: string;
+  reviewPrompt: string;
+  updatedAt: Date;
+}
+
 export interface CalibrationDashboardSnapshot {
   resolvedClaims: ForecastClaimSnapshot[];
   domains: CalibrationDomainSummary[];
   privateBets: PrivateBetSnapshot[];
   prompts: BayesianUpdatePrompt[];
+  postMortems: ClaimPostMortemSnapshot[];
 }
 
 const SHAPE_RULES: Array<{
@@ -522,6 +538,79 @@ function bayesianShift(params: { confidence: number; evidenceSignal: number; out
   }
 
   return Math.max(-10, Math.min(10, Math.round(delta / 6)));
+}
+
+function missTypeForClaim(claim: ForecastClaimSnapshot): ClaimPostMortemSnapshot["missType"] {
+  if (claim.outcome === 1 && claim.confidence < 55) {
+    return "underconfident";
+  }
+
+  if (claim.outcome === 0 && claim.confidence >= 55) {
+    return "overconfident";
+  }
+
+  return "well-calibrated";
+}
+
+function postMortemLesson(claim: ForecastClaimSnapshot, missType: ClaimPostMortemSnapshot["missType"]) {
+  if (missType === "overconfident") {
+    return claim.domain === "market"
+      ? "The market bet was too steep for the evidence. Next time, demand one more external signal before committing."
+      : "The claim outran the evidence. Next time, slow the confidence curve and force a smaller update.";
+  }
+
+  if (missType === "underconfident") {
+    return claim.domain === "technical"
+      ? "The technical claim was stronger than the forecast. Next time, let evidence pull confidence upward sooner."
+      : "The claim was better than the score suggested. Next time, check whether hesitation is hiding a real signal.";
+  }
+
+  return "The forecast and outcome were close enough to count as a calibration win. Keep the same update rhythm.";
+}
+
+function postMortemShapeSignal(claim: ForecastClaimSnapshot, missType: ClaimPostMortemSnapshot["missType"]) {
+  if (missType === "overconfident" && claim.domain === "market") {
+    return "overconfident market shape";
+  }
+
+  if (missType === "overconfident") {
+    return "confidence outran evidence";
+  }
+
+  if (missType === "underconfident") {
+    return "evidence outran confidence";
+  }
+
+  return "calibration held";
+}
+
+function buildClaimPostMortems(resolvedClaims: ForecastClaimSnapshot[]): ClaimPostMortemSnapshot[] {
+  return resolvedClaims
+    .filter((claim): claim is ForecastClaimSnapshot & { outcome: 0 | 1; brierScore: number } =>
+      claim.outcome != null && claim.brierScore != null,
+    )
+    .map((claim) => {
+      const missType = missTypeForClaim(claim);
+
+      return {
+        mapId: claim.mapId,
+        title: claim.title,
+        domain: claim.domain,
+        confidence: claim.confidence,
+        outcome: claim.outcome,
+        brierScore: claim.brierScore ?? 0,
+        resolutionDate: claim.resolutionDate,
+        missType,
+        lesson: postMortemLesson(claim, missType),
+        shapeSignal: postMortemShapeSignal(claim, missType),
+        reviewPrompt:
+          missType === "well-calibrated"
+            ? "What did you do right about the confidence update, and how can you repeat that rhythm?"
+            : "What cue would have changed the confidence slider by 10 points earlier?",
+        updatedAt: claim.updatedAt,
+      };
+    })
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 }
 
 const DEVILS_ADVOCATE_RECEIPTS: Array<{
@@ -1271,5 +1360,6 @@ export function buildCalibrationDashboard(maps: ThoughtMapModel[]): CalibrationD
     domains: domains.sort((a, b) => a.domain.localeCompare(b.domain)),
     privateBets: privateBets.sort((a, b) => b.confidence - a.confidence),
     prompts: prompts.sort((a, b) => b.evidenceSignal - a.evidenceSignal),
+    postMortems: buildClaimPostMortems(resolvedClaims),
   };
 }
