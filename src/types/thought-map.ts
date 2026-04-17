@@ -27,6 +27,10 @@ export const CLAIM_PROVENANCES = ["intuition", "cited_source", "inherited", "der
 
 export type ClaimProvenance = (typeof CLAIM_PROVENANCES)[number];
 
+export const SOURCE_TRUST_LEVELS = ["high", "medium", "low", "self"] as const;
+
+export type SourceTrustLevel = (typeof SOURCE_TRUST_LEVELS)[number];
+
 export const CLAIM_STATUSES = [
   "open",
   "stress_tested",
@@ -322,6 +326,8 @@ export interface ClaimCaptureMetadata {
   resolutionDate: string | null;
   provenance: ClaimProvenance;
   provenanceDetail: string;
+  sourceCitation: string;
+  sourceTrustLevel: SourceTrustLevel;
   stakes: ClaimStake[];
   dependencyNotes: string;
   status: ClaimStatus;
@@ -338,6 +344,8 @@ export interface ClaimStructureSnapshot {
   propagatedConfidence: number | null;
   temporalScope: string | null;
   conditionalStatement: string | null;
+  sourceCitation: string | null;
+  sourceTrustLevel: SourceTrustLevel | null;
   mergeCandidates: string[];
   splitCandidates: string[];
   whyNowReason: string;

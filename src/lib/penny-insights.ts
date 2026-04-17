@@ -1155,6 +1155,8 @@ export function buildClaimStructureSnapshot(map: ThoughtMapModel, node: ThoughtN
     propagatedConfidence,
     temporalScope,
     conditionalStatement,
+    sourceCitation: capture?.sourceCitation?.trim() || null,
+    sourceTrustLevel: capture?.sourceTrustLevel ?? null,
     mergeCandidates,
     splitCandidates,
     whyNowReason:

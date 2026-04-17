@@ -13,6 +13,8 @@ import {
   type ClaimStake,
   type ClaimStatus,
   type CreateThoughtMapInput,
+  SOURCE_TRUST_LEVELS,
+  type SourceTrustLevel,
 } from "@/types/thought-map";
 import { extractAssumptionSnapshot } from "@/lib/thought-map-generation";
 
@@ -65,6 +67,8 @@ export function ThoughtMapForm() {
     resolutionDate: string;
     provenance: ClaimProvenance;
     provenanceDetail: string;
+    sourceCitation: string;
+    sourceTrustLevel: SourceTrustLevel;
     stakes: ClaimStake[];
     dependencyNotes: string;
     status: ClaimStatus;
@@ -76,6 +80,8 @@ export function ThoughtMapForm() {
     resolutionDate: "",
     provenance: "intuition",
     provenanceDetail: "",
+    sourceCitation: "",
+    sourceTrustLevel: "self",
     stakes: [],
     dependencyNotes: "",
     status: "open",
@@ -121,6 +127,8 @@ export function ThoughtMapForm() {
           resolutionDate: claim.resolutionDate || null,
           provenance: claim.provenance,
           provenanceDetail: claim.provenanceDetail.trim(),
+          sourceCitation: claim.sourceCitation.trim(),
+          sourceTrustLevel: claim.sourceTrustLevel,
           stakes: claim.stakes,
           dependencyNotes: claim.dependencyNotes.trim(),
           status: claim.status,
@@ -292,6 +300,45 @@ export function ThoughtMapForm() {
                 placeholder="Intuition, cited source, inherited from a person, or derived from another claim"
                 className="w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
               />
+            </label>
+
+            <label className="space-y-2 lg:col-span-2">
+              <span className="text-sm font-medium text-[var(--ink)]">Source citation</span>
+              <input
+                type="text"
+                value={claim.sourceCitation}
+                onChange={(event) =>
+                  setClaim((current) => ({ ...current, sourceCitation: event.target.value }))
+                }
+                placeholder="Article title, paper, URL, book chapter, transcript, or pasted source"
+                className="w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
+              />
+              <p className="text-xs leading-5 text-[var(--muted-ink)]">
+                Penny will attach this citation to any claims that emerge from the pasted or imported material.
+              </p>
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-[var(--ink)]">Source reliability</span>
+              <select
+                value={claim.sourceTrustLevel}
+                onChange={(event) =>
+                  setClaim((current) => ({
+                    ...current,
+                    sourceTrustLevel: event.target.value as SourceTrustLevel,
+                  }))
+                }
+                className="w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-black/20"
+              >
+                {SOURCE_TRUST_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {level === "self" ? "Self / intuition" : prettyLabel(level)}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs leading-5 text-[var(--muted-ink)]">
+                Peer-reviewed research should usually outweigh interviews, tweets, and intuition by default.
+              </p>
             </label>
 
             <div className="space-y-2 lg:col-span-2">

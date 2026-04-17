@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createThoughtMap } from "@/server/thought-map";
-import { CLAIM_PROVENANCES, CLAIM_STATUSES, CLAIM_STAKES } from "@/types/thought-map";
+import { CLAIM_PROVENANCES, CLAIM_STATUSES, CLAIM_STAKES, SOURCE_TRUST_LEVELS } from "@/types/thought-map";
 
 const createThoughtMapSchema = z.object({
   rawThought: z
@@ -18,6 +18,8 @@ const createThoughtMapSchema = z.object({
       .default(null),
     provenance: z.enum(CLAIM_PROVENANCES),
     provenanceDetail: z.string().max(200).optional().default(""),
+    sourceCitation: z.string().max(240).optional().default(""),
+    sourceTrustLevel: z.enum(SOURCE_TRUST_LEVELS).optional().default("self"),
     stakes: z.array(z.enum(CLAIM_STAKES)).default([]),
     dependencyNotes: z.string().max(300).optional().default(""),
     status: z.enum(CLAIM_STATUSES),

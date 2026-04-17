@@ -133,6 +133,8 @@ function formatClaimCaptureMetadata(metadata: ClaimCaptureMetadata) {
     `- Resolution date: ${metadata.resolutionDate ?? "not set"}`,
     `- Provenance: ${metadata.provenance}`,
     `- Provenance detail: ${metadata.provenanceDetail || "not specified"}`,
+    `- Source citation: ${metadata.sourceCitation || "not specified"}`,
+    `- Source reliability: ${metadata.sourceTrustLevel}`,
     `- Stakes: ${metadata.stakes.length ? metadata.stakes.join(", ") : "none tagged"}`,
     `- Dependency notes: ${metadata.dependencyNotes || "none provided"}`,
     `- Status: ${metadata.status}`,
