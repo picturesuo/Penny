@@ -52,6 +52,11 @@
 - `user`: Voice capture should transcribe a memo and parse it into claim-structure candidates for confirmation.
 - `user`: Reading import should let highlights from articles or books become claims or evidence with provenance and citation preserved.
 - `user`: Meeting transcript processing should extract decisions, claims, disagreements, and action items into Brain as structured material.
+- `user`: Self-audit mode should periodically review whether Penny has been too lenient or too harsh and whether any shapes are miscalibrated, because the product should model the same honesty it asks from the user.
+- `user`: Export everything should let the user export the full Brain, including claims, moves, shapes, artifacts, and learnings, in structured form.
+- `user`: Import from existing tools should support Roam, Obsidian, Notion, and Google Docs by parsing notes into claim-candidates for user confirmation.
+- `user`: Privacy tiers should let specific claims be marked extra-private so they never enter aggregate shape libraries or community features unless the user explicitly allows it.
+- `user`: Forgetting should provide a deliberate archive-and-hide function for things the user wants to keep historically but stop using in the live lens.
 
 ## Product Vision & Direction
 - `user`: Penny is an ideation instrument, meaning a personal thinking system that captures raw ideas, stress-tests them against evidence and precedent, teaches the user what they do not understand at the moment they need it, and reflects thinking patterns back to the user so learning compounds over time.
