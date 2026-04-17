@@ -19,6 +19,18 @@ export function ShapeDashboard({
   function recordFeedback(shape: PennyShape, verdict: PennyShapeFeedback) {
     const mapId = shape.primaryMapId;
     const previousVerdict = feedback[shape.id];
+    const restoreFeedback = () =>
+      setFeedback((current) => {
+        const next = { ...current };
+
+        if (previousVerdict) {
+          next[shape.id] = previousVerdict;
+        } else {
+          delete next[shape.id];
+        }
+
+        return next;
+      });
 
     setFeedback((current) => ({ ...current, [shape.id]: verdict }));
 
@@ -42,15 +54,11 @@ export function ShapeDashboard({
         });
 
         if (!response.ok) {
-          if (previousVerdict) {
-            setFeedback((current) => ({ ...current, [shape.id]: previousVerdict }));
-          }
+          restoreFeedback();
           return;
         }
       } catch {
-        if (previousVerdict) {
-          setFeedback((current) => ({ ...current, [shape.id]: previousVerdict }));
-        }
+        restoreFeedback();
         return;
       }
     });
