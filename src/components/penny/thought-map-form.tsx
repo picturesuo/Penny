@@ -84,16 +84,7 @@ export function ThoughtMapForm() {
   const [focusedAssumptionId, setFocusedAssumptionId] = useState<string | null>(null);
   const assumptionSnapshot = useMemo(() => extractAssumptionSnapshot(rawThought), [rawThought]);
   const weakestAssumption = useMemo(
-    () =>
-      [...assumptionSnapshot.assumptions].sort((a, b) => a.confidence - b.confidence)[0] ?? null,
-    [assumptionSnapshot.assumptions],
-  );
-  const assumptionSuggestions = useMemo(
-    () =>
-      assumptionSnapshot.assumptions
-        .slice(0, 3)
-        .map((assumption) => assumption.text)
-        .filter((text): text is string => text.trim().length > 0),
+    () => [...assumptionSnapshot.assumptions].sort((a, b) => a.confidence - b.confidence)[0] ?? null,
     [assumptionSnapshot.assumptions],
   );
   const confidenceChallenge =
