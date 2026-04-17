@@ -86,6 +86,11 @@
 - `user`: The adversarial final pass should attack the dependency structure rather than individual claims, identify the quiet load-bearing assumption, and check whether the whole output collapses if that assumption fails.
 - `user`: The steel-manning gym should give the user a position they disagree with, ask them to argue its strongest form, and score the result against Penny’s best version as explicit skill training.
 - `user`: Diversified retrieval should be the default for critique: each pass should widen the lens set before narrowing to a single verdict.
+- `user`: Precedent-grounded critique should retrieve real failure cases that match the claim’s risk profile, so Penny can say what specifically killed similar companies or ideas before.
+- `user`: Peer simulation should let the user choose a named audience mode such as skeptical investor or thesis advisor, and Penny should critique in that voice using precedent for how that audience attacks similar structures.
+- `user`: Norm-challenge scrutiny should hold firm on whether a challenged norm is actually load-bearing and should articulate the strongest case for the norm before entertaining the counter-case.
+- `user`: Confidence decay should surface untouched beliefs for revisit after a threshold, with foundational beliefs decaying faster because their failure cascades through the rest of the model.
+- `user`: Interleaved stress-testing should mix related claims across a queue rather than drilling one claim sequentially, because discrimination is stronger than pattern-matching.
 - `user`: Just-in-time learning should happen at the point of confusion during stress-testing, with minimum viable explanation, why-it-matters context, teach-back, and optional deeper anchors.
 - `user`: Every learning moment should generate moves and should feed a knowledge shape for what the user understands, repeats, or needs to relearn.
 - `user`: Shapes must be visible to the user as metacognitive feedback, both in-context and through periodic reflection surfaces.
@@ -99,6 +104,9 @@
 - `user`: Near-term architectural work should define what a learning recommendation contains, what the user does with it, how success is measured, and what gets captured in the moves layer so the self-iterating second brain has a durable substrate.
 - `user`: The single addition to push hardest for is the old selves feature, which shows users their past beliefs and confidence levels over time and makes the moves layer emotionally legible, shareable, and product-defining.
 - `user`: Old selves should turn the moves layer into visible value, create resonant moments when users see how their thinking changed, and justify the storage and modeling cost of tracking moves.
+- `user`: Belief genealogy should show where a belief came from, what depends on it, and whether its source has been contradicted.
+- `user`: The shapes dashboard should be a periodic surface for patterns the system has learned about the user’s thinking, with each shape confirmable, rejectable, and refinable.
+- `user`: In-context shape callouts should name the active pattern inside a critique so personalization feels honest rather than mysterious.
 
 ## Psychology-Backed Design
 - `user`: Penny’s design should be grounded in learning science, metacognition research, judgment research, and cognitive load theory rather than generic AI-product assumptions.
