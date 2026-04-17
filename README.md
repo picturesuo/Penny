@@ -125,3 +125,4 @@ Then open `http://localhost:3000`.
 - The evidence service intentionally stays lightweight. If retrieval fails, the app falls back to logic-only mode and continues the session.
 - The Prisma client is generated automatically by Prisma commands using the standard `@prisma/client` package.
 - The product direction is intentionally opinionated: Penny is a pressure-tested second brain, not a general-purpose chatbot or note system.
+- Workflow rule: when work moves from one file to another, commit and push the finished file before starting the next one. Use `scripts/codex-commit.sh --each-path <paths...>` so each file gets its own short commit message and push. Keep commits non-private and do not stage personal, secret, scratch, or machine-specific files. Push straight to the configured GitHub remote only and fail instead of guessing if no safe remote exists.
