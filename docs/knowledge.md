@@ -70,6 +70,11 @@
 - `user`: The three outputs a user should leave with are a structured result, real learning, and clearer self-knowledge.
 - `user`: Learning features should be just-in-time, not a reading list.
 - `user`: Teach-back should be the default learning interaction: when the user hits confusion, Penny gives a minimum scaffold and asks the user to explain the concept in the context of the current claim, then Penny identifies gaps.
+- `user`: Concept prerequisite graphs should let Learn zoom out when a teach-back reveals the user does not understand a prerequisite concept, so Penny can teach the prerequisite first.
+- `user`: Spaced repetition on learned concepts should be contextual rather than flashcard-style, resurfacing a concept when it naturally applies inside a new claim.
+- `user`: Learning sessions should be independent of claim work when the user explicitly wants to expand their conceptual toolkit in a dedicated learning mode.
+- `user`: A personal concept glossary should show mastered concepts by domain, including the claims where each concept was first encountered.
+- `user`: Concept collision detection should surface when a learned concept modifies or contradicts a claim the user already holds, forcing the propagation into the map.
 - `user`: Prior-knowledge anchoring should tie every learning moment to an existing claim in the graph, so the user connects new material to what they already believe instead of receiving generic explanation.
 - `user`: Knowledge shape tracking should record what the user has mastered, what they keep needing to relearn, and what is solid, so future critiques can pitch at the user’s actual level per topic.
 - `user`: Research-mode expansion should exist as an optional follow-up after the inline learning moment, clearly separated so it never turns into a tangent and always stays anchored to the triggering claim.
