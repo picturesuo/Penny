@@ -115,6 +115,10 @@ Learn should be just-in-time and claim-anchored.
 - Penny should import from Roam, Obsidian, Notion, and Google Docs by parsing existing notes into claim-candidates for user confirmation.
 - Claims should support privacy tiers so extra-private material never enters aggregate shape libraries or community features unless the user explicitly allows it.
 - Users should be able to archive and hide things they truly want to forget without deleting historical integrity from the system.
+- Advanced users should be able to write custom lens rules, such as weighting technical claims harder than market claims or suppressing a redundant school of thought.
+- Users should be able to inspect and edit shapes directly when Penny’s model of them is wrong.
+- Lens reset should let the user ask Penny to rebuild from recent moves when major life changes invalidate older patterns.
+- Reasoning replay should let the user trace the full move history behind a decision or artifact.
 
 ## Curriculum and Education
 
