@@ -21,6 +21,7 @@ export function ShapeDashboard({
   initialFeedback: Record<string, PennyShapeFeedback>;
 }) {
   const [feedback, setFeedback] = useState<Record<string, PennyShapeFeedback>>(initialFeedback);
+  const [feedbackReasons, setFeedbackReasons] = useState<Record<string, string>>({});
   const [activePrivateBets, setActivePrivateBets] = useState<Record<string, boolean>>({});
   const [isPending, startTransition] = useTransition();
 
@@ -53,9 +54,10 @@ export function ShapeDashboard({
     };
   }, [calibration.resolvedClaims]);
 
-  function recordFeedback(shape: PennyShape, verdict: PennyShapeFeedback) {
+  function recordFeedback(shape: PennyShape, verdict: PennyShapeFeedback, reasoning: string) {
     const mapId = shape.primaryMapId;
     const previousVerdict = feedback[shape.id];
+    const trimmedReasoning = reasoning.trim();
     const restoreFeedback = () =>
       setFeedback((current) => {
         const next = { ...current };
@@ -87,6 +89,7 @@ export function ShapeDashboard({
             verdict,
             shapeLabel: shape.label,
             source: "dashboard",
+            reasoning: trimmedReasoning,
           }),
         });
 
@@ -94,6 +97,7 @@ export function ShapeDashboard({
           restoreFeedback();
           return;
         }
+        setFeedbackReasons((current) => ({ ...current, [shape.id]: "" }));
       } catch {
         restoreFeedback();
         return;
@@ -332,31 +336,48 @@ export function ShapeDashboard({
                   ))}
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 space-y-3">
+                  <textarea
+                    value={feedbackReasons[shape.id] ?? ""}
+                    onChange={(event) =>
+                      setFeedbackReasons((current) => ({
+                        ...current,
+                        [shape.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Why do you disagree with this shape?"
+                    className="min-h-24 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none ring-0 placeholder:text-[var(--muted-ink)] focus:border-[var(--ink)]"
+                  />
                   <Button
                     variant="secondary"
                     className="px-3 py-2 text-xs"
-                    disabled={isPending}
-                    onClick={() => recordFeedback(shape, "confirmed")}
+                    disabled={isPending || !(feedbackReasons[shape.id]?.trim().length)}
+                    onClick={() => recordFeedback(shape, "confirmed", feedbackReasons[shape.id] ?? "")}
                   >
-                    Confirm
+                    Confirm with note
                   </Button>
                   <Button
                     variant="secondary"
                     className="px-3 py-2 text-xs"
-                    disabled={isPending}
-                    onClick={() => recordFeedback(shape, "rejected")}
+                    disabled={isPending || !(feedbackReasons[shape.id]?.trim().length)}
+                    onClick={() => recordFeedback(shape, "rejected", feedbackReasons[shape.id] ?? "")}
                   >
-                    Reject
+                    Reject with note
                   </Button>
                   <Button
                     variant="secondary"
                     className="px-3 py-2 text-xs"
-                    disabled={isPending}
-                    onClick={() => recordFeedback(shape, "refined")}
+                    disabled={isPending || !(feedbackReasons[shape.id]?.trim().length)}
+                    onClick={() => recordFeedback(shape, "refined", feedbackReasons[shape.id] ?? "")}
                   >
-                    Refine
+                    Refine with note
                   </Button>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Badge className="bg-white text-[var(--ink)]">
+                    The note is stored with the verdict as shape-feedback reasoning.
+                  </Badge>
                 </div>
 
                 {currentFeedback ? (

@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   buildClaimMoveHistory,
+  buildClaimDependencyGraph,
   buildBeliefGenealogy,
   buildDevilsAdvocateReceipts,
   buildConfidenceDecaySnapshot,
+  buildConfusionLog,
   buildSessionRhythmSnapshot,
   collectShapeFeedback,
   captureSnapshotForMap,
@@ -91,6 +93,7 @@ type ActionResponse = {
     graphAnalysis?: {
       primaryGap: string;
       secondaryGap: string | null;
+      critiqueTags: string[];
       reasons: string[];
       weakNodes: Array<{
         nodeId: string;
@@ -287,6 +290,7 @@ export function ThoughtMapWorkspace({
   const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
     collectShapeFeedback(normalizeMap(initialMap).events),
   );
+  const [shapeOverrideReasons, setShapeOverrideReasons] = useState<Record<string, string>>({});
   const [runningRecommendedMove, setRunningRecommendedMove] = useState(false);
   const [runningFounderBrief, setRunningFounderBrief] = useState(false);
   const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
@@ -653,6 +657,7 @@ export function ThoughtMapWorkspace({
     () => findActiveShapeCallout(selectedGraphNodeModel, derivedShapes),
     [derivedShapes, selectedGraphNodeModel],
   );
+  const activeShapeReasoning = activeShapeCallout ? (shapeOverrideReasons[activeShapeCallout.id] ?? "").trim() : "";
   const selectedGenealogy = useMemo(
     () => buildBeliefGenealogy(map.nodes, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
@@ -665,6 +670,7 @@ export function ThoughtMapWorkspace({
     () => buildClaimMoveHistory(map.nodes, map.events, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map.events, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
   );
+  const claimDependencyGraph = useMemo(() => buildClaimDependencyGraph(map), [map]);
   const selectedReceiptVoices = useMemo(
     () => buildDevilsAdvocateReceipts(selectedGraphNodeModel),
     [selectedGraphNodeModel],
@@ -683,6 +689,7 @@ export function ThoughtMapWorkspace({
   const interleavedStressQueue = useMemo(() => interleaveStressNodes(activeNodes).slice(0, 8), [activeNodes]);
   const claimCapture = useMemo(() => captureSnapshotForMap(map), [map]);
   const rhythm = useMemo(() => buildSessionRhythmSnapshot(map), [map]);
+  const confusionLog = useMemo(() => buildConfusionLog(map), [map]);
   const bestSteelmanTarget = map.recommendedNextMove
     ? map.nodes.find((node) => node.id === map.recommendedNextMove?.targetNodeId) ?? null
     : selectedGraphNode?.node ?? weakestLearningNode ?? map.nodes.find((node) => node.kind === "core_claim") ?? rootNode ?? null;
@@ -769,7 +776,11 @@ export function ThoughtMapWorkspace({
     }));
   }
 
-  function recordShapeFeedback(shape: { id: string; label: string; primaryMapId: string | null }, verdict: PennyShapeFeedback) {
+  function recordShapeFeedback(
+    shape: { id: string; label: string; primaryMapId: string | null },
+    verdict: PennyShapeFeedback,
+    reasoning: string,
+  ) {
     const mapId = shape.primaryMapId ?? map.id;
     const previousVerdict = shapeFeedback[shape.id];
     const restoreFeedback = () =>
@@ -799,6 +810,7 @@ export function ThoughtMapWorkspace({
             verdict,
             shapeLabel: shape.label,
             source: "workspace",
+            reasoning,
             nodeId: selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null,
           }),
         });
@@ -810,6 +822,11 @@ export function ThoughtMapWorkspace({
 
         const payload = (await response.json()) as { event: SerializableThoughtMapEvent };
         mergeShapeFeedbackEvent(payload.event);
+        setShapeOverrideReasons((current) => {
+          const next = { ...current };
+          delete next[shape.id];
+          return next;
+        });
       } catch {
         restoreFeedback();
         return;
@@ -1484,6 +1501,13 @@ export function ThoughtMapWorkspace({
             <Badge className="bg-[#e7defa] text-[#5c4c88]">{lastAction.execution.mode.replaceAll("_", " ")}</Badge>
             <Badge>{lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")}</Badge>
           </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {lastAction.reasoning.graphAnalysis.critiqueTags.map((tag) => (
+              <Badge key={tag} className="bg-[var(--panel)] text-[var(--ink)]">
+                {tag.replaceAll("-", " ")}
+              </Badge>
+            ))}
+          </div>
           <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
             Penny targeted <span className="font-medium">{lastAction.execution.targetNodeKind.replaceAll("_", " ")}</span> because the graph’s weakest gap was{" "}
             <span className="font-medium">{lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")}</span>.
@@ -1672,6 +1696,44 @@ export function ThoughtMapWorkspace({
             </div>
 
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Claim dependency graph</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Load-bearing claims and edges</h3>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Roots</p>
+                  <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{claimDependencyGraph.rootNodeIds.length}</p>
+                </div>
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Load-bearing</p>
+                  <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{claimDependencyGraph.loadBearingNodeIds.length}</p>
+                </div>
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Edges</p>
+                  <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{claimDependencyGraph.edges.length}</p>
+                </div>
+              </div>
+              <div className="mt-4 space-y-2">
+                {claimDependencyGraph.loadBearingNodeIds.slice(0, 4).map((nodeId) => {
+                  const node = nodesById.get(nodeId);
+
+                  if (!node) {
+                    return null;
+                  }
+
+                  return (
+                    <div key={nodeId} className="rounded-[18px] bg-[var(--panel)] p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={statusBadge(node.nodeStatus)}>{node.nodeStatus}</Badge>
+                        <Badge className="bg-white text-[var(--ink)]">{kindLabel(node.kind)}</Badge>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{node.content}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Move history</p>
               <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">What happened to this claim</h3>
               <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
@@ -1728,28 +1790,62 @@ export function ThoughtMapWorkspace({
                       {activeShapeCallout.evidenceNodeIds.length === 1 ? "" : "s"}
                     </Badge>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-2 text-xs"
-                      onClick={() => recordShapeFeedback(activeShapeCallout, "confirmed")}
-                    >
-                      Confirm
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-2 text-xs"
-                      onClick={() => recordShapeFeedback(activeShapeCallout, "rejected")}
-                    >
-                      Reject
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-2 text-xs"
-                      onClick={() => recordShapeFeedback(activeShapeCallout, "refined")}
-                    >
-                      Refine
-                    </Button>
+                  <div className="mt-4 space-y-3">
+                    <textarea
+                      className="min-h-[96px] w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                      placeholder="Why do you disagree? What load-bearing assumption or precedent are you testing?"
+                      value={shapeOverrideReasons[activeShapeCallout.id] ?? ""}
+                      onChange={(event) =>
+                        setShapeOverrideReasons((current) => ({
+                          ...current,
+                          [activeShapeCallout.id]: event.target.value,
+                        }))
+                      }
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="secondary"
+                        className="px-3 py-2 text-xs"
+                        disabled={isPending || activeShapeReasoning.length < 8}
+                        onClick={() =>
+                          recordShapeFeedback(
+                            activeShapeCallout,
+                            "confirmed",
+                            activeShapeReasoning,
+                          )
+                        }
+                      >
+                        Confirm
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="px-3 py-2 text-xs"
+                        disabled={isPending || activeShapeReasoning.length < 8}
+                        onClick={() =>
+                          recordShapeFeedback(
+                            activeShapeCallout,
+                            "rejected",
+                            activeShapeReasoning,
+                          )
+                        }
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="px-3 py-2 text-xs"
+                        disabled={isPending || activeShapeReasoning.length < 8}
+                        onClick={() =>
+                          recordShapeFeedback(
+                            activeShapeCallout,
+                            "refined",
+                            activeShapeReasoning,
+                          )
+                        }
+                      >
+                        Refine
+                      </Button>
+                    </div>
                   </div>
                   {shapeFeedback[activeShapeCallout.id] ? (
                     <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
@@ -1824,6 +1920,28 @@ export function ThoughtMapWorkspace({
                       ))}
                     </div>
                     <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{rhythm.note}</p>
+                  </div>
+
+                  <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Confusion log</p>
+                    <div className="mt-3 space-y-2">
+                      {confusionLog.length ? (
+                        confusionLog.map((entry) => (
+                          <div key={entry.nodeId} className="rounded-[16px] bg-white px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className="bg-[#e7defa] text-[#5c4c88]">severity {entry.severity}</Badge>
+                              <Badge className="bg-white text-[var(--ink)]">{entry.title}</Badge>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{entry.confusion}</p>
+                            <p className="mt-1 text-xs leading-5 text-[var(--muted-ink)]">{entry.nextStep}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="rounded-[16px] bg-white px-4 py-3 text-sm leading-6 text-[var(--muted-ink)]">
+                          No strong confusion signals are surfacing right now.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </>
               ) : (
