@@ -617,12 +617,32 @@ export interface ThoughtPartnerMatchSnapshot {
   privacyNote: string;
 }
 
+export interface SharedSpherePreviewSnapshot {
+  mapIds: string[];
+  titles: string[];
+  authorshipMarkers: string[];
+  summary: string;
+  guardrail: string;
+  privacyNote: string;
+}
+
+export interface AdvisorReviewSnapshot {
+  title: string;
+  reviewerLabel: string;
+  critiqueOnly: string;
+  permissionsNote: string;
+  reviewPrompt: string;
+  updatedAt: Date;
+}
+
 export interface CommunityCommonsDashboard {
   contributions: CommunityContributionSnapshot[];
   contradictionSignals: CommunityContradictionSignal[];
   openQuestions: CommunityOpenQuestionSnapshot[];
   shapeLibrary: CommunityShapeLibrarySnapshot[];
   thoughtPartnerMatches: ThoughtPartnerMatchSnapshot[];
+  sharedSpherePreviews: SharedSpherePreviewSnapshot[];
+  advisorReviewModes: AdvisorReviewSnapshot[];
 }
 
 export interface EmotionalStructureShapeSnapshot {
@@ -1419,7 +1439,7 @@ export function buildDevilsAdvocateReceipts(node: ThoughtNodeModel | null): Devi
 
     void score;
     return { ...receipt, score };
-  })
+    })
     .sort((a, b) => b.score - a.score)
     .slice(0, 2)
     .map((receipt) => {
@@ -1427,6 +1447,134 @@ export function buildDevilsAdvocateReceipts(node: ThoughtNodeModel | null): Devi
       void score;
       return rest;
     });
+}
+
+function audienceLensLabel(audienceLabel: string) {
+  const lower = audienceLabel.toLowerCase();
+
+  if (/(board|investor|director|committee)/.test(lower)) {
+    return "board-level";
+  }
+
+  if (/(advisor|mentor|reviewer|teacher|committee)/.test(lower)) {
+    return "review-level";
+  }
+
+  if (/(co-founder|partner|collaborator|co-thinker|peer)/.test(lower)) {
+    return "collaborative";
+  }
+
+  if (/(academic|thesis|committee|paper|review)/.test(lower)) {
+    return "scholarly";
+  }
+
+  return "specific";
+}
+
+export interface AudienceCritiqueSurface {
+  audienceLabel: string;
+  audienceContext: string;
+  lensLabel: string;
+  pushOn: string[];
+  likelySkip: string[];
+  likelyObjections: string[];
+  reviewPrompt: string;
+}
+
+export function buildAudienceCritiqueSurface(
+  node: ThoughtNodeModel | null,
+  audienceLabel: string,
+  audienceContext: string,
+  precedent: DevilAdvocateReceipt | null = null,
+): AudienceCritiqueSurface {
+  const label = audienceLabel.trim().length ? audienceLabel.trim() : "specific audience";
+  const context = audienceContext.trim();
+  const text = `${node?.content ?? ""} ${context}`.toLowerCase();
+  const lensLabel = audienceLensLabel(label);
+
+  const pushOn: string[] = [];
+  const likelySkip: string[] = [];
+  const likelyObjections: string[] = [];
+
+  if (/(board|investor|director|committee)/.test(label.toLowerCase())) {
+    pushOn.push("downside, timing, and what would make this fail in the next six months");
+    pushOn.push("the exact evidence behind the largest confidence number");
+    likelySkip.push("generic vision language unless it is tied to a decision");
+    likelySkip.push("implementation detail that does not change the board outcome");
+    likelyObjections.push("What is the hidden burn or downside if this is wrong?");
+    likelyObjections.push("What changed since the last update that actually matters?");
+  } else if (/(advisor|mentor|reviewer|teacher)/.test(label.toLowerCase())) {
+    pushOn.push("method, definition control, and whether the claim is actually falsifiable");
+    pushOn.push("the strongest counterclaim they would expect you to answer");
+    likelySkip.push("narrative flourish that does not alter the proof structure");
+    likelySkip.push("surface-level confidence without a clear test");
+    likelyObjections.push("Where is the exact claim boundary?");
+    likelyObjections.push("What would a rigorous reviewer say is under-defined?");
+  } else if (/(co-founder|partner|collaborator|co-thinker|peer)/.test(label.toLowerCase())) {
+    pushOn.push("what you each uniquely believe and where the map disagrees");
+    pushOn.push("who owns which assumption and what happens if one of you is wrong");
+    likelySkip.push("generic alignment language without ownership or tension");
+    likelySkip.push("repeated agreement that does not change the structure");
+    likelyObjections.push("Which claim would each of you defend differently?");
+    likelyObjections.push("Where does the disagreement become a move instead of a feeling?");
+  } else {
+    pushOn.push("the exact claim boundary and the hardest consequence if it fails");
+    pushOn.push("whether this audience would skip anything you are overexplaining");
+    likelySkip.push("anything that does not change what they decide next");
+    likelyObjections.push("What would this audience press on first?");
+  }
+
+  if (/next Tuesday|tomorrow|today|board/i.test(context)) {
+    pushOn.unshift("the decision they need to make on the date you gave Penny");
+  }
+
+  if (/board|investor/.test(text)) {
+    likelyObjections.push("Show the board the downside before they have to ask for it.");
+  }
+
+  if (precedent) {
+    likelyObjections.push(`Use ${precedent.thinker} as the precedent lens that makes the critique concrete.`);
+  }
+
+  return {
+    audienceLabel: label,
+    audienceContext: context || "No additional audience context provided.",
+    lensLabel,
+    pushOn: pushOn.slice(0, 3),
+    likelySkip: likelySkip.slice(0, 3),
+    likelyObjections: Array.from(new Set(likelyObjections)).slice(0, 4),
+    reviewPrompt:
+      lensLabel === "board-level"
+        ? "Prepare for the questions that change the decision, not the questions that simply sound smart."
+        : lensLabel === "review-level"
+          ? "Make the claim audit-ready: boundaries, evidence, and the one line that would fail a critical reviewer."
+          : "Make the structure legible enough that the specific audience can push on the right thing.",
+  };
+}
+
+export interface AdvisorReviewSurface {
+  reviewerLabel: string;
+  critiqueOnly: string;
+  permissionsNote: string;
+  reviewPrompt: string;
+}
+
+export function buildAdvisorReviewSurface(
+  node: ThoughtNodeModel | null,
+  reviewerLabel: string,
+  audienceCritique: AudienceCritiqueSurface | null,
+): AdvisorReviewSurface {
+  const reviewer = reviewerLabel.trim().length ? reviewerLabel.trim() : "advisor";
+  const nodeText = node?.content ?? "the active claim";
+
+  return {
+    reviewerLabel: reviewer,
+    critiqueOnly: `${reviewer} can add critique-only moves against ${nodeText} without editing the claim itself.`,
+    permissionsNote: "Advisor review is read-only by design; critique becomes a move, but claim edits remain with the owner.",
+    reviewPrompt: audienceCritique
+      ? `Review the claim as ${audienceCritique.audienceLabel} would, then add only the critique that changes the structure.`
+      : "Review the claim structure and add only the critique that changes the reasoning.",
+  };
 }
 
 function shapeVerdict(confidence: number, supportCount: number): ShapeVerdict {
@@ -3157,12 +3305,56 @@ export function buildCommunityCommonsDashboard(
     })
     .slice(0, 4);
 
+  const sharedSpherePreviews = thoughtPartnerMatches.map((match, index) => ({
+    mapIds: match.mapIds,
+    titles: match.titles,
+    authorshipMarkers: ["You", "Co-thinker"],
+    summary:
+      index === 0
+        ? "A shared sphere would keep authorship visible and let disagreement become first-class structural data instead of hidden back-and-forth."
+        : "A bounded co-thinking sphere can stay privacy-first while still surfacing who added which move.",
+    guardrail: "Review-only by default; no feed, no raw graph exposure, and no silent merge of authorship.",
+    privacyNote: match.privacyNote,
+  }));
+
+  const advisorReviewModes = maps
+    .map((map) => {
+      const criticalDependencyCount = map.graphSnapshot?.criticalDependencyIds.length ?? 0;
+      const weakCount = map.graphSnapshot?.weakestNodeIds.length ?? 0;
+      const audienceLabel = criticalDependencyCount >= 4 ? "board" : weakCount >= 3 ? "advisor" : "reviewer";
+
+      return {
+        title: map.title,
+        reviewerLabel: audienceLabel,
+        critiqueOnly:
+          audienceLabel === "board"
+            ? "This map should be reviewed without editing by anyone who needs the downside and timing call spelled out."
+            : audienceLabel === "advisor"
+              ? "This map benefits from critique-only review before the owner changes the claim itself."
+              : "This map can be reviewed in critique-only mode to keep ownership clean.",
+        permissionsNote:
+          audienceLabel === "board"
+            ? "Board review stays bounded to critique and cannot rewrite the underlying claim graph."
+            : "Reviewers can comment on structure, but only the owner can edit claims.",
+        reviewPrompt:
+          audienceLabel === "board"
+            ? "What would this board push on first, and which line would they ignore if it were not made explicit?"
+            : "Where is the sharpest critique that should be heard without letting the reviewer edit the claim?",
+        updatedAt: map.updatedAt,
+      } satisfies AdvisorReviewSnapshot;
+    })
+    .filter((item) => item.reviewerLabel.length > 0)
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, 4);
+
   return {
     contributions,
     contradictionSignals,
     openQuestions,
     shapeLibrary,
     thoughtPartnerMatches,
+    sharedSpherePreviews,
+    advisorReviewModes,
   };
 }
 
