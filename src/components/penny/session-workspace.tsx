@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import { AlertTriangle, RefreshCcw } from "lucide-react";
-import { regenerateChallengeAction, resolveAssumptionAction, submitAnswerAction } from "@/app/actions";
+import {
+  regenerateChallengeAction,
+  resolveAssumptionAction,
+  submitAnswerAction,
+  submitReflectionAction,
+} from "@/app/actions";
 import { ConceptBriefCard } from "@/components/penny/concept-brief-card";
 import { StageChip } from "@/components/penny/stage-chip";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +22,7 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
     session.currentStage === "brief" ||
     session.questionBudget - session.questionsAsked.length <= 1 ||
     (session.clarityScore >= 78 && session.answers.length >= 3);
+  const showReflectionRitual = shouldStopSoon || session.currentStage === "brief";
   const modeTitle = isCaptureMode ? "Capture" : "Reflection";
   const modeDescription = isCaptureMode
     ? "Dump raw thought here. Critique, evidence, and secondary prompts stay out of the way until the structure is real enough to reflect on."
@@ -178,6 +184,63 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
                 You&apos;ve done real work here. This is a good place to stop; come back fresh for the last few claims.
               </p>
             </div>
+          </Card>
+        ) : null}
+
+        {showReflectionRitual ? (
+          <Card className="p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Session-end reflection ritual</p>
+                <h3 className="mt-1 text-xl font-semibold text-[var(--ink)]">Close the loop in 60 seconds.</h3>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                  Capture the surprise, the resistance, and the thing worth returning to. Penny keeps this as a reflection artifact instead of letting it disappear.
+                </p>
+              </div>
+              <Badge className="bg-[#e7defa] text-[#5c4c88]">shape data</Badge>
+            </div>
+
+            <form action={submitReflectionAction.bind(null, session.id)} className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]" htmlFor="surprised">
+                  What surprised you today?
+                </label>
+                <textarea
+                  id="surprised"
+                  name="surprised"
+                  rows={2}
+                  placeholder="Name the thing that changed your mind or attention."
+                  className="w-full rounded-[20px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none ring-0 placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]" htmlFor="resisted">
+                  What did you resist?
+                </label>
+                <textarea
+                  id="resisted"
+                  name="resisted"
+                  rows={2}
+                  placeholder="Name the critique, shift, or conclusion you kept pushing away."
+                  className="w-full rounded-[20px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none ring-0 placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]" htmlFor="returnTo">
+                  What do you want to come back to?
+                </label>
+                <textarea
+                  id="returnTo"
+                  name="returnTo"
+                  rows={2}
+                  placeholder="Name the claim or decision you want to reopen next time."
+                  className="w-full rounded-[20px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none ring-0 placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                />
+              </div>
+              <Button type="submit" variant="secondary" className="gap-2">
+                Save reflection
+              </Button>
+            </form>
           </Card>
         ) : null}
 
