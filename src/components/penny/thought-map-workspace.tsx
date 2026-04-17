@@ -32,7 +32,6 @@ import {
   retrieveSurvivorPrecedentsForCase,
   traceContradictionCascade,
   buildShapeTimeline,
-  type ClaimStructureSnapshot,
   type PennyShape,
   type PennyShapeFeedback,
   type MapTimelineSnapshot,
@@ -43,6 +42,7 @@ import { cn } from "@/lib/utils";
 import type {
   CognitiveIntervention,
   FounderBriefModel,
+  ClaimStructureSnapshot,
   ThoughtMapGraphSnapshot,
   ThoughtMapEvent,
   ThoughtMapModel,
