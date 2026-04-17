@@ -82,6 +82,11 @@
 - `user`: Twin-check output should have Penny produce the strongest version of the user’s current thinking so the user can decide whether it actually represents what they believe.
 - `user`: Post-mortem protocol on resolved claims should turn outcomes into first-class artifacts so the richest shape input comes from what actually happened.
 - `user`: Dependency-completeness checks should block synthesis only when load-bearing claims have not been stress-tested, framing the block as a visible risk review rather than pure gatekeeping.
+- `user`: Generation and synthesis should include artifact version history with drift detection so founder briefs, essay spines, and other output artifacts can be compared against the stress-tested claims they rest on.
+- `user`: Structured output templates should vary by domain, with founder brief, essay spine, research proposal, policy memo, product spec, design review, investment thesis, and career-transition framework treated as structural frames rather than content templates.
+- `user`: Some projects need multi-output synthesis from the same claim base, such as a board deck, a strategy doc, and a team memo, and Penny should keep the underlying structure consistent while emphasizing differently by audience.
+- `user`: Synthesis artifacts should visually reflect confidence propagation so high-confidence claims render solid while weak or unexamined claims render with a marker that exposes uncertainty in the output itself.
+- `user`: Penny should optionally generate a counter-version artifact before commitment so the user can inspect the strongest opposing conclusion and see which claims would need different weighting.
 - `user`: Tunnel and workflow features should make each stage explicitly completable with exit criteria for capture, structure, stress-test, synthesize, and reflect.
 - `user`: Dual-surface architecture should separate capture mode from reflection mode so low-friction intake and critique-heavy review do not contaminate each other.
 - `user`: Cognitive protection mode should detect deep work on load-bearing claims and suppress secondary prompts, notifications, and unrelated surfaces.
