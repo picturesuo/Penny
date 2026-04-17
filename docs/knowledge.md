@@ -11,6 +11,7 @@
 - `user`: The learning loop should merge into the best-next-move area rather than compete with it as a separate primary section.
 - `user`: Users should both revisit/refine existing maps repeatedly and open new ones often, more like a high-intensity ChatGPT workflow.
 - `user`: Near-term priority is frontend hierarchy and polish because the workspace currently feels chopped.
+- `user`: For multi-part code tasks, each distinct finished change should be committed and pushed before starting the next distinct change, so the repo records each completed subtask as its own publishable step.
 
 ## Product Vision & Direction
 - `user`: Penny is an ideation instrument, meaning a personal thinking system that captures raw ideas, stress-tests them against evidence and precedent, teaches the user what they do not understand at the moment they need it, and reflects thinking patterns back to the user so learning compounds over time.
