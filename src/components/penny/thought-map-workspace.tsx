@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import type { ReactNode } from "react";
 import { AlertCircle, ArrowRightLeft, CircleDot, GitBranchPlus, Link2, Sparkles } from "lucide-react";
 import { FounderBriefCard } from "@/components/penny/founder-brief-card";
 import { Badge } from "@/components/ui/badge";
