@@ -70,7 +70,8 @@ export type ThoughtMapEventType =
   | "intervention_dismissed"
   | "bias_detected"
   | "bias_resolved"
-  | "move_applied";
+  | "move_applied"
+  | "shape_feedback";
 
 export type RecommendationReason =
   | "low_evidence"

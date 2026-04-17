@@ -7,11 +7,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
+  buildClaimMoveHistory,
   buildBeliefGenealogy,
+  buildConfidenceDecaySnapshot,
+  collectShapeFeedback,
   buildOldSelfTimeline,
   derivePennyShapes,
   findActiveShapeCallout,
   formatShapeVerdict,
+  interleaveStressNodes,
+  retrievePrecedentsForNode,
+  type PennyShapeFeedback,
 } from "@/lib/penny-insights";
 import { cn } from "@/lib/utils";
 import type {
@@ -104,6 +110,8 @@ type FounderBriefResponse = {
 };
 
 type MapView = "outline" | "graph";
+
+type PeerAudience = "skeptical investor" | "thesis advisor" | "skeptical academic" | "gtm operator";
 
 type PositionedGraphNode = {
   node: ThoughtNodeModel;
@@ -271,7 +279,10 @@ export function ThoughtMapWorkspace({
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(() =>
     preferredGraphNodeId(normalizeMap(initialMap)),
   );
-  const [shapeFeedback, setShapeFeedback] = useState<Record<string, "confirmed" | "rejected" | "refined">>({});
+  const [peerAudience, setPeerAudience] = useState<PeerAudience>("skeptical investor");
+  const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
+    collectShapeFeedback(normalizeMap(initialMap).events),
+  );
   const [runningRecommendedMove, setRunningRecommendedMove] = useState(false);
   const [runningFounderBrief, setRunningFounderBrief] = useState(false);
   const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
@@ -646,14 +657,25 @@ export function ThoughtMapWorkspace({
     () => buildOldSelfTimeline(map.nodes, map.events, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map.events, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
   );
+  const selectedMoveHistory = useMemo(
+    () => buildClaimMoveHistory(map.nodes, map.events, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
+    [defaultGraphNodeId, map.events, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
+  );
   const selectedGraphNodeParent = selectedGraphNode?.node.parentId
     ? nodesById.get(selectedGraphNode.node.parentId) ?? null
     : null;
+  const selectedPrecedents = selectedGraphNode ? retrievePrecedentsForNode(selectedGraphNode.node) : [];
+  const selectedDecay = selectedGraphNode ? buildConfidenceDecaySnapshot(selectedGraphNode.node) : null;
+  const interleavedStressQueue = useMemo(() => interleaveStressNodes(activeNodes).slice(0, 8), [activeNodes]);
   const bestSteelmanTarget = map.recommendedNextMove
     ? map.nodes.find((node) => node.id === map.recommendedNextMove?.targetNodeId) ?? null
     : selectedGraphNode?.node ?? weakestLearningNode ?? map.nodes.find((node) => node.kind === "core_claim") ?? rootNode ?? null;
   const steelmanTargetText = bestSteelmanTarget?.content ?? map.rawThought;
   const steelmanPrompt = `Argue the strongest possible version of this position: ${steelmanTargetText}`;
+  const selectedNormChallengeNode =
+    selectedGraphNode?.node ?? map.nodes.find((node) => /norm|should|must|rule/i.test(node.content)) ?? null;
+  const selectedPrecedentSummary =
+    selectedPrecedents[0] ?? null;
   const inspectorScores = selectedGraphNode
     ? [
         { label: "Strength", value: selectedGraphNode.node.scores?.strength ?? null },
@@ -672,6 +694,23 @@ export function ThoughtMapWorkspace({
       : response.recommendedIntervention === null
         ? null
         : undefined;
+    const syntheticMoveEvent: SerializableThoughtMapEvent = {
+      id: `local:${response.action}:${response.execution.targetNodeId}:${Date.now()}`,
+      mapId: map.id,
+      nodeId: response.execution.targetNodeId,
+      interventionId: null,
+      eventType: "move_applied",
+      payload: {
+        action: response.action,
+        executionMode: response.execution.mode,
+        targetNodeKind: response.execution.targetNodeKind,
+        targetParentId: response.execution.targetParentId,
+        supersededNodeId: response.execution.supersededNodeId,
+        createdNodeIds: response.createdNodes.map((node) => node.id),
+        updatedNodeIds: response.updatedNodes.map((node) => node.id),
+      },
+      createdAt: new Date(),
+    };
 
     setMap((currentMap) => {
       const updatedLookup = new Map(updatedNodes.map((node) => [node.id, node]));
@@ -694,8 +733,56 @@ export function ThoughtMapWorkspace({
             ? currentMap.recommendedIntervention
             : normalizedRecommendedIntervention,
         recommendedNextMove: response.recommendedNextMove ?? currentMap.recommendedNextMove,
+        events: [...currentMap.events, normalizeEvent(syntheticMoveEvent)].sort(
+          (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+        ),
         updatedAt: new Date(),
       };
+    });
+  }
+
+  function mergeShapeFeedbackEvent(event: SerializableThoughtMapEvent) {
+    const normalizedEvent = normalizeEvent(event);
+
+    setMap((currentMap) => ({
+      ...currentMap,
+      events: [...currentMap.events, normalizedEvent].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
+      updatedAt: new Date(),
+    }));
+  }
+
+  function recordShapeFeedback(shape: { id: string; label: string; primaryMapId: string | null }, verdict: PennyShapeFeedback) {
+    const mapId = shape.primaryMapId ?? map.id;
+
+    setShapeFeedback((current) => ({ ...current, [shape.id]: verdict }));
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${mapId}/shape-feedback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            shapeId: shape.id,
+            verdict,
+            shapeLabel: shape.label,
+            source: "workspace",
+            nodeId: selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null,
+          }),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { event: SerializableThoughtMapEvent };
+        mergeShapeFeedbackEvent(payload.event);
+      } catch {
+        return;
+      }
     });
   }
 
@@ -1130,6 +1217,139 @@ export function ThoughtMapWorkspace({
           ))}
         </div>
 
+        <div className="mt-6 rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Peer simulation</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Critique this claim as a named audience</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Penny uses how this audience historically attacks similar structures, then grounds the response in the matching precedent set.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["skeptical investor", "thesis advisor", "skeptical academic", "gtm operator"] as PeerAudience[]).map((audience) => (
+                <Button
+                  key={audience}
+                  variant={peerAudience === audience ? "primary" : "secondary"}
+                  className="px-4 py-2 text-xs"
+                  onClick={() => setPeerAudience(audience)}
+                >
+                  {audience}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
+            <div className="rounded-[20px] bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Precedent-grounded critique</p>
+              <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+                {selectedGraphNode
+                  ? `${peerAudience} mode: Penny searches for failure cases that match this claim’s risk profile before it gives the critique.`
+                  : "Select a claim to retrieve failure cases that match its risk profile."}
+              </p>
+              {selectedPrecedents.length ? (
+                <div className="mt-4 space-y-3">
+                  {selectedPrecedents.map((precedent) => (
+                    <div key={precedent.id} className="rounded-[18px] bg-[var(--panel)] p-4">
+                      <p className="text-sm font-medium text-[var(--ink)]">{precedent.name}</p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                        {precedent.domain} · {precedent.failureMode}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {precedent.riskTags.map((tag) => (
+                          <Badge key={`${precedent.id}-${tag}`} className="bg-white text-[var(--ink)]">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{precedent.whatKilledIt}</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{precedent.killAssumption}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-[var(--muted-ink)]">
+                  Penny will show the cases that most closely match the claim’s risk profile once a node is selected.
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-[20px] bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Audience attacks</p>
+              <div className="mt-3 space-y-2">
+                {(selectedPrecedentSummary?.audienceAttacks ?? [])[0] ? (
+                  selectedPrecedentSummary!.audienceAttacks.map((attack) => (
+                    <p key={attack} className="rounded-[16px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)]">
+                      {attack}
+                    </p>
+                  ))
+                ) : (
+                  <p className="text-sm leading-6 text-[var(--muted-ink)]">
+                    Choose an audience to simulate how that audience historically attacks similar structures.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[20px] bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Norm-challenge scrutiny</p>
+              {selectedNormChallengeNode ? (
+                <>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+                    {selectedNormChallengeNode.content}
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                    Penny holds the strongest case for the norm in view, then checks whether the counter-case actually addresses the reason the norm exists.
+                  </p>
+                  <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Why this norm exists</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                      Norms usually exist because they protect trust, coordination, or safety. The scrutiny pass asks whether the objection also handles those load-bearing concerns.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                  No explicit norm claim is selected yet. Pick a claim that frames a rule, should, must, or policy to surface this scrutiny pass.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-[24px] border border-black/8 bg-white p-5">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Interleaved stress-testing</p>
+          <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Alternate across related claims instead of drilling one branch at a time.</h3>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+            Penny mixes weak-evidence, falsification, dependency, and comparison pressure so the critique discriminates between nearby claims instead of pattern-matching one branch to death.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {interleavedStressQueue.length ? (
+              interleavedStressQueue.map((node, index) => (
+                <div key={node.id} className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className={statusBadge(node.nodeStatus)}>{node.nodeStatus}</Badge>
+                    <Badge>{kindLabel(node.kind)}</Badge>
+                    <Badge className="bg-white text-[var(--ink)]">pass {index + 1}</Badge>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{node.content}</p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                    {node.scores?.evidence != null ? `evidence ${formatScore(node.scores.evidence)}` : "evidence n/a"} ·{" "}
+                    {node.psychology?.falsificationCoverageScore != null
+                      ? `falsification ${formatScore(node.psychology.falsificationCoverageScore)}`
+                      : "falsification n/a"}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                No stress nodes yet. Add more claims so Penny can alternate pressure across the map.
+              </p>
+            )}
+          </div>
+        </div>
+
         <div className="mt-6 grid gap-4 xl:grid-cols-2">
           {stressTestPasses.map((pass) => (
             <div key={pass.title} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
@@ -1298,7 +1518,7 @@ export function ThoughtMapWorkspace({
           <div className="space-y-4">
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Belief genealogy</p>
-              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Where this belief came from</h3>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Supersession chain and source contradictions</h3>
 
               {selectedGenealogy.lineage.length ? (
                 <div className="mt-4 space-y-3">
@@ -1338,6 +1558,66 @@ export function ThoughtMapWorkspace({
                   )}
                 </div>
               </div>
+
+              <div className="mt-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Contradicted by</p>
+                <div className="mt-3 space-y-2">
+                  {selectedGenealogy.contradictions.length ? (
+                    selectedGenealogy.contradictions.slice(0, 4).map((node) => (
+                      <div key={node.id} className="rounded-[18px] bg-[var(--panel)] p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className={statusBadge(node.nodeStatus)}>{node.nodeStatus}</Badge>
+                          <Badge>{kindLabel(node.kind)}</Badge>
+                          {node.nodeStatus === "superseded" ? (
+                            <Badge className="bg-[#f5d6b3] text-[#8b4d1f]">source contradicted</Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{node.content}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <Badge className="bg-[var(--panel)] text-[var(--ink)]">No contradicted source found yet</Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Move history</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">What happened to this claim</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                The move log makes the self-iteration visible: what Penny changed, what signals fired, and when the user pushed back.
+              </p>
+              <div className="mt-4 space-y-3">
+                {selectedMoveHistory.length ? (
+                  selectedMoveHistory.slice(-5).map((entry) => (
+                    <div key={entry.id} className="rounded-[18px] bg-[var(--panel)] p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="bg-white text-[var(--ink)]">{entry.label}</Badge>
+                        <Badge
+                          className={
+                            entry.accent === "move"
+                              ? "bg-[#d9ead8] text-[#355b32]"
+                              : entry.accent === "feedback"
+                                ? "bg-[#e7defa] text-[#5c4c88]"
+                                : "bg-[#fff6ed] text-[#8b4d1f]"
+                          }
+                        >
+                          {entry.accent}
+                        </Badge>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{entry.summary}</p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                        {entry.createdAt.toLocaleDateString()}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                    No move history yet for this claim.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="rounded-[24px] border border-black/8 bg-[linear-gradient(180deg,#fffdf8_0%,#f8f2e8_100%)] p-5">
@@ -1363,36 +1643,21 @@ export function ThoughtMapWorkspace({
                     <Button
                       variant="secondary"
                       className="px-3 py-2 text-xs"
-                      onClick={() =>
-                        setShapeFeedback((current) => ({
-                          ...current,
-                          [activeShapeCallout.id]: "confirmed",
-                        }))
-                      }
+                      onClick={() => recordShapeFeedback(activeShapeCallout, "confirmed")}
                     >
                       Confirm
                     </Button>
                     <Button
                       variant="secondary"
                       className="px-3 py-2 text-xs"
-                      onClick={() =>
-                        setShapeFeedback((current) => ({
-                          ...current,
-                          [activeShapeCallout.id]: "rejected",
-                        }))
-                      }
+                      onClick={() => recordShapeFeedback(activeShapeCallout, "rejected")}
                     >
                       Reject
                     </Button>
                     <Button
                       variant="secondary"
                       className="px-3 py-2 text-xs"
-                      onClick={() =>
-                        setShapeFeedback((current) => ({
-                          ...current,
-                          [activeShapeCallout.id]: "refined",
-                        }))
-                      }
+                      onClick={() => recordShapeFeedback(activeShapeCallout, "refined")}
                     >
                       Refine
                     </Button>
@@ -1406,6 +1671,42 @@ export function ThoughtMapWorkspace({
               ) : (
                 <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
                   When a shape is active in a critique, Penny will name it here and show the pattern it is using.
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Confidence decay</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">
+                {selectedDecay ? `${selectedDecay.untouchedDays} days untouched` : "Select a node to track revisit decay"}
+              </h3>
+
+              {selectedDecay ? (
+                <>
+                  <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
+                    {selectedDecay.isFoundational
+                      ? "Foundational beliefs decay faster because their failure cascades through the rest of the map."
+                      : "Non-foundational claims decay more slowly, but still surface for revisit after enough time passes."}
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Revisit threshold</p>
+                      <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{selectedDecay.revisitThresholdDays} days</p>
+                    </div>
+                    <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Decayed confidence</p>
+                      <p className="mt-2 text-lg font-semibold text-[var(--ink)]">
+                        {selectedDecay.decayedConfidence != null ? formatScore(selectedDecay.decayedConfidence) : "n/a"}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                    Confidence multiplier now sits at {Math.round(selectedDecay.decayMultiplier * 100)}%. Untouched beliefs are flagged before they go stale.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                  Select a node in the graph to see how long it has gone untouched and when Penny should revisit it.
                 </p>
               )}
             </div>

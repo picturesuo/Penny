@@ -134,6 +134,8 @@
 - `repo`: The first outline/graph map-page slice should reuse the existing `ThoughtMapModel` payload from `getThoughtMap()` instead of introducing a graph-only transport. The current payload already includes `parentId`, judged `scores`, `nodeStatus`, `graphSnapshot`, `recommendedNextMove`, interventions, founder brief data, and founder-brief readiness.
 - `repo`: `src/app/page.tsx` now leads with the pressure-tested second-brain frame and keeps the landing copy aligned with the wiki-first product direction instead of centering startup-idea critique.
 - `repo`: `src/app/app/page.tsx` now surfaces a small foundation stack for Lens, overrides, and precedents, and `src/components/penny/thought-map-workspace.tsx` now frames triage and the override trail with that same foundation language.
+- `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces precedent-grounded critique, peer simulation, norm-challenge scrutiny, confidence decay, and interleaved stress-testing as first-class critique surfaces.
+- `repo`: `src/components/penny/shape-dashboard.tsx` now records shape feedback back to the map through `POST /api/maps/[id]/shape-feedback`, and `src/server/thought-map.ts` now persists that feedback as a `shape_feedback` move event.
 
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.

@@ -1,15 +1,60 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { formatShapeVerdict, type PennyShape } from "@/lib/penny-insights";
+import { formatShapeVerdict, type PennyShape, type PennyShapeFeedback } from "@/lib/penny-insights";
 
-type ShapeFeedback = "confirmed" | "rejected" | "refined";
+export function ShapeDashboard({
+  shapes,
+  initialFeedback,
+}: {
+  shapes: PennyShape[];
+  initialFeedback: Record<string, PennyShapeFeedback>;
+}) {
+  const [feedback, setFeedback] = useState<Record<string, PennyShapeFeedback>>(initialFeedback);
+  const [isPending, startTransition] = useTransition();
 
-export function ShapeDashboard({ shapes }: { shapes: PennyShape[] }) {
-  const [feedback, setFeedback] = useState<Record<string, ShapeFeedback>>({});
+  function recordFeedback(shape: PennyShape, verdict: PennyShapeFeedback) {
+    const mapId = shape.primaryMapId;
+    const previousVerdict = feedback[shape.id];
+
+    setFeedback((current) => ({ ...current, [shape.id]: verdict }));
+
+    if (!mapId) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${mapId}/shape-feedback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            shapeId: shape.id,
+            verdict,
+            shapeLabel: shape.label,
+            source: "dashboard",
+          }),
+        });
+
+        if (!response.ok) {
+          if (previousVerdict) {
+            setFeedback((current) => ({ ...current, [shape.id]: previousVerdict }));
+          }
+          return;
+        }
+      } catch {
+        if (previousVerdict) {
+          setFeedback((current) => ({ ...current, [shape.id]: previousVerdict }));
+        }
+        return;
+      }
+    });
+  }
 
   return (
     <Card className="p-6 sm:p-8">
@@ -60,21 +105,24 @@ export function ShapeDashboard({ shapes }: { shapes: PennyShape[] }) {
                   <Button
                     variant="secondary"
                     className="px-3 py-2 text-xs"
-                    onClick={() => setFeedback((current) => ({ ...current, [shape.id]: "confirmed" }))}
+                    disabled={isPending}
+                    onClick={() => recordFeedback(shape, "confirmed")}
                   >
                     Confirm
                   </Button>
                   <Button
                     variant="secondary"
                     className="px-3 py-2 text-xs"
-                    onClick={() => setFeedback((current) => ({ ...current, [shape.id]: "rejected" }))}
+                    disabled={isPending}
+                    onClick={() => recordFeedback(shape, "rejected")}
                   >
                     Reject
                   </Button>
                   <Button
                     variant="secondary"
                     className="px-3 py-2 text-xs"
-                    onClick={() => setFeedback((current) => ({ ...current, [shape.id]: "refined" }))}
+                    disabled={isPending}
+                    onClick={() => recordFeedback(shape, "refined")}
                   >
                     Refine
                   </Button>

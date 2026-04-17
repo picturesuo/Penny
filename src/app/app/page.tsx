@@ -79,7 +79,7 @@ export default async function DashboardPage() {
         </div>
       </Card>
 
-      <ShapeDashboard shapes={shapes} />
+      <ShapeDashboard shapes={shapes} initialFeedback={{}} />
 
       {mapCards.length ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">

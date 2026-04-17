@@ -48,8 +48,9 @@ function mapNode(record: ThoughtNode): ThoughtNodeModel {
 }
 
 function buildThoughtMapModel(
-  record: ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+  record: ThoughtMap & { nodes: ThoughtNode[]; events?: ThoughtMapEventRecord[] },
 ): ThoughtMapModel {
+  const events = record.events ?? [];
   const founderBriefPayload = parseJson<Omit<FounderBriefModel, "generatedAt">>(record.founderBrief);
   const founderBrief =
     founderBriefPayload && record.founderBriefGeneratedAt
@@ -65,15 +66,7 @@ function buildThoughtMapModel(
     rawThought: record.rawThought,
     status: record.status,
     nodes: record.nodes.map(mapNode),
-    events: record.events.map((event): ThoughtMapEventModel => ({
-      id: event.id,
-      mapId: event.mapId,
-      nodeId: event.nodeId,
-      interventionId: event.interventionId,
-      eventType: event.eventType as ThoughtMapEventType,
-      payload: parseJson<Record<string, unknown>>(event.payload),
-      createdAt: event.createdAt,
-    })),
+    events: events.map(mapEventRecord),
     founderBrief,
     founderBriefReadiness: {
       eligible: false,
@@ -117,6 +110,18 @@ function parseJson<T>(value: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+function mapEventRecord(record: ThoughtMapEventRecord): ThoughtMapEventModel {
+  return {
+    id: record.id,
+    mapId: record.mapId,
+    nodeId: record.nodeId,
+    interventionId: record.interventionId,
+    eventType: record.eventType as ThoughtMapEventType,
+    payload: parseJson<Record<string, unknown>>(record.payload),
+    createdAt: record.createdAt,
+  };
 }
 
 function formatClaimCaptureMetadata(metadata: ClaimCaptureMetadata) {
@@ -196,6 +201,33 @@ async function createThoughtMapEvent(
       payload: serializeJson(input.payload ?? null),
     },
   });
+}
+
+export async function recordShapeFeedback(params: {
+  mapId: string;
+  shapeId: string;
+  verdict: "confirmed" | "rejected" | "refined";
+  shapeLabel: string;
+  source: string;
+  nodeId?: string | null;
+}) {
+  const created = await prisma.$transaction(async (tx) => {
+    return tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.nodeId ?? null,
+        eventType: "shape_feedback",
+        payload: serializeJson({
+          shapeId: params.shapeId,
+          verdict: params.verdict,
+          shapeLabel: params.shapeLabel,
+          source: params.source,
+        }),
+      },
+    });
+  });
+
+  return mapEventRecord(created);
 }
 
 async function syncThoughtMapInterventions(params: {
@@ -375,14 +407,18 @@ export async function listThoughtMaps() {
       nodes: {
         orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
       },
-      events: {
-        orderBy: [{ createdAt: "asc" }],
-      },
     },
     take: 12,
   });
 
-  return Promise.all(maps.map((map) => hydrateThoughtMap(map)));
+  return Promise.all(
+    maps.map((map) =>
+      hydrateThoughtMap({
+        ...map,
+        events: [],
+      } as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] }),
+    ),
+  );
 }
 
 export async function createThoughtMap(input: CreateThoughtMapInput) {
