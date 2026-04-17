@@ -115,13 +115,13 @@ function stageQuestion(session: SessionState, stage: SessionStage): string {
   const solution = mergeText(session.solution, session.rawIdea);
 
   const stageQuestions: Record<SessionStage, string> = {
-    intake: `Who is this actually for? "Everyone who might want this" is not an answer.`,
+    intake: `What's your gut say? Don't overthink it yet. Who is this actually for?`,
     clarify: `What painful moment makes ${targetUser || "the target user"} actively look for a solution, instead of tolerating the current mess?`,
     assumptions: `What are you assuming about why existing options fail ${targetUser || "for this user"} today?`,
-    "pressure-test": `Why would ${targetUser || "that user"} change behavior for ${solution || "this"} instead of sticking with the current workaround?`,
-    evidence: `What evidence do you have beyond intuition that ${problem || "this problem"} is urgent enough to pay for?`,
-    prioritize: `If you had to narrow this to one wedge customer and one promise, what would you keep and what would you cut?`,
-    brief: `What is the single test that would most quickly prove or kill this idea this week?`,
+    "pressure-test": `Walk through this slowly. What's the weakest link in why ${targetUser || "that user"} would change behavior for ${solution || "this"}?`,
+    evidence: `Slow down and check the evidence. What would actually change your mind about ${problem || "this problem"}?`,
+    prioritize: `Check your reasoning against the critiques. Where are you leaning on instinct instead of evidence?`,
+    brief: `Check your reasoning against the critiques before you write. Where did you lean on instinct vs. evidence, and what becomes necessary if the claim holds?`,
   };
 
   return stageQuestions[stage];
