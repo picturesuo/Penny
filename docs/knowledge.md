@@ -135,6 +135,12 @@
 - `user`: Belief provenance across users should only flag shared-source contradictions when privacy-safe and should never expose another user’s private claim graph directly.
 - `user`: Public anonymized research mode should surface aggregate unresolved-pattern data as a public good for researchers, journalists, and funders.
 - `user`: Thought-partner matching should be targeted and one-to-one, not feed-like, and should stay high-touch because the design risk is high.
+- `user`: Devil’s advocate with receipts should critique in the voices of specific historical or contemporary thinkers, using their actual positions and precedent for what happened when others took the user’s side.
+- `user`: Cross-project shape transfer should let shapes learned in one project inform stress-testing in the next, so the user gets sharper across contexts.
+- `user`: Inheritance claims should explicitly mark beliefs received from someone else and automatically level up scrutiny on that source chain.
+- `user`: Aging foundations monitoring should decay base claims in large dependency structures more aggressively because their failure cascades outward.
+- `user`: Contradiction cascade tracing should walk forward through dependents when a foundational claim changes so the user knows what else needs revisiting.
+- `user`: Session rhythm should detect approaching cognitive depletion and suggest stopping instead of optimizing for engagement.
 - `user`: Just-in-time learning should happen at the point of confusion during stress-testing, with minimum viable explanation, why-it-matters context, teach-back, and optional deeper anchors.
 - `user`: Every learning moment should generate moves and should feed a knowledge shape for what the user understands, repeats, or needs to relearn.
 - `user`: Shapes must be visible to the user as metacognitive feedback, both in-context and through periodic reflection surfaces.
