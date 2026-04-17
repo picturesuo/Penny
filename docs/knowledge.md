@@ -53,6 +53,7 @@
 - `user`: Tunnel and workflow features should make each stage explicitly completable with exit criteria for capture, structure, stress-test, synthesize, and reflect.
 - `user`: Dual-surface architecture should separate capture mode from reflection mode so low-friction intake and critique-heavy review do not contaminate each other.
 - `user`: Cognitive protection mode should detect deep work on load-bearing claims and suppress secondary prompts, notifications, and unrelated surfaces.
+- `user`: Deep work sessions should be a first-class mode with a declared focus and a 50-minute stretch by default, suppressing non-critical interruptions and batching any follow-up until a clean session-end ritual.
 - `user`: Session rhythm detection should notice approaching cognitive depletion and suggest stopping instead of pushing engagement.
 - `user`: Clean endings should make Penny say the tunnel traversal is complete, hand over the artifact, and stop pulling for more engagement.
 - `user`: Reflection should remain optional-but-rewarded after synthesis, surfacing shapes from the session in a short and skippable way.
