@@ -136,9 +136,21 @@ function formatClaimCaptureMetadata(metadata: ClaimCaptureMetadata) {
     `- Stakes: ${metadata.stakes.length ? metadata.stakes.join(", ") : "none tagged"}`,
     `- Dependency notes: ${metadata.dependencyNotes || "none provided"}`,
     `- Status: ${metadata.status}`,
-    "",
-    "## Raw thought",
   ];
+
+  if (metadata.temporalScope) {
+    lines.push(`- Temporal scope: ${metadata.temporalScope}`);
+  }
+
+  if (metadata.conditionalStatement) {
+    lines.push(`- Conditional statement: ${metadata.conditionalStatement}`);
+  }
+
+  if (metadata.structureKind) {
+    lines.push(`- Structure kind: ${metadata.structureKind.replaceAll("_", " ")}`);
+  }
+
+  lines.push("", "## Raw thought");
 
   return lines.join("\n");
 }
@@ -278,7 +290,7 @@ export async function recordConfidenceOverride(params: {
   mapId: string;
   sourceNodeId: string;
   targetNodeId: string;
-  mode: "hold" | "reduce";
+  mode: "hold" | "reduce" | "decouple";
   reasoning: string;
 }) {
   const created = await prisma.$transaction(async (tx) => {
