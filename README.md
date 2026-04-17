@@ -12,6 +12,13 @@ Penny is built around three core functions:
 - Stress-test: challenge weak evidence, shaky assumptions, missing comparisons, risky dependencies, and unsupported leaps, with precedent where possible.
 - Learning: teach at the point of confusion, using the claim graph to drive just-in-time explanations instead of a separate reading list.
 
+### Learning Features
+
+- Teach-back by default: Penny gives a minimum scaffold, then asks the user to explain the concept in the context of the current claim.
+- Prior-knowledge anchoring: every learning moment should connect to an existing claim in the graph.
+- Knowledge shape tracking: Penny should remember what the user has mastered, what they keep needing to relearn, and what is solid.
+- Research-mode expansion: optional follow-up only, clearly separated from the inline learning moment so it stays anchored to the triggering claim.
+
 What the user should leave with:
 
 - A structured result, such as a brief, outline, decision memo, or plan.
