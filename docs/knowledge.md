@@ -300,6 +300,11 @@
 - `user`: The whole-map timeline should show claims appearing, getting stress-tested, changing confidence, getting revised, and resolving as a time-lapse of thinking.
 - `user`: The per-shape timeline should show when Penny first noticed a pattern, how its confidence evolved, and which moves strengthened or weakened it.
 - `user`: The per-dependency-chain timeline should show the load-bearing structure emerging over time so the user can see how an argument was assembled.
+- `user`: The "what I used to believe" digest should be a periodic reflection surface that shows recently updated beliefs and invites the user to trace why they moved.
+- `user`: Prediction retrospectives should trigger on a claim's resolution date and ask what happened, what was predicted, and what the outcome says about calibration.
+- `user`: Belief velocity should track how fast beliefs change by domain so Penny can show whether the user is rigid or volatile in different areas.
+- `user`: Decisions made under Penny's influence should be logged as moments where critique actually changed direction, creating a history of decision quality instead of just critique output.
+- `user`: Precedent adherence tracking should check whether the user's responses actually addressed the failure modes surfaced by a selected precedent case, not just whether the case sounded relevant.
 - `user`: Confidence drift indicators should surface recent shifts in confidence directly on the graph as directional cues.
 - `user`: Contradiction cascade preview should appear at revision time so users can see the downstream structural debt they are incurring.
 - `user`: Provenance tracing should show the original source, capture session, and the shapes Penny knew at the time the belief was formed.
@@ -349,6 +354,8 @@
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces precedent-grounded critique, peer simulation, norm-challenge scrutiny, confidence decay, and interleaved stress-testing as first-class critique surfaces.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a round-tracked dialectic scaffold, a synthesis-gate surface, a move-query lens, and confidence drift indicators in the old-selves timeline.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a first-class timeline block for whole-map events, per-shape confidence trails, and dependency-chain progression.
+- `repo`: `src/app/app/page.tsx` now surfaces a memory/time dashboard with what-I-used-to-believe digests, prediction retrospectives, belief velocity, and decisions under Penny.
+- `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces precedent adherence tracking so the selected failure case can check whether the user's replies actually address the same failure modes.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces propagated confidence implications explicitly so downstream belief changes must be accepted or defended instead of happening silently.
 - `repo`: `src/lib/penny-insights.ts` now enriches precedent cases with claim equivalents, load-bearing assumptions, structural lessons, and failure-type tags, and it adds survivor analog retrieval for the same structural shape; `src/components/penny/thought-map-workspace.tsx` lets the user select a precedent and compare it with surviving analogs.
 - `repo`: `src/lib/thought-map-generation.ts` now performs claim-type-aware assumption extraction with a sharpness filter, and `src/components/penny/thought-map-form.tsx` now surfaces the extracted assumptions as interactive capture-time preview nodes.
