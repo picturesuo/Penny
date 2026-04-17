@@ -43,6 +43,11 @@
 - `user`: Stakes-proportional friction should make load-bearing claims incur more stress-testing, pre-mortems, and revisit cadence, while lightweight claims stay lightweight.
 - `user`: Twin-check output should have Penny produce the strongest version of the user’s current thinking so the user can decide whether it actually represents what they believe.
 - `user`: Post-mortem protocol on resolved claims should turn outcomes into first-class artifacts so the richest shape input comes from what actually happened.
+- `user`: Tunnel and workflow features should make each stage explicitly completable with exit criteria for capture, structure, stress-test, synthesize, and reflect.
+- `user`: Dual-surface architecture should separate capture mode from reflection mode so low-friction intake and critique-heavy review do not contaminate each other.
+- `user`: Cognitive protection mode should detect deep work on load-bearing claims and suppress secondary prompts, notifications, and unrelated surfaces.
+- `user`: Clean endings should make Penny say the tunnel traversal is complete, hand over the artifact, and stop pulling for more engagement.
+- `user`: Reflection should remain optional-but-rewarded after synthesis, surfacing shapes from the session in a short and skippable way.
 - `user`: The data model should treat `Claims`, `Moves`, and `Shapes` as first-class layers.
 - `user`: `Claims` are the nodes: beliefs, evidence, provenance, confidence, and status.
 - `user`: The capture form should collect the root claim with a normalized metadata envelope so the same raw thought also carries confidence, resolution timing, provenance, stakes, dependencies, and status.
@@ -50,6 +55,11 @@
 - `user`: `Shapes` are emergent thinking patterns derived from moves over time, and they should be visible to the user as metacognitive feedback.
 - `user`: Key mechanisms include failure-type routing, teach-back over summary, disagreement as signal, confidence decay, and surfacing shapes back to the user.
 - `user`: The product shape is a tunnel from raw thought to structured creativity, with bounded stages and exit criteria for capture, stress-test, learn, and synthesize.
+- `user`: The tunnel should have explicit stage exit criteria so capture, structure, stress-test, synthesize, and reflect each feel completable.
+- `user`: Capture mode and reflection mode should be separate surfaces so the system preserves System 1 flow and System 2 depth instead of mixing them together.
+- `user`: When the user is in deep work on a load-bearing claim, Penny should enter cognitive protection mode and suppress unrelated prompts and secondary surfaces.
+- `user`: When a tunnel traversal completes, Penny should explicitly say so, hand over the artifact, and stop pulling for engagement.
+- `user`: Reflection should be optional but rewarded, with a short shapes surface after synthesis that is easy to skip but high value when used.
 - `user`: Penny’s voice should be an invested sparring partner: genuinely helpful, not sycophantic, not brutal.
 - `user`: The visual language should feel like a built city rather than a notes dump, with structure emerging from thinking and density beating breadth.
 - `user`: The current build should preserve the landing page thesis, the server-backed thought-map model, the outline plus graph workspace, best-next-move as a central decision surface, stress testing as a visible lane, and the founder brief flow as one instance of structured output.
