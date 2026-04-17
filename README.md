@@ -122,6 +122,9 @@ Learn should be just-in-time and claim-anchored.
 - Users should be able to inspect and edit shapes directly when Penny’s model of them is wrong.
 - Lens reset should let the user ask Penny to rebuild from recent moves when major life changes invalidate older patterns.
 - Reasoning replay should let the user trace the full move history behind a decision or artifact.
+- Citation capture should attach source provenance to pasted material so claims can be traced back through source, search, and session.
+- Source reliability should default to stronger weighting for peer-reviewed research than for interviews, tweets, or intuition.
+- Penny should flag when cited sources contradict each other or when a source has been updated, retracted, or contradicted by newer evidence.
 
 ## Predictive Surfaces
 
