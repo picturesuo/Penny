@@ -7,6 +7,7 @@ import type {
 } from "@prisma/client";
 import { prisma } from "@/db/prisma";
 import { buildFounderBrief, getFounderBriefReadiness } from "@/lib/founder-brief";
+import { buildPennyLens } from "@/lib/penny-insights";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
 import {
   createRootNodeContent,
@@ -73,6 +74,7 @@ function buildThoughtMapModel(
       missingRequirements: ["assumption", "counter_argument", "research"],
     },
     graphSnapshot: null,
+    bayesianPropagation: null,
     recommendedNextMove: null,
     interventions: [],
     recommendedIntervention: null,
@@ -224,6 +226,67 @@ export async function recordShapeFeedback(params: {
           shapeLabel: params.shapeLabel,
           source: params.source,
           reasoning: params.reasoning,
+        }),
+      },
+    });
+  });
+
+  return mapEventRecord(created);
+}
+
+export async function recordConfidenceOverride(params: {
+  mapId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  mode: "hold" | "reduce";
+  reasoning: string;
+}) {
+  const created = await prisma.$transaction(async (tx) => {
+    return tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.targetNodeId,
+        eventType: "confidence_override",
+        payload: serializeJson({
+          sourceNodeId: params.sourceNodeId,
+          targetNodeId: params.targetNodeId,
+          mode: params.mode,
+          reasoning: params.reasoning,
+        }),
+      },
+    });
+  });
+
+  return mapEventRecord(created);
+}
+
+export async function recordDialecticRound(params: {
+  mapId: string;
+  nodeId?: string | null;
+  round: string;
+  roundIndex: number;
+  title: string;
+  critiqueStrength: string;
+  prompt: string;
+  why: string;
+  responsePath: "defend" | "revise" | "absorb";
+  response: string;
+}) {
+  const created = await prisma.$transaction(async (tx) => {
+    return tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.nodeId ?? null,
+        eventType: "dialectic_round",
+        payload: serializeJson({
+          round: params.round,
+          roundIndex: params.roundIndex,
+          title: params.title,
+          critiqueStrength: params.critiqueStrength,
+          prompt: params.prompt,
+          why: params.why,
+          responsePath: params.responsePath,
+          response: params.response,
         }),
       },
     });
@@ -389,12 +452,15 @@ async function syncThoughtMapInterventions(params: {
 async function hydrateThoughtMap(
   record: ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
   beforeMap?: ThoughtMapModel | null,
+  options?: { syncInterventions?: boolean },
 ) {
   const judgedMap = buildThoughtMapModel(record);
-  const interventionState = await syncThoughtMapInterventions({
-    map: judgedMap,
-    beforeMap,
-  });
+  const interventionState = options?.syncInterventions === false
+    ? { interventions: [], recommendedIntervention: null }
+    : await syncThoughtMapInterventions({
+        map: judgedMap,
+        beforeMap,
+      });
 
   return {
     ...judgedMap,
@@ -418,7 +484,9 @@ export async function listThoughtMaps() {
       hydrateThoughtMap({
         ...map,
         events: [],
-      } as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] }),
+      } as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] }, undefined, {
+        syncInterventions: false,
+      }),
     ),
   );
 }
@@ -520,10 +588,12 @@ export async function applyNodeAction(params: {
     throw new Error("Node not found");
   }
 
+  const lens = buildPennyLens(map);
   const generated = generateActionNotes({
     map,
     node,
     action: params.action,
+    lens,
   });
   const persistenceParentId = generated.execution.targetParentId ?? generated.parentNodeId;
   const weakNodeIds = generated.reasoning.graphAnalysis?.weakNodes.map((weakNode) => weakNode.nodeId) ?? [];
@@ -705,7 +775,8 @@ export async function generateFounderBrief(mapId: string) {
     throw new Error("Map not found");
   }
 
-  const founderBrief = buildFounderBrief(map);
+  const lens = buildPennyLens(map);
+  const founderBrief = buildFounderBrief(map, lens);
   const { generatedAt, ...storedFounderBrief } = founderBrief;
   const updatedRecord = await prisma.thoughtMap.update({
     where: { id: mapId },
