@@ -68,6 +68,11 @@ Learn should be just-in-time and claim-anchored.
 
 - Penny gives a minimum scaffold, then asks the user to explain the concept in the context of the current claim.
 - Penny highlights the gap in the user's own explanation and asks for a corrected restatement.
+- If the user is missing a prerequisite concept, Penny should zoom out and teach that concept first through a prerequisite graph.
+- Learned concepts should come back contextually when they naturally apply, not just as flashcards.
+- Users should also be able to enter a dedicated learning mode when the goal is conceptual expansion rather than claim work.
+- Penny should keep a personal concept glossary with mastered concepts organized by domain and linked back to the claims where they first appeared.
+- If a learned concept collides with an existing claim, Penny should surface that tension and force the propagation into the map.
 - Research-mode expansion should stay optional and separate from the inline learning moment.
 - The system should remember what the user has mastered, what they keep needing to relearn, and where their understanding still fails.
 
