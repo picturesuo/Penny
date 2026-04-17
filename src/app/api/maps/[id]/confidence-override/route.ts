@@ -5,7 +5,7 @@ import { recordConfidenceOverride } from "@/server/thought-map";
 const confidenceOverrideSchema = z.object({
   sourceNodeId: z.string().min(1),
   targetNodeId: z.string().min(1),
-  mode: z.enum(["hold", "reduce"]),
+  mode: z.enum(["hold", "reduce", "decouple"]),
   reasoning: z.string().trim().min(8).max(1000),
 });
 
