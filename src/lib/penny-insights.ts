@@ -313,12 +313,29 @@ export interface PrecedentCase {
   id: string;
   name: string;
   domain: string;
+  claimEquivalent: string;
+  loadBearingAssumptions: string[];
   failureMode: string;
   failureTrajectory: string;
   riskTags: string[];
   killAssumption: string;
   whatKilledIt: string;
+  structuralLesson: string;
+  failureTypeTags: string[];
   audienceAttacks: string[];
+}
+
+export interface PrecedentSurvivorCase {
+  id: string;
+  name: string;
+  domain: string;
+  claimEquivalent: string;
+  loadBearingAssumptions: string[];
+  survivalTrajectory: string;
+  riskTags: string[];
+  whatSavedIt: string;
+  structuralLesson: string;
+  survivalTypeTags: string[];
 }
 
 export interface ConfidenceDecaySnapshot {
@@ -643,11 +660,20 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     id: "quibi-mobile-shortform",
     name: "Quibi",
     domain: "consumer media",
+    claimEquivalent: "Mobile premium video can create a habit users return to often enough to justify paid subscription economics.",
+    loadBearingAssumptions: [
+      "Users will adopt a new viewing habit fast enough to matter.",
+      "Short-form premium content creates enough repeat behavior to support subscription economics.",
+      "Attention scarcity helps distribution instead of merely increasing novelty.",
+    ],
     failureMode: "network-effects mismatch",
     failureTrajectory: "novelty spike, weak repeat behavior, distribution never compounds",
     riskTags: ["network effects", "adoption", "distribution", "attention"],
     killAssumption: "People would pay for short-form premium video on mobile without a stronger habit loop.",
     whatKilledIt: "The product bet on a weak behavior change and a crowded attention environment, so distribution never compensated for the missing habit.",
+    structuralLesson:
+      "If the behavior shift is slower than the capital window, attention is not a moat; the timing of repeat use is the real constraint.",
+    failureTypeTags: ["retention-collapse", "behavior-shift", "timeline-mismatch"],
     audienceAttacks: [
       "Skeptical investor: where is the durable retention loop?",
       "Thesis advisor: what theory of behavior change was actually tested?",
@@ -657,11 +683,20 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     id: "juicero-hardware-cost",
     name: "Juicero",
     domain: "hardware",
+    claimEquivalent: "A premium hardware layer can justify itself by creating enough value to outrun cheaper substitutes.",
+    loadBearingAssumptions: [
+      "The machine creates value that cannot be replicated by a simpler workaround.",
+      "Hardware complexity will be rewarded with enough willingness to pay.",
+      "Supply-chain and support costs will improve rather than compound.",
+    ],
     failureMode: "operational overbuild",
     failureTrajectory: "complexity expands, unit economics stay ugly, simpler workaround wins",
     riskTags: ["operations", "money", "time", "dependency"],
     killAssumption: "A premium machine would create enough value to justify expensive hardware and proprietary supply.",
     whatKilledIt: "The system optimized for complexity and capital burn, but the underlying job could be done more cheaply without the machine.",
+    structuralLesson:
+      "When a simpler substitute solves the same job, operational elegance is not enough; the system must win on economics, not only on engineering.",
+    failureTypeTags: ["capital-intensity-compounding", "unit-economics", "operational-overbuild"],
     audienceAttacks: [
       "Skeptical investor: where is the unit-economics moat?",
       "GTM operator: what operational step is this making harder instead of easier?",
@@ -671,11 +706,20 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     id: "wework-growth",
     name: "WeWork",
     domain: "real estate / platform",
+    claimEquivalent: "Community and brand can outrun the economics of occupancy and justify premium valuation.",
+    loadBearingAssumptions: [
+      "The story can stay ahead of the underlying cash flow.",
+      "Governance weakness will not become the primary risk.",
+      "Capital markets will keep rewarding the growth narrative before scrutiny catches up.",
+    ],
     failureMode: "premise-rejection",
     failureTrajectory: "story outruns economics, governance weakens, premise becomes indefensible",
     riskTags: ["reputation", "money", "operational", "governance"],
     killAssumption: "Community and brand would outrun the basic economics of space and occupancy.",
     whatKilledIt: "The story outgrew the economics and governance structure, so the business became impossible to defend on its own terms.",
+    structuralLesson:
+      "If the premise only works while scrutiny stays low, the structure is fragile no matter how charismatic the growth story looks.",
+    failureTypeTags: ["premise-rejection", "governance-drift", "capital-intensity-compounding"],
     audienceAttacks: [
       "Skeptical investor: what if the growth story is just subsidized occupancy?",
       "Thesis committee: does the premise survive once governance is removed from the slide deck?",
@@ -685,11 +729,20 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     id: "theranos-validation",
     name: "Theranos",
     domain: "health / science",
+    claimEquivalent: "A hidden measurement system can carry the weight of a revolutionary promise even before independent validation exists.",
+    loadBearingAssumptions: [
+      "The core measurement layer is valid enough to support the surrounding claim.",
+      "External validation can arrive later without changing the risk profile.",
+      "Trust in the promise will survive exposure of the measurement layer.",
+    ],
     failureMode: "evidence failure",
     failureTrajectory: "hidden measurement layer, validation missing, confidence outruns proof",
     riskTags: ["reputation", "relationship", "self-image", "money"],
     killAssumption: "The promise would hold even if the core measurement system could not be independently validated.",
     whatKilledIt: "The claim depended on hidden test validity, and when the measurement layer was exposed, the rest of the structure collapsed.",
+    structuralLesson:
+      "If the claim depends on a hidden measurement layer, validation is not a later optimization; it is the load-bearing center.",
+    failureTypeTags: ["validation-gap", "measurement-failure", "evidence-failure"],
     audienceAttacks: [
       "Skeptical academic: where is the reproducible evidence chain?",
       "Thesis advisor: what specific result would falsify the core claim?",
@@ -699,11 +752,20 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     id: "google-glass-norms",
     name: "Google Glass",
     domain: "wearable computing",
+    claimEquivalent: "A technically useful device can succeed even if it violates everyday social norms in public.",
+    loadBearingAssumptions: [
+      "Utility will outrun discomfort in public settings.",
+      "Privacy concerns can be managed after adoption starts.",
+      "Social norms will adjust quickly enough to support repeated use.",
+    ],
     failureMode: "norm friction",
     failureTrajectory: "utility exists, but social cost becomes visible before adoption can normalize",
     riskTags: ["relationship", "self-image", "political", "social"],
     killAssumption: "The product could be useful even if it violated everyday social norms and made people uncomfortable.",
     whatKilledIt: "The social cost became visible faster than the utility, so the norm violation itself became the blocking issue.",
+    structuralLesson:
+      "If the norm violation is visible before the utility compounds, the product becomes a social argument before it becomes a product.",
+    failureTypeTags: ["norm-friction", "privacy-risk", "adoption-friction"],
     audienceAttacks: [
       "Skeptical investor: who wants to wear this in public?",
       "Thesis committee: does the counter-case actually neutralize the social friction?",
@@ -713,15 +775,112 @@ const PRECEDENT_CORPUS: PrecedentCase[] = [
     id: "clubhouse-retention",
     name: "Clubhouse",
     domain: "social audio",
+    claimEquivalent: "Scarcity and novelty can bootstrap a network effect even before repeat behavior is established.",
+    loadBearingAssumptions: [
+      "Invite scarcity will create durable desire rather than just early attention.",
+      "Novelty will convert into repeat behavior quickly enough to matter.",
+      "The social graph will compound faster than novelty decays.",
+    ],
     failureMode: "retention collapse",
     failureTrajectory: "attention arrives first, repeat behavior never compounds, novelty fades",
     riskTags: ["network effects", "time", "attention", "social"],
     killAssumption: "Novelty plus invite scarcity would create durable engagement and real network effects.",
     whatKilledIt: "The product got attention before it earned repeat behavior, so the network thinned once the novelty faded.",
+    structuralLesson:
+      "Attention can arrive before compounding behavior, but without a repeat loop the network never actually becomes a system.",
+    failureTypeTags: ["retention-collapse", "behavior-shift", "network-effects-mismatch"],
     audienceAttacks: [
       "Skeptical investor: how does this keep compounding after novelty?",
       "GTM operator: what repeated behavior is the sales motion actually feeding?",
     ],
+  },
+];
+
+const SURVIVOR_CORPUS: PrecedentSurvivorCase[] = [
+  {
+    id: "amazon-logistics-patience",
+    name: "Amazon",
+    domain: "commerce / logistics",
+    claimEquivalent: "Capital-intensive distribution can work if the company can wait for behavior to catch up.",
+    loadBearingAssumptions: [
+      "The company can sustain a long runway while the market matures.",
+      "Operational complexity can compound into advantage instead of only burn.",
+      "Cross-subsidy and patience can bridge the adoption gap.",
+    ],
+    survivalTrajectory: "capital intensity endured because the timeline was long enough and the infrastructure became a moat",
+    riskTags: ["capital intensity", "timeline", "logistics", "distribution"],
+    whatSavedIt: "Amazon tolerated a long payoff window, used adjacent cash flows, and kept improving the infrastructure until the market caught up.",
+    structuralLesson:
+      "The same structure that kills a business at one horizon can survive at another if runway, cross-subsidy, and infrastructure compounding are real.",
+    survivalTypeTags: ["capital-intensity-compounding", "timeline-mismatch", "distribution"],
+  },
+  {
+    id: "netflix-format-shift",
+    name: "Netflix",
+    domain: "media / distribution",
+    claimEquivalent: "A behavior shift can survive if the company transitions before novelty decays and keeps the user loop intact.",
+    loadBearingAssumptions: [
+      "The company can shift formats without losing the underlying habit.",
+      "Distribution advantages carry across the transition.",
+      "The new format keeps repeat behavior alive.",
+    ],
+    survivalTrajectory: "behavior shift succeeded because the company moved with the consumption pattern instead of waiting for it",
+    riskTags: ["behavior shift", "retention", "distribution", "timing"],
+    whatSavedIt: "Netflix kept the core habit while changing the delivery model, so the behavior shifted rather than breaking.",
+    structuralLesson:
+      "A weak behavior shift can survive when the product evolves with the user's habit instead of asking the user to form a completely new one.",
+    survivalTypeTags: ["behavior-shift", "retention-collapse", "timeline-mismatch"],
+  },
+  {
+    id: "airbnb-trust-rails",
+    name: "Airbnb",
+    domain: "marketplace / travel",
+    claimEquivalent: "A norm-friction marketplace can survive if trust rails reduce the social cost of participation.",
+    loadBearingAssumptions: [
+      "Trust systems can make stranger-to-stranger exchange feel safe enough.",
+      "The marketplace can keep repeated use high even when the interaction is socially unusual.",
+      "Reputation and identity checks can lower the norm barrier.",
+    ],
+    survivalTrajectory: "norm friction persisted, but trust infrastructure and reputation systems made the experience socially workable",
+    riskTags: ["trust", "norms", "marketplace", "social"],
+    whatSavedIt: "Airbnb paired the unusual behavior with review systems, identity cues, and host economics that lowered the social cost.",
+    structuralLesson:
+      "Norm friction is survivable when the product explicitly builds rails that make the social cost legible and manageable.",
+    survivalTypeTags: ["norm-friction", "adoption-friction", "trust"],
+  },
+  {
+    id: "wikipedia-governance",
+    name: "Wikipedia",
+    domain: "knowledge commons",
+    claimEquivalent: "A commons can survive if governance is explicit and repeated interaction is organized.",
+    loadBearingAssumptions: [
+      "Community rules can keep quality and trust from collapsing.",
+      "Repeated interaction can be turned into governance rather than chaos.",
+      "The system can absorb conflict without losing the underlying artifact.",
+    ],
+    survivalTrajectory: "governance risk was managed by turning conflict into process and process into repeatable moderation",
+    riskTags: ["governance", "commons", "trust", "process"],
+    whatSavedIt: "Wikipedia survived because the governance layer was explicit, legible, and continuously reinforced by the community itself.",
+    structuralLesson:
+      "When governance is the actual product layer, the system survives by making moderation and norms visible instead of pretending they do not matter.",
+    survivalTypeTags: ["governance-drift", "norm-friction", "trust"],
+  },
+  {
+    id: "salesforce-enterprise-patience",
+    name: "Salesforce",
+    domain: "enterprise software",
+    claimEquivalent: "A long enterprise adoption cycle can survive if the product compounds trust over time.",
+    loadBearingAssumptions: [
+      "The market will tolerate a slower buying motion.",
+      "Value can compound even while adoption is gradual.",
+      "Trust and recurrence matter more than a fast one-shot conversion.",
+    ],
+    survivalTrajectory: "adoption took time, but the recurring model and enterprise trust made the slow path durable",
+    riskTags: ["adoption", "timing", "trust", "enterprise"],
+    whatSavedIt: "Salesforce survived by matching the enterprise sales cycle and letting recurrence do the compounding.",
+    structuralLesson:
+      "If the adoption window is long, survival depends on a structure that rewards patience rather than punishes it.",
+    survivalTypeTags: ["timeline-mismatch", "adoption-friction", "trust"],
   },
 ];
 
@@ -1095,6 +1254,42 @@ function riskProfile(node: ThoughtNodeModel) {
   return Array.from(tags);
 }
 
+function structuralPatternSignals(node: ThoughtNodeModel) {
+  const text = normalize(node.content);
+  const signals = new Set<string>();
+
+  if (/(growth|scale|burn|cash|runway|capital|unit economics|logistics|warehouse)/.test(text)) {
+    signals.add("capital-intensity-compounding");
+    signals.add("timeline-mismatch");
+  }
+
+  if (/(repeat|retention|habit|novelty|engagement|repeat behavior|compounds)/.test(text)) {
+    signals.add("retention-collapse");
+    signals.add("behavior-shift");
+  }
+
+  if (/(validation|measure|measurement|proof|evidence|falsif|test)/.test(text)) {
+    signals.add("validation-gap");
+    signals.add("measurement-failure");
+  }
+
+  if (/(norm|social cost|public|privacy|awkward|wear|trust|identity)/.test(text)) {
+    signals.add("norm-friction");
+    signals.add("trust");
+  }
+
+  if (/(governance|board|control|moderation|policy|commons|process)/.test(text)) {
+    signals.add("governance-drift");
+  }
+
+  if (/(network|distribution|adoption|marketplace|platform)/.test(text)) {
+    signals.add("network-effects-mismatch");
+    signals.add("adoption-friction");
+  }
+
+  return signals;
+}
+
 export function retrievePrecedentsForNode(
   node: ThoughtNodeModel,
   limitOrLens: number | PennyLensSnapshot = 3,
@@ -1104,6 +1299,7 @@ export function retrievePrecedentsForNode(
   const lens = typeof limitOrLens === "number" ? maybeLens ?? null : limitOrLens;
   const tags = new Set(riskProfile(node));
   const text = normalize(node.content);
+  const structuralSignals = structuralPatternSignals(node);
   const lensSignals = new Set(
     lens
       ? [
@@ -1132,6 +1328,7 @@ export function retrievePrecedentsForNode(
       if (precedent.failureTrajectory && /economics|unit economics|burn|cost/.test(text) && /economics|cost|unit economics|complexity/.test(precedent.failureTrajectory)) score += 3;
       if (precedent.failureTrajectory && /validation|measure|evidence|proof/.test(text) && /validation|measure|proof|measurement/.test(precedent.failureTrajectory)) score += 3;
       if (precedent.failureTrajectory && /norm|social|public|wear|social cost/.test(text) && /social cost|norm/.test(precedent.failureTrajectory)) score += 3;
+      if (precedent.failureTypeTags.some((tag) => structuralSignals.has(tag))) score += 4;
       if (precedent.failureMode.includes("evidence") && (node.psychology?.falsificationCoverageScore ?? 1) < 0.6) score += 2;
       if (precedent.failureMode.includes("network") && tags.has("network effects")) score += 2;
       if (precedent.failureMode.includes("norm") && tags.has("norm")) score += 2;
@@ -1152,6 +1349,80 @@ export function retrievePrecedentsForNode(
     .filter((item) => item.score > 0)
     .slice(0, limit)
     .map(({ precedent }) => precedent);
+}
+
+export function retrieveSurvivorPrecedentsForNode(
+  node: ThoughtNodeModel,
+  limitOrLens: number | PennyLensSnapshot = 3,
+  maybeLens?: PennyLensSnapshot | null,
+): PrecedentSurvivorCase[] {
+  const limit = typeof limitOrLens === "number" ? limitOrLens : 3;
+  const lens = typeof limitOrLens === "number" ? maybeLens ?? null : limitOrLens;
+  const tags = new Set(riskProfile(node));
+  const text = normalize(node.content);
+  const structuralSignals = structuralPatternSignals(node);
+  const lensSignals = new Set(
+    lens
+      ? [
+          ...lens.activeShapes.flatMap((shape) => shape.signals),
+          ...lens.provisionalShapes.flatMap((shape) => shape.signals),
+          ...lens.overrideShapes.flatMap((shape) => shape.signals),
+        ]
+      : [],
+  );
+  const lensLabels = new Set(
+    lens
+      ? [
+          ...lens.activeShapes.map((shape) => normalize(shape.label)),
+          ...lens.provisionalShapes.map((shape) => normalize(shape.label)),
+          ...lens.overrideShapes.map((shape) => normalize(shape.label)),
+        ]
+      : [],
+  );
+
+  return [...SURVIVOR_CORPUS]
+    .map((survivor) => {
+      let score = 0;
+
+      if (survivor.riskTags.some((tag) => tags.has(tag) || structuralSignals.has(tag))) score += 3;
+      if (survivor.survivalTypeTags.some((tag) => structuralSignals.has(tag))) score += 4;
+      if (survivor.survivalTrajectory && /timeline|patience|runway|repeat|trust|governance/.test(text) && /timeline|patience|repeat|trust|governance/.test(survivor.survivalTrajectory)) score += 2;
+      if (lensSignals.size > 0 && survivor.riskTags.some((tag) => lensSignals.has(tag) || lensLabels.has(normalize(tag)))) {
+        score += 2;
+      }
+
+      return { survivor, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .filter((item) => item.score > 0)
+    .slice(0, limit)
+    .map(({ survivor }) => survivor);
+}
+
+export function retrieveSurvivorPrecedentsForCase(
+  precedent: PrecedentCase,
+  limit = 3,
+): PrecedentSurvivorCase[] {
+  const precedentSignals = new Set(precedent.failureTypeTags);
+  const precedentText = normalize(
+    [precedent.claimEquivalent, precedent.failureTrajectory, precedent.whatKilledIt, precedent.structuralLesson].join(" "),
+  );
+
+  return [...SURVIVOR_CORPUS]
+    .map((survivor) => {
+      let score = 0;
+
+      if (survivor.survivalTypeTags.some((tag) => precedentSignals.has(tag))) score += 4;
+      if (survivor.riskTags.some((tag) => precedent.riskTags.includes(tag))) score += 2;
+      if (survivor.survivalTrajectory && /timeline|patience|runway|repeat|trust|governance/.test(precedentText) && /timeline|patience|repeat|trust|governance/.test(survivor.survivalTrajectory)) score += 2;
+      if (survivor.whatSavedIt && /saved|wait|trust|patience|infrastructure|reputation|governance/.test(normalize(survivor.whatSavedIt))) score += 1;
+
+      return { survivor, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .filter((item) => item.score > 0)
+    .slice(0, limit)
+    .map(({ survivor }) => survivor);
 }
 
 export interface AdversarialFinalPassSnapshot {
