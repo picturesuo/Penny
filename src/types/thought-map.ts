@@ -72,6 +72,8 @@ export type ThoughtMapEventType =
   | "bias_detected"
   | "bias_resolved"
   | "move_applied"
+  | "dialectic_round"
+  | "confidence_override"
   | "shape_feedback";
 
 export type RecommendationReason =
@@ -156,6 +158,32 @@ export interface ThoughtMapGraphSnapshot {
   criticalDependencyIds: string[];
   missingNodeTypes: ThoughtNodeKind[];
   overallScore: number;
+}
+
+export interface BayesianPropagationStep {
+  sourceNodeId: string;
+  targetNodeId: string;
+  depth: number;
+  sourceConfidence: number;
+  baseConfidence: number;
+  propagatedConfidence: number;
+  delta: number;
+  edgeFactor: number;
+  reasoning: string;
+  overrideReasoning: string | null;
+  pathLabel: string;
+}
+
+export interface BayesianPropagationSnapshot {
+  seedNodeId: string;
+  seedConfidence: number;
+  overrideCount: number;
+  cascade: BayesianPropagationStep[];
+  supporterChain: Array<{
+    nodeId: string;
+    label: string;
+    confidence: number | null;
+  }>;
 }
 
 export interface ThoughtMapRecommendedMove {
@@ -278,6 +306,7 @@ export interface ThoughtMapModel {
   founderBrief: FounderBriefModel | null;
   founderBriefReadiness: FounderBriefReadiness;
   graphSnapshot: ThoughtMapGraphSnapshot | null;
+  bayesianPropagation: BayesianPropagationSnapshot | null;
   recommendedNextMove: ThoughtMapRecommendedMove | null;
   interventions: CognitiveIntervention[];
   recommendedIntervention: CognitiveIntervention | null;
