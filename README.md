@@ -35,6 +35,13 @@ Penny is built around three core functions:
 - Clean endings: when a tunnel traversal completes, Penny should say so, hand over the artifact, and stop pulling for more engagement.
 - Reflection stage: optional but rewarded, with a short shapes surface after synthesis that is easy to skip but high value when used.
 
+### Curriculum & Education
+
+- Student mode: apply the tunnel to essay writing by capturing claims, stress-testing structure, teaching through confusion, synthesizing an outline, and handing off prose to downstream AI.
+- Explicit metacognition teaching: when shapes surface, name the pattern, name the underlying research, and name the response.
+- Instructor surface: with student permission, show the structural progression of a student’s thinking across a project so process can be graded, not just output.
+- Curriculum packs: pre-built tunnel variants for investment theses, research proposals, product specs, and argumentative essays, each with task-specific stage criteria.
+
 What the user should leave with:
 
 - A structured result, such as a brief, outline, decision memo, or plan.
@@ -96,6 +103,7 @@ The visual and interaction model should feel like a built city, not a notes dump
 - The graph should remain a lens, not the product.
 - Best next move should remain the central decision surface.
 - The tunnel should feel complete at the end of a traversal, not like an endless loop of prompts.
+- Curriculum modes should feel like tuned tunnels, not generic templates.
 
 ## Interface & Aesthetic
 
