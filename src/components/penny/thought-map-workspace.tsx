@@ -9,14 +9,18 @@ import { Card } from "@/components/ui/card";
 import {
   buildClaimMoveHistory,
   buildBeliefGenealogy,
+  buildDevilsAdvocateReceipts,
   buildConfidenceDecaySnapshot,
+  buildSessionRhythmSnapshot,
   collectShapeFeedback,
+  captureSnapshotForMap,
   buildOldSelfTimeline,
   derivePennyShapes,
   findActiveShapeCallout,
   formatShapeVerdict,
   interleaveStressNodes,
   retrievePrecedentsForNode,
+  traceContradictionCascade,
   type PennyShapeFeedback,
 } from "@/lib/penny-insights";
 import { cn } from "@/lib/utils";
@@ -661,12 +665,24 @@ export function ThoughtMapWorkspace({
     () => buildClaimMoveHistory(map.nodes, map.events, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map.events, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
   );
+  const selectedReceiptVoices = useMemo(
+    () => buildDevilsAdvocateReceipts(selectedGraphNodeModel),
+    [selectedGraphNodeModel],
+  );
   const selectedGraphNodeParent = selectedGraphNode?.node.parentId
     ? nodesById.get(selectedGraphNode.node.parentId) ?? null
     : null;
   const selectedPrecedents = selectedGraphNode ? retrievePrecedentsForNode(selectedGraphNode.node) : [];
-  const selectedDecay = selectedGraphNode ? buildConfidenceDecaySnapshot(selectedGraphNode.node) : null;
+  const selectedDecay = selectedGraphNode
+    ? buildConfidenceDecaySnapshot(selectedGraphNode.node, selectedGenealogy.dependents.length)
+    : null;
+  const selectedCascade = useMemo(
+    () => traceContradictionCascade(map.nodes, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
+    [defaultGraphNodeId, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
+  );
   const interleavedStressQueue = useMemo(() => interleaveStressNodes(activeNodes).slice(0, 8), [activeNodes]);
+  const claimCapture = useMemo(() => captureSnapshotForMap(map), [map]);
+  const rhythm = useMemo(() => buildSessionRhythmSnapshot(map), [map]);
   const bestSteelmanTarget = map.recommendedNextMove
     ? map.nodes.find((node) => node.id === map.recommendedNextMove?.targetNodeId) ?? null
     : selectedGraphNode?.node ?? weakestLearningNode ?? map.nodes.find((node) => node.kind === "core_claim") ?? rootNode ?? null;
@@ -1232,6 +1248,33 @@ export function ThoughtMapWorkspace({
           ))}
         </div>
 
+        <div className="mt-6 rounded-[24px] border border-black/8 bg-white p-5">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Devil&apos;s advocate with receipts</p>
+          <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Critique the claim through thinkers who already warned about this shape.</h3>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+            Penny picks a thinker whose position matches the failure mode, then attaches a precedent showing what happened when people took the optimistic side anyway.
+          </p>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {selectedReceiptVoices.length ? (
+              selectedReceiptVoices.map((receipt) => (
+                <div key={receipt.thinker} className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="bg-white text-[var(--ink)]">{receipt.thinker}</Badge>
+                    <Badge className="bg-[#e7defa] text-[#5c4c88]">receipt-backed</Badge>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{receipt.position}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{receipt.precedent}</p>
+                  <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">{receipt.lesson}</p>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                Select a claim to see which historical thinkers would attack it with receipts.
+              </p>
+            )}
+          </div>
+        </div>
+
         <div className="mt-6 rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -1439,11 +1482,11 @@ export function ThoughtMapWorkspace({
           <div className="flex flex-wrap items-center gap-2">
             <Badge>Last move</Badge>
             <Badge className="bg-[#e7defa] text-[#5c4c88]">{lastAction.execution.mode.replaceAll("_", " ")}</Badge>
-            <Badge>{lastAction.reasoning.graphAnalysis.primaryGap}</Badge>
+            <Badge>{lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")}</Badge>
           </div>
           <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
             Penny targeted <span className="font-medium">{lastAction.execution.targetNodeKind.replaceAll("_", " ")}</span> because the graph’s weakest gap was{" "}
-            <span className="font-medium">{lastAction.reasoning.graphAnalysis.primaryGap}</span>.
+            <span className="font-medium">{lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")}</span>.
           </p>
           <div className="mt-4 grid gap-5 lg:grid-cols-[1.2fr_1fr]">
             <div>
@@ -1531,6 +1574,37 @@ export function ThoughtMapWorkspace({
           </div>
 
           <div className="space-y-4">
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Inheritance claims</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">How this belief entered the map</h3>
+              {claimCapture ? (
+                <>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Badge className="bg-[var(--panel)] text-[var(--ink)]">{claimCapture.provenance}</Badge>
+                    <Badge className="bg-[#e7defa] text-[#5c4c88]">confidence {claimCapture.confidence}%</Badge>
+                    <Badge className="bg-[#d9ead8] text-[#355b32]">{claimCapture.status}</Badge>
+                    {claimCapture.resolutionDate ? (
+                      <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{claimCapture.resolutionDate}</Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
+                    {claimCapture.provenance === "inherited"
+                      ? `Inherited from ${claimCapture.provenanceDetail || "another person"}.`
+                      : "This claim started from your own capture instead of a source you inherited."}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                    {claimCapture.provenance === "inherited"
+                      ? "Scrutiny automatically goes up on the source chain because inherited beliefs can hide borrowed errors."
+                      : "Penny still records provenance so later revisions can trace where the belief came from."}
+                  </p>
+                </>
+              ) : (
+                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                  No capture metadata is available for this map yet.
+                </p>
+              )}
+            </div>
+
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Belief genealogy</p>
               <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Supersession chain and source contradictions</h3>
@@ -1691,7 +1765,7 @@ export function ThoughtMapWorkspace({
             </div>
 
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Confidence decay</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Aging foundations monitor</p>
               <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">
                 {selectedDecay ? `${selectedDecay.untouchedDays} days untouched` : "Select a node to track revisit decay"}
               </h3>
@@ -1700,7 +1774,7 @@ export function ThoughtMapWorkspace({
                 <>
                   <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
                     {selectedDecay.isFoundational
-                      ? "Foundational beliefs decay faster because their failure cascades through the rest of the map."
+                      ? "Foundational beliefs at the base of large dependency structures decay faster because their failure cascades through the rest of the map."
                       : "Non-foundational claims decay more slowly, but still surface for revisit after enough time passes."}
                   </p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1718,6 +1792,39 @@ export function ThoughtMapWorkspace({
                   <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
                     Confidence multiplier now sits at {Math.round(selectedDecay.decayMultiplier * 100)}%. Untouched beliefs are flagged before they go stale.
                   </p>
+
+                  <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Contradiction cascade tracer</p>
+                    <div className="mt-3 space-y-2">
+                      {selectedCascade.slice(0, 4).map((step) => (
+                        <div key={step.nodeId} className="rounded-[16px] bg-white px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge className={step.depth === 0 ? "bg-[#e7defa] text-[#5c4c88]" : "bg-[var(--panel)] text-[var(--ink)]"}>
+                              depth {step.depth}
+                            </Badge>
+                            <Badge className="bg-white text-[var(--ink)]">{step.label}</Badge>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{step.content}</p>
+                          <p className="mt-1 text-xs leading-5 text-[var(--muted-ink)]">{step.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Session rhythm</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Badge className={rhythm.shouldStop ? "bg-[#fff6ed] text-[#8b4d1f]" : "bg-[#d9ead8] text-[#355b32]"}>
+                        {rhythm.depletionScore}% depletion
+                      </Badge>
+                      {rhythm.signals.map((signal) => (
+                        <Badge key={signal} className="bg-white text-[var(--ink)]">
+                          {signal}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{rhythm.note}</p>
+                  </div>
                 </>
               ) : (
                 <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
