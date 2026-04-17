@@ -231,6 +231,12 @@
 - `user`: Confidence decay should surface untouched beliefs for revisit after a threshold, with foundational beliefs decaying faster because their failure cascades through the rest of the model.
 - `user`: The memory and time layer should unify old selves, genealogy, inheritance, contradiction cascade tracing, aging foundations, cross-project transfer, and session rhythm into one compounding system.
 - `user`: Interleaved stress-testing should mix related claims across a queue rather than drilling one claim sequentially, because discrimination is stronger than pattern-matching.
+- `user`: The critique layer should make Socratic mode selectable, not default, so the user can be asked to critique their own claim instead of always receiving a generated attack.
+- `user`: Critique intensity should be a visible slider per session or claim so Penny can stay gentle, firm, or brutal depending on the user’s state.
+- `user`: Critique variety should be forced so Penny does not keep repeating the same failure type when other critique surfaces need pressure.
+- `user`: "Penny is wrong" should have a dedicated correction-capture flow because factual critique errors are higher-priority signal than ordinary disagreement.
+- `user`: Meta-critique should let Penny critique the quality of the user’s engagement with critique, including defensive versus integrative response patterns.
+- `user`: Red-team sessions should exist as a sustained 20-30 minute attack mode on the whole structure rather than one claim at a time.
 - `user`: Calibration and forecasting should include Brier scoring on resolved claims, private bets with yourself, Bayesian update prompts, and probability calibration feedback by domain.
 - `user`: Probability commitment should be required at capture with a default 60% and soft challenge above 90% so overconfidence gets questioned immediately.
 - `user`: Brier scoring should be visible as a measurable improvement signal on resolved claims, not hidden in the background.
