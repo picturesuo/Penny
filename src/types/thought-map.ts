@@ -42,6 +42,8 @@ export const CLAIM_STAKES = ["reputation", "money", "time", "relationship", "sel
 
 export type ClaimStake = (typeof CLAIM_STAKES)[number];
 
+export type ClaimStructureKind = "assertion" | "conditional" | "compound" | "temporal" | "merged_candidate" | "split_candidate";
+
 export type ThoughtMapExecutionMode =
   | "add_children"
   | "strengthen_branch"
@@ -323,6 +325,22 @@ export interface ClaimCaptureMetadata {
   stakes: ClaimStake[];
   dependencyNotes: string;
   status: ClaimStatus;
+  temporalScope?: string;
+  conditionalStatement?: string;
+  structureKind?: ClaimStructureKind;
+}
+
+export interface ClaimStructureSnapshot {
+  whyNowTrigger: string;
+  confidenceMath: string | null;
+  dependencyWeight: number | null;
+  directConfidence: number | null;
+  propagatedConfidence: number | null;
+  temporalScope: string | null;
+  conditionalStatement: string | null;
+  mergeCandidates: string[];
+  splitCandidates: string[];
+  whyNowReason: string;
 }
 
 export interface CreateThoughtMapInput {
