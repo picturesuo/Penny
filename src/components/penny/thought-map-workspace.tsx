@@ -10,6 +10,7 @@ import {
   buildClaimMoveHistory,
   buildClaimDependencyGraph,
   buildBeliefGenealogy,
+  buildBayesianPropagationSnapshot,
   buildDevilsAdvocateReceipts,
   buildConfidenceDecaySnapshot,
   buildConfusionLog,
@@ -18,6 +19,7 @@ import {
   buildSessionRhythmSnapshot,
   collectShapeFeedback,
   captureSnapshotForMap,
+  inheritedClaimSnapshots,
   buildOldSelfTimeline,
   findActiveShapeCallout,
   formatShapeVerdict,
@@ -130,6 +132,22 @@ type PositionedGraphNode = {
   isWeak: boolean;
   isCritical: boolean;
   childCount: number;
+  ageDays: number;
+  densityScore: number;
+  saturationScore: number;
+};
+
+type PositionedGraphEdge = {
+  id: string;
+  parentId: string;
+  childId: string;
+  from: { x: number; y: number; depth: number };
+  to: { x: number; y: number; depth: number };
+  isWeak: boolean;
+  isCritical: boolean;
+  strengthScore: number;
+  contradictionScore: number;
+  recencyDays: number;
 };
 
 const GRAPH_NODE_WIDTH = 188;
@@ -325,6 +343,39 @@ function critiqueStrengthLabel(score: number | null | undefined) {
   };
 }
 
+function nodeAgeDays(node: ThoughtNodeModel) {
+  return Math.max(0, Math.floor((Date.now() - node.updatedAt.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+function clampPercent(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function structuralDensity(node: ThoughtNodeModel, childCount: number) {
+  return clampPercent(childCount * 22 + (node.scores?.dependencyRisk ?? 0) * 42 + (node.scores?.centrality ?? 0) * 36);
+}
+
+function structuralSaturation(node: ThoughtNodeModel) {
+  const metrics = [
+    node.scores?.strength ?? 0,
+    node.scores?.evidence ?? 0,
+    node.scores?.specificity ?? 0,
+    node.scores?.confidence ?? 0,
+  ];
+
+  return clampPercent(metrics.reduce((sum, value) => sum + value, 0) / metrics.length * 100);
+}
+
+function summarizeText(value: string, maxLength = 140) {
+  const clean = value.trim().replace(/\s+/g, " ");
+
+  if (clean.length <= maxLength) {
+    return clean;
+  }
+
+  return `${clean.slice(0, maxLength - 1)}…`;
+}
+
 function knowledgeSurface(node: ThoughtNodeModel | null, genealogy: ReturnType<typeof buildBeliefGenealogy>) {
   if (!node) {
     return {
@@ -418,6 +469,8 @@ export function ThoughtMapWorkspace({
     collectShapeFeedback(normalizeMap(initialMap).events),
   );
   const [shapeOverrideReasons, setShapeOverrideReasons] = useState<Record<string, string>>({});
+  const [confidenceOverrideReasons, setConfidenceOverrideReasons] = useState<Record<string, string>>({});
+  const [dialecticResponseDrafts, setDialecticResponseDrafts] = useState<Record<string, string>>({});
   const [runningRecommendedMove, setRunningRecommendedMove] = useState(false);
   const [runningFounderBrief, setRunningFounderBrief] = useState(false);
   const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
@@ -727,6 +780,9 @@ export function ThoughtMapWorkspace({
         return [];
       }
 
+      const childCount = (nodesByParent[node.id] ?? []).length;
+      const ageDays = nodeAgeDays(node);
+
       return [
         {
           node,
@@ -735,11 +791,14 @@ export function ThoughtMapWorkspace({
           y: position.y,
           isWeak: weakestNodeIds.has(node.id),
           isCritical: criticalDependencyIds.has(node.id),
-          childCount: (nodesByParent[node.id] ?? []).length,
+          childCount,
+          ageDays,
+          densityScore: structuralDensity(node, childCount),
+          saturationScore: structuralSaturation(node),
         },
       ];
     });
-    const edges = sortedNodes.flatMap((node) => {
+    const edges: PositionedGraphEdge[] = sortedNodes.flatMap((node) => {
       if (!node.parentId) {
         return [];
       }
@@ -751,6 +810,18 @@ export function ThoughtMapWorkspace({
         return [];
       }
 
+      const parentNode = nodesById.get(node.parentId) ?? null;
+      const ageDays = nodeAgeDays(node);
+      const strengthScore = clampPercent(
+        (node.scores?.strength ?? 0) * 45 + (node.scores?.confidence ?? 0) * 35 + (node.scores?.dependencyRisk ?? 0) * 20,
+      );
+      const contradictionScore = clampPercent(
+        (node.kind === "counter_argument" ? 55 : 0) +
+          (node.psychology?.falsificationCoverageScore != null ? (1 - node.psychology.falsificationCoverageScore) * 45 : 0) +
+          (node.nodeStatus === "weak" ? 12 : 0) +
+          (parentNode?.kind === "counter_argument" ? 8 : 0),
+      );
+
       return [
         {
           id: `${node.parentId}-${node.id}`,
@@ -760,6 +831,9 @@ export function ThoughtMapWorkspace({
           to,
           isWeak: weakestNodeIds.has(node.id),
           isCritical: criticalDependencyIds.has(node.id),
+          strengthScore,
+          contradictionScore,
+          recencyDays: ageDays,
         },
       ];
     });
@@ -770,7 +844,7 @@ export function ThoughtMapWorkspace({
       nodes,
       edges,
     };
-  }, [map.graphSnapshot, map.nodes, nodesByParent, rootNode]);
+  }, [map.graphSnapshot, map.nodes, nodesById, nodesByParent, rootNode]);
 
   useEffect(() => {
     if (!selectedGraphNodeId || !nodesById.has(selectedGraphNodeId)) {
@@ -792,6 +866,10 @@ export function ThoughtMapWorkspace({
     [defaultGraphNodeId, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
   );
   const selectedArchaeologyAxiom = selectedGenealogy.lineage[0] ?? null;
+  const selectedPropagation = useMemo(
+    () => buildBayesianPropagationSnapshot(map, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
+    [defaultGraphNodeId, map, rootNode?.id, selectedGraphNode?.node.id],
+  );
   const selectedKnowledgeSurface = useMemo(
     () => knowledgeSurface(selectedGraphNode?.node ?? null, selectedGenealogy),
     [selectedGenealogy, selectedGraphNode?.node],
@@ -804,6 +882,89 @@ export function ThoughtMapWorkspace({
     () => buildClaimMoveHistory(map.nodes, map.events, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map.events, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
   );
+  const selectedCritiqueStrength = critiqueStrengthLabel(selectedGraphNode?.node.scores?.strength ?? null);
+  const selectedPrecedents = selectedGraphNode ? retrievePrecedentsForNode(selectedGraphNode.node, lens) : [];
+  const selectedPrecedentSummary = selectedPrecedents[0] ?? null;
+  const dialecticRoundEvents = useMemo(
+    () =>
+      map.events
+        .filter((event) => event.eventType === "dialectic_round")
+        .map((event) => ({
+          id: event.id,
+          createdAt: event.createdAt,
+          nodeId: event.nodeId,
+          round: typeof event.payload?.round === "string" ? String(event.payload.round) : "round",
+          roundIndex: typeof event.payload?.roundIndex === "number" ? Number(event.payload.roundIndex) : 0,
+          title: typeof event.payload?.title === "string" ? String(event.payload.title) : "Dialectic round",
+          critiqueStrength:
+            typeof event.payload?.critiqueStrength === "string" ? String(event.payload.critiqueStrength) : "unknown",
+          prompt: typeof event.payload?.prompt === "string" ? String(event.payload.prompt) : "",
+          why: typeof event.payload?.why === "string" ? String(event.payload.why) : "",
+          responsePath:
+            event.payload?.responsePath === "defend" ||
+            event.payload?.responsePath === "revise" ||
+            event.payload?.responsePath === "absorb"
+              ? event.payload.responsePath
+              : null,
+          response: typeof event.payload?.response === "string" ? String(event.payload.response) : "",
+        }))
+        .sort((a, b) => a.roundIndex - b.roundIndex || a.createdAt.getTime() - b.createdAt.getTime()),
+    [map.events],
+  );
+  const dialecticRounds = useMemo(() => {
+    const responseTrail = dialecticRoundEvents.map((event) => summarizeText(event.response, 96)).filter(Boolean);
+    const lastResponse = responseTrail[responseTrail.length - 1] ?? null;
+    const priorResponse = responseTrail[responseTrail.length - 2] ?? null;
+
+    return [
+      {
+        round: "Round 1",
+        title: "Opening critique",
+        strength: selectedCritiqueStrength.label,
+        prompt: selectedGraphNode
+          ? `Penny opens with its sharpest attack on ${kindLabel(selectedGraphNode.node.kind)}.`
+          : "Penny opens with its sharpest attack on the active claim.",
+        why: lastAction?.reasoning.graphAnalysis?.primaryGap
+          ? `Failure type: ${lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")}`
+          : "Failure type: not yet selected",
+        responsePath: "defend / revise / absorb",
+      },
+      {
+        round: "Round 2",
+        title: "User response",
+        strength: "response-driven",
+        prompt: lastResponse
+          ? `Penny re-reads the last response and pushes on the new weak point it introduced: ${lastResponse}.`
+          : "The user’s reply becomes a move. Penny reads the reasoning, stores the disagreement, and avoids repeating itself.",
+        why: lastResponse
+          ? `This round reacts to the prior recorded response: ${lastResponse}.`
+          : selectedPrecedentSummary
+            ? `Precedent source: ${selectedPrecedentSummary.name} · ${selectedPrecedentSummary.domain}`
+            : "Precedent source: none selected yet",
+        responsePath: "defend / revise / absorb",
+      },
+      {
+        round: "Round 3",
+        title: "Escalate or pivot",
+        strength: selectedPrecedentSummary ? "precedent-backed" : "open",
+        prompt:
+          lastResponse || priorResponse
+            ? `Penny escalates from the recorded thread. Prior response: ${priorResponse ?? lastResponse}; current response: ${lastResponse ?? "none yet"}.`
+            : selectedPrecedentSummary
+              ? `Penny escalates using ${selectedPrecedentSummary.failureMode} precedent or pivots to the next risk angle.`
+              : "Penny escalates to a stronger critique or pivots to a different angle of attack.",
+        why: activeShapeCallout ? `Shape pattern: ${activeShapeCallout.label}` : "Shape pattern: no active pattern yet",
+        responsePath: "future rounds inherit prior responses",
+      },
+    ] as const;
+  }, [
+    activeShapeCallout,
+    dialecticRoundEvents,
+    lastAction?.reasoning.graphAnalysis?.primaryGap,
+    selectedCritiqueStrength.label,
+    selectedGraphNode,
+    selectedPrecedentSummary,
+  ]);
   const claimDependencyGraph = useMemo(() => buildClaimDependencyGraph(map), [map]);
   const selectedReceiptVoices = useMemo(
     () => buildDevilsAdvocateReceipts(selectedGraphNodeModel),
@@ -812,7 +973,6 @@ export function ThoughtMapWorkspace({
   const selectedGraphNodeParent = selectedGraphNode?.node.parentId
     ? nodesById.get(selectedGraphNode.node.parentId) ?? null
     : null;
-  const selectedPrecedents = selectedGraphNode ? retrievePrecedentsForNode(selectedGraphNode.node, lens) : [];
   const selectedDecay = selectedGraphNode
     ? buildConfidenceDecaySnapshot(selectedGraphNode.node, selectedGenealogy.dependents.length)
     : null;
@@ -822,6 +982,7 @@ export function ThoughtMapWorkspace({
   );
   const interleavedStressQueue = useMemo(() => interleaveStressNodes(activeNodes).slice(0, 8), [activeNodes]);
   const claimCapture = useMemo(() => captureSnapshotForMap(map), [map]);
+  const inheritedClaimAudit = useMemo(() => inheritedClaimSnapshots([map]), [map]);
   const rhythm = useMemo(() => buildSessionRhythmSnapshot(map), [map]);
   const confusionLog = useMemo(() => buildConfusionLog(map), [map]);
   const bestSteelmanTarget = map.recommendedNextMove
@@ -829,11 +990,8 @@ export function ThoughtMapWorkspace({
     : selectedGraphNode?.node ?? weakestLearningNode ?? map.nodes.find((node) => node.kind === "core_claim") ?? rootNode ?? null;
   const steelmanTargetText = bestSteelmanTarget?.content ?? map.rawThought;
   const steelmanPrompt = `Argue the strongest possible version of this position: ${steelmanTargetText}`;
-  const selectedCritiqueStrength = critiqueStrengthLabel(selectedGraphNode?.node.scores?.strength ?? null);
   const selectedNormChallengeNode =
     selectedGraphNode?.node ?? map.nodes.find((node) => /norm|should|must|rule/i.test(node.content)) ?? null;
-  const selectedPrecedentSummary =
-    selectedPrecedents[0] ?? null;
   const synthesisPreMortem = selectedGraphNode?.node.content ?? map.recommendedNextMove?.summary ?? map.rawThought;
   const synthesisIfRight = selectedGraphNode
     ? `If this claim holds, what becomes possible and what becomes necessary for ${kindLabel(selectedGraphNode.node.kind)} work?`
@@ -850,41 +1008,6 @@ export function ThoughtMapWorkspace({
   const synthesisMissingCoverage = map.founderBriefReadiness.missingRequirements.map((requirement) =>
     requirement.replaceAll("_", " "),
   );
-  const dialecticRounds = [
-    {
-      round: "Round 1",
-      title: "Opening critique",
-      strength: selectedCritiqueStrength.label,
-      prompt: selectedGraphNode
-        ? `Penny opens with its sharpest attack on ${kindLabel(selectedGraphNode.node.kind)}.`
-        : "Penny opens with its sharpest attack on the active claim.",
-      why: lastAction?.reasoning.graphAnalysis?.primaryGap
-        ? `Failure type: ${lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")}`
-        : "Failure type: not yet selected",
-      responsePath: "Defend, revise, or absorb.",
-    },
-    {
-      round: "Round 2",
-      title: "User response",
-      strength: "response-driven",
-      prompt:
-        "The user’s reply becomes a move. Penny reads the reasoning, stores the disagreement, and avoids repeating itself.",
-      why: selectedPrecedentSummary
-        ? `Precedent source: ${selectedPrecedentSummary.name} · ${selectedPrecedentSummary.domain}`
-        : "Precedent source: none selected yet",
-      responsePath: "Defend / revise / absorb change the downstream record differently.",
-    },
-    {
-      round: "Round 3",
-      title: "Escalate or pivot",
-      strength: selectedPrecedentSummary ? "precedent-backed" : "open",
-      prompt: selectedPrecedentSummary
-        ? `Penny escalates using ${selectedPrecedentSummary.failureMode} precedent or pivots to the next risk angle.`
-        : "Penny escalates to a stronger critique or pivots to a different angle of attack.",
-      why: activeShapeCallout ? `Shape pattern: ${activeShapeCallout.label}` : "Shape pattern: no active pattern yet",
-      responsePath: "Future rounds inherit the full history of the thread.",
-    },
-  ] as const;
   const inspectorScores = selectedGraphNode
     ? [
         { label: "Strength", value: selectedGraphNode.node.scores?.strength ?? null },
@@ -962,6 +1085,52 @@ export function ThoughtMapWorkspace({
     }));
   }
 
+  function mergeDialecticRoundEvent(event: SerializableThoughtMapEvent) {
+    const normalizedEvent = normalizeEvent(event);
+
+    setMap((currentMap) => ({
+      ...currentMap,
+      events: [...currentMap.events, normalizedEvent].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
+      updatedAt: new Date(),
+    }));
+  }
+
+  function recordConfidenceOverride(sourceNodeId: string, targetNodeId: string, reasoning: string) {
+    const trimmedReasoning = reasoning.trim();
+    if (trimmedReasoning.length < 8) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${map.id}/confidence-override`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            sourceNodeId,
+            targetNodeId,
+            mode: "hold",
+            reasoning: trimmedReasoning,
+          }),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { event: SerializableThoughtMapEvent };
+        mergeDialecticRoundEvent(payload.event);
+        setConfidenceOverrideReasons((current) => ({ ...current, [targetNodeId]: "" }));
+      } catch {
+        return;
+      }
+    });
+  }
+
   function recordShapeFeedback(
     shape: { id: string; label: string; primaryMapId: string | null },
     verdict: PennyShapeFeedback,
@@ -1015,6 +1184,58 @@ export function ThoughtMapWorkspace({
         });
       } catch {
         restoreFeedback();
+        return;
+      }
+    });
+  }
+
+  function recordDialecticRound(params: {
+    round: string;
+    roundIndex: number;
+    title: string;
+    critiqueStrength: string;
+    prompt: string;
+    why: string;
+    responsePath: "defend" | "revise" | "absorb";
+  }) {
+    const response = (dialecticResponseDrafts[params.round] ?? "").trim();
+
+    if (response.length < 8) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const responsePayload = await fetch(`/api/maps/${map.id}/dialectic-rounds`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nodeId: selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null,
+            round: params.round,
+            roundIndex: params.roundIndex,
+            title: params.title,
+            critiqueStrength: params.critiqueStrength,
+            prompt: params.prompt,
+            why: params.why,
+            responsePath: params.responsePath,
+            response,
+          }),
+        });
+
+        if (!responsePayload.ok) {
+          return;
+        }
+
+        const payload = (await responsePayload.json()) as { event: SerializableThoughtMapEvent };
+        mergeDialecticRoundEvent(payload.event);
+        setDialecticResponseDrafts((current) => {
+          const next = { ...current };
+          delete next[params.round];
+          return next;
+        });
+      } catch {
         return;
       }
     });
@@ -1784,7 +2005,10 @@ export function ThoughtMapWorkspace({
           Penny should remember every round, carry the user’s response history forward, and change the next attack instead of reusing the same line.
         </p>
         <div className="mt-4 grid gap-4 xl:grid-cols-3">
-          {dialecticRounds.map((round) => (
+          {dialecticRounds.map((round) => {
+            const draft = dialecticResponseDrafts[round.round] ?? "";
+
+            return (
             <div key={round.round} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="bg-white text-[var(--ink)]">{round.round}</Badge>
@@ -1797,15 +2021,71 @@ export function ThoughtMapWorkspace({
                 <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{round.why}</p>
               </details>
               <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{round.responsePath}</p>
+              <textarea
+                className="mt-3 min-h-[88px] w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                placeholder="Capture the response that should persist with this round."
+                value={draft}
+                onChange={(event) =>
+                  setDialecticResponseDrafts((current) => ({
+                    ...current,
+                    [round.round]: event.target.value,
+                  }))
+                }
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(["defend", "revise", "absorb"] as const).map((path) => (
+                  <Button
+                    key={`${round.round}-${path}`}
+                    variant="secondary"
+                    className="px-3 py-2 text-xs"
+                    disabled={isPending || draft.trim().length < 8}
+                    onClick={() =>
+                      recordDialecticRound({
+                        round: round.round,
+                        roundIndex: Number(round.round.replace(/[^0-9]/g, "")) || 0,
+                        title: round.title,
+                        critiqueStrength: round.strength,
+                        prompt: round.prompt,
+                        why: round.why,
+                        responsePath: path,
+                      })
+                    }
+                  >
+                    {path}
+                  </Button>
+                ))}
+              </div>
             </div>
-          ))}
+          )})}
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {(["defend", "revise", "absorb"] as const).map((path) => (
-            <Badge key={path} className="bg-white text-[var(--ink)]">
-              {path}
-            </Badge>
-          ))}
+        <div className="mt-4 rounded-[24px] border border-black/8 bg-white p-5">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Round audit trail</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+            Each persisted round keeps the critique strength, response path, and reasoning note together so the thread can be audited instead of reconstructed from memory.
+          </p>
+          <div className="mt-4 space-y-3">
+            {dialecticRoundEvents.length ? (
+              dialecticRoundEvents.map((entry) => (
+                <div key={entry.id} className="rounded-[20px] bg-[var(--panel)] p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="bg-white text-[var(--ink)]">{entry.round}</Badge>
+                    <Badge className="bg-[#e7defa] text-[#5c4c88]">{entry.critiqueStrength}</Badge>
+                    {entry.responsePath ? (
+                      <Badge className="bg-[#d9ead8] text-[#355b32]">{entry.responsePath}</Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 text-sm font-medium text-[var(--ink)]">{entry.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{entry.prompt}</p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{entry.why}</p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{entry.response}</p>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-[20px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                No round audit has been persisted yet.
+              </p>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -2082,6 +2362,94 @@ export function ThoughtMapWorkspace({
             </div>
 
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Bayesian propagation</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Confidence should cascade through the graph.</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                When the seed claim moves, dependents should move too. Overrides let the user explain why a specific drop should be softened instead of blindly accepted.
+              </p>
+
+              {selectedPropagation ? (
+                <>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Badge className="bg-[#d9ead8] text-[#355b32]">
+                      Seed {formatScore(selectedPropagation.seedConfidence)}
+                    </Badge>
+                    <Badge className="bg-[#e7defa] text-[#5c4c88]">{selectedPropagation.overrideCount} overrides</Badge>
+                    <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                      {selectedPropagation.cascade.length} cascade steps
+                    </Badge>
+                  </div>
+                  <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Support chain</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {selectedPropagation.supporterChain.map((step) => (
+                        <Badge key={step.nodeId} className="bg-white text-[var(--ink)]">
+                          {step.label} · {step.confidence != null ? formatScore(step.confidence) : "n/a"}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {selectedPropagation.cascade.slice(0, 4).map((step) => (
+                      <div key={`${step.sourceNodeId}:${step.targetNodeId}`} className="rounded-[18px] bg-[var(--panel)] p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className="bg-white text-[var(--ink)]">{step.pathLabel}</Badge>
+                          <Badge className="bg-[#d9ead8] text-[#355b32]">base {formatScore(step.baseConfidence)}</Badge>
+                          <Badge className="bg-[#e7defa] text-[#5c4c88]">
+                            propagated {formatScore(step.propagatedConfidence)}
+                          </Badge>
+                          <Badge className={step.delta >= 0 ? "bg-[#d9ead8] text-[#355b32]" : "bg-[#fff6ed] text-[#8b4d1f]"}>
+                            {step.delta >= 0 ? "+" : "-"}
+                            {Math.abs(Math.round(step.delta * 100))}
+                          </Badge>
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{step.reasoning}</p>
+                        {step.overrideReasoning ? (
+                          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                            Override reasoning: {step.overrideReasoning}
+                          </p>
+                        ) : null}
+                        <form
+                          className="mt-3 space-y-3"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            recordConfidenceOverride(
+                              step.sourceNodeId,
+                              step.targetNodeId,
+                              confidenceOverrideReasons[step.targetNodeId] ?? "",
+                            );
+                          }}
+                        >
+                          <textarea
+                            className="min-h-[84px] w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                            placeholder="Explain why this downstream confidence should be held higher than the raw cascade suggests."
+                            value={confidenceOverrideReasons[step.targetNodeId] ?? ""}
+                            onChange={(event) =>
+                              setConfidenceOverrideReasons((current) => ({
+                                ...current,
+                                [step.targetNodeId]: event.target.value,
+                              }))
+                            }
+                          />
+                          <Button
+                            type="submit"
+                            variant="secondary"
+                            className="px-3 py-2 text-xs"
+                            disabled={isPending || (confidenceOverrideReasons[step.targetNodeId] ?? "").trim().length < 8}
+                          >
+                            Override this drop
+                          </Button>
+                        </form>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-[var(--muted-ink)]">Select a claim to inspect the propagation cascade.</p>
+              )}
+            </div>
+
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Inheritance claims</p>
               <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">How this belief entered the map</h3>
               {claimCapture ? (
@@ -2176,6 +2544,46 @@ export function ThoughtMapWorkspace({
                   )}
                 </div>
               </div>
+            </div>
+
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Source/session audit</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Trace where this claim came from and how it moved.</h3>
+              {claimCapture ? (
+                <>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Badge className="bg-[var(--panel)] text-[var(--ink)]">{claimCapture.provenance}</Badge>
+                    <Badge className="bg-[#e7defa] text-[#5c4c88]">confidence {claimCapture.confidence}%</Badge>
+                    <Badge className="bg-[#d9ead8] text-[#355b32]">{claimCapture.status}</Badge>
+                    {claimCapture.resolutionDate ? (
+                      <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{claimCapture.resolutionDate}</Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
+                    {claimCapture.provenance === "inherited"
+                      ? `Inherited from ${claimCapture.provenanceDetail || "another person"} and tracked through the source chain.`
+                      : "This claim started from your own capture, but Penny still keeps the provenance and session trail visible."}
+                  </p>
+                  <div className="mt-4 space-y-2">
+                    {inheritedClaimAudit.length ? (
+                      inheritedClaimAudit.map((snapshot) => (
+                        <div key={`${snapshot.mapId}-${snapshot.sourceLabel}`} className="rounded-[18px] bg-[var(--panel)] p-4">
+                          <p className="text-sm font-medium text-[var(--ink)]">{snapshot.sourceLabel}</p>
+                          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{snapshot.scrutinyNote}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                        No inherited source chain is present yet.
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                  No capture metadata is available for this map yet.
+                </p>
+              )}
             </div>
 
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
@@ -2570,16 +2978,42 @@ export function ThoughtMapWorkspace({
                         const endX = edge.to.x - GRAPH_NODE_WIDTH / 2 + 8;
                         const controlOffset = Math.max((endX - startX) / 2, 36);
                         const isRelated = edge.parentId === selectedGraphNodeId || edge.childId === selectedGraphNodeId;
+                        const stroke = edge.contradictionScore >= 60
+                          ? "#8b4d1f"
+                          : edge.strengthScore >= 70
+                            ? "#4a5565"
+                            : edge.isCritical
+                              ? "#5c4c88"
+                              : edge.isWeak
+                                ? "#c97d39"
+                                : "#c6bfb4";
+                        const strokeWidth = isRelated
+                          ? 2.9
+                          : edge.contradictionScore >= 60
+                            ? 2.5
+                            : edge.strengthScore >= 70
+                              ? 2.2
+                              : edge.isCritical
+                                ? 2
+                                : 1.5;
+                        const strokeDasharray =
+                          edge.contradictionScore >= 60
+                            ? "6 5"
+                            : edge.recencyDays >= 30
+                              ? "4 7"
+                              : undefined;
+                        const opacity = Math.max(0.45, 1 - Math.min(edge.recencyDays, 90) / 200);
 
                         return (
                           <path
                             key={edge.id}
                             d={`M ${startX} ${edge.from.y} C ${startX + controlOffset} ${edge.from.y}, ${endX - controlOffset} ${edge.to.y}, ${endX} ${edge.to.y}`}
                             fill="none"
-                            stroke={isRelated ? "#4a5565" : edge.isWeak ? "#c97d39" : "#c6bfb4"}
+                            stroke={isRelated ? "#4a5565" : stroke}
                             strokeLinecap="round"
-                            strokeWidth={isRelated ? 2.5 : edge.isCritical ? 2 : 1.5}
-                            opacity={isRelated ? 1 : 0.8}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray={strokeDasharray}
+                            opacity={isRelated ? 1 : opacity}
                           />
                         );
                       })}
@@ -2593,15 +3027,16 @@ export function ThoughtMapWorkspace({
                           key={graphNode.node.id}
                           type="button"
                           aria-pressed={isSelected}
-                          className={cn(
-                            "absolute -translate-x-1/2 -translate-y-1/2 rounded-[24px] border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)] focus-visible:ring-offset-2",
-                            "w-[188px] shadow-[0_16px_36px_rgba(15,23,42,0.08)]",
-                            statusTone(graphNode.node.nodeStatus),
-                            isSelected && "border-[var(--ink)] ring-2 ring-[var(--ink)] ring-offset-2",
-                            !isSelected && "hover:border-black/25",
-                          )}
-                          style={{ left: graphNode.x, top: graphNode.y }}
-                          onClick={() => setSelectedGraphNodeId(graphNode.node.id)}
+                        className={cn(
+                          "absolute -translate-x-1/2 -translate-y-1/2 rounded-[24px] border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ink)] focus-visible:ring-offset-2",
+                          "w-[188px] shadow-[0_16px_36px_rgba(15,23,42,0.08)]",
+                          statusTone(graphNode.node.nodeStatus),
+                          graphNode.ageDays >= 30 && "ring-1 ring-[#8b4d1f]/25",
+                          isSelected && "border-[var(--ink)] ring-2 ring-[var(--ink)] ring-offset-2",
+                          !isSelected && "hover:border-black/25",
+                        )}
+                        style={{ left: graphNode.x, top: graphNode.y }}
+                        onClick={() => setSelectedGraphNodeId(graphNode.node.id)}
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge className={statusBadge(graphNode.node.nodeStatus)}>{graphNode.node.nodeStatus}</Badge>
@@ -2612,9 +3047,12 @@ export function ThoughtMapWorkspace({
                           <p className="mt-2 max-h-[3.6rem] overflow-hidden text-sm leading-6 text-[var(--muted-ink)]">
                             {graphNode.node.content}
                           </p>
-                          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
-                            strength {formatScore(graphNode.node.scores?.strength ?? null)}
-                          </p>
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            <Badge className="bg-white text-[var(--ink)]">strength {formatScore(graphNode.node.scores?.strength ?? null)}</Badge>
+                            <Badge className="bg-white text-[var(--ink)]">age {graphNode.ageDays}d</Badge>
+                            <Badge className="bg-white text-[var(--ink)]">density {graphNode.densityScore}%</Badge>
+                            <Badge className="bg-white text-[var(--ink)]">saturation {graphNode.saturationScore}%</Badge>
+                          </div>
                         </button>
                       );
                     })}
@@ -2661,6 +3099,32 @@ export function ThoughtMapWorkspace({
                             <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{formatScore(score.value)}</p>
                           </div>
                         ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Structural health</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-[20px] bg-[var(--panel)] px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Age</p>
+                          <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{selectedGraphNode.ageDays} days</p>
+                        </div>
+                        <div className="rounded-[20px] bg-[var(--panel)] px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Density</p>
+                          <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{selectedGraphNode.densityScore}%</p>
+                        </div>
+                        <div className="rounded-[20px] bg-[var(--panel)] px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Saturation</p>
+                          <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{selectedGraphNode.saturationScore}%</p>
+                        </div>
+                        <div className="rounded-[20px] bg-[var(--panel)] px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Drift</p>
+                          <p className="mt-2 text-lg font-semibold text-[var(--ink)]">
+                            {selectedDecay?.decayedConfidence != null && selectedGraphNode.node.scores?.confidence != null
+                              ? `${Math.round((selectedGraphNode.node.scores.confidence - selectedDecay.decayedConfidence) * 100)}`
+                              : "n/a"}
+                          </p>
+                        </div>
                       </div>
                     </div>
 
