@@ -52,6 +52,10 @@
 - `user`: Voice capture should transcribe a memo and parse it into claim-structure candidates for confirmation.
 - `user`: Reading import should let highlights from articles or books become claims or evidence with provenance and citation preserved.
 - `user`: Meeting transcript processing should extract decisions, claims, disagreements, and action items into Brain as structured material.
+- `user`: Citation capture from pasted material should attach the source to any claims that emerge so the user can trace a claim back through paper, search, and session.
+- `user`: Source reliability weighting should bias stress-testing by source type, with peer-reviewed research higher than founder interviews, founder interviews higher than tweets, and tweets higher than intuition by default.
+- `user`: Source contradiction alerts should flag when sources the user relies on contradict each other across claims.
+- `user`: Update available flags should surface when cited sources have been contradicted, retracted, or updated by newer evidence.
 - `user`: Self-audit mode should periodically review whether Penny has been too lenient or too harsh and whether any shapes are miscalibrated, because the product should model the same honesty it asks from the user.
 - `user`: Export everything should let the user export the full Brain, including claims, moves, shapes, artifacts, and learnings, in structured form.
 - `user`: Import from existing tools should support Roam, Obsidian, Notion, and Google Docs by parsing notes into claim-candidates for user confirmation.
