@@ -14,11 +14,11 @@ import {
   buildConfidenceDecaySnapshot,
   buildConfusionLog,
   buildAdversarialFinalPass,
+  buildPennyLens,
   buildSessionRhythmSnapshot,
   collectShapeFeedback,
   captureSnapshotForMap,
   buildOldSelfTimeline,
-  derivePennyShapes,
   findActiveShapeCallout,
   formatShapeVerdict,
   interleaveStressNodes,
@@ -436,9 +436,10 @@ export function ThoughtMapWorkspace({
   const rootNode = map.nodes.find((node) => node.kind === "root");
   const statusCounts = countByStatus(map.nodes);
   const nodesById = useMemo(() => new Map(map.nodes.map((node) => [node.id, node])), [map.nodes]);
+  const lens = useMemo(() => buildPennyLens(map), [map]);
   const derivedShapes = useMemo(
-    () => derivePennyShapes(map.nodes).sort((a, b) => b.confidence - a.confidence),
-    [map.nodes],
+    () => [...lens.effectiveShapes].sort((a, b) => b.confidence - a.confidence),
+    [lens],
   );
   const defaultGraphNodeId = preferredGraphNodeId(map);
   const activeNodes = map.nodes.filter((node) => node.nodeStatus !== "superseded");
@@ -781,8 +782,8 @@ export function ThoughtMapWorkspace({
     graphCanvas.nodes.find((candidate) => candidate.node.id === selectedGraphNodeId) ?? null;
   const selectedGraphNodeModel = selectedGraphNode?.node ?? null;
   const activeShapeCallout = useMemo(
-    () => findActiveShapeCallout(selectedGraphNodeModel, derivedShapes),
-    [derivedShapes, selectedGraphNodeModel],
+    () => findActiveShapeCallout(selectedGraphNodeModel, derivedShapes, lens),
+    [derivedShapes, lens, selectedGraphNodeModel],
   );
   const activeShapeTeaching = useMemo(() => shapeMetacognition(activeShapeCallout), [activeShapeCallout]);
   const activeShapeReasoning = activeShapeCallout ? (shapeOverrideReasons[activeShapeCallout.id] ?? "").trim() : "";
@@ -790,6 +791,7 @@ export function ThoughtMapWorkspace({
     () => buildBeliefGenealogy(map.nodes, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
   );
+  const selectedArchaeologyAxiom = selectedGenealogy.lineage[0] ?? null;
   const selectedKnowledgeSurface = useMemo(
     () => knowledgeSurface(selectedGraphNode?.node ?? null, selectedGenealogy),
     [selectedGenealogy, selectedGraphNode?.node],
@@ -810,7 +812,7 @@ export function ThoughtMapWorkspace({
   const selectedGraphNodeParent = selectedGraphNode?.node.parentId
     ? nodesById.get(selectedGraphNode.node.parentId) ?? null
     : null;
-  const selectedPrecedents = selectedGraphNode ? retrievePrecedentsForNode(selectedGraphNode.node) : [];
+  const selectedPrecedents = selectedGraphNode ? retrievePrecedentsForNode(selectedGraphNode.node, lens) : [];
   const selectedDecay = selectedGraphNode
     ? buildConfidenceDecaySnapshot(selectedGraphNode.node, selectedGenealogy.dependents.length)
     : null;
@@ -2042,6 +2044,44 @@ export function ThoughtMapWorkspace({
 
           <div className="space-y-4">
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Belief archaeology</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Layer the claim until it hits an axiom.</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Penny traces the current claim down through its parents so the hidden assumption stack stays visible instead of feeling self-evident.
+              </p>
+              {selectedArchaeologyAxiom ? (
+                <div className="mt-4 space-y-2">
+                  <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Deepest layer</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedArchaeologyAxiom.content}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                      {selectedArchaeologyAxiom.kind.replaceAll("_", " ")} · {selectedArchaeologyAxiom.nodeStatus}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedGenealogy.lineage.map((node, index) => (
+                      <div key={`${node.id}:${index}`} className="rounded-[18px] bg-white px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge className={statusBadge(node.nodeStatus)}>{kindLabel(node.kind)}</Badge>
+                          {index === 0 ? (
+                            <Badge className="bg-[#d9ead8] text-[#355b32]">axiom</Badge>
+                          ) : index === selectedGenealogy.lineage.length - 1 ? (
+                            <Badge className="bg-[#e7defa] text-[#5c4c88]">current claim</Badge>
+                          ) : (
+                            <Badge className="bg-[var(--panel)] text-[var(--ink)]">layer {index + 1}</Badge>
+                          )}
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{node.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-[var(--muted-ink)]">Select a claim to peel back the deepest assumption it rests on.</p>
+              )}
+            </div>
+
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Inheritance claims</p>
               <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">How this belief entered the map</h3>
               {claimCapture ? (
@@ -2174,6 +2214,38 @@ export function ThoughtMapWorkspace({
                   );
                 })}
               </div>
+            </div>
+
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Lens freshness</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">How current the working lens is</h3>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Active shapes</p>
+                  <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{lens.activeShapes.length}</p>
+                </div>
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Overrides</p>
+                  <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{lens.comparison.overrideShapeCount}</p>
+                </div>
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Lag</p>
+                  <p className="mt-2 text-lg font-semibold text-[var(--ink)]">
+                    {lens.freshness.lagMinutes != null ? `${lens.freshness.lagMinutes}m` : "n/a"}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-[var(--ink)]">
+                {lens.freshness.stale
+                  ? "The lens is stale enough to deserve a refresh before more synthesis work."
+                  : "The current lens is still tracking the latest move and override signals."}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Generic shapes: {lens.comparison.genericShapeCount}. Effective lens shapes: {lens.effectiveShapes.length}.
+                {lens.comparison.suppressedShapeIds.length
+                  ? ` Suppressed by override: ${lens.comparison.suppressedShapeIds.slice(0, 3).join(", ")}.`
+                  : " No shape has been suppressed by override yet."}
+              </p>
             </div>
 
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
