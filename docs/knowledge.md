@@ -37,6 +37,12 @@
 - `user`: Prior-knowledge anchoring should tie every learning moment to an existing claim in the graph, so the user connects new material to what they already believe instead of receiving generic explanation.
 - `user`: Knowledge shape tracking should record what the user has mastered, what they keep needing to relearn, and what is solid, so future critiques can pitch at the user’s actual level per topic.
 - `user`: Research-mode expansion should exist as an optional follow-up after the inline learning moment, clearly separated so it never turns into a tangent and always stays anchored to the triggering claim.
+- `user`: Decision and synthesis features should include a pre-mortem synthesis gate, an if-you-were-right mode, stakes-proportional friction, a twin-check output, and a post-mortem protocol on resolved claims.
+- `user`: The pre-mortem should be the default synthesis gate before any output artifact is generated, so the user imagines how the result fails in six months before Penny synthesizes.
+- `user`: The if-you-were-right mode should assume the claim holds and ask what becomes possible, what becomes necessary, and what the user would do in 30 days, because it reveals when the user does not fully believe their own claim.
+- `user`: Stakes-proportional friction should make load-bearing claims incur more stress-testing, pre-mortems, and revisit cadence, while lightweight claims stay lightweight.
+- `user`: Twin-check output should have Penny produce the strongest version of the user’s current thinking so the user can decide whether it actually represents what they believe.
+- `user`: Post-mortem protocol on resolved claims should turn outcomes into first-class artifacts so the richest shape input comes from what actually happened.
 - `user`: The data model should treat `Claims`, `Moves`, and `Shapes` as first-class layers.
 - `user`: `Claims` are the nodes: beliefs, evidence, provenance, confidence, and status.
 - `user`: The capture form should collect the root claim with a normalized metadata envelope so the same raw thought also carries confidence, resolution timing, provenance, stakes, dependencies, and status.
@@ -140,6 +146,9 @@
 - `user`: The UX should separate capture from reflection when that reduces interference, while preserving a clean tunnel from raw thought to structured output.
 - `user`: The psychology-backed feature set should include probability-rated claims, post-mortems on resolved claims, teach-back learning, spacing and interleaving, confidence decay, multi-framework stress-testing, metacognition surfacing, generation-first interaction, cognitive protection during deep work, and calibration tracking over time.
 - `user`: Penny’s psychology layer should make the tool feel like an invested sparring partner and a training instrument for thinking, not a chatbot or a passive knowledge base.
+- `user`: The psychology-backed decision layer should use pre-mortems, if-you-were-right mode, stakes-proportional friction, twin-check output, and post-mortems to make synthesis feel load-bearing rather than generic.
+- `user`: Decision friction should scale with stakes so the system respects what matters most instead of treating every claim and output the same way.
+- `user`: Twin-check output is also a calibration tool because it lets the user see whether Penny’s strongest version of their thinking matches their own intent.
 
 ## Project Facts
 - Capture stable project facts, decisions, and summaries worth reusing across tasks.
