@@ -1,12 +1,27 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createThoughtMap } from "@/server/thought-map";
+import { CLAIM_PROVENANCES, CLAIM_STATUSES, CLAIM_STAKES } from "@/types/thought-map";
 
 const createThoughtMapSchema = z.object({
   rawThought: z
     .string()
     .min(12, "Give Penny one real thought, not a slogan.")
     .max(400, "Keep the first thought under 400 characters."),
+  claim: z.object({
+    confidence: z.number().int().min(0).max(100),
+    resolutionDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional()
+      .default(null),
+    provenance: z.enum(CLAIM_PROVENANCES),
+    provenanceDetail: z.string().max(200).optional().default(""),
+    stakes: z.array(z.enum(CLAIM_STAKES)).default([]),
+    dependencyNotes: z.string().max(300).optional().default(""),
+    status: z.enum(CLAIM_STATUSES),
+  }),
 });
 
 export async function POST(request: Request) {

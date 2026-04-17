@@ -11,6 +11,7 @@ import { generateActionNotes, generateInitialBranchNotes } from "@/lib/thought-m
 import { cleanSentence } from "@/lib/penny";
 import type {
   CognitiveIntervention,
+  ClaimCaptureMetadata,
   CreateThoughtMapInput,
   FounderBriefModel,
   GeneratedActionBundle,
@@ -98,6 +99,23 @@ function parseJson<T>(value: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+function formatClaimCaptureMetadata(metadata: ClaimCaptureMetadata) {
+  const lines = [
+    "## Claim capture",
+    `- Confidence: ${metadata.confidence}%`,
+    `- Resolution date: ${metadata.resolutionDate ?? "not set"}`,
+    `- Provenance: ${metadata.provenance}`,
+    `- Provenance detail: ${metadata.provenanceDetail || "not specified"}`,
+    `- Stakes: ${metadata.stakes.length ? metadata.stakes.join(", ") : "none tagged"}`,
+    `- Dependency notes: ${metadata.dependencyNotes || "none provided"}`,
+    `- Status: ${metadata.status}`,
+    "",
+    "## Raw thought",
+  ];
+
+  return lines.join("\n");
 }
 
 function mapIntervention(record: ThoughtMapIntervention): CognitiveIntervention {
@@ -345,27 +363,29 @@ export async function listThoughtMaps() {
 
 export async function createThoughtMap(input: CreateThoughtMapInput) {
   const rawThought = cleanSentence(input.rawThought);
+  const captureEnvelope = formatClaimCaptureMetadata(input.claim);
+  const mapRawThought = `${captureEnvelope}\n${rawThought}`;
   const title = createThoughtMapTitle(rawThought);
-  const seedNodes = generateInitialBranchNotes(rawThought);
+  const seedNodes = generateInitialBranchNotes(mapRawThought);
 
   const created = await prisma.$transaction(async (tx) => {
     const map = await tx.thoughtMap.create({
       data: {
         userId: getDemoThoughtUserId(),
         title,
-        rawThought,
+        rawThought: mapRawThought,
       },
     });
 
     const root = await tx.thoughtNode.create({
-      data: {
-        mapId: map.id,
-        kind: "root",
-        nodeStatus: "active",
-        content: createRootNodeContent(rawThought),
-        branchOrder: 0,
-      },
-    });
+        data: {
+          mapId: map.id,
+          kind: "root",
+          nodeStatus: "active",
+          content: createRootNodeContent(mapRawThought),
+          branchOrder: 0,
+        },
+      });
 
     await tx.thoughtNode.createMany({
       data: seedNodes.map((node, index) => ({

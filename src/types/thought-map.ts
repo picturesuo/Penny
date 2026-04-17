@@ -23,6 +23,25 @@ export const NODE_ACTIONS = [
 
 export type NodeAction = (typeof NODE_ACTIONS)[number];
 
+export const CLAIM_PROVENANCES = ["intuition", "cited_source", "inherited", "derived"] as const;
+
+export type ClaimProvenance = (typeof CLAIM_PROVENANCES)[number];
+
+export const CLAIM_STATUSES = [
+  "open",
+  "stress_tested",
+  "resolved",
+  "abandoned",
+  "revisiting",
+  "stale",
+] as const;
+
+export type ClaimStatus = (typeof CLAIM_STATUSES)[number];
+
+export const CLAIM_STAKES = ["reputation", "money", "time", "relationship", "self_image"] as const;
+
+export type ClaimStake = (typeof CLAIM_STAKES)[number];
+
 export type ThoughtMapExecutionMode =
   | "add_children"
   | "strengthen_branch"
@@ -256,8 +275,19 @@ export interface ThoughtMapModel {
   updatedAt: Date;
 }
 
+export interface ClaimCaptureMetadata {
+  confidence: number;
+  resolutionDate: string | null;
+  provenance: ClaimProvenance;
+  provenanceDetail: string;
+  stakes: ClaimStake[];
+  dependencyNotes: string;
+  status: ClaimStatus;
+}
+
 export interface CreateThoughtMapInput {
   rawThought: string;
+  claim: ClaimCaptureMetadata;
 }
 
 export interface GeneratedThoughtNote {
