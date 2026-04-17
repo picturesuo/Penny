@@ -60,6 +60,11 @@
 - `user`: When the user is in deep work on a load-bearing claim, Penny should enter cognitive protection mode and suppress unrelated prompts and secondary surfaces.
 - `user`: When a tunnel traversal completes, Penny should explicitly say so, hand over the artifact, and stop pulling for engagement.
 - `user`: Reflection should be optional but rewarded, with a short shapes surface after synthesis that is easy to skip but high value when used.
+- `user`: Curriculum and education features should support student mode, explicit metacognition teaching, an instructor surface, and curriculum packs for common thinking tasks.
+- `user`: Student mode should apply the tunnel to essay writing by capturing claims, stress-testing structure, teaching through confused concepts, synthesizing an outline, and handing off prose to downstream AI.
+- `user`: Explicit metacognition teaching should name the pattern, name the underlying research, and name the response whenever shapes surface so users can transfer the skill outside the tool.
+- `user`: Instructor surface should let teachers, with student permission, view the structural progression of a student’s thinking across a project and evaluate process rather than only output.
+- `user`: Curriculum packs should be pre-built tunnel variants for common tasks such as investment thesis, research proposal, product spec, and argumentative essay, with stage criteria tailored to the task.
 - `user`: Penny’s voice should be an invested sparring partner: genuinely helpful, not sycophantic, not brutal.
 - `user`: The visual language should feel like a built city rather than a notes dump, with structure emerging from thinking and density beating breadth.
 - `user`: The interface should use a density-over-breadth visual language, where well-stress-tested nodes render with richer color and more confident lines while shallow nodes stay thin and provisional.
