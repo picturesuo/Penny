@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ShapeDashboard } from "@/components/penny/shape-dashboard";
-import { derivePennyShapes } from "@/lib/penny-insights";
+import { buildCalibrationDashboard, derivePennyShapes } from "@/lib/penny-insights";
 import { listThoughtMaps } from "@/server/thought-map";
 
 const foundation = [
@@ -36,6 +36,7 @@ export default async function DashboardPage() {
   const maps = await listThoughtMaps();
   const allNodes = maps.flatMap((map) => map.nodes);
   const shapes = derivePennyShapes(allNodes).sort((a, b) => b.confidence - a.confidence).slice(0, 4);
+  const calibration = buildCalibrationDashboard(maps);
   const mapCards = maps.map((map) => ({
     map,
     counts: summarizeNodeStatus(map.nodes),
@@ -79,7 +80,7 @@ export default async function DashboardPage() {
         </div>
       </Card>
 
-      <ShapeDashboard shapes={shapes} initialFeedback={{}} />
+      <ShapeDashboard shapes={shapes} calibration={calibration} initialFeedback={{}} />
 
       {mapCards.length ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
