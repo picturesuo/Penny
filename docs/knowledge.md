@@ -178,6 +178,10 @@
 - `user`: A/B testing the lens internally is the honest non-wrappability check: compare generic critique against lens-informed critique and verify that the difference is visible to a third party.
 - `user`: Shape confidence thresholds are load-bearing: only shapes above threshold should feed the lens, while provisional shapes remain tracked but inactive.
 - `user`: Override-derived shapes are distinct from behavior-derived shapes and should be computed separately so disagreement can change the lens in ways behavior alone cannot.
+- `user`: Custom lens injection should let advanced users write explicit rules for how the lens behaves, such as weighting technical claims harder than market claims or suppressing a redundant school of thought.
+- `user`: Shape inspection and correction should let users inspect and edit shapes directly so they can disagree with Penny’s model and revise it.
+- `user`: Lens reset should let the user ask Penny to treat them as new and rebuild the lens from recent moves when life changes invalidate old patterns.
+- `user`: Reasoning replay should let the user replay the full move trajectory that led to an artifact or decision so the work product has full provenance.
 - `user`: The system must use a closed loop, not an open loop.
 - `user`: Generation uses the lens.
 - `user`: User response becomes a move.
