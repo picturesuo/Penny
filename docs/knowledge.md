@@ -130,6 +130,11 @@
 - `user`: Private bets should use personal-credibility stakes rather than real money so the training remains sticky without becoming financial advice.
 - `user`: Bayesian update prompts should nudge confidence in small increments when new evidence appears, teaching the rhythm of superforecasting instead of dramatic swings.
 - `user`: Probability calibration feedback should be domain-specific so Penny can tell the user where they are well-calibrated and where their 80%s are overconfident.
+- `user`: Social and community features must be handled carefully with opt-in, anonymized, and privacy-preserving defaults.
+- `user`: Precedent corpus contributions should let users optionally submit anonymized, structured post-mortems so the failure corpus can grow as a commons.
+- `user`: Belief provenance across users should only flag shared-source contradictions when privacy-safe and should never expose another user’s private claim graph directly.
+- `user`: Public anonymized research mode should surface aggregate unresolved-pattern data as a public good for researchers, journalists, and funders.
+- `user`: Thought-partner matching should be targeted and one-to-one, not feed-like, and should stay high-touch because the design risk is high.
 - `user`: Just-in-time learning should happen at the point of confusion during stress-testing, with minimum viable explanation, why-it-matters context, teach-back, and optional deeper anchors.
 - `user`: Every learning moment should generate moves and should feed a knowledge shape for what the user understands, repeats, or needs to relearn.
 - `user`: Shapes must be visible to the user as metacognitive feedback, both in-context and through periodic reflection surfaces.
