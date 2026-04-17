@@ -69,6 +69,15 @@ Challenge is the dialectic interaction: claim, counterargument, response, repeat
 - Penny should also surface quiet fragility when felt confidence outruns structural support.
 - Stress tests should draw from multiple critique frames rather than one generic voice.
 
+## Collaboration
+
+Penny supports bounded collaboration without turning into a social feed.
+
+- Specific audience critique lets the user tune a claim to a concrete audience, such as a board, advisor, or co-thinker.
+- Advisor review mode keeps critique-only contributions separate from claim editing.
+- Shared spheres keep authorship visible when two people want to think together on one problem.
+- Thought-partner matching stays one-to-one, opt-in, and time-limited to structurally similar questions.
+
 ## Learn
 
 Learn should be just-in-time and claim-anchored.
