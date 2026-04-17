@@ -1678,97 +1678,89 @@ export function buildOldSelfTimeline(
 
 export function buildMapTimeline(map: ThoughtMapModel): MapTimelineSnapshot {
   const entries: MapTimelineEntry[] = [];
-  const eventEntries = map.events.flatMap((event) => {
+  for (const event of map.events) {
     if (event.eventType === "move_applied") {
       const action = typeof event.payload?.action === "string" ? String(event.payload.action).replaceAll("_", " ") : "move";
       const updatedCount = Array.isArray(event.payload?.updatedNodeIds) ? event.payload.updatedNodeIds.length : 0;
       const createdCount = Array.isArray(event.payload?.createdNodeIds) ? event.payload.createdNodeIds.length : 0;
 
-      return [
-        {
-          id: event.id,
-          label: "Claim moved",
-          summary: `${action[0]?.toUpperCase() ?? "M"}${action.slice(1)} move touched ${createdCount} created and ${updatedCount} updated node${updatedCount === 1 ? "" : "s"}.`,
-          createdAt: event.createdAt,
-          nodeId: event.nodeId,
-          accent: "revision",
-        } satisfies MapTimelineEntry,
-      ];
+      entries.push({
+        id: event.id,
+        label: "Claim moved",
+        summary: `${action[0]?.toUpperCase() ?? "M"}${action.slice(1)} move touched ${createdCount} created and ${updatedCount} updated node${updatedCount === 1 ? "" : "s"}.`,
+        createdAt: event.createdAt,
+        nodeId: event.nodeId,
+        accent: "revision",
+      });
+      continue;
     }
 
     if (event.eventType === "confidence_override") {
       const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
 
-      return [
-        {
-          id: event.id,
-          label: "Confidence shifted",
-          summary: reasoning
-            ? `The user explained why confidence should hold: ${reasoning.slice(0, 140)}${reasoning.length > 140 ? "…" : ""}`
-            : "A confidence override was recorded for this branch.",
-          createdAt: event.createdAt,
-          nodeId: event.nodeId,
-          accent: "confidence",
-        } satisfies MapTimelineEntry,
-      ];
+      entries.push({
+        id: event.id,
+        label: "Confidence shifted",
+        summary: reasoning
+          ? `The user explained why confidence should hold: ${reasoning.slice(0, 140)}${reasoning.length > 140 ? "…" : ""}`
+          : "A confidence override was recorded for this branch.",
+        createdAt: event.createdAt,
+        nodeId: event.nodeId,
+        accent: "confidence",
+      });
+      continue;
     }
 
     if (event.eventType === "dialectic_round") {
       const title = typeof event.payload?.title === "string" ? String(event.payload.title) : "Dialectic round";
       const response = typeof event.payload?.response === "string" ? String(event.payload.response).trim() : "";
 
-      return [
-        {
-          id: event.id,
-          label: title,
-          summary: response
-            ? `Stress-test response: ${response.slice(0, 140)}${response.length > 140 ? "…" : ""}`
-            : "A dialectic round was recorded against this branch.",
-          createdAt: event.createdAt,
-          nodeId: event.nodeId,
-          accent: "stress",
-        } satisfies MapTimelineEntry,
-      ];
+      entries.push({
+        id: event.id,
+        label: title,
+        summary: response
+          ? `Stress-test response: ${response.slice(0, 140)}${response.length > 140 ? "…" : ""}`
+          : "A dialectic round was recorded against this branch.",
+        createdAt: event.createdAt,
+        nodeId: event.nodeId,
+        accent: "stress",
+      });
+      continue;
     }
 
     if (event.eventType === "shape_feedback") {
       const verdict = typeof event.payload?.verdict === "string" ? String(event.payload.verdict) : "feedback";
       const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
 
-      return [
-        {
-          id: event.id,
-          label: "Shape feedback",
-          summary: reasoning
-            ? `The shape was marked ${verdict} because: ${reasoning.slice(0, 140)}${reasoning.length > 140 ? "…" : ""}`
-            : `The shape was marked ${verdict}.`,
-          createdAt: event.createdAt,
-          nodeId: event.nodeId,
-          accent: verdict === "confirmed" ? "resolution" : "shape",
-        } satisfies MapTimelineEntry,
-      ];
+      entries.push({
+        id: event.id,
+        label: "Shape feedback",
+        summary: reasoning
+          ? `The shape was marked ${verdict} because: ${reasoning.slice(0, 140)}${reasoning.length > 140 ? "…" : ""}`
+          : `The shape was marked ${verdict}.`,
+        createdAt: event.createdAt,
+        nodeId: event.nodeId,
+        accent: verdict === "confirmed" ? "resolution" : "shape",
+      });
+      continue;
     }
 
     if (event.eventType === "bias_detected" || event.eventType === "bias_resolved") {
       const detector = typeof event.payload?.detector === "string" ? String(event.payload.detector).replaceAll("_", " ") : "bias";
 
-      return [
-        {
-          id: event.id,
-          label: event.eventType === "bias_detected" ? "Stress signal" : "Stress signal resolved",
-          summary:
-            event.eventType === "bias_detected"
-              ? `${detector} pressure showed up in the map.`
-              : `${detector} pressure got named and softened.`,
-          createdAt: event.createdAt,
-          nodeId: event.nodeId,
-          accent: event.eventType === "bias_detected" ? "stress" : "resolution",
-        } satisfies MapTimelineEntry,
-      ];
+      entries.push({
+        id: event.id,
+        label: event.eventType === "bias_detected" ? "Stress signal" : "Stress signal resolved",
+        summary:
+          event.eventType === "bias_detected"
+            ? `${detector} pressure showed up in the map.`
+            : `${detector} pressure got named and softened.`,
+        createdAt: event.createdAt,
+        nodeId: event.nodeId,
+        accent: event.eventType === "bias_detected" ? "stress" : "resolution",
+      });
     }
-
-    return [];
-  });
+  }
 
   for (const node of map.nodes) {
     entries.push({
