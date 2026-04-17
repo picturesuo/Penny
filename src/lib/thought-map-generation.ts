@@ -1,5 +1,6 @@
 import { cleanSentence, dedupeStrings } from "@/lib/penny";
 import { analyzeThoughtMap, isNearDuplicate, type CritiqueTag } from "@/lib/thought-map-analysis";
+import { buildPennyLens, type PennyLensSnapshot } from "@/lib/penny-insights";
 import type {
   GeneratedActionBundle,
   GeneratedThoughtNote,
@@ -18,6 +19,23 @@ type ContextSignals = {
   friction: string;
   outcome: string;
 };
+
+export type ClaimType = "causal" | "capability" | "comparative" | "definitional" | "operational" | "unknown";
+export type AssumptionCategory = "mechanism" | "conditions" | "scale" | "time" | "counterfactual" | "measurement";
+
+export interface AssumptionExtractionItem {
+  text: string;
+  category: AssumptionCategory;
+  confidence: number;
+  sharpness: "sharp" | "medium" | "soft";
+  explanation: string;
+}
+
+export interface AssumptionExtractionSnapshot {
+  claimType: ClaimType;
+  claimTypeConfidence: number;
+  assumptions: AssumptionExtractionItem[];
+}
 
 function gapTargetKind(gap: CritiqueTag): ThoughtNodeKind {
   if (gap === "missing-counterargument" || gap === "premise-rejection" || gap === "analogy-break") return "counter_argument";
@@ -135,6 +153,157 @@ function buildSignals(text: string): ContextSignals {
     keyTerms,
     friction: inferFriction(cleaned),
     outcome: inferOutcome(cleaned),
+  };
+}
+
+function inferClaimType(text: string): { claimType: ClaimType; confidence: number } {
+  const lower = text.toLowerCase();
+
+  if (/\b(better than|faster than|cheaper than|more than|less than|versus|vs\.?|compared to|instead of)\b/.test(lower)) {
+    return { claimType: "comparative", confidence: 93 };
+  }
+
+  if (/\b(causes?|caused by|leads to|leads into|drives?|results? in|because|therefore|so that)\b/.test(lower)) {
+    return { claimType: "causal", confidence: 90 };
+  }
+
+  if (/\b(can|could|able to|works? for|handle|support|deliver|run|operate)\b/.test(lower)) {
+    return { claimType: "capability", confidence: 84 };
+  }
+
+  if (/\b(is a|is an|means|defined as|counts as|kind of|type of)\b/.test(lower)) {
+    return { claimType: "definitional", confidence: 79 };
+  }
+
+  if (/\b(scale|launch|adoption|workflow|process|operate|day-to-day|implementation)\b/.test(lower)) {
+    return { claimType: "operational", confidence: 76 };
+  }
+
+  return { claimType: "unknown", confidence: 55 };
+}
+
+function assumptionCategoryOrder(claimType: ClaimType): AssumptionCategory[] {
+  switch (claimType) {
+    case "causal":
+      return ["mechanism", "conditions", "time", "counterfactual", "measurement", "scale"];
+    case "capability":
+      return ["conditions", "scale", "mechanism", "time", "measurement", "counterfactual"];
+    case "comparative":
+      return ["counterfactual", "measurement", "conditions", "scale", "time", "mechanism"];
+    case "definitional":
+      return ["measurement", "counterfactual", "conditions", "mechanism", "scale", "time"];
+    case "operational":
+      return ["conditions", "scale", "time", "mechanism", "measurement", "counterfactual"];
+    default:
+      return ["mechanism", "conditions", "scale", "time", "counterfactual", "measurement"];
+  }
+}
+
+function assumptionTemplate(params: {
+  claimType: ClaimType;
+  category: AssumptionCategory;
+  signals: ContextSignals;
+}) {
+  const { claimType, category, signals } = params;
+  const subject = signals.subjectPhrase;
+  const userType = signals.userType;
+  const alternative = signals.currentAlternative;
+  const outcome = signals.outcome;
+
+  const templates: Record<AssumptionCategory, string> = {
+    mechanism:
+      claimType === "comparative"
+        ? `This only wins if the speed advantage comes from ${subject}, not from hidden coordination or labor the user does not see.`
+        : claimType === "causal"
+          ? `This only works if ${subject} changes ${outcome} through a real mechanism, not just correlation.`
+          : `This only works if ${subject} has a mechanism the user can actually explain and act on.`,
+    conditions:
+      claimType === "capability"
+        ? `This only works if ${userType} can use it in the real operating conditions, not just in a demo.`
+        : claimType === "comparative"
+          ? `This only wins if the comparison is made under the same usage conditions and service level as ${alternative}.`
+          : `This only works if the claim holds under the conditions the user actually cares about.`,
+    scale:
+      claimType === "capability"
+        ? `This only works if it still holds at the scale the user cares about, not only for a tiny test group.`
+        : claimType === "comparative"
+          ? `This only wins if the advantage survives at the relevant volume, not just in a small or idealized case.`
+          : `This only works if the pattern still holds at the relevant scale and load.`,
+    time:
+      claimType === "causal"
+        ? `This only matters if the effect lasts long enough to change the actual decision horizon.`
+        : claimType === "comparative"
+          ? `This only matters if the advantage survives after the first burst of novelty and onboarding.`
+          : `This only works if the claim stays true long enough to affect the next decision.`,
+    counterfactual:
+      claimType === "comparative"
+        ? `This only matters if ${alternative} does not catch up once the problem gets pressure-tested.`
+        : claimType === "causal"
+          ? `This only matters if the alternative explanation does not already account for the result.`
+          : `This only works if the likely alternative does not already solve the problem well enough.`,
+    measurement:
+      claimType === "causal"
+        ? `This only works if the outcome can be measured in a way that is not easy to fake or misread.`
+        : claimType === "comparative"
+          ? `This only wins if the metric for "better" is the right one, not the one that flatters the idea.`
+          : `This only works if the success signal is measurable and not easy to hand-wave away.`,
+  };
+
+  return templates[category];
+}
+
+function sharpnessLabel(confidence: number) {
+  if (confidence >= 84) {
+    return "sharp" as const;
+  }
+
+  if (confidence >= 68) {
+    return "medium" as const;
+  }
+
+  return "soft" as const;
+}
+
+export function extractAssumptionSnapshot(rawThought: string): AssumptionExtractionSnapshot {
+  const cleaned = cleanSentence(rawThought);
+  const signals = buildSignals(cleaned);
+  const claimType = inferClaimType(cleaned);
+  const categories = assumptionCategoryOrder(claimType.claimType);
+  const assumptions = categories.slice(0, 3).map((category, index) => {
+    const text = assumptionTemplate({ claimType: claimType.claimType, category, signals });
+    const confidence = Math.min(
+      96,
+      claimType.confidence -
+        index * 6 +
+        (category === "measurement" ? 4 : 0) +
+        (category === "counterfactual" ? 3 : 0) +
+        (/\b(\d+|minutes?|days?|weeks?|months?|scale|commercial|urban|customers?|senders?|receivers?)\b/.test(cleaned.toLowerCase()) ? 4 : 0),
+    );
+
+    return {
+      text: clip(text),
+      category,
+      confidence,
+      sharpness: sharpnessLabel(confidence),
+      explanation:
+        category === "mechanism"
+          ? "Sharp because it points to the actual mechanism the claim needs."
+          : category === "conditions"
+            ? "Sharp because it names the operating conditions that can break the claim."
+            : category === "scale"
+              ? "Sharp because it forces the claim to survive the real magnitude."
+              : category === "time"
+                ? "Sharp because it tests the horizon where the claim has to keep holding."
+                : category === "counterfactual"
+                  ? "Sharp because it asks what the claim is really competing against."
+                  : "Sharp because it defines the observable test, not just the idea.",
+    };
+  });
+
+  return {
+    claimType: claimType.claimType,
+    claimTypeConfidence: claimType.confidence,
+    assumptions,
   };
 }
 
@@ -557,6 +726,7 @@ function siblingHighlights(map: ThoughtMapModel, node: ThoughtNodeModel) {
 
 function generateInitialNotes(rawThought: string): GeneratedThoughtNote[] {
   const signals = buildSignals(rawThought);
+  const assumptionExtraction = extractAssumptionSnapshot(rawThought);
   const rootNode: ThoughtNodeModel = {
     id: "root",
     mapId: "seed",
@@ -590,11 +760,13 @@ function generateInitialNotes(rawThought: string): GeneratedThoughtNote[] {
           anchors: [signals.friction, signals.outcome],
         },
       ),
-      makeNote("assumption", `Assume ${signals.userType} will change behavior for sharper feedback, not just prettier output`, {
-        strategy: "seed_assumption",
-        why: "Surfaces the key behavior-change risk.",
-        anchors: [signals.userType, "feedback"],
-      }),
+      ...assumptionExtraction.assumptions.map((assumption, index) =>
+        makeNote("assumption", assumption.text, {
+          strategy: `seed_assumption_${assumption.category}`,
+          why: assumption.explanation,
+          anchors: [signals.userType, signals.currentAlternative, assumption.category, String(index + 1)],
+        }),
+      ),
       makeNote("counter_argument", `${signals.currentAlternative} may already be fast enough for early thinking`, {
         strategy: "seed_counter_argument",
         why: "Acknowledges the incumbent behavior directly.",
@@ -607,8 +779,8 @@ function generateInitialNotes(rawThought: string): GeneratedThoughtNote[] {
       }),
     ],
     {
-      desiredMin: 5,
-      desiredMax: 5,
+      desiredMin: 7,
+      desiredMax: 7,
       node: rootNode,
       action: "expand",
       anchors: [rawThought, ...signals.keyTerms, signals.userType, signals.currentAlternative],
@@ -1202,12 +1374,15 @@ export function generateActionNotes(params: {
   map: ThoughtMapModel;
   node: ThoughtNodeModel;
   action: NodeAction;
+  lens?: PennyLensSnapshot | null;
 }): GeneratedActionBundle {
   const analysis = analyzeThoughtMap(params);
+  const lens = params.lens ?? buildPennyLens(params.map);
   const targetNode =
     params.map.nodes.find((node) => node.id === analysis.actionSelection.targetNodeId) ?? params.node;
   const sourceText = [params.map.rawThought, targetNode.content].join(" ");
   const signals = buildSignals(sourceText);
+  const lensFocus = lens.effectiveShapes.slice(0, 3);
   const anchors = [
     params.map.rawThought,
     targetNode.content,
@@ -1215,6 +1390,8 @@ export function generateActionNotes(params: {
     signals.userType,
     signals.currentAlternative,
     signals.outcome,
+    ...lensFocus.map((shape) => shape.label),
+    ...lens.overrideShapes.slice(0, 2).map((shape) => shape.label),
   ];
   const existingContents = params.map.nodes.map((node) => node.content);
 
@@ -1245,6 +1422,27 @@ export function generateActionNotes(params: {
 
       return true;
     });
+  const lensGapNotes = lensFocus.length
+    ? [
+        makeNote(
+          lens.freshness.stale ? "research" : "why_it_matters",
+          lens.freshness.stale
+            ? `Refresh the lens before the next move: it is ${lens.freshness.lagMinutes ?? 0} minutes behind the latest override.`
+            : `The active lens is now ${lensFocus[0]!.label}; keep the next move aligned with that pattern instead of the raw graph alone.`,
+          {
+            strategy: "lens_alignment",
+            why: lens.freshness.stale
+              ? "Adds a freshness check so the lens does not drift away from the move history."
+              : "Binds the generated note to the active lens instead of only the graph state.",
+            anchors: [
+              lensFocus[0]!.label,
+              ...lensFocus[0]!.signals,
+              ...(lens.overrideShapes[0]?.signals ?? []),
+            ],
+          },
+        ),
+      ]
+    : [];
 
   const qualityCandidates =
     analysis.actionSelection.mode === "replace_weak_branch"
@@ -1258,7 +1456,7 @@ export function generateActionNotes(params: {
   const candidates =
     analysis.actionSelection.mode === "replace_weak_branch"
       ? qualityCandidates
-      : [...qualityCandidates, ...targetedGapCandidates, ...baseCandidates];
+      : [...qualityCandidates, ...targetedGapCandidates, ...lensGapNotes, ...baseCandidates];
 
   const notes = finalizeNotes(candidates, {
     desiredMin: 2,
@@ -1300,6 +1498,10 @@ export function generateActionNotes(params: {
         "Anchor output to source terms and user context",
         "Reject generic notes and backfill with specificity fallbacks",
         "Drop near-duplicate notes against the existing map",
+        `Treat ${lens.effectiveShapes.length} lens shapes as the current working frame`,
+        lens.comparison.overrideShapeCount > 0
+          ? `Separate ${lens.comparison.overrideShapeCount} override-derived shapes from the behavior-derived lens before drafting`
+          : "No override-derived shapes are currently changing the lens",
       ],
       sourceAnchors: anchors
         .map((value) => clip(value))
