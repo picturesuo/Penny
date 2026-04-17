@@ -23,6 +23,7 @@ import {
   interleaveStressNodes,
   retrievePrecedentsForNode,
   traceContradictionCascade,
+  type PennyShape,
   type PennyShapeFeedback,
 } from "@/lib/penny-insights";
 import { cn } from "@/lib/utils";
@@ -298,6 +299,55 @@ function critiqueDepthNote(node: ThoughtNodeModel) {
   }
 
   return "Low confidence already carries uncertainty, so Penny keeps the critique lighter and more targeted.";
+}
+
+function knowledgeSurface(node: ThoughtNodeModel | null, genealogy: ReturnType<typeof buildBeliefGenealogy>) {
+  if (!node) {
+    return { understood: [] as string[], needsWork: [] as string[] };
+  }
+
+  const understood = [
+    node.scores?.evidence != null && node.scores.evidence >= 0.65 ? "evidence collection" : null,
+    node.scores?.specificity != null && node.scores.specificity >= 0.65 ? "claim specificity" : null,
+    node.scores?.testability != null && node.scores.testability >= 0.6 ? "test design" : null,
+    genealogy.contradictions.length > 0 ? "counterargument handling" : null,
+    genealogy.dependents.length > 0 ? "dependency tracing" : null,
+  ].filter((value): value is string => value != null);
+
+  const needsWork = [
+    node.scores?.evidence != null && node.scores.evidence < 0.65 ? "evidence collection" : null,
+    node.scores?.specificity != null && node.scores.specificity < 0.65 ? "claim specificity" : null,
+    node.scores?.testability != null && node.scores.testability < 0.6 ? "test design" : null,
+    node.scores?.dependencyRisk != null && node.scores.dependencyRisk > 0.55 ? "dependency reasoning" : null,
+    genealogy.contradictions.length === 0 ? "counterargument handling" : null,
+  ].filter((value): value is string => value != null);
+
+  return {
+    understood: Array.from(new Set(understood)),
+    needsWork: Array.from(new Set(needsWork)),
+  };
+}
+
+function shapeMetacognition(shape: PennyShape | null) {
+  if (!shape) {
+    return null;
+  }
+
+  const pattern = shape.label;
+  const research =
+    shape.kind === "domain"
+      ? "Domain shapes are derived from repeated critique and calibration signals."
+      : "Cognitive shapes are derived from recurring self-protection, repetition, and revision patterns.";
+  const response =
+    shape.verdict === "confirmed"
+      ? "Keep using this pattern as an active lens."
+      : shape.verdict === "provisional"
+        ? "Use it cautiously and keep testing for corroboration."
+        : shape.verdict === "rejected"
+          ? "Push back on the pattern when it appears again."
+          : "Refine the pattern with more evidence and better counterexamples.";
+
+  return { pattern, research, response };
 }
 
 export function ThoughtMapWorkspace({
@@ -685,10 +735,15 @@ export function ThoughtMapWorkspace({
     () => findActiveShapeCallout(selectedGraphNodeModel, derivedShapes),
     [derivedShapes, selectedGraphNodeModel],
   );
+  const activeShapeTeaching = useMemo(() => shapeMetacognition(activeShapeCallout), [activeShapeCallout]);
   const activeShapeReasoning = activeShapeCallout ? (shapeOverrideReasons[activeShapeCallout.id] ?? "").trim() : "";
   const selectedGenealogy = useMemo(
     () => buildBeliefGenealogy(map.nodes, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
+  );
+  const selectedKnowledgeSurface = useMemo(
+    () => knowledgeSurface(selectedGraphNode?.node ?? null, selectedGenealogy),
+    [selectedGenealogy, selectedGraphNode?.node],
   );
   const selectedOldSelves = useMemo(
     () => buildOldSelfTimeline(map.nodes, map.events, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
@@ -1100,6 +1155,64 @@ export function ThoughtMapWorkspace({
                     because {map.recommendedIntervention.triggerReason.toLowerCase()}
                   </p>
                 ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Teach-back</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Explain it in the context of this claim.</h3>
+              <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
+                Penny gives the minimum scaffold, then asks you to generate the explanation yourself so the gap shows up where it matters.
+              </p>
+              {selectedGraphNode ? (
+                <div className="mt-4 rounded-[20px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Minimum scaffold</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                    Define the concept, connect it to this claim, and name one thing that would make the claim stronger or weaker.
+                  </p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                    Now explain how it applies to: <span className="font-medium text-[var(--ink)]">{selectedGraphNode.node.content}</span>
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-4 rounded-[20px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                  Select a node to turn this into a claim-anchored teach-back prompt.
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Knowledge shape</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">What Penny thinks you already know here.</h3>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Demonstrated</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedKnowledgeSurface.understood.length ? (
+                      selectedKnowledgeSurface.understood.map((concept) => (
+                        <Badge key={concept} className="bg-white text-[var(--ink)]">
+                          {concept}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge className="bg-white text-[var(--ink)]">No demonstrated concepts yet</Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Needs work</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedKnowledgeSurface.needsWork.length ? (
+                      selectedKnowledgeSurface.needsWork.map((concept) => (
+                        <Badge key={concept} className="bg-[#fff6ed] text-[#8b4d1f]">
+                          {concept}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge className="bg-[#d9ead8] text-[#355b32]">No obvious gaps</Badge>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1884,6 +1997,16 @@ export function ThoughtMapWorkspace({
                     <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
                       Marked as {shapeFeedback[activeShapeCallout.id]}
                     </p>
+                  ) : null}
+                  {activeShapeTeaching ? (
+                    <div className="mt-4 rounded-[18px] bg-white p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Metacognition teaching</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                        Pattern: <span className="font-medium">{activeShapeTeaching.pattern}</span>
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{activeShapeTeaching.research}</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">Response: {activeShapeTeaching.response}</p>
+                    </div>
                   ) : null}
                 </>
               ) : (
