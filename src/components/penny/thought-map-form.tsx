@@ -68,6 +68,9 @@ export function ThoughtMapForm() {
     stakes: ClaimStake[];
     dependencyNotes: string;
     status: ClaimStatus;
+    temporalScope: string;
+    conditionalStatement: string;
+    structureKind: "assertion" | "conditional" | "compound" | "temporal" | "merged_candidate" | "split_candidate";
   }>({
     confidence: 60,
     resolutionDate: "",
@@ -76,6 +79,9 @@ export function ThoughtMapForm() {
     stakes: [],
     dependencyNotes: "",
     status: "open",
+    temporalScope: "",
+    conditionalStatement: "",
+    structureKind: "assertion",
   });
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -118,6 +124,9 @@ export function ThoughtMapForm() {
           stakes: claim.stakes,
           dependencyNotes: claim.dependencyNotes.trim(),
           status: claim.status,
+          temporalScope: claim.temporalScope.trim() || undefined,
+          conditionalStatement: claim.conditionalStatement.trim() || undefined,
+          structureKind: claim.structureKind,
         },
       };
 
@@ -342,6 +351,53 @@ export function ThoughtMapForm() {
                 ))}
               </div>
             </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-[var(--ink)]">Temporal scope</span>
+              <input
+                type="text"
+                value={claim.temporalScope}
+                onChange={(event) =>
+                  setClaim((current) => ({ ...current, temporalScope: event.target.value }))
+                }
+                placeholder="e.g. 5-year claim, this quarter, long-run"
+                className="w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-[var(--ink)]">Claim structure</span>
+              <select
+                value={claim.structureKind}
+                onChange={(event) =>
+                  setClaim((current) => ({
+                    ...current,
+                    structureKind: event.target.value as typeof claim.structureKind,
+                  }))
+                }
+                className="w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm text-[var(--ink)] outline-none focus:border-black/20"
+              >
+                <option value="assertion">Assertion</option>
+                <option value="conditional">Conditional</option>
+                <option value="compound">Compound</option>
+                <option value="temporal">Temporal</option>
+                <option value="merged_candidate">Merged candidate</option>
+                <option value="split_candidate">Split candidate</option>
+              </select>
+            </label>
+
+            <label className="space-y-2 lg:col-span-2">
+              <span className="text-sm font-medium text-[var(--ink)]">Conditional statement</span>
+              <textarea
+                rows={2}
+                value={claim.conditionalStatement}
+                onChange={(event) =>
+                  setClaim((current) => ({ ...current, conditionalStatement: event.target.value }))
+                }
+                placeholder="If X, then Y"
+                className="w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
+              />
+            </label>
           </div>
         </div>
 
@@ -356,7 +412,7 @@ export function ThoughtMapForm() {
         />
 
         {rawThought.trim() ? (
-          <div className="rounded-[28px] border border-[#d7c06c] bg-[#fff9df] p-5">
+            <div className="rounded-[28px] border border-[#d7c06c] bg-[#fff9df] p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-[#6f5612]">Assumption extraction</p>
@@ -483,6 +539,22 @@ export function ThoughtMapForm() {
                 );
               })}
             </div>
+
+            {claim.temporalScope.trim() || claim.conditionalStatement.trim() || claim.structureKind !== "assertion" ? (
+              <div className="mt-4 rounded-[24px] border border-[#d7c06c] bg-[#fffdf0] p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-[#6f5612]">Claim structure</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {claim.temporalScope.trim() ? <Badge className="bg-white text-[#5a460d]">{claim.temporalScope.trim()}</Badge> : null}
+                  <Badge className="bg-white text-[#5a460d]">{claim.structureKind.replaceAll("_", " ")}</Badge>
+                  {claim.conditionalStatement.trim() ? (
+                    <Badge className="bg-white text-[#5a460d]">conditional present</Badge>
+                  ) : null}
+                </div>
+                <p className="mt-3 text-sm leading-6 text-[#6f5612]">
+                  Temporal scope and conditional wording make the claim easier to split, merge, and stress-test later.
+                </p>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
