@@ -343,3 +343,48 @@ export async function markAssumptionResolved(sessionId: string, assumption: stri
   );
   await saveSession(session);
 }
+
+export async function submitSessionReflection(
+  sessionId: string,
+  reflection: {
+    surprised: string;
+    resisted: string;
+    returnTo: string;
+  },
+) {
+  const session = await getSession(sessionId);
+  if (!session) {
+    throw new Error("Session not found");
+  }
+
+  const surprised = cleanSentence(reflection.surprised);
+  const resisted = cleanSentence(reflection.resisted);
+  const returnTo = cleanSentence(reflection.returnTo);
+
+  if (!surprised || !resisted || !returnTo) {
+    throw new Error("Reflection fields are required");
+  }
+
+  session.conversation.push(
+    createMessage(
+      "system",
+      "reflection",
+      [
+        "Session-end reflection ritual",
+        `What surprised you today: ${surprised}`,
+        `What did you resist: ${resisted}`,
+        `What do you want to come back to: ${returnTo}`,
+      ].join("\n"),
+    ),
+  );
+
+  if (session.status === "brief-ready") {
+    session.status = "brief-ready";
+  } else {
+    session.status = "reflection-logged";
+  }
+
+  await saveSession(session);
+
+  return session;
+}
