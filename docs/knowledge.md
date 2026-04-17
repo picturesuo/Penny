@@ -105,6 +105,11 @@
 - `user`: Norm-challenge scrutiny should hold firm on whether a challenged norm is actually load-bearing and should articulate the strongest case for the norm before entertaining the counter-case.
 - `user`: Confidence decay should surface untouched beliefs for revisit after a threshold, with foundational beliefs decaying faster because their failure cascades through the rest of the model.
 - `user`: Interleaved stress-testing should mix related claims across a queue rather than drilling one claim sequentially, because discrimination is stronger than pattern-matching.
+- `user`: Calibration and forecasting should include Brier scoring on resolved claims, private bets with yourself, Bayesian update prompts, and probability calibration feedback by domain.
+- `user`: Brier scoring should be visible as a measurable improvement signal on resolved claims, not hidden in the background.
+- `user`: Private bets should use personal-credibility stakes rather than real money so the training remains sticky without becoming financial advice.
+- `user`: Bayesian update prompts should nudge confidence in small increments when new evidence appears, teaching the rhythm of superforecasting instead of dramatic swings.
+- `user`: Probability calibration feedback should be domain-specific so Penny can tell the user where they are well-calibrated and where their 80%s are overconfident.
 - `user`: Just-in-time learning should happen at the point of confusion during stress-testing, with minimum viable explanation, why-it-matters context, teach-back, and optional deeper anchors.
 - `user`: Every learning moment should generate moves and should feed a knowledge shape for what the user understands, repeats, or needs to relearn.
 - `user`: Shapes must be visible to the user as metacognitive feedback, both in-context and through periodic reflection surfaces.
