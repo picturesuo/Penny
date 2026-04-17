@@ -1,4 +1,12 @@
-import type { ThoughtMapEvent, ThoughtNodeModel } from "@/types/thought-map";
+import type {
+  ClaimCaptureMetadata,
+  ClaimProvenance,
+  ClaimStatus,
+  ClaimStake,
+  ThoughtMapEvent,
+  ThoughtMapModel,
+  ThoughtNodeModel,
+} from "@/types/thought-map";
 
 export type ShapeVerdict = "confirmed" | "provisional" | "rejected" | "refined";
 export type PennyShapeFeedback = "confirmed" | "rejected" | "refined";
@@ -67,6 +75,64 @@ export interface ConfidenceDecaySnapshot {
   decayMultiplier: number;
   decayedConfidence: number | null;
   isFoundational: boolean;
+}
+
+export type CalibrationDomain = "technical" | "market" | "operational" | "research" | "people" | "general";
+
+export interface ForecastClaimSnapshot {
+  mapId: string;
+  title: string;
+  domain: CalibrationDomain;
+  confidence: number;
+  outcome: 0 | 1 | null;
+  brierScore: number | null;
+  status: ClaimStatus;
+  resolutionDate: string | null;
+  provenance: ClaimProvenance;
+  stakes: ClaimStake[];
+  personalCredibilityStake: "light" | "medium" | "heavy";
+  evidenceSignal: number;
+  bayesianShift: number;
+  updatePrompt: string;
+  updatedAt: Date;
+}
+
+export interface CalibrationDomainSummary {
+  domain: CalibrationDomain;
+  sampleSize: number;
+  averageConfidence: number;
+  averageOutcomeRate: number | null;
+  averageBrierScore: number | null;
+  calibrationGap: number | null;
+  note: string;
+}
+
+export interface PrivateBetSnapshot {
+  mapId: string;
+  title: string;
+  domain: CalibrationDomain;
+  confidence: number;
+  resolutionDate: string | null;
+  status: ClaimStatus;
+  stakes: ClaimStake[];
+  credibilityLabel: string;
+  prompt: string;
+}
+
+export interface BayesianUpdatePrompt {
+  mapId: string;
+  title: string;
+  domain: CalibrationDomain;
+  evidenceSignal: number;
+  suggestedShift: number;
+  prompt: string;
+}
+
+export interface CalibrationDashboardSnapshot {
+  resolvedClaims: ForecastClaimSnapshot[];
+  domains: CalibrationDomainSummary[];
+  privateBets: PrivateBetSnapshot[];
+  prompts: BayesianUpdatePrompt[];
 }
 
 const SHAPE_RULES: Array<{
@@ -237,6 +303,139 @@ function normalize(text: string) {
 
 function clampConfidence(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetadata | null {
+  const match = rawThought.match(/## Claim capture([\s\S]*?)\n## Raw thought/);
+
+  if (!match) {
+    return null;
+  }
+
+  const metadata: Partial<ClaimCaptureMetadata> = {
+    confidence: 60,
+    resolutionDate: null,
+    provenance: "intuition",
+    provenanceDetail: "",
+    stakes: [],
+    dependencyNotes: "",
+    status: "open",
+  };
+
+  for (const line of match[1].split("\n")) {
+    const cleaned = line.trim().replace(/^- /, "");
+    if (!cleaned.includes(":")) {
+      continue;
+    }
+
+    const [key, ...rest] = cleaned.split(":");
+    const value = rest.join(":").trim();
+
+    switch (key.toLowerCase()) {
+      case "confidence":
+        metadata.confidence = Number.parseInt(value.replace("%", ""), 10);
+        break;
+      case "resolution date":
+        metadata.resolutionDate = value === "not set" ? null : value;
+        break;
+      case "provenance":
+        metadata.provenance = value as ClaimProvenance;
+        break;
+      case "provenance detail":
+        metadata.provenanceDetail = value === "not specified" ? "" : value;
+        break;
+      case "stakes":
+        metadata.stakes =
+          value === "none tagged"
+            ? []
+            : value
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean) as ClaimStake[];
+        break;
+      case "dependency notes":
+        metadata.dependencyNotes = value === "none provided" ? "" : value;
+        break;
+      case "status":
+        metadata.status = value as ClaimStatus;
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (
+    metadata.confidence == null ||
+    metadata.resolutionDate == null ||
+    metadata.provenance == null ||
+    metadata.provenanceDetail == null ||
+    metadata.stakes == null ||
+    metadata.dependencyNotes == null ||
+    metadata.status == null
+  ) {
+    return null;
+  }
+
+  return metadata as ClaimCaptureMetadata;
+}
+
+function classifyCalibrationDomain(text: string): CalibrationDomain {
+  if (/(market|distribution|pricing|buyer|customer acquisition|adoption|retention)/i.test(text)) {
+    return "market";
+  }
+
+  if (/(ops|operation|workflow|process|handoff|execution|delivery|team|hiring)/i.test(text)) {
+    return "operational";
+  }
+
+  if (/(research|evidence|study|experiment|validation|interview|test)/i.test(text)) {
+    return "research";
+  }
+
+  if (/(technical|infra|engineering|architecture|system|code|api|developer)/i.test(text)) {
+    return "technical";
+  }
+
+  if (/(people|relationship|leadership|culture|manager|communication|social)/i.test(text)) {
+    return "people";
+  }
+
+  return "general";
+}
+
+function average(values: number[]) {
+  if (!values.length) {
+    return null;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function credibilityLabel(confidence: number, stakes: ClaimStake[]) {
+  if (confidence >= 80 || stakes.length >= 3) {
+    return "heavy";
+  }
+
+  if (confidence >= 65 || stakes.length >= 1) {
+    return "medium";
+  }
+
+  return "light";
+}
+
+function bayesianShift(params: { confidence: number; evidenceSignal: number; outcome: 0 | 1 | null }) {
+  if (params.outcome != null) {
+    const actual = params.outcome * 100;
+    return Math.max(-12, Math.min(12, Math.round((actual - params.confidence) / 5)));
+  }
+
+  const delta = params.evidenceSignal - params.confidence;
+
+  if (Math.abs(delta) <= 8) {
+    return 0;
+  }
+
+  return Math.max(-10, Math.min(10, Math.round(delta / 6)));
 }
 
 function shapeVerdict(confidence: number, supportCount: number): ShapeVerdict {
@@ -590,4 +789,132 @@ export function findActiveShapeCallout(
 
 export function formatShapeVerdict(verdict: ShapeVerdict) {
   return verdict.replaceAll("_", " ");
+}
+
+export function buildCalibrationDashboard(maps: ThoughtMapModel[]): CalibrationDashboardSnapshot {
+  const resolvedClaims: ForecastClaimSnapshot[] = [];
+  const privateBets: PrivateBetSnapshot[] = [];
+  const prompts: BayesianUpdatePrompt[] = [];
+  const domainBuckets = new Map<
+    CalibrationDomain,
+    Array<{ confidence: number; outcome: number | null; brierScore: number | null }>
+  >();
+
+  for (const map of maps) {
+    const capture = parseClaimCaptureMetadata(map.rawThought);
+
+    if (!capture) {
+      continue;
+    }
+
+    const text = `${map.title} ${map.rawThought} ${map.nodes.map((node) => node.content).join(" ")}`;
+    const domain = classifyCalibrationDomain(text);
+    const confidence = capture.confidence;
+    const outcome = capture.status === "resolved" ? 1 : capture.status === "abandoned" || capture.status === "stale" ? 0 : null;
+    const brierScore = outcome == null ? null : Number(((confidence / 100 - outcome) ** 2).toFixed(3));
+    const evidenceSignal = clampConfidence(
+      Math.round(
+        average(
+          map.nodes
+            .filter((node) => node.kind !== "root" && node.scores?.evidence != null)
+            .map((node) => node.scores?.evidence ?? 0),
+        ) ?? 0,
+      ),
+    );
+    const shift = bayesianShift({ confidence, evidenceSignal, outcome });
+    const prompt =
+      shift === 0
+        ? `Hold at ${confidence}%. Evidence and confidence are close enough to keep the bet steady.`
+        : shift < 0
+          ? `Evidence is lagging confidence here. Nudge this down by about ${Math.abs(shift)} points and look for one falsifier.`
+          : `Evidence is outrunning confidence. Nudge this up by about ${shift} points and see if the claim is too modest.`;
+
+    const snapshot: ForecastClaimSnapshot = {
+      mapId: map.id,
+      title: map.title,
+      domain,
+      confidence,
+      outcome,
+      brierScore,
+      status: capture.status,
+      resolutionDate: capture.resolutionDate,
+      provenance: capture.provenance,
+      stakes: capture.stakes,
+      personalCredibilityStake: credibilityLabel(confidence, capture.stakes),
+      evidenceSignal,
+      bayesianShift: shift,
+      updatePrompt: prompt,
+      updatedAt: map.updatedAt,
+    };
+
+    if (outcome != null) {
+      resolvedClaims.push(snapshot);
+    }
+
+    if (capture.resolutionDate && (capture.status === "open" || capture.status === "revisiting")) {
+      privateBets.push({
+        mapId: map.id,
+        title: map.title,
+        domain,
+        confidence,
+        resolutionDate: capture.resolutionDate,
+        status: capture.status,
+        stakes: capture.stakes,
+        credibilityLabel: credibilityLabel(confidence, capture.stakes),
+        prompt: `This looks like a ${credibilityLabel(confidence, capture.stakes)} private bet. Revisit it on ${capture.resolutionDate} and score whether your confidence was justified.`,
+      });
+    }
+
+    if (shift !== 0 || outcome == null) {
+      prompts.push({
+        mapId: map.id,
+        title: map.title,
+        domain,
+        evidenceSignal,
+        suggestedShift: shift,
+        prompt,
+      });
+    }
+
+    const bucket = domainBuckets.get(domain) ?? [];
+    bucket.push({ confidence, outcome, brierScore });
+    domainBuckets.set(domain, bucket);
+  }
+
+  const domains = Array.from(domainBuckets.entries()).map(([domain, entries]) => {
+    const averageConfidence = average(entries.map((entry) => entry.confidence)) ?? 0;
+    const resolvedEntries = entries.filter((entry) => entry.outcome != null);
+    const averageOutcomeRate = average(resolvedEntries.map((entry) => entry.outcome as number));
+    const averageBrierScore = average(resolvedEntries.map((entry) => entry.brierScore ?? 0));
+    const calibrationGap =
+      averageOutcomeRate == null ? null : Number(((averageConfidence / 100 - averageOutcomeRate) * 100).toFixed(1));
+
+    return {
+      domain,
+      sampleSize: entries.length,
+      averageConfidence: Math.round(averageConfidence),
+      averageOutcomeRate: averageOutcomeRate == null ? null : Number((averageOutcomeRate * 100).toFixed(1)),
+      averageBrierScore: averageBrierScore == null ? null : Number(averageBrierScore.toFixed(3)),
+      calibrationGap,
+      note:
+        domain === "technical"
+          ? "Technical claims usually tolerate smaller update steps."
+          : domain === "market"
+            ? "Market calls should be nudged harder when evidence stays thin."
+            : domain === "operational"
+              ? "Operational forecasts should be checked against execution friction."
+              : domain === "research"
+                ? "Research claims should lean on evidence first, confidence second."
+                : domain === "people"
+                  ? "People claims tend to drift when the social cost is undercounted."
+                  : "General claims need more evidence before they deserve a steep forecast.",
+    };
+  });
+
+  return {
+    resolvedClaims: resolvedClaims.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()),
+    domains: domains.sort((a, b) => a.domain.localeCompare(b.domain)),
+    privateBets: privateBets.sort((a, b) => b.confidence - a.confidence),
+    prompts: prompts.sort((a, b) => b.evidenceSignal - a.evidenceSignal),
+  };
 }
