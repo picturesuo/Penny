@@ -82,6 +82,14 @@ The goal is not friction for its own sake. The goal is to preserve the effort th
 
 Friction should scale with stakes so the product does not flatten important decisions into lightweight ones.
 
+### Loop Tightening
+
+- Lens injection pipeline: every stress-test, learning moment, and precedent retrieval should receive a structured slice of the lens, not just a personality summary.
+- Lens freshness monitoring: track the lag between a move and the generation behavior it changes, with a target of under a week.
+- Internal lens A/B: compare generic critique with lens-informed critique and verify that the difference is visible to a third party.
+- Shape confidence thresholds: only shapes above threshold should feed the lens; provisional shapes stay tracked but inactive.
+- Override-derived shapes: disagreement data should produce its own shape signals, separate from behavior-derived patterns.
+
 ## Psychology-Backed Design
 
 The product should reflect research-backed learning and judgment principles:
