@@ -39,10 +39,12 @@ Penny is built around three core functions:
 
 ### Curriculum & Education
 
-- Student mode: apply the tunnel to essay writing by capturing claims, stress-testing structure, teaching through confusion, synthesizing an outline, and handing off prose to downstream AI.
+- Student mode tunnel: apply the workflow to essay writing by capturing claims, stress-testing structure, teaching through confusion, synthesizing an outline, and handing off prose to downstream AI.
 - Explicit metacognition teaching: when shapes surface, name the pattern, name the underlying research, and name the response.
 - Instructor surface: with student permission, show the structural progression of a student’s thinking across a project so process can be graded, not just output.
-- Curriculum packs: pre-built tunnel variants for investment theses, research proposals, product specs, and argumentative essays, each with task-specific stage criteria.
+- Classroom shape views: aggregate patterns across a class so instructors can see shared bottlenecks.
+- Metacognition rubrics: evaluate thinking by the shapes visible in the tunnel traversal, not just the final output.
+- Curriculum packs: pre-built tunnel variants for investment theses, research proposals, product specs, and argumentative essays, each with task-specific exit criteria.
 
 What the user should leave with:
 
