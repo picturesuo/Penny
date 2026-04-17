@@ -205,6 +205,54 @@ export interface CalibrationDashboardSnapshot {
   postMortems: ClaimPostMortemSnapshot[];
 }
 
+export interface CommunityContributionSnapshot {
+  displayLabel: string;
+  summary: string;
+  reviewGate: string;
+  sourceHint: string;
+  updatedAt: Date;
+}
+
+export interface CommunityContradictionSignal {
+  sourceLabel: string;
+  mapCount: number;
+  summary: string;
+  privacyNote: string;
+  updatedAt: Date;
+}
+
+export interface CommunityOpenQuestionSnapshot {
+  topic: string;
+  unresolvedCount: number;
+  summary: string;
+  researchPrompt: string;
+  updatedAt: Date;
+}
+
+export interface CommunityShapeLibrarySnapshot {
+  label: string;
+  kind: PennyShapeKind;
+  mapCount: number;
+  confidence: number;
+  summary: string;
+}
+
+export interface ThoughtPartnerMatchSnapshot {
+  mapIds: string[];
+  titles: string[];
+  sharedShapes: string[];
+  reason: string;
+  privacyNote: string;
+}
+
+export interface CommunityCommonsDashboard {
+  contributions: CommunityContributionSnapshot[];
+  contradictionSignals: CommunityContradictionSignal[];
+  openQuestions: CommunityOpenQuestionSnapshot[];
+  shapeLibrary: CommunityShapeLibrarySnapshot[];
+  thoughtPartnerMatches: ThoughtPartnerMatchSnapshot[];
+}
+
 const SHAPE_RULES: Array<{
   id: string;
   label: string;
@@ -1361,5 +1409,177 @@ export function buildCalibrationDashboard(maps: ThoughtMapModel[]): CalibrationD
     privateBets: privateBets.sort((a, b) => b.confidence - a.confidence),
     prompts: prompts.sort((a, b) => b.evidenceSignal - a.evidenceSignal),
     postMortems: buildClaimPostMortems(resolvedClaims),
+  };
+}
+
+function communitySourceKey(snapshot: ClaimCaptureSnapshot) {
+  if (snapshot.provenance === "intuition") {
+    return null;
+  }
+
+  const normalized = snapshot.provenanceDetail.trim().toLowerCase();
+  return normalized.length ? normalized : null;
+}
+
+function communitySourceLabel(snapshot: ClaimCaptureSnapshot) {
+  if (snapshot.provenance === "intuition") {
+    return "intuition";
+  }
+
+  return snapshot.provenanceDetail.trim() || snapshot.provenance;
+}
+
+export function buildCommunityCommonsDashboard(maps: ThoughtMapModel[]): CommunityCommonsDashboard {
+  const calibration = buildCalibrationDashboard(maps);
+  const captures = maps
+    .map((map) => captureSnapshotForMap(map))
+    .filter((snapshot): snapshot is ClaimCaptureSnapshot => snapshot !== null);
+  const allNodes = maps.flatMap((map) => map.nodes);
+  const shapes = derivePennyShapes(allNodes);
+  const mapDomainById = new Map(
+    maps.map((map) => {
+      const text = `${map.title} ${map.rawThought} ${map.nodes.map((node) => node.content).join(" ")}`;
+      return [map.id, classifyCalibrationDomain(text)] as const;
+    }),
+  );
+
+  const contributions = calibration.postMortems.slice(0, 4).map((postMortem) => ({
+    displayLabel: `${postMortem.domain} post-mortem`,
+    summary: postMortem.lesson,
+    reviewGate: "Anonymized, structured, and review-gated before sharing.",
+    sourceHint: `Shape signal: ${postMortem.shapeSignal}.`,
+    updatedAt: postMortem.updatedAt,
+  }));
+
+  const sourceGroups = new Map<string, ClaimCaptureSnapshot[]>();
+  for (const capture of captures) {
+    const key = communitySourceKey(capture);
+
+    if (!key) {
+      continue;
+    }
+
+    const bucket = sourceGroups.get(key) ?? [];
+    bucket.push(capture);
+    sourceGroups.set(key, bucket);
+  }
+
+  const contradictionSignals = Array.from(sourceGroups.entries())
+    .map(([, group]) => {
+      const statusSet = new Set(group.map((snapshot) => snapshot.status));
+      const mixedStatuses = statusSet.size > 1;
+      const resolvedCount = group.filter((snapshot) => snapshot.status === "resolved").length;
+      const revisitingCount = group.filter((snapshot) => snapshot.status === "revisiting").length;
+      const signalStrength = group.length + (mixedStatuses ? 2 : 0) + (resolvedCount > 0 && revisitingCount > 0 ? 2 : 0);
+
+      return {
+        sourceLabel: communitySourceLabel(group[0]!),
+        mapCount: group.length,
+        summary: mixedStatuses
+          ? "One captured belief chain is holding this source as another has already moved away from it."
+          : "This source appears in multiple captures and deserves privacy-safe contradiction monitoring.",
+        privacyNote: "Only source-level aggregation is surfaced here; no raw cross-user graph is exposed.",
+        updatedAt: group.reduce(
+          (latest, snapshot) => (snapshot.updatedAt.getTime() > latest.getTime() ? snapshot.updatedAt : latest),
+          group[0]?.updatedAt ?? new Date(0),
+        ),
+        signalStrength,
+      };
+    })
+    .filter((signal) => signal.signalStrength > 1)
+    .sort((a, b) => b.signalStrength - a.signalStrength)
+    .slice(0, 4)
+    .map(({ signalStrength, ...signal }) => {
+      void signalStrength;
+      return signal;
+    });
+
+  const openQuestions = maps
+    .map((map) => {
+      const unresolvedCount =
+        (map.graphSnapshot?.weakestNodeIds.length ?? 0) +
+        (map.graphSnapshot?.criticalDependencyIds.length ?? 0) +
+        map.nodes.filter((node) => node.nodeStatus !== "superseded" && node.kind === "research").length;
+
+      const activeNodeCount = map.nodes.filter((node) => node.nodeStatus !== "superseded").length;
+
+      return {
+        topic: map.title,
+        unresolvedCount,
+        summary:
+          unresolvedCount > 0
+            ? `${unresolvedCount} weak or still-open branches remain across ${activeNodeCount} active nodes.`
+            : "The current map does not expose an obvious unresolved-question cluster yet.",
+        researchPrompt:
+          unresolvedCount > 0
+            ? "Promote the unresolved branch into a research task or a community review candidate."
+            : "Keep watching for a repeated question pattern before surfacing it publicly.",
+        updatedAt: map.updatedAt,
+      };
+    })
+    .filter((question) => question.unresolvedCount > 0)
+    .sort((a, b) => b.unresolvedCount - a.unresolvedCount)
+    .slice(0, 4);
+
+  const shapeLibrary = shapes
+    .map((shape) => ({
+      label: shape.label,
+      kind: shape.kind,
+      mapCount: shape.sourceMapIds.length,
+      confidence: shape.confidence,
+      summary: shape.summary,
+    }))
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 4);
+
+  const mapShapeLabels = new Map<string, Set<string>>();
+  for (const shape of shapes) {
+    for (const mapId of shape.sourceMapIds) {
+      const bucket = mapShapeLabels.get(mapId) ?? new Set<string>();
+      bucket.add(shape.label);
+      mapShapeLabels.set(mapId, bucket);
+    }
+  }
+
+  const thoughtPartnerMatches = maps
+    .flatMap((left, leftIndex) => {
+      const leftShapes = mapShapeLabels.get(left.id) ?? new Set<string>();
+      const leftDomain = mapDomainById.get(left.id) ?? "general";
+      const matches: ThoughtPartnerMatchSnapshot[] = [];
+
+      for (let index = leftIndex + 1; index < maps.length; index += 1) {
+        const right = maps[index];
+        const rightShapes = mapShapeLabels.get(right.id) ?? new Set<string>();
+        const sharedShapes = Array.from(leftShapes).filter((shape) => rightShapes.has(shape));
+        const rightDomain = mapDomainById.get(right.id) ?? "general";
+        const domainOverlap = leftDomain === rightDomain ? 1 : 0;
+        const score = sharedShapes.length + domainOverlap;
+
+        if (score < 2) {
+          continue;
+        }
+
+        matches.push({
+          mapIds: [left.id, right.id],
+          titles: [left.title, right.title],
+          sharedShapes,
+          reason:
+            sharedShapes.length > 0
+              ? `Both maps are carrying ${sharedShapes.slice(0, 2).join(", ")} patterns, which makes a targeted one-to-one comparison useful.`
+              : "The maps live in the same domain and deserve a bounded, targeted comparison.",
+          privacyNote: "Matching should stay opt-in, one-to-one, and bounded to the shared pattern surface.",
+        });
+      }
+
+      return matches;
+    })
+    .slice(0, 4);
+
+  return {
+    contributions,
+    contradictionSignals,
+    openQuestions,
+    shapeLibrary,
+    thoughtPartnerMatches,
   };
 }
