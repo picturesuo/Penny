@@ -531,6 +531,52 @@ export interface CalibrationDashboardSnapshot {
   postMortems: ClaimPostMortemSnapshot[];
 }
 
+export interface BeliefDigestSnapshot {
+  mapId: string;
+  title: string;
+  updatedBeliefCount: number;
+  updatedBeliefs: string[];
+  summary: string;
+  reviewPrompt: string;
+  updatedAt: Date;
+}
+
+export interface PredictionRetrospectiveSnapshot {
+  mapId: string;
+  title: string;
+  domain: CalibrationDomain;
+  confidence: number;
+  resolutionDate: string | null;
+  brierScore: number;
+  reviewPrompt: string;
+  summary: string;
+  updatedAt: Date;
+}
+
+export interface BeliefVelocitySnapshot {
+  domain: CalibrationDomain;
+  sampleSize: number;
+  updateCount: number;
+  averageLagDays: number | null;
+  velocityLabel: "rigid" | "steady" | "volatile";
+  summary: string;
+}
+
+export interface DecisionInfluenceSnapshot {
+  mapId: string;
+  title: string;
+  summary: string;
+  changedDirection: string;
+  updatedAt: Date;
+}
+
+export interface MemoryTimeDashboard {
+  beliefDigests: BeliefDigestSnapshot[];
+  predictionRetrospectives: PredictionRetrospectiveSnapshot[];
+  beliefVelocity: BeliefVelocitySnapshot[];
+  decisionInfluence: DecisionInfluenceSnapshot[];
+}
+
 export interface CommunityContributionSnapshot {
   displayLabel: string;
   summary: string;
@@ -2806,6 +2852,143 @@ export function buildCalibrationDashboard(maps: ThoughtMapModel[]): CalibrationD
     privateBets: privateBets.sort((a, b) => b.confidence - a.confidence),
     prompts: prompts.sort((a, b) => b.evidenceSignal - a.evidenceSignal),
     postMortems: buildClaimPostMortems(resolvedClaims),
+  };
+}
+
+export function buildMemoryTimeDashboard(maps: ThoughtMapModel[]): MemoryTimeDashboard {
+  const calibration = buildCalibrationDashboard(maps);
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const beliefDigests = maps
+    .map((map) => {
+      const recentUpdates = map.nodes
+        .filter((node) => node.kind !== "root" && node.updatedAt.getTime() - node.createdAt.getTime() > 0)
+        .filter((node) => Date.now() - node.updatedAt.getTime() <= thirtyDaysMs)
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+
+      if (!recentUpdates.length) {
+        return null;
+      }
+
+      const updatedBeliefs = recentUpdates.slice(0, 3).map((node) => `${node.kind.replaceAll("_", " ")} · ${node.content.slice(0, 90)}${node.content.length > 90 ? "…" : ""}`);
+
+      return {
+        mapId: map.id,
+        title: map.title,
+        updatedBeliefCount: recentUpdates.length,
+        updatedBeliefs,
+        summary: `You updated ${recentUpdates.length} beliefs in the last 30 days.`,
+        reviewPrompt: "Want to trace why these beliefs moved?",
+        updatedAt: recentUpdates[0]?.updatedAt ?? map.updatedAt,
+      };
+    })
+    .filter((item): item is BeliefDigestSnapshot => item !== null)
+    .sort((a, b) => b.updatedBeliefCount - a.updatedBeliefCount || b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, 4);
+
+  const velocityBuckets = new Map<
+    CalibrationDomain,
+    Array<{
+      updateCount: number;
+      lagDays: number | null;
+    }>
+  >();
+
+  for (const map of maps) {
+    const text = `${map.title} ${map.rawThought} ${map.nodes.map((node) => node.content).join(" ")}`;
+    const domain = classifyCalibrationDomain(text);
+    const updatedNodes = map.nodes.filter((node) => node.kind !== "root" && node.updatedAt.getTime() - node.createdAt.getTime() > 0);
+    const lagDays = updatedNodes.length
+      ? average(updatedNodes.map((node) => recencyDaysFromDates(node.createdAt, node.updatedAt)))
+      : null;
+    const bucket = velocityBuckets.get(domain) ?? [];
+    bucket.push({
+      updateCount: updatedNodes.length,
+      lagDays,
+    });
+    velocityBuckets.set(domain, bucket);
+  }
+
+  const beliefVelocity = Array.from(velocityBuckets.entries())
+    .map(([domain, entries]) => {
+      const sampleSize = entries.length;
+      const updateCount = entries.reduce((sum, entry) => sum + entry.updateCount, 0);
+      const averageLagDays = average(entries.map((entry) => entry.lagDays ?? 0));
+      const normalizedLag = averageLagDays == null ? null : Number(averageLagDays.toFixed(1));
+      const updateRate = sampleSize ? updateCount / sampleSize : 0;
+      const velocityLabel: BeliefVelocitySnapshot["velocityLabel"] =
+        updateRate >= 5 ? "volatile" : updateRate <= 1.5 ? "rigid" : "steady";
+
+      return {
+        domain,
+        sampleSize,
+        updateCount,
+        averageLagDays: normalizedLag,
+        velocityLabel,
+        summary:
+          velocityLabel === "volatile"
+            ? "Beliefs are changing quickly in this domain, so Penny should watch for overreaction."
+            : velocityLabel === "rigid"
+              ? "Beliefs are changing slowly here, so Penny should test whether the user is getting stuck."
+              : "Beliefs are moving at a workable rate in this domain.",
+      };
+    })
+    .sort((a, b) => a.domain.localeCompare(b.domain));
+
+  const decisionInfluence = maps
+    .flatMap((map) => {
+      const entries = map.events
+        .filter((event) => event.eventType === "dialectic_round" || event.eventType === "confidence_override")
+        .map((event) => {
+          if (event.eventType === "dialectic_round") {
+            const round = typeof event.payload?.round === "string" ? String(event.payload.round) : "round";
+            const responsePath = typeof event.payload?.responsePath === "string" ? String(event.payload.responsePath) : "response";
+            const response = typeof event.payload?.response === "string" ? String(event.payload.response).trim() : "";
+
+            return {
+              mapId: map.id,
+              title: map.title,
+              summary: response
+                ? `Penny changed the direction of ${round.toLowerCase()} into a ${responsePath} response: ${response.slice(0, 120)}${response.length > 120 ? "…" : ""}`
+                : `Penny changed the direction of ${round.toLowerCase()} into a ${responsePath} response.`,
+              changedDirection: responsePath,
+              updatedAt: event.createdAt,
+            } satisfies DecisionInfluenceSnapshot;
+          }
+
+          const mode = typeof event.payload?.mode === "string" ? String(event.payload.mode) : "hold";
+          const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
+
+          return {
+            mapId: map.id,
+            title: map.title,
+            summary: reasoning
+              ? `Penny adjusted the dependency edge with a ${mode} override: ${reasoning.slice(0, 120)}${reasoning.length > 120 ? "…" : ""}`
+              : `Penny adjusted the dependency edge with a ${mode} override.`,
+            changedDirection: mode,
+            updatedAt: event.createdAt,
+          } satisfies DecisionInfluenceSnapshot;
+        });
+
+      return entries;
+    })
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, 5);
+
+  return {
+    beliefDigests,
+    predictionRetrospectives: calibration.postMortems.slice(0, 4).map((postMortem) => ({
+      mapId: postMortem.mapId,
+      title: postMortem.title,
+      domain: postMortem.domain,
+      confidence: postMortem.confidence,
+      resolutionDate: postMortem.resolutionDate,
+      brierScore: postMortem.brierScore,
+      reviewPrompt: postMortem.reviewPrompt,
+      summary: postMortem.lesson,
+      updatedAt: postMortem.updatedAt,
+    })),
+    beliefVelocity,
+    decisionInfluence,
   };
 }
 
