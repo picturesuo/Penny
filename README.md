@@ -1,62 +1,119 @@
 # Penny
 
-Penny is an ideation instrument for people who need to understand and resolve ideas. It captures raw thought, pressure-tests it against evidence and precedent, teaches what the user does not understand in the moment they need it, and reflects thinking patterns back to the user so learning compounds over time.
+Penny is a pressure-tested second brain. It captures how its user thinks, stress-tests that thinking against evidence and precedent, teaches the user what they do not understand at the moment they need it, and surfaces patterns in their cognition back to them. The output is threefold: a structured artifact, durable learning, and self-knowledge about how the user thinks.
 
-It is not a note-taking app, not a chatbot, and not a wiki. It is a workbench for raw thought that should produce structured creativity, load-bearing outputs, and self-knowledge that compounds.
+Penny is not a note-taking app, a chatbot, a wiki, or a journaling tool. It is a thinking instrument: a workbench you sit down at with raw thought and leave with something structurally sound.
 
-## Product Direction
+## Brain / Challenge / Learn
 
-Penny is built around three core functions:
+- `Brain` is the product: a spatial, accumulating knowledge graph of the user's thinking over time.
+- `Challenge` is what happens when the user focuses on a region of Brain and turns on stress-testing.
+- `Learn` is what happens anywhere in Brain when the user hits confusion and needs to understand something before moving on.
+- Challenge and Learn are modes of interaction with the same graph, not separate products.
 
-- Second brain: capture claims, assumptions, evidence, counterarguments, and open questions in structured form.
-- Stress-test: challenge weak evidence, shaky assumptions, missing comparisons, risky dependencies, and unsupported leaps, with precedent where possible.
-- Learning: teach at the point of confusion, using the claim graph to drive just-in-time explanations instead of a separate reading list.
+## Target Users
 
-### Dialectic Interaction
+Penny is for people whose work is taking half-formed thinking and making it rigorous:
 
-- Round-tracked counterargument threads: Penny should critique in explicit rounds so it can escalate, concede, or pivot based on the user’s response.
-- Critique strength disclosure: every counterargument should label itself weak, moderate, or strong.
-- Why-this-critique transparency: the user should be able to expand a critique to see the failure type, shape pattern, precedent, and framework behind it.
-- Argument-as-explanation: every critique should be explainable as a causal chain over the claim graph, with assumptions, propagated confidence, and precedent cases spelled out in natural language.
-- Three-path response: the user should be able to defend, revise, or absorb a critique instead of being forced into one text box.
-- Counterargument provenance tags: critiques should show where they came from, whether from precedent, dependency analysis, behavioral science, or shape-derived patterns.
-- Collaborative elicitation patterns: Penny should offer solo versions of devil's advocate, naive questioner, integrator, and skeptic roles so the user can choose the structural prompt they need on demand.
-- Quiet keystone moment: when the dependency graph is rich enough, Penny should surface the single load-bearing claim that collapses the rest of the map and offer a one-click stress-test of that keystone.
-- Quiet fragility: Penny should also surface cases where the user’s felt confidence outruns the structural confidence supported by the dependency chain.
+- Founders mid-strategy pivot
+- PhD students doing literature reviews and dissertation arguments
+- First-time authors trying to make a book-length argument hold together
+- Policy analysts preparing briefs that will be attacked by opposing views
+- People in career transitions figuring out what they actually believe
+- People post-quitting-a-big-thing who need their own cognition before they take more advice
+- Engineers and technical founders interrogating their own design choices
+- Students writing serious essays who want structure before prose
 
-### Learning Features
+Penny is explicitly not for casual note-taking, everyday journaling, quick factual questions, or general productivity.
 
-- Teach-back by default: Penny gives a minimum scaffold, then asks the user to explain the concept in the context of the current claim.
-- Prior-knowledge anchoring: every learning moment should connect to an existing claim in the graph.
-- Knowledge shape tracking: Penny should remember what the user has mastered, what they keep needing to relearn, and what is solid.
-- Research-mode expansion: optional follow-up only, clearly separated from the inline learning moment so it stays anchored to the triggering claim.
+## Outputs
 
-### Decision & Synthesis Features
+Every session should leave the user with three things:
 
-- Pre-mortem as a synthesis gate: before any output artifact is generated, the user imagines how it fails in six months.
-- If-you-were-right mode: assume the claim is true and ask what becomes possible, what becomes necessary, and what the user would do in 30 days.
-- Stakes-proportional friction: load-bearing claims get more stress-testing, more pre-mortems, and a tighter revisit cadence.
-- Twin-check output: Penny produces the strongest version of the user’s current thinking, then the user decides whether it actually represents what they believe.
-- Post-mortem protocol: when outcomes resolve, Penny turns them into first-class artifacts so the system learns from reality.
-- Dependency-completeness check: synthesis should block only when load-bearing claims have not been stress-tested, and the block should be framed as a risk review rather than pure gatekeeping.
+- A result: a structurally sound artifact such as a brief, outline, memo, plan, or spine document.
+- Learning: understanding gained at the exact point of confusion, not a reading list.
+- Self-knowledge: visible patterns in how the user thinks, captured as shapes and old selves.
 
-### Tunnel & Workflow
+## Core Architecture
 
-- Explicit stage exit criteria: capture, structure, stress-test, synthesize, and reflect should each feel completable.
-- Dual-surface architecture: keep capture mode low-friction and critique-free, and keep reflection mode slow, structured, and stress-test heavy.
-- Cognitive protection mode: when the user is deep in a load-bearing claim, Penny should suppress secondary prompts and unrelated surfaces.
-- Session rhythm detection: when Penny detects cognitive depletion, it should suggest stopping instead of trying to extend engagement.
-- Clean endings: when a tunnel traversal completes, Penny should say so, hand over the artifact, and stop pulling for more engagement.
-- Reflection stage: optional but rewarded, with a short shapes surface after synthesis that is easy to skip but high value when used.
+- `Claim`: the node substrate. A claim is an assertion, concept, or question with content, provenance, status, confidence, stakes, dependencies, and sphere assignment.
+- `Move`: the event substrate. Every stress-test, override, revision, learning moment, confidence change, resolution, abandonment, session start, and session end becomes an immutable move.
+- `Shape`: the pattern substrate. Shapes are recurring cognitive or domain patterns derived from moves and surfaced back to the user.
+- `Lens`: the live model of the user. It is derived from high-confidence shapes and is injected into generation so Penny's critique actually changes over time.
+- `Sphere`: a contextual graph boundary so work, writing, life, and learning can remain distinct while still allowing pull-based cross-sphere connection.
+- `Session`: a first-class unit of cognitive work with a start, an end, a rhythm, and a protected focus window.
 
-### Curriculum & Education
+## Brain
 
-- Student mode tunnel: apply the workflow to essay writing by capturing claims, stress-testing structure, teaching through confusion, synthesizing an outline, and handing off prose to downstream AI.
-- Explicit metacognition teaching: when shapes surface, name the pattern, name the underlying research, and name the response.
-- Instructor surface: with student permission, show the structural progression of a student’s thinking across a project so process can be graded, not just output.
-- Classroom shape views: aggregate patterns across a class so instructors can see shared bottlenecks.
-- Metacognition rubrics: evaluate thinking by the shapes visible in the tunnel traversal, not just the final output.
-- Curriculum packs: pre-built tunnel variants for investment theses, research proposals, product specs, and argumentative essays, each with task-specific exit criteria.
+Brain has two primary views of the same data:
+
+- The Map: a spatial, zoomable knowledge graph for topology, structural health, and aesthetic payoff.
+- The Stream: a reverse-chronological feed for what the user was just doing, what has aged, what needs attention, and what the next move is.
+
+The Map is where the structure becomes visible. The Stream is where daily work starts.
+
+## Challenge
+
+Challenge is the dialectic interaction: claim, counterargument, response, repeated in explicit rounds.
+
+- Counterarguments should have explicit rounds, strength labels, provenance tags, and a why-this-critique panel.
+- The user should be able to defend, revise, or absorb a critique.
+- Penny should show the quiet keystone: the load-bearing claim whose failure collapses the rest of the structure.
+- Penny should also surface quiet fragility when felt confidence outruns structural support.
+- Stress tests should draw from multiple critique frames rather than one generic voice.
+
+## Learn
+
+Learn should be just-in-time and claim-anchored.
+
+- Penny gives a minimum scaffold, then asks the user to explain the concept in the context of the current claim.
+- Penny highlights the gap in the user's own explanation and asks for a corrected restatement.
+- Research-mode expansion should stay optional and separate from the inline learning moment.
+- The system should remember what the user has mastered, what they keep needing to relearn, and where their understanding still fails.
+
+## Sessions and Synthesis
+
+- Sessions should have explicit exit criteria and a clean ending.
+- Capture, structure, stress-test, synthesize, and reflect should each feel completable.
+- Synthesis should be gated by pre-mortem, if-you-were-right, twin-check, stakes-proportional friction, and dependency-completeness review.
+- The product should protect deep work, detect depletion, and suggest stopping when it has enough signal.
+- Reflection after synthesis should be optional but rewarded.
+
+## Calibration and Memory
+
+- Every claim should have a confidence value.
+- Confidence above 90% should trigger a soft challenge.
+- Resolved claims should feed Brier tracking and private self-bets.
+- Old selves, belief genealogy, inheritance markers, contradiction cascades, confidence drift, and aging foundations should all be visible.
+- Shapes should be visible, reviewable, and capable of changing the lens quickly enough that the next critique feels different.
+
+## Curriculum and Education
+
+- Student mode should apply the tunnel to essay writing: capture claims, stress-test structure, teach through confusion, synthesize an outline, then hand off prose to downstream AI.
+- Instructor surface should let teachers inspect the structural progression of student thinking with permission.
+- Classroom shape views should show aggregate bottlenecks.
+- Curriculum packs should be tuned tunnel variants with task-specific exit criteria, not just content templates.
+
+## Design Principles
+
+- Density over breadth: deeper maps should look and feel better than shallow ones.
+- Emergent structure: organization should accrete from work, not from upfront tagging ceremonies.
+- Progressive disclosure: the active stage should stay front and center.
+- Knowledge cards first: single claims should be the primary working surface, with the graph as a minimap.
+- Outline first: the daily workspace should favor structured work over decorative overview.
+- Smart defaults: Penny should preselect the right critique depth and learning scaffold, but always allow override.
+- Clean endings: finished work should feel finished.
+
+## What Penny Does Not Do
+
+- No points, badges, or streaks
+- No feed, comments, or likes
+- No chatbot sidebar as the core interface
+- No template-first main flow
+- No engagement-driven notifications
+- No default final prose generation
+- No infinite scroll
+- No always-on background assistant
 
 What the user should leave with:
 
