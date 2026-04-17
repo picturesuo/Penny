@@ -34,6 +34,7 @@
 - `user`: Round-tracked counterargument threads should timestamp each exchange, preserve the full response history, and make survival depth a property of the claim.
 - `user`: Critique strength disclosure should label each counterargument as weak, moderate, or strong so users can calibrate how seriously to treat it.
 - `user`: A "why this critique" transparency panel should expose the failure type, shape-level pattern, precedent cases, and applied framework behind a counterargument.
+- `user`: Argument-as-explanation should turn every critique into a causal chain over the claim graph, with assumptions, propagated confidence, and precedent spelled out in natural language.
 - `user`: Responses to counterarguments should have three distinct paths: defend, revise, or absorb, and each path should generate different downstream signals.
 - `user`: Counterargument provenance tags should show where a critique came from, such as precedent, dependency analysis, behavioral science, or shape-derived patterns.
 - `user`: Learning should be just-in-time and downstream of capture plus stress-testing, tied to the exact point of confusion instead of a separate reading list.
@@ -264,6 +265,7 @@
 - `repo`: `src/components/penny/shape-dashboard.tsx` now records shape feedback back to the map through `POST /api/maps/[id]/shape-feedback`, and `src/server/thought-map.ts` now persists that feedback as a `shape_feedback` move event.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now captures reasoning for the active shape override, surfaces a first-class claim dependency graph, and shows a confusion log for weak or unclear branches.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now presents the selected claim as the primary knowledge card and keeps the graph as a structural minimap.
+- `repo`: `src/components/penny/thought-map-workspace.tsx` now expands every dialectic round into an argument-as-explanation block that spells out premise, assumption, pressure, precedent, shape, and conclusion.
 - `repo`: `src/lib/thought-map-analysis.ts` now exposes explicit critique tags alongside the older coverage buckets, and `src/lib/penny-insights.ts` tightened the market-overconfidence shape rule so it only fires in genuinely market-facing text.
 - `repo`: `src/components/penny/shape-dashboard.tsx` now surfaces structured post-mortems for resolved claims so calibration has a first-class end state and shape input.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now weights critique depth by claim confidence so high-confidence claims get heavier pressure and low-confidence claims stay lighter and more targeted.
