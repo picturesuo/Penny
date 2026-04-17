@@ -184,6 +184,7 @@ The visual and interaction model should feel like a built city, not a notes dump
 - Workspace surfaces for dialectic rounds, synthesis gates, move query, old selves, belief genealogy, and confidence drift
 - Bayesian propagation through the claim graph with overrideable cascade previews
 - Belief archaeology panel and session-end reflection ritual for deeper memory and close-out
+- Challenge-skill calibration on the critique surface so Penny can pitch difficulty to the user's current state
 - Founder brief synthesis gates with pre-mortem, if-you-were-right, twin-check, stakes level, and dependency completeness
 - Curriculum and education surface for student mode, instructor views, classroom shape views, and curriculum packs
 - Shapes dashboard with Brier trajectory, domain calibration, private bets, Bayesian updates, and post-mortems
