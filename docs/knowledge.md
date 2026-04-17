@@ -62,6 +62,11 @@
 - `user`: Reflection should be optional but rewarded, with a short shapes surface after synthesis that is easy to skip but high value when used.
 - `user`: Penny’s voice should be an invested sparring partner: genuinely helpful, not sycophantic, not brutal.
 - `user`: The visual language should feel like a built city rather than a notes dump, with structure emerging from thinking and density beating breadth.
+- `user`: The interface should use a density-over-breadth visual language, where well-stress-tested nodes render with richer color and more confident lines while shallow nodes stay thin and provisional.
+- `user`: Organization should emerge from stress-testing and relationship inference rather than upfront tagging or ceremony.
+- `user`: Progressive disclosure should keep the active tunnel stage front and center while other stages remain accessible but quiet.
+- `user`: The outline should be the daily workspace and the graph should be a periodic zoom-out, not the primary surface.
+- `user`: Smart defaults should preselect stress-test type, critique depth, and learning scaffold based on claim type, confidence, and topic while still allowing override.
 - `user`: The current build should preserve the landing page thesis, the server-backed thought-map model, the outline plus graph workspace, best-next-move as a central decision surface, stress testing as a visible lane, and the founder brief flow as one instance of structured output.
 - `user`: Traps to avoid are letting the graph become the product, turning best-next-move into a task list, adding a chatbot sidebar, letting stress-testing become contrarianism, and treating learning as a reading list.
 - `user`: Near-term direction before more inspector, triage, or dashboard work is to define the learning loop spec and the moves layer so the self-iterating second brain has the right substrate.
