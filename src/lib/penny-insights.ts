@@ -241,6 +241,66 @@ export interface OldSelfSnapshot {
   isCurrent: boolean;
 }
 
+export type MapTimelineAccent = "claim" | "stress" | "revision" | "confidence" | "shape" | "resolution";
+
+export interface MapTimelineEntry {
+  id: string;
+  label: string;
+  summary: string;
+  createdAt: Date;
+  nodeId: string | null;
+  accent: MapTimelineAccent;
+}
+
+export interface MapTimelineSnapshot {
+  mapId: string;
+  title: string;
+  entries: MapTimelineEntry[];
+  summary: string;
+}
+
+export type ShapeTimelineTone = "strengthened" | "weakened" | "steady" | "feedback";
+
+export interface ShapeTimelineStep {
+  id: string;
+  label: string;
+  summary: string;
+  createdAt: Date;
+  nodeId: string | null;
+  confidence: number | null;
+  tone: ShapeTimelineTone;
+}
+
+export interface ShapeTimelineSnapshot {
+  shapeId: string;
+  label: string;
+  confidence: number;
+  firstSeenAt: Date | null;
+  confidenceRange: {
+    min: number | null;
+    max: number | null;
+  };
+  trail: ShapeTimelineStep[];
+}
+
+export type DependencyChainTimelineRelation = "root" | "parent" | "supersedes" | "dependent";
+
+export interface DependencyChainTimelineStep {
+  id: string;
+  nodeId: string | null;
+  label: string;
+  summary: string;
+  createdAt: Date;
+  relation: DependencyChainTimelineRelation;
+  loadBearing: boolean;
+}
+
+export interface DependencyChainTimelineSnapshot {
+  nodeId: string;
+  label: string;
+  steps: DependencyChainTimelineStep[];
+}
+
 export interface ClaimMoveHistoryEntry {
   id: string;
   label: string;
@@ -1614,6 +1674,254 @@ export function buildOldSelfTimeline(
       isCurrent: node.id === nodeId,
     };
   });
+}
+
+export function buildMapTimeline(map: ThoughtMapModel): MapTimelineSnapshot {
+  const entries: MapTimelineEntry[] = [];
+  const eventEntries = map.events.flatMap((event) => {
+    if (event.eventType === "move_applied") {
+      const action = typeof event.payload?.action === "string" ? String(event.payload.action).replaceAll("_", " ") : "move";
+      const updatedCount = Array.isArray(event.payload?.updatedNodeIds) ? event.payload.updatedNodeIds.length : 0;
+      const createdCount = Array.isArray(event.payload?.createdNodeIds) ? event.payload.createdNodeIds.length : 0;
+
+      return [
+        {
+          id: event.id,
+          label: "Claim moved",
+          summary: `${action[0]?.toUpperCase() ?? "M"}${action.slice(1)} move touched ${createdCount} created and ${updatedCount} updated node${updatedCount === 1 ? "" : "s"}.`,
+          createdAt: event.createdAt,
+          nodeId: event.nodeId,
+          accent: "revision",
+        } satisfies MapTimelineEntry,
+      ];
+    }
+
+    if (event.eventType === "confidence_override") {
+      const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
+
+      return [
+        {
+          id: event.id,
+          label: "Confidence shifted",
+          summary: reasoning
+            ? `The user explained why confidence should hold: ${reasoning.slice(0, 140)}${reasoning.length > 140 ? "…" : ""}`
+            : "A confidence override was recorded for this branch.",
+          createdAt: event.createdAt,
+          nodeId: event.nodeId,
+          accent: "confidence",
+        } satisfies MapTimelineEntry,
+      ];
+    }
+
+    if (event.eventType === "dialectic_round") {
+      const title = typeof event.payload?.title === "string" ? String(event.payload.title) : "Dialectic round";
+      const response = typeof event.payload?.response === "string" ? String(event.payload.response).trim() : "";
+
+      return [
+        {
+          id: event.id,
+          label: title,
+          summary: response
+            ? `Stress-test response: ${response.slice(0, 140)}${response.length > 140 ? "…" : ""}`
+            : "A dialectic round was recorded against this branch.",
+          createdAt: event.createdAt,
+          nodeId: event.nodeId,
+          accent: "stress",
+        } satisfies MapTimelineEntry,
+      ];
+    }
+
+    if (event.eventType === "shape_feedback") {
+      const verdict = typeof event.payload?.verdict === "string" ? String(event.payload.verdict) : "feedback";
+      const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
+
+      return [
+        {
+          id: event.id,
+          label: "Shape feedback",
+          summary: reasoning
+            ? `The shape was marked ${verdict} because: ${reasoning.slice(0, 140)}${reasoning.length > 140 ? "…" : ""}`
+            : `The shape was marked ${verdict}.`,
+          createdAt: event.createdAt,
+          nodeId: event.nodeId,
+          accent: verdict === "confirmed" ? "resolution" : "shape",
+        } satisfies MapTimelineEntry,
+      ];
+    }
+
+    if (event.eventType === "bias_detected" || event.eventType === "bias_resolved") {
+      const detector = typeof event.payload?.detector === "string" ? String(event.payload.detector).replaceAll("_", " ") : "bias";
+
+      return [
+        {
+          id: event.id,
+          label: event.eventType === "bias_detected" ? "Stress signal" : "Stress signal resolved",
+          summary:
+            event.eventType === "bias_detected"
+              ? `${detector} pressure showed up in the map.`
+              : `${detector} pressure got named and softened.`,
+          createdAt: event.createdAt,
+          nodeId: event.nodeId,
+          accent: event.eventType === "bias_detected" ? "stress" : "resolution",
+        } satisfies MapTimelineEntry,
+      ];
+    }
+
+    return [];
+  });
+
+  for (const node of map.nodes) {
+    entries.push({
+      id: `node:${node.id}`,
+      label: node.kind.replaceAll("_", " "),
+      summary: `Claim appeared as ${node.content.slice(0, 140)}${node.content.length > 140 ? "…" : ""}`,
+      createdAt: node.createdAt,
+      nodeId: node.id,
+      accent: node.nodeStatus === "superseded" ? "resolution" : "claim",
+    });
+  }
+
+  entries.push(...eventEntries);
+
+  const sortedEntries = entries.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  return {
+    mapId: map.id,
+    title: map.title,
+    entries: sortedEntries,
+    summary:
+      sortedEntries.length > 0
+        ? "Time-lapse of claims appearing, being stress-tested, revised, and resolved."
+        : "The map has not produced a timeline yet.",
+  };
+}
+
+export function buildShapeTimeline(map: ThoughtMapModel, shape: PennyShape | null): ShapeTimelineSnapshot | null {
+  if (!shape) {
+    return null;
+  }
+
+  const supportingNodes = shape.evidenceNodeIds
+    .map((nodeId) => map.nodes.find((node) => node.id === nodeId) ?? null)
+    .filter((node): node is ThoughtNodeModel => node != null)
+    .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+  const relatedEvents = map.events
+    .filter(
+      (event) =>
+        event.eventType === "shape_feedback" &&
+        typeof event.payload?.shapeId === "string" &&
+        String(event.payload.shapeId) === shape.id,
+    )
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const trail: ShapeTimelineStep[] = [];
+  let previousConfidence: number | null = null;
+
+  for (const node of supportingNodes) {
+    const confidence = node.scores?.confidence ?? null;
+    const tone: ShapeTimelineTone =
+      previousConfidence == null || confidence == null
+        ? "steady"
+        : confidence > previousConfidence
+          ? "strengthened"
+          : confidence < previousConfidence
+            ? "weakened"
+            : "steady";
+
+    trail.push({
+      id: node.id,
+      label: `${node.kind.replaceAll("_", " ")} move`,
+      summary: `${node.content.slice(0, 120)}${node.content.length > 120 ? "…" : ""}`,
+      createdAt: node.updatedAt,
+      nodeId: node.id,
+      confidence,
+      tone,
+    });
+
+    previousConfidence = confidence ?? previousConfidence;
+  }
+
+  for (const event of relatedEvents) {
+    const verdict = typeof event.payload?.verdict === "string" ? String(event.payload.verdict) : "feedback";
+    const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
+
+    trail.push({
+      id: event.id,
+      label: `Shape ${verdict}`,
+      summary: reasoning
+        ? reasoning.slice(0, 120) + (reasoning.length > 120 ? "…" : "")
+        : `The user marked this shape as ${verdict}.`,
+      createdAt: event.createdAt,
+      nodeId: typeof event.payload?.nodeId === "string" ? String(event.payload.nodeId) : null,
+      confidence: verdict === "confirmed" ? Math.min(100, shape.confidence + 8) : verdict === "refined" ? Math.max(0, shape.confidence - 4) : Math.max(0, shape.confidence - 14),
+      tone: verdict === "confirmed" ? "strengthened" : verdict === "refined" ? "steady" : "weakened",
+    });
+  }
+
+  trail.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  const confidenceValues = trail
+    .map((step) => step.confidence)
+    .filter((confidence): confidence is number => confidence != null);
+
+  return {
+    shapeId: shape.id,
+    label: shape.label,
+    confidence: shape.confidence,
+    firstSeenAt: trail[0]?.createdAt ?? null,
+    confidenceRange: confidenceValues.length
+      ? {
+          min: Math.min(...confidenceValues),
+          max: Math.max(...confidenceValues),
+        }
+      : { min: null, max: null },
+    trail,
+  };
+}
+
+export function buildDependencyChainTimeline(map: ThoughtMapModel, nodeId: string): DependencyChainTimelineSnapshot | null {
+  const genealogy = buildBeliefGenealogy(map.nodes, nodeId);
+  const dependencyGraph = buildClaimDependencyGraph(map);
+  const loadBearingNodeIds = new Set(dependencyGraph.loadBearingNodeIds);
+  const current = genealogy.current;
+
+  if (!current) {
+    return null;
+  }
+
+  const steps: DependencyChainTimelineStep[] = genealogy.lineage.map((node, index) => ({
+    id: `${node.id}:${index}`,
+    nodeId: node.id,
+    label: index === 0 ? "foundation" : node.kind.replaceAll("_", " "),
+    summary: node.content.slice(0, 140) + (node.content.length > 140 ? "…" : ""),
+    createdAt: node.createdAt,
+    relation:
+      index === 0
+        ? "root"
+        : node.supersedesNodeId === genealogy.lineage[index - 1]?.id
+          ? "supersedes"
+          : "parent",
+    loadBearing: loadBearingNodeIds.has(node.id),
+  }));
+
+  const dependents = genealogy.dependents
+    .slice()
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .slice(0, 4)
+    .map((node) => ({
+      id: `dependent:${node.id}`,
+      nodeId: node.id,
+      label: "downstream dependent",
+      summary: node.content.slice(0, 140) + (node.content.length > 140 ? "…" : ""),
+      createdAt: node.createdAt,
+      relation: "dependent" as const,
+      loadBearing: loadBearingNodeIds.has(node.id),
+    }));
+
+  return {
+    nodeId: current.id,
+    label: current.content,
+    steps: [...steps, ...dependents].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+  };
 }
 
 export function buildClaimMoveHistory(
