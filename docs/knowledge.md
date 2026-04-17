@@ -194,6 +194,8 @@
 - `repo`: `src/app/app/page.tsx` now surfaces a small foundation stack for Lens, overrides, and precedents, and `src/components/penny/thought-map-workspace.tsx` now frames triage and the override trail with that same foundation language.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces precedent-grounded critique, peer simulation, norm-challenge scrutiny, confidence decay, and interleaved stress-testing as first-class critique surfaces.
 - `repo`: `src/components/penny/shape-dashboard.tsx` now records shape feedback back to the map through `POST /api/maps/[id]/shape-feedback`, and `src/server/thought-map.ts` now persists that feedback as a `shape_feedback` move event.
+- `repo`: `src/components/penny/thought-map-workspace.tsx` now captures reasoning for the active shape override, surfaces a first-class claim dependency graph, and shows a confusion log for weak or unclear branches.
+- `repo`: `src/lib/thought-map-analysis.ts` now exposes explicit critique tags alongside the older coverage buckets, and `src/lib/penny-insights.ts` tightened the market-overconfidence shape rule so it only fires in genuinely market-facing text.
 
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.
