@@ -13,6 +13,7 @@ import {
   buildDevilsAdvocateReceipts,
   buildConfidenceDecaySnapshot,
   buildConfusionLog,
+  buildAdversarialFinalPass,
   buildSessionRhythmSnapshot,
   collectShapeFeedback,
   captureSnapshotForMap,
@@ -837,6 +838,7 @@ export function ThoughtMapWorkspace({
     : "If this claim holds, what becomes possible and what becomes necessary?";
   const synthesisTwinCheck = steelmanTargetText;
   const synthesisDependencyCount = claimDependencyGraph.loadBearingNodeIds.length;
+  const adversarialFinalPass = useMemo(() => buildAdversarialFinalPass(map), [map]);
   const synthesisMissingCoverage = map.founderBriefReadiness.missingRequirements.map((requirement) =>
     requirement.replaceAll("_", " "),
   );
@@ -1601,6 +1603,9 @@ export function ThoughtMapWorkspace({
                       <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
                         {precedent.domain} · {precedent.failureMode}
                       </p>
+                      <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">
+                        Failure trajectory: {precedent.failureTrajectory}
+                      </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {precedent.riskTags.map((tag) => (
                           <Badge key={`${precedent.id}-${tag}`} className="bg-white text-[var(--ink)]">
@@ -1797,6 +1802,71 @@ export function ThoughtMapWorkspace({
               {path}
             </Badge>
           ))}
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge>Adversarial final pass</Badge>
+          <Badge className="bg-[#e7defa] text-[#5c4c88]">pre-synthesis</Badge>
+          <Badge className="bg-[#d9ead8] text-[#355b32]">{adversarialFinalPass.claimCount} claims</Badge>
+        </div>
+        <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">Attack the dependency structure before anything is synthesized.</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+          Penny doesn’t critique individual claims here. It finds the quiet load-bearing assumption in the full argument and asks whether the whole structure survives if that one claim fails.
+        </p>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Quiet keystone</p>
+            {adversarialFinalPass.loadBearingAssumption ? (
+              <>
+                <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+                  The quiet keystone is #{adversarialFinalPass.quietKeystoneIndex}: {adversarialFinalPass.loadBearingAssumption.content}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{adversarialFinalPass.quietKeystoneReason}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                  {adversarialFinalPass.collapseWarning} It currently has {adversarialFinalPass.dependentCount} direct dependents.
+                </p>
+              </>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                {adversarialFinalPass.collapseWarning}
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Named voices</p>
+            <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
+              Optional critique voices stay grounded in the precedent corpus, so a skeptical VC does not sound like a thesis committee member.
+            </p>
+            <div className="mt-4 space-y-2">
+              {namedVoices.map((voice) => (
+                <div key={`final-pass-${voice.label}`} className="rounded-[18px] bg-white p-4">
+                  <p className="text-sm font-medium text-[var(--ink)]">{voice.label}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{voice.attackStyle}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Override trail</p>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+          Already-challenged branches stay visible here so future pressure can go deeper instead of repeating the same surface critique.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {challengedActions.length ? (
+            challengedActions.map((action) => (
+              <Badge key={`history-${action}`} className="bg-[var(--panel)] text-[var(--ink)]">
+                {labelAction(action)}
+              </Badge>
+            ))
+          ) : (
+            <Badge className="bg-[var(--panel)] text-[var(--ink)]">No challenge history yet</Badge>
+          )}
+          {map.interventions.length ? (
+            <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{map.interventions.length} active intervention prompts</Badge>
+          ) : null}
         </div>
       </Card>
 
