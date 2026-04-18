@@ -4,8 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, FileText, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ARTIFACT_TYPES, getArtifactType } from "@/lib/artifact-types";
-import type { ArtifactRecord, ArtifactTypeId } from "@/types/thought-map";
+import { ARTIFACT_TYPES, diffArtifactRecords, getArtifactType } from "@/lib/artifact-types";
+import type { ArtifactRecord, ArtifactTypeId, ThoughtMapModel } from "@/types/thought-map";
 
 export function ArtifactBuilder({
   mapId,
@@ -23,10 +23,32 @@ export function ArtifactBuilder({
     () => getArtifactType(initialArtifactTypeId)?.template.sections.map((section) => section.id) ?? [],
   );
   const [artifact, setArtifact] = useState<ArtifactRecord | null>(null);
+  const [mapArtifacts, setMapArtifacts] = useState<ArtifactRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const selectedType = useMemo(() => getArtifactType(artifactTypeId), [artifactTypeId]);
+  const previousArtifact = useMemo(() => {
+    if (!artifact) {
+      return null;
+    }
+
+    return (
+      mapArtifacts
+        .filter(
+          (entry) =>
+            entry.artifactTypeId === artifact.artifactTypeId &&
+            entry.version === Math.max(1, artifact.version - 1) &&
+            entry.id !== artifact.id,
+        )
+        .sort((a, b) => b.version - a.version || new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime())[0] ??
+      null
+    );
+  }, [artifact, mapArtifacts]);
+  const artifactDiff = useMemo(
+    () => (artifact && previousArtifact ? diffArtifactRecords(previousArtifact, artifact) : null),
+    [artifact, previousArtifact],
+  );
 
   async function generateArtifact() {
     setError(null);
@@ -47,8 +69,9 @@ export function ArtifactBuilder({
       throw new Error("Penny could not generate the artifact.");
     }
 
-    const payload = (await response.json()) as { artifact: ArtifactRecord };
+    const payload = (await response.json()) as { artifact: ArtifactRecord; map?: ThoughtMapModel };
     setArtifact(payload.artifact);
+    setMapArtifacts(payload.map?.artifacts ?? []);
     onArtifactGenerated?.(payload.artifact);
   }
 
@@ -192,6 +215,44 @@ export function ArtifactBuilder({
               <div key={section.id} className="rounded-[18px] bg-[var(--panel)] p-3">
                 <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{section.title}</p>
                 <p className="mt-1 text-sm leading-6 text-[var(--ink)]">{section.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {artifactDiff ? (
+        <div className="mt-4 rounded-[24px] border border-black/8 bg-[var(--panel)] p-4">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Version diff</p>
+          <h4 className="mt-1 text-lg font-semibold text-[var(--ink)]">
+            Compared with version {artifactDiff.fromVersion}
+          </h4>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+            {artifactDiff.changedSectionCount} of {artifactDiff.sectionDiffs.length} sections changed.
+          </p>
+          <div className="mt-4 space-y-3">
+            {artifactDiff.sectionDiffs.map((section) => (
+              <div key={section.id} className="rounded-[18px] bg-white p-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{section.title}</p>
+                <p className="mt-1 text-sm font-medium text-[var(--ink)]">
+                  {section.changed ? "Changed" : "Unchanged"}
+                </p>
+                {section.changed ? (
+                  <div className="mt-2 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-[16px] bg-[var(--panel)] p-3">
+                      <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted-ink)]">Before</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--ink)]">{section.before || "No prior text."}</p>
+                    </div>
+                    <div className="rounded-[16px] bg-[var(--panel)] p-3">
+                      <p className="text-xs uppercase tracking-[0.14em] text-[var(--muted-ink)]">After</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--ink)]">{section.after || "No current text."}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                    This section matches the previous version.
+                  </p>
+                )}
               </div>
             ))}
           </div>
