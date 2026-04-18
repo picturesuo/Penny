@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { SessionWorkspace } from "@/components/penny/session-workspace";
-import { getSession } from "@/server/penny";
+import { getSession, listMarginFragments } from "@/server/penny";
 
 export default async function SessionPage({
   params,
@@ -9,10 +9,11 @@ export default async function SessionPage({
 }) {
   const { id } = await params;
   const session = await getSession(id);
+  const fragments = await listMarginFragments();
 
   if (!session) {
     notFound();
   }
 
-  return <SessionWorkspace session={session} />;
+  return <SessionWorkspace session={session} initialFragments={fragments} />;
 }
