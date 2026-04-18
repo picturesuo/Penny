@@ -1673,6 +1673,8 @@ export function ThoughtMapWorkspace({
     selectedSteelMan && dialecticRoundEvents.length >= 2
       ? "You've been through two rounds. Has your understanding of the opposing view changed? Revise your steel man."
       : null;
+  const selectedSteelManQualityReason = selectedSteelManAssessment?.qualityScoreReason ?? selectedSteelMan?.qualityScoreReason ?? null;
+  const selectedSteelManRevisionNote = selectedSteelManAssessment?.revisionPrompt ?? steelManRevisionPrompt;
   const selectedPrecedentAdherence = useMemo(() => {
     if (!selectedPrecedentSummary) {
       return null;
@@ -2480,6 +2482,10 @@ export function ThoughtMapWorkspace({
 
         const payload = (await response.json()) as SteelManResponse;
         mergeSteelMan(payload.steelMan);
+        setSteelManAssessments((current) => ({
+          ...current,
+          [claimId]: payload.assessment,
+        }));
         setSteelManDrafts((current) => ({
           ...current,
           [claimId]: payload.steelMan.steelManText,
@@ -3999,6 +4005,7 @@ export function ThoughtMapWorkspace({
         <div className="mt-4 grid gap-4 xl:grid-cols-3">
           {dialecticRounds.map((round) => {
             const draft = dialecticResponseDrafts[round.round] ?? "";
+            const roundContextDraft = round.roundContextDraft;
 
             return (
             <div key={round.round} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
