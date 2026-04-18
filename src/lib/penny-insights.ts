@@ -10,6 +10,7 @@ import type {
   Concession,
   Defense,
   Dismissal,
+  DialecticClaimElement,
   DialecticCritiqueStrength,
   DialecticRound,
   DialecticResponsePath,
