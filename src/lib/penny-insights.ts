@@ -1,6 +1,7 @@
 import type {
   BayesianPropagationSnapshot,
   BayesianPropagationStep,
+  BeliefPropagationContribution,
   ClaimCaptureMetadata,
   ClaimProvenance,
   ClaimStructureSnapshot,
@@ -20,6 +21,7 @@ import type {
   ThoughtMapModel,
   ThoughtNodeModel,
 } from "@/types/thought-map";
+import { buildBeliefGraph, propagateBeliefGraph } from "@/lib/bayesian-propagation";
 
 export type ShapeVerdict = "confirmed" | "provisional" | "rejected" | "refined";
 export type PennyShapeFeedback = "confirmed" | "rejected" | "refined";
@@ -102,6 +104,14 @@ export interface ClaimDependencyGraph {
   rootNodeIds: string[];
   loadBearingNodeIds: string[];
   edges: ClaimDependencyEdge[];
+}
+
+export interface ClaimRepairSuggestion {
+  actionType: "merge" | "split" | "promote" | "demote" | "reclassify" | "reroute_edge" | "reroot";
+  sourceClaimIds: string[];
+  confidence: number;
+  reason: string;
+  preview: string;
 }
 
 function confidenceFromScore(score: number | null | undefined) {
@@ -512,85 +522,50 @@ export function buildBayesianPropagationSnapshot(
   }
 
   const seedConfidence = confidenceFromScore(seedNode.scores?.confidence);
-  const dependencyGraph = buildClaimDependencyGraph(map);
-  const overrides = collectBayesianOverrides(map.events);
-  const nodesById = new Map(map.nodes.map((node) => [node.id, node] as const));
-  const outgoingByNode = new Map<string, string[]>();
-  const edgeByKey = new Map(dependencyGraph.edges.map((edge) => [`${edge.fromNodeId}:${edge.toNodeId}`, edge] as const));
+  const beliefGraph = map.beliefGraph ?? buildBeliefGraph(map);
+  const propagation = propagateBeliefGraph(beliefGraph, seedNode.id, seedConfidence);
+  const events = map.events.filter(
+    (event) =>
+      event.eventType === "belief_propagation_decision" ||
+      event.eventType === "confidence_override" ||
+      event.eventType === "belief_propagation",
+  );
+  const overrideCount = events.filter(
+    (event) =>
+      event.eventType === "belief_propagation_decision" ||
+      event.eventType === "confidence_override",
+  ).length;
+  const nodeById = new Map(map.nodes.map((node) => [node.id, node] as const));
+  const cascade: BayesianPropagationStep[] = propagation.steps
+    .filter((step) => step.claimId !== seedNode.id)
+    .map((step, index) => {
+      const targetNode = nodeById.get(step.claimId) ?? null;
+      const sourceContribution = step.contributions[0] ?? null;
+      const sourceNode = sourceContribution ? nodeById.get(sourceContribution.parentId) ?? null : null;
+      const sourceConfidence = sourceContribution?.parentPosterior ?? step.newPosterior ?? step.oldPosterior;
+      const edgeFactor =
+        step.oldPosterior > 0 ? Math.max(0, Math.min(1, step.newPosterior / step.oldPosterior)) : 1;
+      const contributions: BeliefPropagationContribution[] = step.contributions;
 
-  for (const edge of dependencyGraph.edges) {
-    const outgoing = outgoingByNode.get(edge.fromNodeId) ?? [];
-    outgoing.push(edge.toNodeId);
-    outgoingByNode.set(edge.fromNodeId, outgoing);
-  }
-
-  const cascade: BayesianPropagationStep[] = [];
-  const visited = new Set<string>([seedNode.id]);
-  const queue: Array<{ nodeId: string; propagatedConfidence: number; depth: number }> = [
-    { nodeId: seedNode.id, propagatedConfidence: seedConfidence, depth: 0 },
-  ];
-
-  while (queue.length) {
-    const current = queue.shift();
-
-    if (!current) {
-      continue;
-    }
-
-    const children = outgoingByNode.get(current.nodeId) ?? [];
-
-    for (const childId of children) {
-      const child = nodesById.get(childId);
-
-      if (!child || child.nodeStatus === "superseded") {
-        continue;
-      }
-
-      const source = nodesById.get(current.nodeId);
-      const baseConfidence = confidenceFromScore(child.scores?.confidence);
-      const edge = edgeByKey.get(`${current.nodeId}:${childId}`) ?? null;
-      const strengthFactor = (edge?.strengthScore ?? 50) / 100;
-      const contradictionPenalty = (edge?.contradictionScore ?? 0) / 100 * 0.28;
-      const recencyPenalty = Math.min((edge?.recencyDays ?? 0) / 180, 0.12);
-      const relationBias = edge?.relation === "supersedes" ? 0.06 : 0.02;
-      const override = overrides.get(`${current.nodeId}:${childId}`);
-      const overrideBoost = override?.mode === "hold" ? 0.08 : 0;
-      const decoupled = override?.mode === "decouple";
-      const edgeFactor = decoupled
-        ? 1
-        : Math.max(
-            0.42,
-            Math.min(0.98, 0.44 + strengthFactor * 0.36 + relationBias + overrideBoost - contradictionPenalty - recencyPenalty),
-          );
-      const propagatedConfidence = decoupled
-        ? baseConfidence
-        : Math.max(0, Math.min(1, (baseConfidence * 0.6 + current.propagatedConfidence * 0.4) * edgeFactor));
-      const delta = propagatedConfidence - baseConfidence;
-
-      cascade.push({
-        sourceNodeId: current.nodeId,
-        targetNodeId: childId,
-        depth: current.depth + 1,
-        sourceConfidence: current.propagatedConfidence,
-        baseConfidence,
-        propagatedConfidence,
-        delta,
+      return {
+        sourceNodeId: sourceContribution?.parentId ?? seedNode.id,
+        targetNodeId: step.claimId,
+        depth: index + 1,
+        sourceConfidence,
+        baseConfidence: step.oldPosterior,
+        propagatedConfidence: step.newPosterior,
+        delta: step.posteriorDelta,
         edgeFactor,
-        reasoning: override
-          ? override.mode === "decouple"
-            ? `You decoupled ${nodeLabel(child)} from ${nodeLabel(source)}, so the downstream claim keeps its own base confidence instead of inheriting this edge's drop.`
-            : override.reasoning
-          : `The confidence on ${nodeLabel(source)} carries forward into ${nodeLabel(child)} through the dependency edge.`,
-        overrideReasoning: override?.reasoning || null,
-        pathLabel: `${nodeLabel(source)} → ${nodeLabel(child)}`,
-      });
-
-      if (!visited.has(childId)) {
-        visited.add(childId);
-        queue.push({ nodeId: childId, propagatedConfidence, depth: current.depth + 1 });
-      }
-    }
-  }
+        reasoning: step.explanation,
+        overrideReasoning: step.skippedReason ?? null,
+        pathLabel: sourceNode ? `${nodeLabel(sourceNode)} → ${nodeLabel(targetNode ?? undefined)}` : nodeLabel(targetNode ?? undefined),
+        prior: step.oldPosterior,
+        posterior: step.newPosterior,
+        contributions,
+        skipped: step.skipped,
+        skippedReason: step.skippedReason,
+      };
+    });
 
   const supporterChain = buildBeliefGenealogy(map.nodes, seedNodeId).lineage.map((node) => ({
     nodeId: node.id,
@@ -601,8 +576,9 @@ export function buildBayesianPropagationSnapshot(
   return {
     seedNodeId: seedNode.id,
     seedConfidence,
-    overrideCount: overrides.size,
-    cascade: cascade.sort((a, b) => a.depth - b.depth || b.delta - a.delta),
+    overrideCount,
+    cycleError: propagation.cycleError,
+    cascade: cascade.sort((a, b) => a.depth - b.depth || Math.abs(b.delta) - Math.abs(a.delta)),
     supporterChain,
   };
 }
@@ -1504,6 +1480,10 @@ function similarityScore(a: string, b: string) {
   return overlap / Math.max(aTokens.length, bTokens.length);
 }
 
+export function scoreClaimSimilarity(a: string, b: string) {
+  return similarityScore(a, b);
+}
+
 function scoreBand(value: number) {
   return Math.max(0, Math.min(10, Math.round(value)));
 }
@@ -1656,6 +1636,82 @@ export function buildClaimStructureSnapshot(map: ThoughtMapModel, node: ThoughtN
             ? "Temporal scope matters because the same statement can be true on one horizon and false on another."
             : "The claim is live enough that the critique should surface now rather than later.",
   };
+}
+
+export function buildClaimRepairSuggestions(map: ThoughtMapModel): ClaimRepairSuggestion[] {
+  const suggestions: ClaimRepairSuggestion[] = [];
+  const claimNodes = map.nodes.filter((node) => node.kind !== "root" && node.nodeStatus !== "superseded");
+
+  for (let index = 0; index < claimNodes.length; index += 1) {
+    const node = claimNodes[index];
+    const nodeText = node.content.trim();
+    if (!nodeText) {
+      continue;
+    }
+
+    const structure = buildClaimStructureSnapshot(map, node);
+    if ((structure.splitCandidates.length > 0 || /(?:and|or|but|while|plus)/i.test(nodeText)) && nodeText.length >= 80) {
+      suggestions.push({
+        actionType: "split",
+        sourceClaimIds: [node.id],
+        confidence: Math.min(0.92, 0.58 + Math.min(0.34, structure.splitCandidates.length * 0.12)),
+        reason: structure.splitCandidates[0] ?? "This claim looks compound enough to split into separate tracks.",
+        preview: `Split "${node.content}" into smaller claims so each can be stress-tested separately.`,
+      });
+    }
+
+    if (node.kind === "assumption" && map.events.filter((event) => event.nodeId === node.id && event.eventType === "dialectic_round").length >= 3) {
+      suggestions.push({
+        actionType: "promote",
+        sourceClaimIds: [node.id],
+        confidence: 0.82,
+        reason: "This assumption has been stressed enough times that it deserves first-class claim status.",
+        preview: "Promote this assumption so it gets its own confidence, stakes, and critique history.",
+      });
+    }
+
+    const dependentCount = map.nodes.filter((candidate) => candidate.parentId === node.id).length;
+
+    if (node.kind === "core_claim" && dependentCount === 0 && node.note && /assumption|support|depends/i.test(node.note)) {
+      suggestions.push({
+        actionType: "demote",
+        sourceClaimIds: [node.id],
+        confidence: 0.71,
+        reason: "This claim reads like support material for another claim rather than a first-order claim.",
+        preview: "Demote this claim so it supports the claim it really belongs under.",
+      });
+    }
+
+    if (/if\s+.+\s+then|when\s+.+\s+then/i.test(nodeText) && node.kind !== "assumption") {
+      suggestions.push({
+        actionType: "reclassify",
+        sourceClaimIds: [node.id],
+        confidence: 0.76,
+        reason: "This looks conditional, but it is not marked as a conditional structure.",
+        preview: "Reclassify this claim so the condition can be stress-tested separately.",
+      });
+    }
+
+    const mergeCandidate = claimNodes
+      .filter((candidate) => candidate.id !== node.id)
+      .map((candidate) => ({ candidate, score: similarityScore(nodeText, candidate.content) }))
+      .filter(({ score }) => score >= 0.8)
+      .sort((a, b) => b.score - a.score)[0];
+
+    if (mergeCandidate) {
+      suggestions.push({
+        actionType: "merge",
+        sourceClaimIds: [node.id, mergeCandidate.candidate.id],
+        confidence: Math.min(0.96, 0.6 + mergeCandidate.score * 0.4),
+        reason: `These claims overlap heavily (${Math.round(mergeCandidate.score * 100)}% similarity) and may be restatements.`,
+        preview: `Merge "${node.content}" with "${mergeCandidate.candidate.content}" into one cleaner claim.`,
+      });
+    }
+  }
+
+  return suggestions
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 8);
 }
 
 export function inheritedClaimSnapshots(maps: ThoughtMapModel[]): InheritedClaimSnapshot[] {
@@ -2831,6 +2887,77 @@ export function buildMapTimeline(map: ThoughtMapModel): MapTimelineSnapshot {
       continue;
     }
 
+    if (event.eventType === "belief_propagation_decision") {
+      const decisionType =
+        typeof event.payload?.decisionType === "string" ? String(event.payload.decisionType) : "decision";
+      const reason = typeof event.payload?.reason === "string" ? String(event.payload.reason).trim() : "";
+      const finalPosterior =
+        typeof event.payload?.finalPosterior === "number" ? Math.round(event.payload.finalPosterior * 100) : null;
+
+      entries.push({
+        id: event.id,
+        label: "Belief decision",
+        summary: reason
+          ? `${decisionType} decision recorded. ${reason.slice(0, 140)}${reason.length > 140 ? "…" : ""}`
+          : `${decisionType} decision recorded${finalPosterior != null ? ` at ${finalPosterior}%` : ""}.`,
+        createdAt: event.createdAt,
+        nodeId: event.nodeId,
+        accent: "confidence",
+      });
+      continue;
+    }
+
+    if (event.eventType === "belief_propagation") {
+      const result = event.payload?.result && typeof event.payload.result === "object" ? (event.payload.result as Record<string, unknown>) : null;
+      const changedClaimIds = Array.isArray(result?.changedClaimIds) ? result.changedClaimIds.length : 0;
+      const cycleError =
+        result && typeof result.cycleError === "object" && result.cycleError !== null
+          ? (result.cycleError as Record<string, unknown>)
+          : null;
+      const cycleMessage = typeof cycleError?.message === "string" ? String(cycleError.message) : null;
+
+      entries.push({
+        id: event.id,
+        label: "Belief propagation",
+        summary: cycleMessage
+          ? `Propagation hit a cycle: ${cycleMessage}`
+          : `Belief propagation recomputed ${changedClaimIds} downstream claim${changedClaimIds === 1 ? "" : "s"}.`,
+        createdAt: event.createdAt,
+        nodeId: event.nodeId,
+        accent: "confidence",
+      });
+      continue;
+    }
+
+    if (event.eventType === "belief_graph_cycle") {
+      const cycleError = event.payload?.cycleError && typeof event.payload.cycleError === "object" ? (event.payload.cycleError as Record<string, unknown>) : null;
+      const message = typeof cycleError?.message === "string" ? String(cycleError.message) : "A cycle was detected in the belief graph.";
+
+      entries.push({
+        id: event.id,
+        label: "Belief graph cycle",
+        summary: message,
+        createdAt: event.createdAt,
+        nodeId: event.nodeId,
+        accent: "stress",
+      });
+      continue;
+    }
+
+    if (event.eventType === "belief_graph_state") {
+      const seedClaimId = typeof event.payload?.seedClaimId === "string" ? String(event.payload.seedClaimId) : null;
+
+      entries.push({
+        id: event.id,
+        label: "Belief graph state",
+        summary: seedClaimId ? `The belief graph was recomputed from ${seedClaimId}.` : "The belief graph was recomputed.",
+        createdAt: event.createdAt,
+        nodeId: event.nodeId,
+        accent: "confidence",
+      });
+      continue;
+    }
+
     if (event.eventType === "dialectic_round") {
       const title = typeof event.payload?.title === "string" ? String(event.payload.title) : "Dialectic round";
       const response = typeof event.payload?.response === "string" ? String(event.payload.response).trim() : "";
@@ -3158,6 +3285,40 @@ export function buildClaimMoveHistory(
             : `The user asked Penny to ${mode === "reduce" ? "tighten" : "soften"} the cascade.`,
           createdAt: event.createdAt,
           accent: "feedback",
+        } satisfies ClaimMoveHistoryEntry;
+      }
+
+      if (event.eventType === "belief_propagation_decision") {
+        const decisionType =
+          typeof event.payload?.decisionType === "string" ? String(event.payload.decisionType) : "belief decision";
+        const reason = typeof event.payload?.reason === "string" ? String(event.payload.reason).trim() : "";
+        const finalPosterior =
+          typeof event.payload?.finalPosterior === "number" ? Math.round(event.payload.finalPosterior * 100) : null;
+
+        return {
+          id: event.id,
+          label: "Belief decision",
+          summary: reason
+            ? `${decisionType} · ${reason.slice(0, 120)}${reason.length > 120 ? "…" : ""}`
+            : `${decisionType}${finalPosterior != null ? ` · ${finalPosterior}%` : ""}`,
+          createdAt: event.createdAt,
+          accent: "signal",
+        } satisfies ClaimMoveHistoryEntry;
+      }
+
+      if (event.eventType === "belief_propagation" || event.eventType === "belief_graph_state") {
+        const result = event.payload?.result && typeof event.payload.result === "object" ? (event.payload.result as Record<string, unknown>) : null;
+        const changedClaimIds = Array.isArray(result?.changedClaimIds) ? result.changedClaimIds.length : 0;
+
+        return {
+          id: event.id,
+          label: event.eventType === "belief_graph_state" ? "Belief graph state" : "Belief propagation",
+          summary:
+            event.eventType === "belief_graph_state"
+              ? "The belief graph was recomputed for this branch."
+              : `Belief propagation moved ${changedClaimIds} downstream claim${changedClaimIds === 1 ? "" : "s"}.`,
+          createdAt: event.createdAt,
+          accent: "signal",
         } satisfies ClaimMoveHistoryEntry;
       }
 
@@ -3508,7 +3669,12 @@ export function buildMemoryTimeDashboard(maps: ThoughtMapModel[]): MemoryTimeDas
   const decisionInfluence = maps
     .flatMap((map) => {
       const entries = map.events
-        .filter((event) => event.eventType === "dialectic_round" || event.eventType === "confidence_override")
+        .filter(
+          (event) =>
+            event.eventType === "dialectic_round" ||
+            event.eventType === "confidence_override" ||
+            event.eventType === "belief_propagation_decision",
+        )
         .map((event) => {
           if (event.eventType === "dialectic_round") {
             const round = typeof event.payload?.round === "string" ? String(event.payload.round) : "round";
@@ -3522,6 +3688,22 @@ export function buildMemoryTimeDashboard(maps: ThoughtMapModel[]): MemoryTimeDas
                 ? `Penny changed the direction of ${round.toLowerCase()} into a ${responsePath} response: ${response.slice(0, 120)}${response.length > 120 ? "…" : ""}`
                 : `Penny changed the direction of ${round.toLowerCase()} into a ${responsePath} response.`,
               changedDirection: responsePath,
+              updatedAt: event.createdAt,
+            } satisfies DecisionInfluenceSnapshot;
+          }
+
+          if (event.eventType === "belief_propagation_decision") {
+            const decisionType =
+              typeof event.payload?.decisionType === "string" ? String(event.payload.decisionType) : "belief decision";
+            const reason = typeof event.payload?.reason === "string" ? String(event.payload.reason).trim() : "";
+
+            return {
+              mapId: map.id,
+              title: map.title,
+              summary: reason
+                ? `Penny made a ${decisionType} decision on the belief graph: ${reason.slice(0, 120)}${reason.length > 120 ? "…" : ""}`
+                : `Penny made a ${decisionType} decision on the belief graph.`,
+              changedDirection: decisionType,
               updatedAt: event.createdAt,
             } satisfies DecisionInfluenceSnapshot;
           }
