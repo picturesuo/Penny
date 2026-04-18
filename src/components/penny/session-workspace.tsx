@@ -7,14 +7,21 @@ import {
   submitReflectionAction,
 } from "@/app/actions";
 import { ConceptBriefCard } from "@/components/penny/concept-brief-card";
+import { MarginRail } from "@/components/penny/margin-rail";
 import { StageChip } from "@/components/penny/stage-chip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { SessionState } from "@/types/penny";
+import type { MarginFragmentModel, SessionState } from "@/types/penny";
 
-export function SessionWorkspace({ session }: { session: SessionState }) {
+export function SessionWorkspace({
+  session,
+  initialFragments,
+}: {
+  session: SessionState;
+  initialFragments: MarginFragmentModel[];
+}) {
   const isCaptureMode = session.currentStage === "intake" || session.currentStage === "clarify" || session.currentStage === "assumptions";
   const isReflectionMode = !isCaptureMode;
   const isDeepWork = session.currentStage === "pressure-test" || session.currentStage === "evidence";
@@ -43,6 +50,17 @@ export function SessionWorkspace({ session }: { session: SessionState }) {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <MarginRail
+        scopeLabel="Session margin"
+        fragments={initialFragments}
+        currentStage={session.currentStage}
+        currentFocus={deepWorkFocus}
+        currentSphere={session.category || "work"}
+        currentContext={session.conversation.at(-1)?.content ?? session.rawIdea}
+        currentResponse={session.answers.at(-1) ?? null}
+        recentSessionMinutes={Math.max(0, Math.round((session.updatedAt.getTime() - session.createdAt.getTime()) / (1000 * 60)))}
+        sourceSessionId={session.id}
+      />
       <Card className="flex min-h-[720px] flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-black/8 px-6 py-5">
           <div>
