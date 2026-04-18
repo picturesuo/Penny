@@ -1,5 +1,6 @@
 import { ThoughtMapForm } from "@/components/penny/thought-map-form";
 import { Card } from "@/components/ui/card";
+import { getDemoThoughtUserId } from "@/lib/thought-map";
 
 export default function NewSessionPage() {
   return (
@@ -10,7 +11,7 @@ export default function NewSessionPage() {
         <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--muted-ink)]">
           Think of this like the first note in a pressure-tested LLM-style wiki: capture the claim, its confidence, where it came from, what is at risk, and what would make it resolve.
         </p>
-        <ThoughtMapForm />
+        <ThoughtMapForm userId={getDemoThoughtUserId()} />
       </Card>
     </div>
   );

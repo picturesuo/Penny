@@ -3,6 +3,7 @@ import { ArrowRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { CalibrationCoachingView } from "@/components/penny/calibration-coaching";
 import { ShapeDashboard } from "@/components/penny/shape-dashboard";
 import {
   buildAdvancedThinkingDashboard,
@@ -11,6 +12,7 @@ import {
   buildMemoryTimeDashboard,
   derivePennyShapes,
 } from "@/lib/penny-insights";
+import { buildCalibrationCoaching } from "@/lib/calibration";
 import { buildMarginSurfaceSnapshot } from "@/lib/margin";
 import { listMarginFragments } from "@/server/penny";
 import { listThoughtMaps } from "@/server/thought-map";
@@ -88,6 +90,7 @@ export default async function DashboardPage() {
   const allNodes = maps.flatMap((map) => map.nodes);
   const shapes = derivePennyShapes(allNodes).sort((a, b) => b.confidence - a.confidence).slice(0, 4);
   const calibration = buildCalibrationDashboard(maps);
+  const calibrationCoaching = buildCalibrationCoaching(maps);
   const communitySnapshot = buildCommunityCommonsDashboard(maps, allNodes);
   const advancedSnapshot = buildAdvancedThinkingDashboard(maps, allNodes);
   const memoryTime = buildMemoryTimeDashboard(maps);
@@ -679,6 +682,8 @@ export default async function DashboardPage() {
       </Card>
 
       <ShapeDashboard shapes={shapes} calibration={calibration} initialFeedback={{}} />
+
+      <CalibrationCoachingView coaching={calibrationCoaching} />
 
       {mapCards.length ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">

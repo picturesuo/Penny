@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpenText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +10,14 @@ import {
   CLAIM_STATUSES,
   CLAIM_STAKES,
   type ClaimProvenance,
+  type CalibrationCoaching,
   type ClaimStake,
   type ClaimStatus,
   type CreateThoughtMapInput,
   SOURCE_TRUST_LEVELS,
   type SourceTrustLevel,
 } from "@/types/thought-map";
+import { calibrationIndicatorForClaim } from "@/lib/calibration";
 import { extractAssumptionSnapshot } from "@/lib/thought-map-generation";
 
 const STARTER_IDEAS = [
@@ -59,7 +61,11 @@ function prettyLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
-export function ThoughtMapForm() {
+type ThoughtMapFormProps = {
+  userId?: string;
+};
+
+export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
   const router = useRouter();
   const [rawThought, setRawThought] = useState("");
   const [claim, setClaim] = useState<{
@@ -91,6 +97,10 @@ export function ThoughtMapForm() {
   });
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [calibrationCoaching, setCalibrationCoaching] = useState<CalibrationCoaching | null>(null);
+  const [calibrationLoading, setCalibrationLoading] = useState(Boolean(userId));
+  const [calibrationDismissed, setCalibrationDismissed] = useState(false);
+  const calibrationConfidenceAnchor = useRef<number | null>(null);
   const [assumptionVerdicts, setAssumptionVerdicts] = useState<Record<string, "accepted" | "rejected" | "refined">>({});
   const [assumptionCorrections, setAssumptionCorrections] = useState<Record<string, string>>({});
   const [focusedAssumptionId, setFocusedAssumptionId] = useState<string | null>(null);
@@ -105,6 +115,64 @@ export function ThoughtMapForm() {
       : claim.confidence < 25
         ? "Very low confidence is fine, but Penny will treat this as a provisional claim until it gets more structure."
         : null;
+  const calibrationIndicator = useMemo(
+    () =>
+      calibrationIndicatorForClaim({
+        coaching: calibrationCoaching,
+        claimText: rawThought,
+        claimType: claim.structureKind,
+        confidence: claim.confidence,
+      }),
+    [calibrationCoaching, rawThought, claim.structureKind, claim.confidence],
+  );
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    let active = true;
+
+    fetch(`/api/users/${userId}/calibration`)
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        return (await response.json()) as { coaching?: CalibrationCoaching | null };
+      })
+      .then((payload) => {
+        if (!active || !payload) {
+          return;
+        }
+
+        setCalibrationCoaching(payload.coaching ?? null);
+      })
+      .catch(() => {
+        if (active) {
+          setCalibrationCoaching(null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setCalibrationLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (calibrationIndicator && !calibrationDismissed && calibrationConfidenceAnchor.current == null) {
+      calibrationConfidenceAnchor.current = claim.confidence;
+    }
+
+    if (!calibrationIndicator) {
+      calibrationConfidenceAnchor.current = null;
+    }
+  }, [calibrationIndicator, calibrationDismissed, claim.confidence]);
 
   function toggleStake(stake: ClaimStake) {
     setClaim((current) => ({
@@ -159,6 +227,30 @@ export function ThoughtMapForm() {
       }
 
       const responsePayload = (await response.json()) as { map: { id: string } };
+
+      if (
+        userId &&
+        calibrationIndicator &&
+        !calibrationDismissed &&
+        calibrationConfidenceAnchor.current != null &&
+        calibrationConfidenceAnchor.current === claim.confidence
+      ) {
+        void fetch(`/api/users/${userId}/calibration`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            action: "reject",
+            domain: calibrationIndicator.domain,
+            claimType: calibrationIndicator.claimType,
+            originalConfidence: claim.confidence,
+            suggestedAdjustment: calibrationIndicator.adjustment,
+            recommendationText: calibrationIndicator.recommendationText,
+          }),
+        });
+      }
+
       router.push(`/app/maps/${responsePayload.map.id}`);
     });
   }
@@ -235,6 +327,34 @@ export function ThoughtMapForm() {
                   Every claim gets a probability so Penny can score it later and challenge overconfidence early.
                 </p>
               )}
+              {calibrationIndicator && !calibrationDismissed ? (
+                <div className="rounded-[18px] border border-[#d7c06c] bg-[#fff8df] p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#6f5612]">Calibration coaching</p>
+                      <p className="mt-1 text-sm leading-6 text-[#5a460d]">
+                        {calibrationIndicator.adjustment > 0
+                          ? `⚠ Your calibration in ${calibrationIndicator.domain} suggests adjusting up by ~${Math.abs(calibrationIndicator.adjustment)} points.`
+                          : `⚠ Your calibration in ${calibrationIndicator.domain} suggests adjusting down by ~${Math.abs(calibrationIndicator.adjustment)} points.`}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-[#6f5612]">{calibrationIndicator.recommendationText}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="px-3 py-2 text-xs"
+                      onClick={() => {
+                        setCalibrationDismissed(true);
+                        calibrationConfidenceAnchor.current = null;
+                      }}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              ) : calibrationLoading ? (
+                <p className="text-xs leading-5 text-[var(--muted-ink)]">Loading calibration coaching...</p>
+              ) : null}
             </label>
 
             <label className="space-y-2">
