@@ -4,9 +4,9 @@
 - [x] Initialize the first real task artifact.
 
 ## Next
-- [ ] Reframe the landing page to foreground the pressure-tested second brain.
-- [ ] Capture the main edge case: keep the wiki-first framing readable on smaller screens.
-- [ ] Capture one cleanup item: audit leftover startup-idea wording.
+- [x] Reframe the landing page to foreground the pressure-tested second brain.
+- [x] Capture the main edge case: keep the wiki-first framing readable on smaller screens.
+- [x] Capture one cleanup item: audit leftover startup-idea wording.
 
 ## Later
 - [ ] Expand only when the project grows.
