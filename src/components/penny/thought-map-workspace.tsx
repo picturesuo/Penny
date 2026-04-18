@@ -5065,6 +5065,7 @@ export function ThoughtMapWorkspace({
           </p>
           <div className="mt-4">
             <MetaCognitionPrompt
+              key={selectedMetaCognitionPrompt.id}
               prompt={selectedMetaCognitionPrompt}
               onRespond={(responseType, responseText, tellMeMoreOpened) =>
                 recordMetaCognitionResponse(selectedMetaCognitionPrompt, responseType, responseText, tellMeMoreOpened)
