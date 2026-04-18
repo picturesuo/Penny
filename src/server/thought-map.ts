@@ -5,9 +5,10 @@ import type {
   ThoughtMapIntervention,
   ThoughtNode,
 } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/db/prisma";
 import { buildFounderBrief, getFounderBriefReadiness } from "@/lib/founder-brief";
-import { buildPennyLens } from "@/lib/penny-insights";
+import { analyzeDialecticResponse, assessSteelManQuality, buildPennyLens } from "@/lib/penny-insights";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
 import {
   createRootNodeContent,
@@ -21,8 +22,11 @@ import type {
   ClaimCaptureMetadata,
   CreateThoughtMapInput,
   FounderBriefModel,
+  DialecticCritiqueStrength,
   GeneratedActionBundle,
   NodeAction,
+  SteelMan,
+  SteelManVersion,
   ThoughtMapEvent as ThoughtMapEventModel,
   ThoughtMapModel,
   ThoughtMapEventType,
@@ -259,6 +263,89 @@ function deriveChallengeCalibration(params: {
   };
 }
 
+function normalizeDialecticCritiqueStrength(
+  critiqueStrength: string,
+  critiqueType?: string | null,
+): DialecticCritiqueStrength {
+  const normalized = critiqueStrength.trim().toLowerCase();
+
+  if (normalized.includes("adversarial") || critiqueType === "red_team") {
+    return "adversarial";
+  }
+
+  if (normalized.includes("strong") || normalized.includes("brutal")) {
+    return "strong";
+  }
+
+  if (normalized.includes("moderate") || normalized.includes("firm")) {
+    return "moderate";
+  }
+
+  return "mild";
+}
+
+function confidenceScoreToPercent(score: number | null | undefined) {
+  if (typeof score !== "number" || Number.isNaN(score)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(score * 100)));
+}
+
+function summarizePriorDialecticRounds(map: ThoughtMapModel, nodeId: string | null | undefined) {
+  return map.events
+    .filter((event) => event.eventType === "dialectic_round" && (nodeId ? event.nodeId === nodeId : true))
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map((event, index) => {
+      const round = typeof event.payload?.round === "string" ? String(event.payload.round) : `Round ${index + 1}`;
+      const responsePath =
+        event.payload?.responsePath === "defend" ||
+        event.payload?.responsePath === "revise" ||
+        event.payload?.responsePath === "absorb"
+          ? event.payload.responsePath
+          : "defend";
+      const roundPayload = event.payload?.dialecticRound && typeof event.payload.dialecticRound === "object"
+        ? (event.payload.dialecticRound as Record<string, unknown>)
+        : null;
+
+      return {
+        id: event.id,
+        round,
+        roundIndex:
+          typeof event.payload?.roundIndex === "number" ? Number(event.payload.roundIndex) : index,
+        title: typeof event.payload?.title === "string" ? String(event.payload.title) : "Dialectic round",
+        critiqueStrength:
+          typeof event.payload?.critiqueStrength === "string" ? String(event.payload.critiqueStrength) : "mild",
+        critiqueType:
+          typeof event.payload?.critiqueType === "string" && event.payload.critiqueType.trim().length > 0
+            ? String(event.payload.critiqueType)
+            : null,
+        responsePath,
+        prompt: typeof event.payload?.prompt === "string" ? String(event.payload.prompt) : "",
+        why: typeof event.payload?.why === "string" ? String(event.payload.why) : "",
+        response: typeof event.payload?.response === "string" ? String(event.payload.response) : "",
+        responseClassification:
+          roundPayload && typeof roundPayload.responseClassification === "object"
+            ? (roundPayload.responseClassification as Record<string, unknown>)
+            : null,
+        confidenceDelta:
+          roundPayload && typeof roundPayload.confidenceDelta === "number"
+            ? Number(roundPayload.confidenceDelta)
+            : null,
+        engagementScore:
+          roundPayload && typeof roundPayload.engagementScore === "number"
+            ? Number(roundPayload.engagementScore)
+            : null,
+        evidenceAdded:
+          roundPayload && typeof roundPayload.newEvidenceAdded === "boolean"
+            ? Boolean(roundPayload.newEvidenceAdded)
+            : roundPayload && typeof roundPayload.responseEvidenceAdded === "boolean"
+              ? Boolean(roundPayload.responseEvidenceAdded)
+              : false,
+      };
+    });
+}
+
 export async function recordShapeFeedback(params: {
   mapId: string;
   shapeId: string;
@@ -322,11 +409,84 @@ export async function recordDialecticRound(params: {
   title: string;
   critiqueStrength: string;
   critiqueType?: string | null;
+  critiqueFailureTypes?: string[];
   prompt: string;
   why: string;
   responsePath: "defend" | "revise" | "absorb";
   response: string;
+  confidenceAtRoundEnd?: number | null;
 }) {
+  const map = await getThoughtMap(params.mapId);
+
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  const currentNode = params.nodeId ? map.nodes.find((candidate) => candidate.id === params.nodeId) ?? null : null;
+  const currentConfidence = confidenceScoreToPercent(currentNode?.scores?.confidence) ?? 0;
+  const confidenceAtRoundStart = currentConfidence;
+  const confidenceAtRoundEnd =
+    typeof params.confidenceAtRoundEnd === "number" && Number.isFinite(params.confidenceAtRoundEnd)
+      ? Math.max(0, Math.min(100, Math.round(params.confidenceAtRoundEnd)))
+      : confidenceAtRoundStart;
+  const confidenceDelta = Number((confidenceAtRoundEnd - confidenceAtRoundStart).toFixed(2));
+  const critiqueStrength = normalizeDialecticCritiqueStrength(params.critiqueStrength, params.critiqueType ?? null);
+  const critiqueFailureTypes = params.critiqueFailureTypes?.length
+    ? params.critiqueFailureTypes
+    : params.critiqueType
+      ? [params.critiqueType]
+      : [];
+  const priorRounds = summarizePriorDialecticRounds(map, params.nodeId ?? null);
+  const priorRoundId = priorRounds.at(-1)?.id ?? null;
+  const roundId = crypto.randomUUID();
+  const roundNumber = params.roundIndex + 1;
+  const responseEvidenceAdded = /(https?:\/\/|www\.|paper|study|data|source|citation|according to|for example|for instance)/i.test(
+    params.response,
+  );
+  const analysis = analyzeDialecticResponse({
+    roundId,
+    response: params.response,
+    responsePath: params.responsePath,
+    critiqueGenerated: params.prompt,
+    critiqueFailureTypes,
+    confidenceAtRoundStart,
+    confidenceAtRoundEnd,
+    priorRoundsCount: priorRounds.length,
+    followUpFocus: params.why,
+    responseAddressedEvidence: responseEvidenceAdded,
+  });
+  const stagnantRounds = [...priorRounds.slice(-2), { confidenceDelta, engagementScore: analysis.engagementScore, evidenceAdded: analysis.newEvidenceAdded }].filter(
+    (entry) => Number(entry.confidenceDelta ?? 0) === 0 && !entry.evidenceAdded,
+  ).length;
+  const followUpPrompt =
+    stagnantRounds >= 3
+      ? "The next round should name the pattern of no confidence change or new evidence and ask the user to notice it."
+      : analysis.followUpPrompt;
+  const createdAt = new Date();
+  const structuredRound = {
+    id: roundId,
+    mapId: params.mapId,
+    claimId: params.nodeId ?? null,
+    roundNumber,
+    priorRoundId,
+    critiqueGenerated: params.prompt,
+    critiqueFailureTypes,
+    critiqueLens: params.why,
+    critiqueStrength,
+    userResponse: params.response,
+    responseClassification: analysis.classification,
+    concessions: analysis.concessions,
+    defenses: analysis.defenses,
+    dismissals: analysis.dismissals,
+    confidenceAtRoundStart,
+    confidenceAtRoundEnd,
+    confidenceDelta,
+    engagementScore: analysis.engagementScore,
+    followUpPrompt,
+    createdAt: createdAt.toISOString(),
+    closedAt: createdAt.toISOString(),
+  };
+
   const created = await prisma.$transaction(async (tx) => {
     const event = await tx.thoughtMapEvent.create({
       data: {
@@ -337,12 +497,14 @@ export async function recordDialecticRound(params: {
           round: params.round,
           roundIndex: params.roundIndex,
           title: params.title,
-          critiqueStrength: params.critiqueStrength,
+          critiqueStrength,
           critiqueType: params.critiqueType ?? null,
           prompt: params.prompt,
           why: params.why,
           responsePath: params.responsePath,
           response: params.response,
+          dialecticRound: structuredRound,
+          priorRounds: priorRounds.slice(-3),
         }),
       },
     });
@@ -367,6 +529,12 @@ export async function recordDialecticRound(params: {
           responseLength: calibration.responseLength,
           quickResponse: calibration.quickResponse,
           responsePath: params.responsePath,
+          engagementScore: analysis.engagementScore,
+          responseClassification: analysis.classification,
+          confidenceAtRoundStart,
+          confidenceAtRoundEnd,
+          confidenceDelta,
+          responseEvidenceAdded: analysis.newEvidenceAdded,
         }),
       },
     });
