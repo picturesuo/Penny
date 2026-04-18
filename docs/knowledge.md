@@ -223,6 +223,7 @@
 - `user`: The adversarial final pass should attack the dependency structure rather than individual claims, identify the quiet load-bearing assumption, and check whether the whole output collapses if that assumption fails.
 - `user`: The adversarial final pass should happen before synthesis and should surface the quiet keystone assumption as a distinct pre-synthesis gate.
 - `user`: The steel-manning gym should give the user a position they disagree with, ask them to argue its strongest form, and score the result against Penny’s best version as explicit skill training.
+- `user`: The steel-man gate should block critique generation until the user has written the strongest opposing view, store that steel man as a claim-attached object, and keep the original plus later revisions visible in the claim memory view.
 - `user`: Diversified retrieval should be the default for critique: each pass should widen the lens set before narrowing to a single verdict.
 - `user`: Precedent-grounded critique should retrieve real failure cases that match the claim’s risk profile, so Penny can say what specifically killed similar companies or ideas before.
 - `user`: Precedent retrieval should match by failure trajectory first, then domain and outcome, because structural collapse patterns are more defensible than topic similarity.
