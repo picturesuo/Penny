@@ -356,6 +356,26 @@ export interface ThoughtMapEvent {
   createdAt: Date;
 }
 
+export interface SteelManVersion {
+  versionText: string;
+  savedAt: Date;
+  roundContext: string | null;
+}
+
+export interface SteelMan {
+  id: string;
+  claimId: string;
+  mapId: string;
+  userId: string;
+  steelManText: string;
+  writtenAt: Date;
+  qualityScore: number | null;
+  qualityScoreReason: string | null;
+  usedInRound: string[];
+  updatedAt: Date | null;
+  updateHistory: SteelManVersion[];
+}
+
 export interface ThoughtNodeModel {
   id: string;
   mapId: string;
@@ -381,6 +401,7 @@ export interface ThoughtMapModel {
   status: string;
   nodes: ThoughtNodeModel[];
   events: ThoughtMapEvent[];
+  steelMans: SteelMan[];
   founderBrief: FounderBriefModel | null;
   founderBriefReadiness: FounderBriefReadiness;
   graphSnapshot: ThoughtMapGraphSnapshot | null;
