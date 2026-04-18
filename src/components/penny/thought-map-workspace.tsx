@@ -3974,18 +3974,18 @@ export function ThoughtMapWorkspace({
           </div>
           {selectedSteelMan?.qualityScore != null ? (
             <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
-              <p className="text-sm leading-6 text-[var(--ink)]">{selectedSteelMan.qualityScoreReason}</p>
-              {selectedSteelMan?.qualityScore < 5 && selectedSteelMan?.qualityScoreReason ? (
+              <p className="text-sm leading-6 text-[var(--ink)]">{selectedSteelManQualityReason}</p>
+              {selectedSteelMan?.qualityScore < 5 && selectedSteelManQualityReason ? (
                 <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-                  {selectedSteelMan.qualityScoreReason.includes("generic")
+                  {selectedSteelManQualityReason.includes("generic")
                     ? "Your steel man is mostly generic. Can you make it more specific to the actual evidence you're relying on?"
                     : "Want to revise it before critique? A stronger opposing view usually produces a better first round."}
                 </p>
               ) : null}
             </div>
           ) : null}
-          {steelManRevisionPrompt ? (
-            <p className="mt-4 rounded-[18px] bg-[#fff6ed] px-4 py-3 text-sm leading-6 text-[#8b4d1f]">{steelManRevisionPrompt}</p>
+          {selectedSteelManRevisionNote ? (
+            <p className="mt-4 rounded-[18px] bg-[#fff6ed] px-4 py-3 text-sm leading-6 text-[#8b4d1f]">{selectedSteelManRevisionNote}</p>
           ) : null}
           {selectedSteelMan?.updateHistory.length ? (
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -5277,6 +5277,15 @@ export function ThoughtMapWorkspace({
                   No steel man has been saved for this claim yet.
                 </p>
               )}
+              {selectedSteelMan?.usedInRound.length ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {selectedSteelMan.usedInRound.map((roundLabel) => (
+                    <Badge key={roundLabel} className="bg-[#fff6ed] text-[#8b4d1f]">
+                      Used in {roundLabel}
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
