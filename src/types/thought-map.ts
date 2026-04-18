@@ -124,6 +124,77 @@ export interface CognitiveBiasProfile {
   mostImprovedBias: BiasType | null;
 }
 
+export const BLIND_SPOT_DOMAINS = [
+  "market",
+  "technical",
+  "personal",
+  "competitive",
+  "financial",
+  "operational",
+  "research",
+  "general",
+] as const;
+
+export type BlindSpotDomain = (typeof BLIND_SPOT_DOMAINS)[number];
+
+export interface BlindSpotEntry {
+  claimId: string;
+  claimText: string;
+  confidence: number;
+  daysSinceCreation: number;
+  dialecticRoundCount: number;
+  stakeLevel: string;
+  urgencyScore: number;
+  suggestedAction: string;
+}
+
+export interface DomainBlindSpot {
+  domain: BlindSpotDomain;
+  claimCount: number;
+  averageConfidence: number;
+  stressTestedCount: number;
+  stressTestedPercent: number;
+  oldestUntestedClaim: Date;
+  suggestedAction: string;
+  sampleClaimId: string | null;
+}
+
+export interface AssumptionBlindSpot {
+  assumptionText: string;
+  parentClaimIds: string[];
+  parentClaimCount: number;
+  daysSinceCreation: number;
+  hasBeenQuestioned: boolean;
+  suggestedAction: string;
+}
+
+export interface LoadBearingBlindSpot {
+  claimId: string;
+  claimText: string;
+  downstreamClaimCount: number;
+  downstreamArtifactCount: number;
+  dialecticRoundCount: number;
+  confidence: number;
+  riskScore: number;
+}
+
+export interface ClaimTypeGap {
+  claimType: ClaimStructureKind;
+  totalClaims: number;
+  testedClaims: number;
+  gapSeverity: "low" | "medium" | "high" | "critical";
+}
+
+export interface BlindSpotMap {
+  userId: string;
+  computedAt: Date;
+  untestedHighConfidenceClaims: BlindSpotEntry[];
+  unexaminedDomains: DomainBlindSpot[];
+  unchallengedAssumptions: AssumptionBlindSpot[];
+  loadBearingUntestedNodes: LoadBearingBlindSpot[];
+  claimTypeGaps: ClaimTypeGap[];
+}
+
 export type CognitiveInterventionType =
   | "force_falsification"
   | "require_slots"

@@ -171,3 +171,14 @@ model CognitiveBiasProfile {
 
   @@index([userId, updatedAt])
 }
+
+model BlindSpotMapCache {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  blindSpotMapJson String   @default("{}")
+  lastComputedAt   DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+}
