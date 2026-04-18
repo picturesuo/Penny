@@ -8,6 +8,7 @@ const shapeFeedbackSchema = z.object({
   shapeLabel: z.string().min(1),
   source: z.string().min(1),
   reasoning: z.string().trim().min(8).max(1000),
+  falsificationCondition: z.string().trim().max(500).nullable().optional(),
   nodeId: z.string().min(1).optional().nullable(),
 });
 
@@ -26,6 +27,7 @@ export async function POST(
       shapeLabel: input.shapeLabel,
       source: input.source,
       reasoning: input.reasoning,
+      falsificationCondition: input.falsificationCondition ?? null,
       nodeId: input.nodeId ?? null,
     });
 

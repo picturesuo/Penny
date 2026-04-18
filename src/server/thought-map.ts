@@ -1,6 +1,7 @@
 import type {
   Prisma,
   CognitiveBiasProfile as CognitiveBiasProfileRecord,
+  BlindSpotMapCache as BlindSpotMapCacheRecord,
   ThoughtMap,
   ThoughtMapEvent as ThoughtMapEventRecord,
   ThoughtMapIntervention,
@@ -11,6 +12,7 @@ import { prisma } from "@/db/prisma";
 import { buildFounderBrief, getFounderBriefReadiness } from "@/lib/founder-brief";
 import {
   buildBeliefGraph,
+  buildBlindSpotMap,
   propagateBeliefGraph,
   serializeBeliefGraph,
   serializeBeliefPropagationResult,

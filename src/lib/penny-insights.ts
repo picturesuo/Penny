@@ -5,6 +5,10 @@ import type {
   BiasEntry,
   BiasEvidenceInstance,
   BiasType,
+  BlindSpotDomain,
+  BlindSpotEntry,
+  BlindSpotMap,
+  ClaimTypeGap,
   ClaimCaptureMetadata,
   ClaimProvenance,
   ClaimStructureSnapshot,
@@ -24,10 +28,13 @@ import type {
   ThoughtMapEvent,
   ThoughtMapModel,
   ThoughtNodeModel,
+  DomainBlindSpot,
   ShapeDerivation,
   ContributingMove,
   ShapeThreshold,
   ShapeCounterfactual,
+  AssumptionBlindSpot,
+  LoadBearingBlindSpot,
 } from "@/types/thought-map";
 import { buildBeliefGraph, propagateBeliefGraph } from "@/lib/bayesian-propagation";
 import { BIAS_TAXONOMY, biasTypeById } from "@/lib/bias-taxonomy";
@@ -1765,6 +1772,38 @@ function classifyCalibrationDomain(text: string): CalibrationDomain {
   return "general";
 }
 
+function classifyBlindSpotDomain(text: string): BlindSpotDomain {
+  if (/(finance|financial|money|revenue|cost|cash|burn|runway|valuation|investment|term sheet|roi|unit economics)/i.test(text)) {
+    return "financial";
+  }
+
+  if (/(competitive|competition|competitor|rival|moat|differentiation|positioning|incumbent|benchmark|alternative)/i.test(text)) {
+    return "competitive";
+  }
+
+  if (/(market|distribution|pricing|buyer|customer acquisition|adoption|retention|demand|go-to-market|g tm|g.t.m.)/i.test(text)) {
+    return "market";
+  }
+
+  if (/(technical|infra|engineering|architecture|system|code|api|developer|latency|scalability|performance)/i.test(text)) {
+    return "technical";
+  }
+
+  if (/(people|relationship|leadership|culture|manager|communication|social|identity|self-image|values|career|life)/i.test(text)) {
+    return "personal";
+  }
+
+  if (/(ops|operation|workflow|process|handoff|execution|delivery|team|hiring|implementation)/i.test(text)) {
+    return "operational";
+  }
+
+  if (/(research|evidence|study|experiment|validation|interview|test|paper|citation|literature)/i.test(text)) {
+    return "research";
+  }
+
+  return "general";
+}
+
 function average(values: number[]) {
   if (!values.length) {
     return null;
@@ -2921,9 +2960,11 @@ export function buildPennyLens(map: ThoughtMapModel): PennyLensSnapshot {
   const shapeCandidates = buildPennyShapeCandidates(map.nodes);
   const overrideShapes = buildOverrideShapeLayer(map);
   const adjusted = adjustLensShapes(shapeCandidates, overrideShapes);
-  const explainedActiveShapes = attachShapeExplainability(map, adjusted.activeShapes);
-  const explainedProvisionalShapes = attachShapeExplainability(map, adjusted.provisionalShapes);
   const explainedEffectiveShapes = attachShapeExplainability(map, adjusted.effectiveShapes);
+  const explainedActiveShapes = explainedEffectiveShapes.filter((shape) => shape.confidence >= ACTIVE_SHAPE_CONFIDENCE);
+  const explainedProvisionalShapes = explainedEffectiveShapes.filter(
+    (shape) => shape.confidence >= PROVISIONAL_SHAPE_CONFIDENCE && shape.confidence < ACTIVE_SHAPE_CONFIDENCE,
+  );
   const latestMoveAt =
     map.events
       .filter((event) => event.eventType === "move_applied")
@@ -4263,6 +4304,308 @@ export function buildCognitiveBiasProfile(maps: ThoughtMapModel[], userId: strin
     overallCalibrationTrend,
     strongestBias,
     mostImprovedBias,
+  };
+}
+
+function topStakeLevel(stakes: ClaimStake[] | null | undefined) {
+  const normalized = stakes?.map((stake) => stake.toLowerCase()) ?? [];
+  if (normalized.includes("money")) {
+    return "money";
+  }
+  if (normalized.includes("reputation")) {
+    return "reputation";
+  }
+  if (normalized.includes("relationship")) {
+    return "relationship";
+  }
+  if (normalized.includes("self_image")) {
+    return "self_image";
+  }
+  if (normalized.includes("time")) {
+    return "time";
+  }
+  return "none";
+}
+
+function blindSpotUrgencyScore(params: {
+  confidence: number;
+  stakeLevel: string;
+  loadBearing: boolean;
+  ageDays: number;
+  roundCount: number;
+}) {
+  let score = 20;
+  if (params.confidence > 80) {
+    score += 20;
+  }
+  if (params.stakeLevel === "reputation" || params.stakeLevel === "money") {
+    score += 20;
+  }
+  if (params.loadBearing) {
+    score += 20;
+  }
+  if (params.ageDays > 90) {
+    score += 20;
+  }
+  if (params.roundCount > 0) {
+    score = Math.max(0, score - Math.min(18, params.roundCount * 3));
+  }
+  return Math.max(0, Math.min(100, score));
+}
+
+function claimTypeGapSeverity(totalClaims: number, testedClaims: number) {
+  if (totalClaims === 0) {
+    return "low" as const;
+  }
+
+  if (testedClaims === 0 && totalClaims >= 3) {
+    return "critical" as const;
+  }
+
+  const testedPercent = testedClaims / totalClaims;
+
+  if (testedPercent < 0.2) {
+    return "high" as const;
+  }
+
+  if (testedPercent < 0.4) {
+    return "medium" as const;
+  }
+
+  return "low" as const;
+}
+
+export function buildBlindSpotMap(maps: ThoughtMapModel[], userId: string): BlindSpotMap {
+  const now = new Date();
+  const claimRecords: Array<{
+    map: ThoughtMapModel;
+    node: ThoughtNodeModel;
+    capture: ReturnType<typeof captureSnapshotForMap>;
+    domain: BlindSpotDomain;
+    structureKind: ClaimStructureKind;
+    roundCount: number;
+    confidence: number;
+    ageDays: number;
+    stakeLevel: string;
+    downstreamClaimCount: number;
+    downstreamArtifactCount: number;
+  }> = [];
+
+  for (const map of maps) {
+    const capture = captureSnapshotForMap(map);
+    const claimDependencyGraph = buildClaimDependencyGraph(map);
+    const outgoing = new Map<string, string[]>();
+    for (const edge of claimDependencyGraph.edges) {
+      const bucket = outgoing.get(edge.fromNodeId) ?? [];
+      bucket.push(edge.toNodeId);
+      outgoing.set(edge.fromNodeId, bucket);
+    }
+
+    const nodeEvents = new Map<string, ThoughtMapEvent[]>();
+    for (const event of map.events) {
+      const bucket = nodeEvents.get(event.nodeId ?? "") ?? [];
+      bucket.push(event);
+      nodeEvents.set(event.nodeId ?? "", bucket);
+    }
+
+    const descendantsFor = (startNodeId: string) => {
+      const visited = new Set<string>();
+      const queue = [...(outgoing.get(startNodeId) ?? [])];
+
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        if (visited.has(current)) {
+          continue;
+        }
+        visited.add(current);
+        queue.push(...(outgoing.get(current) ?? []));
+      }
+
+      return Array.from(visited);
+    };
+
+    for (const node of map.nodes.filter((candidate) => candidate.kind !== "root" && candidate.nodeStatus !== "superseded")) {
+      const roundCount = nodeEvents.get(node.id)?.filter((event) => event.eventType === "dialectic_round").length ?? 0;
+      const confidence = node.scores?.confidence != null ? Math.round(node.scores.confidence * 100) : capture?.confidence ?? 0;
+      const ageDays = recencyDaysFromDates(node.createdAt, now);
+      const text = `${map.title} ${map.rawThought} ${node.content} ${capture?.dependencyNotes ?? ""} ${capture?.provenanceDetail ?? ""}`;
+      const domain = classifyBlindSpotDomain(text);
+      const structure = buildClaimStructureSnapshot(map, node);
+      const stakeLevel = topStakeLevel(capture?.stakes);
+      const descendantIds = descendantsFor(node.id);
+      const descendantArtifacts = descendantIds.reduce((sum, descendantId) => {
+        return sum + (nodeEvents.get(descendantId)?.length ?? 0);
+      }, 0);
+
+      claimRecords.push({
+        map,
+        node,
+        capture,
+        domain,
+        structureKind: structure.structureKind,
+        roundCount,
+        confidence,
+        ageDays,
+        stakeLevel,
+        downstreamClaimCount: descendantIds.length,
+        downstreamArtifactCount: descendantArtifacts + descendantIds.length,
+      });
+    }
+  }
+
+  const untestedHighConfidenceClaims = claimRecords
+    .filter((record) => record.confidence > 75 && record.roundCount === 0 && record.ageDays > 14)
+    .map<BlindSpotEntry>((record) => ({
+      claimId: record.node.id,
+      claimText: record.node.content,
+      confidence: record.confidence,
+      daysSinceCreation: record.ageDays,
+      dialecticRoundCount: record.roundCount,
+      stakeLevel: record.stakeLevel,
+      urgencyScore: blindSpotUrgencyScore({
+        confidence: record.confidence,
+        stakeLevel: record.stakeLevel,
+        loadBearing: record.downstreamClaimCount >= 3,
+        ageDays: record.ageDays,
+        roundCount: record.roundCount,
+      }),
+      suggestedAction: "Start a critique round on this claim now.",
+    }))
+    .sort((a, b) => b.urgencyScore - a.urgencyScore || b.confidence - a.confidence || b.daysSinceCreation - a.daysSinceCreation);
+
+  const domainBuckets = new Map<
+    BlindSpotDomain,
+    Array<{
+      claimId: string;
+      confidence: number;
+      tested: boolean;
+      createdAt: Date;
+      domain: BlindSpotDomain;
+    }>
+  >();
+
+  for (const record of claimRecords) {
+    const bucket = domainBuckets.get(record.domain) ?? [];
+    bucket.push({
+      claimId: record.node.id,
+      confidence: record.confidence,
+      tested: record.roundCount > 0,
+      createdAt: record.node.createdAt,
+      domain: record.domain,
+    });
+    domainBuckets.set(record.domain, bucket);
+  }
+
+  const unexaminedDomains = Array.from(domainBuckets.entries())
+    .map<DomainBlindSpot | null>(([domain, entries]) => {
+      const claimCount = entries.length;
+      const stressTestedCount = entries.filter((entry) => entry.tested).length;
+      const stressTestedPercent = claimCount ? Math.round((stressTestedCount / claimCount) * 100) : 0;
+
+      if (stressTestedPercent >= 20) {
+        return null;
+      }
+
+      const oldestUntested = entries
+        .filter((entry) => !entry.tested)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0] ?? entries[0]!;
+      const averageConfidence = claimCount
+        ? Math.round(entries.reduce((sum, entry) => sum + entry.confidence, 0) / claimCount)
+        : 0;
+
+      return {
+        domain,
+        claimCount,
+        averageConfidence,
+        stressTestedCount,
+        stressTestedPercent,
+        oldestUntestedClaim: oldestUntested.createdAt,
+        suggestedAction: `Review the oldest untested ${domain} claim first.`,
+        sampleClaimId: oldestUntested.claimId,
+      };
+    })
+    .filter((entry): entry is DomainBlindSpot => entry !== null)
+    .sort((a, b) => a.stressTestedPercent - b.stressTestedPercent || b.claimCount - a.claimCount);
+
+  const unchallengedAssumptions = claimRecords
+    .filter(
+      (record) =>
+        record.node.kind === "assumption" && record.downstreamClaimCount >= 3 && record.roundCount === 0,
+    )
+    .map<AssumptionBlindSpot>((record) => ({
+      assumptionText: record.node.content,
+      parentClaimIds: claimRecords
+        .filter((candidate) => candidate.node.parentId === record.node.id)
+        .map((candidate) => candidate.node.id),
+      parentClaimCount: claimRecords.filter((candidate) => candidate.node.parentId === record.node.id).length,
+      daysSinceCreation: record.ageDays,
+      hasBeenQuestioned: record.roundCount > 0,
+      suggestedAction: "Promote this assumption into a critique round and test it directly.",
+    }))
+    .sort((a, b) => b.parentClaimCount - a.parentClaimCount || b.daysSinceCreation - a.daysSinceCreation);
+
+  const loadBearingUntestedNodes = claimRecords
+    .filter((record) => record.downstreamClaimCount >= 3 && record.roundCount <= 1)
+    .map<LoadBearingBlindSpot>((record) => ({
+      claimId: record.node.id,
+      claimText: record.node.content,
+      downstreamClaimCount: record.downstreamClaimCount,
+      downstreamArtifactCount: record.downstreamArtifactCount,
+      dialecticRoundCount: record.roundCount,
+      confidence: record.confidence,
+      riskScore: blindSpotUrgencyScore({
+        confidence: record.confidence,
+        stakeLevel: record.stakeLevel,
+        loadBearing: true,
+        ageDays: record.ageDays,
+        roundCount: record.roundCount,
+      }),
+    }))
+    .sort((a, b) => b.riskScore - a.riskScore || b.downstreamClaimCount - a.downstreamClaimCount || a.dialecticRoundCount - b.dialecticRoundCount);
+
+  const claimKindBuckets = new Map<
+    ClaimStructureKind,
+    Array<{
+      claimId: string;
+      tested: boolean;
+    }>
+  >();
+
+  for (const record of claimRecords) {
+    const bucket = claimKindBuckets.get(record.structureKind) ?? [];
+    bucket.push({
+      claimId: record.node.id,
+      tested: record.roundCount > 0,
+    });
+    claimKindBuckets.set(record.structureKind, bucket);
+  }
+
+  const claimTypeGaps = Array.from(claimKindBuckets.entries())
+    .map<ClaimTypeGap>(([claimType, entries]) => {
+      const totalClaims = entries.length;
+      const testedClaims = entries.filter((entry) => entry.tested).length;
+
+      return {
+        claimType,
+        totalClaims,
+        testedClaims,
+        gapSeverity: claimTypeGapSeverity(totalClaims, testedClaims),
+      };
+    })
+    .filter((entry) => entry.totalClaims > 0)
+    .sort((a, b) => {
+      const severityRank = { critical: 3, high: 2, medium: 1, low: 0 } as const;
+      return severityRank[b.gapSeverity] - severityRank[a.gapSeverity] || b.totalClaims - a.totalClaims;
+    });
+
+  return {
+    userId,
+    computedAt: now,
+    untestedHighConfidenceClaims,
+    unexaminedDomains,
+    unchallengedAssumptions,
+    loadBearingUntestedNodes,
+    claimTypeGaps,
   };
 }
 
