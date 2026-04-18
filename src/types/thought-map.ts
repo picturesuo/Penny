@@ -166,6 +166,30 @@ export interface BeliefPropagationDecision {
   createdAt: Date;
 }
 
+export type BeliefPropagationAction = "compute" | "accept" | "override" | "decouple";
+
+export interface BeliefPropagationRequest {
+  seedClaimId: string;
+  updatedPosterior: number | null;
+  action: BeliefPropagationAction;
+  targetClaimId: string | null;
+  decisionType: BeliefPropagationDecisionType | null;
+  reason: string | null;
+  proposedPosterior: number | null;
+  finalPosterior: number | null;
+}
+
+export interface BeliefPropagationResponse {
+  result: BeliefPropagationGraphSnapshot;
+  graphEventId: string | null;
+  propagationEventId: string | null;
+  decisionEventId: string | null;
+  cycleError: {
+    nodeIds: string[];
+    message: string;
+  } | null;
+}
+
 export type DialecticCritiqueStrength = "mild" | "moderate" | "strong" | "adversarial";
 
 export type DialecticResponsePath = "defend" | "revise" | "absorb";
@@ -249,6 +273,9 @@ export type ThoughtMapEventType =
   | "challenge_calibration"
   | "confidence_override"
   | "shape_feedback"
+  | "repair_action"
+  | "revisit_schedule"
+  | "revisit_action"
   | "belief_propagation"
   | "belief_propagation_decision"
   | "belief_graph_cycle"
@@ -350,6 +377,11 @@ export interface BayesianPropagationStep {
   reasoning: string;
   overrideReasoning: string | null;
   pathLabel: string;
+  prior?: number;
+  posterior?: number;
+  contributions?: BeliefPropagationContribution[];
+  skipped?: boolean;
+  skippedReason?: string | null;
 }
 
 export interface BayesianPropagationSnapshot {
@@ -485,6 +517,118 @@ export interface SteelMan {
   updateHistory: SteelManVersion[];
 }
 
+export type ClaimRepairActionType =
+  | "merge"
+  | "split"
+  | "promote"
+  | "demote"
+  | "reclassify"
+  | "reroute_edge"
+  | "reroot";
+
+export type ClaimRepairInitiator = "user" | "penny_suggestion";
+
+export type SupersessionType = "merge" | "split" | "reclassification";
+
+export type EdgeChangeType = "created" | "deleted" | "rerouted" | "strength_adjusted";
+
+export interface SupersessionRecord {
+  supersededClaimIds: string[];
+  supersedingClaimIds: string[];
+  supersessionType: SupersessionType;
+  preservedHistory: boolean;
+}
+
+export interface EdgeChange {
+  edgeId: string;
+  changeType: EdgeChangeType;
+  fromClaimId: string;
+  toClaimId: string;
+  reason: string;
+}
+
+export interface ClaimRepairAction {
+  id: string;
+  mapId: string;
+  actionType: ClaimRepairActionType;
+  initiatedBy: ClaimRepairInitiator;
+  sourceClaimIds: string[];
+  resultingClaimIds: string[];
+  reasoning: string;
+  supersessionRecord: SupersessionRecord;
+  edgeChanges: EdgeChange[];
+  propagationTriggered: boolean;
+  createdAt: Date;
+}
+
+export type RevisitPriority = "low" | "medium" | "high" | "urgent";
+
+export type RevisitStatus = "pending" | "surfaced" | "snoozed" | "completed" | "dismissed";
+
+export type RevisitTriggerType = "time_based" | "event_based" | "dependency_change" | "confidence_drift" | "external_trigger";
+
+export type RevisitReasonType =
+  | "age_threshold"
+  | "stake_level"
+  | "untested"
+  | "dependency_changed"
+  | "resolution_date_approaching"
+  | "confidence_drift"
+  | "external_trigger"
+  | "manual";
+
+export type TriggerDefinitionType = "date" | "event_keyword" | "dependency_update" | "confidence_threshold" | "manual_flag";
+
+export type RevisitActionType =
+  | "reviewed_no_change"
+  | "confidence_updated"
+  | "claim_updated"
+  | "claim_retired"
+  | "snoozed"
+  | "triggered_repair"
+  | "triggered_dialectic";
+
+export type RevisitLeitnerBox = 1 | 2 | 3 | 4 | 5;
+
+export interface TriggerDefinition {
+  triggerType: TriggerDefinitionType;
+  dateTarget: Date | null;
+  eventKeyword: string | null;
+  confidenceThreshold: number | null;
+  dependencyClaimId: string | null;
+}
+
+export interface RevisitReason {
+  type: RevisitReasonType;
+  description: string;
+  urgencyScore: number;
+}
+
+export interface RevisitAction {
+  type: RevisitActionType;
+  notes: string | null;
+  newConfidence: number | null;
+  completedAt: Date;
+}
+
+export interface RevisitSchedule {
+  id: string;
+  claimId: string;
+  mapId: string;
+  userId: string;
+  scheduledFor: Date;
+  schedulingReason: RevisitReason;
+  priority: RevisitPriority;
+  status: RevisitStatus;
+  leitnerBox: RevisitLeitnerBox;
+  surfacedAt: Date | null;
+  userAction: RevisitAction | null;
+  snoozedUntil: Date | null;
+  triggerType: RevisitTriggerType;
+  triggerDefinition: TriggerDefinition;
+  lastComputedAt: Date;
+}
+
 export interface ThoughtNodeModel {
   id: string;
   mapId: string;
@@ -511,6 +655,8 @@ export interface ThoughtMapModel {
   nodes: ThoughtNodeModel[];
   events: ThoughtMapEvent[];
   steelMans: SteelMan[];
+  repairActions: ClaimRepairAction[];
+  revisitSchedules: RevisitSchedule[];
   founderBrief: FounderBriefModel | null;
   founderBriefReadiness: FounderBriefReadiness;
   graphSnapshot: ThoughtMapGraphSnapshot | null;
