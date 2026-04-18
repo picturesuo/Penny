@@ -2,6 +2,17 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { recordDialecticRound } from "@/server/thought-map";
 
+const roundContextSchema = z
+  .object({
+    currentConfidence: z.number().min(0).max(100).optional().nullable(),
+    confidenceAtRoundEnd: z.number().min(0).max(100).optional().nullable(),
+    concessionNote: z.string().max(500).optional().nullable(),
+    connectedClaimsChanged: z.boolean().optional().nullable(),
+    connectedClaimsNote: z.string().max(500).optional().nullable(),
+    newEvidenceNote: z.string().max(500).optional().nullable(),
+  })
+  .optional();
+
 const dialecticRoundSchema = z.object({
   nodeId: z.string().min(1).optional().nullable(),
   round: z.string().min(1),
@@ -9,10 +20,12 @@ const dialecticRoundSchema = z.object({
   title: z.string().min(1),
   critiqueStrength: z.string().min(1),
   critiqueType: z.string().min(1).optional(),
+  critiqueFailureTypes: z.array(z.string().min(1)).optional(),
   prompt: z.string().min(1),
   why: z.string().min(1),
   responsePath: z.enum(["defend", "revise", "absorb"]),
   response: z.string().min(1).max(1000),
+  roundContext: roundContextSchema,
 });
 
 export async function POST(
@@ -31,13 +44,24 @@ export async function POST(
       title: input.title,
       critiqueStrength: input.critiqueStrength,
       critiqueType: input.critiqueType ?? null,
+      critiqueFailureTypes: input.critiqueFailureTypes ?? (input.critiqueType ? [input.critiqueType] : []),
       prompt: input.prompt,
       why: input.why,
       responsePath: input.responsePath,
       response: input.response,
+      confidenceAtRoundEnd: input.roundContext?.confidenceAtRoundEnd ?? null,
     });
 
-    return NextResponse.json({ event }, { status: 201 });
+    const round = event.payload?.dialecticRound ?? null;
+
+    return NextResponse.json(
+      {
+        event,
+        round,
+        roundContext: input.roundContext ?? null,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
