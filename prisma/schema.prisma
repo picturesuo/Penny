@@ -156,3 +156,18 @@ model MarginFragment {
   @@index([sourceSessionId])
   @@index([sourceMapId])
 }
+
+model CognitiveBiasProfile {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  profileVersion         Int      @default(1)
+  biasProfileJson        String   @default("{}")
+  overallCalibrationTrend String   @default("stable")
+  strongestBiasId        String?
+  mostImprovedBiasId     String?
+  lastUpdated            DateTime @default(now())
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+}

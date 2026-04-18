@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, ArrowRightLeft, CircleDot, GitBranchPlus, Link2, Sparkles } from "lucide-react";
+import { BiasProfile } from "@/components/penny/bias-profile";
 import { FounderBriefCard } from "@/components/penny/founder-brief-card";
 import { ClaimRepairModal } from "@/components/penny/claim-repair-modal";
 import { MarginRail } from "@/components/penny/margin-rail";
@@ -24,6 +25,8 @@ import {
   buildConfusionLog,
   buildAdversarialFinalPass,
   buildClaimRepairSuggestions,
+  biasProfileCritiqueContext,
+  buildCognitiveBiasProfile,
   buildPennyLens,
   buildSessionRhythmSnapshot,
   collectShapeFeedback,
@@ -45,8 +48,11 @@ import {
   type DependencyChainTimelineSnapshot,
   type SteelManQualityAssessment,
 } from "@/lib/penny-insights";
+import { evaluateMetaCognitionTrigger, type MetaCognitionPromptSnapshot } from "@/lib/meta-cognition";
 import { buildRevisitQueue } from "@/lib/revisit-scheduler";
 import { cn } from "@/lib/utils";
+import { MetaCognitionPrompt } from "@/components/penny/meta-cognition-prompt";
+import { ShapeDetail } from "@/components/penny/shape-detail";
 import type {
   CognitiveIntervention,
   ClaimRepairAction,
@@ -64,6 +70,9 @@ import type {
   TriggerDefinition,
   SteelMan,
   SteelManVersion,
+  CognitiveBiasProfile,
+  ShapeDerivation,
+  MetaCognitionResponseType,
 } from "@/types/thought-map";
 import type { MarginFragmentModel } from "@/types/penny";
 
@@ -74,13 +83,14 @@ type SerializableThoughtNode = Omit<ThoughtNodeModel, "createdAt" | "updatedAt">
 
 type SerializableThoughtMap = Omit<
   ThoughtMapModel,
-  "nodes" | "createdAt" | "updatedAt" | "interventions" | "recommendedIntervention" | "founderBrief" | "steelMans" | "repairActions" | "revisitSchedules"
+  "nodes" | "createdAt" | "updatedAt" | "interventions" | "recommendedIntervention" | "founderBrief" | "steelMans" | "repairActions" | "revisitSchedules" | "shapeDerivations"
 > & {
   nodes: SerializableThoughtNode[];
   events: SerializableThoughtMapEvent[];
   steelMans: SerializableSteelMan[];
   repairActions: SerializableClaimRepairAction[];
   revisitSchedules: SerializableRevisitSchedule[];
+  shapeDerivations: SerializableShapeDerivation[];
   founderBrief: SerializableFounderBrief | null;
   interventions: SerializableIntervention[];
   recommendedIntervention: SerializableIntervention | null;
@@ -117,10 +127,34 @@ type SerializableSteelMan = Omit<SteelMan, "writtenAt" | "updatedAt" | "updateHi
   updateHistory: SerializableSteelManVersion[];
 };
 
+type SerializableShapeDerivation = Omit<ShapeDerivation, "computedAt" | "contributingMoves"> & {
+  contributingMoves: Array<
+    Omit<ShapeDerivation["contributingMoves"][number], "timestamp"> & {
+      timestamp: Date | string;
+    }
+  >;
+  computedAt: Date | string;
+};
+
 type SerializableClaimRepairAction = Omit<ClaimRepairAction, "createdAt"> & {
   createdAt: Date | string;
   supersessionRecord: Omit<ClaimRepairAction["supersessionRecord"], never>;
   edgeChanges: Array<ClaimRepairAction["edgeChanges"][number]>;
+};
+
+type SerializableBiasEvidenceInstance = Omit<CognitiveBiasProfile["biasEntries"][number]["evidenceInstances"][number], "timestamp"> & {
+  timestamp: Date | string;
+};
+
+type SerializableBiasEntry = Omit<CognitiveBiasProfile["biasEntries"][number], "firstDetected" | "lastSignal" | "evidenceInstances"> & {
+  firstDetected: Date | string;
+  lastSignal: Date | string;
+  evidenceInstances: SerializableBiasEvidenceInstance[];
+};
+
+type SerializableCognitiveBiasProfile = Omit<CognitiveBiasProfile, "biasEntries" | "lastUpdated"> & {
+  biasEntries: SerializableBiasEntry[];
+  lastUpdated: Date | string;
 };
 
 type SerializableRevisitAction = Omit<RevisitAction, "completedAt"> & {
@@ -306,6 +340,17 @@ function normalizeSteelMan(steelMan: SerializableSteelMan): SteelMan {
   };
 }
 
+function normalizeShapeDerivation(derivation: SerializableShapeDerivation): ShapeDerivation {
+  return {
+    ...derivation,
+    computedAt: toDate(derivation.computedAt),
+    contributingMoves: derivation.contributingMoves.map((move) => ({
+      ...move,
+      timestamp: toDate(move.timestamp),
+    })),
+  };
+}
+
 function normalizeClaimRepairAction(repairAction: SerializableClaimRepairAction): ClaimRepairAction {
   return {
     ...repairAction,
@@ -336,6 +381,30 @@ function normalizeRevisitSchedule(schedule: SerializableRevisitSchedule): Revisi
   };
 }
 
+function normalizeBiasEvidenceInstance(instance: SerializableBiasEvidenceInstance) {
+  return {
+    ...instance,
+    timestamp: toDate(instance.timestamp),
+  };
+}
+
+function normalizeBiasEntry(entry: SerializableBiasEntry): CognitiveBiasProfile["biasEntries"][number] {
+  return {
+    ...entry,
+    firstDetected: toDate(entry.firstDetected),
+    lastSignal: toDate(entry.lastSignal),
+    evidenceInstances: entry.evidenceInstances.map(normalizeBiasEvidenceInstance),
+  };
+}
+
+function normalizeBiasProfile(profile: SerializableCognitiveBiasProfile): CognitiveBiasProfile {
+  return {
+    ...profile,
+    lastUpdated: toDate(profile.lastUpdated),
+    biasEntries: profile.biasEntries.map(normalizeBiasEntry),
+  };
+}
+
 function normalizeEvent(event: SerializableThoughtMapEvent): ThoughtMapEvent {
   return {
     ...event,
@@ -352,6 +421,7 @@ function normalizeMap(map: SerializableThoughtMap): ThoughtMapModel {
     steelMans: (map.steelMans ?? []).map(normalizeSteelMan),
     repairActions: (map.repairActions ?? []).map(normalizeClaimRepairAction),
     revisitSchedules: (map.revisitSchedules ?? []).map(normalizeRevisitSchedule),
+    shapeDerivations: (map.shapeDerivations ?? []).map(normalizeShapeDerivation),
     founderBrief: map.founderBrief ? normalizeFounderBrief(map.founderBrief) : null,
     interventions: map.interventions.map(normalizeIntervention),
     recommendedIntervention: map.recommendedIntervention ? normalizeIntervention(map.recommendedIntervention) : null,
@@ -610,9 +680,13 @@ function critiqueModePrompt(
   critiqueType: CritiqueFailureType,
   target: string,
   intensity: number,
+  biasContext?: string | null,
   steelManText?: string | null,
 ) {
   const intensityWord = critiqueIntensityLabel(intensity);
+  const biasBridge = biasContext?.trim().length
+    ? ` Bias context: ${biasContext.trim()}`
+    : "";
   const steelManBridge = steelManText?.trim().length
     ? ` You already wrote a steel man: ${summarizeText(steelManText.trim(), 160)}. Penny should build from that version, name what it captured, and then push on what it still missed.`
     : "";
@@ -622,15 +696,15 @@ function critiqueModePrompt(
       `What would have to be true for ${target} to fail?`,
       `What is the weakest part of ${target} that you have been avoiding?`,
       `If you had to kill ${target}, what would be the grounds?`,
-      `${critiqueTypePrompt(critiqueType, target)} Answer this in your own words before Penny explains.${steelManBridge}`,
+      `${critiqueTypePrompt(critiqueType, target)} Answer this in your own words before Penny explains.${biasBridge}${steelManBridge}`,
     ].join(" ");
   }
 
   if (mode === "red_team") {
-    return `Run a ${intensityWord} red-team session on the whole structure around ${target}. Attack the dependency chain, the precedent story, and the weakest assumption for 20-30 minutes before you let the synthesis move forward.${steelManBridge}`;
+    return `Run a ${intensityWord} red-team session on the whole structure around ${target}. Attack the dependency chain, the precedent story, and the weakest assumption for 20-30 minutes before you let the synthesis move forward.${biasBridge}${steelManBridge}`;
   }
 
-  return `${critiqueTypePrompt(critiqueType, target)} Penny should be ${intensityWord} about this pass and keep the failure type explicit.${steelManBridge}`;
+  return `${critiqueTypePrompt(critiqueType, target)} Penny should be ${intensityWord} about this pass and keep the failure type explicit.${biasBridge}${steelManBridge}`;
 }
 
 function critiqueVarietySuggestion(recentTypes: CritiqueFailureType[]) {
@@ -1020,6 +1094,9 @@ export function ThoughtMapWorkspace({
   initialFragments?: MarginFragmentModel[];
 }) {
   const [map, setMap] = useState(() => normalizeMap(initialMap));
+  const [biasProfile, setBiasProfile] = useState<CognitiveBiasProfile | null>(null);
+  const [biasProfileLoading, setBiasProfileLoading] = useState(false);
+  const [biasProfileRefreshing, setBiasProfileRefreshing] = useState(false);
   const [view, setView] = useState<MapView>(initialView);
   const [lastAction, setLastAction] = useState<ActionResponse | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
@@ -1035,6 +1112,7 @@ export function ThoughtMapWorkspace({
   const [advisorReviewDraft, setAdvisorReviewDraft] = useState("");
   const [advisorReviewNotes, setAdvisorReviewNotes] = useState<string[]>([]);
   const [selectedPrecedentId, setSelectedPrecedentId] = useState<string | null>(null);
+  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [steelManDrafts, setSteelManDrafts] = useState<Record<string, string>>({});
   const [steelManAssessments, setSteelManAssessments] = useState<Record<string, SteelManQualityAssessment>>({});
   const [repairModalOpen, setRepairModalOpen] = useState(false);
@@ -1060,6 +1138,7 @@ export function ThoughtMapWorkspace({
   const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
     collectShapeFeedback(normalizeMap(initialMap).events),
   );
+  const [shapeFalsificationDrafts, setShapeFalsificationDrafts] = useState<Record<string, string>>({});
   const [shapeOverrideReasons, setShapeOverrideReasons] = useState<Record<string, string>>({});
   const [confidenceOverrideReasons, setConfidenceOverrideReasons] = useState<Record<string, string>>({});
   const [propagationFinalPosteriorDrafts, setPropagationFinalPosteriorDrafts] = useState<Record<string, number>>({});
@@ -1081,6 +1160,7 @@ export function ThoughtMapWorkspace({
   const [runningRecommendedMove, setRunningRecommendedMove] = useState(false);
   const [runningFounderBrief, setRunningFounderBrief] = useState(false);
   const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
+  const [metaCognitionEventsSeen, setMetaCognitionEventsSeen] = useState<Record<string, boolean>>({});
   const [isPending, startTransition] = useTransition();
 
   const nodesByParent = useMemo(() => {
@@ -1097,10 +1177,25 @@ export function ThoughtMapWorkspace({
   const statusCounts = countByStatus(map.nodes);
   const nodesById = useMemo(() => new Map(map.nodes.map((node) => [node.id, node])), [map.nodes]);
   const lens = useMemo(() => buildPennyLens(map), [map]);
+  const localBiasProfile = useMemo(() => buildCognitiveBiasProfile([map], map.userId), [map]);
+  const displayedBiasProfile = biasProfile ?? localBiasProfile;
   const derivedShapes = useMemo(
     () => [...lens.effectiveShapes].sort((a, b) => b.confidence - a.confidence),
     [lens],
   );
+  const selectedShape = useMemo(
+    () => derivedShapes.find((shape) => shape.id === selectedShapeId) ?? derivedShapes[0] ?? null,
+    [derivedShapes, selectedShapeId],
+  );
+  const selectedShapeFeedback = selectedShape ? shapeFeedback[selectedShape.id] ?? null : null;
+  const selectedShapeFalsificationDraft = selectedShape
+    ? shapeFalsificationDrafts[selectedShape.id] ?? selectedShape.falsificationCondition ?? ""
+    : "";
+  useEffect(() => {
+    if (!selectedShapeId || !derivedShapes.some((shape) => shape.id === selectedShapeId)) {
+      setSelectedShapeId(derivedShapes[0]?.id ?? null);
+    }
+  }, [derivedShapes, selectedShapeId]);
   const defaultGraphNodeId = preferredGraphNodeId(map);
   const activeNodes = map.nodes.filter((node) => node.nodeStatus !== "superseded");
   const unresolvedGaps = [
@@ -1512,6 +1607,59 @@ export function ThoughtMapWorkspace({
     () => buildClaimStructureSnapshot(map, selectedGraphNode?.node ?? null),
     [map, selectedGraphNode?.node],
   );
+  const selectedMetaCognitionPrompt = useMemo(
+    () =>
+      evaluateMetaCognitionTrigger({
+        map,
+        node: selectedGraphNode?.node ?? null,
+        shapes: derivedShapes,
+      }),
+    [derivedShapes, map, selectedGraphNode?.node],
+  );
+  useEffect(() => {
+    if (!selectedMetaCognitionPrompt || metaCognitionEventsSeen[selectedMetaCognitionPrompt.id]) {
+      return;
+    }
+
+    setMetaCognitionEventsSeen((current) => ({
+      ...current,
+      [selectedMetaCognitionPrompt.id]: true,
+    }));
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${map.id}/meta-cognition`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            triggerId: selectedMetaCognitionPrompt.trigger.id,
+            condition: selectedMetaCognitionPrompt.trigger.condition,
+            prompt: selectedMetaCognitionPrompt.prompt,
+            promptTone: selectedMetaCognitionPrompt.trigger.promptTone,
+            sessionContext: selectedMetaCognitionPrompt.sessionContext,
+            evidence: selectedMetaCognitionPrompt.evidence,
+            shapesAssociated: selectedMetaCognitionPrompt.shapesAssociated,
+            selectedNodeId: selectedMetaCognitionPrompt.selectedNodeId,
+            responseType: null,
+            responseText: null,
+            tellMeMoreOpened: false,
+            behaviorChangedWithinTenMinutes: null,
+          }),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { event: SerializableThoughtMapEvent };
+        mergeMetaCognitionEvent(payload.event);
+      } catch {
+        return;
+      }
+    });
+  }, [map.id, metaCognitionEventsSeen, selectedMetaCognitionPrompt, startTransition]);
   const selectedOldSelves = useMemo(
     () => buildOldSelfTimeline(map.nodes, map.events, selectedGraphNode?.node.id ?? defaultGraphNodeId ?? rootNode?.id ?? ""),
     [defaultGraphNodeId, map.events, map.nodes, rootNode?.id, selectedGraphNode?.node.id],
@@ -2030,7 +2178,14 @@ export function ThoughtMapWorkspace({
         round: "Round 1",
         title: critiqueMode === "socratic" ? "Socratic opening" : critiqueMode === "red_team" ? "Red-team opening" : "Opening critique",
         strength: `${selectedCritiqueStrength.label === "weak" ? "mild" : selectedCritiqueStrength.label} · ${critiqueModeLabel(critiqueMode)} · ${intensityLabel} · ${selectedSteelManReady ? "steel-man ready" : "steel-man required"}`,
-        prompt: critiqueModePrompt(critiqueMode, activeCritiqueType, nodeLabel, critiqueIntensity, selectedSteelManDraft),
+        prompt: critiqueModePrompt(
+          critiqueMode,
+          activeCritiqueType,
+          nodeLabel,
+          critiqueIntensity,
+          selectedBiasContext,
+          selectedSteelManDraft,
+        ),
         why: lastAction?.reasoning.graphAnalysis?.primaryGap
           ? `Failure type: ${lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")} · critique type: ${activeCritiqueType}`
           : `Failure type: not yet selected · critique type: ${activeCritiqueType}`,
@@ -2174,6 +2329,10 @@ export function ThoughtMapWorkspace({
     () => buildAdvisorReviewSurface(selectedGraphNodeModel, advisorReviewerName, selectedAudienceCritique),
     [advisorReviewerName, selectedAudienceCritique, selectedGraphNodeModel],
   );
+  const selectedBiasContext = useMemo(
+    () => biasProfileCritiqueContext(displayedBiasProfile, selectedGraphNode?.node ?? null),
+    [displayedBiasProfile, selectedGraphNode?.node],
+  );
   const selectedGraphNodeParent = selectedGraphNode?.node.parentId
     ? nodesById.get(selectedGraphNode.node.parentId) ?? null
     : null;
@@ -2189,6 +2348,48 @@ export function ThoughtMapWorkspace({
   const inheritedClaimAudit = useMemo(() => inheritedClaimSnapshots([map]), [map]);
   const rhythm = useMemo(() => buildSessionRhythmSnapshot(map), [map]);
   const confusionLog = useMemo(() => buildConfusionLog(map), [map]);
+  async function refreshBiasProfile() {
+    if (!map.userId) {
+      return;
+    }
+
+    setBiasProfileRefreshing(true);
+
+    try {
+      const response = await fetch(`/api/users/${map.userId}/bias-profile`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { profile?: SerializableCognitiveBiasProfile | null };
+      if (payload.profile) {
+        setBiasProfile(normalizeBiasProfile(payload.profile));
+      }
+    } catch {
+      return;
+    } finally {
+      setBiasProfileRefreshing(false);
+      setBiasProfileLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+      setBiasProfileLoading(true);
+    void refreshBiasProfile().finally(() => {
+      if (!cancelled) {
+        setBiasProfileLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [map.updatedAt, map.userId]);
   const bestSteelmanTarget = map.recommendedNextMove
     ? map.nodes.find((node) => node.id === map.recommendedNextMove?.targetNodeId) ?? null
     : selectedGraphNode?.node ?? weakestLearningNode ?? map.nodes.find((node) => node.kind === "core_claim") ?? rootNode ?? null;
@@ -2309,6 +2510,18 @@ export function ThoughtMapWorkspace({
   }
 
   function mergeBeliefPropagationEvent(event: SerializableThoughtMapEvent) {
+    const normalizedEvent = normalizeEvent(event);
+
+    setMap((currentMap) => ({
+      ...currentMap,
+      events: [...currentMap.events, normalizedEvent].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
+      updatedAt: new Date(),
+    }));
+  }
+
+  function mergeMetaCognitionEvent(event: SerializableThoughtMapEvent) {
     const normalizedEvent = normalizeEvent(event);
 
     setMap((currentMap) => ({
@@ -2479,6 +2692,7 @@ export function ThoughtMapWorkspace({
     shape: { id: string; label: string; primaryMapId: string | null },
     verdict: PennyShapeFeedback,
     reasoning: string,
+    falsificationCondition?: string | null,
   ) {
     const mapId = shape.primaryMapId ?? map.id;
     const previousVerdict = shapeFeedback[shape.id];
@@ -2510,6 +2724,7 @@ export function ThoughtMapWorkspace({
             shapeLabel: shape.label,
             source: "workspace",
             reasoning,
+            falsificationCondition: falsificationCondition ?? null,
             nodeId: selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null,
           }),
         });
@@ -2528,6 +2743,51 @@ export function ThoughtMapWorkspace({
         });
       } catch {
         restoreFeedback();
+        return;
+      }
+    });
+  }
+
+  function recordMetaCognitionResponse(
+    prompt: MetaCognitionPromptSnapshot | null,
+    responseType: MetaCognitionResponseType,
+    responseText: string | null,
+    tellMeMoreOpened: boolean,
+  ) {
+    if (!prompt) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${map.id}/meta-cognition`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            triggerId: prompt.trigger.id,
+            condition: prompt.trigger.condition,
+            prompt: prompt.prompt,
+            promptTone: prompt.trigger.promptTone,
+            sessionContext: prompt.sessionContext,
+            evidence: prompt.evidence,
+            shapesAssociated: prompt.shapesAssociated,
+            selectedNodeId: prompt.selectedNodeId,
+            responseType,
+            responseText,
+            tellMeMoreOpened,
+            behaviorChangedWithinTenMinutes: null,
+          }),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { event: SerializableThoughtMapEvent };
+        mergeMetaCognitionEvent(payload.event);
+      } catch {
         return;
       }
     });
@@ -4185,7 +4445,13 @@ export function ThoughtMapWorkspace({
               <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Socratic mode</p>
               <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
                 {critiqueMode === "socratic"
-                  ? critiqueModePrompt("socratic", activeCritiqueType, selectedGraphNode?.node.content ?? "the active claim", critiqueIntensity)
+                  ? critiqueModePrompt(
+                      "socratic",
+                      activeCritiqueType,
+                      selectedGraphNode?.node.content ?? "the active claim",
+                      critiqueIntensity,
+                      selectedBiasContext,
+                    )
                   : `When selected, Socratic mode asks the user to critique their own claim instead of letting Penny generate the critique directly.`}
               </p>
               <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
@@ -4786,6 +5052,29 @@ export function ThoughtMapWorkspace({
         </Card>
       ) : null}
 
+      {selectedMetaCognitionPrompt ? (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge>Meta-cognition prompt</Badge>
+            <Badge className="bg-[#e7defa] text-[#5c4c88]">{selectedMetaCognitionPrompt.trigger.condition.replaceAll("_", " ")}</Badge>
+            <Badge className="bg-white text-[var(--ink)]">{selectedMetaCognitionPrompt.trigger.promptTone.replaceAll("_", " ")}</Badge>
+          </div>
+          <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">The lens is talking back.</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+            This is not a critique. It is an observational nudge about the session state that Penny thinks is worth naming.
+          </p>
+          <div className="mt-4">
+            <MetaCognitionPrompt
+              prompt={selectedMetaCognitionPrompt}
+              onRespond={(responseType, responseText, tellMeMoreOpened) =>
+                recordMetaCognitionResponse(selectedMetaCognitionPrompt, responseType, responseText, tellMeMoreOpened)
+              }
+              onDismiss={() => recordMetaCognitionResponse(selectedMetaCognitionPrompt, "not_now", null, false)}
+            />
+          </div>
+        </Card>
+      ) : null}
+
       <Card className="p-6 sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -4796,12 +5085,51 @@ export function ThoughtMapWorkspace({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {derivedShapes.slice(0, 3).map((shape) => (
-              <Badge key={shape.id} className="bg-[var(--panel)] text-[var(--ink)]">
+            {derivedShapes.slice(0, 4).map((shape) => (
+              <Button
+                key={shape.id}
+                variant={selectedShape?.id === shape.id ? "primary" : "secondary"}
+                className="px-3 py-2 text-xs"
+                onClick={() => setSelectedShapeId(shape.id)}
+              >
                 {shape.label}
-              </Badge>
+              </Button>
             ))}
           </div>
+        </div>
+
+        <div className="mt-4">
+          <ShapeDetail
+            shape={selectedShape}
+            falsificationDraft={selectedShapeFalsificationDraft}
+            onFalsificationDraftChange={(value) => {
+              if (!selectedShape) {
+                return;
+              }
+
+              setShapeFalsificationDrafts((current) => ({
+                ...current,
+                [selectedShape.id]: value,
+              }));
+            }}
+            onSaveFalsificationCondition={() => {
+              if (!selectedShape) {
+                return;
+              }
+
+              const falsificationCondition = selectedShapeFalsificationDraft.trim();
+              recordShapeFeedback(
+                {
+                  id: selectedShape.id,
+                  label: selectedShape.label,
+                  primaryMapId: selectedShape.primaryMapId,
+                },
+                selectedShapeFeedback ?? "refined",
+                selectedShape.derivation?.counterfactual.description ?? "Updated falsification condition.",
+                falsificationCondition,
+              );
+            }}
+          />
         </div>
 
         <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -5522,6 +5850,13 @@ export function ThoughtMapWorkspace({
                   : " No shape has been suppressed by override yet."}
               </p>
             </div>
+
+            <BiasProfile
+              profile={displayedBiasProfile}
+              loading={biasProfileLoading}
+              refreshing={biasProfileRefreshing}
+              onRefresh={refreshBiasProfile}
+            />
 
             <div className="rounded-[24px] border border-black/8 bg-white p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Move history</p>

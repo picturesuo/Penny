@@ -2,11 +2,15 @@ import type {
   BayesianPropagationSnapshot,
   BayesianPropagationStep,
   BeliefPropagationContribution,
+  BiasEntry,
+  BiasEvidenceInstance,
+  BiasType,
   ClaimCaptureMetadata,
   ClaimProvenance,
   ClaimStructureSnapshot,
   ClaimStructureKind,
   ClaimStatus,
+  CognitiveBiasProfile,
   ClaimStake,
   Concession,
   Defense,
@@ -20,8 +24,13 @@ import type {
   ThoughtMapEvent,
   ThoughtMapModel,
   ThoughtNodeModel,
+  ShapeDerivation,
+  ContributingMove,
+  ShapeThreshold,
+  ShapeCounterfactual,
 } from "@/types/thought-map";
 import { buildBeliefGraph, propagateBeliefGraph } from "@/lib/bayesian-propagation";
+import { BIAS_TAXONOMY, biasTypeById } from "@/lib/bias-taxonomy";
 
 export type ShapeVerdict = "confirmed" | "provisional" | "rejected" | "refined";
 export type PennyShapeFeedback = "confirmed" | "rejected" | "refined";
@@ -41,6 +50,8 @@ export interface PennyShape {
   supportingNodes: ThoughtNodeModel[];
   explanation: string;
   signals: string[];
+  derivation: ShapeDerivation | null;
+  falsificationCondition: string | null;
 }
 
 export interface PennyLensOverrideShape {
@@ -52,6 +63,7 @@ export interface PennyLensOverrideShape {
   nodeId: string | null;
   sourceMapId: string | null;
   signals: string[];
+  falsificationCondition: string | null;
 }
 
 export interface PennyLensFreshness {
@@ -2511,6 +2523,250 @@ export function interleaveStressNodes(nodes: ThoughtNodeModel[]): ThoughtNodeMod
   return interleaved;
 }
 
+function latestShapeFeedbackByShapeId(map: ThoughtMapModel) {
+  const latest = new Map<
+    string,
+    {
+      verdict: PennyShapeFeedback;
+      reasoning: string;
+      falsificationCondition: string | null;
+      nodeId: string | null;
+      createdAt: Date;
+    }
+  >();
+
+  for (const event of map.events) {
+    if (event.eventType !== "shape_feedback") {
+      continue;
+    }
+
+    const shapeId = typeof event.payload?.shapeId === "string" ? String(event.payload.shapeId) : null;
+    const verdict = event.payload?.verdict;
+    const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
+    const falsificationCondition =
+      typeof event.payload?.falsificationCondition === "string" && event.payload.falsificationCondition.trim().length > 0
+        ? String(event.payload.falsificationCondition).trim()
+        : null;
+    const nodeId = typeof event.payload?.nodeId === "string" ? String(event.payload.nodeId) : null;
+
+    if (!shapeId || (verdict !== "confirmed" && verdict !== "rejected" && verdict !== "refined")) {
+      continue;
+    }
+
+    const existing = latest.get(shapeId);
+    if (!existing || existing.createdAt.getTime() <= event.createdAt.getTime()) {
+      latest.set(shapeId, {
+        verdict,
+        reasoning,
+        falsificationCondition,
+        nodeId,
+        createdAt: event.createdAt,
+      });
+    }
+  }
+
+  return latest;
+}
+
+function eventDescriptionForShape(event: ThoughtMapEvent, node: ThoughtNodeModel | undefined) {
+  if (event.eventType === "move_applied") {
+    return `Applied ${String(event.payload?.action ?? "a move")} to ${node?.content ?? "the claim"}.`;
+  }
+
+  if (event.eventType === "dialectic_round") {
+    const path = typeof event.payload?.responsePath === "string" ? String(event.payload.responsePath) : "responded";
+    return `Dialectic round ended with a ${path} response.`;
+  }
+
+  if (event.eventType === "confidence_override") {
+    const mode = typeof event.payload?.mode === "string" ? String(event.payload.mode) : "override";
+    return mode === "hold" ? "Confidence was held after critique." : `Confidence was ${mode}d after critique.`;
+  }
+
+  if (event.eventType === "belief_propagation_decision") {
+    const decision = typeof event.payload?.decisionType === "string" ? String(event.payload.decisionType) : "decision";
+    return `Propagation was explicitly ${decision} for a downstream claim.`;
+  }
+
+  if (event.eventType === "shape_feedback") {
+    const verdict = typeof event.payload?.verdict === "string" ? String(event.payload.verdict) : "feedback";
+    return `The user marked the shape as ${verdict}.`;
+  }
+
+  if (event.eventType === "repair_action") {
+    const action = typeof event.payload?.actionType === "string" ? String(event.payload.actionType) : "repair";
+    return `The graph was structurally repaired via ${action}.`;
+  }
+
+  return "A move contributed to the pattern.";
+}
+
+function contributionWeightForEvent(event: ThoughtMapEvent, node: ThoughtNodeModel | undefined) {
+  if (event.eventType === "dialectic_round") {
+    return 1.25;
+  }
+
+  if (event.eventType === "confidence_override") {
+    return 1.1;
+  }
+
+  if (event.eventType === "belief_propagation_decision") {
+    return 1;
+  }
+
+  if (event.eventType === "repair_action") {
+    return 0.9;
+  }
+
+  if (event.eventType === "shape_feedback") {
+    return 0.85;
+  }
+
+  return node?.scores?.confidence != null ? Math.max(0.45, Number(node.scores.confidence.toFixed(2))) : 0.5;
+}
+
+function contributionDirectionForEvent(event: ThoughtMapEvent) {
+  if (event.eventType === "confidence_override") {
+    const mode = event.payload?.mode;
+    return mode === "hold" ? "confirms_shape" : "disconfirms_shape";
+  }
+
+  if (event.eventType === "shape_feedback") {
+    const verdict = event.payload?.verdict;
+    return verdict === "rejected" ? "disconfirms_shape" : "confirms_shape";
+  }
+
+  if (event.eventType === "repair_action") {
+    return "disconfirms_shape";
+  }
+
+  if (event.eventType === "dialectic_round") {
+    const payload = event.payload ?? {};
+    const round =
+      payload.dialecticRound && typeof payload.dialecticRound === "object"
+        ? (payload.dialecticRound as Record<string, unknown>)
+        : null;
+    const responseClassification =
+      round?.responseClassification && typeof round.responseClassification === "object"
+        ? (round.responseClassification as Record<string, unknown>)
+        : null;
+    const classification = typeof responseClassification?.type === "string" ? String(responseClassification.type) : null;
+    return classification === "dismissal" || classification === "partial_concession" ? "disconfirms_shape" : "confirms_shape";
+  }
+
+  return "confirms_shape";
+}
+
+function buildShapeDerivation(map: ThoughtMapModel, shape: PennyShape, allShapes: PennyShape[]): ShapeDerivation {
+  const evidenceNodeIds = new Set(shape.evidenceNodeIds);
+  const relatedEvents = map.events.filter((event) => {
+    if (event.nodeId != null && evidenceNodeIds.has(event.nodeId)) {
+      return true;
+    }
+
+    if (event.eventType === "shape_feedback") {
+      return typeof event.payload?.shapeId === "string" && String(event.payload.shapeId) === shape.id;
+    }
+
+    if (event.eventType === "repair_action") {
+      const sourceIds = Array.isArray(event.payload?.sourceClaimIds)
+        ? event.payload.sourceClaimIds.filter((item): item is string => typeof item === "string")
+        : [];
+      return sourceIds.some((id) => evidenceNodeIds.has(id));
+    }
+
+    return false;
+  });
+
+  const contributingMoves: ContributingMove[] = relatedEvents.map((event) => {
+    const node = event.nodeId ? map.nodes.find((candidate) => candidate.id === event.nodeId) : undefined;
+    const weight = contributionWeightForEvent(event, node);
+    const direction = contributionDirectionForEvent(event);
+
+    return {
+      moveId: event.id,
+      moveType: event.eventType,
+      eventDescription: eventDescriptionForShape(event, node),
+      weight,
+      direction,
+      claimContext: node?.content ?? shape.summary,
+      timestamp: event.createdAt,
+      includeReason:
+        direction === "confirms_shape"
+          ? "This move reinforces the recurring pattern."
+          : "This move pushes against the recurring pattern and lowers confidence in it.",
+    };
+  });
+
+  const confirmingMoves = contributingMoves.filter((move) => move.direction === "confirms_shape");
+  const disconfirmingMoves = contributingMoves.filter((move) => move.direction === "disconfirms_shape");
+  const confirmationScore = confirmingMoves.reduce((sum, move) => sum + move.weight, 0);
+  const disconfirmationScore = disconfirmingMoves.reduce((sum, move) => sum + move.weight, 0);
+  const requiredConfidence = shape.verdict === "confirmed" ? ACTIVE_SHAPE_CONFIDENCE : PROVISIONAL_SHAPE_CONFIDENCE;
+  const thresholdMet: ShapeThreshold = {
+    requiredConfidence,
+    actualConfidence: shape.confidence,
+    evidenceCountRequired: shape.verdict === "confirmed" ? 4 : 2,
+    evidenceCountActual: contributingMoves.length,
+    thresholdMet: shape.confidence >= requiredConfidence && contributingMoves.length >= (shape.verdict === "confirmed" ? 4 : 2),
+  };
+
+  const minimumChangesToRetire = Math.max(1, Math.ceil(Math.max(1, confirmingMoves.length - disconfirmingMoves.length) / 2));
+  const counterfactual: ShapeCounterfactual = {
+    description:
+      disconfirmingMoves.length > 0
+        ? `This shape would weaken if ${Math.min(3, disconfirmingMoves.length)} of the ${contributingMoves.length} moves that currently push against it had instead been absorbed as updates rather than dismissed. The current confirmation score ${confirmationScore.toFixed(2)} still outruns the disconfirmation score ${disconfirmationScore.toFixed(2)}.`
+        : `This shape would need fresh disconfirming evidence or a confidence drop on the most recent confirming moves to stop looking confirmed. The current confirmation score is ${confirmationScore.toFixed(2)}.`,
+    movesToRemove: confirmingMoves.slice(0, 2).map((move) => move.moveId),
+    movesNeededToNegate: disconfirmingMoves.slice(0, 3).map((move) => move.moveId),
+    minimumChangesToRetire,
+  };
+
+  const alternativeShapes = allShapes
+    .filter((candidate) => candidate.id !== shape.id)
+    .map((candidate) => {
+      const overlap = candidate.evidenceNodeIds.filter((nodeId) => evidenceNodeIds.has(nodeId)).length;
+      const sharedSignals = candidate.signals.filter((signal) => shape.signals.includes(signal)).length;
+      return {
+        label: candidate.label,
+        score: overlap * 2 + sharedSignals,
+      };
+    })
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((candidate) => candidate.label);
+
+  const derivationFormula = `${contributingMoves.length} contributing moves, ${confirmingMoves.length} confirming (${confirmationScore.toFixed(2)}) vs ${disconfirmingMoves.length} disconfirming (${disconfirmationScore.toFixed(2)}), ${shape.confidence}% confidence against a ${requiredConfidence}% threshold.`;
+
+  return {
+    shapeId: shape.id,
+    derivationVersion: Math.max(1, contributingMoves.length),
+    contributingMoves: contributingMoves.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
+    derivationFormula,
+    thresholdMet,
+    counterfactual,
+    alternativeShapes,
+    computedAt: new Date(),
+  };
+}
+
+function attachShapeExplainability(map: ThoughtMapModel, shapes: PennyShape[]) {
+  const enrichedShapes = shapes.map((shape) => ({
+    ...shape,
+    derivation: buildShapeDerivation(map, shape, shapes),
+  }));
+  const feedbackByShapeId = latestShapeFeedbackByShapeId(map);
+
+  return enrichedShapes.map((shape) => {
+    const feedback = feedbackByShapeId.get(shape.id);
+    return {
+      ...shape,
+      falsificationCondition: feedback?.falsificationCondition ?? shape.falsificationCondition ?? null,
+    };
+  });
+}
+
 function buildPennyShapeCandidates(nodes: ThoughtNodeModel[]): PennyShape[] {
   return SHAPE_RULES.reduce<PennyShape[]>((acc, rule) => {
     const supportingNodes = nodes.filter(rule.matches);
@@ -2535,6 +2791,8 @@ function buildPennyShapeCandidates(nodes: ThoughtNodeModel[]): PennyShape[] {
       supportingNodes: supportingNodes.slice(0, 4),
       explanation: rule.explanation,
       signals: rule.signals,
+      derivation: null,
+      falsificationCondition: null,
     });
 
     return acc;
@@ -2554,6 +2812,10 @@ function buildOverrideShapeLayer(map: ThoughtMapModel): PennyLensOverrideShape[]
     const shapeLabel = typeof event.payload?.shapeLabel === "string" ? String(event.payload.shapeLabel).trim() : "";
     const reasoning = typeof event.payload?.reasoning === "string" ? String(event.payload.reasoning).trim() : "";
     const nodeId = typeof event.payload?.nodeId === "string" ? String(event.payload.nodeId) : null;
+    const falsificationCondition =
+      typeof event.payload?.falsificationCondition === "string" && String(event.payload.falsificationCondition).trim().length > 0
+        ? String(event.payload.falsificationCondition).trim()
+        : null;
 
     if (!shapeId || (verdict !== "confirmed" && verdict !== "rejected" && verdict !== "refined")) {
       continue;
@@ -2567,6 +2829,7 @@ function buildOverrideShapeLayer(map: ThoughtMapModel): PennyLensOverrideShape[]
       reasoning: reasoning || "The shape was explicitly overridden.",
       nodeId,
       sourceMapId: map.id,
+      falsificationCondition,
       signals: Array.from(
         new Set(
           `${shapeLabel} ${reasoning}`
@@ -2609,6 +2872,7 @@ function adjustLensShapes(shapes: PennyShape[], overrideShapes: PennyLensOverrid
         confidence: clampConfidence(shape.confidence + lift),
         verdict: override.verdict === "confirmed" ? "confirmed" : override.verdict === "refined" ? "refined" : shape.verdict,
         explanation: `${shape.explanation} Override reasoning: ${override.reasoning}`,
+        falsificationCondition: override.falsificationCondition ?? shape.falsificationCondition,
       });
       return acc;
     }
@@ -2633,6 +2897,8 @@ function adjustLensShapes(shapes: PennyShape[], overrideShapes: PennyLensOverrid
         supportingNodes: [],
         explanation: override.reasoning,
         signals: override.signals,
+        derivation: null,
+        falsificationCondition: override.falsificationCondition,
       });
     }
   }
@@ -2655,6 +2921,9 @@ export function buildPennyLens(map: ThoughtMapModel): PennyLensSnapshot {
   const shapeCandidates = buildPennyShapeCandidates(map.nodes);
   const overrideShapes = buildOverrideShapeLayer(map);
   const adjusted = adjustLensShapes(shapeCandidates, overrideShapes);
+  const explainedActiveShapes = attachShapeExplainability(map, adjusted.activeShapes);
+  const explainedProvisionalShapes = attachShapeExplainability(map, adjusted.provisionalShapes);
+  const explainedEffectiveShapes = attachShapeExplainability(map, adjusted.effectiveShapes);
   const latestMoveAt =
     map.events
       .filter((event) => event.eventType === "move_applied")
@@ -2681,10 +2950,10 @@ export function buildPennyLens(map: ThoughtMapModel): PennyLensSnapshot {
     generatedAt: new Date(),
     publishConfidenceThreshold: ACTIVE_SHAPE_CONFIDENCE,
     activeConfidenceThreshold: PROVISIONAL_SHAPE_CONFIDENCE,
-    activeShapes: adjusted.activeShapes.sort((a, b) => b.confidence - a.confidence),
-    provisionalShapes: adjusted.provisionalShapes.sort((a, b) => b.confidence - a.confidence),
+    activeShapes: explainedActiveShapes.sort((a, b) => b.confidence - a.confidence),
+    provisionalShapes: explainedProvisionalShapes.sort((a, b) => b.confidence - a.confidence),
     overrideShapes,
-    effectiveShapes: adjusted.effectiveShapes.sort((a, b) => b.confidence - a.confidence),
+    effectiveShapes: explainedEffectiveShapes.sort((a, b) => b.confidence - a.confidence),
     freshness: {
       latestMoveAt,
       latestOverrideAt,
@@ -3585,6 +3854,444 @@ export function buildCalibrationDashboard(maps: ThoughtMapModel[]): CalibrationD
     prompts: prompts.sort((a, b) => b.evidenceSignal - a.evidenceSignal),
     postMortems: buildClaimPostMortems(resolvedClaims),
   };
+}
+
+function clampBiasPercent(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function biasEntryStatus(confirms: number, disconfirms: number, evidenceCount: number, bias: BiasType) {
+  if (evidenceCount >= bias.evidenceRequiredToRetire && disconfirms > confirms) {
+    return "retired" as const;
+  }
+
+  if (evidenceCount >= bias.evidenceRequiredToConfirm && confirms >= disconfirms) {
+    return "confirmed" as const;
+  }
+
+  if (evidenceCount > 0) {
+    return "monitoring" as const;
+  }
+
+  return "suspected" as const;
+}
+
+function biasEntryTrend(confirms: number, disconfirms: number) {
+  if (disconfirms > confirms * 1.15) {
+    return "weakening" as const;
+  }
+
+  if (confirms > disconfirms * 1.15) {
+    return "strengthening" as const;
+  }
+
+  return "stable" as const;
+}
+
+function biasSignalText(eventType: string, detector: string, description: string) {
+  if (description.trim().length > 0) {
+    return description.trim();
+  }
+
+  return `${eventType} on ${detector.replaceAll("_", " ")} pressure.`;
+}
+
+function addBiasEvidence(
+  bucket: Map<
+    string,
+    {
+      biasType: BiasType;
+      evidenceInstances: BiasEvidenceInstance[];
+      confirms: number;
+      disconfirms: number;
+      mitigationAttempts: number;
+      mitigationSuccesses: number;
+      claimDomains: Set<string>;
+      firstDetected: Date | null;
+      lastSignal: Date | null;
+    }
+  >,
+  biasType: BiasType,
+  params: {
+    eventId: string;
+    eventType: string;
+    description: string;
+    signalStrength: number;
+    timestamp: Date;
+    direction: "confirms_bias" | "disconfirms_bias";
+    claimDomain: CalibrationDomain;
+    mitigationAttempt?: boolean;
+    mitigationSuccess?: boolean;
+  },
+) {
+  const existing = bucket.get(biasType.id) ?? {
+    biasType,
+    evidenceInstances: [],
+    confirms: 0,
+    disconfirms: 0,
+    mitigationAttempts: 0,
+    mitigationSuccesses: 0,
+    claimDomains: new Set<string>(),
+    firstDetected: null,
+    lastSignal: null,
+  };
+
+  existing.evidenceInstances.push({
+    eventId: params.eventId,
+    eventType: params.eventType,
+    description: params.description,
+    signalStrength: clampBiasPercent(params.signalStrength * 100),
+    timestamp: params.timestamp,
+  });
+  existing.claimDomains.add(params.claimDomain);
+  if (params.direction === "confirms_bias") {
+    existing.confirms += 1;
+  } else {
+    existing.disconfirms += 1;
+  }
+  if (params.mitigationAttempt) {
+    existing.mitigationAttempts += 1;
+  }
+  if (params.mitigationSuccess) {
+    existing.mitigationSuccesses += 1;
+  }
+  existing.firstDetected = existing.firstDetected && existing.firstDetected.getTime() < params.timestamp.getTime() ? existing.firstDetected : params.timestamp;
+  existing.lastSignal = existing.lastSignal && existing.lastSignal.getTime() > params.timestamp.getTime() ? existing.lastSignal : params.timestamp;
+  bucket.set(biasType.id, existing);
+}
+
+export function buildCognitiveBiasProfile(maps: ThoughtMapModel[], userId: string): CognitiveBiasProfile {
+  const bucket = new Map<
+    string,
+    {
+      biasType: BiasType;
+      evidenceInstances: BiasEvidenceInstance[];
+      confirms: number;
+      disconfirms: number;
+      mitigationAttempts: number;
+      mitigationSuccesses: number;
+      claimDomains: Set<string>;
+      firstDetected: Date | null;
+      lastSignal: Date | null;
+    }
+  >();
+
+  for (const biasType of BIAS_TAXONOMY) {
+    bucket.set(biasType.id, {
+      biasType,
+      evidenceInstances: [],
+      confirms: 0,
+      disconfirms: 0,
+      mitigationAttempts: 0,
+      mitigationSuccesses: 0,
+      claimDomains: new Set<string>(),
+      firstDetected: null,
+      lastSignal: null,
+    });
+  }
+
+  for (const map of maps) {
+    const capture = captureSnapshotForMap(map);
+    const mapDomain = classifyCalibrationDomain(`${map.title} ${map.rawThought} ${map.nodes.map((node) => node.content).join(" ")}`);
+    const now = new Date();
+
+    for (const node of map.nodes.filter((candidate) => candidate.kind !== "root" && candidate.nodeStatus !== "superseded")) {
+      const nodeDomain = classifyCalibrationDomain(`${node.content} ${capture?.dependencyNotes ?? ""} ${capture?.provenanceDetail ?? ""}`);
+      const nodeText = `${map.rawThought} ${node.content}`.toLowerCase();
+      const nodeEvents = map.events.filter((event) => event.nodeId === node.id);
+      const dialecticRounds = nodeEvents.filter((event) => event.eventType === "dialectic_round");
+      const propagationDecisions = nodeEvents.filter((event) => event.eventType === "belief_propagation_decision");
+      const biasSignals = nodeEvents.filter((event) => event.eventType === "bias_detected" || event.eventType === "bias_resolved");
+      const captureConfidence = capture?.confidence ?? null;
+      const currentConfidence = node.scores?.confidence != null ? Math.round(node.scores.confidence * 100) : null;
+      const calibrationGap =
+        captureConfidence != null && currentConfidence != null ? captureConfidence - currentConfidence : null;
+      const updateMagnitude =
+        node.scores?.confidence != null && captureConfidence != null && currentConfidence != null
+          ? Math.abs(captureConfidence - currentConfidence)
+          : null;
+      const strongRounds = dialecticRounds.filter((event) => {
+        const strength = typeof event.payload?.critiqueStrength === "string" ? String(event.payload.critiqueStrength) : "";
+        return /strong|adversarial/i.test(strength);
+      });
+      const concessionRounds = dialecticRounds.filter((event) => {
+        const classification = event.payload?.responseClassification as Record<string, unknown> | null;
+        const type = typeof classification?.type === "string" ? String(classification.type) : "";
+        return type === "concession" || type === "partial_concession";
+      });
+      const dismissalRounds = dialecticRounds.filter((event) => {
+        const classification = event.payload?.responseClassification as Record<string, unknown> | null;
+        const type = typeof classification?.type === "string" ? String(classification.type) : "";
+        return type === "dismissal";
+      });
+      const evidenceDense = (node.psychology?.falsificationCoverageScore ?? 1) < 0.58 || (node.scores?.evidence ?? 0) < 0.42;
+      const recentCue = /(recent|just happened|just now|today|this week|yesterday|latest|fresh|news|newly)/i.test(nodeText);
+
+      if (captureConfidence != null && currentConfidence != null) {
+        const gap = calibrationGap ?? 0;
+        if (gap >= 15) {
+          addBiasEvidence(bucket, biasTypeById("overconfidence_bias")!, {
+            eventId: `${map.id}:${node.id}:overconfidence`,
+            eventType: "confidence_vs_calibration",
+            description: `The claim entered at ${captureConfidence}% but currently sits around ${currentConfidence}%, leaving a large overconfidence gap.`,
+            signalStrength: Math.min(1, gap / 40),
+            timestamp: node.updatedAt,
+            direction: "confirms_bias",
+            claimDomain: nodeDomain,
+            mitigationAttempt: true,
+            mitigationSuccess: gap >= 25,
+          });
+        } else if (gap <= 4) {
+          addBiasEvidence(bucket, biasTypeById("overconfidence_bias")!, {
+            eventId: `${map.id}:${node.id}:overconfidence_disconfirm`,
+            eventType: "confidence_vs_calibration",
+            description: `The claim stayed close to calibration instead of drifting into a false certainty gap.`,
+            signalStrength: 0.24,
+            timestamp: node.updatedAt,
+            direction: "disconfirms_bias",
+            claimDomain: nodeDomain,
+          });
+        }
+
+        if (updateMagnitude != null && updateMagnitude <= 15 && strongRounds.length > 0) {
+          addBiasEvidence(bucket, biasTypeById("anchoring_bias")!, {
+            eventId: `${map.id}:${node.id}:anchoring`,
+            eventType: "update_asymmetry",
+            description: "Even after strong critique, the confidence barely moved, which looks like anchoring.",
+            signalStrength: Math.min(1, (15 - updateMagnitude) / 15),
+            timestamp: node.updatedAt,
+            direction: "confirms_bias",
+            claimDomain: nodeDomain,
+            mitigationAttempt: true,
+            mitigationSuccess: updateMagnitude > 8,
+          });
+        }
+      }
+
+      if (
+        (node.psychology?.likelyBiases.includes("confirmation_bias") ?? false) ||
+        !map.nodes.some((candidate) => candidate.parentId === node.id && candidate.kind === "counter_argument") ||
+        (node.psychology?.falsificationCoverageScore ?? 1) < 0.58
+      ) {
+        addBiasEvidence(bucket, biasTypeById("confirmation_bias")!, {
+          eventId: `${map.id}:${node.id}:confirmation`,
+          eventType: "source_concentration",
+          description: "The claim keeps accumulating support without enough counterweight or falsification pressure.",
+          signalStrength: Math.min(1, 1 - (node.psychology?.falsificationCoverageScore ?? 1)),
+          timestamp: node.updatedAt,
+          direction: "confirms_bias",
+          claimDomain: nodeDomain,
+          mitigationAttempt: true,
+          mitigationSuccess: concessionRounds.length > 0 || dismissalRounds.length === 0,
+        });
+      }
+
+      if (recentCue && capture?.provenance === "intuition" && (captureConfidence ?? 0) >= 65) {
+        addBiasEvidence(bucket, biasTypeById("availability_heuristic")!, {
+          eventId: `${map.id}:${node.id}:availability`,
+          eventType: "first_impression_stickiness",
+          description: "A vivid or recent cue appears to be carrying more weight than a slower base-rate check.",
+          signalStrength: 0.7,
+          timestamp: node.updatedAt,
+          direction: "confirms_bias",
+          claimDomain: mapDomain,
+          mitigationAttempt: true,
+          mitigationSuccess: propagationDecisions.some((event) => {
+            const decisionType = typeof event.payload?.decisionType === "string" ? String(event.payload.decisionType) : "";
+            return decisionType === "override" || decisionType === "decouple";
+          }),
+        });
+      }
+
+      if (capture?.resolutionDate && new Date(capture.resolutionDate).getTime() < now.getTime()) {
+        addBiasEvidence(bucket, biasTypeById("planning_fallacy")!, {
+          eventId: `${map.id}:${node.id}:planning`,
+          eventType: "confidence_vs_calibration",
+          description: "The claim has a deadline or resolution date that has already slipped past the present without a clean resolution.",
+          signalStrength: 0.84,
+          timestamp: node.updatedAt,
+          direction: "confirms_bias",
+          claimDomain: nodeDomain,
+          mitigationAttempt: true,
+          mitigationSuccess: calibrationGap != null && calibrationGap <= 10,
+        });
+      }
+
+      if ((capture?.stakes ?? []).includes("self_image") || (capture?.stakes ?? []).includes("relationship")) {
+        const concessionRate = dialecticRounds.length ? concessionRounds.length / dialecticRounds.length : 0;
+        if (dialecticRounds.length > 0 && concessionRate <= 0.22) {
+          addBiasEvidence(bucket, biasTypeById("sunk_cost_pattern")!, {
+            eventId: `${map.id}:${node.id}:sunk_cost`,
+            eventType: "round_dismissal_rate",
+            description: "The user keeps defending the claim even while the emotional stakes suggest a stronger willingness to re-open it.",
+            signalStrength: Math.min(1, 0.9 - concessionRate),
+            timestamp: node.updatedAt,
+            direction: "confirms_bias",
+            claimDomain: mapDomain,
+            mitigationAttempt: true,
+            mitigationSuccess: concessionRate > 0.12,
+          });
+        }
+      }
+
+      if (capture?.provenance === "intuition" && dialecticRounds.length > 0 && (updateMagnitude == null || updateMagnitude <= 15)) {
+        addBiasEvidence(bucket, biasTypeById("first_impression_stickiness")!, {
+          eventId: `${map.id}:${node.id}:first_impression`,
+          eventType: "first_impression_stickiness",
+          description: "An intuition-based first capture is still holding shape after multiple rounds of critique.",
+          signalStrength: 0.76,
+          timestamp: node.updatedAt,
+          direction: "confirms_bias",
+          claimDomain: mapDomain,
+          mitigationAttempt: true,
+          mitigationSuccess: updateMagnitude != null ? updateMagnitude > 15 : false,
+        });
+      }
+
+      if ((node.psychology?.likelyBiases.includes("overconfidence") ?? false) && strongRounds.length > 0) {
+        addBiasEvidence(bucket, biasTypeById("overconfidence_bias")!, {
+          eventId: `${map.id}:${node.id}:psychology-overconfidence`,
+          eventType: "confidence_vs_calibration",
+          description: "The existing psychology layer already flags overconfidence risk on this branch.",
+          signalStrength: 0.62,
+          timestamp: node.updatedAt,
+          direction: "confirms_bias",
+          claimDomain: nodeDomain,
+          mitigationAttempt: true,
+          mitigationSuccess: concessionRounds.length > 0,
+        });
+      }
+
+      if (biasSignals.length > 0) {
+        for (const event of biasSignals) {
+          const detector = typeof event.payload?.detector === "string" ? String(event.payload.detector) : "bias";
+          const biasType =
+            detector === "confirmation_bias"
+              ? biasTypeById("confirmation_bias")
+              : detector === "overconfidence"
+                ? biasTypeById("overconfidence_bias")
+                : detector === "option_overload"
+                  ? biasTypeById("availability_heuristic")
+                  : detector === "solution_first_thinking"
+                    ? biasTypeById("planning_fallacy")
+                    : detector === "shallow_abstraction"
+                      ? biasTypeById("first_impression_stickiness")
+                      : biasTypeById("confirmation_bias");
+
+          if (!biasType) {
+            continue;
+          }
+
+          addBiasEvidence(bucket, biasType, {
+            eventId: event.id,
+            eventType: event.eventType,
+            description: biasSignalText(
+              event.eventType,
+              detector,
+              `Penny detected ${detector.replaceAll("_", " ")} pressure on ${node.content.slice(0, 72)}${node.content.length > 72 ? "…" : ""}`,
+            ),
+            signalStrength: event.eventType === "bias_resolved" ? 0.48 : 0.66,
+            timestamp: event.createdAt,
+            direction: event.eventType === "bias_resolved" ? "disconfirms_bias" : "confirms_bias",
+            claimDomain: nodeDomain,
+            mitigationAttempt: event.eventType === "bias_detected",
+            mitigationSuccess: event.eventType === "bias_resolved",
+          });
+        }
+      }
+    }
+  }
+
+  const biasEntries = Array.from(bucket.values())
+    .map((entry) => {
+      const evidenceCount = entry.evidenceInstances.length;
+      const confidenceInBias = clampBiasPercent(
+        Math.max(
+          0,
+          Math.min(
+            100,
+            28 +
+              entry.confirms * 14 +
+              evidenceCount * 4 -
+              entry.disconfirms * 9 +
+              entry.mitigationSuccesses * 5 -
+              entry.mitigationAttempts * 2,
+          ),
+        ),
+      );
+      return {
+        biasType: entry.biasType,
+        status: biasEntryStatus(entry.confirms, entry.disconfirms, evidenceCount, entry.biasType),
+        confidenceInBias,
+        evidenceCount,
+        evidenceInstances: entry.evidenceInstances.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
+        firstDetected: entry.firstDetected ?? new Date(0),
+        lastSignal: entry.lastSignal ?? new Date(0),
+        mitigationAttempts: entry.mitigationAttempts,
+        mitigationSuccesses: entry.mitigationSuccesses,
+        claimDomains: Array.from(entry.claimDomains),
+        trend: biasEntryTrend(entry.confirms, entry.disconfirms),
+      } satisfies BiasEntry;
+    })
+    .filter((entry) => entry.evidenceCount > 0 || entry.status !== "suspected")
+    .sort((a, b) => b.confidenceInBias - a.confidenceInBias || b.evidenceCount - a.evidenceCount);
+
+  const strongestBias = biasEntries.find((entry) => entry.status === "confirmed")?.biasType ?? biasEntries[0]?.biasType ?? null;
+  const mostImprovedBias =
+    biasEntries
+      .slice()
+      .sort(
+        (a, b) =>
+          b.mitigationSuccesses / Math.max(1, b.mitigationAttempts) -
+            a.mitigationSuccesses / Math.max(1, a.mitigationAttempts) ||
+          (a.trend === "weakening" ? 1 : 0) - (b.trend === "weakening" ? 1 : 0),
+      )[0]?.biasType ?? null;
+  const totalAttempts = biasEntries.reduce((sum, entry) => sum + entry.mitigationAttempts, 0);
+  const totalSuccesses = biasEntries.reduce((sum, entry) => sum + entry.mitigationSuccesses, 0);
+  const overallCalibrationTrend =
+    totalAttempts > 0 && totalSuccesses / totalAttempts >= 0.42
+      ? "improving"
+      : totalAttempts > 0 && totalSuccesses / totalAttempts <= 0.18
+        ? "degrading"
+        : "stable";
+
+  return {
+    userId,
+    profileVersion: Math.max(1, biasEntries.length),
+    biasEntries,
+    lastUpdated: maps.reduce((latest, map) => (map.updatedAt.getTime() > latest.getTime() ? map.updatedAt : latest), new Date(0)),
+    overallCalibrationTrend,
+    strongestBias,
+    mostImprovedBias,
+  };
+}
+
+export function biasProfileCritiqueContext(profile: CognitiveBiasProfile | null, node: ThoughtNodeModel | null) {
+  if (!profile || !node) {
+    return null;
+  }
+
+  const nodeDomain = classifyCalibrationDomain(node.content);
+  const activeEntries = profile.biasEntries.filter(
+    (entry) =>
+      entry.status !== "retired" &&
+      (entry.claimDomains.includes(nodeDomain) || entry.claimDomains.includes("general") || entry.claimDomains.length === 0),
+  );
+  const strongest = activeEntries
+    .slice()
+    .sort((a, b) => b.confidenceInBias - a.confidenceInBias || b.evidenceCount - a.evidenceCount)[0];
+
+  if (!strongest) {
+    return null;
+  }
+
+  const mitigationPrompt = strongest.biasType.mitigationPrompts[0] ?? "Prioritize calibration and explicit counterevidence.";
+
+  return [
+    `This user has a documented ${strongest.biasType.name.toLowerCase()} pattern on ${nodeDomain} claims.`,
+    mitigationPrompt,
+    `Evidence count: ${strongest.evidenceCount}. Trend: ${strongest.trend}.`,
+  ].join(" ");
 }
 
 export function buildMemoryTimeDashboard(maps: ThoughtMapModel[]): MemoryTimeDashboard {

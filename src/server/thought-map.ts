@@ -1,5 +1,6 @@
 import type {
   Prisma,
+  CognitiveBiasProfile as CognitiveBiasProfileRecord,
   ThoughtMap,
   ThoughtMapEvent as ThoughtMapEventRecord,
   ThoughtMapIntervention,
@@ -14,7 +15,7 @@ import {
   serializeBeliefGraph,
   serializeBeliefPropagationResult,
 } from "@/lib/bayesian-propagation";
-import { analyzeDialecticResponse, assessSteelManQuality, buildPennyLens } from "@/lib/penny-insights";
+import { analyzeDialecticResponse, assessSteelManQuality, buildCognitiveBiasProfile, buildPennyLens } from "@/lib/penny-insights";
 import { buildRevisitQueue, computeLeitnerBox, computeRevisitScheduleForNode, computeRevisitSchedulesForMap } from "@/lib/revisit-scheduler";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
 import {
@@ -51,6 +52,7 @@ import type {
   BeliefPropagationAction,
   BeliefPropagationDecision,
   BeliefPropagationResponse,
+  CognitiveBiasProfile,
 } from "@/types/thought-map";
 
 function mapNode(record: ThoughtNode): ThoughtNodeModel {
@@ -92,6 +94,7 @@ function buildThoughtMapModel(
     status: record.status,
     nodes: record.nodes.map(mapNode),
     events: events.map(mapEventRecord),
+    shapeDerivations: [],
     steelMans: parseSteelMans(record.steelMans),
     repairActions: parseClaimRepairActions(record.repairActions),
     revisitSchedules: parseRevisitSchedules(record.revisitSchedules),
@@ -114,9 +117,13 @@ function buildThoughtMapModel(
     ...mapped,
     ...buildThoughtMapJudgment(mapped),
   };
+  const lens = buildPennyLens(judgedMap);
 
   return {
     ...judgedMap,
+    shapeDerivations: lens.effectiveShapes
+      .map((shape) => shape.derivation)
+      .filter((derivation): derivation is NonNullable<typeof derivation> => derivation !== null),
     founderBrief,
     founderBriefReadiness: getFounderBriefReadiness(judgedMap),
   };
@@ -140,6 +147,46 @@ function parseJson<T>(value: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+function normalizeBiasProfileRecord(record: CognitiveBiasProfileRecord | null): CognitiveBiasProfile | null {
+  if (!record) {
+    return null;
+  }
+
+  const parsed = parseJson<Partial<CognitiveBiasProfile>>(record.biasProfileJson);
+  if (!parsed) {
+    return null;
+  }
+
+  return {
+    userId: record.userId,
+    profileVersion: record.profileVersion,
+    biasEntries: Array.isArray(parsed.biasEntries)
+      ? parsed.biasEntries.map((entry) => ({
+          ...entry,
+          firstDetected: entry.firstDetected ? new Date(entry.firstDetected) : new Date(record.createdAt),
+          lastSignal: entry.lastSignal ? new Date(entry.lastSignal) : new Date(record.updatedAt),
+          evidenceInstances: Array.isArray(entry.evidenceInstances)
+            ? entry.evidenceInstances.map((instance) => ({
+                ...instance,
+                timestamp: new Date(instance.timestamp),
+              }))
+            : [],
+        }))
+      : [],
+    lastUpdated: new Date(record.lastUpdated),
+    overallCalibrationTrend:
+      record.overallCalibrationTrend === "improving" || record.overallCalibrationTrend === "degrading"
+        ? record.overallCalibrationTrend
+        : "stable",
+    strongestBias: parsed.strongestBias ?? null,
+    mostImprovedBias: parsed.mostImprovedBias ?? null,
+  };
+}
+
+function serializeBiasProfile(profile: CognitiveBiasProfile) {
+  return serializeJson(profile) ?? "{}";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -767,6 +814,7 @@ export async function recordShapeFeedback(params: {
   shapeLabel: string;
   source: string;
   reasoning: string;
+  falsificationCondition?: string | null;
   nodeId?: string | null;
 }) {
   const created = await prisma.$transaction(async (tx) => {
@@ -781,7 +829,27 @@ export async function recordShapeFeedback(params: {
           shapeLabel: params.shapeLabel,
           source: params.source,
           reasoning: params.reasoning,
+          falsificationCondition: params.falsificationCondition ?? null,
         }),
+      },
+    });
+  });
+
+  return mapEventRecord(created);
+}
+
+export async function recordMetaCognitionEvent(params: {
+  mapId: string;
+  nodeId?: string | null;
+  payload: Record<string, unknown>;
+}) {
+  const created = await prisma.$transaction(async (tx) => {
+    return tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.nodeId ?? null,
+        eventType: params.payload.responseType ? "meta_cognition_response" : "meta_cognition_prompt",
+        payload: serializeJson(params.payload),
       },
     });
   });
@@ -2009,6 +2077,8 @@ async function syncThoughtMapInterventions(params: {
     )
     .map(mapIntervention);
 
+  await refreshCognitiveBiasProfile(params.map.userId);
+
   return {
     interventions,
     recommendedIntervention: interventions[0] ?? null,
@@ -2406,4 +2476,78 @@ export async function dismissThoughtMapIntervention(params: { mapId: string; int
   });
 
   return mapIntervention(updated);
+}
+
+async function loadBiasProfileMaps(userId: string) {
+  return prisma.thoughtMap.findMany({
+    where: { userId },
+    orderBy: [{ updatedAt: "asc" }, { createdAt: "asc" }],
+    include: {
+      nodes: {
+        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+  });
+}
+
+export async function refreshCognitiveBiasProfile(userId: string) {
+  const mapRecords = await loadBiasProfileMaps(userId);
+  const maps = await Promise.all(
+    mapRecords.map((record) =>
+      hydrateThoughtMap(
+        record as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+        undefined,
+        { syncInterventions: false },
+      ),
+    ),
+  );
+  const profile = buildCognitiveBiasProfile(maps, userId);
+  const existing = await prisma.cognitiveBiasProfile.findUnique({
+    where: { userId },
+  });
+  const serialized = serializeBiasProfile(profile);
+
+  if (!existing || existing.biasProfileJson !== serialized) {
+    const nextVersion = existing ? existing.profileVersion + 1 : profile.profileVersion;
+    await prisma.cognitiveBiasProfile.upsert({
+      where: { userId },
+      update: {
+        profileVersion: nextVersion,
+        biasProfileJson: serialized,
+        overallCalibrationTrend: profile.overallCalibrationTrend,
+        strongestBiasId: profile.strongestBias?.id ?? null,
+        mostImprovedBiasId: profile.mostImprovedBias?.id ?? null,
+        lastUpdated: profile.lastUpdated,
+      },
+      create: {
+        userId,
+        profileVersion: profile.profileVersion,
+        biasProfileJson: serialized,
+        overallCalibrationTrend: profile.overallCalibrationTrend,
+        strongestBiasId: profile.strongestBias?.id ?? null,
+        mostImprovedBiasId: profile.mostImprovedBias?.id ?? null,
+        lastUpdated: profile.lastUpdated,
+      },
+    });
+  }
+
+  return profile;
+}
+
+export async function getCognitiveBiasProfile(userId: string) {
+  const stored = await prisma.cognitiveBiasProfile.findUnique({
+    where: { userId },
+  });
+
+  if (stored) {
+    const profile = normalizeBiasProfileRecord(stored);
+    if (profile) {
+      return profile;
+    }
+  }
+
+  return refreshCognitiveBiasProfile(userId);
 }

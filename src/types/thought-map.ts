@@ -61,6 +61,69 @@ export type ThinkingBias =
   | "solution_first_thinking"
   | "option_overload";
 
+export type CognitiveBiasStatus = "suspected" | "confirmed" | "monitoring" | "retired";
+
+export type CognitiveBiasTrend = "strengthening" | "stable" | "weakening";
+
+export type DetectionSignalType =
+  | "confidence_vs_calibration"
+  | "defense_rate"
+  | "update_asymmetry"
+  | "source_concentration"
+  | "round_dismissal_rate"
+  | "first_impression_stickiness";
+
+export type DetectionSignalDirection = "confirms_bias" | "disconfirms_bias";
+
+export interface DetectionSignal {
+  signalType: DetectionSignalType;
+  direction: DetectionSignalDirection;
+  weight: number;
+}
+
+export interface BiasType {
+  id: string;
+  name: string;
+  description: string;
+  detectionSignals: DetectionSignal[];
+  claimDomains: string[];
+  mitigationPrompts: string[];
+  evidenceRequiredToConfirm: number;
+  evidenceRequiredToRetire: number;
+}
+
+export interface BiasEvidenceInstance {
+  eventId: string;
+  eventType: string;
+  description: string;
+  signalStrength: number;
+  timestamp: Date;
+}
+
+export interface BiasEntry {
+  biasType: BiasType;
+  status: CognitiveBiasStatus;
+  confidenceInBias: number;
+  evidenceCount: number;
+  evidenceInstances: BiasEvidenceInstance[];
+  firstDetected: Date;
+  lastSignal: Date;
+  mitigationAttempts: number;
+  mitigationSuccesses: number;
+  claimDomains: string[];
+  trend: CognitiveBiasTrend;
+}
+
+export interface CognitiveBiasProfile {
+  userId: string;
+  profileVersion: number;
+  biasEntries: BiasEntry[];
+  lastUpdated: Date;
+  overallCalibrationTrend: "improving" | "stable" | "degrading";
+  strongestBias: BiasType | null;
+  mostImprovedBias: BiasType | null;
+}
+
 export type CognitiveInterventionType =
   | "force_falsification"
   | "require_slots"
@@ -283,7 +346,9 @@ export type ThoughtMapEventType =
   | "belief_propagation"
   | "belief_propagation_decision"
   | "belief_graph_cycle"
-  | "belief_graph_state";
+  | "belief_graph_state"
+  | "meta_cognition_prompt"
+  | "meta_cognition_response";
 
 export type RecommendationReason =
   | "low_evidence"
@@ -505,6 +570,45 @@ export interface ThoughtMapEvent {
   createdAt: Date;
 }
 
+export type ShapeDerivationDirection = "confirms_shape" | "disconfirms_shape";
+
+export interface ContributingMove {
+  moveId: string;
+  moveType: string;
+  eventDescription: string;
+  weight: number;
+  direction: ShapeDerivationDirection;
+  claimContext: string;
+  timestamp: Date;
+  includeReason: string;
+}
+
+export interface ShapeThreshold {
+  requiredConfidence: number;
+  actualConfidence: number;
+  evidenceCountRequired: number;
+  evidenceCountActual: number;
+  thresholdMet: boolean;
+}
+
+export interface ShapeCounterfactual {
+  description: string;
+  movesToRemove: string[];
+  movesNeededToNegate: string[];
+  minimumChangesToRetire: number;
+}
+
+export interface ShapeDerivation {
+  shapeId: string;
+  derivationVersion: number;
+  contributingMoves: ContributingMove[];
+  derivationFormula: string;
+  thresholdMet: ShapeThreshold;
+  counterfactual: ShapeCounterfactual;
+  alternativeShapes: string[];
+  computedAt: Date;
+}
+
 export interface SteelManVersion {
   versionText: string;
   savedAt: Date;
@@ -637,6 +741,52 @@ export interface RevisitSchedule {
   lastComputedAt: Date;
 }
 
+export type MetaCognitionTone = "curious" | "gentle_challenge" | "observation" | "pattern_notice";
+
+export type MetaCognitionCondition =
+  | "rapid_dismissal_pattern"
+  | "emotional_language"
+  | "speed_pattern"
+  | "confidence_stickiness"
+  | "sunk_cost_signal"
+  | "positive_pattern_recognition";
+
+export interface MetaCognitionTrigger {
+  id: string;
+  condition: MetaCognitionCondition;
+  promptTemplate: string;
+  promptTone: MetaCognitionTone;
+  minimumSessionLength: number;
+  cooldownPeriod: number;
+  biasAssociated: ThinkingBias | null;
+  shapesAssociated: string[];
+}
+
+export type MetaCognitionResponseType = "that's_useful" | "disagree" | "not_now";
+
+export interface MetaCognitionSessionContext {
+  roundNumber: number;
+  claimsOpen: number;
+  minutesElapsed: number;
+}
+
+export interface MetaCognitionEvent {
+  id: string;
+  mapId: string;
+  nodeId: string | null;
+  triggerId: string;
+  condition: MetaCognitionCondition;
+  prompt: string;
+  promptTone: MetaCognitionTone;
+  sessionContext: MetaCognitionSessionContext;
+  evidence: string[];
+  responseType: MetaCognitionResponseType | null;
+  responseText: string | null;
+  tellMeMoreOpened: boolean;
+  behaviorChangedWithinTenMinutes: boolean | null;
+  createdAt: Date;
+}
+
 export interface ThoughtNodeModel {
   id: string;
   mapId: string;
@@ -662,6 +812,7 @@ export interface ThoughtMapModel {
   status: string;
   nodes: ThoughtNodeModel[];
   events: ThoughtMapEvent[];
+  shapeDerivations: ShapeDerivation[];
   steelMans: SteelMan[];
   repairActions: ClaimRepairAction[];
   revisitSchedules: RevisitSchedule[];
