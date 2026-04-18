@@ -50,7 +50,6 @@ import type {
   ThoughtNodeModel,
   BeliefPropagationAction,
   BeliefPropagationDecision,
-  BeliefPropagationRequest,
   BeliefPropagationResponse,
 } from "@/types/thought-map";
 
