@@ -100,7 +100,7 @@ export default function LandingPage() {
         <header className="flex items-center justify-between py-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Penny</p>
-            <p className="mt-1 text-sm text-[var(--muted-ink)]">Not another chatbot. Brain, Challenge, and Learn for personal thinking.</p>
+            <p className="mt-1 text-sm text-[var(--muted-ink)]">Pressure-tested second brain, not another chatbot.</p>
           </div>
           <Link href="/app">
             <Button variant="secondary">Open dashboard</Button>
@@ -109,14 +109,12 @@ export default function LandingPage() {
 
         <section className="grid flex-1 items-center gap-12 py-16 lg:grid-cols-[1fr_0.92fr]">
           <div className="max-w-3xl">
-            <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted-ink)]">
-              Brain, Challenge, Learn
-            </p>
-            <h1 className="mt-6 max-w-4xl font-display text-6xl leading-[0.95] text-[var(--ink)] sm:text-7xl">
-              Build a pressure-tested second brain that challenges your thinking and teaches you what you do not know.
+            <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted-ink)]">Wiki-first personal thinking</p>
+            <h1 className="mt-6 max-w-3xl font-display text-5xl leading-[0.96] text-[var(--ink)] sm:text-6xl lg:text-7xl">
+              Build a pressure-tested second brain that keeps your thinking honest.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-[var(--muted-ink)]">
-              Penny starts with raw thought, turns it into a spatial graph of claims and moves, pressure-tests weak logic, and teaches you in the moment you hit confusion.
+              Penny starts with messy claims, turns them into a living graph, pressure-tests them against evidence and precedent, and keeps the next move visible while you work.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link href="/app/new">
