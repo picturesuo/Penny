@@ -40,11 +40,13 @@ import {
   type MapTimelineSnapshot,
   type ShapeTimelineSnapshot,
   type DependencyChainTimelineSnapshot,
+  type SteelManQualityAssessment,
 } from "@/lib/penny-insights";
 import { cn } from "@/lib/utils";
 import type {
   CognitiveIntervention,
   FounderBriefModel,
+  DialecticRound,
   ClaimStructureSnapshot,
   ThoughtMapGraphSnapshot,
   ThoughtMapEvent,
@@ -52,6 +54,8 @@ import type {
   ThoughtMapRecommendedMove,
   ThoughtNodeKind,
   ThoughtNodeModel,
+  SteelMan,
+  SteelManVersion,
 } from "@/types/thought-map";
 import type { MarginFragmentModel } from "@/types/penny";
 
@@ -62,10 +66,11 @@ type SerializableThoughtNode = Omit<ThoughtNodeModel, "createdAt" | "updatedAt">
 
 type SerializableThoughtMap = Omit<
   ThoughtMapModel,
-  "nodes" | "createdAt" | "updatedAt" | "interventions" | "recommendedIntervention" | "founderBrief"
+  "nodes" | "createdAt" | "updatedAt" | "interventions" | "recommendedIntervention" | "founderBrief" | "steelMans"
 > & {
   nodes: SerializableThoughtNode[];
   events: SerializableThoughtMapEvent[];
+  steelMans: SerializableSteelMan[];
   founderBrief: SerializableFounderBrief | null;
   interventions: SerializableIntervention[];
   recommendedIntervention: SerializableIntervention | null;
@@ -90,6 +95,21 @@ type SerializableIntervention = Omit<
 
 type SerializableThoughtMapEvent = Omit<ThoughtMapEvent, "createdAt"> & {
   createdAt: Date | string;
+};
+
+type SerializableSteelManVersion = Omit<SteelManVersion, "savedAt"> & {
+  savedAt: Date | string;
+};
+
+type SerializableSteelMan = Omit<SteelMan, "writtenAt" | "updatedAt" | "updateHistory"> & {
+  writtenAt: Date | string;
+  updatedAt: Date | string | null;
+  updateHistory: SerializableSteelManVersion[];
+};
+
+type SerializableDialecticRound = Omit<DialecticRound, "createdAt" | "closedAt"> & {
+  createdAt: Date | string;
+  closedAt: Date | string | null;
 };
 
 type ActionResponse = {
@@ -128,6 +148,11 @@ type ActionResponse = {
       };
     };
   };
+};
+
+type SteelManResponse = {
+  steelMan: SerializableSteelMan;
+  assessment: SteelManQualityAssessment;
 };
 
 type FounderBriefResponse = {
@@ -236,6 +261,22 @@ function normalizeFounderBrief(brief: SerializableFounderBrief): FounderBriefMod
   };
 }
 
+function normalizeSteelManVersion(version: SerializableSteelManVersion): SteelManVersion {
+  return {
+    ...version,
+    savedAt: toDate(version.savedAt),
+  };
+}
+
+function normalizeSteelMan(steelMan: SerializableSteelMan): SteelMan {
+  return {
+    ...steelMan,
+    writtenAt: toDate(steelMan.writtenAt),
+    updatedAt: steelMan.updatedAt ? toDate(steelMan.updatedAt) : null,
+    updateHistory: steelMan.updateHistory.map(normalizeSteelManVersion),
+  };
+}
+
 function normalizeEvent(event: SerializableThoughtMapEvent): ThoughtMapEvent {
   return {
     ...event,
@@ -249,6 +290,7 @@ function normalizeMap(map: SerializableThoughtMap): ThoughtMapModel {
     ...map,
     nodes: map.nodes.map(normalizeNode),
     events: map.events.map(normalizeEvent),
+    steelMans: map.steelMans.map(normalizeSteelMan),
     founderBrief: map.founderBrief ? normalizeFounderBrief(map.founderBrief) : null,
     interventions: map.interventions.map(normalizeIntervention),
     recommendedIntervention: map.recommendedIntervention ? normalizeIntervention(map.recommendedIntervention) : null,
@@ -320,6 +362,14 @@ function formatScore(score: number | null | undefined) {
   }
 
   return `${Math.round(score * 100)}`;
+}
+
+function formatPercentValue(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) {
+    return "n/a";
+  }
+
+  return `${Math.round(value)}%`;
 }
 
 function topNodesBy(
@@ -494,23 +544,32 @@ function critiqueTypePrompt(critiqueType: CritiqueFailureType, nodeLabel: string
   }
 }
 
-function critiqueModePrompt(mode: CritiqueMode, critiqueType: CritiqueFailureType, target: string, intensity: number) {
+function critiqueModePrompt(
+  mode: CritiqueMode,
+  critiqueType: CritiqueFailureType,
+  target: string,
+  intensity: number,
+  steelManText?: string | null,
+) {
   const intensityWord = critiqueIntensityLabel(intensity);
+  const steelManBridge = steelManText?.trim().length
+    ? ` You already wrote a steel man: ${summarizeText(steelManText.trim(), 160)}. Penny should build from that version, name what it captured, and then push on what it still missed.`
+    : "";
 
   if (mode === "socratic") {
     return [
       `What would have to be true for ${target} to fail?`,
       `What is the weakest part of ${target} that you have been avoiding?`,
       `If you had to kill ${target}, what would be the grounds?`,
-      `${critiqueTypePrompt(critiqueType, target)} Answer this in your own words before Penny explains.`,
+      `${critiqueTypePrompt(critiqueType, target)} Answer this in your own words before Penny explains.${steelManBridge}`,
     ].join(" ");
   }
 
   if (mode === "red_team") {
-    return `Run a ${intensityWord} red-team session on the whole structure around ${target}. Attack the dependency chain, the precedent story, and the weakest assumption for 20-30 minutes before you let the synthesis move forward.`;
+    return `Run a ${intensityWord} red-team session on the whole structure around ${target}. Attack the dependency chain, the precedent story, and the weakest assumption for 20-30 minutes before you let the synthesis move forward.${steelManBridge}`;
   }
 
-  return `${critiqueTypePrompt(critiqueType, target)} Penny should be ${intensityWord} about this pass and keep the failure type explicit.`;
+  return `${critiqueTypePrompt(critiqueType, target)} Penny should be ${intensityWord} about this pass and keep the failure type explicit.${steelManBridge}`;
 }
 
 function critiqueVarietySuggestion(recentTypes: CritiqueFailureType[]) {
@@ -915,6 +974,7 @@ export function ThoughtMapWorkspace({
   const [advisorReviewDraft, setAdvisorReviewDraft] = useState("");
   const [advisorReviewNotes, setAdvisorReviewNotes] = useState<string[]>([]);
   const [selectedPrecedentId, setSelectedPrecedentId] = useState<string | null>(null);
+  const [steelManDrafts, setSteelManDrafts] = useState<Record<string, string>>({});
   const [teachBackDrafts, setTeachBackDrafts] = useState<Record<string, string>>({});
   const [teachBackFeedback, setTeachBackFeedback] = useState<Record<string, TeachBackAnalysis>>({});
   const [teachBackAttempts, setTeachBackAttempts] = useState<Record<string, string[]>>({});
@@ -930,6 +990,18 @@ export function ThoughtMapWorkspace({
   const [critiqueCorrectionDrafts, setCritiqueCorrectionDrafts] = useState<Record<string, string>>({});
   const [propagationAcknowledged, setPropagationAcknowledged] = useState<Record<string, string>>({});
   const [dialecticResponseDrafts, setDialecticResponseDrafts] = useState<Record<string, string>>({});
+  const [dialecticRoundContextDrafts, setDialecticRoundContextDrafts] = useState<
+    Record<
+      string,
+      {
+        confidenceAtRoundEnd: number;
+        concessionNote: string;
+        connectedClaimsChanged: boolean | null;
+        connectedClaimsNote: string;
+        newEvidenceNote: string;
+      }
+    >
+  >({});
   const [runningRecommendedMove, setRunningRecommendedMove] = useState(false);
   const [runningFounderBrief, setRunningFounderBrief] = useState(false);
   const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
@@ -1406,6 +1478,18 @@ export function ThoughtMapWorkspace({
   const selectedSurvivorPrecedents = selectedPrecedentSummary
     ? retrieveSurvivorPrecedentsForCase(selectedPrecedentSummary)
     : [];
+  const selectedSteelMan = selectedGraphNode
+    ? map.steelMans.find((steelMan) => steelMan.claimId === selectedGraphNode.node.id) ?? null
+    : null;
+  const selectedSteelManDraft = selectedGraphNode
+    ? steelManDrafts[selectedGraphNode.node.id] ?? selectedSteelMan?.steelManText ?? ""
+    : "";
+  const selectedSteelManDraftReady = selectedSteelManDraft.trim().length > 100;
+  const selectedSteelManReady = selectedSteelMan ? selectedSteelMan.steelManText.trim().length > 100 : false;
+  const steelManRevisionPrompt =
+    selectedSteelMan && dialecticRoundEvents.length >= 2
+      ? "You've been through two rounds. Has your understanding of the opposing view changed? Revise your steel man."
+      : null;
   const selectedTeachBackFocus = useMemo(
     () => teachBackFocusForNode(selectedGraphNode?.node ?? null, selectedKnowledgeSurface),
     [selectedGraphNode?.node, selectedKnowledgeSurface],
@@ -1518,29 +1602,72 @@ export function ThoughtMapWorkspace({
     () =>
       map.events
         .filter((event) => event.eventType === "dialectic_round")
-        .map((event) => ({
-          id: event.id,
-          createdAt: event.createdAt,
-          nodeId: event.nodeId,
-          round: typeof event.payload?.round === "string" ? String(event.payload.round) : "round",
-          roundIndex: typeof event.payload?.roundIndex === "number" ? Number(event.payload.roundIndex) : 0,
-          title: typeof event.payload?.title === "string" ? String(event.payload.title) : "Dialectic round",
-          critiqueStrength:
-            typeof event.payload?.critiqueStrength === "string" ? String(event.payload.critiqueStrength) : "unknown",
-          critiqueType:
-            typeof event.payload?.critiqueType === "string" && event.payload.critiqueType.trim().length > 0
-              ? String(event.payload.critiqueType)
-              : null,
-          prompt: typeof event.payload?.prompt === "string" ? String(event.payload.prompt) : "",
-          why: typeof event.payload?.why === "string" ? String(event.payload.why) : "",
-          responsePath:
-            event.payload?.responsePath === "defend" ||
-            event.payload?.responsePath === "revise" ||
-            event.payload?.responsePath === "absorb"
-              ? event.payload.responsePath
-              : null,
-          response: typeof event.payload?.response === "string" ? String(event.payload.response) : "",
-        }))
+        .map((event) => {
+          const payload = event.payload ?? {};
+          const roundPayload =
+            payload.dialecticRound && typeof payload.dialecticRound === "object"
+              ? (payload.dialecticRound as Record<string, unknown>)
+              : null;
+          const priorRoundsPayload = Array.isArray(payload.priorRounds) ? payload.priorRounds : [];
+
+          return {
+            id: event.id,
+            createdAt: event.createdAt,
+            nodeId: event.nodeId,
+            claimId:
+              roundPayload && typeof roundPayload.claimId === "string" && roundPayload.claimId.trim().length > 0
+                ? String(roundPayload.claimId)
+                : event.nodeId,
+            round: typeof payload.round === "string" ? String(payload.round) : "round",
+            roundIndex: typeof payload.roundIndex === "number" ? Number(payload.roundIndex) : 0,
+            title: typeof payload.title === "string" ? String(payload.title) : "Dialectic round",
+            critiqueStrength:
+              typeof payload.critiqueStrength === "string" ? String(payload.critiqueStrength) : "unknown",
+            critiqueType:
+              typeof payload.critiqueType === "string" && payload.critiqueType.trim().length > 0
+                ? String(payload.critiqueType)
+                : null,
+            critiqueFailureTypes:
+              roundPayload && Array.isArray(roundPayload.critiqueFailureTypes)
+                ? roundPayload.critiqueFailureTypes.filter((item): item is string => typeof item === "string")
+                : [],
+            prompt: typeof payload.prompt === "string" ? String(payload.prompt) : "",
+            why: typeof payload.why === "string" ? String(payload.why) : "",
+            responsePath:
+              payload.responsePath === "defend" || payload.responsePath === "revise" || payload.responsePath === "absorb"
+                ? payload.responsePath
+                : null,
+            response: typeof payload.response === "string" ? String(payload.response) : "",
+            priorRounds: priorRoundsPayload
+              .filter((item): item is Record<string, unknown> => item != null && typeof item === "object")
+              .map((item) => ({
+                id: typeof item.id === "string" ? String(item.id) : "",
+                round: typeof item.round === "string" ? String(item.round) : "round",
+                roundIndex: typeof item.roundIndex === "number" ? Number(item.roundIndex) : 0,
+                title: typeof item.title === "string" ? String(item.title) : "Dialectic round",
+                critiqueStrength: typeof item.critiqueStrength === "string" ? String(item.critiqueStrength) : "mild",
+                critiqueType:
+                  typeof item.critiqueType === "string" && item.critiqueType.trim().length > 0
+                    ? String(item.critiqueType)
+                    : null,
+                responsePath:
+                  item.responsePath === "defend" || item.responsePath === "revise" || item.responsePath === "absorb"
+                    ? item.responsePath
+                    : null,
+                prompt: typeof item.prompt === "string" ? String(item.prompt) : "",
+                why: typeof item.why === "string" ? String(item.why) : "",
+                response: typeof item.response === "string" ? String(item.response) : "",
+                confidenceDelta:
+                  typeof item.confidenceDelta === "number" ? Number(item.confidenceDelta) : null,
+                engagementScore:
+                  typeof item.engagementScore === "number" ? Number(item.engagementScore) : null,
+              })),
+            dialecticRound:
+              roundPayload && typeof roundPayload === "object"
+                ? (roundPayload as SerializableDialecticRound)
+                : null,
+          };
+        })
         .sort((a, b) => a.roundIndex - b.roundIndex || a.createdAt.getTime() - b.createdAt.getTime()),
     [map.events],
   );
@@ -1743,23 +1870,83 @@ export function ThoughtMapWorkspace({
     const priorResponse = responseTrail[responseTrail.length - 2] ?? null;
     const nodeLabel = selectedGraphNode ? selectedGraphNode.node.content : "the active claim";
     const intensityLabel = critiqueIntensityLabel(critiqueIntensity);
+    const currentConfidence = Math.round((selectedGraphNode?.node.scores?.confidence ?? 0) * 100);
+    const roundEventsByIndex = new Map(dialecticRoundEvents.map((event) => [event.roundIndex, event] as const));
+    const steelManSummary = selectedSteelManDraft.trim().length
+      ? summarizeText(selectedSteelManDraft.trim(), 140)
+      : "The steel-man gate is still open.";
 
-    return [
+    function buildRoundContext(roundIndex: number) {
+      const event = roundEventsByIndex.get(roundIndex) ?? null;
+      const priorEvents = dialecticRoundEvents.filter((candidate) => candidate.roundIndex < roundIndex);
+      const priorSummary = priorEvents
+        .slice(-2)
+        .map((candidate) => {
+          const classification = candidate.dialecticRound?.responseClassification?.type ?? candidate.responsePath ?? "response";
+          const confidenceDelta = candidate.dialecticRound?.confidenceDelta ?? null;
+          const confidenceLabel = confidenceDelta == null ? "" : ` (${confidenceDelta >= 0 ? "+" : ""}${formatPercentValue(confidenceDelta)})`;
+
+          return `${candidate.round}: ${classification}${confidenceLabel} — ${summarizeText(candidate.response || candidate.prompt, 72)}`;
+        })
+        .join(" · ");
+      const latestPrior = priorEvents.at(-1) ?? null;
+      const priorRoundData = event?.dialecticRound ?? null;
+      const confidenceStart =
+        priorRoundData?.confidenceAtRoundStart ??
+        latestPrior?.dialecticRound?.confidenceAtRoundEnd ??
+        currentConfidence;
+      const confidenceEnd = priorRoundData?.confidenceAtRoundEnd ?? confidenceStart;
+      const confidenceDelta = priorRoundData?.confidenceDelta ?? confidenceEnd - confidenceStart;
+      const followUpPrompt =
+        priorRoundData?.followUpPrompt ??
+        (priorEvents.length >= 2 && priorEvents.slice(-2).every((entry) => Number(entry.dialecticRound?.confidenceDelta ?? 0) === 0)
+          ? "The next round should be a meta-prompt that names the lack of confidence change or new evidence."
+          : roundIndex === 0
+            ? "If you continue, round 2 will re-read your response and push on the new weak point it introduces."
+            : roundIndex === 1
+              ? "If you continue, round 3 will escalate from the recorded thread or pivot if the critique has already been answered."
+              : "If you continue, Penny will either escalate, pivot, or name the stagnation if the thread is not changing.");
+      const confidenceContext = `${formatPercentValue(confidenceStart)} → ${formatPercentValue(confidenceEnd)} (${confidenceDelta >= 0 ? "+" : ""}${formatPercentValue(confidenceDelta)})`;
+      const concessions = priorRoundData?.concessions ?? [];
+      const defenses = priorRoundData?.defenses ?? [];
+      const dismissals = priorRoundData?.dismissals ?? [];
+
+      return {
+        priorSummary: priorSummary || "No prior rounds yet.",
+        followUpPrompt:
+          followUpPrompt ??
+          (roundIndex >= 2 && !event
+            ? "If the user continues, the next round should focus on whether the thread is actually changing or just replaying itself."
+            : null),
+        confidenceContext,
+        confidenceStart,
+        confidenceEnd,
+        confidenceDelta,
+        concessions,
+        defenses,
+        dismissals,
+        responseClassification: priorRoundData?.responseClassification ?? null,
+        engagementScore: priorRoundData?.engagementScore ?? null,
+      };
+    }
+
+    const roundBlueprints = [
       {
         round: "Round 1",
         title: critiqueMode === "socratic" ? "Socratic opening" : critiqueMode === "red_team" ? "Red-team opening" : "Opening critique",
-        strength: `${selectedCritiqueStrength.label} · ${critiqueModeLabel(critiqueMode)} · ${intensityLabel}`,
-        prompt: critiqueModePrompt(critiqueMode, activeCritiqueType, nodeLabel, critiqueIntensity),
+        strength: `${selectedCritiqueStrength.label === "weak" ? "mild" : selectedCritiqueStrength.label} · ${critiqueModeLabel(critiqueMode)} · ${intensityLabel} · ${selectedSteelManReady ? "steel-man ready" : "steel-man required"}`,
+        prompt: critiqueModePrompt(critiqueMode, activeCritiqueType, nodeLabel, critiqueIntensity, selectedSteelManDraft),
         why: lastAction?.reasoning.graphAnalysis?.primaryGap
           ? `Failure type: ${lastAction.reasoning.graphAnalysis.primaryGap.replaceAll("-", " ")} · critique type: ${activeCritiqueType}`
           : `Failure type: not yet selected · critique type: ${activeCritiqueType}`,
         argument: critiqueArgument,
+        steelMan: steelManSummary,
         responsePath: "defend / revise / absorb",
       },
       {
         round: "Round 2",
         title: critiqueMode === "socratic" ? "Teach-back response" : "User response",
-        strength: `response-driven · ${critiqueModeLabel(critiqueMode)}`,
+        strength: `moderate · response-driven · ${critiqueModeLabel(critiqueMode)}`,
         prompt: lastResponse
           ? `Penny re-reads the last response and pushes on the new weak point it introduced: ${lastResponse}.`
           : critiqueMode === "socratic"
@@ -1788,12 +1975,17 @@ export function ThoughtMapWorkspace({
             : "No active shape has been selected yet, so the response is judged only against the claim structure.",
           conclusion: "The point of the round is not to repeat the opening attack. It is to explain why the user’s response changes what Penny should worry about next.",
         },
+        steelMan: selectedSteelMan?.updateHistory.length
+          ? "The steel man is already stored with the claim, so the reply should be judged against the captured opposing view rather than a generic objection."
+          : steelManSummary,
         responsePath: "defend / revise / absorb",
       },
       {
         round: "Round 3",
         title: critiqueMode === "red_team" ? "Sustained red-team" : "Escalate or pivot",
-        strength: selectedPrecedentSummary ? `precedent-backed · ${intensityLabel}` : `open · ${intensityLabel}`,
+        strength: `${critiqueMode === "red_team" ? "adversarial" : selectedPrecedentSummary ? "strong" : "moderate"} · ${
+          selectedPrecedentSummary ? "precedent-backed" : "open"
+        } · ${intensityLabel}`,
         prompt:
           lastResponse || priorResponse
             ? `Penny escalates from the recorded thread. Prior response: ${priorResponse ?? lastResponse}; current response: ${lastResponse ?? "none yet"}.`
@@ -1820,18 +2012,51 @@ export function ThoughtMapWorkspace({
           conclusion:
             "This is the point where the critique should feel like an explanation of the argument's failure surface, not a repetition of an earlier warning.",
         },
+        steelMan: selectedSteelMan?.updateHistory.length
+          ? "Before round three, Penny should ask whether the user’s understanding of the opposing view has changed and prompt a revision if needed."
+          : steelManSummary,
         responsePath: "future rounds inherit prior responses",
       },
     ] as const;
+
+    return roundBlueprints.map((round, index) => {
+      const context = buildRoundContext(index);
+
+      return {
+        ...round,
+        priorRoundSummary: context.priorSummary,
+        followUpPrompt: context.followUpPrompt,
+        confidenceContext: context.confidenceContext,
+        confidenceAtRoundStart: context.confidenceStart,
+        confidenceAtRoundEnd: context.confidenceEnd,
+        confidenceDelta: context.confidenceDelta,
+        responseClassification: context.responseClassification,
+        engagementScore: context.engagementScore,
+        concessions: context.concessions,
+        defenses: context.defenses,
+        dismissals: context.dismissals,
+        roundContextDraft: dialecticRoundContextDrafts[round.round] ?? {
+          confidenceAtRoundEnd: context.confidenceEnd,
+          concessionNote: "",
+          connectedClaimsChanged: null,
+          connectedClaimsNote: "",
+          newEvidenceNote: "",
+        },
+      };
+    });
   }, [
     activeShapeCallout,
     dialecticRoundEvents,
+    dialecticRoundContextDrafts,
     activeCritiqueType,
     lastAction?.reasoning.graphAnalysis?.primaryGap,
     critiqueIntensity,
     critiqueMode,
     selectedCritiqueStrength.label,
     selectedGraphNode,
+    selectedSteelMan?.updateHistory.length,
+    selectedSteelManDraft,
+    selectedSteelManReady,
     selectedPrecedentSummary,
     critiqueArgument,
     selectedPropagation?.cascade,
@@ -1988,6 +2213,29 @@ export function ThoughtMapWorkspace({
     }));
   }
 
+  function mergeSteelMan(steelMan: SerializableSteelMan) {
+    const normalizedSteelMan = normalizeSteelMan(steelMan);
+
+    setMap((currentMap) => {
+      const nextSteelMans = currentMap.steelMans.filter(
+        (existing) => !(existing.claimId === normalizedSteelMan.claimId && existing.userId === normalizedSteelMan.userId),
+      );
+
+      nextSteelMans.push(normalizedSteelMan);
+      nextSteelMans.sort(
+        (a, b) =>
+          (b.updatedAt?.getTime() ?? b.writtenAt.getTime()) - (a.updatedAt?.getTime() ?? a.writtenAt.getTime()) ||
+          b.writtenAt.getTime() - a.writtenAt.getTime(),
+      );
+
+      return {
+        ...currentMap,
+        steelMans: nextSteelMans,
+        updatedAt: new Date(),
+      };
+    });
+  }
+
   function recordConfidenceOverride(
     sourceNodeId: string,
     targetNodeId: string,
@@ -2085,18 +2333,58 @@ export function ThoughtMapWorkspace({
     });
   }
 
+  function updateDialecticRoundContext(
+    roundKey: string,
+    patch: Partial<{
+      confidenceAtRoundEnd: number;
+      concessionNote: string;
+      connectedClaimsChanged: boolean | null;
+      connectedClaimsNote: string;
+      newEvidenceNote: string;
+    }>,
+  ) {
+    const fallbackConfidence = Math.round((selectedGraphNode?.node.scores?.confidence ?? 0) * 100);
+
+    setDialecticRoundContextDrafts((current) => {
+      const existing = current[roundKey] ?? {
+        confidenceAtRoundEnd: fallbackConfidence,
+        concessionNote: "",
+        connectedClaimsChanged: null,
+        connectedClaimsNote: "",
+        newEvidenceNote: "",
+      };
+
+      return {
+        ...current,
+        [roundKey]: {
+          ...existing,
+          ...patch,
+        },
+      };
+    });
+  }
+
   function recordDialecticRound(params: {
     round: string;
     roundIndex: number;
     title: string;
     critiqueStrength: string;
     critiqueType?: CritiqueFailureType | string;
+    critiqueFailureTypes?: string[];
     prompt: string;
     why: string;
     responsePath: "defend" | "revise" | "absorb";
     response?: string;
   }) {
     const response = (params.response ?? dialecticResponseDrafts[params.round] ?? "").trim();
+    const currentConfidence = Math.round((selectedGraphNode?.node.scores?.confidence ?? 0) * 100);
+    const roundContext = dialecticRoundContextDrafts[params.round] ?? {
+      confidenceAtRoundEnd: currentConfidence,
+      concessionNote: "",
+      connectedClaimsChanged: null,
+      connectedClaimsNote: "",
+      newEvidenceNote: "",
+    };
 
     if (response.length < 8) {
       return;
@@ -2116,10 +2404,19 @@ export function ThoughtMapWorkspace({
             title: params.title,
             critiqueStrength: params.critiqueStrength,
             critiqueType: params.critiqueType ?? null,
+            critiqueFailureTypes: params.critiqueFailureTypes ?? (params.critiqueType ? [params.critiqueType] : []),
             prompt: params.prompt,
             why: params.why,
             responsePath: params.responsePath,
             response,
+            roundContext: {
+              currentConfidence,
+              confidenceAtRoundEnd: roundContext.confidenceAtRoundEnd,
+              concessionNote: roundContext.concessionNote,
+              connectedClaimsChanged: roundContext.connectedClaimsChanged,
+              connectedClaimsNote: roundContext.connectedClaimsNote,
+              newEvidenceNote: roundContext.newEvidenceNote,
+            },
           }),
         });
 
@@ -2127,13 +2424,64 @@ export function ThoughtMapWorkspace({
           return;
         }
 
-        const payload = (await responsePayload.json()) as { event: SerializableThoughtMapEvent };
+        const payload = (await responsePayload.json()) as {
+          event: SerializableThoughtMapEvent;
+          round?: SerializableDialecticRound | null;
+          roundContext?: unknown;
+        };
         mergeDialecticRoundEvent(payload.event);
         setDialecticResponseDrafts((current) => {
           const next = { ...current };
           delete next[params.round];
           return next;
         });
+        setDialecticRoundContextDrafts((current) => {
+          const next = { ...current };
+          delete next[params.round];
+          return next;
+        });
+      } catch {
+        return;
+      }
+    });
+  }
+
+  function recordSteelMan() {
+    const claimId = selectedGraphNode?.node.id ?? null;
+    const steelManText = selectedSteelManDraft.trim();
+
+    if (!claimId || steelManText.length < 100) {
+      return;
+    }
+
+    const roundContext = dialecticRoundEvents.length >= 2 ? "Round 3 update" : "Round 1 gate";
+    const usedInRound = Array.from(new Set([...(selectedSteelMan?.usedInRound ?? []), roundContext]));
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${map.id}/steel-man`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            claimId,
+            steelManText,
+            roundContext,
+            usedInRound,
+          }),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as SteelManResponse;
+        mergeSteelMan(payload.steelMan);
+        setSteelManDrafts((current) => ({
+          ...current,
+          [claimId]: payload.steelMan.steelManText,
+        }));
       } catch {
         return;
       }
@@ -3572,6 +3920,80 @@ export function ThoughtMapWorkspace({
           Penny should remember every round, carry the user’s response history forward, and change the next attack instead of reusing the same line.
         </p>
         <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{challengeSkill.note}</p>
+        <div className="mt-5 rounded-[24px] border border-black/8 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Steel-man gate</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Before Penny critiques this claim, write the strongest opposing view you can.</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                What would a smart, well-informed skeptic say? Write as if you are trying to convince yourself this claim is wrong.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className={selectedSteelManReady ? "bg-[#d9ead8] text-[#355b32]" : "bg-[#fff6ed] text-[#8b4d1f]"}>
+                {selectedSteelManReady ? "steel-man saved" : `${selectedSteelManDraft.trim().length} / 100 minimum`}
+              </Badge>
+              {selectedSteelMan?.qualityScore != null ? (
+                <Badge className="bg-[#e7defa] text-[#5c4c88]">quality {selectedSteelMan.qualityScore}/10</Badge>
+              ) : null}
+            </div>
+          </div>
+          <textarea
+            className="mt-4 min-h-[140px] w-full rounded-[20px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+            placeholder="Write the strongest opposing view in your own words."
+            value={selectedSteelManDraft}
+            onChange={(event) =>
+              selectedGraphNode?.node.id
+                ? setSteelManDrafts((current) => ({
+                    ...current,
+                    [selectedGraphNode.node.id]: event.target.value,
+                  }))
+                : null
+            }
+          />
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button
+              className="gap-2"
+              disabled={isPending || !selectedGraphNode || !selectedSteelManDraftReady}
+              onClick={recordSteelMan}
+            >
+              <Sparkles className="size-4" />
+              {selectedSteelMan ? "Revise steel man" : "Save steel man and unlock critique"}
+            </Button>
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+              The 100-character floor is a minimum gate, not a target.
+            </p>
+          </div>
+          {selectedSteelMan?.qualityScore != null ? (
+            <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
+              <p className="text-sm leading-6 text-[var(--ink)]">{selectedSteelMan.qualityScoreReason}</p>
+              {selectedSteelMan?.qualityScore < 5 && selectedSteelMan?.qualityScoreReason ? (
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                  {selectedSteelMan.qualityScoreReason.includes("generic")
+                    ? "Your steel man is mostly generic. Can you make it more specific to the actual evidence you're relying on?"
+                    : "Want to revise it before critique? A stronger opposing view usually produces a better first round."}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {steelManRevisionPrompt ? (
+            <p className="mt-4 rounded-[18px] bg-[#fff6ed] px-4 py-3 text-sm leading-6 text-[#8b4d1f]">{steelManRevisionPrompt}</p>
+          ) : null}
+          {selectedSteelMan?.updateHistory.length ? (
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Original</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedSteelMan.updateHistory[0]?.versionText}</p>
+              </div>
+              <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Latest revision</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                  {selectedSteelMan.updateHistory[selectedSteelMan.updateHistory.length - 1]?.versionText}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </div>
         <div className="mt-4 grid gap-4 xl:grid-cols-3">
           {dialecticRounds.map((round) => {
             const draft = dialecticResponseDrafts[round.round] ?? "";
@@ -3581,9 +4003,25 @@ export function ThoughtMapWorkspace({
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="bg-white text-[var(--ink)]">{round.round}</Badge>
                 <Badge className="bg-[#e7defa] text-[#5c4c88]">{round.strength}</Badge>
+                <Badge className="bg-white text-[var(--ink)]">{round.confidenceContext}</Badge>
+                {round.responseClassification ? (
+                  <Badge className="bg-[#d9ead8] text-[#355b32]">{round.responseClassification.type}</Badge>
+                ) : null}
+                {round.engagementScore != null ? (
+                  <Badge className="bg-[#fff6ed] text-[#8b4d1f]">engagement {Math.round(round.engagementScore)}</Badge>
+                ) : null}
               </div>
               <p className="mt-3 text-sm font-medium text-[var(--ink)]">{round.title}</p>
               <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{round.prompt}</p>
+              <div className="mt-3 rounded-[18px] bg-white p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Prior rounds</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{round.priorRoundSummary}</p>
+                {round.followUpPrompt ? (
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                    <span className="font-medium text-[var(--ink)]">Follow-up preview:</span> {round.followUpPrompt}
+                  </p>
+                ) : null}
+              </div>
               <details className="mt-3 rounded-[18px] bg-white p-4">
                 <summary className="cursor-pointer text-sm font-medium text-[var(--ink)]">Why this critique</summary>
                 <div className="mt-3 space-y-3">
@@ -3609,8 +4047,40 @@ export function ThoughtMapWorkspace({
                       <p className="text-sm leading-6 text-[var(--ink)]">
                         <span className="font-medium">Conclusion:</span> {round.argument.conclusion}
                       </p>
+                      <p className="text-sm leading-6 text-[var(--ink)]">
+                        <span className="font-medium">Steel man:</span> {round.steelMan}
+                      </p>
                     </div>
                   </div>
+                  {round.responseClassification ? (
+                    <div className="rounded-[16px] bg-[#f7f2ff] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#5c4c88]">Structured reading</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                        Penny read this response as <span className="font-medium">{round.responseClassification.type}</span>
+                        {round.responseClassification.classifiedBy === "user_explicit"
+                          ? " from your explicit path choice."
+                          : " by inference from the text."}
+                      </p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                        Confidence at start {formatPercentValue(round.confidenceAtRoundStart)} · end {formatPercentValue(round.confidenceAtRoundEnd)}
+                        · delta {round.confidenceDelta >= 0 ? "+" : ""}
+                        {formatPercentValue(round.confidenceDelta)}
+                      </p>
+                      {round.concessions.length || round.defenses.length || round.dismissals.length ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {round.concessions.length ? (
+                            <Badge className="bg-white text-[var(--ink)]">{round.concessions.length} concessions</Badge>
+                          ) : null}
+                          {round.defenses.length ? (
+                            <Badge className="bg-white text-[var(--ink)]">{round.defenses.length} defenses</Badge>
+                          ) : null}
+                          {round.dismissals.length ? (
+                            <Badge className="bg-white text-[var(--ink)]">{round.dismissals.length} dismissals</Badge>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </details>
               <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{round.responsePath}</p>
@@ -3625,26 +4095,107 @@ export function ThoughtMapWorkspace({
                   }))
                 }
               />
+              <div className="mt-3 rounded-[18px] border border-black/8 bg-white p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Concession capture</p>
+                <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                  Did you update your confidence?
+                </label>
+                <div className="mt-2 flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={roundContextDraft.confidenceAtRoundEnd}
+                    onChange={(event) =>
+                      updateDialecticRoundContext(round.round, {
+                        confidenceAtRoundEnd: Number(event.target.value),
+                      })
+                    }
+                    className="h-2 w-full accent-[var(--ink)]"
+                  />
+                  <Badge className="bg-[var(--panel)] text-[var(--ink)]">{formatPercentValue(roundContextDraft.confidenceAtRoundEnd)}</Badge>
+                </div>
+                <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                  What specifically did you concede?
+                </label>
+                <textarea
+                  className="mt-2 min-h-[64px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                  placeholder="Optional: name the exact point you conceded."
+                  value={roundContextDraft.concessionNote}
+                  onChange={(event) =>
+                    updateDialecticRoundContext(round.round, {
+                      concessionNote: event.target.value,
+                    })
+                  }
+                />
+                <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                  Did this critique change connected claims?
+                </label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {([
+                    ["yes", "Yes"],
+                    ["no", "No"],
+                    ["unsure", "Unsure"],
+                  ] as const).map(([value, label]) => (
+                    <Button
+                      key={`${round.round}-connected-${value}`}
+                      variant={roundContextDraft.connectedClaimsChanged === (value === "yes" ? true : value === "no" ? false : null) ? "primary" : "secondary"}
+                      className="px-3 py-2 text-xs"
+                      onClick={() =>
+                        updateDialecticRoundContext(round.round, {
+                          connectedClaimsChanged: value === "yes" ? true : value === "no" ? false : null,
+                        })
+                      }
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                <textarea
+                  className="mt-3 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                  placeholder="Optional: name the claims affected."
+                  value={roundContextDraft.connectedClaimsNote}
+                  onChange={(event) =>
+                    updateDialecticRoundContext(round.round, {
+                      connectedClaimsNote: event.target.value,
+                    })
+                  }
+                />
+                <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">New evidence added?</label>
+                <textarea
+                  className="mt-2 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                  placeholder="Optional: paste the new evidence or source you added."
+                  value={roundContextDraft.newEvidenceNote}
+                  onChange={(event) =>
+                    updateDialecticRoundContext(round.round, {
+                      newEvidenceNote: event.target.value,
+                    })
+                  }
+                />
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {(["defend", "revise", "absorb"] as const).map((path) => (
                   <Button
                     key={`${round.round}-${path}`}
                     variant="secondary"
                     className="px-3 py-2 text-xs"
-                    disabled={isPending || draft.trim().length < 8}
-                    onClick={() =>
-                      recordDialecticRound({
-                        round: round.round,
-                        roundIndex: Number(round.round.replace(/[^0-9]/g, "")) || 0,
-                        title: round.title,
-                        critiqueStrength: round.strength,
-                        critiqueType: activeCritiqueType,
-                        prompt: round.prompt,
-                        why: round.why,
-                        responsePath: path,
-                      })
-                    }
-                  >
+                    disabled={isPending || !selectedSteelManReady || draft.trim().length < 8}
+                      onClick={() =>
+                        recordDialecticRound({
+                          round: round.round,
+                          roundIndex: Number(round.round.replace(/[^0-9]/g, "")) || 0,
+                          title: round.title,
+                          critiqueStrength: round.strength,
+                          critiqueType: activeCritiqueType,
+                          critiqueFailureTypes: [activeCritiqueType],
+                          prompt: round.prompt,
+                          why: round.why,
+                          responsePath: path,
+                          response: draft,
+                        })
+                      }
+                    >
                     {path}
                   </Button>
                 ))}
@@ -3673,6 +4224,35 @@ export function ThoughtMapWorkspace({
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{entry.prompt}</p>
                   <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{entry.why}</p>
                   <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{entry.response}</p>
+                  {entry.dialecticRound ? (
+                    <div className="mt-3 rounded-[16px] bg-white p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                          {entry.dialecticRound.responseClassification.type}
+                        </Badge>
+                        <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                          {formatPercentValue(entry.dialecticRound.confidenceAtRoundStart)} → {formatPercentValue(entry.dialecticRound.confidenceAtRoundEnd)}
+                        </Badge>
+                        <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                          engagement {Math.round(entry.dialecticRound.engagementScore)}
+                        </Badge>
+                      </div>
+                      {entry.dialecticRound.followUpPrompt ? (
+                        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                          <span className="font-medium text-[var(--ink)]">Follow-up:</span> {entry.dialecticRound.followUpPrompt}
+                        </p>
+                      ) : null}
+                      {entry.dialecticRound.concessions.length || entry.dialecticRound.defenses.length || entry.dialecticRound.dismissals.length ? (
+                        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                          {entry.dialecticRound.concessions.length ? `${entry.dialecticRound.concessions.length} concessions` : null}
+                          {entry.dialecticRound.concessions.length && (entry.dialecticRound.defenses.length || entry.dialecticRound.dismissals.length) ? " · " : null}
+                          {entry.dialecticRound.defenses.length ? `${entry.dialecticRound.defenses.length} defenses` : null}
+                          {(entry.dialecticRound.concessions.length || entry.dialecticRound.defenses.length) && entry.dialecticRound.dismissals.length ? " · " : null}
+                          {entry.dialecticRound.dismissals.length ? `${entry.dialecticRound.dismissals.length} dismissals` : null}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ))
             ) : (
@@ -4660,6 +5240,32 @@ export function ThoughtMapWorkspace({
               ) : (
                 <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
                   When a shape is active in a critique, Penny will name it here and show the pattern it is using.
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-[24px] border border-black/8 bg-white p-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Steel man memory</p>
+              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Original opposition and revision live alongside the claim.</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                When the opposing view changes after critique, Penny keeps the first version and the revision side by side so the thread can be reviewed later.
+              </p>
+              {selectedSteelMan?.updateHistory.length ? (
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Original steel man</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedSteelMan.updateHistory[0]?.versionText}</p>
+                  </div>
+                  <div className="rounded-[18px] bg-[var(--panel)] p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Latest revision</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                      {selectedSteelMan.updateHistory[selectedSteelMan.updateHistory.length - 1]?.versionText}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-[var(--muted-ink)]">
+                  No steel man has been saved for this claim yet.
                 </p>
               )}
             </div>
