@@ -51,7 +51,6 @@ import type {
   ArtifactRecord,
   ArtifactTypeId,
   ImportSource,
-  ImportSourceType,
   DialecticCritiqueStrength,
   GeneratedActionBundle,
   NodeAction,
@@ -221,6 +220,8 @@ function buildThoughtMapModel(
     founderBriefReadiness: getFounderBriefReadiness(judgedMap),
   };
 }
+
+type HydratedThoughtMapRecord = ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] };
 
 function interventionDedupeKey(intervention: Pick<CognitiveIntervention, "mapId" | "targetNodeId" | "type">) {
   return `${intervention.mapId}:${intervention.targetNodeId}:${intervention.type}`;
@@ -3536,7 +3537,7 @@ export async function generateArtifactForMap(params: {
         })()
       : null;
 
-  const result = await prisma.$transaction(async (tx) => {
+  const updatedRecord: HydratedThoughtMapRecord | null = await prisma.$transaction(async (tx) => {
     await tx.thoughtMapEvent.create({
       data: {
         mapId: params.mapId,
@@ -3567,6 +3568,8 @@ export async function generateArtifactForMap(params: {
         },
       },
     });
+
+    return updatedRecord;
   });
 
   if (!updatedRecord) {
@@ -3650,14 +3653,14 @@ export async function recordImportReview(params: {
     throw new Error("Map not found");
   }
 
-  const map = await hydrateThoughtMap(mapRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] });
+  const map = buildThoughtMapModel(mapRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] });
   const rootNode = map.nodes.find((node) => node.kind === "root") ?? null;
   const startOrder =
     map.nodes
       .filter((node) => node.parentId === rootNode?.id)
       .reduce((max, node) => Math.max(max, node.branchOrder), 0) || 0;
 
-  const updatedRecord = await prisma.$transaction(async (tx) => {
+  const result: { review: ImportSource; updatedRecord: HydratedThoughtMapRecord | null } = await prisma.$transaction(async (tx) => {
     const finalizedClaims: ExtractedClaim[] = [];
     const acceptedClaimIds: string[] = [];
     let rejectedClaimCount = 0;
@@ -3723,7 +3726,7 @@ export async function recordImportReview(params: {
       },
     });
 
-    return tx.thoughtMap.findUnique({
+    const updatedRecord = await tx.thoughtMap.findUnique({
       where: { id: params.mapId },
       include: {
         nodes: {
