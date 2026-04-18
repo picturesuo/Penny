@@ -9,17 +9,28 @@ import type {
 } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/db/prisma";
-import { buildFounderBrief, getFounderBriefReadiness } from "@/lib/founder-brief";
+import { artifactRecordFromFounderBrief, buildArtifactDraft, getArtifactType } from "@/lib/artifact-types";
+import { getFounderBriefReadiness } from "@/lib/founder-brief";
 import { buildBeliefGraph, propagateBeliefGraph, serializeBeliefGraph, serializeBeliefPropagationResult } from "@/lib/bayesian-propagation";
 import {
   analyzeDialecticResponse,
   assessSteelManQuality,
+  buildClaimDependencyGraph,
   buildBlindSpotMap,
   buildCritiqueQualityProfile,
   buildCognitiveBiasProfile,
   collectCritiqueFeedback,
   buildPennyLens,
+  captureSnapshotForMap,
 } from "@/lib/penny-insights";
+import {
+  calculateBrierScore,
+  calculateLogScore,
+  buildCalibrationCoaching,
+  classifyCalibrationDomain,
+  outcomeProbability,
+  updateDomainCalibration,
+} from "@/lib/calibration";
 import { buildRevisitQueue, computeLeitnerBox, computeRevisitScheduleForNode, computeRevisitSchedulesForMap } from "@/lib/revisit-scheduler";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
 import {
@@ -35,11 +46,19 @@ import type {
   ClaimRepairAction,
   CreateThoughtMapInput,
   FounderBriefModel,
+  ArtifactOutcome,
+  ArtifactRecord,
+  ArtifactTypeId,
   DialecticCritiqueStrength,
   GeneratedActionBundle,
   NodeAction,
   EdgeChange,
+  ClaimOutcomePair,
   CritiqueCorrection,
+  CalibrationCoaching,
+  CalibrationCoachingRejection,
+  ClaimResolution,
+  ClaimResolutionType,
   RevisitAction,
   RevisitLeitnerBox,
   RevisitPriority,
@@ -49,6 +68,9 @@ import type {
   SteelMan,
   SteelManVersion,
   SupersessionRecord,
+  ResolutionEvidence,
+  PostMortem,
+  PropagationResult,
   TriggerDefinition,
   ThoughtMapEvent as ThoughtMapEventModel,
   ThoughtMapModel,
@@ -85,10 +107,18 @@ function buildThoughtMapModel(
 ): ThoughtMapModel {
   const events = record.events ?? [];
   const founderBriefPayload = parseJson<Omit<FounderBriefModel, "generatedAt">>(record.founderBrief);
-  const founderBrief =
+  let founderBrief =
     founderBriefPayload && record.founderBriefGeneratedAt
       ? {
           ...founderBriefPayload,
+          artifactId:
+            typeof founderBriefPayload.artifactId === "string" && founderBriefPayload.artifactId.trim().length > 0
+              ? founderBriefPayload.artifactId
+              : `founder_brief:${record.id}:${record.founderBriefGeneratedAt.getTime()}`,
+          artifactTypeId: founderBriefPayload.artifactTypeId ?? "founder_brief",
+          loadBearingClaims: Array.isArray(founderBriefPayload.loadBearingClaims)
+            ? founderBriefPayload.loadBearingClaims
+            : [],
           generatedAt: record.founderBriefGeneratedAt,
         }
       : null;
@@ -100,6 +130,7 @@ function buildThoughtMapModel(
     status: record.status,
     nodes: record.nodes.map(mapNode),
     events: events.map(mapEventRecord),
+    artifacts: [],
     shapeDerivations: [],
     steelMans: parseSteelMans(record.steelMans),
     critiqueFeedbacks: [],
@@ -159,9 +190,21 @@ function buildThoughtMapModel(
     })
     .filter((correction) => correction.correctionText.trim().length > 0);
   const critiqueQualityProfile = buildCritiqueQualityProfile(judgedMap, critiqueFeedbacks);
+  const artifacts = collectArtifactRecords(judgedMap, events);
+  const founderBriefArtifact = artifacts.find((artifact) => artifact.artifactTypeId === "founder_brief");
+  if (founderBriefArtifact && founderBrief) {
+    founderBrief = {
+      ...founderBrief,
+      artifactId: founderBriefArtifact.id,
+      artifactTypeId: "founder_brief",
+      loadBearingClaims:
+        founderBriefArtifact.loadBearingClaims.length > 0 ? founderBriefArtifact.loadBearingClaims : founderBrief.loadBearingClaims,
+    };
+  }
 
   return {
     ...judgedMap,
+    artifacts,
     shapeDerivations: lens.effectiveShapes
       .map((shape) => shape.derivation)
       .filter((derivation): derivation is NonNullable<typeof derivation> => derivation !== null),
@@ -226,11 +269,92 @@ function normalizeBiasProfileRecord(record: CognitiveBiasProfileRecord | null): 
         : "stable",
     strongestBias: parsed.strongestBias ?? null,
     mostImprovedBias: parsed.mostImprovedBias ?? null,
+    calibrationCoaching: normalizeCalibrationCoaching(parsed.calibrationCoaching),
+    coachingRejections: Array.isArray(parsed.coachingRejections)
+      ? parsed.coachingRejections
+          .map((entry) => normalizeCalibrationRejection(entry))
+          .filter((entry): entry is CalibrationCoachingRejection => entry !== null)
+      : [],
   };
 }
 
 function serializeBiasProfile(profile: CognitiveBiasProfile) {
   return serializeJson(profile) ?? "{}";
+}
+
+function normalizeCalibrationRejection(value: unknown): CalibrationCoachingRejection | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const entry = value as Record<string, unknown>;
+  if (
+    typeof entry.id !== "string" ||
+    typeof entry.userId !== "string" ||
+    typeof entry.domain !== "string" ||
+    typeof entry.claimType !== "string" ||
+    typeof entry.originalConfidence !== "number" ||
+    typeof entry.suggestedAdjustment !== "number" ||
+    typeof entry.recommendationText !== "string" ||
+    !(entry.dismissedAt instanceof Date || typeof entry.dismissedAt === "string")
+  ) {
+    return null;
+  }
+
+  return {
+    id: entry.id,
+    userId: entry.userId,
+    domain: entry.domain as CalibrationCoachingRejection["domain"],
+    claimType: entry.claimType as CalibrationCoachingRejection["claimType"],
+    originalConfidence: entry.originalConfidence,
+    suggestedAdjustment: entry.suggestedAdjustment,
+    recommendationText: entry.recommendationText,
+    dismissedAt: new Date(entry.dismissedAt),
+  };
+}
+
+function normalizeCalibrationCoaching(value: unknown): CalibrationCoaching | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const coaching = value as Record<string, unknown>;
+  if (
+    typeof coaching.userId !== "string" ||
+    !(coaching.generatedAt instanceof Date || typeof coaching.generatedAt === "string") ||
+    typeof coaching.overallTrend !== "string"
+  ) {
+    return null;
+  }
+
+  const domainProfiles = Array.isArray(coaching.domainProfiles)
+    ? coaching.domainProfiles.map((entry) => ({
+        ...(entry as Record<string, unknown>),
+        calibrationCurve: Array.isArray((entry as Record<string, unknown>).calibrationCurve)
+          ? (entry as Record<string, unknown>).calibrationCurve.map((point) => point as CalibrationCoaching["domainProfiles"][number]["calibrationCurve"][number])
+          : [],
+      }))
+    : [];
+  const claimTypeProfiles = Array.isArray(coaching.claimTypeProfiles) ? (coaching.claimTypeProfiles as CalibrationCoaching["claimTypeProfiles"]) : [];
+  const recommendations = Array.isArray(coaching.coachingRecommendations)
+    ? (coaching.coachingRecommendations as CalibrationCoaching["coachingRecommendations"])
+    : [];
+  const rejectionHistory = Array.isArray(coaching.rejectionHistory)
+    ? coaching.rejectionHistory
+        .map((entry) => normalizeCalibrationRejection(entry))
+        .filter((entry): entry is CalibrationCoachingRejection => entry !== null)
+    : [];
+
+  return {
+    userId: coaching.userId,
+    generatedAt: new Date(coaching.generatedAt),
+    domainProfiles,
+    claimTypeProfiles,
+    coachingRecommendations: recommendations,
+    overallTrend:
+      coaching.overallTrend === "improving" || coaching.overallTrend === "degrading" ? coaching.overallTrend : "stable",
+    rejectionHistory,
+  };
 }
 
 function normalizeBlindSpotMapRecord(record: BlindSpotMapCacheRecord | null) {
@@ -711,6 +835,223 @@ function mapEventRecord(record: ThoughtMapEventRecord): ThoughtMapEventModel {
   };
 }
 
+function normalizeClaimOutcomePair(payload: Record<string, unknown> | null): ClaimOutcomePair | null {
+  if (!payload) {
+    return null;
+  }
+
+  const claimId = typeof payload.claimId === "string" ? payload.claimId : null;
+  const claimText = typeof payload.claimText === "string" ? payload.claimText : null;
+
+  if (!claimId || !claimText) {
+    return null;
+  }
+
+  return {
+    claimId,
+    claimText,
+    wasClaimCorrect:
+      payload.wasClaimCorrect === true || payload.wasClaimCorrect === false ? payload.wasClaimCorrect : null,
+    confidenceAtArtifactTime:
+      typeof payload.confidenceAtArtifactTime === "number" ? payload.confidenceAtArtifactTime : 0,
+    actualOutcome: typeof payload.actualOutcome === "string" ? payload.actualOutcome : null,
+  };
+}
+
+function normalizeArtifactOutcome(payload: Record<string, unknown> | null): ArtifactOutcome | null {
+  if (!payload) {
+    return null;
+  }
+
+  const id = typeof payload.id === "string" ? payload.id : null;
+  const artifactId = typeof payload.artifactId === "string" ? payload.artifactId : null;
+  const artifactType = typeof payload.artifactType === "string" ? payload.artifactType : null;
+  const userId = typeof payload.userId === "string" ? payload.userId : null;
+  const actionTaken = typeof payload.actionTaken === "string" ? payload.actionTaken : null;
+  const outcomeDescription = typeof payload.outcomeDescription === "string" ? payload.outcomeDescription : null;
+  const outcomeType =
+    payload.outcomeType === "success" ||
+    payload.outcomeType === "partial_success" ||
+    payload.outcomeType === "failure" ||
+    payload.outcomeType === "inconclusive" ||
+    payload.outcomeType === "pending"
+      ? payload.outcomeType
+      : null;
+
+  if (!id || !artifactId || !artifactType || !userId || !actionTaken || !outcomeDescription || !outcomeType) {
+    return null;
+  }
+
+  return {
+    id,
+    artifactId,
+    artifactType,
+    userId,
+    actionTaken,
+    outcomeDate:
+      typeof payload.outcomeDate === "string" || payload.outcomeDate instanceof Date
+        ? new Date(payload.outcomeDate)
+        : new Date(),
+    outcomeDescription,
+    outcomeType,
+    loadBearingClaimResolutions: Array.isArray(payload.loadBearingClaimResolutions)
+      ? payload.loadBearingClaimResolutions
+          .map((entry) => (entry && typeof entry === "object" ? normalizeClaimOutcomePair(entry as Record<string, unknown>) : null))
+          .filter((entry): entry is ClaimOutcomePair => entry !== null)
+      : [],
+    artifactQualityRating: typeof payload.artifactQualityRating === "number" ? payload.artifactQualityRating : 0,
+    qualityDimensions: Array.isArray(payload.qualityDimensions)
+      ? payload.qualityDimensions
+          .map((entry) =>
+            entry && typeof entry === "object"
+              ? {
+                  dimension:
+                    entry.dimension === "accuracy" ||
+                    entry.dimension === "completeness" ||
+                    entry.dimension === "persuasiveness" ||
+                    entry.dimension === "actionability" ||
+                    entry.dimension === "structure"
+                      ? entry.dimension
+                      : "structure",
+                  score: typeof entry.score === "number" ? entry.score : 0,
+                  comment: typeof entry.comment === "string" ? entry.comment : null,
+                }
+              : null,
+          )
+          .filter((entry): entry is ArtifactOutcome["qualityDimensions"][number] => entry !== null)
+      : [],
+    wouldUseAgain: Boolean(payload.wouldUseAgain),
+    lessonsLearned: typeof payload.lessonsLearned === "string" ? payload.lessonsLearned : null,
+  };
+}
+
+function normalizeArtifactRecord(payload: Record<string, unknown> | null): ArtifactRecord | null {
+  if (!payload) {
+    return null;
+  }
+
+  const id = typeof payload.id === "string" ? payload.id : null;
+  const artifactTypeId =
+    payload.artifactTypeId === "founder_brief" ||
+    payload.artifactTypeId === "decision_memo" ||
+    payload.artifactTypeId === "investment_thesis" ||
+    payload.artifactTypeId === "research_proposal" ||
+    payload.artifactTypeId === "risk_register" ||
+    payload.artifactTypeId === "personal_decision_audit" ||
+    payload.artifactTypeId === "hypothesis_brief"
+      ? payload.artifactTypeId
+      : null;
+  const artifactTypeName = typeof payload.artifactTypeName === "string" ? payload.artifactTypeName : null;
+  const title = typeof payload.title === "string" ? payload.title : null;
+  const sourceMapId = typeof payload.sourceMapId === "string" ? payload.sourceMapId : null;
+
+  if (!id || !artifactTypeId || !artifactTypeName || !title || !sourceMapId) {
+    return null;
+  }
+
+  const sections = Array.isArray(payload.sections)
+    ? payload.sections
+        .map((section) =>
+          section && typeof section === "object"
+            ? {
+                id: typeof section.id === "string" ? section.id : "",
+                title: typeof section.title === "string" ? section.title : "",
+                body: typeof section.body === "string" ? section.body : "",
+                sourceClaimIds: Array.isArray(section.sourceClaimIds)
+                  ? section.sourceClaimIds.filter((item): item is string => typeof item === "string")
+                  : [],
+              }
+            : null,
+        )
+        .filter((section): section is ArtifactRecord["sections"][number] => Boolean(section?.id))
+    : [];
+
+  const loadBearingClaims = Array.isArray(payload.loadBearingClaims)
+    ? payload.loadBearingClaims
+        .map((entry) => (entry && typeof entry === "object" ? normalizeClaimOutcomePair(entry as Record<string, unknown>) : null))
+        .filter((entry): entry is ClaimOutcomePair => entry !== null)
+    : [];
+
+  const outcomes = Array.isArray(payload.outcomes)
+    ? payload.outcomes
+        .map((entry) => (entry && typeof entry === "object" ? normalizeArtifactOutcome(entry as Record<string, unknown>) : null))
+        .filter((entry): entry is ArtifactOutcome => entry !== null)
+    : [];
+  const latestOutcome = outcomes.length ? outcomes[outcomes.length - 1] : null;
+
+  return {
+    id,
+    artifactTypeId,
+    artifactTypeName,
+    title,
+    audience: typeof payload.audience === "string" ? payload.audience : null,
+    sourceMapId,
+    generatedAt:
+      typeof payload.generatedAt === "string" || payload.generatedAt instanceof Date
+        ? new Date(payload.generatedAt)
+        : new Date(),
+    version: typeof payload.version === "number" ? payload.version : 1,
+    sectionOrder: Array.isArray(payload.sectionOrder)
+      ? payload.sectionOrder.filter((item): item is string => typeof item === "string")
+      : [],
+    narrativeGlue: typeof payload.narrativeGlue === "string" ? payload.narrativeGlue : null,
+    sections,
+    loadBearingClaims,
+    outcomes,
+    latestOutcome,
+  };
+}
+
+function collectArtifactRecords(
+  map: ThoughtMapModel,
+  events: ThoughtMapEventRecord[],
+): ArtifactRecord[] {
+  const records = new Map<string, ArtifactRecord>();
+
+  for (const event of events) {
+    const payload = event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : null;
+
+    if (event.eventType === "artifact_generated") {
+      const record = normalizeArtifactRecord(payload);
+      if (record) {
+        records.set(record.id, record);
+      }
+    }
+  }
+
+  if (map.founderBrief && !records.has(map.founderBrief.artifactId)) {
+    records.set(map.founderBrief.artifactId, artifactRecordFromFounderBrief(map, map.founderBrief, 1));
+  }
+
+  for (const event of events) {
+    if (event.eventType !== "artifact_outcome") {
+      continue;
+    }
+
+    const payload = event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : null;
+    const outcome = normalizeArtifactOutcome(payload);
+    if (!outcome) {
+      continue;
+    }
+
+    const record = records.get(outcome.artifactId);
+    if (!record) {
+      continue;
+    }
+
+    const outcomes = [...record.outcomes.filter((item) => item.id !== outcome.id), outcome].sort(
+      (a, b) => a.outcomeDate.getTime() - b.outcomeDate.getTime(),
+    );
+    records.set(outcome.artifactId, {
+      ...record,
+      outcomes,
+      latestOutcome: outcomes[outcomes.length - 1] ?? null,
+    });
+  }
+
+  return [...records.values()].sort((a, b) => a.generatedAt.getTime() - b.generatedAt.getTime());
+}
+
 function formatClaimCaptureMetadata(metadata: ClaimCaptureMetadata) {
   const lines = [
     "## Claim capture",
@@ -1172,6 +1513,277 @@ export async function recordBeliefPropagation(params: {
     graphEvent: mapEventRecord(created.graphEvent),
     propagationEvent: mapEventRecord(created.propagationEvent),
     cycleEvent: created.cycleEvent ? mapEventRecord(created.cycleEvent) : null,
+  };
+}
+
+function collectDownstreamClaimIds(map: ThoughtMapModel, claimId: string) {
+  const graph = buildClaimDependencyGraph(map);
+  const adjacency = new Map<string, string[]>();
+
+  for (const edge of graph.edges) {
+    const bucket = adjacency.get(edge.fromNodeId) ?? [];
+    bucket.push(edge.toNodeId);
+    adjacency.set(edge.fromNodeId, bucket);
+  }
+
+  const queue: Array<{ claimId: string; relation: "direct" | "transitive" }> = [{ claimId, relation: "direct" }];
+  const seen = new Set<string>([claimId]);
+  const results: Array<{ claimId: string; relation: "direct" | "transitive" }> = [];
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+
+    const children = adjacency.get(current.claimId) ?? [];
+    for (const childId of children) {
+      if (seen.has(childId)) {
+        continue;
+      }
+
+      seen.add(childId);
+      results.push({
+        claimId: childId,
+        relation: current.claimId === claimId ? "direct" : "transitive",
+      });
+      queue.push({ claimId: childId, relation: "transitive" });
+    }
+  }
+
+  return results;
+}
+
+function downstreamArtifactsForClaim(map: ThoughtMapModel, claimId: string) {
+  const artifacts = new Set<string>();
+
+  if (map.repairActions.some((repairAction) => repairAction.sourceClaimIds.includes(claimId))) {
+    artifacts.add("repair_action");
+  }
+
+  if (map.revisitSchedules.some((schedule) => schedule.claimId === claimId)) {
+    artifacts.add("revisit_schedule");
+  }
+
+  if (map.interventions.some((intervention) => intervention.targetNodeId === claimId)) {
+    artifacts.add("intervention");
+  }
+
+  if (map.recommendedNextMove?.targetNodeId === claimId) {
+    artifacts.add("recommended_next_move");
+  }
+
+  return Array.from(artifacts);
+}
+
+async function loadDomainCalibrationHistory(userId: string, domain: string) {
+  const maps = await prisma.thoughtMap.findMany({
+    where: { userId },
+    include: {
+      nodes: {
+        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+  });
+
+  const history: Array<{
+    domain: string;
+    predictedConfidence: number;
+    actualProbability: number;
+    brierScore: number;
+    logScore: number;
+  }> = [];
+
+  for (const record of maps) {
+    const map = buildThoughtMapModel(record as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] });
+    const mapDomain = classifyCalibrationDomain(`${map.title} ${map.rawThought} ${map.nodes.map((node) => node.content).join(" ")}`);
+
+    if (mapDomain !== domain) {
+      continue;
+    }
+
+    for (const event of map.events) {
+      if (event.eventType !== "claim_resolution" || !event.payload || typeof event.payload !== "object") {
+        continue;
+      }
+
+      const payload = event.payload as Record<string, unknown>;
+      const predictedConfidence =
+        typeof payload.predictedConfidenceAtResolution === "number" ? payload.predictedConfidenceAtResolution : null;
+      const resolutionType =
+        payload.resolutionType === "confirmed" ||
+        payload.resolutionType === "disconfirmed" ||
+        payload.resolutionType === "partially_confirmed" ||
+        payload.resolutionType === "inconclusive" ||
+        payload.resolutionType === "reframed" ||
+        payload.resolutionType === "superseded"
+          ? (payload.resolutionType as ClaimResolutionType)
+          : null;
+
+      if (predictedConfidence == null || !resolutionType) {
+        continue;
+      }
+
+      const actualProbability = outcomeProbability(resolutionType);
+      history.push({
+        domain: mapDomain,
+        predictedConfidence: predictedConfidence / 100,
+        actualProbability,
+        brierScore: calculateBrierScore(predictedConfidence / 100, actualProbability),
+        logScore: calculateLogScore(predictedConfidence / 100, actualProbability),
+      });
+    }
+  }
+
+  return history;
+}
+
+export async function recordClaimResolution(params: {
+  mapId: string;
+  claimId: string;
+  resolutionType: ClaimResolutionType;
+  actualOutcome: string;
+  resolutionEvidence: ResolutionEvidence[];
+  postMortem: PostMortem | null;
+  propagationTriggered?: boolean;
+  lessonsCaptured?: string[];
+  propagationResults?: PropagationResult[];
+  userId?: string;
+}) {
+  const userId = params.userId ?? getDemoThoughtUserId();
+  const mapRecord = await prisma.thoughtMap.findUnique({
+    where: { id: params.mapId },
+    include: {
+      nodes: {
+        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+  });
+
+  if (!mapRecord) {
+    throw new Error("Map not found");
+  }
+
+  const map = buildThoughtMapModel(mapRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] });
+  const claim = map.nodes.find((node) => node.id === params.claimId);
+
+  if (!claim) {
+    throw new Error("Claim not found");
+  }
+
+  const captureConfidence = Math.round(captureSnapshotForMap(map)?.confidence ?? claim.scores?.confidence ?? 0);
+  const actualProbability = outcomeProbability(params.resolutionType);
+  const brierScore = calculateBrierScore(captureConfidence / 100, actualProbability);
+  const logScore = calculateLogScore(captureConfidence / 100, actualProbability);
+  const domain = classifyCalibrationDomain(`${map.title} ${map.rawThought} ${claim.content}`);
+  const calibrationHistory = await loadDomainCalibrationHistory(userId, domain);
+  const calibrationImpact = updateDomainCalibration(calibrationHistory, {
+    domain,
+    predictedConfidence: captureConfidence / 100,
+    actualProbability,
+    brierScore,
+    logScore,
+  });
+  const downstreamClaims = collectDownstreamClaimIds(map, claim.id);
+  const downstreamArtifacts = downstreamArtifactsForClaim(map, claim.id);
+  const resolutionId = randomUUID();
+  const resolutionDate = new Date();
+  const lessonsCaptured = (params.lessonsCaptured ?? []).filter((lesson) => lesson.trim().length > 0);
+  const propagationResults =
+    params.propagationResults?.length
+      ? params.propagationResults
+      : downstreamClaims.map((downstream) => {
+          const downstreamNode = map.nodes.find((node) => node.id === downstream.claimId) ?? null;
+          const currentConfidence = downstreamNode?.scores?.confidence != null ? Math.round(downstreamNode.scores.confidence * 100) : null;
+          const suggestedConfidence = (() => {
+            switch (params.resolutionType) {
+              case "confirmed":
+                return currentConfidence == null ? Math.min(100, captureConfidence + 15) : Math.min(100, currentConfidence + Math.round((100 - currentConfidence) * 0.2));
+              case "disconfirmed":
+                return currentConfidence == null ? Math.max(0, captureConfidence - 25) : Math.max(0, currentConfidence - Math.round(currentConfidence * 0.35));
+              case "partially_confirmed":
+                return currentConfidence == null ? Math.max(0, Math.min(100, Math.round(captureConfidence * 0.85))) : Math.max(0, Math.min(100, Math.round(currentConfidence + (captureConfidence - currentConfidence) * 0.25)));
+              case "reframed":
+                return currentConfidence;
+              case "superseded":
+                return null;
+              case "inconclusive":
+                return currentConfidence;
+            }
+          })();
+
+          return {
+            claimId: downstream.claimId,
+            claimText: downstreamNode?.content ?? downstream.claimId,
+            relation: downstream.relation,
+            currentConfidence,
+            suggestedConfidence,
+            decision:
+              params.resolutionType === "disconfirmed" || params.resolutionType === "superseded"
+                ? "override"
+                : params.resolutionType === "reframed"
+                  ? "decouple"
+                  : "accept",
+            confidenceDelta:
+              currentConfidence != null && suggestedConfidence != null ? Number((suggestedConfidence - currentConfidence).toFixed(1)) : null,
+            downstreamArtifacts,
+          } satisfies PropagationResult;
+        });
+  const claimResolution: ClaimResolution = {
+    id: resolutionId,
+    claimId: params.claimId,
+    mapId: params.mapId,
+    resolutionDate,
+    resolutionType: params.resolutionType,
+    actualOutcome: params.actualOutcome.trim(),
+    predictedConfidenceAtResolution: captureConfidence,
+    brierScore,
+    logScore,
+    resolutionEvidence: params.resolutionEvidence.map((evidence) => ({
+      ...evidence,
+      addedAt: evidence.addedAt instanceof Date ? evidence.addedAt : new Date(evidence.addedAt),
+    })),
+    postMortem: params.postMortem
+      ? {
+          ...params.postMortem,
+          createdAt: params.postMortem.createdAt instanceof Date ? params.postMortem.createdAt : new Date(params.postMortem.createdAt),
+        }
+      : null,
+    propagationTriggered: params.propagationTriggered ?? downstreamClaims.length > 0,
+    propagationResults,
+    lessonsCaptured,
+    calibrationImpact,
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.claimId,
+        eventType: "claim_resolution",
+        payload: serializeJson(claimResolution),
+      },
+    });
+  });
+
+  const updatedMap = await getThoughtMap(params.mapId);
+
+  if (!updatedMap) {
+    throw new Error("Map not found after resolution");
+  }
+
+  return {
+    resolution: claimResolution,
+    map: updatedMap,
+    propagationResults,
+    calibrationImpact,
+    downstreamArtifacts,
   };
 }
 
@@ -2698,36 +3310,212 @@ export async function applyRecommendedNextMove(mapId: string) {
   });
 }
 
+export async function generateArtifactForMap(params: {
+  mapId: string;
+  artifactTypeId: ArtifactTypeId;
+  audience?: string | null;
+  sectionOrder?: string[];
+  narrativeGlue?: string | null;
+}) {
+  const map = await getThoughtMap(params.mapId);
+
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  const artifactType = getArtifactType(params.artifactTypeId);
+  if (!artifactType) {
+    throw new Error("Artifact type not found");
+  }
+
+  const lens = buildPennyLens(map);
+  const version = map.artifacts.filter((artifact) => artifact.artifactTypeId === params.artifactTypeId).length + 1;
+  const artifact = buildArtifactDraft(map, params.artifactTypeId, {
+    artifactId: `${map.id}:${params.artifactTypeId}:${randomUUID()}`,
+    version,
+    audience: params.audience ?? artifactType.template.defaultAudience,
+    sectionOrder: params.sectionOrder,
+    narrativeGlue: params.narrativeGlue ?? null,
+    lens,
+  });
+
+  const founderBrief =
+    params.artifactTypeId === "founder_brief" ? artifactDraftToFounderBrief(artifact) : null;
+  const storedFounderBrief =
+    founderBrief && params.artifactTypeId === "founder_brief"
+      ? (() => {
+          const { generatedAt, ...rest } = founderBrief;
+          return { generatedAt, stored: rest };
+        })()
+      : null;
+
+  const updatedRecord = await prisma.$transaction(async (tx) => {
+    await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: null,
+        eventType: "artifact_generated",
+        payload: serializeJson(artifact),
+      },
+    });
+
+    if (storedFounderBrief) {
+      await tx.thoughtMap.update({
+        where: { id: params.mapId },
+        data: {
+          founderBrief: serializeJson(storedFounderBrief.stored),
+          founderBriefGeneratedAt: storedFounderBrief.generatedAt,
+        },
+      });
+    }
+
+    return tx.thoughtMap.findUnique({
+      where: { id: params.mapId },
+      include: {
+        nodes: {
+          orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+        },
+        events: {
+          orderBy: [{ createdAt: "asc" }],
+        },
+      },
+    });
+  });
+
+  if (!updatedRecord) {
+    throw new Error("Map not found");
+  }
+
+  const hydratedMap = await hydrateThoughtMap(
+    updatedRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+    map,
+  );
+
+  return {
+    artifact,
+    map: hydratedMap,
+  };
+}
+
 export async function generateFounderBrief(mapId: string) {
+  const result = await generateArtifactForMap({
+    mapId,
+    artifactTypeId: "founder_brief",
+  });
+
+  return result.map;
+}
+
+export async function recordArtifactOutcome(params: {
+  artifactId: string;
+  userId: string;
+  actionTaken: string;
+  outcomeDate: Date;
+  outcomeDescription: string;
+  outcomeType: "success" | "partial_success" | "failure" | "inconclusive" | "pending";
+  loadBearingClaimResolutions: ClaimOutcomePair[];
+  artifactQualityRating: number;
+  qualityDimensions: ArtifactOutcome["qualityDimensions"];
+  wouldUseAgain: boolean;
+  lessonsLearned: string | null;
+}) {
+  const mapId = params.artifactId.split(":")[0];
   const map = await getThoughtMap(mapId);
 
   if (!map) {
     throw new Error("Map not found");
   }
 
-  const lens = buildPennyLens(map);
-  const founderBrief = buildFounderBrief(map, lens);
-  const { generatedAt, ...storedFounderBrief } = founderBrief;
-  const updatedRecord = await prisma.thoughtMap.update({
-    where: { id: mapId },
-    data: {
-      founderBrief: serializeJson(storedFounderBrief),
-      founderBriefGeneratedAt: generatedAt,
-    },
-    include: {
-      nodes: {
-        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+  const artifact = map.artifacts.find((candidate) => candidate.id === params.artifactId);
+
+  if (!artifact) {
+    throw new Error("Artifact not found");
+  }
+
+  const outcome: ArtifactOutcome = {
+    id: randomUUID(),
+    artifactId: params.artifactId,
+    artifactType: artifact.artifactTypeId,
+    userId: params.userId,
+    actionTaken: params.actionTaken,
+    outcomeDate: params.outcomeDate,
+    outcomeDescription: params.outcomeDescription,
+    outcomeType: params.outcomeType,
+    loadBearingClaimResolutions: params.loadBearingClaimResolutions,
+    artifactQualityRating: params.artifactQualityRating,
+    qualityDimensions: params.qualityDimensions,
+    wouldUseAgain: params.wouldUseAgain,
+    lessonsLearned: params.lessonsLearned,
+  };
+
+  const incorrectCount = params.loadBearingClaimResolutions.filter((entry) => entry.wasClaimCorrect === false).length;
+  const retrospectivePrompt =
+    params.outcomeType === "failure" && incorrectCount >= 3
+      ? `3 of the ${params.loadBearingClaimResolutions.length} load-bearing claims in this artifact turned out to be wrong. Would you like to walk through what happened?`
+      : null;
+
+  const updatedRecord = await prisma.$transaction(async (tx) => {
+    await tx.thoughtMapEvent.create({
+      data: {
+        mapId,
+        nodeId: null,
+        eventType: "artifact_outcome",
+        payload: serializeJson(outcome),
       },
-      events: {
-        orderBy: [{ createdAt: "asc" }],
+    });
+
+    for (const claim of params.loadBearingClaimResolutions) {
+      if (claim.wasClaimCorrect === null) {
+        continue;
+      }
+
+      await tx.thoughtMapEvent.create({
+        data: {
+          mapId,
+          nodeId: claim.claimId,
+          eventType: "claim_resolution",
+          payload: serializeJson({
+            id: randomUUID(),
+            artifactId: params.artifactId,
+            artifactOutcomeId: outcome.id,
+            artifactType: artifact.artifactTypeId,
+            userId: params.userId,
+            ...claim,
+            outcomeDate: params.outcomeDate.toISOString(),
+          }),
+        },
+      });
+    }
+
+    return tx.thoughtMap.findUnique({
+      where: { id: mapId },
+      include: {
+        nodes: {
+          orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+        },
+        events: {
+          orderBy: [{ createdAt: "asc" }],
+        },
       },
-    },
+    });
   });
 
-  return hydrateThoughtMap(
+  if (!updatedRecord) {
+    throw new Error("Map not found");
+  }
+
+  await refreshCalibrationCoaching(params.userId);
+
+  const hydratedMap = await hydrateThoughtMap(
     updatedRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
     map,
   );
+
+  return {
+    outcome,
+    retrospectivePrompt,
+    map: hydratedMap,
+  };
 }
 
 export async function dismissThoughtMapIntervention(params: { mapId: string; interventionId: string }) {
@@ -2817,7 +3605,13 @@ export async function refreshCognitiveBiasProfile(userId: string) {
   const existing = await prisma.cognitiveBiasProfile.findUnique({
     where: { userId },
   });
-  const serialized = serializeBiasProfile(profile);
+  const existingProfile = normalizeBiasProfileRecord(existing);
+  const mergedProfile: CognitiveBiasProfile = {
+    ...profile,
+    calibrationCoaching: existingProfile?.calibrationCoaching ?? null,
+    coachingRejections: existingProfile?.coachingRejections ?? [],
+  };
+  const serialized = serializeBiasProfile(mergedProfile);
 
   if (!existing || existing.biasProfileJson !== serialized) {
     const nextVersion = existing ? existing.profileVersion + 1 : profile.profileVersion;
@@ -2843,7 +3637,7 @@ export async function refreshCognitiveBiasProfile(userId: string) {
     });
   }
 
-  return profile;
+  return mergedProfile;
 }
 
 export async function getCognitiveBiasProfile(userId: string) {
@@ -2859,6 +3653,155 @@ export async function getCognitiveBiasProfile(userId: string) {
   }
 
   return refreshCognitiveBiasProfile(userId);
+}
+
+async function loadCalibrationMaps(userId: string) {
+  return loadBiasProfileMaps(userId);
+}
+
+export async function refreshCalibrationCoaching(userId: string) {
+  const mapRecords = await loadCalibrationMaps(userId);
+  const maps = await Promise.all(
+    mapRecords.map((record) =>
+      hydrateThoughtMap(
+        record as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+        undefined,
+        { syncInterventions: false },
+      ),
+    ),
+  );
+  const coaching = buildCalibrationCoaching(maps, userId);
+  const stored = await prisma.cognitiveBiasProfile.findUnique({
+    where: { userId },
+  });
+  const storedProfile = normalizeBiasProfileRecord(stored);
+  const mergedProfile: CognitiveBiasProfile = {
+    ...(storedProfile ?? {
+      userId,
+      profileVersion: 1,
+      biasEntries: [],
+      lastUpdated: coaching.generatedAt,
+      overallCalibrationTrend: coaching.overallTrend,
+      strongestBias: null,
+      mostImprovedBias: null,
+    }),
+    calibrationCoaching: {
+      ...coaching,
+      userId,
+      rejectionHistory: storedProfile?.coachingRejections ?? coaching.rejectionHistory ?? [],
+    },
+    coachingRejections: storedProfile?.coachingRejections ?? coaching.rejectionHistory ?? [],
+  };
+  const serialized = serializeBiasProfile(mergedProfile);
+
+  if (!stored || stored.biasProfileJson !== serialized) {
+    const nextVersion = stored ? stored.profileVersion + 1 : mergedProfile.profileVersion;
+    await prisma.cognitiveBiasProfile.upsert({
+      where: { userId },
+      update: {
+        profileVersion: nextVersion,
+        biasProfileJson: serialized,
+        overallCalibrationTrend: coaching.overallTrend,
+        strongestBiasId: storedProfile?.strongestBias?.id ?? null,
+        mostImprovedBiasId: storedProfile?.mostImprovedBias?.id ?? null,
+        lastUpdated: coaching.generatedAt,
+      },
+      create: {
+        userId,
+        profileVersion: mergedProfile.profileVersion,
+        biasProfileJson: serialized,
+        overallCalibrationTrend: coaching.overallTrend,
+        strongestBiasId: storedProfile?.strongestBias?.id ?? null,
+        mostImprovedBiasId: storedProfile?.mostImprovedBias?.id ?? null,
+        lastUpdated: coaching.generatedAt,
+      },
+    });
+  }
+
+  return mergedProfile.calibrationCoaching ?? coaching;
+}
+
+export async function getCalibrationCoaching(userId: string) {
+  const stored = await prisma.cognitiveBiasProfile.findUnique({
+    where: { userId },
+  });
+
+  if (stored) {
+    const profile = normalizeBiasProfileRecord(stored);
+    if (profile?.calibrationCoaching) {
+      return profile.calibrationCoaching;
+    }
+  }
+
+  return refreshCalibrationCoaching(userId);
+}
+
+export async function recordCalibrationRejection(params: {
+  userId: string;
+  domain: CalibrationCoachingRejection["domain"];
+  claimType: CalibrationCoachingRejection["claimType"];
+  originalConfidence: number;
+  suggestedAdjustment: number;
+  recommendationText: string;
+}) {
+  const current = await getCalibrationCoaching(params.userId);
+  const rejection: CalibrationCoachingRejection = {
+    id: randomUUID(),
+    userId: params.userId,
+    domain: params.domain,
+    claimType: params.claimType,
+    originalConfidence: params.originalConfidence,
+    suggestedAdjustment: params.suggestedAdjustment,
+    recommendationText: params.recommendationText,
+    dismissedAt: new Date(),
+  };
+  const nextProfile: CalibrationCoaching = {
+    ...current,
+    rejectionHistory: [rejection, ...current.rejectionHistory],
+    generatedAt: new Date(),
+  };
+  const existing = await prisma.cognitiveBiasProfile.findUnique({
+    where: { userId: params.userId },
+  });
+  const storedProfile = normalizeBiasProfileRecord(existing);
+  const mergedProfile: CognitiveBiasProfile = {
+    ...(storedProfile ?? {
+      userId: params.userId,
+      profileVersion: 1,
+      biasEntries: [],
+      lastUpdated: nextProfile.generatedAt,
+      overallCalibrationTrend: nextProfile.overallTrend,
+      strongestBias: null,
+      mostImprovedBias: null,
+    }),
+    calibrationCoaching: nextProfile,
+    coachingRejections: nextProfile.rejectionHistory,
+    lastUpdated: nextProfile.generatedAt,
+  };
+  const serialized = serializeBiasProfile(mergedProfile);
+  const nextVersion = existing ? existing.profileVersion + 1 : mergedProfile.profileVersion;
+  await prisma.cognitiveBiasProfile.upsert({
+    where: { userId: params.userId },
+    update: {
+      profileVersion: nextVersion,
+      biasProfileJson: serialized,
+      overallCalibrationTrend: nextProfile.overallTrend,
+      strongestBiasId: storedProfile?.strongestBias?.id ?? null,
+      mostImprovedBiasId: storedProfile?.mostImprovedBias?.id ?? null,
+      lastUpdated: nextProfile.generatedAt,
+    },
+    create: {
+      userId: params.userId,
+      profileVersion: mergedProfile.profileVersion,
+      biasProfileJson: serialized,
+      overallCalibrationTrend: nextProfile.overallTrend,
+      strongestBiasId: storedProfile?.strongestBias?.id ?? null,
+      mostImprovedBiasId: storedProfile?.mostImprovedBias?.id ?? null,
+      lastUpdated: nextProfile.generatedAt,
+    },
+  });
+
+  return nextProfile;
 }
 
 export async function refreshBlindSpotMap(userId: string) {

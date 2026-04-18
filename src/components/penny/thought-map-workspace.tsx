@@ -5,8 +5,10 @@ import type { ReactNode } from "react";
 import { AlertCircle, ArrowRightLeft, CircleDot, GitBranchPlus, Link2, Sparkles } from "lucide-react";
 import { BiasProfile } from "@/components/penny/bias-profile";
 import { BlindSpotMapView } from "@/components/penny/blind-spot-map";
+import { ArtifactBuilder } from "@/components/penny/artifact-builder";
 import { FounderBriefCard } from "@/components/penny/founder-brief-card";
 import { ClaimRepairModal } from "@/components/penny/claim-repair-modal";
+import { ResolutionFlow, type ResolutionDownstreamClaim, type ResolutionSubmission } from "@/components/penny/resolution-flow";
 import { MarginRail } from "@/components/penny/margin-rail";
 import { RevisitQueue } from "@/components/penny/revisit-queue";
 import { Badge } from "@/components/ui/badge";
@@ -1216,6 +1218,7 @@ export function ThoughtMapWorkspace({
   const [steelManDrafts, setSteelManDrafts] = useState<Record<string, string>>({});
   const [steelManAssessments, setSteelManAssessments] = useState<Record<string, SteelManQualityAssessment>>({});
   const [repairModalOpen, setRepairModalOpen] = useState(false);
+  const [resolutionFlowOpen, setResolutionFlowOpen] = useState(false);
   const [revisitTriggerDrafts, setRevisitTriggerDrafts] = useState<
     Record<
       string,
@@ -2531,6 +2534,89 @@ export function ThoughtMapWorkspace({
   const inheritedClaimAudit = useMemo(() => inheritedClaimSnapshots([map]), [map]);
   const rhythm = useMemo(() => buildSessionRhythmSnapshot(map), [map]);
   const confusionLog = useMemo(() => buildConfusionLog(map), [map]);
+  const claimResolutionEvents = useMemo(
+    () =>
+      map.events.filter(
+        (event) =>
+          event.eventType === "claim_resolution" &&
+          event.payload &&
+          typeof event.payload === "object" &&
+          (selectedGraphNode?.node.id == null ? true : event.nodeId === selectedGraphNode.node.id),
+      ),
+    [map.events, selectedGraphNode?.node.id],
+  );
+  const resolutionLessons = useMemo(
+    () =>
+      claimResolutionEvents.flatMap((event) => {
+        const payload = event.payload as Record<string, unknown>;
+        const lessons = Array.isArray(payload.lessonsCaptured)
+          ? payload.lessonsCaptured.filter((lesson): lesson is string => typeof lesson === "string" && lesson.trim().length > 0)
+          : [];
+
+        return lessons;
+      }),
+    [claimResolutionEvents],
+  );
+  const resolutionTargetNode = selectedGraphNode?.node ?? rootNode ?? null;
+  const resolutionCandidateDate =
+    claimCapture?.resolutionDate && !Number.isNaN(Date.parse(claimCapture.resolutionDate))
+      ? new Date(claimCapture.resolutionDate)
+      : null;
+  const resolutionDue =
+    Boolean(resolutionCandidateDate) &&
+    Boolean(claimCapture) &&
+    (claimCapture?.status === "open" || claimCapture?.status === "revisiting") &&
+    resolutionCandidateDate!.getTime() <= Date.now();
+  const resolutionDownstreamClaims = useMemo(() => {
+    if (!resolutionTargetNode) {
+      return [];
+    }
+
+    const adjacency = new Map<string, string[]>();
+    for (const edge of claimDependencyGraph.edges) {
+      const bucket = adjacency.get(edge.fromNodeId) ?? [];
+      bucket.push(edge.toNodeId);
+      adjacency.set(edge.fromNodeId, bucket);
+    }
+
+    const queue: Array<{ id: string; relation: "direct" | "transitive" }> = [{ id: resolutionTargetNode.id, relation: "direct" }];
+    const seen = new Set<string>([resolutionTargetNode.id]);
+    const results: ResolutionDownstreamClaim[] = [];
+
+    while (queue.length) {
+      const current = queue.shift();
+      if (!current) {
+        continue;
+      }
+
+      for (const childId of adjacency.get(current.id) ?? []) {
+        if (seen.has(childId)) {
+          continue;
+        }
+
+        seen.add(childId);
+        const node = nodesById.get(childId) ?? null;
+        if (node) {
+          results.push({
+            claimId: node.id,
+            claimText: node.content,
+            relation: current.id === resolutionTargetNode.id ? "direct" : "transitive",
+            currentConfidence: node.scores?.confidence != null ? Math.round(node.scores.confidence * 100) : null,
+            suggestedConfidence: node.scores?.confidence != null ? Math.round(node.scores.confidence * 100) : null,
+            downstreamArtifacts: [
+              ...(map.repairActions.some((repairAction) => repairAction.sourceClaimIds.includes(node.id)) ? ["repair_action"] : []),
+              ...(map.revisitSchedules.some((schedule) => schedule.claimId === node.id) ? ["revisit_schedule"] : []),
+              ...(map.interventions.some((intervention) => intervention.targetNodeId === node.id) ? ["intervention"] : []),
+            ],
+          });
+        }
+
+        queue.push({ id: childId, relation: "transitive" });
+      }
+    }
+
+    return results;
+  }, [claimDependencyGraph.edges, map.interventions, map.repairActions, map.revisitSchedules, nodesById, resolutionTargetNode]);
   async function refreshBiasProfile() {
     if (!map.userId) {
       return;
@@ -2637,7 +2723,10 @@ export function ThoughtMapWorkspace({
   const steelmanPrompt = `Argue the strongest possible version of this position: ${steelmanTargetText}`;
   const selectedNormChallengeNode =
     selectedGraphNode?.node ?? map.nodes.find((node) => /norm|should|must|rule/i.test(node.content)) ?? null;
-  const synthesisPreMortem = selectedGraphNode?.node.content ?? map.recommendedNextMove?.summary ?? map.rawThought;
+  const synthesisPreMortemBase = selectedGraphNode?.node.content ?? map.recommendedNextMove?.summary ?? map.rawThought;
+  const synthesisPreMortem = resolutionLessons.length
+    ? `${synthesisPreMortemBase} Lesson to carry forward: ${resolutionLessons[0]}.`
+    : synthesisPreMortemBase;
   const synthesisIfRight = selectedGraphNode
     ? `If this claim holds, what becomes possible and what becomes necessary for ${kindLabel(selectedGraphNode.node.kind)} work?`
     : "If this claim holds, what becomes possible and what becomes necessary?";
@@ -3324,6 +3413,36 @@ export function ThoughtMapWorkspace({
         const payload = (await response.json()) as { map: SerializableThoughtMap };
         setMap(normalizeMap(payload.map));
         setRepairModalOpen(false);
+      } catch {
+        return;
+      }
+    });
+  }
+
+  function recordClaimResolution(submission: ResolutionSubmission) {
+    const claimId = resolutionTargetNode?.id ?? selectedGraphNode?.node.id ?? rootNode?.id ?? null;
+
+    if (!claimId) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${map.id}/claims/${claimId}/resolve`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(submission),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { map: SerializableThoughtMap };
+        setMap(normalizeMap(payload.map));
+        setResolutionFlowOpen(false);
       } catch {
         return;
       }
@@ -6135,7 +6254,53 @@ export function ThoughtMapWorkspace({
                         </div>
                       </div>
                     </div>
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <Badge className="bg-white text-[var(--ink)]">
+                        {resolutionDue ? "resolution ready" : resolutionCandidateDate ? `due ${claimCapture.resolutionDate}` : "manual resolution"}
+                      </Badge>
+                      <Button
+                        variant="secondary"
+                        className="px-3 py-2 text-xs"
+                        onClick={() => setResolutionFlowOpen(true)}
+                      >
+                        {resolutionDue ? "Resolve now" : "Open resolution flow"}
+                      </Button>
+                    </div>
                   </div>
+                  {resolutionDue ? (
+                    <div className="mt-4 rounded-[18px] border border-[#d7c06c] bg-[#fff9df] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#8b4d1f]">Resolution due</p>
+                      <h4 className="mt-2 text-lg font-semibold text-[var(--ink)]">
+                        This claim is ready for outcome capture.
+                      </h4>
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                        Penny should score the outcome, write down what changed, and propagate the signal to the claims that depend on it.
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge className="bg-white text-[var(--ink)]">predicted {claimCapture.confidence}%</Badge>
+                        <Badge className="bg-white text-[var(--ink)]">{resolutionTargetNode?.kind.replaceAll("_", " ") ?? "claim"}</Badge>
+                        <Button
+                          variant="secondary"
+                          className="px-3 py-2 text-xs"
+                          onClick={() => setResolutionFlowOpen(true)}
+                        >
+                          Resolve now
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {resolutionLessons.length ? (
+                    <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Resolution lessons</p>
+                      <div className="mt-3 space-y-2">
+                        {resolutionLessons.slice(0, 3).map((lesson) => (
+                          <p key={lesson} className="rounded-[16px] bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)]">
+                            {lesson}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
@@ -7040,6 +7205,21 @@ export function ThoughtMapWorkspace({
       </Card>
 
       {map.founderBrief ? <FounderBriefCard brief={map.founderBrief} /> : null}
+      <ArtifactBuilder mapId={map.id} />
+      <ResolutionFlow
+        key={resolutionFlowOpen ? `resolution:${resolutionTargetNode?.id ?? "claim"}` : "resolution:closed"}
+        open={resolutionFlowOpen}
+        claim={resolutionTargetNode}
+        resolutionDate={claimCapture?.resolutionDate ?? null}
+        predictedConfidence={claimCapture?.confidence ?? Math.round((resolutionTargetNode?.scores?.confidence ?? 0) * 100)}
+        steelManText={selectedSteelMan?.steelManText ?? null}
+        activeShapes={lens.activeShapes.map((shape) => shape.label)}
+        activeBiases={selectedBiasContext ? [selectedBiasContext] : []}
+        downstreamClaims={resolutionDownstreamClaims}
+        onClose={() => setResolutionFlowOpen(false)}
+        onSubmit={recordClaimResolution}
+        isSubmitting={isPending}
+      />
       <ClaimRepairModal
         open={repairModalOpen}
         currentClaim={selectedGraphNode?.node ?? null}

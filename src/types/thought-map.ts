@@ -119,9 +119,11 @@ export interface CognitiveBiasProfile {
   profileVersion: number;
   biasEntries: BiasEntry[];
   lastUpdated: Date;
-  overallCalibrationTrend: "improving" | "stable" | "degrading";
+  overallCalibrationTrend: CalibrationTrend;
   strongestBias: BiasType | null;
   mostImprovedBias: BiasType | null;
+  calibrationCoaching?: CalibrationCoaching | null;
+  coachingRejections?: CalibrationCoachingRejection[];
 }
 
 export const BLIND_SPOT_DOMAINS = [
@@ -427,7 +429,10 @@ export type ThoughtMapEventType =
   | "meta_cognition_response"
   | "critique_feedback"
   | "critique_correction"
-  | "critique_quality_profile";
+  | "critique_quality_profile"
+  | "artifact_generated"
+  | "artifact_outcome"
+  | "claim_resolution";
 
 export type RecommendationReason =
   | "low_evidence"
@@ -449,12 +454,114 @@ export type InteractionMode =
 
 export type FounderBriefRequirement = "assumption" | "counter_argument" | "research";
 
+export type ArtifactTypeId =
+  | "founder_brief"
+  | "decision_memo"
+  | "investment_thesis"
+  | "research_proposal"
+  | "risk_register"
+  | "personal_decision_audit"
+  | "hypothesis_brief";
+
+export interface SynthesisGate {
+  id: string;
+  label: string;
+  description: string;
+  required: boolean;
+}
+
+export interface ArtifactTemplateSection {
+  id: string;
+  title: string;
+  description: string;
+  sourceKinds: ThoughtNodeKind[];
+  minimumClaims: number;
+  renderMode: "paragraph" | "bullets" | "list";
+}
+
+export interface ArtifactTemplate {
+  id: ArtifactTypeId;
+  title: string;
+  description: string;
+  defaultAudience: string;
+  sections: ArtifactTemplateSection[];
+}
+
+export interface ArtifactType {
+  id: ArtifactTypeId;
+  name: string;
+  description: string;
+  requiredClaimTypes: string[];
+  minimumClaimCount: number;
+  requiredLoadBearingConfidence: number;
+  synthesisGates: SynthesisGate[];
+  template: ArtifactTemplate;
+  audienceOptions: string[];
+  estimatedCompletionTime: number;
+}
+
+export interface ArtifactSection {
+  id: string;
+  title: string;
+  body: string;
+  sourceClaimIds: string[];
+}
+
+export interface ClaimOutcomePair {
+  claimId: string;
+  claimText: string;
+  wasClaimCorrect: boolean | null;
+  confidenceAtArtifactTime: number;
+  actualOutcome: string | null;
+}
+
+export interface ArtifactQualityDimension {
+  dimension: "accuracy" | "completeness" | "persuasiveness" | "actionability" | "structure";
+  score: number;
+  comment: string | null;
+}
+
+export interface ArtifactOutcome {
+  id: string;
+  artifactId: string;
+  artifactType: string;
+  userId: string;
+  actionTaken: string;
+  outcomeDate: Date;
+  outcomeDescription: string;
+  outcomeType: "success" | "partial_success" | "failure" | "inconclusive" | "pending";
+  loadBearingClaimResolutions: ClaimOutcomePair[];
+  artifactQualityRating: number;
+  qualityDimensions: ArtifactQualityDimension[];
+  wouldUseAgain: boolean;
+  lessonsLearned: string | null;
+}
+
+export interface ArtifactRecord {
+  id: string;
+  artifactTypeId: ArtifactTypeId;
+  artifactTypeName: string;
+  title: string;
+  audience: string | null;
+  sourceMapId: string;
+  generatedAt: Date;
+  version: number;
+  sectionOrder: string[];
+  narrativeGlue: string | null;
+  sections: ArtifactSection[];
+  loadBearingClaims: ClaimOutcomePair[];
+  outcomes: ArtifactOutcome[];
+  latestOutcome: ArtifactOutcome | null;
+}
+
 export interface FounderBriefReadiness {
   eligible: boolean;
   missingRequirements: FounderBriefRequirement[];
 }
 
 export interface FounderBriefModel {
+  artifactId: string;
+  artifactTypeId: ArtifactTypeId;
   ideaSummary: string;
   targetUser: string;
   coreClaim: string;
@@ -466,6 +573,7 @@ export interface FounderBriefModel {
   ifYouWereRight: string;
   twinCheck: string;
   dependencyCompleteness: string;
+  loadBearingClaims: ClaimOutcomePair[];
   generatedAt: Date;
 }
 
@@ -954,6 +1062,7 @@ export interface ThoughtMapModel {
   status: string;
   nodes: ThoughtNodeModel[];
   events: ThoughtMapEvent[];
+  artifacts: ArtifactRecord[];
   shapeDerivations: ShapeDerivation[];
   steelMans: SteelMan[];
   critiqueFeedbacks: CritiqueFeedback[];
@@ -988,6 +1097,78 @@ export interface ClaimCaptureMetadata {
   structureKind?: ClaimStructureKind;
 }
 
+export type ClaimResolutionType =
+  | "confirmed"
+  | "disconfirmed"
+  | "partially_confirmed"
+  | "inconclusive"
+  | "reframed"
+  | "superseded";
+
+export interface ResolutionEvidence {
+  evidenceText: string;
+  sourceType: "observation" | "report" | "third_party" | "personal_experience" | "data";
+  sourceUrl: string | null;
+  addedAt: Date;
+}
+
+export interface PostMortem {
+  whatHappened: string;
+  whatWasMissed: string;
+  shapesActiveAtPrediction: string[];
+  biasesActiveAtPrediction: string[];
+  keyAssumptionsThatWereWrong: string[];
+  whatToDoNextTime: string;
+  emotionalAssessment: "relieved" | "unsurprised" | "surprised" | "frustrated" | "uncertain" | null;
+  createdAt: Date;
+}
+
+export interface PropagationResult {
+  claimId: string;
+  claimText: string;
+  relation: "direct" | "transitive";
+  currentConfidence: number | null;
+  suggestedConfidence: number | null;
+  decision: BeliefPropagationDecisionType;
+  confidenceDelta: number | null;
+  downstreamArtifacts: string[];
+}
+
+export interface Lesson {
+  id: string;
+  mapId: string;
+  claimId: string;
+  text: string;
+  sourceResolutionId: string;
+  createdAt: Date;
+}
+
+export interface CalibrationImpact {
+  domainAffected: string;
+  previousBrierScore: number;
+  newBrierScore: number;
+  directionOfChange: "improved" | "degraded" | "unchanged";
+  confidenceAdjustmentSuggested: number | null;
+}
+
+export interface ClaimResolution {
+  id: string;
+  claimId: string;
+  mapId: string;
+  resolutionDate: Date;
+  resolutionType: ClaimResolutionType;
+  actualOutcome: string;
+  predictedConfidenceAtResolution: number;
+  brierScore: number;
+  logScore: number;
+  resolutionEvidence: ResolutionEvidence[];
+  postMortem: PostMortem | null;
+  propagationTriggered: boolean;
+  propagationResults: PropagationResult[];
+  lessonsCaptured: string[];
+  calibrationImpact: CalibrationImpact;
+}
+
 export interface ClaimStructureSnapshot {
   whyNowTrigger: string;
   confidenceMath: string | null;
@@ -1002,6 +1183,76 @@ export interface ClaimStructureSnapshot {
   mergeCandidates: string[];
   splitCandidates: string[];
   whyNowReason: string;
+}
+
+export type CalibrationTrend = "improving" | "stable" | "degrading";
+
+export interface CalibrationPoint {
+  confidenceBucket: string;
+  predictedRate: number;
+  actualRate: number;
+  sampleSize: number;
+}
+
+export interface DomainCalibrationProfile {
+  domain: CalibrationDomain;
+  claimCount: number;
+  resolvedClaimCount: number;
+  averageBrierScore: number;
+  calibrationCurve: CalibrationPoint[];
+  systematicError: "overconfident" | "underconfident" | "well_calibrated" | "insufficient_data";
+  errorMagnitude: number;
+  bestDomain: boolean;
+  worstDomain: boolean;
+  coachingNote: string;
+}
+
+export interface ClaimTypeCalibrationProfile {
+  claimType: ClaimStructureKind;
+  resolvedCount: number;
+  averageBrierScore: number;
+  systematicError: "overconfident" | "underconfident" | "well_calibrated" | "insufficient_data";
+  coachingNote: string;
+}
+
+export type CoachingRecommendationType =
+  | "reduce_confidence"
+  | "increase_confidence"
+  | "seek_more_evidence"
+  | "use_base_rate"
+  | "apply_reference_class"
+  | "stress_test_more";
+
+export interface CoachingRecommendation {
+  id: string;
+  domain: CalibrationDomain | null;
+  claimType: ClaimStructureKind | null;
+  recommendationType: CoachingRecommendationType;
+  recommendationText: string;
+  magnitude: number;
+  evidenceCount: number;
+  priority: "low" | "medium" | "high";
+}
+
+export interface CalibrationCoachingRejection {
+  id: string;
+  userId: string;
+  domain: CalibrationDomain;
+  claimType: ClaimStructureKind;
+  originalConfidence: number;
+  suggestedAdjustment: number;
+  recommendationText: string;
+  dismissedAt: Date;
+}
+
+export interface CalibrationCoaching {
+  userId: string;
+  generatedAt: Date;
+  domainProfiles: DomainCalibrationProfile[];
+  claimTypeProfiles: ClaimTypeCalibrationProfile[];
+  coachingRecommendations: CoachingRecommendation[];
+  overallTrend: CalibrationTrend;
+  rejectionHistory: CalibrationCoachingRejection[];
 }
 
 export interface CreateThoughtMapInput {

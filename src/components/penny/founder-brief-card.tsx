@@ -1,9 +1,16 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CopyBriefButton } from "@/components/penny/copy-brief-button";
+import { ArtifactOutcomeFlow } from "@/components/penny/artifact-outcome-flow";
 import { formatFounderBrief } from "@/lib/founder-brief";
 import type { FounderBriefModel } from "@/types/thought-map";
 
 export function FounderBriefCard({ brief }: { brief: FounderBriefModel }) {
+  const [showOutcomeFlow, setShowOutcomeFlow] = useState(false);
+
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-black/8 bg-[var(--panel)] px-6 py-4">
@@ -11,13 +18,35 @@ export function FounderBriefCard({ brief }: { brief: FounderBriefModel }) {
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Founder Brief</p>
           <h3 className="mt-1 text-xl font-semibold text-[var(--ink)]">Map-derived summary worth revisiting</h3>
         </div>
-        <CopyBriefButton value={formatFounderBrief(brief)} />
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => setShowOutcomeFlow((current) => !current)}>
+            Add outcome
+          </Button>
+          <CopyBriefButton value={formatFounderBrief(brief)} />
+        </div>
       </div>
+
+      {showOutcomeFlow ? (
+        <div className="border-b border-black/8 bg-[var(--panel)] px-6 py-6">
+          <ArtifactOutcomeFlow
+            artifactId={brief.artifactId}
+            artifactTypeLabel="Founder Brief"
+            loadBearingClaims={brief.loadBearingClaims}
+            onClose={() => setShowOutcomeFlow(false)}
+            onSaved={(_, retrospectivePrompt) => {
+              if (!retrospectivePrompt) {
+                setShowOutcomeFlow(false);
+              }
+            }}
+          />
+        </div>
+      ) : null}
 
       <div className="grid gap-6 px-6 py-6 text-sm leading-7 text-[var(--ink)] lg:grid-cols-2">
         <Section title="Idea summary" content={brief.ideaSummary} />
         <Section title="Target user" content={brief.targetUser} />
         <Section title="Core claim" content={brief.coreClaim} />
+        <ListSection title="Load-bearing claims" items={brief.loadBearingClaims.map((claim) => claim.claimText)} />
         <ListSection title="Key assumptions" items={brief.keyAssumptions} />
         <ListSection title="Strongest counterarguments" items={brief.strongestCounterarguments} />
         <OrderedSection title="Next 3 validation steps" items={brief.nextValidationSteps} />
