@@ -353,6 +353,7 @@
 - `repo`: `src/app/app/page.tsx` now surfaces a small foundation stack for Lens, overrides, and precedents, and `src/components/penny/thought-map-workspace.tsx` now frames triage and the override trail with that same foundation language.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces precedent-grounded critique, peer simulation, norm-challenge scrutiny, confidence decay, and interleaved stress-testing as first-class critique surfaces.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now adds a specific-audience critique surface, advisor review mode, and bounded co-thinking affordances so the user can critique for a concrete audience without turning the graph into a social feed.
+- `repo`: `src/components/penny/margin-rail.tsx` now provides a hotkey-driven Margin lane for fleeting-thought capture, silent persistence, resurfacing candidates, clusters, and weekly review across session, map, and dashboard surfaces.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a round-tracked dialectic scaffold, a synthesis-gate surface, a move-query lens, and confidence drift indicators in the old-selves timeline.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a first-class timeline block for whole-map events, per-shape confidence trails, and dependency-chain progression.
 - `repo`: `src/app/app/page.tsx` now surfaces a memory/time dashboard with what-I-used-to-believe digests, prediction retrospectives, belief velocity, and decisions under Penny.
