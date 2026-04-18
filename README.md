@@ -59,6 +59,14 @@ Brain has two primary views of the same data:
 
 The Map is where the structure becomes visible. The Stream is where daily work starts.
 
+## Margin
+
+Margin is the low-friction capture lane for fleeting thoughts that should stay alive without interrupting the current thread.
+
+- Press Tab to stash a fragment in under three seconds.
+- Fragments stay separate from claims until the user promotes, merges, or archives them.
+- Penny resurfaces fragments when they match the current context, cluster with other fragments, or age into a weekly review.
+
 ## Challenge
 
 Challenge is the dialectic interaction: claim, counterargument, response, repeated in explicit rounds.
