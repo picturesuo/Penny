@@ -1,7 +1,9 @@
 import { cleanSentence } from "@/lib/penny";
 import type { PennyLensSnapshot } from "@/lib/penny-insights";
 import type {
+  ArtifactDiff,
   ArtifactRecord,
+  ArtifactSectionDiff,
   ArtifactTemplate,
   ArtifactType,
   ArtifactTypeId,
@@ -720,5 +722,33 @@ export function artifactRecordFromFounderBrief(map: ThoughtMapModel, brief: Foun
     loadBearingClaims: brief.loadBearingClaims,
     outcomes: [],
     latestOutcome: null,
+  };
+}
+
+function normalizeDiffText(value: string | null | undefined) {
+  return (value ?? "").trim().replace(/\s+/g, " ");
+}
+
+export function diffArtifactRecords(previous: ArtifactRecord, current: ArtifactRecord): ArtifactDiff {
+  const previousSections = new Map(previous.sections.map((section) => [section.id, section]));
+  const sectionDiffs: ArtifactSectionDiff[] = current.sections.map((section) => {
+    const before = previousSections.get(section.id)?.body ?? "";
+    const after = section.body;
+    return {
+      id: section.id,
+      title: section.title,
+      before,
+      after,
+      changed: normalizeDiffText(before) !== normalizeDiffText(after),
+    };
+  });
+
+  return {
+    artifactId: current.id,
+    artifactTypeId: current.artifactTypeId,
+    fromVersion: previous.version,
+    toVersion: current.version,
+    changedSectionCount: sectionDiffs.filter((section) => section.changed).length,
+    sectionDiffs,
   };
 }
