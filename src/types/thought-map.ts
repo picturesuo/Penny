@@ -80,6 +80,7 @@ export type BeliefPropagationDecisionType = "accept" | "override" | "decouple";
 
 export interface BeliefNode {
   claimId: string;
+  kind: ThoughtNodeKind;
   prior: number;
   posterior: number;
   posteriorComputedAt: Date;
@@ -180,7 +181,7 @@ export interface BeliefPropagationRequest {
 }
 
 export interface BeliefPropagationResponse {
-  result: BeliefPropagationGraphSnapshot;
+  result: BeliefPropagationResult;
   graphEventId: string | null;
   propagationEventId: string | null;
   decisionEventId: string | null;
@@ -188,6 +189,9 @@ export interface BeliefPropagationResponse {
     nodeIds: string[];
     message: string;
   } | null;
+  graphEvent?: ThoughtMapEvent | null;
+  propagationEvent?: ThoughtMapEvent | null;
+  cycleEvent?: ThoughtMapEvent | null;
 }
 
 export type DialecticCritiqueStrength = "mild" | "moderate" | "strong" | "adversarial";
