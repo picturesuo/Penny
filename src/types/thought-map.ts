@@ -388,6 +388,10 @@ export interface BayesianPropagationSnapshot {
   seedNodeId: string;
   seedConfidence: number;
   overrideCount: number;
+  cycleError?: {
+    nodeIds: string[];
+    message: string;
+  } | null;
   cascade: BayesianPropagationStep[];
   supporterChain: Array<{
     nodeId: string;
