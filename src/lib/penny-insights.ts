@@ -7,6 +7,14 @@ import type {
   ClaimStructureKind,
   ClaimStatus,
   ClaimStake,
+  Concession,
+  Defense,
+  Dismissal,
+  DialecticCritiqueStrength,
+  DialecticRound,
+  DialecticResponsePath,
+  ResponseClassification,
+  ResponseClassificationType,
   ThoughtMapEvent,
   ThoughtMapModel,
   ThoughtNodeModel,
@@ -101,6 +109,320 @@ function confidenceFromScore(score: number | null | undefined) {
 
 function recencyDaysFromDates(from: Date, to: Date) {
   return Math.max(0, Math.floor((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+export interface DialecticResponseAnalysis {
+  classification: ResponseClassification;
+  concessions: Concession[];
+  defenses: Defense[];
+  dismissals: Dismissal[];
+  engagementScore: number;
+  followUpPrompt: string;
+  newEvidenceAdded: boolean;
+}
+
+function normalizeDialecticText(text: string) {
+  return text.trim().toLowerCase();
+}
+
+function containsAny(text: string, phrases: string[]) {
+  return phrases.some((phrase) => text.includes(phrase));
+}
+
+function looksLikeEvidence(text: string) {
+  return /(https?:\/\/|www\.|paper|study|evidence|source|according to|for example|for instance|dataset|citation|cite|chart|figure|\[\d+\])/.test(
+    text,
+  );
+}
+
+function detectClaimElement(text: string, fallback: "main_claim" = "main_claim"): DialecticClaimElement {
+  if (/(assumption|assume|presume|premise)/.test(text)) {
+    return "assumption";
+  }
+
+  if (/(evidence|source|citation|study|paper|data)/.test(text)) {
+    return "evidence";
+  }
+
+  if (/(warrant|because|therefore|so that|logic|reasoning)/.test(text)) {
+    return "warrant";
+  }
+
+  if (/(framing|frame|reframe|context|angle)/.test(text)) {
+    return "framing";
+  }
+
+  return fallback;
+}
+
+function detectDefenseStrength(text: string, evidenceAdded: boolean) {
+  const length = text.trim().length;
+
+  if (evidenceAdded && length >= 180) {
+    return "strong";
+  }
+
+  if (length >= 90) {
+    return "moderate";
+  }
+
+  return "weak";
+}
+
+function hasClarifyingQuestion(text: string) {
+  return /\?$/.test(text.trim()) || /(?:what if|how would|can you clarify|do you mean|why not)/.test(text);
+}
+
+function classifyDialecticResponse(params: {
+  response: string;
+  responsePath: DialecticResponsePath;
+  critiqueFailureTypes: string[];
+  confidenceChange: number;
+  evidenceAdded: boolean;
+}): ResponseClassification {
+  const text = normalizeDialecticText(params.response);
+  const concessionSignals = containsAny(text, [
+    "you're right",
+    "you are right",
+    "fair point",
+    "i concede",
+    "i concede that",
+    "you're probably right",
+    "that is fair",
+    "that's fair",
+    "i hadn't considered",
+    "i was wrong",
+  ]);
+  const defenseSignals = containsAny(text, [
+    "however",
+    "but",
+    "because",
+    "the reason is",
+    "i still think",
+    "i disagree",
+    "my point is",
+    "what i'm saying",
+  ]);
+  const dismissalSignals = containsAny(text, [
+    "irrelevant",
+    "not the point",
+    "doesn't matter",
+    "does not matter",
+    "i don't buy it",
+    "that's a strawman",
+    "this doesn't apply",
+  ]);
+  const reframeSignals = containsAny(text, [
+    "reframe",
+    "better question",
+    "the real question",
+    "more importantly",
+    "from another angle",
+    "the issue is actually",
+  ]);
+
+  const evidenceScore = params.evidenceAdded ? 1 : 0;
+  const confidenceScore = params.confidenceChange < 0 ? 1 : 0;
+  const path = params.responsePath;
+
+  if (dismissalSignals && !defenseSignals && !concessionSignals) {
+    return {
+      type: "dismissal",
+      confidence: 0.82,
+      classifiedBy: "inferred",
+    };
+  }
+
+  if (concessionSignals && defenseSignals) {
+    return {
+      type: "partial_concession",
+      confidence: 0.84,
+      classifiedBy: path === "revise" || path === "absorb" ? "user_explicit" : "inferred",
+    };
+  }
+
+  if (concessionSignals || path === "revise") {
+    return {
+      type: confidenceScore || evidenceScore ? "concession" : "concession",
+      confidence: confidenceScore ? 0.92 : 0.78,
+      classifiedBy: path === "revise" ? "user_explicit" : "inferred",
+    };
+  }
+
+  if (evidenceScore && (defenseSignals || path === "defend")) {
+    return {
+      type: "evidence_addition",
+      confidence: 0.88,
+      classifiedBy: path === "defend" ? "user_explicit" : "inferred",
+    };
+  }
+
+  if (reframeSignals) {
+    return {
+      type: "reframe",
+      confidence: 0.76,
+      classifiedBy: "inferred",
+    };
+  }
+
+  if (defenseSignals || path === "defend") {
+    return {
+      type: "defense",
+      confidence: defenseSignals ? 0.86 : 0.72,
+      classifiedBy: path === "defend" ? "user_explicit" : "inferred",
+    };
+  }
+
+  if (path === "absorb") {
+    return {
+      type: "dismissal",
+      confidence: 0.7,
+      classifiedBy: "user_explicit",
+    };
+  }
+
+  return {
+    type: params.confidenceChange < 0 ? "partial_concession" : "reframe",
+    confidence: 0.58,
+    classifiedBy: "inferred",
+  };
+}
+
+export function scoreDialecticEngagement(params: {
+  response: string;
+  critiqueGenerated: string;
+  critiqueFailureTypes: string[];
+  confidenceChange: number;
+  evidenceAdded: boolean;
+  classification: ResponseClassification;
+}) {
+  const responseLength = params.response.trim().length;
+  const critiqueLength = Math.max(1, params.critiqueGenerated.trim().length);
+  const lengthRatio = Math.min(1, responseLength / Math.max(critiqueLength * 0.6, 80));
+  const lengthScore = Math.round(lengthRatio * 30);
+  const evidenceScore = params.evidenceAdded ? 22 : 0;
+  const failureTypeScore =
+    params.critiqueFailureTypes.length && containsAny(normalizeDialecticText(params.response), params.critiqueFailureTypes)
+      ? 16
+      : containsAny(normalizeDialecticText(params.response), ["because", "mechanism", "assumption", "evidence", "therefore"])
+        ? 10
+        : 0;
+  const confidenceScore = params.confidenceChange !== 0 ? 12 : 0;
+  const questionScore = hasClarifyingQuestion(params.response) ? 8 : 0;
+  const classificationScore =
+    params.classification.type === "partial_concession" || params.classification.type === "concession"
+      ? 12
+      : params.classification.type === "evidence_addition"
+        ? 10
+        : params.classification.type === "dismissal"
+          ? 4
+          : 6;
+
+  return Math.max(0, Math.min(100, lengthScore + evidenceScore + failureTypeScore + confidenceScore + questionScore + classificationScore));
+}
+
+export function analyzeDialecticResponse(params: {
+  roundId: string;
+  response: string;
+  responsePath: DialecticResponsePath;
+  critiqueGenerated: string;
+  critiqueFailureTypes: string[];
+  confidenceAtRoundStart: number;
+  confidenceAtRoundEnd: number;
+  priorRoundsCount: number;
+  followUpFocus: string;
+  responseAddressedEvidence?: boolean;
+}): DialecticResponseAnalysis {
+  const confidenceChange = Number((params.confidenceAtRoundEnd - params.confidenceAtRoundStart).toFixed(2));
+  const classification = classifyDialecticResponse({
+    response: params.response,
+    responsePath: params.responsePath,
+    critiqueFailureTypes: params.critiqueFailureTypes,
+    confidenceChange,
+    evidenceAdded: params.responseAddressedEvidence ?? looksLikeEvidence(params.response),
+  });
+  const evidenceAdded = params.responseAddressedEvidence ?? looksLikeEvidence(params.response);
+  const text = params.response.trim();
+  const claimElement = detectClaimElement(text);
+  const confidenceChangeTrigger = confidenceChange !== 0 || classification.type === "concession" || classification.type === "partial_concession";
+  const downstreamPropagate =
+    confidenceChangeTrigger &&
+    (classification.type === "concession" || classification.type === "partial_concession" || classification.type === "evidence_addition");
+  const concessions: Concession[] =
+    classification.type === "concession" || classification.type === "partial_concession"
+      ? [
+          {
+            id: `${params.roundId}:concession`,
+            roundId: params.roundId,
+            claimElement,
+            concededPoint: text,
+            confidenceChangeTrigger,
+            downstreamPropagate,
+          },
+        ]
+      : [];
+  const defenses: Defense[] =
+    classification.type === "defense" ||
+    classification.type === "evidence_addition" ||
+    classification.type === "partial_concession"
+      ? [
+          {
+            id: `${params.roundId}:defense`,
+            roundId: params.roundId,
+            claimElement,
+            defenseText: text,
+            defenseStrength: detectDefenseStrength(text, evidenceAdded),
+            evidenceAdded,
+            newSourceCited: /(https?:\/\/|www\.|paper|study|source|citation|according to)/.test(text),
+          },
+        ]
+      : [];
+  const dismissals: Dismissal[] =
+    classification.type === "dismissal"
+      ? [
+          {
+            id: `${params.roundId}:dismissal`,
+            roundId: params.roundId,
+            dismissalText: text,
+            reasonGiven: containsAny(normalizeDialecticText(text), ["because", "reason", "since", "for the reason"]) ? text : null,
+            flaggedAsAvoidance: !containsAny(normalizeDialecticText(text), ["because", "reason", "since", "for the reason"]),
+          },
+        ]
+      : [];
+
+  const followUpPrompt =
+    params.priorRoundsCount >= 2 && confidenceChange === 0 && !evidenceAdded
+      ? "The next round should be a meta-prompt that names the lack of confidence change or new evidence."
+      : classification.type === "concession"
+        ? `The next round should focus on the conceded ${claimElement} and test whether the remaining defense survives it.`
+        : classification.type === "partial_concession"
+          ? `The next round should stay with the part you conceded and pressure the remaining defense on the ${claimElement}.`
+          : classification.type === "dismissal"
+            ? `The next round should test whether dismissing the ${claimElement} is avoidance or a defensible refusal to update.`
+            : classification.type === "evidence_addition"
+              ? `The next round should examine whether the new evidence changes the ${claimElement} or only adds color.`
+              : classification.type === "reframe"
+                ? `The next round should follow the reframed point and see whether it changes the original failure type ${params.critiqueFailureTypes[0] ?? "in question"}.`
+                : `The next round should pressure the strongest remaining defense against ${params.critiqueFailureTypes[0] ?? "the current critique"}.`;
+
+  const engagementScore = scoreDialecticEngagement({
+    response: text,
+    critiqueGenerated: params.critiqueGenerated,
+    critiqueFailureTypes: params.critiqueFailureTypes,
+    confidenceChange,
+    evidenceAdded,
+    classification,
+  });
+
+  return {
+    classification,
+    concessions,
+    defenses,
+    dismissals,
+    engagementScore,
+    followUpPrompt,
+    newEvidenceAdded: evidenceAdded,
+  };
 }
 
 function nodeLabel(node: ThoughtNodeModel | null | undefined) {
