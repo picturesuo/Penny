@@ -8,7 +8,14 @@ import type {
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/db/prisma";
 import { buildFounderBrief, getFounderBriefReadiness } from "@/lib/founder-brief";
+import {
+  buildBeliefGraph,
+  propagateBeliefGraph,
+  serializeBeliefGraph,
+  serializeBeliefPropagationResult,
+} from "@/lib/bayesian-propagation";
 import { analyzeDialecticResponse, assessSteelManQuality, buildPennyLens } from "@/lib/penny-insights";
+import { buildRevisitQueue, computeLeitnerBox, computeRevisitScheduleForNode, computeRevisitSchedulesForMap } from "@/lib/revisit-scheduler";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
 import {
   createRootNodeContent,
@@ -20,17 +27,31 @@ import { cleanSentence } from "@/lib/penny";
 import type {
   CognitiveIntervention,
   ClaimCaptureMetadata,
+  ClaimRepairAction,
   CreateThoughtMapInput,
   FounderBriefModel,
   DialecticCritiqueStrength,
   GeneratedActionBundle,
   NodeAction,
+  EdgeChange,
+  RevisitAction,
+  RevisitLeitnerBox,
+  RevisitPriority,
+  RevisitReason,
+  RevisitSchedule,
+  RevisitStatus,
   SteelMan,
   SteelManVersion,
+  SupersessionRecord,
+  TriggerDefinition,
   ThoughtMapEvent as ThoughtMapEventModel,
   ThoughtMapModel,
   ThoughtMapEventType,
   ThoughtNodeModel,
+  BeliefPropagationAction,
+  BeliefPropagationDecision,
+  BeliefPropagationRequest,
+  BeliefPropagationResponse,
 } from "@/types/thought-map";
 
 function mapNode(record: ThoughtNode): ThoughtNodeModel {
@@ -73,6 +94,8 @@ function buildThoughtMapModel(
     nodes: record.nodes.map(mapNode),
     events: events.map(mapEventRecord),
     steelMans: parseSteelMans(record.steelMans),
+    repairActions: parseClaimRepairActions(record.repairActions),
+    revisitSchedules: parseRevisitSchedules(record.revisitSchedules),
     founderBrief,
     founderBriefReadiness: {
       eligible: false,
@@ -207,6 +230,284 @@ function parseSteelMans(value: string | null | undefined) {
       const bUpdatedAt = b.updatedAt?.getTime() ?? b.writtenAt.getTime();
       return bUpdatedAt - aUpdatedAt || b.writtenAt.getTime() - a.writtenAt.getTime();
     });
+}
+
+function normalizeSupersessionRecord(record: unknown): SupersessionRecord | null {
+  if (!isRecord(record)) {
+    return null;
+  }
+
+  const supersessionType =
+    record.supersessionType === "merge" || record.supersessionType === "split" || record.supersessionType === "reclassification"
+      ? record.supersessionType
+      : null;
+
+  if (!supersessionType) {
+    return null;
+  }
+
+  return {
+    supersededClaimIds: Array.isArray(record.supersededClaimIds)
+      ? record.supersededClaimIds.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [],
+    supersedingClaimIds: Array.isArray(record.supersedingClaimIds)
+      ? record.supersedingClaimIds.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [],
+    supersessionType,
+    preservedHistory: Boolean(record.preservedHistory),
+  };
+}
+
+function normalizeEdgeChange(record: unknown): EdgeChange | null {
+  if (!isRecord(record)) {
+    return null;
+  }
+
+  const changeType =
+    record.changeType === "created" ||
+    record.changeType === "deleted" ||
+    record.changeType === "rerouted" ||
+    record.changeType === "strength_adjusted"
+      ? record.changeType
+      : null;
+  const edgeId = typeof record.edgeId === "string" ? record.edgeId : "";
+  const fromClaimId = typeof record.fromClaimId === "string" ? record.fromClaimId : "";
+  const toClaimId = typeof record.toClaimId === "string" ? record.toClaimId : "";
+  const reason = typeof record.reason === "string" && record.reason.trim().length > 0 ? record.reason.trim() : "";
+
+  if (!changeType || !edgeId || !fromClaimId || !toClaimId || !reason) {
+    return null;
+  }
+
+  return {
+    edgeId,
+    changeType,
+    fromClaimId,
+    toClaimId,
+    reason,
+  };
+}
+
+function normalizeClaimRepairAction(record: unknown): ClaimRepairAction | null {
+  if (!isRecord(record)) {
+    return null;
+  }
+
+  const actionType =
+    record.actionType === "merge" ||
+    record.actionType === "split" ||
+    record.actionType === "promote" ||
+    record.actionType === "demote" ||
+    record.actionType === "reclassify" ||
+    record.actionType === "reroute_edge" ||
+    record.actionType === "reroot"
+      ? record.actionType
+      : null;
+  const initiatedBy = record.initiatedBy === "user" || record.initiatedBy === "penny_suggestion" ? record.initiatedBy : null;
+  const reasoning = typeof record.reasoning === "string" && record.reasoning.trim().length > 0 ? record.reasoning.trim() : "";
+  const createdAt = parseSteelManDate(record.createdAt);
+  const supersessionRecord = normalizeSupersessionRecord(record.supersessionRecord);
+
+  if (!actionType || !initiatedBy || !reasoning || !createdAt || !supersessionRecord) {
+    return null;
+  }
+
+  return {
+    id: typeof record.id === "string" ? record.id : "",
+    mapId: typeof record.mapId === "string" ? record.mapId : "",
+    actionType,
+    initiatedBy,
+    sourceClaimIds: Array.isArray(record.sourceClaimIds)
+      ? record.sourceClaimIds.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [],
+    resultingClaimIds: Array.isArray(record.resultingClaimIds)
+      ? record.resultingClaimIds.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [],
+    reasoning,
+    supersessionRecord,
+    edgeChanges: Array.isArray(record.edgeChanges)
+      ? record.edgeChanges.map(normalizeEdgeChange).filter((item): item is EdgeChange => item !== null)
+      : [],
+    propagationTriggered: Boolean(record.propagationTriggered),
+    createdAt,
+  };
+}
+
+function normalizeTriggerDefinition(record: unknown): TriggerDefinition | null {
+  if (!isRecord(record)) {
+    return null;
+  }
+
+  const triggerType =
+    record.triggerType === "date" ||
+    record.triggerType === "event_keyword" ||
+    record.triggerType === "dependency_update" ||
+    record.triggerType === "confidence_threshold" ||
+    record.triggerType === "manual_flag"
+      ? record.triggerType
+      : null;
+
+  if (!triggerType) {
+    return null;
+  }
+
+  return {
+    triggerType,
+    dateTarget: parseSteelManDate(record.dateTarget),
+    eventKeyword: typeof record.eventKeyword === "string" && record.eventKeyword.trim().length > 0 ? record.eventKeyword.trim() : null,
+    confidenceThreshold: typeof record.confidenceThreshold === "number" ? record.confidenceThreshold : null,
+    dependencyClaimId:
+      typeof record.dependencyClaimId === "string" && record.dependencyClaimId.trim().length > 0 ? record.dependencyClaimId.trim() : null,
+  };
+}
+
+function normalizeRevisitReason(record: unknown): RevisitReason | null {
+  if (!isRecord(record)) {
+    return null;
+  }
+
+  const type =
+    record.type === "age_threshold" ||
+    record.type === "stake_level" ||
+    record.type === "untested" ||
+    record.type === "dependency_changed" ||
+    record.type === "resolution_date_approaching" ||
+    record.type === "confidence_drift" ||
+    record.type === "external_trigger" ||
+    record.type === "manual"
+      ? record.type
+      : null;
+  const description = typeof record.description === "string" && record.description.trim().length > 0 ? record.description.trim() : "";
+  const urgencyScore = typeof record.urgencyScore === "number" ? record.urgencyScore : 0;
+
+  if (!type || !description) {
+    return null;
+  }
+
+  return {
+    type,
+    description,
+    urgencyScore,
+  };
+}
+
+function normalizeRevisitAction(record: unknown): RevisitAction | null {
+  if (!isRecord(record)) {
+    return null;
+  }
+
+  const type =
+    record.type === "reviewed_no_change" ||
+    record.type === "confidence_updated" ||
+    record.type === "claim_updated" ||
+    record.type === "claim_retired" ||
+    record.type === "snoozed" ||
+    record.type === "triggered_repair" ||
+    record.type === "triggered_dialectic"
+      ? record.type
+      : null;
+  const completedAt = parseSteelManDate(record.completedAt);
+
+  if (!type || !completedAt) {
+    return null;
+  }
+
+  return {
+    type,
+    notes: typeof record.notes === "string" && record.notes.trim().length > 0 ? record.notes.trim() : null,
+    newConfidence: typeof record.newConfidence === "number" ? record.newConfidence : null,
+    completedAt,
+  };
+}
+
+function normalizeRevisitSchedule(record: unknown): RevisitSchedule | null {
+  if (!isRecord(record)) {
+    return null;
+  }
+
+  const status =
+    record.status === "pending" ||
+    record.status === "surfaced" ||
+    record.status === "snoozed" ||
+    record.status === "completed" ||
+    record.status === "dismissed"
+      ? record.status
+      : null;
+  const priority = record.priority === "low" || record.priority === "medium" || record.priority === "high" || record.priority === "urgent" ? record.priority : null;
+  const triggerType =
+    record.triggerType === "time_based" ||
+    record.triggerType === "event_based" ||
+    record.triggerType === "dependency_change" ||
+    record.triggerType === "confidence_drift" ||
+    record.triggerType === "external_trigger"
+      ? record.triggerType
+      : null;
+  const schedulingReason = normalizeRevisitReason(record.schedulingReason);
+  const triggerDefinition = normalizeTriggerDefinition(record.triggerDefinition);
+  const scheduledFor = parseSteelManDate(record.scheduledFor);
+  const lastComputedAt = parseSteelManDate(record.lastComputedAt);
+
+  if (
+    !status ||
+    !priority ||
+    !triggerType ||
+    !schedulingReason ||
+    !triggerDefinition ||
+    !scheduledFor ||
+    !lastComputedAt ||
+    typeof record.id !== "string" ||
+    typeof record.claimId !== "string" ||
+    typeof record.mapId !== "string" ||
+    typeof record.userId !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    id: record.id,
+    claimId: record.claimId,
+    mapId: record.mapId,
+    userId: record.userId,
+    scheduledFor,
+    schedulingReason,
+    priority,
+    status,
+    leitnerBox: record.leitnerBox === 1 || record.leitnerBox === 2 || record.leitnerBox === 3 || record.leitnerBox === 4 || record.leitnerBox === 5 ? record.leitnerBox : 1,
+    surfacedAt: parseSteelManDate(record.surfacedAt),
+    userAction: normalizeRevisitAction(record.userAction),
+    snoozedUntil: parseSteelManDate(record.snoozedUntil),
+    triggerType,
+    triggerDefinition,
+    lastComputedAt,
+  };
+}
+
+function parseClaimRepairActions(value: string | null | undefined) {
+  const parsed = parseJson<unknown>(value ?? null);
+
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return parsed
+    .map(normalizeClaimRepairAction)
+    .filter((repairAction): repairAction is ClaimRepairAction => repairAction !== null)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
+function parseRevisitSchedules(value: string | null | undefined) {
+  const parsed = parseJson<unknown>(value ?? null);
+
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  const priorityWeight = (priority: RevisitPriority) => (priority === "urgent" ? 4 : priority === "high" ? 3 : priority === "medium" ? 2 : 1);
+
+  return parsed
+    .map(normalizeRevisitSchedule)
+    .filter((schedule): schedule is RevisitSchedule => schedule !== null)
+    .sort((a, b) => priorityWeight(b.priority) - priorityWeight(a.priority) || a.scheduledFor.getTime() - b.scheduledFor.getTime());
 }
 
 function mapEventRecord(record: ThoughtMapEventRecord): ThoughtMapEventModel {
@@ -514,6 +815,151 @@ export async function recordConfidenceOverride(params: {
   return mapEventRecord(created);
 }
 
+function decisionTypeToConfidenceMode(decisionType: Exclude<BeliefPropagationAction, "compute">) {
+  if (decisionType === "decouple") {
+    return "decouple" as const;
+  }
+
+  if (decisionType === "override") {
+    return "reduce" as const;
+  }
+
+  return "hold" as const;
+}
+
+export async function recordBeliefPropagationDecision(params: {
+  mapId: string;
+  seedClaimId: string;
+  targetClaimId: string;
+  decisionType: Exclude<BeliefPropagationAction, "compute">;
+  oldPosterior: number;
+  proposedPosterior: number;
+  finalPosterior: number;
+  reason: string;
+  arithmetic: BeliefPropagationDecision["arithmetic"];
+}) {
+  const createdAt = new Date();
+  const created = await prisma.$transaction(async (tx) => {
+    const decisionEvent = await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.targetClaimId,
+        eventType: "belief_propagation_decision",
+        payload: serializeJson({
+          seedClaimId: params.seedClaimId,
+          targetClaimId: params.targetClaimId,
+          decisionType: params.decisionType,
+          oldPosterior: params.oldPosterior,
+          proposedPosterior: params.proposedPosterior,
+          finalPosterior: params.finalPosterior,
+          reason: params.reason,
+          arithmetic: params.arithmetic,
+          createdAt,
+        }),
+      },
+    });
+
+    const compatibilityEvent = await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.targetClaimId,
+        eventType: "confidence_override",
+        payload: serializeJson({
+          sourceNodeId: params.seedClaimId,
+          targetNodeId: params.targetClaimId,
+          mode: decisionTypeToConfidenceMode(params.decisionType),
+          reasoning: params.reason,
+        }),
+      },
+    });
+
+    return {
+      decisionEvent,
+      compatibilityEvent,
+    };
+  });
+
+  return {
+    decisionEvent: mapEventRecord(created.decisionEvent),
+    compatibilityEvent: mapEventRecord(created.compatibilityEvent),
+  };
+}
+
+export async function recordBeliefPropagation(params: {
+  mapId: string;
+  seedClaimId: string;
+  updatedPosterior?: number | null;
+}): Promise<BeliefPropagationResponse> {
+  const map = await getThoughtMap(params.mapId);
+
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  const graph = buildBeliefGraph(map);
+  const result = propagateBeliefGraph(graph, params.seedClaimId, params.updatedPosterior ?? null);
+  const serializedResult = serializeBeliefPropagationResult(result);
+
+  const created = await prisma.$transaction(async (tx) => {
+    const graphEvent = await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.seedClaimId,
+        eventType: "belief_graph_state",
+        payload: serializeJson({
+          seedClaimId: params.seedClaimId,
+          beliefGraph: serializeBeliefGraph(result.graph),
+          cycleError: result.cycleError,
+          computedAt: result.computedAt,
+        }),
+      },
+    });
+
+    const propagationEvent = await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.seedClaimId,
+        eventType: "belief_propagation",
+        payload: serializeJson({
+          seedClaimId: params.seedClaimId,
+          updatedPosterior: params.updatedPosterior ?? null,
+          result: serializedResult,
+        }),
+      },
+    });
+
+    let cycleEvent: ThoughtMapEventRecord | null = null;
+    if (result.cycleError) {
+      cycleEvent = await tx.thoughtMapEvent.create({
+        data: {
+          mapId: params.mapId,
+          nodeId: params.seedClaimId,
+          eventType: "belief_graph_cycle",
+          payload: serializeJson({
+            seedClaimId: params.seedClaimId,
+            cycleError: result.cycleError,
+            computedAt: result.computedAt,
+          }),
+        },
+      });
+    }
+
+    return {
+      graphEvent,
+      propagationEvent,
+      cycleEvent,
+    };
+  });
+
+  return {
+    result,
+    graphEventId: created.graphEvent.id,
+    propagationEventId: created.propagationEvent.id,
+    decisionEventId: null,
+    cycleError: result.cycleError,
+  };
+}
+
 export async function recordDialecticRound(params: {
   mapId: string;
   nodeId?: string | null;
@@ -754,6 +1200,658 @@ export async function recordSteelMan(params: {
   return {
     steelMan,
     assessment,
+  };
+}
+
+function readString(value: Record<string, unknown>, keys: string[], fallback = "") {
+  for (const key of keys) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return fallback;
+}
+
+function readStringArray(value: Record<string, unknown>, key: string) {
+  const candidate = value[key];
+  if (!Array.isArray(candidate)) {
+    return [];
+  }
+
+  return candidate.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim());
+}
+
+export async function recordClaimRepairAction(params: {
+  mapId: string;
+  actionType: "merge" | "split" | "promote" | "demote" | "reclassify" | "reroute_edge" | "reroot";
+  initiatedBy?: "user" | "penny_suggestion";
+  sourceClaimIds: string[];
+  reasoning: string;
+  details?: Record<string, unknown>;
+  propagationTriggered?: boolean;
+  userId?: string;
+}) {
+  const userId = params.userId ?? getDemoThoughtUserId();
+  const map = await prisma.thoughtMap.findUnique({
+    where: { id: params.mapId },
+    select: {
+      id: true,
+      userId: true,
+      repairActions: true,
+      revisitSchedules: true,
+      nodes: {
+        select: {
+          id: true,
+          mapId: true,
+          parentId: true,
+          kind: true,
+          nodeStatus: true,
+          actionOrigin: true,
+          supersedesNodeId: true,
+          content: true,
+          note: true,
+          branchOrder: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  const sourceNodes = params.sourceClaimIds
+    .map((claimId) => map.nodes.find((node) => node.id === claimId))
+    .filter((node): node is ThoughtNode => node != null);
+
+  if (!sourceNodes.length) {
+    throw new Error("Claim not found");
+  }
+
+  const now = new Date();
+  const repairActions = parseClaimRepairActions(map.repairActions);
+  const branchOrderForParent = (parentId: string | null) =>
+    (map.nodes.filter((candidate) => candidate.parentId === parentId).reduce((max, candidate) => Math.max(max, candidate.branchOrder), 0) || 0) + 1;
+  const commonParentId =
+    sourceNodes.map((node) => node.parentId).every((parentId, _, list) => parentId === list[0])
+      ? sourceNodes[0]?.parentId ?? null
+      : sourceNodes[0]?.parentId ?? null;
+  let resultingClaimIds: string[] = [];
+  const edgeChanges: EdgeChange[] = [];
+  const supersessionRecord: SupersessionRecord = {
+    supersededClaimIds: sourceNodes.map((node) => node.id),
+    supersedingClaimIds: [],
+    supersessionType: params.actionType === "split" ? "split" : params.actionType === "merge" ? "merge" : "reclassification",
+    preservedHistory: true,
+  };
+
+  await prisma.$transaction(async (tx) => {
+    if (params.actionType === "merge") {
+      const mergedText = readString(params.details ?? {}, ["mergedText", "mergeText"], sourceNodes.map((node) => node.content).join(" "));
+      const mergedKind = (readString(params.details ?? {}, ["mergedKind", "newKind"], "core_claim") as ThoughtNode["kind"]) ?? "core_claim";
+      const mergedNode = await tx.thoughtNode.create({
+        data: {
+          mapId: map.id,
+          parentId: commonParentId,
+          kind: mergedKind,
+          nodeStatus: "active",
+          content: mergedText,
+          note: `Merged from ${sourceNodes.map((node) => node.id).join(", ")}`,
+          branchOrder: branchOrderForParent(commonParentId),
+        },
+      });
+
+      await tx.thoughtNode.updateMany({
+        where: { id: { in: sourceNodes.map((node) => node.id) } },
+        data: {
+          nodeStatus: "superseded",
+          supersedesNodeId: mergedNode.id,
+        },
+      });
+
+      const childIds = map.nodes.filter((node) => params.sourceClaimIds.includes(node.parentId ?? "")).map((node) => node.id);
+      if (childIds.length) {
+        await tx.thoughtNode.updateMany({
+          where: { id: { in: childIds } },
+          data: {
+            parentId: mergedNode.id,
+          },
+        });
+        edgeChanges.push(
+          ...childIds.map((childId) => ({
+            edgeId: `${map.id}:${childId}:${mergedNode.id}`,
+            changeType: "rerouted" as const,
+            fromClaimId: params.sourceClaimIds[0] ?? mergedNode.id,
+            toClaimId: mergedNode.id,
+            reason: "Children rerouted to the merged claim.",
+          })),
+        );
+      }
+
+      resultingClaimIds = [mergedNode.id];
+      supersessionRecord.supersedingClaimIds = [mergedNode.id];
+      edgeChanges.push({
+        edgeId: `${map.id}:${mergedNode.id}:parent`,
+        changeType: "created",
+        fromClaimId: commonParentId ?? mergedNode.id,
+        toClaimId: mergedNode.id,
+        reason: "Merged claim created from overlapping claims.",
+      });
+    } else if (params.actionType === "split") {
+      const source = sourceNodes[0];
+      const splitTexts = readStringArray(params.details ?? {}, "splitTexts");
+      const firstText = splitTexts[0] ?? readString(params.details ?? {}, ["firstText", "leftText"], `${source.content} (part 1)`);
+      const secondText = splitTexts[1] ?? readString(params.details ?? {}, ["secondText", "rightText"], `${source.content} (part 2)`);
+      const firstNode = await tx.thoughtNode.create({
+        data: {
+          mapId: map.id,
+          parentId: source.parentId,
+          kind: source.kind,
+          nodeStatus: "active",
+          content: firstText,
+          note: `Split from ${source.id}`,
+          branchOrder: branchOrderForParent(source.parentId),
+        },
+      });
+      const secondNode = await tx.thoughtNode.create({
+        data: {
+          mapId: map.id,
+          parentId: source.parentId,
+          kind: source.kind,
+          nodeStatus: "active",
+          content: secondText,
+          note: `Split from ${source.id}`,
+          branchOrder: branchOrderForParent(source.parentId) + 1,
+        },
+      });
+
+      await tx.thoughtNode.update({
+        where: { id: source.id },
+        data: {
+          nodeStatus: "superseded",
+          supersedesNodeId: firstNode.id,
+        },
+      });
+
+      const childNodes = map.nodes.filter((node) => node.parentId === source.id);
+      for (const [index, child] of childNodes.entries()) {
+        await tx.thoughtNode.update({
+          where: { id: child.id },
+          data: {
+            parentId: index % 2 === 0 ? firstNode.id : secondNode.id,
+          },
+        });
+        edgeChanges.push({
+          edgeId: `${map.id}:${child.id}:${index % 2 === 0 ? firstNode.id : secondNode.id}`,
+          changeType: "rerouted",
+          fromClaimId: source.id,
+          toClaimId: index % 2 === 0 ? firstNode.id : secondNode.id,
+          reason: "Child claim assigned during split.",
+        });
+      }
+
+      resultingClaimIds = [firstNode.id, secondNode.id];
+      supersessionRecord.supersedingClaimIds = resultingClaimIds;
+      edgeChanges.push(
+        {
+          edgeId: `${map.id}:${firstNode.id}:parent`,
+          changeType: "created",
+          fromClaimId: source.parentId ?? firstNode.id,
+          toClaimId: firstNode.id,
+          reason: "First split claim created.",
+        },
+        {
+          edgeId: `${map.id}:${secondNode.id}:parent`,
+          changeType: "created",
+          fromClaimId: source.parentId ?? secondNode.id,
+          toClaimId: secondNode.id,
+          reason: "Second split claim created.",
+        },
+      );
+    } else if (params.actionType === "promote") {
+      const source = sourceNodes[0];
+      const promotedText = readString(params.details ?? {}, ["promotedText", "claimText"], source.content);
+      const promotedNode = await tx.thoughtNode.create({
+        data: {
+          mapId: map.id,
+          parentId: source.parentId,
+          kind: "core_claim",
+          nodeStatus: "active",
+          content: promotedText,
+          note: `Promoted from ${source.id}`,
+          branchOrder: branchOrderForParent(source.parentId),
+        },
+      });
+
+      await tx.thoughtNode.update({
+        where: { id: source.id },
+        data: {
+          nodeStatus: "superseded",
+          supersedesNodeId: promotedNode.id,
+        },
+      });
+
+      const childNodes = map.nodes.filter((node) => node.parentId === source.id);
+      if (childNodes.length) {
+        await tx.thoughtNode.updateMany({
+          where: { id: { in: childNodes.map((node) => node.id) } },
+          data: {
+            parentId: promotedNode.id,
+          },
+        });
+      }
+
+      resultingClaimIds = [promotedNode.id];
+      supersessionRecord.supersedingClaimIds = [promotedNode.id];
+      edgeChanges.push({
+        edgeId: `${map.id}:${promotedNode.id}:parent`,
+        changeType: "created",
+        fromClaimId: source.parentId ?? promotedNode.id,
+        toClaimId: promotedNode.id,
+        reason: "Assumption promoted to first-class claim.",
+      });
+    } else if (params.actionType === "demote") {
+      const source = sourceNodes[0];
+      const targetClaimId = readString(params.details ?? {}, ["targetClaimId"], source.parentId ?? "");
+      if (!targetClaimId) {
+        throw new Error("Target claim required for demote");
+      }
+
+      const demotedNode = await tx.thoughtNode.create({
+        data: {
+          mapId: map.id,
+          parentId: targetClaimId,
+          kind: "assumption",
+          nodeStatus: "active",
+          content: readString(params.details ?? {}, ["demotedText", "claimText"], source.content),
+          note: `Demoted from ${source.id}`,
+          branchOrder: branchOrderForParent(targetClaimId),
+        },
+      });
+
+      await tx.thoughtNode.update({
+        where: { id: source.id },
+        data: {
+          nodeStatus: "superseded",
+          supersedesNodeId: demotedNode.id,
+        },
+      });
+
+      resultingClaimIds = [demotedNode.id];
+      supersessionRecord.supersedingClaimIds = [demotedNode.id];
+      edgeChanges.push({
+        edgeId: `${map.id}:${demotedNode.id}:parent`,
+        changeType: "created",
+        fromClaimId: targetClaimId,
+        toClaimId: demotedNode.id,
+        reason: "Claim demoted into a supporting assumption.",
+      });
+    } else if (params.actionType === "reclassify") {
+      const source = sourceNodes[0];
+      const newKind = readString(params.details ?? {}, ["newStructureKind", "kind"], source.kind) as ThoughtNode["kind"];
+      const reclassifiedNode = await tx.thoughtNode.create({
+        data: {
+          mapId: map.id,
+          parentId: source.parentId,
+          kind: newKind,
+          nodeStatus: "active",
+          content: source.content,
+          note: `Reclassified from ${source.kind}`,
+          branchOrder: branchOrderForParent(source.parentId),
+        },
+      });
+
+      await tx.thoughtNode.update({
+        where: { id: source.id },
+        data: {
+          nodeStatus: "superseded",
+          supersedesNodeId: reclassifiedNode.id,
+        },
+      });
+
+      resultingClaimIds = [reclassifiedNode.id];
+      supersessionRecord.supersedingClaimIds = [reclassifiedNode.id];
+      supersessionRecord.supersessionType = "reclassification";
+      edgeChanges.push({
+        edgeId: `${map.id}:${reclassifiedNode.id}:parent`,
+        changeType: "created",
+        fromClaimId: source.parentId ?? reclassifiedNode.id,
+        toClaimId: reclassifiedNode.id,
+        reason: "Claim reclassified into a new structure kind.",
+      });
+    } else if (params.actionType === "reroute_edge") {
+      const childClaimId = readString(params.details ?? {}, ["childClaimId", "edgeId", "sourceClaimId"], sourceNodes[0].id);
+      const toClaimId = readString(params.details ?? {}, ["toClaimId", "targetClaimId"], "");
+      if (!toClaimId) {
+        throw new Error("Target claim required for reroute_edge");
+      }
+
+      await tx.thoughtNode.update({
+        where: { id: childClaimId },
+        data: {
+          parentId: toClaimId,
+        },
+      });
+
+      resultingClaimIds = [toClaimId];
+      edgeChanges.push({
+        edgeId: `${map.id}:${childClaimId}:${toClaimId}`,
+        changeType: "rerouted",
+        fromClaimId: sourceNodes[0].id,
+        toClaimId,
+        reason: "Edge explicitly rerouted by the user.",
+      });
+    } else if (params.actionType === "reroot") {
+      const source = sourceNodes[0];
+      const rerootedNode = await tx.thoughtNode.create({
+        data: {
+          mapId: map.id,
+          parentId: null,
+          kind: source.kind,
+          nodeStatus: "active",
+          content: readString(params.details ?? {}, ["rerootText", "claimText"], source.content),
+          note: `Rerooted from ${source.id}`,
+          branchOrder: branchOrderForParent(null),
+        },
+      });
+
+      await tx.thoughtNode.update({
+        where: { id: source.id },
+        data: {
+          nodeStatus: "superseded",
+          supersedesNodeId: rerootedNode.id,
+        },
+      });
+
+      resultingClaimIds = [rerootedNode.id];
+      supersessionRecord.supersedingClaimIds = [rerootedNode.id];
+      edgeChanges.push({
+        edgeId: `${map.id}:${rerootedNode.id}:root`,
+        changeType: "created",
+        fromClaimId: rerootedNode.id,
+        toClaimId: rerootedNode.id,
+        reason: "Claim rerooted as a new top-level structure.",
+      });
+    }
+
+    const repairActionRecord = await tx.thoughtMapEvent.create({
+      data: {
+        mapId: map.id,
+        nodeId: sourceNodes[0].id,
+        eventType: "repair_action",
+        payload: serializeJson({
+          actionType: params.actionType,
+          initiatedBy: params.initiatedBy ?? "user",
+          sourceClaimIds: params.sourceClaimIds,
+          resultingClaimIds,
+          reasoning: params.reasoning,
+          supersessionRecord,
+          edgeChanges,
+          propagationTriggered: params.propagationTriggered ?? true,
+          createdAt: now,
+        }),
+      },
+    });
+
+    repairActions.unshift({
+      id: repairActionRecord.id,
+      mapId: map.id,
+      actionType: params.actionType,
+      initiatedBy: params.initiatedBy ?? "user",
+      sourceClaimIds: params.sourceClaimIds,
+      resultingClaimIds,
+      reasoning: params.reasoning,
+      supersessionRecord,
+      edgeChanges,
+      propagationTriggered: params.propagationTriggered ?? true,
+      createdAt: now,
+    });
+
+    await tx.thoughtMap.update({
+      where: { id: map.id },
+      data: {
+        repairActions: serializeJson(repairActions) ?? "[]",
+      },
+    });
+  });
+
+  const updatedRecord = await prisma.thoughtMap.findUnique({
+    where: { id: params.mapId },
+    include: {
+      nodes: {
+        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+  });
+
+  if (!updatedRecord) {
+    throw new Error("Map not found after repair");
+  }
+
+  const updatedMap = await hydrateThoughtMap(updatedRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] });
+  const revisitSchedules = computeRevisitSchedulesForMap(updatedMap);
+
+  await prisma.thoughtMap.update({
+    where: { id: params.mapId },
+    data: {
+      revisitSchedules: serializeJson(revisitSchedules) ?? "[]",
+    },
+  });
+
+  const finalMap = await getThoughtMap(params.mapId);
+
+  if (!finalMap) {
+    throw new Error("Map not found after revisit refresh");
+  }
+
+  return {
+    repairAction: repairActions[0] ?? null,
+    map: finalMap,
+    revisitSchedules,
+  };
+}
+
+export async function refreshRevisitSchedules(mapId: string) {
+  const map = await getThoughtMap(mapId);
+
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  const revisitSchedules = computeRevisitSchedulesForMap(map);
+
+  await prisma.thoughtMap.update({
+    where: { id: mapId },
+    data: {
+      revisitSchedules: serializeJson(revisitSchedules) ?? "[]",
+    },
+  });
+
+  return revisitSchedules;
+}
+
+export async function setRevisitTrigger(params: {
+  mapId: string;
+  claimId: string;
+  triggerDefinition: TriggerDefinition;
+  userId?: string;
+}) {
+  const map = await getThoughtMap(params.mapId);
+
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  const claim = map.nodes.find((node) => node.id === params.claimId);
+  if (!claim) {
+    throw new Error("Claim not found");
+  }
+
+  const existing = map.revisitSchedules.find((schedule) => schedule.claimId === params.claimId) ?? null;
+  const nextSchedule = computeRevisitScheduleForNode(map, claim, {
+    existing,
+    triggerDefinition: params.triggerDefinition,
+  });
+  const nextSchedules = map.revisitSchedules.filter((schedule) => schedule.claimId !== params.claimId).concat(nextSchedule);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.claimId,
+        eventType: "revisit_schedule",
+        payload: serializeJson({
+          claimId: params.claimId,
+          triggerDefinition: params.triggerDefinition,
+          scheduledFor: nextSchedule.scheduledFor,
+          schedulingReason: nextSchedule.schedulingReason,
+          priority: nextSchedule.priority,
+        }),
+      },
+    });
+
+    await tx.thoughtMap.update({
+      where: { id: params.mapId },
+      data: {
+        revisitSchedules: serializeJson(nextSchedules) ?? "[]",
+      },
+    });
+  });
+
+  const updatedMap = await getThoughtMap(params.mapId);
+
+  if (!updatedMap) {
+    throw new Error("Map not found after trigger update");
+  }
+
+  return {
+    schedule: nextSchedule,
+    map: updatedMap,
+    queue: buildRevisitQueue(updatedMap),
+  };
+}
+
+export async function recordRevisitAction(params: {
+  mapId: string;
+  claimId: string;
+  type: "reviewed_no_change" | "confidence_updated" | "claim_updated" | "claim_retired" | "snoozed" | "triggered_repair" | "triggered_dialectic";
+  notes?: string | null;
+  newConfidence?: number | null;
+  triggerDefinition?: TriggerDefinition | null;
+  snoozedUntil?: Date | null;
+  userId?: string;
+}) {
+  const userId = params.userId ?? getDemoThoughtUserId();
+  const mapRecord = await prisma.thoughtMap.findUnique({
+    where: { id: params.mapId },
+    select: {
+      id: true,
+      userId: true,
+      revisitSchedules: true,
+      nodes: {
+        select: {
+          id: true,
+          mapId: true,
+          parentId: true,
+          kind: true,
+          nodeStatus: true,
+          actionOrigin: true,
+          supersedesNodeId: true,
+          content: true,
+          note: true,
+          branchOrder: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!mapRecord) {
+    throw new Error("Map not found");
+  }
+
+  const map = await getThoughtMap(params.mapId);
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  const schedule = parseRevisitSchedules(mapRecord.revisitSchedules).find((item) => item.claimId === params.claimId) ?? null;
+  if (!schedule) {
+    throw new Error("Revisit schedule not found");
+  }
+
+  const completedAt = new Date();
+  const nextSchedule = {
+    ...schedule,
+    status: params.type === "snoozed" ? "snoozed" : "completed",
+    surfacedAt: schedule.surfacedAt ?? completedAt,
+    userAction: {
+      type: params.type,
+      notes: params.notes ?? null,
+      newConfidence: params.newConfidence ?? null,
+      completedAt,
+    },
+    snoozedUntil: params.snoozedUntil ?? schedule.snoozedUntil,
+    triggerDefinition: params.triggerDefinition ?? schedule.triggerDefinition,
+    leitnerBox: computeLeitnerBox({
+      currentBox: schedule.leitnerBox,
+      reviewAction: params.type,
+      majorChange: params.type === "claim_updated" || params.type === "confidence_updated",
+      dependencyChanged: params.type === "triggered_repair",
+      unstable: params.type === "claim_updated" && (params.newConfidence ?? 0) < 40,
+    }),
+    lastComputedAt: completedAt,
+  };
+
+  const nextSchedules = map.revisitSchedules
+    .filter((item) => item.claimId !== params.claimId)
+    .concat(nextSchedule)
+    .sort((a, b) => (b.priority === "urgent" ? 4 : b.priority === "high" ? 3 : b.priority === "medium" ? 2 : 1) - (a.priority === "urgent" ? 4 : a.priority === "high" ? 3 : a.priority === "medium" ? 2 : 1));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: params.claimId,
+        eventType: "revisit_action",
+        payload: serializeJson({
+          claimId: params.claimId,
+          type: params.type,
+          notes: params.notes ?? null,
+          newConfidence: params.newConfidence ?? null,
+          snoozedUntil: params.snoozedUntil ?? null,
+          triggerDefinition: params.triggerDefinition ?? schedule.triggerDefinition,
+          completedAt,
+        }),
+      },
+    });
+
+    await tx.thoughtMap.update({
+      where: { id: params.mapId },
+      data: {
+        revisitSchedules: serializeJson(nextSchedules) ?? "[]",
+      },
+    });
+  });
+
+  const updatedMap = await getThoughtMap(params.mapId);
+
+  if (!updatedMap) {
+    throw new Error("Map not found after revisit action");
+  }
+
+  return {
+    schedule: nextSchedule,
+    map: updatedMap,
+    queue: buildRevisitQueue(updatedMap),
   };
 }
 
