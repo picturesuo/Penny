@@ -1,0 +1,1 @@
+ALTER TABLE "ThoughtMap" ADD COLUMN "steelMans" TEXT NOT NULL DEFAULT '[]';

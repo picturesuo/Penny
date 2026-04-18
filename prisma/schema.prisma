@@ -52,6 +52,7 @@ model ThoughtMap {
   status                 String                    @default("ready")
   founderBrief           String?
   founderBriefGeneratedAt DateTime?
+  steelMans              String                    @default("[]")
   nodes                  ThoughtNode[]
   interventions          ThoughtMapIntervention[]
   events                 ThoughtMapEvent[]
