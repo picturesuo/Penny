@@ -2317,7 +2317,7 @@ export function ThoughtMapWorkspace({
         currentFocus={selectedGraphNodeModel?.content ?? map.recommendedNextMove?.targetNodeContent ?? map.rawThought}
         currentSphere="work"
         currentContext={selectedGraphNodeModel?.note ?? map.recommendedNextMove?.summary ?? map.rawThought}
-        currentResponse={lastAction?.summary ?? null}
+        currentResponse={map.recommendedNextMove?.summary ?? lastAction?.reasoning.graphAnalysis?.primaryGap ?? null}
         recentSessionMinutes={Math.max(0, Math.round((map.updatedAt.getTime() - map.createdAt.getTime()) / (1000 * 60)))}
         sourceMapId={map.id}
       />
