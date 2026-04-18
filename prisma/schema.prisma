@@ -129,3 +129,27 @@ model ThoughtMapEvent {
   @@index([interventionId])
   @@index([nodeId])
 }
+
+model MarginFragment {
+  id              String   @id @default(cuid())
+  userId          String
+  sourceSessionId String?
+  sourceMapId     String?
+  sphere          String   @default("work")
+  content         String
+  contextSnapshot String   @default("{}")
+  status          String   @default("floating")
+  priority        Float    @default(0.5)
+  surfaceCount    Int      @default(0)
+  lastSurfacedAt  DateTime?
+  promotedAt      DateTime?
+  archivedAt      DateTime?
+  mergedInto      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, status, updatedAt])
+  @@index([userId, sphere, updatedAt])
+  @@index([sourceSessionId])
+  @@index([sourceMapId])
+}
