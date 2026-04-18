@@ -102,6 +102,7 @@ function buildThoughtMapModel(
     },
     graphSnapshot: null,
     bayesianPropagation: null,
+    beliefGraph: null,
     recommendedNextMove: null,
     interventions: [],
     recommendedIntervention: null,
