@@ -388,6 +388,8 @@ export interface DialecticRound {
   critiqueFailureTypes: string[];
   critiqueLens: string;
   critiqueStrength: DialecticCritiqueStrength;
+  critiqueMode?: string | null;
+  voiceLabel?: string | null;
   userResponse: string;
   responseClassification: ResponseClassification;
   concessions: Concession[];

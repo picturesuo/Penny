@@ -3872,6 +3872,10 @@ export function buildCritiqueQualityProfile(
   const voiceBuckets = new Map<string, number[]>();
 
   for (const feedback of feedbacks) {
+    if (feedback.dismissed || feedback.ratings.length === 0) {
+      continue;
+    }
+
     for (const rating of feedback.ratings) {
       dimensionBuckets.set(rating.dimension, [...(dimensionBuckets.get(rating.dimension) ?? []), rating.score]);
     }

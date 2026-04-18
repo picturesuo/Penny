@@ -40,8 +40,6 @@ import type {
   NodeAction,
   EdgeChange,
   CritiqueCorrection,
-  CritiqueFeedback,
-  CritiqueQualityProfile,
   RevisitAction,
   RevisitLeitnerBox,
   RevisitPriority,
@@ -1251,6 +1249,8 @@ export async function recordDialecticRound(params: {
     critiqueFailureTypes,
     critiqueLens: params.why,
     critiqueStrength,
+    critiqueMode: params.critiqueMode ?? null,
+    voiceLabel: params.voiceLabel ?? null,
     userResponse: params.response,
     responseClassification: analysis.classification,
     concessions: analysis.concessions,
@@ -1437,9 +1437,13 @@ export async function recordCritiqueFeedback(params: {
   overallUsefulness: number;
   freeTextFeedback?: string | null;
   correctionText?: string | null;
+  correctionType?: CritiqueCorrection["correctionType"];
   isCorrectionFlagged?: boolean;
   dismissed?: boolean;
   shapeId?: string | null;
+  critiqueMode?: string | null;
+  voiceLabel?: string | null;
+  failureTypes?: string[];
 }) {
   const map = await getThoughtMap(params.mapId);
 
@@ -1455,14 +1459,18 @@ export async function recordCritiqueFeedback(params: {
   const critiqueMode =
     typeof critiquePayload?.critiqueMode === "string" && critiquePayload.critiqueMode.trim().length > 0
       ? critiquePayload.critiqueMode.trim()
-      : null;
+      : typeof params.critiqueMode === "string" && params.critiqueMode.trim().length > 0
+        ? params.critiqueMode.trim()
+        : null;
   const voiceLabel =
     typeof critiquePayload?.voiceLabel === "string" && critiquePayload.voiceLabel.trim().length > 0
       ? critiquePayload.voiceLabel.trim()
-      : null;
+      : typeof params.voiceLabel === "string" && params.voiceLabel.trim().length > 0
+        ? params.voiceLabel.trim()
+        : null;
   const failureTypes = Array.isArray(critiquePayload?.critiqueFailureTypes)
     ? critiquePayload.critiqueFailureTypes.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    : [];
+    : params.failureTypes?.filter((item): item is string => typeof item === "string" && item.trim().length > 0) ?? [];
   const feedbackGivenAt = new Date();
   const feedbackPayload = {
     roundId: params.roundId,
@@ -1503,7 +1511,7 @@ export async function recordCritiqueFeedback(params: {
             critiqueId: params.critiqueId,
             critiqueText: typeof critiquePayload?.prompt === "string" ? String(critiquePayload.prompt) : "",
             correctionText: params.correctionText.trim(),
-            correctionType: "other",
+            correctionType: params.correctionType ?? "other",
             userId: params.userId,
             createdAt: feedbackGivenAt.toISOString(),
             reviewedAt: null,
