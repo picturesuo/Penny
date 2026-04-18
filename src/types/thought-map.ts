@@ -46,6 +46,8 @@ export const CLAIM_STAKES = ["reputation", "money", "time", "relationship", "sel
 
 export type ClaimStake = (typeof CLAIM_STAKES)[number];
 
+export type CalibrationDomain = "technical" | "market" | "operational" | "research" | "people" | "general";
+
 export type ClaimStructureKind = "assertion" | "conditional" | "compound" | "temporal" | "merged_candidate" | "split_candidate";
 
 export type ThoughtMapExecutionMode =
@@ -408,6 +410,8 @@ export interface DialecticRound {
 
 export type ThoughtMapEventType =
   | "map_created"
+  | "import_source"
+  | "import_review"
   | "intervention_shown"
   | "intervention_completed"
   | "intervention_dismissed"
@@ -462,6 +466,10 @@ export type ArtifactTypeId =
   | "risk_register"
   | "personal_decision_audit"
   | "hypothesis_brief";
+
+export type ImportSourceType = "url" | "text_paste" | "document";
+
+export type ExtractedClaimDecision = "accepted" | "rejected" | "edited" | "pending";
 
 export interface SynthesisGate {
   id: string;
@@ -552,6 +560,36 @@ export interface ArtifactRecord {
   loadBearingClaims: ClaimOutcomePair[];
   outcomes: ArtifactOutcome[];
   latestOutcome: ArtifactOutcome | null;
+}
+
+export interface ExtractedClaim {
+  id: string;
+  importSourceId: string;
+  rawText: string;
+  extractedText: string;
+  structureKind: string;
+  inferredConfidence: number | null;
+  inferredDomain: string | null;
+  sourceAttribution: string;
+  offsetInSource: number;
+  userDecision: ExtractedClaimDecision;
+  editedText: string | null;
+  resultingClaimId: string | null;
+}
+
+export interface ImportSource {
+  id: string;
+  mapId: string;
+  userId: string;
+  sourceType: ImportSourceType;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  sourceContent: string;
+  importedAt: Date;
+  extractedClaims: ExtractedClaim[];
+  acceptedClaimIds: string[];
+  rejectedClaimCount: number;
+  editedClaimCount: number;
 }
 
 export interface FounderBriefReadiness {
@@ -1070,6 +1108,7 @@ export interface ThoughtMapModel {
   critiqueQualityProfile: CritiqueQualityProfile | null;
   repairActions: ClaimRepairAction[];
   revisitSchedules: RevisitSchedule[];
+  importSources: ImportSource[];
   founderBrief: FounderBriefModel | null;
   founderBriefReadiness: FounderBriefReadiness;
   graphSnapshot: ThoughtMapGraphSnapshot | null;

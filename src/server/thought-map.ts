@@ -9,7 +9,7 @@ import type {
 } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/db/prisma";
-import { artifactRecordFromFounderBrief, buildArtifactDraft, getArtifactType } from "@/lib/artifact-types";
+import { artifactDraftToFounderBrief, artifactRecordFromFounderBrief, buildArtifactDraft, getArtifactType } from "@/lib/artifact-types";
 import { getFounderBriefReadiness } from "@/lib/founder-brief";
 import { buildBeliefGraph, propagateBeliefGraph, serializeBeliefGraph, serializeBeliefPropagationResult } from "@/lib/bayesian-propagation";
 import {
@@ -46,9 +46,12 @@ import type {
   ClaimRepairAction,
   CreateThoughtMapInput,
   FounderBriefModel,
+  ExtractedClaim,
   ArtifactOutcome,
   ArtifactRecord,
   ArtifactTypeId,
+  ImportSource,
+  ImportSourceType,
   DialecticCritiqueStrength,
   GeneratedActionBundle,
   NodeAction,
@@ -138,6 +141,7 @@ function buildThoughtMapModel(
     critiqueQualityProfile: null,
     repairActions: parseClaimRepairActions(record.repairActions),
     revisitSchedules: parseRevisitSchedules(record.revisitSchedules),
+    importSources: [],
     founderBrief,
     founderBriefReadiness: {
       eligible: false,
@@ -191,6 +195,7 @@ function buildThoughtMapModel(
     .filter((correction) => correction.correctionText.trim().length > 0);
   const critiqueQualityProfile = buildCritiqueQualityProfile(judgedMap, critiqueFeedbacks);
   const artifacts = collectArtifactRecords(judgedMap, events);
+  const importSources = collectImportSources(events);
   const founderBriefArtifact = artifacts.find((artifact) => artifact.artifactTypeId === "founder_brief");
   if (founderBriefArtifact && founderBrief) {
     founderBrief = {
@@ -204,6 +209,7 @@ function buildThoughtMapModel(
 
   return {
     ...judgedMap,
+    importSources,
     artifacts,
     shapeDerivations: lens.effectiveShapes
       .map((shape) => shape.derivation)
@@ -327,17 +333,90 @@ function normalizeCalibrationCoaching(value: unknown): CalibrationCoaching | nul
     return null;
   }
 
-  const domainProfiles = Array.isArray(coaching.domainProfiles)
-    ? coaching.domainProfiles.map((entry) => ({
-        ...(entry as Record<string, unknown>),
-        calibrationCurve: Array.isArray((entry as Record<string, unknown>).calibrationCurve)
-          ? (entry as Record<string, unknown>).calibrationCurve.map((point) => point as CalibrationCoaching["domainProfiles"][number]["calibrationCurve"][number])
-          : [],
-      }))
+  const domainProfiles: CalibrationCoaching["domainProfiles"] = Array.isArray(coaching.domainProfiles)
+    ? coaching.domainProfiles.map((entry) => {
+        const profile = entry as Record<string, unknown>;
+        const systematicError: CalibrationCoaching["domainProfiles"][number]["systematicError"] =
+          profile.systematicError === "overconfident" ||
+          profile.systematicError === "underconfident" ||
+          profile.systematicError === "well_calibrated" ||
+          profile.systematicError === "insufficient_data"
+            ? profile.systematicError
+            : "insufficient_data";
+
+        return {
+          domain: profile.domain as CalibrationCoaching["domainProfiles"][number]["domain"],
+          claimCount: typeof profile.claimCount === "number" ? profile.claimCount : 0,
+          resolvedClaimCount: typeof profile.resolvedClaimCount === "number" ? profile.resolvedClaimCount : 0,
+          averageBrierScore: typeof profile.averageBrierScore === "number" ? profile.averageBrierScore : 0,
+          calibrationCurve: Array.isArray(profile.calibrationCurve)
+            ? profile.calibrationCurve.map((point) => point as CalibrationCoaching["domainProfiles"][number]["calibrationCurve"][number])
+            : [],
+          systematicError,
+          errorMagnitude: typeof profile.errorMagnitude === "number" ? profile.errorMagnitude : 0,
+          bestDomain: Boolean(profile.bestDomain),
+          worstDomain: Boolean(profile.worstDomain),
+          coachingNote: typeof profile.coachingNote === "string" ? profile.coachingNote : "",
+        } satisfies CalibrationCoaching["domainProfiles"][number];
+      })
     : [];
-  const claimTypeProfiles = Array.isArray(coaching.claimTypeProfiles) ? (coaching.claimTypeProfiles as CalibrationCoaching["claimTypeProfiles"]) : [];
-  const recommendations = Array.isArray(coaching.coachingRecommendations)
-    ? (coaching.coachingRecommendations as CalibrationCoaching["coachingRecommendations"])
+  const claimTypeProfiles: CalibrationCoaching["claimTypeProfiles"] = Array.isArray(coaching.claimTypeProfiles)
+    ? coaching.claimTypeProfiles.map((entry) => {
+        const profile = entry as Record<string, unknown>;
+        const systematicError: CalibrationCoaching["claimTypeProfiles"][number]["systematicError"] =
+          profile.systematicError === "overconfident" ||
+          profile.systematicError === "underconfident" ||
+          profile.systematicError === "well_calibrated" ||
+          profile.systematicError === "insufficient_data"
+            ? profile.systematicError
+            : "insufficient_data";
+
+        return {
+          claimType: profile.claimType as CalibrationCoaching["claimTypeProfiles"][number]["claimType"],
+          resolvedCount: typeof profile.resolvedCount === "number" ? profile.resolvedCount : 0,
+          averageBrierScore: typeof profile.averageBrierScore === "number" ? profile.averageBrierScore : 0,
+          systematicError,
+          coachingNote: typeof profile.coachingNote === "string" ? profile.coachingNote : "",
+        } satisfies CalibrationCoaching["claimTypeProfiles"][number];
+      })
+    : [];
+  const recommendations: CalibrationCoaching["coachingRecommendations"] = Array.isArray(coaching.coachingRecommendations)
+    ? coaching.coachingRecommendations.map((entry) => {
+        const profile = entry as Record<string, unknown>;
+        const recommendationType: CalibrationCoaching["coachingRecommendations"][number]["recommendationType"] =
+          profile.recommendationType === "reduce_confidence" ||
+          profile.recommendationType === "increase_confidence" ||
+          profile.recommendationType === "seek_more_evidence" ||
+          profile.recommendationType === "use_base_rate" ||
+          profile.recommendationType === "apply_reference_class" ||
+          profile.recommendationType === "stress_test_more"
+            ? profile.recommendationType
+            : "seek_more_evidence";
+
+        const priority: CalibrationCoaching["coachingRecommendations"][number]["priority"] =
+          profile.priority === "low" || profile.priority === "medium" || profile.priority === "high"
+            ? profile.priority
+            : "low";
+
+        return {
+          id: typeof profile.id === "string" ? profile.id : randomUUID(),
+          domain:
+            profile.domain === null ||
+            typeof profile.domain === "string"
+              ? (profile.domain as CalibrationCoaching["coachingRecommendations"][number]["domain"])
+              : null,
+          claimType:
+            profile.claimType === null ||
+            typeof profile.claimType === "string"
+              ? (profile.claimType as CalibrationCoaching["coachingRecommendations"][number]["claimType"])
+              : null,
+          recommendationType,
+          recommendationText: typeof profile.recommendationText === "string" ? profile.recommendationText : "",
+          magnitude: typeof profile.magnitude === "number" ? profile.magnitude : 0,
+          evidenceCount: typeof profile.evidenceCount === "number" ? profile.evidenceCount : 0,
+          priority,
+        } satisfies CalibrationCoaching["coachingRecommendations"][number];
+      })
     : [];
   const rejectionHistory = Array.isArray(coaching.rejectionHistory)
     ? coaching.rejectionHistory
@@ -958,7 +1037,7 @@ function normalizeArtifactRecord(payload: Record<string, unknown> | null): Artif
                 title: typeof section.title === "string" ? section.title : "",
                 body: typeof section.body === "string" ? section.body : "",
                 sourceClaimIds: Array.isArray(section.sourceClaimIds)
-                  ? section.sourceClaimIds.filter((item): item is string => typeof item === "string")
+                  ? section.sourceClaimIds.filter((item: unknown): item is string => typeof item === "string")
                   : [],
               }
             : null,
@@ -1050,6 +1129,114 @@ function collectArtifactRecords(
   }
 
   return [...records.values()].sort((a, b) => a.generatedAt.getTime() - b.generatedAt.getTime());
+}
+
+function normalizeExtractedClaim(payload: Record<string, unknown> | null): ExtractedClaim | null {
+  if (!payload) {
+    return null;
+  }
+
+  const id = typeof payload.id === "string" ? payload.id : "";
+  const importSourceId = typeof payload.importSourceId === "string" ? payload.importSourceId : "";
+  const rawText = typeof payload.rawText === "string" ? payload.rawText : "";
+  const extractedText = typeof payload.extractedText === "string" ? payload.extractedText : "";
+  const structureKind = typeof payload.structureKind === "string" ? payload.structureKind : "";
+  const sourceAttribution = typeof payload.sourceAttribution === "string" ? payload.sourceAttribution : "";
+  const offsetInSource = typeof payload.offsetInSource === "number" ? payload.offsetInSource : -1;
+  const userDecision =
+    payload.userDecision === "accepted" ||
+    payload.userDecision === "rejected" ||
+    payload.userDecision === "edited" ||
+    payload.userDecision === "pending"
+      ? payload.userDecision
+      : null;
+
+  if (!id || !importSourceId || !rawText || !extractedText || !structureKind || !sourceAttribution || offsetInSource < 0 || !userDecision) {
+    return null;
+  }
+
+  return {
+    id,
+    importSourceId,
+    rawText,
+    extractedText,
+    structureKind,
+    inferredConfidence: typeof payload.inferredConfidence === "number" ? payload.inferredConfidence : null,
+    inferredDomain: typeof payload.inferredDomain === "string" && payload.inferredDomain.trim().length > 0 ? payload.inferredDomain : null,
+    sourceAttribution,
+    offsetInSource,
+    userDecision,
+    editedText: typeof payload.editedText === "string" && payload.editedText.trim().length > 0 ? payload.editedText.trim() : null,
+    resultingClaimId:
+      typeof payload.resultingClaimId === "string" && payload.resultingClaimId.trim().length > 0 ? payload.resultingClaimId.trim() : null,
+  };
+}
+
+function normalizeImportSource(payload: Record<string, unknown> | null): ImportSource | null {
+  if (!payload) {
+    return null;
+  }
+
+  const id = typeof payload.id === "string" ? payload.id : "";
+  const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+  const userId = typeof payload.userId === "string" ? payload.userId : "";
+  const sourceType =
+    payload.sourceType === "url" || payload.sourceType === "text_paste" || payload.sourceType === "document"
+      ? payload.sourceType
+      : null;
+  const sourceContent = typeof payload.sourceContent === "string" ? payload.sourceContent : "";
+  const importedAt =
+    typeof payload.importedAt === "string" || payload.importedAt instanceof Date ? new Date(payload.importedAt) : null;
+
+  if (!id || !mapId || !userId || !sourceType || !sourceContent || !importedAt || Number.isNaN(importedAt.getTime())) {
+    return null;
+  }
+
+  const extractedClaims = Array.isArray(payload.extractedClaims)
+    ? payload.extractedClaims
+        .map((entry) => normalizeExtractedClaim(entry as Record<string, unknown>))
+        .filter((entry): entry is ExtractedClaim => entry !== null)
+    : [];
+
+  return {
+    id,
+    mapId,
+    userId,
+    sourceType,
+    sourceUrl:
+      typeof payload.sourceUrl === "string" && payload.sourceUrl.trim().length > 0 ? payload.sourceUrl.trim() : null,
+    sourceTitle:
+      typeof payload.sourceTitle === "string" && payload.sourceTitle.trim().length > 0 ? payload.sourceTitle.trim() : null,
+    sourceContent,
+    importedAt,
+    extractedClaims,
+    acceptedClaimIds: Array.isArray(payload.acceptedClaimIds)
+      ? payload.acceptedClaimIds.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [],
+    rejectedClaimCount: typeof payload.rejectedClaimCount === "number" ? payload.rejectedClaimCount : 0,
+    editedClaimCount: typeof payload.editedClaimCount === "number" ? payload.editedClaimCount : 0,
+  };
+}
+
+function collectImportSources(events: ThoughtMapEventRecord[]) {
+  const records = new Map<string, ImportSource>();
+
+  for (const event of events) {
+    if (event.eventType !== "import_source" && event.eventType !== "import_review") {
+      continue;
+    }
+
+    const payload = event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : null;
+    const record = normalizeImportSource(payload);
+
+    if (!record) {
+      continue;
+    }
+
+    records.set(record.id, record);
+  }
+
+  return [...records.values()].sort((a, b) => a.importedAt.getTime() - b.importedAt.getTime());
 }
 
 function formatClaimCaptureMetadata(metadata: ClaimCaptureMetadata) {
@@ -3349,7 +3536,7 @@ export async function generateArtifactForMap(params: {
         })()
       : null;
 
-  const updatedRecord = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     await tx.thoughtMapEvent.create({
       data: {
         mapId: params.mapId,
@@ -3369,7 +3556,7 @@ export async function generateArtifactForMap(params: {
       });
     }
 
-    return tx.thoughtMap.findUnique({
+    const updatedRecord = await tx.thoughtMap.findUnique({
       where: { id: params.mapId },
       include: {
         nodes: {
@@ -3404,6 +3591,169 @@ export async function generateFounderBrief(mapId: string) {
   });
 
   return result.map;
+}
+
+function importStructureToNodeKind(structureKind: string): ThoughtNodeModel["kind"] {
+  if (structureKind === "conditional") {
+    return "assumption";
+  }
+
+  if (structureKind === "recommendation") {
+    return "why_it_matters";
+  }
+
+  if (structureKind === "causal" || structureKind === "quantitative_prediction" || structureKind === "future_assertion") {
+    return "research";
+  }
+
+  return "core_claim";
+}
+
+function buildImportedClaimNote(importSource: ImportSource, claim: ExtractedClaim) {
+  const sourceLabel = importSource.sourceTitle ?? importSource.sourceUrl ?? importSource.sourceType.replaceAll("_", " ");
+  const decisionLabel = claim.userDecision === "edited" ? "edited" : "accepted";
+  return `Imported from ${sourceLabel}. ${claim.sourceAttribution}. ${decisionLabel} from ${claim.structureKind}.`;
+}
+
+export async function recordImportSource(importSource: ImportSource) {
+  await prisma.$transaction(async (tx) => {
+    await tx.thoughtMapEvent.create({
+      data: {
+        mapId: importSource.mapId,
+        nodeId: null,
+        eventType: "import_source",
+        payload: serializeJson(importSource),
+      },
+    });
+  });
+
+  return importSource;
+}
+
+export async function recordImportReview(params: {
+  mapId: string;
+  importSource: ImportSource;
+}) {
+  const mapRecord = await prisma.thoughtMap.findUnique({
+    where: { id: params.mapId },
+    include: {
+      nodes: {
+        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+  });
+
+  if (!mapRecord) {
+    throw new Error("Map not found");
+  }
+
+  const map = await hydrateThoughtMap(mapRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] });
+  const rootNode = map.nodes.find((node) => node.kind === "root") ?? null;
+  const startOrder =
+    map.nodes
+      .filter((node) => node.parentId === rootNode?.id)
+      .reduce((max, node) => Math.max(max, node.branchOrder), 0) || 0;
+
+  const updatedRecord = await prisma.$transaction(async (tx) => {
+    const finalizedClaims: ExtractedClaim[] = [];
+    const acceptedClaimIds: string[] = [];
+    let rejectedClaimCount = 0;
+    let editedClaimCount = 0;
+
+    for (const claim of params.importSource.extractedClaims) {
+      if (claim.userDecision === "pending") {
+        throw new Error("Resolve all imported claims before accepting them.");
+      }
+
+      if (claim.userDecision === "rejected") {
+        rejectedClaimCount += 1;
+        finalizedClaims.push({
+          ...claim,
+          resultingClaimId: null,
+        });
+        continue;
+      }
+
+      const claimText = (claim.userDecision === "edited" ? claim.editedText : claim.extractedText)?.trim() ?? "";
+      if (!claimText) {
+        throw new Error("Imported claims need text before they can be accepted.");
+      }
+
+      const created = await tx.thoughtNode.create({
+        data: {
+          mapId: params.mapId,
+          parentId: rootNode?.id ?? null,
+          kind: importStructureToNodeKind(claim.structureKind),
+          nodeStatus: "active",
+          content: claimText,
+          note: buildImportedClaimNote(params.importSource, claim),
+          branchOrder: startOrder + acceptedClaimIds.length + 1,
+        },
+      });
+
+      acceptedClaimIds.push(created.id);
+      if (claim.userDecision === "edited") {
+        editedClaimCount += 1;
+      }
+
+      finalizedClaims.push({
+        ...claim,
+        importSourceId: params.importSource.id,
+        resultingClaimId: created.id,
+      });
+    }
+
+    const review: ImportSource = {
+      ...params.importSource,
+      extractedClaims: finalizedClaims,
+      acceptedClaimIds,
+      rejectedClaimCount,
+      editedClaimCount,
+    };
+
+    await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: null,
+        eventType: "import_review",
+        payload: serializeJson(review),
+      },
+    });
+
+    return tx.thoughtMap.findUnique({
+      where: { id: params.mapId },
+      include: {
+        nodes: {
+          orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+        },
+        events: {
+          orderBy: [{ createdAt: "asc" }],
+        },
+      },
+    });
+
+    return {
+      review,
+      updatedRecord,
+    };
+  });
+
+  if (!result.updatedRecord) {
+    throw new Error("Map not found after import review");
+  }
+
+  const hydratedMap = await hydrateThoughtMap(
+    result.updatedRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+    map,
+  );
+
+  return {
+    importSource: result.review,
+    map: hydratedMap,
+  };
 }
 
 export async function recordArtifactOutcome(params: {
