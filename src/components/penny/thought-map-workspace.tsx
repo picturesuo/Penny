@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, ArrowRightLeft, CircleDot, GitBranchPlus, Link2, Sparkles } from "lucide-react";
 import { FounderBriefCard } from "@/components/penny/founder-brief-card";
+import { ClaimRepairModal } from "@/components/penny/claim-repair-modal";
 import { MarginRail } from "@/components/penny/margin-rail";
+import { RevisitQueue } from "@/components/penny/revisit-queue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,6 +23,7 @@ import {
   buildConfidenceDecaySnapshot,
   buildConfusionLog,
   buildAdversarialFinalPass,
+  buildClaimRepairSuggestions,
   buildPennyLens,
   buildSessionRhythmSnapshot,
   collectShapeFeedback,
@@ -42,9 +45,11 @@ import {
   type DependencyChainTimelineSnapshot,
   type SteelManQualityAssessment,
 } from "@/lib/penny-insights";
+import { buildRevisitQueue } from "@/lib/revisit-scheduler";
 import { cn } from "@/lib/utils";
 import type {
   CognitiveIntervention,
+  ClaimRepairAction,
   FounderBriefModel,
   DialecticRound,
   ClaimStructureSnapshot,
@@ -54,6 +59,9 @@ import type {
   ThoughtMapRecommendedMove,
   ThoughtNodeKind,
   ThoughtNodeModel,
+  RevisitAction,
+  RevisitSchedule,
+  TriggerDefinition,
   SteelMan,
   SteelManVersion,
 } from "@/types/thought-map";
@@ -66,11 +74,13 @@ type SerializableThoughtNode = Omit<ThoughtNodeModel, "createdAt" | "updatedAt">
 
 type SerializableThoughtMap = Omit<
   ThoughtMapModel,
-  "nodes" | "createdAt" | "updatedAt" | "interventions" | "recommendedIntervention" | "founderBrief" | "steelMans"
+  "nodes" | "createdAt" | "updatedAt" | "interventions" | "recommendedIntervention" | "founderBrief" | "steelMans" | "repairActions" | "revisitSchedules"
 > & {
   nodes: SerializableThoughtNode[];
   events: SerializableThoughtMapEvent[];
   steelMans: SerializableSteelMan[];
+  repairActions: SerializableClaimRepairAction[];
+  revisitSchedules: SerializableRevisitSchedule[];
   founderBrief: SerializableFounderBrief | null;
   interventions: SerializableIntervention[];
   recommendedIntervention: SerializableIntervention | null;
@@ -105,6 +115,25 @@ type SerializableSteelMan = Omit<SteelMan, "writtenAt" | "updatedAt" | "updateHi
   writtenAt: Date | string;
   updatedAt: Date | string | null;
   updateHistory: SerializableSteelManVersion[];
+};
+
+type SerializableClaimRepairAction = Omit<ClaimRepairAction, "createdAt"> & {
+  createdAt: Date | string;
+  supersessionRecord: Omit<ClaimRepairAction["supersessionRecord"], never>;
+  edgeChanges: Array<ClaimRepairAction["edgeChanges"][number]>;
+};
+
+type SerializableRevisitAction = Omit<RevisitAction, "completedAt"> & {
+  completedAt: Date | string;
+};
+
+type SerializableRevisitSchedule = Omit<RevisitSchedule, "scheduledFor" | "surfacedAt" | "userAction" | "snoozedUntil" | "lastComputedAt"> & {
+  scheduledFor: Date | string;
+  surfacedAt: Date | string | null;
+  userAction: SerializableRevisitAction | null;
+  snoozedUntil: Date | string | null;
+  lastComputedAt: Date | string;
+  triggerDefinition: TriggerDefinition;
 };
 
 type SerializableDialecticRound = Omit<DialecticRound, "createdAt" | "closedAt"> & {
@@ -277,6 +306,36 @@ function normalizeSteelMan(steelMan: SerializableSteelMan): SteelMan {
   };
 }
 
+function normalizeClaimRepairAction(repairAction: SerializableClaimRepairAction): ClaimRepairAction {
+  return {
+    ...repairAction,
+    createdAt: toDate(repairAction.createdAt),
+    edgeChanges: repairAction.edgeChanges,
+  };
+}
+
+function normalizeRevisitAction(action: SerializableRevisitAction | null): RevisitAction | null {
+  if (!action) {
+    return null;
+  }
+
+  return {
+    ...action,
+    completedAt: toDate(action.completedAt),
+  };
+}
+
+function normalizeRevisitSchedule(schedule: SerializableRevisitSchedule): RevisitSchedule {
+  return {
+    ...schedule,
+    scheduledFor: toDate(schedule.scheduledFor),
+    surfacedAt: schedule.surfacedAt ? toDate(schedule.surfacedAt) : null,
+    userAction: normalizeRevisitAction(schedule.userAction),
+    snoozedUntil: schedule.snoozedUntil ? toDate(schedule.snoozedUntil) : null,
+    lastComputedAt: toDate(schedule.lastComputedAt),
+  };
+}
+
 function normalizeEvent(event: SerializableThoughtMapEvent): ThoughtMapEvent {
   return {
     ...event,
@@ -290,7 +349,9 @@ function normalizeMap(map: SerializableThoughtMap): ThoughtMapModel {
     ...map,
     nodes: map.nodes.map(normalizeNode),
     events: map.events.map(normalizeEvent),
-    steelMans: map.steelMans.map(normalizeSteelMan),
+    steelMans: (map.steelMans ?? []).map(normalizeSteelMan),
+    repairActions: (map.repairActions ?? []).map(normalizeClaimRepairAction),
+    revisitSchedules: (map.revisitSchedules ?? []).map(normalizeRevisitSchedule),
     founderBrief: map.founderBrief ? normalizeFounderBrief(map.founderBrief) : null,
     interventions: map.interventions.map(normalizeIntervention),
     recommendedIntervention: map.recommendedIntervention ? normalizeIntervention(map.recommendedIntervention) : null,
@@ -976,6 +1037,19 @@ export function ThoughtMapWorkspace({
   const [selectedPrecedentId, setSelectedPrecedentId] = useState<string | null>(null);
   const [steelManDrafts, setSteelManDrafts] = useState<Record<string, string>>({});
   const [steelManAssessments, setSteelManAssessments] = useState<Record<string, SteelManQualityAssessment>>({});
+  const [repairModalOpen, setRepairModalOpen] = useState(false);
+  const [revisitTriggerDrafts, setRevisitTriggerDrafts] = useState<
+    Record<
+      string,
+      {
+        triggerType: TriggerDefinition["triggerType"];
+        dateTarget: string;
+        eventKeyword: string;
+        confidenceThreshold: string;
+        dependencyClaimId: string;
+      }
+    >
+  >({});
   const [teachBackDrafts, setTeachBackDrafts] = useState<Record<string, string>>({});
   const [teachBackFeedback, setTeachBackFeedback] = useState<Record<string, TeachBackAnalysis>>({});
   const [teachBackAttempts, setTeachBackAttempts] = useState<Record<string, string[]>>({});
@@ -988,6 +1062,7 @@ export function ThoughtMapWorkspace({
   );
   const [shapeOverrideReasons, setShapeOverrideReasons] = useState<Record<string, string>>({});
   const [confidenceOverrideReasons, setConfidenceOverrideReasons] = useState<Record<string, string>>({});
+  const [propagationFinalPosteriorDrafts, setPropagationFinalPosteriorDrafts] = useState<Record<string, number>>({});
   const [critiqueCorrectionDrafts, setCritiqueCorrectionDrafts] = useState<Record<string, string>>({});
   const [propagationAcknowledged, setPropagationAcknowledged] = useState<Record<string, string>>({});
   const [dialecticResponseDrafts, setDialecticResponseDrafts] = useState<Record<string, string>>({});
@@ -1422,6 +1497,11 @@ export function ThoughtMapWorkspace({
       reasoning: strongestStep.reasoning,
       confidenceMath,
       dependencyWeight: strongestStep.edgeFactor,
+      prior: strongestStep.prior ?? strongestStep.baseConfidence,
+      posterior: strongestStep.posterior ?? strongestStep.propagatedConfidence,
+      contributions: strongestStep.contributions ?? [],
+      skipped: strongestStep.skipped ?? false,
+      skippedReason: strongestStep.skippedReason ?? null,
     };
   }, [nodesById, selectedPropagation]);
   const selectedKnowledgeSurface = useMemo(
@@ -1488,6 +1568,17 @@ export function ThoughtMapWorkspace({
     : "";
   const selectedSteelManDraftReady = selectedSteelManDraft.trim().length > 100;
   const selectedSteelManReady = selectedSteelMan ? selectedSteelMan.steelManText.trim().length > 100 : false;
+  const claimRepairSuggestions = useMemo(() => buildClaimRepairSuggestions(map), [map]);
+  const dailyRevisitQueue = useMemo(() => buildRevisitQueue(map), [map]);
+  const selectedRevisitTriggerDraft = selectedGraphNode?.node.id
+    ? revisitTriggerDrafts[selectedGraphNode.node.id] ?? {
+        triggerType: "manual_flag" as const,
+        dateTarget: "",
+        eventKeyword: "",
+        confidenceThreshold: "",
+        dependencyClaimId: selectedGraphNode.node.id,
+      }
+    : null;
   const selectedTeachBackFocus = useMemo(
     () => teachBackFocusForNode(selectedGraphNode?.node ?? null, selectedKnowledgeSurface),
     [selectedGraphNode?.node, selectedKnowledgeSurface],
@@ -2217,6 +2308,18 @@ export function ThoughtMapWorkspace({
     }));
   }
 
+  function mergeBeliefPropagationEvent(event: SerializableThoughtMapEvent) {
+    const normalizedEvent = normalizeEvent(event);
+
+    setMap((currentMap) => ({
+      ...currentMap,
+      events: [...currentMap.events, normalizedEvent].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
+      updatedAt: new Date(),
+    }));
+  }
+
   function mergeSteelMan(steelMan: SerializableSteelMan) {
     const normalizedSteelMan = normalizeSteelMan(steelMan);
 
@@ -2240,42 +2343,135 @@ export function ThoughtMapWorkspace({
     });
   }
 
-  function recordConfidenceOverride(
-    sourceNodeId: string,
-    targetNodeId: string,
-    reasoning: string,
-    mode: "hold" | "reduce" | "decouple" = "hold",
-  ) {
-    const trimmedReasoning = reasoning.trim();
+  function recordBeliefPropagationDecision(params: {
+    seedClaimId: string;
+    targetClaimId: string;
+    decisionType: "accept" | "override" | "decouple";
+    reasoning: string;
+    oldPosterior: number;
+    proposedPosterior: number;
+    finalPosterior: number;
+    arithmetic: {
+      parentId: string;
+      parentPrior: number;
+      parentPosterior: number;
+      edgeProbability: number;
+      formula: string;
+    };
+  }) {
+    const trimmedReasoning = params.reasoning.trim();
     if (trimmedReasoning.length < 8) {
       return;
     }
 
     startTransition(async () => {
       try {
-        const response = await fetch(`/api/maps/${map.id}/confidence-override`, {
+        const response = await fetch(`/api/maps/${map.id}/propagate`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            sourceNodeId,
-            targetNodeId,
-            mode,
-            reasoning: trimmedReasoning,
+            seedClaimId: params.seedClaimId,
+            action: params.decisionType,
+            targetClaimId: params.targetClaimId,
+            decisionType: params.decisionType,
+            reason: trimmedReasoning,
+            oldPosterior: params.oldPosterior,
+            proposedPosterior: params.proposedPosterior,
+            finalPosterior: params.finalPosterior,
+            arithmetic: params.arithmetic,
           }),
         });
 
-        if (!response.ok) {
+        if (!response.ok && response.status !== 409) {
           return;
         }
 
-        const payload = (await response.json()) as { event: SerializableThoughtMapEvent };
-        mergeDialecticRoundEvent(payload.event);
-        setConfidenceOverrideReasons((current) => ({ ...current, [targetNodeId]: "" }));
+        const payload = (await response.json()) as { events?: SerializableThoughtMapEvent[] };
+        payload.events?.forEach((event) => mergeBeliefPropagationEvent(event));
+        setPropagationAcknowledged((current) => ({
+          ...current,
+          [params.targetClaimId]: params.decisionType,
+        }));
+        setConfidenceOverrideReasons((current) => ({ ...current, [params.targetClaimId]: "" }));
+        setPropagationFinalPosteriorDrafts((current) => {
+          const next = { ...current };
+          delete next[params.targetClaimId];
+          return next;
+        });
       } catch {
         return;
       }
+    });
+  }
+
+  function persistBeliefPropagation(seedClaimId: string, updatedPosterior: number | null) {
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${map.id}/propagate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            seedClaimId,
+            updatedPosterior,
+            action: "compute",
+          }),
+        });
+
+        if (!response.ok && response.status !== 409) {
+          return;
+        }
+
+        const payload = (await response.json()) as { events?: SerializableThoughtMapEvent[] };
+        payload.events?.forEach((event) => mergeBeliefPropagationEvent(event));
+      } catch {
+        return;
+      }
+    });
+  }
+
+  function recordConfidenceOverride(
+    sourceNodeId: string,
+    targetNodeId: string,
+    reasoning: string,
+    mode: "hold" | "reduce" | "decouple" = "hold",
+  ) {
+    const step = selectedPropagation?.cascade.find((candidate) => candidate.targetNodeId === targetNodeId) ?? null;
+    const seedClaimId = sourceNodeId;
+    const decisionType = mode === "decouple" ? "decouple" : mode === "reduce" ? "override" : "accept";
+    const oldPosterior = step?.baseConfidence ?? selectedGraphNode?.node.scores?.confidence ?? 0;
+    const proposedPosterior = step?.propagatedConfidence ?? selectedGraphNode?.node.scores?.confidence ?? 0;
+    const finalPosteriorDraft = propagationFinalPosteriorDrafts[targetNodeId];
+    const finalPosterior =
+      finalPosteriorDraft != null
+        ? finalPosteriorDraft / 100
+        : decisionType === "accept"
+          ? proposedPosterior
+          : decisionType === "decouple"
+            ? oldPosterior
+            : proposedPosterior;
+    const sourceConfidence = step?.sourceConfidence ?? selectedGraphNode?.node.scores?.confidence ?? 0;
+
+    recordBeliefPropagationDecision({
+      seedClaimId: selectedPropagation?.seedNodeId ?? seedClaimId,
+      targetClaimId: targetNodeId,
+      decisionType,
+      reasoning,
+      oldPosterior,
+      proposedPosterior,
+      finalPosterior,
+      arithmetic: {
+        parentId: seedClaimId,
+        parentPrior: oldPosterior,
+        parentPosterior: sourceConfidence,
+        edgeProbability: step?.edgeFactor ?? 0,
+        formula: step
+          ? `${formatScore(step.sourceConfidence)}% × ${Math.round(step.edgeFactor * 100)}% = ${formatScore(proposedPosterior)}%`
+          : `${formatScore(oldPosterior)}% → ${formatScore(finalPosterior)}%`,
+      },
     });
   }
 
@@ -2490,6 +2686,151 @@ export function ThoughtMapWorkspace({
           ...current,
           [claimId]: payload.steelMan.steelManText,
         }));
+      } catch {
+        return;
+      }
+    });
+  }
+
+  function recordClaimRepair(submission: {
+    actionType: string;
+    initiatedBy: "user" | "penny_suggestion";
+    sourceClaimIds: string[];
+    reasoning: string;
+    details: Record<string, unknown>;
+    propagationTriggered: boolean;
+  }) {
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${map.id}/repair`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(submission),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { map: SerializableThoughtMap };
+        setMap(normalizeMap(payload.map));
+        setRepairModalOpen(false);
+      } catch {
+        return;
+      }
+    });
+  }
+
+  function updateRevisitTriggerDraft(
+    claimId: string,
+    patch: Partial<{
+      triggerType: TriggerDefinition["triggerType"];
+      dateTarget: string;
+      eventKeyword: string;
+      confidenceThreshold: string;
+      dependencyClaimId: string;
+    }>,
+  ) {
+    setRevisitTriggerDrafts((current) => {
+      const existing = current[claimId] ?? {
+        triggerType: "manual_flag" as const,
+        dateTarget: "",
+        eventKeyword: "",
+        confidenceThreshold: "",
+        dependencyClaimId: claimId,
+      };
+
+      return {
+        ...current,
+        [claimId]: {
+          ...existing,
+          ...patch,
+        },
+      };
+    });
+  }
+
+  function submitRevisitTrigger(claimId: string) {
+    const draft = revisitTriggerDrafts[claimId];
+
+    if (!draft) {
+      return;
+    }
+
+    const triggerDefinition = {
+      triggerType: draft.triggerType,
+      dateTarget: draft.dateTarget ? new Date(draft.dateTarget).toISOString() : null,
+      eventKeyword: draft.eventKeyword.trim() || null,
+      confidenceThreshold: draft.confidenceThreshold ? Number(draft.confidenceThreshold) : null,
+      dependencyClaimId: draft.dependencyClaimId.trim() || null,
+    };
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${map.id}/revisits`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            operation: "set_trigger",
+            claimId,
+            triggerDefinition,
+          }),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { map: SerializableThoughtMap };
+        setMap(normalizeMap(payload.map));
+      } catch {
+        return;
+      }
+    });
+  }
+
+  function recordRevisitAction(
+    claimId: string,
+    type: "reviewed_no_change" | "confidence_updated" | "claim_updated" | "claim_retired" | "snoozed" | "triggered_repair" | "triggered_dialectic",
+  ) {
+    const draft = revisitTriggerDrafts[claimId] ?? null;
+    const triggerDefinition = draft
+      ? {
+          triggerType: draft.triggerType,
+          dateTarget: draft.dateTarget ? new Date(draft.dateTarget).toISOString() : null,
+          eventKeyword: draft.eventKeyword.trim() || null,
+          confidenceThreshold: draft.confidenceThreshold ? Number(draft.confidenceThreshold) : null,
+          dependencyClaimId: draft.dependencyClaimId.trim() || null,
+        }
+      : null;
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${map.id}/revisits`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            operation: "act",
+            claimId,
+            type,
+            notes: type === "snoozed" ? "Snoozed from the queue" : null,
+            triggerDefinition,
+            snoozedUntil: type === "snoozed" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
+          }),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { map: SerializableThoughtMap };
+        setMap(normalizeMap(payload.map));
       } catch {
         return;
       }
@@ -4646,6 +4987,34 @@ export function ThoughtMapWorkspace({
               <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
                 Why now: {selectedClaimStructure.whyNowTrigger}
               </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button
+                  variant="secondary"
+                  className="px-3 py-2 text-xs"
+                  onClick={() =>
+                    persistBeliefPropagation(
+                      selectedPropagation?.seedNodeId ?? selectedGraphNode?.node.id ?? defaultGraphNodeId ?? "",
+                      selectedGraphNode?.node.scores?.confidence ?? null,
+                    )
+                  }
+                >
+                  Persist cascade
+                </Button>
+                {selectedPropagation?.cycleError ? (
+                  <Badge className="bg-[#fff6ed] text-[#8b4d1f]">
+                    cycle detected · {selectedPropagation.cycleError.nodeIds.length} nodes
+                  </Badge>
+                ) : null}
+              </div>
+              {selectedPropagation?.cycleError ? (
+                <div className="mt-3 rounded-[18px] border border-[#d7c06c] bg-[#fff9df] p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#8b4d1f]">Structural error</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedPropagation.cycleError.message}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                    Cycle nodes: {selectedPropagation.cycleError.nodeIds.join(" → ")}.
+                  </p>
+                </div>
+              ) : null}
 
               {selectedPropagation ? (
                 <>
@@ -4670,13 +5039,67 @@ export function ThoughtMapWorkspace({
                         <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
                           Dependency weight {Math.round(selectedPropagationImplication.dependencyWeight * 100)}% · change {formatScore(Math.abs(selectedPropagationImplication.delta))} points
                         </p>
+                        <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
+                          Posterior moved from {formatScore(selectedPropagationImplication.beforeConfidence)}% to{" "}
+                          {formatScore(selectedPropagationImplication.afterConfidence)}%.
+                        </p>
+                        {selectedPropagationImplication.contributions.length ? (
+                          <div className="mt-3 space-y-2 rounded-[14px] bg-[var(--panel)] p-3">
+                            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                              Parent contributions
+                            </p>
+                            {selectedPropagationImplication.contributions.map((contribution) => (
+                              <div key={`${contribution.parentId}:${contribution.edgeId}`} className="rounded-[12px] bg-white p-3">
+                                <p className="text-sm font-medium text-[var(--ink)]">
+                                  Parent {nodesById.get(contribution.parentId)?.content ?? contribution.parentId}
+                                </p>
+                                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                                  {formatPercentValue(contribution.parentPrior * 100)} → {formatPercentValue(contribution.parentPosterior * 100)}
+                                </p>
+                                <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{contribution.explanation}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       {propagationAcknowledged[selectedPropagationImplication.targetNodeId] ? (
                         <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[#355b32]">
-                          Implication accepted
+                          Decision recorded: {propagationAcknowledged[selectedPropagationImplication.targetNodeId]}
                         </p>
                       ) : null}
                       <div className="mt-4 space-y-3">
+                        <div className="rounded-[18px] bg-white px-4 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Final posterior</p>
+                            <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                              {formatPercentValue(
+                                propagationFinalPosteriorDrafts[selectedPropagationImplication.targetNodeId] ??
+                                  selectedPropagationImplication.afterConfidence * 100,
+                              )}
+                            </Badge>
+                          </div>
+                          <input
+                            className="mt-3 w-full accent-[var(--ink)]"
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={
+                              propagationFinalPosteriorDrafts[selectedPropagationImplication.targetNodeId] ??
+                              Math.round(selectedPropagationImplication.afterConfidence * 100)
+                            }
+                            onChange={(event) =>
+                              setPropagationFinalPosteriorDrafts((current) => ({
+                                ...current,
+                                [selectedPropagationImplication.targetNodeId]: Number(event.target.value),
+                              }))
+                            }
+                          />
+                          <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">
+                            Accept keeps the propagated posterior. Override uses this slider value. Decouple keeps the claim
+                            at its own base confidence.
+                          </p>
+                        </div>
                         <textarea
                           className="min-h-[84px] w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
                           placeholder="If the propagation is too strong, explain why the downstream confidence should stay higher."
@@ -4706,7 +5129,7 @@ export function ThoughtMapWorkspace({
                               );
                             }}
                           >
-                            Accept implication
+                            Accept
                           </Button>
                           <Button
                             variant="secondary"
@@ -4721,7 +5144,7 @@ export function ThoughtMapWorkspace({
                               )
                             }
                           >
-                            Argue propagation is too strong
+                            Override
                           </Button>
                           <Button
                             variant="secondary"
@@ -4736,7 +5159,7 @@ export function ThoughtMapWorkspace({
                               )
                             }
                           >
-                            Decouple claims
+                            Decouple
                           </Button>
                         </div>
                       </div>
@@ -5137,6 +5560,13 @@ export function ThoughtMapWorkspace({
                 )}
               </div>
             </div>
+
+            <RevisitQueue
+              items={dailyRevisitQueue}
+              onOpenClaim={(claimId) => setSelectedGraphNodeId(claimId)}
+              onReviewNoChange={(claimId) => recordRevisitAction(claimId, "reviewed_no_change")}
+              onSnooze={(claimId) => recordRevisitAction(claimId, "snoozed")}
+            />
 
             <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Move query lens</p>
@@ -5634,6 +6064,126 @@ export function ThoughtMapWorkspace({
                       <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
                         Keep graph interactions selection-only in this slice. Switch back to <span className="font-medium text-[var(--ink)]">Outline view</span> to run a move.
                       </p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Button className="gap-2" variant="secondary" onClick={() => setRepairModalOpen(true)}>
+                          <GitBranchPlus className="size-4" />
+                          Repair graph
+                        </Button>
+                        <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{claimRepairSuggestions.length} suggestions</Badge>
+                      </div>
+                      <div className="mt-4 rounded-[20px] bg-white p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Revisit trigger</p>
+                          <Badge className="bg-[var(--panel)] text-[var(--ink)]">{selectedRevisitTriggerDraft?.triggerType ?? "manual_flag"}</Badge>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                          Attach a date, keyword, dependency, or confidence trigger so Penny can surface this claim again.
+                        </p>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <select
+                            className="rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] outline-none"
+                            value={selectedRevisitTriggerDraft?.triggerType ?? "manual_flag"}
+                            onChange={(event) =>
+                              selectedGraphNode?.node.id
+                                ? updateRevisitTriggerDraft(selectedGraphNode.node.id, {
+                                    triggerType: event.target.value as TriggerDefinition["triggerType"],
+                                  })
+                                : null
+                            }
+                          >
+                            <option value="manual_flag">manual flag</option>
+                            <option value="date">date</option>
+                            <option value="event_keyword">event keyword</option>
+                            <option value="dependency_update">dependency update</option>
+                            <option value="confidence_threshold">confidence threshold</option>
+                          </select>
+                          {selectedRevisitTriggerDraft?.triggerType === "date" ? (
+                            <input
+                              className="rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] outline-none"
+                              type="date"
+                              value={selectedRevisitTriggerDraft.dateTarget}
+                              onChange={(event) =>
+                                selectedGraphNode?.node.id
+                                  ? updateRevisitTriggerDraft(selectedGraphNode.node.id, { dateTarget: event.target.value })
+                                  : null
+                              }
+                            />
+                          ) : selectedRevisitTriggerDraft?.triggerType === "event_keyword" ? (
+                            <input
+                              className="rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] outline-none"
+                              placeholder="keyword or phrase"
+                              value={selectedRevisitTriggerDraft.eventKeyword}
+                              onChange={(event) =>
+                                selectedGraphNode?.node.id
+                                  ? updateRevisitTriggerDraft(selectedGraphNode.node.id, { eventKeyword: event.target.value })
+                                  : null
+                              }
+                            />
+                          ) : selectedRevisitTriggerDraft?.triggerType === "dependency_update" ? (
+                            <select
+                              className="rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] outline-none"
+                              value={selectedRevisitTriggerDraft.dependencyClaimId}
+                              onChange={(event) =>
+                                selectedGraphNode?.node.id
+                                  ? updateRevisitTriggerDraft(selectedGraphNode.node.id, { dependencyClaimId: event.target.value })
+                                  : null
+                              }
+                            >
+                              <option value="">Select dependency</option>
+                              {map.nodes
+                                .filter((candidate) => candidate.id !== selectedGraphNode.node.id)
+                                .map((candidate) => (
+                                  <option key={candidate.id} value={candidate.id}>
+                                    {candidate.content}
+                                  </option>
+                                ))}
+                            </select>
+                          ) : selectedRevisitTriggerDraft?.triggerType === "confidence_threshold" ? (
+                            <input
+                              className="rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm text-[var(--ink)] outline-none"
+                              type="number"
+                              min={0}
+                              max={100}
+                              placeholder="40"
+                              value={selectedRevisitTriggerDraft.confidenceThreshold}
+                              onChange={(event) =>
+                                selectedGraphNode?.node.id
+                                  ? updateRevisitTriggerDraft(selectedGraphNode.node.id, { confidenceThreshold: event.target.value })
+                                  : null
+                              }
+                            />
+                          ) : null}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            className="gap-2"
+                            variant="secondary"
+                            disabled={!selectedGraphNode}
+                            onClick={() => (selectedGraphNode?.node.id ? submitRevisitTrigger(selectedGraphNode.node.id) : null)}
+                          >
+                            <Link2 className="size-4" />
+                            Attach trigger
+                          </Button>
+                          <Button
+                            className="gap-2"
+                            variant="secondary"
+                            disabled={!selectedGraphNode}
+                            onClick={() => (selectedGraphNode?.node.id ? recordRevisitAction(selectedGraphNode.node.id, "reviewed_no_change") : null)}
+                          >
+                            <CircleDot className="size-4" />
+                            Still accurate
+                          </Button>
+                          <Button
+                            className="gap-2"
+                            variant="secondary"
+                            disabled={!selectedGraphNode}
+                            onClick={() => (selectedGraphNode?.node.id ? recordRevisitAction(selectedGraphNode.node.id, "snoozed") : null)}
+                          >
+                            <ArrowRightLeft className="size-4" />
+                            Snooze 7 days
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                     <div className="mt-6 rounded-[20px] bg-[var(--panel)] p-4">
                       <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Challenge-skill calibration</p>
@@ -5675,6 +6225,14 @@ export function ThoughtMapWorkspace({
       </Card>
 
       {map.founderBrief ? <FounderBriefCard brief={map.founderBrief} /> : null}
+      <ClaimRepairModal
+        open={repairModalOpen}
+        currentClaim={selectedGraphNode?.node ?? null}
+        claimOptions={map.nodes.filter((node) => node.kind !== "root")}
+        suggestions={claimRepairSuggestions}
+        onClose={() => setRepairModalOpen(false)}
+        onSubmit={recordClaimRepair}
+      />
     </div>
   );
 }
