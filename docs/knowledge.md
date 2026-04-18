@@ -14,7 +14,7 @@
 - Synthesis should be gated by pre-mortem, if-you-were-right, twin-check, stakes-proportional friction, and dependency-completeness review so the output step feels load-bearing.
 - Sessions are first-class objects with a declared focus, protected deep-work windows, cognitive protection, depletion detection, and a clean ending ritual that hands over the artifact and stops pulling.
 - Calibration is first-class: every claim has a probability, high-confidence claims get challenged, resolved claims feed Brier tracking, and private self-bets make calibration emotionally sticky.
-- Memory and time should be visible: old selves, belief genealogy, inheritance markers, contradiction cascades, aging foundations, confidence drift, and session rhythm should all surface as felt product, not hidden infrastructure.
+- Memory and time should be visible: old selves, belief genealogy, inheritance markers, contradiction cascades, aging foundations, confidence drift, revisit queues, and session rhythm should all surface as felt product, not hidden infrastructure.
 - Shapes must be visible and reviewable, and the lens must update quickly enough that a Tuesday override visibly changes critique quality by the following week.
 - The design should feel like a built city: density over breadth, emergent structure, progressive disclosure, knowledge cards first, outline-first daily work, smart defaults, and clean endings.
 - Penny should not try to be a generic note-taking app, chatbot, wiki, or journaling tool. Those modes should remain deliberately excluded because they dilute the people the product is actually for.
@@ -45,6 +45,7 @@
 - `user`: Stakes tagging is high leverage because it exposes what is at risk when a claim is wrong.
 - `user`: Dependency information is load-bearing because it shows which claims hold up other claims and where scrutiny should concentrate.
 - `user`: Claim structure should capture temporal scope, conditional form, merge candidates, and split candidates so Penny can separate horizon, if-part, and compound claims before critique.
+- `user`: Claim repair actions should be immutable structural surgery: merge, split, promote, demote, reclassify, reroute edge, and reroot should create new events and new graph state rather than overwrite the old one.
 - `user`: The why-now signal should explain why a critique appears at this moment, not just what the critique is, so the user can read Penny’s trigger over time.
 - `user`: Propagation math should be explicit, with confidence deltas shown as arithmetic and disagreement pathways for accept, reduce, or decouple.
 - `user`: Claim status should explicitly support open, stress-tested, resolved, abandoned, revisiting, and stale states so the system can query exit criteria and revisit paths.
@@ -231,6 +232,7 @@
 - `user`: Norm-challenge scrutiny should hold firm on whether a challenged norm is actually load-bearing and should articulate the strongest case for the norm before entertaining the counter-case.
 - `user`: Confidence decay should surface untouched beliefs for revisit after a threshold, with foundational beliefs decaying faster because their failure cascades through the rest of the model.
 - `user`: The memory and time layer should unify old selves, genealogy, inheritance, contradiction cascade tracing, aging foundations, cross-project transfer, and session rhythm into one compounding system.
+- `user`: Revisit scheduling should be active and persistent, with age, last-update age, stake level, stress-test history, and triggers feeding a daily queue plus explicit trigger attachments on the claim card.
 - `user`: Interleaved stress-testing should mix related claims across a queue rather than drilling one claim sequentially, because discrimination is stronger than pattern-matching.
 - `user`: The critique layer should make Socratic mode selectable, not default, so the user can be asked to critique their own claim instead of always receiving a generated attack.
 - `user`: Critique intensity should be a visible slider per session or claim so Penny can stay gentle, firm, or brutal depending on the user’s state.
