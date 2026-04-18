@@ -386,6 +386,96 @@ export default async function DashboardPage() {
 
       <Card className="p-6 sm:p-8">
         <div className="max-w-3xl">
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Switching-cost layer</p>
+          <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
+            The product should make leaving expensive in the right ways.
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
+            These named surfaces reincorporate the richer switching-cost story: autobiography, fingerprint, archive, loss, time locks, forgetting, and counterfactuals stay visible as first-class concepts instead of dissolving into generic dashboards.
+          </p>
+        </div>
+        <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Intellectual autobiography system</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              A structured history of what you used to believe, what changed, and which maps moved your mind.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge className="bg-white text-[var(--ink)]">{memoryTime.beliefDigests.length} belief digests</Badge>
+              <Badge className="bg-[#e7defa] text-[#5c4c88]">{maps.length} maps</Badge>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Living cognitive fingerprint</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              The current shape set and calibration profile should read like a fingerprint of how this user thinks right now.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge className="bg-white text-[var(--ink)]">{shapes.length} active shapes</Badge>
+              <Badge className="bg-[#d9ead8] text-[#355b32]">{calibration.domains.length} calibrated domains</Badge>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Irreplaceable decision archive</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              Decisions should survive later regret. Maps, fragments, and resolved claims together form the archive of why a choice was made.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge className="bg-white text-[var(--ink)]">{mapCards.length} map records</Badge>
+              <Badge className="bg-[#e7defa] text-[#5c4c88]">{fragments.length} fragments</Badge>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">What you would lose</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              This makes the opportunity cost legible: what disappears if the archive, shapes, and historical context are not carried forward.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{marginSnapshot.floatingCount} floating fragments</Badge>
+              <Badge className="bg-white text-[var(--ink)]">{marginSnapshot.archivedCount} archived fragments</Badge>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Time-locked features</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              Some surfaces only matter once time has passed: resolution prompts, retrospectives, revisit queues, and delayed calibration checks.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge className="bg-white text-[var(--ink)]">{memoryTime.predictionRetrospectives.length} retrospectives</Badge>
+              <Badge className="bg-[#d9ead8] text-[#355b32]">{calibration.resolvedClaims.length} resolved claims</Badge>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Cascading forget with audit</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              Forgetting should not be silent. Archive, hide, or vault operations should leave a durable trail so users can review what was removed and why.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge className="bg-white text-[var(--ink)]">{communitySnapshot.contributions.length} review-gated contributions</Badge>
+              <Badge className="bg-[#e7defa] text-[#5c4c88]">{marginSnapshot.promotedCount} promoted fragments</Badge>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Counterfactual engine</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              The system should be able to answer “what would have happened” by reusing the same shapes, retrospectives, and post-mortem prompts it already surfaces.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge className="bg-white text-[var(--ink)]">{advancedSnapshot.counterShapes.length} counter-shapes</Badge>
+              <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{memoryTime.predictionRetrospectives.length} post-mortems</Badge>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <div className="max-w-3xl">
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Margin</p>
           <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
             Fleeting thoughts can stay alive without interrupting the main thread.
