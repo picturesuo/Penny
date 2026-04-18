@@ -70,6 +70,102 @@ export type CognitiveInterventionType =
 
 export type CognitiveInterventionStatus = "open" | "completed" | "dismissed";
 
+export type BeliefGraphPropagationModel = "bayesian" | "heuristic";
+
+export type BeliefEdgeModel = "supportive" | "contradictory" | "conditional" | "enabling";
+
+export type BeliefCombiningModel = "independent" | "conjunctive" | "disjunctive";
+
+export type BeliefPropagationDecisionType = "accept" | "override" | "decouple";
+
+export interface BeliefNode {
+  claimId: string;
+  prior: number;
+  posterior: number;
+  posteriorComputedAt: Date;
+  lockedByUser: boolean;
+  propagationDecoupled: boolean;
+  computedFrom: string[];
+}
+
+export interface BeliefEdge {
+  id: string;
+  parentId: string;
+  childId: string;
+  conditionalProbability: number;
+  edgeModel: BeliefEdgeModel;
+  combiningModel: BeliefCombiningModel;
+  userSetConditional: boolean;
+  strength: number;
+  recency: number;
+}
+
+export interface BeliefGraph {
+  nodes: Map<string, BeliefNode>;
+  edges: Map<string, BeliefEdge>;
+  propagationModel: BeliefGraphPropagationModel;
+  lastFullCompute: Date;
+}
+
+export interface BeliefPropagationContribution {
+  parentId: string;
+  edgeId: string;
+  parentPosterior: number;
+  parentPrior: number;
+  edgeProbability: number;
+  model: BeliefCombiningModel;
+  value: number;
+  explanation: string;
+}
+
+export interface BeliefPropagationStep {
+  claimId: string;
+  oldPosterior: number;
+  newPosterior: number;
+  posteriorDelta: number;
+  posteriorComputedAt: Date;
+  model: BeliefCombiningModel;
+  edgeModel: BeliefEdgeModel;
+  lockedByUser: boolean;
+  propagationDecoupled: boolean;
+  computedFrom: string[];
+  contributions: BeliefPropagationContribution[];
+  explanation: string;
+  skipped?: boolean;
+  skippedReason?: string | null;
+}
+
+export interface BeliefPropagationResult {
+  graph: BeliefGraph;
+  steps: BeliefPropagationStep[];
+  changedClaimIds: string[];
+  cycleError: {
+    nodeIds: string[];
+    message: string;
+  } | null;
+  computedAt: Date;
+}
+
+export interface BeliefPropagationDecision {
+  id: string;
+  mapId: string;
+  seedClaimId: string;
+  targetClaimId: string;
+  decisionType: BeliefPropagationDecisionType;
+  oldPosterior: number;
+  proposedPosterior: number;
+  finalPosterior: number;
+  reason: string;
+  arithmetic: {
+    parentId: string;
+    parentPrior: number;
+    parentPosterior: number;
+    edgeProbability: number;
+    formula: string;
+  };
+  createdAt: Date;
+}
+
 export type DialecticCritiqueStrength = "mild" | "moderate" | "strong" | "adversarial";
 
 export type DialecticResponsePath = "defend" | "revise" | "absorb";
@@ -152,7 +248,11 @@ export type ThoughtMapEventType =
   | "dialectic_round"
   | "challenge_calibration"
   | "confidence_override"
-  | "shape_feedback";
+  | "shape_feedback"
+  | "belief_propagation"
+  | "belief_propagation_decision"
+  | "belief_graph_cycle"
+  | "belief_graph_state";
 
 export type RecommendationReason =
   | "low_evidence"
@@ -262,6 +362,15 @@ export interface BayesianPropagationSnapshot {
     label: string;
     confidence: number | null;
   }>;
+}
+
+export interface BeliefPropagationGraphSnapshot {
+  seedClaimId: string;
+  propagationModel: BeliefGraphPropagationModel;
+  computedAt: Date;
+  cycleError: BeliefPropagationResult["cycleError"];
+  steps: BeliefPropagationStep[];
+  changedClaimIds: string[];
 }
 
 export interface ThoughtMapRecommendedMove {
@@ -406,6 +515,7 @@ export interface ThoughtMapModel {
   founderBriefReadiness: FounderBriefReadiness;
   graphSnapshot: ThoughtMapGraphSnapshot | null;
   bayesianPropagation: BayesianPropagationSnapshot | null;
+  beliefGraph: BeliefGraph | null;
   recommendedNextMove: ThoughtMapRecommendedMove | null;
   interventions: CognitiveIntervention[];
   recommendedIntervention: CognitiveIntervention | null;
