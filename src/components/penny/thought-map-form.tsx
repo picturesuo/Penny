@@ -99,8 +99,9 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
   const [isPending, startTransition] = useTransition();
   const [calibrationCoaching, setCalibrationCoaching] = useState<CalibrationCoaching | null>(null);
   const [calibrationLoading, setCalibrationLoading] = useState(Boolean(userId));
-  const [calibrationDismissed, setCalibrationDismissed] = useState(false);
+  const [calibrationDismissedRecommendationId, setCalibrationDismissedRecommendationId] = useState<string | null>(null);
   const calibrationConfidenceAnchor = useRef<number | null>(null);
+  const lastCalibrationRecommendationKey = useRef<string | null>(null);
   const [assumptionVerdicts, setAssumptionVerdicts] = useState<Record<string, "accepted" | "rejected" | "refined">>({});
   const [assumptionCorrections, setAssumptionCorrections] = useState<Record<string, string>>({});
   const [focusedAssumptionId, setFocusedAssumptionId] = useState<string | null>(null);
@@ -121,10 +122,11 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
         coaching: calibrationCoaching,
         claimText: rawThought,
         claimType: claim.structureKind,
-        confidence: claim.confidence,
-      }),
+      confidence: claim.confidence,
+    }),
     [calibrationCoaching, rawThought, claim.structureKind, claim.confidence],
   );
+  const calibrationRecommendationKey = calibrationIndicator?.recommendationId ?? null;
 
   useEffect(() => {
     if (!userId) {
@@ -165,14 +167,23 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
   }, [userId]);
 
   useEffect(() => {
-    if (calibrationIndicator && !calibrationDismissed && calibrationConfidenceAnchor.current == null) {
+    if (calibrationIndicator && calibrationConfidenceAnchor.current == null) {
       calibrationConfidenceAnchor.current = claim.confidence;
     }
 
     if (!calibrationIndicator) {
       calibrationConfidenceAnchor.current = null;
     }
-  }, [calibrationIndicator, calibrationDismissed, claim.confidence]);
+  }, [calibrationIndicator, claim.confidence]);
+
+  useEffect(() => {
+    if (lastCalibrationRecommendationKey.current === calibrationRecommendationKey) {
+      return;
+    }
+
+    lastCalibrationRecommendationKey.current = calibrationRecommendationKey;
+    calibrationConfidenceAnchor.current = calibrationIndicator ? claim.confidence : null;
+  }, [calibrationRecommendationKey, calibrationIndicator, claim.confidence]);
 
   function toggleStake(stake: ClaimStake) {
     setClaim((current) => ({
@@ -231,7 +242,6 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
       if (
         userId &&
         calibrationIndicator &&
-        !calibrationDismissed &&
         calibrationConfidenceAnchor.current != null &&
         calibrationConfidenceAnchor.current === claim.confidence
       ) {
@@ -327,7 +337,7 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
                   Every claim gets a probability so Penny can score it later and challenge overconfidence early.
                 </p>
               )}
-              {calibrationIndicator && !calibrationDismissed ? (
+              {calibrationIndicator && calibrationDismissedRecommendationId !== calibrationRecommendationKey ? (
                 <div className="rounded-[18px] border border-[#d7c06c] bg-[#fff8df] p-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
@@ -344,8 +354,7 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
                       variant="secondary"
                       className="px-3 py-2 text-xs"
                       onClick={() => {
-                        setCalibrationDismissed(true);
-                        calibrationConfidenceAnchor.current = null;
+                        setCalibrationDismissedRecommendationId(calibrationRecommendationKey);
                       }}
                     >
                       Dismiss
