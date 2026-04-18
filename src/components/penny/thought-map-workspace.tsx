@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, ArrowRightLeft, CircleDot, GitBranchPlus, Link2, Sparkles } from "lucide-react";
 import { FounderBriefCard } from "@/components/penny/founder-brief-card";
+import { MarginRail } from "@/components/penny/margin-rail";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -52,6 +53,7 @@ import type {
   ThoughtNodeKind,
   ThoughtNodeModel,
 } from "@/types/thought-map";
+import type { MarginFragmentModel } from "@/types/penny";
 
 type SerializableThoughtNode = Omit<ThoughtNodeModel, "createdAt" | "updatedAt"> & {
   createdAt: Date | string;
@@ -891,9 +893,11 @@ function shapeMetacognition(shape: PennyShape | null) {
 export function ThoughtMapWorkspace({
   initialMap,
   initialView = "outline",
+  initialFragments = [],
 }: {
   initialMap: SerializableThoughtMap;
   initialView?: MapView;
+  initialFragments?: MarginFragmentModel[];
 }) {
   const [map, setMap] = useState(() => normalizeMap(initialMap));
   const [view, setView] = useState<MapView>(initialView);
@@ -2306,6 +2310,17 @@ export function ThoughtMapWorkspace({
 
   return (
     <div className="space-y-8">
+      <MarginRail
+        scopeLabel="Map margin"
+        fragments={initialFragments}
+        currentStage={view === "graph" ? "graph" : "outline"}
+        currentFocus={selectedGraphNodeModel?.content ?? map.recommendedNextMove?.targetNodeContent ?? map.rawThought}
+        currentSphere="work"
+        currentContext={selectedGraphNodeModel?.note ?? map.recommendedNextMove?.summary ?? map.rawThought}
+        currentResponse={lastAction?.summary ?? null}
+        recentSessionMinutes={Math.max(0, Math.round((map.updatedAt.getTime() - map.createdAt.getTime()) / (1000 * 60)))}
+        sourceMapId={map.id}
+      />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Thought Map</p>
