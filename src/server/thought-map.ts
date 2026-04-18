@@ -433,6 +433,28 @@ function summarizePriorDialecticRounds(map: ThoughtMapModel, nodeId: string | nu
             : roundPayload && typeof roundPayload.responseEvidenceAdded === "boolean"
               ? Boolean(roundPayload.responseEvidenceAdded)
               : false,
+        dialecticRound: roundPayload
+          ? {
+              confidenceAtRoundEnd:
+                typeof roundPayload.confidenceAtRoundEnd === "number"
+                  ? Number(roundPayload.confidenceAtRoundEnd)
+                  : null,
+              confidenceDelta:
+                typeof roundPayload.confidenceDelta === "number" ? Number(roundPayload.confidenceDelta) : null,
+              engagementScore:
+                typeof roundPayload.engagementScore === "number" ? Number(roundPayload.engagementScore) : null,
+              responseClassification:
+                roundPayload.responseClassification && typeof roundPayload.responseClassification === "object"
+                  ? (roundPayload.responseClassification as Record<string, unknown>)
+                  : null,
+              newEvidenceAdded:
+                typeof roundPayload.newEvidenceAdded === "boolean"
+                  ? Boolean(roundPayload.newEvidenceAdded)
+                  : typeof roundPayload.responseEvidenceAdded === "boolean"
+                    ? Boolean(roundPayload.responseEvidenceAdded)
+                    : false,
+            }
+          : null,
       };
     });
 }
