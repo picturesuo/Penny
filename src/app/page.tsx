@@ -32,6 +32,7 @@ const useCases = [
     bullets: [
       "Capture claims, moves, shapes, and confidence in one living graph.",
       "Keep the map structurally healthy, not just visually interesting.",
+      "Move sensitive claims, maps, and sessions into device-only vault storage when needed.",
       "Let the user revisit old selves, genealogy, and contradictions as part of the product.",
     ],
   },
@@ -114,7 +115,7 @@ export default function LandingPage() {
               Build a pressure-tested second brain that keeps your thinking honest.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-[var(--muted-ink)]">
-              Penny starts with messy claims, turns them into a living graph, pressure-tests them against evidence and precedent, and keeps the next move visible while you work.
+              Penny starts with messy claims, turns them into a living graph, pressure-tests them against evidence and precedent, keeps the next move visible while you work, and can move sensitive work into device-only vault storage when it needs to stay local.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link href="/app/new">
