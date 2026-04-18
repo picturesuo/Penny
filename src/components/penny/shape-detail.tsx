@@ -141,6 +141,18 @@ export function ShapeDetail({
               {shape.derivation.thresholdMet.requiredConfidence}% confidence, and Penny can show exactly which moves confirmed it versus pushed against it.
             </p>
           </div>
+          {shape.derivation.correctionSignals?.length ? (
+            <div className="mt-4 rounded-[18px] bg-[#fff6ed] p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[#8b4d1f]">Corrections that affected this shape</p>
+              <div className="mt-2 space-y-2">
+                {shape.derivation.correctionSignals.map((signal) => (
+                  <p key={signal} className="text-sm leading-6 text-[var(--ink)]">
+                    {signal}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {shape.falsificationCondition ? (
             <div className="mt-4 rounded-[18px] bg-[#fff6ed] p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-[#8b4d1f]">Your falsification condition</p>

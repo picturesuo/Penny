@@ -26,6 +26,10 @@ import {
   buildConfusionLog,
   buildAdversarialFinalPass,
   buildClaimRepairSuggestions,
+  buildCritiqueQualityProfile,
+  critiqueGenerationModifier,
+  collectCritiqueCorrections,
+  collectCritiqueFeedback,
   biasProfileCritiqueContext,
   buildCognitiveBiasProfile,
   buildPennyLens,
@@ -52,6 +56,7 @@ import {
 import { evaluateMetaCognitionTrigger, type MetaCognitionPromptSnapshot } from "@/lib/meta-cognition";
 import { buildRevisitQueue } from "@/lib/revisit-scheduler";
 import { cn } from "@/lib/utils";
+import { CritiqueFeedback as CritiqueFeedbackCard } from "@/components/penny/critique-feedback";
 import { MetaCognitionPrompt } from "@/components/penny/meta-cognition-prompt";
 import { ShapeDetail } from "@/components/penny/shape-detail";
 import type {
@@ -69,6 +74,9 @@ import type {
   RevisitAction,
   RevisitSchedule,
   TriggerDefinition,
+  CritiqueFeedback as CritiqueFeedbackModel,
+  CritiqueCorrection as CritiqueCorrectionModel,
+  CritiqueQualityProfile as CritiqueQualityProfileModel,
   SteelMan,
   SteelManVersion,
   CognitiveBiasProfile,
@@ -85,11 +93,26 @@ type SerializableThoughtNode = Omit<ThoughtNodeModel, "createdAt" | "updatedAt">
 
 type SerializableThoughtMap = Omit<
   ThoughtMapModel,
-  "nodes" | "createdAt" | "updatedAt" | "interventions" | "recommendedIntervention" | "founderBrief" | "steelMans" | "repairActions" | "revisitSchedules" | "shapeDerivations"
+  | "nodes"
+  | "createdAt"
+  | "updatedAt"
+  | "interventions"
+  | "recommendedIntervention"
+  | "founderBrief"
+  | "steelMans"
+  | "critiqueFeedbacks"
+  | "critiqueCorrections"
+  | "critiqueQualityProfile"
+  | "repairActions"
+  | "revisitSchedules"
+  | "shapeDerivations"
 > & {
   nodes: SerializableThoughtNode[];
   events: SerializableThoughtMapEvent[];
   steelMans: SerializableSteelMan[];
+  critiqueFeedbacks: SerializableCritiqueFeedback[];
+  critiqueCorrections: SerializableCritiqueCorrection[];
+  critiqueQualityProfile: SerializableCritiqueQualityProfile | null;
   repairActions: SerializableClaimRepairAction[];
   revisitSchedules: SerializableRevisitSchedule[];
   shapeDerivations: SerializableShapeDerivation[];
@@ -136,6 +159,22 @@ type SerializableShapeDerivation = Omit<ShapeDerivation, "computedAt" | "contrib
     }
   >;
   computedAt: Date | string;
+};
+
+type SerializableCritiqueRating = Omit<CritiqueFeedbackModel["ratings"][number], never>;
+
+type SerializableCritiqueFeedback = Omit<CritiqueFeedbackModel, "feedbackGivenAt" | "ratings"> & {
+  ratings: SerializableCritiqueRating[];
+  feedbackGivenAt: Date | string;
+};
+
+type SerializableCritiqueCorrection = Omit<CritiqueCorrectionModel, "createdAt" | "reviewedAt"> & {
+  createdAt: Date | string;
+  reviewedAt: Date | string | null;
+};
+
+type SerializableCritiqueQualityProfile = Omit<CritiqueQualityProfileModel, "lastUpdated"> & {
+  lastUpdated: Date | string;
 };
 
 type SerializableClaimRepairAction = Omit<ClaimRepairAction, "createdAt"> & {
@@ -362,6 +401,35 @@ function normalizeShapeDerivation(derivation: SerializableShapeDerivation): Shap
   };
 }
 
+function normalizeCritiqueRating(rating: SerializableCritiqueRating): CritiqueFeedbackModel["ratings"][number] {
+  return {
+    ...rating,
+  };
+}
+
+function normalizeCritiqueFeedback(feedback: SerializableCritiqueFeedback): CritiqueFeedbackModel {
+  return {
+    ...feedback,
+    feedbackGivenAt: toDate(feedback.feedbackGivenAt),
+    ratings: feedback.ratings.map(normalizeCritiqueRating),
+  };
+}
+
+function normalizeCritiqueCorrection(correction: SerializableCritiqueCorrection): CritiqueCorrectionModel {
+  return {
+    ...correction,
+    createdAt: toDate(correction.createdAt),
+    reviewedAt: correction.reviewedAt ? toDate(correction.reviewedAt) : null,
+  };
+}
+
+function normalizeCritiqueQualityProfile(profile: SerializableCritiqueQualityProfile): CritiqueQualityProfileModel {
+  return {
+    ...profile,
+    lastUpdated: toDate(profile.lastUpdated),
+  };
+}
+
 function normalizeClaimRepairAction(repairAction: SerializableClaimRepairAction): ClaimRepairAction {
   return {
     ...repairAction,
@@ -445,6 +513,9 @@ function normalizeMap(map: SerializableThoughtMap): ThoughtMapModel {
     nodes: map.nodes.map(normalizeNode),
     events: map.events.map(normalizeEvent),
     steelMans: (map.steelMans ?? []).map(normalizeSteelMan),
+    critiqueFeedbacks: (map.critiqueFeedbacks ?? []).map(normalizeCritiqueFeedback),
+    critiqueCorrections: (map.critiqueCorrections ?? []).map(normalizeCritiqueCorrection),
+    critiqueQualityProfile: map.critiqueQualityProfile ? normalizeCritiqueQualityProfile(map.critiqueQualityProfile) : null,
     repairActions: (map.repairActions ?? []).map(normalizeClaimRepairAction),
     revisitSchedules: (map.revisitSchedules ?? []).map(normalizeRevisitSchedule),
     shapeDerivations: (map.shapeDerivations ?? []).map(normalizeShapeDerivation),
@@ -1164,6 +1235,8 @@ export function ThoughtMapWorkspace({
   const [critiqueMode, setCritiqueMode] = useState<CritiqueMode>("direct");
   const [critiqueIntensity, setCritiqueIntensity] = useState(62);
   const [selectedCritiqueType, setSelectedCritiqueType] = useState<CritiqueFailureType>("weak evidence");
+  const [openedCritiqueFeedbackRoundIds, setOpenedCritiqueFeedbackRoundIds] = useState<Record<string, boolean>>({});
+  const [hiddenCritiqueFeedbackRoundIds, setHiddenCritiqueFeedbackRoundIds] = useState<Record<string, boolean>>({});
   const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
     collectShapeFeedback(normalizeMap(initialMap).events),
   );
@@ -1893,6 +1966,18 @@ export function ThoughtMapWorkspace({
               typeof payload.critiqueType === "string" && payload.critiqueType.trim().length > 0
                 ? String(payload.critiqueType)
                 : null,
+            critiqueMode:
+              roundPayload && typeof roundPayload.critiqueMode === "string" && roundPayload.critiqueMode.trim().length > 0
+                ? String(roundPayload.critiqueMode)
+                : typeof payload.critiqueMode === "string" && payload.critiqueMode.trim().length > 0
+                  ? String(payload.critiqueMode)
+                  : null,
+            voiceLabel:
+              roundPayload && typeof roundPayload.voiceLabel === "string" && roundPayload.voiceLabel.trim().length > 0
+                ? String(roundPayload.voiceLabel)
+                : typeof payload.voiceLabel === "string" && payload.voiceLabel.trim().length > 0
+                  ? String(payload.voiceLabel)
+                  : null,
             critiqueFailureTypes:
               roundPayload && Array.isArray(roundPayload.critiqueFailureTypes)
                 ? roundPayload.critiqueFailureTypes.filter((item): item is string => typeof item === "string")
@@ -1937,6 +2022,70 @@ export function ThoughtMapWorkspace({
         .sort((a, b) => a.roundIndex - b.roundIndex || a.createdAt.getTime() - b.createdAt.getTime()),
     [map.events],
   );
+  const critiqueFeedbackEvents = useMemo(
+    () => map.events.filter((event) => event.eventType === "critique_feedback"),
+    [map.events],
+  );
+  const critiqueFeedbacks = useMemo(() => collectCritiqueFeedback(map.events), [map.events]);
+  const critiqueCorrections = useMemo(() => collectCritiqueCorrections(map.events), [map.events]);
+  const critiqueQualityProfile = useMemo(
+    () => map.critiqueQualityProfile ?? buildCritiqueQualityProfile(map, critiqueFeedbacks),
+    [critiqueFeedbacks, map],
+  );
+  const critiqueGenerationGuidance = useMemo(
+    () => critiqueGenerationModifier(critiqueQualityProfile),
+    [critiqueQualityProfile],
+  );
+  const critiqueFeedbackStatusByRoundId = useMemo(() => {
+    return dialecticRoundEvents.reduce<Record<string, { dismissalCount: number; submitted: boolean; latestFeedback: SerializableThoughtMapEvent | null }>>(
+      (accumulator, round) => {
+        const feedbackEvents = critiqueFeedbackEvents
+          .filter((event) => {
+            const payload = event.payload ?? {};
+            const roundId = typeof payload.roundId === "string" ? String(payload.roundId) : null;
+            const critiqueId = typeof payload.critiqueId === "string" ? String(payload.critiqueId) : null;
+            return roundId === round.id || critiqueId === round.id;
+          })
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+        let latestFeedback: SerializableThoughtMapEvent | null = null;
+        let dismissalCount = 0;
+
+        for (const event of feedbackEvents) {
+          const payload = event.payload ?? {};
+          const dismissed = Boolean(payload.dismissed);
+          const ratings = Array.isArray(payload.ratings) ? payload.ratings : [];
+          const submitted = !dismissed && ratings.length > 0;
+
+          if (submitted) {
+            latestFeedback = normalizeEvent(event);
+            dismissalCount = 0;
+            continue;
+          }
+
+          if (dismissed) {
+            dismissalCount += 1;
+          }
+        }
+
+        const latestSuccessful = feedbackEvents
+          .filter((event) => {
+            const payload = event.payload ?? {};
+            return Boolean(payload.dismissed) === false && Array.isArray(payload.ratings) && payload.ratings.length > 0;
+          })
+          .at(-1);
+
+        accumulator[round.id] = {
+          dismissalCount: latestSuccessful ? dismissalCount : dismissalCount,
+          submitted: Boolean(latestSuccessful),
+          latestFeedback: latestFeedback ?? (latestSuccessful ? normalizeEvent(latestSuccessful) : null),
+        };
+
+        return accumulator;
+      },
+      {},
+    );
+  }, [critiqueFeedbackEvents, dialecticRoundEvents]);
   const steelManRevisionPrompt =
     selectedSteelMan && dialecticRoundEvents.length >= 2
       ? "You've been through two rounds. Has your understanding of the opposing view changed? Revise your steel man."
@@ -2126,6 +2275,8 @@ export function ThoughtMapWorkspace({
       critiqueType: "correction",
       prompt: "Capture the factual correction Penny got wrong so it can be treated as high-priority signal.",
       why: "Dedicated correction capture is the highest-priority critique signal because it corrects the product’s own mistake.",
+      critiqueMode,
+      voiceLabel: selectedAudienceCritique?.audienceLabel ?? peerAudience,
       responsePath: "revise",
       response: correction,
     });
@@ -2302,7 +2453,10 @@ export function ThoughtMapWorkspace({
       const context = buildRoundContext(index);
 
       return {
+        id: round.round,
         ...round,
+        dialecticRound: roundEventsByIndex.get(index)?.dialecticRound ?? null,
+        critiqueFailureTypes: roundEventsByIndex.get(index)?.dialecticRound?.critiqueFailureTypes ?? [],
         priorRoundSummary: context.priorSummary,
         followUpPrompt: context.followUpPrompt,
         confidenceContext: context.confidenceContext,
@@ -2619,6 +2773,28 @@ export function ThoughtMapWorkspace({
     }));
   }
 
+  function mergeCritiqueFeedbackEvent(event: SerializableThoughtMapEvent) {
+    const normalizedEvent = normalizeEvent(event);
+
+    setMap((currentMap) => ({
+      ...currentMap,
+      events: [...currentMap.events, normalizedEvent].sort(
+        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+      ),
+      critiqueFeedbacks: collectCritiqueFeedback([...currentMap.events, normalizedEvent]),
+      critiqueCorrections: collectCritiqueCorrections([...currentMap.events, normalizedEvent]),
+      critiqueQualityProfile: buildCritiqueQualityProfile(
+        {
+          ...currentMap,
+          events: [...currentMap.events, normalizedEvent].sort(
+            (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+          ),
+        } as ThoughtMapModel,
+      ),
+      updatedAt: new Date(),
+    }));
+  }
+
   function mergeSteelMan(steelMan: SerializableSteelMan) {
     const normalizedSteelMan = normalizeSteelMan(steelMan);
 
@@ -2879,6 +3055,87 @@ export function ThoughtMapWorkspace({
     });
   }
 
+  function recordCritiqueFeedback(params: {
+    round: SerializableDialecticRound | null;
+    dismissed?: boolean;
+    ratings?: Array<{ dimension: CritiqueFeedbackModel["ratings"][number]["dimension"]; score: number; comment: string | null }>;
+    overallUsefulness?: number;
+    freeTextFeedback?: string | null;
+    correctionText?: string | null;
+    correctionType?: CritiqueCorrectionModel["correctionType"];
+    isCorrectionFlagged?: boolean;
+    shapeId?: string | null;
+  }) {
+    const round = params.round;
+    if (!round) {
+      return;
+    }
+    const critiqueId = round.id;
+    const dismissed = params.dismissed ?? false;
+    const ratings =
+      params.ratings ??
+      ([
+        "relevance",
+        "novelty",
+        "strength",
+        "specificity",
+        "actionability",
+        "timing",
+      ] as const).map((dimension) => ({
+        dimension,
+        score: 3,
+        comment: null,
+      }));
+    const overallUsefulness =
+      params.overallUsefulness ?? Math.max(1, Math.min(5, Math.round(ratings.reduce((sum, rating) => sum + rating.score, 0) / ratings.length)));
+
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/maps/${map.id}/critique-feedback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            roundId: round.id,
+            critiqueId,
+            userId: map.userId,
+            ratings,
+            overallUsefulness,
+            freeTextFeedback: params.freeTextFeedback ?? null,
+            correctionText: params.correctionText ?? null,
+            correctionType: params.correctionType ?? "other",
+            isCorrectionFlagged: params.isCorrectionFlagged ?? false,
+            dismissed,
+            shapeId: params.shapeId ?? selectedShape?.id ?? null,
+            critiqueMode: critiqueMode,
+            voiceLabel: selectedAudienceCritique?.audienceLabel ?? peerAudience,
+            failureTypes: round.critiqueFailureTypes ?? [],
+          }),
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          feedback: SerializableThoughtMapEvent;
+          correction?: SerializableThoughtMapEvent | null;
+          profileEvent?: SerializableThoughtMapEvent | null;
+        };
+        mergeCritiqueFeedbackEvent(payload.feedback);
+        if (payload.correction) {
+          mergeCritiqueFeedbackEvent(payload.correction);
+        }
+        if (payload.profileEvent) {
+          mergeCritiqueFeedbackEvent(payload.profileEvent);
+        }
+      } catch {
+        return;
+      }
+    });
+  }
+
   function updateDialecticRoundContext(
     roundKey: string,
     patch: Partial<{
@@ -2917,6 +3174,8 @@ export function ThoughtMapWorkspace({
     critiqueStrength: string;
     critiqueType?: CritiqueFailureType | string;
     critiqueFailureTypes?: string[];
+    critiqueMode?: "direct" | "socratic" | "red_team";
+    voiceLabel?: string | null;
     prompt: string;
     why: string;
     responsePath: "defend" | "revise" | "absorb";
@@ -2951,6 +3210,8 @@ export function ThoughtMapWorkspace({
             critiqueStrength: params.critiqueStrength,
             critiqueType: params.critiqueType ?? null,
             critiqueFailureTypes: params.critiqueFailureTypes ?? (params.critiqueType ? [params.critiqueType] : []),
+            critiqueMode: params.critiqueMode ?? critiqueMode,
+            voiceLabel: params.voiceLabel ?? (selectedAudienceCritique?.audienceLabel ?? peerAudience),
             prompt: params.prompt,
             why: params.why,
             responsePath: params.responsePath,
@@ -4524,6 +4785,31 @@ export function ThoughtMapWorkspace({
                 </p>
               )}
             </div>
+
+            <div className="mt-4 rounded-[18px] bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Critique quality profile</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{critiqueGenerationGuidance.uncertaintyNote}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {critiqueGenerationGuidance.avoidVoices.length ? (
+                  critiqueGenerationGuidance.avoidVoices.slice(0, 3).map((voice) => (
+                    <Badge key={`avoid-${voice}`} className="bg-[#fff6ed] text-[#8b4d1f]">
+                      avoid {voice}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge className="bg-[var(--panel)] text-[var(--ink)]">no voice downgrade yet</Badge>
+                )}
+                {critiqueGenerationGuidance.prioritizeFailureTypes.length ? (
+                  critiqueGenerationGuidance.prioritizeFailureTypes.slice(0, 3).map((failureType) => (
+                    <Badge key={`priority-${failureType}`} className="bg-[#d9ead8] text-[#355b32]">
+                      prioritize {failureType}
+                    </Badge>
+                  ))
+                ) : (
+                  <Badge className="bg-[var(--panel)] text-[var(--ink)]">no failure-type preference yet</Badge>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -4559,6 +4845,9 @@ export function ThoughtMapWorkspace({
                 ) : (
                   <Badge className="bg-white text-[var(--ink)]">No critique history yet</Badge>
                 )}
+                {critiqueCorrections.length ? (
+                  <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{critiqueCorrections.length} corrections logged</Badge>
+                ) : null}
               </div>
               <p className="mt-3 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">
                 Engagement style: {critiqueEngagementStyle}
@@ -4699,6 +4988,19 @@ export function ThoughtMapWorkspace({
           {dialecticRounds.map((round) => {
             const draft = dialecticResponseDrafts[round.round] ?? "";
             const roundContextDraft = round.roundContextDraft;
+            const critiqueFeedbackStatus = critiqueFeedbackStatusByRoundId[round.id] ?? {
+              dismissalCount: 0,
+              submitted: false,
+              latestFeedback: null,
+            };
+            const hasPersistedRound = Boolean(round.dialecticRound);
+            const feedbackManualOnly = critiqueFeedbackStatus.dismissalCount >= 3 && !critiqueFeedbackStatus.submitted;
+            const feedbackVisible =
+              hasPersistedRound &&
+              !hiddenCritiqueFeedbackRoundIds[round.id] &&
+              (critiqueFeedbackStatus.submitted ||
+                critiqueFeedbackStatus.dismissalCount < 3 ||
+                Boolean(openedCritiqueFeedbackRoundIds[round.id]));
 
             return (
             <div key={round.round} className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
@@ -4785,6 +5087,84 @@ export function ThoughtMapWorkspace({
                   ) : null}
                 </div>
               </details>
+              {feedbackVisible ? (
+                <div className="mt-4">
+                  <CritiqueFeedbackCard
+                    roundLabel={round.round}
+                    critiqueText={round.prompt}
+                    critiqueMode={round.dialecticRound?.critiqueMode ?? critiqueMode}
+                    voiceLabel={round.dialecticRound?.voiceLabel ?? selectedAudienceCritique?.audienceLabel ?? peerAudience}
+                    failureTypes={round.critiqueFailureTypes ?? []}
+                    shapeId={selectedShape?.id ?? null}
+                    manualOnly={feedbackManualOnly && !openedCritiqueFeedbackRoundIds[round.id]}
+                    submitted={critiqueFeedbackStatus.submitted}
+                    onSubmit={(payload) =>
+                      recordCritiqueFeedback({
+                        round: round.dialecticRound ?? null,
+                        dismissed: payload.dismissed,
+                        ratings: payload.ratings,
+                        overallUsefulness: payload.overallUsefulness,
+                        freeTextFeedback: payload.freeTextFeedback,
+                        correctionText: payload.correctionText,
+                        correctionType: payload.correctionType,
+                        isCorrectionFlagged: payload.isCorrectionFlagged,
+                        shapeId: payload.shapeId,
+                      })
+                    }
+                    onDismiss={() => {
+                      if (feedbackManualOnly && !openedCritiqueFeedbackRoundIds[round.id]) {
+                        setOpenedCritiqueFeedbackRoundIds((current) => ({
+                          ...current,
+                          [round.id]: true,
+                        }));
+                        return;
+                      }
+
+                      setHiddenCritiqueFeedbackRoundIds((current) => ({
+                        ...current,
+                        [round.id]: true,
+                      }));
+                      recordCritiqueFeedback({
+                        round: round.dialecticRound ?? null,
+                        dismissed: true,
+                        overallUsefulness: 3,
+                        ratings: [],
+                        freeTextFeedback: null,
+                        correctionText: null,
+                        isCorrectionFlagged: false,
+                        shapeId: selectedShape?.id ?? null,
+                      });
+                    }}
+                  />
+                </div>
+              ) : feedbackManualOnly ? (
+                <div className="mt-4 rounded-[20px] border border-dashed border-black/10 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Critique feedback</p>
+                      <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
+                        Penny stopped auto-showing this after three dismissals.
+                      </p>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      className="px-3 py-2 text-xs"
+                      onClick={() => {
+                        setHiddenCritiqueFeedbackRoundIds((current) => ({
+                          ...current,
+                          [round.id]: false,
+                        }));
+                        setOpenedCritiqueFeedbackRoundIds((current) => ({
+                          ...current,
+                          [round.id]: true,
+                        }));
+                      }}
+                    >
+                      Rate this critique
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{round.responsePath}</p>
               <textarea
                 className="mt-3 min-h-[88px] w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
@@ -4891,6 +5271,8 @@ export function ThoughtMapWorkspace({
                           critiqueStrength: round.strength,
                           critiqueType: activeCritiqueType,
                           critiqueFailureTypes: [activeCritiqueType],
+                          critiqueMode,
+                          voiceLabel: selectedAudienceCritique?.audienceLabel ?? peerAudience,
                           prompt: round.prompt,
                           why: round.why,
                           responsePath: path,
