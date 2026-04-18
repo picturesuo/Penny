@@ -882,6 +882,8 @@ export async function recordBeliefPropagationDecision(params: {
   return {
     decisionEvent: mapEventRecord(created.decisionEvent),
     compatibilityEvent: mapEventRecord(created.compatibilityEvent),
+    decisionEventId: created.decisionEvent.id,
+    compatibilityEventId: created.compatibilityEvent.id,
   };
 }
 
@@ -957,6 +959,9 @@ export async function recordBeliefPropagation(params: {
     propagationEventId: created.propagationEvent.id,
     decisionEventId: null,
     cycleError: result.cycleError,
+    graphEvent: mapEventRecord(created.graphEvent),
+    propagationEvent: mapEventRecord(created.propagationEvent),
+    cycleEvent: created.cycleEvent ? mapEventRecord(created.cycleEvent) : null,
   };
 }
 
