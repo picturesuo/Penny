@@ -975,6 +975,7 @@ export function ThoughtMapWorkspace({
   const [advisorReviewNotes, setAdvisorReviewNotes] = useState<string[]>([]);
   const [selectedPrecedentId, setSelectedPrecedentId] = useState<string | null>(null);
   const [steelManDrafts, setSteelManDrafts] = useState<Record<string, string>>({});
+  const [steelManAssessments, setSteelManAssessments] = useState<Record<string, SteelManQualityAssessment>>({});
   const [teachBackDrafts, setTeachBackDrafts] = useState<Record<string, string>>({});
   const [teachBackFeedback, setTeachBackFeedback] = useState<Record<string, TeachBackAnalysis>>({});
   const [teachBackAttempts, setTeachBackAttempts] = useState<Record<string, string[]>>({});
@@ -1481,15 +1482,12 @@ export function ThoughtMapWorkspace({
   const selectedSteelMan = selectedGraphNode
     ? map.steelMans.find((steelMan) => steelMan.claimId === selectedGraphNode.node.id) ?? null
     : null;
+  const selectedSteelManAssessment = selectedGraphNode ? steelManAssessments[selectedGraphNode.node.id] ?? null : null;
   const selectedSteelManDraft = selectedGraphNode
     ? steelManDrafts[selectedGraphNode.node.id] ?? selectedSteelMan?.steelManText ?? ""
     : "";
   const selectedSteelManDraftReady = selectedSteelManDraft.trim().length > 100;
   const selectedSteelManReady = selectedSteelMan ? selectedSteelMan.steelManText.trim().length > 100 : false;
-  const steelManRevisionPrompt =
-    selectedSteelMan && dialecticRoundEvents.length >= 2
-      ? "You've been through two rounds. Has your understanding of the opposing view changed? Revise your steel man."
-      : null;
   const selectedTeachBackFocus = useMemo(
     () => teachBackFocusForNode(selectedGraphNode?.node ?? null, selectedKnowledgeSurface),
     [selectedGraphNode?.node, selectedKnowledgeSurface],
@@ -1671,6 +1669,10 @@ export function ThoughtMapWorkspace({
         .sort((a, b) => a.roundIndex - b.roundIndex || a.createdAt.getTime() - b.createdAt.getTime()),
     [map.events],
   );
+  const steelManRevisionPrompt =
+    selectedSteelMan && dialecticRoundEvents.length >= 2
+      ? "You've been through two rounds. Has your understanding of the opposing view changed? Revise your steel man."
+      : null;
   const selectedPrecedentAdherence = useMemo(() => {
     if (!selectedPrecedentSummary) {
       return null;
