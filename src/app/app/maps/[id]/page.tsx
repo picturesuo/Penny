@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ThoughtMapWorkspace } from "@/components/penny/thought-map-workspace";
 import { getThoughtMap } from "@/server/thought-map";
+import { listMarginFragments } from "@/server/penny";
 
 export default async function ThoughtMapPage({
   params,
@@ -9,10 +10,11 @@ export default async function ThoughtMapPage({
 }) {
   const { id } = await params;
   const map = await getThoughtMap(id);
+  const fragments = await listMarginFragments();
 
   if (!map) {
     notFound();
   }
 
-  return <ThoughtMapWorkspace initialMap={map} initialView="outline" />;
+  return <ThoughtMapWorkspace initialMap={map} initialView="outline" initialFragments={fragments} />;
 }
