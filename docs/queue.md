@@ -1,12 +1,12 @@
 # Queue
 
 ## Now
-- [x] Initialize the first real task artifact.
+- [x] Implement calibration coaching by domain and claim type.
 
 ## Next
-- [x] Reframe the landing page to foreground the pressure-tested second brain.
-- [x] Capture the main edge case: keep the wiki-first framing readable on smaller screens.
-- [x] Capture one cleanup item: audit leftover startup-idea wording.
+- [ ] Verify the calibration route, domain curves, and confidence-slider coaching hint.
+- [ ] Check the claim-type coaching recommendations on the dashboard surface.
+- [ ] Confirm rejection logging when the user keeps the original confidence after a coaching hint.
 
 ## Later
 - [ ] Expand only when the project grows.

@@ -6,6 +6,7 @@ import { AlertCircle, ArrowRightLeft, CircleDot, GitBranchPlus, Link2, Sparkles 
 import { BiasProfile } from "@/components/penny/bias-profile";
 import { BlindSpotMapView } from "@/components/penny/blind-spot-map";
 import { ArtifactBuilder } from "@/components/penny/artifact-builder";
+import { DocumentImport } from "@/components/penny/document-import";
 import { FounderBriefCard } from "@/components/penny/founder-brief-card";
 import { ClaimRepairModal } from "@/components/penny/claim-repair-modal";
 import { ResolutionFlow, type ResolutionDownstreamClaim, type ResolutionSubmission } from "@/components/penny/resolution-flow";
@@ -85,6 +86,8 @@ import type {
   BlindSpotMap,
   ShapeDerivation,
   MetaCognitionResponseType,
+  ImportSource,
+  ExtractedClaim,
 } from "@/types/thought-map";
 import type { MarginFragmentModel } from "@/types/penny";
 
@@ -107,6 +110,7 @@ type SerializableThoughtMap = Omit<
   | "critiqueQualityProfile"
   | "repairActions"
   | "revisitSchedules"
+  | "importSources"
   | "shapeDerivations"
 > & {
   nodes: SerializableThoughtNode[];
@@ -121,6 +125,7 @@ type SerializableThoughtMap = Omit<
   founderBrief: SerializableFounderBrief | null;
   interventions: SerializableIntervention[];
   recommendedIntervention: SerializableIntervention | null;
+  importSources: SerializableImportSource[];
   createdAt: Date | string;
   updatedAt: Date | string;
 };
@@ -177,6 +182,13 @@ type SerializableCritiqueCorrection = Omit<CritiqueCorrectionModel, "createdAt" 
 
 type SerializableCritiqueQualityProfile = Omit<CritiqueQualityProfileModel, "lastUpdated"> & {
   lastUpdated: Date | string;
+};
+
+type SerializableExtractedClaim = ExtractedClaim;
+
+type SerializableImportSource = Omit<ImportSource, "importedAt" | "extractedClaims"> & {
+  importedAt: Date | string;
+  extractedClaims: SerializableExtractedClaim[];
 };
 
 type SerializableClaimRepairAction = Omit<ClaimRepairAction, "createdAt"> & {
@@ -462,6 +474,20 @@ function normalizeRevisitSchedule(schedule: SerializableRevisitSchedule): Revisi
   };
 }
 
+function normalizeExtractedClaim(claim: SerializableExtractedClaim): ExtractedClaim {
+  return {
+    ...claim,
+  };
+}
+
+function normalizeImportSource(importSource: SerializableImportSource): ImportSource {
+  return {
+    ...importSource,
+    importedAt: toDate(importSource.importedAt),
+    extractedClaims: importSource.extractedClaims.map(normalizeExtractedClaim),
+  };
+}
+
 function normalizeBiasEvidenceInstance(instance: SerializableBiasEvidenceInstance) {
   return {
     ...instance,
@@ -521,6 +547,7 @@ function normalizeMap(map: SerializableThoughtMap): ThoughtMapModel {
     repairActions: (map.repairActions ?? []).map(normalizeClaimRepairAction),
     revisitSchedules: (map.revisitSchedules ?? []).map(normalizeRevisitSchedule),
     shapeDerivations: (map.shapeDerivations ?? []).map(normalizeShapeDerivation),
+    importSources: (map.importSources ?? []).map(normalizeImportSource),
     founderBrief: map.founderBrief ? normalizeFounderBrief(map.founderBrief) : null,
     interventions: map.interventions.map(normalizeIntervention),
     recommendedIntervention: map.recommendedIntervention ? normalizeIntervention(map.recommendedIntervention) : null,
@@ -7206,6 +7233,7 @@ export function ThoughtMapWorkspace({
 
       {map.founderBrief ? <FounderBriefCard brief={map.founderBrief} /> : null}
       <ArtifactBuilder mapId={map.id} />
+      <DocumentImport mapId={map.id} />
       <ResolutionFlow
         key={resolutionFlowOpen ? `resolution:${resolutionTargetNode?.id ?? "claim"}` : "resolution:closed"}
         open={resolutionFlowOpen}
