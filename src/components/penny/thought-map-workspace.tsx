@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, ArrowRightLeft, CircleDot, GitBranchPlus, Link2, Sparkles } from "lucide-react";
 import { BiasProfile } from "@/components/penny/bias-profile";
+import { BlindSpotMapView } from "@/components/penny/blind-spot-map";
 import { FounderBriefCard } from "@/components/penny/founder-brief-card";
 import { ClaimRepairModal } from "@/components/penny/claim-repair-modal";
 import { MarginRail } from "@/components/penny/margin-rail";
@@ -71,6 +72,7 @@ import type {
   SteelMan,
   SteelManVersion,
   CognitiveBiasProfile,
+  BlindSpotMap,
   ShapeDerivation,
   MetaCognitionResponseType,
 } from "@/types/thought-map";
@@ -155,6 +157,15 @@ type SerializableBiasEntry = Omit<CognitiveBiasProfile["biasEntries"][number], "
 type SerializableCognitiveBiasProfile = Omit<CognitiveBiasProfile, "biasEntries" | "lastUpdated"> & {
   biasEntries: SerializableBiasEntry[];
   lastUpdated: Date | string;
+};
+
+type SerializableBlindSpotDomain = Omit<BlindSpotMap["unexaminedDomains"][number], "oldestUntestedClaim"> & {
+  oldestUntestedClaim: Date | string;
+};
+
+type SerializableBlindSpotMap = Omit<BlindSpotMap, "computedAt" | "unexaminedDomains"> & {
+  computedAt: Date | string;
+  unexaminedDomains: SerializableBlindSpotDomain[];
 };
 
 type SerializableRevisitAction = Omit<RevisitAction, "completedAt"> & {
@@ -402,6 +413,21 @@ function normalizeBiasProfile(profile: SerializableCognitiveBiasProfile): Cognit
     ...profile,
     lastUpdated: toDate(profile.lastUpdated),
     biasEntries: profile.biasEntries.map(normalizeBiasEntry),
+  };
+}
+
+function normalizeBlindSpotDomain(domain: SerializableBlindSpotDomain): BlindSpotMap["unexaminedDomains"][number] {
+  return {
+    ...domain,
+    oldestUntestedClaim: toDate(domain.oldestUntestedClaim),
+  };
+}
+
+function normalizeBlindSpotMap(blindSpotMap: SerializableBlindSpotMap): BlindSpotMap {
+  return {
+    ...blindSpotMap,
+    computedAt: toDate(blindSpotMap.computedAt),
+    unexaminedDomains: blindSpotMap.unexaminedDomains.map(normalizeBlindSpotDomain),
   };
 }
 
@@ -1097,6 +1123,9 @@ export function ThoughtMapWorkspace({
   const [biasProfile, setBiasProfile] = useState<CognitiveBiasProfile | null>(null);
   const [biasProfileLoading, setBiasProfileLoading] = useState(false);
   const [biasProfileRefreshing, setBiasProfileRefreshing] = useState(false);
+  const [blindSpotMap, setBlindSpotMap] = useState<BlindSpotMap | null>(null);
+  const [blindSpotMapLoading, setBlindSpotMapLoading] = useState(false);
+  const [blindSpotMapRefreshing, setBlindSpotMapRefreshing] = useState(false);
   const [view, setView] = useState<MapView>(initialView);
   const [lastAction, setLastAction] = useState<ActionResponse | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
@@ -2376,6 +2405,34 @@ export function ThoughtMapWorkspace({
     }
   }
 
+  async function refreshBlindSpotMap() {
+    if (!map.userId) {
+      return;
+    }
+
+    setBlindSpotMapRefreshing(true);
+
+    try {
+      const response = await fetch(`/api/users/${map.userId}/blind-spots`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { blindSpotMap?: SerializableBlindSpotMap | null };
+      if (payload.blindSpotMap) {
+        setBlindSpotMap(normalizeBlindSpotMap(payload.blindSpotMap));
+      }
+    } catch {
+      return;
+    } finally {
+      setBlindSpotMapRefreshing(false);
+      setBlindSpotMapLoading(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -2385,6 +2442,35 @@ export function ThoughtMapWorkspace({
         setBiasProfileLoading(false);
       }
     });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [map.updatedAt, map.userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setBlindSpotMapLoading(true);
+    void (async () => {
+      try {
+        const response = await fetch(`/api/users/${map.userId}/blind-spots`);
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { blindSpotMap?: SerializableBlindSpotMap | null };
+        if (!cancelled && payload.blindSpotMap) {
+          setBlindSpotMap(normalizeBlindSpotMap(payload.blindSpotMap));
+        }
+      } catch {
+        return;
+      } finally {
+        if (!cancelled) {
+          setBlindSpotMapLoading(false);
+        }
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -5851,6 +5937,17 @@ export function ThoughtMapWorkspace({
                   : " No shape has been suppressed by override yet."}
               </p>
             </div>
+
+            <BlindSpotMapView
+              blindSpotMap={blindSpotMap}
+              loading={blindSpotMapLoading}
+              refreshing={blindSpotMapRefreshing}
+              onRefresh={refreshBlindSpotMap}
+              onOpenClaim={(claimId) => {
+                setSelectedGraphNodeId(claimId);
+                setView("graph");
+              }}
+            />
 
             <BiasProfile
               profile={displayedBiasProfile}

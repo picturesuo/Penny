@@ -16,6 +16,9 @@ import type {
   ClaimStatus,
   CognitiveBiasProfile,
   ClaimStake,
+  CritiqueCorrection,
+  CritiqueFeedback,
+  CritiqueQualityProfile,
   Concession,
   Defense,
   Dismissal,
@@ -1640,6 +1643,7 @@ export function buildClaimStructureSnapshot(map: ThoughtMapModel, node: ThoughtN
     dependencyWeight,
     directConfidence,
     propagatedConfidence,
+    structureKind: claimKind,
     temporalScope,
     conditionalStatement,
     sourceCitation: capture?.sourceCitation?.trim() || null,
@@ -2698,6 +2702,9 @@ function contributionDirectionForEvent(event: ThoughtMapEvent) {
 
 function buildShapeDerivation(map: ThoughtMapModel, shape: PennyShape, allShapes: PennyShape[]): ShapeDerivation {
   const evidenceNodeIds = new Set(shape.evidenceNodeIds);
+  const corrections = collectCritiqueCorrections(map.events).filter(
+    (correction) => correction.shapeId === shape.id || correction.critiqueText.toLowerCase().includes(shape.label.toLowerCase()),
+  );
   const relatedEvents = map.events.filter((event) => {
     if (event.nodeId != null && evidenceNodeIds.has(event.nodeId)) {
       return true;
@@ -2786,6 +2793,7 @@ function buildShapeDerivation(map: ThoughtMapModel, shape: PennyShape, allShapes
     thresholdMet,
     counterfactual,
     alternativeShapes,
+    correctionSignals: corrections.map((correction) => correction.correctionText).slice(0, 3),
     computedAt: new Date(),
   };
 }
@@ -3725,6 +3733,220 @@ export function collectShapeFeedback(events: ThoughtMapEvent[]) {
   }, {});
 }
 
+function critiqueFeedbackPayload(event: ThoughtMapEvent) {
+  if (event.eventType !== "critique_feedback") {
+    return null;
+  }
+
+  return event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : null;
+}
+
+export function collectCritiqueFeedback(events: ThoughtMapEvent[]) {
+  return events
+    .filter((event) => event.eventType === "critique_feedback")
+    .map((event) => {
+      const payload = critiqueFeedbackPayload(event);
+      const feedbackGivenAt =
+        typeof payload?.feedbackGivenAt === "string" ? new Date(String(payload.feedbackGivenAt)) : event.createdAt;
+      const ratings = Array.isArray(payload?.ratings)
+        ? payload.ratings
+            .map((rating) => {
+              if (!rating || typeof rating !== "object") {
+                return null;
+              }
+
+              const item = rating as Record<string, unknown>;
+              const dimension = typeof item.dimension === "string" ? item.dimension : null;
+              const score = typeof item.score === "number" ? item.score : null;
+              if (!dimension || score == null) {
+                return null;
+              }
+
+              return {
+                dimension,
+                score,
+                comment:
+                  typeof item.comment === "string" && item.comment.trim().length > 0 ? item.comment.trim() : null,
+              };
+            })
+            .filter((item): item is CritiqueFeedback["ratings"][number] => item !== null)
+        : [];
+
+      return {
+        id: event.id,
+        roundId: typeof payload?.roundId === "string" ? payload.roundId : event.id,
+        critiqueId: typeof payload?.critiqueId === "string" ? payload.critiqueId : event.id,
+        userId: typeof payload?.userId === "string" ? payload.userId : "unknown",
+        ratings,
+        overallUsefulness:
+          typeof payload?.overallUsefulness === "number" ? Math.max(1, Math.min(5, payload.overallUsefulness)) : 3,
+        freeTextFeedback:
+          typeof payload?.freeTextFeedback === "string" && payload.freeTextFeedback.trim().length > 0
+            ? payload.freeTextFeedback.trim()
+            : null,
+        correctionText:
+          typeof payload?.correctionText === "string" && payload.correctionText.trim().length > 0
+            ? payload.correctionText.trim()
+            : null,
+        isCorrectionFlagged: Boolean(payload?.isCorrectionFlagged),
+        feedbackGivenAt,
+        dismissed: Boolean(payload?.dismissed),
+        critiqueMode:
+          typeof payload?.critiqueMode === "string" && payload.critiqueMode.trim().length > 0
+            ? payload.critiqueMode.trim()
+            : null,
+        failureTypes: Array.isArray(payload?.failureTypes)
+          ? payload.failureTypes.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+          : [],
+        voiceLabel:
+          typeof payload?.voiceLabel === "string" && payload.voiceLabel.trim().length > 0
+            ? payload.voiceLabel.trim()
+            : null,
+      } satisfies CritiqueFeedback;
+    });
+}
+
+export function collectCritiqueCorrections(events: ThoughtMapEvent[]) {
+  return events
+    .filter((event) => event.eventType === "critique_correction")
+    .map((event) => {
+      const payload = event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : null;
+      const createdAt = typeof payload?.createdAt === "string" ? new Date(String(payload.createdAt)) : event.createdAt;
+      const reviewedAt =
+        typeof payload?.reviewedAt === "string" ? new Date(String(payload.reviewedAt)) : null;
+      const correctionType =
+        payload?.correctionType === "factual_error" ||
+        payload?.correctionType === "wrong_target" ||
+        payload?.correctionType === "wrong_tone" ||
+        payload?.correctionType === "missing_context" ||
+        payload?.correctionType === "already_addressed" ||
+        payload?.correctionType === "other"
+          ? payload.correctionType
+          : "other";
+
+      return {
+        id: event.id,
+        roundId: typeof payload?.roundId === "string" ? payload.roundId : event.id,
+        critiqueText: typeof payload?.critiqueText === "string" ? payload.critiqueText.trim() : "",
+        correctionText: typeof payload?.correctionText === "string" ? payload.correctionText.trim() : "",
+        correctionType,
+        userId: typeof payload?.userId === "string" ? payload.userId : "unknown",
+        createdAt,
+        reviewedAt,
+        incorporated: Boolean(payload?.incorporated),
+        shapeId:
+          typeof payload?.shapeId === "string" && payload.shapeId.trim().length > 0
+            ? payload.shapeId.trim()
+            : null,
+      } satisfies CritiqueCorrection;
+    })
+    .filter((correction) => correction.correctionText.length > 0);
+}
+
+function scoreAverage(values: number[]) {
+  if (!values.length) {
+    return 0;
+  }
+
+  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
+}
+
+export function buildCritiqueQualityProfile(
+  map: ThoughtMapModel,
+  feedbacks: CritiqueFeedback[] = collectCritiqueFeedback(map.events),
+): CritiqueQualityProfile | null {
+  if (!feedbacks.length) {
+    return null;
+  }
+
+  const roundEvents = map.events.filter((event) => event.eventType === "dialectic_round");
+  const roundById = new Map(
+    roundEvents.map((event) => [
+      event.id,
+      (event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : {}) as Record<string, unknown>,
+    ] as const),
+  );
+  const dimensionBuckets = new Map<string, number[]>();
+  const modeBuckets = new Map<string, number[]>();
+  const failureTypeBuckets = new Map<string, number[]>();
+  const voiceBuckets = new Map<string, number[]>();
+
+  for (const feedback of feedbacks) {
+    for (const rating of feedback.ratings) {
+      dimensionBuckets.set(rating.dimension, [...(dimensionBuckets.get(rating.dimension) ?? []), rating.score]);
+    }
+
+    const roundPayload = roundById.get(feedback.roundId) ?? roundById.get(feedback.critiqueId) ?? null;
+    const critiqueMode =
+      typeof roundPayload?.critiqueMode === "string" && roundPayload.critiqueMode.trim().length > 0
+        ? roundPayload.critiqueMode.trim()
+        : feedback.critiqueMode?.trim() ?? "direct";
+    const voiceLabel =
+      typeof roundPayload?.voiceLabel === "string" && roundPayload.voiceLabel.trim().length > 0
+        ? roundPayload.voiceLabel.trim()
+        : feedback.voiceLabel?.trim() ?? "default";
+    const failureTypes = Array.isArray(roundPayload?.critiqueFailureTypes)
+      ? roundPayload.critiqueFailureTypes.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : feedback.failureTypes ?? [];
+    const usefulness = Math.max(1, Math.min(5, feedback.overallUsefulness));
+
+    modeBuckets.set(critiqueMode, [...(modeBuckets.get(critiqueMode) ?? []), usefulness]);
+    voiceBuckets.set(voiceLabel, [...(voiceBuckets.get(voiceLabel) ?? []), usefulness]);
+    for (const failureType of failureTypes) {
+      failureTypeBuckets.set(failureType, [...(failureTypeBuckets.get(failureType) ?? []), usefulness]);
+    }
+  }
+
+  return {
+    userId: feedbacks[0]?.userId ?? map.userId,
+    dimensionAverages: Object.fromEntries(
+      Array.from(dimensionBuckets.entries()).map(([dimension, values]) => [dimension, scoreAverage(values)]),
+    ),
+    critiqueModePerformance: Object.fromEntries(
+      Array.from(modeBuckets.entries()).map(([mode, values]) => [mode, scoreAverage(values)]),
+    ),
+    failureTypePerformance: Object.fromEntries(
+      Array.from(failureTypeBuckets.entries()).map(([failureType, values]) => [failureType, scoreAverage(values)]),
+    ),
+    voicePerformance: Object.fromEntries(
+      Array.from(voiceBuckets.entries()).map(([voice, values]) => [voice, scoreAverage(values)]),
+    ),
+    totalRatings: feedbacks.reduce((sum, feedback) => sum + feedback.ratings.length, 0),
+    lastUpdated: feedbacks
+      .map((feedback) => feedback.feedbackGivenAt)
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? new Date(),
+  };
+}
+
+export function critiqueGenerationModifier(profile: CritiqueQualityProfile | null) {
+  if (!profile) {
+    return {
+      avoidVoices: [] as string[],
+      prioritizeFailureTypes: [] as string[],
+      avoidRepeats: false,
+      uncertaintyNote: "Penny is still learning which critiques land best for this user.",
+    };
+  }
+
+  const avoidVoices = Object.entries(profile.voicePerformance)
+    .filter(([, score]) => score < 3)
+    .map(([voice]) => voice);
+  const prioritizeFailureTypes = Object.entries(profile.failureTypePerformance)
+    .filter(([, score]) => score > 4.2)
+    .map(([failureType]) => failureType);
+  const avoidRepeats = (profile.dimensionAverages.novelty ?? profile.dimensionAverages["novelty"] ?? 3) < 2.5;
+
+  return {
+    avoidVoices,
+    prioritizeFailureTypes,
+    avoidRepeats,
+    uncertaintyNote:
+      avoidRepeats || avoidVoices.length || prioritizeFailureTypes.length
+        ? "Penny is adapting its critique mix from your feedback."
+        : "Penny’s critique mix looks stable, so it can keep the current balance.",
+  };
+}
+
 export function shapeFeedbackPayload(params: {
   shapeId: string;
   verdict: PennyShapeFeedback;
@@ -4533,6 +4755,7 @@ export function buildBlindSpotMap(maps: ThoughtMapModel[], userId: string): Blin
         record.node.kind === "assumption" && record.downstreamClaimCount >= 3 && record.roundCount === 0,
     )
     .map<AssumptionBlindSpot>((record) => ({
+      assumptionId: record.node.id,
       assumptionText: record.node.content,
       parentClaimIds: claimRecords
         .filter((candidate) => candidate.node.parentId === record.node.id)
@@ -4560,6 +4783,7 @@ export function buildBlindSpotMap(maps: ThoughtMapModel[], userId: string): Blin
         ageDays: record.ageDays,
         roundCount: record.roundCount,
       }),
+      daysSinceCreation: record.ageDays,
     }))
     .sort((a, b) => b.riskScore - a.riskScore || b.downstreamClaimCount - a.downstreamClaimCount || a.dialecticRoundCount - b.dialecticRoundCount);
 
@@ -4584,15 +4808,17 @@ export function buildBlindSpotMap(maps: ThoughtMapModel[], userId: string): Blin
     .map<ClaimTypeGap>(([claimType, entries]) => {
       const totalClaims = entries.length;
       const testedClaims = entries.filter((entry) => entry.tested).length;
+      const sampleClaimId = claimRecords.find((record) => record.structureKind === claimType)?.node.id ?? null;
 
       return {
         claimType,
         totalClaims,
         testedClaims,
         gapSeverity: claimTypeGapSeverity(totalClaims, testedClaims),
+        sampleClaimId,
       };
     })
-    .filter((entry) => entry.totalClaims > 0)
+    .filter((entry) => entry.totalClaims > 0 && entry.gapSeverity !== "low")
     .sort((a, b) => {
       const severityRank = { critical: 3, high: 2, medium: 1, low: 0 } as const;
       return severityRank[b.gapSeverity] - severityRank[a.gapSeverity] || b.totalClaims - a.totalClaims;

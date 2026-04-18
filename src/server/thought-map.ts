@@ -10,14 +10,16 @@ import type {
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/db/prisma";
 import { buildFounderBrief, getFounderBriefReadiness } from "@/lib/founder-brief";
+import { buildBeliefGraph, propagateBeliefGraph, serializeBeliefGraph, serializeBeliefPropagationResult } from "@/lib/bayesian-propagation";
 import {
-  buildBeliefGraph,
+  analyzeDialecticResponse,
+  assessSteelManQuality,
   buildBlindSpotMap,
-  propagateBeliefGraph,
-  serializeBeliefGraph,
-  serializeBeliefPropagationResult,
-} from "@/lib/bayesian-propagation";
-import { analyzeDialecticResponse, assessSteelManQuality, buildCognitiveBiasProfile, buildPennyLens } from "@/lib/penny-insights";
+  buildCritiqueQualityProfile,
+  buildCognitiveBiasProfile,
+  collectCritiqueFeedback,
+  buildPennyLens,
+} from "@/lib/penny-insights";
 import { buildRevisitQueue, computeLeitnerBox, computeRevisitScheduleForNode, computeRevisitSchedulesForMap } from "@/lib/revisit-scheduler";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
 import {
@@ -37,6 +39,9 @@ import type {
   GeneratedActionBundle,
   NodeAction,
   EdgeChange,
+  CritiqueCorrection,
+  CritiqueFeedback,
+  CritiqueQualityProfile,
   RevisitAction,
   RevisitLeitnerBox,
   RevisitPriority,
@@ -55,6 +60,7 @@ import type {
   BeliefPropagationDecision,
   BeliefPropagationResponse,
   CognitiveBiasProfile,
+  BlindSpotMap,
 } from "@/types/thought-map";
 
 function mapNode(record: ThoughtNode): ThoughtNodeModel {
@@ -98,6 +104,9 @@ function buildThoughtMapModel(
     events: events.map(mapEventRecord),
     shapeDerivations: [],
     steelMans: parseSteelMans(record.steelMans),
+    critiqueFeedbacks: [],
+    critiqueCorrections: [],
+    critiqueQualityProfile: null,
     repairActions: parseClaimRepairActions(record.repairActions),
     revisitSchedules: parseRevisitSchedules(record.revisitSchedules),
     founderBrief,
@@ -120,12 +129,47 @@ function buildThoughtMapModel(
     ...buildThoughtMapJudgment(mapped),
   };
   const lens = buildPennyLens(judgedMap);
+  const critiqueFeedbacks = collectCritiqueFeedback(judgedMap.events);
+  const critiqueCorrections = judgedMap.events
+    .filter((event) => event.eventType === "critique_correction")
+    .map((event) => {
+      const payload = event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : null;
+      return {
+        id: event.id,
+        roundId: typeof payload?.roundId === "string" ? String(payload.roundId) : event.id,
+        critiqueText: typeof payload?.critiqueText === "string" ? String(payload.critiqueText) : "",
+        correctionText: typeof payload?.correctionText === "string" ? String(payload.correctionText) : "",
+        correctionType:
+          payload?.correctionType === "factual_error" ||
+          payload?.correctionType === "wrong_target" ||
+          payload?.correctionType === "wrong_tone" ||
+          payload?.correctionType === "missing_context" ||
+          payload?.correctionType === "already_addressed" ||
+          payload?.correctionType === "other"
+            ? payload.correctionType
+            : "other",
+        userId: typeof payload?.userId === "string" ? String(payload.userId) : judgedMap.userId,
+        createdAt: event.createdAt,
+        reviewedAt:
+          typeof payload?.reviewedAt === "string" ? new Date(String(payload.reviewedAt)) : null,
+        incorporated: Boolean(payload?.incorporated),
+        shapeId:
+          typeof payload?.shapeId === "string" && String(payload.shapeId).trim().length > 0
+            ? String(payload.shapeId).trim()
+            : null,
+      } satisfies CritiqueCorrection;
+    })
+    .filter((correction) => correction.correctionText.trim().length > 0);
+  const critiqueQualityProfile = buildCritiqueQualityProfile(judgedMap, critiqueFeedbacks);
 
   return {
     ...judgedMap,
     shapeDerivations: lens.effectiveShapes
       .map((shape) => shape.derivation)
       .filter((derivation): derivation is NonNullable<typeof derivation> => derivation !== null),
+    critiqueFeedbacks,
+    critiqueCorrections,
+    critiqueQualityProfile,
     founderBrief,
     founderBriefReadiness: getFounderBriefReadiness(judgedMap),
   };
@@ -189,6 +233,104 @@ function normalizeBiasProfileRecord(record: CognitiveBiasProfileRecord | null): 
 
 function serializeBiasProfile(profile: CognitiveBiasProfile) {
   return serializeJson(profile) ?? "{}";
+}
+
+function normalizeBlindSpotMapRecord(record: BlindSpotMapCacheRecord | null) {
+  if (!record) {
+    return null;
+  }
+
+  const parsed = parseJson<{
+    userId?: string;
+    computedAt?: string | Date;
+    untestedHighConfidenceClaims?: Array<{
+      claimId: string;
+      claimText: string;
+      confidence: number;
+      daysSinceCreation: number;
+      dialecticRoundCount: number;
+      stakeLevel: string;
+      urgencyScore: number;
+      suggestedAction: string;
+    }>;
+    unexaminedDomains?: Array<{
+      domain: string;
+      claimCount: number;
+      averageConfidence: number;
+      stressTestedCount: number;
+      stressTestedPercent: number;
+      oldestUntestedClaim: string | Date;
+      suggestedAction: string;
+      sampleClaimId: string | null;
+    }>;
+    unchallengedAssumptions?: Array<{
+      assumptionId: string;
+      assumptionText: string;
+      parentClaimIds: string[];
+      parentClaimCount: number;
+      daysSinceCreation: number;
+      hasBeenQuestioned: boolean;
+      suggestedAction: string;
+    }>;
+    loadBearingUntestedNodes?: Array<{
+      claimId: string;
+      claimText: string;
+      downstreamClaimCount: number;
+      downstreamArtifactCount: number;
+      dialecticRoundCount: number;
+      confidence: number;
+      riskScore: number;
+      daysSinceCreation: number;
+    }>;
+    claimTypeGaps?: Array<{
+      claimType: string;
+      totalClaims: number;
+      testedClaims: number;
+      gapSeverity: "low" | "medium" | "high" | "critical";
+      sampleClaimId: string | null;
+    }>;
+  }>(record.blindSpotMapJson);
+
+  if (!parsed) {
+    return null;
+  }
+
+  return {
+    userId: record.userId,
+    computedAt: parsed.computedAt ? new Date(parsed.computedAt) : new Date(record.lastComputedAt),
+    untestedHighConfidenceClaims: Array.isArray(parsed.untestedHighConfidenceClaims)
+      ? parsed.untestedHighConfidenceClaims
+      : [],
+    unexaminedDomains: Array.isArray(parsed.unexaminedDomains)
+      ? parsed.unexaminedDomains.map((entry) => ({
+          ...entry,
+          oldestUntestedClaim: new Date(entry.oldestUntestedClaim),
+          domain:
+            entry.domain === "market" ||
+            entry.domain === "technical" ||
+            entry.domain === "personal" ||
+            entry.domain === "competitive" ||
+            entry.domain === "financial" ||
+            entry.domain === "operational" ||
+            entry.domain === "research"
+              ? entry.domain
+              : "general",
+        }))
+      : [],
+    unchallengedAssumptions: Array.isArray(parsed.unchallengedAssumptions) ? parsed.unchallengedAssumptions : [],
+    loadBearingUntestedNodes: Array.isArray(parsed.loadBearingUntestedNodes) ? parsed.loadBearingUntestedNodes : [],
+    claimTypeGaps: Array.isArray(parsed.claimTypeGaps)
+      ? parsed.claimTypeGaps.map((entry) => ({
+          ...entry,
+          claimType: entry.claimType as BlindSpotMap["claimTypeGaps"][number]["claimType"],
+          sampleClaimId: entry.sampleClaimId ?? null,
+        }))
+      : [],
+  };
+}
+
+function serializeBlindSpotMap(map: BlindSpotMap) {
+  return serializeJson(map) ?? "{}";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1044,6 +1186,8 @@ export async function recordDialecticRound(params: {
   critiqueStrength: string;
   critiqueType?: string | null;
   critiqueFailureTypes?: string[];
+  critiqueMode?: string | null;
+  voiceLabel?: string | null;
   prompt: string;
   why: string;
   responsePath: "defend" | "revise" | "absorb";
@@ -1133,6 +1277,8 @@ export async function recordDialecticRound(params: {
           title: params.title,
           critiqueStrength,
           critiqueType: params.critiqueType ?? null,
+          critiqueMode: params.critiqueMode ?? null,
+          voiceLabel: params.voiceLabel ?? null,
           prompt: params.prompt,
           why: params.why,
           responsePath: params.responsePath,
@@ -1275,6 +1421,144 @@ export async function recordSteelMan(params: {
   return {
     steelMan,
     assessment,
+  };
+}
+
+export async function recordCritiqueFeedback(params: {
+  mapId: string;
+  roundId: string;
+  critiqueId: string;
+  userId: string;
+  ratings: Array<{
+    dimension: string;
+    score: number;
+    comment: string | null;
+  }>;
+  overallUsefulness: number;
+  freeTextFeedback?: string | null;
+  correctionText?: string | null;
+  isCorrectionFlagged?: boolean;
+  dismissed?: boolean;
+  shapeId?: string | null;
+}) {
+  const map = await getThoughtMap(params.mapId);
+
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  const critiqueEvent = map.events.find((event) => event.id === params.roundId || event.id === params.critiqueId) ?? null;
+  const critiquePayload =
+    critiqueEvent?.payload && typeof critiqueEvent.payload === "object"
+      ? (critiqueEvent.payload as Record<string, unknown>)
+      : null;
+  const critiqueMode =
+    typeof critiquePayload?.critiqueMode === "string" && critiquePayload.critiqueMode.trim().length > 0
+      ? critiquePayload.critiqueMode.trim()
+      : null;
+  const voiceLabel =
+    typeof critiquePayload?.voiceLabel === "string" && critiquePayload.voiceLabel.trim().length > 0
+      ? critiquePayload.voiceLabel.trim()
+      : null;
+  const failureTypes = Array.isArray(critiquePayload?.critiqueFailureTypes)
+    ? critiquePayload.critiqueFailureTypes.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const feedbackGivenAt = new Date();
+  const feedbackPayload = {
+    roundId: params.roundId,
+    critiqueId: params.critiqueId,
+    userId: params.userId,
+    ratings: params.ratings,
+    overallUsefulness: params.overallUsefulness,
+    freeTextFeedback: params.freeTextFeedback ?? null,
+    correctionText: params.correctionText ?? null,
+    isCorrectionFlagged: params.isCorrectionFlagged ?? false,
+    feedbackGivenAt: feedbackGivenAt.toISOString(),
+    dismissed: params.dismissed ?? false,
+    critiqueMode,
+    failureTypes,
+    voiceLabel,
+    shapeId: params.shapeId ?? null,
+  };
+
+  const created = await prisma.$transaction(async (tx) => {
+    const feedbackEvent = await tx.thoughtMapEvent.create({
+      data: {
+        mapId: params.mapId,
+        nodeId: critiqueEvent?.nodeId ?? null,
+        eventType: "critique_feedback",
+        payload: serializeJson(feedbackPayload),
+      },
+    });
+
+    let correctionEvent: ThoughtMapEventRecord | null = null;
+    if (params.isCorrectionFlagged && params.correctionText?.trim().length) {
+      correctionEvent = await tx.thoughtMapEvent.create({
+        data: {
+          mapId: params.mapId,
+          nodeId: critiqueEvent?.nodeId ?? null,
+          eventType: "critique_correction",
+          payload: serializeJson({
+            roundId: params.roundId,
+            critiqueId: params.critiqueId,
+            critiqueText: typeof critiquePayload?.prompt === "string" ? String(critiquePayload.prompt) : "",
+            correctionText: params.correctionText.trim(),
+            correctionType: "other",
+            userId: params.userId,
+            createdAt: feedbackGivenAt.toISOString(),
+            reviewedAt: null,
+            incorporated: false,
+            shapeId: params.shapeId ?? null,
+          }),
+        },
+      });
+    }
+
+    const updatedMap = await tx.thoughtMap.findUnique({
+      where: { id: params.mapId },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        rawThought: true,
+        status: true,
+        founderBrief: true,
+        founderBriefGeneratedAt: true,
+        steelMans: true,
+        repairActions: true,
+        revisitSchedules: true,
+        nodes: true,
+        events: {
+          orderBy: { createdAt: "asc" },
+        },
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    const profile = updatedMap ? buildCritiqueQualityProfile(buildThoughtMapModel(updatedMap)) : null;
+
+    const profileEvent = profile
+      ? await tx.thoughtMapEvent.create({
+          data: {
+            mapId: params.mapId,
+            nodeId: critiqueEvent?.nodeId ?? null,
+            eventType: "critique_quality_profile",
+            payload: serializeJson(profile),
+          },
+        })
+      : null;
+
+    return {
+      feedbackEvent,
+      correctionEvent,
+      profileEvent,
+    };
+  });
+
+  return {
+    feedback: mapEventRecord(created.feedbackEvent),
+    correction: created.correctionEvent ? mapEventRecord(created.correctionEvent) : null,
+    profileEvent: created.profileEvent ? mapEventRecord(created.profileEvent) : null,
   };
 }
 
@@ -2495,6 +2779,21 @@ async function loadBiasProfileMaps(userId: string) {
   });
 }
 
+async function loadBlindSpotMapRecords(userId: string) {
+  return prisma.thoughtMap.findMany({
+    where: { userId },
+    orderBy: [{ updatedAt: "asc" }, { createdAt: "asc" }],
+    include: {
+      nodes: {
+        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+  });
+}
+
 export async function refreshCognitiveBiasProfile(userId: string) {
   const mapRecords = await loadBiasProfileMaps(userId);
   const maps = await Promise.all(
@@ -2552,4 +2851,57 @@ export async function getCognitiveBiasProfile(userId: string) {
   }
 
   return refreshCognitiveBiasProfile(userId);
+}
+
+export async function refreshBlindSpotMap(userId: string) {
+  const mapRecords = await loadBlindSpotMapRecords(userId);
+  const maps = await Promise.all(
+    mapRecords.map((record) =>
+      hydrateThoughtMap(
+        record as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+        undefined,
+        { syncInterventions: false },
+      ),
+    ),
+  );
+  const blindSpotMap = buildBlindSpotMap(maps, userId);
+  const existing = await prisma.blindSpotMapCache.findUnique({
+    where: { userId },
+  });
+  const serialized = serializeBlindSpotMap(blindSpotMap);
+
+  if (!existing || existing.blindSpotMapJson !== serialized) {
+    await prisma.blindSpotMapCache.upsert({
+      where: { userId },
+      update: {
+        blindSpotMapJson: serialized,
+        lastComputedAt: blindSpotMap.computedAt,
+      },
+      create: {
+        userId,
+        blindSpotMapJson: serialized,
+        lastComputedAt: blindSpotMap.computedAt,
+      },
+    });
+  }
+
+  return blindSpotMap;
+}
+
+export async function getBlindSpotMap(userId: string) {
+  const stored = await prisma.blindSpotMapCache.findUnique({
+    where: { userId },
+  });
+
+  if (stored) {
+    const blindSpotMap = normalizeBlindSpotMapRecord(stored);
+    const lastComputedAt = stored.lastComputedAt.getTime();
+    const stale = Date.now() - lastComputedAt > 7 * 24 * 60 * 60 * 1000;
+
+    if (blindSpotMap && !stale) {
+      return blindSpotMap;
+    }
+  }
+
+  return refreshBlindSpotMap(userId);
 }

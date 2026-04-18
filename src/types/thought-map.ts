@@ -160,6 +160,7 @@ export interface DomainBlindSpot {
 }
 
 export interface AssumptionBlindSpot {
+  assumptionId: string;
   assumptionText: string;
   parentClaimIds: string[];
   parentClaimCount: number;
@@ -176,6 +177,7 @@ export interface LoadBearingBlindSpot {
   dialecticRoundCount: number;
   confidence: number;
   riskScore: number;
+  daysSinceCreation: number;
 }
 
 export interface ClaimTypeGap {
@@ -183,6 +185,7 @@ export interface ClaimTypeGap {
   totalClaims: number;
   testedClaims: number;
   gapSeverity: "low" | "medium" | "high" | "critical";
+  sampleClaimId: string | null;
 }
 
 export interface BlindSpotMap {
@@ -419,7 +422,10 @@ export type ThoughtMapEventType =
   | "belief_graph_cycle"
   | "belief_graph_state"
   | "meta_cognition_prompt"
-  | "meta_cognition_response";
+  | "meta_cognition_response"
+  | "critique_feedback"
+  | "critique_correction"
+  | "critique_quality_profile";
 
 export type RecommendationReason =
   | "low_evidence"
@@ -641,6 +647,68 @@ export interface ThoughtMapEvent {
   createdAt: Date;
 }
 
+export type CritiqueRatingDimension =
+  | "relevance"
+  | "novelty"
+  | "strength"
+  | "specificity"
+  | "actionability"
+  | "timing";
+
+export interface CritiqueRating {
+  dimension: CritiqueRatingDimension;
+  score: number;
+  comment: string | null;
+}
+
+export type CritiqueCorrectionType =
+  | "factual_error"
+  | "wrong_target"
+  | "wrong_tone"
+  | "missing_context"
+  | "already_addressed"
+  | "other";
+
+export interface CritiqueFeedback {
+  id: string;
+  roundId: string;
+  critiqueId: string;
+  userId: string;
+  ratings: CritiqueRating[];
+  overallUsefulness: number;
+  freeTextFeedback: string | null;
+  correctionText: string | null;
+  isCorrectionFlagged: boolean;
+  feedbackGivenAt: Date;
+  dismissed?: boolean;
+  critiqueMode?: string | null;
+  failureTypes?: string[];
+  voiceLabel?: string | null;
+}
+
+export interface CritiqueCorrection {
+  id: string;
+  roundId: string;
+  critiqueText: string;
+  correctionText: string;
+  correctionType: CritiqueCorrectionType;
+  userId: string;
+  createdAt: Date;
+  reviewedAt: Date | null;
+  incorporated: boolean;
+  shapeId?: string | null;
+}
+
+export interface CritiqueQualityProfile {
+  userId: string;
+  dimensionAverages: Record<string, number>;
+  critiqueModePerformance: Record<string, number>;
+  failureTypePerformance: Record<string, number>;
+  voicePerformance: Record<string, number>;
+  totalRatings: number;
+  lastUpdated: Date;
+}
+
 export type ShapeDerivationDirection = "confirms_shape" | "disconfirms_shape";
 
 export interface ContributingMove {
@@ -677,6 +745,7 @@ export interface ShapeDerivation {
   thresholdMet: ShapeThreshold;
   counterfactual: ShapeCounterfactual;
   alternativeShapes: string[];
+  correctionSignals?: string[];
   computedAt: Date;
 }
 
@@ -885,6 +954,9 @@ export interface ThoughtMapModel {
   events: ThoughtMapEvent[];
   shapeDerivations: ShapeDerivation[];
   steelMans: SteelMan[];
+  critiqueFeedbacks: CritiqueFeedback[];
+  critiqueCorrections: CritiqueCorrection[];
+  critiqueQualityProfile: CritiqueQualityProfile | null;
   repairActions: ClaimRepairAction[];
   revisitSchedules: RevisitSchedule[];
   founderBrief: FounderBriefModel | null;
@@ -920,6 +992,7 @@ export interface ClaimStructureSnapshot {
   dependencyWeight: number | null;
   directConfidence: number | null;
   propagatedConfidence: number | null;
+  structureKind: ClaimStructureKind;
   temporalScope: string | null;
   conditionalStatement: string | null;
   sourceCitation: string | null;
