@@ -9,8 +9,10 @@ import {
   buildCalibrationDashboard,
   buildCommunityCommonsDashboard,
   buildMemoryTimeDashboard,
+  buildMarginSurfaceSnapshot,
   derivePennyShapes,
 } from "@/lib/penny-insights";
+import { listMarginFragments } from "@/server/penny";
 import { listThoughtMaps } from "@/server/thought-map";
 
 const foundation = [
@@ -82,12 +84,14 @@ function summarizeNodeStatus(nodes: Awaited<ReturnType<typeof listThoughtMaps>>[
 
 export default async function DashboardPage() {
   const maps = await listThoughtMaps();
+  const fragments = await listMarginFragments();
   const allNodes = maps.flatMap((map) => map.nodes);
   const shapes = derivePennyShapes(allNodes).sort((a, b) => b.confidence - a.confidence).slice(0, 4);
   const calibration = buildCalibrationDashboard(maps);
   const communitySnapshot = buildCommunityCommonsDashboard(maps, allNodes);
   const advancedSnapshot = buildAdvancedThinkingDashboard(maps, allNodes);
   const memoryTime = buildMemoryTimeDashboard(maps);
+  const marginSnapshot = buildMarginSurfaceSnapshot(fragments, { sphere: "work" });
   const mapCards = maps.map((map) => ({
     map,
     counts: summarizeNodeStatus(map.nodes),
@@ -371,6 +375,58 @@ export default async function DashboardPage() {
                 ))
               ) : (
                 <p className="text-sm leading-7 text-[var(--muted-ink)]">No direction-change log is strong enough to promote yet.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <div className="max-w-3xl">
+          <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Margin</p>
+          <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
+            Fleeting thoughts can stay alive without interrupting the main thread.
+          </h2>
+          <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
+            Penny keeps a low-friction margin lane open for fragments that are not ready to become claims yet. The best ones cluster, resurface, and eventually graduate.
+          </p>
+        </div>
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Surface</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl bg-white/70 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">Floating</p>
+                <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{marginSnapshot.floatingCount}</p>
+              </div>
+              <div className="rounded-2xl bg-white/70 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">Clusters</p>
+                <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{marginSnapshot.clusters.length}</p>
+              </div>
+              <div className="rounded-2xl bg-white/70 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">Surfaced</p>
+                <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{marginSnapshot.surfacedCount}</p>
+              </div>
+              <div className="rounded-2xl bg-white/70 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">Promoted</p>
+                <p className="mt-2 text-lg font-semibold text-[var(--ink)]">{marginSnapshot.promotedCount}</p>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Weekly review</p>
+            <div className="mt-3 space-y-3">
+              {marginSnapshot.weeklyReview.length ? (
+                marginSnapshot.weeklyReview.map((fragment) => (
+                  <div key={fragment.id} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                    <p className="text-sm leading-6 text-[var(--ink)]">{fragment.content}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">
+                      {fragment.status} · {fragment.sphere}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">No fragment is old or clustered enough to surface yet.</p>
               )}
             </div>
           </div>
