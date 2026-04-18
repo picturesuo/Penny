@@ -1,9 +1,16 @@
-import type { Session } from "@prisma/client";
+import type { MarginFragment, Session } from "@prisma/client";
 import { prisma } from "@/db/prisma";
 import { cleanSentence, computeClarityScore, createMessage, dedupePoints, dedupeStrings, determineStage, safeJsonParse, titleFromIdea, DEMO_USER_ID } from "@/lib/penny";
 import { MockLlmProvider } from "@/lib/ai/mock-provider";
 import { MockContextProvider } from "@/lib/context/mock-context";
-import type { EvidenceScanResult, SessionCardModel, SessionState, StructuredPoint } from "@/types/penny";
+import type {
+  EvidenceScanResult,
+  MarginFragmentContextSnapshot,
+  MarginFragmentModel,
+  SessionCardModel,
+  SessionState,
+  StructuredPoint,
+} from "@/types/penny";
 
 const llm = new MockLlmProvider();
 const contextProvider = new MockContextProvider();
@@ -42,6 +49,49 @@ function serializeStrings(value: string[]) {
   return JSON.stringify(dedupeStrings(value));
 }
 
+function parseMarginContextSnapshot(value: string): MarginFragmentContextSnapshot {
+  try {
+    const parsed = JSON.parse(value) as Partial<MarginFragmentContextSnapshot> | null;
+
+    return {
+      currentStage: parsed?.currentStage ?? "dashboard",
+      currentFocus: typeof parsed?.currentFocus === "string" ? parsed.currentFocus : "",
+      currentSphere: typeof parsed?.currentSphere === "string" ? parsed.currentSphere : "work",
+      currentContext: typeof parsed?.currentContext === "string" ? parsed.currentContext : "",
+      currentResponse: typeof parsed?.currentResponse === "string" ? parsed.currentResponse : null,
+      recentSessionMinutes:
+        typeof parsed?.recentSessionMinutes === "number" && Number.isFinite(parsed.recentSessionMinutes)
+          ? parsed.recentSessionMinutes
+          : null,
+      sourceSessionId: typeof parsed?.sourceSessionId === "string" ? parsed.sourceSessionId : null,
+      sourceMapId: typeof parsed?.sourceMapId === "string" ? parsed.sourceMapId : null,
+    };
+  } catch {
+    return {
+      currentStage: "dashboard",
+      currentFocus: "",
+      currentSphere: "work",
+      currentContext: "",
+      currentResponse: null,
+      recentSessionMinutes: null,
+      sourceSessionId: null,
+      sourceMapId: null,
+    };
+  }
+}
+
+function mapMarginFragment(record: MarginFragment): MarginFragmentModel {
+  return {
+    ...record,
+    contextSnapshot: parseMarginContextSnapshot(record.contextSnapshot),
+    lastSurfacedAt: record.lastSurfacedAt,
+    promotedAt: record.promotedAt,
+    archivedAt: record.archivedAt,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
 async function saveSession(session: SessionState) {
   return prisma.session.update({
     where: { id: session.id },
@@ -74,6 +124,73 @@ async function saveSession(session: SessionState) {
       logicOnlyMode: session.logicOnlyMode,
     },
   });
+}
+
+export async function listMarginFragments(userId = DEMO_USER_ID): Promise<MarginFragmentModel[]> {
+  const fragments = await prisma.marginFragment.findMany({
+    where: { userId },
+    orderBy: [{ createdAt: "desc" }],
+  });
+
+  return fragments.map(mapMarginFragment);
+}
+
+export async function createMarginFragment(params: {
+  userId?: string;
+  content: string;
+  sphere?: string;
+  sourceSessionId?: string | null;
+  sourceMapId?: string | null;
+  contextSnapshot: MarginFragmentContextSnapshot;
+}) {
+  const content = cleanSentence(params.content);
+
+  if (!content) {
+    throw new Error("Fragment content is required");
+  }
+
+  const created = await prisma.marginFragment.create({
+    data: {
+      userId: params.userId ?? DEMO_USER_ID,
+      content,
+      sphere: cleanSentence(params.sphere ?? params.contextSnapshot.currentSphere) || "work",
+      sourceSessionId: params.sourceSessionId ?? null,
+      sourceMapId: params.sourceMapId ?? null,
+      contextSnapshot: JSON.stringify(params.contextSnapshot),
+      status: "floating",
+      priority: 0.55,
+      surfaceCount: 0,
+    },
+  });
+
+  return mapMarginFragment(created);
+}
+
+export async function updateMarginFragment(params: {
+  fragmentId: string;
+  status?: "floating" | "surfaced" | "promoted" | "merged" | "archived";
+  priorityDelta?: number;
+  mergedInto?: string | null;
+}) {
+  const updated = await prisma.marginFragment.update({
+    where: { id: params.fragmentId },
+    data: {
+      status: params.status,
+      priority:
+        params.priorityDelta != null
+          ? {
+              increment: params.priorityDelta,
+            }
+          : undefined,
+      mergedInto: params.mergedInto ?? undefined,
+      lastSurfacedAt: params.status === "surfaced" ? new Date() : undefined,
+      promotedAt: params.status === "promoted" ? new Date() : undefined,
+      archivedAt: params.status === "archived" ? new Date() : undefined,
+      surfaceCount: params.status === "surfaced" ? { increment: 1 } : undefined,
+    },
+  });
+
+  return mapMarginFragment(updated);
 }
 
 async function appendAssistantTurn(session: SessionState) {
