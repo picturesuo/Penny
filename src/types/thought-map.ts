@@ -515,6 +515,23 @@ export interface ArtifactSection {
   sourceClaimIds: string[];
 }
 
+export interface ArtifactSectionDiff {
+  id: string;
+  title: string;
+  before: string;
+  after: string;
+  changed: boolean;
+}
+
+export interface ArtifactDiff {
+  artifactId: string;
+  artifactTypeId: ArtifactTypeId;
+  fromVersion: number;
+  toVersion: number;
+  changedSectionCount: number;
+  sectionDiffs: ArtifactSectionDiff[];
+}
+
 export interface ClaimOutcomePair {
   claimId: string;
   claimText: string;
