@@ -72,6 +72,7 @@ function buildThoughtMapModel(
     status: record.status,
     nodes: record.nodes.map(mapNode),
     events: events.map(mapEventRecord),
+    steelMans: parseSteelMans(record.steelMans),
     founderBrief,
     founderBriefReadiness: {
       eligible: false,
@@ -102,8 +103,8 @@ function interventionDedupeKey(intervention: Pick<CognitiveIntervention, "mapId"
   return `${intervention.mapId}:${intervention.targetNodeId}:${intervention.type}`;
 }
 
-function serializeJson(value: Record<string, unknown> | null) {
-  return value ? JSON.stringify(value) : null;
+function serializeJson(value: unknown) {
+  return value == null ? null : JSON.stringify(value);
 }
 
 function parseJson<T>(value: string | null): T | null {
@@ -116,6 +117,96 @@ function parseJson<T>(value: string | null): T | null {
   } catch {
     return null;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseSteelManDate(value: unknown) {
+  if (typeof value !== "string" && !(value instanceof Date)) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function normalizeSteelManVersion(record: unknown): SteelManVersion | null {
+  if (!isRecord(record)) {
+    return null;
+  }
+
+  const versionText = typeof record.versionText === "string" ? record.versionText.trim() : "";
+  const savedAt = parseSteelManDate(record.savedAt);
+  if (!versionText || !savedAt) {
+    return null;
+  }
+
+  return {
+    versionText,
+    savedAt,
+    roundContext: typeof record.roundContext === "string" && record.roundContext.trim().length > 0 ? record.roundContext.trim() : null,
+  };
+}
+
+function normalizeSteelMan(record: unknown): SteelMan | null {
+  if (!isRecord(record)) {
+    return null;
+  }
+
+  const id = typeof record.id === "string" ? record.id : "";
+  const claimId = typeof record.claimId === "string" ? record.claimId : "";
+  const mapId = typeof record.mapId === "string" ? record.mapId : "";
+  const userId = typeof record.userId === "string" ? record.userId : "";
+  const steelManText = typeof record.steelManText === "string" ? record.steelManText.trim() : "";
+  const writtenAt = parseSteelManDate(record.writtenAt);
+
+  if (!id || !claimId || !mapId || !userId || !steelManText || !writtenAt) {
+    return null;
+  }
+
+  const updateHistory = Array.isArray(record.updateHistory)
+    ? record.updateHistory.map(normalizeSteelManVersion).filter((version): version is SteelManVersion => version !== null)
+    : [];
+  const usedInRound = Array.isArray(record.usedInRound)
+    ? record.usedInRound.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const updatedAt = parseSteelManDate(record.updatedAt);
+
+  return {
+    id,
+    claimId,
+    mapId,
+    userId,
+    steelManText,
+    writtenAt,
+    qualityScore: typeof record.qualityScore === "number" ? record.qualityScore : null,
+    qualityScoreReason:
+      typeof record.qualityScoreReason === "string" && record.qualityScoreReason.trim().length > 0
+        ? record.qualityScoreReason.trim()
+        : null,
+    usedInRound,
+    updatedAt,
+    updateHistory,
+  };
+}
+
+function parseSteelMans(value: string | null | undefined) {
+  const parsed = parseJson<unknown>(value ?? null);
+
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return parsed
+    .map(normalizeSteelMan)
+    .filter((steelMan): steelMan is SteelMan => steelMan !== null)
+    .sort((a, b) => {
+      const aUpdatedAt = a.updatedAt?.getTime() ?? a.writtenAt.getTime();
+      const bUpdatedAt = b.updatedAt?.getTime() ?? b.writtenAt.getTime();
+      return bUpdatedAt - aUpdatedAt || b.writtenAt.getTime() - a.writtenAt.getTime();
+    });
 }
 
 function mapEventRecord(record: ThoughtMapEventRecord): ThoughtMapEventModel {
@@ -424,7 +515,9 @@ export async function recordDialecticRound(params: {
 
   const currentNode = params.nodeId ? map.nodes.find((candidate) => candidate.id === params.nodeId) ?? null : null;
   const currentConfidence = confidenceScoreToPercent(currentNode?.scores?.confidence) ?? 0;
-  const confidenceAtRoundStart = currentConfidence;
+  const priorRounds = summarizePriorDialecticRounds(map, params.nodeId ?? null);
+  const priorRoundId = priorRounds.at(-1)?.id ?? null;
+  const confidenceAtRoundStart = priorRounds.at(-1)?.dialecticRound?.confidenceAtRoundEnd ?? currentConfidence;
   const confidenceAtRoundEnd =
     typeof params.confidenceAtRoundEnd === "number" && Number.isFinite(params.confidenceAtRoundEnd)
       ? Math.max(0, Math.min(100, Math.round(params.confidenceAtRoundEnd)))
@@ -436,8 +529,6 @@ export async function recordDialecticRound(params: {
     : params.critiqueType
       ? [params.critiqueType]
       : [];
-  const priorRounds = summarizePriorDialecticRounds(map, params.nodeId ?? null);
-  const priorRoundId = priorRounds.at(-1)?.id ?? null;
   const roundId = crypto.randomUUID();
   const roundNumber = params.roundIndex + 1;
   const responseEvidenceAdded = /(https?:\/\/|www\.|paper|study|data|source|citation|according to|for example|for instance)/i.test(
@@ -543,6 +634,105 @@ export async function recordDialecticRound(params: {
   });
 
   return mapEventRecord(created);
+}
+
+export async function recordSteelMan(params: {
+  mapId: string;
+  claimId: string;
+  steelManText: string;
+  roundContext?: string | null;
+  usedInRound?: string[];
+  userId?: string;
+}) {
+  const userId = params.userId ?? getDemoThoughtUserId();
+  const map = await prisma.thoughtMap.findUnique({
+    where: { id: params.mapId },
+    select: {
+      id: true,
+      userId: true,
+      steelMans: true,
+      nodes: {
+        select: {
+          id: true,
+          content: true,
+        },
+      },
+    },
+  });
+
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  const claim = map.nodes.find((node) => node.id === params.claimId);
+
+  if (!claim) {
+    throw new Error("Claim not found");
+  }
+
+  const steelMans = parseSteelMans(map.steelMans);
+  const assessment = assessSteelManQuality(params.steelManText, claim.content);
+  const now = new Date();
+  const nextVersion: SteelManVersion = {
+    versionText: params.steelManText.trim(),
+    savedAt: now,
+    roundContext: params.roundContext ?? null,
+  };
+  const usedInRound = Array.from(
+    new Set([...(steelMans.find((steelMan) => steelMan.claimId === params.claimId && steelMan.userId === userId)?.usedInRound ?? []), ...(params.usedInRound ?? [])]),
+  );
+  const existingIndex = steelMans.findIndex((steelMan) => steelMan.claimId === params.claimId && steelMan.userId === userId);
+
+  if (existingIndex >= 0) {
+    const existing = steelMans[existingIndex];
+    const currentVersion = existing.updateHistory[existing.updateHistory.length - 1] ?? null;
+    const updateHistory =
+      currentVersion && currentVersion.versionText.trim() === nextVersion.versionText
+        ? existing.updateHistory
+        : [...existing.updateHistory, nextVersion];
+
+    steelMans[existingIndex] = {
+      ...existing,
+      steelManText: nextVersion.versionText,
+      qualityScore: assessment.qualityScore,
+      qualityScoreReason: assessment.qualityScoreReason,
+      usedInRound,
+      updatedAt: now,
+      updateHistory,
+    };
+  } else {
+    steelMans.push({
+      id: randomUUID(),
+      claimId: params.claimId,
+      mapId: params.mapId,
+      userId,
+      steelManText: nextVersion.versionText,
+      writtenAt: now,
+      qualityScore: assessment.qualityScore,
+      qualityScoreReason: assessment.qualityScoreReason,
+      usedInRound,
+      updatedAt: now,
+      updateHistory: [nextVersion],
+    });
+  }
+
+  await prisma.thoughtMap.update({
+    where: { id: params.mapId },
+    data: {
+      steelMans: serializeJson(steelMans) ?? "[]",
+    },
+  });
+
+  const steelMan = steelMans.find((item) => item.claimId === params.claimId && item.userId === userId) ?? steelMans[steelMans.length - 1];
+
+  if (!steelMan) {
+    throw new Error("Steel man not found");
+  }
+
+  return {
+    steelMan,
+    assessment,
+  };
 }
 
 async function syncThoughtMapInterventions(params: {
