@@ -83,6 +83,7 @@ function parseMarginContextSnapshot(value: string): MarginFragmentContextSnapsho
 function mapMarginFragment(record: MarginFragment): MarginFragmentModel {
   return {
     ...record,
+    status: record.status as MarginFragmentModel["status"],
     contextSnapshot: parseMarginContextSnapshot(record.contextSnapshot),
     lastSurfacedAt: record.lastSurfacedAt,
     promotedAt: record.promotedAt,
