@@ -1,12 +1,12 @@
 # Queue
 
 ## Now
-- [x] Implement weakest-link and dependency health scoring.
+- [ ] Implement vault mode.
 
 ## Next
-- [ ] Verify the claim dependency-health bar and weakest-link panel.
-- [ ] Verify the founder brief pre-generation dependency-health preview.
-- [ ] Check the artifact and claim health annotations on regenerated maps.
+- [ ] Verify vault creation, unlock, and local-only redaction in the workspace.
+- [ ] Verify server vault-ID registration for claim, map, and session designations.
+- [ ] Check the vault modal copy against the device-only recovery warning.
 
 ## Later
 - [ ] Expand only when the project grows.

@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, ArrowRightLeft, CircleDot, GitBranchPlus, Link2, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowRightLeft, CircleDot, Download, GitBranchPlus, Link2, Lock, Sparkles } from "lucide-react";
 import { BiasProfile } from "@/components/penny/bias-profile";
+import { SessionClose } from "@/components/penny/session-close";
+import { SessionStart } from "@/components/penny/session-start";
 import { BlindSpotMapView } from "@/components/penny/blind-spot-map";
 import { ArtifactBuilder } from "@/components/penny/artifact-builder";
+import { ExportModal } from "@/components/penny/export-modal";
 import { DependencyHealthBar, DependencyHealthPanel } from "@/components/penny/dependency-health";
 import { DocumentImport } from "@/components/penny/document-import";
 import { FounderBriefCard } from "@/components/penny/founder-brief-card";
+import { VaultModal, type VaultDraft } from "@/components/penny/vault-modal";
+import { UncertaintyIndicator } from "@/components/penny/uncertainty-indicator";
 import { ClaimRepairModal } from "@/components/penny/claim-repair-modal";
 import { ResolutionFlow, type ResolutionDownstreamClaim, type ResolutionSubmission } from "@/components/penny/resolution-flow";
 import { MarginRail } from "@/components/penny/margin-rail";
@@ -60,7 +65,9 @@ import {
 import { buildArtifactDependencyHealth } from "@/lib/dependency-health";
 import { buildClaimEvidenceSummary } from "@/lib/evidence-quality";
 import { evaluateMetaCognitionTrigger, type MetaCognitionPromptSnapshot } from "@/lib/meta-cognition";
+import { generateSessionSummary } from "@/lib/session-summary";
 import { buildRevisitQueue } from "@/lib/revisit-scheduler";
+import type { VaultContentPayload } from "@/lib/vault";
 import { cn } from "@/lib/utils";
 import { CritiqueFeedback as CritiqueFeedbackCard } from "@/components/penny/critique-feedback";
 import { EvidenceEntry } from "@/components/penny/evidence-entry";
@@ -94,6 +101,9 @@ import type {
   MetaCognitionResponseType,
   ImportSource,
   ExtractedClaim,
+  VaultEntryManifest,
+  ThinkingSession,
+  SessionEvent,
 } from "@/types/thought-map";
 import type { MarginFragmentModel } from "@/types/penny";
 
@@ -117,6 +127,7 @@ type SerializableThoughtMap = Omit<
   | "repairActions"
   | "revisitSchedules"
   | "importSources"
+  | "vaultEntries"
   | "shapeDerivations"
   | "evidence"
 > & {
@@ -134,8 +145,24 @@ type SerializableThoughtMap = Omit<
   interventions: SerializableIntervention[];
   recommendedIntervention: SerializableIntervention | null;
   importSources: SerializableImportSource[];
+  vaultEntries: SerializableVaultEntryManifest[];
   createdAt: Date | string;
   updatedAt: Date | string;
+};
+
+type SerializableSessionEvent = Omit<SessionEvent, "timestamp"> & {
+  timestamp: Date | string;
+};
+
+type SerializableThinkingSession = Omit<
+  ThinkingSession,
+  "startedAt" | "endedAt" | "sessionEvents" | "closingRitual" | "sessionSummary"
+> & {
+  startedAt: Date | string;
+  endedAt: Date | string | null;
+  sessionEvents: SerializableSessionEvent[];
+  closingRitual: ThinkingSession["closingRitual"] | null;
+  sessionSummary: ThinkingSession["sessionSummary"] | null;
 };
 
 type SerializableFounderBrief = Omit<FounderBriefModel, "generatedAt"> & {
@@ -205,6 +232,11 @@ type SerializableExtractedClaim = ExtractedClaim;
 type SerializableImportSource = Omit<ImportSource, "importedAt" | "extractedClaims"> & {
   importedAt: Date | string;
   extractedClaims: SerializableExtractedClaim[];
+};
+
+type SerializableVaultEntryManifest = Omit<VaultEntryManifest, "createdAt" | "lastAccessedAt"> & {
+  createdAt: Date | string;
+  lastAccessedAt: Date | string;
 };
 
 type SerializableClaimRepairAction = Omit<ClaimRepairAction, "createdAt"> & {
@@ -300,6 +332,12 @@ type SteelManResponse = {
 
 type FounderBriefResponse = {
   map: SerializableThoughtMap;
+};
+
+type SessionMapOption = {
+  id: string;
+  title: string;
+  claimIds: string[];
 };
 
 type MapView = "outline" | "graph";
@@ -504,6 +542,14 @@ function normalizeImportSource(importSource: SerializableImportSource): ImportSo
   };
 }
 
+function normalizeVaultEntryManifest(entry: SerializableVaultEntryManifest): VaultEntryManifest {
+  return {
+    ...entry,
+    createdAt: toDate(entry.createdAt),
+    lastAccessedAt: toDate(entry.lastAccessedAt),
+  };
+}
+
 function normalizeBiasEvidenceInstance(instance: SerializableBiasEvidenceInstance) {
   return {
     ...instance,
@@ -582,11 +628,40 @@ function normalizeMap(map: SerializableThoughtMap): ThoughtMapModel {
     revisitSchedules: (map.revisitSchedules ?? []).map(normalizeRevisitSchedule),
     shapeDerivations: (map.shapeDerivations ?? []).map(normalizeShapeDerivation),
     importSources: (map.importSources ?? []).map(normalizeImportSource),
+    vaultEntries: (map.vaultEntries ?? []).map(normalizeVaultEntryManifest),
     founderBrief: map.founderBrief ? normalizeFounderBrief(map.founderBrief) : null,
     interventions: map.interventions.map(normalizeIntervention),
     recommendedIntervention: map.recommendedIntervention ? normalizeIntervention(map.recommendedIntervention) : null,
     createdAt: toDate(map.createdAt),
     updatedAt: toDate(map.updatedAt),
+  };
+}
+
+function normalizeSessionEvent(event: SerializableSessionEvent): SessionEvent {
+  return {
+    ...event,
+    timestamp: toDate(event.timestamp),
+  };
+}
+
+function normalizeSession(session: SerializableThinkingSession): ThinkingSession {
+  return {
+    ...session,
+    startedAt: toDate(session.startedAt),
+    endedAt: session.endedAt ? toDate(session.endedAt) : null,
+    sessionEvents: session.sessionEvents.map(normalizeSessionEvent),
+    closingRitual: session.closingRitual
+      ? {
+          ...session.closingRitual,
+          completedAt: toDate(session.closingRitual.completedAt),
+        }
+      : null,
+    sessionSummary: session.sessionSummary
+      ? {
+          ...session.sessionSummary,
+          generatedAt: toDate(session.sessionSummary.generatedAt),
+        }
+      : null,
   };
 }
 
@@ -1248,12 +1323,20 @@ export function ThoughtMapWorkspace({
   initialMap,
   initialView = "outline",
   initialFragments = [],
+  availableMaps = [],
 }: {
   initialMap: SerializableThoughtMap;
   initialView?: MapView;
   initialFragments?: MarginFragmentModel[];
+  availableMaps?: SessionMapOption[];
 }) {
   const [map, setMap] = useState(() => normalizeMap(initialMap));
+  const [activeSession, setActiveSession] = useState<ThinkingSession | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [sessionStartVisible, setSessionStartVisible] = useState(false);
+  const [sessionCloseVisible, setSessionCloseVisible] = useState(false);
+  const [sessionTimeWarningDismissed, setSessionTimeWarningDismissed] = useState(false);
+  const [sessionNow, setSessionNow] = useState(() => new Date());
   const [biasProfile, setBiasProfile] = useState<CognitiveBiasProfile | null>(null);
   const [biasProfileLoading, setBiasProfileLoading] = useState(false);
   const [biasProfileRefreshing, setBiasProfileRefreshing] = useState(false);
@@ -1327,9 +1410,13 @@ export function ThoughtMapWorkspace({
   >({});
   const [runningRecommendedMove, setRunningRecommendedMove] = useState(false);
   const [runningFounderBrief, setRunningFounderBrief] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [vaultModalOpen, setVaultModalOpen] = useState(false);
+  const [vaultDraft, setVaultDraft] = useState<VaultDraft | null>(null);
   const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
   const [metaCognitionEventsSeen, setMetaCognitionEventsSeen] = useState<Record<string, boolean>>({});
   const [isPending, startTransition] = useTransition();
+  const lastOpenedClaimIdRef = useRef<string | null>(null);
 
   const nodesByParent = useMemo(() => {
     return map.nodes.reduce<Record<string, ThoughtNodeModel[]>>((acc, node) => {
@@ -1900,6 +1987,10 @@ export function ThoughtMapWorkspace({
           })
         : null,
     [map.evidence, selectedGraphNode],
+  );
+  const selectedBiasContext = useMemo(
+    () => biasProfileCritiqueContext(displayedBiasProfile, selectedGraphNode?.node ?? null),
+    [displayedBiasProfile, selectedGraphNode?.node],
   );
   const selectedSteelMan = selectedGraphNode
     ? map.steelMans.find((steelMan) => steelMan.claimId === selectedGraphNode.node.id) ?? null
@@ -2584,6 +2675,7 @@ export function ThoughtMapWorkspace({
     selectedSteelManReady,
     selectedPrecedentSummary,
     critiqueArgument,
+    selectedBiasContext,
     selectedPropagation?.cascade,
   ]);
   const selectedReceiptVoices = useMemo(
@@ -2604,13 +2696,23 @@ export function ThoughtMapWorkspace({
     () => buildAdvisorReviewSurface(selectedGraphNodeModel, advisorReviewerName, selectedAudienceCritique),
     [advisorReviewerName, selectedAudienceCritique, selectedGraphNodeModel],
   );
-  const selectedBiasContext = useMemo(
-    () => biasProfileCritiqueContext(displayedBiasProfile, selectedGraphNode?.node ?? null),
-    [displayedBiasProfile, selectedGraphNode?.node],
-  );
   const selectedGraphNodeParent = selectedGraphNode?.node.parentId
     ? nodesById.get(selectedGraphNode.node.parentId) ?? null
     : null;
+  const vaultedClaimIds = useMemo(
+    () =>
+      new Set(
+        map.vaultEntries
+          .filter((entry) => entry.entryType === "claim" && entry.claimId)
+          .map((entry) => entry.claimId as string),
+      ),
+    [map.vaultEntries],
+  );
+  const selectedGraphNodeVaulted = Boolean(selectedGraphNode && vaultedClaimIds.has(selectedGraphNode.node.id));
+  const mapVaultRegistered = map.vaultEntries.some((entry) => entry.entryType === "map" && entry.mapId === map.id);
+  const sessionVaultRegistered = Boolean(
+    activeSession && map.vaultEntries.some((entry) => entry.entryType === "session" && entry.sessionId === activeSession.id),
+  );
   const selectedDecay = selectedGraphNode
     ? buildConfidenceDecaySnapshot(selectedGraphNode.node, selectedGenealogy.dependents.length)
     : null;
@@ -2706,6 +2808,183 @@ export function ThoughtMapWorkspace({
 
     return results;
   }, [claimDependencyGraph.edges, map.interventions, map.repairActions, map.revisitSchedules, nodesById, resolutionTargetNode]);
+
+  const sessionSummaryPreview = useMemo(() => {
+    if (!activeSession) {
+      return null;
+    }
+
+    return generateSessionSummary({
+      sessionId: activeSession.id,
+      events: activeSession.sessionEvents,
+      scopedClaimIds: activeSession.scopedClaimIds,
+      generatedAt: sessionNow,
+    });
+  }, [activeSession, sessionNow]);
+
+  const sessionTimeBudgetMinutes = activeSession?.timeBudgetMinutes ?? null;
+  const sessionElapsedMinutes = activeSession
+    ? Math.max(0, (sessionNow.getTime() - activeSession.startedAt.getTime()) / (1000 * 60))
+    : 0;
+  const sessionRemainingMinutes =
+    sessionTimeBudgetMinutes != null ? Math.max(0, sessionTimeBudgetMinutes - sessionElapsedMinutes) : null;
+  const sessionProgress =
+    sessionTimeBudgetMinutes != null && sessionTimeBudgetMinutes > 0
+      ? sessionElapsedMinutes / sessionTimeBudgetMinutes
+      : 0;
+  const sessionTimeWarning =
+    Boolean(activeSession) &&
+    activeSession?.endedAt == null &&
+    sessionTimeBudgetMinutes != null &&
+    sessionProgress >= 0.8 &&
+    !sessionTimeWarningDismissed;
+  const sessionTimeExpired =
+    Boolean(activeSession) &&
+    activeSession?.endedAt == null &&
+    sessionTimeBudgetMinutes != null &&
+    sessionElapsedMinutes >= sessionTimeBudgetMinutes;
+
+  async function appendSessionEventToServer(params: {
+    sessionId: string;
+    eventType: SessionEvent["eventType"];
+    claimId?: string | null;
+    description: string;
+  }) {
+    try {
+      await fetch("/api/sessions", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId: params.sessionId,
+          eventType: params.eventType,
+          claimId: params.claimId ?? null,
+          description: params.description,
+        }),
+      });
+    } catch {
+      return;
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSession() {
+      setSessionLoading(true);
+
+      try {
+        const response = await fetch(`/api/sessions?mapId=${map.id}`);
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { session?: SerializableThinkingSession | null };
+        if (cancelled) {
+          return;
+        }
+
+        const nextSession = payload.session ? normalizeSession(payload.session) : null;
+        setActiveSession(nextSession);
+        setSessionStartVisible(!nextSession);
+        setSessionCloseVisible(false);
+        setSessionTimeWarningDismissed(false);
+      } catch {
+        if (!cancelled) {
+          setSessionStartVisible(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setSessionLoading(false);
+        }
+      }
+    }
+
+    void loadSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [map.id]);
+
+  useEffect(() => {
+    if (!activeSession || activeSession.endedAt) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setSessionNow(new Date());
+    }, 15000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [activeSession, activeSession?.id, activeSession?.endedAt]);
+
+  useEffect(() => {
+    if (!activeSession || activeSession.endedAt || sessionTimeBudgetMinutes == null) {
+      return;
+    }
+
+    if (sessionTimeExpired) {
+      setSessionCloseVisible(true);
+    }
+  }, [activeSession, sessionTimeBudgetMinutes, sessionTimeExpired]);
+
+  useEffect(() => {
+    if (!activeSession || activeSession.endedAt) {
+      lastOpenedClaimIdRef.current = null;
+      return;
+    }
+
+    if (selectedGraphNodeId && lastOpenedClaimIdRef.current !== selectedGraphNodeId) {
+      lastOpenedClaimIdRef.current = selectedGraphNodeId;
+      void appendSessionEventToServer({
+        sessionId: activeSession.id,
+        eventType: "claim_opened",
+        claimId: selectedGraphNodeId,
+        description: `Opened claim ${nodesById.get(selectedGraphNodeId)?.content ?? selectedGraphNodeId}.`,
+      });
+    }
+  }, [activeSession, nodesById, selectedGraphNodeId]);
+
+  async function refreshBlindSpotMap() {
+    if (!map.userId) {
+      return;
+    }
+
+    setBlindSpotMapRefreshing(true);
+
+    try {
+      const response = await fetch(`/api/users/${map.userId}/blind-spots`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as { blindSpotMap?: SerializableBlindSpotMap | null };
+      if (payload.blindSpotMap) {
+        setBlindSpotMap(normalizeBlindSpotMap(payload.blindSpotMap));
+        if (activeSession && !activeSession.endedAt) {
+          void appendSessionEventToServer({
+            sessionId: activeSession.id,
+            eventType: "blind_spot_reviewed",
+            claimId: null,
+            description: "Refreshed the blind spot map from the workspace.",
+          });
+        }
+      }
+    } catch {
+      return;
+    } finally {
+      setBlindSpotMapRefreshing(false);
+      setBlindSpotMapLoading(false);
+    }
+  }
+
   async function refreshBiasProfile() {
     if (!map.userId) {
       return;
@@ -2734,43 +3013,44 @@ export function ThoughtMapWorkspace({
     }
   }
 
-  async function refreshBlindSpotMap() {
-    if (!map.userId) {
-      return;
-    }
-
-    setBlindSpotMapRefreshing(true);
-
-    try {
-      const response = await fetch(`/api/users/${map.userId}/blind-spots`, {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        return;
-      }
-
-      const payload = (await response.json()) as { blindSpotMap?: SerializableBlindSpotMap | null };
-      if (payload.blindSpotMap) {
-        setBlindSpotMap(normalizeBlindSpotMap(payload.blindSpotMap));
-      }
-    } catch {
-      return;
-    } finally {
-      setBlindSpotMapRefreshing(false);
-      setBlindSpotMapLoading(false);
-    }
-  }
-
   useEffect(() => {
     let cancelled = false;
 
-      setBiasProfileLoading(true);
-    void refreshBiasProfile().finally(() => {
-      if (!cancelled) {
-        setBiasProfileLoading(false);
+    async function loadBiasProfile() {
+      if (!map.userId) {
+        if (!cancelled) {
+          setBiasProfileLoading(false);
+        }
+        return;
       }
-    });
+
+      setBiasProfileRefreshing(true);
+
+      try {
+        const response = await fetch(`/api/users/${map.userId}/bias-profile`, {
+          method: "POST",
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { profile?: SerializableCognitiveBiasProfile | null };
+        if (payload.profile) {
+          setBiasProfile(normalizeBiasProfile(payload.profile));
+        }
+      } catch {
+        return;
+      } finally {
+        if (!cancelled) {
+          setBiasProfileRefreshing(false);
+          setBiasProfileLoading(false);
+        }
+      }
+    }
+
+    setBiasProfileLoading(true);
+    void loadBiasProfile();
 
     return () => {
       cancelled = true;
@@ -3050,6 +3330,14 @@ export function ThoughtMapWorkspace({
           ...current,
           [params.targetClaimId]: params.decisionType,
         }));
+        if (activeSession && !activeSession.endedAt) {
+          void appendSessionEventToServer({
+            sessionId: activeSession.id,
+            eventType: "confidence_update",
+            claimId: params.targetClaimId,
+            description: `Recorded a ${params.decisionType} confidence propagation for ${params.targetClaimId}.`,
+          });
+        }
         setConfidenceOverrideReasons((current) => ({ ...current, [params.targetClaimId]: "" }));
         setPropagationFinalPosteriorDrafts((current) => {
           const next = { ...current };
@@ -3423,6 +3711,14 @@ export function ThoughtMapWorkspace({
           delete next[params.round];
           return next;
         });
+        if (activeSession && !activeSession.endedAt) {
+          void appendSessionEventToServer({
+            sessionId: activeSession.id,
+            eventType: "critique_round",
+            claimId: selectedGraphNode?.node.id ?? null,
+            description: `${params.title}: ${response.slice(0, 160)}`,
+          });
+        }
         setDialecticRoundContextDrafts((current) => {
           const next = { ...current };
           delete next[params.round];
@@ -3535,6 +3831,14 @@ export function ThoughtMapWorkspace({
         const payload = (await response.json()) as { map: SerializableThoughtMap };
         setMap(normalizeMap(payload.map));
         setResolutionFlowOpen(false);
+        if (activeSession && !activeSession.endedAt) {
+          void appendSessionEventToServer({
+            sessionId: activeSession.id,
+            eventType: "confidence_update",
+            claimId,
+            description: `Recorded a resolution for ${claimId}.`,
+          });
+        }
       } catch {
         return;
       }
@@ -3649,6 +3953,14 @@ export function ThoughtMapWorkspace({
 
         const payload = (await response.json()) as { map: SerializableThoughtMap };
         setMap(normalizeMap(payload.map));
+        if (activeSession && !activeSession.endedAt) {
+          void appendSessionEventToServer({
+            sessionId: activeSession.id,
+            eventType: "revisit_completed",
+            claimId,
+            description: `Marked revisit action ${type} for ${claimId}.`,
+          });
+        }
       } catch {
         return;
       }
@@ -3675,6 +3987,14 @@ export function ThoughtMapWorkspace({
         const payload = (await response.json()) as ActionResponse;
         setLastAction(payload);
         mergeMapUpdate(payload);
+        if (activeSession && !activeSession.endedAt && payload.createdNodes.length > 0) {
+          void appendSessionEventToServer({
+            sessionId: activeSession.id,
+            eventType: "claim_created",
+            claimId: nodeId,
+            description: `Created ${payload.createdNodes.length} new claim${payload.createdNodes.length === 1 ? "" : "s"} from ${nodeId}.`,
+          });
+        }
       } catch {
         return;
       } finally {
@@ -3703,6 +4023,14 @@ export function ThoughtMapWorkspace({
         const payload = (await response.json()) as ActionResponse;
         setLastAction(payload);
         mergeMapUpdate(payload);
+        if (activeSession && !activeSession.endedAt && payload.createdNodes.length > 0) {
+          void appendSessionEventToServer({
+            sessionId: activeSession.id,
+            eventType: "claim_created",
+            claimId: map.recommendedNextMove?.targetNodeId ?? null,
+            description: `Executed the recommended move and created ${payload.createdNodes.length} claim${payload.createdNodes.length === 1 ? "" : "s"}.`,
+          });
+        }
       } catch {
         return;
       } finally {
@@ -3745,11 +4073,148 @@ export function ThoughtMapWorkspace({
 
         const payload = (await response.json()) as FounderBriefResponse;
         setMap(normalizeMap(payload.map));
+        if (activeSession && !activeSession.endedAt) {
+          void appendSessionEventToServer({
+            sessionId: activeSession.id,
+            eventType: "artifact_generated",
+            claimId: null,
+            description: "Generated a founder brief from the map.",
+          });
+        }
       } catch {
         setFounderBriefError("Penny could not generate the founder brief.");
       } finally {
         setRunningFounderBrief(false);
       }
+    });
+  }
+
+  function openVaultManager() {
+    setVaultDraft(null);
+    setVaultModalOpen(true);
+  }
+
+  function openVaultDraft(draft: VaultDraft) {
+    setVaultDraft(draft);
+    setVaultModalOpen(true);
+  }
+
+  function makeVaultPayload(
+    entryType: VaultContentPayload["entryType"],
+    title: string,
+    description: string,
+    content: unknown,
+    sourceMapId: string | null,
+    sourceClaimId: string | null,
+    sourceSessionId: string | null,
+  ): VaultContentPayload {
+    return {
+      entryType,
+      title,
+      description,
+      sourceMapId,
+      sourceClaimId,
+      sourceSessionId,
+      capturedAt: new Date().toISOString(),
+      content,
+    };
+  }
+
+  function vaultClaim(node: ThoughtNodeModel) {
+    if (vaultedClaimIds.has(node.id)) {
+      openVaultManager();
+      return;
+    }
+
+    openVaultDraft({
+      entryType: "claim",
+      mapId: map.id,
+      claimId: node.id,
+      sessionId: activeSession?.id ?? null,
+      title: `Vault claim: ${node.content.slice(0, 64)}`,
+      description: "Store this claim only on the current device and keep the server copy redacted from future views.",
+      payload: makeVaultPayload(
+        "claim",
+        node.content,
+        node.note ?? "Sensitive claim moved to local-only storage.",
+        {
+          node,
+          map: {
+            id: map.id,
+            title: map.title,
+            rawThought: map.rawThought,
+          },
+          parentId: node.parentId,
+          status: node.nodeStatus,
+          score: node.scores,
+        },
+        map.id,
+        node.id,
+        activeSession?.id ?? null,
+      ),
+    });
+  }
+
+  function vaultMap() {
+    if (mapVaultRegistered) {
+      openVaultManager();
+      return;
+    }
+
+    openVaultDraft({
+      entryType: "map",
+      mapId: map.id,
+      sessionId: activeSession?.id ?? null,
+      title: `Vault map: ${map.title}`,
+      description: "Store the map snapshot locally. The encrypted version never syncs to the server.",
+      payload: makeVaultPayload(
+        "map",
+        map.title,
+        map.rawThought,
+        {
+          map,
+          selectedClaimId: selectedGraphNode?.node.id ?? null,
+          selectedSessionId: activeSession?.id ?? null,
+        },
+        map.id,
+        null,
+        activeSession?.id ?? null,
+      ),
+    });
+  }
+
+  function vaultSession() {
+    if (!activeSession || activeSession.endedAt) {
+      return;
+    }
+
+    if (sessionVaultRegistered) {
+      openVaultManager();
+      return;
+    }
+
+    openVaultDraft({
+      entryType: "session",
+      mapId: map.id,
+      sessionId: activeSession.id,
+      title: `Vault session: ${activeSession.declaredIntention}`,
+      description: "Store the session snapshot locally so it never syncs to another device.",
+      payload: makeVaultPayload(
+        "session",
+        activeSession.declaredIntention,
+        activeSession.declaredIntention,
+        {
+          session: activeSession,
+          map: {
+            id: map.id,
+            title: map.title,
+          },
+          selectedClaimId: selectedGraphNode?.node.id ?? null,
+        },
+        map.id,
+        selectedGraphNode?.node.id ?? null,
+        activeSession.id,
+      ),
     });
   }
 
@@ -3779,6 +4244,7 @@ export function ThoughtMapWorkspace({
     const children = nodesByParent[node.id] ?? [];
     const supersededNode =
       node.supersedesNodeId ? map.nodes.find((candidate) => candidate.id === node.supersedesNodeId) : null;
+    const isVaulted = vaultedClaimIds.has(node.id);
 
     return (
       <div key={node.id} className={depth > 0 ? "pl-4 sm:pl-6" : ""}>
@@ -3787,11 +4253,19 @@ export function ThoughtMapWorkspace({
             <Badge className={statusBadge(node.nodeStatus)}>{node.nodeStatus}</Badge>
             <Badge>{kindLabel(node.kind)}</Badge>
             {node.supersedesNodeId ? <Badge className="bg-[#e7defa] text-[#5c4c88]">replacement</Badge> : null}
+            {isVaulted ? (
+              <Badge className="bg-[#1f5d73] text-white">
+                <Lock className="mr-1 size-3.5" />
+                Vault
+              </Badge>
+            ) : null}
           </div>
 
-          <p className="mt-3 text-sm leading-7 text-[var(--ink)] sm:text-base">{node.content}</p>
+          <p className="mt-3 text-sm leading-7 text-[var(--ink)] sm:text-base">
+            {isVaulted ? "This claim lives in Vault on this device. Unlock it in the vault manager to inspect the content." : node.content}
+          </p>
 
-          {node.note ? <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{node.note}</p> : null}
+          {node.note && !isVaulted ? <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{node.note}</p> : null}
 
           {supersededNode ? (
             <p className="mt-3 text-xs leading-6 text-[var(--muted-ink)]">
@@ -3812,6 +4286,10 @@ export function ThoughtMapWorkspace({
                 {action.label}
               </Button>
             ))}
+            <Button variant="secondary" className="gap-2 px-3 py-2 text-xs" onClick={() => vaultClaim(node)}>
+              <Lock className="size-3.5" />
+              {isVaulted ? "Open Vault" : "Move to Vault"}
+            </Button>
           </div>
         </div>
 
@@ -3843,6 +4321,62 @@ export function ThoughtMapWorkspace({
         recentSessionMinutes={Math.max(0, Math.round((map.updatedAt.getTime() - map.createdAt.getTime()) / (1000 * 60)))}
         sourceMapId={map.id}
       />
+      {activeSession && !activeSession.endedAt ? (
+        <div className="rounded-[24px] border border-black/10 bg-white p-4 shadow-[0_12px_34px_rgba(15,23,42,0.06)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="bg-[#dff0f7] text-[#1f5d73]">Thinking session</Badge>
+                <Badge className="bg-[var(--panel)] text-[var(--ink)]">{activeSession.intentionType.replaceAll("_", " ")}</Badge>
+                {activeSession.timeBudgetMinutes != null ? (
+                  <Badge className="bg-[#fff6ed] text-[#8b4d1f]">
+                    {Math.max(0, Math.ceil(sessionRemainingMinutes ?? 0))} min left
+                  </Badge>
+                ) : (
+                  <Badge className="bg-[var(--panel)] text-[var(--ink)]">No time budget</Badge>
+                )}
+              </div>
+              <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">{activeSession.declaredIntention}</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                {activeSession.scopedClaimIds.length
+                  ? `Scoped to ${activeSession.scopedClaimIds.length} claim${activeSession.scopedClaimIds.length === 1 ? "" : "s"}.`
+                  : "No claims were scoped when the session started."}
+              </p>
+              {sessionTimeWarning ? (
+                <div className="mt-4 rounded-[18px] border border-[#d7c06c] bg-[#fff9df] px-4 py-3 text-sm leading-6 text-[#6f5612]">
+                  You are approaching your time limit. You have covered {Math.max(0, Math.ceil(sessionElapsedMinutes))} minutes.
+                  Wrap up or extend if you want to keep going.
+                </div>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button className="gap-2" onClick={() => setSessionCloseVisible(true)}>
+                End session
+              </Button>
+              <Button className="gap-2" variant="secondary" onClick={vaultSession}>
+                <Lock className="size-4" />
+                {sessionVaultRegistered ? "Open Vault" : "Move to Vault"}
+              </Button>
+              {activeSession.timeBudgetMinutes != null ? (
+                <Button
+                  className="gap-2"
+                  variant="ghost"
+                  onClick={() => setSessionTimeWarningDismissed(true)}
+                >
+                  Dismiss reminder
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : !sessionLoading ? (
+        <div className="flex flex-col gap-3 rounded-[24px] border border-dashed border-black/12 bg-white/70 p-4 text-sm leading-6 text-[var(--muted-ink)] lg:flex-row lg:items-center lg:justify-between">
+          <p>No active thinking session. Start one to capture intention, scope, and closing ritual.</p>
+          <Button className="gap-2" variant="secondary" onClick={() => setSessionStartVisible(true)}>
+            Start session
+          </Button>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Thought Map</p>
@@ -3872,6 +4406,11 @@ export function ThoughtMapWorkspace({
                 <Badge className="bg-[var(--panel)] text-[var(--ink)]">Needs more map structure</Badge>
               )}
             </div>
+            {map.recommendedNextMove?.uncertainty ? (
+              <div className="mt-3">
+                <UncertaintyIndicator uncertainty={map.recommendedNextMove.uncertainty} />
+              </div>
+            ) : null}
             <h2 className="mt-4 text-3xl font-semibold text-[var(--ink)]">
               {map.recommendedNextMove?.headline ?? "Keep shaping the map until Penny can point to one decisive next move."}
             </h2>
@@ -5232,6 +5771,7 @@ export function ThoughtMapWorkspace({
                 {round.engagementScore != null ? (
                   <Badge className="bg-[#fff6ed] text-[#8b4d1f]">engagement {Math.round(round.engagementScore)}</Badge>
                 ) : null}
+                {round.dialecticRound?.uncertainty ? <UncertaintyIndicator uncertainty={round.dialecticRound.uncertainty} /> : null}
               </div>
               <p className="mt-3 text-sm font-medium text-[var(--ink)]">{round.title}</p>
               <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{round.prompt}</p>
@@ -6237,6 +6777,7 @@ export function ThoughtMapWorkspace({
                             {step.delta >= 0 ? "+" : "-"}
                             {Math.abs(Math.round(step.delta * 100))}
                           </Badge>
+                          {step.uncertainty ? <UncertaintyIndicator uncertainty={step.uncertainty} /> : null}
                         </div>
                         <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{step.reasoning}</p>
                         {step.overrideReasoning ? (
@@ -6681,6 +7222,7 @@ export function ThoughtMapWorkspace({
                       {activeShapeCallout.evidenceNodeIds.length} prior claim
                       {activeShapeCallout.evidenceNodeIds.length === 1 ? "" : "s"}
                     </Badge>
+                    {activeShapeCallout.uncertainty ? <UncertaintyIndicator uncertainty={activeShapeCallout.uncertainty} /> : null}
                   </div>
                   <div className="mt-4 space-y-3">
                     <textarea
@@ -7074,7 +7616,17 @@ export function ThoughtMapWorkspace({
                       {selectedGraphNode ? "Selected claim" : "Select a claim"}
                     </h3>
                   </div>
-                  {selectedGraphNode ? <Badge>{kindLabel(selectedGraphNode.node.kind)}</Badge> : null}
+                  {selectedGraphNode ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge>{kindLabel(selectedGraphNode.node.kind)}</Badge>
+                      {selectedGraphNodeVaulted ? (
+                        <Badge className="bg-[#1f5d73] text-white">
+                          <Lock className="mr-1 size-3.5" />
+                          Vault
+                        </Badge>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
 
                 {selectedGraphNode ? (
@@ -7086,9 +7638,17 @@ export function ThoughtMapWorkspace({
                       <Badge>Children {selectedGraphNode.childCount}</Badge>
                     </div>
 
-                    <p className="mt-4 text-sm leading-7 text-[var(--ink)]">{selectedGraphNode.node.content}</p>
+                    <p className="mt-4 text-sm leading-7 text-[var(--ink)]">
+                      {selectedGraphNodeVaulted
+                        ? "This claim is in Vault on this device. Open the vault manager to reveal it with the passphrase."
+                        : selectedGraphNode.node.content}
+                    </p>
                     {selectedGraphNode.node.note ? (
-                      <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{selectedGraphNode.node.note}</p>
+                      <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                        {selectedGraphNodeVaulted
+                          ? "This claim is stored locally in Vault. Unlock it in the vault manager to inspect the note."
+                          : selectedGraphNode.node.note}
+                      </p>
                     ) : null}
                     {selectedGraphNodeParent ? (
                       <p className="mt-4 text-xs leading-5 text-[var(--muted-ink)]">
@@ -7226,6 +7786,10 @@ export function ThoughtMapWorkspace({
                             {action.label}
                           </Badge>
                         ))}
+                        <Badge className="bg-[#1f5d73] text-white">
+                          <Lock className="mr-1 size-3.5" />
+                          {selectedGraphNodeVaulted ? "Vaulted" : "Move to Vault"}
+                        </Badge>
                       </div>
                       <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
                         Keep graph interactions selection-only in this slice. Switch back to <span className="font-medium text-[var(--ink)]">Outline view</span> to run a move.
@@ -7234,6 +7798,10 @@ export function ThoughtMapWorkspace({
                         <Button className="gap-2" variant="secondary" onClick={() => setRepairModalOpen(true)}>
                           <GitBranchPlus className="size-4" />
                           Repair graph
+                        </Button>
+                        <Button className="gap-2" variant="secondary" onClick={() => vaultClaim(selectedGraphNode.node)}>
+                          <Lock className="size-4" />
+                          {selectedGraphNodeVaulted ? "Open Vault" : "Move to Vault"}
                         </Button>
                         <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{claimRepairSuggestions.length} suggestions</Badge>
                       </div>
@@ -7382,10 +7950,20 @@ export function ThoughtMapWorkspace({
 
           <div className="flex flex-col items-end gap-2">
             <Badge className="bg-white text-[var(--ink)]">Stakes {synthesisStakesLevel}</Badge>
-            <Button className="gap-2" disabled={runningFounderBrief || isPending} onClick={runFounderBrief}>
-              <Sparkles className="size-4" />
-              Generate founder brief
-            </Button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button className="gap-2" disabled={runningFounderBrief || isPending} onClick={runFounderBrief}>
+                <Sparkles className="size-4" />
+                Generate founder brief
+              </Button>
+              <Button className="gap-2" variant="secondary" onClick={vaultMap}>
+                <Lock className="size-4" />
+                {mapVaultRegistered ? "Open Vault" : "Move to Vault"}
+              </Button>
+              <Button variant="secondary" className="gap-2" onClick={() => setExportModalOpen(true)}>
+                <Download className="size-4" />
+                Export
+              </Button>
+            </div>
           </div>
         </div>
       </Card>
@@ -7393,6 +7971,29 @@ export function ThoughtMapWorkspace({
       {map.founderBrief ? <FounderBriefCard brief={map.founderBrief} /> : null}
       <ArtifactBuilder mapId={map.id} />
       <DocumentImport mapId={map.id} />
+      <ExportModal
+        open={exportModalOpen}
+        userId={map.userId}
+        mapId={map.id}
+        mapTitle={map.title}
+        claimId={selectedGraphNode?.node.id ?? null}
+        claimLabel={selectedGraphNode?.node.content ?? null}
+        onClose={() => setExportModalOpen(false)}
+      />
+      <VaultModal
+        open={vaultModalOpen}
+        userId={map.userId}
+        draft={vaultDraft}
+        onClose={() => {
+          setVaultModalOpen(false);
+          setVaultDraft(null);
+        }}
+      onSaved={(_entry, nextMap) => {
+        setMap(normalizeMap(nextMap as SerializableThoughtMap));
+        setVaultModalOpen(false);
+        setVaultDraft(null);
+      }}
+      />
       <ResolutionFlow
         key={resolutionFlowOpen ? `resolution:${resolutionTargetNode?.id ?? "claim"}` : "resolution:closed"}
         open={resolutionFlowOpen}
@@ -7415,6 +8016,50 @@ export function ThoughtMapWorkspace({
         onClose={() => setRepairModalOpen(false)}
         onSubmit={recordClaimRepair}
       />
+      {sessionLoading ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
+          <div className="max-w-md rounded-[28px] border border-black/10 bg-[var(--paper)] p-6 text-center shadow-[0_30px_80px_rgba(15,23,42,0.22)]">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Session gate</p>
+            <h2 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Loading your thinking session</h2>
+            <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+              Penny is checking whether to resume an active session or start a new one.
+            </p>
+          </div>
+        </div>
+      ) : null}
+      {sessionStartVisible && !sessionLoading ? (
+        <SessionStart
+          mapId={map.id}
+          mapTitle={map.title}
+          maps={availableMaps}
+          onStarted={(session) => {
+            setActiveSession(normalizeSession(session as SerializableThinkingSession));
+            setSessionStartVisible(false);
+            setSessionTimeWarningDismissed(false);
+          }}
+          onDismissed={(session) => {
+            setActiveSession(normalizeSession(session as SerializableThinkingSession));
+            setSessionStartVisible(false);
+            setSessionTimeWarningDismissed(false);
+          }}
+        />
+      ) : null}
+      {sessionCloseVisible && activeSession && !activeSession.endedAt ? (
+        <SessionClose
+          session={activeSession}
+          summary={sessionSummaryPreview}
+          onClosed={(session) => {
+            setActiveSession(normalizeSession(session as SerializableThinkingSession));
+            setSessionCloseVisible(false);
+            setSessionTimeWarningDismissed(false);
+          }}
+          onSkipped={(session) => {
+            setActiveSession(normalizeSession(session as SerializableThinkingSession));
+            setSessionCloseVisible(false);
+            setSessionTimeWarningDismissed(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

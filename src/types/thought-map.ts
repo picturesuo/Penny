@@ -56,6 +56,38 @@ export type ThoughtMapExecutionMode =
   | "replace_weak_branch"
   | "diversify_branches";
 
+export const VAULT_ENTRY_TYPES = ["claim", "map", "session"] as const;
+
+export type VaultEntryType = (typeof VAULT_ENTRY_TYPES)[number];
+
+export type VaultSyncStatus = "local_only";
+
+export type PennyUncertaintyOutputType =
+  | "critique"
+  | "shape"
+  | "synthesis_prompt"
+  | "reference_class"
+  | "propagation_result"
+  | "meta_cognition_prompt";
+
+export type PennyUncertaintyLevel = "high_confidence" | "moderate_confidence" | "low_confidence" | "speculative";
+
+export type PennyUncertaintyGroundingType =
+  | "user_pattern_data"
+  | "cross_user_aggregate"
+  | "general_heuristic"
+  | "first_principles";
+
+export interface PennyUncertainty {
+  outputType: PennyUncertaintyOutputType;
+  uncertaintyLevel: PennyUncertaintyLevel;
+  groundingType: PennyUncertaintyGroundingType;
+  evidenceBasis: string;
+  confidenceScore: number;
+  caveats: string[];
+  groundingCount: number;
+}
+
 export type ThinkingBias =
   | "confirmation_bias"
   | "shallow_abstraction"
@@ -404,6 +436,7 @@ export interface DialecticRound {
   confidenceDelta: number;
   engagementScore: number;
   followUpPrompt: string | null;
+  uncertainty: PennyUncertainty | null;
   createdAt: Date;
   closedAt: Date | null;
 }
@@ -437,7 +470,8 @@ export type ThoughtMapEventType =
   | "critique_quality_profile"
   | "artifact_generated"
   | "artifact_outcome"
-  | "claim_resolution";
+  | "claim_resolution"
+  | "vault_entry_registered";
 
 export type RecommendationReason =
   | "low_evidence"
@@ -467,6 +501,42 @@ export type ArtifactTypeId =
   | "risk_register"
   | "personal_decision_audit"
   | "hypothesis_brief";
+
+export const EXPORT_TYPES = [
+  "single_map",
+  "all_maps",
+  "single_claim",
+  "calibration_data",
+  "session_history",
+  "shapes_and_lens",
+  "full_data",
+] as const;
+
+export type ExportType = (typeof EXPORT_TYPES)[number];
+
+export const EXPORT_FORMATS = ["json", "markdown", "csv"] as const;
+
+export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+
+export const EXPORT_SCHEMA_VERSION = "penny.export/v1" as const;
+
+export type ExportSchemaVersion = typeof EXPORT_SCHEMA_VERSION;
+
+export interface ExportRequest {
+  id: string;
+  userId: string;
+  exportType: ExportType;
+  format: ExportFormat;
+  includeHistory: boolean;
+  includePrivate: boolean;
+  requestedAt: Date;
+  completedAt: Date | null;
+  downloadUrl: string | null;
+  expiresAt: Date | null;
+  mapId?: string | null;
+  claimId?: string | null;
+  sessionId?: string | null;
+}
 
 export type ImportSourceType = "url" | "text_paste" | "document";
 
@@ -643,6 +713,28 @@ export interface ArtifactOutcome {
   lessonsLearned: string | null;
 }
 
+export interface VaultEntry {
+  id: string;
+  entryType: VaultEntryType;
+  encryptedContent: string;
+  contentHash: string;
+  keyHint: string | null;
+  createdAt: Date;
+  lastAccessedAt: Date;
+  syncStatus: VaultSyncStatus;
+}
+
+export interface VaultEntryManifest {
+  id: string;
+  entryType: VaultEntryType;
+  mapId: string;
+  claimId: string | null;
+  sessionId: string | null;
+  createdAt: Date;
+  lastAccessedAt: Date;
+  syncStatus: VaultSyncStatus;
+}
+
 export interface ArtifactRecord {
   id: string;
   artifactTypeId: ArtifactTypeId;
@@ -713,6 +805,7 @@ export interface FounderBriefModel {
   dependencyCompleteness: string;
   dependencyHealth: DependencyHealth | null;
   loadBearingClaims: ClaimOutcomePair[];
+  uncertainty: PennyUncertainty | null;
   generatedAt: Date;
 }
 
@@ -777,6 +870,7 @@ export interface BayesianPropagationStep {
   contributions?: BeliefPropagationContribution[];
   skipped?: boolean;
   skippedReason?: string | null;
+  uncertainty: PennyUncertainty | null;
 }
 
 export interface BayesianPropagationSnapshot {
@@ -850,6 +944,7 @@ export interface ThoughtMapRecommendedMove {
   acceptedAt?: string | null;
   dismissedAt?: string | null;
   executedAt?: string | null;
+  uncertainty: PennyUncertainty | null;
 }
 
 export interface ThoughtMapActionResult {
@@ -1212,6 +1307,7 @@ export interface ThoughtMapModel {
   repairActions: ClaimRepairAction[];
   revisitSchedules: RevisitSchedule[];
   importSources: ImportSource[];
+  vaultEntries: VaultEntryManifest[];
   founderBrief: FounderBriefModel | null;
   founderBriefReadiness: FounderBriefReadiness;
   graphSnapshot: ThoughtMapGraphSnapshot | null;

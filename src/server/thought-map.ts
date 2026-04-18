@@ -2,6 +2,7 @@ import type {
   Prisma,
   CognitiveBiasProfile as CognitiveBiasProfileRecord,
   BlindSpotMapCache as BlindSpotMapCacheRecord,
+  Session,
   ThoughtMap,
   ThoughtMapEvent as ThoughtMapEventRecord,
   ThoughtMapIntervention,
@@ -18,6 +19,7 @@ import {
   assessSteelManQuality,
   buildClaimDependencyGraph,
   buildBlindSpotMap,
+  buildCalibrationDashboard,
   buildCritiqueQualityProfile,
   buildCognitiveBiasProfile,
   collectCritiqueFeedback,
@@ -35,6 +37,7 @@ import {
 import { buildClaimEvidenceSummary, buildEvidenceQualityGate, scoreEvidenceQuality } from "@/lib/evidence-quality";
 import { buildRevisitQueue, computeLeitnerBox, computeRevisitScheduleForNode, computeRevisitSchedulesForMap } from "@/lib/revisit-scheduler";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
+import { buildPennyUncertainty } from "@/lib/uncertainty";
 import {
   createRootNodeContent,
   createThoughtMapTitle,
@@ -42,6 +45,13 @@ import {
 } from "@/lib/thought-map";
 import { generateActionNotes, generateInitialBranchNotes } from "@/lib/thought-map-generation";
 import { buildReferenceClassRecord, suggestReferenceClass } from "@/lib/reference-classes";
+import { EXPORT_PORTABILITY_GUARANTEE, serializeSessionRecord } from "@/lib/export";
+import { EXPORT_SCHEMA_VERSION } from "@/types/thought-map";
+import type {
+  OpenFormatExportBundle,
+  ExportMapSnapshot,
+  ExportCalibrationSnapshot,
+} from "@/lib/export";
 import { cleanSentence } from "@/lib/penny";
 import type {
   CognitiveIntervention,
@@ -79,6 +89,8 @@ import type {
   PostMortem,
   PropagationResult,
   TriggerDefinition,
+  VaultEntryManifest,
+  VaultEntryType,
   ThoughtMapEvent as ThoughtMapEventModel,
   ThoughtMapModel,
   ThoughtMapEventType,
@@ -89,6 +101,8 @@ import type {
   CognitiveBiasProfile,
   BlindSpotMap,
   ReferenceClass,
+  ExportRequest,
+  ExportType,
 } from "@/types/thought-map";
 
 function mapNode(record: ThoughtNode): ThoughtNodeModel {
@@ -149,6 +163,7 @@ function buildThoughtMapModel(
     repairActions: parseClaimRepairActions(record.repairActions),
     revisitSchedules: parseRevisitSchedules(record.revisitSchedules),
     importSources: [],
+    vaultEntries: [],
     founderBrief,
     founderBriefReadiness: {
       eligible: false,
@@ -204,6 +219,7 @@ function buildThoughtMapModel(
   const artifacts = collectArtifactRecords(judgedMap, events);
   const evidence = collectEvidenceRecords(events);
   const importSources = collectImportSources(events);
+  const vaultEntries = collectVaultEntries(events);
   const founderBriefArtifact = artifacts.find((artifact) => artifact.artifactTypeId === "founder_brief");
   if (founderBriefArtifact && founderBrief) {
     founderBrief = {
@@ -236,6 +252,7 @@ function buildThoughtMapModel(
   return {
     ...judgedMap,
     importSources,
+    vaultEntries,
     evidence,
     nodes,
     artifacts: hydratedArtifacts,
@@ -1341,6 +1358,59 @@ function collectImportSources(events: ThoughtMapEventRecord[]) {
   return [...records.values()].sort((a, b) => a.importedAt.getTime() - b.importedAt.getTime());
 }
 
+function normalizeVaultEntryManifest(payload: Record<string, unknown> | null): VaultEntryManifest | null {
+  if (!payload) {
+    return null;
+  }
+
+  const id = typeof payload.vaultEntryId === "string" ? payload.vaultEntryId : "";
+  const mapId = typeof payload.mapId === "string" ? payload.mapId : "";
+  const entryType =
+    payload.entryType === "claim" || payload.entryType === "map" || payload.entryType === "session"
+      ? payload.entryType
+      : null;
+
+  if (!id || !mapId || !entryType) {
+    return null;
+  }
+
+  return {
+    id,
+    entryType,
+    mapId,
+    claimId: typeof payload.claimId === "string" && payload.claimId.trim().length > 0 ? payload.claimId.trim() : null,
+    sessionId: typeof payload.sessionId === "string" && payload.sessionId.trim().length > 0 ? payload.sessionId.trim() : null,
+    createdAt:
+      typeof payload.createdAt === "string" || payload.createdAt instanceof Date ? new Date(payload.createdAt) : new Date(),
+    lastAccessedAt:
+      typeof payload.lastAccessedAt === "string" || payload.lastAccessedAt instanceof Date
+        ? new Date(payload.lastAccessedAt)
+        : new Date(),
+    syncStatus: "local_only" as const,
+  };
+}
+
+function collectVaultEntries(events: ThoughtMapEventRecord[]) {
+  const records = new Map<string, VaultEntryManifest>();
+
+  for (const event of events) {
+    if (event.eventType !== "vault_entry_registered") {
+      continue;
+    }
+
+    const payload = event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : null;
+    const record = normalizeVaultEntryManifest(payload);
+
+    if (!record) {
+      continue;
+    }
+
+    records.set(record.id, record);
+  }
+
+  return [...records.values()].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
 function normalizeEvidence(record: unknown): Evidence | null {
   if (!isRecord(record)) {
     return null;
@@ -2349,6 +2419,19 @@ export async function recordDialecticRound(params: {
       ? "The next round should name the pattern of no confidence change or new evidence and ask the user to notice it."
       : analysis.followUpPrompt;
   const createdAt = new Date();
+  const uncertainty = buildPennyUncertainty({
+    outputType: "critique",
+    groundingType: priorRounds.length >= 1 ? "user_pattern_data" : "general_heuristic",
+    groundingCount: priorRounds.length,
+    evidenceBasis:
+      priorRounds.length > 0
+        ? `Based on ${priorRounds.length} prior critique round${priorRounds.length === 1 ? "" : "s"} on this claim and the user's response history.`
+        : "This is a general critique heuristic because there is no prior round history yet.",
+    caveats:
+      priorRounds.length === 0
+        ? ["Penny has not seen enough of this claim yet to claim a strong pattern."]
+        : [],
+  });
   const structuredRound = {
     id: roundId,
     mapId: params.mapId,
@@ -2371,6 +2454,7 @@ export async function recordDialecticRound(params: {
     confidenceDelta,
     engagementScore: analysis.engagementScore,
     followUpPrompt,
+    uncertainty,
     createdAt: createdAt.toISOString(),
     closedAt: createdAt.toISOString(),
   };
@@ -4105,6 +4189,87 @@ export async function recordImportReview(params: {
   };
 }
 
+export async function recordVaultEntryRegistration(params: {
+  userId: string;
+  mapId: string;
+  entryId: string;
+  entryType: VaultEntryType;
+  claimId?: string | null;
+  sessionId?: string | null;
+}) {
+  const mapRecord = await prisma.thoughtMap.findUnique({
+    where: { id: params.mapId },
+    include: {
+      nodes: {
+        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+  });
+
+  if (!mapRecord) {
+    throw new Error("Map not found");
+  }
+
+  const vaultEntry: VaultEntryManifest = {
+    id: params.entryId,
+    entryType: params.entryType,
+    mapId: params.mapId,
+    claimId: params.claimId ?? null,
+    sessionId: params.sessionId ?? null,
+    createdAt: new Date(),
+    lastAccessedAt: new Date(),
+    syncStatus: "local_only",
+  };
+
+  const updatedRecord = await prisma.$transaction(async (tx) => {
+    await createThoughtMapEvent(tx, {
+      mapId: params.mapId,
+      nodeId: params.claimId ?? null,
+      eventType: "vault_entry_registered",
+      payload: {
+        vaultEntryId: vaultEntry.id,
+        entryType: vaultEntry.entryType,
+        mapId: vaultEntry.mapId,
+        claimId: vaultEntry.claimId,
+        sessionId: vaultEntry.sessionId,
+        createdAt: vaultEntry.createdAt.toISOString(),
+        lastAccessedAt: vaultEntry.lastAccessedAt.toISOString(),
+        syncStatus: vaultEntry.syncStatus,
+        userId: params.userId,
+      },
+    });
+
+    return tx.thoughtMap.findUnique({
+      where: { id: params.mapId },
+      include: {
+        nodes: {
+          orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+        },
+        events: {
+          orderBy: [{ createdAt: "asc" }],
+        },
+      },
+    });
+  });
+
+  if (!updatedRecord) {
+    throw new Error("Map not found after vault registration");
+  }
+
+  const hydratedMap = await hydrateThoughtMap(
+    updatedRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+    buildThoughtMapModel(mapRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] }),
+  );
+
+  return {
+    vaultEntry,
+    map: hydratedMap,
+  };
+}
+
 export async function recordClaimEvidence(params: {
   mapId: string;
   claimId: string;
@@ -4648,4 +4813,290 @@ export async function getBlindSpotMap(userId: string) {
   }
 
   return refreshBlindSpotMap(userId);
+}
+
+export interface ExportDataBundle {
+  exportType: ExportType;
+  title: string | null;
+  document: unknown;
+}
+
+function eventPayloadForExport(event: ThoughtMapEventModel, includePrivate: boolean) {
+  if (!event.payload || typeof event.payload !== "object") {
+    return null;
+  }
+
+  const payload = { ...(event.payload as Record<string, unknown>) };
+
+  if (includePrivate) {
+    return payload;
+  }
+
+  for (const key of ["rawThought", "sourceContent", "conversation", "answers", "declaredIntention", "rawIdea"]) {
+    if (key in payload) {
+      payload[key] = "[redacted]";
+    }
+  }
+
+  return payload;
+}
+
+function mapHistoryEvents(map: ThoughtMapModel, claimId: string, includeHistory: boolean, includePrivate: boolean): ThoughtMapEventModel[] {
+  if (!includeHistory) {
+    return [];
+  }
+
+  return map.events
+    .filter((event) => event.nodeId === claimId)
+    .map((event) => ({
+      id: event.id,
+      mapId: map.id,
+      eventType: event.eventType,
+      nodeId: event.nodeId,
+      interventionId: event.interventionId,
+      createdAt: event.createdAt,
+      payload: eventPayloadForExport(event, includePrivate),
+    }));
+}
+
+function buildSessionExportRecords(records: Session[], includePrivate: boolean) {
+  return records.map((record) => {
+    const session = serializeSessionRecord(record);
+
+    if (includePrivate) {
+      return session;
+    }
+
+    return {
+      ...session,
+      declaredIntention: "[redacted]",
+      sessionEvents: [],
+      closingRitual: null,
+      sessionSummary: null,
+      rawIdea: "[redacted]",
+      extractedProblem: null,
+      extractedCustomer: null,
+      extractedSolution: null,
+      ideaSummary: null,
+      targetUser: null,
+      problem: null,
+      solution: null,
+      assumptions: [],
+      resolvedAssumptions: [],
+      risks: [],
+      unknowns: [],
+      evidenceFor: [],
+      evidenceAgainst: [],
+      marketPatterns: [],
+      questionsAsked: [],
+      answers: [],
+      conversation: [],
+      conceptBrief: null,
+    };
+  });
+}
+
+async function loadUserMaps(userId: string) {
+  const records = await prisma.thoughtMap.findMany({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+    include: {
+      nodes: {
+        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+  });
+
+  return Promise.all(
+    records.map((record) =>
+      hydrateThoughtMap(record as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] }, undefined, {
+        syncInterventions: false,
+      }),
+    ),
+  );
+}
+
+async function loadSessionsForExport(userId: string, mapId?: string | null, sessionId?: string | null): Promise<Session[]> {
+  return prisma.session.findMany({
+    where: {
+      userId,
+      ...(mapId ? { mapId } : {}),
+      ...(sessionId ? { id: sessionId } : {}),
+    },
+    orderBy: [{ startedAt: "desc" }],
+  });
+}
+
+type CalibrationBundle = {
+  biasProfile: CognitiveBiasProfile | null;
+  blindSpotMap: BlindSpotMap | null;
+  coaching: CalibrationCoaching | null;
+};
+
+async function loadCalibrationBundle(userId: string): Promise<CalibrationBundle | null> {
+  const [biasProfile, blindSpotMap, coaching] = await Promise.all([
+    getCognitiveBiasProfile(userId),
+    getBlindSpotMap(userId),
+    getCalibrationCoaching(userId),
+  ]);
+
+  if (!biasProfile && !blindSpotMap && !coaching) {
+    return null;
+  }
+
+  return {
+    biasProfile,
+    blindSpotMap,
+    coaching,
+  };
+}
+
+function buildMapExportSnapshot(params: {
+  map: ThoughtMapModel;
+  sessions: Session[];
+  includeHistory: boolean;
+  includePrivate: boolean;
+  focusClaimId: string | null;
+  focusClaimText: string | null;
+  claimFilter?: string | null;
+}): ExportMapSnapshot {
+  const { map, sessions, includeHistory, includePrivate, focusClaimId, focusClaimText, claimFilter } = params;
+  const claims = claimFilter ? map.nodes.filter((claim) => claim.id === claimFilter) : map.nodes;
+  const lens = buildPennyLens(map);
+  const sanitizedMap: ThoughtMapModel = includePrivate
+    ? map
+    : {
+        ...map,
+        rawThought: "",
+        nodes: map.nodes.map((node) => ({
+          ...node,
+          note: null,
+        })),
+      };
+
+  return {
+    map: sanitizedMap,
+    lens,
+    shapes: lens.effectiveShapes,
+    claimHistory: claims.map((claim) => {
+      const claimSnapshot = includePrivate ? claim : { ...claim, note: null };
+
+      return {
+        claimId: claim.id,
+        claim: claimSnapshot,
+        history: includeHistory ? mapHistoryEvents(map, claim.id, includeHistory, includePrivate) : [],
+      };
+    }),
+    focusClaimId,
+    focusClaimText,
+    sessions: buildSessionExportRecords(sessions, includePrivate) as unknown as ExportMapSnapshot["sessions"],
+  };
+}
+
+function buildCalibrationSnapshot(maps: ThoughtMapModel[], calibration: CalibrationBundle | null): ExportCalibrationSnapshot {
+  return {
+    biasProfile: calibration?.biasProfile ?? null,
+    coaching: calibration?.coaching ?? null,
+    blindSpotMap: calibration?.blindSpotMap ?? null,
+    dashboard: maps.length ? buildCalibrationDashboard(maps) : null,
+  };
+}
+
+export async function buildExportData(params: {
+  userId: string;
+  exportType: ExportType;
+  includeHistory: boolean;
+  includePrivate: boolean;
+  mapId?: string | null;
+  claimId?: string | null;
+  sessionId?: string | null;
+  exportRequest: ExportRequest;
+}): Promise<OpenFormatExportBundle> {
+  const allMaps = await loadUserMaps(params.userId);
+  const calibration = await loadCalibrationBundle(params.userId);
+  const allSessions = await loadSessionsForExport(params.userId);
+  const calibrationSnapshot = buildCalibrationSnapshot(allMaps, calibration);
+  const filteredMaps =
+    params.exportType === "single_map"
+      ? allMaps.filter((map) => map.id === params.mapId)
+      : params.exportType === "single_claim"
+        ? allMaps.filter((map) => map.nodes.some((claim) => claim.id === params.claimId))
+        : params.exportType === "shapes_and_lens" && params.mapId
+          ? allMaps.filter((map) => map.id === params.mapId)
+          : params.exportType === "session_history"
+            ? params.mapId
+              ? allMaps.filter((map) => map.id === params.mapId)
+              : []
+            : params.exportType === "calibration_data"
+              ? []
+              : allMaps;
+
+  if (params.exportType === "single_map" && filteredMaps.length === 0) {
+    throw new Error("Map not found");
+  }
+
+  if (params.exportType === "single_claim" && !params.claimId) {
+    throw new Error("Claim not found");
+  }
+
+  if (params.exportType === "single_claim" && params.claimId && filteredMaps.length === 0) {
+    throw new Error("Claim not found");
+  }
+
+  if (params.exportType === "shapes_and_lens" && params.mapId && filteredMaps.length === 0) {
+    throw new Error("Map not found");
+  }
+
+  if (params.exportType === "session_history" && params.mapId && filteredMaps.length === 0) {
+    throw new Error("Map not found");
+  }
+
+  const claimFilter = params.exportType === "single_claim" ? params.claimId ?? null : null;
+  const mapSnapshots = filteredMaps.map((map) => {
+    const sessionsForMap =
+      params.exportType === "session_history" && params.mapId && params.sessionId
+        ? allSessions.filter((session) => session.mapId === params.mapId && session.id === params.sessionId)
+        : params.exportType === "session_history" && params.mapId
+          ? allSessions.filter((session) => session.mapId === params.mapId)
+          : params.exportType === "single_map" || params.exportType === "single_claim"
+            ? allSessions.filter((session) => session.mapId === map.id)
+            : allSessions.filter((session) => session.mapId === map.id);
+
+    return buildMapExportSnapshot({
+      map,
+      sessions: sessionsForMap,
+      includeHistory: params.includeHistory,
+      includePrivate: params.includePrivate,
+      focusClaimId: claimFilter,
+      focusClaimText: claimFilter ? map.nodes.find((claim) => claim.id === claimFilter)?.content ?? null : null,
+      claimFilter,
+    });
+  });
+
+  const topLevelSessions: Session[] =
+    params.exportType === "calibration_data"
+      ? []
+      : params.exportType === "session_history"
+      ? allSessions.filter((session) =>
+          params.mapId ? session.mapId === params.mapId : params.sessionId ? session.id === params.sessionId : true,
+        )
+      : params.exportType === "single_map" || params.exportType === "single_claim"
+        ? allSessions.filter((session) => mapSnapshots.some((snapshot) => snapshot.map.id === session.mapId))
+        : params.exportType === "shapes_and_lens"
+          ? allSessions.filter((session) => (params.mapId ? session.mapId === params.mapId : true))
+          : allSessions;
+
+  return {
+    schemaVersion: EXPORT_SCHEMA_VERSION,
+    exportedAt: new Date(),
+    request: params.exportRequest,
+    portabilityGuarantee: EXPORT_PORTABILITY_GUARANTEE,
+    userId: params.userId,
+    maps: mapSnapshots,
+    sessions: buildSessionExportRecords(topLevelSessions, params.includePrivate) as unknown as OpenFormatExportBundle["sessions"],
+    calibration: calibrationSnapshot,
+  };
 }
