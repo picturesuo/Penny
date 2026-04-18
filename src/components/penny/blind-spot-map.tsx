@@ -173,6 +173,7 @@ export function BlindSpotMapView({
   onRefresh,
   onOpenClaim,
 }: BlindSpotMapProps) {
+  const [renderedAt] = useState(() => Date.now());
   const [selectedDomain, setSelectedDomain] = useState<BlindSpotDomain | null>(blindSpotMap?.unexaminedDomains[0]?.domain ?? null);
 
   const priorityItems = useMemo(() => (blindSpotMap ? blindSpotDigest(blindSpotMap) : []), [blindSpotMap]);
@@ -279,7 +280,7 @@ export function BlindSpotMapView({
                   </div>
                   <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
                     Avg confidence {formatPercent(domain.averageConfidence)} · oldest untouched {formatDays(
-                      Math.max(0, Math.floor((Date.now() - domain.oldestUntestedClaim.getTime()) / (1000 * 60 * 60 * 24))),
+                      Math.max(0, Math.floor((renderedAt - domain.oldestUntestedClaim.getTime()) / (1000 * 60 * 60 * 24))),
                     )} ago
                   </p>
                 </button>
