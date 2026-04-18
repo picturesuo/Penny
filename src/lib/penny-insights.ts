@@ -844,6 +844,15 @@ export interface ClaimPostMortemSnapshot {
   updatedAt: Date;
 }
 
+export interface SteelManQualityAssessment {
+  specificityScore: number;
+  evidentialBasisScore: number;
+  engagementDepthScore: number;
+  qualityScore: number;
+  qualityScoreReason: string;
+  revisionPrompt: string | null;
+}
+
 export interface CalibrationDashboardSnapshot {
   resolvedClaims: ForecastClaimSnapshot[];
   domains: CalibrationDomainSummary[];
@@ -1492,6 +1501,94 @@ function similarityScore(a: string, b: string) {
 
   const overlap = aTokens.filter((token) => bTokens.includes(token)).length;
   return overlap / Math.max(aTokens.length, bTokens.length);
+}
+
+function scoreBand(value: number) {
+  return Math.max(0, Math.min(10, Math.round(value)));
+}
+
+function normalizedSteelManTokens(text: string) {
+  return Array.from(
+    new Set(
+      normalize(text)
+        .split(/\s+/)
+        .filter((token) => token.length > 3),
+    ),
+  );
+}
+
+export function assessSteelManQuality(steelManText: string, claimText: string): SteelManQualityAssessment {
+  const steelManTokens = normalizedSteelManTokens(steelManText);
+  const claimTokens = normalizedSteelManTokens(claimText);
+  const sharedTokens = steelManTokens.filter((token) => claimTokens.includes(token));
+  const normalizedSteelMan = normalize(steelManText);
+
+  const specificityScore = scoreBand(
+    Math.min(
+      10,
+      2 +
+        steelManTokens.length / 18 +
+        ((/[0-9]/.test(steelManText) ? 1 : 0) +
+          (/\b(because|specifically|for example|for instance|in practice|at scale|under these conditions)\b/i.test(steelManText) ? 1.8 : 0) +
+          (/\b(if|when|unless|assuming|however|but|yet|instead)\b/i.test(steelManText) ? 1.4 : 0)) +
+        Math.min(2, sharedTokens.length / 2),
+    ),
+  );
+
+  const evidentialBasisScore = scoreBand(
+    Math.min(
+      10,
+      1.5 +
+        (/\b(evidence|data|study|example|metric|measure|survey|test|history|case|interview|observation)\b/i.test(steelManText) ? 3 : 0) +
+        (/\b(according to|we know|the numbers|the data|the evidence|observed)\b/i.test(steelManText) ? 2 : 0) +
+        Math.min(3, steelManTokens.filter((token) => /[0-9]/.test(token)).length * 1.2),
+    ),
+  );
+
+  const engagementDepthScore = scoreBand(
+    Math.min(
+      10,
+      2 +
+        Math.min(4, sharedTokens.length * 1.2) +
+        (/\b(strongest version|most charitable|real issue|actual evidence|actual assumption|what this misses|what it leaves out)\b/i.test(
+          normalizedSteelMan,
+        )
+          ? 3
+          : 0) +
+        (/\b(but|however|although|even if|still|yet)\b/i.test(steelManText) ? 1.5 : 0),
+    ),
+  );
+
+  const qualityScore = scoreBand((specificityScore + evidentialBasisScore + engagementDepthScore) / 3);
+  const weakestAxis =
+    specificityScore <= evidentialBasisScore && specificityScore <= engagementDepthScore
+      ? "specificity"
+      : evidentialBasisScore <= engagementDepthScore
+        ? "evidential basis"
+        : "engagement depth";
+
+  const qualityScoreReason =
+    qualityScore >= 8
+      ? "The steel man is strong: it is specific, tied to evidence, and engages the opposing view instead of flattening it."
+      : qualityScore >= 5
+        ? `The steel man has the right shape, but ${weakestAxis} is still thinner than the others.`
+        : `The steel man is still mostly generic; it needs more ${weakestAxis} against the actual claim.`;
+
+  const revisionPrompt =
+    qualityScore >= 8
+      ? null
+      : qualityScore >= 5
+        ? `Your steel man is partially strong, but ${weakestAxis} could be sharper. Want to revise it before critique?`
+        : "Your steel man is mostly generic. Can you make it more specific to the actual evidence you're relying on?";
+
+  return {
+    specificityScore,
+    evidentialBasisScore,
+    engagementDepthScore,
+    qualityScore,
+    qualityScoreReason,
+    revisionPrompt,
+  };
 }
 
 export function buildClaimStructureSnapshot(map: ThoughtMapModel, node: ThoughtNodeModel | null): ClaimStructureSnapshot {
