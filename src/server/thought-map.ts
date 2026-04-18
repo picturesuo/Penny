@@ -1794,9 +1794,10 @@ export async function recordRevisitAction(params: {
   }
 
   const completedAt = new Date();
+  const nextStatus: RevisitStatus = params.type === "snoozed" ? "snoozed" : "completed";
   const nextSchedule = {
     ...schedule,
-    status: params.type === "snoozed" ? "snoozed" : "completed",
+    status: nextStatus,
     surfacedAt: schedule.surfacedAt ?? completedAt,
     userAction: {
       type: params.type,
