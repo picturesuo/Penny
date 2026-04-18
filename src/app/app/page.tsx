@@ -9,9 +9,9 @@ import {
   buildCalibrationDashboard,
   buildCommunityCommonsDashboard,
   buildMemoryTimeDashboard,
-  buildMarginSurfaceSnapshot,
   derivePennyShapes,
 } from "@/lib/penny-insights";
+import { buildMarginSurfaceSnapshot } from "@/lib/margin";
 import { listMarginFragments } from "@/server/penny";
 import { listThoughtMaps } from "@/server/thought-map";
 
