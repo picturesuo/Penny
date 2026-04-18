@@ -249,6 +249,7 @@
 - `user`: Private bets should use personal-credibility stakes rather than real money so the training remains sticky without becoming financial advice.
 - `user`: Bayesian update prompts should nudge confidence in small increments when new evidence appears, teaching the rhythm of superforecasting instead of dramatic swings.
 - `user`: Probability calibration feedback should be domain-specific so Penny can tell the user where they are well-calibrated and where their 80%s are overconfident.
+- `user`: Calibration coaching should tell the user what to do differently by domain and claim type, with a non-blocking confidence-slider indicator that can be dismissed and logged when ignored.
 - `user`: Propagated confidence changes should be surfaced explicitly so when one claim moves the downstream implication is shown, and the user must either accept the update or argue that the propagation is too strong.
 - `user`: Social and community features must be handled carefully with opt-in, anonymized, and privacy-preserving defaults.
 - `user`: Precedent corpus contributions should let users optionally submit anonymized, structured post-mortems so the failure corpus can grow as a commons.
@@ -377,6 +378,7 @@
 - `repo`: `src/lib/thought-map-analysis.ts` now exposes explicit critique tags alongside the older coverage buckets, and `src/lib/penny-insights.ts` tightened the market-overconfidence shape rule so it only fires in genuinely market-facing text.
 - `repo`: `src/app/api/maps/[id]/critique-feedback/route.ts`, `src/components/penny/critique-feedback.tsx`, `src/lib/penny-insights.ts`, and `src/server/thought-map.ts` now persist structured critique ratings, correction captures, and critique-quality profiles, and `src/components/penny/thought-map-workspace.tsx` shows the prompt inline with dismissals, manual fallback, and profile-aware critique guidance.
 - `repo`: `src/components/penny/shape-dashboard.tsx` now surfaces structured post-mortems for resolved claims so calibration has a first-class end state and shape input.
+- `repo`: `src/app/api/users/[id]/calibration/route.ts`, `src/components/penny/calibration-coaching.tsx`, `src/lib/calibration.ts`, `src/server/thought-map.ts`, `src/components/penny/thought-map-form.tsx`, and `src/app/app/page.tsx` now persist calibration coaching, expose a domain-and-claim-type coaching view, and show a dismissible confidence-slider indicator that logs rejections.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now weights critique depth by claim confidence so high-confidence claims get heavier pressure and low-confidence claims stay lighter and more targeted.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now adds a claim-anchored teach-back surface, a per-claim knowledge gap surface, and explicit metacognition teaching for active shapes.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now turns teach-back into an inline draft/check/rewrite loop with concept-specific correction, annotated user text, and a restatement prompt, including a special network-effects example that distinguishes direct from indirect effects when that is the active confusion.
