@@ -115,3 +115,37 @@ export interface SessionCardModel {
   targetUser?: string | null;
   problem?: string | null;
 }
+
+export const MARGIN_FRAGMENT_STATUSES = ["floating", "surfaced", "promoted", "merged", "archived"] as const;
+
+export type MarginFragmentStatus = (typeof MARGIN_FRAGMENT_STATUSES)[number];
+
+export interface MarginFragmentContextSnapshot {
+  currentStage: SessionStage | "outline" | "graph" | "dashboard";
+  currentFocus: string;
+  currentSphere: string;
+  currentContext: string;
+  currentResponse?: string | null;
+  recentSessionMinutes: number | null;
+  sourceSessionId?: string | null;
+  sourceMapId?: string | null;
+}
+
+export interface MarginFragmentModel {
+  id: string;
+  userId: string;
+  sourceSessionId: string | null;
+  sourceMapId: string | null;
+  sphere: string;
+  content: string;
+  contextSnapshot: MarginFragmentContextSnapshot;
+  status: MarginFragmentStatus;
+  priority: number;
+  surfaceCount: number;
+  lastSurfacedAt: Date | null;
+  promotedAt: Date | null;
+  archivedAt: Date | null;
+  mergedInto: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
