@@ -70,6 +70,77 @@ export type CognitiveInterventionType =
 
 export type CognitiveInterventionStatus = "open" | "completed" | "dismissed";
 
+export type DialecticCritiqueStrength = "mild" | "moderate" | "strong" | "adversarial";
+
+export type DialecticResponsePath = "defend" | "revise" | "absorb";
+
+export type ResponseClassificationType =
+  | "concession"
+  | "defense"
+  | "dismissal"
+  | "partial_concession"
+  | "reframe"
+  | "evidence_addition";
+
+export type DialecticClaimElement = "main_claim" | "assumption" | "evidence" | "warrant" | "framing";
+
+export interface ResponseClassification {
+  type: ResponseClassificationType;
+  confidence: number;
+  classifiedBy: "user_explicit" | "inferred";
+}
+
+export interface Concession {
+  id: string;
+  roundId: string;
+  claimElement: DialecticClaimElement;
+  concededPoint: string;
+  confidenceChangeTrigger: boolean;
+  downstreamPropagate: boolean;
+}
+
+export interface Defense {
+  id: string;
+  roundId: string;
+  claimElement: DialecticClaimElement | string;
+  defenseText: string;
+  defenseStrength: "weak" | "moderate" | "strong";
+  evidenceAdded: boolean;
+  newSourceCited: boolean;
+}
+
+export interface Dismissal {
+  id: string;
+  roundId: string;
+  dismissalText: string;
+  reasonGiven: string | null;
+  flaggedAsAvoidance: boolean;
+}
+
+export interface DialecticRound {
+  id: string;
+  mapId: string;
+  claimId: string | null;
+  roundNumber: number;
+  priorRoundId: string | null;
+  critiqueGenerated: string;
+  critiqueFailureTypes: string[];
+  critiqueLens: string;
+  critiqueStrength: DialecticCritiqueStrength;
+  userResponse: string;
+  responseClassification: ResponseClassification;
+  concessions: Concession[];
+  defenses: Defense[];
+  dismissals: Dismissal[];
+  confidenceAtRoundStart: number;
+  confidenceAtRoundEnd: number;
+  confidenceDelta: number;
+  engagementScore: number;
+  followUpPrompt: string | null;
+  createdAt: Date;
+  closedAt: Date | null;
+}
+
 export type ThoughtMapEventType =
   | "map_created"
   | "intervention_shown"
