@@ -1,12 +1,12 @@
 # Queue
 
 ## Now
-- [x] Implement calibration coaching by domain and claim type.
+- [x] Implement weakest-link and dependency health scoring.
 
 ## Next
-- [ ] Verify the calibration route, domain curves, and confidence-slider coaching hint.
-- [ ] Check the claim-type coaching recommendations on the dashboard surface.
-- [ ] Confirm rejection logging when the user keeps the original confidence after a coaching hint.
+- [ ] Verify the claim dependency-health bar and weakest-link panel.
+- [ ] Verify the founder brief pre-generation dependency-health preview.
+- [ ] Check the artifact and claim health annotations on regenerated maps.
 
 ## Later
 - [ ] Expand only when the project grows.

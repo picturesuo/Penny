@@ -1,4 +1,5 @@
 import { artifactDraftToFounderBrief, buildArtifactDraft } from "@/lib/artifact-types";
+import { buildEvidenceQualityGate } from "@/lib/evidence-quality";
 import { buildPennyLens, type PennyLensSnapshot } from "@/lib/penny-insights";
 import type {
   FounderBriefModel,
@@ -14,7 +15,7 @@ const REQUIRED_FOUNDER_BRIEF_KINDS: FounderBriefRequirement[] = [
 ];
 
 export function getFounderBriefReadiness(map: ThoughtMapModel): FounderBriefReadiness {
-  const counts = activeNodes(map).reduce<Record<FounderBriefRequirement, number>>(
+  const counts = map.nodes.filter((node) => node.nodeStatus === "active").reduce<Record<FounderBriefRequirement, number>>(
     (acc, node) => {
       if (node.kind === "assumption" || node.kind === "counter_argument" || node.kind === "research") {
         acc[node.kind] += 1;
@@ -29,14 +30,23 @@ export function getFounderBriefReadiness(map: ThoughtMapModel): FounderBriefRead
     },
   );
   const missingRequirements = REQUIRED_FOUNDER_BRIEF_KINDS.filter((kind) => counts[kind] < 1);
+  const evidenceGate = buildEvidenceQualityGate(map);
 
   return {
-    eligible: missingRequirements.length === 0,
+    eligible: missingRequirements.length === 0 && !evidenceGate.blocked,
     missingRequirements,
+    evidenceGateMessage: evidenceGate.message,
   };
 }
 
 export function buildFounderBrief(map: ThoughtMapModel, lens: PennyLensSnapshot | null = buildPennyLens(map)): FounderBriefModel {
+  const evidenceGate = buildEvidenceQualityGate(map);
+  if (evidenceGate.blocked) {
+    throw new Error(
+      evidenceGate.message ?? "Founder brief not ready: this founder brief depends on poorly evidenced claims.",
+    );
+  }
+
   const generatedAt = new Date();
   const draft = buildArtifactDraft(map, "founder_brief", {
     artifactId: `founder_brief:${map.id}:${generatedAt.getTime()}`,
@@ -74,5 +84,16 @@ export function formatFounderBrief(brief: FounderBriefModel) {
     `- If you were right: ${brief.ifYouWereRight}`,
     `- Twin-check: ${brief.twinCheck}`,
     `- Dependency completeness: ${brief.dependencyCompleteness}`,
+    "",
+    "## Dependency Health",
+    brief.dependencyHealth
+      ? [
+          `- Score: ${brief.dependencyHealth.healthScore}/100`,
+          `- Weakest link: ${brief.dependencyHealth.weakestLink.claimText}`,
+          `- Risk note: ${brief.dependencyHealth.weakestLink.riskReason}`,
+          `- Chain depth: ${brief.dependencyHealth.chainDepth}`,
+          `- Total dependencies: ${brief.dependencyHealth.totalDependencies}`,
+        ].join("\n")
+      : "- No dependency health was computed yet.",
   ].join("\n");
 }

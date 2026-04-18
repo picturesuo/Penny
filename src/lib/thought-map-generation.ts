@@ -740,6 +740,7 @@ function generateInitialNotes(rawThought: string): GeneratedThoughtNote[] {
     branchOrder: 0,
     scores: null,
     psychology: null,
+    dependencyHealth: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

@@ -6,6 +6,7 @@ import { AlertCircle, ArrowRightLeft, CircleDot, GitBranchPlus, Link2, Sparkles 
 import { BiasProfile } from "@/components/penny/bias-profile";
 import { BlindSpotMapView } from "@/components/penny/blind-spot-map";
 import { ArtifactBuilder } from "@/components/penny/artifact-builder";
+import { DependencyHealthBar, DependencyHealthPanel } from "@/components/penny/dependency-health";
 import { DocumentImport } from "@/components/penny/document-import";
 import { FounderBriefCard } from "@/components/penny/founder-brief-card";
 import { ClaimRepairModal } from "@/components/penny/claim-repair-modal";
@@ -56,10 +57,13 @@ import {
   type DependencyChainTimelineSnapshot,
   type SteelManQualityAssessment,
 } from "@/lib/penny-insights";
+import { buildArtifactDependencyHealth } from "@/lib/dependency-health";
+import { buildClaimEvidenceSummary } from "@/lib/evidence-quality";
 import { evaluateMetaCognitionTrigger, type MetaCognitionPromptSnapshot } from "@/lib/meta-cognition";
 import { buildRevisitQueue } from "@/lib/revisit-scheduler";
 import { cn } from "@/lib/utils";
 import { CritiqueFeedback as CritiqueFeedbackCard } from "@/components/penny/critique-feedback";
+import { EvidenceEntry } from "@/components/penny/evidence-entry";
 import { MetaCognitionPrompt } from "@/components/penny/meta-cognition-prompt";
 import { ShapeDetail } from "@/components/penny/shape-detail";
 import type {
@@ -80,6 +84,8 @@ import type {
   CritiqueFeedback as CritiqueFeedbackModel,
   CritiqueCorrection as CritiqueCorrectionModel,
   CritiqueQualityProfile as CritiqueQualityProfileModel,
+  Evidence,
+  EvidenceQualityComponent,
   SteelMan,
   SteelManVersion,
   CognitiveBiasProfile,
@@ -112,6 +118,7 @@ type SerializableThoughtMap = Omit<
   | "revisitSchedules"
   | "importSources"
   | "shapeDerivations"
+  | "evidence"
 > & {
   nodes: SerializableThoughtNode[];
   events: SerializableThoughtMapEvent[];
@@ -122,6 +129,7 @@ type SerializableThoughtMap = Omit<
   repairActions: SerializableClaimRepairAction[];
   revisitSchedules: SerializableRevisitSchedule[];
   shapeDerivations: SerializableShapeDerivation[];
+  evidence: SerializableEvidence[];
   founderBrief: SerializableFounderBrief | null;
   interventions: SerializableIntervention[];
   recommendedIntervention: SerializableIntervention | null;
@@ -147,6 +155,14 @@ type SerializableIntervention = Omit<
 
 type SerializableThoughtMapEvent = Omit<ThoughtMapEvent, "createdAt"> & {
   createdAt: Date | string;
+};
+
+type SerializableEvidenceComponent = EvidenceQualityComponent;
+
+type SerializableEvidence = Omit<Evidence, "publicationDate" | "addedAt" | "qualityComponents"> & {
+  publicationDate: Date | string | null;
+  addedAt: Date | string;
+  qualityComponents: SerializableEvidenceComponent[];
 };
 
 type SerializableSteelManVersion = Omit<SteelManVersion, "savedAt"> & {
@@ -535,11 +551,29 @@ function normalizeEvent(event: SerializableThoughtMapEvent): ThoughtMapEvent {
   };
 }
 
+function normalizeEvidenceComponent(component: SerializableEvidenceComponent): EvidenceQualityComponent {
+  return {
+    dimension: component.dimension,
+    score: component.score,
+    explanation: component.explanation,
+  };
+}
+
+function normalizeEvidence(evidence: SerializableEvidence): Evidence {
+  return {
+    ...evidence,
+    publicationDate: evidence.publicationDate ? toDate(evidence.publicationDate) : null,
+    addedAt: toDate(evidence.addedAt),
+    qualityComponents: evidence.qualityComponents.map(normalizeEvidenceComponent),
+  };
+}
+
 function normalizeMap(map: SerializableThoughtMap): ThoughtMapModel {
   return {
     ...map,
     nodes: map.nodes.map(normalizeNode),
     events: map.events.map(normalizeEvent),
+    evidence: (map.evidence ?? []).map(normalizeEvidence),
     steelMans: (map.steelMans ?? []).map(normalizeSteelMan),
     critiqueFeedbacks: (map.critiqueFeedbacks ?? []).map(normalizeCritiqueFeedback),
     critiqueCorrections: (map.critiqueCorrections ?? []).map(normalizeCritiqueCorrection),
@@ -1232,6 +1266,7 @@ export function ThoughtMapWorkspace({
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(() =>
     preferredGraphNodeId(normalizeMap(initialMap)),
   );
+  const [dependencyHealthClaimId, setDependencyHealthClaimId] = useState<string | null>(null);
   const [peerAudience, setPeerAudience] = useState<PeerAudience>("skeptical investor");
   const [specificAudienceName, setSpecificAudienceName] = useState("your board next Tuesday");
   const [specificAudienceContext, setSpecificAudienceContext] = useState(
@@ -1245,6 +1280,7 @@ export function ThoughtMapWorkspace({
   const [steelManDrafts, setSteelManDrafts] = useState<Record<string, string>>({});
   const [steelManAssessments, setSteelManAssessments] = useState<Record<string, SteelManQualityAssessment>>({});
   const [repairModalOpen, setRepairModalOpen] = useState(false);
+  const [evidenceEntryOpenClaimId, setEvidenceEntryOpenClaimId] = useState<string | null>(null);
   const [resolutionFlowOpen, setResolutionFlowOpen] = useState(false);
   const [revisitTriggerDrafts, setRevisitTriggerDrafts] = useState<
     Record<
@@ -1340,6 +1376,7 @@ export function ThoughtMapWorkspace({
         ]
       : []),
     ...map.founderBriefReadiness.missingRequirements.map((requirement) => `missing ${requirement.replaceAll("_", " ")}`),
+    ...(map.founderBriefReadiness.evidenceGateMessage ? [map.founderBriefReadiness.evidenceGateMessage] : []),
   ];
   const weakEvidenceNodes = topNodesBy(
     activeNodes,
@@ -1551,6 +1588,17 @@ export function ThoughtMapWorkspace({
   ];
   const validationPreview = map.founderBrief?.nextValidationSteps.slice(0, 2) ?? [];
   const claimDependencyGraph = useMemo(() => buildClaimDependencyGraph(map), [map]);
+  const founderBriefDependencyPreview = useMemo(() => {
+    if (claimDependencyGraph.loadBearingNodeIds.length === 0) {
+      return null;
+    }
+
+    return buildArtifactDependencyHealth(
+      map,
+      claimDependencyGraph.loadBearingNodeIds.slice(0, 5),
+      `founder_brief:${map.id}:preview`,
+    );
+  }, [claimDependencyGraph.loadBearingNodeIds, map]);
   const graphCanvas = useMemo(() => {
     const sortedNodes = [...map.nodes].sort(
       (a, b) => a.branchOrder - b.branchOrder || a.createdAt.getTime() - b.createdAt.getTime(),
@@ -1674,6 +1722,10 @@ export function ThoughtMapWorkspace({
   const selectedGraphNode =
     graphCanvas.nodes.find((candidate) => candidate.node.id === selectedGraphNodeId) ?? null;
   const selectedGraphNodeModel = selectedGraphNode?.node ?? null;
+  useEffect(() => {
+    setDependencyHealthClaimId(null);
+  }, [selectedGraphNodeId]);
+
   const activeShapeCallout = useMemo(
     () => findActiveShapeCallout(selectedGraphNodeModel, derivedShapes, lens),
     [derivedShapes, lens, selectedGraphNodeModel],
@@ -1839,6 +1891,16 @@ export function ThoughtMapWorkspace({
   const selectedSurvivorPrecedents = selectedPrecedentSummary
     ? retrieveSurvivorPrecedentsForCase(selectedPrecedentSummary)
     : [];
+  const selectedClaimEvidenceSummary = useMemo(
+    () =>
+      selectedGraphNode
+        ? buildClaimEvidenceSummary({
+            claimId: selectedGraphNode.node.id,
+            evidence: map.evidence,
+          })
+        : null,
+    [map.evidence, selectedGraphNode],
+  );
   const selectedSteelMan = selectedGraphNode
     ? map.steelMans.find((steelMan) => steelMan.claimId === selectedGraphNode.node.id) ?? null
     : null;
@@ -2769,6 +2831,9 @@ export function ThoughtMapWorkspace({
   const synthesisMissingCoverage = map.founderBriefReadiness.missingRequirements.map((requirement) =>
     requirement.replaceAll("_", " "),
   );
+  if (map.founderBriefReadiness.evidenceGateMessage) {
+    synthesisMissingCoverage.push(map.founderBriefReadiness.evidenceGateMessage);
+  }
   const quietKeystoneCascade = useMemo(
     () =>
       adversarialFinalPass.loadBearingAssumption
@@ -3647,11 +3712,15 @@ export function ThoughtMapWorkspace({
   }
 
   function founderBriefReadinessMessage() {
+    const dependencyHealthSentence = founderBriefDependencyPreview
+      ? `Current load-bearing claims average dependency health is ${founderBriefDependencyPreview.averageHealth}/100, and the weakest link is ${founderBriefDependencyPreview.health.weakestLink.claimText}.`
+      : "The map does not yet expose enough load-bearing claims for a dependency-health preview.";
+
     if (map.founderBriefReadiness.eligible) {
-      return "Ready to generate. The map has at least one active assumption, counterargument, and research branch, but Penny still keeps the synthesis gates visible so the user can judge the risk.";
+      return `Ready to generate. ${dependencyHealthSentence} The map has at least one active assumption, counterargument, and research branch, but Penny still keeps the synthesis gates visible so the user can judge the risk.`;
     }
 
-    return `Still at risk: ${synthesisMissingCoverage.join(", ")}. Penny should warn the user and let them choose to proceed anyway if the output is worth the risk.`;
+    return `Still at risk: ${synthesisMissingCoverage.join(", ")}. ${dependencyHealthSentence} Penny should warn the user and let them choose to proceed anyway if the output is worth the risk.`;
   }
 
   function runFounderBrief() {
@@ -3665,8 +3734,11 @@ export function ThoughtMapWorkspace({
         });
 
         if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { message?: string } | null;
           setFounderBriefError(
-            response.status === 409 ? founderBriefReadinessMessage() : "Penny could not generate the founder brief.",
+            response.status === 409
+              ? payload?.message ?? founderBriefReadinessMessage()
+              : payload?.message ?? "Penny could not generate the founder brief.",
           );
           return;
         }
@@ -6973,6 +7045,9 @@ export function ThoughtMapWorkspace({
                             {graphNode.isWeak ? <Badge className="bg-[#f5d6b3] text-[#8b4d1f]">weak focus</Badge> : null}
                             {graphNode.isCritical ? <Badge className="bg-[#e7defa] text-[#5c4c88]">dependency</Badge> : null}
                           </div>
+                          <div className="mt-3">
+                            <DependencyHealthBar health={graphNode.node.dependencyHealth} label="Health" />
+                          </div>
                           <p className="mt-3 text-sm font-medium leading-5 text-[var(--ink)]">{kindLabel(graphNode.node.kind)}</p>
                           <p className="mt-2 max-h-[3.6rem] overflow-hidden text-sm leading-6 text-[var(--muted-ink)]">
                             {graphNode.node.content}
@@ -7057,6 +7132,90 @@ export function ThoughtMapWorkspace({
                           </p>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <DependencyHealthBar
+                        health={selectedGraphNode.node.dependencyHealth}
+                        interactive
+                        onClick={() => setDependencyHealthClaimId(selectedGraphNode.node.id)}
+                      />
+                      {dependencyHealthClaimId === selectedGraphNode.node.id ? (
+                        <div className="mt-4">
+                          <DependencyHealthPanel
+                            map={map}
+                            claimId={selectedGraphNode.node.id}
+                            onClose={() => setDependencyHealthClaimId(null)}
+                            onRunCritiqueWeakestLink={(claimId) => {
+                              setSelectedGraphNodeId(claimId);
+                              setView("outline");
+                              setDependencyHealthClaimId(null);
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-6">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Evidence quality</p>
+                        <Button
+                          className="h-8 gap-2"
+                          variant="secondary"
+                          onClick={() =>
+                            setEvidenceEntryOpenClaimId((current) =>
+                              current === selectedGraphNode.node.id ? null : selectedGraphNode.node.id,
+                            )
+                          }
+                        >
+                          <Sparkles className="size-4" />
+                          Add evidence
+                        </Button>
+                      </div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-[20px] bg-[var(--panel)] px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Average score</p>
+                          <p className="mt-2 text-lg font-semibold text-[var(--ink)]">
+                            {selectedClaimEvidenceSummary?.averageQualityScore != null
+                              ? `${Math.round(selectedClaimEvidenceSummary.averageQualityScore)}/100`
+                              : "n/a"}
+                          </p>
+                        </div>
+                        <div className="rounded-[20px] bg-[var(--panel)] px-4 py-3">
+                          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Evidence count</p>
+                          <p className="mt-2 text-lg font-semibold text-[var(--ink)]">
+                            {selectedClaimEvidenceSummary?.evidenceCount ?? 0}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(selectedClaimEvidenceSummary?.evidenceTypeDistribution ?? [])
+                          .filter((entry) => entry.count > 0)
+                          .map((entry) => (
+                            <Badge key={entry.evidenceType} className="bg-[var(--panel)] text-[var(--ink)]">
+                              {entry.evidenceType.replaceAll("_", " ")} · {entry.count}
+                            </Badge>
+                          ))}
+                      </div>
+                      {selectedClaimEvidenceSummary?.warnings.length ? (
+                        <div className="mt-3 space-y-2 rounded-[20px] border border-[#c97d39]/25 bg-[#fff6ed] px-4 py-3 text-sm leading-6 text-[#8b4d1f]">
+                          {selectedClaimEvidenceSummary.warnings.map((warning) => (
+                            <p key={warning}>{warning}</p>
+                          ))}
+                        </div>
+                      ) : null}
+                      {evidenceEntryOpenClaimId === selectedGraphNode.node.id ? (
+                        <EvidenceEntry
+                          mapId={map.id}
+                          claimId={selectedGraphNode.node.id}
+                          claimText={selectedGraphNode.node.content}
+                          onSaved={({ map: nextMap }) => {
+                            setMap(normalizeMap(nextMap));
+                            setEvidenceEntryOpenClaimId(null);
+                          }}
+                          onCancel={() => setEvidenceEntryOpenClaimId(null)}
+                        />
+                      ) : null}
                     </div>
 
                     <div className="mt-6">

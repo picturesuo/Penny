@@ -10,6 +10,7 @@ import type {
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/db/prisma";
 import { artifactDraftToFounderBrief, artifactRecordFromFounderBrief, buildArtifactDraft, getArtifactType } from "@/lib/artifact-types";
+import { buildArtifactDependencyHealth, buildDependencyHealthReport } from "@/lib/dependency-health";
 import { getFounderBriefReadiness } from "@/lib/founder-brief";
 import { buildBeliefGraph, propagateBeliefGraph, serializeBeliefGraph, serializeBeliefPropagationResult } from "@/lib/bayesian-propagation";
 import {
@@ -31,6 +32,7 @@ import {
   outcomeProbability,
   updateDomainCalibration,
 } from "@/lib/calibration";
+import { buildClaimEvidenceSummary, buildEvidenceQualityGate, scoreEvidenceQuality } from "@/lib/evidence-quality";
 import { buildRevisitQueue, computeLeitnerBox, computeRevisitScheduleForNode, computeRevisitSchedulesForMap } from "@/lib/revisit-scheduler";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
 import {
@@ -39,6 +41,7 @@ import {
   getDemoThoughtUserId,
 } from "@/lib/thought-map";
 import { generateActionNotes, generateInitialBranchNotes } from "@/lib/thought-map-generation";
+import { buildReferenceClassRecord, suggestReferenceClass } from "@/lib/reference-classes";
 import { cleanSentence } from "@/lib/penny";
 import type {
   CognitiveIntervention,
@@ -50,12 +53,14 @@ import type {
   ArtifactOutcome,
   ArtifactRecord,
   ArtifactTypeId,
+  DependencyHealth,
   ImportSource,
   DialecticCritiqueStrength,
   GeneratedActionBundle,
   NodeAction,
   EdgeChange,
   ClaimOutcomePair,
+  Evidence,
   CritiqueCorrection,
   CalibrationCoaching,
   CalibrationCoachingRejection,
@@ -83,6 +88,7 @@ import type {
   BeliefPropagationResponse,
   CognitiveBiasProfile,
   BlindSpotMap,
+  ReferenceClass,
 } from "@/types/thought-map";
 
 function mapNode(record: ThoughtNode): ThoughtNodeModel {
@@ -99,6 +105,7 @@ function mapNode(record: ThoughtNode): ThoughtNodeModel {
     branchOrder: record.branchOrder,
     scores: null,
     psychology: null,
+    dependencyHealth: null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -132,6 +139,7 @@ function buildThoughtMapModel(
     status: record.status,
     nodes: record.nodes.map(mapNode),
     events: events.map(mapEventRecord),
+    evidence: [],
     artifacts: [],
     shapeDerivations: [],
     steelMans: parseSteelMans(record.steelMans),
@@ -194,6 +202,7 @@ function buildThoughtMapModel(
     .filter((correction) => correction.correctionText.trim().length > 0);
   const critiqueQualityProfile = buildCritiqueQualityProfile(judgedMap, critiqueFeedbacks);
   const artifacts = collectArtifactRecords(judgedMap, events);
+  const evidence = collectEvidenceRecords(events);
   const importSources = collectImportSources(events);
   const founderBriefArtifact = artifacts.find((artifact) => artifact.artifactTypeId === "founder_brief");
   if (founderBriefArtifact && founderBrief) {
@@ -203,13 +212,33 @@ function buildThoughtMapModel(
       artifactTypeId: "founder_brief",
       loadBearingClaims:
         founderBriefArtifact.loadBearingClaims.length > 0 ? founderBriefArtifact.loadBearingClaims : founderBrief.loadBearingClaims,
+      dependencyHealth:
+        founderBriefArtifact.dependencyHealth ??
+        buildArtifactDependencyHealth(
+          judgedMap,
+          founderBriefArtifact.loadBearingClaims.map((pair) => pair.claimId),
+          founderBriefArtifact.id,
+        ).health,
     };
   }
+
+  const nodes = judgedMap.nodes.map((node) => ({
+    ...node,
+    dependencyHealth: buildDependencyHealthReport(judgedMap, node.id).health,
+  }));
+  const hydratedArtifacts = artifacts.map((artifact) => ({
+    ...artifact,
+    dependencyHealth:
+      artifact.dependencyHealth ??
+      buildArtifactDependencyHealth(judgedMap, artifact.loadBearingClaims.map((pair) => pair.claimId), artifact.id).health,
+  }));
 
   return {
     ...judgedMap,
     importSources,
-    artifacts,
+    evidence,
+    nodes,
+    artifacts: hydratedArtifacts,
     shapeDerivations: lens.effectiveShapes
       .map((shape) => shape.derivation)
       .filter((derivation): derivation is NonNullable<typeof derivation> => derivation !== null),
@@ -938,6 +967,72 @@ function normalizeClaimOutcomePair(payload: Record<string, unknown> | null): Cla
   };
 }
 
+function normalizeDependencyHealth(payload: Record<string, unknown> | null): DependencyHealth | null {
+  if (!payload) {
+    return null;
+  }
+
+  const claimId = typeof payload.claimId === "string" ? payload.claimId : null;
+  const mapId = typeof payload.mapId === "string" ? payload.mapId : null;
+  const weakestLinkPayload =
+    payload.weakestLink && typeof payload.weakestLink === "object"
+      ? (payload.weakestLink as Record<string, unknown>)
+      : null;
+  const healthComponents = Array.isArray(payload.healthComponents)
+    ? payload.healthComponents
+        .map((component) =>
+          component && typeof component === "object"
+            ? {
+                dimension:
+                  component.dimension === "confidence_floor" ||
+                  component.dimension === "test_coverage" ||
+                  component.dimension === "evidence_quality" ||
+                  component.dimension === "staleness" ||
+                  component.dimension === "contradiction_density" ||
+                  component.dimension === "assumption_coverage"
+                    ? component.dimension
+                    : "confidence_floor",
+                score: typeof component.score === "number" ? component.score : 0,
+                weight: typeof component.weight === "number" ? component.weight : 0,
+                explanation: typeof component.explanation === "string" ? component.explanation : "",
+              }
+            : null,
+        )
+        .filter((component): component is DependencyHealth["healthComponents"][number] => component !== null)
+    : [];
+
+  if (!claimId || !mapId || !weakestLinkPayload) {
+    return null;
+  }
+
+  return {
+    claimId,
+    mapId,
+    healthScore: typeof payload.healthScore === "number" ? payload.healthScore : 0,
+    weakestLink: {
+      claimId: typeof weakestLinkPayload.claimId === "string" ? weakestLinkPayload.claimId : claimId,
+      claimText: typeof weakestLinkPayload.claimText === "string" ? weakestLinkPayload.claimText : "",
+      claimConfidence: typeof weakestLinkPayload.claimConfidence === "number" ? weakestLinkPayload.claimConfidence : 0,
+      dialecticRoundCount: typeof weakestLinkPayload.dialecticRoundCount === "number" ? weakestLinkPayload.dialecticRoundCount : 0,
+      daysSinceUpdate: typeof weakestLinkPayload.daysSinceUpdate === "number" ? weakestLinkPayload.daysSinceUpdate : 0,
+      downstreamImpact: typeof weakestLinkPayload.downstreamImpact === "number" ? weakestLinkPayload.downstreamImpact : 0,
+      riskScore: typeof weakestLinkPayload.riskScore === "number" ? weakestLinkPayload.riskScore : 0,
+      riskReason: typeof weakestLinkPayload.riskReason === "string" ? weakestLinkPayload.riskReason : "",
+    },
+    chainDepth: typeof payload.chainDepth === "number" ? payload.chainDepth : 0,
+    totalDependencies: typeof payload.totalDependencies === "number" ? payload.totalDependencies : 0,
+    untestedDependencies: typeof payload.untestedDependencies === "number" ? payload.untestedDependencies : 0,
+    lowConfidenceDependencies: typeof payload.lowConfidenceDependencies === "number" ? payload.lowConfidenceDependencies : 0,
+    contradictionRisk: typeof payload.contradictionRisk === "number" ? payload.contradictionRisk : 0,
+    staleDependencies: typeof payload.staleDependencies === "number" ? payload.staleDependencies : 0,
+    healthComponents,
+    computedAt:
+      typeof payload.computedAt === "string" || payload.computedAt instanceof Date
+        ? new Date(payload.computedAt)
+        : new Date(),
+  };
+}
+
 function normalizeArtifactOutcome(payload: Record<string, unknown> | null): ArtifactOutcome | null {
   if (!payload) {
     return null;
@@ -1051,6 +1146,11 @@ function normalizeArtifactRecord(payload: Record<string, unknown> | null): Artif
         .map((entry) => (entry && typeof entry === "object" ? normalizeClaimOutcomePair(entry as Record<string, unknown>) : null))
         .filter((entry): entry is ClaimOutcomePair => entry !== null)
     : [];
+  const dependencyHealth = normalizeDependencyHealth(
+    payload.dependencyHealth && typeof payload.dependencyHealth === "object"
+      ? (payload.dependencyHealth as Record<string, unknown>)
+      : null,
+  );
 
   const outcomes = Array.isArray(payload.outcomes)
     ? payload.outcomes
@@ -1077,6 +1177,7 @@ function normalizeArtifactRecord(payload: Record<string, unknown> | null): Artif
     narrativeGlue: typeof payload.narrativeGlue === "string" ? payload.narrativeGlue : null,
     sections,
     loadBearingClaims,
+    dependencyHealth,
     outcomes,
     latestOutcome,
   };
@@ -1240,9 +1341,116 @@ function collectImportSources(events: ThoughtMapEventRecord[]) {
   return [...records.values()].sort((a, b) => a.importedAt.getTime() - b.importedAt.getTime());
 }
 
+function normalizeEvidence(record: unknown): Evidence | null {
+  if (!isRecord(record)) {
+    return null;
+  }
+
+  const id = typeof record.id === "string" ? record.id : "";
+  const claimId = typeof record.claimId === "string" ? record.claimId : "";
+  const evidenceText = typeof record.evidenceText === "string" ? record.evidenceText.trim() : "";
+  const evidenceType =
+    record.evidenceType === "peer_reviewed" ||
+    record.evidenceType === "expert_opinion" ||
+    record.evidenceType === "case_study" ||
+    record.evidenceType === "survey_data" ||
+    record.evidenceType === "first_hand_observation" ||
+    record.evidenceType === "anecdote" ||
+    record.evidenceType === "intuition" ||
+    record.evidenceType === "hearsay" ||
+    record.evidenceType === "analogy"
+      ? record.evidenceType
+      : null;
+  const sourceUrl = typeof record.sourceUrl === "string" && record.sourceUrl.trim().length > 0 ? record.sourceUrl.trim() : null;
+  const sourceName = typeof record.sourceName === "string" && record.sourceName.trim().length > 0 ? record.sourceName.trim() : null;
+  const publicationDate = parseSteelManDate(record.publicationDate);
+  const authorCredentials =
+    typeof record.authorCredentials === "string" && record.authorCredentials.trim().length > 0
+      ? record.authorCredentials.trim()
+      : null;
+  const sampleSize =
+    typeof record.sampleSize === "number" && Number.isFinite(record.sampleSize) && record.sampleSize > 0
+      ? Math.round(record.sampleSize)
+      : null;
+  const replicationStatus =
+    record.replicationStatus === "replicated" ||
+    record.replicationStatus === "unreplicated" ||
+    record.replicationStatus === "contested" ||
+    record.replicationStatus === "unknown"
+      ? record.replicationStatus
+      : null;
+  const qualityScore = typeof record.qualityScore === "number" ? record.qualityScore : 0;
+  const qualityComponents = Array.isArray(record.qualityComponents)
+    ? record.qualityComponents
+        .map((entry) =>
+          isRecord(entry) && typeof entry.dimension === "string" && typeof entry.score === "number" && typeof entry.explanation === "string"
+            ? {
+                dimension:
+                  entry.dimension === "source_type" ||
+                  entry.dimension === "recency" ||
+                  entry.dimension === "sample_size" ||
+                  entry.dimension === "replication" ||
+                  entry.dimension === "credentials" ||
+                  entry.dimension === "directness"
+                    ? entry.dimension
+                    : "source_type",
+                score: entry.score,
+                explanation: entry.explanation,
+              }
+            : null,
+        )
+        .filter((component): component is Evidence["qualityComponents"][number] => component !== null)
+    : [];
+  const addedAt = parseSteelManDate(record.addedAt);
+  const addedBy = record.addedBy === "user" || record.addedBy === "penny_suggestion" ? record.addedBy : null;
+
+  if (!id || !claimId || !evidenceText || !evidenceType || !addedAt || !addedBy) {
+    return null;
+  }
+
+  return {
+    id,
+    claimId,
+    evidenceText,
+    evidenceType,
+    sourceUrl,
+    sourceName,
+    publicationDate,
+    authorCredentials,
+    sampleSize,
+    replicationStatus,
+    qualityScore,
+    qualityComponents,
+    addedAt,
+    addedBy,
+  };
+}
+
+function collectEvidenceRecords(events: ThoughtMapEventRecord[]) {
+  const records = new Map<string, Evidence>();
+
+  for (const event of events) {
+    if (event.eventType !== "evidence_added") {
+      continue;
+    }
+
+    const payload = event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : null;
+    const record = normalizeEvidence(payload);
+
+    if (!record) {
+      continue;
+    }
+
+    records.set(record.id, record);
+  }
+
+  return [...records.values()].sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
+}
+
 function formatClaimCaptureMetadata(metadata: ClaimCaptureMetadata) {
   const lines = [
     "## Claim capture",
+    `- Inside-view estimate: ${metadata.insideViewEstimate}%`,
     `- Confidence: ${metadata.confidence}%`,
     `- Resolution date: ${metadata.resolutionDate ?? "not set"}`,
     `- Provenance: ${metadata.provenance}`,
@@ -1269,6 +1477,108 @@ function formatClaimCaptureMetadata(metadata: ClaimCaptureMetadata) {
   lines.push("", "## Raw thought");
 
   return lines.join("\n");
+}
+
+function parseReferenceClassPayload(payload: Record<string, unknown> | null) {
+  const referenceClass = payload?.referenceClass;
+
+  if (!isRecord(referenceClass)) {
+    return null;
+  }
+
+  const divergence = typeof referenceClass.divergence === "number" ? referenceClass.divergence : 0;
+  const divergenceDirection =
+    referenceClass.divergenceDirection === "higher_than_base_rate" ||
+    referenceClass.divergenceDirection === "lower_than_base_rate" ||
+    referenceClass.divergenceDirection === "aligned"
+      ? referenceClass.divergenceDirection
+      : "aligned";
+
+  return {
+    id: typeof referenceClass.id === "string" ? referenceClass.id : "",
+    claimId: typeof referenceClass.claimId === "string" ? referenceClass.claimId : "",
+    promptShown: typeof referenceClass.promptShown === "string" ? referenceClass.promptShown : "",
+    referenceClassType: typeof referenceClass.referenceClassType === "string" ? referenceClass.referenceClassType : "custom",
+    benchmarkLow: typeof referenceClass.benchmarkLow === "number" ? referenceClass.benchmarkLow : null,
+    benchmarkHigh: typeof referenceClass.benchmarkHigh === "number" ? referenceClass.benchmarkHigh : null,
+    benchmarkSource: typeof referenceClass.benchmarkSource === "string" ? referenceClass.benchmarkSource : null,
+    userInsideViewEstimate: typeof referenceClass.userInsideViewEstimate === "number" ? referenceClass.userInsideViewEstimate : 0,
+    userReferenceClassEstimate:
+      typeof referenceClass.userReferenceClassEstimate === "number" ? referenceClass.userReferenceClassEstimate : null,
+    userFinalConfidence: typeof referenceClass.userFinalConfidence === "number" ? referenceClass.userFinalConfidence : 0,
+    divergence,
+    divergenceDirection,
+    userExplainedDivergence:
+      typeof referenceClass.userExplainedDivergence === "string" && referenceClass.userExplainedDivergence.trim().length > 0
+        ? referenceClass.userExplainedDivergence.trim()
+        : null,
+    capturedAt:
+      typeof referenceClass.capturedAt === "string" || referenceClass.capturedAt instanceof Date
+        ? new Date(referenceClass.capturedAt as string | Date)
+        : new Date(),
+  } satisfies ReferenceClass;
+}
+
+async function maybeRecordReferenceClassBiasSignal(params: {
+  mapId: string;
+  userId: string;
+  referenceClass: ReferenceClass | null;
+  nodeId: string;
+}) {
+  if (
+    !params.referenceClass ||
+    params.referenceClass.userReferenceClassEstimate == null ||
+    params.referenceClass.userExplainedDivergence?.trim().length ||
+    params.referenceClass.divergence <= 20
+  ) {
+    return;
+  }
+
+  const priorMaps = await loadBiasProfileMaps(params.userId);
+  let priorUnexplainedDivergences = 0;
+
+  for (const map of priorMaps) {
+    if (map.id === params.mapId) {
+      continue;
+    }
+
+    for (const event of map.events) {
+      if (event.eventType !== "map_created") {
+        continue;
+      }
+
+      const payload = parseJson<Record<string, unknown>>(event.payload);
+      const referenceClass = parseReferenceClassPayload(payload);
+
+      if (
+        referenceClass &&
+        referenceClass.userReferenceClassEstimate != null &&
+        referenceClass.divergence > 20 &&
+        referenceClass.userExplainedDivergence == null
+      ) {
+        priorUnexplainedDivergences += 1;
+      }
+    }
+  }
+
+  if (priorUnexplainedDivergences < 1) {
+    return;
+  }
+
+  await prisma.thoughtMapEvent.create({
+    data: {
+      mapId: params.mapId,
+      nodeId: params.nodeId,
+      eventType: "bias_detected",
+      payload: serializeJson({
+        detector: "confirmation_bias",
+        reason: "reference_class_divergence",
+        repetitionCount: priorUnexplainedDivergences + 1,
+        referenceClassId: params.referenceClass.id,
+        divergence: params.referenceClass.divergence,
+      }),
+    },
+  });
 }
 
 function mapIntervention(record: ThoughtMapIntervention): CognitiveIntervention {
@@ -3227,25 +3537,46 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
   const mapRawThought = `${captureEnvelope}\n${rawThought}`;
   const title = createThoughtMapTitle(rawThought);
   const seedNodes = generateInitialBranchNotes(mapRawThought);
+  const referenceClassSuggestion = input.referenceClass
+    ? suggestReferenceClass({
+        claimText: rawThought,
+        claimType: input.claim.structureKind ?? "assertion",
+        structureKind: input.claim.structureKind ?? "assertion",
+      })
+    : null;
+  let referenceClassRecord: ReferenceClass | null = null;
+  const userId = getDemoThoughtUserId();
 
   const created = await prisma.$transaction(async (tx) => {
     const map = await tx.thoughtMap.create({
       data: {
-        userId: getDemoThoughtUserId(),
+        userId,
         title,
         rawThought: mapRawThought,
       },
     });
 
     const root = await tx.thoughtNode.create({
-        data: {
-          mapId: map.id,
-          kind: "root",
-          nodeStatus: "active",
-          content: createRootNodeContent(mapRawThought),
-          branchOrder: 0,
-        },
+      data: {
+        mapId: map.id,
+        kind: "root",
+        nodeStatus: "active",
+        content: createRootNodeContent(mapRawThought),
+        branchOrder: 0,
+      },
+    });
+
+    if (input.referenceClass && referenceClassSuggestion) {
+      referenceClassRecord = buildReferenceClassRecord({
+        claimId: root.id,
+        suggestion: referenceClassSuggestion,
+        userInsideViewEstimate: input.referenceClass.userInsideViewEstimate,
+        userReferenceClassEstimate: input.referenceClass.userReferenceClassEstimate,
+        userFinalConfidence: input.referenceClass.userFinalConfidence,
+        userExplainedDivergence: input.referenceClass.userExplainedDivergence,
+        capturedAt: root.createdAt,
       });
+    }
 
     await tx.thoughtNode.createMany({
       data: seedNodes.map((node, index) => ({
@@ -3266,6 +3597,7 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
       payload: {
         rawThought,
         claim: input.claim,
+        referenceClass: referenceClassRecord,
       },
     });
 
@@ -3281,6 +3613,15 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
       },
     });
   });
+
+  if (referenceClassRecord) {
+    await maybeRecordReferenceClassBiasSignal({
+      mapId: created.id,
+      userId,
+      referenceClass: referenceClassRecord,
+      nodeId: created.nodes[0]?.id ?? created.id,
+    });
+  }
 
   return hydrateThoughtMap(created);
 }
@@ -3514,6 +3855,11 @@ export async function generateArtifactForMap(params: {
   const artifactType = getArtifactType(params.artifactTypeId);
   if (!artifactType) {
     throw new Error("Artifact type not found");
+  }
+
+  const evidenceGate = buildEvidenceQualityGate(map);
+  if (evidenceGate.blocked) {
+    throw new Error(evidenceGate.message ?? "Artifact not ready: this artifact depends on poorly evidenced claims.");
   }
 
   const lens = buildPennyLens(map);
@@ -3756,6 +4102,100 @@ export async function recordImportReview(params: {
   return {
     importSource: result.review,
     map: hydratedMap,
+  };
+}
+
+export async function recordClaimEvidence(params: {
+  mapId: string;
+  claimId: string;
+  evidenceText: string;
+  evidenceType: Evidence["evidenceType"];
+  sourceUrl?: string | null;
+  sourceName?: string | null;
+  publicationDate?: Date | string | null;
+  authorCredentials?: string | null;
+  sampleSize?: number | null;
+  replicationStatus?: Evidence["replicationStatus"];
+  addedBy?: Evidence["addedBy"];
+  userId?: string;
+}) {
+  const map = await getThoughtMap(params.mapId);
+
+  if (!map) {
+    throw new Error("Map not found");
+  }
+
+  const claim = map.nodes.find((node) => node.id === params.claimId);
+  if (!claim) {
+    throw new Error("Claim not found");
+  }
+
+  const quality = scoreEvidenceQuality({
+    evidenceText: params.evidenceText,
+    evidenceType: params.evidenceType,
+    sourceUrl: params.sourceUrl ?? null,
+    sourceName: params.sourceName ?? null,
+    publicationDate: params.publicationDate ?? null,
+    authorCredentials: params.authorCredentials ?? null,
+    sampleSize: params.sampleSize ?? null,
+    replicationStatus: params.replicationStatus ?? null,
+    addedAt: new Date(),
+  });
+  const evidence: Evidence = {
+    id: randomUUID(),
+    claimId: params.claimId,
+    evidenceText: params.evidenceText.trim(),
+    evidenceType: params.evidenceType,
+    sourceUrl: params.sourceUrl ?? null,
+    sourceName: params.sourceName ?? null,
+    publicationDate: params.publicationDate ? new Date(params.publicationDate) : null,
+    authorCredentials: params.authorCredentials ?? null,
+    sampleSize:
+      typeof params.sampleSize === "number" && Number.isFinite(params.sampleSize) ? Math.round(params.sampleSize) : null,
+    replicationStatus: params.replicationStatus ?? null,
+    qualityScore: quality.qualityScore,
+    qualityComponents: quality.qualityComponents,
+    addedAt: new Date(),
+    addedBy: params.addedBy ?? "user",
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await createThoughtMapEvent(tx, {
+      mapId: params.mapId,
+      nodeId: params.claimId,
+      eventType: "evidence_added",
+      payload: evidence as unknown as Record<string, unknown>,
+    });
+  });
+
+  const updatedRecord = await prisma.thoughtMap.findUnique({
+    where: { id: params.mapId },
+    include: {
+      nodes: {
+        orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],
+      },
+      events: {
+        orderBy: [{ createdAt: "asc" }],
+      },
+    },
+  });
+
+  if (!updatedRecord) {
+    throw new Error("Map not found after evidence update");
+  }
+
+  const updatedMap = await hydrateThoughtMap(
+    updatedRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },
+    map,
+  );
+
+  return {
+    evidence,
+    map: updatedMap,
+    summary: buildClaimEvidenceSummary({
+      claimId: params.claimId,
+      evidence: updatedMap.evidence,
+    }),
   };
 }
 

@@ -1,4 +1,5 @@
 import { cleanSentence } from "@/lib/penny";
+import { buildClaimEvidenceSummary } from "@/lib/evidence-quality";
 import type { NodeAction, ThoughtMapModel, ThoughtNodeKind, ThoughtNodeModel } from "@/types/thought-map";
 
 export const CRITIQUE_TAGS = [
@@ -14,6 +15,10 @@ export const CRITIQUE_TAGS = [
 
 export type CritiqueTag = (typeof CRITIQUE_TAGS)[number];
 export type GapType = CritiqueTag;
+
+function average(values: number[]) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+}
 
 export interface GraphCoverageScore {
   opposition: number;
@@ -243,8 +248,18 @@ function scoreOpposition(nodeCounts: Record<ThoughtNodeKind, number>) {
 
 function scoreEvidence(nodeCounts: Record<ThoughtNodeKind, number>, map: ThoughtMapModel) {
   const researchNodes = analyzableNodes(map).filter((node) => node.kind === "research");
-  const researchQuality = researchNodes.filter((node) => hasEvidenceSignal(node.content)).length;
-  return Math.min(100, Math.max(nodeCounts.research * 10, researchQuality * 25));
+  const researchQuality = researchNodes.length
+    ? average(
+        researchNodes.map((node) => {
+          const summary = buildClaimEvidenceSummary({
+            claimId: node.id,
+            evidence: map.evidence,
+          });
+          return summary.averageQualityScore ?? 0;
+        }),
+      )
+    : 0;
+  return Math.min(100, Math.max(nodeCounts.research * 10, Math.round(researchQuality * 0.75)));
 }
 
 function scoreBalance(nodeCounts: Record<ThoughtNodeKind, number>) {

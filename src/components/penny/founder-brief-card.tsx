@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DependencyHealthBar } from "@/components/penny/dependency-health";
 import { CopyBriefButton } from "@/components/penny/copy-brief-button";
 import { ArtifactOutcomeFlow } from "@/components/penny/artifact-outcome-flow";
 import { formatFounderBrief } from "@/lib/founder-brief";
@@ -41,6 +42,10 @@ export function FounderBriefCard({ brief }: { brief: FounderBriefModel }) {
           />
         </div>
       ) : null}
+
+      <div className="border-b border-black/8 px-6 py-5">
+        <DependencyHealthBar health={brief.dependencyHealth} />
+      </div>
 
       <div className="grid gap-6 px-6 py-6 text-sm leading-7 text-[var(--ink)] lg:grid-cols-2">
         <Section title="Idea summary" content={brief.ideaSummary} />

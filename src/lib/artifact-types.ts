@@ -1,4 +1,5 @@
 import { cleanSentence } from "@/lib/penny";
+import { buildArtifactDependencyHealth } from "@/lib/dependency-health";
 import type { PennyLensSnapshot } from "@/lib/penny-insights";
 import type {
   ArtifactDiff,
@@ -617,6 +618,11 @@ export function buildArtifactDraft(
   }));
 
   const loadBearingClaims = loadBearingClaimPairs(map, 5);
+  const dependencyHealth = buildArtifactDependencyHealth(
+    map,
+    loadBearingClaims.map((pair) => pair.claimId),
+    options.artifactId,
+  ).health;
 
   return {
     id: options.artifactId,
@@ -631,6 +637,7 @@ export function buildArtifactDraft(
     narrativeGlue: options.narrativeGlue ?? null,
     sections,
     loadBearingClaims,
+    dependencyHealth,
     outcomes: [],
     latestOutcome: null,
   };
@@ -667,6 +674,7 @@ export function artifactDraftToFounderBrief(artifact: ArtifactRecord): FounderBr
     ifYouWereRight: sectionText("ifYouWereRight"),
     twinCheck: sectionText("twinCheck"),
     dependencyCompleteness: sectionText("dependencyCompleteness"),
+    dependencyHealth: artifact.dependencyHealth,
     loadBearingClaims,
     generatedAt: artifact.generatedAt,
   };
@@ -720,6 +728,7 @@ export function artifactRecordFromFounderBrief(map: ThoughtMapModel, brief: Foun
       sourceClaimIds: brief.loadBearingClaims.map((pair) => pair.claimId),
     })),
     loadBearingClaims: brief.loadBearingClaims,
+    dependencyHealth: brief.dependencyHealth,
     outcomes: [],
     latestOutcome: null,
   };

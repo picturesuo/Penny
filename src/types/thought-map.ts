@@ -412,6 +412,7 @@ export type ThoughtMapEventType =
   | "map_created"
   | "import_source"
   | "import_review"
+  | "evidence_added"
   | "intervention_shown"
   | "intervention_completed"
   | "intervention_dismissed"
@@ -470,6 +471,47 @@ export type ArtifactTypeId =
 export type ImportSourceType = "url" | "text_paste" | "document";
 
 export type ExtractedClaimDecision = "accepted" | "rejected" | "edited" | "pending";
+
+export const EVIDENCE_TYPES = [
+  "peer_reviewed",
+  "expert_opinion",
+  "case_study",
+  "survey_data",
+  "first_hand_observation",
+  "anecdote",
+  "intuition",
+  "hearsay",
+  "analogy",
+] as const;
+
+export type EvidenceType = (typeof EVIDENCE_TYPES)[number];
+
+export const EVIDENCE_REPLICATION_STATUSES = ["replicated", "unreplicated", "contested", "unknown"] as const;
+
+export type EvidenceReplicationStatus = (typeof EVIDENCE_REPLICATION_STATUSES)[number];
+
+export interface EvidenceQualityComponent {
+  dimension: "source_type" | "recency" | "sample_size" | "replication" | "credentials" | "directness";
+  score: number;
+  explanation: string;
+}
+
+export interface Evidence {
+  id: string;
+  claimId: string;
+  evidenceText: string;
+  evidenceType: EvidenceType;
+  sourceUrl: string | null;
+  sourceName: string | null;
+  publicationDate: Date | null;
+  authorCredentials: string | null;
+  sampleSize: number | null;
+  replicationStatus: EvidenceReplicationStatus | null;
+  qualityScore: number;
+  qualityComponents: EvidenceQualityComponent[];
+  addedAt: Date;
+  addedBy: "user" | "penny_suggestion";
+}
 
 export interface SynthesisGate {
   id: string;
@@ -546,6 +588,45 @@ export interface ArtifactQualityDimension {
   comment: string | null;
 }
 
+export interface WeakestLinkEntry {
+  claimId: string;
+  claimText: string;
+  claimConfidence: number;
+  dialecticRoundCount: number;
+  daysSinceUpdate: number;
+  downstreamImpact: number;
+  riskScore: number;
+  riskReason: string;
+}
+
+export interface HealthComponent {
+  dimension:
+    | "confidence_floor"
+    | "test_coverage"
+    | "evidence_quality"
+    | "staleness"
+    | "contradiction_density"
+    | "assumption_coverage";
+  score: number;
+  weight: number;
+  explanation: string;
+}
+
+export interface DependencyHealth {
+  claimId: string;
+  mapId: string;
+  healthScore: number;
+  weakestLink: WeakestLinkEntry;
+  chainDepth: number;
+  totalDependencies: number;
+  untestedDependencies: number;
+  lowConfidenceDependencies: number;
+  contradictionRisk: number;
+  staleDependencies: number;
+  healthComponents: HealthComponent[];
+  computedAt: Date;
+}
+
 export interface ArtifactOutcome {
   id: string;
   artifactId: string;
@@ -575,6 +656,7 @@ export interface ArtifactRecord {
   narrativeGlue: string | null;
   sections: ArtifactSection[];
   loadBearingClaims: ClaimOutcomePair[];
+  dependencyHealth: DependencyHealth | null;
   outcomes: ArtifactOutcome[];
   latestOutcome: ArtifactOutcome | null;
 }
@@ -612,6 +694,7 @@ export interface ImportSource {
 export interface FounderBriefReadiness {
   eligible: boolean;
   missingRequirements: FounderBriefRequirement[];
+  evidenceGateMessage?: string | null;
 }
 
 export interface FounderBriefModel {
@@ -628,6 +711,7 @@ export interface FounderBriefModel {
   ifYouWereRight: string;
   twinCheck: string;
   dependencyCompleteness: string;
+  dependencyHealth: DependencyHealth | null;
   loadBearingClaims: ClaimOutcomePair[];
   generatedAt: Date;
 }
@@ -1105,6 +1189,7 @@ export interface ThoughtNodeModel {
   branchOrder: number;
   scores: ThoughtNodeScores | null;
   psychology: NodePsychologyMeta | null;
+  dependencyHealth: DependencyHealth | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -1117,6 +1202,7 @@ export interface ThoughtMapModel {
   status: string;
   nodes: ThoughtNodeModel[];
   events: ThoughtMapEvent[];
+  evidence: Evidence[];
   artifacts: ArtifactRecord[];
   shapeDerivations: ShapeDerivation[];
   steelMans: SteelMan[];
@@ -1139,6 +1225,7 @@ export interface ThoughtMapModel {
 }
 
 export interface ClaimCaptureMetadata {
+  insideViewEstimate: number;
   confidence: number;
   resolutionDate: string | null;
   provenance: ClaimProvenance;
@@ -1151,6 +1238,23 @@ export interface ClaimCaptureMetadata {
   temporalScope?: string;
   conditionalStatement?: string;
   structureKind?: ClaimStructureKind;
+}
+
+export interface ReferenceClass {
+  id: string;
+  claimId: string;
+  promptShown: string;
+  referenceClassType: string;
+  benchmarkLow: number | null;
+  benchmarkHigh: number | null;
+  benchmarkSource: string | null;
+  userInsideViewEstimate: number;
+  userReferenceClassEstimate: number | null;
+  userFinalConfidence: number;
+  divergence: number;
+  divergenceDirection: "higher_than_base_rate" | "lower_than_base_rate" | "aligned";
+  userExplainedDivergence: string | null;
+  capturedAt: Date;
 }
 
 export type ClaimResolutionType =
@@ -1314,6 +1418,81 @@ export interface CalibrationCoaching {
 export interface CreateThoughtMapInput {
   rawThought: string;
   claim: ClaimCaptureMetadata;
+  referenceClass?: Omit<ReferenceClass, "id" | "claimId" | "capturedAt">;
+}
+
+export type SessionIntentionType =
+  | "stress_test"
+  | "explore_new_claim"
+  | "resolve_pending"
+  | "generate_artifact"
+  | "review_blind_spots"
+  | "revisit_queue"
+  | "open_exploration";
+
+export type SessionEventType =
+  | "session_started"
+  | "session_dismissed"
+  | "session_closed"
+  | "claim_opened"
+  | "critique_round"
+  | "confidence_update"
+  | "claim_created"
+  | "artifact_generated"
+  | "blind_spot_reviewed"
+  | "revisit_completed";
+
+export interface SessionEvent {
+  id: string;
+  sessionId: string;
+  eventType: SessionEventType;
+  claimId: string | null;
+  description: string;
+  timestamp: Date;
+}
+
+export interface ClosingQuestion {
+  question: string;
+  answer: string;
+}
+
+export interface ClosingRitual {
+  sessionId: string;
+  questionsAnswered: ClosingQuestion[];
+  openItemsNoted: string[];
+  nextSessionIntention: string | null;
+  completedAt: Date;
+}
+
+export interface SessionSummary {
+  sessionId: string;
+  claimsExamined: number;
+  claimsUpdated: number;
+  claimsCreated: number;
+  critiquesRun: number;
+  concessionsMade: number;
+  artifactsGenerated: number;
+  keyInsight: string | null;
+  generatedAt: Date;
+}
+
+export interface ThinkingSession {
+  id: string;
+  userId: string;
+  mapId: string | null;
+  declaredIntention: string;
+  intentionType: SessionIntentionType;
+  scopedClaimIds: string[];
+  timeBudgetMinutes: number | null;
+  startedAt: Date;
+  endedAt: Date | null;
+  actualDurationMinutes: number | null;
+  sessionEvents: SessionEvent[];
+  closingRitual: ClosingRitual | null;
+  sessionSummary: SessionSummary | null;
+  energyRating: "low" | "medium" | "high" | null;
+  focusRating: "scattered" | "moderate" | "deep" | null;
+  productivityRating: number | null;
 }
 
 export interface GeneratedThoughtNote {
