@@ -6,10 +6,12 @@ export function OnboardingSpotlight({
   prompt,
   role = "default",
   onStart,
+  onSkip,
 }: {
   prompt: OnboardingPrompt;
   role?: keyof typeof ONBOARDING_EXAMPLE_CLAIMS;
   onStart?: () => void;
+  onSkip?: () => void;
 }) {
   const example = prompt.exampleContent ?? ONBOARDING_EXAMPLE_CLAIMS[role] ?? ONBOARDING_EXAMPLE_CLAIMS.default;
 
@@ -26,7 +28,11 @@ export function OnboardingSpotlight({
       ) : null}
       <div className="mt-4 flex flex-wrap gap-3">
         <Button onClick={onStart}>{prompt.actionLabel}</Button>
-        {prompt.skipLabel ? <Button variant="secondary">{prompt.skipLabel}</Button> : null}
+        {prompt.skipLabel ? (
+          <Button variant="secondary" onClick={onSkip}>
+            {prompt.skipLabel}
+          </Button>
+        ) : null}
       </div>
     </Card>
   );

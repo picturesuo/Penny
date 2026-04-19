@@ -1,3 +1,5 @@
+export type OnboardingRole = "founder" | "researcher" | "investor" | "operator" | "default";
+
 export type OnboardingStep =
   | "welcome"
   | "explain_the_model"
@@ -50,7 +52,7 @@ export interface OnboardingChecklist {
   nextRecommended: ChecklistItem | null;
 }
 
-export const ONBOARDING_EXAMPLE_CLAIMS: Record<string, string> = {
+export const ONBOARDING_EXAMPLE_CLAIMS: Record<OnboardingRole, string> = {
   founder:
     "Our biggest risk in the next 6 months is that we can't close enterprise deals fast enough to hit our Series A metrics.",
   researcher: "My core hypothesis will survive peer review in its current form.",
@@ -58,3 +60,22 @@ export const ONBOARDING_EXAMPLE_CLAIMS: Record<string, string> = {
   operator: "The team we have now can execute this roadmap without a key hire.",
   default: "The most important decision I'm facing right now is the right one to make.",
 };
+
+export interface OnboardingWorkspaceState {
+  state: OnboardingState;
+  prompt: OnboardingPrompt;
+  checklist: OnboardingChecklist;
+  role: OnboardingRole;
+  exampleClaim: string;
+  isComplete: boolean;
+}
+
+export interface OnboardingProgressUpdate {
+  selectedRole?: OnboardingRole;
+  currentStep?: OnboardingStep;
+  skippedAt?: Date | null;
+  completedAt?: Date | null;
+  firstMapId?: string | null;
+  firstClaimId?: string | null;
+  firstCritiqueRoundId?: string | null;
+}

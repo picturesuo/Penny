@@ -197,6 +197,24 @@ model BlindSpotMapCache {
   @@index([userId, updatedAt])
 }
 
+model OnboardingProgress {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  selectedRole          String   @default("default")
+  currentStep           String   @default("welcome")
+  completedStepsJson    String   @default("[]")
+  firstMapId            String?
+  firstClaimId          String?
+  firstCritiqueRoundId   String?
+  skippedAt             DateTime?
+  completedAt           DateTime?
+  startedAt             DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+}
+
 model BiographyAnnotation {
   id             String   @id @default(cuid())
   userId         String

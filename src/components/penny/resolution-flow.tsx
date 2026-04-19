@@ -231,7 +231,7 @@ export function ResolutionFlow({
             <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
               {resolutionDate ? `Resolution date: ${resolutionDate}.` : "No resolution date was set, but you can resolve manually."}
               {" "}
-              Penny will score the outcome, capture the miss, and show what changes downstream.
+              Penny will score the outcome, capture the miss, and reconstruct the day 0, 30, 60, and 90 branches from the recorded timeline.
             </p>
           </div>
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
@@ -522,8 +522,7 @@ export function ResolutionFlow({
           <div className="flex items-center gap-2 text-sm text-[var(--muted-ink)]">
             <AlertCircle className="size-4" />
             <span>
-              Resolution readiness is based on outcome capture and, when needed, a post-mortem. This flow keeps the
-              scoring visible instead of hiding it after submission.
+              Resolution readiness is based on outcome capture, the post-mortem when needed, and the counterfactual record that will be written from this resolution.
             </span>
           </div>
           <div className="flex flex-wrap gap-2">

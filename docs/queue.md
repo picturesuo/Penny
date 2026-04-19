@@ -1,12 +1,11 @@
 # Queue
 
 ## Now
-- [x] Vault mode is already implemented in code; the stale implementation item has been retired.
+- [ ] Build out the counterfactual archive so resolved claims can reconstruct the day 0 / 30 / 60 / 90 branches from recorded history.
 
 ## Next
-- [ ] Verify vault creation, unlock, and local-only redaction in the workspace.
-- [ ] Verify server vault-ID registration for claim, map, and session designations.
-- [ ] Check the vault modal copy against the device-only recovery warning.
+- [ ] Verify the counterfactual archive page and API return the reconstructed branch analysis for resolved claims.
+- [ ] Check the resolution flow and landing copy against the honesty requirement: reconstruction, not causal certainty.
 
 ## Later
 - [ ] Expand only when the project grows.

@@ -69,9 +69,10 @@ function prettyLabel(value: string) {
 type ThoughtMapFormProps = {
   userId?: string;
   initialRawThought?: string;
+  onCreatedMap?: (mapId: string) => void;
 };
 
-export function ThoughtMapForm({ userId, initialRawThought }: ThoughtMapFormProps) {
+export function ThoughtMapForm({ userId, initialRawThought, onCreatedMap }: ThoughtMapFormProps) {
   const router = useRouter();
   const [rawThought, setRawThought] = useState(() => initialRawThought ?? "");
   const [claim, setClaim] = useState<{
@@ -399,6 +400,7 @@ export function ThoughtMapForm({ userId, initialRawThought }: ThoughtMapFormProp
       }
 
       const responsePayload = (await response.json()) as { map: { id: string } };
+      onCreatedMap?.(responsePayload.map.id);
 
       if (
         userId &&

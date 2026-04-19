@@ -16,6 +16,7 @@
 - Calibration is first-class: every claim has a probability, high-confidence claims get challenged, resolved claims feed Brier tracking, and private self-bets make calibration emotionally sticky.
 - Memory and time should be visible: old selves, belief genealogy, inheritance markers, contradiction cascades, aging foundations, confidence drift, revisit queues, and session rhythm should all surface as felt product, not hidden infrastructure.
 - Velocity should be visible: a dedicated intellectual-velocity surface should show whether the user is compounding faster over time through calibration improvement, critique sophistication, update rate, blind-spot coverage, evidence quality, revision latency, and structural health.
+- The counterfactual archive should reconstruct plausible day 0 / 30 / 60 / 90 branches from the claim’s recorded history when a prediction resolves, while staying explicit that the result is a reconstruction rather than causal certainty.
 - Shapes must be visible and reviewable, and the lens must update quickly enough that a Tuesday override visibly changes critique quality by the following week.
 - The design should feel like a built city: density over breadth, emergent structure, progressive disclosure, knowledge cards first, outline-first daily work, smart defaults, and clean endings.
 - Penny should not try to be a generic note-taking app, chatbot, wiki, or journaling tool. Those modes should remain deliberately excluded because they dilute the people the product is actually for.

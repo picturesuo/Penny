@@ -1,5 +1,16 @@
 import type { MarginFragmentModel, SessionCardModel } from "@/types/penny";
-import type { ChecklistItem, OnboardingChecklist, OnboardingPrompt, OnboardingState, OnboardingStep } from "@/types/onboarding";
+import {
+  ONBOARDING_EXAMPLE_CLAIMS,
+} from "@/types/onboarding";
+import type {
+  ChecklistItem,
+  OnboardingChecklist,
+  OnboardingPrompt,
+  OnboardingRole,
+  OnboardingState,
+  OnboardingStep,
+  OnboardingWorkspaceState,
+} from "@/types/onboarding";
 import type { ThoughtMapModel } from "@/types/thought-map";
 
 const PROMPTS: Record<OnboardingStep, OnboardingPrompt> = {
@@ -27,7 +38,7 @@ const PROMPTS: Record<OnboardingStep, OnboardingPrompt> = {
     body: "Use a real belief, not a slogan. The model gets better when the first map is anchored to something concrete.",
     actionLabel: "Create first claim",
     skipLabel: "Skip example",
-    exampleContent: "We can close our first three customers without a dedicated sales hire.",
+    exampleContent: null,
     highlightSelector: "[data-onboarding-target='quick-capture']",
   },
   first_structure: {
@@ -211,12 +222,54 @@ function mapCountToStep(maps: ThoughtMapModel[], sessions: SessionCardModel[], f
   return "explain_the_model";
 }
 
+export function getOnboardingExampleClaim(role: OnboardingRole): string {
+  return ONBOARDING_EXAMPLE_CLAIMS[role] ?? ONBOARDING_EXAMPLE_CLAIMS.default;
+}
+
+export function getOnboardingPrompt(step: OnboardingStep, role: OnboardingRole = "default"): OnboardingPrompt {
+  const prompt = PROMPTS[step];
+
+  if (step === "welcome" || step === "first_claim_prompted") {
+    return {
+      ...prompt,
+      exampleContent: getOnboardingExampleClaim(role),
+    };
+  }
+
+  return prompt;
+}
+
+export function buildOnboardingWorkspaceState(params: {
+  userId: string;
+  maps: ThoughtMapModel[];
+  sessions: SessionCardModel[];
+  fragments: MarginFragmentModel[];
+  role?: OnboardingRole;
+  persistedStep?: OnboardingStep | null;
+}): OnboardingWorkspaceState {
+  const state = buildOnboardingState(params);
+  const role = params.role ?? "default";
+  const prompt = getOnboardingPrompt(params.persistedStep ?? state.currentStep, role);
+  const checklist = buildOnboardingChecklist(params);
+
+  return {
+    state,
+    prompt,
+    checklist,
+    role,
+    exampleClaim: getOnboardingExampleClaim(role),
+    isComplete: state.currentStep === "complete",
+  };
+}
+
 export function buildOnboardingState(params: {
   userId: string;
   maps: ThoughtMapModel[];
   sessions: SessionCardModel[];
   fragments: MarginFragmentModel[];
 }): OnboardingState {
+  const orderedMaps = [...params.maps].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const firstMap = orderedMaps[0] ?? null;
   const currentStep = mapCountToStep(params.maps, params.sessions, params.fragments);
   const currentStepIndex = ONBOARDING_STEP_ORDER.indexOf(currentStep);
   const completedSteps = currentStepIndex > 0 ? ONBOARDING_STEP_ORDER.slice(0, currentStepIndex) : [];
@@ -225,12 +278,12 @@ export function buildOnboardingState(params: {
     userId: params.userId,
     currentStep,
     completedSteps,
-    firstMapId: params.maps[0]?.id ?? null,
-    firstClaimId: params.maps[0]?.nodes.find((node) => node.kind !== "root")?.id ?? null,
-    firstCritiqueRoundId: params.maps[0]?.events.find((event) => /critique/i.test(event.eventType))?.id ?? null,
+    firstMapId: firstMap?.id ?? null,
+    firstClaimId: firstMap?.nodes.find((node) => node.kind !== "root")?.id ?? null,
+    firstCritiqueRoundId: firstMap?.events.find((event) => event.eventType === "dialectic_round")?.id ?? null,
     skippedAt: null,
     completedAt: currentStep === "complete" ? new Date() : null,
-    startedAt: params.maps[0]?.createdAt ?? new Date(),
+    startedAt: firstMap?.createdAt ?? new Date(),
   };
 }
 
@@ -269,8 +322,4 @@ export function buildOnboardingChecklist(params: {
     totalCount: items.length,
     nextRecommended,
   };
-}
-
-export function getOnboardingPrompt(step: OnboardingStep): OnboardingPrompt {
-  return PROMPTS[step];
 }

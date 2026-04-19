@@ -484,11 +484,20 @@ export default async function DashboardPage() {
           <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
             <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Counterfactual engine</p>
             <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
-              The system should be able to answer “what would have happened” by reusing the same shapes, retrospectives, and post-mortem prompts it already surfaces.
+              Resolved claims become branching decision histories: Penny reconstructs what would have happened at capture, day 30, day 60, and day 90 from the recorded timeline.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Badge className="bg-white text-[var(--ink)]">{advancedSnapshot.counterShapes.length} counter-shapes</Badge>
+              <Badge className="bg-white text-[var(--ink)]">{calibration.resolvedClaims.length} resolved claims</Badge>
               <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{memoryTime.predictionRetrospectives.length} post-mortems</Badge>
+              <Badge className="bg-[#d9ead8] text-[#355b32]">Day 0 / 30 / 60 / 90 branches</Badge>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href="/app/counterfactuals">
+                <Button variant="secondary" className="gap-2">
+                  Open archive
+                  <ArrowRight className="size-4" />
+                </Button>
+              </Link>
             </div>
           </div>
         </div>

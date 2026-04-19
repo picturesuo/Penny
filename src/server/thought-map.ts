@@ -35,6 +35,7 @@ import {
   updateDomainCalibration,
 } from "@/lib/calibration";
 import { buildClaimEvidenceSummary, buildEvidenceQualityGate, scoreEvidenceQuality } from "@/lib/evidence-quality";
+import { buildCounterfactualAnalysis } from "@/lib/counterfactual-engine";
 import { buildRevisitQueue, computeLeitnerBox, computeRevisitScheduleForNode, computeRevisitSchedulesForMap } from "@/lib/revisit-scheduler";
 import { buildThoughtMapActionResult, buildThoughtMapJudgment } from "@/lib/thought-map-judgment";
 import { buildPennyUncertainty } from "@/lib/uncertainty";
@@ -2329,7 +2330,16 @@ export async function recordClaimResolution(params: {
     propagationResults,
     lessonsCaptured,
     calibrationImpact,
+    counterfactualAnalysis: null,
   };
+
+  claimResolution.counterfactualAnalysis = buildCounterfactualAnalysis({
+    map,
+    claim,
+    resolution: claimResolution,
+    userId,
+    captureSnapshot: captureSnapshotForMap(map),
+  });
 
   await prisma.$transaction(async (tx) => {
     await tx.thoughtMapEvent.create({

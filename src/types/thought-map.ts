@@ -1,3 +1,5 @@
+import type { CounterfactualAnalysis } from "@/types/counterfactual";
+
 export const THOUGHT_NODE_KINDS = [
   "root",
   "core_claim",
@@ -1423,6 +1425,7 @@ export interface ClaimResolution {
   propagationResults: PropagationResult[];
   lessonsCaptured: string[];
   calibrationImpact: CalibrationImpact;
+  counterfactualAnalysis: CounterfactualAnalysis | null;
 }
 
 export interface ClaimStructureSnapshot {
