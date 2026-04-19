@@ -27,7 +27,7 @@ const dialecticRoundSchema = z.object({
   prompt: z.string().min(1),
   why: z.string().min(1),
   responsePath: z.enum(["defend", "revise", "absorb"]),
-  response: z.string().min(10).max(1000),
+  response: z.string().trim().min(10, "Response must be at least 10 characters.").max(1000),
   roundContext: roundContextSchema,
 });
 
