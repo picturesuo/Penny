@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { GlobalSearch } from "@/components/penny/global-search";
 import { QuickCapture } from "@/components/penny/quick-capture";
 import { CaptureInbox } from "@/components/penny/capture-inbox";
+import { NewMapButton } from "@/components/penny/new-map-modal";
 import { renderDashboardPanel } from "@/components/penny/dashboard-panels";
 import { buildHomeDashboard } from "@/lib/home-dashboard";
 import type { SessionCardModel } from "@/types/penny";
@@ -24,14 +25,6 @@ export function HomeDashboard({
   fragments: QuickCaptureModel[];
 }) {
   const dashboard = buildHomeDashboard({ userId, maps, sessions, fragments });
-  const primaryLink =
-    dashboard.primaryAction.actionType === "create_first_claim"
-      ? "/app/new"
-      : dashboard.primaryAction.actionType === "start_session" && dashboard.primaryAction.targetId
-        ? `/app/session/${dashboard.primaryAction.targetId}`
-        : dashboard.primaryAction.targetId
-          ? `/app/maps/${dashboard.primaryAction.targetId}`
-          : "/app";
   const visiblePanels = dashboard.panels.filter((panel) => panel.isVisible);
 
   return (
@@ -53,12 +46,25 @@ export function HomeDashboard({
               Penny opens on the thing you most need right now: onboarding, the next critique, a due resolution, or the most useful memory surface.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <Link href={primaryLink}>
-                <Button className="gap-2" data-onboarding-target="start-map">
-                  {dashboard.primaryAction.label}
-                  <ArrowRight className="size-4" />
-                </Button>
-              </Link>
+              {dashboard.primaryAction.actionType === "create_first_claim" ? (
+                <NewMapButton label={dashboard.primaryAction.label} className="gap-2" />
+              ) : dashboard.primaryAction.actionType === "start_session" && dashboard.primaryAction.targetId ? (
+                <Link href={`/app/session/${dashboard.primaryAction.targetId}`}>
+                  <Button className="gap-2">
+                    {dashboard.primaryAction.label}
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </Link>
+              ) : dashboard.primaryAction.targetId ? (
+                <Link href={`/app/maps/${dashboard.primaryAction.targetId}`}>
+                  <Button className="gap-2">
+                    {dashboard.primaryAction.label}
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </Link>
+              ) : (
+                <NewMapButton label={dashboard.primaryAction.label} className="gap-2" />
+              )}
               <Link href="/app/search">
                 <Button variant="secondary" className="gap-2">
                   <Search className="size-4" />

@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { NewMapButton } from "@/components/penny/new-map-modal";
 import type { DashboardPanel } from "@/types/home-dashboard";
 
 type RecentMapSummary = {
@@ -46,12 +45,7 @@ export function RecentMapsPanel({ panel }: { panel: DashboardPanel }) {
         )}
       </div>
       <div className="mt-4">
-        <Link href="/app/new">
-          <Button variant="secondary" className="gap-2">
-            Create map
-            <ArrowRight className="size-4" />
-          </Button>
-        </Link>
+        <NewMapButton label="Create map" variant="secondary" className="gap-2" />
       </div>
     </Card>
   );

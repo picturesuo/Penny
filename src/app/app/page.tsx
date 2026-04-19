@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Plus } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -22,6 +22,7 @@ import { listQuickCaptures } from "@/server/quick-capture";
 import { listSessions } from "@/server/penny";
 import { listThoughtMaps } from "@/server/thought-map";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
+import { NewMapButton } from "@/components/penny/new-map-modal";
 
 const foundation = [
   {
@@ -123,12 +124,7 @@ export default async function DashboardPage() {
             Each map starts as raw thought, then turns into claims, moves, shapes, and next actions the user can sharpen live.
           </p>
         </div>
-        <Link href="/app/new">
-          <Button className="gap-2">
-            <Plus className="size-4" />
-            Start thought map
-          </Button>
-        </Link>
+        <NewMapButton label="Start thought map" className="gap-2" />
       </div>
 
       <Card className="p-6 sm:p-8">

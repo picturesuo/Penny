@@ -2,9 +2,11 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useNewMapDialog } from "@/components/penny/new-map-modal";
 
 export function GlobalShortcuts() {
   const router = useRouter();
+  const { open } = useNewMapDialog();
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -20,7 +22,7 @@ export function GlobalShortcuts() {
 
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === "n") {
         event.preventDefault();
-        router.push("/app/new");
+        open();
       }
 
       if ((event.metaKey || event.ctrlKey) && key === "k") {
@@ -36,7 +38,7 @@ export function GlobalShortcuts() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [router]);
+  }, [open, router]);
 
   return null;
 }
