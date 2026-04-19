@@ -27,6 +27,7 @@
 - Capture durable user guidance, preferences, and constraints that should survive past a single task.
 - `user`: Always be critical about user-supplied ideas, framing, and requirements instead of accepting them at face value; challenge weak assumptions, ambiguous scope, and missing tradeoffs.
 - `user`: Commit every file change and push to GitHub automatically so the repo does not stay dirty between steps, unless a file is explicitly private, secret, scratch, or machine-specific.
+- `user`: The Intellectual Biography should be a living narrative of how the user’s thinking evolved, derived from move history and old-selves timelines, and it should feel worth reading as an autobiography rather than a data export.
 - `user`: Commit every file change that you make and push it to the configured GitHub remote automatically, while still avoiding unrelated private or scratch files.
 - `user`: The four core object types are `Claim`, `Move`, `Shape`, and `Lens`; `Claim` is the assertion substrate, `Move` records user response and change, `Shape` captures recurring patterns, and `Lens` is the live personalized model used for generation.
 - `user`: Penny’s three main use cases should be framed as: a pressure-tested second brain/personal idea wiki, stress testing the ideas inside that wiki, and a learning loop that recommends the best next thing to learn.
