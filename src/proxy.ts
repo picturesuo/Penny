@@ -4,7 +4,7 @@ import { AUTH_SESSION_COOKIE, getAuthenticatedUserFromToken } from "@/server/aut
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith("/api/auth")) {
+  if (pathname.startsWith("/api/auth") || pathname === "/api/health" || pathname.startsWith("/api/notifications/send")) {
     return NextResponse.next();
   }
 
