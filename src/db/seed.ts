@@ -133,7 +133,7 @@ async function ensureSampleMap(userId: string) {
   });
 }
 
-async function main() {
+export async function seedDevelopmentDatabase() {
   const sampleUser = await ensureSampleUser();
   await ensureSampleMap(sampleUser.id);
 
@@ -155,12 +155,3 @@ async function main() {
     ),
   );
 }
-
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });

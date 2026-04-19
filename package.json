@@ -15,7 +15,7 @@
     "db:setup": "prisma migrate deploy && prisma db seed"
   },
   "prisma": {
-    "seed": "tsx src/db/seed.ts"
+    "seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.6.0",

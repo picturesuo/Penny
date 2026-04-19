@@ -3686,7 +3686,7 @@ export async function listThoughtMaps() {
   );
 }
 
-export async function createThoughtMap(input: CreateThoughtMapInput) {
+export async function createThoughtMap(input: CreateThoughtMapInput, userId?: string) {
   const startedAt = Date.now();
   const rawThought = cleanSentence(input.rawThought);
   const captureEnvelope = formatClaimCaptureMetadata(input.claim);
@@ -3701,13 +3701,13 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
       })
     : null;
   let referenceClassRecord: ReferenceClass | null = null;
-  const userId = await getCurrentAuthenticatedUserId();
+  const activeUserId = userId ?? (await getCurrentAuthenticatedUserId());
   const claimDomain = classifyCalibrationDomain(mapRawThought);
 
   const created = await prisma.$transaction(async (tx) => {
     const map = await tx.thoughtMap.create({
       data: {
-        userId,
+        userId: activeUserId,
         title,
         rawThought: mapRawThought,
       },
@@ -3774,7 +3774,7 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
   if (referenceClassRecord) {
     await maybeRecordReferenceClassBiasSignal({
       mapId: created.id,
-      userId,
+      userId: activeUserId,
       referenceClass: referenceClassRecord,
       nodeId: created.nodes[0]?.id ?? created.id,
     });
@@ -3801,12 +3801,12 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
           domain: claimDomain,
         },
       },
-      userId,
+      activeUserId,
     );
   }
 
   logger.info("map_created", {
-    userId,
+    userId: activeUserId,
     featureId: "thought-map",
     durationMs: Date.now() - startedAt,
     data: {
@@ -3820,10 +3820,10 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
   return hydrateThoughtMap(created);
 }
 
-export async function getThoughtMap(mapId: string) {
-  const userId = await getCurrentAuthenticatedUserId();
+export async function getThoughtMap(mapId: string, userId?: string) {
+  const activeUserId = userId ?? (await getCurrentAuthenticatedUserId());
   const map = await prisma.thoughtMap.findFirst({
-    where: { id: mapId, userId },
+    where: { id: mapId, userId: activeUserId },
     include: {
       nodes: {
         orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],

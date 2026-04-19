@@ -1,7 +1,7 @@
 # Queue
 
 ## Now
-- [ ] Finish the type-definition audit by tightening any remaining server-to-type mismatches and publishing the corrected contracts.
+- [x] Finish the type-definition audit by tightening any remaining server-to-type mismatches and publishing the corrected contracts.
 
 ## Next
 - [ ] Re-scan the remaining type files for any loose nullable fields or server-populated fields that are still not reflected in the public types.
@@ -23,3 +23,4 @@
 - [x] Error monitoring needs to catch both client crashes and API failures, so the first implementation should combine App Router error boundaries with request-level reporting and keep the event payload user- and request-scoped.
 - [x] Rate limiting should be centralized and cheap, so the first pass uses an in-memory per-subject window before any AI work or auth mutation runs.
 - [x] The type audit found that session status should be normalized to the actual lifecycle union and that session summaries should always carry a key insight once generated.
+- [x] The MVP core types need to follow the real runtime shapes, so `Map` uses `rawThought` plus `claimCount`, `Claim` models thought nodes plus capture metadata, `SteelMan` uses the persisted quality-score fields, and `Artifact` / `Move` should follow the actual record and event unions instead of the sketch draft.
