@@ -1,9 +1,12 @@
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "@prisma/client";
+import { checkRequiredEnvVars } from "@/lib/env-check";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
+
+checkRequiredEnvVars();
 
 const busyTimeoutMs = Number(process.env.SQLITE_BUSY_TIMEOUT_MS ?? 10000);
 
