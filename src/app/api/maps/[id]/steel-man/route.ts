@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { MapParamsSchema } from "@/lib/validation/schemas";
+import { ClaimIdSchema, MapParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { recordSteelMan } from "@/server/thought-map";
 
 const steelManSchema = z.object({
-  claimId: z.string().min(1),
-  steelManText: z.string().min(100),
+  claimId: ClaimIdSchema,
+  steelManText: z.string().min(80),
   roundContext: z.string().min(1).optional().nullable(),
   usedInRound: z.array(z.string().min(1)).optional(),
 });

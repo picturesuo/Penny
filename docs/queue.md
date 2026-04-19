@@ -1,11 +1,11 @@
 # Queue
 
 ## Now
-- [x] Build the map and claim creation routes on top of the shared Zod validation and server helpers.
+- [x] Build the steel-man gate component between claim creation and the first critique round.
 
 ## Next
 - [ ] Re-scan the remaining type files for any loose nullable fields or server-populated fields that are still not reflected in the public types.
-- [ ] Keep the shared context aligned with the map/claim route slice before moving to another feature area.
+- [x] Keep the shared context aligned with the steel-man gate slice before moving to another feature area.
 
 ## Later
 - [ ] Expand only when the project grows.
@@ -27,3 +27,4 @@
 - [x] The MVP core contracts now have dedicated Prisma tables and indexes, and the sqlite dev database was recreated cleanly after the old zero-byte `dev.db` file caused Prisma drift.
 - [x] Every API route should validate params, query, and body inputs with shared Zod schemas before touching the server layer; route IDs should use `cuid()` because the repo uses cuid-backed record IDs.
 - [x] Map creation now uses the shared `CreateMapSchema` + `createMap` path and returns the created map wrapper, while claim creation now lists existing claims, validates the capture payload, and records the new claim as an applied move.
+- [x] The steel-man gate should sit between claim capture and the first critique round, save the user’s strongest opposing view through the existing steel-man route, surface a quality assessment, and allow an explicit skip path that does not dead-end the flow.
