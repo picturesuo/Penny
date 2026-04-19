@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfidenceSlider } from "@/components/penny/confidence-slider";
+import { LearningPromptBanner } from "@/components/penny/learning-prompt-banner";
+import { generateLearningPrompt } from "@/lib/learning-prompts";
+import type { LearningPromptClaim } from "@/lib/learning-prompts";
 
 export type ClaimCaptureFormData = {
   text: string;
@@ -35,6 +38,26 @@ export function ClaimCaptureForm({ mapId, onSubmit, onCancel }: ClaimCaptureForm
   const [showMetadata, setShowMetadata] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [learningPromptDismissed, setLearningPromptDismissed] = useState(false);
+  const learningPrompt = useMemo(() => {
+    const promptClaim: LearningPromptClaim = {
+      id: `draft-${mapId}`,
+      mapId,
+      userId: "draft",
+      text,
+      confidence,
+      structureKind: "assertion",
+      provenance,
+      stakes: [],
+    };
+
+    return generateLearningPrompt({
+      claim: promptClaim,
+      round: null,
+      userResponse: null,
+      triggerType: "high_confidence_entry",
+    });
+  }, [confidence, mapId, provenance, text]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -92,13 +115,22 @@ export function ClaimCaptureForm({ mapId, onSubmit, onCancel }: ClaimCaptureForm
             <span className="rounded-full bg-[#efe8fb] px-3 py-1 text-xs text-[#5c4c88]">{confidenceLabel}</span>
           </label>
           <p className="text-sm leading-6 text-[var(--muted-ink)]">60% means you think it is more likely than not, but you are not certain.</p>
-          <ConfidenceSlider
-            id={`confidence-slider-${mapId}`}
-            value={confidence}
-            onChange={setConfidence}
-            calibrationHint={null}
-          />
-        </div>
+        <ConfidenceSlider
+          id={`confidence-slider-${mapId}`}
+          value={confidence}
+          onChange={setConfidence}
+          calibrationHint={null}
+        />
+        {learningPrompt && !learningPromptDismissed ? (
+          <div className="pt-2">
+            <LearningPromptBanner
+              prompt={learningPrompt}
+              claimId={`draft-${mapId}`}
+              onDismiss={() => setLearningPromptDismissed(true)}
+            />
+          </div>
+        ) : null}
+      </div>
 
         <button
           type="button"

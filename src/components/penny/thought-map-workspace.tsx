@@ -70,6 +70,7 @@ import { buildClaimEvidenceSummary } from "@/lib/evidence-quality";
 import { track } from "@/lib/analytics";
 import { classifyCalibrationDomain } from "@/lib/calibration";
 import { evaluateMetaCognitionTrigger, type MetaCognitionPromptSnapshot } from "@/lib/meta-cognition";
+import { generateLearningPrompt, type LearningPromptOutput, type LearningPromptClaim, type LearningPromptRound } from "@/lib/learning-prompts";
 import { generateSessionSummary } from "@/lib/session-summary";
 import { buildRevisitQueue } from "@/lib/revisit-scheduler";
 import type { VaultContentPayload } from "@/lib/vault";
@@ -77,6 +78,7 @@ import { cn } from "@/lib/utils";
 import { CritiqueFeedback as CritiqueFeedbackCard } from "@/components/penny/critique-feedback";
 import { EvidenceEntry } from "@/components/penny/evidence-entry";
 import { MetaCognitionPrompt } from "@/components/penny/meta-cognition-prompt";
+import { LearningPromptBanner } from "@/components/penny/learning-prompt-banner";
 import { PersonalizedCritiquePanel } from "@/components/penny/personalized-critique-panel";
 import { ShapeDetail } from "@/components/penny/shape-detail";
 import type {
@@ -1422,8 +1424,15 @@ export function ThoughtMapWorkspace({
   const [vaultDraft, setVaultDraft] = useState<VaultDraft | null>(null);
   const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
   const [metaCognitionEventsSeen, setMetaCognitionEventsSeen] = useState<Record<string, boolean>>({});
+  const [learningPrompt, setLearningPrompt] = useState<LearningPromptOutput | null>(null);
+  const [learningPromptDismissed, setLearningPromptDismissed] = useState(false);
   const [isPending, startTransition] = useTransition();
   const lastOpenedClaimIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setLearningPrompt(null);
+    setLearningPromptDismissed(false);
+  }, [map.id]);
 
   const nodesByParent = useMemo(() => {
     return map.nodes.reduce<Record<string, ThoughtNodeModel[]>>((acc, node) => {
@@ -3555,6 +3564,69 @@ export function ThoughtMapWorkspace({
     });
   }
 
+  function buildLearningPromptAfterRound(params: {
+    response: string;
+    round: SerializableDialecticRound | null;
+    critiqueFailureTypes: string[];
+  }) {
+    const selectedNode = selectedGraphNode?.node ?? selectedGraphNodeModel;
+    if (!selectedNode) {
+      return null;
+    }
+
+    const claim: LearningPromptClaim = {
+      id: selectedNode.id,
+      mapId: map.id,
+      userId: map.userId,
+      text: selectedNode.content,
+      confidence: Math.round((selectedNode.scores?.confidence ?? 0) * 100),
+      structureKind: "assertion",
+      provenance: "intuition",
+      stakes: [],
+      domain: classifyCalibrationDomain(`${selectedNode.content} ${selectedNode.note ?? ""}`),
+    };
+
+    const round: LearningPromptRound | null = params.round
+      ? {
+          id: params.round.id,
+          claimId: params.round.claimId ?? claim.id,
+          roundNumber: params.round.roundNumber,
+          critiqueFailureTypes: params.round.critiqueFailureTypes ?? params.critiqueFailureTypes ?? [],
+          confidenceAtRoundStart: params.round.confidenceAtRoundStart,
+          confidenceAtRoundEnd: params.round.confidenceAtRoundEnd,
+          confidenceDelta: params.round.confidenceDelta,
+          engagementScore: params.round.engagementScore,
+          userResponse: params.round.userResponse,
+          responseClassification: params.round.responseClassification,
+        }
+      : {
+          id: `${map.id}:${claim.id}:round`,
+          claimId: claim.id,
+          roundNumber: params.critiqueFailureTypes.length + 1,
+          critiqueFailureTypes: params.critiqueFailureTypes,
+          confidenceAtRoundStart: Math.round((selectedNode.scores?.confidence ?? 0) * 100),
+          confidenceAtRoundEnd: Math.round((selectedNode.scores?.confidence ?? 0) * 100),
+          confidenceDelta: 0,
+          engagementScore: 0,
+          userResponse: params.response,
+          responseClassification: null,
+        };
+
+    const triggerType =
+      round.confidenceDelta <= -10
+        ? "confidence_drop"
+        : params.response.trim().length < 24 || round.responseClassification?.type === "dismissal"
+          ? "low_engagement"
+          : "post_challenge";
+
+    return generateLearningPrompt({
+      claim,
+      round,
+      userResponse: params.response,
+      triggerType,
+    });
+  }
+
   function recordCritiqueFeedback(params: {
     round: SerializableDialecticRound | null;
     dismissed?: boolean;
@@ -3750,6 +3822,13 @@ export function ThoughtMapWorkspace({
           roundContext?: unknown;
         };
         mergeDialecticRoundEvent(payload.event);
+        const prompt = buildLearningPromptAfterRound({
+          response,
+          round: payload.round ?? null,
+          critiqueFailureTypes: params.critiqueFailureTypes ?? (params.critiqueType ? [params.critiqueType] : []),
+        });
+        setLearningPrompt(prompt);
+        setLearningPromptDismissed(false);
         setDialecticResponseDrafts((current) => {
           const next = { ...current };
           delete next[params.round];
@@ -6380,6 +6459,27 @@ export function ThoughtMapWorkspace({
                 recordMetaCognitionResponse(selectedMetaCognitionPrompt, responseType, responseText, tellMeMoreOpened)
               }
               onDismiss={() => recordMetaCognitionResponse(selectedMetaCognitionPrompt, "not_now", null, false)}
+            />
+          </div>
+        </Card>
+      ) : null}
+
+      {learningPrompt && !learningPromptDismissed ? (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge>Learning prompt</Badge>
+            <Badge className="bg-[#e7f3ea] text-[#2f6d47]">{learningPrompt.promptType.replaceAll("_", " ")}</Badge>
+            {learningPrompt.source ? <Badge className="bg-white text-[var(--ink)]">{learningPrompt.source}</Badge> : null}
+          </div>
+          <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">A useful thing to learn right now.</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+            Penny is surfacing this because the current round or claim suggests a specific correction, not just a generic critique.
+          </p>
+          <div className="mt-4">
+            <LearningPromptBanner
+              prompt={learningPrompt}
+              claimId={selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? map.id}
+              onDismiss={() => setLearningPromptDismissed(true)}
             />
           </div>
         </Card>
