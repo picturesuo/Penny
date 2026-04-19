@@ -15,6 +15,7 @@ import {
   derivePennyShapes,
 } from "@/lib/penny-insights";
 import { buildCalibrationCoaching } from "@/lib/calibration";
+import { buildCalibrationTrackRecord, buildShareableTrackRecord } from "@/lib/calibration-track-record";
 import { buildMarginSurfaceSnapshot } from "@/lib/margin";
 import { getDemoThoughtUserId } from "@/lib/thought-map";
 import { listMarginFragments, listSessions } from "@/server/penny";
@@ -95,6 +96,8 @@ export default async function DashboardPage() {
   const shapes = derivePennyShapes(allNodes).sort((a, b) => b.confidence - a.confidence).slice(0, 4);
   const calibration = buildCalibrationDashboard(maps);
   const calibrationCoaching = buildCalibrationCoaching(maps);
+  const calibrationTrackRecord = buildCalibrationTrackRecord(maps);
+  const shareableTrackRecord = buildShareableTrackRecord(calibrationTrackRecord, "You", process.env.CALIBRATION_TRACK_SECRET ?? null);
   const communitySnapshot = buildCommunityCommonsDashboard(maps, allNodes);
   const advancedSnapshot = buildAdvancedThinkingDashboard(maps, allNodes);
   const memoryTime = buildMemoryTimeDashboard(maps);
@@ -778,7 +781,7 @@ export default async function DashboardPage() {
         </div>
       </Card>
 
-      <ShapeDashboard shapes={shapes} calibration={calibration} initialFeedback={{}} />
+      <ShapeDashboard shapes={shapes} calibration={calibration} initialFeedback={{}} trackRecord={shareableTrackRecord} />
 
       <CalibrationCoachingView coaching={calibrationCoaching} />
 

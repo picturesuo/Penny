@@ -116,6 +116,23 @@ export function HomeDashboard({
             captures={fragments}
           />
 
+          <Card className="p-6" data-onboarding-target="identity-archive">
+            <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Identity archive</p>
+            <h3 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Biography and fingerprint</h3>
+            <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">
+              Review the chapterized story of how your mind changed and the named patterns Penny has learned from your history.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href="/app/identity">
+                <Button className="gap-2">
+                  Open identity
+                  <ArrowRight className="size-4" />
+                </Button>
+              </Link>
+              <Badge className="bg-[var(--panel)] text-[var(--ink)]">{maps.length} maps observed</Badge>
+            </div>
+          </Card>
+
           <Card className="p-6" data-onboarding-target="recent-maps">
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Recent maps</p>
             <div className="mt-4 space-y-3">

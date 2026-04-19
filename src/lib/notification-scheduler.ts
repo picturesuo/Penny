@@ -599,15 +599,30 @@ export function buildNotificationDispatches(context: NotificationBuildContext) {
       resolutionDate: bet.resolutionDate,
       status: bet.status,
     }))
-    .filter((claim) => {
-      const resolutionDate = new Date(claim.resolutionDate);
-      if (Number.isNaN(resolutionDate.getTime())) {
-        return false;
-      }
+    .filter(
+      (
+        claim,
+      ): claim is {
+        id: string;
+        mapId: string;
+        claimText: string;
+        confidence: number;
+        resolutionDate: string;
+        status: "open" | "stress_tested" | "resolved" | "abandoned" | "revisiting" | "stale";
+      } => {
+        if (!claim.resolutionDate) {
+          return false;
+        }
 
-      const daysUntilDue = daysSince(now, resolutionDate);
-      return daysUntilDue <= 1;
-    })
+        const resolutionDate = new Date(claim.resolutionDate);
+        if (Number.isNaN(resolutionDate.getTime())) {
+          return false;
+        }
+
+        const daysUntilDue = daysSince(now, resolutionDate);
+        return daysUntilDue <= 1;
+      },
+    )
     .sort((a, b) => new Date(a.resolutionDate).getTime() - new Date(b.resolutionDate).getTime())
     .slice(0, 3);
 

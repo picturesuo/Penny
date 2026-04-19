@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/db/prisma";
 import { getDemoThoughtUserId } from "@/lib/thought-map";
 import { buildNotificationDispatchesForUser, recordNotificationDeliveries } from "@/server/notifications";
+import type { Notification } from "@/types/notifications";
 
 const sendNotificationsSchema = z.object({
   userId: z.string().min(1).optional(),
@@ -16,10 +16,7 @@ export async function POST(request: Request) {
     const payload = text.trim().length ? sendNotificationsSchema.parse(JSON.parse(text)) : sendNotificationsSchema.parse({});
     const now = payload.now ?? new Date();
 
-    const userIds =
-      payload.userId != null
-        ? [payload.userId]
-        : (await prisma.notificationPreference.findMany({ select: { userId: true }, orderBy: { updatedAt: "desc" } })).map((entry) => entry.userId);
+    const userIds = payload.userId != null ? [payload.userId] : [getDemoThoughtUserId()];
 
     const effectiveUserIds = userIds.length ? userIds : [getDemoThoughtUserId()];
     const results = [];
@@ -28,7 +25,7 @@ export async function POST(request: Request) {
 
     for (const userId of effectiveUserIds) {
       const notifications = await buildNotificationDispatchesForUser(userId, now);
-      const finalized = notifications.map((notification) => ({
+      const finalized: Notification[] = notifications.map((notification): Notification => ({
         ...notification,
         sentAt: notification.status === "suppressed" ? null : now,
         status: notification.status === "suppressed" ? "suppressed" : "sent",

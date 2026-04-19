@@ -196,3 +196,31 @@ model BlindSpotMapCache {
 
   @@index([userId, updatedAt])
 }
+
+model BiographyAnnotation {
+  id             String   @id @default(cuid())
+  userId         String
+  chapterId      String
+  targetType     String
+  targetId       String
+  annotationText String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, chapterId])
+  @@index([userId, targetType, targetId])
+}
+
+model FingerprintPatternReview {
+  id                     String   @id @default(cuid())
+  userId                 String
+  patternId              String
+  disputeText            String?
+  falsificationCondition String?
+  acknowledged           Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([userId, patternId])
+  @@index([userId, updatedAt])
+}

@@ -130,7 +130,7 @@ async function loadThoughtMapsForUser(userId: string): Promise<ThoughtMapModel[]
   });
 
   const maps = await Promise.all(ids.map((entry) => getThoughtMap(entry.id)));
-  return maps.filter((map): map is ThoughtMapModel => map !== null);
+  return maps.flatMap((map) => (map ? [map] : []));
 }
 
 export async function getNotificationPreferences(userId: string) {

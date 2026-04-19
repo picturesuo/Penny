@@ -112,6 +112,8 @@ export function buildHomeDashboard(params: {
 
   const latestMap = params.maps[0] ?? null;
   const latestSession = params.sessions[0] ?? null;
+  const quickCaptureActionType: "continue_map" | "quick_capture" = latestMap ? "continue_map" : "quick_capture";
+  const fallbackActionType: "start_session" | "continue_map" = latestSession ? "start_session" : "continue_map";
 
   const primaryAction =
     maturity === "new"
@@ -125,7 +127,7 @@ export function buildHomeDashboard(params: {
         ? {
             label: latestMap ? `Continue ${latestMap.title}` : "Capture a thought",
             description: latestMap ? "Pick up the map Penny already knows about." : "Add one raw thought before it disappears.",
-            actionType: (latestMap ? "continue_map" : "quick_capture") as const,
+            actionType: quickCaptureActionType,
             targetId: latestMap?.id ?? null,
           }
         : maturity === "established"
@@ -138,7 +140,7 @@ export function buildHomeDashboard(params: {
           : {
               label: latestSession ? `Resume ${latestSession.title}` : "Open your strongest map",
               description: "Return to the most load-bearing work first.",
-              actionType: (latestSession ? "start_session" : "continue_map") as const,
+              actionType: fallbackActionType,
               targetId: latestSession?.id ?? latestMap?.id ?? null,
             };
 

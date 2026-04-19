@@ -194,9 +194,10 @@ async function searchArtifacts(queryTokens: string[], filters: SearchFilters) {
 
   for (const map of maps) {
     for (const artifact of map.artifacts) {
+      const artifactText = [artifact.narrativeGlue ?? "", ...artifact.sections.map((section) => `${section.title} ${section.body}`)].join(" ").trim();
       const metadata = {
-        status: artifact.status,
-        confidence: artifact.qualityRating ?? null,
+        status: artifact.latestOutcome?.outcomeType ?? "pending",
+        confidence: artifact.latestOutcome?.artifactQualityRating ?? null,
         domain: artifact.artifactTypeId,
         hasResolutionDate: false,
         dialecticRoundCount: artifact.loadBearingClaims.length,
@@ -204,12 +205,12 @@ async function searchArtifacts(queryTokens: string[], filters: SearchFilters) {
       };
       const matchedFields = findMatchedFields(queryTokens, [
         ["title", artifact.title],
-        ["summary", artifact.summary],
+        ["summary", artifactText],
         ["artifactType", artifact.artifactTypeName],
       ]);
       const relevanceScore = scoreFields(queryTokens, [
         { text: artifact.title, weight: 1.2 },
-        { text: artifact.summary, weight: 0.8 },
+        { text: artifactText, weight: 0.8 },
         { text: artifact.artifactTypeName, weight: 0.4 },
       ]);
 
@@ -218,7 +219,7 @@ async function searchArtifacts(queryTokens: string[], filters: SearchFilters) {
           entityType: "artifact",
           entityId: artifact.id,
           title: artifact.title,
-          preview: cleanSentence(artifact.summary).slice(0, 160),
+          preview: cleanSentence(artifactText).slice(0, 160),
           matchedFields,
           relevanceScore,
           metadata,
@@ -240,7 +241,7 @@ async function searchSessions(queryTokens: string[], filters: SearchFilters) {
     const metadata = {
       status: session.status,
       confidence: session.clarityScore,
-      domain: session.category ?? "general",
+      domain: session.currentStage,
       hasResolutionDate: false,
       dialecticRoundCount: session.currentStage === "brief" ? 1 : 0,
       stakeLevel: session.status === "brief-ready" ? "high" : "medium",

@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS = {
 };
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState(() => {
+  const [settings, setSettings] = useState<typeof DEFAULT_SETTINGS>(() => {
     if (typeof window === "undefined") {
       return DEFAULT_SETTINGS;
     }

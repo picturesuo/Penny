@@ -4,21 +4,25 @@ import { useMemo, useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { TrackRecordCard } from "@/components/penny/track-record-card";
 import {
   formatShapeVerdict,
   type CalibrationDashboardSnapshot,
   type PennyShape,
   type PennyShapeFeedback,
 } from "@/lib/penny-insights";
+import type { ShareableTrackRecord } from "@/types/calibration-record";
 
 export function ShapeDashboard({
   shapes,
   calibration,
   initialFeedback,
+  trackRecord,
 }: {
   shapes: PennyShape[];
   calibration: CalibrationDashboardSnapshot;
   initialFeedback: Record<string, PennyShapeFeedback>;
+  trackRecord: ShareableTrackRecord;
 }) {
   const [feedback, setFeedback] = useState<Record<string, PennyShapeFeedback>>(initialFeedback);
   const [feedbackReasons, setFeedbackReasons] = useState<Record<string, string>>({});
@@ -285,6 +289,10 @@ export function ShapeDashboard({
               )}
             </div>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <TrackRecordCard record={trackRecord} />
       </div>
 
       <div className="mt-6 rounded-[24px] border border-black/8 bg-white p-5">
