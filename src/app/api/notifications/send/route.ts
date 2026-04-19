@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
-import { buildNotificationDispatchesForUser, recordNotificationDeliveries } from "@/server/notifications";
+import { buildNotificationDispatchesForUser, listNotificationRecipientIds, recordNotificationDeliveries } from "@/server/notifications";
 import type { Notification } from "@/types/notifications";
 
 const sendNotificationsSchema = z.object({
@@ -15,15 +14,12 @@ export async function POST(request: Request) {
     const text = await request.text();
     const payload = text.trim().length ? sendNotificationsSchema.parse(JSON.parse(text)) : sendNotificationsSchema.parse({});
     const now = payload.now ?? new Date();
-
-    const userIds = payload.userId != null ? [payload.userId] : [getDemoThoughtUserId()];
-
-    const effectiveUserIds = userIds.length ? userIds : [getDemoThoughtUserId()];
+    const finalUserIds = payload.userId ? [payload.userId] : await listNotificationRecipientIds();
     const results = [];
     let generated = 0;
     let suppressed = 0;
 
-    for (const userId of effectiveUserIds) {
+    for (const userId of finalUserIds) {
       const notifications = await buildNotificationDispatchesForUser(userId, now);
       const finalized: Notification[] = notifications.map((notification): Notification => ({
         ...notification,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { computeHomeDashboard } from "@/lib/home-dashboard";
-import { listMarginFragments, listSessions } from "@/server/penny";
+import { listQuickCaptures } from "@/server/quick-capture";
+import { listSessions } from "@/server/penny";
 import { listThoughtMaps } from "@/server/thought-map";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
@@ -8,7 +9,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const [maps, sessions, fragments] = await Promise.all([
     listThoughtMaps(),
     listSessions(id),
-    listMarginFragments(id),
+    listQuickCaptures(id),
   ]);
 
   const dashboard = computeHomeDashboard(id, {

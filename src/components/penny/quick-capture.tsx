@@ -3,8 +3,15 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { QuickCapture } from "@/types/quick-capture";
 
-export function QuickCapture({ onSaved }: { onSaved?: () => void }) {
+export function QuickCapture({
+  onSaved,
+  userId,
+}: {
+  onSaved?: () => void;
+  userId?: string;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -32,24 +39,21 @@ export function QuickCapture({ onSaved }: { onSaved?: () => void }) {
     setMessage(null);
 
     try {
-      const response = await fetch("/api/margin/fragments", {
+      const response = await fetch("/api/quick-capture", {
         method: "POST",
         headers: {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          content,
+          userId,
+          rawText: content,
+          captureSource: "web_shortcut",
           sphere: "work",
-          contextSnapshot: {
-            currentStage: "dashboard",
-            currentFocus: content.slice(0, 120),
-            currentSphere: "work",
-            currentContext: content,
-            currentResponse: null,
-            recentSessionMinutes: null,
-            sourceSessionId: null,
-            sourceMapId: null,
-          },
+          currentStage: "dashboard",
+          currentFocus: content.slice(0, 120),
+          currentContext: content,
+          currentResponse: null,
+          recentSessionMinutes: null,
         }),
       });
 
@@ -57,9 +61,10 @@ export function QuickCapture({ onSaved }: { onSaved?: () => void }) {
         throw new Error("Could not save capture");
       }
 
+      const payload = (await response.json()) as { capture?: QuickCapture };
       setText("");
       setIsOpen(false);
-      setMessage("Captured in the margin.");
+      setMessage(payload.capture ? "Captured and ready for later." : "Captured.");
       onSaved?.();
     } catch {
       setMessage("Penny could not save this capture right now.");

@@ -1,8 +1,12 @@
-import { derivePennyShapes } from "@/lib/penny-insights";
+import { classifyCalibrationDomain } from "@/lib/calibration";
+import { formatLessonPreview } from "@/lib/lesson-library";
 import { cleanSentence } from "@/lib/penny";
-import { listMarginFragments, listSessions } from "@/server/penny";
+import { derivePennyShapes } from "@/lib/penny-insights";
+import { getLessonLibrary } from "@/server/lesson-library";
+import { listSessions } from "@/server/penny";
 import { listThoughtMaps } from "@/server/thought-map";
 import type { SearchFilters, SearchQuery, SearchResponse, SearchResult } from "@/types/search";
+import type { ThoughtMapModel } from "@/types/thought-map";
 
 function tokenize(value: string) {
   return cleanSentence(value)
@@ -22,21 +26,45 @@ function scoreText(queryTokens: string[], text: string, weight: number) {
     return 0;
   }
 
-  const matches = queryTokens.filter((token) => fieldTokens.some((fieldToken) => fieldToken.includes(token) || token.includes(fieldToken)));
+  const matches = queryTokens.filter((token) =>
+    fieldTokens.some((fieldToken) => fieldToken.includes(token) || token.includes(fieldToken)),
+  );
   return (matches.length / queryTokens.length) * weight;
 }
 
 function scoreFields(queryTokens: string[], fields: Array<{ text: string; weight: number }>) {
-  return Math.min(
-    1,
-    fields.reduce((total, field) => total + scoreText(queryTokens, field.text, field.weight), 0),
-  );
+  return Math.min(1, fields.reduce((total, field) => total + scoreText(queryTokens, field.text, field.weight), 0));
 }
 
 function findMatchedFields(queryTokens: string[], entries: Array<[string, string]>) {
-  return entries
-    .filter(([, text]) => scoreText(queryTokens, text, 1) > 0)
-    .map(([field]) => field);
+  return entries.filter(([, text]) => scoreText(queryTokens, text, 1) > 0).map(([field]) => field);
+}
+
+function asDate(value: unknown) {
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  return null;
+}
+
+function matchesDateRange(filters: SearchFilters, metadata: Record<string, unknown>) {
+  if (!filters.dateRange) {
+    return true;
+  }
+
+  const [start, end] = filters.dateRange;
+  const date = asDate(metadata.createdAt) ?? asDate(metadata.updatedAt);
+  if (!date) {
+    return true;
+  }
+
+  return date.getTime() >= start.getTime() && date.getTime() <= end.getTime();
 }
 
 function matchesFilters(filters: SearchFilters, entityType: SearchResult["entityType"], metadata: Record<string, unknown>) {
@@ -55,7 +83,11 @@ function matchesFilters(filters: SearchFilters, entityType: SearchResult["entity
     return false;
   }
 
-  if (filters.hasResolutionDate != null && typeof metadata.hasResolutionDate === "boolean" && metadata.hasResolutionDate !== filters.hasResolutionDate) {
+  if (
+    filters.hasResolutionDate != null &&
+    typeof metadata.hasResolutionDate === "boolean" &&
+    metadata.hasResolutionDate !== filters.hasResolutionDate
+  ) {
     return false;
   }
 
@@ -74,6 +106,10 @@ function matchesFilters(filters: SearchFilters, entityType: SearchResult["entity
     return false;
   }
 
+  if (!matchesDateRange(filters, metadata)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -83,10 +119,7 @@ function makeSuggestion(query: string, results: SearchResult[]) {
     return ["Try a claim title, map title, or a phrase from the raw thought."];
   }
 
-  const suggestions = [
-    `Search for “${base}” in another map`,
-    `Try a shorter version of “${base}”`,
-  ];
+  const suggestions = [`Search for “${base}” in another map`, `Try a shorter version of “${base}”`];
 
   if (results.length > 0) {
     suggestions.unshift(`Best match: ${results[0]?.title ?? "result"}`);
@@ -95,17 +128,19 @@ function makeSuggestion(query: string, results: SearchResult[]) {
   return suggestions.slice(0, 3);
 }
 
-async function searchMaps(queryTokens: string[], filters: SearchFilters) {
-  const maps = await listThoughtMaps();
+async function searchMaps(queryTokens: string[], maps: ThoughtMapModel[], filters: SearchFilters) {
   const results: SearchResult[] = [];
 
   for (const map of maps) {
     const shapeLabels = derivePennyShapes(map.nodes).map((shape) => shape.label);
-    const mapMetadata = {
+    const metadata = {
       status: map.status,
-      nodeCount: map.nodes.length,
-      artifactCount: map.artifacts.length,
       confidence: map.nodes[0]?.scores?.confidence ?? null,
+      domain: classifyCalibrationDomain(`${map.title} ${map.rawThought}`),
+      hasResolutionDate: map.events.some((event) => event.eventType === "claim_resolution"),
+      dialecticRoundCount: map.events.filter((event) => event.eventType === "dialectic_round").length,
+      stakeLevel: map.nodes.some((node) => node.kind === "core_claim") ? "high" : "medium",
+      createdAt: map.createdAt,
       updatedAt: map.updatedAt,
     };
     const matchedFields = findMatchedFields(queryTokens, [
@@ -119,7 +154,7 @@ async function searchMaps(queryTokens: string[], filters: SearchFilters) {
       { text: shapeLabels.join(" "), weight: 0.5 },
     ]);
 
-    if (relevanceScore > 0.1 && matchesFilters(filters, "map", mapMetadata)) {
+    if (relevanceScore > 0.1 && matchesFilters(filters, "map", metadata)) {
       results.push({
         entityType: "map",
         entityId: map.id,
@@ -127,7 +162,7 @@ async function searchMaps(queryTokens: string[], filters: SearchFilters) {
         preview: cleanSentence(map.rawThought).slice(0, 160),
         matchedFields,
         relevanceScore,
-        metadata: mapMetadata,
+        metadata,
         mapId: map.id,
         mapTitle: map.title,
       });
@@ -137,8 +172,7 @@ async function searchMaps(queryTokens: string[], filters: SearchFilters) {
   return results;
 }
 
-async function searchClaims(queryTokens: string[], filters: SearchFilters) {
-  const maps = await listThoughtMaps();
+async function searchClaims(queryTokens: string[], maps: ThoughtMapModel[], filters: SearchFilters) {
   const results: SearchResult[] = [];
 
   for (const map of maps) {
@@ -150,10 +184,12 @@ async function searchClaims(queryTokens: string[], filters: SearchFilters) {
       const metadata = {
         status: node.nodeStatus,
         confidence: node.scores?.confidence ?? null,
-        domain: node.kind,
-        hasResolutionDate: /by\s+\d{4}/i.test(node.content) || /(?:deadline|resolve|resolution)/i.test(node.content),
-        dialecticRoundCount: node.kind === "counter_argument" || node.kind === "research" ? 1 : 0,
-        stakeLevel: node.kind === "core_claim" ? "high" : "medium",
+        domain: classifyCalibrationDomain(node.content),
+        hasResolutionDate: map.events.some((event) => event.eventType === "claim_resolution" && event.nodeId === node.id),
+        dialecticRoundCount: map.events.filter((event) => event.eventType === "dialectic_round" && event.nodeId === node.id).length,
+        stakeLevel: node.kind === "core_claim" ? "high" : node.kind === "counter_argument" ? "medium" : "low",
+        createdAt: node.createdAt,
+        updatedAt: node.updatedAt,
       };
       const matchedFields = findMatchedFields(queryTokens, [
         ["content", node.content],
@@ -188,8 +224,7 @@ async function searchClaims(queryTokens: string[], filters: SearchFilters) {
   return results;
 }
 
-async function searchArtifacts(queryTokens: string[], filters: SearchFilters) {
-  const maps = await listThoughtMaps();
+async function searchArtifacts(queryTokens: string[], maps: ThoughtMapModel[], filters: SearchFilters) {
   const results: SearchResult[] = [];
 
   for (const map of maps) {
@@ -198,10 +233,12 @@ async function searchArtifacts(queryTokens: string[], filters: SearchFilters) {
       const metadata = {
         status: artifact.latestOutcome?.outcomeType ?? "pending",
         confidence: artifact.latestOutcome?.artifactQualityRating ?? null,
-        domain: artifact.artifactTypeId,
-        hasResolutionDate: false,
+        domain: classifyCalibrationDomain(`${artifact.title} ${artifact.artifactTypeName}`),
+        hasResolutionDate: artifact.latestOutcome != null,
         dialecticRoundCount: artifact.loadBearingClaims.length,
         stakeLevel: artifact.loadBearingClaims.length > 3 ? "high" : "medium",
+        createdAt: map.createdAt,
+        updatedAt: map.updatedAt,
       };
       const matchedFields = findMatchedFields(queryTokens, [
         ["title", artifact.title],
@@ -233,18 +270,20 @@ async function searchArtifacts(queryTokens: string[], filters: SearchFilters) {
   return results;
 }
 
-async function searchSessions(queryTokens: string[], filters: SearchFilters) {
-  const sessions = await listSessions();
+async function searchSessions(queryTokens: string[], userId: string, filters: SearchFilters) {
+  const sessions = await listSessions(userId);
   const results: SearchResult[] = [];
 
   for (const session of sessions) {
     const metadata = {
       status: session.status,
       confidence: session.clarityScore,
-      domain: session.currentStage,
+      domain: classifyCalibrationDomain(`${session.title} ${session.rawIdea}`),
       hasResolutionDate: false,
       dialecticRoundCount: session.currentStage === "brief" ? 1 : 0,
       stakeLevel: session.status === "brief-ready" ? "high" : "medium",
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt ?? session.createdAt,
     };
     const matchedFields = findMatchedFields(queryTokens, [
       ["title", session.title],
@@ -275,41 +314,46 @@ async function searchSessions(queryTokens: string[], filters: SearchFilters) {
   return results;
 }
 
-async function searchLessons(queryTokens: string[], filters: SearchFilters) {
-  const fragments = await listMarginFragments();
+async function searchLessons(queryTokens: string[], userId: string, filters: SearchFilters) {
+  const library = await getLessonLibrary(userId);
   const results: SearchResult[] = [];
 
-  for (const fragment of fragments) {
+  for (const lesson of library.lessons) {
     const metadata = {
-      status: fragment.status,
-      confidence: fragment.priority,
-      domain: fragment.sphere,
-      hasResolutionDate: false,
-      dialecticRoundCount: fragment.surfaceCount,
-      stakeLevel: fragment.priority > 0.7 ? "high" : "medium",
+      status: lesson.hasBeenApplied ? "applied" : "stored",
+      confidence: Math.round(lesson.confidenceInLesson * 100),
+      domain: lesson.domain ?? classifyCalibrationDomain(lesson.lessonText),
+      hasResolutionDate: lesson.sourceType === "resolution" || lesson.sourceType === "counterfactual",
+      dialecticRoundCount: lesson.applicationCount,
+      stakeLevel: lesson.confidenceInLesson >= 0.85 ? "high" : "medium",
+      createdAt: lesson.createdAt,
+      updatedAt: lesson.lastSurfacedAt ?? lesson.createdAt,
+      sourceType: lesson.sourceType,
     };
     const matchedFields = findMatchedFields(queryTokens, [
-      ["content", fragment.content],
-      ["sphere", fragment.sphere],
-      ["context", fragment.contextSnapshot.currentContext],
+      ["text", lesson.lessonText],
+      ["editedText", lesson.userEditedText ?? ""],
+      ["tags", lesson.tags.join(" ")],
+      ["domain", lesson.domain ?? ""],
     ]);
     const relevanceScore = scoreFields(queryTokens, [
-      { text: fragment.content, weight: 1.0 },
-      { text: fragment.sphere, weight: 0.4 },
-      { text: fragment.contextSnapshot.currentContext, weight: 0.4 },
+      { text: lesson.lessonText, weight: 1.1 },
+      { text: lesson.userEditedText ?? "", weight: 0.7 },
+      { text: lesson.tags.join(" "), weight: 0.5 },
+      { text: lesson.domain ?? "", weight: 0.3 },
     ]);
 
-    if (relevanceScore > 0.1 && matchesFilters(filters, "lesson", metadata)) {
+    if (relevanceScore > 0.12 && matchesFilters(filters, "lesson", metadata)) {
       results.push({
         entityType: "lesson",
-        entityId: fragment.id,
-        title: cleanSentence(fragment.content).slice(0, 90),
-        preview: cleanSentence(fragment.contextSnapshot.currentContext || fragment.content).slice(0, 160),
+        entityId: lesson.id,
+        title: formatLessonPreview(lesson).slice(0, 90),
+        preview: formatLessonPreview(lesson).slice(0, 160),
         matchedFields,
         relevanceScore,
         metadata,
-        mapId: fragment.sourceMapId,
-        mapTitle: null,
+        mapId: null,
+        mapTitle: "Lesson library",
       });
     }
   }
@@ -317,8 +361,7 @@ async function searchLessons(queryTokens: string[], filters: SearchFilters) {
   return results;
 }
 
-async function searchShapes(queryTokens: string[], filters: SearchFilters) {
-  const maps = await listThoughtMaps();
+async function searchShapes(queryTokens: string[], maps: ThoughtMapModel[], filters: SearchFilters) {
   const results: SearchResult[] = [];
 
   for (const map of maps) {
@@ -331,6 +374,8 @@ async function searchShapes(queryTokens: string[], filters: SearchFilters) {
         hasResolutionDate: false,
         dialecticRoundCount: shape.evidenceNodeIds.length,
         stakeLevel: shape.confidence > 80 ? "high" : "medium",
+        createdAt: map.createdAt,
+        updatedAt: map.updatedAt,
       };
       const matchedFields = findMatchedFields(queryTokens, [
         ["label", shape.label],
@@ -366,14 +411,15 @@ export async function globalSearch(query: SearchQuery): Promise<SearchResponse> 
   const start = Date.now();
   const queryTokens = tokenize(query.query);
   const filters = query.filters;
+  const allMaps = (await listThoughtMaps()).filter((map) => map.userId === query.userId);
 
   const [claimResults, mapResults, artifactResults, lessonResults, sessionResults, shapeResults] = await Promise.all([
-    searchClaims(queryTokens, filters),
-    searchMaps(queryTokens, filters),
-    searchArtifacts(queryTokens, filters),
-    searchLessons(queryTokens, filters),
-    searchSessions(queryTokens, filters),
-    searchShapes(queryTokens, filters),
+    searchClaims(queryTokens, allMaps, filters),
+    searchMaps(queryTokens, allMaps, filters),
+    searchArtifacts(queryTokens, allMaps, filters),
+    searchLessons(queryTokens, query.userId, filters),
+    searchSessions(queryTokens, query.userId, filters),
+    searchShapes(queryTokens, allMaps, filters),
   ]);
 
   const rankedResults = [...claimResults, ...mapResults, ...artifactResults, ...lessonResults, ...sessionResults, ...shapeResults].sort(

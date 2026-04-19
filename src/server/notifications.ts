@@ -133,6 +133,28 @@ async function loadThoughtMapsForUser(userId: string): Promise<ThoughtMapModel[]
   return maps.flatMap((map) => (map ? [map] : []));
 }
 
+export async function listNotificationRecipientIds() {
+  await ensureNotificationTables();
+
+  const recipients = await prisma.$queryRaw<Array<{ userId: string }>>(Prisma.sql`
+    SELECT DISTINCT userId
+    FROM (
+      SELECT "userId" AS userId FROM "ThoughtMap"
+      UNION
+      SELECT "userId" AS userId FROM "Session"
+      UNION
+      SELECT "userId" AS userId FROM "MarginFragment"
+      UNION
+      SELECT "userId" AS userId FROM "NotificationPreference"
+      UNION
+      SELECT "userId" AS userId FROM "NotificationRecord"
+    )
+    ORDER BY userId ASC
+  `);
+
+  return recipients.map((recipient) => recipient.userId);
+}
+
 export async function getNotificationPreferences(userId: string) {
   await ensureNotificationTables();
 

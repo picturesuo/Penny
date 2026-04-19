@@ -3,20 +3,60 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { SearchResponse, SearchResult } from "@/types/search";
 
+function resultHref(result: SearchResult) {
+  if (result.entityType === "lesson") {
+    return "/app/lessons";
+  }
+
+  if (result.entityType === "session") {
+    return `/app/session/${result.entityId}`;
+  }
+
+  if (result.mapId) {
+    return `/app/maps/${result.mapId}`;
+  }
+
+  if (result.entityType === "shape") {
+    return "/app/identity";
+  }
+
+  return "/app";
+}
+
+function formatMetadataValue(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.toLocaleDateString();
+  }
+
+  return null;
+}
+
 function ResultRow({ result }: { result: SearchResult }) {
   return (
-    <Link href={result.mapId ? `/app/maps/${result.mapId}` : "/app"} className="block">
+    <Link href={resultHref(result)} className="block">
       <div className="rounded-[22px] border border-black/8 bg-white/80 p-4 transition hover:border-black/15 hover:bg-white">
         <div className="flex flex-wrap items-center gap-2">
           <Badge className="bg-[var(--panel)] text-[var(--ink)]">{result.entityType}</Badge>
           {result.mapTitle ? <Badge className="bg-white text-[var(--muted-ink)]">{result.mapTitle}</Badge> : null}
           <Badge className="bg-white text-[var(--muted-ink)]">{Math.round(result.relevanceScore * 100)}%</Badge>
+          {formatMetadataValue(result.metadata.domain) ? (
+            <Badge className="bg-white text-[var(--muted-ink)]">{formatMetadataValue(result.metadata.domain)}</Badge>
+          ) : null}
         </div>
         <h4 className="mt-3 text-base font-medium text-[var(--ink)]">{result.title}</h4>
         <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{result.preview}</p>
         {result.matchedFields.length > 0 ? (
           <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">
             Matched: {result.matchedFields.join(", ")}
+          </p>
+        ) : null}
+        {formatMetadataValue(result.metadata.createdAt) ? (
+          <p className="mt-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">
+            {formatMetadataValue(result.metadata.createdAt)}
           </p>
         ) : null}
       </div>

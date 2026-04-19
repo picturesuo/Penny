@@ -1,16 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchResults } from "@/components/penny/search-results";
-import type { SearchResponse } from "@/types/search";
+import type { SearchEntityType, SearchResponse } from "@/types/search";
+
+const ENTITY_FILTERS: Array<{ value: SearchEntityType; label: string }> = [
+  { value: "claim", label: "Claims" },
+  { value: "map", label: "Maps" },
+  { value: "artifact", label: "Artifacts" },
+  { value: "lesson", label: "Lessons" },
+  { value: "session", label: "Sessions" },
+  { value: "shape", label: "Shapes" },
+];
 
 export function GlobalSearch({ userId }: { userId: string }) {
   const [query, setQuery] = useState("");
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [entityTypes, setEntityTypes] = useState<SearchEntityType[]>([]);
+
+  const activeFilters = useMemo(
+    () => ({
+      entityTypes,
+      domains: [],
+      confidenceRange: null,
+      dateRange: null,
+      status: [],
+      hasDialecticRounds: null,
+      hasResolutionDate: null,
+      stakeLevel: [],
+    }),
+    [entityTypes],
+  );
+
+  function toggleEntityType(type: SearchEntityType) {
+    setEntityTypes((current) => (current.includes(type) ? current.filter((entry) => entry !== type) : [...current, type]));
+  }
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -32,6 +60,7 @@ export function GlobalSearch({ userId }: { userId: string }) {
           query: trimmed,
           userId,
           requestedAt: new Date().toISOString(),
+          filters: activeFilters,
         }),
       })
         .then(async (result) => {
@@ -62,7 +91,7 @@ export function GlobalSearch({ userId }: { userId: string }) {
       active = false;
       window.clearTimeout(handle);
     };
-  }, [query, userId]);
+  }, [activeFilters, query, userId]);
 
   return (
     <div className="space-y-4">
@@ -84,9 +113,45 @@ export function GlobalSearch({ userId }: { userId: string }) {
             className="w-full rounded-full border border-black/10 bg-white py-3 pl-11 pr-4 text-sm text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-[var(--ink)]"
           />
         </label>
-        <Button variant="secondary" onClick={() => setQuery("")}>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setQuery("");
+            setEntityTypes([]);
+            setResponse(null);
+            setError(null);
+            setIsLoading(false);
+          }}
+        >
           Clear
         </Button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={`rounded-full border px-3 py-2 text-xs transition ${
+            entityTypes.length === 0
+              ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--paper)]"
+              : "border-black/10 bg-white text-[var(--muted-ink)] hover:border-black/20 hover:text-[var(--ink)]"
+          }`}
+          onClick={() => setEntityTypes([])}
+        >
+          All entities
+        </button>
+        {ENTITY_FILTERS.map((filter) => (
+          <button
+            key={filter.value}
+            type="button"
+            className={`rounded-full border px-3 py-2 text-xs transition ${
+              entityTypes.includes(filter.value)
+                ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--paper)]"
+                : "border-black/10 bg-white text-[var(--muted-ink)] hover:border-black/20 hover:text-[var(--ink)]"
+            }`}
+            onClick={() => toggleEntityType(filter.value)}
+          >
+            {filter.label}
+          </button>
+        ))}
       </div>
       <SearchResults response={response} isLoading={isLoading} error={error} />
     </div>

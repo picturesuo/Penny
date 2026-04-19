@@ -8,7 +8,8 @@ import { QuickCapture } from "@/components/penny/quick-capture";
 import { CaptureInbox } from "@/components/penny/capture-inbox";
 import { renderDashboardPanel } from "@/components/penny/dashboard-panels";
 import { buildHomeDashboard } from "@/lib/home-dashboard";
-import type { MarginFragmentModel, SessionCardModel } from "@/types/penny";
+import type { SessionCardModel } from "@/types/penny";
+import type { QuickCapture as QuickCaptureModel } from "@/types/quick-capture";
 import type { ThoughtMapModel } from "@/types/thought-map";
 
 export function HomeDashboard({
@@ -20,7 +21,7 @@ export function HomeDashboard({
   userId: string;
   maps: ThoughtMapModel[];
   sessions: SessionCardModel[];
-  fragments: MarginFragmentModel[];
+  fragments: QuickCaptureModel[];
 }) {
   const dashboard = buildHomeDashboard({ userId, maps, sessions, fragments });
   const primaryLink =
@@ -64,7 +65,7 @@ export function HomeDashboard({
                   Search everything
                 </Button>
               </Link>
-              <QuickCapture />
+              <QuickCapture userId={userId} />
             </div>
           </div>
 

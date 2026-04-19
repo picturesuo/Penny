@@ -11,6 +11,7 @@
 - The `Map` is for topology, structural health, and screenshots; the `Stream` is for daily work, resurfacing aged claims, open questions, shape changes, and suggested next moves.
 - `Challenge` is the dialectic interaction: claim, counterargument, response, with explicit rounds, critique strength disclosure, provenance, why-this-critique transparency, three-path responses, Bayesian propagation, and quiet-keystone surfacing.
 - `Learn` is just-in-time, claim-anchored, and teach-back driven: Penny gives a minimum scaffold, asks the user to explain the concept in the context of the current claim, and then closes the gap inline.
+- Global search should be user-scoped, deterministic, and fast enough to recover claims, maps, artifacts, lessons, sessions, and shapes without forcing the user to open each map manually.
 - Synthesis should be gated by pre-mortem, if-you-were-right, twin-check, stakes-proportional friction, and dependency-completeness review so the output step feels load-bearing.
 - Sessions are first-class objects with a declared focus, protected deep-work windows, cognitive protection, depletion detection, and a clean ending ritual that hands over the artifact and stops pulling.
 - Calibration is first-class: every claim has a probability, high-confidence claims get challenged, resolved claims feed Brier tracking, and private self-bets make calibration emotionally sticky.
