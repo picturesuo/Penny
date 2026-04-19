@@ -25,6 +25,8 @@
 
 ## User-Provided Knowledge
 - Capture durable user guidance, preferences, and constraints that should survive past a single task.
+- `user`: Always be critical about user-supplied ideas, framing, and requirements instead of accepting them at face value; challenge weak assumptions, ambiguous scope, and missing tradeoffs.
+- `user`: Commit every file change that you make and push it to the configured GitHub remote automatically, while still avoiding unrelated private or scratch files.
 - `user`: The four core object types are `Claim`, `Move`, `Shape`, and `Lens`; `Claim` is the assertion substrate, `Move` records user response and change, `Shape` captures recurring patterns, and `Lens` is the live personalized model used for generation.
 - `user`: Penny’s three main use cases should be framed as: a pressure-tested second brain/personal idea wiki, stress testing the ideas inside that wiki, and a learning loop that recommends the best next thing to learn.
 - `user`: The first priority is the pressure-tested second brain. Product structure and trackers should make that active focus explicit while still keeping stress testing and learning visible as planned lanes.
@@ -62,6 +64,7 @@
 - `user`: Update available flags should surface when cited sources have been contradicted, retracted, or updated by newer evidence.
 - `user`: Self-audit mode should periodically review whether Penny has been too lenient or too harsh and whether any shapes are miscalibrated, because the product should model the same honesty it asks from the user.
 - `user`: Export everything should let the user export the full Brain, including claims, moves, shapes, artifacts, and learnings, in structured form.
+- `user`: Export should support open JSON, Markdown, and CSV formats with a published schema and a portability guarantee.
 - `user`: Import from existing tools should support Roam, Obsidian, Notion, and Google Docs by parsing notes into claim-candidates for user confirmation.
 - `user`: Privacy tiers should let specific claims be marked extra-private so they never enter aggregate shape libraries or community features unless the user explicitly allows it.
 - `user`: Forgetting should provide a deliberate archive-and-hide function for things the user wants to keep historically but stop using in the live lens.
@@ -362,6 +365,7 @@
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a round-tracked dialectic scaffold, a synthesis-gate surface, a move-query lens, and confidence drift indicators in the old-selves timeline.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now includes a first-class timeline block for whole-map events, per-shape confidence trails, and dependency-chain progression.
 - `repo`: `src/app/app/page.tsx` now surfaces a memory/time dashboard with what-I-used-to-believe digests, prediction retrospectives, belief velocity, and decisions under Penny.
+- `repo`: `src/app/app/page.tsx` now surfaces a notification preferences panel, and `src/lib/notification-scheduler.ts` / `src/server/notifications.ts` now drive revisit digests, resolution reminders, blind-spot digests, and session nudges from live map state.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces precedent adherence tracking so the selected failure case can check whether the user's replies actually address the same failure modes.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now surfaces propagated confidence implications explicitly so downstream belief changes must be accepted or defended instead of happening silently.
 - `repo`: `src/lib/penny-insights.ts` now enriches precedent cases with claim equivalents, load-bearing assumptions, structural lessons, and failure-type tags, and it adds survivor analog retrieval for the same structural shape; `src/components/penny/thought-map-workspace.tsx` lets the user select a precedent and compare it with surviving analogs.
@@ -384,6 +388,7 @@
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now adds a claim-anchored teach-back surface, a per-claim knowledge gap surface, and explicit metacognition teaching for active shapes.
 - `repo`: `src/components/penny/thought-map-workspace.tsx` now turns teach-back into an inline draft/check/rewrite loop with concept-specific correction, annotated user text, and a restatement prompt, including a special network-effects example that distinguishes direct from indirect effects when that is the active confusion.
 - `repo`: `src/app/app/page.tsx` now surfaces a derived community commons snapshot with review-gated precedent contributions, privacy-safe contradiction signals, aggregate open questions, an anonymized shape library, and bounded thought-partner matching.
+- `repo`: `src/lib/evidence-quality.ts`, `src/app/api/maps/[id]/claims/[claimId]/evidence/route.ts`, `src/components/penny/evidence-entry.tsx`, and `src/components/penny/thought-map-workspace.tsx` now add first-class evidence records with quality scoring, claim-health summaries, inline evidence entry, and artifact gating when load-bearing claims are poorly evidenced.
 
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.
