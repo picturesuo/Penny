@@ -5446,7 +5446,7 @@ export function ThoughtMapWorkspace({
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {interleavedStressQueue.length ? (
               interleavedStressQueue.map((node, index) => (
-                <div key={node.id} className="rounded-[18px] bg-[var(--panel)] p-4">
+                <div key={`${node.id}-${index}`} className="rounded-[18px] bg-[var(--panel)] p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge className={statusBadge(node.nodeStatus)}>{node.nodeStatus}</Badge>
                     <Badge>{kindLabel(node.kind)}</Badge>
