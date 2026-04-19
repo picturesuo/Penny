@@ -101,7 +101,7 @@ export default function LandingPage() {
         <header className="flex items-center justify-between py-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Penny</p>
-            <p className="mt-1 text-sm text-[var(--muted-ink)]">Pressure-tested second brain, not another chatbot.</p>
+            <p className="mt-1 text-sm text-[var(--muted-ink)]">Pressure-tested second brain for claims, critique, and learning.</p>
           </div>
           <Link href="/auth/sign-in">
             <Button variant="secondary">Sign in</Button>
