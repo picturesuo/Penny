@@ -11,6 +11,7 @@ import type {
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/db/prisma";
 import { track } from "@/lib/analytics";
+import { logger } from "@/lib/logger";
 import { artifactDraftToFounderBrief, artifactRecordFromFounderBrief, buildArtifactDraft, getArtifactType } from "@/lib/artifact-types";
 import { buildArtifactDependencyHealth, buildDependencyHealthReport } from "@/lib/dependency-health";
 import { getFounderBriefReadiness } from "@/lib/founder-brief";
@@ -2016,6 +2017,7 @@ export async function recordBeliefPropagation(params: {
   seedClaimId: string;
   updatedPosterior?: number | null;
 }): Promise<BeliefPropagationResponse> {
+  const startedAt = Date.now();
   const map = await getThoughtMap(params.mapId);
 
   if (!map) {
@@ -2089,6 +2091,19 @@ export async function recordBeliefPropagation(params: {
     },
     map.userId,
   );
+
+  logger.info("belief_propagation_updated", {
+    userId: map.userId,
+    featureId: "thought-map",
+    durationMs: Date.now() - startedAt,
+    data: {
+      mapId: params.mapId,
+      seedClaimId: params.seedClaimId,
+      seedPrior,
+      seedPosterior,
+      cycleError: result.cycleError ?? null,
+    },
+  });
 
   return {
     result,
@@ -2239,6 +2254,7 @@ export async function recordClaimResolution(params: {
   propagationResults?: PropagationResult[];
   userId?: string;
 }) {
+  const startedAt = Date.now();
   const userId = params.userId ?? (await getCurrentAuthenticatedUserId());
   const mapRecord = await prisma.thoughtMap.findUnique({
     where: { id: params.mapId },
@@ -2399,6 +2415,7 @@ export async function recordDialecticRound(params: {
   response: string;
   confidenceAtRoundEnd?: number | null;
 }) {
+  const startedAt = Date.now();
   const map = await getThoughtMap(params.mapId);
 
   if (!map) {
@@ -2554,6 +2571,7 @@ export async function recordSteelMan(params: {
   usedInRound?: string[];
   userId?: string;
 }) {
+  const startedAt = Date.now();
   const userId = params.userId ?? (await getCurrentAuthenticatedUserId());
   const map = await prisma.thoughtMap.findUnique({
     where: { id: params.mapId },
@@ -2650,6 +2668,17 @@ export async function recordSteelMan(params: {
     userId,
   );
 
+  logger.info("steel_man_written", {
+    userId,
+    featureId: "thought-map",
+    durationMs: Date.now() - startedAt,
+    data: {
+      mapId: params.mapId,
+      claimId: params.claimId,
+      qualityScore: assessment.qualityScore,
+    },
+  });
+
   return {
     steelMan,
     assessment,
@@ -2677,6 +2706,7 @@ export async function recordCritiqueFeedback(params: {
   voiceLabel?: string | null;
   failureTypes?: string[];
 }) {
+  const startedAt = Date.now();
   const map = await getThoughtMap(params.mapId);
 
   if (!map) {
@@ -3282,6 +3312,7 @@ export async function setRevisitTrigger(params: {
   triggerDefinition: TriggerDefinition;
   userId?: string;
 }) {
+  const startedAt = Date.now();
   const map = await getThoughtMap(params.mapId);
 
   if (!map) {
@@ -3656,6 +3687,7 @@ export async function listThoughtMaps() {
 }
 
 export async function createThoughtMap(input: CreateThoughtMapInput) {
+  const startedAt = Date.now();
   const rawThought = cleanSentence(input.rawThought);
   const captureEnvelope = formatClaimCaptureMetadata(input.claim);
   const mapRawThought = `${captureEnvelope}\n${rawThought}`;
@@ -3772,6 +3804,18 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
       userId,
     );
   }
+
+  logger.info("map_created", {
+    userId,
+    featureId: "thought-map",
+    durationMs: Date.now() - startedAt,
+    data: {
+      mapId: created.id,
+      rootClaimId: rootNodeId,
+      claimDomain,
+      hasReferenceClass: Boolean(referenceClassRecord),
+    },
+  });
 
   return hydrateThoughtMap(created);
 }
@@ -3998,6 +4042,7 @@ export async function generateArtifactForMap(params: {
   narrativeGlue?: string | null;
   userId?: string;
 }) {
+  const startedAt = Date.now();
   const map = await getThoughtMap(params.mapId);
 
   if (!map) {
@@ -4087,6 +4132,17 @@ export async function generateArtifactForMap(params: {
     },
     activeUserId,
   );
+
+  logger.info("artifact_generated", {
+    userId: activeUserId,
+    featureId: "thought-map",
+    durationMs: Date.now() - startedAt,
+    data: {
+      mapId: params.mapId,
+      artifactTypeId: params.artifactTypeId,
+      artifactId: artifact.id,
+    },
+  });
 
   const hydratedMap = await hydrateThoughtMap(
     updatedRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { track } from "@/lib/analytics";
+import { logger } from "@/lib/logger";
 import { signUpWithEmail } from "@/server/auth";
 import {
   buildRateLimitResponse,
@@ -37,6 +38,10 @@ export async function POST(request: Request) {
       },
       result.value.user.id,
     );
+    logger.info("auth_sign_up_route_completed", {
+      userId: result.value.user.id,
+      featureId: "auth-sign-up",
+    });
 
     return NextResponse.json(
       {

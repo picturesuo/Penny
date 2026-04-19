@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildNotificationDispatchesForUser, listNotificationRecipientIds, recordNotificationDeliveries } from "@/server/notifications";
 import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
+import { logger } from "@/lib/logger";
 import type { Notification } from "@/types/notifications";
 
 const sendNotificationsSchema = z.object({
@@ -41,6 +42,16 @@ export async function POST(request: Request) {
         userId,
         notifications: finalized,
       });
+
+      logger.info("notifications_built", {
+        userId,
+        featureId: "notifications-send",
+        data: {
+          generated: finalized.filter((notification) => notification.status === "sent").length,
+          suppressed: finalized.filter((notification) => notification.status === "suppressed").length,
+          dryRun: Boolean(payload.dryRun),
+        },
+      });
     }
 
     return NextResponse.json(
@@ -66,6 +77,13 @@ export async function POST(request: Request) {
       requestPath: request.url,
       requestMethod: request.method,
       featureId: "notifications-send",
+    });
+    logger.error("notifications_send_failed", {
+      featureId: "notifications-send",
+      error: error instanceof Error ? error.name : "UnknownError",
+      data: {
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
     });
 
     return NextResponse.json(

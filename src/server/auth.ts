@@ -4,6 +4,7 @@ import { createHash, pbkdf2Sync, randomBytes, timingSafeEqual } from "node:crypt
 import { cookies } from "next/headers";
 import { prisma } from "@/db/prisma";
 import { DEMO_USER_ID } from "@/lib/penny";
+import { logger } from "@/lib/logger";
 
 export const AUTH_SESSION_COOKIE = "penny_session";
 export const AUTH_VERIFICATION_COOKIE = "penny_verification";
@@ -84,9 +85,17 @@ export async function signUpWithEmail(params: {
 }) {
   const email = normalizeEmail(params.email);
   const displayName = normalizeDisplayName(params.displayName);
+  logger.info("auth_sign_up_started", {
+    featureId: "auth-sign-up",
+    data: { emailDomain: email.split("@")[1] ?? null },
+  });
   const existing = await prisma.user.findUnique({ where: { email } });
 
   if (existing) {
+    logger.warn("auth_sign_up_duplicate_email", {
+      featureId: "auth-sign-up",
+      data: { emailDomain: email.split("@")[1] ?? null },
+    });
     return { ok: false as const, error: "email_already_in_use" as const };
   }
 
@@ -102,6 +111,11 @@ export async function signUpWithEmail(params: {
   });
 
   const verification = await createVerificationToken(user.id);
+  logger.info("auth_sign_up_completed", {
+    userId: user.id,
+    featureId: "auth-sign-up",
+    data: { emailDomain: email.split("@")[1] ?? null },
+  });
 
   return {
     ok: true as const,
@@ -115,6 +129,9 @@ export async function signUpWithEmail(params: {
 
 export async function verifyEmailToken(token: string) {
   const tokenHash = hashToken(token);
+  logger.info("auth_email_verification_checked", {
+    featureId: "auth-sign-up",
+  });
   const record = await prisma.emailVerificationToken.findUnique({
     where: { tokenHash },
     include: { user: true },
@@ -134,6 +151,10 @@ export async function verifyEmailToken(token: string) {
       data: { consumedAt: new Date() },
     }),
   ]);
+  logger.info("auth_email_verified", {
+    userId: record.userId,
+    featureId: "auth-sign-up",
+  });
 
   return {
     ok: true as const,
@@ -143,22 +164,42 @@ export async function verifyEmailToken(token: string) {
 
 export async function signInWithEmail(params: { email: string; password: string }) {
   const email = normalizeEmail(params.email);
+  logger.info("auth_sign_in_started", {
+    featureId: "auth-sign-in",
+    data: { emailDomain: email.split("@")[1] ?? null },
+  });
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user) {
+    logger.warn("auth_sign_in_email_not_found", {
+      featureId: "auth-sign-in",
+      data: { emailDomain: email.split("@")[1] ?? null },
+    });
     return { ok: false as const, error: "email_not_found" as const };
   }
 
   if (!user.emailVerifiedAt) {
+    logger.warn("auth_sign_in_unverified_email", {
+      userId: user.id,
+      featureId: "auth-sign-in",
+    });
     return { ok: false as const, error: "email_not_verified" as const };
   }
 
   const verified = verifyPassword(params.password, user.passwordHash, user.passwordSalt);
   if (!verified) {
+    logger.warn("auth_sign_in_wrong_password", {
+      userId: user.id,
+      featureId: "auth-sign-in",
+    });
     return { ok: false as const, error: "wrong_password" as const };
   }
 
   const session = await createAuthSession(user.id);
+  logger.info("auth_sign_in_completed", {
+    userId: user.id,
+    featureId: "auth-sign-in",
+  });
   return {
     ok: true as const,
     value: {
@@ -180,6 +221,10 @@ export async function createAuthSession(userId: string) {
       expiresAt,
     },
   });
+  logger.info("auth_session_created", {
+    userId,
+    featureId: "auth-session",
+  });
 
   return {
     token: sessionToken,
@@ -192,6 +237,9 @@ export async function revokeAuthSession(token: string) {
   await prisma.authSession.updateMany({
     where: { sessionTokenHash },
     data: { revokedAt: new Date() },
+  });
+  logger.info("auth_session_revoked", {
+    featureId: "auth-session",
   });
 }
 

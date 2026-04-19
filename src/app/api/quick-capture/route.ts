@@ -4,6 +4,7 @@ import { createQuickCapture, listQuickCaptures, updateQuickCapture } from "@/ser
 import { QUICK_CAPTURE_SOURCES } from "@/types/quick-capture";
 import { SESSION_STAGES } from "@/types/penny";
 import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
+import { logger } from "@/lib/logger";
 
 const createQuickCaptureSchema = z.object({
   userId: z.string().min(1).optional(),
@@ -36,6 +37,11 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const userId = url.searchParams.get("userId") || undefined;
     const captures = await listQuickCaptures(userId);
+    logger.info("quick_capture_listed", {
+      userId: userId ?? undefined,
+      featureId: "quick-capture-get",
+      data: { count: captures.length },
+    });
     return NextResponse.json({ captures }, { status: 200 });
   } catch (error) {
     reportError(normalizeError(error), {
@@ -69,6 +75,14 @@ export async function POST(request: Request) {
       extractedDomain: input.extractedDomain ?? null,
       extractedConfidence: input.extractedConfidence ?? null,
       extractionConfidence: input.extractionConfidence ?? null,
+    });
+    logger.info("quick_capture_created", {
+      userId: capture.userId,
+      featureId: "quick-capture-post",
+      data: {
+        captureId: capture.id,
+        source: capture.captureSource,
+      },
     });
 
     return NextResponse.json({ capture }, { status: 201 });
@@ -104,6 +118,14 @@ export async function PATCH(request: Request) {
       status: input.status,
       processedIntoClaimId: input.processedIntoClaimId ?? null,
       processedIntoMapId: input.processedIntoMapId ?? null,
+    });
+    logger.info("quick_capture_updated", {
+      userId: capture.userId,
+      featureId: "quick-capture-patch",
+      data: {
+        captureId: capture.id,
+        status: capture.status,
+      },
     });
 
     return NextResponse.json({ capture }, { status: 200 });

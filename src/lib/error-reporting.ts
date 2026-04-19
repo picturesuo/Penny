@@ -1,4 +1,5 @@
 import { DEMO_USER_ID } from "@/lib/penny";
+import { logger } from "@/lib/logger";
 
 export type ErrorReportContext = {
   userId?: string;
@@ -34,18 +35,21 @@ export type ErrorReportEvent = {
 
 export function reportError(error: Error, context?: ErrorReportContext): void {
   const event = buildErrorEvent(error, context);
-
-  if (process.env.NODE_ENV === "development") {
-    console.error("[Penny error]", event);
-
-    if (event.stack) {
-      console.error(event.stack);
-    }
-
-    return;
-  }
-
-  console.error("[Penny error]", JSON.stringify(event));
+  logger.error(event.message, {
+    userId: event.userId ?? undefined,
+    featureId: event.featureId ?? undefined,
+    error: event.errorName,
+    data: {
+      id: event.id,
+      stack: event.stack,
+      location: event.location,
+      request: event.request,
+      additionalData: event.additionalData,
+      digest: event.digest,
+      environment: event.environment,
+      capturedAt: event.capturedAt,
+    },
+  });
 }
 
 export function buildErrorEvent(error: Error, context?: ErrorReportContext): ErrorReportEvent {

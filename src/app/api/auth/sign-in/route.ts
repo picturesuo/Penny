@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AUTH_SESSION_COOKIE, signInWithEmail } from "@/server/auth";
+import { logger } from "@/lib/logger";
 import {
   buildRateLimitResponse,
   checkRateLimit,
@@ -27,6 +28,11 @@ export async function POST(request: Request) {
         result.error === "email_not_found" ? 404 : result.error === "wrong_password" ? 401 : result.error === "email_not_verified" ? 403 : 400;
       return NextResponse.json({ error: result.error }, { status });
     }
+
+    logger.info("auth_sign_in_route_completed", {
+      userId: result.value.user.id,
+      featureId: "auth-sign-in",
+    });
 
     const response = NextResponse.json(
       {
