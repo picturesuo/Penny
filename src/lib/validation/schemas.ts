@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { EXPORT_FORMATS, EXPORT_TYPES } from "@/types/thought-map";
+import {
+  CLAIM_PROVENANCES,
+  CLAIM_STATUSES,
+  CLAIM_STAKES,
+  EXPORT_FORMATS,
+  EXPORT_TYPES,
+  SOURCE_TRUST_LEVELS,
+} from "@/types/thought-map";
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -29,6 +36,15 @@ export const SessionIdSchema = RouteIdSchema;
 export const RoundIdSchema = RouteIdSchema;
 export const LessonIdSchema = RouteIdSchema;
 export const FragmentIdSchema = RouteIdSchema;
+
+const CLAIM_STRUCTURE_KINDS = [
+  "assertion",
+  "conditional",
+  "compound",
+  "temporal",
+  "merged_candidate",
+  "split_candidate",
+] as const;
 
 export const MapParamsSchema = z.object({
   id: MapIdSchema,
@@ -61,8 +77,40 @@ export const UserParamsSchema = z.object({
   id: UserIdSchema,
 });
 
+const ClaimCaptureMetadataSchema = z.object({
+  insideViewEstimate: z.number().int().min(0).max(100),
+  confidence: z.number().int().min(0).max(100),
+  resolutionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().default(null),
+  provenance: z.enum(CLAIM_PROVENANCES),
+  provenanceDetail: z.string().max(200).default(""),
+  sourceCitation: z.string().max(240).default(""),
+  sourceTrustLevel: z.enum(SOURCE_TRUST_LEVELS).default("self"),
+  stakes: z.array(z.enum(CLAIM_STAKES)).default([]),
+  dependencyNotes: z.string().max(300).default(""),
+  status: z.enum(CLAIM_STATUSES),
+  temporalScope: z.string().max(120).optional(),
+  conditionalStatement: z.string().max(200).optional(),
+  structureKind: z.enum(CLAIM_STRUCTURE_KINDS).optional(),
+});
+
+const ReferenceClassSchema = z.object({
+  promptShown: z.string().min(1).max(500),
+  referenceClassType: z.string().min(1).max(80),
+  benchmarkLow: z.number().min(0).max(100).nullable().optional().default(null),
+  benchmarkHigh: z.number().min(0).max(100).nullable().optional().default(null),
+  benchmarkSource: z.string().max(240).nullable().optional().default(null),
+  userInsideViewEstimate: z.number().min(0).max(100),
+  userReferenceClassEstimate: z.number().min(0).max(100).nullable().optional().default(null),
+  userFinalConfidence: z.number().min(0).max(100),
+  divergence: z.number(),
+  divergenceDirection: z.enum(["higher_than_base_rate", "lower_than_base_rate", "aligned"]),
+  userExplainedDivergence: z.string().max(400).nullable().optional().default(null),
+});
+
 export const CreateMapSchema = z.object({
-  rawThought: z.string().min(12).max(400),
+  rawThought: z.string().min(12, "Give Penny one real thought, not a slogan.").max(400, "Keep the first thought under 400 characters."),
+  claim: ClaimCaptureMetadataSchema,
+  referenceClass: ReferenceClassSchema.optional(),
 });
 
 export const UpdateMapSchema = z.object({
@@ -71,20 +119,15 @@ export const UpdateMapSchema = z.object({
   status: z.enum(["ready", "archived"]).optional(),
 });
 
-export const CreateClaimSchema = z.object({
-  content: z.string().min(10).max(1000),
-  note: z.string().max(500).nullable().optional(),
-  kind: z.enum(["root", "core_claim", "why_it_matters", "assumption", "counter_argument", "research"]).optional(),
-  nodeStatus: z.enum(["active", "weak", "superseded"]).optional(),
-  parentId: z.string().cuid().nullable().optional(),
-  branchOrder: z.number().int().min(0).optional(),
-});
-
 export const CreateClaimCaptureSchema = z.object({
   text: z.string().min(10, "Claim must be at least 10 characters").max(1000, "Claim too long"),
   confidence: z.number().min(0).max(100),
-  provenance: z.enum(["intuition", "cited_source", "inherited", "derived"]).default("intuition"),
-  stakes: z.array(z.string().min(1).max(50)).default([]),
+  provenance: z.enum(CLAIM_PROVENANCES).default("intuition"),
+  stakes: z.array(z.enum(CLAIM_STAKES)).default([]),
+});
+
+export const CreateClaimSchema = CreateClaimCaptureSchema.extend({
+  note: z.string().max(500).nullable().optional(),
 });
 
 export const UpdateClaimSchema = z.object({

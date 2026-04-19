@@ -1,72 +1,60 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { createThoughtMap } from "@/server/thought-map";
-import { CLAIM_PROVENANCES, CLAIM_STATUSES, CLAIM_STAKES, SOURCE_TRUST_LEVELS } from "@/types/thought-map";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
+import { createMap, getMapsForUser } from "@/server/mvp";
+import { checkRateLimit } from "@/lib/rate-limiter";
+import { logger } from "@/lib/logger";
+import { CreateMapSchema, validateBody, ValidationError } from "@/lib/validation/schemas";
 
-const createThoughtMapSchema = z.object({
-  rawThought: z
-    .string()
-    .min(12, "Give Penny one real thought, not a slogan.")
-    .max(400, "Keep the first thought under 400 characters."),
-  claim: z.object({
-    insideViewEstimate: z.number().int().min(0).max(100).default(60),
-    confidence: z.number().int().min(0).max(100),
-    resolutionDate: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/)
-      .nullable()
-      .optional()
-      .default(null),
-    provenance: z.enum(CLAIM_PROVENANCES),
-    provenanceDetail: z.string().max(200).optional().default(""),
-    sourceCitation: z.string().max(240).optional().default(""),
-    sourceTrustLevel: z.enum(SOURCE_TRUST_LEVELS).optional().default("self"),
-    stakes: z.array(z.enum(CLAIM_STAKES)).default([]),
-    dependencyNotes: z.string().max(300).optional().default(""),
-    status: z.enum(CLAIM_STATUSES),
-    temporalScope: z.string().max(120).optional().default(""),
-    conditionalStatement: z.string().max(200).optional().default(""),
-    structureKind: z.enum(["assertion", "conditional", "compound", "temporal", "merged_candidate", "split_candidate"]).optional().default("assertion"),
-  }),
-  referenceClass: z
-    .object({
-      promptShown: z.string().min(1).max(500),
-      referenceClassType: z.string().min(1).max(80),
-      benchmarkLow: z.number().min(0).max(100).nullable().optional().default(null),
-      benchmarkHigh: z.number().min(0).max(100).nullable().optional().default(null),
-      benchmarkSource: z.string().max(240).nullable().optional().default(null),
-      userInsideViewEstimate: z.number().min(0).max(100),
-      userReferenceClassEstimate: z.number().min(0).max(100).nullable().optional().default(null),
-      userFinalConfidence: z.number().min(0).max(100),
-      divergence: z.number(),
-      divergenceDirection: z.enum(["higher_than_base_rate", "lower_than_base_rate", "aligned"]),
-      userExplainedDivergence: z.string().max(400).nullable().optional().default(null),
-    })
-    .optional(),
-});
+export async function GET() {
+  try {
+    const userId = await getCurrentAuthenticatedUserId();
+    const maps = await getMapsForUser(userId);
+    return NextResponse.json({ maps }, { status: 200 });
+  } catch (error) {
+    logger.error("Failed to fetch maps", {
+      error: error instanceof Error ? error.message : String(error),
+      featureId: "maps-get",
+    });
+    return NextResponse.json({ error: "Failed to fetch maps" }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request) {
   try {
-    const json = await request.json();
-    const input = createThoughtMapSchema.parse(json);
-    const map = await createThoughtMap(input);
-    return NextResponse.json({ map }, { status: 201 });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
+    const userId = await getCurrentAuthenticatedUserId();
+    const rateLimit = checkRateLimit(userId, "api_general");
+    if (!rateLimit.allowed) {
       return NextResponse.json(
+        { error: "Rate limit exceeded. Please wait before creating another map." },
         {
-          error: "invalid_request",
-          details: error.flatten(),
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)),
+          },
         },
-        { status: 400 },
       );
     }
 
-    return NextResponse.json(
-      {
-        error: "internal_error",
-      },
-      { status: 500 },
-    );
+    const input = await validateBody(CreateMapSchema)(await request.json());
+    const map = await createMap(userId, input);
+
+    logger.info("Map created", {
+      userId,
+      featureId: "maps-post",
+      data: { mapId: map.id },
+    });
+
+    return NextResponse.json({ map }, { status: 201 });
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    logger.error("Failed to create map", {
+      error: error instanceof Error ? error.message : String(error),
+      featureId: "maps-post",
+    });
+
+    return NextResponse.json({ error: "Failed to create map" }, { status: 500 });
   }
 }
