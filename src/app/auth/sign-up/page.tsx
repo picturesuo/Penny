@@ -1,0 +1,12 @@
+import { redirect } from "next/navigation";
+import { AuthForm } from "@/components/penny/auth-form";
+import { getAuthenticatedUserFromCookies } from "@/server/auth";
+
+export default async function SignUpPage() {
+  const user = await getAuthenticatedUserFromCookies();
+  if (user) {
+    redirect("/app");
+  }
+
+  return <AuthForm mode="sign-up" />;
+}

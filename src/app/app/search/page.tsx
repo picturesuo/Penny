@@ -1,9 +1,10 @@
 import { Search } from "lucide-react";
 import { GlobalSearch } from "@/components/penny/global-search";
 import { Card } from "@/components/ui/card";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
-export default function SearchPage() {
+export default async function SearchPage() {
+  const userId = await getCurrentAuthenticatedUserId();
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <Card className="p-8">
@@ -20,7 +21,7 @@ export default function SearchPage() {
           Use this surface to recover reasoning you already made. Search stays deterministic first, with all the existing map data on hand.
         </p>
       </Card>
-      <GlobalSearch userId={getDemoThoughtUserId()} />
+      <GlobalSearch userId={userId} />
     </div>
   );
 }

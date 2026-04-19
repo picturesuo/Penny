@@ -42,7 +42,6 @@ import { buildPennyUncertainty } from "@/lib/uncertainty";
 import {
   createRootNodeContent,
   createThoughtMapTitle,
-  getDemoThoughtUserId,
 } from "@/lib/thought-map";
 import { generateActionNotes, generateInitialBranchNotes } from "@/lib/thought-map-generation";
 import { buildReferenceClassRecord, suggestReferenceClass } from "@/lib/reference-classes";
@@ -54,6 +53,7 @@ import type {
   ExportCalibrationSnapshot,
 } from "@/lib/export";
 import { cleanSentence } from "@/lib/penny";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import type {
   CognitiveIntervention,
   ClaimCaptureMetadata,
@@ -2224,7 +2224,7 @@ export async function recordClaimResolution(params: {
   propagationResults?: PropagationResult[];
   userId?: string;
 }) {
-  const userId = params.userId ?? getDemoThoughtUserId();
+  const userId = params.userId ?? (await getCurrentAuthenticatedUserId());
   const mapRecord = await prisma.thoughtMap.findUnique({
     where: { id: params.mapId },
     include: {
@@ -2539,7 +2539,7 @@ export async function recordSteelMan(params: {
   usedInRound?: string[];
   userId?: string;
 }) {
-  const userId = params.userId ?? getDemoThoughtUserId();
+  const userId = params.userId ?? (await getCurrentAuthenticatedUserId());
   const map = await prisma.thoughtMap.findUnique({
     where: { id: params.mapId },
     select: {
@@ -2806,7 +2806,7 @@ export async function recordClaimRepairAction(params: {
   propagationTriggered?: boolean;
   userId?: string;
 }) {
-  const userId = params.userId ?? getDemoThoughtUserId();
+  const userId = params.userId ?? (await getCurrentAuthenticatedUserId());
   const map = await prisma.thoughtMap.findUnique({
     where: { id: params.mapId },
     select: {
@@ -3321,7 +3321,7 @@ export async function recordRevisitAction(params: {
   snoozedUntil?: Date | null;
   userId?: string;
 }) {
-  const userId = params.userId ?? getDemoThoughtUserId();
+  const userId = params.userId ?? (await getCurrentAuthenticatedUserId());
   const mapRecord = await prisma.thoughtMap.findUnique({
     where: { id: params.mapId },
     select: {
@@ -3605,7 +3605,9 @@ async function hydrateThoughtMap(
 }
 
 export async function listThoughtMaps() {
+  const userId = await getCurrentAuthenticatedUserId();
   const maps = await prisma.thoughtMap.findMany({
+    where: { userId },
     orderBy: { updatedAt: "desc" },
     include: {
       nodes: {
@@ -3641,7 +3643,7 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
       })
     : null;
   let referenceClassRecord: ReferenceClass | null = null;
-  const userId = getDemoThoughtUserId();
+  const userId = await getCurrentAuthenticatedUserId();
 
   const created = await prisma.$transaction(async (tx) => {
     const map = await tx.thoughtMap.create({
@@ -3723,8 +3725,9 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
 }
 
 export async function getThoughtMap(mapId: string) {
-  const map = await prisma.thoughtMap.findUnique({
-    where: { id: mapId },
+  const userId = await getCurrentAuthenticatedUserId();
+  const map = await prisma.thoughtMap.findFirst({
+    where: { id: mapId, userId },
     include: {
       nodes: {
         orderBy: [{ branchOrder: "asc" }, { createdAt: "asc" }],

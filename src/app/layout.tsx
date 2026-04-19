@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Instrument_Serif, Manrope } from "next/font/google";
 import "./globals.css";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -25,17 +25,19 @@ export const metadata: Metadata = {
   description: "Bring a messy idea. Leave with a validation path.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const userId = await getCurrentAuthenticatedUserId();
+
   return (
     <html
       lang="en"
       className={`${manrope.variable} ${instrumentSerif.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col" data-user-id={getDemoThoughtUserId()}>
+      <body className="min-h-full flex flex-col" data-user-id={userId}>
         {children}
       </body>
     </html>

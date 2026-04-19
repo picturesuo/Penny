@@ -103,8 +103,8 @@ export default function LandingPage() {
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Penny</p>
             <p className="mt-1 text-sm text-[var(--muted-ink)]">Pressure-tested second brain, not another chatbot.</p>
           </div>
-          <Link href="/app">
-            <Button variant="secondary">Open dashboard</Button>
+          <Link href="/auth/sign-in">
+            <Button variant="secondary">Sign in</Button>
           </Link>
         </header>
 
@@ -118,15 +118,15 @@ export default function LandingPage() {
               Penny starts with messy claims, turns them into a living graph, pressure-tests them against evidence and precedent, keeps the next move visible while you work, and can move sensitive work into device-only vault storage when it needs to stay local.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <Link href="/app/new">
+              <Link href="/auth/sign-up">
                 <Button className="gap-2 px-6 py-3 text-base">
-                  Start your first map
+                  Create account
                   <ArrowRight className="size-4" />
                 </Button>
               </Link>
-              <Link href="/app">
+              <Link href="/auth/sign-in">
                 <Button variant="secondary" className="px-6 py-3 text-base">
-                  View sessions
+                  Sign in
                 </Button>
               </Link>
             </div>

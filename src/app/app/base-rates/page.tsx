@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
 import { listThoughtMaps } from "@/server/thought-map";
 import { getPersonalBaseRateLibrary } from "@/server/personal-base-rates";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import { BaseRateLibraryView } from "@/components/penny/base-rate-library";
 
 export default async function BaseRatesPage() {
   const maps = await listThoughtMaps();
-  const userId = maps[0]?.userId ?? getDemoThoughtUserId();
+  const userId = await getCurrentAuthenticatedUserId();
   const library = await getPersonalBaseRateLibrary(userId);
 
   return (
@@ -35,4 +35,3 @@ export default async function BaseRatesPage() {
     </div>
   );
 }
-

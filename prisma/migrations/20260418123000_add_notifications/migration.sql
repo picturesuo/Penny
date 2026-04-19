@@ -1,0 +1,3 @@
+-- Intentionally left blank.
+-- This migration folder was present in the repo but the SQL file was missing,
+-- which blocked subsequent Prisma migrations from running.

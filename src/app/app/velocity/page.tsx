@@ -3,12 +3,12 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VelocityDashboard } from "@/components/penny/velocity-dashboard";
 import { buildVelocityReport } from "@/lib/intellectual-velocity";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
 import { listThoughtMaps } from "@/server/thought-map";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
 export default async function VelocityPage() {
   const maps = await listThoughtMaps();
-  const userId = maps[0]?.userId ?? getDemoThoughtUserId();
+  const userId = await getCurrentAuthenticatedUserId();
   const report = buildVelocityReport(userId, maps, 30);
 
   return (

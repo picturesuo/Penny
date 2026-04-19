@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { extractImportSource, extractTextFromHtml } from "@/lib/claim-extractor";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import { getThoughtMap, recordImportReview, recordImportSource } from "@/server/thought-map";
 import { ImportSourceType } from "@/types/thought-map";
 
@@ -89,7 +89,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "route_mismatch" }, { status: 400 });
     }
 
-    const userId = getDemoThoughtUserId();
+    const userId = await getCurrentAuthenticatedUserId();
     const map = await getThoughtMap(input.mapId);
 
     if (!map) {

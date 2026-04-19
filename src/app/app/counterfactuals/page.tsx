@@ -3,12 +3,12 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CounterfactualDashboard } from "@/components/penny/counterfactual-dashboard";
 import { buildCounterfactualArchiveForUser } from "@/server/counterfactual";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
 import { listThoughtMaps } from "@/server/thought-map";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
 export default async function CounterfactualsPage() {
   const maps = await listThoughtMaps();
-  const userId = maps[0]?.userId ?? getDemoThoughtUserId();
+  const userId = await getCurrentAuthenticatedUserId();
   const archive = await buildCounterfactualArchiveForUser(userId);
 
   return (

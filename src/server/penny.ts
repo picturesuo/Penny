@@ -5,6 +5,7 @@ import { cleanSentence, computeClarityScore, createMessage, dedupePoints, dedupe
 import { MockLlmProvider } from "@/lib/ai/mock-provider";
 import { MockContextProvider } from "@/lib/context/mock-context";
 import { generateSessionSummary } from "@/lib/session-summary";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import type {
   EvidenceScanResult,
   MarginFragmentContextSnapshot,
@@ -179,9 +180,10 @@ async function saveSession(session: SessionState) {
   });
 }
 
-export async function listMarginFragments(userId = DEMO_USER_ID): Promise<MarginFragmentModel[]> {
+export async function listMarginFragments(userId?: string): Promise<MarginFragmentModel[]> {
+  const activeUserId = userId ?? (await getCurrentAuthenticatedUserId());
   const fragments = await prisma.marginFragment.findMany({
-    where: { userId },
+    where: { userId: activeUserId },
     orderBy: [{ createdAt: "desc" }],
   });
 
@@ -202,9 +204,10 @@ export async function createMarginFragment(params: {
     throw new Error("Fragment content is required");
   }
 
+  const userId = params.userId ?? (await getCurrentAuthenticatedUserId());
   const created = await prisma.marginFragment.create({
     data: {
-      userId: params.userId ?? DEMO_USER_ID,
+      userId,
       content,
       sphere: cleanSentence(params.sphere ?? params.contextSnapshot.currentSphere) || "work",
       sourceSessionId: params.sourceSessionId ?? null,
@@ -314,10 +317,11 @@ export async function ensureSeedData() {
   }
 }
 
-export async function listSessions(userId = DEMO_USER_ID): Promise<SessionCardModel[]> {
+export async function listSessions(userId?: string): Promise<SessionCardModel[]> {
   await ensureSeedData();
+  const activeUserId = userId ?? (await getCurrentAuthenticatedUserId());
   const sessions = await prisma.session.findMany({
-    where: { userId },
+    where: { userId: activeUserId },
     orderBy: { updatedAt: "desc" },
   });
 
@@ -434,11 +438,12 @@ export async function generateConceptBrief(session: SessionState, evidence?: Evi
   return llm.generateConceptBrief(session, currentEvidence);
 }
 
-export async function createSession(rawIdea: string, category?: string, presetTitle?: string) {
+export async function createSession(rawIdea: string, category?: string, presetTitle?: string, userId?: string) {
   const sanitizedIdea = cleanSentence(rawIdea);
+  const activeUserId = userId ?? (await getCurrentAuthenticatedUserId());
   const created = await prisma.session.create({
     data: {
-      userId: DEMO_USER_ID,
+      userId: activeUserId,
       title: presetTitle || titleFromIdea(sanitizedIdea),
       rawIdea: sanitizedIdea,
       category,

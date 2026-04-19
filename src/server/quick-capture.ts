@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/db/prisma";
-import { DEMO_USER_ID, cleanSentence } from "@/lib/penny";
+import { cleanSentence } from "@/lib/penny";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import {
   parseQuickCaptureContextSnapshot,
   type QuickCapture,
@@ -103,13 +104,14 @@ async function readRows(userId: string) {
   });
 }
 
-export async function listQuickCaptures(userId = DEMO_USER_ID): Promise<QuickCapture[]> {
-  const rows = await readRows(userId);
+export async function listQuickCaptures(userId?: string): Promise<QuickCapture[]> {
+  const activeUserId = userId ?? (await getCurrentAuthenticatedUserId());
+  const rows = await readRows(activeUserId);
   return rows.map((row) => mapQuickCapture(row));
 }
 
 export async function createQuickCapture(params: QuickCaptureCreateInput): Promise<QuickCapture> {
-  const userId = params.userId ?? DEMO_USER_ID;
+  const userId = params.userId ?? (await getCurrentAuthenticatedUserId());
   const rawText = cleanSentence(params.rawText);
 
   if (!rawText) {

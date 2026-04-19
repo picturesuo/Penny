@@ -3,12 +3,12 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FeatureUnlockProgress } from "@/components/penny/feature-unlock-progress";
 import { buildFeatureUnlockStatuses, buildUnlockSummary } from "@/lib/time-locked-features";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
 import { listThoughtMaps } from "@/server/thought-map";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
 export default async function UnlocksPage() {
   const maps = await listThoughtMaps();
-  const userId = maps[0]?.userId ?? getDemoThoughtUserId();
+  const userId = await getCurrentAuthenticatedUserId();
   const unlockStatuses = buildFeatureUnlockStatuses({ userId, maps });
   const summary = buildUnlockSummary(unlockStatuses);
 

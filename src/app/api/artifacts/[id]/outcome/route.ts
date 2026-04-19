@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import { recordArtifactOutcome } from "@/server/thought-map";
 
 const claimResolutionSchema = z.object({
@@ -39,9 +39,10 @@ export async function POST(
     const { id } = await context.params;
     const json = await request.json();
     const input = artifactOutcomeSchema.parse(json);
+    const userId = await getCurrentAuthenticatedUserId();
     const result = await recordArtifactOutcome({
       artifactId: id,
-      userId: getDemoThoughtUserId(),
+      userId,
       actionTaken: input.actionTaken,
       outcomeDate: new Date(input.outcomeDate),
       outcomeDescription: input.outcomeDescription,

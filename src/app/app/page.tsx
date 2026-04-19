@@ -19,9 +19,9 @@ import { buildCalibrationTrackRecord, buildShareableTrackRecord } from "@/lib/ca
 import { getLessonLibrary } from "@/server/lesson-library";
 import { buildMarginSurfaceSnapshot } from "@/lib/margin";
 import { listQuickCaptures } from "@/server/quick-capture";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
 import { listSessions } from "@/server/penny";
 import { listThoughtMaps } from "@/server/thought-map";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
 const foundation = [
   {
@@ -93,7 +93,7 @@ function summarizeNodeStatus(nodes: Awaited<ReturnType<typeof listThoughtMaps>>[
 export default async function DashboardPage() {
   const maps = await listThoughtMaps();
   const sessions = await listSessions();
-  const userId = maps[0]?.userId ?? getDemoThoughtUserId();
+  const userId = await getCurrentAuthenticatedUserId();
   const fragments = await listQuickCaptures(userId);
   const allNodes = maps.flatMap((map) => map.nodes);
   const shapes = derivePennyShapes(allNodes).sort((a, b) => b.confidence - a.confidence).slice(0, 4);
@@ -837,7 +837,7 @@ export default async function DashboardPage() {
 
       <CalibrationCoachingView coaching={calibrationCoaching} />
 
-      <NotificationPreferencesView userId={getDemoThoughtUserId()} />
+      <NotificationPreferencesView userId={userId} />
 
       {mapCards.length ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">

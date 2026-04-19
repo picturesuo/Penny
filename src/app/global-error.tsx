@@ -5,7 +5,6 @@ import Link from "next/link";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getClientUserId, reportError } from "@/lib/error-reporting";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
 
 type GlobalErrorProps = {
   error: Error & { digest?: string };
@@ -16,7 +15,7 @@ type GlobalErrorProps = {
 export default function GlobalError({ error, reset, unstable_retry }: GlobalErrorProps) {
   useEffect(() => {
     reportError(error, {
-      userId: getClientUserId() ?? getDemoThoughtUserId(),
+      userId: getClientUserId() ?? undefined,
       requestPath: window.location.pathname + window.location.search,
       requestMethod: "CLIENT",
       featureId: "global-layout",
@@ -30,7 +29,7 @@ export default function GlobalError({ error, reset, unstable_retry }: GlobalErro
 
   return (
     <html lang="en">
-      <body className="min-h-screen bg-[var(--paper)] text-[var(--ink)]" data-user-id={getDemoThoughtUserId()}>
+      <body className="min-h-screen bg-[var(--paper)] text-[var(--ink)]" data-user-id={getClientUserId() ?? ""}>
         <div className="mx-auto flex min-h-screen max-w-2xl items-center px-6 py-16">
           <div className="w-full rounded-[32px] border border-black/8 bg-[var(--panel)] p-8 shadow-[0_24px_64px_rgba(10,13,28,0.08)]">
             <div className="flex items-center gap-3 text-[var(--ink)]">

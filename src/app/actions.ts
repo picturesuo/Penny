@@ -10,6 +10,7 @@ import {
   submitSessionReflection,
   submitAnswer,
 } from "@/server/penny";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
 const newSessionSchema = z.object({
   rawIdea: z.string().min(12, "Bring more than a slogan."),
@@ -22,7 +23,8 @@ export async function createSessionAction(formData: FormData) {
     category: formData.get("category") || undefined,
   });
 
-  const sessionId = await createSession(payload.rawIdea, payload.category);
+  const userId = await getCurrentAuthenticatedUserId();
+  const sessionId = await createSession(payload.rawIdea, payload.category, undefined, userId);
   redirect(`/app/session/${sessionId}`);
 }
 

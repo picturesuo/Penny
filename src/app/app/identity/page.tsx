@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
 import { listThoughtMaps } from "@/server/thought-map";
 import { getIntellectualBiography } from "@/server/intellectual-biography";
 import { getCognitiveFingerprint } from "@/server/cognitive-fingerprint";
 import { IntellectualBiographyView } from "@/components/penny/intellectual-biography";
 import { CognitiveFingerprintView } from "@/components/penny/cognitive-fingerprint";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
 export default async function IdentityPage() {
   const maps = await listThoughtMaps();
-  const userId = maps[0]?.userId ?? getDemoThoughtUserId();
+  const userId = await getCurrentAuthenticatedUserId();
   const [biography, fingerprint] = await Promise.all([getIntellectualBiography(userId), getCognitiveFingerprint(userId)]);
 
   return (

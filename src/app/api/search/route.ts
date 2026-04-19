@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { globalSearch } from "@/lib/search";
-import { DEMO_USER_ID } from "@/lib/penny";
 import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import type { SearchFilters } from "@/types/search";
 
 const searchFiltersSchema = z.object({
@@ -22,7 +22,7 @@ const searchFiltersSchema = z.object({
 
 const searchSchema = z.object({
   query: z.string().trim().default(""),
-  userId: z.string().trim().min(1).optional().default(DEMO_USER_ID),
+  userId: z.string().trim().min(1).optional(),
   requestedAt: z.string().datetime().optional(),
   filters: searchFiltersSchema.partial().optional().default({}),
 });
@@ -46,9 +46,10 @@ function normalizeFilters(filters: z.infer<typeof searchFiltersSchema>): SearchF
 export async function POST(request: Request) {
   try {
     const input = searchSchema.parse(await request.json());
+    const userId = await getCurrentAuthenticatedUserId();
     const response = await globalSearch({
       query: input.query,
-      userId: input.userId,
+      userId: input.userId ?? userId,
       requestedAt: input.requestedAt ? new Date(input.requestedAt) : new Date(),
       filters: normalizeFilters({
         entityTypes: input.filters.entityTypes ?? [],

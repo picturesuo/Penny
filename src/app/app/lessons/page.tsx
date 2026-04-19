@@ -3,12 +3,12 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LessonLibraryView } from "@/components/penny/lesson-library";
 import { getLessonLibrary } from "@/server/lesson-library";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
 import { listThoughtMaps } from "@/server/thought-map";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
 export default async function LessonsPage() {
   const maps = await listThoughtMaps();
-  const userId = maps[0]?.userId ?? getDemoThoughtUserId();
+  const userId = await getCurrentAuthenticatedUserId();
   const library = await getLessonLibrary(userId);
 
   return (

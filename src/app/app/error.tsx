@@ -5,7 +5,6 @@ import Link from "next/link";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { reportError, getClientUserId } from "@/lib/error-reporting";
-import { getDemoThoughtUserId } from "@/lib/thought-map";
 
 type AppSegmentErrorProps = {
   error: Error & { digest?: string };
@@ -16,7 +15,7 @@ type AppSegmentErrorProps = {
 export default function Error({ error, reset, unstable_retry }: AppSegmentErrorProps) {
   useEffect(() => {
     reportError(error, {
-      userId: getClientUserId() ?? getDemoThoughtUserId(),
+      userId: getClientUserId() ?? undefined,
       requestPath: window.location.pathname + window.location.search,
       requestMethod: "CLIENT",
       featureId: "app-segment",
