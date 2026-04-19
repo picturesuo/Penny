@@ -1367,7 +1367,7 @@ export function ThoughtMapWorkspace({
   const [selectedPrecedentId, setSelectedPrecedentId] = useState<string | null>(null);
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [steelManDrafts, setSteelManDrafts] = useState<Record<string, string>>({});
-  const [steelManAssessments, setSteelManAssessments] = useState<Record<string, SteelManQualityAssessment>>({});
+  const [, setSteelManAssessments] = useState<Record<string, SteelManQualityAssessment>>({});
   const [steelManGateBypassed, setSteelManGateBypassed] = useState<Record<string, boolean>>({});
   const [repairModalOpen, setRepairModalOpen] = useState(false);
   const [evidenceEntryOpenClaimId, setEvidenceEntryOpenClaimId] = useState<string | null>(null);
