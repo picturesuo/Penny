@@ -18,6 +18,7 @@ import { ClaimRepairModal } from "@/components/penny/claim-repair-modal";
 import { ResolutionFlow, type ResolutionDownstreamClaim, type ResolutionSubmission } from "@/components/penny/resolution-flow";
 import { MarginRail } from "@/components/penny/margin-rail";
 import { RevisitQueue } from "@/components/penny/revisit-queue";
+import { SteelManGate } from "@/components/penny/steel-man-gate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -78,9 +79,10 @@ import { cn } from "@/lib/utils";
 import { CritiqueFeedback as CritiqueFeedbackCard } from "@/components/penny/critique-feedback";
 import { EvidenceEntry } from "@/components/penny/evidence-entry";
 import { MetaCognitionPrompt } from "@/components/penny/meta-cognition-prompt";
-import { LearningPromptBanner } from "@/components/penny/learning-prompt-banner";
+import { LearningPromptCard } from "@/components/penny/learning-prompt-card";
 import { PersonalizedCritiquePanel } from "@/components/penny/personalized-critique-panel";
 import { ShapeDetail } from "@/components/penny/shape-detail";
+import type { SteelManGateSavedSteelMan } from "@/components/penny/steel-man-gate";
 import type {
   CognitiveIntervention,
   ClaimRepairAction,
@@ -332,11 +334,6 @@ type ActionResponse = {
       };
     };
   };
-};
-
-type SteelManResponse = {
-  steelMan: SerializableSteelMan;
-  assessment: SteelManQualityAssessment;
 };
 
 type FounderBriefResponse = {
@@ -1371,6 +1368,7 @@ export function ThoughtMapWorkspace({
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [steelManDrafts, setSteelManDrafts] = useState<Record<string, string>>({});
   const [steelManAssessments, setSteelManAssessments] = useState<Record<string, SteelManQualityAssessment>>({});
+  const [steelManGateBypassed, setSteelManGateBypassed] = useState<Record<string, boolean>>({});
   const [repairModalOpen, setRepairModalOpen] = useState(false);
   const [evidenceEntryOpenClaimId, setEvidenceEntryOpenClaimId] = useState<string | null>(null);
   const [resolutionFlowOpen, setResolutionFlowOpen] = useState(false);
@@ -1425,12 +1423,14 @@ export function ThoughtMapWorkspace({
   const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
   const [metaCognitionEventsSeen, setMetaCognitionEventsSeen] = useState<Record<string, boolean>>({});
   const [learningPrompt, setLearningPrompt] = useState<LearningPromptOutput | null>(null);
+  const [learningPromptRoundId, setLearningPromptRoundId] = useState<string | null>(null);
   const [learningPromptDismissed, setLearningPromptDismissed] = useState(false);
   const [isPending, startTransition] = useTransition();
   const lastOpenedClaimIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setLearningPrompt(null);
+    setLearningPromptRoundId(null);
     setLearningPromptDismissed(false);
   }, [map.id]);
 
@@ -2011,12 +2011,12 @@ export function ThoughtMapWorkspace({
   const selectedSteelMan = selectedGraphNode
     ? map.steelMans.find((steelMan) => steelMan.claimId === selectedGraphNode.node.id) ?? null
     : null;
-  const selectedSteelManAssessment = selectedGraphNode ? steelManAssessments[selectedGraphNode.node.id] ?? null : null;
   const selectedSteelManDraft = selectedGraphNode
     ? steelManDrafts[selectedGraphNode.node.id] ?? selectedSteelMan?.steelManText ?? ""
     : "";
-  const selectedSteelManDraftReady = selectedSteelManDraft.trim().length > 100;
-  const selectedSteelManReady = selectedSteelMan ? selectedSteelMan.steelManText.trim().length > 100 : false;
+  const selectedSteelManReady = selectedSteelMan
+    ? selectedSteelMan.steelManText.trim().length >= 80
+    : Boolean(selectedGraphNode?.node.id && steelManGateBypassed[selectedGraphNode.node.id]);
   const claimRepairSuggestions = useMemo(() => buildClaimRepairSuggestions(map), [map]);
   const dailyRevisitQueue = useMemo(() => buildRevisitQueue(map), [map]);
   const selectedRevisitTriggerDraft = selectedGraphNode?.node.id
@@ -2309,12 +2309,6 @@ export function ThoughtMapWorkspace({
       {},
     );
   }, [critiqueFeedbackEvents, dialecticRoundEvents]);
-  const steelManRevisionPrompt =
-    selectedSteelMan && dialecticRoundEvents.length >= 2
-      ? "You've been through two rounds. Has your understanding of the opposing view changed? Revise your steel man."
-      : null;
-  const selectedSteelManQualityReason = selectedSteelManAssessment?.qualityScoreReason ?? selectedSteelMan?.qualityScoreReason ?? null;
-  const selectedSteelManRevisionNote = selectedSteelManAssessment?.revisionPrompt ?? steelManRevisionPrompt;
   const selectedPrecedentAdherence = useMemo(() => {
     if (!selectedPrecedentSummary) {
       return null;
@@ -3828,6 +3822,7 @@ export function ThoughtMapWorkspace({
           critiqueFailureTypes: params.critiqueFailureTypes ?? (params.critiqueType ? [params.critiqueType] : []),
         });
         setLearningPrompt(prompt);
+        setLearningPromptRoundId(payload.round?.id ?? null);
         setLearningPromptDismissed(false);
         setDialecticResponseDrafts((current) => {
           const next = { ...current };
@@ -3858,52 +3853,6 @@ export function ThoughtMapWorkspace({
           delete next[params.round];
           return next;
         });
-      } catch {
-        return;
-      }
-    });
-  }
-
-  function recordSteelMan() {
-    const claimId = selectedGraphNode?.node.id ?? null;
-    const steelManText = selectedSteelManDraft.trim();
-
-    if (!claimId || steelManText.length < 100) {
-      return;
-    }
-
-    const roundContext = dialecticRoundEvents.length >= 2 ? "Round 3 update" : "Round 1 gate";
-    const usedInRound = Array.from(new Set([...(selectedSteelMan?.usedInRound ?? []), roundContext]));
-
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/maps/${map.id}/steel-man`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            claimId,
-            steelManText,
-            roundContext,
-            usedInRound,
-          }),
-        });
-
-        if (!response.ok) {
-          return;
-        }
-
-        const payload = (await response.json()) as SteelManResponse;
-        mergeSteelMan(payload.steelMan);
-        setSteelManAssessments((current) => ({
-          ...current,
-          [claimId]: payload.assessment,
-        }));
-        setSteelManDrafts((current) => ({
-          ...current,
-          [claimId]: payload.steelMan.steelManText,
-        }));
       } catch {
         return;
       }
@@ -5829,79 +5778,100 @@ export function ThoughtMapWorkspace({
           Penny should remember every round, carry the user’s response history forward, and change the next attack instead of reusing the same line.
         </p>
         <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{challengeSkill.note}</p>
-        <div className="mt-5 rounded-[24px] border border-black/8 bg-white p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Steel-man gate</p>
-              <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Before Penny critiques this claim, write the strongest opposing view you can.</h3>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-                What would a smart, well-informed skeptic say? Write as if you are trying to convince yourself this claim is wrong.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className={selectedSteelManReady ? "bg-[#d9ead8] text-[#355b32]" : "bg-[#fff6ed] text-[#8b4d1f]"}>
-                {selectedSteelManReady ? "steel-man saved" : `${selectedSteelManDraft.trim().length} / 100 minimum`}
-              </Badge>
-              {selectedSteelMan?.qualityScore != null ? (
-                <Badge className="bg-[#e7defa] text-[#5c4c88]">quality {selectedSteelMan.qualityScore}/10</Badge>
-              ) : null}
-            </div>
-          </div>
-          <textarea
-            className="mt-4 min-h-[140px] w-full rounded-[20px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
-            placeholder="Write the strongest opposing view in your own words."
-            value={selectedSteelManDraft}
-            onChange={(event) =>
-              selectedGraphNode?.node.id
-                ? setSteelManDrafts((current) => ({
-                    ...current,
-                    [selectedGraphNode.node.id]: event.target.value,
-                  }))
+        <div className="mt-5">
+          <SteelManGate
+            claim={{
+              id: selectedGraphNode?.node.id ?? "",
+              mapId: map.id,
+              text: selectedGraphNode?.node.content ?? "",
+              confidence: Math.round((selectedGraphNode?.node.scores?.confidence ?? 0) * 100),
+            }}
+            existingSteelMan={
+              selectedSteelMan
+                ? {
+                    steelManText: selectedSteelMan.steelManText,
+                    qualityScore: selectedSteelMan.qualityScore,
+                    qualityScoreReason: selectedSteelMan.qualityScoreReason ?? null,
+                  }
                 : null
             }
+            initialText={selectedSteelManDraft}
+            onTextChange={(nextText) => {
+              if (!selectedGraphNode?.node.id) {
+                return;
+              }
+              setSteelManGateBypassed((current) => ({
+                ...current,
+                [selectedGraphNode.node.id]: false,
+              }));
+              setSteelManDrafts((current) => ({
+                ...current,
+                [selectedGraphNode.node.id]: nextText,
+              }));
+            }}
+            onSavedSteelMan={(steelMan: SteelManGateSavedSteelMan) => {
+              if (selectedGraphNode?.node.id) {
+                setSteelManGateBypassed((current) => ({
+                  ...current,
+                  [selectedGraphNode.node.id]: false,
+                }));
+              }
+              mergeSteelMan(steelMan as unknown as SerializableSteelMan);
+              if (selectedGraphNode?.node.id) {
+                setSteelManDrafts((current) => ({
+                  ...current,
+                  [selectedGraphNode.node.id]: steelMan.steelManText,
+                }));
+                setSteelManAssessments((current) => ({
+                  ...current,
+                  [selectedGraphNode.node.id]: {
+                    specificityScore: steelMan.qualityScore ?? 0,
+                    evidentialBasisScore: steelMan.qualityScore ?? 0,
+                    engagementDepthScore: steelMan.qualityScore ?? 0,
+                    qualityScore: steelMan.qualityScore ?? 0,
+                    qualityScoreReason: steelMan.qualityScoreReason ?? "Steel man saved.",
+                    revisionPrompt: null,
+                  },
+                }));
+              }
+            }}
+            onComplete={(steelManText, score) => {
+              if (!selectedGraphNode?.node.id) {
+                return;
+              }
+              setSteelManGateBypassed((current) => ({
+                ...current,
+                [selectedGraphNode.node.id]: false,
+              }));
+              setSteelManDrafts((current) => ({
+                ...current,
+                [selectedGraphNode.node.id]: steelManText,
+              }));
+              if (score) {
+                setSteelManAssessments((current) => ({
+                  ...current,
+                  [selectedGraphNode.node.id]: {
+                    specificityScore: score.overallScore,
+                    evidentialBasisScore: score.overallScore,
+                    engagementDepthScore: score.overallScore,
+                    qualityScore: score.overallScore,
+                    qualityScoreReason: score.overallFeedback,
+                    revisionPrompt: score.reviseSuggestion,
+                  },
+                }));
+              }
+            }}
+            onSkip={() => {
+              if (!selectedGraphNode?.node.id) {
+                return;
+              }
+              setSteelManGateBypassed((current) => ({
+                ...current,
+                [selectedGraphNode.node.id]: true,
+              }));
+            }}
+            isFirstRound={dialecticRoundEvents.length === 0}
           />
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Button
-              className="gap-2"
-              disabled={isPending || !selectedGraphNode || !selectedSteelManDraftReady}
-              onClick={recordSteelMan}
-            >
-              <Sparkles className="size-4" />
-              {selectedSteelMan ? "Revise steel man" : "Save steel man and unlock critique"}
-            </Button>
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
-              The 100-character floor is a minimum gate, not a target.
-            </p>
-          </div>
-          {selectedSteelMan?.qualityScore != null ? (
-            <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
-              <p className="text-sm leading-6 text-[var(--ink)]">{selectedSteelManQualityReason}</p>
-              {selectedSteelMan?.qualityScore < 5 && selectedSteelManQualityReason ? (
-                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-                  {selectedSteelManQualityReason.includes("generic")
-                    ? "Your steel man is mostly generic. Can you make it more specific to the actual evidence you're relying on?"
-                    : "Want to revise it before critique? A stronger opposing view usually produces a better first round."}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-          {selectedSteelManRevisionNote ? (
-            <p className="mt-4 rounded-[18px] bg-[#fff6ed] px-4 py-3 text-sm leading-6 text-[#8b4d1f]">{selectedSteelManRevisionNote}</p>
-          ) : null}
-          {selectedSteelMan?.updateHistory.length ? (
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              <div className="rounded-[18px] bg-[var(--panel)] p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Original</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedSteelMan.updateHistory[0]?.versionText}</p>
-              </div>
-              <div className="rounded-[18px] bg-[var(--panel)] p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Latest revision</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
-                  {selectedSteelMan.updateHistory[selectedSteelMan.updateHistory.length - 1]?.versionText}
-                </p>
-              </div>
-            </div>
-          ) : null}
         </div>
         <div className="mt-4 grid gap-4 xl:grid-cols-3">
           {dialecticRounds.map((round) => {
@@ -6476,9 +6446,10 @@ export function ThoughtMapWorkspace({
             Penny is surfacing this because the current round or claim suggests a specific correction, not just a generic critique.
           </p>
           <div className="mt-4">
-            <LearningPromptBanner
+            <LearningPromptCard
               prompt={learningPrompt}
               claimId={selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? map.id}
+              roundId={learningPromptRoundId}
               onDismiss={() => setLearningPromptDismissed(true)}
             />
           </div>

@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfidenceSlider } from "@/components/penny/confidence-slider";
-import { LearningPromptBanner } from "@/components/penny/learning-prompt-banner";
+import { LearningPromptCard } from "@/components/penny/learning-prompt-card";
 import { generateLearningPrompt } from "@/lib/learning-prompts";
 import type { LearningPromptClaim } from "@/lib/learning-prompts";
 
@@ -123,9 +123,10 @@ export function ClaimCaptureForm({ mapId, onSubmit, onCancel }: ClaimCaptureForm
         />
         {learningPrompt && !learningPromptDismissed ? (
           <div className="pt-2">
-            <LearningPromptBanner
+            <LearningPromptCard
               prompt={learningPrompt}
               claimId={`draft-${mapId}`}
+              roundId={null}
               onDismiss={() => setLearningPromptDismissed(true)}
             />
           </div>
