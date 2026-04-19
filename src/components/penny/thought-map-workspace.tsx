@@ -36,6 +36,7 @@ import {
   buildAdversarialFinalPass,
   buildClaimRepairSuggestions,
   buildCritiqueQualityProfile,
+  buildCalibrationDashboard,
   critiqueGenerationModifier,
   collectCritiqueCorrections,
   collectCritiqueFeedback,
@@ -62,6 +63,7 @@ import {
   type DependencyChainTimelineSnapshot,
   type SteelManQualityAssessment,
 } from "@/lib/penny-insights";
+import { buildPersonalizedCritiqueContext, generatePersonalizationDisclosure } from "@/lib/personalized-critique-engine";
 import { buildArtifactDependencyHealth } from "@/lib/dependency-health";
 import { buildClaimEvidenceSummary } from "@/lib/evidence-quality";
 import { evaluateMetaCognitionTrigger, type MetaCognitionPromptSnapshot } from "@/lib/meta-cognition";
@@ -72,6 +74,7 @@ import { cn } from "@/lib/utils";
 import { CritiqueFeedback as CritiqueFeedbackCard } from "@/components/penny/critique-feedback";
 import { EvidenceEntry } from "@/components/penny/evidence-entry";
 import { MetaCognitionPrompt } from "@/components/penny/meta-cognition-prompt";
+import { PersonalizedCritiquePanel } from "@/components/penny/personalized-critique-panel";
 import { ShapeDetail } from "@/components/penny/shape-detail";
 import type {
   CognitiveIntervention,
@@ -105,6 +108,7 @@ import type {
   ThinkingSession,
   SessionEvent,
 } from "@/types/thought-map";
+import type { PersonalizedCritiqueContext } from "@/types/personalized-critique";
 import type { MarginFragmentModel } from "@/types/penny";
 
 type SerializableThoughtNode = Omit<ThoughtNodeModel, "createdAt" | "updatedAt"> & {
@@ -2219,6 +2223,30 @@ export function ThoughtMapWorkspace({
     () => critiqueGenerationModifier(critiqueQualityProfile),
     [critiqueQualityProfile],
   );
+  const personalizedCritiqueContext = useMemo<PersonalizedCritiqueContext | null>(
+    () =>
+      buildPersonalizedCritiqueContext({
+        map,
+        targetNode: selectedGraphNode?.node ?? null,
+        biasProfile: displayedBiasProfile,
+        calibration: buildCalibrationDashboard([map]),
+        lens,
+        critiqueQualityProfile,
+      }),
+    [critiqueQualityProfile, displayedBiasProfile, lens, map, selectedGraphNode?.node],
+  );
+  const personalizedCritiqueDisclosure = personalizedCritiqueContext
+    ? generatePersonalizationDisclosure({
+        knowledgeDepth: personalizedCritiqueContext.knowledgeDepth,
+        confirmedBiases: personalizedCritiqueContext.confirmedBiases,
+        dominantShapes: personalizedCritiqueContext.dominantShapes,
+        weakDomains: personalizedCritiqueContext.weakDomains,
+        strongDomains: personalizedCritiqueContext.strongDomains,
+        intensityAdjustment: personalizedCritiqueContext.intensityAdjustment,
+        dismissalPatterns: personalizedCritiqueContext.dismissalPatterns,
+      })
+    : null;
+  const critiquePersonalizationBridge = [selectedBiasContext, personalizedCritiqueDisclosure].filter(Boolean).join(" ") || null;
   const critiqueFeedbackStatusByRoundId = useMemo(() => {
     return dialecticRoundEvents.reduce<Record<string, { dismissalCount: number; submitted: boolean; latestFeedback: SerializableThoughtMapEvent | null }>>(
       (accumulator, round) => {
@@ -2546,7 +2574,7 @@ export function ThoughtMapWorkspace({
           activeCritiqueType,
           nodeLabel,
           critiqueIntensity,
-          selectedBiasContext,
+          critiquePersonalizationBridge,
           selectedSteelManDraft,
         ),
         why: lastAction?.reasoning.graphAnalysis?.primaryGap
@@ -2675,7 +2703,7 @@ export function ThoughtMapWorkspace({
     selectedSteelManReady,
     selectedPrecedentSummary,
     critiqueArgument,
-    selectedBiasContext,
+    critiquePersonalizationBridge,
     selectedPropagation?.cascade,
   ]);
   const selectedReceiptVoices = useMemo(
@@ -5567,19 +5595,21 @@ export function ThoughtMapWorkspace({
                 )}
               </div>
             </div>
+
+            <PersonalizedCritiquePanel context={personalizedCritiqueContext} />
           </div>
 
           <div className="space-y-4">
             <div className="rounded-[20px] bg-[var(--panel)] p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Socratic mode</p>
-              <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
                 {critiqueMode === "socratic"
                   ? critiqueModePrompt(
                       "socratic",
                       activeCritiqueType,
                       selectedGraphNode?.node.content ?? "the active claim",
                       critiqueIntensity,
-                      selectedBiasContext,
+                      critiquePersonalizationBridge,
                     )
                   : `When selected, Socratic mode asks the user to critique their own claim instead of letting Penny generate the critique directly.`}
               </p>
