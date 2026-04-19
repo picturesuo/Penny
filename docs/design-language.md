@@ -8,10 +8,10 @@ Penny should feel like a built city, not a notes dump.
 - Structure should emerge from thinking, not from decorative UI ceremony.
 - The primary surfaces should feel deliberate, legible, and load-bearing.
 
-## Hierarchy
+## Product Hierarchy
 
-- Capture, challenge, and learn are the core motion.
-- The dashboard is a home base, not the hero.
+- `/app` is the canonical signed-in home.
+- The dashboard is a directing surface, not the hero.
 - The workspace is where the work happens.
 - The graph is a structural minimap, not the whole product.
 - Knowledge cards should feel more important than chrome.
@@ -28,7 +28,7 @@ Penny should feel like a built city, not a notes dump.
 - Use strong sectional grouping and clear spacing between modes.
 - Keep the active work surface front and center.
 - Preserve progressive disclosure so the user can stay in the tunnel without losing the surrounding structure.
-- Avoid flat “dashboard grid” sameness when a surface should feel like a specific instrument.
+- Avoid flat dashboard-grid sameness when a surface should feel like a specific instrument.
 
 ## Color And Surfaces
 
@@ -54,8 +54,9 @@ Penny should feel like a built city, not a notes dump.
 ## Navigation Tone
 
 - The route structure should feel consistent.
-- One canonical home path should exist for signed-in users.
-- Public entry, dashboard home, and workspace routes should each have a clear job.
+- One canonical home path exists for signed-in users: `/app`.
+- Public entry, dashboard home, and workspace routes each have a clear job.
+- Legacy routes should redirect instead of competing with the canonical path.
 
 ## What To Avoid
 

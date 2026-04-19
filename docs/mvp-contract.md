@@ -1,55 +1,58 @@
 # MVP Contract
 
 ## Purpose
-Penny’s MVP is a pressure-tested second brain: capture a claim, challenge it, learn from the response, and keep the resulting record available for later revisiting.
+Penny’s MVP is a closed loop for pressure-testing thought: capture a claim, challenge it, learn from the response, and keep the result available for later revisiting.
 
-This contract is the published, code-aligned version of the current slice. It is written to match the repo as it exists now, not an older sketch of the app.
+This document describes the current product contract as it exists in the repo today. It is not a roadmap and does not invent future surfaces.
 
 ## Canonical Routes
 
 - `/` is the public landing page.
-- `/auth/sign-in` and `/auth/sign-up` are the auth entry points.
-- `/dashboard` is the signed-in home entrypoint.
-- `/app` is the main workspace shell for maps, sessions, search, lessons, velocity, identity, and the other in-product surfaces.
-- `/app/maps/[id]` is the thought-map workspace.
+- `/app` is the canonical signed-in product home.
+- `/app/*` is the active workspace family for maps, sessions, search, lessons, velocity, identity, unlocks, and related surfaces.
+- `/dashboard` is legacy and redirects to `/app`.
+- `/auth/sign-in`, `/auth/sign-up`, and `/auth/verify` still exist, but they are not the canonical product home.
 
-## Canonical Flow
+## Current User Loop
 
 1. A visitor lands on `/`.
-2. A new user signs up or an existing user signs in through `/auth/*`.
-3. Authenticated users land on `/dashboard`.
-4. The dashboard routes the user into the appropriate work surface under `/app`.
-5. The user captures or opens a map, then works through claim, challenge, and learning surfaces without leaving the product loop.
+2. If they already have a valid session or are running in demo mode, they are taken into `/app`.
+3. If they choose to sign up or sign in, the auth form completes and returns them to `/app`.
+4. In `/app`, the user captures a map, opens an existing map, or enters a supporting surface like search or lessons.
+5. The map workspace moves through claim capture, steel-man, challenge, response, and follow-up learning.
+6. The user can revisit history, artifacts, and related surfaces without leaving the `/app` shell.
 
 ## Load-Bearing Surfaces
 
-- `src/app/page.tsx` owns the public story and the redirect for authenticated visitors.
-- `src/app/dashboard/page.tsx` owns the signed-in home view.
-- `src/app/app/page.tsx` owns the main in-product dashboard and work surfaces.
-- `src/components/penny/home-dashboard.tsx` renders the signed-in home state.
-- `src/components/penny/thought-map-workspace.tsx` renders the map workspace and the capture-to-challenge-to-learn flow.
+- `src/app/page.tsx` owns the public landing page and the authenticated redirect.
+- `src/app/app/page.tsx` owns the main in-product dashboard and surface orchestration.
+- `src/app/app/layout.tsx` owns the shared signed-in shell for the active workspace.
+- `src/components/penny/nav.tsx` owns the signed-in navigation for `/app`.
+- `src/components/penny/home-dashboard.tsx` renders the richer dashboard state used inside `/app`.
+- `src/components/penny/home-dashboard-client.tsx` renders the standalone dashboard mode for the route-backed home.
+- `src/components/penny/thought-map-workspace.tsx` renders the map workspace and the capture-to-challenge flow.
 - `src/components/penny/challenge-round.tsx` renders the dedicated challenge-round card.
 - `src/components/penny/auth-form.tsx` owns the sign-in and sign-up submission flow.
 
 ## Runtime Contract
 
 - Claims, moves, shapes, and the live user lens are the core data layers.
-- The map payload is derived from the server-side thought-map model, not from ad hoc client parsing.
-- Capture and challenge should remain auditable and schema-aligned.
-- The challenge response minimum is 10 characters at the API boundary and in the UI.
-- Authenticated navigation should stay on one clean path: `/dashboard` for home, then `/app` for work.
-
-## Published Artifacts
-
-- `docs/codebase-audit.md` documents the current repo shape and the reconciliation between roadmap language and actual files.
-- `docs/design-language.md` documents the visual system and layout rules for the product.
+- The map payload is hydrated from the server-side thought-map model, not from ad hoc client parsing.
+- Capture and challenge remain auditable and schema-aligned.
+- Challenge responses enforce the current 10-character minimum at the API boundary and in the UI.
+- `/dashboard` is not a separate product home anymore; it is only a compatibility redirect into `/app`.
 
 ## Non-Goals
 
-- This contract does not redefine persistence routes.
-- This contract does not introduce a new app shell.
-- This contract does not rename the existing `/app` workspace.
+- This contract does not add new product surfaces.
+- This contract does not redefine persistence tables or schema ownership.
+- This contract does not reintroduce a split between `/dashboard` and `/app`.
+
+## Published Artifacts
+
+- `docs/codebase-audit.md` records the current repo shape and route reality.
+- `docs/design-language.md` records the current visual and navigation language.
 
 ## Reconciliation Note
 
-Older roadmap language in the repo referenced dashboard-oriented steps loosely and sometimes assumed older file names. This contract treats the current code layout as authoritative and keeps the user journey anchored to the actual routes and surfaces now in use.
+Earlier repo language treated `/dashboard` as the home entrypoint. The code now treats `/app` as the canonical authenticated root, and this document follows the code.
