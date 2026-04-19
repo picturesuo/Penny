@@ -5,7 +5,7 @@ import { getAuthenticatedUserFromCookies } from "@/server/auth";
 export default async function SignUpPage() {
   const user = await getAuthenticatedUserFromCookies();
   if (user) {
-    redirect("/app");
+    redirect("/dashboard");
   }
 
   return <AuthForm mode="sign-up" />;
