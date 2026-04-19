@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpenText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfidenceSlider } from "@/components/penny/confidence-slider";
 import { HereBeforeNotification } from "@/components/penny/here-before-signal";
 import {
   CLAIM_PROVENANCES,
@@ -544,16 +545,11 @@ export function ThoughtMapForm({ userId, initialRawThought, onCreatedMap }: Thou
                 <span className="text-sm font-medium text-[var(--ink)]">Inside-view estimate</span>
                 <span className="text-sm text-[var(--muted-ink)]">{claim.insideViewEstimate}%</span>
               </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
+              <ConfidenceSlider
                 value={claim.insideViewEstimate}
-                onChange={(event) =>
-                  setClaim((current) => ({ ...current, insideViewEstimate: Number(event.target.value) }))
-                }
-                className="w-full accent-[var(--ink)]"
+                onChange={(value) => setClaim((current) => ({ ...current, insideViewEstimate: value }))}
+                showLabel={false}
+                showAnchors={false}
               />
               <p className="text-xs leading-5 text-[var(--muted-ink)]">
                 This is your first-pass estimate before Penny shows you the outside view.
@@ -663,16 +659,12 @@ export function ThoughtMapForm({ userId, initialRawThought, onCreatedMap }: Thou
                 <span className="text-sm font-medium text-[var(--ink)]">Final confidence</span>
                 <span className="text-sm text-[var(--muted-ink)]">{claim.confidence}%</span>
               </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
+              <ConfidenceSlider
                 value={claim.confidence}
-                onChange={(event) =>
-                  setClaim((current) => ({ ...current, confidence: Number(event.target.value) }))
-                }
-                className="w-full accent-[var(--ink)]"
+                onChange={(value) => setClaim((current) => ({ ...current, confidence: value }))}
+                showLabel={false}
+                showAnchors={false}
+                calibrationHint={calibrationIndicator ? calibrationIndicator.recommendationText : null}
               />
               {confidenceChallenge ? (
                 <p className="text-xs leading-5 text-[#8b4d1f]">{confidenceChallenge}</p>

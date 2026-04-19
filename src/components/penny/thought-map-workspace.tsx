@@ -21,6 +21,7 @@ import { RevisitQueue } from "@/components/penny/revisit-queue";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfidenceSlider } from "@/components/penny/confidence-slider";
 import {
   buildDependencyChainTimeline,
   buildMapTimeline,
@@ -6715,23 +6716,22 @@ export function ThoughtMapWorkspace({
                               )}
                             </Badge>
                           </div>
-                          <input
-                            className="mt-3 w-full accent-[var(--ink)]"
-                            type="range"
-                            min={0}
-                            max={100}
-                            step={1}
-                            value={
-                              propagationFinalPosteriorDrafts[selectedPropagationImplication.targetNodeId] ??
-                              Math.round(selectedPropagationImplication.afterConfidence * 100)
-                            }
-                            onChange={(event) =>
-                              setPropagationFinalPosteriorDrafts((current) => ({
-                                ...current,
-                                [selectedPropagationImplication.targetNodeId]: Number(event.target.value),
-                              }))
-                            }
-                          />
+                          <div className="mt-3">
+                            <ConfidenceSlider
+                              value={
+                                propagationFinalPosteriorDrafts[selectedPropagationImplication.targetNodeId] ??
+                                Math.round(selectedPropagationImplication.afterConfidence * 100)
+                              }
+                              onChange={(value) =>
+                                setPropagationFinalPosteriorDrafts((current) => ({
+                                  ...current,
+                                  [selectedPropagationImplication.targetNodeId]: value,
+                                }))
+                              }
+                              showLabel={false}
+                              showAnchors={false}
+                            />
+                          </div>
                           <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">
                             Accept keeps the propagated posterior. Override uses this slider value. Decouple keeps the claim
                             at its own base confidence.

@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfidenceSlider } from "@/components/penny/confidence-slider";
 
 export type ClaimCaptureFormData = {
   text: string;
@@ -91,21 +92,12 @@ export function ClaimCaptureForm({ mapId, onSubmit, onCancel }: ClaimCaptureForm
             <span className="rounded-full bg-[#efe8fb] px-3 py-1 text-xs text-[#5c4c88]">{confidenceLabel}</span>
           </label>
           <p className="text-sm leading-6 text-[var(--muted-ink)]">60% means you think it is more likely than not, but you are not certain.</p>
-          <input
+          <ConfidenceSlider
             id={`confidence-slider-${mapId}`}
-            type="range"
-            min={5}
-            max={95}
-            step={5}
             value={confidence}
-            onChange={(event) => setConfidence(Number(event.target.value))}
-            className="w-full accent-[var(--ink)]"
+            onChange={setConfidence}
+            calibrationHint={null}
           />
-          <div className="flex justify-between text-xs uppercase tracking-[0.14em] text-[var(--muted-ink)]">
-            <span>5% very unlikely</span>
-            <span>50% coin flip</span>
-            <span>95% almost certain</span>
-          </div>
         </div>
 
         <button

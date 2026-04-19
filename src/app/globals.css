@@ -9,6 +9,10 @@
   --muted-ink: #6e6a63;
   --panel: #f1e7da;
   --panel-strong: #e5d8c8;
+  --color-track: #e7d8c5;
+  --color-low-confidence: #b56b4b;
+  --color-mid-confidence: #c38a47;
+  --color-high-confidence: #4f7f57;
 }
 
 @theme inline {
