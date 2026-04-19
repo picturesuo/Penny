@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { MarginFragment, Session } from "@prisma/client";
 import { prisma } from "@/db/prisma";
 import { track } from "@/lib/analytics";
+import { logger } from "@/lib/logger";
 import { cleanSentence, computeClarityScore, createMessage, dedupePoints, dedupeStrings, determineStage, safeJsonParse, titleFromIdea, DEMO_USER_ID } from "@/lib/penny";
 import { MockLlmProvider } from "@/lib/ai/mock-provider";
 import { MockContextProvider } from "@/lib/context/mock-context";
@@ -447,6 +448,7 @@ export async function generateConceptBrief(session: SessionState, evidence?: Evi
 }
 
 export async function createSession(rawIdea: string, category?: string, presetTitle?: string, userId?: string) {
+  const startedAt = Date.now();
   const sanitizedIdea = cleanSentence(rawIdea);
   const activeUserId = userId ?? (await getCurrentAuthenticatedUserId());
   assertRateLimit(activeUserId, "ai_extraction");
@@ -474,6 +476,15 @@ export async function createSession(rawIdea: string, category?: string, presetTi
   await extractIdeaStructure(session);
   await appendAssistantTurn(session);
   await saveSession(session);
+  logger.info("session_created", {
+    userId: activeUserId,
+    featureId: "sessions",
+    durationMs: Date.now() - startedAt,
+    data: {
+      sessionId: session.id,
+      category: category ?? null,
+    },
+  });
   return session.id;
 }
 
@@ -613,6 +624,7 @@ export async function closeThinkingSession(params: {
   focusRating: "scattered" | "moderate" | "deep" | null;
   productivityRating: number | null;
 }) {
+  const startedAt = Date.now();
   const session = await getSession(params.sessionId);
 
   if (!session) {
@@ -661,6 +673,15 @@ export async function closeThinkingSession(params: {
   });
 
   await saveSession(session);
+  logger.info("session_completed", {
+    userId: session.userId,
+    featureId: "sessions",
+    durationMs: Date.now() - startedAt,
+    data: {
+      sessionId: session.id,
+      durationMinutes: session.actualDurationMinutes ?? 0,
+    },
+  });
   void track(
     {
       event: "session_completed",

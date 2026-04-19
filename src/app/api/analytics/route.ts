@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sendAnalyticsEvent } from "@/lib/analytics";
+import { logger } from "@/lib/logger";
 
 const userIdSchema = z.string().trim().min(1).nullable().optional();
 
@@ -66,6 +67,13 @@ export async function POST(request: Request) {
   try {
     const input = analyticsEventSchema.parse(await request.json());
     await sendAnalyticsEvent(input, input.userId ?? undefined);
+    logger.info("analytics_event_received", {
+      userId: input.userId ?? undefined,
+      featureId: "analytics",
+      data: {
+        event: input.event,
+      },
+    });
     return NextResponse.json({ ok: true }, { status: 202 });
   } catch (error) {
     if (error instanceof z.ZodError) {
