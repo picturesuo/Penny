@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpenText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HereBeforeNotification } from "@/components/penny/here-before-signal";
 import {
   CLAIM_PROVENANCES,
   CLAIM_STATUSES,
@@ -22,6 +23,7 @@ import { findRelevantPersonalBaseRate, generateBaseRateWarning } from "@/lib/per
 import { suggestReferenceClass } from "@/lib/reference-classes";
 import { extractAssumptionSnapshot } from "@/lib/thought-map-generation";
 import type { PersonalBaseRateLibrary } from "@/types/personal-base-rates";
+import type { HereBeforeSignal } from "@/types/here-before-detection";
 
 const STARTER_IDEAS = [
   "Compliance teams at mid-sized fintechs need a faster way to turn regulatory changes into concrete action plans without hiring more analysts.",
@@ -107,6 +109,10 @@ export function ThoughtMapForm({ userId, initialRawThought }: ThoughtMapFormProp
   const [calibrationLoading, setCalibrationLoading] = useState(Boolean(userId));
   const [personalBaseRateLibrary, setPersonalBaseRateLibrary] = useState<PersonalBaseRateLibrary | null>(null);
   const [personalBaseRateLoading, setPersonalBaseRateLoading] = useState(Boolean(userId));
+  const [hereBeforeSignal, setHereBeforeSignal] = useState<HereBeforeSignal | null>(null);
+  const [hereBeforeDismissed, setHereBeforeDismissed] = useState(false);
+  const draftClaimId = useRef(`draft-${userId ?? "anonymous"}`);
+  const shouldCheckHereBefore = rawThought.trim().length >= 40;
   const [calibrationDismissedRecommendationId, setCalibrationDismissedRecommendationId] = useState<string | null>(null);
   const calibrationConfidenceAnchor = useRef<number | null>(null);
   const lastCalibrationRecommendationKey = useRef<string | null>(null);
@@ -227,6 +233,62 @@ export function ThoughtMapForm({ userId, initialRawThought }: ThoughtMapFormProp
     lastCalibrationRecommendationKey.current = calibrationRecommendationKey;
     calibrationConfidenceAnchor.current = calibrationIndicator ? claim.confidence : null;
   }, [calibrationRecommendationKey, calibrationIndicator, claim.confidence]);
+
+  useEffect(() => {
+    if (!userId || !shouldCheckHereBefore) {
+      return;
+    }
+
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      void fetch(`/api/users/${userId}/here-before`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: draftClaimId.current,
+          text: rawThought.trim(),
+          domain: calibrationIndicator?.domain ?? "general",
+          claimType: claim.structureKind,
+          stakesLevel:
+            claim.stakes.some((stake) => stake === "money" || stake === "reputation") || claim.stakes.length >= 3
+              ? "heavy"
+              : claim.stakes.length > 0
+                ? "moderate"
+                : "light",
+          structureKind: claim.structureKind,
+          provenance: claim.provenance,
+          confidence: claim.confidence,
+        }),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            return null;
+          }
+
+          return (await response.json()) as { signal?: HereBeforeSignal | null };
+        })
+        .then((payload) => {
+          if (!active) {
+            return;
+          }
+
+          setHereBeforeSignal(payload?.signal ?? null);
+          setHereBeforeDismissed(false);
+        })
+        .catch(() => {
+          if (active) {
+            setHereBeforeSignal(null);
+          }
+        });
+    }, 450);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [calibrationIndicator?.domain, claim.confidence, claim.provenance, claim.stakes, claim.structureKind, shouldCheckHereBefore, rawThought, userId]);
 
   useEffect(() => {
     if (!userId) {
@@ -583,6 +645,16 @@ export function ThoughtMapForm({ userId, initialRawThought }: ThoughtMapFormProp
                 <p className="text-xs leading-5 text-[var(--muted-ink)]">Loading calibration coaching...</p>
               ) : null}
             </label>
+
+            {shouldCheckHereBefore && hereBeforeSignal && !hereBeforeDismissed ? (
+              <div className="lg:col-span-2">
+                <HereBeforeNotification
+                  signal={hereBeforeSignal}
+                  onDismiss={() => setHereBeforeDismissed(true)}
+                  onViewHistory={(claimId) => router.push(`/app/maps/${claimId}`)}
+                />
+              </div>
+            ) : null}
 
             <label className="space-y-2">
               <span className="text-sm font-medium text-[var(--ink)]">Resolution date</span>
