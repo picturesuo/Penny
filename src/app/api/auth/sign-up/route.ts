@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { signUpWithEmail } from "@/server/auth";
+import {
+  buildRateLimitResponse,
+  checkRateLimit,
+  getRequestRateLimitSubject,
+} from "@/lib/rate-limiter";
 
 const signUpSchema = z.object({
   displayName: z.string().trim().min(2).max(120),
@@ -10,6 +15,11 @@ const signUpSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const rateLimit = checkRateLimit(getRequestRateLimitSubject(request), "auth_signup");
+    if (!rateLimit.allowed) {
+      return buildRateLimitResponse(rateLimit);
+    }
+
     const input = signUpSchema.parse(await request.json());
     const result = await signUpWithEmail(input);
 

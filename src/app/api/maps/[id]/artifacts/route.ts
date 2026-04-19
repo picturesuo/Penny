@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateArtifactForMap } from "@/server/thought-map";
+import { buildRateLimitResponse, isRateLimitError } from "@/lib/rate-limiter";
 
 const artifactTypeIdSchema = z.enum([
   "founder_brief",
@@ -43,6 +44,10 @@ export async function POST(
       { status: 201 },
     );
   } catch (error) {
+    if (isRateLimitError(error)) {
+      return buildRateLimitResponse(error);
+    }
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         {

@@ -13,6 +13,7 @@
 - `Learn` is just-in-time, claim-anchored, and teach-back driven: Penny gives a minimum scaffold, asks the user to explain the concept in the context of the current claim, and then closes the gap inline.
 - Global search should be user-scoped, deterministic, and fast enough to recover claims, maps, artifacts, lessons, sessions, and shapes without forcing the user to open each map manually.
 - Error monitoring should be first-class: unhandled client errors, root layout failures, and server request errors should emit structured events with the error message, file/line location, request path, and user ID so a silent failure is not possible.
+- Rate limiting should be shared and cheap: the MVP limiter can live in memory, but expensive AI paths and auth sign-in/sign-up should be bucketed separately so the first guard happens before the expensive work runs.
 - Synthesis should be gated by pre-mortem, if-you-were-right, twin-check, stakes-proportional friction, and dependency-completeness review so the output step feels load-bearing.
 - Sessions are first-class objects with a declared focus, protected deep-work windows, cognitive protection, depletion detection, and a clean ending ritual that hands over the artifact and stops pulling.
 - Calibration is first-class: every claim has a probability, high-confidence claims get challenged, resolved claims feed Brier tracking, and private self-bets make calibration emotionally sticky.

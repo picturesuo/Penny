@@ -53,6 +53,7 @@ import type {
   ExportCalibrationSnapshot,
 } from "@/lib/export";
 import { cleanSentence } from "@/lib/penny";
+import { assertRateLimit } from "@/lib/rate-limiter";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import type {
   CognitiveIntervention,
@@ -3944,6 +3945,7 @@ export async function generateArtifactForMap(params: {
   audience?: string | null;
   sectionOrder?: string[];
   narrativeGlue?: string | null;
+  userId?: string;
 }) {
   const map = await getThoughtMap(params.mapId);
 
@@ -3960,6 +3962,9 @@ export async function generateArtifactForMap(params: {
   if (evidenceGate.blocked) {
     throw new Error(evidenceGate.message ?? "Artifact not ready: this artifact depends on poorly evidenced claims.");
   }
+
+  const activeUserId = params.userId ?? (await getCurrentAuthenticatedUserId());
+  assertRateLimit(activeUserId, "ai_classify");
 
   const lens = buildPennyLens(map);
   const version = map.artifacts.filter((artifact) => artifact.artifactTypeId === params.artifactTypeId).length + 1;
@@ -4032,10 +4037,11 @@ export async function generateArtifactForMap(params: {
   };
 }
 
-export async function generateFounderBrief(mapId: string) {
+export async function generateFounderBrief(mapId: string, userId?: string) {
   const result = await generateArtifactForMap({
     mapId,
     artifactTypeId: "founder_brief",
+    userId,
   });
 
   return result.map;

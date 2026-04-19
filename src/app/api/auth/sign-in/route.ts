@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { AUTH_SESSION_COOKIE, signInWithEmail } from "@/server/auth";
+import {
+  buildRateLimitResponse,
+  checkRateLimit,
+  getRequestRateLimitSubject,
+} from "@/lib/rate-limiter";
 
 const signInSchema = z.object({
   email: z.string().trim().email(),
@@ -9,6 +14,11 @@ const signInSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const rateLimit = checkRateLimit(getRequestRateLimitSubject(request), "auth_signin");
+    if (!rateLimit.allowed) {
+      return buildRateLimitResponse(rateLimit);
+    }
+
     const input = signInSchema.parse(await request.json());
     const result = await signInWithEmail(input);
 

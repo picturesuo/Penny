@@ -1,11 +1,11 @@
 # Queue
 
 ## Now
-- [ ] Finish the error monitoring slice so unhandled client and server failures are logged with route, file, line, and user context instead of failing silently.
+- [ ] Finish the request rate limiting slice so AI-calling routes and auth endpoints are throttled before the expensive work runs.
 
 ## Next
-- [ ] Verify the error boundaries, request hooks, and route-level logging path on the new monitoring layer.
-- [ ] Check the fallback copy against the honesty requirement: the app should say the error was logged, not pretend it was recovered.
+- [ ] Verify the AI entry points, auth routes, and founder brief path are all using the shared limiter.
+- [ ] Check the 429 fallback shape so the app returns a clear retry-after response instead of a silent failure.
 
 ## Later
 - [ ] Expand only when the project grows.
@@ -21,3 +21,4 @@
 - [x] The lesson library should emerge from resolved claims and critique history rather than a separate note system, so the first build used the existing thought-map event log as the source of truth.
 - [x] Global search had been scanning cross-user data and using margin fragments as a stand-in for lessons, so the search helper needed to be retargeted at the actual per-user archive surfaces.
 - [x] Error monitoring needs to catch both client crashes and API failures, so the first implementation should combine App Router error boundaries with request-level reporting and keep the event payload user- and request-scoped.
+- [x] Rate limiting should be centralized and cheap, so the first pass uses an in-memory per-subject window before any AI work or auth mutation runs.

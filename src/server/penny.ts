@@ -4,6 +4,7 @@ import { prisma } from "@/db/prisma";
 import { cleanSentence, computeClarityScore, createMessage, dedupePoints, dedupeStrings, determineStage, safeJsonParse, titleFromIdea, DEMO_USER_ID } from "@/lib/penny";
 import { MockLlmProvider } from "@/lib/ai/mock-provider";
 import { MockContextProvider } from "@/lib/context/mock-context";
+import { assertRateLimit } from "@/lib/rate-limiter";
 import { generateSessionSummary } from "@/lib/session-summary";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import type {
@@ -441,6 +442,7 @@ export async function generateConceptBrief(session: SessionState, evidence?: Evi
 export async function createSession(rawIdea: string, category?: string, presetTitle?: string, userId?: string) {
   const sanitizedIdea = cleanSentence(rawIdea);
   const activeUserId = userId ?? (await getCurrentAuthenticatedUserId());
+  assertRateLimit(activeUserId, "ai_extraction");
   const created = await prisma.session.create({
     data: {
       userId: activeUserId,
@@ -667,6 +669,7 @@ export async function submitAnswer(sessionId: string, answer: string) {
     throw new Error("Answer is required");
   }
 
+  assertRateLimit(await getCurrentAuthenticatedUserId(), "ai_critique");
   session.answers.push(sanitizedAnswer);
   session.conversation.push(createMessage("user", "answer", sanitizedAnswer));
   await extractIdeaStructure(session);
@@ -682,6 +685,7 @@ export async function advanceSessionState(sessionId: string) {
     throw new Error("Session not found");
   }
 
+  assertRateLimit(await getCurrentAuthenticatedUserId(), "ai_critique");
   await extractIdeaStructure(session);
   await appendAssistantTurn(session);
   await saveSession(session);
@@ -695,6 +699,7 @@ export async function regenerateChallenge(sessionId: string) {
     throw new Error("Session not found");
   }
 
+  assertRateLimit(await getCurrentAuthenticatedUserId(), "ai_steel_man");
   const evidence = await generateContextEvidence(session);
   const pressureTest = await generatePressureTest(session, evidence);
   session.conversation.push(

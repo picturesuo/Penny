@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateFounderBrief } from "@/server/thought-map";
+import { buildRateLimitResponse, isRateLimitError } from "@/lib/rate-limiter";
 
 export async function POST(
   _request: Request,
@@ -11,6 +12,10 @@ export async function POST(
 
     return NextResponse.json({ map }, { status: 201 });
   } catch (error) {
+    if (isRateLimitError(error)) {
+      return buildRateLimitResponse(error);
+    }
+
     if (error instanceof Error && /not found/i.test(error.message)) {
       return NextResponse.json(
         {
