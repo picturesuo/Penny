@@ -1,23 +1,25 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, BookOpenText, BrainCircuit, GraduationCap, ShieldAlert, Target, Waypoints } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { getAuthenticatedUserFromCookies } from "@/server/auth";
 
 const steps = [
   {
     icon: Target,
-    title: "Start in Brain",
-    copy: "Drop the half-formed claim, decision, or hunch into a spatial second brain that keeps accumulating over time.",
+    title: "Capture",
+    copy: "State what you believe as a specific, falsifiable claim and give it a confidence level.",
   },
   {
     icon: ShieldAlert,
-    title: "Turn on Challenge",
-    copy: "Pressure-test the idea against evidence, precedent, dependencies, and the strongest version of the counterargument.",
+    title: "Challenge",
+    copy: "Pressure-test it against evidence, precedent, dependencies, and the strongest counterargument.",
   },
   {
     icon: Waypoints,
-    title: "Invoke Learn",
-    copy: "When something is unclear, teach through the exact claim you are working on and leave with the concept attached.",
+    title: "Learn",
+    copy: "When something is unclear, teach through the claim you are already working on and leave with the concept attached.",
   },
 ];
 
@@ -94,39 +96,61 @@ const tracker = [
   },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const user = await getAuthenticatedUserFromCookies();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return (
     <main className="relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-[-14rem] h-[32rem] bg-[radial-gradient(circle_at_top,_rgba(230,223,255,0.55),_transparent_58%)]" />
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8 lg:px-10">
         <header className="flex items-center justify-between py-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Penny</p>
-            <p className="mt-1 text-sm text-[var(--muted-ink)]">Pressure-tested second brain for claims, critique, and learning.</p>
-          </div>
-          <Link href="/auth/sign-in">
-            <Button variant="secondary">Sign in</Button>
+          <Link href="/" className="flex items-center gap-3">
+            <span className="grid size-10 place-items-center rounded-full bg-[var(--ink)] text-sm font-semibold text-[var(--paper)]">
+              P
+            </span>
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Penny</p>
+              <p className="mt-1 text-sm text-[var(--muted-ink)]">Pressure-tested second brain for claims, critique, and learning.</p>
+            </div>
           </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/auth/sign-in">
+              <Button variant="secondary">Sign in</Button>
+            </Link>
+            <Link href="/auth/sign-up">
+              <Button className="gap-2">
+                Start thinking
+                <ArrowRight className="size-4" />
+              </Button>
+            </Link>
+          </div>
         </header>
 
         <section className="grid flex-1 items-center gap-12 py-16 lg:grid-cols-[1fr_0.92fr]">
           <div className="max-w-3xl">
             <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted-ink)]">Wiki-first personal thinking</p>
             <h1 className="mt-6 max-w-3xl font-display text-5xl leading-[0.96] text-[var(--ink)] sm:text-6xl lg:text-7xl">
-              Build a pressure-tested second brain that keeps your thinking honest.
+              A pressure-tested
+              <br />
+              second brain
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-[var(--muted-ink)]">
-              Penny starts with messy claims, turns them into a living graph, pressure-tests them against evidence and precedent, keeps the next move visible while you work, and can move sensitive work into device-only vault storage when it needs to stay local.
+              Penny helps you capture what you believe, challenge it rigorously, and build a durable record of how your thinking evolves.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link href="/auth/sign-up">
                 <Button className="gap-2 px-6 py-3 text-base">
-                  Create account
+                  Start thinking
                   <ArrowRight className="size-4" />
                 </Button>
               </Link>
-              <Link href="/auth/sign-in">
+              <Link href="#how-it-works">
                 <Button variant="secondary" className="px-6 py-3 text-base">
-                  Sign in
+                  See how it works
                 </Button>
               </Link>
             </div>
@@ -151,11 +175,11 @@ export default function LandingPage() {
           </Card>
         </section>
 
-        <section className="py-6">
+        <section id="how-it-works" className="py-6">
           <div className="max-w-3xl">
-            <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Three use cases</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">How it works</p>
             <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
-              One product, three jobs.
+              Capture, challenge, and learn in one flow.
             </h2>
           </div>
           <div className="mt-8 grid gap-5 lg:grid-cols-3">
