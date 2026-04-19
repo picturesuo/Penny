@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ArtifactParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import { recordArtifactOutcome } from "@/server/thought-map";
@@ -36,7 +37,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await context.params;
+    const { id } = ArtifactParamsSchema.parse(await context.params);
     const json = await request.json();
     const input = artifactOutcomeSchema.parse(json);
     const userId = await getCurrentAuthenticatedUserId();

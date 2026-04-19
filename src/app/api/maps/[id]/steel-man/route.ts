@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MapParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { recordSteelMan } from "@/server/thought-map";
 
@@ -14,7 +15,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await context.params;
+    const { id } = MapParamsSchema.parse(await context.params);
     const json = await request.json();
     const input = steelManSchema.parse(json);
     const result = await recordSteelMan({

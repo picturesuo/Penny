@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UserParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import type { CalibrationCoachingRejection } from "@/types/thought-map";
 import { getCalibrationCoaching, recordCalibrationRejection, refreshCalibrationCoaching } from "@/server/thought-map";
@@ -13,14 +14,14 @@ const calibrationActionSchema = z.object({
 });
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
+  const { id } = UserParamsSchema.parse(await context.params);
   const coaching = await getCalibrationCoaching(id);
 
   return NextResponse.json({ coaching });
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
+  const { id } = UserParamsSchema.parse(await context.params);
   const payload = calibrationActionSchema.parse(await request.json());
 
   if (payload.action === "reject") {

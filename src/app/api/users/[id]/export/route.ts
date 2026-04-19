@@ -1,19 +1,9 @@
 import { NextResponse } from "next/server";
+import { ExportQuerySchema, UserParamsSchema } from "@/lib/validation/schemas";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { buildExportData } from "@/server/thought-map";
 import { buildExportFilename, buildExportPayloadForType, EXPORT_PORTABILITY_GUARANTEE } from "@/lib/export";
-import { EXPORT_FORMATS, EXPORT_TYPES } from "@/types/thought-map";
-
-const exportQuerySchema = z.object({
-  exportType: z.enum(EXPORT_TYPES),
-  format: z.enum(EXPORT_FORMATS),
-  includeHistory: z.enum(["true", "false"]).default("true"),
-  includePrivate: z.enum(["true", "false"]).default("false"),
-  mapId: z.string().trim().min(1).optional(),
-  claimId: z.string().trim().min(1).optional(),
-  sessionId: z.string().trim().min(1).optional(),
-});
 
 function exportHeaders(filename: string, contentType: string) {
   return {
@@ -25,9 +15,9 @@ function exportHeaders(filename: string, contentType: string) {
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await context.params;
+    const { id } = UserParamsSchema.parse(await context.params);
     const url = new URL(request.url);
-    const parsed = exportQuerySchema.parse(Object.fromEntries(url.searchParams.entries()));
+    const parsed = ExportQuerySchema.parse(Object.fromEntries(url.searchParams.entries()));
     const now = new Date();
     const exportRequest = {
       id: randomUUID(),

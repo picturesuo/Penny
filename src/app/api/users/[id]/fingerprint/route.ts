@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UserParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { getCognitiveFingerprint, upsertFingerprintReview } from "@/server/cognitive-fingerprint";
 
@@ -10,7 +11,7 @@ const fingerprintReviewSchema = z.object({
 });
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
+  const { id } = UserParamsSchema.parse(await context.params);
   const fingerprint = await getCognitiveFingerprint(id);
 
   return NextResponse.json({ fingerprint });
@@ -18,7 +19,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await context.params;
+    const { id } = UserParamsSchema.parse(await context.params);
     const payload = fingerprintReviewSchema.parse(await request.json());
     const review = await upsertFingerprintReview({
       userId: id,

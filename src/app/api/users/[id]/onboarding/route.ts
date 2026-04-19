@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getOnboardingWorkspace, updateOnboardingProgress } from "@/server/onboarding";
 import type { OnboardingRole, OnboardingStep } from "@/types/onboarding";
+import { UserParamsSchema } from "@/lib/validation/schemas";
 
 const onboardingUpdateSchema = z.object({
   selectedRole: z.enum(["founder", "researcher", "investor", "operator", "default"]).optional(),
@@ -26,13 +27,13 @@ const onboardingUpdateSchema = z.object({
 });
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
+  const { id } = UserParamsSchema.parse(await context.params);
   const workspace = await getOnboardingWorkspace(id);
   return NextResponse.json({ workspace });
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
+  const { id } = UserParamsSchema.parse(await context.params);
   const json = await request.json().catch(() => ({}));
   const input = onboardingUpdateSchema.parse(json) as {
     selectedRole?: OnboardingRole;

@@ -1,11 +1,11 @@
 # Queue
 
 ## Now
-- [x] Finish the type-definition audit by tightening any remaining server-to-type mismatches and publishing the corrected contracts.
+- [x] Finish the API validation sweep by routing every user input path through Zod and publishing the corrected contracts.
 
 ## Next
 - [ ] Re-scan the remaining type files for any loose nullable fields or server-populated fields that are still not reflected in the public types.
-- [ ] Keep the shared context aligned with the type-audit slice before moving to another feature area.
+- [ ] Keep the shared context aligned with the validation slice before moving to another feature area.
 
 ## Later
 - [ ] Expand only when the project grows.
@@ -25,3 +25,4 @@
 - [x] The type audit found that session status should be normalized to the actual lifecycle union and that session summaries should always carry a key insight once generated.
 - [x] The MVP core types need to follow the real runtime shapes, so `Map` uses `rawThought` plus `claimCount`, `Claim` models thought nodes plus capture metadata, `SteelMan` uses the persisted quality-score fields, and `Artifact` / `Move` should follow the actual record and event unions instead of the sketch draft.
 - [x] The MVP core contracts now have dedicated Prisma tables and indexes, and the sqlite dev database was recreated cleanly after the old zero-byte `dev.db` file caused Prisma drift.
+- [x] Every API route should validate params, query, and body inputs with shared Zod schemas before touching the server layer; route IDs should use `cuid()` because the repo uses cuid-backed record IDs.

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MapParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { buildClaimRepairSuggestions } from "@/lib/penny-insights";
 import { getThoughtMap, recordClaimRepairAction } from "@/server/thought-map";
@@ -17,7 +18,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await context.params;
+    const { id } = MapParamsSchema.parse(await context.params);
     const map = await getThoughtMap(id);
 
     if (!map) {
@@ -41,7 +42,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await context.params;
+    const { id } = MapParamsSchema.parse(await context.params);
     const json = await request.json();
     const input = repairActionSchema.parse(json);
     const result = await recordClaimRepairAction({

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { FragmentParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { updateMarginFragment } from "@/server/penny";
 
@@ -13,7 +14,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await context.params;
+    const { id } = FragmentParamsSchema.parse(await context.params);
     const json = await request.json();
     const input = updateMarginFragmentSchema.parse(json);
     const fragment = await updateMarginFragment({

@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUserFromCookies } from "@/server/auth";
 import { logger } from "@/lib/logger";
 import { track } from "@/lib/analytics";
-import { ChallengeResponseSchema, validateBody, ValidationError } from "@/lib/validation/schemas";
+import {
+  ChallengeResponseSchema,
+  MapClaimParamsSchema,
+  RoundIdSchema,
+  validateBody,
+  ValidationError,
+} from "@/lib/validation/schemas";
 import {
   getChallengeDraftRound,
   inferChallengeResponsePath,
@@ -27,7 +33,9 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id, claimId, roundId } = await context.params;
+    const params = await context.params;
+    const { id, claimId } = MapClaimParamsSchema.parse(params);
+    const roundId = RoundIdSchema.parse(params.roundId);
     const input = await validateBody(ChallengeResponseSchema)(await request.json());
     const draft = await getChallengeDraftRound(roundId, user.id);
 

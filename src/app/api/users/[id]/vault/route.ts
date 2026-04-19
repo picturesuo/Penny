@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { recordVaultEntryRegistration } from "@/server/thought-map";
 import { VAULT_ENTRY_TYPES } from "@/types/thought-map";
+import { UserParamsSchema } from "@/lib/validation/schemas";
 
 const vaultRegistrationSchema = z.object({
   mapId: z.string().trim().min(1),
@@ -13,7 +14,7 @@ const vaultRegistrationSchema = z.object({
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id: userId } = await context.params;
+    const { id: userId } = UserParamsSchema.parse(await context.params);
     const input = vaultRegistrationSchema.parse(await request.json());
     const result = await recordVaultEntryRegistration({
       userId,

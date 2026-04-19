@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MapInterventionParamsSchema } from "@/lib/validation/schemas";
 import { dismissThoughtMapIntervention } from "@/server/thought-map";
 
 export async function POST(
@@ -6,7 +7,7 @@ export async function POST(
   context: { params: Promise<{ id: string; interventionId: string }> },
 ) {
   try {
-    const { id, interventionId } = await context.params;
+    const { id, interventionId } = MapInterventionParamsSchema.parse(await context.params);
     const intervention = await dismissThoughtMapIntervention({
       mapId: id,
       interventionId,

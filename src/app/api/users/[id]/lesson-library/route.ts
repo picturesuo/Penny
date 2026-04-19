@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { findRelevantLessons, getLessonLibrary, recordLessonApplication, serializeLessonLibrary } from "@/server/lesson-library";
 import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
+import { LessonLibraryQuerySchema, UserParamsSchema } from "@/lib/validation/schemas";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
+  const { id } = UserParamsSchema.parse(await context.params);
   const url = new URL(request.url);
-  const claimText = url.searchParams.get("claimText")?.trim() ?? "";
-  const claimDomain = url.searchParams.get("claimDomain")?.trim() ?? "general";
-  const claimType = url.searchParams.get("claimType")?.trim() ?? "assertion";
+  const query = LessonLibraryQuerySchema.parse({
+    claimText: url.searchParams.get("claimText") ?? undefined,
+    claimDomain: url.searchParams.get("claimDomain") ?? undefined,
+    claimType: url.searchParams.get("claimType") ?? undefined,
+  });
+  const claimText = query.claimText?.trim() ?? "";
+  const claimDomain = query.claimDomain?.trim() ?? "general";
+  const claimType = query.claimType?.trim() ?? "assertion";
 
   if (claimText.length > 0) {
     const relevance = await findRelevantLessons(id, claimText, claimDomain, claimType);
@@ -20,22 +27,13 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await context.params;
-    const body = (await request.json()) as {
-      lessonId?: string;
-      appliedInContext?: string;
-      wasUseful?: boolean | null;
-      userNote?: string | null;
-    };
-
-    if (!body.lessonId || !body.appliedInContext?.trim()) {
-      return NextResponse.json(
-        {
-          error: "invalid_request",
-        },
-        { status: 400 },
-      );
-    }
+    const { id } = UserParamsSchema.parse(await context.params);
+    const body = z.object({
+      lessonId: z.string().cuid(),
+      appliedInContext: z.string().min(1).max(400),
+      wasUseful: z.boolean().nullable().optional(),
+      userNote: z.string().max(1000).nullable().optional(),
+    }).parse(await request.json());
 
     const application = await recordLessonApplication({
       userId: id,

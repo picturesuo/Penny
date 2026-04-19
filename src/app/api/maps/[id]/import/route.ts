@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MapParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { extractImportSource, extractTextFromHtml } from "@/lib/claim-extractor";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
@@ -35,7 +36,7 @@ function isImportSourceType(value: string): value is ImportSourceType {
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: mapId } = await params;
+    const { id: mapId } = MapParamsSchema.parse(await params);
     const json = await request.json();
 
     if (json && typeof json === "object" && "importSourceId" in json) {

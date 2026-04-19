@@ -5,15 +5,16 @@ import { QUICK_CAPTURE_SOURCES } from "@/types/quick-capture";
 import { SESSION_STAGES } from "@/types/penny";
 import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
 import { logger } from "@/lib/logger";
+import { QuickCaptureListQuerySchema } from "@/lib/validation/schemas";
 
 const createQuickCaptureSchema = z.object({
-  userId: z.string().min(1).optional(),
+  userId: z.string().cuid().optional(),
   rawText: z.string().trim().min(1).max(500),
   captureSource: z.enum(QUICK_CAPTURE_SOURCES).optional(),
   sphere: z.string().trim().max(120).optional(),
-  mapId: z.string().trim().max(120).nullable().optional(),
-  sourceSessionId: z.string().trim().max(120).nullable().optional(),
-  sourceMapId: z.string().trim().max(120).nullable().optional(),
+  mapId: z.string().cuid().nullable().optional(),
+  sourceSessionId: z.string().cuid().nullable().optional(),
+  sourceMapId: z.string().cuid().nullable().optional(),
   currentStage: z.enum([...SESSION_STAGES, "outline", "graph", "dashboard"]).optional(),
   currentFocus: z.string().trim().max(500).optional(),
   currentContext: z.string().trim().max(1000).optional(),
@@ -26,17 +27,19 @@ const createQuickCaptureSchema = z.object({
 });
 
 const updateQuickCaptureSchema = z.object({
-  captureId: z.string().min(1),
-  userId: z.string().min(1).optional(),
+  captureId: z.string().cuid(),
+  userId: z.string().cuid().optional(),
   status: z.enum(["floating", "surfaced", "archived"]).optional(),
-  processedIntoClaimId: z.string().nullable().optional(),
-  processedIntoMapId: z.string().nullable().optional(),
+  processedIntoClaimId: z.string().cuid().nullable().optional(),
+  processedIntoMapId: z.string().cuid().nullable().optional(),
 });
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const userId = url.searchParams.get("userId") || undefined;
+    const userId = QuickCaptureListQuerySchema.parse({
+      userId: url.searchParams.get("userId") ?? undefined,
+    }).userId;
     const captures = await listQuickCaptures(userId);
     logger.info("quick_capture_listed", {
       userId: userId ?? undefined,

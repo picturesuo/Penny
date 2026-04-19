@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MapClaimParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { recordClaimResolution } from "@/server/thought-map";
 
@@ -46,7 +47,7 @@ export async function POST(
   context: { params: Promise<{ id: string; claimId: string }> },
 ) {
   try {
-    const { id, claimId } = await context.params;
+    const { id, claimId } = MapClaimParamsSchema.parse(await context.params);
     const json = await request.json();
     const input = resolutionSchema.parse(json);
     const result = await recordClaimResolution({

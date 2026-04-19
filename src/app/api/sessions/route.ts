@@ -9,6 +9,7 @@ import {
 } from "@/server/penny";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import { normalizeError, reportError } from "@/lib/error-reporting";
+import { SessionListQuerySchema } from "@/lib/validation/schemas";
 
 const sessionIntentionTypes = [
   "stress_test",
@@ -34,30 +35,30 @@ const sessionEventTypes = [
 ] as const;
 
 const createSchema = z.object({
-  userId: z.string().min(1).optional(),
-  mapId: z.string().min(1).nullable().optional().default(null),
-  declaredIntention: z.string().min(1).max(500),
+  userId: z.string().cuid().optional(),
+  mapId: z.string().cuid().nullable().optional().default(null),
+  declaredIntention: z.string().trim().min(1).max(500),
   intentionType: z.enum(sessionIntentionTypes),
-  scopedClaimIds: z.array(z.string().min(1)).default([]),
+  scopedClaimIds: z.array(z.string().cuid()).default([]),
   timeBudgetMinutes: z.number().int().min(1).max(480).nullable().optional().default(null),
 });
 
 const updateSchema = z.object({
-  sessionId: z.string().min(1),
-  declaredIntention: z.string().min(1).max(500).optional(),
+  sessionId: z.string().cuid(),
+  declaredIntention: z.string().trim().min(1).max(500).optional(),
   intentionType: z.enum(sessionIntentionTypes).optional(),
-  scopedClaimIds: z.array(z.string().min(1)).optional(),
+  scopedClaimIds: z.array(z.string().cuid()).optional(),
   timeBudgetMinutes: z.number().int().min(1).max(480).nullable().optional(),
   energyRating: z.enum(["low", "medium", "high"]).nullable().optional(),
   focusRating: z.enum(["scattered", "moderate", "deep"]).nullable().optional(),
   productivityRating: z.number().int().min(1).max(5).nullable().optional(),
   eventType: z.enum(sessionEventTypes).optional(),
-  claimId: z.string().min(1).nullable().optional(),
-  description: z.string().min(1).max(500).optional(),
+  claimId: z.string().cuid().nullable().optional(),
+  description: z.string().trim().min(1).max(500).optional(),
 });
 
 const closeSchema = z.object({
-  sessionId: z.string().min(1),
+  sessionId: z.string().cuid(),
   skipClosingRitual: z.boolean().optional().default(false),
   questionsAnswered: z
     .array(
@@ -76,7 +77,7 @@ const closeSchema = z.object({
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const mapId = url.searchParams.get("mapId");
+  const mapId = SessionListQuerySchema.parse({ mapId: url.searchParams.get("mapId") ?? undefined }).mapId;
 
   if (!mapId) {
     return NextResponse.json({ session: null });

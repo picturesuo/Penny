@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { UserParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { detectHereBeforeSignal } from "@/lib/here-before-detection";
 
@@ -15,7 +16,7 @@ const hereBeforeDraftSchema = z.object({
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await context.params;
+    const { id } = UserParamsSchema.parse(await context.params);
     const payload = hereBeforeDraftSchema.parse(await request.json());
     const signal = await detectHereBeforeSignal(id, payload);
 

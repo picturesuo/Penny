@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MapParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { track } from "@/lib/analytics";
 import { classifyCalibrationDomain } from "@/lib/calibration";
@@ -16,7 +17,7 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await context.params;
+    const { id } = MapParamsSchema.parse(await context.params);
     const userId = await getCurrentAuthenticatedUserId();
     const input = claimCaptureSchema.parse(await request.json());
 

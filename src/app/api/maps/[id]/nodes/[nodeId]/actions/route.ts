@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MapNodeParamsSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { applyNodeAction } from "@/server/thought-map";
 import { NODE_ACTIONS } from "@/types/thought-map";
@@ -12,7 +13,7 @@ export async function POST(
   context: { params: Promise<{ id: string; nodeId: string }> },
 ) {
   try {
-    const { id, nodeId } = await context.params;
+    const { id, nodeId } = MapNodeParamsSchema.parse(await context.params);
     const json = await request.json();
     const input = applyNodeActionSchema.parse(json);
     const result = await applyNodeAction({
