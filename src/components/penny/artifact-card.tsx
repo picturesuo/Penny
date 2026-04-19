@@ -10,8 +10,28 @@ import { DependencyHealthBar } from "@/components/penny/dependency-health";
 import type { Artifact } from "@/types/mvp-core";
 import type { ArtifactOutcome } from "@/types/thought-map";
 
+type ArtifactCardSection = {
+  id: string;
+  title: string;
+  body: string;
+  sourceClaimIds: string[];
+  sectionType?: string | null;
+};
+
+type ArtifactCardLoadBearingClaim = {
+  claimId: string;
+  claimText: string;
+  confidenceAtArtifactTime: number;
+};
+
+type ArtifactCardArtifact = Omit<Artifact, "userId" | "sections" | "loadBearingClaims" | "latestOutcome"> & {
+  sections: ArtifactCardSection[];
+  loadBearingClaims: ArtifactCardLoadBearingClaim[];
+  latestOutcome: ArtifactOutcome | null;
+};
+
 interface ArtifactCardProps {
-  artifact: Artifact;
+  artifact: ArtifactCardArtifact;
   onExport?: () => void;
 }
 
@@ -289,7 +309,7 @@ function formatDateTime(value: Date): string {
   return value.toLocaleString();
 }
 
-function generatePlainText(artifact: Artifact): string {
+function generatePlainText(artifact: ArtifactCardArtifact): string {
   const lines: string[] = [
     artifact.title,
     "=".repeat(artifact.title.length),
