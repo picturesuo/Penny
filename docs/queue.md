@@ -1,7 +1,7 @@
 # Queue
 
 ## Now
-- [x] Build the steel-man gate component between claim creation and the first critique round.
+- [x] Build the challenge round UI between the steel-man gate and round persistence.
 
 ## Next
 - [ ] Re-scan the remaining type files for any loose nullable fields or server-populated fields that are still not reflected in the public types.
@@ -28,3 +28,4 @@
 - [x] Every API route should validate params, query, and body inputs with shared Zod schemas before touching the server layer; route IDs should use `cuid()` because the repo uses cuid-backed record IDs.
 - [x] Map creation now uses the shared `CreateMapSchema` + `createMap` path and returns the created map wrapper, while claim creation now lists existing claims, validates the capture payload, and records the new claim as an applied move.
 - [x] The steel-man gate should sit between claim capture and the first critique round, save the user’s strongest opposing view through the existing steel-man route, surface a quality assessment, and allow an explicit skip path that does not dead-end the flow.
+- [x] The challenge round UI should be its own component, but the response still needs to persist through the existing dialectic-round flow with the schema-aligned 10-character minimum.

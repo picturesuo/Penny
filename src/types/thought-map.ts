@@ -503,7 +503,8 @@ export type ArtifactTypeId =
   | "research_proposal"
   | "risk_register"
   | "personal_decision_audit"
-  | "hypothesis_brief";
+  | "hypothesis_brief"
+  | "challenge_summary";
 
 export const EXPORT_TYPES = [
   "single_map",

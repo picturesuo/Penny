@@ -14,9 +14,10 @@ import {
   inferChallengeResponsePath,
   markChallengeDraftCompleted,
 } from "@/server/dialectic-challenges";
+import { generateChallengeSummaryArtifact } from "@/server/challenge-summary";
 import { recordDialecticRound } from "@/server/thought-map";
 import { updateConfidence } from "@/server/mvp";
-import type { ResponseClassification } from "@/types/thought-map";
+import type { ArtifactRecord, ResponseClassification } from "@/types/thought-map";
 
 type CompletedChallengeRound = {
   engagementScore?: number | null;
@@ -92,6 +93,26 @@ export async function POST(
             },
     });
 
+    let summaryArtifact: ArtifactRecord | null = null;
+    try {
+      summaryArtifact = (await generateChallengeSummaryArtifact({
+        mapId: id,
+        claimId,
+        userId: user.id,
+      })).artifact;
+    } catch (summaryError) {
+      logger.warn("Failed to generate challenge summary artifact", {
+        userId: user.id,
+        featureId: "challenge-rounds",
+        data: {
+          mapId: id,
+          claimId,
+          challengeId: roundId,
+          error: summaryError instanceof Error ? summaryError.message : String(summaryError),
+        },
+      });
+    }
+
     await track(
       {
         event: "challenge_completed",
@@ -123,6 +144,7 @@ export async function POST(
         challengeId: roundId,
         completedRoundId: finalEvent.id,
         round: completedRound ?? finalEvent.payload?.dialecticRound ?? null,
+        summaryArtifact,
       },
       { status: 201 },
     );
