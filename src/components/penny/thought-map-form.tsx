@@ -18,8 +18,10 @@ import {
   type SourceTrustLevel,
 } from "@/types/thought-map";
 import { calibrationIndicatorForClaim } from "@/lib/calibration";
+import { findRelevantPersonalBaseRate, generateBaseRateWarning } from "@/lib/personal-base-rates";
 import { suggestReferenceClass } from "@/lib/reference-classes";
 import { extractAssumptionSnapshot } from "@/lib/thought-map-generation";
+import type { PersonalBaseRateLibrary } from "@/types/personal-base-rates";
 
 const STARTER_IDEAS = [
   "Compliance teams at mid-sized fintechs need a faster way to turn regulatory changes into concrete action plans without hiring more analysts.",
@@ -103,6 +105,8 @@ export function ThoughtMapForm({ userId, initialRawThought }: ThoughtMapFormProp
   const [isPending, startTransition] = useTransition();
   const [calibrationCoaching, setCalibrationCoaching] = useState<CalibrationCoaching | null>(null);
   const [calibrationLoading, setCalibrationLoading] = useState(Boolean(userId));
+  const [personalBaseRateLibrary, setPersonalBaseRateLibrary] = useState<PersonalBaseRateLibrary | null>(null);
+  const [personalBaseRateLoading, setPersonalBaseRateLoading] = useState(Boolean(userId));
   const [calibrationDismissedRecommendationId, setCalibrationDismissedRecommendationId] = useState<string | null>(null);
   const calibrationConfidenceAnchor = useRef<number | null>(null);
   const lastCalibrationRecommendationKey = useRef<string | null>(null);
@@ -153,6 +157,19 @@ export function ThoughtMapForm({ userId, initialRawThought }: ThoughtMapFormProp
       : referenceClassDelta > 0
         ? "higher_than_base_rate"
         : "lower_than_base_rate";
+  const personalBaseRate = useMemo(
+    () =>
+      personalBaseRateLibrary
+        ? findRelevantPersonalBaseRate(
+            calibrationIndicator?.domain ?? "general",
+            claim.structureKind,
+            claim.confidence,
+            personalBaseRateLibrary,
+          )
+        : null,
+    [calibrationIndicator?.domain, claim.confidence, claim.structureKind, personalBaseRateLibrary],
+  );
+  const personalBaseRateWarning = personalBaseRate ? generateBaseRateWarning(personalBaseRate, claim.confidence) : null;
 
   useEffect(() => {
     if (!userId) {
@@ -210,6 +227,44 @@ export function ThoughtMapForm({ userId, initialRawThought }: ThoughtMapFormProp
     lastCalibrationRecommendationKey.current = calibrationRecommendationKey;
     calibrationConfidenceAnchor.current = calibrationIndicator ? claim.confidence : null;
   }, [calibrationRecommendationKey, calibrationIndicator, claim.confidence]);
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    let active = true;
+
+    fetch(`/api/users/${userId}/base-rates`)
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        return (await response.json()) as { library?: PersonalBaseRateLibrary | null };
+      })
+      .then((payload) => {
+        if (!active || !payload) {
+          return;
+        }
+
+        setPersonalBaseRateLibrary(payload.library ?? null);
+      })
+      .catch(() => {
+        if (active) {
+          setPersonalBaseRateLibrary(null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setPersonalBaseRateLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   function toggleStake(stake: ClaimStake) {
     setClaim((current) => ({
@@ -397,6 +452,17 @@ export function ThoughtMapForm({ userId, initialRawThought }: ThoughtMapFormProp
                       Benchmark: personal base rate check. Penny will still compare this to your final confidence.
                     </p>
                   )}
+                  {personalBaseRateLoading ? (
+                    <p className="mt-2 text-xs leading-5 text-[#6f5612]">Loading your personal base rates...</p>
+                  ) : personalBaseRateWarning ? (
+                    <p className="mt-2 rounded-2xl bg-white/80 px-3 py-2 text-xs leading-5 text-[#5a460d]">
+                      {personalBaseRateWarning}
+                    </p>
+                  ) : personalBaseRate ? (
+                    <p className="mt-2 rounded-2xl bg-white/80 px-3 py-2 text-xs leading-5 text-[#5a460d]">
+                      Personal base rate: {Math.round(personalBaseRate.empiricalRate * 100)}% over {personalBaseRate.predictionCount} predictions.
+                    </p>
+                  ) : null}
                 </div>
                 <Badge className="bg-white text-[#5a460d]">{referenceClassSuggestion.referenceClassType.replaceAll("_", " ")}</Badge>
               </div>
