@@ -4,7 +4,7 @@ import { NewMapDialogProvider } from "@/components/penny/new-map-modal";
 import { QuickCaptureModalProvider } from "@/components/penny/quick-capture-modal";
 import { getCurrentUser } from "@/lib/auth";
 
-export default async function AppLayout({
+export default async function DashboardLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;

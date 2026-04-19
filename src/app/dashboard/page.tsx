@@ -1,16 +1,16 @@
 import { redirect } from "next/navigation";
 import { HomeDashboard } from "@/components/penny/home-dashboard";
-import { getAuthenticatedUserFromCookies } from "@/server/auth";
 import { getMapsForUser } from "@/server/mvp";
+import { getCurrentUserId } from "@/lib/auth";
 
 export default async function DashboardPage() {
-  const user = await getAuthenticatedUserFromCookies();
+  const userId = await getCurrentUserId();
 
-  if (!user) {
+  if (!userId) {
     redirect("/auth/sign-in");
   }
 
-  const maps = await getMapsForUser(user.id);
+  const maps = await getMapsForUser(userId);
 
-  return <HomeDashboard maps={maps} userId={user.id} />;
+  return <HomeDashboard maps={maps} userId={userId} />;
 }

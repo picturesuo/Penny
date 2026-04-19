@@ -2,6 +2,7 @@
 
 ## Now
 - [x] Build the challenge round UI between the steel-man gate and round persistence.
+- [x] Build the global navigation.
 
 ## Next
 - [ ] Re-scan the remaining type files for any loose nullable fields or server-populated fields that are still not reflected in the public types.
