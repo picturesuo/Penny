@@ -5,7 +5,7 @@
 
 ## Next
 - [ ] Re-scan the remaining type files for any loose nullable fields or server-populated fields that are still not reflected in the public types.
-- [x] Keep the shared context aligned with the steel-man gate slice before moving to another feature area.
+- [x] Keep the shared context aligned with the challenge-round slice before moving to another feature area.
 
 ## Later
 - [ ] Expand only when the project grows.

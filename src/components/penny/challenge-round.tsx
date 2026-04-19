@@ -99,7 +99,6 @@ export function ChallengeRound({
   const [submitted, setSubmitted] = useState(Boolean(round.dialecticRound?.userResponse))
 
   const trimmedResponse = responseDraft.trim()
-  const confidenceDelta = round.roundContextDraft.confidenceAtRoundEnd - round.confidenceAtRoundStart
   const isRoundOpen = !round.dialecticRound?.closedAt
   const completedRound = round.dialecticRound
 
@@ -108,7 +107,7 @@ export function ChallengeRound({
     setSelectedResponsePath('defend')
     setShowWhyNow(false)
     setShowPriorRounds(false)
-  }, [round.round, round.dialecticRound?.id])
+  }, [round.round, round.dialecticRound?.id, round.dialecticRound?.userResponse])
 
   const priorRoundLabel = useMemo(() => {
     if (!priorRounds.length) {
@@ -318,6 +317,8 @@ export function ChallengeRound({
               placeholder="Capture the response that should persist with this round."
               value={responseDraft}
               onChange={(event) => onResponseDraftChange(event.target.value)}
+              minLength={10}
+              maxLength={3000}
             />
             <div className="mt-3 flex flex-wrap gap-2">
               {(['defend', 'revise', 'absorb'] as const).map((path) => (
