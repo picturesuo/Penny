@@ -1,8 +1,7 @@
-import { proxy as innerProxy } from "./src/proxy";
-import type { NextRequest } from "next/server";
+import innerProxy from "./src/proxy";
 
-export function proxy(request: NextRequest) {
-  return innerProxy(request);
+export function proxy() {
+  return innerProxy();
 }
 
 export const config = {
