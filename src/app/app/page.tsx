@@ -349,8 +349,18 @@ export default async function DashboardPage() {
           </div>
 
           <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
-            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Belief velocity</p>
-            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">Some domains should change quickly, while others should harden slowly. Penny should show both.</p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Intellectual velocity</p>
+                <p className="mt-3 text-sm leading-7 text-[var(--ink)]">Some domains should change quickly, while others should harden slowly. Penny should show the rate of improvement, not just the archive state.</p>
+              </div>
+              <Link href="/app/velocity">
+                <Button variant="secondary" className="gap-2">
+                  Open dashboard
+                  <ArrowRight className="size-4" />
+                </Button>
+              </Link>
+            </div>
             <div className="mt-4 space-y-3">
               {memoryTime.beliefVelocity.length ? (
                 memoryTime.beliefVelocity.map((item) => (
@@ -366,7 +376,7 @@ export default async function DashboardPage() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm leading-7 text-[var(--muted-ink)]">Belief velocity will appear once there is enough update history to compare domains.</p>
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">Intellectual velocity will appear once there is enough update history to compare domains.</p>
               )}
             </div>
           </div>
