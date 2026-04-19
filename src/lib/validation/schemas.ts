@@ -36,6 +36,13 @@ export const CreateClaimSchema = z.object({
   branchOrder: z.number().int().min(0).optional(),
 });
 
+export const CreateClaimCaptureSchema = z.object({
+  text: z.string().min(10, "Claim must be at least 10 characters").max(1000, "Claim too long"),
+  confidence: z.number().min(0).max(100),
+  provenance: z.enum(["intuition", "cited_source", "inherited", "derived"]).default("intuition"),
+  stakes: z.array(z.string().min(1).max(50)).default([]),
+});
+
 export const UpdateClaimSchema = z.object({
   content: z.string().min(10).max(1000).optional(),
   note: z.string().max(500).nullable().optional(),
