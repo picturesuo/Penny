@@ -11,7 +11,7 @@
 - [ ] Expand only when the project grows.
 
 ## Blocked
-- [ ] No blockers recorded yet.
+- [ ] No blockers recorded.
 
 ## Discovered While Working
 - [x] The landing page still leaned on startup-idea language at the top, so the smallest real artifact was to reframe the hero around the pressure-tested second brain.
@@ -24,3 +24,4 @@
 - [x] Rate limiting should be centralized and cheap, so the first pass uses an in-memory per-subject window before any AI work or auth mutation runs.
 - [x] The type audit found that session status should be normalized to the actual lifecycle union and that session summaries should always carry a key insight once generated.
 - [x] The MVP core types need to follow the real runtime shapes, so `Map` uses `rawThought` plus `claimCount`, `Claim` models thought nodes plus capture metadata, `SteelMan` uses the persisted quality-score fields, and `Artifact` / `Move` should follow the actual record and event unions instead of the sketch draft.
+- [x] The MVP core contracts now have dedicated Prisma tables and indexes, and the sqlite dev database was recreated cleanly after the old zero-byte `dev.db` file caused Prisma drift.

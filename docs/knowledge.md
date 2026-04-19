@@ -7,6 +7,7 @@
 - The product outputs three things on every meaningful traversal: a structured artifact, durable learning, and self-knowledge about how the user thinks.
 - Every piece of information in Penny belongs to one of four object types: `Claim`, `Move`, `Shape`, or `Lens`, with `Sphere` and `Session` as first-class organizing layers.
 - The MVP core types should follow the real runtime shapes, not the sketch fields: map summaries use `rawThought` and derived claim counts, claims model thought nodes plus capture metadata, steel-mans use the persisted quality-score fields, artifacts mirror the stored artifact record, and moves should reflect the actual event unions.
+- The MVP core contract now has dedicated Prisma tables in `maps`, `claims`, `claim_confidence_history_entries`, `steel_mans`, `response_classifications`, `dialectic_rounds`, `learning_prompts`, `artifact_contents`, `artifact_sections`, `sessions`, and `moves`, with the requested MVP indexes applied.
 - `Claim` is the node substrate, `Move` is the immutable event history, `Shape` is the recurring pattern derived from moves, and `Lens` is the live user model that gets injected into generation.
 - `Brain` has two primary views of the same data: the `Map`, which is the spatial knowledge graph, and the `Stream`, which is the reverse-chronological activity feed that surfaces what needs attention next.
 - The `Map` is for topology, structural health, and screenshots; the `Stream` is for daily work, resurfacing aged claims, open questions, shape changes, and suggested next moves.

@@ -89,6 +89,7 @@ export type ResponseClassificationSnapshot = ResponseClassification;
 
 export type DialecticRound = {
   id: string;
+  userId: string;
   mapId: string;
   claimId: string | null;
   roundNumber: number;
@@ -153,6 +154,7 @@ export type ArtifactContent = {
 
 export type Artifact = {
   id: string;
+  userId: string;
   artifactTypeId: ArtifactRecord["artifactTypeId"];
   artifactTypeName: string;
   title: string;
