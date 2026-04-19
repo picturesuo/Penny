@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createQuickCapture, listQuickCaptures, updateQuickCapture } from "@/server/quick-capture";
 import { QUICK_CAPTURE_SOURCES } from "@/types/quick-capture";
 import { SESSION_STAGES } from "@/types/penny";
+import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
 
 const createQuickCaptureSchema = z.object({
   userId: z.string().min(1).optional(),
@@ -36,7 +37,14 @@ export async function GET(request: Request) {
     const userId = url.searchParams.get("userId") || undefined;
     const captures = await listQuickCaptures(userId);
     return NextResponse.json({ captures }, { status: 200 });
-  } catch {
+  } catch (error) {
+    reportError(normalizeError(error), {
+      userId: getRequestUserId({ path: new URL(request.url).pathname, headers: request.headers }),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "quick-capture-get",
+    });
+
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
@@ -75,6 +83,13 @@ export async function POST(request: Request) {
       );
     }
 
+    reportError(normalizeError(error), {
+      userId: getRequestUserId({ path: new URL(request.url).pathname, headers: request.headers }),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "quick-capture-post",
+    });
+
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
@@ -106,6 +121,13 @@ export async function PATCH(request: Request) {
     if (error instanceof Error && /not found/i.test(error.message)) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
+
+    reportError(normalizeError(error), {
+      userId: getRequestUserId({ path: new URL(request.url).pathname, headers: request.headers }),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "quick-capture-patch",
+    });
 
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }

@@ -1,11 +1,11 @@
 # Queue
 
 ## Now
-- [ ] Finish the global search slice so user-scoped search can recover claims, maps, artifacts, lessons, sessions, and shapes without map-hopping.
+- [ ] Finish the error monitoring slice so unhandled client and server failures are logged with route, file, line, and user context instead of failing silently.
 
 ## Next
-- [ ] Verify the search page, filters, and result routing on the new user-scoped search path.
-- [ ] Check the search copy and suggestions against the honesty requirement: search returns what is already in the archive, not generic advice.
+- [ ] Verify the error boundaries, request hooks, and route-level logging path on the new monitoring layer.
+- [ ] Check the fallback copy against the honesty requirement: the app should say the error was logged, not pretend it was recovered.
 
 ## Later
 - [ ] Expand only when the project grows.
@@ -20,3 +20,4 @@
 - [x] Vault mode was already present in the workspace (`src/components/penny/vault-modal.tsx` and the related server registration flow), so the queue item needed to be retired instead of re-implemented.
 - [x] The lesson library should emerge from resolved claims and critique history rather than a separate note system, so the first build used the existing thought-map event log as the source of truth.
 - [x] Global search had been scanning cross-user data and using margin fragments as a stand-in for lessons, so the search helper needed to be retargeted at the actual per-user archive surfaces.
+- [x] Error monitoring needs to catch both client crashes and API failures, so the first implementation should combine App Router error boundaries with request-level reporting and keep the event payload user- and request-scoped.

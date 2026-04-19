@@ -2,14 +2,18 @@ import Link from "next/link";
 import { Lightbulb, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GlobalShortcuts } from "@/components/penny/global-shortcuts";
+import { SignOutButton } from "@/components/penny/sign-out-button";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const userId = await getCurrentAuthenticatedUserId();
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" data-user-id={userId}>
       <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
         <header className="flex flex-col gap-4 border-b border-black/8 pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
@@ -44,6 +48,7 @@ export default function AppLayout({
                 Start thought map
               </Button>
             </Link>
+            <SignOutButton />
           </div>
         </header>
         <div className="py-8">{children}</div>

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/db/prisma";
 import { buildRevisitQueue } from "@/lib/revisit-scheduler";
 import { getThoughtMap } from "@/server/thought-map";
+import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const maps = await prisma.thoughtMap.findMany({
       select: { id: true },
@@ -28,7 +29,14 @@ export async function GET() {
       },
       { status: 200 },
     );
-  } catch {
+  } catch (error) {
+    reportError(normalizeError(error), {
+      userId: getRequestUserId({ path: new URL(request.url).pathname, headers: request.headers }),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "revisit-queue",
+    });
+
     return NextResponse.json(
       {
         error: "internal_error",

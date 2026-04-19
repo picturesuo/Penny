@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { findRelevantLessons, getLessonLibrary, recordLessonApplication, serializeLessonLibrary } from "@/server/lesson-library";
+import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -54,6 +55,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         { status: 404 },
       );
     }
+
+    reportError(normalizeError(error), {
+      userId: getRequestUserId({ path: new URL(request.url).pathname, headers: request.headers }),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "lesson-library",
+    });
 
     return NextResponse.json(
       {

@@ -7,7 +7,8 @@ import {
   getActiveThinkingSession,
   updateThinkingSession,
 } from "@/server/penny";
-import { DEMO_USER_ID } from "@/lib/penny";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
+import { normalizeError, reportError } from "@/lib/error-reporting";
 
 const sessionIntentionTypes = [
   "stress_test",
@@ -33,7 +34,7 @@ const sessionEventTypes = [
 ] as const;
 
 const createSchema = z.object({
-  userId: z.string().min(1).optional().default(DEMO_USER_ID),
+  userId: z.string().min(1).optional(),
   mapId: z.string().min(1).nullable().optional().default(null),
   declaredIntention: z.string().min(1).max(500),
   intentionType: z.enum(sessionIntentionTypes),
@@ -81,15 +82,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ session: null });
   }
 
-  const session = await getActiveThinkingSession({ mapId });
+  const userId = await getCurrentAuthenticatedUserId();
+  const session = await getActiveThinkingSession({ mapId, userId });
   return NextResponse.json({ session });
 }
 
 export async function POST(request: Request) {
   try {
     const input = createSchema.parse(await request.json());
+    const userId = input.userId ?? (await getCurrentAuthenticatedUserId());
     const createdSession = await createThinkingSession({
-      userId: input.userId,
+      userId,
       mapId: input.mapId,
       declaredIntention: input.declaredIntention,
       intentionType: input.intentionType,
@@ -102,12 +105,19 @@ export async function POST(request: Request) {
       claimId: null,
       description: input.declaredIntention,
     });
-    const session = await getActiveThinkingSession({ mapId: input.mapId, userId: input.userId });
+    const session = await getActiveThinkingSession({ mapId: input.mapId, userId });
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "invalid_request", details: error.flatten() }, { status: 400 });
     }
+
+    reportError(normalizeError(error), {
+      userId: await getCurrentAuthenticatedUserId(),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "sessions-post",
+    });
 
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
@@ -134,6 +144,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "invalid_request", details: error.flatten() }, { status: 400 });
     }
 
+    reportError(normalizeError(error), {
+      userId: await getCurrentAuthenticatedUserId(),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "sessions-patch",
+    });
+
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
@@ -159,6 +176,13 @@ export async function PUT(request: Request) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "invalid_request", details: error.flatten() }, { status: 400 });
     }
+
+    reportError(normalizeError(error), {
+      userId: await getCurrentAuthenticatedUserId(),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "sessions-put",
+    });
 
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }

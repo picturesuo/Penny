@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildNotificationDispatchesForUser, listNotificationRecipientIds, recordNotificationDeliveries } from "@/server/notifications";
+import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
 import type { Notification } from "@/types/notifications";
 
 const sendNotificationsSchema = z.object({
@@ -57,6 +58,13 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    reportError(normalizeError(error), {
+      userId: getRequestUserId({ path: new URL(request.url).pathname, headers: request.headers }),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "notifications-send",
+    });
 
     return NextResponse.json(
       {

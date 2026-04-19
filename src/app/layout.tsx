@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Instrument_Serif, Manrope } from "next/font/google";
 import "./globals.css";
+import { getDemoThoughtUserId } from "@/lib/thought-map";
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -34,7 +35,9 @@ export default function RootLayout({
       lang="en"
       className={`${manrope.variable} ${instrumentSerif.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col" data-user-id={getDemoThoughtUserId()}>
+        {children}
+      </body>
     </html>
   );
 }

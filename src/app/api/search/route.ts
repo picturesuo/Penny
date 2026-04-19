@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { globalSearch } from "@/lib/search";
 import { DEMO_USER_ID } from "@/lib/penny";
+import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
 import type { SearchFilters } from "@/types/search";
 
 const searchFiltersSchema = z.object({
@@ -66,6 +67,13 @@ export async function POST(request: Request) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "invalid_request", details: error.flatten() }, { status: 400 });
     }
+
+    reportError(normalizeError(error), {
+      userId: getRequestUserId({ path: new URL(request.url).pathname, headers: request.headers }),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "search-route",
+    });
 
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }

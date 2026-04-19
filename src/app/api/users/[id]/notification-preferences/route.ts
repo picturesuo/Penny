@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getNotificationPreferences, saveNotificationPreferences } from "@/server/notifications";
+import { getRequestUserId, normalizeError, reportError } from "@/lib/error-reporting";
 
 const scheduleSchema = z.object({
   daysOfWeek: z.array(z.number().int().min(0).max(6)).default([]),
@@ -62,6 +63,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         { status: 400 },
       );
     }
+
+    reportError(normalizeError(error), {
+      userId: getRequestUserId({ path: new URL(request.url).pathname, headers: request.headers }),
+      requestPath: request.url,
+      requestMethod: request.method,
+      featureId: "notification-preferences",
+    });
 
     return NextResponse.json(
       {
