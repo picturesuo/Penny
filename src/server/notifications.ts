@@ -36,6 +36,8 @@ type NotificationRecordRow = {
   openedAt: Date | string | null;
   clickedAt: Date | string | null;
   status: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 };
 
 function coerceDate(value: Date | string | null): Date | null {
@@ -115,6 +117,8 @@ function mapNotificationRecord(record: NotificationRecordRow): Notification {
     openedAt: coerceDate(record.openedAt),
     clickedAt: coerceDate(record.clickedAt),
     status: record.status as Notification["status"],
+    createdAt: coerceDate(record.createdAt) ?? new Date(),
+    updatedAt: coerceDate(record.updatedAt) ?? new Date(),
   };
 }
 
@@ -225,7 +229,9 @@ export async function listNotificationRecords(userId?: string) {
       "sentAt",
       "openedAt",
       "clickedAt",
-      "status"
+      "status",
+      "createdAt",
+      "updatedAt"
     FROM "NotificationRecord"
     ${userId ? Prisma.sql`WHERE "userId" = ${userId}` : Prisma.empty}
     ORDER BY "scheduledFor" DESC, "createdAt" DESC

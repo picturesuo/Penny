@@ -14,6 +14,8 @@
 - Global search should be user-scoped, deterministic, and fast enough to recover claims, maps, artifacts, lessons, sessions, and shapes without forcing the user to open each map manually.
 - Error monitoring should be first-class: unhandled client errors, root layout failures, and server request errors should emit structured events with the error message, file/line location, request path, and user ID so a silent failure is not possible.
 - Rate limiting should be shared and cheap: the MVP limiter can live in memory, but expensive AI paths and auth sign-in/sign-up should be bucketed separately so the first guard happens before the expensive work runs.
+- Session state should be normalized before it leaves the server: the live session contract uses the explicit `active` / `brief-ready` / `reflection-logged` / `closed` lifecycle, and a generated session summary should always include a key insight string.
+- Notification records should expose their persisted `createdAt` and `updatedAt` timestamps in the server-facing type so delivery history can be audited without guessing about record freshness.
 - Synthesis should be gated by pre-mortem, if-you-were-right, twin-check, stakes-proportional friction, and dependency-completeness review so the output step feels load-bearing.
 - Sessions are first-class objects with a declared focus, protected deep-work windows, cognitive protection, depletion detection, and a clean ending ritual that hands over the artifact and stops pulling.
 - Calibration is first-class: every claim has a probability, high-confidence claims get challenged, resolved claims feed Brier tracking, and private self-bets make calibration emotionally sticky.

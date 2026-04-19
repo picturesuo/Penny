@@ -248,6 +248,7 @@ function notificationTemplateToDraft(params: {
   scheduledFor: Date;
   status: NotificationStatus;
 }): Notification {
+  const createdAt = params.scheduledFor;
   return {
     id: randomUUID(),
     userId: params.userId,
@@ -265,6 +266,8 @@ function notificationTemplateToDraft(params: {
     openedAt: null,
     clickedAt: null,
     status: params.status,
+    createdAt,
+    updatedAt: createdAt,
   };
 }
 

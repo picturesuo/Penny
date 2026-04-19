@@ -1572,7 +1572,7 @@ export interface SessionSummary {
   critiquesRun: number;
   concessionsMade: number;
   artifactsGenerated: number;
-  keyInsight: string | null;
+  keyInsight: string;
   generatedAt: Date;
 }
 

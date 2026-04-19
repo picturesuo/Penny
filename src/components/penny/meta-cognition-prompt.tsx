@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UncertaintyIndicator } from "@/components/penny/uncertainty-indicator";
+import { track } from "@/lib/analytics";
+import { getClientUserId } from "@/lib/error-reporting";
+import { DEMO_USER_ID } from "@/lib/penny";
 import type { MetaCognitionPromptSnapshot } from "@/lib/meta-cognition";
 
 export function MetaCognitionPrompt({
@@ -17,6 +20,26 @@ export function MetaCognitionPrompt({
 }) {
   const [showEvidence, setShowEvidence] = useState(false);
   const [disagreeDraft, setDisagreeDraft] = useState("");
+  const trackedPromptId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (trackedPromptId.current === prompt.id) {
+      return;
+    }
+
+    trackedPromptId.current = prompt.id;
+    const userId = getClientUserId();
+    void track(
+      {
+        event: "learning_prompt_opened",
+        properties: {
+          promptType: prompt.trigger.condition,
+          claimId: prompt.selectedNodeId ?? prompt.trigger.id,
+        },
+      },
+      userId && userId !== DEMO_USER_ID ? userId : undefined,
+    );
+  }, [prompt.id, prompt.selectedNodeId, prompt.trigger.condition, prompt.trigger.id]);
 
   return (
     <div className="rounded-[24px] border border-[#b6c8f4] bg-[linear-gradient(180deg,#f8fbff_0%,#eef4ff_100%)] p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">

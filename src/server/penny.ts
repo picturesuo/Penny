@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { MarginFragment, Session } from "@prisma/client";
 import { prisma } from "@/db/prisma";
+import { track } from "@/lib/analytics";
 import { cleanSentence, computeClarityScore, createMessage, dedupePoints, dedupeStrings, determineStage, safeJsonParse, titleFromIdea, DEMO_USER_ID } from "@/lib/penny";
 import { MockLlmProvider } from "@/lib/ai/mock-provider";
 import { MockContextProvider } from "@/lib/context/mock-context";
@@ -25,6 +26,10 @@ import type {
 const llm = new MockLlmProvider();
 const contextProvider = new MockContextProvider();
 
+function parseSessionStatus(value: string | null | undefined): SessionState["status"] {
+  return value === "active" || value === "brief-ready" || value === "reflection-logged" || value === "closed" ? value : "active";
+}
+
 function mapSession(record: Session): SessionState {
   const parseJson = <T,>(value: string | null, fallback: T): T => {
     if (!value) {
@@ -42,8 +47,9 @@ function mapSession(record: Session): SessionState {
     ...event,
     timestamp: new Date(event.timestamp),
   }));
+  const { status: _status, ...rest } = record;
   return {
-    ...record,
+    ...rest,
     mapId: record.mapId ?? null,
     declaredIntention: record.declaredIntention ?? "",
     intentionType: (record.intentionType as SessionIntentionType) ?? "open_exploration",
@@ -59,6 +65,7 @@ function mapSession(record: Session): SessionState {
     focusRating: (record.focusRating as SessionState["focusRating"]) ?? null,
     productivityRating: record.productivityRating ?? null,
     currentStage: record.currentStage as SessionState["currentStage"],
+    status: parseSessionStatus(record.status),
     category: record.category ?? null,
     extractedProblem: record.extractedProblem ?? null,
     extractedCustomer: record.extractedCustomer ?? null,
@@ -330,7 +337,7 @@ export async function listSessions(userId?: string): Promise<SessionCardModel[]>
     id: session.id,
     title: session.title,
     currentStage: session.currentStage as SessionCardModel["currentStage"],
-    status: session.status,
+    status: parseSessionStatus(session.status),
     clarityScore: session.clarityScore,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
@@ -654,6 +661,16 @@ export async function closeThinkingSession(params: {
   });
 
   await saveSession(session);
+  void track(
+    {
+      event: "session_completed",
+      properties: {
+        sessionId: session.id,
+        durationMinutes: session.actualDurationMinutes ?? 0,
+      },
+    },
+    session.userId,
+  );
 
   return session;
 }

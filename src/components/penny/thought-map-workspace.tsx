@@ -66,6 +66,8 @@ import {
 import { buildPersonalizedCritiqueContext, generatePersonalizationDisclosure } from "@/lib/personalized-critique-engine";
 import { buildArtifactDependencyHealth } from "@/lib/dependency-health";
 import { buildClaimEvidenceSummary } from "@/lib/evidence-quality";
+import { track } from "@/lib/analytics";
+import { classifyCalibrationDomain } from "@/lib/calibration";
 import { evaluateMetaCognitionTrigger, type MetaCognitionPromptSnapshot } from "@/lib/meta-cognition";
 import { generateSessionSummary } from "@/lib/session-summary";
 import { buildRevisitQueue } from "@/lib/revisit-scheduler";
@@ -3693,6 +3695,19 @@ export function ThoughtMapWorkspace({
     }
 
     startTransition(async () => {
+      const claimId = selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null;
+
+      void track(
+        {
+          event: "challenge_started",
+          properties: {
+            claimId: claimId ?? "unknown",
+            roundNumber: params.roundIndex + 1,
+          },
+        },
+        map.userId,
+      );
+
       try {
         const responsePayload = await fetch(`/api/maps/${map.id}/dialectic-rounds`, {
           method: "POST",
@@ -3743,10 +3758,21 @@ export function ThoughtMapWorkspace({
           void appendSessionEventToServer({
             sessionId: activeSession.id,
             eventType: "critique_round",
-            claimId: selectedGraphNode?.node.id ?? null,
+            claimId,
             description: `${params.title}: ${response.slice(0, 160)}`,
           });
         }
+        void track(
+          {
+            event: "challenge_completed",
+            properties: {
+              claimId: claimId ?? "unknown",
+              roundNumber: params.roundIndex + 1,
+              engagementScore: Math.min(1, Math.max(0, response.length / 240)),
+            },
+          },
+          map.userId,
+        );
         setDialecticRoundContextDrafts((current) => {
           const next = { ...current };
           delete next[params.round];
@@ -4015,6 +4041,19 @@ export function ThoughtMapWorkspace({
         const payload = (await response.json()) as ActionResponse;
         setLastAction(payload);
         mergeMapUpdate(payload);
+        for (const node of payload.createdNodes) {
+          void track(
+            {
+              event: "claim_created",
+              properties: {
+                claimId: node.id,
+                mapId: map.id,
+                domain: classifyCalibrationDomain(node.content),
+              },
+            },
+            map.userId,
+          );
+        }
         if (activeSession && !activeSession.endedAt && payload.createdNodes.length > 0) {
           void appendSessionEventToServer({
             sessionId: activeSession.id,
@@ -4051,6 +4090,19 @@ export function ThoughtMapWorkspace({
         const payload = (await response.json()) as ActionResponse;
         setLastAction(payload);
         mergeMapUpdate(payload);
+        for (const node of payload.createdNodes) {
+          void track(
+            {
+              event: "claim_created",
+              properties: {
+                claimId: node.id,
+                mapId: map.id,
+                domain: classifyCalibrationDomain(node.content),
+              },
+            },
+            map.userId,
+          );
+        }
         if (activeSession && !activeSession.endedAt && payload.createdNodes.length > 0) {
           void appendSessionEventToServer({
             sessionId: activeSession.id,

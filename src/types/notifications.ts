@@ -61,6 +61,8 @@ export type Notification = {
   openedAt: Date | null;
   clickedAt: Date | null;
   status: NotificationStatus;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type EmailTemplate = {

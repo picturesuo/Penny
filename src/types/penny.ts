@@ -90,7 +90,7 @@ export interface SessionState {
   energyRating: "low" | "medium" | "high" | null;
   focusRating: "scattered" | "moderate" | "deep" | null;
   productivityRating: number | null;
-  status: string;
+  status: SessionStatus;
   currentStage: SessionStage;
   questionBudget: number;
   clarityScore: number;
@@ -121,7 +121,7 @@ export interface SessionCardModel {
   id: string;
   title: string;
   currentStage: SessionStage;
-  status: string;
+  status: SessionStatus;
   clarityScore: number;
   createdAt: Date;
   updatedAt: Date;
@@ -129,6 +129,8 @@ export interface SessionCardModel {
   targetUser?: string | null;
   problem?: string | null;
 }
+
+export type SessionStatus = "active" | "brief-ready" | "reflection-logged" | "closed";
 
 export const MARGIN_FRAGMENT_STATUSES = ["floating", "surfaced", "promoted", "merged", "archived"] as const;
 

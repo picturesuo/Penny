@@ -26,6 +26,8 @@ export async function POST(request: Request) {
         ...notification,
         sentAt: notification.status === "suppressed" ? null : now,
         status: notification.status === "suppressed" ? "suppressed" : "sent",
+        createdAt: notification.createdAt ?? now,
+        updatedAt: now,
       }));
 
       generated += finalized.filter((notification) => notification.status === "sent").length;

@@ -1,11 +1,11 @@
 # Queue
 
 ## Now
-- [ ] Finish the request rate limiting slice so AI-calling routes and auth endpoints are throttled before the expensive work runs.
+- [ ] Finish the type-definition audit by tightening any remaining server-to-type mismatches and publishing the corrected contracts.
 
 ## Next
-- [ ] Verify the AI entry points, auth routes, and founder brief path are all using the shared limiter.
-- [ ] Check the 429 fallback shape so the app returns a clear retry-after response instead of a silent failure.
+- [ ] Re-scan the remaining type files for any loose nullable fields or server-populated fields that are still not reflected in the public types.
+- [ ] Keep the shared context aligned with the type-audit slice before moving to another feature area.
 
 ## Later
 - [ ] Expand only when the project grows.
@@ -22,3 +22,4 @@
 - [x] Global search had been scanning cross-user data and using margin fragments as a stand-in for lessons, so the search helper needed to be retargeted at the actual per-user archive surfaces.
 - [x] Error monitoring needs to catch both client crashes and API failures, so the first implementation should combine App Router error boundaries with request-level reporting and keep the event payload user- and request-scoped.
 - [x] Rate limiting should be centralized and cheap, so the first pass uses an in-memory per-subject window before any AI work or auth mutation runs.
+- [x] The type audit found that session status should be normalized to the actual lifecycle union and that session summaries should always carry a key insight once generated.

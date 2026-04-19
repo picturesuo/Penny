@@ -10,6 +10,7 @@ import type {
 } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/db/prisma";
+import { track } from "@/lib/analytics";
 import { artifactDraftToFounderBrief, artifactRecordFromFounderBrief, buildArtifactDraft, getArtifactType } from "@/lib/artifact-types";
 import { buildArtifactDependencyHealth, buildDependencyHealthReport } from "@/lib/dependency-health";
 import { getFounderBriefReadiness } from "@/lib/founder-brief";
@@ -2022,6 +2023,7 @@ export async function recordBeliefPropagation(params: {
   }
 
   const graph = buildBeliefGraph(map);
+  const seedPrior = graph.nodes.get(params.seedClaimId)?.posterior ?? 0;
   const result = propagateBeliefGraph(graph, params.seedClaimId, params.updatedPosterior ?? null);
   const serializedResult = serializeBeliefPropagationResult(result);
 
@@ -2075,6 +2077,18 @@ export async function recordBeliefPropagation(params: {
       cycleEvent,
     };
   });
+
+  const seedPosterior = result.graph.nodes.get(params.seedClaimId)?.posterior ?? params.updatedPosterior ?? seedPrior;
+  void track(
+    {
+      event: "confidence_updated",
+      properties: {
+        claimId: params.seedClaimId,
+        delta: Math.round((seedPosterior - seedPrior) * 100),
+      },
+    },
+    map.userId,
+  );
 
   return {
     result,
@@ -2624,6 +2638,17 @@ export async function recordSteelMan(params: {
   if (!steelMan) {
     throw new Error("Steel man not found");
   }
+
+  void track(
+    {
+      event: "steel_man_written",
+      properties: {
+        claimId: params.claimId,
+        qualityScore: assessment.qualityScore,
+      },
+    },
+    userId,
+  );
 
   return {
     steelMan,
@@ -3645,6 +3670,7 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
     : null;
   let referenceClassRecord: ReferenceClass | null = null;
   const userId = await getCurrentAuthenticatedUserId();
+  const claimDomain = classifyCalibrationDomain(mapRawThought);
 
   const created = await prisma.$transaction(async (tx) => {
     const map = await tx.thoughtMap.create({
@@ -3720,6 +3746,31 @@ export async function createThoughtMap(input: CreateThoughtMapInput) {
       referenceClass: referenceClassRecord,
       nodeId: created.nodes[0]?.id ?? created.id,
     });
+  }
+
+  void track(
+    {
+      event: "map_created",
+      properties: {
+        mapId: created.id,
+      },
+    },
+    userId,
+  );
+
+  const rootNodeId = created.nodes[0]?.id ?? null;
+  if (rootNodeId) {
+    void track(
+      {
+        event: "claim_created",
+        properties: {
+          claimId: rootNodeId,
+          mapId: created.id,
+          domain: claimDomain,
+        },
+      },
+      userId,
+    );
   }
 
   return hydrateThoughtMap(created);
@@ -4025,6 +4076,17 @@ export async function generateArtifactForMap(params: {
   if (!updatedRecord) {
     throw new Error("Map not found");
   }
+
+  void track(
+    {
+      event: "artifact_generated",
+      properties: {
+        artifactType: params.artifactTypeId,
+        mapId: params.mapId,
+      },
+    },
+    activeUserId,
+  );
 
   const hydratedMap = await hydrateThoughtMap(
     updatedRecord as ThoughtMap & { nodes: ThoughtNode[]; events: ThoughtMapEventRecord[] },

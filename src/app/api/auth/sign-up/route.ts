@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { track } from "@/lib/analytics";
 import { signUpWithEmail } from "@/server/auth";
 import {
   buildRateLimitResponse,
@@ -26,6 +27,16 @@ export async function POST(request: Request) {
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }
+
+    void track(
+      {
+        event: "sign_up",
+        properties: {
+          method: "email_password",
+        },
+      },
+      result.value.user.id,
+    );
 
     return NextResponse.json(
       {

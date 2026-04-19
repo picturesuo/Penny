@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Instrument_Serif, Manrope } from "next/font/google";
 import "./globals.css";
+import { AnalyticsPageTracker } from "@/components/penny/analytics-page-tracker";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
 const manrope = Manrope({
@@ -38,6 +39,7 @@ export default async function RootLayout({
       className={`${manrope.variable} ${instrumentSerif.variable} ${plexMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" data-user-id={userId}>
+        <AnalyticsPageTracker />
         {children}
       </body>
     </html>

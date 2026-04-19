@@ -281,6 +281,10 @@ function parseSessionJson<T>(value: string | null, fallback: T): T {
   }
 }
 
+function parseSessionStatus(value: string | null | undefined): SessionState["status"] {
+  return value === "active" || value === "brief-ready" || value === "reflection-logged" || value === "closed" ? value : "active";
+}
+
 export function serializeSessionRecord(record: PrismaSession): SessionState {
   const sessionEvents = parseSessionJson<Array<Record<string, unknown>>>(record.sessionEvents, []).map((event) => ({
     id: typeof event.id === "string" ? event.id : "",
@@ -350,7 +354,7 @@ export function serializeSessionRecord(record: PrismaSession): SessionState {
           critiquesRun: typeof sessionSummaryRaw.critiquesRun === "number" ? sessionSummaryRaw.critiquesRun : 0,
           concessionsMade: typeof sessionSummaryRaw.concessionsMade === "number" ? sessionSummaryRaw.concessionsMade : 0,
           artifactsGenerated: typeof sessionSummaryRaw.artifactsGenerated === "number" ? sessionSummaryRaw.artifactsGenerated : 0,
-          keyInsight: typeof sessionSummaryRaw.keyInsight === "string" ? sessionSummaryRaw.keyInsight : null,
+          keyInsight: typeof sessionSummaryRaw.keyInsight === "string" ? sessionSummaryRaw.keyInsight : "",
           generatedAt:
             typeof sessionSummaryRaw.generatedAt === "string"
               ? new Date(sessionSummaryRaw.generatedAt)
@@ -379,7 +383,7 @@ export function serializeSessionRecord(record: PrismaSession): SessionState {
     focusRating: record.focusRating as SessionState["focusRating"],
     productivityRating: record.productivityRating,
     currentStage: record.currentStage as SessionState["currentStage"],
-    status: record.status,
+    status: parseSessionStatus(record.status),
     title: record.title,
     rawIdea: record.rawIdea,
     category: record.category,
