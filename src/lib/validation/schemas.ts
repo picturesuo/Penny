@@ -164,13 +164,13 @@ export const CreateRoundSchema = z.object({
   prompt: z.string().min(1),
   why: z.string().min(1),
   responsePath: z.enum(["defend", "revise", "absorb"]),
-  response: z.string().min(1).max(1000),
+  response: z.string().trim().min(10, "Response must be at least 10 characters.").max(1000),
   confidenceAtRoundEnd: z.number().min(0).max(100).nullable().optional(),
 });
 
 export const RoundResponseSchema = z.object({
   roundId: z.string().cuid(),
-  userResponse: z.string().min(10).max(3000),
+  userResponse: z.string().trim().min(10, "Response must be at least 10 characters.").max(3000),
   newConfidence: z.number().min(0).max(100),
   confidenceChangeReason: z.string().max(500).nullable().optional(),
 });
@@ -182,7 +182,7 @@ export const ChallengeStartSchema = z.object({
 });
 
 export const ChallengeResponseSchema = z.object({
-  userResponse: z.string().min(10).max(3000),
+  userResponse: z.string().trim().min(10, "Response must be at least 10 characters.").max(3000),
   newConfidence: z.number().min(0).max(100),
   confidenceChangeReason: z.string().max(500).nullable().optional(),
   responsePath: z.enum(["defend", "revise", "absorb"]).optional(),
