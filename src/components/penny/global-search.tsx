@@ -109,7 +109,7 @@ export function GlobalSearch({ userId }: { userId: string }) {
                 setIsLoading(false);
               }
             }}
-            placeholder="Search claims, maps, artifacts, sessions, shapes..."
+            placeholder="Search claims, maps, artifacts, lessons, sessions, shapes..."
             className="w-full rounded-full border border-black/10 bg-white py-3 pl-11 pr-4 text-sm text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-[var(--ink)]"
           />
         </label>

@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       sphere: input.sphere,
       sourceSessionId: input.sourceSessionId ?? null,
       sourceMapId: input.sourceMapId ?? null,
-      currentStage: input.currentStage,
+      currentStage: input.currentStage as Parameters<typeof createQuickCapture>[0]["currentStage"],
       currentFocus: input.currentFocus,
       currentContext: input.currentContext,
       currentResponse: input.currentResponse ?? null,
