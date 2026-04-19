@@ -1,10 +1,10 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { MapWorkspace } from "@/components/penny/map-workspace";
 import { getAuthenticatedUserFromCookies } from "@/server/auth";
 import { getArtifactsForMap, getClaimsForMap, getMap, getMapsForUser } from "@/server/mvp";
 import { listMarginFragments } from "@/server/penny";
 
-export default async function ThoughtMapPage({
+export default async function MapPage({
   params,
 }: {
   params: Promise<{ id: string }>;

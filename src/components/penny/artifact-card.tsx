@@ -7,28 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DependencyHealthBar } from "@/components/penny/dependency-health";
-import type { Artifact } from "@/types/mvp-core";
-import type { ArtifactOutcome } from "@/types/thought-map";
+import type { ArtifactOutcome, ArtifactRecord } from "@/types/thought-map";
 
-type ArtifactCardSection = {
-  id: string;
-  title: string;
-  body: string;
-  sourceClaimIds: string[];
-  sectionType?: string | null;
-};
-
-type ArtifactCardLoadBearingClaim = {
-  claimId: string;
-  claimText: string;
-  confidenceAtArtifactTime: number;
-};
-
-type ArtifactCardArtifact = Omit<Artifact, "userId" | "sections" | "loadBearingClaims" | "latestOutcome"> & {
-  sections: ArtifactCardSection[];
-  loadBearingClaims: ArtifactCardLoadBearingClaim[];
-  latestOutcome: ArtifactOutcome | null;
-};
+type ArtifactCardArtifact = ArtifactRecord;
 
 interface ArtifactCardProps {
   artifact: ArtifactCardArtifact;
@@ -145,9 +126,6 @@ export function ArtifactCard({ artifact, onExport }: ArtifactCardProps) {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{section.title}</p>
-                    <p className="mt-1 text-sm text-[var(--muted-ink)]">
-                      {section.sectionType ? formatSectionType(section.sectionType) : "Section"}
-                    </p>
                   </div>
                   <Badge className="bg-white text-[var(--ink)]">
                     {section.sourceClaimIds.length} source claim{section.sourceClaimIds.length === 1 ? "" : "s"}
@@ -289,12 +267,6 @@ function formatArtifactType(value: string): string {
     .replace(/\b\w/g, (char: string) => char.toUpperCase());
 }
 
-function formatSectionType(value: string): string {
-  return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (char: string) => char.toUpperCase());
-}
-
 function formatOutcomeType(value: ArtifactOutcome["outcomeType"]): string {
   return value
     .replaceAll("_", " ")
@@ -343,10 +315,6 @@ function generatePlainText(artifact: ArtifactCardArtifact): string {
 
   artifact.sections.forEach((section) => {
     lines.push("", section.title, "-".repeat(section.title.length));
-
-    if (section.sectionType) {
-      lines.push(`Section type: ${formatSectionType(section.sectionType)}`);
-    }
 
     if (section.sourceClaimIds.length > 0) {
       lines.push(`Source claims: ${section.sourceClaimIds.join(", ")}`);
