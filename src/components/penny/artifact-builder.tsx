@@ -66,7 +66,8 @@ export function ArtifactBuilder({
     });
 
     if (!response.ok) {
-      throw new Error("Penny could not generate the artifact.");
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? "Penny could not generate the artifact.");
     }
 
     const payload = (await response.json()) as { artifact: ArtifactRecord; map?: ThoughtMapModel };

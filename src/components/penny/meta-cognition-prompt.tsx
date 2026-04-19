@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { UncertaintyIndicator } from "@/components/penny/uncertainty-indicator";
 import type { MetaCognitionPromptSnapshot } from "@/lib/meta-cognition";
 
 export function MetaCognitionPrompt({
@@ -22,6 +23,7 @@ export function MetaCognitionPrompt({
       <div className="flex items-center justify-between gap-3">
         <Badge className="bg-white text-[var(--ink)]">{prompt.trigger.promptTone.replaceAll("_", " ")}</Badge>
         <Badge className="bg-white text-[var(--ink)]">{prompt.trigger.condition.replaceAll("_", " ")}</Badge>
+        <UncertaintyIndicator uncertainty={prompt.uncertainty} />
       </div>
       <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{prompt.prompt}</p>
       <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">

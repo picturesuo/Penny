@@ -18,6 +18,7 @@ import {
   type SourceTrustLevel,
 } from "@/types/thought-map";
 import { calibrationIndicatorForClaim } from "@/lib/calibration";
+import { suggestReferenceClass } from "@/lib/reference-classes";
 import { extractAssumptionSnapshot } from "@/lib/thought-map-generation";
 
 const STARTER_IDEAS = [
@@ -63,12 +64,14 @@ function prettyLabel(value: string) {
 
 type ThoughtMapFormProps = {
   userId?: string;
+  initialRawThought?: string;
 };
 
-export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
+export function ThoughtMapForm({ userId, initialRawThought }: ThoughtMapFormProps) {
   const router = useRouter();
-  const [rawThought, setRawThought] = useState("");
+  const [rawThought, setRawThought] = useState(() => initialRawThought ?? "");
   const [claim, setClaim] = useState<{
+    insideViewEstimate: number;
     confidence: number;
     resolutionDate: string;
     provenance: ClaimProvenance;
@@ -82,6 +85,7 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
     conditionalStatement: string;
     structureKind: "assertion" | "conditional" | "compound" | "temporal" | "merged_candidate" | "split_candidate";
   }>({
+    insideViewEstimate: 60,
     confidence: 60,
     resolutionDate: "",
     provenance: "intuition",
@@ -102,6 +106,9 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
   const [calibrationDismissedRecommendationId, setCalibrationDismissedRecommendationId] = useState<string | null>(null);
   const calibrationConfidenceAnchor = useRef<number | null>(null);
   const lastCalibrationRecommendationKey = useRef<string | null>(null);
+  const [referenceClassEstimate, setReferenceClassEstimate] = useState<number | null>(null);
+  const [referenceClassExplanation, setReferenceClassExplanation] = useState("");
+  const [referenceClassPromptDismissed, setReferenceClassPromptDismissed] = useState(false);
   const [assumptionVerdicts, setAssumptionVerdicts] = useState<Record<string, "accepted" | "rejected" | "refined">>({});
   const [assumptionCorrections, setAssumptionCorrections] = useState<Record<string, string>>({});
   const [focusedAssumptionId, setFocusedAssumptionId] = useState<string | null>(null);
@@ -127,6 +134,25 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
     [calibrationCoaching, rawThought, claim.structureKind, claim.confidence],
   );
   const calibrationRecommendationKey = calibrationIndicator?.recommendationId ?? null;
+  const referenceClassSuggestion = useMemo(
+    () =>
+      suggestReferenceClass({
+        claimText: rawThought,
+        claimType: claim.structureKind,
+        structureKind: claim.structureKind,
+      }),
+    [rawThought, claim.structureKind],
+  );
+  const referenceClassDivergence =
+    referenceClassEstimate == null ? null : claim.confidence - referenceClassEstimate;
+  const referenceClassDelta = referenceClassDivergence ?? 0;
+  const referenceClassNeedsExplanation = referenceClassDelta > 20;
+  const referenceClassDirection =
+    referenceClassEstimate == null || referenceClassDelta === 0
+      ? "aligned"
+      : referenceClassDelta > 0
+        ? "higher_than_base_rate"
+        : "lower_than_base_rate";
 
   useEffect(() => {
     if (!userId) {
@@ -202,6 +228,7 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
       const payload: CreateThoughtMapInput = {
         rawThought,
         claim: {
+          insideViewEstimate: claim.insideViewEstimate,
           confidence: claim.confidence,
           resolutionDate: claim.resolutionDate || null,
           provenance: claim.provenance,
@@ -215,6 +242,23 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
           conditionalStatement: claim.conditionalStatement.trim() || undefined,
           structureKind: claim.structureKind,
         },
+        referenceClass: rawThought.trim()
+          ? {
+              promptShown: referenceClassSuggestion.promptShown,
+              referenceClassType: referenceClassSuggestion.referenceClassType,
+              benchmarkLow: referenceClassSuggestion.benchmarkLow,
+              benchmarkHigh: referenceClassSuggestion.benchmarkHigh,
+              benchmarkSource: referenceClassSuggestion.benchmarkSource,
+              userInsideViewEstimate: claim.insideViewEstimate,
+              userReferenceClassEstimate: referenceClassEstimate,
+              userFinalConfidence: claim.confidence,
+              divergence: referenceClassDivergence ?? 0,
+              divergenceDirection: referenceClassDirection,
+              userExplainedDivergence: referenceClassNeedsExplanation
+                ? referenceClassExplanation.trim() || null
+                : null,
+            }
+          : undefined,
       };
 
       const response = await fetch("/api/maps", {
@@ -314,9 +358,117 @@ export function ThoughtMapForm({ userId }: ThoughtMapFormProps) {
         <div className="rounded-[28px] border border-black/10 bg-white p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Claim metadata</p>
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <label className="space-y-2">
+            <div className="space-y-2 lg:col-span-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-[var(--ink)]">Probability</span>
+                <span className="text-sm font-medium text-[var(--ink)]">Inside-view estimate</span>
+                <span className="text-sm text-[var(--muted-ink)]">{claim.insideViewEstimate}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={claim.insideViewEstimate}
+                onChange={(event) =>
+                  setClaim((current) => ({ ...current, insideViewEstimate: Number(event.target.value) }))
+                }
+                className="w-full accent-[var(--ink)]"
+              />
+              <p className="text-xs leading-5 text-[var(--muted-ink)]">
+                This is your first-pass estimate before Penny shows you the outside view.
+              </p>
+            </div>
+
+            <div className="rounded-[24px] border border-[#d7c06c] bg-[#fff9df] p-4 lg:col-span-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="max-w-3xl">
+                  <p className="text-xs uppercase tracking-[0.2em] text-[#6f5612]">Reference class</p>
+                  <h4 className="mt-1 text-lg font-semibold text-[#5a460d]">{referenceClassSuggestion.promptShown}</h4>
+                  {referenceClassSuggestion.benchmarkSource ? (
+                    <p className="mt-2 text-xs leading-5 text-[#6f5612]">
+                      Benchmark: {referenceClassSuggestion.benchmarkLow == null ? "n/a" : `${referenceClassSuggestion.benchmarkLow}%`}
+                      {" - "}
+                      {referenceClassSuggestion.benchmarkHigh == null ? "n/a" : `${referenceClassSuggestion.benchmarkHigh}%`}
+                      {" · "}
+                      {referenceClassSuggestion.benchmarkSource}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs leading-5 text-[#6f5612]">
+                      Benchmark: personal base rate check. Penny will still compare this to your final confidence.
+                    </p>
+                  )}
+                </div>
+                <Badge className="bg-white text-[#5a460d]">{referenceClassSuggestion.referenceClassType.replaceAll("_", " ")}</Badge>
+              </div>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-sm font-medium text-[#5a460d]">Your base-rate estimate</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={referenceClassEstimate ?? ""}
+                    onChange={(event) => {
+                      const value = event.target.value.trim();
+                      const parsed = value.length ? Number(value) : null;
+                      setReferenceClassEstimate(typeof parsed === "number" && Number.isFinite(parsed) ? parsed : null);
+                    }}
+                    placeholder="e.g. 25"
+                    className="w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                  />
+                  <p className="text-xs leading-5 text-[#6f5612]">
+                    Penny stores this separately from your inside view so you can compare the two later.
+                  </p>
+                </label>
+
+                <div className="space-y-2 rounded-[18px] bg-white p-4">
+                  <p className="text-sm font-medium text-[#5a460d]">Comparison</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="bg-[#fff6d8] text-[#6f5612]">Inside {claim.insideViewEstimate}%</Badge>
+                    <Badge className="bg-[#fff6d8] text-[#6f5612]">
+                      Base rate {referenceClassEstimate == null ? "?" : `${referenceClassEstimate}%`}
+                    </Badge>
+                    <Badge className="bg-[#fff6d8] text-[#6f5612]">Final {claim.confidence}%</Badge>
+                  </div>
+                  <p className="text-xs leading-5 text-[#6f5612]">
+                    The final confidence stays yours. The outside view just makes the comparison explicit.
+                  </p>
+                </div>
+              </div>
+
+              {referenceClassNeedsExplanation && !referenceClassPromptDismissed ? (
+                <div className="mt-4 rounded-[18px] border border-[#d7c06c] bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="max-w-3xl">
+                      <p className="text-sm font-medium text-[#5a460d]">Your estimate is notably higher than the base rate.</p>
+                      <p className="mt-1 text-sm leading-6 text-[#6f5612]">
+                        Base rates do not account for your specific advantages. In one sentence, what makes your situation different from the typical case?
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="px-3 py-2 text-xs"
+                      onClick={() => setReferenceClassPromptDismissed(true)}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={referenceClassExplanation}
+                    onChange={(event) => setReferenceClassExplanation(event.target.value)}
+                    placeholder="What makes this case different?"
+                    className="mt-3 w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <label className="space-y-2 lg:col-span-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-[var(--ink)]">Final confidence</span>
                 <span className="text-sm text-[var(--muted-ink)]">{claim.confidence}%</span>
               </div>
               <input

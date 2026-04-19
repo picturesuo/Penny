@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { DependencyHealthBar } from "@/components/penny/dependency-health";
 import { CopyBriefButton } from "@/components/penny/copy-brief-button";
 import { ArtifactOutcomeFlow } from "@/components/penny/artifact-outcome-flow";
+import { UncertaintyIndicator } from "@/components/penny/uncertainty-indicator";
 import { formatFounderBrief } from "@/lib/founder-brief";
 import type { FounderBriefModel } from "@/types/thought-map";
 
@@ -18,6 +19,11 @@ export function FounderBriefCard({ brief }: { brief: FounderBriefModel }) {
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Founder Brief</p>
           <h3 className="mt-1 text-xl font-semibold text-[var(--ink)]">Map-derived summary worth revisiting</h3>
+          {brief.uncertainty ? (
+            <div className="mt-2">
+              <UncertaintyIndicator uncertainty={brief.uncertainty} />
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => setShowOutcomeFlow((current) => !current)}>

@@ -38,9 +38,11 @@ import type {
   ShapeCounterfactual,
   AssumptionBlindSpot,
   LoadBearingBlindSpot,
+  PennyUncertainty,
 } from "@/types/thought-map";
 import { buildBeliefGraph, propagateBeliefGraph } from "@/lib/bayesian-propagation";
 import { BIAS_TAXONOMY, biasTypeById } from "@/lib/bias-taxonomy";
+import { buildPennyUncertainty } from "@/lib/uncertainty";
 
 export type ShapeVerdict = "confirmed" | "provisional" | "rejected" | "refined";
 export type PennyShapeFeedback = "confirmed" | "rejected" | "refined";
@@ -62,6 +64,7 @@ export interface PennyShape {
   signals: string[];
   derivation: ShapeDerivation | null;
   falsificationCondition: string | null;
+  uncertainty: PennyUncertainty | null;
 }
 
 export interface PennyLensOverrideShape {
@@ -568,6 +571,8 @@ export function buildBayesianPropagationSnapshot(
       const edgeFactor =
         step.oldPosterior > 0 ? Math.max(0, Math.min(1, step.newPosterior / step.oldPosterior)) : 1;
       const contributions: BeliefPropagationContribution[] = step.contributions;
+      const groundingCount = Math.max(1, contributions.length);
+      const isApproximate = Boolean(step.skipped || step.skippedReason);
 
       return {
         sourceNodeId: sourceContribution?.parentId ?? seedNode.id,
@@ -586,6 +591,19 @@ export function buildBayesianPropagationSnapshot(
         contributions,
         skipped: step.skipped,
         skippedReason: step.skippedReason,
+        uncertainty: buildPennyUncertainty({
+          outputType: "propagation_result",
+          groundingType: "first_principles",
+          groundingCount,
+          evidenceBasis:
+            contributions.length > 0
+              ? `Bayesian propagation over ${contributions.length} contributor${contributions.length === 1 ? "" : "s"} and the current dependency graph.`
+              : "Heuristic fallback over the dependency graph because no direct contributors were available.",
+          caveats: isApproximate
+            ? ["This step was skipped or overridden, so the propagation math is approximate."]
+            : ["This is model arithmetic, not observed outcome data."],
+          confidenceScore: isApproximate ? 48 : 82,
+        }),
       };
     });
 
@@ -1353,6 +1371,7 @@ export function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetad
   }
 
   const metadata: Partial<ClaimCaptureMetadata> = {
+    insideViewEstimate: 60,
     confidence: 60,
     resolutionDate: null,
     provenance: "intuition",
@@ -1377,6 +1396,9 @@ export function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetad
     const value = rest.join(":").trim();
 
     switch (key.toLowerCase()) {
+      case "inside-view estimate":
+        metadata.insideViewEstimate = Number.parseInt(value.replace("%", ""), 10);
+        break;
       case "confidence":
         metadata.confidence = Number.parseInt(value.replace("%", ""), 10);
         break;
@@ -1425,6 +1447,7 @@ export function parseClaimCaptureMetadata(rawThought: string): ClaimCaptureMetad
   }
 
   if (
+    metadata.insideViewEstimate == null ||
     metadata.confidence == null ||
     metadata.resolutionDate == null ||
     metadata.provenance == null ||
@@ -2700,6 +2723,22 @@ function contributionDirectionForEvent(event: ThoughtMapEvent) {
   return "confirms_shape";
 }
 
+function shapeUncertaintyScore(sampleCount: number) {
+  if (sampleCount >= 10) {
+    return 90;
+  }
+
+  if (sampleCount >= 4) {
+    return 68;
+  }
+
+  if (sampleCount >= 1) {
+    return 42;
+  }
+
+  return 24;
+}
+
 function buildShapeDerivation(map: ThoughtMapModel, shape: PennyShape, allShapes: PennyShape[]): ShapeDerivation {
   const evidenceNodeIds = new Set(shape.evidenceNodeIds);
   const corrections = collectCritiqueCorrections(map.events).filter(
@@ -2810,6 +2849,17 @@ function attachShapeExplainability(map: ThoughtMapModel, shapes: PennyShape[]) {
     return {
       ...shape,
       falsificationCondition: feedback?.falsificationCondition ?? shape.falsificationCondition ?? null,
+      uncertainty: shape.uncertainty ?? buildPennyUncertainty({
+        outputType: "shape",
+        groundingType: "user_pattern_data",
+        groundingCount: shape.evidenceNodeIds.length,
+        evidenceBasis: `Based on ${shape.evidenceNodeIds.length} matching node${shape.evidenceNodeIds.length === 1 ? "" : "s"} from the user's map history.`,
+        confidenceScore: shapeUncertaintyScore(shape.evidenceNodeIds.length),
+        caveats:
+          shape.evidenceNodeIds.length < 4
+            ? ["This shape is provisional and should be treated as a working hypothesis."]
+            : [],
+      }),
     };
   });
 }
@@ -2840,6 +2890,17 @@ function buildPennyShapeCandidates(nodes: ThoughtNodeModel[]): PennyShape[] {
       signals: rule.signals,
       derivation: null,
       falsificationCondition: null,
+      uncertainty: buildPennyUncertainty({
+        outputType: "shape",
+        groundingType: "user_pattern_data",
+        groundingCount: supportCount,
+        evidenceBasis: `Based on ${supportCount} recurring node${supportCount === 1 ? "" : "s"} that match ${rule.label}.`,
+        confidenceScore: shapeUncertaintyScore(supportCount),
+        caveats:
+          supportCount < 4
+            ? ["This shape is provisional because the pattern is still emerging."]
+            : [],
+      }),
     });
 
     return acc;
@@ -2946,6 +3007,14 @@ function adjustLensShapes(shapes: PennyShape[], overrideShapes: PennyLensOverrid
         signals: override.signals,
         derivation: null,
         falsificationCondition: override.falsificationCondition,
+        uncertainty: buildPennyUncertainty({
+          outputType: "shape",
+          groundingType: "general_heuristic",
+          groundingCount: override.nodeId ? 1 : 0,
+          evidenceBasis: `This override was supplied directly by the user for ${override.label}.`,
+          confidenceScore: override.nodeId ? 34 : 24,
+          caveats: ["This is an explicit override rather than a naturally derived pattern."],
+        }),
       });
     }
   }

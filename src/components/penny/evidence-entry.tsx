@@ -108,7 +108,10 @@ export function EvidenceEntry({
         </Button>
       </div>
 
-      <div className="mt-4 rounded-[18px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--muted-ink)]">
+      <div
+        className="mt-4 rounded-[18px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--muted-ink)]"
+        title="Higher-quality evidence weighs more heavily when Penny updates confidence, propagates support, and checks synthesis gates."
+      >
         <Info className="mr-2 inline-block size-4 align-[-3px] text-[var(--ink)]" />
         Why does this score matter? Penny uses evidence quality to decide how strongly to trust a claim when it propagates into other claims or into an artifact.
       </div>

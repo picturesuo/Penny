@@ -149,7 +149,7 @@ export function ShapeDashboard({
 
         <div className="mt-6 grid gap-4 xl:grid-cols-3">
           <div className="rounded-[24px] bg-[var(--panel)] p-5 xl:col-span-1">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Visible trajectory</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Living cognitive fingerprint</p>
             <h4 className="mt-2 text-xl font-semibold text-[var(--ink)]">
               {brierTrajectory ? brierTrajectory.label : "Not enough scored claims yet"}
             </h4>
@@ -288,7 +288,7 @@ export function ShapeDashboard({
       </div>
 
       <div className="mt-6 rounded-[24px] border border-black/8 bg-white p-5">
-        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Post-mortem protocol</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Counterfactual engine</p>
         <h3 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Make resolved claims into calibration artifacts.</h3>
         <p className="mt-3 max-w-3xl text-sm leading-7 text-[var(--muted-ink)]">
           When a claim resolves, Penny turns the outcome into a structured post-mortem so the miss, the lesson, and the next confidence cue become part of the record instead of disappearing into history.
@@ -316,6 +316,20 @@ export function ShapeDashboard({
               No resolved claims yet. Once outcomes arrive, Penny will generate structured post-mortems from the resolved claim trail.
             </p>
           )}
+        </div>
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-[18px] bg-[var(--panel)] p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What you would lose</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+              If the archive vanished, you would lose {calibration.resolvedClaims.length} resolved claims, {shapes.length} active shapes, and the path that explains why those numbers moved.
+            </p>
+          </div>
+          <div className="rounded-[18px] bg-[var(--panel)] p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Cascading forget with audit</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+              Forget-like behavior should leave a trail: what was removed, what was preserved, and why the system decided to keep or hide it.
+            </p>
+          </div>
         </div>
       </div>
 

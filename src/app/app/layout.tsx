@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Lightbulb, Plus } from "lucide-react";
+import { Lightbulb, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GlobalShortcuts } from "@/components/penny/global-shortcuts";
 
 export default function AppLayout({
   children,
@@ -28,6 +29,15 @@ export default function AppLayout({
             <Link href="/">
               <Button variant="ghost">Marketing page</Button>
             </Link>
+            <Link href="/app/search">
+              <Button variant="secondary" className="gap-2">
+                <Search className="size-4" />
+                Search
+              </Button>
+            </Link>
+            <Link href="/app/settings">
+              <Button variant="ghost">Settings</Button>
+            </Link>
             <Link href="/app/new">
               <Button className="gap-2">
                 <Plus className="size-4" />
@@ -38,6 +48,7 @@ export default function AppLayout({
         </header>
         <div className="py-8">{children}</div>
       </div>
+      <GlobalShortcuts />
     </div>
   );
 }

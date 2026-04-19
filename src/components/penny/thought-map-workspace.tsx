@@ -7440,12 +7440,12 @@ export function ThoughtMapWorkspace({
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Map view</p>
             <h2 className="mt-2 text-2xl font-semibold text-[var(--ink)]">
-              {view === "outline" ? "Outline view keeps the active workflow intact." : "Claim card view keeps one claim primary while the graph becomes a minimap."}
+              {view === "outline" ? "Outline view keeps the active workflow intact." : "Graph view keeps one claim primary while the graph becomes a minimap."}
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted-ink)]">
               {view === "outline"
                 ? "Keep expanding, challenging, or connecting branches here while Penny’s best-next-move and founder-brief guidance stay visible above and below the map."
-                : "Select a node to inspect the claim card first. The graph stays available as a structural overview, while outline actions remain available from the card."}
+                : "Select a node to inspect the graph card first. The graph stays available as a structural overview, while outline actions remain available from the card."}
             </p>
           </div>
           <div className="inline-flex rounded-full border border-black/10 bg-white p-1 shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
@@ -7461,7 +7461,7 @@ export function ThoughtMapWorkspace({
               className={cn("px-4", view === "graph" && "shadow-none")}
               onClick={() => changeView("graph")}
             >
-              Claim card
+              Graph view
             </Button>
           </div>
         </div>
@@ -7788,21 +7788,13 @@ export function ThoughtMapWorkspace({
                         ))}
                         <Badge className="bg-[#1f5d73] text-white">
                           <Lock className="mr-1 size-3.5" />
-                          {selectedGraphNodeVaulted ? "Vaulted" : "Move to Vault"}
+                          {selectedGraphNodeVaulted ? "Vaulted" : "Vault available in Outline"}
                         </Badge>
                       </div>
                       <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
                         Keep graph interactions selection-only in this slice. Switch back to <span className="font-medium text-[var(--ink)]">Outline view</span> to run a move.
                       </p>
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <Button className="gap-2" variant="secondary" onClick={() => setRepairModalOpen(true)}>
-                          <GitBranchPlus className="size-4" />
-                          Repair graph
-                        </Button>
-                        <Button className="gap-2" variant="secondary" onClick={() => vaultClaim(selectedGraphNode.node)}>
-                          <Lock className="size-4" />
-                          {selectedGraphNodeVaulted ? "Open Vault" : "Move to Vault"}
-                        </Button>
                         <Badge className="bg-[#fff6ed] text-[#8b4d1f]">{claimRepairSuggestions.length} suggestions</Badge>
                       </div>
                       <div className="mt-4 rounded-[20px] bg-white p-4">

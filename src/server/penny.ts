@@ -1,8 +1,10 @@
+import { randomUUID } from "crypto";
 import type { MarginFragment, Session } from "@prisma/client";
 import { prisma } from "@/db/prisma";
 import { cleanSentence, computeClarityScore, createMessage, dedupePoints, dedupeStrings, determineStage, safeJsonParse, titleFromIdea, DEMO_USER_ID } from "@/lib/penny";
 import { MockLlmProvider } from "@/lib/ai/mock-provider";
 import { MockContextProvider } from "@/lib/context/mock-context";
+import { generateSessionSummary } from "@/lib/session-summary";
 import type {
   EvidenceScanResult,
   MarginFragmentContextSnapshot,
@@ -11,13 +13,49 @@ import type {
   SessionState,
   StructuredPoint,
 } from "@/types/penny";
+import type {
+  ClosingRitual,
+  SessionEvent,
+  SessionSummary,
+  SessionIntentionType,
+} from "@/types/thought-map";
 
 const llm = new MockLlmProvider();
 const contextProvider = new MockContextProvider();
 
 function mapSession(record: Session): SessionState {
+  const parseJson = <T,>(value: string | null, fallback: T): T => {
+    if (!value) {
+      return fallback;
+    }
+
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const sessionEvents = parseJson<SessionEvent[]>(record.sessionEvents ?? "[]", []).map((event) => ({
+    ...event,
+    timestamp: new Date(event.timestamp),
+  }));
   return {
     ...record,
+    mapId: record.mapId ?? null,
+    declaredIntention: record.declaredIntention ?? "",
+    intentionType: (record.intentionType as SessionIntentionType) ?? "open_exploration",
+    scopedClaimIds: parseJson<string[]>(record.scopedClaimIds ?? "[]", []),
+    timeBudgetMinutes: record.timeBudgetMinutes ?? null,
+    startedAt: record.startedAt,
+    endedAt: record.endedAt ?? null,
+    actualDurationMinutes: record.actualDurationMinutes ?? null,
+    sessionEvents,
+    closingRitual: parseJson<ClosingRitual | null>(record.closingRitual ?? null, null),
+    sessionSummary: parseJson<SessionSummary | null>(record.sessionSummary ?? null, null),
+    energyRating: (record.energyRating as SessionState["energyRating"]) ?? null,
+    focusRating: (record.focusRating as SessionState["focusRating"]) ?? null,
+    productivityRating: record.productivityRating ?? null,
     currentStage: record.currentStage as SessionState["currentStage"],
     category: record.category ?? null,
     extractedProblem: record.extractedProblem ?? null,
@@ -97,9 +135,23 @@ async function saveSession(session: SessionState) {
   return prisma.session.update({
     where: { id: session.id },
     data: {
+      mapId: session.mapId ?? null,
       title: session.title,
       rawIdea: session.rawIdea,
       category: session.category,
+      declaredIntention: session.declaredIntention,
+      intentionType: session.intentionType,
+      scopedClaimIds: JSON.stringify(session.scopedClaimIds ?? []),
+      timeBudgetMinutes: session.timeBudgetMinutes,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
+      actualDurationMinutes: session.actualDurationMinutes,
+      sessionEvents: JSON.stringify(session.sessionEvents ?? []),
+      closingRitual: session.closingRitual ? JSON.stringify(session.closingRitual) : null,
+      sessionSummary: session.sessionSummary ? JSON.stringify(session.sessionSummary) : null,
+      energyRating: session.energyRating,
+      focusRating: session.focusRating,
+      productivityRating: session.productivityRating,
       status: session.status,
       currentStage: session.currentStage,
       questionBudget: session.questionBudget,
@@ -293,6 +345,19 @@ export async function getSession(sessionId: string) {
   return mapSession(session);
 }
 
+export async function getActiveThinkingSession(params: { mapId: string | null; userId?: string }) {
+  const session = await prisma.session.findFirst({
+    where: {
+      userId: params.userId ?? DEMO_USER_ID,
+      mapId: params.mapId,
+      endedAt: null,
+    },
+    orderBy: { startedAt: "desc" },
+  });
+
+  return session ? mapSession(session) : null;
+}
+
 export async function extractIdeaStructure(session: SessionState) {
   const structure = await llm.extractStructure(session);
   session.ideaSummary = structure.ideaSummary;
@@ -377,6 +442,10 @@ export async function createSession(rawIdea: string, category?: string, presetTi
       title: presetTitle || titleFromIdea(sanitizedIdea),
       rawIdea: sanitizedIdea,
       category,
+      declaredIntention: sanitizedIdea,
+      intentionType: "open_exploration",
+      scopedClaimIds: JSON.stringify([]),
+      sessionEvents: JSON.stringify([]),
       conversation: JSON.stringify([
         createMessage(
           "assistant",
@@ -392,6 +461,194 @@ export async function createSession(rawIdea: string, category?: string, presetTi
   await appendAssistantTurn(session);
   await saveSession(session);
   return session.id;
+}
+
+async function persistThinkingSession(params: {
+  userId: string;
+  mapId: string | null;
+  declaredIntention: string;
+  intentionType: SessionIntentionType;
+  scopedClaimIds: string[];
+  timeBudgetMinutes: number | null;
+}) {
+  const created = await prisma.session.create({
+    data: {
+      userId: params.userId,
+      mapId: params.mapId,
+      title: params.declaredIntention.slice(0, 56) || "Thinking session",
+      rawIdea: params.declaredIntention,
+      category: params.mapId ? "map" : "exploration",
+      declaredIntention: params.declaredIntention,
+      intentionType: params.intentionType,
+      scopedClaimIds: JSON.stringify(params.scopedClaimIds ?? []),
+      timeBudgetMinutes: params.timeBudgetMinutes,
+      sessionEvents: JSON.stringify([]),
+    },
+  });
+
+  return mapSession(created);
+}
+
+async function appendThinkingSessionEvent(
+  session: SessionState,
+  event: Omit<SessionEvent, "id" | "sessionId" | "timestamp"> & { timestamp?: Date },
+) {
+  const nextEvent: SessionEvent = {
+    id: randomUUID(),
+    sessionId: session.id,
+    eventType: event.eventType,
+    claimId: event.claimId ?? null,
+    description: event.description,
+    timestamp: event.timestamp ?? new Date(),
+  };
+
+  session.sessionEvents = [...session.sessionEvents, nextEvent];
+  await saveSession(session);
+  return nextEvent;
+}
+
+export async function createThinkingSession(params: {
+  userId: string;
+  mapId: string | null;
+  declaredIntention: string;
+  intentionType: SessionIntentionType;
+  scopedClaimIds: string[];
+  timeBudgetMinutes: number | null;
+}) {
+  return persistThinkingSession(params);
+}
+
+export async function updateThinkingSession(params: {
+  sessionId: string;
+  declaredIntention?: string;
+  intentionType?: SessionIntentionType;
+  scopedClaimIds?: string[];
+  timeBudgetMinutes?: number | null;
+  energyRating?: "low" | "medium" | "high" | null;
+  focusRating?: "scattered" | "moderate" | "deep" | null;
+  productivityRating?: number | null;
+  mapId?: string | null;
+}) {
+  const session = await getSession(params.sessionId);
+
+  if (!session) {
+    throw new Error("Session not found");
+  }
+
+  if (params.declaredIntention != null) {
+    session.declaredIntention = cleanSentence(params.declaredIntention);
+    session.rawIdea = session.declaredIntention;
+    session.title = session.declaredIntention.slice(0, 56) || session.title;
+  }
+
+  if (params.intentionType != null) {
+    session.intentionType = params.intentionType;
+  }
+
+  if (params.scopedClaimIds != null) {
+    session.scopedClaimIds = params.scopedClaimIds.filter((claimId) => claimId.trim().length > 0);
+  }
+
+  if (params.timeBudgetMinutes !== undefined) {
+    session.timeBudgetMinutes = params.timeBudgetMinutes;
+  }
+
+  if (params.energyRating !== undefined) {
+    session.energyRating = params.energyRating;
+  }
+
+  if (params.focusRating !== undefined) {
+    session.focusRating = params.focusRating;
+  }
+
+  if (params.productivityRating !== undefined) {
+    session.productivityRating = params.productivityRating;
+  }
+
+  if (params.mapId !== undefined) {
+    session.mapId = params.mapId;
+  }
+
+  return saveSession(session);
+}
+
+export async function appendSessionEvent(params: {
+  sessionId: string;
+  eventType: SessionEvent["eventType"];
+  description: string;
+  claimId?: string | null;
+}) {
+  const session = await getSession(params.sessionId);
+
+  if (!session) {
+    throw new Error("Session not found");
+  }
+
+  return appendThinkingSessionEvent(session, {
+    eventType: params.eventType,
+    description: params.description,
+    claimId: params.claimId ?? null,
+  });
+}
+
+export async function closeThinkingSession(params: {
+  sessionId: string;
+  skipClosingRitual?: boolean;
+  closingRitual: Omit<ClosingRitual, "sessionId" | "completedAt"> & { completedAt?: Date };
+  energyRating: "low" | "medium" | "high" | null;
+  focusRating: "scattered" | "moderate" | "deep" | null;
+  productivityRating: number | null;
+}) {
+  const session = await getSession(params.sessionId);
+
+  if (!session) {
+    throw new Error("Session not found");
+  }
+
+  const endedAt = new Date();
+  const summary = generateSessionSummary({
+    sessionId: session.id,
+    events: session.sessionEvents,
+    scopedClaimIds: session.scopedClaimIds,
+    generatedAt: endedAt,
+  });
+
+  session.endedAt = endedAt;
+  session.actualDurationMinutes = Math.max(0, Math.round((endedAt.getTime() - session.startedAt.getTime()) / (1000 * 60)));
+  session.closingRitual = params.skipClosingRitual
+    ? null
+    : {
+        sessionId: session.id,
+        questionsAnswered: params.closingRitual.questionsAnswered,
+        openItemsNoted: params.closingRitual.openItemsNoted,
+        nextSessionIntention: params.closingRitual.nextSessionIntention,
+        completedAt: params.closingRitual.completedAt ?? endedAt,
+      };
+  session.sessionSummary = summary;
+  session.energyRating = params.energyRating;
+  session.focusRating = params.focusRating;
+  session.productivityRating = params.productivityRating;
+  session.status = "closed";
+
+  if (params.skipClosingRitual) {
+    await appendThinkingSessionEvent(session, {
+      eventType: "session_dismissed",
+      description: "User skipped the closing ritual.",
+      claimId: null,
+      timestamp: endedAt,
+    });
+  }
+
+  await appendThinkingSessionEvent(session, {
+    eventType: "session_closed",
+    description: summary.keyInsight ?? "Session closed.",
+    claimId: null,
+    timestamp: endedAt,
+  });
+
+  await saveSession(session);
+
+  return session;
 }
 
 export async function submitAnswer(sessionId: string, answer: string) {

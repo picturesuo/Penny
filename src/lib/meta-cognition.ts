@@ -8,6 +8,7 @@ import type {
   ThoughtNodeModel,
 } from "@/types/thought-map";
 import type { PennyShape } from "@/lib/penny-insights";
+import { buildPennyUncertainty } from "@/lib/uncertainty";
 
 export interface MetaCognitionPromptSnapshot {
   id: string;
@@ -19,6 +20,7 @@ export interface MetaCognitionPromptSnapshot {
   shapesAssociated: string[];
   selectedNodeId: string | null;
   createdAt: Date;
+  uncertainty: import("@/types/thought-map").PennyUncertainty;
 }
 
 const META_COGNITION_TRIGGERS: Array<Omit<MetaCognitionTrigger, "id" | "shapesAssociated">> = [
@@ -315,6 +317,19 @@ export function evaluateMetaCognitionTrigger(params: {
     shapesAssociated: activeShapes,
     selectedNodeId: node?.id ?? null,
     createdAt: now,
+    uncertainty: buildPennyUncertainty({
+      outputType: "meta_cognition_prompt",
+      groundingType: evidence.length > 0 ? "user_pattern_data" : "general_heuristic",
+      groundingCount: evidence.length,
+      evidenceBasis:
+        evidence.length > 0
+          ? `Based on ${evidence.length} recent user-session evidence point${evidence.length === 1 ? "" : "s"} and ${activeShapes.length} associated shape${activeShapes.length === 1 ? "" : "s"}.`
+          : "This is a general metacognition heuristic with no strong user-pattern evidence yet.",
+      caveats:
+        evidence.length === 0
+          ? ["Penny is using a general prompt because it does not yet have a strong enough user-specific pattern."]
+          : [],
+    }),
   };
 }
 
@@ -338,6 +353,7 @@ export function buildMetaCognitionEventPayload(params: {
     responseText: params.responseText ?? null,
     tellMeMoreOpened: params.tellMeMoreOpened ?? false,
     behaviorChangedWithinTenMinutes: params.behaviorChangedWithinTenMinutes ?? null,
+    uncertainty: params.prompt.uncertainty,
     createdAt: params.prompt.createdAt,
   };
 }

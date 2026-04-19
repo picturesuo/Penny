@@ -2,7 +2,14 @@ import { ThoughtMapForm } from "@/components/penny/thought-map-form";
 import { Card } from "@/components/ui/card";
 import { getDemoThoughtUserId } from "@/lib/thought-map";
 
-export default function NewSessionPage() {
+export default async function NewSessionPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ prefill?: string }> | { prefill?: string };
+}) {
+  const params = await Promise.resolve(searchParams ?? {});
+  const prefill = typeof params.prefill === "string" ? params.prefill : "";
+
   return (
     <div className="mx-auto max-w-4xl">
       <Card className="p-8 sm:p-10">
@@ -11,7 +18,7 @@ export default function NewSessionPage() {
         <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--muted-ink)]">
           Think of this like the first note in a pressure-tested LLM-style wiki: capture the claim, its confidence, where it came from, what is at risk, and what would make it resolve.
         </p>
-        <ThoughtMapForm userId={getDemoThoughtUserId()} />
+        <ThoughtMapForm userId={getDemoThoughtUserId()} initialRawThought={prefill} />
       </Card>
     </div>
   );

@@ -59,6 +59,8 @@ export function buildFounderBrief(map: ThoughtMapModel, lens: PennyLensSnapshot 
 }
 
 export function formatFounderBrief(brief: FounderBriefModel) {
+  const uncertainty = brief.uncertainty;
+
   return [
     "## Idea Summary",
     brief.ideaSummary,
@@ -95,5 +97,14 @@ export function formatFounderBrief(brief: FounderBriefModel) {
           `- Total dependencies: ${brief.dependencyHealth.totalDependencies}`,
         ].join("\n")
       : "- No dependency health was computed yet.",
+    "",
+    "## Penny Confidence",
+    uncertainty
+      ? [
+          `- Level: ${uncertainty.uncertaintyLevel.replaceAll("_", " ")}`,
+          `- Grounding: ${uncertainty.groundingType.replaceAll("_", " ")}`,
+          `- Basis: ${uncertainty.evidenceBasis}`,
+        ].join("\n")
+      : "- No explicit uncertainty was attached.",
   ].join("\n");
 }

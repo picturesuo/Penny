@@ -17,7 +17,7 @@ import { buildCalibrationDashboard, captureSnapshotForMap } from "@/lib/penny-in
 type CalibrationSample = {
   mapId: string;
   confidence: number;
-  outcome: 0 | 1;
+  actualProbability: number;
   brierScore: number;
   updatedAt: Date;
   domain: CalibrationDomain;
@@ -43,6 +43,13 @@ function average(values: number[]) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function confidenceBucketLabel(confidence: number) {
+  const normalized = clamp(confidence, 0, 100);
+  const start = Math.floor(normalized / 10) * 10;
+  const end = Math.min(100, start + 10);
+  return `${start}-${end}%`;
 }
 
 export function calculateBrierScore(predictedProbability: number, actualProbability: number) {
@@ -140,27 +147,68 @@ function claimTypeLabel(claimType: ClaimStructureKind) {
 
 function buildCalibrationSamples(maps: ThoughtMapModel[]) {
   const dashboard = buildCalibrationDashboard(maps);
-  const resolvedByMapId = new Map(dashboard.resolvedClaims.map((claim) => [claim.mapId, claim] as const));
   const samples: CalibrationSample[] = [];
 
   for (const map of maps) {
     const capture = captureSnapshotForMap(map);
-    const resolved = resolvedByMapId.get(map.id);
+    const resolutionEvents = map.events.filter((event) => event.eventType === "claim_resolution");
+    const eventSamples = resolutionEvents
+      .map((event) => {
+        const payload = event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : null;
+        const claimId = typeof payload?.claimId === "string" ? payload.claimId : null;
+        const resolutionType =
+          payload?.resolutionType === "confirmed" ||
+          payload?.resolutionType === "disconfirmed" ||
+          payload?.resolutionType === "partially_confirmed" ||
+          payload?.resolutionType === "inconclusive" ||
+          payload?.resolutionType === "reframed" ||
+          payload?.resolutionType === "superseded"
+            ? (payload.resolutionType as ClaimResolutionType)
+            : null;
+        const predictedConfidenceAtResolution =
+          typeof payload?.predictedConfidenceAtResolution === "number" ? payload.predictedConfidenceAtResolution : null;
+
+        if (!claimId || predictedConfidenceAtResolution == null || !resolutionType) {
+          return null;
+        }
+
+        const claim = map.nodes.find((node) => node.id === claimId) ?? null;
+        const actualProbability = outcomeProbability(resolutionType);
+        const claimType = capture?.structureKind ?? "assertion";
+        const domain = classifyCalibrationDomain(`${map.title} ${map.rawThought} ${claim?.content ?? ""}`);
+
+        return {
+          mapId: map.id,
+          confidence: predictedConfidenceAtResolution,
+          actualProbability,
+          brierScore: calculateBrierScore(predictedConfidenceAtResolution / 100, actualProbability),
+          updatedAt: event.createdAt instanceof Date ? event.createdAt : new Date(event.createdAt),
+          domain,
+          claimType,
+        } satisfies CalibrationSample;
+      })
+      .filter((sample): sample is CalibrationSample => sample !== null);
+
+    if (eventSamples.length) {
+      samples.push(...eventSamples);
+      continue;
+    }
+
+    const resolved = dashboard.resolvedClaims.find((claim) => claim.mapId === map.id);
 
     if (!capture || !resolved || resolved.outcome == null || resolved.brierScore == null) {
       continue;
     }
 
-    const sample: CalibrationSample = {
+    samples.push({
       mapId: map.id,
       confidence: resolved.confidence,
-      outcome: resolved.outcome,
+      actualProbability: resolved.outcome,
       brierScore: resolved.brierScore,
       updatedAt: resolved.updatedAt,
       domain: resolved.domain,
       claimType: capture.structureKind ?? "assertion",
-    };
-    samples.push(sample);
+    });
   }
 
   return { dashboard, samples };
@@ -175,7 +223,7 @@ function buildCalibrationCurve(samples: CalibrationSample[]): CalibrationPoint[]
       return index === 9 ? normalized >= start && normalized <= 100 : normalized >= start && normalized < end;
     });
 
-    const actualRate = average(bucketSamples.map((sample) => sample.outcome * 100));
+    const actualRate = average(bucketSamples.map((sample) => sample.actualProbability * 100));
 
     return {
       confidenceBucket: `${start}-${end}%`,
@@ -236,15 +284,39 @@ function domainCoachingNote(domain: CalibrationDomain, profile: DomainCalibratio
     return `Not enough resolved ${domain} claims yet to coach confidently. Keep scoring claims in this domain.`;
   }
 
+  const strongestGap = profile.calibrationCurve
+    .filter((point) => point.sampleSize > 0)
+    .reduce<{ point: CalibrationPoint | null; gap: number }>(
+      (best, point) => {
+        const gap =
+          profile.systematicError === "underconfident"
+            ? point.actualRate - point.predictedRate
+            : point.predictedRate - point.actualRate;
+
+        if (gap <= best.gap) {
+          return best;
+        }
+
+        return { point, gap };
+      },
+      { point: null, gap: 0 },
+    ).point;
+
   if (profile.systematicError === "overconfident") {
-    return `In ${domain} claims, your confidence is outrunning outcomes. Try lowering initial confidence by about ${Math.max(5, Math.round(profile.errorMagnitude))} points until the claim survives stress-testing.`;
+    const bucket = strongestGap ?? profile.calibrationCurve.find((point) => point.sampleSize > 0) ?? null;
+    const bucketLabel = bucket ? `${Math.max(0, Math.min(100, Math.round(bucket.predictedRate - 5)))}%` : confidenceBucketLabel(70);
+    const actualRate = bucket ? bucket.actualRate : Math.max(0, 100 - Math.round(profile.errorMagnitude));
+    return `In ${domain} claims, when you say ${bucketLabel}, you're right only ${actualRate}% of the time. Try lowering your opening confidence by about ${Math.max(5, Math.round(profile.errorMagnitude))} points before you've stress-tested the claim.`;
   }
 
   if (profile.systematicError === "underconfident") {
-    return `In ${domain} claims, you are more correct than your confidence suggests. Consider raising initial confidence by about ${Math.max(5, Math.round(profile.errorMagnitude))} points when the evidence is solid.`;
+    const bucket = strongestGap ?? profile.calibrationCurve.find((point) => point.sampleSize > 0) ?? null;
+    const bucketLabel = bucket ? `${Math.max(0, Math.min(100, Math.round(bucket.predictedRate - 5)))}%` : confidenceBucketLabel(60);
+    const actualRate = bucket ? bucket.actualRate : Math.min(100, Math.round(100 - profile.errorMagnitude));
+    return `In ${domain} claims, when you say ${bucketLabel}, you're right ${actualRate}% of the time. You may be discounting your own judgment, so consider raising your opening confidence by about ${Math.max(5, Math.round(profile.errorMagnitude))} points when the evidence is solid.`;
   }
 
-  return `Your ${domain} calibration is close to the diagonal. Keep the same evidence-to-confidence rhythm.`;
+  return `You have excellent calibration in ${domain} claims (Brier: ${profile.averageBrierScore.toFixed(2)}). This is your strongest domain, so lean into that confidence.`;
 }
 
 function claimTypeCoachingNote(profile: ClaimTypeCalibrationProfile) {
@@ -257,7 +329,7 @@ function claimTypeCoachingNote(profile: ClaimTypeCalibrationProfile) {
   }
 
   if (profile.systematicError === "underconfident") {
-    return `Your ${claimTypeLabel(profile.claimType)} claims are stronger than you are currently rating them.`;
+    return `Your ${claimTypeLabel(profile.claimType)} claims are stronger than you are currently rating them. You may be discounting your own judgment on this claim structure.`;
   }
 
   return `Your ${claimTypeLabel(profile.claimType)} claims are roughly calibrated. Keep using the same update rhythm.`;
@@ -403,7 +475,7 @@ function buildClaimTypeProfiles(samples: CalibrationSample[]): ClaimTypeCalibrat
   return Array.from(buckets.entries())
     .map<ClaimTypeCalibrationProfile>(([claimType, claimSamples]) => {
       const averageConfidence = average(claimSamples.map((sample) => sample.confidence)) ?? 0;
-      const averageOutcome = average(claimSamples.map((sample) => sample.outcome * 100)) ?? 0;
+      const averageOutcome = average(claimSamples.map((sample) => sample.actualProbability * 100)) ?? 0;
       const averageBrierScore = average(claimSamples.map((sample) => sample.brierScore)) ?? 0;
       const gap = Math.abs(averageConfidence - averageOutcome);
       const systematicError: ClaimTypeCalibrationProfile["systematicError"] =

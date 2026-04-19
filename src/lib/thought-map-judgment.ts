@@ -1,4 +1,6 @@
 import { analyzeThoughtMap, scoreNodeQuality } from "@/lib/thought-map-analysis";
+import { buildClaimEvidenceSummary } from "@/lib/evidence-quality";
+import { buildPennyUncertainty } from "@/lib/uncertainty";
 import type {
   CognitiveIntervention,
   CognitiveInterventionType,
@@ -108,12 +110,18 @@ function nodeTestability(node: ThoughtNodeModel, quality: ReturnType<typeof scor
   return roundScore((quality.dimensions.concreteness * 0.7 + quality.dimensions.tension * 0.3) / 100);
 }
 
-function nodeEvidence(node: ThoughtNodeModel, quality: ReturnType<typeof scoreNodeQuality>) {
+function nodeEvidence(node: ThoughtNodeModel, quality: ReturnType<typeof scoreNodeQuality>, map: ThoughtMapModel) {
+  const evidenceSummary = buildClaimEvidenceSummary({
+    claimId: node.id,
+    evidence: map.evidence,
+  });
+  const actualEvidence = evidenceSummary.averageQualityScore ?? 0;
+
   if (node.kind === "research") {
-    return roundScore((quality.dimensions.concreteness * 0.75 + quality.dimensions.tension * 0.25) / 100);
+    return roundScore((quality.dimensions.concreteness * 0.3 + quality.dimensions.tension * 0.25 + actualEvidence * 0.45) / 100);
   }
 
-  return roundScore((quality.dimensions.concreteness * 0.55 + quality.dimensions.tension * 0.45) / 100);
+  return roundScore((quality.dimensions.concreteness * 0.35 + quality.dimensions.tension * 0.25 + actualEvidence * 0.4) / 100);
 }
 
 function nodeDependencyRisk(
@@ -144,7 +152,7 @@ function nodeConfidence(quality: ReturnType<typeof scoreNodeQuality>) {
 function toNodeScores(node: ThoughtNodeModel, map: ThoughtMapModel): ThoughtNodeScores {
   const quality = scoreNodeQuality(node, map);
   const centrality = nodeCentrality(node, map);
-  const evidence = nodeEvidence(node, quality);
+  const evidence = nodeEvidence(node, quality, map);
   const specificity = roundScore(quality.dimensions.specificity / 100);
   const tension = roundScore(quality.dimensions.tension / 100);
   const coverage = nodeCoverage(node, map);
@@ -556,12 +564,22 @@ function buildMove(
         content: weakNode.content,
         score: weakNode.total,
         issues: weakNode.issues,
-      })),
+        })),
     },
     generatedAt: new Date().toISOString(),
     acceptedAt: null,
     dismissedAt: null,
     executedAt: null,
+    uncertainty: buildPennyUncertainty({
+      outputType: "synthesis_prompt",
+      groundingType: "user_pattern_data",
+      groundingCount: graphAnalysis.weakNodes.length + graphAnalysis.reasons.length,
+      evidenceBasis: `Based on ${graphAnalysis.weakNodes.length} weak node${graphAnalysis.weakNodes.length === 1 ? "" : "s"} and ${graphAnalysis.reasons.length} graph reason${graphAnalysis.reasons.length === 1 ? "" : "s"} in the current map analysis.`,
+      caveats:
+        graphAnalysis.weakNodes.length === 0
+          ? ["This is an exploratory recommendation because the map does not yet expose a strong weak-node pattern."]
+          : [],
+    }),
   };
 }
 
@@ -706,6 +724,7 @@ export function buildThoughtMapJudgment(map: ThoughtMapModel) {
   const scoredMap: ThoughtMapModel = {
     ...map,
     nodes: scoredNodes,
+    evidence: map.evidence,
     interventions: [],
     recommendedIntervention: null,
   };

@@ -76,6 +76,7 @@ import type {
   CalibrationCoachingRejection,
   ClaimResolution,
   ClaimResolutionType,
+  BlindSpotDomain,
   RevisitAction,
   RevisitLeitnerBox,
   RevisitPriority,
@@ -502,7 +503,7 @@ function normalizeBlindSpotMapRecord(record: BlindSpotMapCacheRecord | null) {
       suggestedAction: string;
     }>;
     unexaminedDomains?: Array<{
-      domain: string;
+      domain: BlindSpotDomain;
       claimCount: number;
       averageConfidence: number;
       stressTestedCount: number;
@@ -553,7 +554,7 @@ function normalizeBlindSpotMapRecord(record: BlindSpotMapCacheRecord | null) {
       ? parsed.unexaminedDomains.map((entry) => ({
           ...entry,
           oldestUntestedClaim: new Date(entry.oldestUntestedClaim),
-          domain:
+          domain: (
             entry.domain === "market" ||
             entry.domain === "technical" ||
             entry.domain === "personal" ||
@@ -562,7 +563,8 @@ function normalizeBlindSpotMapRecord(record: BlindSpotMapCacheRecord | null) {
             entry.domain === "operational" ||
             entry.domain === "research"
               ? entry.domain
-              : "general",
+              : "general"
+          ) as BlindSpotDomain,
         }))
       : [],
     unchallengedAssumptions: Array.isArray(parsed.unchallengedAssumptions) ? parsed.unchallengedAssumptions : [],

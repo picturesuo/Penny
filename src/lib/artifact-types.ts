@@ -1,6 +1,7 @@
 import { cleanSentence } from "@/lib/penny";
 import { buildArtifactDependencyHealth } from "@/lib/dependency-health";
 import type { PennyLensSnapshot } from "@/lib/penny-insights";
+import { buildPennyUncertainty } from "@/lib/uncertainty";
 import type {
   ArtifactDiff,
   ArtifactRecord,
@@ -676,6 +677,16 @@ export function artifactDraftToFounderBrief(artifact: ArtifactRecord): FounderBr
     dependencyCompleteness: sectionText("dependencyCompleteness"),
     dependencyHealth: artifact.dependencyHealth,
     loadBearingClaims,
+    uncertainty: buildPennyUncertainty({
+      outputType: "synthesis_prompt",
+      groundingType: "user_pattern_data",
+      groundingCount: loadBearingClaims.length + keyAssumptions.length + strongestCounterarguments.length,
+      evidenceBasis: `Based on ${loadBearingClaims.length} load-bearing claim${loadBearingClaims.length === 1 ? "" : "s"}, ${keyAssumptions.length} assumption${keyAssumptions.length === 1 ? "" : "s"}, and ${strongestCounterarguments.length} counterargument${strongestCounterarguments.length === 1 ? "" : "s"} in the artifact draft.`,
+      caveats:
+        loadBearingClaims.length < 3
+          ? ["The synthesis is still thin because the artifact only has a few load-bearing claims."]
+          : [],
+    }),
     generatedAt: artifact.generatedAt,
   };
 }

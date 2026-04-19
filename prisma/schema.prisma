@@ -14,9 +14,23 @@ datasource db {
 model Session {
   id                  String   @id @default(cuid())
   userId              String
+  mapId               String?
   title               String
   rawIdea             String
   category            String?
+  declaredIntention   String   @default("")
+  intentionType       String   @default("open_exploration")
+  scopedClaimIds      String   @default("[]")
+  timeBudgetMinutes   Int?
+  startedAt           DateTime @default(now())
+  endedAt             DateTime?
+  actualDurationMinutes Int?
+  sessionEvents       String   @default("[]")
+  closingRitual       String?
+  sessionSummary      String?
+  energyRating        String?
+  focusRating         String?
+  productivityRating  Int?
   status              String   @default("active")
   currentStage        String   @default("intake")
   questionBudget      Int      @default(5)

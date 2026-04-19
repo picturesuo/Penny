@@ -62,6 +62,16 @@ export async function POST(
       );
     }
 
+    if (error instanceof Error && /not ready/i.test(error.message)) {
+      return NextResponse.json(
+        {
+          error: "invalid_state",
+          message: error.message,
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       {
         error: "internal_error",

@@ -24,6 +24,7 @@ export async function POST(
       return NextResponse.json(
         {
           error: "invalid_state",
+          message: error.message,
         },
         { status: 409 },
       );

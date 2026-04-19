@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { PennyShape } from "@/lib/penny-insights";
+import { UncertaintyIndicator } from "@/components/penny/uncertainty-indicator";
 
 export function ShapeDetail({
   shape,
@@ -37,6 +38,7 @@ export function ShapeDetail({
         <Badge className="bg-[#d9ead8] text-[#355b32]">
           {shape.derivation.thresholdMet.thresholdMet ? "threshold met" : "provisional"}
         </Badge>
+        {shape.uncertainty ? <UncertaintyIndicator uncertainty={shape.uncertainty} /> : null}
       </div>
       <h3 className="mt-3 text-2xl font-semibold text-[var(--ink)]">{shape.label}</h3>
       <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{shape.summary}</p>

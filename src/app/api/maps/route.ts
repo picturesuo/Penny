@@ -9,6 +9,7 @@ const createThoughtMapSchema = z.object({
     .min(12, "Give Penny one real thought, not a slogan.")
     .max(400, "Keep the first thought under 400 characters."),
   claim: z.object({
+    insideViewEstimate: z.number().int().min(0).max(100).default(60),
     confidence: z.number().int().min(0).max(100),
     resolutionDate: z
       .string()
@@ -27,6 +28,21 @@ const createThoughtMapSchema = z.object({
     conditionalStatement: z.string().max(200).optional().default(""),
     structureKind: z.enum(["assertion", "conditional", "compound", "temporal", "merged_candidate", "split_candidate"]).optional().default("assertion"),
   }),
+  referenceClass: z
+    .object({
+      promptShown: z.string().min(1).max(500),
+      referenceClassType: z.string().min(1).max(80),
+      benchmarkLow: z.number().min(0).max(100).nullable().optional().default(null),
+      benchmarkHigh: z.number().min(0).max(100).nullable().optional().default(null),
+      benchmarkSource: z.string().max(240).nullable().optional().default(null),
+      userInsideViewEstimate: z.number().min(0).max(100),
+      userReferenceClassEstimate: z.number().min(0).max(100).nullable().optional().default(null),
+      userFinalConfidence: z.number().min(0).max(100),
+      divergence: z.number(),
+      divergenceDirection: z.enum(["higher_than_base_rate", "lower_than_base_rate", "aligned"]),
+      userExplainedDivergence: z.string().max(400).nullable().optional().default(null),
+    })
+    .optional(),
 });
 
 export async function POST(request: Request) {

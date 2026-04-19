@@ -3,7 +3,9 @@ import { ArrowRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { HomeDashboard } from "@/components/penny/home-dashboard";
 import { CalibrationCoachingView } from "@/components/penny/calibration-coaching";
+import { NotificationPreferencesView } from "@/components/penny/notification-preferences";
 import { ShapeDashboard } from "@/components/penny/shape-dashboard";
 import {
   buildAdvancedThinkingDashboard,
@@ -14,7 +16,8 @@ import {
 } from "@/lib/penny-insights";
 import { buildCalibrationCoaching } from "@/lib/calibration";
 import { buildMarginSurfaceSnapshot } from "@/lib/margin";
-import { listMarginFragments } from "@/server/penny";
+import { getDemoThoughtUserId } from "@/lib/thought-map";
+import { listMarginFragments, listSessions } from "@/server/penny";
 import { listThoughtMaps } from "@/server/thought-map";
 
 const foundation = [
@@ -86,6 +89,7 @@ function summarizeNodeStatus(nodes: Awaited<ReturnType<typeof listThoughtMaps>>[
 
 export default async function DashboardPage() {
   const maps = await listThoughtMaps();
+  const sessions = await listSessions();
   const fragments = await listMarginFragments();
   const allNodes = maps.flatMap((map) => map.nodes);
   const shapes = derivePennyShapes(allNodes).sort((a, b) => b.confidence - a.confidence).slice(0, 4);
@@ -99,9 +103,12 @@ export default async function DashboardPage() {
     map,
     counts: summarizeNodeStatus(map.nodes),
   }));
+  const userId = maps[0]?.userId ?? getDemoThoughtUserId();
 
   return (
     <div className="space-y-8">
+      <HomeDashboard userId={userId} maps={maps} sessions={sessions} fragments={fragments} />
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Brain</p>
@@ -774,6 +781,8 @@ export default async function DashboardPage() {
       <ShapeDashboard shapes={shapes} calibration={calibration} initialFeedback={{}} />
 
       <CalibrationCoachingView coaching={calibrationCoaching} />
+
+      <NotificationPreferencesView userId={getDemoThoughtUserId()} />
 
       {mapCards.length ? (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
