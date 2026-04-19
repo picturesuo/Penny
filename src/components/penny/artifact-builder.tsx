@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, FileText, Sparkles } from "lucide-react";
+import { ArtifactCard } from "@/components/penny/artifact-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ARTIFACT_TYPES, diffArtifactRecords, getArtifactType } from "@/lib/artifact-types";
@@ -204,23 +205,7 @@ export function ArtifactBuilder({
 
       {error ? <p className="mt-3 text-sm leading-6 text-[#8b4d1f]">{error}</p> : null}
 
-      {artifact ? (
-        <div className="mt-5 rounded-[24px] border border-black/8 bg-white p-4">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{artifact.artifactTypeName}</p>
-          <h4 className="mt-1 text-lg font-semibold text-[var(--ink)]">{artifact.title}</h4>
-          <p className="mt-2 text-sm text-[var(--muted-ink)]">
-            Generated {artifact.generatedAt.toString()} for {artifact.audience ?? "unspecified audience"}.
-          </p>
-          <div className="mt-4 space-y-3">
-            {artifact.sections.map((section) => (
-              <div key={section.id} className="rounded-[18px] bg-[var(--panel)] p-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{section.title}</p>
-                <p className="mt-1 text-sm leading-6 text-[var(--ink)]">{section.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {artifact ? <div className="mt-5"><ArtifactCard artifact={artifact} /></div> : null}
 
       {artifactDiff ? (
         <div className="mt-4 rounded-[24px] border border-black/8 bg-[var(--panel)] p-4">
