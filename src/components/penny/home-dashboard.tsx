@@ -10,6 +10,7 @@ import { QuickCapture } from "@/components/penny/quick-capture";
 import { CaptureInbox } from "@/components/penny/capture-inbox";
 import { NoMapsEmptyState } from "@/components/penny/states";
 import { buildHomeDashboard } from "@/lib/home-dashboard";
+import { buildFeatureUnlockStatuses, buildUnlockSummary, featureRouteForId } from "@/lib/time-locked-features";
 import { buildOnboardingChecklist, buildOnboardingState, getOnboardingPrompt } from "@/lib/onboarding";
 import type { MarginFragmentModel, SessionCardModel } from "@/types/penny";
 import type { ThoughtMapModel } from "@/types/thought-map";
@@ -29,6 +30,9 @@ export function HomeDashboard({
   const onboardingState = buildOnboardingState({ userId, maps, sessions, fragments });
   const onboardingChecklist = buildOnboardingChecklist({ maps, sessions, fragments });
   const onboardingPrompt = getOnboardingPrompt(onboardingState.currentStep);
+  const unlockStatuses = buildFeatureUnlockStatuses({ userId, maps });
+  const unlockSummary = buildUnlockSummary(unlockStatuses);
+  const nextUnlockRoute = unlockSummary.nextFeature ? featureRouteForId(unlockSummary.nextFeature.featureId) : "/app/unlocks";
   const primaryLink =
     dashboard.primaryAction.actionType === "create_first_claim"
       ? "/app/new"
@@ -147,6 +151,30 @@ export function HomeDashboard({
                 </Button>
               </Link>
               <Badge className="bg-[var(--panel)] text-[var(--ink)]">Derived, not generic</Badge>
+            </div>
+          </Card>
+
+          <Card className="p-6" data-onboarding-target="unlock-progress">
+            <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Time-locked features</p>
+            <h3 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Unlocks that only become real with enough history</h3>
+            <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">
+              {unlockSummary.unlockedCount} features are already unlocked, and {unlockSummary.lockedCount} still need more history to become meaningful.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href="/app/unlocks">
+                <Button className="gap-2">
+                  Open unlocks
+                  <ArrowRight className="size-4" />
+                </Button>
+              </Link>
+              {unlockSummary.nextFeature ? (
+                <Link href={nextUnlockRoute}>
+                  <Button variant="secondary" className="gap-2">
+                    Explore next
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </Link>
+              ) : null}
             </div>
           </Card>
 

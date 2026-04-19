@@ -1,6 +1,7 @@
 import type { MarginFragmentModel, SessionCardModel } from "@/types/penny";
 import type { HomeDashboardState, UserMaturity, DashboardPanel } from "@/types/home-dashboard";
 import type { ThoughtMapModel } from "@/types/thought-map";
+import { buildFeatureUnlockStatuses, buildUnlockSummary, featureUnlockDefinition } from "@/lib/time-locked-features";
 
 function computeUserMaturity(maps: ThoughtMapModel[]): UserMaturity {
   if (maps.length === 0) {
@@ -22,6 +23,7 @@ function computeUserMaturity(maps: ThoughtMapModel[]): UserMaturity {
 }
 
 function makePanels(params: {
+  userId: string;
   maturity: UserMaturity;
   maps: ThoughtMapModel[];
   sessions: SessionCardModel[];
@@ -30,6 +32,8 @@ function makePanels(params: {
   const quickCaptureCount = params.fragments.filter((fragment) => fragment.status === "floating").length;
   const recentMaps = params.maps.slice(0, 4);
   const recentSessions = params.sessions.slice(0, 4);
+  const unlockStatuses = buildFeatureUnlockStatuses({ userId: params.userId, maps: params.maps });
+  const unlockSummary = buildUnlockSummary(unlockStatuses);
 
   const panels: DashboardPanel[] = [
     {
@@ -78,6 +82,19 @@ function makePanels(params: {
         fragments: params.fragments.length,
       },
     },
+    {
+      id: "unlock_progress",
+      panelType: "unlock_progress",
+      priority: 7,
+      isVisible: unlockStatuses.length > 0,
+      data: {
+        unlockedCount: unlockSummary.unlockedCount,
+        lockedCount: unlockSummary.lockedCount,
+        recentlyUnlockedCount: unlockSummary.recentlyUnlockedCount,
+        nextFeatureId: unlockSummary.nextFeature?.featureId ?? null,
+        nextFeatureName: unlockSummary.nextFeature ? featureUnlockDefinition(unlockSummary.nextFeature.featureId)?.featureName ?? unlockSummary.nextFeature.featureId : null,
+      },
+    },
   ];
 
   if (params.maturity === "new") {
@@ -108,7 +125,7 @@ export function buildHomeDashboard(params: {
   fragments: MarginFragmentModel[];
 }): HomeDashboardState {
   const maturity = computeUserMaturity(params.maps);
-  const panels = makePanels({ maturity, maps: params.maps, sessions: params.sessions, fragments: params.fragments });
+  const panels = makePanels({ userId: params.userId, maturity, maps: params.maps, sessions: params.sessions, fragments: params.fragments });
 
   const latestMap = params.maps[0] ?? null;
   const latestSession = params.sessions[0] ?? null;
