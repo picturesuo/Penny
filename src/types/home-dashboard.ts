@@ -1,13 +1,18 @@
+import type { MarginFragmentModel, SessionCardModel } from "@/types/penny";
+import type { ThoughtMapModel } from "@/types/thought-map";
+
 export type UserMaturity = "new" | "early" | "established" | "mature";
 
 export type DashboardPanelType =
   | "onboarding_checklist"
-  | "quick_capture"
-  | "search"
-  | "recent_maps"
-  | "recent_sessions"
-  | "capture_inbox"
+  | "revisit_queue"
+  | "blind_spot_alert"
+  | "resolution_due"
   | "compounding_value"
+  | "recent_maps"
+  | "velocity_snapshot"
+  | "lesson_surfaced"
+  | "biography_chapter_ready"
   | "unlock_progress";
 
 export interface DashboardPanel {
@@ -58,4 +63,11 @@ export interface HomeDashboardState {
   primaryAction: PrimaryAction;
   sessionSuggestion: SessionSuggestion | null;
   alerts: DashboardAlert[];
+}
+
+export interface UserState {
+  userId: string;
+  maps: ThoughtMapModel[];
+  sessions: SessionCardModel[];
+  fragments: MarginFragmentModel[];
 }

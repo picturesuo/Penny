@@ -473,6 +473,7 @@ export type ThoughtMapEventType =
   | "artifact_generated"
   | "artifact_outcome"
   | "claim_resolution"
+  | "lesson_applied"
   | "vault_entry_registered";
 
 export type RecommendationReason =

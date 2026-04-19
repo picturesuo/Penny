@@ -19,11 +19,13 @@ import {
   type SourceTrustLevel,
 } from "@/types/thought-map";
 import { calibrationIndicatorForClaim } from "@/lib/calibration";
+import { formatLessonPreview } from "@/lib/lesson-library";
 import { findRelevantPersonalBaseRate, generateBaseRateWarning } from "@/lib/personal-base-rates";
 import { suggestReferenceClass } from "@/lib/reference-classes";
 import { extractAssumptionSnapshot } from "@/lib/thought-map-generation";
 import type { PersonalBaseRateLibrary } from "@/types/personal-base-rates";
 import type { HereBeforeSignal } from "@/types/here-before-detection";
+import type { Lesson } from "@/types/lesson-library";
 
 const STARTER_IDEAS = [
   "Compliance teams at mid-sized fintechs need a faster way to turn regulatory changes into concrete action plans without hiring more analysts.",
@@ -123,6 +125,9 @@ export function ThoughtMapForm({ userId, initialRawThought, onCreatedMap }: Thou
   const [assumptionVerdicts, setAssumptionVerdicts] = useState<Record<string, "accepted" | "rejected" | "refined">>({});
   const [assumptionCorrections, setAssumptionCorrections] = useState<Record<string, string>>({});
   const [focusedAssumptionId, setFocusedAssumptionId] = useState<string | null>(null);
+  const [lessonSurface, setLessonSurface] = useState<{ lessons: Lesson[]; surfacingReason: string } | null>(null);
+  const [lessonSurfaceLoadingState, setLessonSurfaceLoadingState] = useState(Boolean(userId));
+  const [lessonSurfaceDismissed, setLessonSurfaceDismissed] = useState(false);
   const assumptionSnapshot = useMemo(() => extractAssumptionSnapshot(rawThought), [rawThought]);
   const weakestAssumption = useMemo(
     () => [...assumptionSnapshot.assumptions].sort((a, b) => a.confidence - b.confidence)[0] ?? null,
@@ -164,6 +169,8 @@ export function ThoughtMapForm({ userId, initialRawThought, onCreatedMap }: Thou
       : referenceClassDelta > 0
         ? "higher_than_base_rate"
         : "lower_than_base_rate";
+  const lessonSurfaceEligible = rawThought.trim().length >= 40;
+  const lessonSurfaceLoading = lessonSurfaceEligible && lessonSurfaceLoadingState;
   const personalBaseRate = useMemo(
     () =>
       personalBaseRateLibrary
@@ -290,6 +297,61 @@ export function ThoughtMapForm({ userId, initialRawThought, onCreatedMap }: Thou
       window.clearTimeout(timeout);
     };
   }, [calibrationIndicator?.domain, claim.confidence, claim.provenance, claim.stakes, claim.structureKind, shouldCheckHereBefore, rawThought, userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    const claimText = rawThought.trim();
+    if (claimText.length < 40) {
+      return;
+    }
+
+    let active = true;
+
+    const timeout = window.setTimeout(() => {
+      setLessonSurfaceLoadingState(true);
+      void fetch(
+        `/api/users/${userId}/lesson-library?claimText=${encodeURIComponent(claimText)}&claimDomain=${encodeURIComponent(
+          calibrationIndicator?.domain ?? "general",
+        )}&claimType=${encodeURIComponent(claim.structureKind)}`,
+      )
+        .then(async (response) => {
+          if (!response.ok) {
+            return null;
+          }
+
+          return (await response.json()) as { lessons?: Lesson[]; surfacingReason?: string };
+        })
+        .then((payload) => {
+          if (!active || !payload) {
+            return;
+          }
+
+          setLessonSurface({
+            lessons: payload.lessons ?? [],
+            surfacingReason: payload.surfacingReason ?? "",
+          });
+          setLessonSurfaceDismissed(false);
+        })
+        .catch(() => {
+          if (active) {
+            setLessonSurface(null);
+          }
+        })
+        .finally(() => {
+          if (active) {
+            setLessonSurfaceLoadingState(false);
+          }
+        });
+    }, 450);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [calibrationIndicator?.domain, claim.structureKind, rawThought, userId]);
 
   useEffect(() => {
     if (!userId) {
@@ -655,6 +717,43 @@ export function ThoughtMapForm({ userId, initialRawThought, onCreatedMap }: Thou
                   onDismiss={() => setHereBeforeDismissed(true)}
                   onViewHistory={(claimId) => router.push(`/app/maps/${claimId}`)}
                 />
+              </div>
+            ) : null}
+
+            {lessonSurfaceLoading ? (
+              <div className="lg:col-span-2 rounded-[22px] border border-black/10 bg-[var(--panel)] p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Lesson surfacing</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                  Checking whether this claim matches anything you have already learned.
+                </p>
+              </div>
+            ) : lessonSurface && lessonSurface.lessons.length > 0 && !lessonSurfaceDismissed ? (
+              <div className="lg:col-span-2 rounded-[22px] border border-[#d7c06c] bg-[#fff8df] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-[#6f5612]">Relevant lessons</p>
+                    <p className="mt-1 text-sm leading-6 text-[#5a460d]">{lessonSurface.surfacingReason}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="px-3 py-2 text-xs"
+                    onClick={() => setLessonSurfaceDismissed(true)}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {lessonSurface.lessons.slice(0, 3).map((lesson) => (
+                    <div key={lesson.id} className="rounded-[18px] bg-white/80 p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="bg-[#fff6d8] text-[#6f5612]">{lesson.lessonType.replaceAll("_", " ")}</Badge>
+                        {lesson.domain ? <Badge className="bg-white text-[#6f5612]">{lesson.domain}</Badge> : null}
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-[#5a460d]">{formatLessonPreview(lesson)}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : null}
 

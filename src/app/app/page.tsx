@@ -16,6 +16,7 @@ import {
 } from "@/lib/penny-insights";
 import { buildCalibrationCoaching } from "@/lib/calibration";
 import { buildCalibrationTrackRecord, buildShareableTrackRecord } from "@/lib/calibration-track-record";
+import { getLessonLibrary } from "@/server/lesson-library";
 import { buildMarginSurfaceSnapshot } from "@/lib/margin";
 import { getDemoThoughtUserId } from "@/lib/thought-map";
 import { listMarginFragments, listSessions } from "@/server/penny";
@@ -92,12 +93,14 @@ export default async function DashboardPage() {
   const maps = await listThoughtMaps();
   const sessions = await listSessions();
   const fragments = await listMarginFragments();
+  const userId = maps[0]?.userId ?? getDemoThoughtUserId();
   const allNodes = maps.flatMap((map) => map.nodes);
   const shapes = derivePennyShapes(allNodes).sort((a, b) => b.confidence - a.confidence).slice(0, 4);
   const calibration = buildCalibrationDashboard(maps);
   const calibrationCoaching = buildCalibrationCoaching(maps);
   const calibrationTrackRecord = buildCalibrationTrackRecord(maps);
   const shareableTrackRecord = buildShareableTrackRecord(calibrationTrackRecord, "You", process.env.CALIBRATION_TRACK_SECRET ?? null);
+  const lessonLibrary = await getLessonLibrary(userId);
   const communitySnapshot = buildCommunityCommonsDashboard(maps, allNodes);
   const advancedSnapshot = buildAdvancedThinkingDashboard(maps, allNodes);
   const memoryTime = buildMemoryTimeDashboard(maps);
@@ -106,7 +109,6 @@ export default async function DashboardPage() {
     map,
     counts: summarizeNodeStatus(map.nodes),
   }));
-  const userId = maps[0]?.userId ?? getDemoThoughtUserId();
 
   return (
     <div className="space-y-8">
@@ -495,6 +497,36 @@ export default async function DashboardPage() {
               <Link href="/app/counterfactuals">
                 <Button variant="secondary" className="gap-2">
                   Open archive
+                  <ArrowRight className="size-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Lesson library</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">
+              Post-mortems, strong concessions, resolutions, and counterfactuals are distilled into reusable lessons that resurface when a new claim matches a prior pattern.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge className="bg-white text-[var(--ink)]">{lessonLibrary.totalLessons} lessons</Badge>
+              <Badge className="bg-[#e7defa] text-[#5c4c88]">{lessonLibrary.appliedLessons} applied</Badge>
+              <Badge className="bg-[#d9ead8] text-[#355b32]">{lessonLibrary.lessonsByType.size} lesson types</Badge>
+            </div>
+            {lessonLibrary.mostRecentLesson ? (
+              <p className="mt-4 text-sm leading-7 text-[var(--muted-ink)]">
+                Latest lesson: {lessonLibrary.mostRecentLesson.lessonText.slice(0, 120)}
+                {lessonLibrary.mostRecentLesson.lessonText.length > 120 ? "..." : ""}
+              </p>
+            ) : (
+              <p className="mt-4 text-sm leading-7 text-[var(--muted-ink)]">
+                No lessons have been distilled yet. The archive starts the first time a claim resolves or a strong concession lands.
+              </p>
+            )}
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link href="/app/lessons">
+                <Button variant="secondary" className="gap-2">
+                  Open library
                   <ArrowRight className="size-4" />
                 </Button>
               </Link>

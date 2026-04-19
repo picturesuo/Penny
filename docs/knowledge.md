@@ -15,6 +15,7 @@
 - Sessions are first-class objects with a declared focus, protected deep-work windows, cognitive protection, depletion detection, and a clean ending ritual that hands over the artifact and stops pulling.
 - Calibration is first-class: every claim has a probability, high-confidence claims get challenged, resolved claims feed Brier tracking, and private self-bets make calibration emotionally sticky.
 - Memory and time should be visible: old selves, belief genealogy, inheritance markers, contradiction cascades, aging foundations, confidence drift, revisit queues, and session rhythm should all surface as felt product, not hidden infrastructure.
+- The lesson library should distill post-mortems, strong concessions, resolutions, and counterfactuals into reusable lessons, surface them during new claim creation when relevant, and make leaving Penny mean giving up accumulated judgment.
 - Velocity should be visible: a dedicated intellectual-velocity surface should show whether the user is compounding faster over time through calibration improvement, critique sophistication, update rate, blind-spot coverage, evidence quality, revision latency, and structural health.
 - The counterfactual archive should reconstruct plausible day 0 / 30 / 60 / 90 branches from the claim’s recorded history when a prediction resolves, while staying explicit that the result is a reconstruction rather than causal certainty.
 - Shapes must be visible and reviewable, and the lens must update quickly enough that a Tuesday override visibly changes critique quality by the following week.
