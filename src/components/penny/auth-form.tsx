@@ -64,7 +64,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       }
 
       setStatus("Signed in.");
-      router.push("/app");
+      router.push("/dashboard");
       router.refresh();
     } catch {
       setStatus("Penny could not complete authentication right now.");
