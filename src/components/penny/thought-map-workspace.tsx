@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, ArrowRightLeft, CircleDot, Download, GitBranchPlus, Link2, Lock, Sparkles } from "lucide-react";
 import { BiasProfile } from "@/components/penny/bias-profile";
@@ -19,7 +19,12 @@ import { ResolutionFlow, type ResolutionDownstreamClaim, type ResolutionSubmissi
 import { MarginRail } from "@/components/penny/margin-rail";
 import { RevisitQueue } from "@/components/penny/revisit-queue";
 import { SteelManGate } from "@/components/penny/steel-man-gate";
-import { ChallengeRound, type BestNextMoveKey, type ChallengeRoundModel } from "@/components/penny/challenge-round";
+import {
+  ChallengeRound,
+  type BestNextMoveKey,
+  type ChallengeGenerationViewModel,
+  type ChallengeRoundModel,
+} from "@/components/penny/challenge-round";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -259,6 +264,17 @@ type SerializableClaimRepairAction = Omit<ClaimRepairAction, "createdAt"> & {
 
 type SerializableBiasEvidenceInstance = Omit<CognitiveBiasProfile["biasEntries"][number]["evidenceInstances"][number], "timestamp"> & {
   timestamp: Date | string;
+};
+
+type ChallengeDraftState = ChallengeGenerationViewModel & {
+  signature: string;
+  roundId: string | null;
+  title: string | null;
+  prompt: string | null;
+  why: string | null;
+  critiqueType: string | null;
+  critiqueStrength: string | null;
+  voiceLabel: string | null;
 };
 
 type SerializableBiasEntry = Omit<CognitiveBiasProfile["biasEntries"][number], "firstDetected" | "lastSignal" | "evidenceInstances"> & {
@@ -896,6 +912,58 @@ function critiqueIntensityLabel(intensity: number) {
   return "brutal";
 }
 
+function challengeIntensityLevel(intensity: number) {
+  if (intensity < 20) {
+    return 1;
+  }
+
+  if (intensity < 40) {
+    return 2;
+  }
+
+  if (intensity < 60) {
+    return 3;
+  }
+
+  if (intensity < 80) {
+    return 4;
+  }
+
+  return 5;
+}
+
+function challengeDraftStateKey(claimId: string, roundIndex: number) {
+  return `${claimId}:${roundIndex}`;
+}
+
+function buildChallengeGenerationSignature(params: {
+  roundIndex: number;
+  critiqueMode: CritiqueMode;
+  critiqueIntensity: number;
+  voiceLabel: string | null;
+}) {
+  return [params.roundIndex, params.critiqueMode, challengeIntensityLevel(params.critiqueIntensity), params.voiceLabel ?? ""].join(":");
+}
+
+function buildChallengeConfidenceChangeReason(
+  roundLabel: string,
+  roundContext: {
+    concessionNote?: string;
+    connectedClaimsNote?: string;
+    newEvidenceNote?: string;
+  },
+) {
+  const details = [roundContext.concessionNote?.trim(), roundContext.connectedClaimsNote?.trim(), roundContext.newEvidenceNote?.trim()].filter(
+    (value): value is string => Boolean(value),
+  );
+
+  if (details.length) {
+    return details.join(" ");
+  }
+
+  return `Updated after ${roundLabel}.`;
+}
+
 function critiqueTypePrompt(critiqueType: CritiqueFailureType, nodeLabel: string) {
   switch (critiqueType) {
     case "weak evidence":
@@ -1431,6 +1499,7 @@ export function ThoughtMapWorkspace({
   const [critiqueCorrectionDrafts, setCritiqueCorrectionDrafts] = useState<Record<string, string>>({});
   const [propagationAcknowledged, setPropagationAcknowledged] = useState<Record<string, string>>({});
   const [dialecticResponseDrafts, setDialecticResponseDrafts] = useState<Record<string, string>>({});
+  const [challengeDraftStates, setChallengeDraftStates] = useState<Record<string, ChallengeDraftState>>({});
   const [dialecticSubmissionAttempts, setDialecticSubmissionAttempts] = useState<Record<string, number>>({});
   const [dialecticRoundContextDrafts, setDialecticRoundContextDrafts] = useState<
     Record<
@@ -2047,13 +2116,17 @@ export function ThoughtMapWorkspace({
   const selectedSteelManReady = selectedSteelMan
     ? selectedSteelMan.steelManText.trim().length >= 80
     : Boolean(selectedGraphNode?.node.id && steelManGateBypassed[selectedGraphNode.node.id]);
-  const challengeClaim = selectedGraphNode
-    ? {
-        id: selectedGraphNode.node.id,
-        text: selectedGraphNode.node.content,
-        confidence: Math.round((selectedGraphNode.node.scores?.confidence ?? 0) * 100),
-      }
-    : null;
+  const challengeClaim = useMemo(
+    () =>
+      selectedGraphNode
+        ? {
+            id: selectedGraphNode.node.id,
+            text: selectedGraphNode.node.content,
+            confidence: Math.round((selectedGraphNode.node.scores?.confidence ?? 0) * 100),
+          }
+        : null,
+    [selectedGraphNode],
+  );
   const claimRepairSuggestions = useMemo(() => buildClaimRepairSuggestions(map), [map]);
   const dailyRevisitQueue = useMemo(() => buildRevisitQueue(map), [map]);
   const revisitPatternFeedback = useMemo(() => buildRevisitPatternFeedback([map]), [map]);
@@ -2820,6 +2893,237 @@ export function ThoughtMapWorkspace({
   }, [dialecticResponseDrafts, dialecticRounds, focusedChallengeRoundLabel]);
   const primaryChallengeRound = dialecticRounds[primaryChallengeRoundIndex] ?? null;
   const secondaryChallengeRounds = dialecticRounds.filter((_, index) => index !== primaryChallengeRoundIndex);
+  const nextOpenChallengeRound = useMemo(
+    () => dialecticRounds.find((candidate) => !candidate.dialecticRound?.userResponse) ?? null,
+    [dialecticRounds],
+  );
+  const activeChallengeDraftKey =
+    challengeClaim && nextOpenChallengeRound ? challengeDraftStateKey(challengeClaim.id, nextOpenChallengeRound.roundIndex) : null;
+  const activeChallengeVoiceLabel = peerAudience;
+  const activeChallengeDraftSignature = nextOpenChallengeRound
+    ? buildChallengeGenerationSignature({
+        roundIndex: nextOpenChallengeRound.roundIndex,
+        critiqueMode,
+        critiqueIntensity,
+        voiceLabel: activeChallengeVoiceLabel,
+      })
+    : null;
+
+  const generateChallengeDraft = useCallback(async (options?: { forceRegenerate?: boolean }) => {
+    if (!challengeClaim || !nextOpenChallengeRound || !selectedSteelManReady) {
+      return;
+    }
+
+    const forceRegenerate = options?.forceRegenerate ?? false;
+    const requestKey = challengeDraftStateKey(challengeClaim.id, nextOpenChallengeRound.roundIndex);
+    const requestSignature = buildChallengeGenerationSignature({
+      roundIndex: nextOpenChallengeRound.roundIndex,
+      critiqueMode,
+      critiqueIntensity,
+      voiceLabel: activeChallengeVoiceLabel,
+    });
+    const attemptNumber = (challengeDraftStates[requestKey]?.attemptNumber ?? 0) + 1;
+
+    setChallengeDraftStates((current) => ({
+      ...current,
+      [requestKey]: {
+        status: "generating",
+        providerLabel: current[requestKey]?.providerLabel ?? null,
+        fallbackReason: null,
+        error: null,
+        attemptNumber,
+        signature: requestSignature,
+        roundId: current[requestKey]?.roundId ?? null,
+        title: current[requestKey]?.title ?? null,
+        prompt: current[requestKey]?.prompt ?? null,
+        why: current[requestKey]?.why ?? null,
+        critiqueType: current[requestKey]?.critiqueType ?? null,
+        critiqueStrength: current[requestKey]?.critiqueStrength ?? null,
+        voiceLabel: current[requestKey]?.voiceLabel ?? null,
+      },
+    }));
+
+    void track(
+      {
+        event: "challenge_generation_started",
+        properties: {
+          claimId: challengeClaim.id,
+          roundNumber: nextOpenChallengeRound.roundIndex + 1,
+          attemptNumber,
+        },
+      },
+      map.userId,
+    );
+
+    try {
+      const response = await fetch(`/api/maps/${map.id}/claims/${challengeClaim.id}/challenge`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          critiqueMode,
+          critiqueIntensity: challengeIntensityLevel(critiqueIntensity),
+          selectedVoice: activeChallengeVoiceLabel,
+          forceRegenerate,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            round?: {
+              id: string;
+              title: string;
+              prompt: string;
+              why: string;
+              critiqueType: string;
+              critiqueStrength: string;
+              voiceLabel: string | null;
+              generationStatus: "generated" | "fallback";
+              generationProviderLabel: string;
+              generationFallbackReason: string | null;
+            };
+          }
+        | null;
+
+      if (!response.ok || !payload?.round) {
+        throw new Error(payload?.error ?? "Couldn't generate a challenge right now.");
+      }
+      const generatedRound = payload.round;
+
+      setChallengeDraftStates((current) => ({
+        ...current,
+        [requestKey]: {
+          status: generatedRound.generationStatus === "fallback" ? "fallback" : "generated",
+          providerLabel: generatedRound.generationProviderLabel,
+          fallbackReason: generatedRound.generationFallbackReason,
+          error: null,
+          attemptNumber,
+          signature: requestSignature,
+          roundId: generatedRound.id,
+          title: generatedRound.title,
+          prompt: generatedRound.prompt,
+          why: generatedRound.why,
+          critiqueType: generatedRound.critiqueType,
+          critiqueStrength: generatedRound.critiqueStrength,
+          voiceLabel: generatedRound.voiceLabel,
+        },
+      }));
+
+      if (generatedRound.generationStatus === "fallback") {
+        void track(
+          {
+            event: "challenge_generation_fallback",
+            properties: {
+              claimId: challengeClaim.id,
+              roundNumber: nextOpenChallengeRound.roundIndex + 1,
+              attemptNumber,
+              provider: generatedRound.generationProviderLabel,
+              reason: generatedRound.generationFallbackReason ?? "Live provider unavailable.",
+            },
+          },
+          map.userId,
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Couldn't generate a challenge right now.";
+
+      setChallengeDraftStates((current) => ({
+        ...current,
+        [requestKey]: {
+          status: "failed",
+          providerLabel: current[requestKey]?.providerLabel ?? null,
+          fallbackReason: null,
+          error: message,
+          attemptNumber,
+          signature: requestSignature,
+          roundId: current[requestKey]?.roundId ?? null,
+          title: current[requestKey]?.title ?? null,
+          prompt: current[requestKey]?.prompt ?? null,
+          why: current[requestKey]?.why ?? null,
+          critiqueType: current[requestKey]?.critiqueType ?? null,
+          critiqueStrength: current[requestKey]?.critiqueStrength ?? null,
+          voiceLabel: current[requestKey]?.voiceLabel ?? null,
+        },
+      }));
+
+      void track(
+        {
+          event: "challenge_generation_failed",
+          properties: {
+            claimId: challengeClaim.id,
+            roundNumber: nextOpenChallengeRound.roundIndex + 1,
+            attemptNumber,
+            reason: message,
+          },
+        },
+        map.userId,
+      );
+    }
+  }, [
+    activeChallengeVoiceLabel,
+    challengeClaim,
+    challengeDraftStates,
+    critiqueIntensity,
+    critiqueMode,
+    map.id,
+    map.userId,
+    nextOpenChallengeRound,
+    selectedSteelManReady,
+  ]);
+
+  function getChallengeDraftStateForRound(round: ChallengeRoundModel): ChallengeDraftState | null {
+    if (!challengeClaim) {
+      return null;
+    }
+
+    return challengeDraftStates[challengeDraftStateKey(challengeClaim.id, round.roundIndex)] ?? null;
+  }
+
+  function resolveChallengeRound(round: ChallengeRoundModel): ChallengeRoundModel {
+    const draftState = getChallengeDraftStateForRound(round);
+
+    if (!draftState || (draftState.status !== "generated" && draftState.status !== "fallback")) {
+      return round;
+    }
+
+    return {
+      ...round,
+      title: draftState.title ?? round.title,
+      prompt: draftState.prompt ?? round.prompt,
+      why: draftState.why ?? round.why,
+      strength:
+        draftState.critiqueStrength && draftState.providerLabel
+          ? `${draftState.critiqueStrength} · ${draftState.providerLabel}`
+          : round.strength,
+      critiqueFailureTypes: draftState.critiqueType ? [draftState.critiqueType] : round.critiqueFailureTypes,
+    };
+  }
+
+  useEffect(() => {
+    if (!challengeClaim || !nextOpenChallengeRound || !selectedSteelManReady || !activeChallengeDraftSignature || !activeChallengeDraftKey) {
+      return;
+    }
+
+    const currentDraft = challengeDraftStates[activeChallengeDraftKey] ?? null;
+
+    if (currentDraft && currentDraft.signature === activeChallengeDraftSignature) {
+      if (currentDraft.status === "generating" || currentDraft.status === "generated" || currentDraft.status === "fallback" || currentDraft.status === "failed") {
+        return;
+      }
+    }
+
+    void generateChallengeDraft();
+  }, [
+    activeChallengeDraftKey,
+    activeChallengeDraftSignature,
+    challengeClaim,
+    challengeDraftStates,
+    generateChallengeDraft,
+    nextOpenChallengeRound,
+    selectedSteelManReady,
+  ]);
 
   useEffect(() => {
     setFocusedChallengeRoundLabel(null);
@@ -3883,6 +4187,7 @@ export function ThoughtMapWorkspace({
     responsePath: "defend" | "revise" | "absorb";
     response?: string;
     confidenceAtRoundEnd?: number;
+    draftRoundId?: string | null;
   }) {
     const response = (params.response ?? dialecticResponseDrafts[params.round] ?? "").trim();
     const currentConfidence = Math.round((selectedGraphNode?.node.scores?.confidence ?? 0) * 100);
@@ -3905,6 +4210,10 @@ export function ThoughtMapWorkspace({
     const claimId = selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null;
     const attemptNumber = (dialecticSubmissionAttempts[params.round] ?? 0) + 1;
 
+    if (params.draftRoundId && !claimId) {
+      throw new Error("Select a claim before saving this challenge round.");
+    }
+
     setDialecticSubmissionAttempts((current) => ({
       ...current,
       [params.round]: attemptNumber,
@@ -3925,47 +4234,51 @@ export function ThoughtMapWorkspace({
     await new Promise<void>((resolve, reject) => {
       startTransition(() => {
         void (async () => {
-          void track(
-            {
-              event: "challenge_started",
-              properties: {
-                claimId: claimId ?? "unknown",
-                roundNumber: params.roundIndex + 1,
-              },
-            },
-            map.userId,
-          );
-
           try {
-            const persistResponse = await fetch(`/api/maps/${map.id}/dialectic-rounds`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                nodeId: selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null,
-                round: params.round,
-                roundIndex: params.roundIndex,
-                title: params.title,
-                critiqueStrength: params.critiqueStrength,
-                critiqueType: params.critiqueType ?? null,
-                critiqueFailureTypes: params.critiqueFailureTypes ?? (params.critiqueType ? [params.critiqueType] : []),
-                critiqueMode: params.critiqueMode ?? critiqueMode,
-                voiceLabel: params.voiceLabel ?? (selectedAudienceCritique?.audienceLabel ?? peerAudience),
-                prompt: params.prompt,
-                why: params.why,
-                responsePath: params.responsePath,
-                response,
-                roundContext: {
-                  currentConfidence,
-                  confidenceAtRoundEnd: explicitConfidenceEnd ?? roundContext.confidenceAtRoundEnd,
-                  concessionNote: roundContext.concessionNote,
-                  connectedClaimsChanged: roundContext.connectedClaimsChanged,
-                  connectedClaimsNote: roundContext.connectedClaimsNote,
-                  newEvidenceNote: roundContext.newEvidenceNote,
-                },
-              }),
-            });
+            const roundContextPayload = {
+              currentConfidence,
+              confidenceAtRoundEnd: explicitConfidenceEnd ?? roundContext.confidenceAtRoundEnd,
+              concessionNote: roundContext.concessionNote,
+              connectedClaimsChanged: roundContext.connectedClaimsChanged,
+              connectedClaimsNote: roundContext.connectedClaimsNote,
+              newEvidenceNote: roundContext.newEvidenceNote,
+            };
+            const persistResponse = params.draftRoundId
+              ? await fetch(`/api/maps/${map.id}/claims/${claimId}/challenge`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    roundId: params.draftRoundId,
+                    userResponse: response,
+                    newConfidence: roundContextPayload.confidenceAtRoundEnd,
+                    confidenceChangeReason: buildChallengeConfidenceChangeReason(params.round, roundContextPayload),
+                    responsePath: params.responsePath,
+                  }),
+                })
+              : await fetch(`/api/maps/${map.id}/dialectic-rounds`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    nodeId: selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null,
+                    round: params.round,
+                    roundIndex: params.roundIndex,
+                    title: params.title,
+                    critiqueStrength: params.critiqueStrength,
+                    critiqueType: params.critiqueType ?? null,
+                    critiqueFailureTypes: params.critiqueFailureTypes ?? (params.critiqueType ? [params.critiqueType] : []),
+                    critiqueMode: params.critiqueMode ?? critiqueMode,
+                    voiceLabel: params.voiceLabel ?? (selectedAudienceCritique?.audienceLabel ?? peerAudience),
+                    prompt: params.prompt,
+                    why: params.why,
+                    responsePath: params.responsePath,
+                    response,
+                    roundContext: roundContextPayload,
+                  }),
+                });
 
             if (!persistResponse.ok) {
               const errorPayload = (await persistResponse.json().catch(() => null)) as { error?: string } | null;
@@ -3973,12 +4286,14 @@ export function ThoughtMapWorkspace({
             }
 
             const payload = (await persistResponse.json()) as {
-              event: SerializableThoughtMapEvent;
+              event?: SerializableThoughtMapEvent;
               round?: SerializableDialecticRound | null;
               roundContext?: unknown;
               updatedClaimConfidence?: number | null;
             };
-            mergeDialecticRoundEvent(payload.event);
+            if (payload.event) {
+              mergeDialecticRoundEvent(payload.event);
+            }
             if (claimId && typeof payload.updatedClaimConfidence === "number") {
               mergeClaimConfidenceUpdate(claimId, payload.updatedClaimConfidence);
             }
@@ -4003,17 +4318,29 @@ export function ThoughtMapWorkspace({
                 description: `${params.title}: ${response.slice(0, 160)}`,
               });
             }
-            void track(
-              {
-                event: "challenge_completed",
-                properties: {
-                  claimId: claimId ?? "unknown",
-                  roundNumber: params.roundIndex + 1,
-                  engagementScore: Math.min(1, Math.max(0, response.length / 240)),
+            if (!params.draftRoundId) {
+              void track(
+                {
+                  event: "challenge_started",
+                  properties: {
+                    claimId: claimId ?? "unknown",
+                    roundNumber: params.roundIndex + 1,
+                  },
                 },
-              },
-              map.userId,
-            );
+                map.userId,
+              );
+              void track(
+                {
+                  event: "challenge_completed",
+                  properties: {
+                    claimId: claimId ?? "unknown",
+                    roundNumber: params.roundIndex + 1,
+                    engagementScore: Math.min(1, Math.max(0, response.length / 240)),
+                  },
+                },
+                map.userId,
+              );
+            }
             setDialecticRoundContextDrafts((current) => {
               const next = { ...current };
               delete next[params.round];
@@ -4028,6 +4355,18 @@ export function ThoughtMapWorkspace({
               delete next[params.round];
               return next;
             });
+            if (params.draftRoundId && claimId) {
+              const activeDraftKey = challengeDraftStateKey(claimId, params.roundIndex);
+              setChallengeDraftStates((current) => {
+                if (!(activeDraftKey in current)) {
+                  return current;
+                }
+
+                const next = { ...current };
+                delete next[activeDraftKey];
+                return next;
+              });
+            }
             resolve();
           } catch (error) {
             void track(
@@ -5179,12 +5518,18 @@ export function ThoughtMapWorkspace({
   const renderChallengeRoundCard = (round: ChallengeRoundModel) => {
     const roundIndex = dialecticRounds.findIndex((candidate) => candidate.round === round.round);
     const draft = dialecticResponseDrafts[round.round] ?? "";
+    const roundGeneration = getChallengeDraftStateForRound(round);
+    const resolvedRound = resolveChallengeRound(round);
+    const retryGeneration =
+      nextOpenChallengeRound && nextOpenChallengeRound.roundIndex === round.roundIndex
+        ? () => generateChallengeDraft({ forceRegenerate: true })
+        : undefined;
 
     return (
       <div key={round.round} className="space-y-4">
         <ChallengeRound
           claim={challengeClaim ?? { id: map.id, text: map.rawThought, confidence: 0 }}
-          round={round}
+          round={resolvedRound}
           priorRounds={dialecticRounds.slice(0, roundIndex) as ChallengeRoundModel[]}
           responseDraft={draft}
           onResponseDraftChange={(value) =>
@@ -5194,6 +5539,8 @@ export function ThoughtMapWorkspace({
             }))
           }
           onRoundContextChange={(patch) => updateDialecticRoundContext(round.round, patch)}
+          generation={roundGeneration}
+          onRetryGeneration={retryGeneration}
           isSteelManReady={selectedSteelManReady}
           onRequestNewRound={
             dialecticRounds[roundIndex + 1]
@@ -5209,22 +5556,23 @@ export function ThoughtMapWorkspace({
             await recordDialecticRound({
               round: round.round,
               roundIndex: round.roundIndex,
-              title: round.title,
-              critiqueStrength: round.strength,
-              critiqueType: activeCritiqueType,
-              critiqueFailureTypes: round.critiqueFailureTypes ?? [activeCritiqueType],
+              title: resolvedRound.title,
+              critiqueStrength: resolvedRound.strength,
+              critiqueType: resolvedRound.critiqueFailureTypes[0] ?? activeCritiqueType,
+              critiqueFailureTypes: resolvedRound.critiqueFailureTypes ?? [activeCritiqueType],
               critiqueMode,
-              voiceLabel: selectedAudienceCritique?.audienceLabel ?? peerAudience,
-              prompt: round.prompt,
-              why: round.why,
+              voiceLabel: roundGeneration?.voiceLabel ?? (selectedAudienceCritique?.audienceLabel ?? peerAudience),
+              prompt: resolvedRound.prompt,
+              why: resolvedRound.why,
               responsePath,
               response,
               confidenceAtRoundEnd: newConfidence,
+              draftRoundId: roundGeneration?.roundId ?? null,
             });
           }}
         />
 
-        {renderChallengeRoundFeedback(round)}
+        {renderChallengeRoundFeedback(resolvedRound)}
       </div>
     );
   };
@@ -6960,12 +7308,18 @@ export function ThoughtMapWorkspace({
                 Boolean(openedCritiqueFeedbackRoundIds[round.dialecticRound?.id ?? round.round]));
             const roundId = round.dialecticRound?.id ?? round.round;
             const draft = dialecticResponseDrafts[round.round] ?? "";
+            const roundGeneration = getChallengeDraftStateForRound(round);
+            const resolvedRound = resolveChallengeRound(round);
+            const retryGeneration =
+              nextOpenChallengeRound && nextOpenChallengeRound.roundIndex === round.roundIndex
+                ? () => generateChallengeDraft({ forceRegenerate: true })
+                : undefined;
 
             return (
               <div key={round.round} className="space-y-4">
                 <ChallengeRound
                   claim={challengeClaim ?? { id: map.id, text: map.rawThought, confidence: 0 }}
-                  round={round}
+                  round={resolvedRound}
                   priorRounds={dialecticRounds.slice(0, index) as ChallengeRoundModel[]}
                   responseDraft={draft}
                   onResponseDraftChange={(value) =>
@@ -6975,6 +7329,8 @@ export function ThoughtMapWorkspace({
                     }))
                   }
                   onRoundContextChange={(patch) => updateDialecticRoundContext(round.round, patch)}
+                  generation={roundGeneration}
+                  onRetryGeneration={retryGeneration}
                   isSteelManReady={selectedSteelManReady}
                   onRequestNewRound={
                     dialecticRounds[index + 1]
@@ -6990,17 +7346,18 @@ export function ThoughtMapWorkspace({
                     await recordDialecticRound({
                       round: round.round,
                       roundIndex: round.roundIndex,
-                      title: round.title,
-                      critiqueStrength: round.strength,
-                      critiqueType: activeCritiqueType,
-                      critiqueFailureTypes: round.critiqueFailureTypes ?? [activeCritiqueType],
+                      title: resolvedRound.title,
+                      critiqueStrength: resolvedRound.strength,
+                      critiqueType: resolvedRound.critiqueFailureTypes[0] ?? activeCritiqueType,
+                      critiqueFailureTypes: resolvedRound.critiqueFailureTypes ?? [activeCritiqueType],
                       critiqueMode,
-                      voiceLabel: selectedAudienceCritique?.audienceLabel ?? peerAudience,
-                      prompt: round.prompt,
-                      why: round.why,
+                      voiceLabel: roundGeneration?.voiceLabel ?? (selectedAudienceCritique?.audienceLabel ?? peerAudience),
+                      prompt: resolvedRound.prompt,
+                      why: resolvedRound.why,
                       responsePath,
                       response,
                       confidenceAtRoundEnd: newConfidence,
+                      draftRoundId: roundGeneration?.roundId ?? null,
                     });
                   }}
                 />
@@ -7008,11 +7365,11 @@ export function ThoughtMapWorkspace({
                 {feedbackVisible ? (
                   <div className="mt-4">
                     <CritiqueFeedbackCard
-                      roundLabel={round.round}
-                      critiqueText={round.prompt}
+                      roundLabel={resolvedRound.round}
+                      critiqueText={resolvedRound.prompt}
                       critiqueMode={round.dialecticRound?.critiqueMode ?? critiqueMode}
                       voiceLabel={round.dialecticRound?.voiceLabel ?? selectedAudienceCritique?.audienceLabel ?? peerAudience}
-                      failureTypes={round.critiqueFailureTypes ?? []}
+                      failureTypes={resolvedRound.critiqueFailureTypes ?? []}
                       shapeId={selectedShape?.id ?? null}
                       manualOnly={feedbackManualOnly && !openedCritiqueFeedbackRoundIds[roundId]}
                       submitted={critiqueFeedbackStatus.submitted}
