@@ -1331,13 +1331,16 @@ export function ThoughtMapWorkspace({
   initialView = "outline",
   initialFragments = [],
   availableMaps = [],
+  initialSelectedClaimId = null,
 }: {
   initialMap: SerializableThoughtMap;
   initialView?: MapView;
   initialFragments?: MarginFragmentModel[];
   availableMaps?: SessionMapOption[];
+  initialSelectedClaimId?: string | null;
 }) {
-  const [map, setMap] = useState(() => normalizeMap(initialMap));
+  const normalizedInitialMap = normalizeMap(initialMap);
+  const [map, setMap] = useState(() => normalizedInitialMap);
   const [activeSession, setActiveSession] = useState<ThinkingSession | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [sessionStartVisible, setSessionStartVisible] = useState(false);
@@ -1354,7 +1357,9 @@ export function ThoughtMapWorkspace({
   const [lastAction, setLastAction] = useState<ActionResponse | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(() =>
-    preferredGraphNodeId(normalizeMap(initialMap)),
+    initialSelectedClaimId && normalizedInitialMap.nodes.some((node) => node.id === initialSelectedClaimId)
+      ? initialSelectedClaimId
+      : preferredGraphNodeId(normalizedInitialMap),
   );
   const [dependencyHealthClaimId, setDependencyHealthClaimId] = useState<string | null>(null);
   const [peerAudience, setPeerAudience] = useState<PeerAudience>("skeptical investor");
@@ -4597,7 +4602,7 @@ export function ThoughtMapWorkspace({
         </div>
       </div>
 
-      <Card className="p-6 sm:p-8">
+      <Card id="teach-back-lane" className="scroll-mt-28 p-6 sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
@@ -4887,7 +4892,7 @@ export function ThoughtMapWorkspace({
         </div>
       </Card>
 
-      <Card className="p-6">
+      <Card id="challenge-lane" className="scroll-mt-28 p-6">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Source entry</p>
@@ -7700,7 +7705,7 @@ export function ThoughtMapWorkspace({
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-black/10 bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
+              <div id="claim-card" className="scroll-mt-28 rounded-[28px] border border-black/10 bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Knowledge card</p>
@@ -8086,7 +8091,9 @@ export function ThoughtMapWorkspace({
 
       {map.founderBrief ? <FounderBriefCard brief={map.founderBrief} /> : null}
       <ArtifactBuilder mapId={map.id} />
-      <DocumentImport mapId={map.id} />
+      <div id="import-source" className="scroll-mt-28">
+        <DocumentImport mapId={map.id} />
+      </div>
       <ExportModal
         open={exportModalOpen}
         userId={map.userId}
