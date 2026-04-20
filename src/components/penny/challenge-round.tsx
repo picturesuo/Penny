@@ -7,6 +7,12 @@ import { Button } from '@/components/ui/button'
 import { ConfidenceSlider } from './confidence-slider'
 import { bestNextMoveCopy, deriveBestNextMove, type BestNextMoveKey, type BestNextMoveRecommendation } from '@/lib/challenge-next-move'
 
+const SURFACE_EYEBROW_CLASS = 'text-[11px] uppercase tracking-[0.2em] text-[var(--muted-ink)]'
+const QUIET_PANEL_CLASS = 'rounded-[20px] border border-black/8 bg-white p-4 shadow-[0_10px_24px_rgba(34,39,46,0.04)]'
+const INSET_PANEL_CLASS = 'rounded-[18px] bg-[var(--panel)] px-4 py-3'
+const ERROR_NOTICE_CLASS = 'mt-3 rounded-[18px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm leading-6 text-[#8b3d2f]'
+const SUCCESS_NOTICE_CLASS = 'mt-3 rounded-[18px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm leading-6 text-[#2f6d47]'
+
 export type ChallengeRoundContextDraft = {
   confidenceAtRoundEnd: number
   concessionNote: string
@@ -203,7 +209,7 @@ export function ChallengeRound({
           : 'bg-white text-[var(--ink)]'
 
   return (
-    <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
+    <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5 shadow-[0_14px_34px_rgba(34,39,46,0.05)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -219,18 +225,18 @@ export function ChallengeRound({
             {round.engagementScore != null ? <span>engagement {Math.round(round.engagementScore)}</span> : null}
           </div>
         </div>
-        <div className="min-w-[180px] rounded-[18px] bg-white px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">Claim in view</p>
+        <div className={`min-w-[180px] ${QUIET_PANEL_CLASS}`}>
+          <p className={SURFACE_EYEBROW_CLASS}>Claim in view</p>
           <blockquote className="mt-2 text-sm leading-6 text-[var(--ink)]">&quot;{claim.text}&quot;</blockquote>
           <p className="mt-2 text-xs text-[var(--muted-ink)]">{formatPercentValue(claim.confidence)} confident</p>
         </div>
       </div>
 
       {(priorRounds.length > 0 || round.followUpPrompt) ? (
-        <div className="mt-3 rounded-[18px] bg-white p-4">
+        <div className={`mt-3 ${QUIET_PANEL_CLASS}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">Earlier rounds</p>
+              <p className={SURFACE_EYEBROW_CLASS}>Earlier rounds</p>
               <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{priorRoundLabel}</p>
             </div>
             {priorRounds.length > 0 ? (
@@ -263,62 +269,62 @@ export function ChallengeRound({
           {showWhyNow ? 'Hide why this challenge' : 'Why this challenge'}
         </button>
         {showWhyNow ? (
-          <div className="mt-3 rounded-[18px] bg-white p-4">
-          <p className="text-sm leading-6 text-[var(--muted-ink)]">{round.why}</p>
-          <div className="rounded-[16px] bg-[var(--panel)] p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Argument as explanation</p>
-            <div className="mt-3 space-y-2">
-              <p className="text-sm leading-6 text-[var(--ink)]">
-                <span className="font-medium">Premise:</span> {round.argument.premise}
-              </p>
-              <p className="text-sm leading-6 text-[var(--ink)]">
-                <span className="font-medium">Assumption:</span> {round.argument.assumption}
-              </p>
-              <p className="text-sm leading-6 text-[var(--ink)]">
-                <span className="font-medium">Pressure:</span> {round.argument.pressure}
-              </p>
-              <p className="text-sm leading-6 text-[var(--ink)]">
-                <span className="font-medium">Precedent:</span> {round.argument.precedent}
-              </p>
-              <p className="text-sm leading-6 text-[var(--ink)]">
-                <span className="font-medium">Shape:</span> {round.argument.shape}
-              </p>
-              <p className="text-sm leading-6 text-[var(--ink)]">
-                <span className="font-medium">Conclusion:</span> {round.argument.conclusion}
-              </p>
-              <p className="text-sm leading-6 text-[var(--ink)]">
-                <span className="font-medium">Steel man:</span> {round.steelMan}
-              </p>
+          <div className={`mt-3 ${QUIET_PANEL_CLASS}`}>
+            <p className="text-sm leading-6 text-[var(--muted-ink)]">{round.why}</p>
+            <div className={`mt-3 ${INSET_PANEL_CLASS}`}>
+              <p className={SURFACE_EYEBROW_CLASS}>Argument as explanation</p>
+              <div className="mt-3 space-y-2">
+                <p className="text-sm leading-6 text-[var(--ink)]">
+                  <span className="font-medium">Premise:</span> {round.argument.premise}
+                </p>
+                <p className="text-sm leading-6 text-[var(--ink)]">
+                  <span className="font-medium">Assumption:</span> {round.argument.assumption}
+                </p>
+                <p className="text-sm leading-6 text-[var(--ink)]">
+                  <span className="font-medium">Pressure:</span> {round.argument.pressure}
+                </p>
+                <p className="text-sm leading-6 text-[var(--ink)]">
+                  <span className="font-medium">Precedent:</span> {round.argument.precedent}
+                </p>
+                <p className="text-sm leading-6 text-[var(--ink)]">
+                  <span className="font-medium">Shape:</span> {round.argument.shape}
+                </p>
+                <p className="text-sm leading-6 text-[var(--ink)]">
+                  <span className="font-medium">Conclusion:</span> {round.argument.conclusion}
+                </p>
+                <p className="text-sm leading-6 text-[var(--ink)]">
+                  <span className="font-medium">Steel man:</span> {round.steelMan}
+                </p>
+              </div>
             </div>
-          </div>
-          {round.responseClassification ? (
-            <div className="rounded-[16px] bg-[#f7f2ff] p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-[#5c4c88]">Structured reading</p>
-              <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
-                Penny read this response as <span className="font-medium">{formatClassification(round.responseClassification.type)}</span>
-                {round.responseClassification.classifiedBy === 'user_explicit' ? ' from your explicit path choice.' : ' by inference from the text.'}
-              </p>
-              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
-                Confidence at start {formatPercentValue(round.confidenceAtRoundStart)} · end {formatPercentValue(round.confidenceAtRoundEnd)}
-                · delta {round.confidenceDelta >= 0 ? '+' : ''}
-                {formatPercentValue(round.confidenceDelta)}
-              </p>
-              {round.concessions.length || round.defenses.length || round.dismissals.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {round.concessions.length ? <BadgeChip label={`${round.concessions.length} concessions`} /> : null}
-                  {round.defenses.length ? <BadgeChip label={`${round.defenses.length} defenses`} /> : null}
-                  {round.dismissals.length ? <BadgeChip label={`${round.dismissals.length} dismissals`} /> : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+            {round.responseClassification ? (
+              <div className="mt-3 rounded-[18px] border border-[#d9d0ee] bg-[#f7f2ff] p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-[#5c4c88]">Structured reading</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                  Penny read this response as <span className="font-medium">{formatClassification(round.responseClassification.type)}</span>
+                  {round.responseClassification.classifiedBy === 'user_explicit' ? ' from your explicit path choice.' : ' by inference from the text.'}
+                </p>
+                <p className={`mt-2 ${SURFACE_EYEBROW_CLASS}`}>
+                  Confidence at start {formatPercentValue(round.confidenceAtRoundStart)} · end {formatPercentValue(round.confidenceAtRoundEnd)}
+                  · delta {round.confidenceDelta >= 0 ? '+' : ''}
+                  {formatPercentValue(round.confidenceDelta)}
+                </p>
+                {round.concessions.length || round.defenses.length || round.dismissals.length ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {round.concessions.length ? <BadgeChip label={`${round.concessions.length} concessions`} /> : null}
+                    {round.defenses.length ? <BadgeChip label={`${round.defenses.length} defenses`} /> : null}
+                    {round.dismissals.length ? <BadgeChip label={`${round.dismissals.length} dismissals`} /> : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
 
       {hasCompletedResponse ? (
-        <div className="mt-4 rounded-[20px] border border-black/8 bg-white p-4">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[18px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--muted-ink)]">
+        <div className={`mt-4 ${QUIET_PANEL_CLASS}`}>
+          <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${INSET_PANEL_CLASS} text-sm leading-6 text-[var(--muted-ink)]`}>
             <span>
               Confidence: {formatPercentValue(round.confidenceAtRoundStart)} → {formatPercentValue(confidenceAtRoundEnd)}
             </span>
@@ -334,8 +340,8 @@ export function ChallengeRound({
           </div>
 
           {bestNextMove ? (
-            <div className="mt-4 rounded-[20px] border border-[#c7d8f8] bg-[#eef4ff] p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-[#45607a]">Best next move</p>
+            <div className="mt-4 rounded-[20px] border border-[#c7d8f8] bg-[#eef4ff] p-5 shadow-[0_10px_24px_rgba(69,96,122,0.08)]">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-[#45607a]">Best next move</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--ink)]">{bestNextMove.primary.label}</span>
                 {bestNextMove.signalLabel ? (
@@ -373,24 +379,24 @@ export function ChallengeRound({
                   ))}
               </div>
               {nextMoveFeedback ? (
-                <p className="mt-3 text-sm leading-6 text-[#2f6d47]">{nextMoveFeedback}</p>
+                <p className={SUCCESS_NOTICE_CLASS}>{nextMoveFeedback}</p>
               ) : null}
               {nextMoveError ? (
-                <p className="mt-3 rounded-[16px] border border-[#d8b2aa] bg-[#fff1ef] px-3 py-2 text-sm leading-6 text-[#8b3d2f]">
+                <p className={ERROR_NOTICE_CLASS}>
                   {nextMoveError}
                 </p>
               ) : null}
             </div>
           ) : null}
 
-          <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Saved response</p>
+          <div className={`mt-4 ${INSET_PANEL_CLASS}`}>
+            <p className={SURFACE_EYEBROW_CLASS}>Saved response</p>
             <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{completedRound?.userResponse ?? trimmedResponse}</p>
           </div>
         </div>
       ) : isRoundOpen ? (
         <form onSubmit={handleSubmitResponse} className="mt-4 space-y-4">
-          <div className="rounded-[18px] border border-black/8 bg-white p-4">
+          <div className={QUIET_PANEL_CLASS}>
             <div className="flex items-center justify-between gap-3">
               <div>
                 <label htmlFor={`round-response-${round.round}`} className="text-sm font-medium text-[var(--ink)]">
@@ -414,7 +420,7 @@ export function ChallengeRound({
               maxLength={3000}
             />
             {submitError ? (
-              <p className="mt-3 rounded-[16px] border border-[#d8b2aa] bg-[#fff1ef] px-3 py-2 text-sm leading-6 text-[#8b3d2f]">
+              <p className={ERROR_NOTICE_CLASS}>
                 {submitError}
               </p>
             ) : null}
@@ -433,10 +439,10 @@ export function ChallengeRound({
             </div>
           </div>
 
-          <div className="rounded-[18px] border border-black/8 bg-white p-4">
+          <div className={QUIET_PANEL_CLASS}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Round context</p>
+                <p className={SURFACE_EYEBROW_CLASS}>Round context</p>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
                   Keep the response primary. Add confidence and evidence notes only if they matter.
                 </p>
@@ -577,7 +583,7 @@ function PriorRoundSummary({ round }: { round: ChallengeRoundModel }) {
 }
 
 function BadgeChip({ label }: { label: string }) {
-  return <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{label}</span>
+  return <span className="rounded-full bg-white px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--ink)]">{label}</span>
 }
 
 function formatClassification(type: string): string {
