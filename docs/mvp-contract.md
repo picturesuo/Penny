@@ -176,3 +176,169 @@ This document is the durable parking lot for ideas that matter but should not dr
 
 - Earlier repo language treated the MVP as a broader capture, challenge, learn, and artifact system. For the next ship window, this contract narrows the visible product to the claim challenge loop.
 - Earlier repo language also treated `/dashboard` and `/app` inconsistently. The live code makes `/dashboard` an alias of `/app`, and this contract follows the code.
+
+## Step 2 UI Cut List
+
+This section translates the frozen MVP path into an explicit UI sorting rule for the current app.
+
+Every visible route, panel, nav item, card, and CTA should fall into one of four buckets:
+
+- Keep visible now
+- Demote but keep accessible
+- Hide for MVP
+- Park for later in the parking lot above
+
+### Current Scope
+
+This cut list is for the current signed-in path:
+
+- `src/app/app/page.tsx`
+- `src/components/penny/home-dashboard.tsx`
+- `src/components/penny/nav.tsx`
+- `src/app/app/maps/[id]/page.tsx`
+- `src/components/penny/map-workspace.tsx`
+- `src/components/penny/thought-map-workspace.tsx`
+- `src/components/penny/challenge-round.tsx`
+
+### Keep Visible Now
+
+- `src/components/penny/nav.tsx`
+  Keep the `Penny` home link, `Maps`, and `New map`.
+
+- `src/components/penny/home-dashboard.tsx`
+  Keep the `Start with a claim` hero, the `Open latest map` CTA, the empty-state `Create your first map` CTA, and the recent maps grid.
+
+- `src/components/penny/map-workspace.tsx`
+  Keep the map title and the `ClaimCaptureLauncher`.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Keep `Outline view` as the default working mode.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Keep the active claim selection flow and the claim card `Challenge` action.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Keep the live steel-man checkpoint because it is already part of the challenge loop contract.
+
+- `src/components/penny/challenge-round.tsx`
+  Keep the challenge round card, response-path selection, confidence capture, submit state, and the completed-round state.
+
+- `src/components/penny/challenge-round.tsx`
+  Keep visible claim context and the saved prior-round / audit-trail payoff after submission.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Keep explicit persistence success and failure states around challenge round submission.
+
+### Demote But Keep Accessible
+
+- `src/components/penny/nav.tsx`
+  Demote `Settings` out of the primary action row. It should stay reachable, but not read as a co-equal task with opening a map.
+
+- `src/components/penny/map-workspace.tsx`
+  Demote the claim-count and artifact-count badges. They are context, not the job.
+
+- `src/components/penny/map-workspace.tsx`
+  Demote the `Latest artifact` card below the core map-opening action or collapse it behind a secondary section.
+
+- `src/components/penny/challenge-round.tsx`
+  Demote `Why this challenge` and the deeper argument/provenance reading behind disclosure, which the current component already supports.
+
+- `src/components/penny/challenge-round.tsx`
+  Demote the expanded prior-round detail behind the current expander instead of letting history dominate first-pass attention.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Demote `Graph view` and keep `Outline view` primary. The graph should remain a structural aid, not a co-equal starting mode.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Demote the graph-side `Knowledge card`, score highlights, structural health, dependency health, evidence quality, and revisit trigger controls behind the graph path rather than the default path.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Demote critique feedback and optional summaries so they appear after a round, not before the user knows what to do.
+
+### Hide For MVP
+
+- `src/components/penny/nav.tsx`
+  Hide the primary-nav `Search` button from the default action row.
+
+- `src/components/penny/nav.tsx`
+  Hide `QuickCapture` from the primary row. It competes with `New map` and opening an existing map.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Hide the founder-brief section headed `Turn the map into a decision artifact.`
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Hide the `Generate founder brief`, `Move to Vault`, and `Export` CTAs from the main map flow.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Hide `ArtifactBuilder` from the core workspace path.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Hide `DocumentImport` from the main challenge path.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Hide `VaultModal` and `ExportModal` entrypoints from the main challenge path.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Hide the session gate, session start, and session close flow from the MVP surface unless they are strictly required to unlock the workspace.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Hide the lens, shape, and meta-cognition explanation surfaces, including `Lens freshness`, `Move query lens`, `Shape callout`, and related teaching panels.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Hide deep history and theory panels such as `Timeline views`, `Old selves`, `Belief archaeology`, `Belief genealogy`, `Source/session audit`, `Claim dependency graph`, and `Aging foundations monitor`.
+
+- `src/components/penny/thought-map-workspace.tsx`
+  Hide secondary system panels such as `Challenge-skill calibration`, broad revisit tooling, and other optional analysis surfaces that make the user ask whether they should do that first.
+
+- `src/app/app/search/page.tsx`
+  Hide search as an advertised primary route during MVP stabilization.
+
+- `src/app/app/velocity/page.tsx`
+  Hide the velocity dashboard from the main path.
+
+- `src/app/app/session/[id]/page.tsx`
+  Hide session workspace entry as a first-class route in the signed-in journey.
+
+### Park For Later
+
+These stay preserved in the parking lot above rather than remaining loud in the product shell.
+
+- Park search recovery as a `Next After MVP` support workflow rather than a primary nav destination.
+
+- Park founder brief, artifact generation, export, and vault under `Needs Backend First` or `Next After MVP`, depending on whether the next ship window still centers the challenge loop.
+
+- Park lens, shape, precedent, and meta-cognition explanation layers under `Future Years / Big Bets` and `Needs UX Rethink`.
+
+- Park session-first and multi-mode workflows under `Needs UX Rethink` until the single map workspace is clearly insufficient.
+
+- Park broad dashboard expansion, velocity surfaces, and extra home panels under `Hidden For MVP` until the home screen no longer needs to fight for hierarchy.
+
+### Immediate Cut Order
+
+1. Remove duplicate or competing entrypoints from attention.
+   That means `/app` stays primary, while `/dashboard`, search, sessions, and other side routes stop reading like equal starting places.
+
+2. Remove future-facing panels from the map workspace.
+   Founder brief, artifact generation, vault, export, and import should stop sitting beside the challenge loop.
+
+3. Collapse secondary context.
+   Graph-heavy inspection, provenance reading, and deeper history stay available, but they move behind view toggles, disclosure, or lower-priority placement.
+
+4. Remove action competition.
+   In nav and above the fold, `Open latest map`, `New map`, and `Challenge` should clearly outrank everything else.
+
+5. Strip explanatory product theory from the signed-in path.
+   The user should not need to parse Penny's long-term philosophy before running one round.
+
+### The Main-Screen Test
+
+After this cut, the signed-in product should answer three questions immediately:
+
+- Where am I?
+  In a claim-centered map workspace.
+
+- What should I do next?
+  Open a map or challenge the active claim.
+
+- Did it work?
+  The round submission either appears in the saved audit trail or shows a clear failure state.
