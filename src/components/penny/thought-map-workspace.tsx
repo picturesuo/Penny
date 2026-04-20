@@ -74,7 +74,7 @@ import { classifyCalibrationDomain } from "@/lib/calibration";
 import { evaluateMetaCognitionTrigger, type MetaCognitionPromptSnapshot } from "@/lib/meta-cognition";
 import { generateLearningPrompt, type LearningPromptOutput, type LearningPromptClaim, type LearningPromptRound } from "@/lib/learning-prompts";
 import { generateSessionSummary } from "@/lib/session-summary";
-import { buildRevisitQueue } from "@/lib/revisit-scheduler";
+import { buildRevisitPatternFeedback, buildRevisitQueue } from "@/lib/revisit-scheduler";
 import type { VaultContentPayload } from "@/lib/vault";
 import { cn } from "@/lib/utils";
 import { CritiqueFeedback as CritiqueFeedbackCard } from "@/components/penny/critique-feedback";
@@ -2027,6 +2027,7 @@ export function ThoughtMapWorkspace({
     : null;
   const claimRepairSuggestions = useMemo(() => buildClaimRepairSuggestions(map), [map]);
   const dailyRevisitQueue = useMemo(() => buildRevisitQueue(map), [map]);
+  const revisitPatternFeedback = useMemo(() => buildRevisitPatternFeedback([map]), [map]);
   const selectedRevisitTriggerDraft = selectedGraphNode?.node.id
     ? revisitTriggerDrafts[selectedGraphNode.node.id] ?? {
         triggerType: "manual_flag" as const,
@@ -4014,7 +4015,17 @@ export function ThoughtMapWorkspace({
 
   function recordRevisitAction(
     claimId: string,
-    type: "reviewed_no_change" | "confidence_updated" | "claim_updated" | "claim_retired" | "snoozed" | "triggered_repair" | "triggered_dialectic",
+    type:
+      | "reviewed_no_change"
+      | "claim_held_up"
+      | "claim_changed"
+      | "claim_failed"
+      | "confidence_updated"
+      | "claim_updated"
+      | "claim_retired"
+      | "snoozed"
+      | "triggered_repair"
+      | "triggered_dialectic",
   ) {
     const draft = revisitTriggerDrafts[claimId] ?? null;
     const triggerDefinition = draft
@@ -7184,8 +7195,17 @@ export function ThoughtMapWorkspace({
 
             <RevisitQueue
               items={dailyRevisitQueue}
+              patternFeedback={revisitPatternFeedback}
               onOpenClaim={(claimId) => setSelectedGraphNodeId(claimId)}
-              onReviewNoChange={(claimId) => recordRevisitAction(claimId, "reviewed_no_change")}
+              onMarkHeldUp={(claimId) => recordRevisitAction(claimId, "claim_held_up")}
+              onMarkChanged={(claimId) => {
+                recordRevisitAction(claimId, "claim_changed")
+                setSelectedGraphNodeId(claimId)
+              }}
+              onMarkFailed={(claimId) => {
+                recordRevisitAction(claimId, "claim_failed")
+                setSelectedGraphNodeId(claimId)
+              }}
               onSnooze={(claimId) => recordRevisitAction(claimId, "snoozed")}
             />
 
@@ -7895,10 +7915,42 @@ export function ThoughtMapWorkspace({
                             className="gap-2"
                             variant="secondary"
                             disabled={!selectedGraphNode}
-                            onClick={() => (selectedGraphNode?.node.id ? recordRevisitAction(selectedGraphNode.node.id, "reviewed_no_change") : null)}
+                            onClick={() => (selectedGraphNode?.node.id ? recordRevisitAction(selectedGraphNode.node.id, "claim_held_up") : null)}
                           >
                             <CircleDot className="size-4" />
-                            Still accurate
+                            Held up
+                          </Button>
+                          <Button
+                            className="gap-2"
+                            variant="secondary"
+                            disabled={!selectedGraphNode}
+                            onClick={() =>
+                              selectedGraphNode?.node.id
+                                ? (() => {
+                                    recordRevisitAction(selectedGraphNode.node.id, "claim_changed");
+                                    setSelectedGraphNodeId(selectedGraphNode.node.id);
+                                  })()
+                                : null
+                            }
+                          >
+                            <ArrowRightLeft className="size-4" />
+                            Changed
+                          </Button>
+                          <Button
+                            className="gap-2"
+                            variant="secondary"
+                            disabled={!selectedGraphNode}
+                            onClick={() =>
+                              selectedGraphNode?.node.id
+                                ? (() => {
+                                    recordRevisitAction(selectedGraphNode.node.id, "claim_failed");
+                                    setSelectedGraphNodeId(selectedGraphNode.node.id);
+                                  })()
+                                : null
+                            }
+                          >
+                            <AlertCircle className="size-4" />
+                            Failed
                           </Button>
                           <Button
                             className="gap-2"
