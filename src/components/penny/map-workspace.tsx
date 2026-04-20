@@ -109,40 +109,43 @@ export function MapWorkspace({
 
   if (focusIntent === "capture") {
     return (
-      <div className="space-y-6" data-user-id={userId}>
+      <div className="space-y-4" data-user-id={userId}>
         <IntentShellHeader
           intent="capture"
-          title="Capture first. Leave the rest of the workspace quiet."
-          body="Add a claim directly into the map or import source material before you open the broader workspace."
+          title="Capture first."
+          body="Add one claim, import source material, or save a quick note before you reopen the rest of the workspace."
           selectedClaim={selectedClaim}
           onOpenFullWorkspace={() => setShowFullWorkspace(true)}
         />
 
-        <Card className="overflow-hidden border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f7f1e8_100%)] p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <Card className="overflow-hidden border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f7f1e8_100%)] p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge>
                   {capturePanel === "claim" ? "Type into Brain" : capturePanel === "import" ? "Paste or import" : "Quick note"}
                 </Badge>
                 <Badge className="bg-white text-[var(--ink)]">{map.title}</Badge>
+                <Badge className="bg-white text-[var(--ink)]">
+                  {initialClaims.length} claim{initialClaims.length === 1 ? "" : "s"}
+                </Badge>
               </div>
-              <h2 className="mt-4 text-3xl font-semibold text-[var(--ink)]">
+              <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)] sm:text-[1.9rem]">
                 {capturePanel === "claim"
                   ? "Make one new claim visible."
                   : capturePanel === "import"
                     ? "Pull source material into the map first."
                     : "Save the thought before you decide what it is."}
               </h2>
-              <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-ink)]">
                 {capturePanel === "claim"
-                  ? "Start with the smallest version of the thought worth keeping in Brain, then let the map grow around it later."
+                  ? "Start with the smallest version of the thought worth keeping, then let the map grow around it later."
                   : capturePanel === "import"
-                    ? "Extract candidate claims from a URL, pasted text, or a document before you reopen the rest of the workspace."
-                    : "Use quick note when the thought is too raw for a claim or source import but still worth catching now."}
+                    ? "Extract candidate claims from a URL, pasted text, or a document before you reopen the broader workspace."
+                    : "Use quick note when the thought is too raw for a claim or import but still worth catching now."}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 lg:max-w-sm lg:justify-end">
               <Button
                 className="gap-2"
                 variant={capturePanel === "claim" ? "primary" : "secondary"}
@@ -167,15 +170,19 @@ export function MapWorkspace({
             </div>
           </div>
 
-          <div className="mt-5 rounded-[22px] border border-black/8 bg-white/80 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Map in view</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{map.title}</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-              {initialClaims.length} captured claim{initialClaims.length === 1 ? "" : "s"} so far.
-            </p>
+          <div className="mt-4 rounded-[20px] border border-black/8 bg-white/84 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Map in view</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--ink)]">{map.title}</p>
+              </div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                {initialClaims.length} captured claim{initialClaims.length === 1 ? "" : "s"}
+              </p>
+            </div>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-4">
             {capturePanel === "claim" ? (
               <ClaimCaptureLauncher mapId={map.id} availableClaims={claimOptions} />
             ) : capturePanel === "import" ? (
@@ -215,18 +222,18 @@ export function MapWorkspace({
 
   if (focusIntent === "challenge" || focusIntent === "learn") {
     return (
-      <div className="space-y-6" data-user-id={userId}>
+      <div className="space-y-4" data-user-id={userId}>
         <IntentShellHeader
           intent={focusIntent}
           title={
             focusIntent === "challenge"
-              ? "Challenge one claim before the rest of the workspace competes for attention."
-              : "Learn in context before you reopen the wider map."
+              ? "Challenge one claim."
+              : "Learn in context."
           }
           body={
             focusIntent === "challenge"
-              ? "Stay on the selected claim, finish the steel-man and round flow, then open the full workspace only if you need broader context."
-              : "Stay on the selected claim, use the teach-back lane first, then reopen the full workspace when the concept is clear enough to continue."
+              ? "Stay on the selected claim, finish the steel-man and round flow, then reopen the broader workspace only if you need it."
+              : "Stay on the selected claim, use the teach-back lane first, then reopen the broader workspace if you need more context."
           }
           selectedClaim={selectedClaim}
           question={launchState?.question ?? null}
@@ -305,41 +312,44 @@ function IntentShellHeader({
   const label = intent === "capture" ? "Capture mode" : intent === "challenge" ? "Challenge mode" : "Learn mode";
 
   return (
-    <Card className="overflow-hidden border-black/8 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(242,235,225,0.96))] p-6 sm:p-8">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-3xl">
+    <Card className="overflow-hidden border-black/8 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(242,235,225,0.96))] p-4 sm:p-5">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{label}</Badge>
             {selectedClaim ? <Badge className="bg-[#e7defa] text-[#5c4c88]">claim selected</Badge> : null}
           </div>
-          <div className="mt-4 flex items-center gap-3">
-            <span className="rounded-full bg-[var(--panel)] p-2 text-[var(--ink)]">
-              <Icon className="size-4" />
-            </span>
-            <h1 className="text-3xl font-semibold text-[var(--ink)] sm:text-4xl">{title}</h1>
-          </div>
-          <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">{body}</p>
-          {question?.trim() ? (
-            <div className="mt-4 rounded-[22px] border border-black/8 bg-white/78 px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Question in view</p>
-              <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{question.trim()}</p>
-            </div>
-          ) : null}
-          <div className="mt-5">
-            <Button variant="secondary" className="gap-2" onClick={onOpenFullWorkspace}>
-              <Layers3 className="size-4" />
-              Open full workspace
-            </Button>
-          </div>
+          <Button variant="secondary" className="gap-2 px-3 py-2 text-xs" onClick={onOpenFullWorkspace}>
+            <Layers3 className="size-4" />
+            Open full workspace
+          </Button>
         </div>
-        <div className="rounded-[24px] border border-black/8 bg-white/75 p-4 lg:max-w-sm">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Current focus</p>
-          <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{selectedClaim?.content ?? "No claim selected yet."}</p>
-          {selectedClaim ? (
-            <p className="mt-3 text-xs leading-5 text-[var(--muted-ink)]">
-              The focused shell keeps this claim primary until you decide to reopen the broader workspace.
-            </p>
-          ) : null}
+
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-[var(--panel)] p-2 text-[var(--ink)]">
+                <Icon className="size-4" />
+              </span>
+              <h1 className="text-2xl font-semibold text-[var(--ink)] sm:text-[1.9rem]">{title}</h1>
+            </div>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-ink)]">{body}</p>
+            {question?.trim() ? (
+              <div className="mt-3 rounded-[18px] border border-black/8 bg-white/78 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Question in view</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--ink)]">{question.trim()}</p>
+              </div>
+            ) : null}
+          </div>
+          <div className="rounded-[20px] border border-black/8 bg-white/78 p-4 lg:max-w-sm">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Current focus</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedClaim?.content ?? "No claim selected yet."}</p>
+            {selectedClaim ? (
+              <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">
+                This shell keeps the active claim in front until you explicitly reopen the broader workspace.
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
     </Card>
