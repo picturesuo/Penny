@@ -1404,6 +1404,7 @@ export function ThoughtMapWorkspace({
   const [critiqueCorrectionDrafts, setCritiqueCorrectionDrafts] = useState<Record<string, string>>({});
   const [propagationAcknowledged, setPropagationAcknowledged] = useState<Record<string, string>>({});
   const [dialecticResponseDrafts, setDialecticResponseDrafts] = useState<Record<string, string>>({});
+  const [dialecticSubmissionAttempts, setDialecticSubmissionAttempts] = useState<Record<string, number>>({});
   const [dialecticRoundContextDrafts, setDialecticRoundContextDrafts] = useState<
     Record<
       string,
@@ -3776,11 +3777,29 @@ export function ThoughtMapWorkspace({
       throw new Error("Response must be at least 10 characters.");
     }
 
+    const claimId = selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null;
+    const attemptNumber = (dialecticSubmissionAttempts[params.round] ?? 0) + 1;
+
+    setDialecticSubmissionAttempts((current) => ({
+      ...current,
+      [params.round]: attemptNumber,
+    }));
+
+    void track(
+      {
+        event: "challenge_submission_attempted",
+        properties: {
+          claimId: claimId ?? "unknown",
+          roundNumber: params.roundIndex + 1,
+          attemptNumber,
+        },
+      },
+      map.userId,
+    );
+
     await new Promise<void>((resolve, reject) => {
       startTransition(() => {
         void (async () => {
-          const claimId = selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null;
-
           void track(
             {
               event: "challenge_started",
@@ -3871,8 +3890,29 @@ export function ThoughtMapWorkspace({
               delete next[params.round];
               return next;
             });
+            setDialecticSubmissionAttempts((current) => {
+              if (!(params.round in current)) {
+                return current;
+              }
+
+              const next = { ...current };
+              delete next[params.round];
+              return next;
+            });
             resolve();
           } catch (error) {
+            void track(
+              {
+                event: "challenge_submission_failed",
+                properties: {
+                  claimId: claimId ?? "unknown",
+                  roundNumber: params.roundIndex + 1,
+                  attemptNumber,
+                  reason: error instanceof Error ? error.message : "unknown_error",
+                },
+              },
+              map.userId,
+            );
             reject(error instanceof Error ? error : new Error("Failed to persist challenge round."));
           }
         })();
