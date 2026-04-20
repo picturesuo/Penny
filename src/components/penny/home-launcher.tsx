@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Brain, FileUp, GraduationCap, Sparkles, Swords } from "lucide-react";
+import { ArrowRight, Brain, GraduationCap, Sparkles, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -24,6 +24,7 @@ export type HomeLauncherMapSummary = {
 };
 
 type LauncherIntent = "capture" | "challenge" | "learn";
+type CaptureInputMode = "type" | "import" | "quick";
 
 type DraftState = {
   text: string;
@@ -91,7 +92,15 @@ const INTENT_COPY: Record<
   },
 };
 
-export function HomeLauncher({ maps }: { maps: HomeLauncherMapSummary[] }) {
+export function HomeLauncher({
+  maps,
+  initialIntent,
+  initialCaptureMode = "type",
+}: {
+  maps: HomeLauncherMapSummary[];
+  initialIntent?: LauncherIntent;
+  initialCaptureMode?: CaptureInputMode;
+}) {
   const router = useRouter();
   const recentMaps = maps.slice(0, 3);
   const recentClaims = useMemo(
@@ -103,7 +112,8 @@ export function HomeLauncher({ maps }: { maps: HomeLauncherMapSummary[] }) {
   );
   const latestMap = maps[0] ?? null;
   const defaultIntent: LauncherIntent = recentClaims.length ? "challenge" : "capture";
-  const [activeIntent, setActiveIntent] = useState<LauncherIntent>(defaultIntent);
+  const [activeIntent, setActiveIntent] = useState<LauncherIntent>(initialIntent ?? defaultIntent);
+  const [captureInputMode, setCaptureInputMode] = useState<CaptureInputMode>(initialCaptureMode);
   const [captureDraft, setCaptureDraft] = useState<DraftState>({ text: "", selectedClaimId: null });
   const [challengeDraft, setChallengeDraft] = useState<DraftState>({ text: "", selectedClaimId: null });
   const [learnDraft, setLearnDraft] = useState<DraftState>({ text: "", selectedClaimId: null });
@@ -111,6 +121,7 @@ export function HomeLauncher({ maps }: { maps: HomeLauncherMapSummary[] }) {
   const [showLearnClaims, setShowLearnClaims] = useState(false);
   const [submittingIntent, setSubmittingIntent] = useState<LauncherIntent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [captureFeedback, setCaptureFeedback] = useState<string | null>(null);
 
   const activeCopy = INTENT_COPY[activeIntent];
   const ActiveIcon = activeCopy.icon;
@@ -181,48 +192,66 @@ export function HomeLauncher({ maps }: { maps: HomeLauncherMapSummary[] }) {
 
   async function handlePrimaryAction() {
     setError(null);
+    setCaptureFeedback(null);
     setSubmittingIntent(activeIntent);
 
     try {
       if (activeIntent === "capture") {
-        await createMapAndOpen({ rawThought: captureDraft.text });
-        return;
-      }
+        if (captureInputMode === "type") {
+          await createMapAndOpen({ rawThought: captureDraft.text });
+        } else if (captureInputMode === "import") {
+          if (!latestMap) {
+            throw new Error("Create one map first so Penny has somewhere to import into.");
+          }
 
-      if (activeIntent === "challenge") {
+          router.push(`/maps/${latestMap.id}?launcher=capture&openImport=1`);
+        } else {
+          const trimmed = captureDraft.text.trim();
+          if (!trimmed) {
+            throw new Error("Write the quick note before you save it.");
+          }
+
+          const response = await fetch("/api/quick-capture", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              rawText: trimmed,
+              captureSource: "web_shortcut",
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Penny could not save this quick note right now.");
+          }
+
+          setCaptureDraft((current) => ({ ...current, text: "" }));
+          setCaptureFeedback("Quick note saved.");
+        }
+      } else if (activeIntent === "challenge") {
         if (challengeDraft.selectedClaimId) {
           routeToExistingClaim("challenge", challengeDraft.selectedClaimId);
-          return;
+        } else {
+          await createMapAndOpen({ rawThought: challengeDraft.text, launcher: "challenge" });
         }
-
-        await createMapAndOpen({ rawThought: challengeDraft.text, launcher: "challenge" });
-        return;
-      }
-
-      if (learnDraft.selectedClaimId) {
+      } else if (learnDraft.selectedClaimId) {
         routeToExistingClaim("learn", learnDraft.selectedClaimId, learnDraft.text);
-        return;
+      } else {
+        await createMapAndOpen({ rawThought: learnDraft.text, launcher: "learn", question: learnDraft.text });
       }
-
-      await createMapAndOpen({ rawThought: learnDraft.text, launcher: "learn", question: learnDraft.text });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Something went wrong.");
+    } finally {
       setSubmittingIntent(null);
-      return;
     }
-
-    setSubmittingIntent(null);
   }
 
   function handleSecondaryAction() {
     setError(null);
+    setCaptureFeedback(null);
 
     if (activeIntent === "capture") {
-      if (!latestMap) {
-        return;
-      }
-
-      router.push(`/maps/${latestMap.id}?launcher=capture&openImport=1`);
       return;
     }
 
@@ -247,7 +276,10 @@ export function HomeLauncher({ maps }: { maps: HomeLauncherMapSummary[] }) {
   const currentDraft = activeDraft();
   const primaryDisabled =
     submittingIntent != null ||
-    (activeIntent === "capture" && currentDraft.text.trim().length < 12) ||
+    (activeIntent === "capture" &&
+      ((captureInputMode === "type" && currentDraft.text.trim().length < 12) ||
+        (captureInputMode === "quick" && currentDraft.text.trim().length < 1) ||
+        (captureInputMode === "import" && !latestMap))) ||
     (activeIntent === "challenge" && !challengeDraft.selectedClaimId && currentDraft.text.trim().length < 12) ||
     (activeIntent === "learn" && currentDraft.text.trim().length < 12);
 
@@ -283,6 +315,7 @@ export function HomeLauncher({ maps }: { maps: HomeLauncherMapSummary[] }) {
                 onClick={() => {
                   setActiveIntent(intent);
                   setError(null);
+                  setCaptureFeedback(null);
                 }}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -313,7 +346,11 @@ export function HomeLauncher({ maps }: { maps: HomeLauncherMapSummary[] }) {
                 <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Right now</p>
                 <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
                   {activeIntent === "capture"
-                    ? "Turn one rough thought into a live map."
+                    ? captureInputMode === "type"
+                      ? "Turn one rough thought into a live map."
+                      : captureInputMode === "import"
+                        ? "Open Penny’s importer without leaving the capture system."
+                        : "Save the fleeting note first, then decide what it becomes later."
                     : activeIntent === "challenge"
                       ? "Put one claim under pressure without opening the whole product first."
                       : "Open the learning scaffold beside a real claim instead of leaving the work."}
@@ -323,27 +360,75 @@ export function HomeLauncher({ maps }: { maps: HomeLauncherMapSummary[] }) {
 
             <div className="p-6">
               <div className="space-y-4">
+                {activeIntent === "capture" ? (
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      ["type", "Type into Brain"],
+                      ["import", "Paste or import"],
+                      ["quick", "Quick note"],
+                    ] as const).map(([mode, label]) => (
+                      <Button
+                        key={mode}
+                        type="button"
+                        variant={captureInputMode === mode ? "primary" : "secondary"}
+                        className="gap-2"
+                        onClick={() => {
+                          setCaptureInputMode(mode);
+                          setError(null);
+                          setCaptureFeedback(null);
+                        }}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
                 <label className="block">
                   <span className="text-sm font-medium text-[var(--ink)]">
-                    {activeIntent === "capture" ? "New material" : activeIntent === "challenge" ? "Claim in view" : "Learning question"}
+                    {activeIntent === "capture"
+                      ? captureInputMode === "type"
+                        ? "New material"
+                        : captureInputMode === "import"
+                          ? "Paste or import"
+                          : "Quick note"
+                      : activeIntent === "challenge"
+                        ? "Claim in view"
+                        : "Learning question"}
                   </span>
-                  <textarea
-                    className="mt-3 min-h-[132px] w-full rounded-[24px] border border-black/10 bg-white px-4 py-4 text-sm leading-7 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
-                    placeholder={activeCopy.placeholder}
-                    value={currentDraft.text}
-                    onChange={(event) => {
-                      const nextText = event.target.value;
-                      if (activeIntent === "capture") {
-                        setCaptureDraft((current) => ({ ...current, text: nextText }));
-                        return;
+                  {activeIntent === "capture" && captureInputMode === "import" ? (
+                    <div className="mt-3 rounded-[24px] border border-black/10 bg-white px-4 py-4">
+                      <p className="text-sm leading-7 text-[var(--ink)]">
+                        Route into Penny’s importer so you can paste source text, add a URL, or upload a document without choosing a separate product surface first.
+                      </p>
+                      <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                        {latestMap
+                          ? `Import will open inside ${latestMap.title}.`
+                          : "Create one map first so Penny has somewhere to place the imported material."}
+                      </p>
+                    </div>
+                  ) : (
+                    <textarea
+                      className="mt-3 min-h-[132px] w-full rounded-[24px] border border-black/10 bg-white px-4 py-4 text-sm leading-7 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                      placeholder={
+                        activeIntent === "capture" && captureInputMode === "quick"
+                          ? "Capture the quick note, fragment, or fleeting thought you do not want to lose..."
+                          : activeCopy.placeholder
                       }
-                      if (activeIntent === "challenge") {
-                        setChallengeDraft({ text: nextText, selectedClaimId: null });
-                        return;
-                      }
-                      setLearnDraft((current) => ({ ...current, text: nextText }));
-                    }}
-                  />
+                      value={currentDraft.text}
+                      onChange={(event) => {
+                        const nextText = event.target.value;
+                        if (activeIntent === "capture") {
+                          setCaptureDraft((current) => ({ ...current, text: nextText }));
+                          return;
+                        }
+                        if (activeIntent === "challenge") {
+                          setChallengeDraft({ text: nextText, selectedClaimId: null });
+                          return;
+                        }
+                        setLearnDraft((current) => ({ ...current, text: nextText }));
+                      }}
+                    />
+                  )}
                 </label>
 
                 {activeIntent === "challenge" ? (
@@ -379,30 +464,52 @@ export function HomeLauncher({ maps }: { maps: HomeLauncherMapSummary[] }) {
                 {error ? (
                   <div className="rounded-[18px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm text-[#8b3d2f]">{error}</div>
                 ) : null}
+                {captureFeedback && activeIntent === "capture" ? (
+                  <div className="rounded-[18px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm text-[#2f6d47]">{captureFeedback}</div>
+                ) : null}
 
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                   <div className="flex flex-wrap gap-2">
                     <Button className="gap-2" onClick={handlePrimaryAction} disabled={primaryDisabled}>
                       {submittingIntent === activeIntent ? (
-                        submittingIntent === "capture" ? "Adding..." : submittingIntent === "challenge" ? "Starting..." : "Opening..."
+                        submittingIntent === "capture"
+                          ? captureInputMode === "quick"
+                            ? "Saving..."
+                            : captureInputMode === "import"
+                              ? "Opening..."
+                              : "Adding..."
+                          : submittingIntent === "challenge"
+                            ? "Starting..."
+                            : "Opening..."
                       ) : (
-                        activeCopy.primaryLabel
+                        activeIntent === "capture"
+                          ? captureInputMode === "quick"
+                            ? "Save quick note"
+                            : captureInputMode === "import"
+                              ? "Open importer"
+                              : activeCopy.primaryLabel
+                          : activeCopy.primaryLabel
                       )}
                     </Button>
-                    {activeCopy.secondaryLabel ? (
+                    {activeCopy.secondaryLabel && activeIntent !== "capture" ? (
                       <Button
                         variant="secondary"
                         className="gap-2"
                         onClick={handleSecondaryAction}
-                        disabled={activeIntent === "capture" && !latestMap}
                       >
-                        {activeIntent === "capture" ? <FileUp className="size-4" /> : <Sparkles className="size-4" />}
+                        <Sparkles className="size-4" />
                         {activeCopy.secondaryLabel}
                       </Button>
                     ) : null}
                   </div>
                   <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
-                    {activeIntent === "challenge" && challengeDraft.selectedClaimId
+                    {activeIntent === "capture"
+                      ? captureInputMode === "type"
+                        ? "Type into Brain"
+                        : captureInputMode === "import"
+                          ? "Paste or import"
+                          : "Quick note"
+                      : activeIntent === "challenge" && challengeDraft.selectedClaimId
                       ? "Existing claim selected"
                       : activeIntent === "learn" && learnDraft.selectedClaimId
                         ? "Claim-tied learning"
