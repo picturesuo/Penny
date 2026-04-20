@@ -53,21 +53,47 @@ export function FounderBriefCard({ brief }: { brief: FounderBriefModel }) {
         <DependencyHealthBar health={brief.dependencyHealth} />
       </div>
 
-      <div className="grid gap-6 px-6 py-6 text-sm leading-7 text-[var(--ink)] lg:grid-cols-2">
-        <Section title="Idea summary" content={brief.ideaSummary} />
-        <Section title="Target user" content={brief.targetUser} />
-        <Section title="Core claim" content={brief.coreClaim} />
-        <ListSection title="Load-bearing claims" items={brief.loadBearingClaims.map((claim) => claim.claimText)} />
-        <ListSection title="Key assumptions" items={brief.keyAssumptions} />
-        <ListSection title="Strongest counterarguments" items={brief.strongestCounterarguments} />
-        <OrderedSection title="Next 3 validation steps" items={brief.nextValidationSteps} />
-        <Section title="Stakes level" content={brief.stakesLevel} />
-        <Section title="Pre-mortem" content={brief.preMortem} />
-        <Section title="If you were right" content={brief.ifYouWereRight} />
-        <Section title="Twin-check" content={brief.twinCheck} />
-        <Section title="Dependency completeness" content={brief.dependencyCompleteness} />
+      <div className="grid gap-5 px-6 py-6 lg:grid-cols-3">
+        <BriefGroup title="Core frame" description="The shortest useful orientation for the brief.">
+          <Section title="Idea summary" content={brief.ideaSummary} />
+          <Section title="Target user" content={brief.targetUser} />
+          <Section title="Core claim" content={brief.coreClaim} />
+          <Section title="Stakes level" content={brief.stakesLevel} />
+        </BriefGroup>
+
+        <BriefGroup title="Pressure points" description="The load-bearing risk surface to keep in view.">
+          <ListSection title="Load-bearing claims" items={brief.loadBearingClaims.map((claim) => claim.claimText)} />
+          <ListSection title="Key assumptions" items={brief.keyAssumptions} />
+          <ListSection title="Strongest counterarguments" items={brief.strongestCounterarguments} />
+          <Section title="Pre-mortem" content={brief.preMortem} />
+        </BriefGroup>
+
+        <BriefGroup title="Next moves" description="What to test next if the brief is meant to drive action.">
+          <OrderedSection title="Next 3 validation steps" items={brief.nextValidationSteps} />
+          <Section title="If you were right" content={brief.ifYouWereRight} />
+          <Section title="Twin-check" content={brief.twinCheck} />
+          <Section title="Dependency completeness" content={brief.dependencyCompleteness} />
+        </BriefGroup>
       </div>
     </Card>
+  );
+}
+
+function BriefGroup({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[28px] border border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f7f1e8_100%)] p-5 shadow-[0_14px_34px_rgba(34,39,46,0.05)]">
+      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{description}</p>
+      <div className="mt-5 space-y-5 text-sm leading-7 text-[var(--ink)]">{children}</div>
+    </div>
   );
 }
 
@@ -75,7 +101,7 @@ function Section({ title, content }: { title: string; content: string }) {
   return (
     <div>
       <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{title}</p>
-      <p className="mt-2">{content}</p>
+      <p className="mt-2 text-sm leading-7 text-[var(--ink)]">{content}</p>
     </div>
   );
 }
@@ -84,9 +110,9 @@ function ListSection({ title, items }: { title: string; items: string[] }) {
   return (
     <div>
       <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{title}</p>
-      <div className="mt-2 space-y-2">
+      <div className="mt-3 space-y-2">
         {items.map((item) => (
-          <p key={item} className="rounded-[20px] bg-[var(--panel)] px-4 py-3">
+          <p key={item} className="rounded-[18px] border border-black/8 bg-white px-4 py-3 text-sm leading-6">
             {item}
           </p>
         ))}
@@ -99,11 +125,14 @@ function OrderedSection({ title, items }: { title: string; items: string[] }) {
   return (
     <div>
       <p className="text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">{title}</p>
-      <div className="mt-2 space-y-2">
+      <div className="mt-3 space-y-2">
         {items.map((item, index) => (
-          <p key={item} className="rounded-[20px] bg-[var(--panel)] px-4 py-3">
-            <span className="font-medium">{index + 1}.</span> {item}
-          </p>
+          <div key={item} className="flex gap-3 rounded-[18px] border border-black/8 bg-white px-4 py-3">
+            <span className="mt-0.5 inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[var(--panel)] px-2 text-xs font-medium text-[var(--ink)]">
+              {index + 1}
+            </span>
+            <p className="text-sm leading-6 text-[var(--ink)]">{item}</p>
+          </div>
         ))}
       </div>
     </div>
