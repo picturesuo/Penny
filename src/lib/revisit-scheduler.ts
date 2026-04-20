@@ -1,9 +1,17 @@
-import type { RevisitAction, RevisitLeitnerBox, RevisitPriority, RevisitReason, RevisitSchedule, TriggerDefinition, ThoughtMapModel, ThoughtNodeModel } from "@/types/thought-map";
+import { derivePennyShapes } from "@/lib/penny-insights";
+import type { RevisitAction, RevisitLeitnerBox, RevisitPriority, RevisitReason, RevisitSchedule, TriggerDefinition, ThoughtMapEvent, ThoughtMapModel, ThoughtNodeModel } from "@/types/thought-map";
 
 export interface RevisitQueueItem {
   schedule: RevisitSchedule;
   claim: ThoughtNodeModel;
   worldChangePrompt: string;
+}
+
+export interface RevisitPatternFeedback {
+  id: string;
+  label: string;
+  summary: string;
+  evidence: string;
 }
 
 export interface RevisitTriggerInput {
@@ -267,6 +275,122 @@ export function buildRevisitQueue(map: ThoughtMapModel, limit = 5, now = new Dat
     .filter((item): item is RevisitQueueItem => item !== null)
     .sort((a, b) => priorityWeight(b.schedule.priority) - priorityWeight(a.schedule.priority) || a.schedule.scheduledFor.getTime() - b.schedule.scheduledFor.getTime())
     .slice(0, limit);
+}
+
+function dialecticEventsForMaps(maps: ThoughtMapModel[]) {
+  return maps.flatMap((map) =>
+    map.events
+      .filter((event) => event.eventType === "dialectic_round")
+      .map((event) => ({ map, event })),
+  );
+}
+
+function revisitActionEventsForMaps(maps: ThoughtMapModel[]) {
+  return maps.flatMap((map) =>
+    map.events
+      .filter((event) => event.eventType === "revisit_action")
+      .map((event) => ({ map, event })),
+  );
+}
+
+function readRoundNumber(event: ThoughtMapEvent) {
+  return typeof event.payload?.round === "string" ? String(event.payload.round) : "round";
+}
+
+export function buildRevisitPatternFeedback(maps: ThoughtMapModel[]): RevisitPatternFeedback | null {
+  if (!maps.length) {
+    return null;
+  }
+
+  const dialecticEvents = dialecticEventsForMaps(maps);
+  const weakEvidenceDefenses = dialecticEvents.filter(({ map, event }) => {
+    const node = map.nodes.find((candidate) => candidate.id === event.nodeId);
+    const responsePath = typeof event.payload?.responsePath === "string" ? String(event.payload.responsePath) : "";
+    const startConfidence =
+      typeof event.payload?.dialecticRound === "object" &&
+      event.payload?.dialecticRound &&
+      typeof (event.payload.dialecticRound as Record<string, unknown>).confidenceAtRoundStart === "number"
+        ? Number((event.payload.dialecticRound as Record<string, unknown>).confidenceAtRoundStart)
+        : 0;
+
+    return responsePath === "defend" && startConfidence >= 75 && (node?.scores?.evidence ?? 1) < 0.55;
+  });
+
+  if (weakEvidenceDefenses.length >= 2) {
+    const latest = weakEvidenceDefenses.slice(-3).map(({ event }) => readRoundNumber(event)).join(" · ");
+    return {
+      id: "defend_high_confidence_weak_evidence",
+      label: "Defense pattern",
+      summary: "You defend high-confidence claims even when evidence is weak.",
+      evidence: `${weakEvidenceDefenses.length} recent rounds fit this pattern. Latest: ${latest}.`,
+    };
+  }
+
+  const dependencyRevisions = dialecticEvents.filter(({ event }) => {
+    const critiqueTypes = Array.isArray(event.payload?.critiqueFailureTypes)
+      ? event.payload.critiqueFailureTypes.map((value) => String(value).toLowerCase())
+      : [];
+    const roundPayload =
+      event.payload?.dialecticRound && typeof event.payload.dialecticRound === "object"
+        ? (event.payload.dialecticRound as Record<string, unknown>)
+        : null;
+    const confidenceDelta =
+      roundPayload && typeof roundPayload.confidenceDelta === "number" ? Math.abs(Number(roundPayload.confidenceDelta)) : 0;
+    const responsePath = typeof event.payload?.responsePath === "string" ? String(event.payload.responsePath) : "";
+
+    return critiqueTypes.some((value) => value.includes("dependency")) && confidenceDelta >= 8 && responsePath !== "defend";
+  });
+
+  if (dependencyRevisions.length >= 2) {
+    const averageDelta =
+      dependencyRevisions.reduce((sum, { event }) => {
+        const roundPayload =
+          event.payload?.dialecticRound && typeof event.payload.dialecticRound === "object"
+            ? (event.payload.dialecticRound as Record<string, unknown>)
+            : null;
+        return sum + Math.abs(typeof roundPayload?.confidenceDelta === "number" ? Number(roundPayload.confidenceDelta) : 0);
+      }, 0) / dependencyRevisions.length;
+
+    return {
+      id: "dependency_critiques_drive_revisions",
+      label: "Dependency revision pattern",
+      summary: "Your biggest revisions happen when critiques target dependencies.",
+      evidence: `${dependencyRevisions.length} dependency-focused rounds moved confidence by an average of ${Math.round(averageDelta)} points.`,
+    };
+  }
+
+  const revisitEvents = revisitActionEventsForMaps(maps);
+  const changeHeavyRevisits = revisitEvents.filter(({ event }) => {
+    const type = typeof event.payload?.type === "string" ? String(event.payload.type) : "";
+    return type === "claim_updated" || type === "claim_retired";
+  });
+  const heldUpRevisits = revisitEvents.filter(({ event }) => {
+    const type = typeof event.payload?.type === "string" ? String(event.payload.type) : "";
+    return type === "reviewed_no_change";
+  });
+
+  if (changeHeavyRevisits.length >= 2 && changeHeavyRevisits.length > heldUpRevisits.length) {
+    return {
+      id: "revisits_find_change",
+      label: "Revisit drift pattern",
+      summary: "When old claims resurface, you usually find they changed more than they held up.",
+      evidence: `${changeHeavyRevisits.length} revisit outcomes marked changed or failed versus ${heldUpRevisits.length} held-up outcomes.`,
+    };
+  }
+
+  const fallbackShape = derivePennyShapes(maps.flatMap((map) => map.nodes))
+    .sort((left, right) => right.confidence - left.confidence)[0] ?? null;
+
+  if (!fallbackShape) {
+    return null;
+  }
+
+  return {
+    id: fallbackShape.id,
+    label: fallbackShape.label,
+    summary: fallbackShape.explanation,
+    evidence: `${fallbackShape.evidenceNodeIds.length} claim${fallbackShape.evidenceNodeIds.length === 1 ? "" : "s"} in the current archive reinforce this pattern.`,
+  };
 }
 
 export function computeRevisitSchedulesForMap(map: ThoughtMapModel, now = new Date()) {
