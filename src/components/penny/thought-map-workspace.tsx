@@ -1407,6 +1407,8 @@ export function ThoughtMapWorkspace({
   const [selectedCritiqueType, setSelectedCritiqueType] = useState<CritiqueFailureType>("weak evidence");
   const [openedCritiqueFeedbackRoundIds, setOpenedCritiqueFeedbackRoundIds] = useState<Record<string, boolean>>({});
   const [hiddenCritiqueFeedbackRoundIds, setHiddenCritiqueFeedbackRoundIds] = useState<Record<string, boolean>>({});
+  const [focusedLearnDetailOpen, setFocusedLearnDetailOpen] = useState(false);
+  const [focusedChallengeHistoryOpen, setFocusedChallengeHistoryOpen] = useState(false);
   const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
     collectShapeFeedback(normalizeMap(initialMap).events),
   );
@@ -2081,6 +2083,16 @@ export function ThoughtMapWorkspace({
       };
     });
   }, [currentTeachBackDraft, currentTeachBackNodeId, normalizedInitialLearningQuestion, selectedGraphNode?.node]);
+  useEffect(() => {
+    if (focusIntent !== "learn") {
+      setFocusedLearnDetailOpen(false);
+      return;
+    }
+
+    if (currentTeachBackAttempts.length > 0 || currentTeachBackDraft.trim().length > 0) {
+      setFocusedLearnDetailOpen(true);
+    }
+  }, [currentTeachBackAttempts.length, currentTeachBackDraft, focusIntent]);
   const handleTeachBackCheck = () => {
     if (!currentTeachBackNodeId) {
       return;
@@ -2287,6 +2299,16 @@ export function ThoughtMapWorkspace({
       }),
     [critiqueQualityProfile, displayedBiasProfile, lens, map, selectedGraphNode?.node],
   );
+  useEffect(() => {
+    if (focusIntent !== "challenge") {
+      setFocusedChallengeHistoryOpen(false);
+      return;
+    }
+
+    if (dialecticRoundEvents.length > 0) {
+      setFocusedChallengeHistoryOpen(true);
+    }
+  }, [dialecticRoundEvents.length, focusIntent]);
   const personalizedCritiqueDisclosure = personalizedCritiqueContext
     ? generatePersonalizationDisclosure({
         knowledgeDepth: personalizedCritiqueContext.knowledgeDepth,
@@ -4727,19 +4749,19 @@ export function ThoughtMapWorkspace({
             ) : null}
           </div>
           <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-4 lg:max-w-sm">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Gap detection</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {selectedKnowledgeSurface.teachBackGap.length ? (
-                selectedKnowledgeSurface.teachBackGap.map((gap) => (
-                  <Badge key={gap} className="bg-[#fff6ed] text-[#8b4d1f]">
-                    {gap}
-                  </Badge>
-                ))
-              ) : (
-                <Badge className="bg-[#d9ead8] text-[#355b32]">No obvious gap</Badge>
-              )}
-            </div>
-            <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{selectedKnowledgeSurface.reviewPrompt}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Quiet context</p>
+            <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
+              {selectedKnowledgeSurface.teachBackGap.length
+                ? `Watch for ${selectedKnowledgeSurface.teachBackGap.join(", ")} while you explain.`
+                : "Explain the concept plainly in this claim before Penny opens the deeper diagnostics."}
+            </p>
+            <button
+              type="button"
+              className="mt-4 text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-ink)]"
+              onClick={() => setFocusedLearnDetailOpen((current) => !current)}
+            >
+              {focusedLearnDetailOpen ? "Hide learning detail" : "Show learning detail"}
+            </button>
           </div>
         </div>
 
@@ -4803,30 +4825,34 @@ export function ThoughtMapWorkspace({
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-[24px] border border-black/8 bg-white p-5">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Your text, annotated</p>
-                <div className="mt-3 rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-7 text-[var(--ink)]">
-                  {highlightTeachBackResponse(currentTeachBackDraft, currentTeachBackAnalysis.annotations)}
-                </div>
-              </div>
+              {focusedLearnDetailOpen ? (
+                <>
+                  <div className="rounded-[24px] border border-black/8 bg-white p-5">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Your text, annotated</p>
+                    <div className="mt-3 rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-7 text-[var(--ink)]">
+                      {highlightTeachBackResponse(currentTeachBackDraft, currentTeachBackAnalysis.annotations)}
+                    </div>
+                  </div>
 
-              <div className="rounded-[24px] border border-black/8 bg-white p-5">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What Penny sees</p>
-                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.summary}</p>
-                <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.whyItMatters}</p>
-                <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Correction</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.correction}</p>
-                <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Restate with the correction</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.restatementPrompt}</p>
-              </div>
+                  <div className="rounded-[24px] border border-black/8 bg-white p-5">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What Penny sees</p>
+                    <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.summary}</p>
+                    <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.whyItMatters}</p>
+                    <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Correction</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.correction}</p>
+                    <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Restate with the correction</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.restatementPrompt}</p>
+                  </div>
 
-              {learningPrompts[0] ? (
-                <div className="rounded-[24px] border border-black/8 bg-white p-5">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{learningPrompts[0].label}</p>
-                  <h3 className="mt-2 text-lg font-semibold text-[var(--ink)]">{learningPrompts[0].title}</h3>
-                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{learningPrompts[0].body}</p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{learningPrompts[0].helper}</p>
-                </div>
+                  {learningPrompts[0] ? (
+                    <div className="rounded-[24px] border border-black/8 bg-white p-5">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{learningPrompts[0].label}</p>
+                      <h3 className="mt-2 text-lg font-semibold text-[var(--ink)]">{learningPrompts[0].title}</h3>
+                      <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{learningPrompts[0].body}</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{learningPrompts[0].helper}</p>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </div>
           </div>
@@ -4839,7 +4865,7 @@ export function ThoughtMapWorkspace({
     </div>
   );
   const challengeRoundsPanel = (
-    <Card className="p-6">
+    <Card id="challenge-lane" className="scroll-mt-28 p-6">
       <div className="flex flex-wrap items-center gap-2">
         <Badge>Dialectic rounds</Badge>
         <Badge className="bg-[#e7defa] text-[#5c4c88]">round-tracked</Badge>
@@ -5100,108 +5126,101 @@ export function ThoughtMapWorkspace({
           );
         })}
       </div>
-      <div className="mt-4 rounded-[24px] border border-black/8 bg-white p-5">
-        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Round audit trail</p>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-          Each persisted round keeps the critique strength, response path, and reasoning note together so the thread can be audited instead of reconstructed from memory.
-        </p>
-        <div className="mt-4 space-y-3">
-          {dialecticRoundEvents.length ? (
-            dialecticRoundEvents.map((entry) => (
-              <div key={entry.id} className="rounded-[20px] bg-[var(--panel)] p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="bg-white text-[var(--ink)]">{entry.round}</Badge>
-                  <Badge className="bg-[#e7defa] text-[#5c4c88]">{entry.critiqueStrength}</Badge>
-                  {entry.critiqueType ? <Badge className="bg-white text-[var(--ink)]">{entry.critiqueType}</Badge> : null}
-                  {entry.responsePath ? <Badge className="bg-[#d9ead8] text-[#355b32]">{entry.responsePath}</Badge> : null}
-                </div>
-                <p className="mt-3 text-sm font-medium text-[var(--ink)]">{entry.title}</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{entry.prompt}</p>
-                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{entry.why}</p>
-                <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{entry.response}</p>
-                {entry.dialecticRound ? (
-                  <div className="mt-3 rounded-[16px] bg-white p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge className="bg-[var(--panel)] text-[var(--ink)]">
-                        {entry.dialecticRound.responseClassification.type}
-                      </Badge>
-                      <Badge className="bg-[var(--panel)] text-[var(--ink)]">
-                        {formatPercentValue(entry.dialecticRound.confidenceAtRoundStart)} → {formatPercentValue(entry.dialecticRound.confidenceAtRoundEnd)}
-                      </Badge>
-                      <Badge className="bg-[var(--panel)] text-[var(--ink)]">
-                        engagement {Math.round(entry.dialecticRound.engagementScore)}
-                      </Badge>
-                    </div>
-                    {entry.dialecticRound.followUpPrompt ? (
-                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-                        <span className="font-medium text-[var(--ink)]">Follow-up:</span> {entry.dialecticRound.followUpPrompt}
-                      </p>
-                    ) : null}
-                    {entry.dialecticRound.concessions.length ||
-                    entry.dialecticRound.defenses.length ||
-                    entry.dialecticRound.dismissals.length ? (
-                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
-                        {entry.dialecticRound.concessions.length ? `${entry.dialecticRound.concessions.length} concessions` : null}
-                        {entry.dialecticRound.concessions.length &&
-                        (entry.dialecticRound.defenses.length || entry.dialecticRound.dismissals.length)
-                          ? " · "
-                          : null}
-                        {entry.dialecticRound.defenses.length ? `${entry.dialecticRound.defenses.length} defenses` : null}
-                        {(entry.dialecticRound.concessions.length || entry.dialecticRound.defenses.length) &&
-                        entry.dialecticRound.dismissals.length
-                          ? " · "
-                          : null}
-                        {entry.dialecticRound.dismissals.length ? `${entry.dialecticRound.dismissals.length} dismissals` : null}
-                      </p>
-                    ) : null}
+      {(focusIntent !== "challenge" || focusedChallengeHistoryOpen || dialecticRoundEvents.length === 0) ? (
+        <div className="mt-4 rounded-[24px] border border-black/8 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Round audit trail</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Each persisted round keeps the critique strength, response path, and reasoning note together so the thread can be audited instead of reconstructed from memory.
+              </p>
+            </div>
+            {focusIntent === "challenge" && dialecticRoundEvents.length > 0 ? (
+              <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => setFocusedChallengeHistoryOpen(false)}>
+                Hide history
+              </Button>
+            ) : null}
+          </div>
+          <div className="mt-4 space-y-3">
+            {dialecticRoundEvents.length ? (
+              dialecticRoundEvents.map((entry) => (
+                <div key={entry.id} className="rounded-[20px] bg-[var(--panel)] p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="bg-white text-[var(--ink)]">{entry.round}</Badge>
+                    <Badge className="bg-[#e7defa] text-[#5c4c88]">{entry.critiqueStrength}</Badge>
+                    {entry.critiqueType ? <Badge className="bg-white text-[var(--ink)]">{entry.critiqueType}</Badge> : null}
+                    {entry.responsePath ? <Badge className="bg-[#d9ead8] text-[#355b32]">{entry.responsePath}</Badge> : null}
                   </div>
-                ) : null}
-              </div>
-            ))
-          ) : (
-            <p className="rounded-[20px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
-              No round audit has been persisted yet.
-            </p>
-          )}
+                  <p className="mt-3 text-sm font-medium text-[var(--ink)]">{entry.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{entry.prompt}</p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{entry.why}</p>
+                  <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{entry.response}</p>
+                  {entry.dialecticRound ? (
+                    <div className="mt-3 rounded-[16px] bg-white p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                          {entry.dialecticRound.responseClassification.type}
+                        </Badge>
+                        <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                          {formatPercentValue(entry.dialecticRound.confidenceAtRoundStart)} → {formatPercentValue(entry.dialecticRound.confidenceAtRoundEnd)}
+                        </Badge>
+                        <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                          engagement {Math.round(entry.dialecticRound.engagementScore)}
+                        </Badge>
+                      </div>
+                      {entry.dialecticRound.followUpPrompt ? (
+                        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                          <span className="font-medium text-[var(--ink)]">Follow-up:</span> {entry.dialecticRound.followUpPrompt}
+                        </p>
+                      ) : null}
+                      {entry.dialecticRound.concessions.length ||
+                      entry.dialecticRound.defenses.length ||
+                      entry.dialecticRound.dismissals.length ? (
+                        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                          {entry.dialecticRound.concessions.length ? `${entry.dialecticRound.concessions.length} concessions` : null}
+                          {entry.dialecticRound.concessions.length &&
+                          (entry.dialecticRound.defenses.length || entry.dialecticRound.dismissals.length)
+                            ? " · "
+                            : null}
+                          {entry.dialecticRound.defenses.length ? `${entry.dialecticRound.defenses.length} defenses` : null}
+                          {(entry.dialecticRound.concessions.length || entry.dialecticRound.defenses.length) &&
+                          entry.dialecticRound.dismissals.length
+                            ? " · "
+                            : null}
+                          {entry.dialecticRound.dismissals.length ? `${entry.dialecticRound.dismissals.length} dismissals` : null}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <p className="rounded-[20px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+                No round audit has been persisted yet.
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="mt-4 rounded-[24px] border border-black/8 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Round history</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Keep the saved audit trail quiet until you need it.
+              </p>
+            </div>
+            <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => setFocusedChallengeHistoryOpen(true)}>
+              Show history
+            </Button>
+          </div>
+        </div>
+      )}
     </Card>
   );
   const challengeFocusWorkspace = (
     <div className="space-y-6">
       {focusedClaimCard}
-      <Card id="challenge-lane" className="scroll-mt-28 p-6 sm:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge>Challenge lane</Badge>
-              <Badge className="bg-[#e7defa] text-[#5c4c88]">{selectedCritiqueStrength.label}</Badge>
-              <Badge
-                className={
-                  challengeSkill.direction === "increase challenge"
-                    ? "bg-[#d9ead8] text-[#355b32]"
-                    : challengeSkill.direction === "reduce challenge"
-                      ? "bg-[#fff6ed] text-[#8b4d1f]"
-                      : "bg-white text-[var(--ink)]"
-                }
-              >
-                {challengeSkill.label}
-              </Badge>
-            </div>
-            <h2 className="mt-4 text-3xl font-semibold text-[var(--ink)]">Steel-man first, then run the next challenge round.</h2>
-            <p className="mt-3 text-base leading-7 text-[var(--muted-ink)]">
-              The selected claim stays fixed while Penny sharpens the strongest version, then records each response in the saved audit trail.
-            </p>
-          </div>
-          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-4 lg:max-w-sm">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Round posture</p>
-            <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{challengeSkill.note}</p>
-            <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
-              {map.recommendedNextMove?.headline ?? "Keep the round specific to the active claim instead of reopening the whole map."}
-            </p>
-          </div>
-        </div>
-      </Card>
       {challengeRoundsPanel}
       {challengeFollowUpPanel}
     </div>
