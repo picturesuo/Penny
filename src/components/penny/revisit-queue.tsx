@@ -3,12 +3,15 @@
 import { AlarmClock, Clock3, RotateCcw, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { RevisitQueueItem } from "@/lib/revisit-scheduler";
+import type { RevisitPatternFeedback, RevisitQueueItem } from "@/lib/revisit-scheduler";
 
 export interface RevisitQueueProps {
   items: RevisitQueueItem[];
+  patternFeedback?: RevisitPatternFeedback | null;
   onOpenClaim?: (claimId: string) => void;
-  onReviewNoChange?: (claimId: string) => void;
+  onMarkHeldUp?: (claimId: string) => void;
+  onMarkChanged?: (claimId: string) => void;
+  onMarkFailed?: (claimId: string) => void;
   onSnooze?: (claimId: string) => void;
 }
 
@@ -36,7 +39,15 @@ function priorityLabel(priority: RevisitQueueItem["schedule"]["priority"]) {
   }
 }
 
-export function RevisitQueue({ items, onOpenClaim, onReviewNoChange, onSnooze }: RevisitQueueProps) {
+export function RevisitQueue({
+  items,
+  patternFeedback = null,
+  onOpenClaim,
+  onMarkHeldUp,
+  onMarkChanged,
+  onMarkFailed,
+  onSnooze,
+}: RevisitQueueProps) {
   if (!items.length) {
     return (
       <div className="rounded-[24px] border border-black/8 bg-white p-5">
@@ -49,6 +60,8 @@ export function RevisitQueue({ items, onOpenClaim, onReviewNoChange, onSnooze }:
     );
   }
 
+  const actionsVisible = Boolean(onMarkHeldUp || onMarkChanged || onMarkFailed || onOpenClaim || onSnooze);
+
   return (
     <div className="rounded-[24px] border border-black/8 bg-white p-5">
       <div className="flex items-center justify-between gap-3">
@@ -58,6 +71,13 @@ export function RevisitQueue({ items, onOpenClaim, onReviewNoChange, onSnooze }:
         </div>
         <Badge className="bg-[#d9ead8] text-[#355b32]">{items.length}</Badge>
       </div>
+      {patternFeedback ? (
+        <div className="mt-4 rounded-[18px] border border-[#d7c06c] bg-[#fff9df] p-4">
+          <p className="text-xs uppercase tracking-[0.18em] text-[#6f5612]">Visible pattern</p>
+          <p className="mt-2 text-sm font-medium leading-6 text-[#5a460d]">{patternFeedback.summary}</p>
+          <p className="mt-2 text-sm leading-6 text-[#6f5612]">{patternFeedback.evidence}</p>
+        </div>
+      ) : null}
       <div className="mt-4 space-y-3">
         {items.map((item) => (
           <div key={item.schedule.id} className="rounded-[18px] bg-[var(--panel)] p-4">
@@ -75,20 +95,40 @@ export function RevisitQueue({ items, onOpenClaim, onReviewNoChange, onSnooze }:
               </span>
               <span>Scheduled for {item.schedule.scheduledFor.toLocaleDateString()}</span>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button className="gap-2" variant="secondary" onClick={() => onReviewNoChange?.(item.claim.id)}>
-                <RotateCcw className="size-4" />
-                Still accurate
-              </Button>
-              <Button className="gap-2" variant="secondary" onClick={() => onOpenClaim?.(item.claim.id)}>
-                <ArrowRight className="size-4" />
-                Let me update this
-              </Button>
-              <Button className="gap-2" variant="secondary" onClick={() => onSnooze?.(item.claim.id)}>
-                <AlarmClock className="size-4" />
-                Snooze 7 days
-              </Button>
-            </div>
+            {actionsVisible ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {onMarkHeldUp ? (
+                  <Button className="gap-2" variant="secondary" onClick={() => onMarkHeldUp(item.claim.id)}>
+                    <RotateCcw className="size-4" />
+                    Held up
+                  </Button>
+                ) : null}
+                {onMarkChanged ? (
+                  <Button className="gap-2" variant="secondary" onClick={() => onMarkChanged(item.claim.id)}>
+                    <ArrowRight className="size-4" />
+                    Changed
+                  </Button>
+                ) : null}
+                {onMarkFailed ? (
+                  <Button className="gap-2" variant="secondary" onClick={() => onMarkFailed(item.claim.id)}>
+                    <ArrowRight className="size-4" />
+                    Failed
+                  </Button>
+                ) : null}
+                {onOpenClaim ? (
+                  <Button className="gap-2" variant="secondary" onClick={() => onOpenClaim(item.claim.id)}>
+                    <ArrowRight className="size-4" />
+                    Open claim
+                  </Button>
+                ) : null}
+                {onSnooze ? (
+                  <Button className="gap-2" variant="secondary" onClick={() => onSnooze(item.claim.id)}>
+                    <AlarmClock className="size-4" />
+                    Snooze 7 days
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
