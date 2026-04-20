@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, FileText, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, FileText, RotateCcw, Sparkles } from "lucide-react";
 import { ArtifactCard } from "@/components/penny/artifact-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -29,6 +29,10 @@ export function ArtifactBuilder({
   const [isPending, startTransition] = useTransition();
 
   const selectedType = useMemo(() => getArtifactType(artifactTypeId), [artifactTypeId]);
+  const defaultSectionOrder = useMemo(
+    () => selectedType?.template.sections.map((section) => section.id) ?? [],
+    [selectedType],
+  );
   const previousArtifact = useMemo(() => {
     if (!artifact) {
       return null;
@@ -145,40 +149,66 @@ export function ArtifactBuilder({
         />
       </label>
 
-      <div className="mt-4 rounded-[24px] bg-[var(--panel)] p-4">
+      <div className="mt-4 rounded-[28px] border border-black/8 bg-[linear-gradient(180deg,#f5ede2_0%,#efe5d8_100%)] p-4 sm:p-5">
         <div className="flex items-center justify-between gap-4">
-          <p className="text-sm font-medium text-[var(--ink)]">Section order</p>
-          <Sparkles className="size-4 text-[var(--ink)]" />
+          <div>
+            <p className="text-sm font-medium text-[var(--ink)]">Section order</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted-ink)]">Compact the brief before generation instead of scrolling one giant stack.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              className="h-9 rounded-full px-3 text-xs"
+              onClick={() => setSectionOrder(defaultSectionOrder)}
+              disabled={JSON.stringify(sectionOrder) === JSON.stringify(defaultSectionOrder)}
+            >
+              <RotateCcw className="mr-1 size-3.5" />
+              Reset
+            </Button>
+            <Sparkles className="size-4 text-[var(--ink)]" />
+          </div>
         </div>
-        <div className="mt-3 space-y-2">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {sectionOrder.map((sectionId, index) => {
             const section = selectedType?.template.sections.find((entry) => entry.id === sectionId);
 
             return (
-              <div key={sectionId} className="flex items-center justify-between gap-3 rounded-[18px] bg-white px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-[var(--ink)]">{section?.title ?? sectionId}</p>
-                  <p className="text-xs text-[var(--muted-ink)]">{section?.description ?? "Section"}</p>
-                </div>
-                <div className="flex gap-2">
+              <div
+                key={sectionId}
+                className="rounded-[22px] border border-black/8 bg-white/92 p-4 shadow-[0_12px_28px_rgba(34,39,46,0.04)]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-[var(--panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--ink)]">
+                        {index + 1}
+                      </span>
+                      <p className="truncate text-sm font-medium text-[var(--ink)]">{section?.title ?? sectionId}</p>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--muted-ink)]">
+                      {section?.description ?? "Section"}
+                    </p>
+                  </div>
+                  <div className="flex gap-1.5">
                   <Button
                     variant="secondary"
-                    className="h-9 w-9 p-0"
+                    className="h-8 w-8 rounded-full p-0"
                     onClick={() => moveSection(index, -1)}
                     disabled={index === 0}
                     aria-label={`Move ${sectionId} up`}
                   >
-                    <ArrowUp className="size-4" />
+                    <ArrowUp className="size-3.5" />
                   </Button>
                   <Button
                     variant="secondary"
-                    className="h-9 w-9 p-0"
+                    className="h-8 w-8 rounded-full p-0"
                     onClick={() => moveSection(index, 1)}
                     disabled={index === sectionOrder.length - 1}
                     aria-label={`Move ${sectionId} down`}
                   >
-                    <ArrowDown className="size-4" />
+                    <ArrowDown className="size-3.5" />
                   </Button>
+                  </div>
                 </div>
               </div>
             );
