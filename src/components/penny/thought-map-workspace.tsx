@@ -3743,7 +3743,7 @@ export function ThoughtMapWorkspace({
     });
   }
 
-  function recordDialecticRound(params: {
+  async function recordDialecticRound(params: {
     round: string;
     roundIndex: number;
     title: string;
@@ -3773,104 +3773,110 @@ export function ThoughtMapWorkspace({
     };
 
     if (response.length < 10) {
-      return;
+      throw new Error("Response must be at least 10 characters.");
     }
 
-    startTransition(async () => {
-      const claimId = selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null;
+    await new Promise<void>((resolve, reject) => {
+      startTransition(() => {
+        void (async () => {
+          const claimId = selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null;
 
-      void track(
-        {
-          event: "challenge_started",
-          properties: {
-            claimId: claimId ?? "unknown",
-            roundNumber: params.roundIndex + 1,
-          },
-        },
-        map.userId,
-      );
+          void track(
+            {
+              event: "challenge_started",
+              properties: {
+                claimId: claimId ?? "unknown",
+                roundNumber: params.roundIndex + 1,
+              },
+            },
+            map.userId,
+          );
 
-      try {
-        const responsePayload = await fetch(`/api/maps/${map.id}/dialectic-rounds`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-            body: JSON.stringify({
-              nodeId: selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null,
-              round: params.round,
-              roundIndex: params.roundIndex,
-              title: params.title,
-            critiqueStrength: params.critiqueStrength,
-            critiqueType: params.critiqueType ?? null,
-            critiqueFailureTypes: params.critiqueFailureTypes ?? (params.critiqueType ? [params.critiqueType] : []),
-            critiqueMode: params.critiqueMode ?? critiqueMode,
-            voiceLabel: params.voiceLabel ?? (selectedAudienceCritique?.audienceLabel ?? peerAudience),
-              prompt: params.prompt,
-              why: params.why,
-              responsePath: params.responsePath,
+          try {
+            const persistResponse = await fetch(`/api/maps/${map.id}/dialectic-rounds`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                nodeId: selectedGraphNode?.node.id ?? selectedGraphNodeModel?.id ?? null,
+                round: params.round,
+                roundIndex: params.roundIndex,
+                title: params.title,
+                critiqueStrength: params.critiqueStrength,
+                critiqueType: params.critiqueType ?? null,
+                critiqueFailureTypes: params.critiqueFailureTypes ?? (params.critiqueType ? [params.critiqueType] : []),
+                critiqueMode: params.critiqueMode ?? critiqueMode,
+                voiceLabel: params.voiceLabel ?? (selectedAudienceCritique?.audienceLabel ?? peerAudience),
+                prompt: params.prompt,
+                why: params.why,
+                responsePath: params.responsePath,
+                response,
+                roundContext: {
+                  currentConfidence,
+                  confidenceAtRoundEnd: explicitConfidenceEnd ?? roundContext.confidenceAtRoundEnd,
+                  concessionNote: roundContext.concessionNote,
+                  connectedClaimsChanged: roundContext.connectedClaimsChanged,
+                  connectedClaimsNote: roundContext.connectedClaimsNote,
+                  newEvidenceNote: roundContext.newEvidenceNote,
+                },
+              }),
+            });
+
+            if (!persistResponse.ok) {
+              const errorPayload = (await persistResponse.json().catch(() => null)) as { error?: string } | null;
+              throw new Error(errorPayload?.error ?? "Failed to persist challenge round.");
+            }
+
+            const payload = (await persistResponse.json()) as {
+              event: SerializableThoughtMapEvent;
+              round?: SerializableDialecticRound | null;
+              roundContext?: unknown;
+            };
+            mergeDialecticRoundEvent(payload.event);
+            const prompt = buildLearningPromptAfterRound({
               response,
-            roundContext: {
-              currentConfidence,
-              confidenceAtRoundEnd: explicitConfidenceEnd ?? roundContext.confidenceAtRoundEnd,
-              concessionNote: roundContext.concessionNote,
-              connectedClaimsChanged: roundContext.connectedClaimsChanged,
-              connectedClaimsNote: roundContext.connectedClaimsNote,
-              newEvidenceNote: roundContext.newEvidenceNote,
-            },
-          }),
-        });
-
-        if (!responsePayload.ok) {
-          return;
-        }
-
-        const payload = (await responsePayload.json()) as {
-          event: SerializableThoughtMapEvent;
-          round?: SerializableDialecticRound | null;
-          roundContext?: unknown;
-        };
-        mergeDialecticRoundEvent(payload.event);
-        const prompt = buildLearningPromptAfterRound({
-          response,
-          round: payload.round ?? null,
-          critiqueFailureTypes: params.critiqueFailureTypes ?? (params.critiqueType ? [params.critiqueType] : []),
-        });
-        setLearningPrompt(prompt);
-        setLearningPromptRoundId(payload.round?.id ?? null);
-        setLearningPromptDismissed(false);
-        setDialecticResponseDrafts((current) => {
-          const next = { ...current };
-          delete next[params.round];
-          return next;
-        });
-        if (activeSession && !activeSession.endedAt) {
-          void appendSessionEventToServer({
-            sessionId: activeSession.id,
-            eventType: "critique_round",
-            claimId,
-            description: `${params.title}: ${response.slice(0, 160)}`,
-          });
-        }
-        void track(
-          {
-            event: "challenge_completed",
-            properties: {
-              claimId: claimId ?? "unknown",
-              roundNumber: params.roundIndex + 1,
-              engagementScore: Math.min(1, Math.max(0, response.length / 240)),
-            },
-          },
-          map.userId,
-        );
-        setDialecticRoundContextDrafts((current) => {
-          const next = { ...current };
-          delete next[params.round];
-          return next;
-        });
-      } catch {
-        return;
-      }
+              round: payload.round ?? null,
+              critiqueFailureTypes: params.critiqueFailureTypes ?? (params.critiqueType ? [params.critiqueType] : []),
+            });
+            setLearningPrompt(prompt);
+            setLearningPromptRoundId(payload.round?.id ?? null);
+            setLearningPromptDismissed(false);
+            setDialecticResponseDrafts((current) => {
+              const next = { ...current };
+              delete next[params.round];
+              return next;
+            });
+            if (activeSession && !activeSession.endedAt) {
+              void appendSessionEventToServer({
+                sessionId: activeSession.id,
+                eventType: "critique_round",
+                claimId,
+                description: `${params.title}: ${response.slice(0, 160)}`,
+              });
+            }
+            void track(
+              {
+                event: "challenge_completed",
+                properties: {
+                  claimId: claimId ?? "unknown",
+                  roundNumber: params.roundIndex + 1,
+                  engagementScore: Math.min(1, Math.max(0, response.length / 240)),
+                },
+              },
+              map.userId,
+            );
+            setDialecticRoundContextDrafts((current) => {
+              const next = { ...current };
+              delete next[params.round];
+              return next;
+            });
+            resolve();
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error("Failed to persist challenge round."));
+          }
+        })();
+      });
     });
   }
 
