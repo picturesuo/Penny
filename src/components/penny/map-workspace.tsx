@@ -25,6 +25,11 @@ export type MapWorkspaceLaunchState = {
   nextAction?: BestNextMoveKey | null;
 };
 
+const SURFACE_EYEBROW_CLASS = "text-[11px] uppercase tracking-[0.2em] text-[var(--muted-ink)]";
+const QUIET_PANEL_CLASS = "rounded-[20px] border border-black/8 bg-white/84 p-4 shadow-[0_10px_24px_rgba(34,39,46,0.04)]";
+const PANEL_NOTICE_ERROR_CLASS = "mt-3 rounded-[18px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm leading-6 text-[#8b3d2f]";
+const PANEL_NOTICE_SUCCESS_CLASS = "mt-3 rounded-[18px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm leading-6 text-[#2f6d47]";
+
 interface MapWorkspaceProps {
   map: ThoughtMapModel;
   initialClaims: ThoughtNodeModel[];
@@ -99,7 +104,7 @@ export function MapWorkspace({
       }
 
       setQuickCaptureText("");
-      setQuickCaptureFeedback("Quick note saved.")
+      setQuickCaptureFeedback("Quick note saved.");
     } catch (error) {
       setQuickCaptureError(error instanceof Error ? error.message : "Penny could not save this quick note right now.");
     } finally {
@@ -118,7 +123,7 @@ export function MapWorkspace({
           onOpenFullWorkspace={() => setShowFullWorkspace(true)}
         />
 
-        <Card className="overflow-hidden border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f7f1e8_100%)] p-5 sm:p-6">
+        <Card className="overflow-hidden border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f7f1e8_100%)] p-6 shadow-[0_18px_44px_rgba(34,39,46,0.06)] sm:p-7">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
@@ -130,7 +135,7 @@ export function MapWorkspace({
                   {initialClaims.length} claim{initialClaims.length === 1 ? "" : "s"}
                 </Badge>
               </div>
-              <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)] sm:text-[1.9rem]">
+              <h2 className="mt-3 text-[1.75rem] font-semibold leading-[1.15] text-[var(--ink)] sm:text-[1.9rem]">
                 {capturePanel === "claim"
                   ? "Make one new claim visible."
                   : capturePanel === "import"
@@ -170,13 +175,13 @@ export function MapWorkspace({
             </div>
           </div>
 
-          <div className="mt-4 rounded-[20px] border border-black/8 bg-white/84 px-4 py-3">
+          <div className={`mt-4 ${QUIET_PANEL_CLASS}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Map in view</p>
+                <p className={SURFACE_EYEBROW_CLASS}>Map in view</p>
                 <p className="mt-1 text-sm leading-6 text-[var(--ink)]">{map.title}</p>
               </div>
-              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+              <p className={SURFACE_EYEBROW_CLASS}>
                 {initialClaims.length} captured claim{initialClaims.length === 1 ? "" : "s"}
               </p>
             </div>
@@ -190,25 +195,26 @@ export function MapWorkspace({
                 <DocumentImport mapId={map.id} />
               </div>
             ) : (
-              <div className="rounded-[24px] border border-black/8 bg-white p-5">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Quick note</p>
+              <div className="rounded-[24px] border border-black/8 bg-white p-6 shadow-[0_12px_30px_rgba(34,39,46,0.04)]">
+                <p className={SURFACE_EYEBROW_CLASS}>Quick note</p>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
                   Save the fragment first, then decide later whether it should become a claim, source import, or something to revisit.
                 </p>
                 <textarea
-                  className="mt-4 min-h-32 w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                  className="mt-4 min-h-32 w-full rounded-[20px] border border-black/10 bg-[var(--panel)] px-5 py-4 text-sm leading-7 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
                   placeholder="Capture the quick note, fragment, or fleeting thought you do not want to lose..."
                   value={quickCaptureText}
                   onChange={(event) => setQuickCaptureText(event.target.value)}
                 />
                 {quickCaptureError ? (
-                  <p className="mt-3 rounded-[16px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm text-[#8b3d2f]">{quickCaptureError}</p>
+                  <p className={PANEL_NOTICE_ERROR_CLASS}>{quickCaptureError}</p>
                 ) : null}
                 {quickCaptureFeedback ? (
-                  <p className="mt-3 rounded-[16px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm text-[#2f6d47]">{quickCaptureFeedback}</p>
+                  <p className={PANEL_NOTICE_SUCCESS_CLASS}>{quickCaptureFeedback}</p>
                 ) : null}
-                <div className="mt-4">
-                  <Button className="gap-2" disabled={quickCaptureSaving || quickCaptureText.trim().length === 0} onClick={() => void handleQuickCaptureSave()}>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <p className={SURFACE_EYEBROW_CLASS}>One capture path, same workspace.</p>
+                  <Button className="gap-2 px-4 py-2.5" disabled={quickCaptureSaving || quickCaptureText.trim().length === 0} onClick={() => void handleQuickCaptureSave()}>
                     {quickCaptureSaving ? "Saving..." : "Save quick note"}
                   </Button>
                 </div>
@@ -256,10 +262,10 @@ export function MapWorkspace({
 
   return (
     <div className="space-y-6" data-user-id={userId}>
-      <Card className="overflow-hidden p-6">
+      <Card className="overflow-hidden p-6 shadow-[0_18px_44px_rgba(34,39,46,0.06)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Map workspace</p>
+            <p className={SURFACE_EYEBROW_CLASS}>Map workspace</p>
             <h1 className="mt-2 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">{map.title}</h1>
             <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
               Select a claim, start one challenge round, and confirm the saved result in the round history below.
@@ -312,14 +318,14 @@ function IntentShellHeader({
   const label = intent === "capture" ? "Capture mode" : intent === "challenge" ? "Challenge mode" : "Learn mode";
 
   return (
-    <Card className="overflow-hidden border-black/8 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(242,235,225,0.96))] p-4 sm:p-5">
+    <Card className="overflow-hidden border-black/8 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(242,235,225,0.96))] p-5 shadow-[0_16px_40px_rgba(34,39,46,0.05)] sm:p-6">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{label}</Badge>
             {selectedClaim ? <Badge className="bg-[#e7defa] text-[#5c4c88]">claim selected</Badge> : null}
           </div>
-          <Button variant="secondary" className="gap-2 px-3 py-2 text-xs" onClick={onOpenFullWorkspace}>
+          <Button variant="secondary" className="gap-2 px-4 py-2.5 text-xs" onClick={onOpenFullWorkspace}>
             <Layers3 className="size-4" />
             Open full workspace
           </Button>
@@ -331,18 +337,18 @@ function IntentShellHeader({
               <span className="rounded-full bg-[var(--panel)] p-2 text-[var(--ink)]">
                 <Icon className="size-4" />
               </span>
-              <h1 className="text-2xl font-semibold text-[var(--ink)] sm:text-[1.9rem]">{title}</h1>
+              <h1 className="text-[1.75rem] font-semibold leading-[1.15] text-[var(--ink)] sm:text-[1.9rem]">{title}</h1>
             </div>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-ink)]">{body}</p>
             {question?.trim() ? (
-              <div className="mt-3 rounded-[18px] border border-black/8 bg-white/78 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Question in view</p>
+              <div className={`mt-3 ${QUIET_PANEL_CLASS}`}>
+                <p className={SURFACE_EYEBROW_CLASS}>Question in view</p>
                 <p className="mt-1 text-sm leading-6 text-[var(--ink)]">{question.trim()}</p>
               </div>
             ) : null}
           </div>
-          <div className="rounded-[20px] border border-black/8 bg-white/78 p-4 lg:max-w-sm">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Current focus</p>
+          <div className={`lg:max-w-sm ${QUIET_PANEL_CLASS}`}>
+            <p className={SURFACE_EYEBROW_CLASS}>Current focus</p>
             <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedClaim?.content ?? "No claim selected yet."}</p>
             {selectedClaim ? (
               <p className="mt-2 text-xs leading-5 text-[var(--muted-ink)]">
