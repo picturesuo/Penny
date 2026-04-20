@@ -1332,12 +1332,14 @@ export function ThoughtMapWorkspace({
   initialFragments = [],
   availableMaps = [],
   initialSelectedClaimId = null,
+  focusIntent = null,
 }: {
   initialMap: SerializableThoughtMap;
   initialView?: MapView;
   initialFragments?: MarginFragmentModel[];
   availableMaps?: SessionMapOption[];
   initialSelectedClaimId?: string | null;
+  focusIntent?: "challenge" | "learn" | null;
 }) {
   const normalizedInitialMap = normalizeMap(initialMap);
   const [map, setMap] = useState(() => normalizedInitialMap);
@@ -4517,6 +4519,543 @@ export function ThoughtMapWorkspace({
   }
 
   const graphMinimapScale = 0.36;
+  const focusedClaimCard = (
+    <Card id="claim-card" className="scroll-mt-28 p-6 sm:p-8">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-3xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge>{focusIntent === "learn" ? "Claim in focus" : "Selected claim"}</Badge>
+            {selectedGraphNode ? <Badge className={statusBadge(selectedGraphNode.node.nodeStatus)}>{selectedGraphNode.node.nodeStatus}</Badge> : null}
+            {selectedGraphNode ? <Badge>{kindLabel(selectedGraphNode.node.kind)}</Badge> : null}
+            {selectedGraphNode?.isWeak ? <Badge className="bg-[#f5d6b3] text-[#8b4d1f]">weak focus</Badge> : null}
+            {selectedGraphNode?.isCritical ? <Badge className="bg-[#e7defa] text-[#5c4c88]">critical dependency</Badge> : null}
+            {selectedGraphNodeVaulted ? (
+              <Badge className="bg-[#1f5d73] text-white">
+                <Lock className="mr-1 size-3.5" />
+                Vault
+              </Badge>
+            ) : null}
+          </div>
+          <h2 className="mt-4 text-3xl font-semibold text-[var(--ink)]">
+            {selectedGraphNode ? "Keep this claim primary." : "No claim is selected yet."}
+          </h2>
+          <p className="mt-3 text-base leading-7 text-[var(--ink)]">
+            {selectedGraphNode
+              ? selectedGraphNodeVaulted
+                ? "This claim is stored in Vault on this device. Open the vault manager if you need to inspect the full text."
+                : selectedGraphNode.node.content
+              : "Open the full workspace if you need to choose a different claim before continuing."}
+          </p>
+          {selectedGraphNode?.node.note && !selectedGraphNodeVaulted ? (
+            <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{selectedGraphNode.node.note}</p>
+          ) : null}
+        </div>
+        <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-4 lg:max-w-sm">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Why this stays in front</p>
+          <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
+            {focusIntent === "learn"
+              ? "Teach-back stays attached to the active claim so learning happens in context instead of spinning off into a generic thread."
+              : "Steel-man and challenge rounds stay attached to the active claim so the saved audit trail stays specific and durable."}
+          </p>
+          {selectedGraphNode ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Badge className="bg-white text-[var(--ink)]">Children {selectedGraphNode.childCount}</Badge>
+              <Badge className="bg-white text-[var(--ink)]">Strength {formatScore(selectedGraphNode.node.scores?.strength ?? null)}</Badge>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </Card>
+  );
+  const learnFocusWorkspace = (
+    <div className="space-y-6">
+      {focusedClaimCard}
+      <Card id="teach-back-lane" className="scroll-mt-28 p-6 sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge>Teach-back</Badge>
+              <Badge className="bg-[#e7defa] text-[#5c4c88]">{selectedKnowledgeSurface.masteryLevel}</Badge>
+              {currentTeachBackAttempts.length ? (
+                <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                  {currentTeachBackAttempts.length} prior attempt{currentTeachBackAttempts.length === 1 ? "" : "s"}
+                </Badge>
+              ) : null}
+            </div>
+            <h2 className="mt-4 text-3xl font-semibold text-[var(--ink)]">Explain the claim back in your own words.</h2>
+            <p className="mt-3 text-base leading-7 text-[var(--muted-ink)]">
+              Penny keeps learning tied to the active claim, then checks whether your explanation actually closes the gap.
+            </p>
+          </div>
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-4 lg:max-w-sm">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Gap detection</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {selectedKnowledgeSurface.teachBackGap.length ? (
+                selectedKnowledgeSurface.teachBackGap.map((gap) => (
+                  <Badge key={gap} className="bg-[#fff6ed] text-[#8b4d1f]">
+                    {gap}
+                  </Badge>
+                ))
+              ) : (
+                <Badge className="bg-[#d9ead8] text-[#355b32]">No obvious gap</Badge>
+              )}
+            </div>
+            <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{selectedKnowledgeSurface.reviewPrompt}</p>
+          </div>
+        </div>
+
+        {selectedGraphNode ? (
+          <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <div className="space-y-4">
+              <div className="rounded-[24px] bg-[var(--panel)] p-5">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Concept handle</p>
+                <p className="mt-2 text-sm font-medium text-[var(--ink)]">{selectedTeachBackFocus.concept}</p>
+                <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{selectedTeachBackFocus.scaffold}</p>
+                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                  Apply it to <span className="font-medium text-[var(--ink)]">{selectedGraphNode.node.content}</span>
+                </p>
+              </div>
+
+              <div className="rounded-[24px] border border-black/8 bg-white p-5">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Explain it back</p>
+                <textarea
+                  className="mt-3 min-h-32 w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                  placeholder={`Before I explain, tell me what you think ${selectedTeachBackFocus.concept} means in this claim.`}
+                  value={currentTeachBackDraft}
+                  onChange={(event) =>
+                    setTeachBackDrafts((prev) => ({
+                      ...prev,
+                      [currentTeachBackNodeId ?? ""]: event.target.value,
+                    }))
+                  }
+                />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button className="gap-2" onClick={handleTeachBackCheck} disabled={!currentTeachBackNodeId || isPending}>
+                    Check explanation
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="gap-2"
+                    onClick={() => {
+                      if (!currentTeachBackNodeId) {
+                        return;
+                      }
+
+                      setTeachBackDrafts((prev) => ({ ...prev, [currentTeachBackNodeId]: selectedTeachBackFocus.scaffold }));
+                    }}
+                    disabled={!currentTeachBackNodeId}
+                  >
+                    Use scaffold
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-[24px] border border-black/8 bg-white p-5">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Your text, annotated</p>
+                <div className="mt-3 rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-7 text-[var(--ink)]">
+                  {highlightTeachBackResponse(currentTeachBackDraft, currentTeachBackAnalysis.annotations)}
+                </div>
+              </div>
+
+              <div className="rounded-[24px] border border-black/8 bg-white p-5">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What Penny sees</p>
+                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.summary}</p>
+                <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.whyItMatters}</p>
+                <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Correction</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.correction}</p>
+                <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Restate with the correction</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.restatementPrompt}</p>
+              </div>
+
+              {learningPrompts[0] ? (
+                <div className="rounded-[24px] border border-black/8 bg-white p-5">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{learningPrompts[0].label}</p>
+                  <h3 className="mt-2 text-lg font-semibold text-[var(--ink)]">{learningPrompts[0].title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{learningPrompts[0].body}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{learningPrompts[0].helper}</p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <p className="mt-6 rounded-[24px] bg-[var(--panel)] p-5 text-sm leading-6 text-[var(--muted-ink)]">
+            Open the full workspace if you need to choose a claim before using teach-back.
+          </p>
+        )}
+      </Card>
+    </div>
+  );
+  const challengeRoundsPanel = (
+    <Card className="p-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge>Dialectic rounds</Badge>
+        <Badge className="bg-[#e7defa] text-[#5c4c88]">round-tracked</Badge>
+        <Badge className="bg-[#d9ead8] text-[#355b32]">{selectedCritiqueStrength.label}</Badge>
+        <Badge
+          className={
+            challengeSkill.direction === "increase challenge"
+              ? "bg-[#d9ead8] text-[#355b32]"
+              : challengeSkill.direction === "reduce challenge"
+                ? "bg-[#fff6ed] text-[#8b4d1f]"
+                : "bg-white text-[var(--ink)]"
+          }
+        >
+          {challengeSkill.label}
+        </Badge>
+      </div>
+      <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">Counterargument as explicit rounds, not a one-shot critique.</h2>
+      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+        Penny should remember every round, carry the user’s response history forward, and change the next attack instead of reusing the same line.
+      </p>
+      <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{challengeSkill.note}</p>
+      <div className="mt-5">
+        <SteelManGate
+          claim={{
+            id: selectedGraphNode?.node.id ?? "",
+            mapId: map.id,
+            text: selectedGraphNode?.node.content ?? "",
+            confidence: Math.round((selectedGraphNode?.node.scores?.confidence ?? 0) * 100),
+          }}
+          existingSteelMan={
+            selectedSteelMan
+              ? {
+                  steelManText: selectedSteelMan.steelManText,
+                  qualityScore: selectedSteelMan.qualityScore,
+                  qualityScoreReason: selectedSteelMan.qualityScoreReason ?? null,
+                }
+              : null
+          }
+          initialText={selectedSteelManDraft}
+          onTextChange={(nextText) => {
+            if (!selectedGraphNode?.node.id) {
+              return;
+            }
+            setSteelManGateBypassed((current) => ({
+              ...current,
+              [selectedGraphNode.node.id]: false,
+            }));
+            setSteelManDrafts((current) => ({
+              ...current,
+              [selectedGraphNode.node.id]: nextText,
+            }));
+          }}
+          onSavedSteelMan={(steelMan: SteelManGateSavedSteelMan) => {
+            if (selectedGraphNode?.node.id) {
+              setSteelManGateBypassed((current) => ({
+                ...current,
+                [selectedGraphNode.node.id]: false,
+              }));
+            }
+            mergeSteelMan(steelMan as unknown as SerializableSteelMan);
+            if (selectedGraphNode?.node.id) {
+              setSteelManDrafts((current) => ({
+                ...current,
+                [selectedGraphNode.node.id]: steelMan.steelManText,
+              }));
+              setSteelManAssessments((current) => ({
+                ...current,
+                [selectedGraphNode.node.id]: {
+                  specificityScore: steelMan.qualityScore ?? 0,
+                  evidentialBasisScore: steelMan.qualityScore ?? 0,
+                  engagementDepthScore: steelMan.qualityScore ?? 0,
+                  qualityScore: steelMan.qualityScore ?? 0,
+                  qualityScoreReason: steelMan.qualityScoreReason ?? "Steel man saved.",
+                  revisionPrompt: null,
+                },
+              }));
+            }
+          }}
+          onComplete={(steelManText, score) => {
+            if (!selectedGraphNode?.node.id) {
+              return;
+            }
+            setSteelManGateBypassed((current) => ({
+              ...current,
+              [selectedGraphNode.node.id]: false,
+            }));
+            setSteelManDrafts((current) => ({
+              ...current,
+              [selectedGraphNode.node.id]: steelManText,
+            }));
+            if (score) {
+              setSteelManAssessments((current) => ({
+                ...current,
+                [selectedGraphNode.node.id]: {
+                  specificityScore: score.overallScore,
+                  evidentialBasisScore: score.overallScore,
+                  engagementDepthScore: score.overallScore,
+                  qualityScore: score.overallScore,
+                  qualityScoreReason: score.overallFeedback,
+                  revisionPrompt: score.reviseSuggestion,
+                },
+              }));
+            }
+          }}
+          onSkip={() => {
+            if (!selectedGraphNode?.node.id) {
+              return;
+            }
+            setSteelManGateBypassed((current) => ({
+              ...current,
+              [selectedGraphNode.node.id]: true,
+            }));
+          }}
+          isFirstRound={dialecticRoundEvents.length === 0}
+        />
+      </div>
+      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+        {dialecticRounds.map((round: ChallengeRoundModel, index) => {
+          const critiqueFeedbackStatus = critiqueFeedbackStatusByRoundId[round.dialecticRound?.id ?? round.round] ?? {
+            dismissalCount: 0,
+            submitted: false,
+            latestFeedback: null,
+          };
+          const hasPersistedRound = Boolean(round.dialecticRound);
+          const feedbackManualOnly = critiqueFeedbackStatus.dismissalCount >= 3 && !critiqueFeedbackStatus.submitted;
+          const feedbackVisible =
+            hasPersistedRound &&
+            !hiddenCritiqueFeedbackRoundIds[round.dialecticRound?.id ?? round.round] &&
+            (critiqueFeedbackStatus.submitted ||
+              critiqueFeedbackStatus.dismissalCount < 3 ||
+              Boolean(openedCritiqueFeedbackRoundIds[round.dialecticRound?.id ?? round.round]));
+          const roundId = round.dialecticRound?.id ?? round.round;
+          const draft = dialecticResponseDrafts[round.round] ?? "";
+
+          return (
+            <div key={round.round} className="space-y-4">
+              <ChallengeRound
+                claim={challengeClaim ?? { id: map.id, text: map.rawThought, confidence: 0 }}
+                round={round}
+                priorRounds={dialecticRounds.slice(0, index) as ChallengeRoundModel[]}
+                responseDraft={draft}
+                onResponseDraftChange={(value) =>
+                  setDialecticResponseDrafts((current) => ({
+                    ...current,
+                    [round.round]: value,
+                  }))
+                }
+                onRoundContextChange={(patch) => updateDialecticRoundContext(round.round, patch)}
+                isSteelManReady={selectedSteelManReady}
+                onResponseSubmit={async (response, newConfidence, responsePath) => {
+                  updateDialecticRoundContext(round.round, {
+                    confidenceAtRoundEnd: newConfidence,
+                  });
+
+                  await recordDialecticRound({
+                    round: round.round,
+                    roundIndex: round.roundIndex,
+                    title: round.title,
+                    critiqueStrength: round.strength,
+                    critiqueType: activeCritiqueType,
+                    critiqueFailureTypes: round.critiqueFailureTypes ?? [activeCritiqueType],
+                    critiqueMode,
+                    voiceLabel: selectedAudienceCritique?.audienceLabel ?? peerAudience,
+                    prompt: round.prompt,
+                    why: round.why,
+                    responsePath,
+                    response,
+                    confidenceAtRoundEnd: newConfidence,
+                  });
+                }}
+              />
+
+              {feedbackVisible ? (
+                <div className="mt-4">
+                  <CritiqueFeedbackCard
+                    roundLabel={round.round}
+                    critiqueText={round.prompt}
+                    critiqueMode={round.dialecticRound?.critiqueMode ?? critiqueMode}
+                    voiceLabel={round.dialecticRound?.voiceLabel ?? selectedAudienceCritique?.audienceLabel ?? peerAudience}
+                    failureTypes={round.critiqueFailureTypes ?? []}
+                    shapeId={selectedShape?.id ?? null}
+                    manualOnly={feedbackManualOnly && !openedCritiqueFeedbackRoundIds[roundId]}
+                    submitted={critiqueFeedbackStatus.submitted}
+                    onSubmit={(payload) =>
+                      recordCritiqueFeedback({
+                        round: round.dialecticRound ? (round.dialecticRound as unknown as SerializableDialecticRound) : null,
+                        dismissed: payload.dismissed,
+                        ratings: payload.ratings,
+                        overallUsefulness: payload.overallUsefulness,
+                        freeTextFeedback: payload.freeTextFeedback,
+                        correctionText: payload.correctionText,
+                        correctionType: payload.correctionType,
+                        isCorrectionFlagged: payload.isCorrectionFlagged,
+                        shapeId: payload.shapeId,
+                      })
+                    }
+                    onDismiss={() => {
+                      if (feedbackManualOnly && !openedCritiqueFeedbackRoundIds[roundId]) {
+                        setOpenedCritiqueFeedbackRoundIds((current) => ({
+                          ...current,
+                          [roundId]: true,
+                        }));
+                        return;
+                      }
+
+                      setHiddenCritiqueFeedbackRoundIds((current) => ({
+                        ...current,
+                        [roundId]: true,
+                      }));
+                      recordCritiqueFeedback({
+                        round: round.dialecticRound ? (round.dialecticRound as unknown as SerializableDialecticRound) : null,
+                        dismissed: true,
+                        overallUsefulness: 3,
+                        ratings: [],
+                        freeTextFeedback: null,
+                        correctionText: null,
+                        isCorrectionFlagged: false,
+                        shapeId: selectedShape?.id ?? null,
+                      });
+                    }}
+                  />
+                </div>
+              ) : feedbackManualOnly ? (
+                <div className="mt-4 rounded-[20px] border border-dashed border-black/10 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Critique feedback</p>
+                      <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
+                        Penny stopped auto-showing this after three dismissals.
+                      </p>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      className="px-3 py-2 text-xs"
+                      onClick={() => {
+                        setHiddenCritiqueFeedbackRoundIds((current) => ({
+                          ...current,
+                          [roundId]: false,
+                        }));
+                        setOpenedCritiqueFeedbackRoundIds((current) => ({
+                          ...current,
+                          [roundId]: true,
+                        }));
+                      }}
+                    >
+                      Rate this critique
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4 rounded-[24px] border border-black/8 bg-white p-5">
+        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Round audit trail</p>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+          Each persisted round keeps the critique strength, response path, and reasoning note together so the thread can be audited instead of reconstructed from memory.
+        </p>
+        <div className="mt-4 space-y-3">
+          {dialecticRoundEvents.length ? (
+            dialecticRoundEvents.map((entry) => (
+              <div key={entry.id} className="rounded-[20px] bg-[var(--panel)] p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="bg-white text-[var(--ink)]">{entry.round}</Badge>
+                  <Badge className="bg-[#e7defa] text-[#5c4c88]">{entry.critiqueStrength}</Badge>
+                  {entry.critiqueType ? <Badge className="bg-white text-[var(--ink)]">{entry.critiqueType}</Badge> : null}
+                  {entry.responsePath ? <Badge className="bg-[#d9ead8] text-[#355b32]">{entry.responsePath}</Badge> : null}
+                </div>
+                <p className="mt-3 text-sm font-medium text-[var(--ink)]">{entry.title}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{entry.prompt}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{entry.why}</p>
+                <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{entry.response}</p>
+                {entry.dialecticRound ? (
+                  <div className="mt-3 rounded-[16px] bg-white p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                        {entry.dialecticRound.responseClassification.type}
+                      </Badge>
+                      <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                        {formatPercentValue(entry.dialecticRound.confidenceAtRoundStart)} → {formatPercentValue(entry.dialecticRound.confidenceAtRoundEnd)}
+                      </Badge>
+                      <Badge className="bg-[var(--panel)] text-[var(--ink)]">
+                        engagement {Math.round(entry.dialecticRound.engagementScore)}
+                      </Badge>
+                    </div>
+                    {entry.dialecticRound.followUpPrompt ? (
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                        <span className="font-medium text-[var(--ink)]">Follow-up:</span> {entry.dialecticRound.followUpPrompt}
+                      </p>
+                    ) : null}
+                    {entry.dialecticRound.concessions.length ||
+                    entry.dialecticRound.defenses.length ||
+                    entry.dialecticRound.dismissals.length ? (
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                        {entry.dialecticRound.concessions.length ? `${entry.dialecticRound.concessions.length} concessions` : null}
+                        {entry.dialecticRound.concessions.length &&
+                        (entry.dialecticRound.defenses.length || entry.dialecticRound.dismissals.length)
+                          ? " · "
+                          : null}
+                        {entry.dialecticRound.defenses.length ? `${entry.dialecticRound.defenses.length} defenses` : null}
+                        {(entry.dialecticRound.concessions.length || entry.dialecticRound.defenses.length) &&
+                        entry.dialecticRound.dismissals.length
+                          ? " · "
+                          : null}
+                        {entry.dialecticRound.dismissals.length ? `${entry.dialecticRound.dismissals.length} dismissals` : null}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <p className="rounded-[20px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+              No round audit has been persisted yet.
+            </p>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+  const challengeFocusWorkspace = (
+    <div className="space-y-6">
+      {focusedClaimCard}
+      <Card id="challenge-lane" className="scroll-mt-28 p-6 sm:p-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge>Challenge lane</Badge>
+              <Badge className="bg-[#e7defa] text-[#5c4c88]">{selectedCritiqueStrength.label}</Badge>
+              <Badge
+                className={
+                  challengeSkill.direction === "increase challenge"
+                    ? "bg-[#d9ead8] text-[#355b32]"
+                    : challengeSkill.direction === "reduce challenge"
+                      ? "bg-[#fff6ed] text-[#8b4d1f]"
+                      : "bg-white text-[var(--ink)]"
+                }
+              >
+                {challengeSkill.label}
+              </Badge>
+            </div>
+            <h2 className="mt-4 text-3xl font-semibold text-[var(--ink)]">Steel-man first, then run the next challenge round.</h2>
+            <p className="mt-3 text-base leading-7 text-[var(--muted-ink)]">
+              The selected claim stays fixed while Penny sharpens the strongest version, then records each response in the saved audit trail.
+            </p>
+          </div>
+          <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-4 lg:max-w-sm">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Round posture</p>
+            <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{challengeSkill.note}</p>
+            <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+              {map.recommendedNextMove?.headline ?? "Keep the round specific to the active claim instead of reopening the whole map."}
+            </p>
+          </div>
+        </div>
+      </Card>
+      {challengeRoundsPanel}
+    </div>
+  );
+
+  if (focusIntent === "learn") {
+    return learnFocusWorkspace;
+  }
+
+  if (focusIntent === "challenge") {
+    return challengeFocusWorkspace;
+  }
 
   return (
     <div className="space-y-8">
