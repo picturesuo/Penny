@@ -10,6 +10,8 @@ type QuickCaptureOpenOptions = {
   onSaved?: () => void;
 };
 
+type CaptureEntryMode = "type" | "import" | "quick";
+
 type QuickCaptureContextValue = {
   open: (options?: QuickCaptureOpenOptions) => void;
   close: () => void;
@@ -100,7 +102,7 @@ export function useQuickCaptureModal() {
 
 export function QuickCaptureButton({
   defaultMapId,
-  label = "Quick capture",
+  label = "Capture",
 }: {
   defaultMapId?: string;
   label?: string;
@@ -127,6 +129,7 @@ export function QuickCaptureModal({
 }) {
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [mode, setMode] = useState<CaptureEntryMode>("quick");
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +141,7 @@ export function QuickCaptureModal({
 
     setText("");
     setError(null);
+    setMode("quick");
 
     const timeout = window.setTimeout(() => {
       textareaRef.current?.focus();
@@ -145,6 +149,18 @@ export function QuickCaptureModal({
 
     return () => window.clearTimeout(timeout);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || mode !== "quick") {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 50);
+
+    return () => window.clearTimeout(timeout);
+  }, [isOpen, mode]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -159,6 +175,18 @@ export function QuickCaptureModal({
   }, [isOpen, onClose]);
 
   async function handleSave() {
+    if (mode !== "quick") {
+      if (mode === "type") {
+        onClose();
+        router.push("/app?intent=capture&captureMode=type");
+        return;
+      }
+
+      onClose();
+      router.push(defaultMapId ? `/maps/${defaultMapId}?launcher=capture&openImport=1` : "/app?intent=capture&captureMode=import");
+      return;
+    }
+
     const rawText = text.trim();
     if (!rawText || saving) {
       return;
@@ -210,20 +238,55 @@ export function QuickCaptureModal({
         className="w-full max-w-xl border-black/10 bg-white p-6 shadow-[0_30px_120px_rgba(0,0,0,0.22)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Capture a thought</p>
-        <h3 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Store the raw thought before it disappears.</h3>
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          placeholder="What are you thinking right now?"
-          rows={6}
-          className="mt-4 w-full rounded-[24px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)]"
-        />
+        <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Capture</p>
+        <h3 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Choose how you want to get material into Penny.</h3>
+        <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
+          Type into Brain, paste or import a source, or save a quick note without deciding the full structure yet.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {([
+            ["type", "Type into Brain"],
+            ["import", "Paste or import"],
+            ["quick", "Quick note"],
+          ] as const).map(([candidate, label]) => (
+            <Button
+              key={candidate}
+              type="button"
+              variant={mode === candidate ? "primary" : "secondary"}
+              onClick={() => {
+                setMode(candidate);
+                setError(null);
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        {mode === "quick" ? (
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder="Capture the quick note, fragment, or fleeting thought you do not want to lose..."
+            rows={6}
+            className="mt-4 w-full rounded-[24px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)]"
+          />
+        ) : (
+          <div className="mt-4 rounded-[24px] border border-black/10 bg-[var(--panel)] px-4 py-4 text-sm leading-7 text-[var(--ink)]">
+            {mode === "type"
+              ? "Open the capture launcher and turn one typed thought into a live map."
+              : defaultMapId
+                ? "Open the importer in the current map so you can paste source text, add a URL, or upload a document."
+                : "Open the capture launcher and route into Penny’s import flow from there."}
+          </div>
+        )}
         {error ? <p className="mt-3 text-sm text-[#8b3d2f]">{error}</p> : null}
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button disabled={saving || text.trim().length === 0} onClick={() => void handleSave()}>
-            {saving ? "Saving…" : "Capture"}
+          <Button
+            disabled={saving || (mode === "quick" && text.trim().length === 0)}
+            onClick={() => void handleSave()}
+          >
+            {saving ? "Saving…" : mode === "quick" ? "Save quick note" : mode === "type" ? "Open capture" : "Open importer"}
           </Button>
           <Button variant="secondary" onClick={onClose}>
             Close
