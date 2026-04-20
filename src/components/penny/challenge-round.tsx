@@ -76,6 +76,14 @@ export type ChallengeRoundModel = {
   roundContextDraft: ChallengeRoundContextDraft
 }
 
+export type ChallengeGenerationViewModel = {
+  status: 'idle' | 'generating' | 'generated' | 'fallback' | 'failed'
+  providerLabel: string | null
+  fallbackReason: string | null
+  error: string | null
+  attemptNumber: number
+}
+
 export type BestNextMoveActionResult = {
   message?: string
 }
@@ -91,6 +99,8 @@ interface ChallengeRoundProps {
   onResponseSubmit: (response: string, newConfidence: number, responsePath: DialecticResponsePath) => Promise<void>
   onRequestNewRound?: () => void
   onBestNextMoveAction?: (action: Exclude<BestNextMoveKey, 'run_another_round'>) => Promise<BestNextMoveActionResult | void> | BestNextMoveActionResult | void
+  generation?: ChallengeGenerationViewModel | null
+  onRetryGeneration?: (() => void | Promise<void>) | undefined
   isSteelManReady: boolean
 }
 
@@ -104,6 +114,8 @@ export function ChallengeRound({
   onResponseSubmit,
   onRequestNewRound,
   onBestNextMoveAction,
+  generation = null,
+  onRetryGeneration,
   isSteelManReady,
 }: ChallengeRoundProps) {
   const [showWhyNow, setShowWhyNow] = useState(false)
@@ -120,6 +132,34 @@ export function ChallengeRound({
   const trimmedResponse = responseDraft.trim()
   const isRoundOpen = !round.dialecticRound?.closedAt
   const completedRound = round.dialecticRound
+  const generationStatus = generation?.status ?? 'idle'
+  const generationBlocksResponse = !completedRound?.userResponse && (generationStatus === 'generating' || generationStatus === 'failed')
+  const generationNotice =
+    generationStatus === 'generated'
+      ? `${generation?.providerLabel ?? 'Challenge generator'} ready.`
+      : generationStatus === 'fallback'
+        ? `Live generation is unavailable, so Penny is using ${generation?.providerLabel ?? 'a fallback challenge'} for now.`
+        : null
+  const generationLabel =
+    generationStatus === 'generating'
+      ? 'Generating critique'
+      : generationStatus === 'generated'
+        ? 'Generated critique'
+        : generationStatus === 'fallback'
+          ? 'Fallback prompt'
+          : generationStatus === 'failed'
+            ? 'Generation failed'
+            : null
+  const generationTone =
+    generationStatus === 'generating'
+      ? 'bg-[#e7defa] text-[#5c4c88]'
+      : generationStatus === 'generated'
+        ? 'bg-[#eef4ff] text-[#45607a]'
+        : generationStatus === 'fallback'
+          ? 'bg-[#fff8df] text-[#7a5a13]'
+          : generationStatus === 'failed'
+            ? 'bg-[#fff1ef] text-[#8b3d2f]'
+            : ''
 
   useEffect(() => {
     setSubmitted(Boolean(round.dialecticRound?.userResponse))
@@ -215,9 +255,16 @@ export function ChallengeRound({
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{round.round}</span>
             <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone}`}>{statusLabel}</span>
+            {generationLabel ? <span className={`rounded-full px-3 py-1 text-xs font-medium ${generationTone}`}>{generationLabel}</span> : null}
           </div>
           <p className="mt-3 text-lg font-semibold leading-7 text-[var(--ink)]">{round.title}</p>
-          <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{round.prompt}</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+            {generationStatus === 'generating'
+              ? 'Penny is assembling the next critique for this claim.'
+              : generationStatus === 'failed'
+                ? 'Challenge generation did not complete, so the next move is to retry.'
+                : round.prompt}
+          </p>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-[var(--muted-ink)]">
             <span>{round.strength}</span>
             <span>{round.confidenceContext}</span>
@@ -232,7 +279,42 @@ export function ChallengeRound({
         </div>
       </div>
 
-      {(priorRounds.length > 0 || round.followUpPrompt) ? (
+      {!hasCompletedResponse && generationStatus === 'generating' ? (
+        <div className={`mt-4 ${QUIET_PANEL_CLASS}`}>
+          <p className={SURFACE_EYEBROW_CLASS}>Generating critique</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+            Penny is turning the claim, steel man, and prior round history into the next challenge.
+          </p>
+          <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+            The response box will open as soon as the critique is ready.
+          </p>
+        </div>
+      ) : null}
+
+      {!hasCompletedResponse && generationStatus === 'failed' ? (
+        <div className={`mt-4 ${QUIET_PANEL_CLASS}`}>
+          <p className={SURFACE_EYEBROW_CLASS}>Challenge generation failed</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+            {generation?.error ?? "Couldn't generate this critique. Try again."}
+          </p>
+          {onRetryGeneration ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button type="button" className="gap-2" onClick={() => void onRetryGeneration()}>
+                Retry generation
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {generationNotice && !hasCompletedResponse && generationStatus !== 'failed' ? (
+        <div className={`mt-4 ${generationStatus === 'fallback' ? ERROR_NOTICE_CLASS : SUCCESS_NOTICE_CLASS}`}>
+          {generationNotice}
+          {generationStatus === 'fallback' && generation?.fallbackReason ? ` ${generation.fallbackReason}` : ''}
+        </div>
+      ) : null}
+
+      {(priorRounds.length > 0 || round.followUpPrompt) && !generationBlocksResponse ? (
         <div className={`mt-3 ${QUIET_PANEL_CLASS}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -265,10 +347,11 @@ export function ChallengeRound({
           type="button"
           className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-ink)]"
           onClick={() => setShowWhyNow((current) => !current)}
+          disabled={generationBlocksResponse}
         >
           {showWhyNow ? 'Hide why this challenge' : 'Why this challenge'}
         </button>
-        {showWhyNow ? (
+        {showWhyNow && !generationBlocksResponse ? (
           <div className={`mt-3 ${QUIET_PANEL_CLASS}`}>
             <p className="text-sm leading-6 text-[var(--muted-ink)]">{round.why}</p>
             <div className={`mt-3 ${INSET_PANEL_CLASS}`}>
@@ -394,7 +477,7 @@ export function ChallengeRound({
             <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{completedRound?.userResponse ?? trimmedResponse}</p>
           </div>
         </div>
-      ) : isRoundOpen ? (
+      ) : isRoundOpen && !generationBlocksResponse ? (
         <form onSubmit={handleSubmitResponse} className="mt-4 space-y-4">
           <div className={QUIET_PANEL_CLASS}>
             <div className="flex items-center justify-between gap-3">
@@ -520,6 +603,14 @@ export function ChallengeRound({
             </Button>
           </div>
         </form>
+      ) : null}
+
+      {!hasCompletedResponse && generationStatus === 'fallback' && onRetryGeneration ? (
+        <div className="mt-4 flex justify-end">
+          <Button type="button" variant="secondary" className="gap-2" onClick={() => void onRetryGeneration()}>
+            Retry generation
+          </Button>
+        </div>
       ) : null}
     </div>
   )
