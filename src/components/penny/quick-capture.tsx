@@ -18,10 +18,10 @@ export function QuickCapture({
       className="gap-2"
       data-onboarding-target="quick-capture"
       onClick={() => open({ defaultMapId })}
-      title={userId ? `Quick capture for ${userId}` : "Quick capture"}
+      title={userId ? `Capture for ${userId}` : "Capture"}
     >
       <Plus className="size-4" />
-      Quick capture
+      Capture
     </Button>
   );
 }
