@@ -155,6 +155,7 @@ export function MapWorkspace({
           availableMaps={availableMaps}
           initialSelectedClaimId={initialSelectedClaimId}
           focusIntent={focusIntent}
+          initialLearningQuestion={launchState?.intent === "learn" ? launchState.question ?? null : null}
         />
       </div>
     );
@@ -191,6 +192,7 @@ export function MapWorkspace({
         availableMaps={availableMaps}
         initialSelectedClaimId={initialSelectedClaimId}
         focusIntent={null}
+        initialLearningQuestion={launchState?.intent === "learn" ? launchState.question ?? null : null}
       />
     </div>
   );
