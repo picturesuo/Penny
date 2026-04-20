@@ -97,6 +97,7 @@ export function ChallengeRound({
   const [selectedResponsePath, setSelectedResponsePath] = useState<DialecticResponsePath>('defend')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(Boolean(round.dialecticRound?.userResponse))
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const trimmedResponse = responseDraft.trim()
   const isRoundOpen = !round.dialecticRound?.closedAt
@@ -107,6 +108,7 @@ export function ChallengeRound({
     setSelectedResponsePath('defend')
     setShowWhyNow(false)
     setShowPriorRounds(false)
+    setSubmitError(null)
   }, [round.round, round.dialecticRound?.id, round.dialecticRound?.userResponse])
 
   const priorRoundLabel = useMemo(() => {
@@ -133,17 +135,25 @@ export function ChallengeRound({
   async function handleSubmitResponse(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    if (!trimmedResponse || trimmedResponse.length < 10 || submitting || !isSteelManReady) {
+    if (submitting || !isSteelManReady) {
+      return
+    }
+
+    if (!trimmedResponse || trimmedResponse.length < 10) {
+      setSubmitError('Response must be at least 10 non-space characters.')
       return
     }
 
     setSubmitting(true)
+    setSubmitError(null)
 
     try {
       await onResponseSubmit(trimmedResponse, round.roundContextDraft.confidenceAtRoundEnd, selectedResponsePath)
       setSubmitted(true)
+      setSubmitError(null)
     } catch (error) {
       console.error(error)
+      setSubmitError(error instanceof Error ? error.message : "Couldn't save this round. Try again.")
     } finally {
       setSubmitting(false)
     }
@@ -151,6 +161,26 @@ export function ChallengeRound({
 
   const hasCompletedResponse = submitted || Boolean(completedRound?.userResponse)
   const confidenceChange = round.roundContextDraft.confidenceAtRoundEnd - round.confidenceAtRoundStart
+  const statusLabel = hasCompletedResponse
+    ? completedRound?.closedAt
+      ? `Saved ${formatSavedAt(completedRound.closedAt)}`
+      : 'Saved'
+    : submitting
+      ? 'Saving round...'
+      : submitError
+        ? 'Save failed'
+        : trimmedResponse.length > 0
+          ? 'Draft'
+          : 'Awaiting response'
+  const statusTone = hasCompletedResponse
+    ? 'bg-[#d9ead8] text-[#355b32]'
+    : submitting
+      ? 'bg-[#e7defa] text-[#5c4c88]'
+      : submitError
+        ? 'bg-[#fff1ef] text-[#8b3d2f]'
+        : trimmedResponse.length > 0
+          ? 'bg-[#fff8df] text-[#5a460d]'
+          : 'bg-white text-[var(--ink)]'
 
   return (
     <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
@@ -158,6 +188,7 @@ export function ChallengeRound({
         <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{round.round}</span>
         <span className="rounded-full bg-[#e7defa] px-3 py-1 text-xs font-medium text-[#5c4c88]">{round.strength}</span>
         <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{round.confidenceContext}</span>
+        <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone}`}>{statusLabel}</span>
         {round.responseClassification ? (
           <span className="rounded-full bg-[#d9ead8] px-3 py-1 text-xs font-medium text-[#355b32]">
             {formatClassification(round.responseClassification.type)}
@@ -305,7 +336,9 @@ export function ChallengeRound({
                 <label htmlFor={`round-response-${round.round}`} className="text-sm font-medium text-[var(--ink)]">
                   Your response
                 </label>
-                <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">Defend, revise, or absorb. Be specific.</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
+                  Defend, revise, or absorb. Minimum 10 non-space characters.
+                </p>
               </div>
               {!isSteelManReady ? (
                 <span className="rounded-full bg-[#fff8df] px-3 py-1 text-xs font-medium text-[#5a460d]">Steel man required</span>
@@ -320,6 +353,11 @@ export function ChallengeRound({
               minLength={10}
               maxLength={3000}
             />
+            {submitError ? (
+              <p className="mt-3 rounded-[16px] border border-[#d8b2aa] bg-[#fff1ef] px-3 py-2 text-sm leading-6 text-[#8b3d2f]">
+                {submitError}
+              </p>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2">
               {(['defend', 'revise', 'absorb'] as const).map((path) => (
                 <Button
@@ -394,7 +432,7 @@ export function ChallengeRound({
               Path: {selectedResponsePath}
             </p>
             <Button type="submit" disabled={submitting || !isSteelManReady || trimmedResponse.length < 10} className="gap-2">
-              {submitting ? 'Submitting...' : 'Submit response'}
+              {submitting ? 'Saving round...' : 'Submit response'}
             </Button>
           </div>
         </form>
@@ -433,4 +471,17 @@ function formatClassification(type: string): string {
 
 function formatPercentValue(value: number): string {
   return `${Math.round(value)}%`
+}
+
+function formatSavedAt(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return 'just now'
+  }
+
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
