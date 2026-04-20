@@ -23,6 +23,9 @@ const revisitActionSchema = z.discriminatedUnion("operation", [
     claimId: z.string().min(1),
     type: z.enum([
       "reviewed_no_change",
+      "claim_held_up",
+      "claim_changed",
+      "claim_failed",
       "confidence_updated",
       "claim_updated",
       "claim_retired",
@@ -86,11 +89,28 @@ export async function POST(
       return NextResponse.json(result, { status: 201 });
     }
 
+    const mappedType =
+      input.type === "claim_held_up"
+        ? "reviewed_no_change"
+        : input.type === "claim_changed"
+          ? "claim_updated"
+          : input.type === "claim_failed"
+            ? "claim_retired"
+            : input.type;
+
     const result = await recordRevisitAction({
       mapId: id,
       claimId: input.claimId,
-      type: input.type,
-      notes: input.notes ?? null,
+      type: mappedType,
+      notes:
+        input.notes ??
+        (input.type === "claim_held_up"
+          ? "Marked held up from the revisit queue."
+          : input.type === "claim_changed"
+            ? "Marked changed from the revisit queue."
+            : input.type === "claim_failed"
+              ? "Marked failed from the revisit queue."
+              : null),
       newConfidence: input.newConfidence ?? null,
       triggerDefinition: input.triggerDefinition
         ? {
