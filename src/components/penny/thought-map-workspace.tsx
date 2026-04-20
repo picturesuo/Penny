@@ -19,7 +19,7 @@ import { ResolutionFlow, type ResolutionDownstreamClaim, type ResolutionSubmissi
 import { MarginRail } from "@/components/penny/margin-rail";
 import { RevisitQueue } from "@/components/penny/revisit-queue";
 import { SteelManGate } from "@/components/penny/steel-man-gate";
-import { ChallengeRound, type ChallengeRoundModel } from "@/components/penny/challenge-round";
+import { ChallengeRound, type BestNextMoveKey, type ChallengeRoundModel } from "@/components/penny/challenge-round";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -4116,25 +4116,23 @@ export function ThoughtMapWorkspace({
         }
       : null;
 
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/maps/${map.id}/revisits`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            operation: "act",
-            claimId,
-            type,
-            notes: type === "snoozed" ? "Snoozed from the queue" : null,
-            triggerDefinition,
-            snoozedUntil: type === "snoozed" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
-          }),
-        });
-
+    return fetch(`/api/maps/${map.id}/revisits`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        operation: "act",
+        claimId,
+        type,
+        notes: type === "snoozed" ? "Snoozed from the queue" : null,
+        triggerDefinition,
+        snoozedUntil: type === "snoozed" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
+      }),
+    })
+      .then(async (response) => {
         if (!response.ok) {
-          return;
+          return false;
         }
 
         const payload = (await response.json()) as { map: SerializableThoughtMap };
@@ -4147,10 +4145,64 @@ export function ThoughtMapWorkspace({
             description: `Marked revisit action ${type} for ${claimId}.`,
           });
         }
-      } catch {
+        return true;
+      })
+      .catch(() => false);
+  }
+
+  function focusRoundComposer(roundLabel: string) {
+    requestAnimationFrame(() => {
+      const element = document.getElementById(`round-response-${roundLabel}`) as HTMLTextAreaElement | null;
+      if (!element) {
         return;
       }
+
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      element.focus();
     });
+  }
+
+  function scrollToFollowUpPanel(panelId: string) {
+    requestAnimationFrame(() => {
+      document.getElementById(panelId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
+  async function handleBestNextMoveAction(action: Exclude<BestNextMoveKey, "run_another_round">) {
+    if (!selectedGraphNode?.node.id) {
+      throw new Error("Select a claim before taking the next step.")
+    }
+
+    const claimId = selectedGraphNode.node.id;
+    setSelectedGraphNodeId(claimId);
+
+    switch (action) {
+      case "revise_claim":
+        setRepairModalOpen(true);
+        return { message: "Claim repair opened." };
+      case "gather_evidence":
+        setDependencyHealthClaimId(null);
+        setEvidenceEntryOpenClaimId(claimId);
+        scrollToFollowUpPanel("challenge-next-step-evidence");
+        return { message: "Evidence entry opened below." };
+      case "challenge_dependency":
+        setEvidenceEntryOpenClaimId(null);
+        setDependencyHealthClaimId(claimId);
+        scrollToFollowUpPanel("challenge-next-step-dependency");
+        return { message: "Dependency review opened below." };
+      case "mark_for_revisit":
+        updateRevisitTriggerDraft(claimId, {
+          triggerType: "manual_flag",
+          dateTarget: "",
+          eventKeyword: "",
+          confidenceThreshold: "",
+          dependencyClaimId: claimId,
+        });
+        if (!(await recordRevisitAction(claimId, "snoozed"))) {
+          throw new Error("Couldn't mark this claim for revisit. Try again.")
+        }
+        return { message: "Claim marked for revisit." };
+    }
   }
 
   function runAction(nodeId: string, action: (typeof ACTIONS)[number]["key"]) {
@@ -4519,6 +4571,61 @@ export function ThoughtMapWorkspace({
   }
 
   const graphMinimapScale = 0.36;
+  const challengeFollowUpPanel =
+    selectedGraphNode != null ? (
+      <div className="space-y-4">
+        {evidenceEntryOpenClaimId === selectedGraphNode.node.id ? (
+          <Card id="challenge-next-step-evidence" className="p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Gather evidence</p>
+                <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Add one concrete source before the next round.</h3>
+              </div>
+              <Button variant="secondary" onClick={() => setEvidenceEntryOpenClaimId(null)}>
+                Close
+              </Button>
+            </div>
+            <div className="mt-4">
+              <EvidenceEntry
+                mapId={map.id}
+                claimId={selectedGraphNode.node.id}
+                claimText={selectedGraphNode.node.content}
+                onSaved={({ map: nextMap }) => {
+                  setMap(normalizeMap(nextMap));
+                  setEvidenceEntryOpenClaimId(null);
+                }}
+                onCancel={() => setEvidenceEntryOpenClaimId(null)}
+              />
+            </div>
+          </Card>
+        ) : null}
+        {dependencyHealthClaimId === selectedGraphNode.node.id ? (
+          <Card id="challenge-next-step-dependency" className="p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Challenge dependency</p>
+                <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">Pressure-test the load-bearing assumption underneath the claim.</h3>
+              </div>
+              <Button variant="secondary" onClick={() => setDependencyHealthClaimId(null)}>
+                Close
+              </Button>
+            </div>
+            <div className="mt-4">
+              <DependencyHealthPanel
+                map={map}
+                claimId={selectedGraphNode.node.id}
+                onClose={() => setDependencyHealthClaimId(null)}
+                onRunCritiqueWeakestLink={(claimId) => {
+                  setSelectedGraphNodeId(claimId);
+                  setView("outline");
+                  setDependencyHealthClaimId(null);
+                }}
+              />
+            </div>
+          </Card>
+        ) : null}
+      </div>
+    ) : null;
   const focusedClaimCard = (
     <Card id="claim-card" className="scroll-mt-28 p-6 sm:p-8">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -4838,6 +4945,12 @@ export function ThoughtMapWorkspace({
                 }
                 onRoundContextChange={(patch) => updateDialecticRoundContext(round.round, patch)}
                 isSteelManReady={selectedSteelManReady}
+                onRequestNewRound={
+                  dialecticRounds[index + 1]
+                    ? () => focusRoundComposer(dialecticRounds[index + 1].round)
+                    : undefined
+                }
+                onBestNextMoveAction={handleBestNextMoveAction}
                 onResponseSubmit={async (response, newConfidence, responsePath) => {
                   updateDialecticRoundContext(round.round, {
                     confidenceAtRoundEnd: newConfidence,
@@ -5046,6 +5159,7 @@ export function ThoughtMapWorkspace({
         </div>
       </Card>
       {challengeRoundsPanel}
+      {challengeFollowUpPanel}
     </div>
   );
 
@@ -6403,6 +6517,7 @@ export function ThoughtMapWorkspace({
           </div>
         </div>
       </Card>
+      {challengeFollowUpPanel}
 
       <Card className="p-6">
         <div className="flex flex-wrap items-center gap-2">
@@ -6546,6 +6661,12 @@ export function ThoughtMapWorkspace({
                   }
                   onRoundContextChange={(patch) => updateDialecticRoundContext(round.round, patch)}
                   isSteelManReady={selectedSteelManReady}
+                  onRequestNewRound={
+                    dialecticRounds[index + 1]
+                      ? () => focusRoundComposer(dialecticRounds[index + 1].round)
+                      : undefined
+                  }
+                  onBestNextMoveAction={handleBestNextMoveAction}
                   onResponseSubmit={async (response, newConfidence, responsePath) => {
                     updateDialecticRoundContext(round.round, {
                       confidenceAtRoundEnd: newConfidence,
