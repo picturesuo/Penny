@@ -1326,6 +1326,10 @@ function shapeMetacognition(shape: PennyShape | null) {
   return { pattern, research, response };
 }
 
+function buildInitialLearnDraft(question: string, claimText: string) {
+  return `I'm trying to understand: ${question}\n\nIn the context of "${claimText}", I think it means `
+}
+
 export function ThoughtMapWorkspace({
   initialMap,
   initialView = "outline",
@@ -1333,6 +1337,7 @@ export function ThoughtMapWorkspace({
   availableMaps = [],
   initialSelectedClaimId = null,
   focusIntent = null,
+  initialLearningQuestion = null,
 }: {
   initialMap: SerializableThoughtMap;
   initialView?: MapView;
@@ -1340,6 +1345,7 @@ export function ThoughtMapWorkspace({
   availableMaps?: SessionMapOption[];
   initialSelectedClaimId?: string | null;
   focusIntent?: "challenge" | "learn" | null;
+  initialLearningQuestion?: string | null;
 }) {
   const normalizedInitialMap = normalizeMap(initialMap);
   const [map, setMap] = useState(() => normalizedInitialMap);
@@ -2058,6 +2064,23 @@ export function ThoughtMapWorkspace({
   const currentTeachBackFeedback = currentTeachBackNodeId ? teachBackFeedback[currentTeachBackNodeId] ?? null : null;
   const currentTeachBackAttempts = currentTeachBackNodeId ? teachBackAttempts[currentTeachBackNodeId] ?? [] : [];
   const currentTeachBackAnalysis = currentTeachBackFeedback ?? selectedTeachBackAnalysis;
+  const normalizedInitialLearningQuestion = initialLearningQuestion?.trim() ?? "";
+  useEffect(() => {
+    if (!currentTeachBackNodeId || !normalizedInitialLearningQuestion || currentTeachBackDraft.trim().length > 0 || !selectedGraphNode?.node) {
+      return;
+    }
+
+    setTeachBackDrafts((prev) => {
+      if ((prev[currentTeachBackNodeId] ?? "").trim().length > 0) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [currentTeachBackNodeId]: buildInitialLearnDraft(normalizedInitialLearningQuestion, selectedGraphNode.node.content),
+      };
+    });
+  }, [currentTeachBackDraft, currentTeachBackNodeId, normalizedInitialLearningQuestion, selectedGraphNode?.node]);
   const handleTeachBackCheck = () => {
     if (!currentTeachBackNodeId) {
       return;
@@ -4693,6 +4716,15 @@ export function ThoughtMapWorkspace({
             <p className="mt-3 text-base leading-7 text-[var(--muted-ink)]">
               Penny keeps learning tied to the active claim, then checks whether your explanation actually closes the gap.
             </p>
+            {normalizedInitialLearningQuestion ? (
+              <div className="mt-4 rounded-[22px] border border-black/8 bg-white/80 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Learning question in view</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{normalizedInitialLearningQuestion}</p>
+                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                  Start by answering this in the context of the selected claim, then let Penny annotate where the explanation still breaks.
+                </p>
+              </div>
+            ) : null}
           </div>
           <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-4 lg:max-w-sm">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Gap detection</p>
@@ -4724,10 +4756,22 @@ export function ThoughtMapWorkspace({
               </div>
 
               <div className="rounded-[24px] border border-black/8 bg-white p-5">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Explain it back</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                  {normalizedInitialLearningQuestion ? "Answer the question in context" : "Explain it back"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                  {normalizedInitialLearningQuestion
+                    ? `Use your learning question as the opening frame, then explain what it means for "${selectedGraphNode.node.content}".`
+                    : "State what the concept means in this claim before Penny checks the explanation."}
+                </p>
                 <textarea
                   className="mt-3 min-h-32 w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
-                  placeholder={`Before I explain, tell me what you think ${selectedTeachBackFocus.concept} means in this claim.`}
+                  placeholder={
+                    normalizedInitialLearningQuestion
+                      ? `Start with: ${normalizedInitialLearningQuestion}`
+                      : `Before I explain, tell me what you think ${selectedTeachBackFocus.concept} means in this claim.`
+                  }
+                  autoFocus
                   value={currentTeachBackDraft}
                   onChange={(event) =>
                     setTeachBackDrafts((prev) => ({
