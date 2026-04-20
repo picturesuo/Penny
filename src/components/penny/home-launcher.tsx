@@ -23,6 +23,20 @@ export type HomeLauncherMapSummary = {
   claims: HomeLauncherClaimSummary[];
 };
 
+export type HomeLauncherResumeSummary = {
+  id: string;
+  mapId: string;
+  mapTitle: string;
+  claimId: string | null;
+  claimText: string;
+  intent: LauncherIntent;
+  nextActionLabel: string;
+  nextActionDescription: string;
+  signalLabel: string | null;
+  href: string;
+  updatedAt: string;
+};
+
 type LauncherIntent = "capture" | "challenge" | "learn";
 type CaptureInputMode = "type" | "import" | "quick";
 
@@ -94,15 +108,16 @@ const INTENT_COPY: Record<
 
 export function HomeLauncher({
   maps,
+  recentWork,
   initialIntent,
   initialCaptureMode = "type",
 }: {
   maps: HomeLauncherMapSummary[];
+  recentWork: HomeLauncherResumeSummary[];
   initialIntent?: LauncherIntent;
   initialCaptureMode?: CaptureInputMode;
 }) {
   const router = useRouter();
-  const recentMaps = maps.slice(0, 3);
   const recentClaims = useMemo(
     () =>
       maps
@@ -284,19 +299,32 @@ export function HomeLauncher({
     (activeIntent === "learn" && currentDraft.text.trim().length < 12);
 
   return (
-    <section className="mx-auto flex min-h-[calc(100vh-16rem)] max-w-5xl flex-col justify-center">
-      <div className="rounded-[40px] border border-black/8 bg-[linear-gradient(180deg,rgba(255,253,248,0.94)_0%,rgba(244,238,228,0.9)_100%)] p-6 shadow-[0_30px_90px_rgba(34,39,46,0.08)] sm:p-8 lg:p-10">
+    <section className="mx-auto flex min-h-[calc(100vh-15rem)] max-w-6xl flex-col justify-center px-1">
+      <div className="rounded-[44px] border border-black/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.82),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(230,212,187,0.42),transparent_34%),linear-gradient(180deg,rgba(255,253,248,0.98)_0%,rgba(243,236,226,0.94)_100%)] p-6 shadow-[0_32px_100px_rgba(34,39,46,0.1)] sm:p-8 lg:p-10">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted-ink)]">Penny</p>
-          <h1 className="font-display mt-4 text-4xl leading-tight text-[var(--ink)] sm:text-5xl">
+          <div className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-white/82 px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)] shadow-[0_10px_24px_rgba(34,39,46,0.05)]">
+            <span className="size-2 rounded-full bg-[#8f775d]" />
+            Penny
+          </div>
+          <h1 className="font-display mt-5 text-4xl leading-tight text-[var(--ink)] sm:text-5xl">
             What do you want to do with your thinking today?
           </h1>
-          <p className="mt-4 text-base leading-7 text-[var(--muted-ink)]">
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-[var(--muted-ink)]">
             Capture something new, challenge a claim, or learn what you need in context.
           </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            {["One question", "Three intents", "One active panel"].map((label) => (
+              <span
+                key={label}
+                className="rounded-full border border-black/8 bg-white/72 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
         </div>
 
-        <div className="mx-auto mt-8 grid max-w-4xl gap-3 md:grid-cols-3">
+        <div className="mx-auto mt-9 grid max-w-4xl gap-3 md:grid-cols-3">
           {(["capture", "challenge", "learn"] as const).map((intent) => {
             const copy = INTENT_COPY[intent];
             const Icon = copy.icon;
@@ -307,10 +335,10 @@ export function HomeLauncher({
                 key={intent}
                 type="button"
                 className={[
-                  "rounded-[28px] border px-5 py-5 text-left transition duration-150",
+                  "group relative overflow-hidden rounded-[30px] border px-5 py-5 text-left transition duration-200 hover:-translate-y-0.5 active:translate-y-0",
                   active
-                    ? "border-[#8f775d] bg-[linear-gradient(180deg,#fffdfa_0%,#f3e7d8_100%)] shadow-[0_18px_44px_rgba(34,39,46,0.08)]"
-                    : "border-black/8 bg-white/70 hover:border-black/15 hover:bg-white",
+                    ? "border-[#8f775d] bg-[linear-gradient(180deg,#fffdfa_0%,#f0e1cf_100%)] shadow-[0_22px_50px_rgba(34,39,46,0.11)]"
+                    : "border-black/8 bg-white/76 shadow-[0_12px_30px_rgba(34,39,46,0.04)] hover:border-black/15 hover:bg-white",
                 ].join(" ")}
                 onClick={() => {
                   setActiveIntent(intent);
@@ -318,32 +346,49 @@ export function HomeLauncher({
                   setCaptureFeedback(null);
                 }}
               >
+                <div
+                  className={[
+                    "pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r opacity-0 transition",
+                    active ? "from-transparent via-[#7a624a]/70 to-transparent opacity-100" : "from-transparent via-black/10 to-transparent group-hover:opacity-100",
+                  ].join(" ")}
+                />
                 <div className="flex items-center justify-between gap-3">
-                  <span className="rounded-full bg-[var(--panel)] p-2 text-[var(--ink)]">
+                  <span
+                    className={[
+                      "rounded-full p-2.5 text-[var(--ink)] shadow-[0_10px_24px_rgba(34,39,46,0.06)] transition",
+                      active ? "bg-white" : "bg-[var(--panel)] group-hover:bg-white",
+                    ].join(" ")}
+                  >
                     <Icon className="size-4" />
                   </span>
-                  {active ? <span className="text-xs uppercase tracking-[0.18em] text-[#7a624a]">Active</span> : null}
+                  <span
+                    className={[
+                      "rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em]",
+                      active ? "bg-white text-[#7a624a]" : "bg-transparent text-[var(--muted-ink)]",
+                    ].join(" ")}
+                  >
+                    {active ? "Selected" : "Intent"}
+                  </span>
                 </div>
-                <p className="mt-4 text-lg font-semibold text-[var(--ink)]">{copy.label}</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{copy.eyebrow}</p>
+                <p className="mt-5 text-lg font-semibold text-[var(--ink)]">{copy.label}</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{copy.eyebrow}</p>
               </button>
             );
           })}
         </div>
 
-        <Card className="mx-auto mt-6 max-w-4xl overflow-hidden border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f7f1e8_100%)] p-0">
-          <div className="grid gap-0 lg:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
-            <div className="border-b border-black/8 bg-[radial-gradient(circle_at_top_left,rgba(236,220,198,0.7),transparent_48%),linear-gradient(180deg,rgba(248,242,233,0.96),rgba(243,236,226,0.96))] p-6 lg:border-b-0 lg:border-r">
+        <Card className="mx-auto mt-6 max-w-4xl overflow-hidden border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f7f1e8_100%)] p-0 shadow-[0_24px_60px_rgba(34,39,46,0.08)]">
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
+            <div className="border-b border-black/8 bg-[radial-gradient(circle_at_top_left,rgba(236,220,198,0.52),transparent_42%),linear-gradient(180deg,rgba(248,242,233,0.98),rgba(243,236,226,0.94))] p-6 lg:border-b-0 lg:border-r lg:p-7">
               <div className="flex items-center gap-3">
                 <span className="rounded-full bg-white p-2 text-[var(--ink)] shadow-[0_12px_30px_rgba(34,39,46,0.06)]">
                   <ActiveIcon className="size-4" />
                 </span>
                 <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">{activeCopy.eyebrow}</p>
               </div>
-              <h2 className="mt-4 text-2xl font-semibold text-[var(--ink)]">{activeCopy.title}</h2>
-              <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">{activeCopy.description}</p>
-              <div className="mt-6 rounded-[24px] border border-black/8 bg-white/75 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Right now</p>
+              <h2 className="mt-4 max-w-sm text-[1.75rem] leading-[1.15] font-semibold text-[var(--ink)]">{activeCopy.title}</h2>
+              <div className="mt-6 rounded-[24px] border border-black/8 bg-white/80 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Fastest path</p>
                 <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
                   {activeIntent === "capture"
                     ? captureInputMode === "type"
@@ -356,9 +401,25 @@ export function HomeLauncher({
                       : "Open the learning scaffold beside a real claim instead of leaving the work."}
                 </p>
               </div>
+              <div className="mt-4 space-y-3 rounded-[24px] border border-black/8 bg-black/[0.02] p-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Stays quiet</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                    The rest of the product stays behind the selection until you need it.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-white px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                    Recent work stays secondary
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                    One dominant action
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="p-6">
+            <div className="p-6 lg:p-7">
               <div className="space-y-4">
                 {activeIntent === "capture" ? (
                   <div className="flex flex-wrap gap-2">
@@ -525,29 +586,40 @@ export function HomeLauncher({
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Continue recent work</p>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">Resume the nearest live map without letting it overpower the launcher.</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">Resume the nearest live claim without reopening the whole workspace in your head.</p>
             </div>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {recentMaps.length ? (
-              recentMaps.map((map) => (
-                <Link key={map.id} href={`/maps/${map.id}`}>
-                  <Card className="h-full border-black/8 bg-white/72 p-4 transition hover:border-black/15 hover:bg-white">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Updated {formatUpdatedAt(map.updatedAt)}</p>
-                    <h3 className="mt-3 text-base font-semibold text-[var(--ink)]">{map.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-                      {map.claimCount} claim{map.claimCount === 1 ? "" : "s"}
-                    </p>
-                    <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-[var(--ink)]">
-                      Open map
-                      <ArrowRight className="size-4" />
+            {recentWork.length ? (
+              recentWork.map((item) => (
+                <Link key={item.id} href={item.href}>
+                  <Card className="h-full border-black/8 bg-white/78 p-4 shadow-[0_12px_30px_rgba(34,39,46,0.04)] transition duration-150 hover:-translate-y-0.5 hover:border-black/15 hover:bg-white">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="rounded-full bg-[var(--panel)] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--ink)]">
+                        {item.nextActionLabel}
+                      </span>
+                      <span className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">Updated {formatUpdatedAt(item.updatedAt)}</span>
+                    </div>
+                    <h3 className="mt-4 text-base font-semibold leading-6 text-[var(--ink)]">{truncate(item.claimText, 84)}</h3>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{truncate(item.nextActionDescription, 108)}</p>
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <div>
+                        {item.signalLabel ? (
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">{item.signalLabel}</p>
+                        ) : null}
+                        <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">{item.mapTitle}</p>
+                      </div>
+                      <span className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-[var(--panel)] px-3 py-2 text-sm font-medium text-[var(--ink)]">
+                        Continue
+                        <ArrowRight className="size-4" />
+                      </span>
                     </div>
                   </Card>
                 </Link>
               ))
             ) : (
               <Card className="border-black/8 bg-white/72 p-4 md:col-span-3">
-                <p className="text-sm leading-7 text-[var(--muted-ink)]">Recent work will appear here after your first map.</p>
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">Recent work will appear here after your first map or saved round.</p>
               </Card>
             )}
           </div>

@@ -1338,6 +1338,7 @@ export function ThoughtMapWorkspace({
   initialSelectedClaimId = null,
   focusIntent = null,
   initialLearningQuestion = null,
+  initialNextAction = null,
 }: {
   initialMap: SerializableThoughtMap;
   initialView?: MapView;
@@ -1346,6 +1347,7 @@ export function ThoughtMapWorkspace({
   initialSelectedClaimId?: string | null;
   focusIntent?: "challenge" | "learn" | null;
   initialLearningQuestion?: string | null;
+  initialNextAction?: BestNextMoveKey | null;
 }) {
   const normalizedInitialMap = normalizeMap(initialMap);
   const [map, setMap] = useState(() => normalizedInitialMap);
@@ -1409,6 +1411,8 @@ export function ThoughtMapWorkspace({
   const [hiddenCritiqueFeedbackRoundIds, setHiddenCritiqueFeedbackRoundIds] = useState<Record<string, boolean>>({});
   const [focusedLearnDetailOpen, setFocusedLearnDetailOpen] = useState(false);
   const [focusedChallengeHistoryOpen, setFocusedChallengeHistoryOpen] = useState(false);
+  const [resumeActionFeedback, setResumeActionFeedback] = useState<string | null>(null);
+  const [resumeActionError, setResumeActionError] = useState<string | null>(null);
   const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
     collectShapeFeedback(normalizeMap(initialMap).events),
   );
@@ -1437,6 +1441,7 @@ export function ThoughtMapWorkspace({
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [vaultModalOpen, setVaultModalOpen] = useState(false);
   const [vaultDraft, setVaultDraft] = useState<VaultDraft | null>(null);
+  const consumedInitialNextActionRef = useRef(false);
   const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
   const [metaCognitionEventsSeen, setMetaCognitionEventsSeen] = useState<Record<string, boolean>>({});
   const [learningPrompt, setLearningPrompt] = useState<LearningPromptOutput | null>(null);
@@ -4250,6 +4255,117 @@ export function ThoughtMapWorkspace({
     }
   }
 
+  useEffect(() => {
+    if (focusIntent !== "challenge") {
+      setResumeActionFeedback(null);
+      setResumeActionError(null);
+      return;
+    }
+
+    if (consumedInitialNextActionRef.current || !initialNextAction || !selectedGraphNode?.node.id) {
+      return;
+    }
+
+    consumedInitialNextActionRef.current = true;
+    setResumeActionFeedback(null);
+    setResumeActionError(null);
+
+    if (initialNextAction === "run_another_round") {
+      const nextOpenRound = dialecticRounds.find((candidate) => !candidate.dialecticRound?.userResponse) ?? null;
+
+      if (nextOpenRound) {
+        focusRoundComposer(nextOpenRound.round);
+        setResumeActionFeedback(`${nextOpenRound.round} is ready below.`);
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        document.getElementById("challenge-lane")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      setResumeActionFeedback("Challenge lane reopened.");
+      return;
+    }
+
+    const claimId = selectedGraphNode.node.id;
+
+    void (async () => {
+      try {
+        if (initialNextAction === "revise_claim") {
+          setSelectedGraphNodeId(claimId);
+          setRepairModalOpen(true);
+          setResumeActionFeedback("Claim repair opened.");
+          return;
+        }
+
+        if (initialNextAction === "gather_evidence") {
+          setSelectedGraphNodeId(claimId);
+          setDependencyHealthClaimId(null);
+          setEvidenceEntryOpenClaimId(claimId);
+          scrollToFollowUpPanel("challenge-next-step-evidence");
+          setResumeActionFeedback("Evidence entry opened below.");
+          return;
+        }
+
+        if (initialNextAction === "challenge_dependency") {
+          setSelectedGraphNodeId(claimId);
+          setEvidenceEntryOpenClaimId(null);
+          setDependencyHealthClaimId(claimId);
+          scrollToFollowUpPanel("challenge-next-step-dependency");
+          setResumeActionFeedback("Dependency review opened below.");
+          return;
+        }
+
+        updateRevisitTriggerDraft(claimId, {
+          triggerType: "manual_flag",
+          dateTarget: "",
+          eventKeyword: "",
+          confidenceThreshold: "",
+          dependencyClaimId: claimId,
+        });
+
+        const response = await fetch(`/api/maps/${map.id}/revisits`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            operation: "act",
+            claimId,
+            type: "snoozed",
+            notes: "Snoozed from the queue",
+            triggerDefinition: {
+              triggerType: "manual_flag",
+              dateTarget: null,
+              eventKeyword: null,
+              confidenceThreshold: null,
+              dependencyClaimId: claimId,
+            },
+            snoozedUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Couldn't mark this claim for revisit. Try again.");
+        }
+
+        const payload = (await response.json()) as { map: SerializableThoughtMap };
+        setMap(normalizeMap(payload.map));
+        if (activeSession && !activeSession.endedAt) {
+          void appendSessionEventToServer({
+            sessionId: activeSession.id,
+            eventType: "revisit_completed",
+            claimId,
+            description: `Marked revisit action snoozed for ${claimId}.`,
+          });
+        }
+
+        setResumeActionFeedback("Claim marked for revisit.");
+      } catch (error) {
+        setResumeActionError(error instanceof Error ? error.message : "Couldn't resume that next step.");
+      }
+    })();
+  }, [activeSession, dialecticRounds, focusIntent, initialNextAction, map.id, selectedGraphNode?.node.id]);
+
   function runAction(nodeId: string, action: (typeof ACTIONS)[number]["key"]) {
     setActiveNodeId(nodeId);
 
@@ -5221,6 +5337,16 @@ export function ThoughtMapWorkspace({
   const challengeFocusWorkspace = (
     <div className="space-y-6">
       {focusedClaimCard}
+      {resumeActionFeedback || resumeActionError ? (
+        <Card className="border-black/8 bg-white p-5">
+          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Resumed next step</p>
+          {resumeActionFeedback ? (
+            <p className="mt-2 text-sm leading-6 text-[#2f6d47]">{resumeActionFeedback}</p>
+          ) : (
+            <p className="mt-2 text-sm leading-6 text-[#8b3d2f]">{resumeActionError}</p>
+          )}
+        </Card>
+      ) : null}
       {challengeRoundsPanel}
       {challengeFollowUpPanel}
     </div>

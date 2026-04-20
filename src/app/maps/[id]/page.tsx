@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { MapWorkspace } from "@/components/penny/map-workspace";
+import type { BestNextMoveKey } from "@/lib/challenge-next-move";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import { getArtifactsForMap, getClaimsForMap, getMap, getMapsForUser } from "@/server/mvp";
 import { listMarginFragments } from "@/server/penny";
@@ -31,17 +32,20 @@ export default async function MapPage({
   const launcher = parseLauncherIntent(firstQueryValue(query.launcher));
   const question = firstQueryValue(query.question);
   const openImport = firstQueryValue(query.openImport) === "1";
+  const nextAction = parseNextAction(firstQueryValue(query.nextAction));
   const launchState = launcher
     ? {
         intent: launcher,
         question,
         openImport,
+        nextAction,
       }
     : openImport
       ? {
           intent: "capture" as const,
           question,
           openImport: true,
+          nextAction,
         }
       : null;
 
@@ -73,4 +77,14 @@ function firstQueryValue(value: string | string[] | undefined) {
 
 function parseLauncherIntent(value: string | null): "capture" | "challenge" | "learn" | null {
   return value === "capture" || value === "challenge" || value === "learn" ? value : null;
+}
+
+function parseNextAction(value: string | null): BestNextMoveKey | null {
+  return value === "revise_claim" ||
+    value === "gather_evidence" ||
+    value === "challenge_dependency" ||
+    value === "run_another_round" ||
+    value === "mark_for_revisit"
+    ? value
+    : null;
 }

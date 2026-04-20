@@ -5,6 +5,7 @@ import { Brain, GraduationCap, Layers3, Swords } from "lucide-react";
 import { ClaimCaptureLauncher } from "@/components/penny/claim-capture-launcher";
 import { DocumentImport } from "@/components/penny/document-import";
 import { ThoughtMapWorkspace } from "@/components/penny/thought-map-workspace";
+import type { BestNextMoveKey } from "@/lib/challenge-next-move";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -21,6 +22,7 @@ export type MapWorkspaceLaunchState = {
   intent: "capture" | "challenge" | "learn";
   question?: string | null;
   openImport?: boolean;
+  nextAction?: BestNextMoveKey | null;
 };
 
 interface MapWorkspaceProps {
@@ -239,6 +241,7 @@ export function MapWorkspace({
           initialSelectedClaimId={initialSelectedClaimId}
           focusIntent={focusIntent}
           initialLearningQuestion={launchState?.intent === "learn" ? launchState.question ?? null : null}
+          initialNextAction={launchState?.intent === "challenge" ? launchState.nextAction ?? null : null}
         />
       </div>
     );
@@ -276,6 +279,7 @@ export function MapWorkspace({
         initialSelectedClaimId={initialSelectedClaimId}
         focusIntent={null}
         initialLearningQuestion={launchState?.intent === "learn" ? launchState.question ?? null : null}
+        initialNextAction={launchState?.intent === "challenge" ? launchState.nextAction ?? null : null}
       />
     </div>
   );

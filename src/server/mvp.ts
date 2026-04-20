@@ -167,11 +167,12 @@ export async function getMap(mapId: string, userId: string): Promise<Map | null>
   return getThoughtMap(mapId, userId);
 }
 
-export async function getMapsForUser(userId: string): Promise<Map[]> {
+export async function getMapsForUser(userId: string, options?: { limit?: number }): Promise<Map[]> {
   const ids = await prisma.thoughtMap.findMany({
     where: { userId },
     select: { id: true },
     orderBy: { updatedAt: "desc" },
+    take: options?.limit,
   });
 
   const maps = await Promise.all(ids.map((entry) => getThoughtMap(entry.id, userId)));
