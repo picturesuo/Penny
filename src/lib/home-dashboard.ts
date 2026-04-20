@@ -1,5 +1,5 @@
 import { buildBlindSpotMap, buildCalibrationDashboard, buildMemoryTimeDashboard } from "@/lib/penny-insights";
-import { buildRevisitQueue } from "@/lib/revisit-scheduler";
+import { buildRevisitPatternFeedback, buildRevisitQueue } from "@/lib/revisit-scheduler";
 import { buildVelocityReport } from "@/lib/intellectual-velocity";
 import { buildOnboardingChecklist, buildOnboardingState } from "@/lib/onboarding";
 import { buildFeatureUnlockStatuses, buildUnlockSummary, featureUnlockDefinition } from "@/lib/time-locked-features";
@@ -177,6 +177,7 @@ function buildPanels(params: {
   onboardingChecklist: ReturnType<typeof buildOnboardingChecklist>;
   onboardingState: ReturnType<typeof buildOnboardingState>;
   revisitQueue: ReturnType<typeof buildRevisitQueue>;
+  revisitPatternFeedback: ReturnType<typeof buildRevisitPatternFeedback>;
   blindSpotMap: ReturnType<typeof buildBlindSpotMap>;
   calibration: ReturnType<typeof buildCalibrationDashboard>;
   memoryTime: ReturnType<typeof buildMemoryTimeDashboard>;
@@ -208,6 +209,7 @@ function buildPanels(params: {
       isVisible: params.revisitQueue.length > 0 || params.maturity !== "new",
       data: {
         items: params.revisitQueue.slice(0, 5),
+        patternFeedback: params.revisitPatternFeedback,
       },
     },
     {
@@ -399,6 +401,7 @@ export function computeHomeDashboard(userId: string, userState: UserState): Home
   const onboardingState = buildOnboardingState({ userId, maps, sessions, fragments });
   const onboardingChecklist = buildOnboardingChecklist({ maps, sessions, fragments });
   const revisitQueue = maps.flatMap((map) => buildRevisitQueue(map, 4));
+  const revisitPatternFeedback = buildRevisitPatternFeedback(maps);
   const calibration = buildCalibrationDashboard(maps);
   const blindSpotMap = buildBlindSpotMap(maps, userId);
   const memoryTime = buildMemoryTimeDashboard(maps);
@@ -416,6 +419,7 @@ export function computeHomeDashboard(userId: string, userState: UserState): Home
       const bPriority = b.schedule.priority === "urgent" ? 4 : b.schedule.priority === "high" ? 3 : b.schedule.priority === "medium" ? 2 : 1;
       return bPriority - aPriority || a.schedule.scheduledFor.getTime() - b.schedule.scheduledFor.getTime();
     }),
+    revisitPatternFeedback,
     blindSpotMap,
     calibration,
     memoryTime,
