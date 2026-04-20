@@ -8,6 +8,18 @@ export type AnalyticsEvent =
   | { event: "claim_created"; properties: { claimId: string; mapId: string; domain: string } }
   | { event: "challenge_started"; properties: { claimId: string; roundNumber: number } }
   | {
+      event: "challenge_generation_started";
+      properties: { claimId: string; roundNumber: number; attemptNumber: number };
+    }
+  | {
+      event: "challenge_generation_failed";
+      properties: { claimId: string; roundNumber: number; attemptNumber: number; reason: string };
+    }
+  | {
+      event: "challenge_generation_fallback";
+      properties: { claimId: string; roundNumber: number; attemptNumber: number; provider: string; reason: string };
+    }
+  | {
       event: "challenge_submission_attempted";
       properties: { claimId: string; roundNumber: number; attemptNumber: number };
     }

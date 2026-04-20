@@ -3,6 +3,7 @@ import "server-only";
 import type { DialecticCritiqueStrength, DialecticResponsePath, ResponseClassification } from "@/types/thought-map";
 import { prisma } from "@/db/prisma";
 import { logger } from "@/lib/logger";
+import { generateChallengeWithFallback } from "@/lib/ai/challenge-provider";
 import { buildCalibrationDashboard, buildClaimStructureSnapshot, buildPennyLens } from "@/lib/penny-insights";
 import { buildPersonalizedCritiqueContext } from "@/lib/personalized-critique-engine";
 import { getClaim, getDialecticRoundsForClaim, getMap, recordMove } from "@/server/mvp";
@@ -22,6 +23,10 @@ export type ChallengeDraftRecord = {
   critiqueIntensity: number;
   prompt: string;
   why: string;
+  generationStatus: "generated" | "fallback";
+  generationProvider: "mock" | "openai" | "anthropic";
+  generationProviderLabel: string;
+  generationFallbackReason: string | null;
   selectedVoice: string | null;
   steelManText: string | null;
   confidenceAtRoundStart: number;
@@ -81,50 +86,123 @@ function deriveCritiqueType(structureKind: string | null, claimText: string): st
   return "weak evidence";
 }
 
-function buildRoundTitle(mode: ChallengeDraftPayload["critiqueMode"], roundNumber: number) {
-  if (mode === "socratic") return roundNumber === 1 ? "Socratic opening" : `Socratic round ${roundNumber}`;
-  if (mode === "red_team") return roundNumber === 1 ? "Red-team opening" : `Red-team round ${roundNumber}`;
-  return roundNumber === 1 ? "Opening critique" : `Round ${roundNumber}`;
+function summarizePriorRound(round: Awaited<ReturnType<typeof getDialecticRoundsForClaim>>[number]) {
+  const classification = round.responseClassification?.type ?? "response";
+  const confidenceDelta = round.confidenceDelta ?? null;
+  const confidenceLabel = confidenceDelta == null ? "" : ` (${confidenceDelta >= 0 ? "+" : ""}${confidenceDelta}%)`;
+  const trailText = round.userResponse?.trim().length ? round.userResponse : round.critiqueGenerated;
+  const snippet = trailText.trim().length > 96 ? `${trailText.trim().slice(0, 95).trimEnd()}…` : trailText.trim();
+
+  return `Round ${round.roundNumber}: ${classification}${confidenceLabel} — ${snippet}`;
 }
 
-function buildChallengePrompt(params: {
-  claimText: string;
-  steelManText: string | null;
+function parseChallengeDraftEvent(event: { id: string; mapId: string; nodeId: string | null; payload: unknown; createdAt: Date }): ChallengeDraftRecord | null {
+  const payload = parsePayload(typeof event.payload === "string" ? event.payload : JSON.stringify(event.payload ?? null));
+
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    id: event.id,
+    mapId: event.mapId,
+    claimId: typeof payload.claimId === "string" ? payload.claimId : event.nodeId ?? "",
+    roundIndex: typeof payload.roundIndex === "number" ? payload.roundIndex : 0,
+    roundNumber: typeof payload.roundNumber === "number" ? payload.roundNumber : 1,
+    title: typeof payload.title === "string" ? payload.title : "Opening critique",
+    critiqueStrength:
+      payload.critiqueStrength === "mild" ||
+      payload.critiqueStrength === "moderate" ||
+      payload.critiqueStrength === "strong" ||
+      payload.critiqueStrength === "adversarial"
+        ? payload.critiqueStrength
+        : "moderate",
+    critiqueType: typeof payload.critiqueType === "string" ? payload.critiqueType : "weak evidence",
+    critiqueMode:
+      payload.critiqueMode === "direct" || payload.critiqueMode === "socratic" || payload.critiqueMode === "red_team"
+        ? payload.critiqueMode
+        : "direct",
+    voiceLabel: typeof payload.voiceLabel === "string" ? payload.voiceLabel : null,
+    critiqueIntensity: typeof payload.critiqueIntensity === "number" ? payload.critiqueIntensity : 3,
+    prompt: typeof payload.prompt === "string" ? payload.prompt : "",
+    why: typeof payload.why === "string" ? payload.why : "",
+    generationStatus: payload.generationStatus === "fallback" ? "fallback" : "generated",
+    generationProvider:
+      payload.generationProvider === "anthropic" || payload.generationProvider === "openai" || payload.generationProvider === "mock"
+        ? payload.generationProvider
+        : "mock",
+    generationProviderLabel: typeof payload.generationProviderLabel === "string" ? payload.generationProviderLabel : "Mock AI",
+    generationFallbackReason: typeof payload.generationFallbackReason === "string" ? payload.generationFallbackReason : null,
+    selectedVoice: typeof payload.selectedVoice === "string" ? payload.selectedVoice : null,
+    steelManText: typeof payload.steelManText === "string" ? payload.steelManText : null,
+    confidenceAtRoundStart: typeof payload.confidenceAtRoundStart === "number" ? payload.confidenceAtRoundStart : 0,
+    targetDomain: typeof payload.targetDomain === "string" ? payload.targetDomain : "general",
+    targetClaimType: typeof payload.targetClaimType === "string" ? payload.targetClaimType : null,
+    knowledgeDepth: typeof payload.knowledgeDepth === "string" ? payload.knowledgeDepth : "surface",
+    disclosure: typeof payload.disclosure === "string" ? payload.disclosure : "",
+    summary: typeof payload.summary === "string" ? payload.summary : "",
+    status: payload.status === "started" || payload.status === "completed" ? payload.status : "started",
+    completedRoundId: typeof payload.completedRoundId === "string" ? payload.completedRoundId : null,
+    completedAt: typeof payload.completedAt === "string" ? payload.completedAt : null,
+    responsePath:
+      payload.responsePath === "defend" || payload.responsePath === "revise" || payload.responsePath === "absorb"
+        ? payload.responsePath
+        : null,
+    userResponse: typeof payload.userResponse === "string" ? payload.userResponse : null,
+    confidenceAtRoundEnd: typeof payload.confidenceAtRoundEnd === "number" ? payload.confidenceAtRoundEnd : null,
+    confidenceDelta: typeof payload.confidenceDelta === "number" ? payload.confidenceDelta : null,
+    engagementScore: typeof payload.engagementScore === "number" ? payload.engagementScore : null,
+    responseClassification:
+      payload.responseClassification && typeof payload.responseClassification === "object"
+        ? (payload.responseClassification as ResponseClassification)
+        : null,
+    createdAt: typeof payload.createdAt === "string" ? payload.createdAt : event.createdAt.toISOString(),
+  };
+}
+
+async function findReusableChallengeDraft(params: {
+  mapId: string;
+  claimId: string;
+  roundIndex: number;
   critiqueMode: ChallengeDraftPayload["critiqueMode"];
-  critiqueType: string;
-  disclosure: string;
+  critiqueIntensity: number;
   selectedVoice: string | null;
 }) {
-  const modeText =
-    params.critiqueMode === "socratic"
-      ? "Use questions to expose the weakest assumption."
-      : params.critiqueMode === "red_team"
-        ? "Act like a hostile reviewer and attack the structure."
-        : "Press directly on the weakest part of the claim.";
+  const events = await prisma.thoughtMapEvent.findMany({
+    where: {
+      mapId: params.mapId,
+      nodeId: params.claimId,
+      eventType: "challenge_calibration",
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 12,
+  });
 
-  const steelManText = params.steelManText
-    ? `Steel man already written: ${params.steelManText}`
-    : "No steel man was available, so the critique should focus on structure and evidence.";
-  const voiceText = params.selectedVoice ? `Use voice: ${params.selectedVoice}.` : "";
+  for (const event of events) {
+    const draft = parseChallengeDraftEvent(event);
 
-  return [
-    modeText,
-    `Critique type: ${params.critiqueType}.`,
-    `Claim: "${params.claimText}"`,
-    steelManText,
-    voiceText,
-    params.disclosure,
-  ]
-    .filter((part) => part.trim().length > 0)
-    .join(" ");
-}
+    if (!draft || draft.status !== "started") {
+      continue;
+    }
 
-function buildChallengeWhy(params: {
-  targetDomain: string;
-  knowledgeDepthMessage: string;
-  summary: string;
-}) {
-  return `${params.knowledgeDepthMessage} This pass is targeting ${params.targetDomain}. ${params.summary}`.trim();
+    if (draft.roundIndex !== params.roundIndex) {
+      continue;
+    }
+
+    if (draft.critiqueMode !== params.critiqueMode || draft.critiqueIntensity !== params.critiqueIntensity) {
+      continue;
+    }
+
+    if ((draft.selectedVoice ?? null) !== params.selectedVoice) {
+      continue;
+    }
+
+    return draft;
+  }
+
+  return null;
 }
 
 export function inferChallengeResponsePath(
@@ -167,6 +245,7 @@ export async function createChallengeDraftRound(params: {
   critiqueMode: "direct" | "socratic" | "red_team";
   critiqueIntensity: number;
   selectedVoice: string | null;
+  forceRegenerate?: boolean;
 }) {
   const selectedVoice = params.selectedVoice?.trim().length ? params.selectedVoice.trim() : null;
   const [map, claim, priorRounds] = await Promise.all([
@@ -199,35 +278,73 @@ export async function createChallengeDraftRound(params: {
   });
 
   const roundNumber = priorRounds.length + 1;
-  const title = buildRoundTitle(params.critiqueMode, roundNumber);
-  const prompt = buildChallengePrompt({
+  const roundIndex = priorRounds.length;
+  const resolvedVoice = selectedVoice ?? personalization?.voiceSelected ?? null;
+
+  if (!params.forceRegenerate) {
+    const existingDraft = await findReusableChallengeDraft({
+      mapId: params.mapId,
+      claimId: params.claimId,
+      roundIndex,
+      critiqueMode: params.critiqueMode,
+      critiqueIntensity: params.critiqueIntensity,
+      selectedVoice: resolvedVoice,
+    });
+
+    if (existingDraft) {
+      return existingDraft;
+    }
+  }
+
+  const generatedChallenge = await generateChallengeWithFallback({
     claimText: claim.content,
     steelManText: steelMan?.steelManText ?? null,
     critiqueMode: params.critiqueMode,
     critiqueType,
-    disclosure: personalization?.disclosure ?? "Penny is using the current claim context to focus the critique.",
-    selectedVoice: selectedVoice ?? personalization?.voiceSelected ?? null,
-  });
-  const why = buildChallengeWhy({
+    critiqueStrength,
+    critiqueIntensity: params.critiqueIntensity,
+    roundNumber,
+    selectedVoice: resolvedVoice,
     targetDomain: personalization?.targetDomain ?? calibrationDomain,
+    targetClaimType: personalization?.targetClaimType ?? structure.structureKind,
+    knowledgeDepth: personalization?.knowledgeDepth ?? "surface",
     knowledgeDepthMessage: personalization?.knowledgeDepthMessage ?? "Penny is still learning how you think here.",
+    disclosure: personalization?.disclosure ?? "Penny is using the current claim context to focus the critique.",
     summary: personalization?.summary ?? "This critique is derived from the current map context.",
+    confidenceAtRoundStart,
+    priorRoundSummaries: priorRounds.slice(-2).map(summarizePriorRound),
   });
+
+  if (generatedChallenge.status === "fallback") {
+    logger.warn("challenge_generation_fallback", {
+      featureId: "challenge-rounds",
+      data: {
+        mapId: params.mapId,
+        claimId: params.claimId,
+        roundNumber,
+        reason: generatedChallenge.fallbackReason,
+      },
+    });
+  }
 
   const challengePayload: ChallengeDraftPayload = {
     mapId: params.mapId,
     claimId: params.claimId,
-    roundIndex: priorRounds.length,
+    roundIndex,
     roundNumber,
-    title,
-    critiqueStrength,
-    critiqueType,
+    title: generatedChallenge.output.title,
+    critiqueStrength: generatedChallenge.output.critiqueStrength,
+    critiqueType: generatedChallenge.output.critiqueType,
     critiqueMode: params.critiqueMode,
-    voiceLabel: selectedVoice ?? personalization?.voiceSelected ?? null,
+    voiceLabel: generatedChallenge.output.voiceLabel,
     critiqueIntensity: params.critiqueIntensity,
-    prompt,
-    why,
-    selectedVoice,
+    prompt: generatedChallenge.output.prompt,
+    why: generatedChallenge.output.why,
+    generationStatus: generatedChallenge.status,
+    generationProvider: generatedChallenge.provider,
+    generationProviderLabel: generatedChallenge.providerLabel,
+    generationFallbackReason: generatedChallenge.fallbackReason,
+    selectedVoice: resolvedVoice,
     steelManText: steelMan?.steelManText ?? null,
     confidenceAtRoundStart,
     targetDomain: personalization?.targetDomain ?? calibrationDomain,
@@ -277,59 +394,7 @@ export async function getChallengeDraftRound(roundId: string, userId: string): P
     return null;
   }
 
-  const payload = parsePayload(event.payload);
-  if (!payload) {
-    return null;
-  }
-
-  return {
-    id: event.id,
-    mapId: event.mapId,
-    claimId: typeof payload.claimId === "string" ? payload.claimId : event.nodeId ?? "",
-    roundIndex: typeof payload.roundIndex === "number" ? payload.roundIndex : 0,
-    roundNumber: typeof payload.roundNumber === "number" ? payload.roundNumber : 1,
-    title: typeof payload.title === "string" ? payload.title : "Opening critique",
-    critiqueStrength:
-      payload.critiqueStrength === "mild" ||
-      payload.critiqueStrength === "moderate" ||
-      payload.critiqueStrength === "strong" ||
-      payload.critiqueStrength === "adversarial"
-        ? payload.critiqueStrength
-        : "moderate",
-    critiqueType: typeof payload.critiqueType === "string" ? payload.critiqueType : "weak evidence",
-    critiqueMode:
-      payload.critiqueMode === "direct" || payload.critiqueMode === "socratic" || payload.critiqueMode === "red_team"
-        ? payload.critiqueMode
-        : "direct",
-    voiceLabel: typeof payload.voiceLabel === "string" ? payload.voiceLabel : null,
-    critiqueIntensity: typeof payload.critiqueIntensity === "number" ? payload.critiqueIntensity : 3,
-    prompt: typeof payload.prompt === "string" ? payload.prompt : "",
-    why: typeof payload.why === "string" ? payload.why : "",
-    selectedVoice: typeof payload.selectedVoice === "string" ? payload.selectedVoice : null,
-    steelManText: typeof payload.steelManText === "string" ? payload.steelManText : null,
-    confidenceAtRoundStart: typeof payload.confidenceAtRoundStart === "number" ? payload.confidenceAtRoundStart : 0,
-    targetDomain: typeof payload.targetDomain === "string" ? payload.targetDomain : "general",
-    targetClaimType: typeof payload.targetClaimType === "string" ? payload.targetClaimType : null,
-    knowledgeDepth: typeof payload.knowledgeDepth === "string" ? payload.knowledgeDepth : "surface",
-    disclosure: typeof payload.disclosure === "string" ? payload.disclosure : "",
-    summary: typeof payload.summary === "string" ? payload.summary : "",
-    status: payload.status === "started" || payload.status === "completed" ? payload.status : "started",
-    completedRoundId: typeof payload.completedRoundId === "string" ? payload.completedRoundId : null,
-    completedAt: typeof payload.completedAt === "string" ? payload.completedAt : null,
-    responsePath:
-      payload.responsePath === "defend" || payload.responsePath === "revise" || payload.responsePath === "absorb"
-        ? payload.responsePath
-        : null,
-    userResponse: typeof payload.userResponse === "string" ? payload.userResponse : null,
-    confidenceAtRoundEnd: typeof payload.confidenceAtRoundEnd === "number" ? payload.confidenceAtRoundEnd : null,
-    confidenceDelta: typeof payload.confidenceDelta === "number" ? payload.confidenceDelta : null,
-    engagementScore: typeof payload.engagementScore === "number" ? payload.engagementScore : null,
-    responseClassification:
-      payload.responseClassification && typeof payload.responseClassification === "object"
-        ? (payload.responseClassification as ResponseClassification)
-        : null,
-    createdAt: typeof payload.createdAt === "string" ? payload.createdAt : event.createdAt.toISOString(),
-  };
+  return parseChallengeDraftEvent(event);
 }
 
 export async function markChallengeDraftCompleted(params: {

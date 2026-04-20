@@ -181,6 +181,7 @@ export const ChallengeStartSchema = z.object({
   critiqueMode: z.enum(["direct", "socratic", "red_team"]).default("direct"),
   critiqueIntensity: z.number().int().min(1).max(5).default(3),
   selectedVoice: z.string().trim().max(120).nullable().optional().default(null),
+  forceRegenerate: z.boolean().optional().default(false),
 });
 
 export const ChallengeResponseSchema = z.object({

@@ -86,6 +86,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       if (confidenceDelta !== 0) {
         await updateConfidence(claimId, userId, input.newConfidence, input.confidenceChangeReason ?? null);
       }
+      const updatedClaimConfidence = confidenceDelta !== 0 ? input.newConfidence : null;
 
       await markChallengeDraftCompleted({
         roundId,
@@ -155,7 +156,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         {
           challengeId: roundId,
           completedRoundId: finalEvent.id,
+          event: finalEvent,
           round: completedRound ?? finalEvent.payload?.dialecticRound ?? null,
+          updatedClaimConfidence,
           summaryArtifact,
         },
         { status: 201 },
@@ -181,6 +184,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       critiqueMode: input.critiqueMode,
       critiqueIntensity: input.critiqueIntensity,
       selectedVoice: input.selectedVoice ?? null,
+      forceRegenerate: input.forceRegenerate,
     });
 
     await track(
