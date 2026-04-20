@@ -7,6 +7,14 @@ export type AnalyticsEvent =
   | { event: "map_created"; properties: { mapId: string } }
   | { event: "claim_created"; properties: { claimId: string; mapId: string; domain: string } }
   | { event: "challenge_started"; properties: { claimId: string; roundNumber: number } }
+  | {
+      event: "challenge_submission_attempted";
+      properties: { claimId: string; roundNumber: number; attemptNumber: number };
+    }
+  | {
+      event: "challenge_submission_failed";
+      properties: { claimId: string; roundNumber: number; attemptNumber: number; reason: string };
+    }
   | { event: "challenge_completed"; properties: { claimId: string; roundNumber: number; engagementScore: number } }
   | { event: "confidence_updated"; properties: { claimId: string; delta: number } }
   | { event: "artifact_generated"; properties: { artifactType: string; mapId: string } }
