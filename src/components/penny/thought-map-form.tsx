@@ -487,7 +487,7 @@ export function ThoughtMapForm({ userId, initialRawThought, onCreatedMap }: Thou
         });
       }
 
-      router.push(`/app/maps/${responsePayload.map.id}`);
+      router.push(`/maps/${responsePayload.map.id}`);
     });
   }
 
@@ -707,7 +707,7 @@ export function ThoughtMapForm({ userId, initialRawThought, onCreatedMap }: Thou
                 <HereBeforeNotification
                   signal={hereBeforeSignal}
                   onDismiss={() => setHereBeforeDismissed(true)}
-                  onViewHistory={(claimId) => router.push(`/app/maps/${claimId}`)}
+                  onViewHistory={(mapId, claimId) => router.push(`/maps/${mapId}?claim=${encodeURIComponent(claimId)}`)}
                 />
               </div>
             ) : null}

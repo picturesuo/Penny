@@ -35,11 +35,11 @@ function escapeHtml(value: string) {
 }
 
 function buildClaimUrl(mapId: string, claimId: string) {
-  return `/app/maps/${mapId}?claim=${encodeURIComponent(claimId)}`;
+  return `/maps/${mapId}?claim=${encodeURIComponent(claimId)}`;
 }
 
 function buildMapUrl(mapId: string) {
-  return `/app/maps/${mapId}`;
+  return `/maps/${mapId}`;
 }
 
 function buildQueueUrl(userId: string) {

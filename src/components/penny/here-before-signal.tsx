@@ -12,7 +12,7 @@ export function HereBeforeNotification({
 }: {
   signal: HereBeforeSignal;
   onDismiss: () => void;
-  onViewHistory: (claimId: string) => void;
+  onViewHistory: (mapId: string, claimId: string) => void;
 }) {
   return (
     <Card className="border border-[#d8c26d] bg-[#fff9df] p-5 shadow-none">
@@ -70,9 +70,8 @@ export function HereBeforeNotification({
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-3">
-        <Button onClick={() => onViewHistory(signal.similarClaimId)}>View the full history</Button>
+        <Button onClick={() => onViewHistory(signal.similarMapId, signal.similarClaimId)}>View the full history</Button>
       </div>
     </Card>
   );
 }
-

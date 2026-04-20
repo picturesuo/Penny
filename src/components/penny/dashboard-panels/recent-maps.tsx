@@ -31,7 +31,7 @@ export function RecentMapsPanel({ panel }: { panel: DashboardPanel }) {
       <div className="mt-4 space-y-3">
         {maps.length ? (
           maps.map((map) => (
-            <Link key={map.id} href={`/app/maps/${map.id}`} className="block rounded-[22px] border border-black/8 bg-[var(--panel)] p-4 transition hover:border-black/15">
+            <Link key={map.id} href={`/maps/${map.id}`} className="block rounded-[22px] border border-black/8 bg-[var(--panel)] p-4 transition hover:border-black/15">
               <p className="text-sm font-medium text-[var(--ink)]">{map.title}</p>
               <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
                 {map.nodeCount} nodes · {map.artifactCount} artifacts

@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArtifactCard } from "@/components/penny/artifact-card";
 import { ClaimCaptureLauncher } from "@/components/penny/claim-capture-launcher";
 import { ThoughtMapWorkspace } from "@/components/penny/thought-map-workspace";
 import { Badge } from "@/components/ui/badge";
@@ -27,15 +26,10 @@ interface MapWorkspaceProps {
 export function MapWorkspace({
   map,
   initialClaims,
-  initialArtifacts,
   userId,
   initialFragments = [],
   availableMaps = [],
 }: MapWorkspaceProps) {
-  const latestArtifact = useMemo(
-    () => [...initialArtifacts].sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime())[0] ?? null,
-    [initialArtifacts],
-  );
   const claimOptions = useMemo(
     () =>
       initialClaims.map((claim) => ({
@@ -53,14 +47,11 @@ export function MapWorkspace({
             <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">Map workspace</p>
             <h1 className="mt-2 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">{map.title}</h1>
             <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
-              Capture a claim, challenge it, teach through the confusing parts, and generate artifacts without leaving the map.
+              Select a claim, start one challenge round, and confirm the saved result in the round history below.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Badge className="bg-white text-[var(--ink)]">
                 {initialClaims.length} claim{initialClaims.length === 1 ? "" : "s"}
-              </Badge>
-              <Badge className="bg-white text-[var(--ink)]">
-                {initialArtifacts.length} artifact{initialArtifacts.length === 1 ? "" : "s"}
               </Badge>
               <Badge className="bg-white text-[var(--ink)]">{availableMaps.length} other map{availableMaps.length === 1 ? "" : "s"}</Badge>
             </div>
@@ -70,13 +61,6 @@ export function MapWorkspace({
             <ClaimCaptureLauncher mapId={map.id} availableClaims={claimOptions} />
           </div>
         </div>
-
-        {latestArtifact ? (
-          <div className="mt-6">
-            <p className="mb-3 text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">Latest artifact</p>
-            <ArtifactCard artifact={latestArtifact} />
-          </div>
-        ) : null}
       </Card>
 
       <ThoughtMapWorkspace

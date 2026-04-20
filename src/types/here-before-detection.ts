@@ -1,5 +1,6 @@
 export type HereBeforeSignal = {
   triggeredFor: string;
+  similarMapId: string;
   similarClaimId: string;
   similarClaimText: string;
   similarityScore: number;
@@ -30,4 +31,3 @@ export type HereBeforeOutcome = {
   concessionsMade: number;
   finalLesson: string | null;
 };
-

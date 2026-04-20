@@ -3255,6 +3255,27 @@ export function ThoughtMapWorkspace({
     }));
   }
 
+  function mergeClaimConfidenceUpdate(claimId: string, confidence: number) {
+    const normalizedConfidence = Math.max(0, Math.min(100, Math.round(confidence))) / 100;
+
+    setMap((currentMap) => ({
+      ...currentMap,
+      nodes: currentMap.nodes.map((node) =>
+        node.id === claimId && node.scores
+          ? {
+              ...node,
+              scores: {
+                ...node.scores,
+                confidence: normalizedConfidence,
+              },
+              updatedAt: new Date(),
+            }
+          : node,
+      ),
+      updatedAt: new Date(),
+    }));
+  }
+
   function mergeBeliefPropagationEvent(event: SerializableThoughtMapEvent) {
     const normalizedEvent = normalizeEvent(event);
 
@@ -3851,8 +3872,12 @@ export function ThoughtMapWorkspace({
               event: SerializableThoughtMapEvent;
               round?: SerializableDialecticRound | null;
               roundContext?: unknown;
+              updatedClaimConfidence?: number | null;
             };
             mergeDialecticRoundEvent(payload.event);
+            if (claimId && typeof payload.updatedClaimConfidence === "number") {
+              mergeClaimConfidenceUpdate(claimId, payload.updatedClaimConfidence);
+            }
             const prompt = buildLearningPromptAfterRound({
               response,
               round: payload.round ?? null,

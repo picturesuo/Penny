@@ -188,7 +188,7 @@ export function NewMapModal({
       }
 
       onClose();
-      router.push(`/app/maps/${mapId}`);
+      router.push(`/maps/${mapId}`);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Something went wrong");
       setCreating(false);

@@ -303,7 +303,8 @@ export async function detectHereBeforeSignal(userId: string, newClaim: HereBefor
 
   return {
     triggeredFor: newClaim.id,
-    similarClaimId: topMatch.claim.id,
+    similarMapId: topMatch.claim.id,
+    similarClaimId: topMatch.representativeClaim?.id ?? topMatch.claim.nodes[0]?.id ?? topMatch.claim.id,
     similarClaimText: topMatch.representativeClaim?.content ?? topMatch.capture.title,
     similarityScore: topMatch.score,
     similarityReasons: topMatch.reasons,

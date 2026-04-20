@@ -13,7 +13,7 @@ function resultHref(result: SearchResult) {
   }
 
   if (result.mapId) {
-    return `/app/maps/${result.mapId}`;
+    return `/maps/${result.mapId}`;
   }
 
   if (result.entityType === "shape") {
