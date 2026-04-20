@@ -128,6 +128,8 @@ export const CreateClaimCaptureSchema = z.object({
 
 export const CreateClaimSchema = CreateClaimCaptureSchema.extend({
   note: z.string().max(500).nullable().optional(),
+  context: z.string().trim().min(8, "Add brief provenance or context.").max(500),
+  dependencyClaimIds: z.array(ClaimIdSchema).max(8, "Link at most 8 dependencies.").default([]),
 });
 
 export const UpdateClaimSchema = z.object({
