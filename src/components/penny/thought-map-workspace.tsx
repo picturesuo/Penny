@@ -5942,7 +5942,7 @@ export function ThoughtMapWorkspace({
                       confidenceAtRoundEnd: newConfidence,
                     });
 
-                    recordDialecticRound({
+                    await recordDialecticRound({
                       round: round.round,
                       roundIndex: round.roundIndex,
                       title: round.title,
