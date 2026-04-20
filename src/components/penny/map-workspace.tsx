@@ -44,9 +44,13 @@ export function MapWorkspace({
   launchState = null,
 }: MapWorkspaceProps) {
   const [showFullWorkspace, setShowFullWorkspace] = useState(launchState == null);
-  const [capturePanel, setCapturePanel] = useState<"claim" | "import">(
+  const [capturePanel, setCapturePanel] = useState<"claim" | "import" | "quick">(
     launchState?.intent === "capture" && launchState.openImport ? "import" : "claim",
   );
+  const [quickCaptureText, setQuickCaptureText] = useState("");
+  const [quickCaptureSaving, setQuickCaptureSaving] = useState(false);
+  const [quickCaptureFeedback, setQuickCaptureFeedback] = useState<string | null>(null);
+  const [quickCaptureError, setQuickCaptureError] = useState<string | null>(null);
   const claimOptions = useMemo(
     () =>
       initialClaims.map((claim) => ({
@@ -60,6 +64,46 @@ export function MapWorkspace({
     [initialClaims, initialSelectedClaimId],
   );
   const focusIntent = !showFullWorkspace ? launchState?.intent ?? null : null;
+
+  async function handleQuickCaptureSave() {
+    const rawText = quickCaptureText.trim();
+    if (!rawText || quickCaptureSaving) {
+      return;
+    }
+
+    setQuickCaptureSaving(true);
+    setQuickCaptureError(null);
+    setQuickCaptureFeedback(null);
+
+    try {
+      const response = await fetch("/api/quick-capture", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rawText,
+          captureSource: "web_shortcut",
+          mapId: map.id,
+          sourceMapId: map.id,
+          currentStage: "outline",
+          currentFocus: map.title,
+          currentContext: map.rawThought,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Penny could not save this quick note right now.");
+      }
+
+      setQuickCaptureText("");
+      setQuickCaptureFeedback("Quick note saved.")
+    } catch (error) {
+      setQuickCaptureError(error instanceof Error ? error.message : "Penny could not save this quick note right now.");
+    } finally {
+      setQuickCaptureSaving(false);
+    }
+  }
 
   if (focusIntent === "capture") {
     return (
@@ -76,16 +120,24 @@ export function MapWorkspace({
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge>{capturePanel === "claim" ? "Capture claim" : "Import source"}</Badge>
+                <Badge>
+                  {capturePanel === "claim" ? "Type into Brain" : capturePanel === "import" ? "Paste or import" : "Quick note"}
+                </Badge>
                 <Badge className="bg-white text-[var(--ink)]">{map.title}</Badge>
               </div>
               <h2 className="mt-4 text-3xl font-semibold text-[var(--ink)]">
-                {capturePanel === "claim" ? "Make one new claim visible." : "Pull source material into the map first."}
+                {capturePanel === "claim"
+                  ? "Make one new claim visible."
+                  : capturePanel === "import"
+                    ? "Pull source material into the map first."
+                    : "Save the thought before you decide what it is."}
               </h2>
               <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
                 {capturePanel === "claim"
                   ? "Start with the smallest version of the thought worth keeping in Brain, then let the map grow around it later."
-                  : "Extract candidate claims from a URL, pasted text, or a document before you reopen the rest of the workspace."}
+                  : capturePanel === "import"
+                    ? "Extract candidate claims from a URL, pasted text, or a document before you reopen the rest of the workspace."
+                    : "Use quick note when the thought is too raw for a claim or source import but still worth catching now."}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -101,7 +153,14 @@ export function MapWorkspace({
                 variant={capturePanel === "import" ? "primary" : "secondary"}
                 onClick={() => setCapturePanel("import")}
               >
-                Import source
+                Paste or import
+              </Button>
+              <Button
+                className="gap-2"
+                variant={capturePanel === "quick" ? "primary" : "secondary"}
+                onClick={() => setCapturePanel("quick")}
+              >
+                Quick note
               </Button>
             </div>
           </div>
@@ -117,9 +176,33 @@ export function MapWorkspace({
           <div className="mt-5">
             {capturePanel === "claim" ? (
               <ClaimCaptureLauncher mapId={map.id} availableClaims={claimOptions} />
-            ) : (
+            ) : capturePanel === "import" ? (
               <div id="import-source" className="scroll-mt-28">
                 <DocumentImport mapId={map.id} />
+              </div>
+            ) : (
+              <div className="rounded-[24px] border border-black/8 bg-white p-5">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Quick note</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                  Save the fragment first, then decide later whether it should become a claim, source import, or something to revisit.
+                </p>
+                <textarea
+                  className="mt-4 min-h-32 w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                  placeholder="Capture the quick note, fragment, or fleeting thought you do not want to lose..."
+                  value={quickCaptureText}
+                  onChange={(event) => setQuickCaptureText(event.target.value)}
+                />
+                {quickCaptureError ? (
+                  <p className="mt-3 rounded-[16px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm text-[#8b3d2f]">{quickCaptureError}</p>
+                ) : null}
+                {quickCaptureFeedback ? (
+                  <p className="mt-3 rounded-[16px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm text-[#2f6d47]">{quickCaptureFeedback}</p>
+                ) : null}
+                <div className="mt-4">
+                  <Button className="gap-2" disabled={quickCaptureSaving || quickCaptureText.trim().length === 0} onClick={() => void handleQuickCaptureSave()}>
+                    {quickCaptureSaving ? "Saving..." : "Save quick note"}
+                  </Button>
+                </div>
               </div>
             )}
           </div>
