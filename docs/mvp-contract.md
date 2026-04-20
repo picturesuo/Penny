@@ -342,3 +342,125 @@ After this cut, the signed-in product should answer three questions immediately:
 
 - Did it work?
   The round submission either appears in the saved audit trail or shows a clear failure state.
+
+## Step 3 Trust And Completion Contract
+
+This section defines what the narrowed MVP path has to feel like in use. The goal is not broader scope. The goal is to make the surviving loop truthful enough to learn from.
+
+### The Trust Standard
+
+For the current MVP, trustworthy means:
+
+- the UI always tells the truth
+- the product does not silently fail
+- success is visible and specific
+- failure is visible and actionable
+
+If the interface implies more certainty than the persistence layer has earned, the loop is still prototype-grade.
+
+### Current Trust Path
+
+The load-bearing loop is:
+
+1. user enters the map workspace
+2. user sees which claim is in focus
+3. user starts one challenge round
+4. user writes a response
+5. user submits the response
+6. user knows whether it saved
+7. user sees the saved result reflected back in the round history
+
+### Required Visible States
+
+The core round flow must make these states legible:
+
+- no active response yet
+- draft in progress
+- submission in progress
+- submission succeeded
+- submission failed
+
+### Truth Rules For The Current Challenge Round
+
+- The round card must stay open while the response is still a draft.
+- The submit button must disable while the request is in flight.
+- The loading state must name the action, not just show a spinner with no meaning.
+- A round must not appear completed until persistence actually succeeds.
+- A failed save must keep the response draft, selected response path, and confidence state intact.
+- A saved round must be reflected in visible history, not only implied by a toast or button change.
+- Validation messages must name the real contract, including the trimmed 10-character response floor and the 0-100 confidence bounds.
+
+### What Success Must Look Like
+
+- the completed round shows the saved user response
+- the round reads as completed rather than merely dismissed
+- the confidence change is shown as the saved start-to-end delta
+- the prior-round trail remains visible
+- the user can tell what was stored without reloading or guessing
+
+### What Failure Must Look Like
+
+- invalid response stays invalid and does not collapse the interaction
+- failed persistence keeps the round in an editable state
+- the error copy is direct and actionable
+- failure cannot be mistaken for completion
+
+Preferred failure copy is blunt and contract-bound:
+
+- `Response must be at least 10 non-space characters.`
+- `Couldn't save this round. Try again.`
+- `Confidence must be between 0 and 100.`
+
+### Recovery Rules
+
+- preserve the typed response on failure
+- preserve the selected response path on failure
+- preserve the confidence input on failure
+- do not kick the user to another screen
+- do not reset the whole round card unless the user explicitly starts a different round
+
+### Hierarchy Rules For The Core Screen
+
+The round UI should read in this order:
+
+1. claim in focus
+2. challenge prompt
+3. response field
+4. response-path selection
+5. confidence input
+6. submit action
+7. saved result and prior rounds
+
+Secondary material should stay quieter than the next required action.
+
+### Highest-Value Polish Order
+
+1. truthful submit behavior
+2. clear error handling
+3. obvious saved state
+4. input preservation on failure
+5. visual hierarchy around the next action
+6. copy tightening
+7. cosmetic polish
+
+### Current Penny-Specific Application
+
+In the live challenge-round slice, Step 3 should hold the line on these points:
+
+- starting a round must clearly open a live interaction
+- the claim in view must stay obvious
+- the response field must communicate the real minimum bar
+- the submit button must reflect in-flight work
+- failed POSTs must not produce a completed-looking card
+- successful POSTs must visibly update the saved round trail
+- saved confidence movement must read as part of the persisted round outcome
+- current-round input must stay visually distinct from prior rounds
+
+### Acceptance Criteria For Step 3
+
+- the user always knows the next action
+- the submit flow shows visible draft, loading, success, and failure states
+- success is reflected in saved history, not just implied
+- failure never masquerades as completion
+- the user’s work is preserved when something goes wrong
+- the core challenge screen feels narrow, intentional, and safe to iterate on
