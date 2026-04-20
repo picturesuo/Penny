@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button'
 import { ConfidenceSlider } from './confidence-slider'
 import { bestNextMoveCopy, deriveBestNextMove, type BestNextMoveKey, type BestNextMoveRecommendation } from '@/lib/challenge-next-move'
 
-const SURFACE_EYEBROW_CLASS = 'text-[11px] uppercase tracking-[0.2em] text-[var(--muted-ink)]'
-const QUIET_PANEL_CLASS = 'rounded-[20px] border border-black/8 bg-white p-4 shadow-[0_10px_24px_rgba(34,39,46,0.04)]'
+const SURFACE_EYEBROW_CLASS = 'text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]'
+const QUIET_PANEL_CLASS = 'rounded-[22px] border border-black/8 bg-white p-4 shadow-[0_10px_24px_rgba(34,39,46,0.04)]'
 const INSET_PANEL_CLASS = 'rounded-[18px] bg-[var(--panel)] px-4 py-3'
 const ERROR_NOTICE_CLASS = 'mt-3 rounded-[18px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm leading-6 text-[#8b3d2f]'
 const SUCCESS_NOTICE_CLASS = 'mt-3 rounded-[18px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm leading-6 text-[#2f6d47]'
@@ -249,15 +249,15 @@ export function ChallengeRound({
           : 'bg-white text-[var(--ink)]'
 
   return (
-    <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5 shadow-[0_14px_34px_rgba(34,39,46,0.05)]">
+    <div className={`penny-reveal rounded-[24px] border border-black/8 bg-[linear-gradient(180deg,rgba(250,244,236,0.98)_0%,rgba(242,230,215,0.96)_100%)] p-5 shadow-[0_14px_34px_rgba(34,39,46,0.05)] ${hasCompletedResponse ? 'penny-saved-flash' : ''}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{round.round}</span>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)] shadow-[0_8px_18px_rgba(34,39,46,0.04)]">{round.round}</span>
             <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone}`}>{statusLabel}</span>
             {generationLabel ? <span className={`rounded-full px-3 py-1 text-xs font-medium ${generationTone}`}>{generationLabel}</span> : null}
           </div>
-          <p className="mt-3 text-lg font-semibold leading-7 text-[var(--ink)]">{round.title}</p>
+          <p className="font-display mt-3 text-[1.5rem] font-semibold leading-[1.06] text-[var(--ink)]">{round.title}</p>
           <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
             {generationStatus === 'generating'
               ? 'Penny is assembling the next critique for this claim.'
@@ -299,7 +299,7 @@ export function ChallengeRound({
           </p>
           {onRetryGeneration ? (
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button type="button" className="gap-2" onClick={() => void onRetryGeneration()}>
+                <Button type="button" className="penny-press gap-2" onClick={() => void onRetryGeneration()}>
                 Retry generation
               </Button>
             </div>
@@ -423,7 +423,7 @@ export function ChallengeRound({
           </div>
 
           {bestNextMove ? (
-            <div className="mt-4 rounded-[20px] border border-[#c7d8f8] bg-[#eef4ff] p-5 shadow-[0_10px_24px_rgba(69,96,122,0.08)]">
+            <div className="penny-reveal mt-4 rounded-[22px] border border-[#d0c2af] bg-[linear-gradient(180deg,#f7efe2_0%,#efe2cf_100%)] p-5 shadow-[0_12px_28px_rgba(69,96,122,0.08)]">
               <p className="text-[11px] uppercase tracking-[0.2em] text-[#45607a]">Best next move</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--ink)]">{bestNextMove.primary.label}</span>
@@ -437,10 +437,10 @@ export function ChallengeRound({
               ) : null}
               <div className="mt-4 flex flex-wrap gap-2">
                 {canHandleNextMove(bestNextMove.primary.key) ? (
-                  <Button
-                    type="button"
-                    className="gap-2"
-                    disabled={actingMove != null}
+                    <Button
+                      type="button"
+                      className="penny-press gap-2"
+                      disabled={actingMove != null}
                     onClick={() => void handleBestNextMoveClick(bestNextMove.primary.key)}
                   >
                     {actingMove === bestNextMove.primary.key ? 'Working...' : bestNextMove.primary.label}
@@ -453,7 +453,7 @@ export function ChallengeRound({
                       key={candidate.key}
                       type="button"
                       variant="secondary"
-                      className="gap-2"
+                      className="penny-press gap-2"
                       disabled={actingMove != null}
                       onClick={() => void handleBestNextMoveClick(candidate.key)}
                     >
@@ -495,7 +495,7 @@ export function ChallengeRound({
             </div>
             <textarea
               id={`round-response-${round.round}`}
-              className="mt-3 min-h-[88px] w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                  className="penny-soft-switch mt-3 min-h-[88px] w-full rounded-[18px] border border-black/10 bg-[var(--paper)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--ink)]"
               placeholder="Capture the response that should persist with this round."
               value={responseDraft}
               onChange={(event) => onResponseDraftChange(event.target.value)}
@@ -513,7 +513,7 @@ export function ChallengeRound({
                   key={`${round.round}-${path}`}
                   type="button"
                   variant={selectedResponsePath === path ? 'primary' : 'secondary'}
-                  className="px-3 py-2 text-xs"
+                  className="penny-press px-3 py-2 text-xs"
                   onClick={() => setSelectedResponsePath(path)}
                 >
                   {path}
@@ -546,7 +546,7 @@ export function ChallengeRound({
                 </div>
                 <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What specifically did you concede?</label>
                 <textarea
-                  className="mt-2 min-h-[64px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                  className="penny-soft-switch mt-2 min-h-[64px] w-full rounded-[16px] border border-black/10 bg-[var(--paper)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--ink)]"
                   placeholder="Optional: name the exact point you conceded."
                   value={round.roundContextDraft.concessionNote}
                   onChange={(event) => onRoundContextChange({ concessionNote: event.target.value })}
@@ -562,7 +562,7 @@ export function ChallengeRound({
                       key={`${round.round}-connected-${value}`}
                       type="button"
                       variant={round.roundContextDraft.connectedClaimsChanged === (value === 'yes' ? true : value === 'no' ? false : null) ? 'primary' : 'secondary'}
-                      className="px-3 py-2 text-xs"
+                      className="penny-press px-3 py-2 text-xs"
                       onClick={() =>
                         onRoundContextChange({
                           connectedClaimsChanged: value === 'yes' ? true : value === 'no' ? false : null,
@@ -574,14 +574,14 @@ export function ChallengeRound({
                   ))}
                 </div>
                 <textarea
-                  className="mt-3 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                  className="penny-soft-switch mt-3 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--paper)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--ink)]"
                   placeholder="Optional: name the claims affected."
                   value={round.roundContextDraft.connectedClaimsNote}
                   onChange={(event) => onRoundContextChange({ connectedClaimsNote: event.target.value })}
                 />
                 <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">New evidence added?</label>
                 <textarea
-                  className="mt-2 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                  className="penny-soft-switch mt-2 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--paper)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--ink)]"
                   placeholder="Optional: paste the new evidence or source you added."
                   value={round.roundContextDraft.newEvidenceNote}
                   onChange={(event) => onRoundContextChange({ newEvidenceNote: event.target.value })}
@@ -598,7 +598,7 @@ export function ChallengeRound({
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
               Path: {selectedResponsePath}
             </p>
-            <Button type="submit" disabled={submitting || !isSteelManReady || trimmedResponse.length < 10} className="gap-2">
+            <Button type="submit" disabled={submitting || !isSteelManReady || trimmedResponse.length < 10} className="penny-press gap-2">
               {submitting ? 'Saving round...' : 'Submit response'}
             </Button>
           </div>
@@ -607,7 +607,7 @@ export function ChallengeRound({
 
       {!hasCompletedResponse && generationStatus === 'fallback' && onRetryGeneration ? (
         <div className="mt-4 flex justify-end">
-          <Button type="button" variant="secondary" className="gap-2" onClick={() => void onRetryGeneration()}>
+          <Button type="button" variant="secondary" className="penny-press gap-2" onClick={() => void onRetryGeneration()}>
             Retry generation
           </Button>
         </div>
