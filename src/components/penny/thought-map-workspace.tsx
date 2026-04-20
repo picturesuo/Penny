@@ -2074,6 +2074,14 @@ export function ThoughtMapWorkspace({
   const currentTeachBackAttempts = currentTeachBackNodeId ? teachBackAttempts[currentTeachBackNodeId] ?? [] : [];
   const currentTeachBackAnalysis = currentTeachBackFeedback ?? selectedTeachBackAnalysis;
   const normalizedInitialLearningQuestion = initialLearningQuestion?.trim() ?? "";
+  const teachBackPromptLabel = normalizedInitialLearningQuestion ? "Answer the question in context" : "Explain the concept in context";
+  const teachBackPromptBody = normalizedInitialLearningQuestion
+    ? `Use your learning question as the opening frame, then explain what it means for "${selectedGraphNode?.node.content ?? map.rawThought}".`
+    : "State what the concept means in this claim before Penny checks the explanation.";
+  const teachBackPlaceholder = normalizedInitialLearningQuestion
+    ? `Start with: ${normalizedInitialLearningQuestion}`
+    : `Before I explain, tell me what you think ${selectedTeachBackFocus.concept} means in this claim.`;
+  const hasTeachBackReview = Boolean(currentTeachBackFeedback || currentTeachBackAttempts.length > 0);
   useEffect(() => {
     if (!currentTeachBackNodeId || !normalizedInitialLearningQuestion || currentTeachBackDraft.trim().length > 0 || !selectedGraphNode?.node) {
       return;
@@ -2093,13 +2101,11 @@ export function ThoughtMapWorkspace({
   useEffect(() => {
     if (focusIntent !== "learn") {
       setFocusedLearnDetailOpen(false);
-      return;
     }
-
-    if (currentTeachBackAttempts.length > 0 || currentTeachBackDraft.trim().length > 0) {
-      setFocusedLearnDetailOpen(true);
-    }
-  }, [currentTeachBackAttempts.length, currentTeachBackDraft, focusIntent]);
+  }, [focusIntent]);
+  useEffect(() => {
+    setFocusedLearnDetailOpen(false);
+  }, [currentTeachBackNodeId]);
   const handleTeachBackCheck = () => {
     if (!currentTeachBackNodeId) {
       return;
@@ -4886,26 +4892,17 @@ export function ThoughtMapWorkspace({
                 </Badge>
               ) : null}
             </div>
-            <h2 className="mt-4 text-3xl font-semibold text-[var(--ink)]">Explain the claim back in your own words.</h2>
+            <h2 className="mt-4 text-3xl font-semibold text-[var(--ink)]">Learn the claim by teaching it back clearly.</h2>
             <p className="mt-3 text-base leading-7 text-[var(--muted-ink)]">
-              Penny keeps learning tied to the active claim, then checks whether your explanation actually closes the gap.
+              Penny keeps learning tied to the active claim, then checks whether your explanation actually closes the gap that matters here.
             </p>
-            {normalizedInitialLearningQuestion ? (
-              <div className="mt-4 rounded-[22px] border border-black/8 bg-white/80 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Learning question in view</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{normalizedInitialLearningQuestion}</p>
-                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
-                  Start by answering this in the context of the selected claim, then let Penny annotate where the explanation still breaks.
-                </p>
-              </div>
-            ) : null}
           </div>
           <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-4 lg:max-w-sm">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Quiet context</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Where Penny will look</p>
             <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
               {selectedKnowledgeSurface.teachBackGap.length
                 ? `Watch for ${selectedKnowledgeSurface.teachBackGap.join(", ")} while you explain.`
-                : "Explain the concept plainly in this claim before Penny opens the deeper diagnostics."}
+                : "Explain the concept plainly in this claim, then let Penny show whether anything still slips."}
             </p>
             <button
               type="button"
@@ -4920,31 +4917,47 @@ export function ThoughtMapWorkspace({
         {selectedGraphNode ? (
           <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <div className="space-y-4">
-              <div className="rounded-[24px] bg-[var(--panel)] p-5">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Concept handle</p>
-                <p className="mt-2 text-sm font-medium text-[var(--ink)]">{selectedTeachBackFocus.concept}</p>
-                <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{selectedTeachBackFocus.scaffold}</p>
-                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
-                  Apply it to <span className="font-medium text-[var(--ink)]">{selectedGraphNode.node.content}</span>
+              <div className="rounded-[28px] border border-black/8 bg-[linear-gradient(135deg,rgba(255,255,255,0.95),rgba(245,240,229,0.9))] p-6">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">
+                    {teachBackPromptLabel}
+                  </span>
+                  <span className="rounded-full bg-[var(--panel)] px-3 py-1 text-xs font-medium text-[var(--muted-ink)]">
+                    {selectedTeachBackFocus.concept}
+                  </span>
+                </div>
+                <p className="mt-4 text-xl font-semibold leading-8 text-[var(--ink)]">
+                  {normalizedInitialLearningQuestion || `Explain ${selectedTeachBackFocus.concept} in the context of this claim.`}
                 </p>
+                <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{selectedTeachBackFocus.scaffold}</p>
+                <div className="mt-4 rounded-[20px] bg-white/90 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Claim anchor</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedGraphNode.node.content}</p>
+                </div>
+                {selectedKnowledgeSurface.teachBackGap.length ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {selectedKnowledgeSurface.teachBackGap.map((gap) => (
+                      <Badge key={gap} className="bg-[#fff6ed] text-[#8b4d1f]">
+                        {gap}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
-              <div className="rounded-[24px] border border-black/8 bg-white p-5">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
-                  {normalizedInitialLearningQuestion ? "Answer the question in context" : "Explain it back"}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-                  {normalizedInitialLearningQuestion
-                    ? `Use your learning question as the opening frame, then explain what it means for "${selectedGraphNode.node.content}".`
-                    : "State what the concept means in this claim before Penny checks the explanation."}
-                </p>
+              <div className="rounded-[28px] border border-black/8 bg-white p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Your explanation</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{teachBackPromptBody}</p>
+                  </div>
+                  <span className="rounded-full bg-[var(--panel)] px-3 py-1 text-xs font-medium text-[var(--muted-ink)]">
+                    {hasTeachBackReview ? "Checked" : currentTeachBackDraft.trim().length > 0 ? "Draft" : "Ready"}
+                  </span>
+                </div>
                 <textarea
-                  className="mt-3 min-h-32 w-full rounded-[18px] border border-black/10 bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
-                  placeholder={
-                    normalizedInitialLearningQuestion
-                      ? `Start with: ${normalizedInitialLearningQuestion}`
-                      : `Before I explain, tell me what you think ${selectedTeachBackFocus.concept} means in this claim.`
-                  }
+                  className="mt-4 min-h-[220px] w-full rounded-[22px] border border-black/10 bg-[var(--panel)] px-5 py-4 text-[15px] leading-7 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                  placeholder={teachBackPlaceholder}
                   autoFocus
                   value={currentTeachBackDraft}
                   onChange={(event) =>
@@ -4954,9 +4967,9 @@ export function ThoughtMapWorkspace({
                     }))
                   }
                 />
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap items-center gap-2">
                   <Button className="gap-2" onClick={handleTeachBackCheck} disabled={!currentTeachBackNodeId || isPending}>
-                    Check explanation
+                    {isPending ? "Checking..." : "Check explanation"}
                   </Button>
                   <Button
                     variant="secondary"
@@ -4972,11 +4985,58 @@ export function ThoughtMapWorkspace({
                   >
                     Use scaffold
                   </Button>
+                  <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                    Best in 3-6 concrete sentences.
+                  </span>
                 </div>
               </div>
             </div>
 
             <div className="space-y-4">
+              <div className="rounded-[28px] border border-black/8 bg-white p-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                    {hasTeachBackReview ? "What Penny sees" : "What happens after you check"}
+                  </p>
+                  {currentTeachBackAnalysis.annotations.length ? (
+                    <span className="rounded-full bg-[var(--panel)] px-3 py-1 text-xs font-medium text-[var(--muted-ink)]">
+                      {currentTeachBackAnalysis.annotations.length} annotation{currentTeachBackAnalysis.annotations.length === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                </div>
+                {hasTeachBackReview ? (
+                  <>
+                    <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.summary}</p>
+                    <div className="mt-4 rounded-[20px] bg-[var(--panel)] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Why it matters here</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.whyItMatters}</p>
+                    </div>
+                    <div className="mt-4 rounded-[20px] bg-[var(--panel)] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Correction</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.correction}</p>
+                    </div>
+                    <div className="mt-4 rounded-[20px] bg-[#eef4ff] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#45607a]">Try again with this frame</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.restatementPrompt}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
+                      Penny will read your explanation against the active claim, name the missing piece, and give you one clean restatement to try next.
+                    </p>
+                    <div className="mt-4 rounded-[20px] bg-[var(--panel)] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Focus while writing</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                        {selectedKnowledgeSurface.teachBackGap.length
+                          ? `Make sure your explanation covers ${selectedKnowledgeSurface.teachBackGap.join(", ")} in the claim’s own context.`
+                          : "Explain the concept in plain language, then connect it back to the claim before you check it."}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
               {focusedLearnDetailOpen ? (
                 <>
                   <div className="rounded-[24px] border border-black/8 bg-white p-5">
@@ -4984,16 +5044,6 @@ export function ThoughtMapWorkspace({
                     <div className="mt-3 rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-7 text-[var(--ink)]">
                       {highlightTeachBackResponse(currentTeachBackDraft, currentTeachBackAnalysis.annotations)}
                     </div>
-                  </div>
-
-                  <div className="rounded-[24px] border border-black/8 bg-white p-5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What Penny sees</p>
-                    <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.summary}</p>
-                    <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.whyItMatters}</p>
-                    <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Correction</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.correction}</p>
-                    <p className="mt-4 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Restate with the correction</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{currentTeachBackAnalysis.restatementPrompt}</p>
                   </div>
 
                   {learningPrompts[0] ? (
