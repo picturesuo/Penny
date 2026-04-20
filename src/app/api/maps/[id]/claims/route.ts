@@ -18,6 +18,25 @@ const claimCaptureSchema = CreateClaimSchema.extend({
   note: z.string().max(500).nullable().optional(),
 });
 
+function formatClaimCaptureNote(params: {
+  provenance: string;
+  context: string;
+  dependencyClaims: Array<{ id: string; content: string }>;
+}) {
+  const lines = [
+    "## Claim capture",
+    `- Provenance: ${params.provenance}`,
+    `- Context: ${params.context}`,
+    `- Dependencies: ${
+      params.dependencyClaims.length
+        ? params.dependencyClaims.map((claim) => claim.content).join(" | ")
+        : "none linked"
+    }`,
+  ];
+
+  return lines.join("\n");
+}
+
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = MapParamsSchema.parse(await context.params);
@@ -67,10 +86,25 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
 
     const input = await validateBody(claimCaptureSchema)(await request.json());
+    const dependencyIds = [...new Set(input.dependencyClaimIds)];
+    const dependencyClaims = map.nodes.filter(
+      (node) => node.kind !== "root" && dependencyIds.includes(node.id),
+    );
+
+    if (dependencyClaims.length !== dependencyIds.length) {
+      throw new ValidationError("dependencyClaimIds: Every dependency must be an existing claim on this map.");
+    }
 
     const claim = await createClaim(userId, id, {
       content: input.text,
-      note: input.note ?? input.provenance,
+      note: formatClaimCaptureNote({
+        provenance: input.provenance,
+        context: input.context,
+        dependencyClaims: dependencyClaims.map((node) => ({
+          id: node.id,
+          content: node.content,
+        })),
+      }),
       kind: "core_claim",
       nodeStatus: "active",
       structureKind: "assertion",
@@ -85,7 +119,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         claimId: claim.id,
         confidence: input.confidence,
         provenance: input.provenance,
+        context: input.context,
         stakes: input.stakes,
+        dependencyClaimIds: dependencyIds,
+        dependencyClaims: dependencyClaims.map((node) => ({
+          id: node.id,
+          content: node.content,
+        })),
       },
     });
 
@@ -94,7 +134,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       sourceNodeId: claim.id,
       targetNodeId: claim.id,
       mode: input.confidence >= 50 ? "hold" : "reduce",
-      reasoning: `Initial capture at ${input.confidence}% confidence. ${input.provenance}.${input.stakes.length > 0 ? ` Stakes: ${input.stakes.join(", ")}.` : ""}`,
+      reasoning: `Initial capture at ${input.confidence}% confidence. ${input.provenance}. Context: ${input.context}.${dependencyClaims.length > 0 ? ` Dependencies: ${dependencyClaims.map((node) => node.content).join(", ")}.` : ""}${input.stakes.length > 0 ? ` Stakes: ${input.stakes.join(", ")}.` : ""}`,
     });
 
     void track(
