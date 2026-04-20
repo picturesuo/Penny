@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUserFromCookies } from "@/server/auth";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import { logger } from "@/lib/logger";
 import { track } from "@/lib/analytics";
 import {
   ChallengeResponseSchema,
   MapClaimParamsSchema,
   RoundIdSchema,
-  validateBody,
-  ValidationError,
 } from "@/lib/validation/schemas";
 import {
   getChallengeDraftRound,
@@ -29,16 +27,23 @@ export async function POST(
   context: { params: Promise<{ id: string; claimId: string; roundId: string }> },
 ) {
   try {
-    const user = await getAuthenticatedUserFromCookies();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = await getCurrentAuthenticatedUserId();
 
     const params = await context.params;
     const { id, claimId } = MapClaimParamsSchema.parse(params);
     const roundId = RoundIdSchema.parse(params.roundId);
-    const input = await validateBody(ChallengeResponseSchema)(await request.json());
-    const draft = await getChallengeDraftRound(roundId, user.id);
+    const body = await request.json();
+    const parsedResponse = ChallengeResponseSchema.safeParse(body);
+
+    if (!parsedResponse.success) {
+      return NextResponse.json(
+        { error: parsedResponse.error.issues[0]?.message ?? "Invalid challenge response" },
+        { status: 400 },
+      );
+    }
+
+    const input = parsedResponse.data;
+    const draft = await getChallengeDraftRound(roundId, userId);
 
     if (!draft || draft.mapId !== id || draft.claimId !== claimId) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -72,7 +77,7 @@ export async function POST(
     const completedRound = (finalEvent.payload?.dialecticRound ?? null) as CompletedChallengeRound | null;
 
     if (confidenceDelta !== 0) {
-      await updateConfidence(claimId, user.id, input.newConfidence, input.confidenceChangeReason ?? null);
+      await updateConfidence(claimId, userId, input.newConfidence, input.confidenceChangeReason ?? null);
     }
 
     await markChallengeDraftCompleted({
@@ -98,11 +103,11 @@ export async function POST(
       summaryArtifact = (await generateChallengeSummaryArtifact({
         mapId: id,
         claimId,
-        userId: user.id,
+        userId,
       })).artifact;
     } catch (summaryError) {
       logger.warn("Failed to generate challenge summary artifact", {
-        userId: user.id,
+        userId,
         featureId: "challenge-rounds",
         data: {
           mapId: id,
@@ -122,11 +127,11 @@ export async function POST(
           engagementScore: completedRound && typeof completedRound.engagementScore === "number" ? completedRound.engagementScore : 0,
         },
       },
-      user.id,
+      userId,
     );
 
     logger.info("Challenge round completed", {
-      userId: user.id,
+      userId,
       featureId: "challenge-rounds",
       data: {
         mapId: id,
@@ -149,10 +154,6 @@ export async function POST(
       { status: 201 },
     );
   } catch (error) {
-    if (error instanceof ValidationError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
     if (error instanceof Error && /not found/i.test(error.message)) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
