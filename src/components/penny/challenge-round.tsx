@@ -69,7 +69,11 @@ export type ChallengeRoundModel = {
   roundContextDraft: ChallengeRoundContextDraft
 }
 
-type BestNextMoveKey = 'revise_claim' | 'gather_evidence' | 'challenge_dependency' | 'run_another_round' | 'mark_for_revisit'
+export type BestNextMoveKey = 'revise_claim' | 'gather_evidence' | 'challenge_dependency' | 'run_another_round' | 'mark_for_revisit'
+
+export type BestNextMoveActionResult = {
+  message?: string
+}
 
 type BestNextMove = {
   primary: {
@@ -93,6 +97,7 @@ interface ChallengeRoundProps {
   onRoundContextChange: (patch: Partial<ChallengeRoundContextDraft>) => void
   onResponseSubmit: (response: string, newConfidence: number, responsePath: DialecticResponsePath) => Promise<void>
   onRequestNewRound?: () => void
+  onBestNextMoveAction?: (action: Exclude<BestNextMoveKey, 'run_another_round'>) => Promise<BestNextMoveActionResult | void> | BestNextMoveActionResult | void
   isSteelManReady: boolean
 }
 
@@ -105,6 +110,7 @@ export function ChallengeRound({
   onRoundContextChange,
   onResponseSubmit,
   onRequestNewRound,
+  onBestNextMoveAction,
   isSteelManReady,
 }: ChallengeRoundProps) {
   const [showWhyNow, setShowWhyNow] = useState(false)
@@ -113,6 +119,9 @@ export function ChallengeRound({
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(Boolean(round.dialecticRound?.userResponse))
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [actingMove, setActingMove] = useState<BestNextMoveKey | null>(null)
+  const [nextMoveError, setNextMoveError] = useState<string | null>(null)
+  const [nextMoveFeedback, setNextMoveFeedback] = useState<string | null>(null)
 
   const trimmedResponse = responseDraft.trim()
   const isRoundOpen = !round.dialecticRound?.closedAt
@@ -124,6 +133,9 @@ export function ChallengeRound({
     setShowWhyNow(false)
     setShowPriorRounds(false)
     setSubmitError(null)
+    setActingMove(null)
+    setNextMoveError(null)
+    setNextMoveFeedback(null)
   }, [round.round, round.dialecticRound?.id, round.dialecticRound?.userResponse])
 
   const priorRoundLabel = useMemo(() => {
@@ -177,12 +189,7 @@ export function ChallengeRound({
   const hasCompletedResponse = submitted || Boolean(completedRound?.userResponse)
   const confidenceChange = round.roundContextDraft.confidenceAtRoundEnd - round.confidenceAtRoundStart
   const bestNextMove = hasCompletedResponse ? deriveBestNextMove(round) : null
-  const canStartAnotherRound =
-    Boolean(onRequestNewRound) &&
-    Boolean(
-      bestNextMove &&
-        (bestNextMove.primary.key === 'run_another_round' || bestNextMove.alternates.some((candidate) => candidate.key === 'run_another_round')),
-    )
+  const canHandleNextMove = (key: BestNextMoveKey) => (key === 'run_another_round' ? Boolean(onRequestNewRound) : Boolean(onBestNextMoveAction))
   const statusLabel = hasCompletedResponse
     ? completedRound?.closedAt
       ? `Saved ${formatSavedAt(completedRound.closedAt)}`
@@ -350,22 +357,39 @@ export function ChallengeRound({
               {round.followUpPrompt ? (
                 <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{round.followUpPrompt}</p>
               ) : null}
-              {bestNextMove.alternates.length ? (
-                <div className="mt-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Quiet alternates</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {bestNextMove.alternates.map((candidate) => (
-                      <span key={candidate.key} className="rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-[var(--muted-ink)]">
-                        {candidate.label}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {canHandleNextMove(bestNextMove.primary.key) ? (
+                  <Button
+                    type="button"
+                    className="gap-2"
+                    disabled={actingMove != null}
+                    onClick={() => void handleBestNextMoveClick(bestNextMove.primary.key)}
+                  >
+                    {actingMove === bestNextMove.primary.key ? 'Working...' : bestNextMove.primary.label}
+                  </Button>
+                ) : null}
+                {bestNextMove.alternates
+                  .filter((candidate) => canHandleNextMove(candidate.key))
+                  .map((candidate) => (
+                    <Button
+                      key={candidate.key}
+                      type="button"
+                      variant="secondary"
+                      className="gap-2"
+                      disabled={actingMove != null}
+                      onClick={() => void handleBestNextMoveClick(candidate.key)}
+                    >
+                      {actingMove === candidate.key ? 'Working...' : candidate.label}
+                    </Button>
+                  ))}
+              </div>
+              {nextMoveFeedback ? (
+                <p className="mt-3 text-sm leading-6 text-[#2f6d47]">{nextMoveFeedback}</p>
               ) : null}
-              {canStartAnotherRound && onRequestNewRound ? (
-                <Button type="button" variant="secondary" className="mt-3" onClick={onRequestNewRound}>
-                  Start round {round.roundIndex + 2}
-                </Button>
+              {nextMoveError ? (
+                <p className="mt-3 rounded-[16px] border border-[#d8b2aa] bg-[#fff1ef] px-3 py-2 text-sm leading-6 text-[#8b3d2f]">
+                  {nextMoveError}
+                </p>
               ) : null}
             </div>
           ) : null}
@@ -481,6 +505,43 @@ export function ChallengeRound({
       ) : null}
     </div>
   )
+
+  async function handleBestNextMoveClick(key: BestNextMoveKey) {
+    if (actingMove != null) {
+      return
+    }
+
+    setNextMoveError(null)
+    setNextMoveFeedback(null)
+
+    if (key === 'run_another_round') {
+      if (!onRequestNewRound) {
+        setNextMoveError("Couldn't open the next round yet.")
+        return
+      }
+
+      onRequestNewRound()
+      setNextMoveFeedback(`Round ${round.roundIndex + 2} is ready.`)
+      return
+    }
+
+    if (!onBestNextMoveAction) {
+      setNextMoveError("Couldn't open that next step yet.")
+      return
+    }
+
+    setActingMove(key)
+
+    try {
+      const result = await onBestNextMoveAction(key)
+      setNextMoveFeedback(result?.message ?? `${bestNextMoveCopy(key).label} opened.`)
+    } catch (error) {
+      console.error(error)
+      setNextMoveError(error instanceof Error ? error.message : "Couldn't open that next step. Try again.")
+    } finally {
+      setActingMove(null)
+    }
+  }
 }
 
 function PriorRoundSummary({ round }: { round: ChallengeRoundModel }) {
