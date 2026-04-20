@@ -1,24 +1,168 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedUserFromCookies } from "@/server/auth";
+import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { logger } from "@/lib/logger";
 import { track } from "@/lib/analytics";
 import { createChallengeDraftRound } from "@/server/dialectic-challenges";
 import {
+  getChallengeDraftRound,
+  inferChallengeResponsePath,
+  markChallengeDraftCompleted,
+} from "@/server/dialectic-challenges";
+import { generateChallengeSummaryArtifact } from "@/server/challenge-summary";
+import { recordDialecticRound } from "@/server/thought-map";
+import { updateConfidence } from "@/server/mvp";
+import {
+  ChallengeResponseSchema,
   ChallengeStartSchema,
   MapClaimParamsSchema,
+  RoundIdSchema,
   validateBody,
   ValidationError,
 } from "@/lib/validation/schemas";
+import type { ArtifactRecord, ResponseClassification } from "@/types/thought-map";
+
+type CompletedChallengeRound = {
+  engagementScore?: number | null;
+  responseClassification?: ResponseClassification | null;
+};
 
 export async function POST(request: Request, context: { params: Promise<{ id: string; claimId: string }> }) {
   try {
-    const user = await getAuthenticatedUserFromCookies();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const userId = await getCurrentAuthenticatedUserId();
+
+    const { id, claimId } = MapClaimParamsSchema.parse(await context.params);
+    const json = await request.json();
+
+    if (
+      json &&
+      typeof json === "object" &&
+      "roundId" in json &&
+      typeof (json as { roundId?: unknown }).roundId === "string"
+    ) {
+      const roundId = RoundIdSchema.parse((json as { roundId: string }).roundId);
+      const parsedResponse = ChallengeResponseSchema.safeParse(json);
+
+      if (!parsedResponse.success) {
+        return NextResponse.json(
+          { error: parsedResponse.error.issues[0]?.message ?? "Invalid challenge response" },
+          { status: 400 },
+        );
+      }
+
+      const input = parsedResponse.data;
+      const draft = await getChallengeDraftRound(roundId, userId);
+
+      if (!draft || draft.mapId !== id || draft.claimId !== claimId) {
+        return NextResponse.json({ error: "not_found" }, { status: 404 });
+      }
+
+      if (draft.status === "completed") {
+        return NextResponse.json({ error: "challenge_already_completed" }, { status: 409 });
+      }
+
+      const confidenceDelta = Number((input.newConfidence - draft.confidenceAtRoundStart).toFixed(2));
+      const responsePath = inferChallengeResponsePath(input.userResponse, confidenceDelta, input.responsePath ?? null);
+      const finalEvent = await recordDialecticRound({
+        mapId: id,
+        nodeId: claimId,
+        round: draft.title,
+        roundIndex: draft.roundIndex,
+        title: draft.title,
+        critiqueStrength: draft.critiqueStrength,
+        critiqueType: draft.critiqueType,
+        critiqueFailureTypes: [draft.critiqueType],
+        critiqueMode: draft.critiqueMode,
+        voiceLabel: draft.voiceLabel,
+        prompt: draft.prompt,
+        why: draft.why,
+        responsePath,
+        response: input.userResponse,
+        confidenceAtRoundEnd: input.newConfidence,
+      });
+
+      const completedRound = (finalEvent.payload?.dialecticRound ?? null) as CompletedChallengeRound | null;
+
+      if (confidenceDelta !== 0) {
+        await updateConfidence(claimId, userId, input.newConfidence, input.confidenceChangeReason ?? null);
+      }
+
+      await markChallengeDraftCompleted({
+        roundId,
+        completedRoundId: finalEvent.id,
+        responsePath,
+        userResponse: input.userResponse,
+        confidenceAtRoundEnd: input.newConfidence,
+        confidenceDelta,
+        engagementScore: completedRound && typeof completedRound.engagementScore === "number" ? completedRound.engagementScore : 0,
+        responseClassification:
+          completedRound && completedRound.responseClassification && typeof completedRound.responseClassification === "object"
+            ? completedRound.responseClassification
+            : {
+                type: "defense",
+                confidence: 0,
+                classifiedBy: "inferred",
+              },
+      });
+
+      let summaryArtifact: ArtifactRecord | null = null;
+      try {
+        summaryArtifact = (await generateChallengeSummaryArtifact({
+          mapId: id,
+          claimId,
+          userId,
+        })).artifact;
+      } catch (summaryError) {
+        logger.warn("Failed to generate challenge summary artifact", {
+          userId,
+          featureId: "challenge-rounds",
+          data: {
+            mapId: id,
+            claimId,
+            challengeId: roundId,
+            error: summaryError instanceof Error ? summaryError.message : String(summaryError),
+          },
+        });
+      }
+
+      await track(
+        {
+          event: "challenge_completed",
+          properties: {
+            claimId,
+            roundNumber: draft.roundNumber,
+            engagementScore: completedRound && typeof completedRound.engagementScore === "number" ? completedRound.engagementScore : 0,
+          },
+        },
+        userId,
+      );
+
+      logger.info("Challenge round completed", {
+        userId,
+        featureId: "challenge-rounds",
+        data: {
+          mapId: id,
+          claimId,
+          challengeId: roundId,
+          completedRoundId: finalEvent.id,
+          roundNumber: draft.roundNumber,
+          engagementScore: completedRound && typeof completedRound.engagementScore === "number" ? completedRound.engagementScore : 0,
+          confidenceDelta,
+        },
+      });
+
+      return NextResponse.json(
+        {
+          challengeId: roundId,
+          completedRoundId: finalEvent.id,
+          round: completedRound ?? finalEvent.payload?.dialecticRound ?? null,
+          summaryArtifact,
+        },
+        { status: 201 },
+      );
     }
 
-    const rateLimit = checkRateLimit(user.id, "ai_critique");
+    const rateLimit = checkRateLimit(userId, "ai_critique");
     if (!rateLimit.allowed) {
       return NextResponse.json(
         {
@@ -28,11 +172,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       );
     }
 
-    const { id, claimId } = MapClaimParamsSchema.parse(await context.params);
-    const input = await validateBody(ChallengeStartSchema)(await request.json());
+    const input = await validateBody(ChallengeStartSchema)(json);
 
     const round = await createChallengeDraftRound({
-      userId: user.id,
+      userId,
       mapId: id,
       claimId,
       critiqueMode: input.critiqueMode,
@@ -48,11 +191,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           roundNumber: round.roundNumber,
         },
       },
-      user.id,
+      userId,
     );
 
     logger.info("Challenge draft started", {
-      userId: user.id,
+      userId,
       featureId: "challenge-rounds",
       data: {
         mapId: id,
