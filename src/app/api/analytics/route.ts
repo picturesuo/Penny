@@ -32,6 +32,21 @@ const analyticsEventSchema = z.union([
     userId: userIdSchema,
   }),
   z.object({
+    event: z.literal("challenge_submission_attempted"),
+    properties: z.object({ claimId: z.string(), roundNumber: z.number(), attemptNumber: z.number().int().positive() }),
+    userId: userIdSchema,
+  }),
+  z.object({
+    event: z.literal("challenge_submission_failed"),
+    properties: z.object({
+      claimId: z.string(),
+      roundNumber: z.number(),
+      attemptNumber: z.number().int().positive(),
+      reason: z.string(),
+    }),
+    userId: userIdSchema,
+  }),
+  z.object({
     event: z.literal("challenge_completed"),
     properties: z.object({ claimId: z.string(), roundNumber: z.number(), engagementScore: z.number() }),
     userId: userIdSchema,
