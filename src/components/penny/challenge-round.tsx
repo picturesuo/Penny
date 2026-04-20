@@ -102,6 +102,7 @@ export function ChallengeRound({
 }: ChallengeRoundProps) {
   const [showWhyNow, setShowWhyNow] = useState(false)
   const [showPriorRounds, setShowPriorRounds] = useState(false)
+  const [showRoundContext, setShowRoundContext] = useState(false)
   const [selectedResponsePath, setSelectedResponsePath] = useState<DialecticResponsePath>('defend')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(Boolean(round.dialecticRound?.userResponse))
@@ -119,6 +120,7 @@ export function ChallengeRound({
     setSelectedResponsePath('defend')
     setShowWhyNow(false)
     setShowPriorRounds(false)
+    setShowRoundContext(false)
     setSubmitError(null)
     setActingMove(null)
     setNextMoveError(null)
@@ -174,7 +176,9 @@ export function ChallengeRound({
   }
 
   const hasCompletedResponse = submitted || Boolean(completedRound?.userResponse)
-  const confidenceChange = round.roundContextDraft.confidenceAtRoundEnd - round.confidenceAtRoundStart
+  const confidenceAtRoundEnd = completedRound?.confidenceAtRoundEnd ?? round.roundContextDraft.confidenceAtRoundEnd
+  const confidenceChange =
+    completedRound?.confidenceDelta ?? confidenceAtRoundEnd - round.confidenceAtRoundStart
   const bestNextMove = hasCompletedResponse ? deriveBestNextMoveForRound(round) : null
   const canHandleNextMove = (key: BestNextMoveKey) => (key === 'run_another_round' ? Boolean(onRequestNewRound) : Boolean(onBestNextMoveAction))
   const statusLabel = hasCompletedResponse
@@ -200,66 +204,66 @@ export function ChallengeRound({
 
   return (
     <div className="rounded-[24px] border border-black/8 bg-[var(--panel)] p-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{round.round}</span>
-        <span className="rounded-full bg-[#e7defa] px-3 py-1 text-xs font-medium text-[#5c4c88]">{round.strength}</span>
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{round.confidenceContext}</span>
-        <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone}`}>{statusLabel}</span>
-        {round.responseClassification ? (
-          <span className="rounded-full bg-[#d9ead8] px-3 py-1 text-xs font-medium text-[#355b32]">
-            {formatClassification(round.responseClassification.type)}
-          </span>
-        ) : null}
-        {round.engagementScore != null ? (
-          <span className="rounded-full bg-[#fff6ed] px-3 py-1 text-xs font-medium text-[#8b4d1f]">
-            engagement {Math.round(round.engagementScore)}
-          </span>
-        ) : null}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{round.round}</span>
+            <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone}`}>{statusLabel}</span>
+          </div>
+          <p className="mt-3 text-lg font-semibold leading-7 text-[var(--ink)]">{round.title}</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{round.prompt}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-[var(--muted-ink)]">
+            <span>{round.strength}</span>
+            <span>{round.confidenceContext}</span>
+            {round.responseClassification ? <span>{formatClassification(round.responseClassification.type)}</span> : null}
+            {round.engagementScore != null ? <span>engagement {Math.round(round.engagementScore)}</span> : null}
+          </div>
+        </div>
+        <div className="min-w-[180px] rounded-[18px] bg-white px-4 py-3">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">Claim in view</p>
+          <blockquote className="mt-2 text-sm leading-6 text-[var(--ink)]">&quot;{claim.text}&quot;</blockquote>
+          <p className="mt-2 text-xs text-[var(--muted-ink)]">{formatPercentValue(claim.confidence)} confident</p>
+        </div>
       </div>
 
-      <p className="mt-3 text-sm font-medium text-[var(--ink)]">{round.title}</p>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{round.prompt}</p>
-
-      <div className="mt-3 rounded-[18px] bg-white p-4">
-        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Claim in view</p>
-        <blockquote className="mt-2 text-sm leading-6 text-[var(--ink)]">&quot;{claim.text}&quot;</blockquote>
-        <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{formatPercentValue(claim.confidence)} confident</p>
-      </div>
-
-      <div className="mt-3 rounded-[18px] bg-white p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Prior rounds</p>
-          {priorRounds.length > 0 ? (
-            <button className="text-xs font-medium text-[var(--ink)]" type="button" onClick={() => setShowPriorRounds((current) => !current)}>
-              {showPriorRounds ? '− Hide' : `+ ${priorRounds.length} prior round${priorRounds.length > 1 ? 's' : ''}`}
-            </button>
+      {(priorRounds.length > 0 || round.followUpPrompt) ? (
+        <div className="mt-3 rounded-[18px] bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">Earlier rounds</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{priorRoundLabel}</p>
+            </div>
+            {priorRounds.length > 0 ? (
+              <button className="text-xs font-medium text-[var(--ink)]" type="button" onClick={() => setShowPriorRounds((current) => !current)}>
+                {showPriorRounds ? 'Hide detail' : `Show ${priorRounds.length}`}
+              </button>
+            ) : null}
+          </div>
+          {showPriorRounds && priorRounds.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {priorRounds.slice(-3).map((priorRound) => (
+                <PriorRoundSummary key={priorRound.round} round={priorRound} />
+              ))}
+            </div>
+          ) : null}
+          {showPriorRounds && round.followUpPrompt ? (
+            <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+              <span className="font-medium text-[var(--ink)]">Follow-up preview:</span> {round.followUpPrompt}
+            </p>
           ) : null}
         </div>
-        <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{priorRoundLabel}</p>
-        {showPriorRounds && priorRounds.length > 0 ? (
-          <div className="mt-3 space-y-2">
-            {priorRounds.slice(-3).map((priorRound) => (
-              <PriorRoundSummary key={priorRound.round} round={priorRound} />
-            ))}
-          </div>
-        ) : null}
-        {round.followUpPrompt ? (
-          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-            <span className="font-medium text-[var(--ink)]">Follow-up preview:</span> {round.followUpPrompt}
-          </p>
-        ) : null}
-      </div>
+      ) : null}
 
-      <div className="mt-3 rounded-[18px] bg-white p-4">
+      <div className="mt-3">
         <button
           type="button"
-          className="text-sm font-medium text-[var(--ink)]"
+          className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-ink)]"
           onClick={() => setShowWhyNow((current) => !current)}
         >
-          {showWhyNow ? '− Why this challenge' : '+ Why this challenge'}
+          {showWhyNow ? 'Hide why this challenge' : 'Why this challenge'}
         </button>
         {showWhyNow ? (
-          <div className="mt-3 space-y-3">
+          <div className="mt-3 rounded-[18px] bg-white p-4">
           <p className="text-sm leading-6 text-[var(--muted-ink)]">{round.why}</p>
           <div className="rounded-[16px] bg-[var(--panel)] p-4">
             <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Argument as explanation</p>
@@ -314,28 +318,26 @@ export function ChallengeRound({
 
       {hasCompletedResponse ? (
         <div className="mt-4 rounded-[20px] border border-black/8 bg-white p-4">
-          <div className="rounded-[18px] bg-[var(--panel)] p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Your response</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{completedRound?.userResponse ?? trimmedResponse}</p>
-          </div>
-
-          <div className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[18px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--muted-ink)]">
             <span>
-              Confidence: {formatPercentValue(round.confidenceAtRoundStart)} → {formatPercentValue(round.confidenceAtRoundEnd)}
+              Confidence: {formatPercentValue(round.confidenceAtRoundStart)} → {formatPercentValue(confidenceAtRoundEnd)}
             </span>
             {confidenceChange !== 0 ? (
-              <span className={confidenceChange < 0 ? 'ml-2 text-[#8b3d2f]' : 'ml-2 text-[#2f6d47]'}>
+              <span className={confidenceChange < 0 ? 'text-[#8b3d2f]' : 'text-[#2f6d47]'}>
                 ({confidenceChange > 0 ? '+' : ''}
                 {formatPercentValue(confidenceChange)})
               </span>
             ) : null}
+            {completedRound?.responseClassification ? (
+              <span>{formatClassification(completedRound.responseClassification.type)}</span>
+            ) : null}
           </div>
 
           {bestNextMove ? (
-            <div className="mt-4 rounded-[18px] bg-[#eef4ff] p-4">
+            <div className="mt-4 rounded-[20px] border border-[#c7d8f8] bg-[#eef4ff] p-4">
               <p className="text-xs uppercase tracking-[0.18em] text-[#45607a]">Best next move</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{bestNextMove.primary.label}</span>
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--ink)]">{bestNextMove.primary.label}</span>
                 {bestNextMove.signalLabel ? (
                   <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{bestNextMove.signalLabel}</span>
                 ) : null}
@@ -380,6 +382,11 @@ export function ChallengeRound({
               ) : null}
             </div>
           ) : null}
+
+          <div className="mt-4 rounded-[18px] bg-[var(--panel)] p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Saved response</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{completedRound?.userResponse ?? trimmedResponse}</p>
+          </div>
         </div>
       ) : isRoundOpen ? (
         <form onSubmit={handleSubmitResponse} className="mt-4 space-y-4">
@@ -427,57 +434,75 @@ export function ChallengeRound({
           </div>
 
           <div className="rounded-[18px] border border-black/8 bg-white p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Concession capture</p>
-            <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Did you update your confidence?</label>
-            <div className="mt-2">
-              <ConfidenceSlider
-                value={Math.max(5, Math.min(95, round.roundContextDraft.confidenceAtRoundEnd))}
-                onChange={(value) => onRoundContextChange({ confidenceAtRoundEnd: value })}
-                showAnchors={false}
-              />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Round context</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
+                  Keep the response primary. Add confidence and evidence notes only if they matter.
+                </p>
+              </div>
+              <button className="text-xs font-medium text-[var(--ink)]" type="button" onClick={() => setShowRoundContext((current) => !current)}>
+                {showRoundContext ? 'Hide detail' : 'Add detail'}
+              </button>
             </div>
-            <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What specifically did you concede?</label>
-            <textarea
-              className="mt-2 min-h-[64px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
-              placeholder="Optional: name the exact point you conceded."
-              value={round.roundContextDraft.concessionNote}
-              onChange={(event) => onRoundContextChange({ concessionNote: event.target.value })}
-            />
-            <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Did this critique change connected claims?</label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {([
-                ['yes', 'Yes'],
-                ['no', 'No'],
-                ['unsure', 'Unsure'],
-              ] as const).map(([value, label]) => (
-                <Button
-                  key={`${round.round}-connected-${value}`}
-                  type="button"
-                  variant={round.roundContextDraft.connectedClaimsChanged === (value === 'yes' ? true : value === 'no' ? false : null) ? 'primary' : 'secondary'}
-                  className="px-3 py-2 text-xs"
-                  onClick={() =>
-                    onRoundContextChange({
-                      connectedClaimsChanged: value === 'yes' ? true : value === 'no' ? false : null,
-                    })
-                  }
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-            <textarea
-              className="mt-3 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
-              placeholder="Optional: name the claims affected."
-              value={round.roundContextDraft.connectedClaimsNote}
-              onChange={(event) => onRoundContextChange({ connectedClaimsNote: event.target.value })}
-            />
-            <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">New evidence added?</label>
-            <textarea
-              className="mt-2 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
-              placeholder="Optional: paste the new evidence or source you added."
-              value={round.roundContextDraft.newEvidenceNote}
-              onChange={(event) => onRoundContextChange({ newEvidenceNote: event.target.value })}
-            />
+            {showRoundContext ? (
+              <div className="mt-4">
+                <label className="block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Did you update your confidence?</label>
+                <div className="mt-2">
+                  <ConfidenceSlider
+                    value={Math.max(5, Math.min(95, round.roundContextDraft.confidenceAtRoundEnd))}
+                    onChange={(value) => onRoundContextChange({ confidenceAtRoundEnd: value })}
+                    showAnchors={false}
+                  />
+                </div>
+                <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What specifically did you concede?</label>
+                <textarea
+                  className="mt-2 min-h-[64px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                  placeholder="Optional: name the exact point you conceded."
+                  value={round.roundContextDraft.concessionNote}
+                  onChange={(event) => onRoundContextChange({ concessionNote: event.target.value })}
+                />
+                <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Did this critique change connected claims?</label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {([
+                    ['yes', 'Yes'],
+                    ['no', 'No'],
+                    ['unsure', 'Unsure'],
+                  ] as const).map(([value, label]) => (
+                    <Button
+                      key={`${round.round}-connected-${value}`}
+                      type="button"
+                      variant={round.roundContextDraft.connectedClaimsChanged === (value === 'yes' ? true : value === 'no' ? false : null) ? 'primary' : 'secondary'}
+                      className="px-3 py-2 text-xs"
+                      onClick={() =>
+                        onRoundContextChange({
+                          connectedClaimsChanged: value === 'yes' ? true : value === 'no' ? false : null,
+                        })
+                      }
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                <textarea
+                  className="mt-3 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                  placeholder="Optional: name the claims affected."
+                  value={round.roundContextDraft.connectedClaimsNote}
+                  onChange={(event) => onRoundContextChange({ connectedClaimsNote: event.target.value })}
+                />
+                <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">New evidence added?</label>
+                <textarea
+                  className="mt-2 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--panel)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none transition focus:border-[var(--ink)]"
+                  placeholder="Optional: paste the new evidence or source you added."
+                  value={round.roundContextDraft.newEvidenceNote}
+                  onChange={(event) => onRoundContextChange({ newEvidenceNote: event.target.value })}
+                />
+              </div>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                Confidence now {formatPercentValue(confidenceAtRoundEnd)}.
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">

@@ -1411,6 +1411,8 @@ export function ThoughtMapWorkspace({
   const [hiddenCritiqueFeedbackRoundIds, setHiddenCritiqueFeedbackRoundIds] = useState<Record<string, boolean>>({});
   const [focusedLearnDetailOpen, setFocusedLearnDetailOpen] = useState(false);
   const [focusedChallengeHistoryOpen, setFocusedChallengeHistoryOpen] = useState(false);
+  const [focusedChallengeRoundsOpen, setFocusedChallengeRoundsOpen] = useState(false);
+  const [focusedChallengeRoundLabel, setFocusedChallengeRoundLabel] = useState<string | null>(null);
   const [resumeActionFeedback, setResumeActionFeedback] = useState<string | null>(null);
   const [resumeActionError, setResumeActionError] = useState<string | null>(null);
   const [shapeFeedback, setShapeFeedback] = useState<Record<string, PennyShapeFeedback>>(() =>
@@ -2780,6 +2782,39 @@ export function ThoughtMapWorkspace({
     critiquePersonalizationBridge,
     selectedPropagation?.cascade,
   ]);
+  const primaryChallengeRoundIndex = useMemo(() => {
+    if (focusedChallengeRoundLabel) {
+      const focusedRoundIndex = dialecticRounds.findIndex((round) => round.round === focusedChallengeRoundLabel);
+      if (focusedRoundIndex >= 0) {
+        return focusedRoundIndex;
+      }
+    }
+
+    const draftedRoundIndex = dialecticRounds.findIndex(
+      (round) => !round.dialecticRound?.closedAt && (dialecticResponseDrafts[round.round] ?? "").trim().length > 0,
+    );
+    if (draftedRoundIndex >= 0) {
+      return draftedRoundIndex;
+    }
+
+    const latestSavedRoundIndex = dialecticRounds.reduce((latestIndex, round, index) => {
+      return round.dialecticRound?.userResponse ? index : latestIndex;
+    }, -1);
+    if (latestSavedRoundIndex >= 0) {
+      return latestSavedRoundIndex;
+    }
+
+    return 0;
+  }, [dialecticResponseDrafts, dialecticRounds, focusedChallengeRoundLabel]);
+  const primaryChallengeRound = dialecticRounds[primaryChallengeRoundIndex] ?? null;
+  const secondaryChallengeRounds = dialecticRounds.filter((_, index) => index !== primaryChallengeRoundIndex);
+
+  useEffect(() => {
+    setFocusedChallengeRoundLabel(null);
+    setFocusedChallengeRoundsOpen(false);
+    setFocusedChallengeHistoryOpen(false);
+  }, [focusIntent, selectedGraphNode?.node.id]);
+
   const selectedReceiptVoices = useMemo(
     () => buildDevilsAdvocateReceipts(selectedGraphNodeModel),
     [selectedGraphNodeModel],
@@ -4201,6 +4236,7 @@ export function ThoughtMapWorkspace({
   }
 
   function focusRoundComposer(roundLabel: string) {
+    setFocusedChallengeRoundLabel(roundLabel);
     requestAnimationFrame(() => {
       const element = document.getElementById(`round-response-${roundLabel}`) as HTMLTextAreaElement | null;
       if (!element) {
@@ -4980,30 +5016,183 @@ export function ThoughtMapWorkspace({
       </Card>
     </div>
   );
+  const renderChallengeRoundFeedback = (round: ChallengeRoundModel) => {
+    const critiqueFeedbackStatus = critiqueFeedbackStatusByRoundId[round.dialecticRound?.id ?? round.round] ?? {
+      dismissalCount: 0,
+      submitted: false,
+      latestFeedback: null,
+    };
+    const hasPersistedRound = Boolean(round.dialecticRound);
+    const feedbackManualOnly = critiqueFeedbackStatus.dismissalCount >= 3 && !critiqueFeedbackStatus.submitted;
+    const roundId = round.dialecticRound?.id ?? round.round;
+    const feedbackVisible =
+      hasPersistedRound &&
+      !hiddenCritiqueFeedbackRoundIds[roundId] &&
+      (critiqueFeedbackStatus.submitted ||
+        critiqueFeedbackStatus.dismissalCount < 3 ||
+        Boolean(openedCritiqueFeedbackRoundIds[roundId]));
+
+    if (feedbackVisible) {
+      return (
+        <div className="mt-4">
+          <CritiqueFeedbackCard
+            roundLabel={round.round}
+            critiqueText={round.prompt}
+            critiqueMode={round.dialecticRound?.critiqueMode ?? critiqueMode}
+            voiceLabel={round.dialecticRound?.voiceLabel ?? selectedAudienceCritique?.audienceLabel ?? peerAudience}
+            failureTypes={round.critiqueFailureTypes ?? []}
+            shapeId={selectedShape?.id ?? null}
+            manualOnly={feedbackManualOnly && !openedCritiqueFeedbackRoundIds[roundId]}
+            submitted={critiqueFeedbackStatus.submitted}
+            onSubmit={(payload) =>
+              recordCritiqueFeedback({
+                round: round.dialecticRound ? (round.dialecticRound as unknown as SerializableDialecticRound) : null,
+                dismissed: payload.dismissed,
+                ratings: payload.ratings,
+                overallUsefulness: payload.overallUsefulness,
+                freeTextFeedback: payload.freeTextFeedback,
+                correctionText: payload.correctionText,
+                correctionType: payload.correctionType,
+                isCorrectionFlagged: payload.isCorrectionFlagged,
+                shapeId: payload.shapeId,
+              })
+            }
+            onDismiss={() => {
+              if (feedbackManualOnly && !openedCritiqueFeedbackRoundIds[roundId]) {
+                setOpenedCritiqueFeedbackRoundIds((current) => ({
+                  ...current,
+                  [roundId]: true,
+                }));
+                return;
+              }
+
+              setHiddenCritiqueFeedbackRoundIds((current) => ({
+                ...current,
+                [roundId]: true,
+              }));
+              recordCritiqueFeedback({
+                round: round.dialecticRound ? (round.dialecticRound as unknown as SerializableDialecticRound) : null,
+                dismissed: true,
+                overallUsefulness: 3,
+                ratings: [],
+                freeTextFeedback: null,
+                correctionText: null,
+                isCorrectionFlagged: false,
+                shapeId: selectedShape?.id ?? null,
+              });
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (feedbackManualOnly) {
+      return (
+        <div className="mt-4 rounded-[20px] border border-dashed border-black/10 bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Critique feedback</p>
+              <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
+                Penny stopped auto-showing this after three dismissals.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              className="px-3 py-2 text-xs"
+              onClick={() => {
+                setHiddenCritiqueFeedbackRoundIds((current) => ({
+                  ...current,
+                  [roundId]: false,
+                }));
+                setOpenedCritiqueFeedbackRoundIds((current) => ({
+                  ...current,
+                  [roundId]: true,
+                }));
+              }}
+            >
+              Rate this critique
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const renderChallengeRoundCard = (round: ChallengeRoundModel) => {
+    const roundIndex = dialecticRounds.findIndex((candidate) => candidate.round === round.round);
+    const draft = dialecticResponseDrafts[round.round] ?? "";
+
+    return (
+      <div key={round.round} className="space-y-4">
+        <ChallengeRound
+          claim={challengeClaim ?? { id: map.id, text: map.rawThought, confidence: 0 }}
+          round={round}
+          priorRounds={dialecticRounds.slice(0, roundIndex) as ChallengeRoundModel[]}
+          responseDraft={draft}
+          onResponseDraftChange={(value) =>
+            setDialecticResponseDrafts((current) => ({
+              ...current,
+              [round.round]: value,
+            }))
+          }
+          onRoundContextChange={(patch) => updateDialecticRoundContext(round.round, patch)}
+          isSteelManReady={selectedSteelManReady}
+          onRequestNewRound={
+            dialecticRounds[roundIndex + 1]
+              ? () => focusRoundComposer(dialecticRounds[roundIndex + 1].round)
+              : undefined
+          }
+          onBestNextMoveAction={handleBestNextMoveAction}
+          onResponseSubmit={async (response, newConfidence, responsePath) => {
+            updateDialecticRoundContext(round.round, {
+              confidenceAtRoundEnd: newConfidence,
+            });
+
+            await recordDialecticRound({
+              round: round.round,
+              roundIndex: round.roundIndex,
+              title: round.title,
+              critiqueStrength: round.strength,
+              critiqueType: activeCritiqueType,
+              critiqueFailureTypes: round.critiqueFailureTypes ?? [activeCritiqueType],
+              critiqueMode,
+              voiceLabel: selectedAudienceCritique?.audienceLabel ?? peerAudience,
+              prompt: round.prompt,
+              why: round.why,
+              responsePath,
+              response,
+              confidenceAtRoundEnd: newConfidence,
+            });
+          }}
+        />
+
+        {renderChallengeRoundFeedback(round)}
+      </div>
+    );
+  };
+
   const challengeRoundsPanel = (
     <Card id="challenge-lane" className="scroll-mt-28 p-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge>Dialectic rounds</Badge>
-        <Badge className="bg-[#e7defa] text-[#5c4c88]">round-tracked</Badge>
-        <Badge className="bg-[#d9ead8] text-[#355b32]">{selectedCritiqueStrength.label}</Badge>
-        <Badge
-          className={
-            challengeSkill.direction === "increase challenge"
-              ? "bg-[#d9ead8] text-[#355b32]"
-              : challengeSkill.direction === "reduce challenge"
-                ? "bg-[#fff6ed] text-[#8b4d1f]"
-                : "bg-white text-[var(--ink)]"
-          }
-        >
-          {challengeSkill.label}
-        </Badge>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-3xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge>Challenge lane</Badge>
+            <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{selectedCritiqueStrength.label} pressure</span>
+            <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{challengeSkill.label}</span>
+          </div>
+          <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">Answer one critique, then decide the next move.</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+            Keep the active round in front. Penny saves the response, carries the thread forward, and points to the next click from the saved outcome.
+          </p>
+        </div>
+        <div className="rounded-[20px] bg-[var(--panel)] px-4 py-3 lg:max-w-sm">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">Quiet context</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{challengeSkill.note}</p>
+        </div>
       </div>
-      <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">Counterargument as explicit rounds, not a one-shot critique.</h2>
-      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-        Penny should remember every round, carry the user’s response history forward, and change the next attack instead of reusing the same line.
-      </p>
-      <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{challengeSkill.note}</p>
-      <div className="mt-5">
+      <div className="mt-4">
         <SteelManGate
           claim={{
             id: selectedGraphNode?.node.id ?? "",
@@ -5098,150 +5287,31 @@ export function ThoughtMapWorkspace({
           isFirstRound={dialecticRoundEvents.length === 0}
         />
       </div>
-      <div className="mt-4 grid gap-4 xl:grid-cols-3">
-        {dialecticRounds.map((round: ChallengeRoundModel, index) => {
-          const critiqueFeedbackStatus = critiqueFeedbackStatusByRoundId[round.dialecticRound?.id ?? round.round] ?? {
-            dismissalCount: 0,
-            submitted: false,
-            latestFeedback: null,
-          };
-          const hasPersistedRound = Boolean(round.dialecticRound);
-          const feedbackManualOnly = critiqueFeedbackStatus.dismissalCount >= 3 && !critiqueFeedbackStatus.submitted;
-          const feedbackVisible =
-            hasPersistedRound &&
-            !hiddenCritiqueFeedbackRoundIds[round.dialecticRound?.id ?? round.round] &&
-            (critiqueFeedbackStatus.submitted ||
-              critiqueFeedbackStatus.dismissalCount < 3 ||
-              Boolean(openedCritiqueFeedbackRoundIds[round.dialecticRound?.id ?? round.round]));
-          const roundId = round.dialecticRound?.id ?? round.round;
-          const draft = dialecticResponseDrafts[round.round] ?? "";
-
-          return (
-            <div key={round.round} className="space-y-4">
-              <ChallengeRound
-                claim={challengeClaim ?? { id: map.id, text: map.rawThought, confidence: 0 }}
-                round={round}
-                priorRounds={dialecticRounds.slice(0, index) as ChallengeRoundModel[]}
-                responseDraft={draft}
-                onResponseDraftChange={(value) =>
-                  setDialecticResponseDrafts((current) => ({
-                    ...current,
-                    [round.round]: value,
-                  }))
-                }
-                onRoundContextChange={(patch) => updateDialecticRoundContext(round.round, patch)}
-                isSteelManReady={selectedSteelManReady}
-                onRequestNewRound={
-                  dialecticRounds[index + 1]
-                    ? () => focusRoundComposer(dialecticRounds[index + 1].round)
-                    : undefined
-                }
-                onBestNextMoveAction={handleBestNextMoveAction}
-                onResponseSubmit={async (response, newConfidence, responsePath) => {
-                  updateDialecticRoundContext(round.round, {
-                    confidenceAtRoundEnd: newConfidence,
-                  });
-
-                  await recordDialecticRound({
-                    round: round.round,
-                    roundIndex: round.roundIndex,
-                    title: round.title,
-                    critiqueStrength: round.strength,
-                    critiqueType: activeCritiqueType,
-                    critiqueFailureTypes: round.critiqueFailureTypes ?? [activeCritiqueType],
-                    critiqueMode,
-                    voiceLabel: selectedAudienceCritique?.audienceLabel ?? peerAudience,
-                    prompt: round.prompt,
-                    why: round.why,
-                    responsePath,
-                    response,
-                    confidenceAtRoundEnd: newConfidence,
-                  });
-                }}
-              />
-
-              {feedbackVisible ? (
-                <div className="mt-4">
-                  <CritiqueFeedbackCard
-                    roundLabel={round.round}
-                    critiqueText={round.prompt}
-                    critiqueMode={round.dialecticRound?.critiqueMode ?? critiqueMode}
-                    voiceLabel={round.dialecticRound?.voiceLabel ?? selectedAudienceCritique?.audienceLabel ?? peerAudience}
-                    failureTypes={round.critiqueFailureTypes ?? []}
-                    shapeId={selectedShape?.id ?? null}
-                    manualOnly={feedbackManualOnly && !openedCritiqueFeedbackRoundIds[roundId]}
-                    submitted={critiqueFeedbackStatus.submitted}
-                    onSubmit={(payload) =>
-                      recordCritiqueFeedback({
-                        round: round.dialecticRound ? (round.dialecticRound as unknown as SerializableDialecticRound) : null,
-                        dismissed: payload.dismissed,
-                        ratings: payload.ratings,
-                        overallUsefulness: payload.overallUsefulness,
-                        freeTextFeedback: payload.freeTextFeedback,
-                        correctionText: payload.correctionText,
-                        correctionType: payload.correctionType,
-                        isCorrectionFlagged: payload.isCorrectionFlagged,
-                        shapeId: payload.shapeId,
-                      })
-                    }
-                    onDismiss={() => {
-                      if (feedbackManualOnly && !openedCritiqueFeedbackRoundIds[roundId]) {
-                        setOpenedCritiqueFeedbackRoundIds((current) => ({
-                          ...current,
-                          [roundId]: true,
-                        }));
-                        return;
-                      }
-
-                      setHiddenCritiqueFeedbackRoundIds((current) => ({
-                        ...current,
-                        [roundId]: true,
-                      }));
-                      recordCritiqueFeedback({
-                        round: round.dialecticRound ? (round.dialecticRound as unknown as SerializableDialecticRound) : null,
-                        dismissed: true,
-                        overallUsefulness: 3,
-                        ratings: [],
-                        freeTextFeedback: null,
-                        correctionText: null,
-                        isCorrectionFlagged: false,
-                        shapeId: selectedShape?.id ?? null,
-                      });
-                    }}
-                  />
-                </div>
-              ) : feedbackManualOnly ? (
-                <div className="mt-4 rounded-[20px] border border-dashed border-black/10 bg-white p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Critique feedback</p>
-                      <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
-                        Penny stopped auto-showing this after three dismissals.
-                      </p>
-                    </div>
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-2 text-xs"
-                      onClick={() => {
-                        setHiddenCritiqueFeedbackRoundIds((current) => ({
-                          ...current,
-                          [roundId]: false,
-                        }));
-                        setOpenedCritiqueFeedbackRoundIds((current) => ({
-                          ...current,
-                          [roundId]: true,
-                        }));
-                      }}
-                    >
-                      Rate this critique
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
+      {primaryChallengeRound ? <div className="mt-4">{renderChallengeRoundCard(primaryChallengeRound)}</div> : null}
+      {secondaryChallengeRounds.length ? (
+        <div className="mt-4 rounded-[24px] border border-black/8 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Other rounds</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                Keep the rest of the round thread quiet until you need the earlier context or the next unopened slot.
+              </p>
             </div>
-          );
-        })}
-      </div>
+            <Button
+              variant="secondary"
+              className="px-3 py-2 text-xs"
+              onClick={() => setFocusedChallengeRoundsOpen((current) => !current)}
+            >
+              {focusedChallengeRoundsOpen ? "Hide other rounds" : `Show ${secondaryChallengeRounds.length} other round${secondaryChallengeRounds.length === 1 ? "" : "s"}`}
+            </Button>
+          </div>
+          {focusedChallengeRoundsOpen ? (
+            <div className="mt-4 space-y-4">
+              {secondaryChallengeRounds.map((round) => renderChallengeRoundCard(round))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {(focusIntent !== "challenge" || focusedChallengeHistoryOpen || dialecticRoundEvents.length === 0) ? (
         <div className="mt-4 rounded-[24px] border border-black/8 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
