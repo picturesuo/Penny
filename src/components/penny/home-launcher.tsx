@@ -106,6 +106,12 @@ const INTENT_COPY: Record<
   },
 };
 
+const SURFACE_EYEBROW_CLASS = "text-[11px] uppercase tracking-[0.2em] text-[var(--muted-ink)]";
+const SUBTLE_BADGE_CLASS = "rounded-full bg-white px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]";
+const QUIET_PANEL_CLASS = "rounded-[20px] border border-black/8 bg-white/84 p-4 shadow-[0_10px_24px_rgba(34,39,46,0.04)]";
+const PANEL_NOTICE_ERROR_CLASS = "rounded-[18px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm leading-6 text-[#8b3d2f]";
+const PANEL_NOTICE_SUCCESS_CLASS = "rounded-[18px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm leading-6 text-[#2f6d47]";
+
 export function HomeLauncher({
   maps,
   recentWork,
@@ -316,7 +322,7 @@ export function HomeLauncher({
             {["One question", "Three intents", "One active panel"].map((label) => (
               <span
                 key={label}
-                className="rounded-full border border-black/8 bg-white/72 px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]"
+                className={SUBTLE_BADGE_CLASS}
               >
                 {label}
               </span>
@@ -384,11 +390,11 @@ export function HomeLauncher({
                 <span className="rounded-full bg-white p-2 text-[var(--ink)] shadow-[0_12px_30px_rgba(34,39,46,0.06)]">
                   <ActiveIcon className="size-4" />
                 </span>
-                <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">{activeCopy.eyebrow}</p>
+                <p className={SURFACE_EYEBROW_CLASS}>{activeCopy.eyebrow}</p>
               </div>
               <h2 className="mt-4 max-w-sm text-[1.75rem] leading-[1.15] font-semibold text-[var(--ink)]">{activeCopy.title}</h2>
-              <div className="mt-6 rounded-[24px] border border-black/8 bg-white/80 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Fastest path</p>
+              <div className={`mt-6 ${QUIET_PANEL_CLASS}`}>
+                <p className={SURFACE_EYEBROW_CLASS}>Fastest path</p>
                 <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
                   {activeIntent === "capture"
                     ? captureInputMode === "type"
@@ -398,21 +404,21 @@ export function HomeLauncher({
                         : "Save the fleeting note first, then decide what it becomes later."
                     : activeIntent === "challenge"
                       ? "Put one claim under pressure without opening the whole product first."
-                      : "Open the learning scaffold beside a real claim instead of leaving the work."}
+                  : "Open the learning scaffold beside a real claim instead of leaving the work."}
                 </p>
               </div>
-              <div className="mt-4 space-y-3 rounded-[24px] border border-black/8 bg-black/[0.02] p-4">
+              <div className={`mt-4 space-y-3 ${QUIET_PANEL_CLASS} bg-[var(--panel)]/72`}>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Stays quiet</p>
+                  <p className={SURFACE_EYEBROW_CLASS}>Stays quiet</p>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
                     The rest of the product stays behind the selection until you need it.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-white px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                  <span className={SUBTLE_BADGE_CLASS}>
                     Recent work stays secondary
                   </span>
-                  <span className="rounded-full bg-white px-3 py-1.5 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                  <span className={SUBTLE_BADGE_CLASS}>
                     One dominant action
                   </span>
                 </div>
@@ -432,7 +438,7 @@ export function HomeLauncher({
                         key={mode}
                         type="button"
                         variant={captureInputMode === mode ? "primary" : "secondary"}
-                        className="gap-2"
+                        className="gap-2 px-4 py-2.5"
                         onClick={() => {
                           setCaptureInputMode(mode);
                           setError(null);
@@ -457,7 +463,7 @@ export function HomeLauncher({
                         : "Learning question"}
                   </span>
                   {activeIntent === "capture" && captureInputMode === "import" ? (
-                    <div className="mt-3 rounded-[24px] border border-black/10 bg-white px-4 py-4">
+                    <div className={`mt-3 ${QUIET_PANEL_CLASS}`}>
                       <p className="text-sm leading-7 text-[var(--ink)]">
                         Route into Penny’s importer so you can paste source text, add a URL, or upload a document without choosing a separate product surface first.
                       </p>
@@ -469,7 +475,7 @@ export function HomeLauncher({
                     </div>
                   ) : (
                     <textarea
-                      className="mt-3 min-h-[132px] w-full rounded-[24px] border border-black/10 bg-white px-4 py-4 text-sm leading-7 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                      className="mt-3 min-h-[144px] w-full rounded-[22px] border border-black/10 bg-white px-5 py-4 text-sm leading-7 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
                       placeholder={
                         activeIntent === "capture" && captureInputMode === "quick"
                           ? "Capture the quick note, fragment, or fleeting thought you do not want to lose..."
@@ -523,15 +529,15 @@ export function HomeLauncher({
                 ) : null}
 
                 {error ? (
-                  <div className="rounded-[18px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm text-[#8b3d2f]">{error}</div>
+                  <div className={PANEL_NOTICE_ERROR_CLASS}>{error}</div>
                 ) : null}
                 {captureFeedback && activeIntent === "capture" ? (
-                  <div className="rounded-[18px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm text-[#2f6d47]">{captureFeedback}</div>
+                  <div className={PANEL_NOTICE_SUCCESS_CLASS}>{captureFeedback}</div>
                 ) : null}
 
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                   <div className="flex flex-wrap gap-2">
-                    <Button className="gap-2" onClick={handlePrimaryAction} disabled={primaryDisabled}>
+                    <Button className="gap-2 px-4 py-2.5" onClick={handlePrimaryAction} disabled={primaryDisabled}>
                       {submittingIntent === activeIntent ? (
                         submittingIntent === "capture"
                           ? captureInputMode === "quick"
@@ -555,7 +561,7 @@ export function HomeLauncher({
                     {activeCopy.secondaryLabel && activeIntent !== "capture" ? (
                       <Button
                         variant="secondary"
-                        className="gap-2"
+                        className="gap-2 px-4 py-2.5"
                         onClick={handleSecondaryAction}
                       >
                         <Sparkles className="size-4" />
@@ -585,7 +591,7 @@ export function HomeLauncher({
         <div className="mx-auto mt-6 max-w-4xl">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Continue recent work</p>
+              <p className={SURFACE_EYEBROW_CLASS}>Continue recent work</p>
               <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">Resume the nearest live claim without reopening the whole workspace in your head.</p>
             </div>
           </div>
@@ -593,21 +599,21 @@ export function HomeLauncher({
             {recentWork.length ? (
               recentWork.map((item) => (
                 <Link key={item.id} href={item.href}>
-                  <Card className="h-full border-black/8 bg-white/78 p-4 shadow-[0_12px_30px_rgba(34,39,46,0.04)] transition duration-150 hover:-translate-y-0.5 hover:border-black/15 hover:bg-white">
+                  <Card className="h-full border-black/8 bg-white/82 p-5 shadow-[0_16px_36px_rgba(34,39,46,0.05)] transition duration-150 hover:-translate-y-0.5 hover:border-black/15 hover:bg-white">
                     <div className="flex items-start justify-between gap-3">
-                      <span className="rounded-full bg-[var(--panel)] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--ink)]">
+                      <span className="rounded-full bg-[var(--panel)] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
                         {item.nextActionLabel}
                       </span>
-                      <span className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">Updated {formatUpdatedAt(item.updatedAt)}</span>
+                      <span className={SURFACE_EYEBROW_CLASS}>Updated {formatUpdatedAt(item.updatedAt)}</span>
                     </div>
                     <h3 className="mt-4 text-base font-semibold leading-6 text-[var(--ink)]">{truncate(item.claimText, 84)}</h3>
                     <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{truncate(item.nextActionDescription, 108)}</p>
                     <div className="mt-4 flex items-center justify-between gap-3">
                       <div>
                         {item.signalLabel ? (
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">{item.signalLabel}</p>
+                          <p className={SURFACE_EYEBROW_CLASS}>{item.signalLabel}</p>
                         ) : null}
-                        <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">{item.mapTitle}</p>
+                        <p className={`mt-1 ${SURFACE_EYEBROW_CLASS}`}>{item.mapTitle}</p>
                       </div>
                       <span className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-[var(--panel)] px-3 py-2 text-sm font-medium text-[var(--ink)]">
                         Continue
@@ -639,8 +645,8 @@ function ClaimPicker({
   onSelect: (claimId: string) => void;
 }) {
   return (
-    <div className="rounded-[24px] border border-black/8 bg-[var(--panel)]/55 p-4">
-      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Recent claims</p>
+    <div className={`${QUIET_PANEL_CLASS} bg-[var(--panel)]/55`}>
+      <p className={SURFACE_EYEBROW_CLASS}>Recent claims</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {claims.map((claim) => (
           <button
@@ -676,12 +682,12 @@ function SelectedClaimNotice({
   }
 
   return (
-    <div className="rounded-[22px] border border-[#d7c6af] bg-[#fffaf2] px-4 py-3">
+    <div className={QUIET_PANEL_CLASS}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Selected claim</p>
+          <p className={SURFACE_EYEBROW_CLASS}>Selected claim</p>
           <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{claim.text}</p>
-          <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{claim.mapTitle}</p>
+          <p className={`mt-2 ${SURFACE_EYEBROW_CLASS}`}>{claim.mapTitle}</p>
         </div>
         <Button variant="ghost" className="px-3" onClick={onClear}>
           Clear
