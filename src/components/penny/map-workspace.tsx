@@ -36,6 +36,14 @@ export function MapWorkspace({
     () => [...initialArtifacts].sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime())[0] ?? null,
     [initialArtifacts],
   );
+  const claimOptions = useMemo(
+    () =>
+      initialClaims.map((claim) => ({
+        id: claim.id,
+        text: claim.content,
+      })),
+    [initialClaims],
+  );
 
   return (
     <div className="space-y-6" data-user-id={userId}>
@@ -59,7 +67,7 @@ export function MapWorkspace({
           </div>
 
           <div className="flex flex-col items-start gap-3 lg:items-end">
-            <ClaimCaptureLauncher mapId={map.id} />
+            <ClaimCaptureLauncher mapId={map.id} availableClaims={claimOptions} />
           </div>
         </div>
 
