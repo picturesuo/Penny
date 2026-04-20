@@ -7,7 +7,15 @@ import { ClaimCaptureForm, type ClaimCaptureFormData } from "@/components/penny/
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
-export function ClaimCaptureLauncher({ mapId }: { mapId: string }) {
+type ClaimCaptureLauncherProps = {
+  mapId: string;
+  availableClaims?: Array<{
+    id: string;
+    text: string;
+  }>;
+};
+
+export function ClaimCaptureLauncher({ mapId, availableClaims = [] }: ClaimCaptureLauncherProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -55,7 +63,7 @@ export function ClaimCaptureLauncher({ mapId }: { mapId: string }) {
                 <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Capture claim</p>
                 <h2 className="mt-2 text-3xl font-semibold text-[var(--ink)]">Save the smallest version of the belief.</h2>
                 <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">
-                  Start with one claim, one confidence score, and one piece of context if it helps.
+                  Capture the claim text, confidence, provenance context, and any existing dependencies before the map grows around it.
                 </p>
               </div>
               <button
@@ -70,6 +78,7 @@ export function ClaimCaptureLauncher({ mapId }: { mapId: string }) {
 
             <ClaimCaptureForm
               mapId={mapId}
+              availableClaims={availableClaims}
               onSubmit={handleSubmit}
               onCancel={() => setOpen(false)}
             />
