@@ -13,7 +13,7 @@ For every visible element in the main signed-in flow, ask:
 Does this help the user complete the claim -> challenge -> response -> saved result loop today?
 
 If yes, keep it visible.
-If no, hide it, demote it, or park it here.
+If no, hide it, demote it, or park it in `docs/mvp-parking-lot.md`.
 
 ## Canonical MVP Path
 
@@ -91,77 +91,19 @@ Hidden in this contract means one of three things:
 
 ## Parking Lot
 
-This document is the durable parking lot for ideas that matter but should not drive the MVP surface yet.
+The hidden-product backlog now lives in one place:
 
-### Hidden For MVP
+- `docs/mvp-parking-lot.md`
 
-- Idea: multi-lane Brain / Challenge / Learn framing inside the signed-in app
-  Why it matters: it explains the long-term structure of the product.
-  Why it is hidden now: it creates cognitive branching before the user completes one challenge round.
-  Bring it back when: the core map-to-round loop is stable and the signed-in home no longer needs roadmap framing to justify itself.
+Use that file for:
 
-- Idea: future dashboard panels and secondary home surfaces
-  Why it matters: they can later expose history, velocity, learning, and strategic context.
-  Why it is hidden now: they compete with the only action that currently proves product value, opening a map and challenging one claim.
-  Bring it back when: the home surface already drives most users into a completed round and needs a second priority after that.
-
-- Idea: vault, export, import, community, and curriculum surfaces in the main journey
-  Why it matters: they can deepen retention, portability, collaboration, and learning over time.
-  Why it is hidden now: they widen the first-run interface without helping the user finish one critique loop.
-  Bring it back when: the core round flow is clear enough that one of these surfaces becomes an obvious second job rather than a distraction.
-
-- Idea: advanced lens and shape explanation layers
-  Why it matters: they are part of Penny's long-term non-wrappable behavior.
-  Why it is hidden now: they explain the model before the user has seen one strong visible output from the model.
-  Bring it back when: personalized critique quality is visibly better and needs explanation or inspection.
-
-### Next After MVP
-
-- Idea: tighter home-to-map handoff and stronger empty states
-  Why it matters: the MVP path should become faster and more obvious after the first freeze.
-  Why it is hidden now: Step 1 is about deciding the path, not redesigning every screen at once.
-  Bring it back when: the UI cut list begins and the canonical path is being enforced in code.
-
-- Idea: explicit post-round next step suggestions
-  Why it matters: users will eventually need help deciding what to do after one saved response.
-  Why it is hidden now: the product first needs to prove that one completed round is valuable on its own.
-  Bring it back when: users can reliably complete one round and the main confusion shifts to what to do next.
-
-### Future Years / Big Bets
-
-- Idea: full Brain / Challenge / Learn system as a coherent product city
-  Why it matters: this is the strategic product ambition and differentiation.
-  Why it is hidden now: the repo is not failing from lack of ambition; it is failing from too many ambitions being visible at once.
-  Bring it back when: the MVP loop is strong enough to support a broader product language without dissolving clarity.
-
-- Idea: rich lens-driven critique, learning, and precedent behavior
-  Why it matters: it is a large part of the long-term moat.
-  Why it is hidden now: the user should first feel one concrete pressure-testing loop work before seeing the full model story.
-  Bring it back when: the personalized output is measurably useful and inspectable enough to justify foregrounding.
-
-### Needs Backend First
-
-- Idea: deeper AI-backed challenge generation and richer critique state
-  Why it matters: challenge quality determines whether the loop teaches anything real.
-  Why it is hidden now: frontend exposure should not outrun the singular server-backed critique path.
-  Bring it back when: the server contract is stable enough that better generation quality can be surfaced without multiplying paths.
-
-- Idea: broader lesson and synthesis surfaces
-  Why it matters: they will eventually turn critique history into durable learning and outputs.
-  Why it is hidden now: they depend on a trustworthy move and round history substrate.
-  Bring it back when: the persisted critique loop is stable, legible, and rich enough to support derived products.
-
-### Needs UX Rethink
-
-- Idea: extra map modes and multi-surface navigation breadth
-  Why it matters: different work modes may matter later for different cognitive jobs.
-  Why it is hidden now: the current result is split attention before the user has completed one meaningful action.
-  Bring it back when: the single canonical workspace is clearly insufficient for a real repeated user task.
-
-- Idea: roadmap-forward explanations inside the product shell
-  Why it matters: they communicate ambition and product direction.
-  Why it is hidden now: they currently substitute for a clear first task instead of supporting it.
-  Bring it back when: the product can explain itself through the main loop and no longer needs roadmap copy to carry the experience.
+- hidden-for-MVP ideas
+- next-after-MVP ideas
+- later ideas
+- future-years / big bets
+- backend-blocked ideas
+- UX-rethink ideas
+- evidence-gated reintroduction
 
 ## Acceptance Criteria For Step 1
 
@@ -170,7 +112,7 @@ This document is the durable parking lot for ideas that matter but should not dr
 - the primary workspace is the claim-focused map route
 - the exact success sequence ends at a persisted round in the audit trail
 - non-essential ideas are hidden or demoted, not erased
-- future ideas are parked in this file instead of being advertised in the interface
+- future ideas are parked in `docs/mvp-parking-lot.md` instead of being advertised in the interface
 
 ## Reconciliation Notes
 
@@ -303,15 +245,15 @@ This cut list is for the current signed-in path:
 
 These stay preserved in the parking lot above rather than remaining loud in the product shell.
 
-- Park search recovery as a `Next After MVP` support workflow rather than a primary nav destination.
+- Park search recovery as a `Next After MVP` support workflow in `docs/mvp-parking-lot.md` rather than a primary nav destination.
 
-- Park founder brief, artifact generation, export, and vault under `Needs Backend First` or `Next After MVP`, depending on whether the next ship window still centers the challenge loop.
+- Park founder brief, artifact generation, export, and vault under `Needs Backend First` or `Next After MVP` in `docs/mvp-parking-lot.md`, depending on whether the next ship window still centers the challenge loop.
 
-- Park lens, shape, precedent, and meta-cognition explanation layers under `Future Years / Big Bets` and `Needs UX Rethink`.
+- Park lens, shape, precedent, and meta-cognition explanation layers under `Future Years / Big Bets` and `Needs UX Rethink` in `docs/mvp-parking-lot.md`.
 
-- Park session-first and multi-mode workflows under `Needs UX Rethink` until the single map workspace is clearly insufficient.
+- Park session-first and multi-mode workflows under `Needs UX Rethink` in `docs/mvp-parking-lot.md` until the single map workspace is clearly insufficient.
 
-- Park broad dashboard expansion, velocity surfaces, and extra home panels under `Hidden For MVP` until the home screen no longer needs to fight for hierarchy.
+- Park broad dashboard expansion, velocity surfaces, and extra home panels under `Hidden For MVP` in `docs/mvp-parking-lot.md` until the home screen no longer needs to fight for hierarchy.
 
 ### Immediate Cut Order
 
