@@ -106,9 +106,9 @@ const INTENT_COPY: Record<
   },
 };
 
-const SURFACE_EYEBROW_CLASS = "text-[11px] uppercase tracking-[0.2em] text-[var(--muted-ink)]";
-const SUBTLE_BADGE_CLASS = "rounded-full bg-white px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]";
-const QUIET_PANEL_CLASS = "rounded-[20px] border border-black/8 bg-white/84 p-4 shadow-[0_10px_24px_rgba(34,39,46,0.04)]";
+const SURFACE_EYEBROW_CLASS = "text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]";
+const SUBTLE_BADGE_CLASS = "rounded-full border border-black/6 bg-white/86 px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]";
+const QUIET_PANEL_CLASS = "rounded-[22px] border border-black/8 bg-white/84 p-4 shadow-[0_10px_24px_rgba(34,39,46,0.04)]";
 const PANEL_NOTICE_ERROR_CLASS = "rounded-[18px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm leading-6 text-[#8b3d2f]";
 const PANEL_NOTICE_SUCCESS_CLASS = "rounded-[18px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm leading-6 text-[#2f6d47]";
 
@@ -306,13 +306,13 @@ export function HomeLauncher({
 
   return (
     <section className="mx-auto flex min-h-[calc(100vh-15rem)] max-w-6xl flex-col justify-center px-1">
-      <div className="rounded-[44px] border border-black/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.82),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(230,212,187,0.42),transparent_34%),linear-gradient(180deg,rgba(255,253,248,0.98)_0%,rgba(243,236,226,0.94)_100%)] p-6 shadow-[0_32px_100px_rgba(34,39,46,0.1)] sm:p-8 lg:p-10">
+      <div className="penny-reveal rounded-[44px] border border-black/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.84),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(223,199,170,0.42),transparent_34%),linear-gradient(180deg,rgba(255,250,243,0.99)_0%,rgba(243,233,220,0.96)_100%)] p-6 shadow-[0_32px_100px_rgba(34,39,46,0.1)] sm:p-8 lg:p-10">
         <div className="mx-auto max-w-3xl text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-white/82 px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)] shadow-[0_10px_24px_rgba(34,39,46,0.05)]">
-            <span className="size-2 rounded-full bg-[#8f775d]" />
+            <span className="size-2 rounded-full bg-[var(--accent-muted)]" />
             Penny
           </div>
-          <h1 className="font-display mt-5 text-4xl leading-tight text-[var(--ink)] sm:text-5xl">
+          <h1 className="font-display mt-5 text-4xl leading-[0.98] text-[var(--ink)] sm:text-[3.4rem]">
             What do you want to do with your thinking today?
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-[var(--muted-ink)]">
@@ -341,9 +341,9 @@ export function HomeLauncher({
                 key={intent}
                 type="button"
                 className={[
-                  "group relative overflow-hidden rounded-[30px] border px-5 py-5 text-left transition duration-200 hover:-translate-y-0.5 active:translate-y-0",
+                  "penny-press penny-soft-switch group relative overflow-hidden rounded-[30px] border px-5 py-5 text-left active:translate-y-0",
                   active
-                    ? "border-[#8f775d] bg-[linear-gradient(180deg,#fffdfa_0%,#f0e1cf_100%)] shadow-[0_22px_50px_rgba(34,39,46,0.11)]"
+                    ? "border-[var(--accent-muted)] bg-[linear-gradient(180deg,#fffdf8_0%,#f2e2cf_100%)] shadow-[0_22px_50px_rgba(34,39,46,0.11)]"
                     : "border-black/8 bg-white/76 shadow-[0_12px_30px_rgba(34,39,46,0.04)] hover:border-black/15 hover:bg-white",
                 ].join(" ")}
                 onClick={() => {
@@ -355,14 +355,14 @@ export function HomeLauncher({
                 <div
                   className={[
                     "pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r opacity-0 transition",
-                    active ? "from-transparent via-[#7a624a]/70 to-transparent opacity-100" : "from-transparent via-black/10 to-transparent group-hover:opacity-100",
+                    active ? "from-transparent via-[var(--accent-muted)] to-transparent opacity-100" : "from-transparent via-black/10 to-transparent group-hover:opacity-100",
                   ].join(" ")}
                 />
                 <div className="flex items-center justify-between gap-3">
                   <span
                     className={[
                       "rounded-full p-2.5 text-[var(--ink)] shadow-[0_10px_24px_rgba(34,39,46,0.06)] transition",
-                      active ? "bg-white" : "bg-[var(--panel)] group-hover:bg-white",
+                      active ? "bg-white" : "bg-[var(--accent-paper)] group-hover:bg-white",
                     ].join(" ")}
                   >
                     <Icon className="size-4" />
@@ -370,20 +370,20 @@ export function HomeLauncher({
                   <span
                     className={[
                       "rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em]",
-                      active ? "bg-white text-[#7a624a]" : "bg-transparent text-[var(--muted-ink)]",
+                      active ? "bg-white text-[var(--accent-muted)]" : "bg-transparent text-[var(--muted-ink)]",
                     ].join(" ")}
                   >
                     {active ? "Selected" : "Intent"}
                   </span>
                 </div>
-                <p className="mt-5 text-lg font-semibold text-[var(--ink)]">{copy.label}</p>
+                <p className="font-display mt-5 text-[1.35rem] font-semibold text-[var(--ink)]">{copy.label}</p>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{copy.eyebrow}</p>
               </button>
             );
           })}
         </div>
 
-        <Card className="mx-auto mt-6 max-w-4xl overflow-hidden border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f7f1e8_100%)] p-0 shadow-[0_24px_60px_rgba(34,39,46,0.08)]">
+        <Card className="penny-soft-switch mx-auto mt-6 max-w-4xl overflow-hidden border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f6eee3_100%)] p-0 shadow-[0_24px_60px_rgba(34,39,46,0.08)]">
           <div className="grid gap-0 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
             <div className="border-b border-black/8 bg-[radial-gradient(circle_at_top_left,rgba(236,220,198,0.52),transparent_42%),linear-gradient(180deg,rgba(248,242,233,0.98),rgba(243,236,226,0.94))] p-6 lg:border-b-0 lg:border-r lg:p-7">
               <div className="flex items-center gap-3">
@@ -392,7 +392,7 @@ export function HomeLauncher({
                 </span>
                 <p className={SURFACE_EYEBROW_CLASS}>{activeCopy.eyebrow}</p>
               </div>
-              <h2 className="mt-4 max-w-sm text-[1.75rem] leading-[1.15] font-semibold text-[var(--ink)]">{activeCopy.title}</h2>
+              <h2 className="font-display mt-4 max-w-sm text-[1.85rem] leading-[1.04] font-semibold text-[var(--ink)]">{activeCopy.title}</h2>
               <div className={`mt-6 ${QUIET_PANEL_CLASS}`}>
                 <p className={SURFACE_EYEBROW_CLASS}>Fastest path</p>
                 <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
@@ -475,7 +475,7 @@ export function HomeLauncher({
                     </div>
                   ) : (
                     <textarea
-                      className="mt-3 min-h-[144px] w-full rounded-[22px] border border-black/10 bg-white px-5 py-4 text-sm leading-7 text-[var(--ink)] outline-none transition placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                      className="penny-soft-switch mt-3 min-h-[144px] w-full rounded-[22px] border border-black/10 bg-white px-5 py-4 text-sm leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
                       placeholder={
                         activeIntent === "capture" && captureInputMode === "quick"
                           ? "Capture the quick note, fragment, or fleeting thought you do not want to lose..."
@@ -537,7 +537,7 @@ export function HomeLauncher({
 
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                   <div className="flex flex-wrap gap-2">
-                    <Button className="gap-2 px-4 py-2.5" onClick={handlePrimaryAction} disabled={primaryDisabled}>
+                    <Button className="penny-press gap-2 px-4 py-2.5" onClick={handlePrimaryAction} disabled={primaryDisabled}>
                       {submittingIntent === activeIntent ? (
                         submittingIntent === "capture"
                           ? captureInputMode === "quick"
@@ -561,7 +561,7 @@ export function HomeLauncher({
                     {activeCopy.secondaryLabel && activeIntent !== "capture" ? (
                       <Button
                         variant="secondary"
-                        className="gap-2 px-4 py-2.5"
+                        className="penny-press gap-2 px-4 py-2.5"
                         onClick={handleSecondaryAction}
                       >
                         <Sparkles className="size-4" />
@@ -599,9 +599,9 @@ export function HomeLauncher({
             {recentWork.length ? (
               recentWork.map((item) => (
                 <Link key={item.id} href={item.href}>
-                  <Card className="h-full border-black/8 bg-white/82 p-5 shadow-[0_16px_36px_rgba(34,39,46,0.05)] transition duration-150 hover:-translate-y-0.5 hover:border-black/15 hover:bg-white">
+                  <Card className="penny-press h-full border-black/8 bg-white/82 p-5 shadow-[0_16px_36px_rgba(34,39,46,0.05)] hover:border-black/15 hover:bg-white">
                     <div className="flex items-start justify-between gap-3">
-                      <span className="rounded-full bg-[var(--panel)] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                      <span className="rounded-full bg-[var(--accent-paper)] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
                         {item.nextActionLabel}
                       </span>
                       <span className={SURFACE_EYEBROW_CLASS}>Updated {formatUpdatedAt(item.updatedAt)}</span>
@@ -615,7 +615,7 @@ export function HomeLauncher({
                         ) : null}
                         <p className={`mt-1 ${SURFACE_EYEBROW_CLASS}`}>{item.mapTitle}</p>
                       </div>
-                      <span className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-[var(--panel)] px-3 py-2 text-sm font-medium text-[var(--ink)]">
+                      <span className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-[var(--accent-paper)] px-3 py-2 text-sm font-medium text-[var(--ink)]">
                         Continue
                         <ArrowRight className="size-4" />
                       </span>
