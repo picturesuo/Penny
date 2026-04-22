@@ -22,6 +22,7 @@ import { SteelManGate } from "@/components/penny/steel-man-gate";
 import {
   ChallengeRound,
   type BestNextMoveKey,
+  type ChallengeDependencyCascade,
   type ChallengeGenerationViewModel,
   type ChallengeRoundModel,
 } from "@/components/penny/challenge-round";
@@ -2079,6 +2080,51 @@ export function ThoughtMapWorkspace({
       isFragile: gap >= 0.18 || structuralCap <= 0.35,
     };
   }, [selectedGenealogy.lineage, selectedGraphNode]);
+  const challengeDependencyCascade = useMemo<ChallengeDependencyCascade | null>(() => {
+    if (!selectedGraphNode) {
+      return null;
+    }
+
+    const summary = selectedPropagationImplication
+      ? `${selectedPropagationImplication.sourceLabel} pulls ${selectedPropagationImplication.targetLabel} from ${formatScore(
+          selectedPropagationImplication.beforeConfidence,
+        )}% to ${formatScore(selectedPropagationImplication.afterConfidence)}% when this branch weakens.`
+      : quietFragility
+        ? `The current support chain caps this claim near ${formatScore(quietFragility.structuralCap)}%, even though felt confidence sits around ${formatScore(
+            quietFragility.feltConfidence,
+          )}%.`
+        : `${selectedGenealogy.dependents.length} downstream claim${selectedGenealogy.dependents.length === 1 ? "" : "s"} currently depend on this branch.`;
+
+    const propagationSteps =
+      selectedPropagation?.cascade.slice(0, 3).map((step, index) => ({
+        id: `${step.sourceNodeId}-${step.targetNodeId}-${index}`,
+        title: step.pathLabel,
+        detail:
+          step.reasoning ??
+          `A ${Math.round(step.edgeFactor * 100)}% dependency weight pushes the branch from ${formatScore(step.baseConfidence)}% to ${formatScore(
+            step.propagatedConfidence,
+          )}%.`,
+        deltaLabel: `${formatScore(step.baseConfidence)}% -> ${formatScore(step.propagatedConfidence)}%`,
+      })) ?? [];
+
+    const fallbackSteps = selectedGenealogy.dependents.slice(0, 3).map((node, index) => ({
+      id: `${node.id}-${index}`,
+      title: node.content,
+      detail: `${kindLabel(node.kind)} still leans on this claim.`,
+      deltaLabel: node.scores?.confidence != null ? `${formatScore(node.scores.confidence)}% confidence` : undefined,
+    }));
+
+    return {
+      summary,
+      steps: propagationSteps.length ? propagationSteps : fallbackSteps,
+    };
+  }, [
+    quietFragility,
+    selectedGenealogy.dependents,
+    selectedGraphNode,
+    selectedPropagation?.cascade,
+    selectedPropagationImplication,
+  ]);
   const mapTimeline = useMemo<MapTimelineSnapshot>(() => buildMapTimeline(map), [map]);
   const timelineShape = activeShapeCallout ?? derivedShapes[0] ?? null;
   const shapeTimeline = useMemo<ShapeTimelineSnapshot | null>(() => buildShapeTimeline(map, timelineShape), [map, timelineShape]);
@@ -5531,6 +5577,7 @@ export function ThoughtMapWorkspace({
           claim={challengeClaim ?? { id: map.id, text: map.rawThought, confidence: 0 }}
           round={resolvedRound}
           priorRounds={dialecticRounds.slice(0, roundIndex) as ChallengeRoundModel[]}
+          dependencyCascade={challengeDependencyCascade}
           responseDraft={draft}
           onResponseDraftChange={(value) =>
             setDialecticResponseDrafts((current) => ({
@@ -7321,6 +7368,7 @@ export function ThoughtMapWorkspace({
                   claim={challengeClaim ?? { id: map.id, text: map.rawThought, confidence: 0 }}
                   round={resolvedRound}
                   priorRounds={dialecticRounds.slice(0, index) as ChallengeRoundModel[]}
+                  dependencyCascade={challengeDependencyCascade}
                   responseDraft={draft}
                   onResponseDraftChange={(value) =>
                     setDialecticResponseDrafts((current) => ({
