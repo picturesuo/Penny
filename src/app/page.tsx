@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowUpRight, BrainCircuit, GraduationCap, ShieldAlert } from "lucide-react";
 import { PennyLogo } from "@/components/penny/penny-logo";
 
@@ -7,18 +8,21 @@ const lanes = [
     description: "Capture and organize what you think.",
     icon: BrainCircuit,
     accent: "var(--brain)",
+    href: "/app",
   },
   {
     title: "Challenge",
     description: "Put an idea under pressure.",
     icon: ShieldAlert,
     accent: "var(--challenge)",
+    href: "/app/new?prefill=What%20claim%20should%20Penny%20challenge%3F",
   },
   {
     title: "Learn",
     description: "Understand what is blocking you.",
     icon: GraduationCap,
     accent: "var(--learn)",
+    href: "/app/lessons",
   },
 ] as const;
 
@@ -45,9 +49,11 @@ export default function LandingPage() {
               const Icon = lane.icon;
 
               return (
-                <article
+                <Link
                   key={lane.title}
-                  className="flex min-h-[306px] flex-col items-center rounded-[22px] border bg-[rgba(255,255,255,0.76)] px-7 pb-7 pt-8 text-center shadow-[0_8px_24px_rgba(45,36,31,0.03)]"
+                  href={lane.href}
+                  aria-label={`Open ${lane.title}`}
+                  className="group flex min-h-[306px] flex-col items-center rounded-[22px] border bg-[rgba(255,255,255,0.76)] px-7 pb-7 pt-8 text-center shadow-[0_8px_24px_rgba(45,36,31,0.03)] penny-press"
                   style={{ borderColor: `color-mix(in srgb, ${lane.accent} 24%, var(--line))` }}
                 >
                   <div
@@ -63,16 +69,14 @@ export default function LandingPage() {
                   </div>
 
                   <div className="mt-auto pt-10">
-                    <button
-                      type="button"
-                      aria-label={`Open ${lane.title}`}
-                      className="flex size-11 items-center justify-center rounded-full text-white transition hover:-translate-y-0.5"
+                    <span
+                      className="flex size-11 items-center justify-center rounded-full text-white transition group-hover:-translate-y-0.5"
                       style={{ backgroundColor: lane.accent }}
                     >
                       <ArrowUpRight className="size-4.5" />
-                    </button>
+                    </span>
                   </div>
-                </article>
+                </Link>
               );
             })}
           </div>
