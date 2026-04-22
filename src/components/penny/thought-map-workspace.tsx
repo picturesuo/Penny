@@ -1399,8 +1399,8 @@ function buildInitialLearnDraft(question: string, claimText: string) {
   return `I'm trying to understand: ${question}\n\nIn the context of "${claimText}", I think it means `
 }
 
-const SURFACE_EYEBROW_CLASS = "text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]";
-const QUIET_SURFACE_CLASS = "rounded-[22px] border border-black/8 bg-white/84 p-4 shadow-[0_10px_24px_rgba(34,39,46,0.04)]";
+const SURFACE_EYEBROW_CLASS = "penny-label";
+const QUIET_SURFACE_CLASS = "penny-card p-4 shadow-[var(--shadow-card)]";
 const SUCCESS_NOTICE_CLASS = "text-sm leading-6 text-[#2f6d47]";
 const ERROR_NOTICE_CLASS = "text-sm leading-6 text-[#8b3d2f]";
 
@@ -5285,7 +5285,7 @@ export function ThoughtMapWorkspace({
       </div>
     ) : null;
   const focusedClaimCard = (
-    <Card id="claim-card" className="penny-reveal scroll-mt-28 border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f6eee3_100%)] p-6 shadow-[0_18px_44px_rgba(34,39,46,0.06)] sm:p-8">
+    <Card id="claim-card" className="penny-reveal penny-card-soft scroll-mt-28 p-6 sm:p-8">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-3xl">
           <div className="flex flex-wrap items-center gap-2">
@@ -5315,7 +5315,7 @@ export function ThoughtMapWorkspace({
             <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{selectedGraphNode.node.note}</p>
           ) : null}
         </div>
-        <div className={`penny-reveal lg:max-w-sm ${QUIET_SURFACE_CLASS} bg-[var(--panel)]/82`}>
+        <div className={`penny-reveal lg:max-w-sm ${QUIET_SURFACE_CLASS}`}>
           <p className={SURFACE_EYEBROW_CLASS}>Why this stays in front</p>
           <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
             {focusIntent === "learn"
@@ -5335,7 +5335,7 @@ export function ThoughtMapWorkspace({
   const learnFocusWorkspace = (
     <div className="space-y-6">
       {focusedClaimCard}
-      <Card id="teach-back-lane" className="penny-reveal scroll-mt-28 border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f6eee3_100%)] p-6 shadow-[0_18px_44px_rgba(34,39,46,0.06)] sm:p-8">
+      <Card id="teach-back-lane" className="penny-reveal penny-card-soft scroll-mt-28 p-6 sm:p-8">
         <div className="max-w-3xl">
           <div className="flex flex-wrap items-center gap-2">
             <Badge>Teach-back</Badge>
@@ -5355,7 +5355,7 @@ export function ThoughtMapWorkspace({
         {selectedGraphNode ? (
           <div className="mt-6 grid gap-4 xl:grid-cols-[240px_minmax(0,1.1fr)_320px]">
             <div className="space-y-4">
-              <div className="penny-reveal rounded-[26px] border border-black/8 bg-white p-5 shadow-[0_14px_34px_rgba(34,39,46,0.05)]">
+              <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
                 <p className={SURFACE_EYEBROW_CLASS}>Concept nav</p>
                 <div className="mt-4 space-y-3">
                   <div className="rounded-[18px] border border-[rgba(95,143,120,0.22)] bg-[rgba(95,143,120,0.14)] p-4">
@@ -5364,7 +5364,8 @@ export function ThoughtMapWorkspace({
                   </div>
                   <button
                     type="button"
-                    className={`w-full rounded-[18px] border px-4 py-3 text-left transition ${focusedLearnExampleOpen ? "border-[rgba(95,143,120,0.22)] bg-[rgba(95,143,120,0.12)]" : "border-black/8 bg-[var(--panel)] hover:bg-[#f3eee7]"}`}
+                    className={`w-full rounded-[18px] border px-4 py-3 text-left transition ${focusedLearnExampleOpen ? "border-[rgba(95,143,120,0.22)] bg-[rgba(95,143,120,0.12)]" : "bg-[var(--panel)] hover:bg-[#f3eee7]"}`}
+                    style={!focusedLearnExampleOpen ? { borderColor: "var(--line)" } : undefined}
                     onClick={() => setFocusedLearnExampleOpen((current) => !current)}
                   >
                     <p className={SURFACE_EYEBROW_CLASS}>Mode</p>
@@ -5373,7 +5374,8 @@ export function ThoughtMapWorkspace({
                   </button>
                   <button
                     type="button"
-                    className={`w-full rounded-[18px] border px-4 py-3 text-left transition ${focusedLearnDetailOpen ? "border-[rgba(95,143,120,0.22)] bg-[rgba(95,143,120,0.12)]" : "border-black/8 bg-[var(--panel)] hover:bg-[#f3eee7]"}`}
+                    className={`w-full rounded-[18px] border px-4 py-3 text-left transition ${focusedLearnDetailOpen ? "border-[rgba(95,143,120,0.22)] bg-[rgba(95,143,120,0.12)]" : "bg-[var(--panel)] hover:bg-[#f3eee7]"}`}
+                    style={!focusedLearnDetailOpen ? { borderColor: "var(--line)" } : undefined}
                     onClick={() => setFocusedLearnDetailOpen((current) => !current)}
                   >
                     <p className={SURFACE_EYEBROW_CLASS}>Mode</p>
@@ -5383,7 +5385,7 @@ export function ThoughtMapWorkspace({
                 </div>
               </div>
 
-              <div className="penny-reveal rounded-[26px] border border-black/8 bg-white p-5 shadow-[0_14px_34px_rgba(34,39,46,0.05)]">
+              <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
                 <p className={SURFACE_EYEBROW_CLASS}>Focus gaps</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {selectedKnowledgeSurface.teachBackGap.length ? (
@@ -5401,7 +5403,7 @@ export function ThoughtMapWorkspace({
             </div>
 
             <div className="space-y-4">
-              <div className="penny-reveal rounded-[28px] border border-black/8 bg-[linear-gradient(135deg,rgba(255,255,255,0.95),rgba(240,247,242,0.94))] p-6 shadow-[0_18px_40px_rgba(34,39,46,0.05)]">
+              <div className="penny-reveal penny-card-soft p-6">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{teachBackPromptLabel}</span>
                   <span className="rounded-full bg-[rgba(95,143,120,0.14)] px-3 py-1 text-xs font-medium text-[#426957]">
@@ -5410,7 +5412,7 @@ export function ThoughtMapWorkspace({
                 </div>
                 <p className="font-display mt-4 text-[1.8rem] font-semibold leading-[1.12] text-[var(--ink)]">{selectedTeachBackFocus.concept}</p>
                 <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">{selectedTeachBackFocus.scaffold}</p>
-                <div className="mt-4 rounded-[20px] border border-black/8 bg-white/92 px-4 py-3">
+                <div className="penny-card-plain mt-4 px-4 py-3">
                   <p className={SURFACE_EYEBROW_CLASS}>Concept title in use</p>
                   <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
                     {normalizedInitialLearningQuestion || `Explain ${selectedTeachBackFocus.concept} in the context of this claim.`}
@@ -5418,7 +5420,7 @@ export function ThoughtMapWorkspace({
                 </div>
               </div>
 
-              <div className="penny-reveal rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_34px_rgba(34,39,46,0.05)]">
+              <div className="penny-reveal penny-card p-6 shadow-[var(--shadow-card)]">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className={SURFACE_EYEBROW_CLASS}>Teach-back box</p>
@@ -5428,7 +5430,7 @@ export function ThoughtMapWorkspace({
                     {hasTeachBackReview ? "Checked" : currentTeachBackDraft.trim().length > 0 ? "Draft" : "Ready"}
                   </span>
                 </div>
-                <div className="mt-4 rounded-[18px] bg-[var(--panel)] px-4 py-3">
+                <div className="penny-card-inset mt-4 px-4 py-3">
                   <p className={SURFACE_EYEBROW_CLASS}>Related claim</p>
                   <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedGraphNode.node.content}</p>
                 </div>
@@ -5476,7 +5478,7 @@ export function ThoughtMapWorkspace({
                 </div>
                 <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Best in 3-6 concrete sentences.</p>
 
-                <div className="mt-5 rounded-[22px] border border-black/8 bg-[var(--panel)] p-5">
+                <div className="penny-card-inset mt-5 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className={SURFACE_EYEBROW_CLASS}>Feedback checklist</p>
                     <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
@@ -5485,7 +5487,7 @@ export function ThoughtMapWorkspace({
                   </div>
                   <div className="mt-4 space-y-3">
                     {learnChecklist.map((item) => (
-                      <div key={item.label} className="flex gap-3 rounded-[18px] border border-black/8 bg-white px-4 py-3">
+                      <div key={item.label} className="flex gap-3 rounded-[18px] border border-[var(--line)] bg-white px-4 py-3">
                         <span
                           className={cn(
                             "mt-0.5 h-2.5 w-2.5 rounded-full",
@@ -5504,7 +5506,7 @@ export function ThoughtMapWorkspace({
                     ))}
                   </div>
                   {hasTeachBackReview ? (
-                    <div className="mt-4 rounded-[18px] bg-white px-4 py-3">
+                    <div className="penny-card-plain mt-4 px-4 py-3">
                       <p className={SURFACE_EYEBROW_CLASS}>Correction</p>
                       <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.correction}</p>
                     </div>
@@ -5513,7 +5515,7 @@ export function ThoughtMapWorkspace({
               </div>
 
               {focusedLearnExampleOpen ? (
-                <div className="penny-reveal rounded-[24px] border border-black/8 bg-white p-5 shadow-[0_12px_30px_rgba(34,39,46,0.04)]">
+                <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className={SURFACE_EYEBROW_CLASS}>Example frame</p>
                     <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Use as a model, not a script</span>
@@ -5524,15 +5526,15 @@ export function ThoughtMapWorkspace({
 
               {focusedLearnDetailOpen ? (
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="penny-reveal rounded-[24px] border border-black/8 bg-white p-5 shadow-[0_12px_30px_rgba(34,39,46,0.04)]">
+                  <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
                     <p className={SURFACE_EYEBROW_CLASS}>Your text, annotated</p>
-                    <div className="mt-3 rounded-[18px] bg-[var(--panel)] p-4 text-sm leading-7 text-[var(--ink)]">
+                    <div className="penny-card-inset mt-3 p-4 text-sm leading-7 text-[var(--ink)]">
                       {highlightTeachBackResponse(currentTeachBackDraft, currentTeachBackAnalysis.annotations)}
                     </div>
                   </div>
 
                   {learningPrompts[0] ? (
-                    <div className="penny-reveal rounded-[24px] border border-black/8 bg-white p-5">
+                    <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
                       <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{learningPrompts[0].label}</p>
                       <h3 className="mt-2 text-lg font-semibold text-[var(--ink)]">{learningPrompts[0].title}</h3>
                       <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{learningPrompts[0].body}</p>
@@ -5544,7 +5546,7 @@ export function ThoughtMapWorkspace({
             </div>
 
             <div className="space-y-4">
-              <div className="penny-reveal rounded-[28px] border border-black/8 bg-white p-6 shadow-[0_16px_34px_rgba(34,39,46,0.05)]">
+              <div className="penny-reveal penny-card p-6 shadow-[var(--shadow-card)]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className={SURFACE_EYEBROW_CLASS}>Where this lives in your brain</p>
@@ -5554,7 +5556,7 @@ export function ThoughtMapWorkspace({
                     {selectedKnowledgeSurface.masteryLevel}
                   </span>
                 </div>
-                <div className="mt-5 rounded-[22px] border border-black/8 bg-[var(--panel)] px-4 py-5">
+                <div className="penny-card-inset mt-5 px-4 py-5">
                   <div className="flex justify-center">
                     <div className="rounded-full border border-black/8 bg-white px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted-ink)]">
                       {selectedGraphNodeParent?.content ?? "Root frame"}
@@ -5571,13 +5573,13 @@ export function ThoughtMapWorkspace({
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {selectedGenealogy.dependents.slice(0, 2).map((node) => (
-                      <div key={node.id} className="rounded-[18px] border border-black/8 bg-white px-3 py-3">
+                      <div key={node.id} className="penny-card-plain px-3 py-3">
                         <p className={SURFACE_EYEBROW_CLASS}>Connected</p>
                         <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{node.content}</p>
                       </div>
                     ))}
                     {!selectedGenealogy.dependents.length ? (
-                      <div className="rounded-[18px] border border-black/8 bg-white px-3 py-3 sm:col-span-2">
+                      <div className="penny-card-plain px-3 py-3 sm:col-span-2">
                         <p className={SURFACE_EYEBROW_CLASS}>Connected</p>
                         <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
                           Penny has not linked downstream ideas here yet, so this concept still mostly lives inside the active claim.
@@ -5588,22 +5590,22 @@ export function ThoughtMapWorkspace({
                 </div>
               </div>
 
-              <div className="penny-reveal rounded-[24px] border border-black/8 bg-white p-5 shadow-[0_12px_30px_rgba(34,39,46,0.04)]">
+              <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
                 <p className={SURFACE_EYEBROW_CLASS}>Related claim</p>
                 <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{selectedGraphNode.node.content}</p>
               </div>
 
-              <div className="penny-reveal rounded-[24px] border border-black/8 bg-white p-5 shadow-[0_12px_30px_rgba(34,39,46,0.04)]">
+              <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
                 <p className={SURFACE_EYEBROW_CLASS}>Connected ideas</p>
                 <div className="mt-4 space-y-2">
                   {learnConnectedIdeas.length ? (
                     learnConnectedIdeas.map((idea) => (
-                      <div key={idea} className="rounded-[18px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)]">
+                      <div key={idea} className="penny-card-inset px-4 py-3 text-sm leading-6 text-[var(--ink)]">
                         {idea}
                       </div>
                     ))
                   ) : (
-                    <div className="rounded-[18px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--muted-ink)]">
+                    <div className="penny-card-inset px-4 py-3 text-sm leading-6 text-[var(--muted-ink)]">
                       No connected ideas surfaced yet.
                     </div>
                   )}
@@ -5787,20 +5789,20 @@ export function ThoughtMapWorkspace({
   };
 
   const challengeRoundsPanel = (
-    <Card id="challenge-lane" className="penny-reveal scroll-mt-28 border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f6eee3_100%)] p-6 shadow-[0_18px_44px_rgba(34,39,46,0.06)]">
+    <Card id="challenge-lane" className="penny-reveal penny-card-soft scroll-mt-28 p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-3xl">
           <div className="flex flex-wrap items-center gap-2">
             <Badge>Challenge lane</Badge>
-            <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{selectedCritiqueStrength.label} pressure</span>
-            <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{challengeSkill.label}</span>
+            <span className="penny-meta">{selectedCritiqueStrength.label} pressure</span>
+            <span className="penny-meta">{challengeSkill.label}</span>
           </div>
           <h2 className="font-display mt-3 text-2xl font-semibold leading-[1.06] text-[var(--ink)]">Answer one critique, then decide the next move.</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
             Keep the active round in front. Penny saves the response, carries the thread forward, and points to the next click from the saved outcome.
           </p>
         </div>
-        <div className={`penny-reveal lg:max-w-sm ${QUIET_SURFACE_CLASS} bg-[var(--panel)]/82`}>
+        <div className={`penny-reveal lg:max-w-sm ${QUIET_SURFACE_CLASS}`}>
           <p className={SURFACE_EYEBROW_CLASS}>Quiet context</p>
           <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{challengeSkill.note}</p>
         </div>
@@ -5902,7 +5904,7 @@ export function ThoughtMapWorkspace({
       </div>
       {primaryChallengeRound ? <div className="mt-4">{renderChallengeRoundCard(primaryChallengeRound)}</div> : null}
       {secondaryChallengeRounds.length ? (
-        <div className="penny-reveal mt-4 rounded-[24px] border border-black/8 bg-white p-5 shadow-[0_12px_30px_rgba(34,39,46,0.04)]">
+        <div className="penny-reveal penny-card mt-4 p-5 shadow-[var(--shadow-card)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className={SURFACE_EYEBROW_CLASS}>Other rounds</p>
@@ -5926,7 +5928,7 @@ export function ThoughtMapWorkspace({
         </div>
       ) : null}
       {(focusIntent !== "challenge" || focusedChallengeHistoryOpen || dialecticRoundEvents.length === 0) ? (
-        <div className="penny-reveal mt-4 rounded-[24px] border border-black/8 bg-white p-5 shadow-[0_12px_30px_rgba(34,39,46,0.04)]">
+        <div className="penny-reveal penny-card mt-4 p-5 shadow-[var(--shadow-card)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className={SURFACE_EYEBROW_CLASS}>Round audit trail</p>
@@ -5943,7 +5945,7 @@ export function ThoughtMapWorkspace({
           <div className="mt-4 space-y-3">
             {dialecticRoundEvents.length ? (
               dialecticRoundEvents.map((entry) => (
-                <div key={entry.id} className="rounded-[20px] bg-[var(--panel)] p-4">
+                <div key={entry.id} className="penny-card-inset p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge className="bg-white text-[var(--ink)]">{entry.round}</Badge>
                     <Badge className="bg-[#e7defa] text-[#5c4c88]">{entry.critiqueStrength}</Badge>
@@ -5955,7 +5957,7 @@ export function ThoughtMapWorkspace({
                   <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{entry.why}</p>
                   <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{entry.response}</p>
                   {entry.dialecticRound ? (
-                    <div className="mt-3 rounded-[16px] bg-white p-4">
+                    <div className="penny-card-plain mt-3 p-4">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge className="bg-[var(--panel)] text-[var(--ink)]">
                           {entry.dialecticRound.responseClassification.type}
@@ -5994,14 +5996,14 @@ export function ThoughtMapWorkspace({
                 </div>
               ))
             ) : (
-              <p className="rounded-[20px] bg-[var(--panel)] p-4 text-sm leading-6 text-[var(--muted-ink)]">
+              <p className="penny-card-inset p-4 text-sm leading-6 text-[var(--muted-ink)]">
                 No round audit has been persisted yet.
               </p>
             )}
           </div>
         </div>
       ) : (
-        <div className="mt-4 rounded-[24px] border border-black/8 bg-white p-5 shadow-[0_12px_30px_rgba(34,39,46,0.04)]">
+        <div className="penny-card mt-4 p-5 shadow-[var(--shadow-card)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className={SURFACE_EYEBROW_CLASS}>Round history</p>
