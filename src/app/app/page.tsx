@@ -56,8 +56,8 @@ export default function DashboardPage() {
   return (
     <section className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
       <aside className="space-y-4">
-        <Card className="border-black/8 bg-white/84 p-5 shadow-[var(--shadow-soft)]">
-          <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Spheres</p>
+        <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
+          <p className="penny-label">Spheres</p>
           <h1 className="mt-2 font-display text-3xl leading-none text-[var(--ink)]">Brain</h1>
           <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
             The archive stays organized by sphere so today’s thinking still belongs to a broader landscape.
@@ -84,10 +84,10 @@ export default function DashboardPage() {
       </aside>
 
       <div className="space-y-6">
-        <Card className="border-black/8 bg-white/84 p-6 shadow-[var(--shadow-soft)]">
+        <Card className="penny-card p-6 shadow-[var(--shadow-card)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Brain stream</p>
+              <p className="penny-label">Brain stream</p>
               <h2 className="mt-2 font-display text-4xl leading-[0.95] text-[var(--ink)]">Continue where you left off.</h2>
               <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
                 The stream keeps one highlighted thread in front, then lets recent thoughts trail behind it without turning the page into a dashboard dump.
@@ -100,7 +100,7 @@ export default function DashboardPage() {
           </div>
         </Card>
 
-        <Card className="border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,242,235,0.96))] p-6 shadow-[var(--shadow-soft)]">
+        <Card className="penny-card-soft p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
@@ -124,16 +124,16 @@ export default function DashboardPage() {
           </div>
 
           <div className="mt-6 grid gap-3 md:grid-cols-3">
-            <div className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-white/72 p-4">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-[var(--muted-ink)]">Sphere</p>
+            <div className="penny-card-plain p-4">
+              <p className="penny-label">Sphere</p>
               <p className="mt-2 text-sm font-medium text-[var(--ink)]">Work</p>
             </div>
-            <div className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-white/72 p-4">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-[var(--muted-ink)]">Current pressure</p>
+            <div className="penny-card-plain p-4">
+              <p className="penny-label">Current pressure</p>
               <p className="mt-2 text-sm font-medium text-[var(--ink)]">Separate distribution from retention.</p>
             </div>
-            <div className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-white/72 p-4">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-[var(--muted-ink)]">Why now</p>
+            <div className="penny-card-plain p-4">
+              <p className="penny-label">Why now</p>
               <p className="mt-2 text-sm font-medium text-[var(--ink)]">This thread underpins the current market thesis.</p>
             </div>
           </div>
@@ -142,7 +142,7 @@ export default function DashboardPage() {
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Recent thoughts</p>
+              <p className="penny-label">Recent thoughts</p>
               <h3 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Stream and recent cards</h3>
             </div>
             <Sparkles className="size-5 text-[var(--brain)]" />
@@ -150,12 +150,12 @@ export default function DashboardPage() {
 
           <div className="space-y-3">
             {recentThoughts.map((thought) => (
-              <Card key={thought.title} className="border-black/8 bg-white/82 p-5 shadow-[var(--shadow-soft)]">
+              <Card key={thought.title} className="penny-card p-5 shadow-[var(--shadow-card)]">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="max-w-3xl">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge className="bg-[var(--panel)] text-[var(--ink)]">{thought.tag}</Badge>
-                      <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{thought.updatedAt}</span>
+                      <span className="penny-meta">{thought.updatedAt}</span>
                     </div>
                     <p className="mt-3 text-lg font-medium leading-7 text-[var(--ink)]">{thought.title}</p>
                     <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">{thought.note}</p>
