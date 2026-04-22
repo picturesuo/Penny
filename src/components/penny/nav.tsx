@@ -59,7 +59,9 @@ export function Nav({ userId, userEmail }: NavProps) {
 
 function navLinkClass(active: boolean) {
   return [
-    "rounded-full px-4 py-2 text-sm font-medium transition",
-    active ? "bg-[var(--ink)] text-[var(--paper)]" : "text-[var(--muted-ink)] hover:bg-black/5 hover:text-[var(--ink)]",
+    "rounded-full border px-4 py-2 text-sm font-medium transition",
+    active
+      ? "border-[color:rgba(182,106,60,0.24)] bg-[var(--accent-primary)] text-[var(--paper)] shadow-[0_12px_28px_rgba(182,106,60,0.18)]"
+      : "border-transparent text-[var(--muted-ink)] hover:border-black/8 hover:bg-black/5 hover:text-[var(--ink)]",
   ].join(" ");
 }
