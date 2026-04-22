@@ -1,25 +1,35 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f1e8;
-  --foreground: #12100e;
-  --paper: #f6f1e8;
-  --ink: #12100e;
-  --ink-soft: #2a2927;
-  --muted-ink: #625a52;
-  --panel: #efe5d8;
-  --panel-strong: #e2d0bc;
-  --accent-primary: #b66a3c;
-  --accent-strong: #985833;
-  --accent-muted: #8d6d58;
-  --accent-soft: #e1c6b4;
-  --accent-paper: #fbf7f0;
-  --patina-accent: #4f8a7b;
-  --risk-amber: #d6a145;
-  --color-track: #dbd1c4;
-  --color-low-confidence: #b66a3c;
-  --color-mid-confidence: #d6a145;
-  --color-high-confidence: #4f8a7b;
+  --paper: #f7f3ee;
+  --panel: #fbf8f4;
+  --ink: #2d241f;
+  --muted-ink: #7b6d63;
+  --line: rgba(45, 36, 31, 0.08);
+
+  --brain: #b96a45;
+  --challenge: #d6a246;
+  --learn: #5f8f78;
+
+  --radius-xl: 24px;
+  --radius-lg: 18px;
+  --shadow-soft: 0 10px 30px rgba(45, 36, 31, 0.05);
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --ink-soft: #433731;
+  --panel-strong: #f2ebe3;
+  --accent-primary: var(--brain);
+  --accent-strong: #9b593b;
+  --accent-muted: #9a897d;
+  --accent-soft: #ead8cb;
+  --accent-paper: #fdfaf6;
+  --patina-accent: var(--learn);
+  --risk-amber: var(--challenge);
+  --color-track: #ddd2c7;
+  --color-low-confidence: var(--brain);
+  --color-mid-confidence: var(--challenge);
+  --color-high-confidence: var(--learn);
 }
 
 @theme inline {
@@ -35,14 +45,14 @@
 
 html {
   background:
-    radial-gradient(circle at top left, rgba(182, 106, 60, 0.18), transparent 34%),
-    radial-gradient(circle at bottom right, rgba(79, 138, 123, 0.14), transparent 30%),
-    linear-gradient(180deg, #faf6ef 0%, #f0e6d8 100%);
+    radial-gradient(circle at top left, rgba(185, 106, 69, 0.14), transparent 36%),
+    radial-gradient(circle at bottom right, rgba(95, 143, 120, 0.1), transparent 32%),
+    linear-gradient(180deg, #fcf9f5 0%, var(--paper) 100%);
 }
 
 body {
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.32), transparent 34%),
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.42), transparent 34%),
     var(--background);
   color: var(--foreground);
   font-family: var(--font-manrope), sans-serif;
@@ -54,7 +64,7 @@ a {
 }
 
 ::selection {
-  background: rgba(182, 106, 60, 0.22);
+  background: rgba(185, 106, 69, 0.2);
 }
 
 .font-display {
@@ -62,11 +72,12 @@ a {
 }
 
 .penny-surface {
-  border: 1px solid rgb(34 39 46 / 0.08);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
   background:
-    radial-gradient(circle at top, rgb(255 255 255 / 0.56), transparent 42%),
-    linear-gradient(180deg, rgb(251 247 240 / 0.98) 0%, rgb(239 229 216 / 0.95) 100%);
-  box-shadow: 0 18px 44px rgb(34 39 46 / 0.06);
+    radial-gradient(circle at top, rgb(255 255 255 / 0.58), transparent 42%),
+    linear-gradient(180deg, rgb(253 250 246 / 0.98) 0%, rgb(247 243 238 / 0.96) 100%);
+  box-shadow: var(--shadow-soft);
 }
 
 .penny-soft-switch {
@@ -119,7 +130,7 @@ a {
   }
 
   100% {
-    box-shadow: 0 18px 44px rgb(34 39 46 / 0.06);
+    box-shadow: var(--shadow-soft);
     transform: translateY(0);
   }
 }
