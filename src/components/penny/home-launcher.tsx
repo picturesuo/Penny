@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Brain, GraduationCap, Sparkles, Swords } from "lucide-react";
+import { Brain, GraduationCap, Sparkles, Swords } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -107,7 +107,6 @@ const INTENT_COPY: Record<
 };
 
 const SURFACE_EYEBROW_CLASS = "text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]";
-const SUBTLE_BADGE_CLASS = "rounded-full border border-black/6 bg-white/86 px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]";
 const QUIET_PANEL_CLASS = "rounded-[22px] border border-black/8 bg-white/84 p-4 shadow-[0_10px_24px_rgba(34,39,46,0.04)]";
 const PANEL_NOTICE_ERROR_CLASS = "rounded-[18px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm leading-6 text-[#8b3d2f]";
 const PANEL_NOTICE_SUCCESS_CLASS = "rounded-[18px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm leading-6 text-[#2f6d47]";
@@ -306,126 +305,114 @@ export function HomeLauncher({
 
   return (
     <section className="mx-auto flex min-h-[calc(100vh-15rem)] max-w-6xl flex-col justify-center px-1">
-      <div className="penny-reveal rounded-[44px] border border-black/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.84),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(223,199,170,0.42),transparent_34%),linear-gradient(180deg,rgba(255,250,243,0.99)_0%,rgba(243,233,220,0.96)_100%)] p-6 shadow-[0_32px_100px_rgba(34,39,46,0.1)] sm:p-8 lg:p-10">
-        <div className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-white/82 px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)] shadow-[0_10px_24px_rgba(34,39,46,0.05)]">
-            <span className="size-2 rounded-full bg-[var(--accent-muted)]" />
-            Penny
+      <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="penny-reveal order-2 rounded-[34px] border border-black/8 bg-[linear-gradient(180deg,rgba(255,253,248,0.98)_0%,rgba(242,235,225,0.94)_100%)] p-5 shadow-[0_24px_60px_rgba(34,39,46,0.08)] lg:order-1 lg:sticky lg:top-28 lg:self-start">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className={SURFACE_EYEBROW_CLASS}>Previous chats & logs</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">Resume the closest live thread without opening the whole workspace in your head.</p>
+            </div>
           </div>
-          <h1 className="font-display mt-5 text-4xl leading-[0.98] text-[var(--ink)] sm:text-[3.4rem]">
-            What do you want to do with your thinking today?
-          </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-[var(--muted-ink)]">
-            Capture something new, challenge a claim, or learn what you need in context.
-          </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-2">
-            {["One question", "Three intents", "One active panel"].map((label) => (
-              <span
-                key={label}
-                className={SUBTLE_BADGE_CLASS}
-              >
-                {label}
-              </span>
-            ))}
+          <div className="mt-5 space-y-3">
+            {recentWork.length ? (
+              recentWork.map((item) => (
+                <Link key={item.id} href={item.href}>
+                  <Card className="penny-press border-black/8 bg-white/84 p-4 shadow-[0_12px_30px_rgba(34,39,46,0.04)] hover:border-black/15 hover:bg-white">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="rounded-full border border-black/8 bg-[var(--accent-paper)] px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-[var(--ink)]">
+                        {item.intent}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--muted-ink)]">
+                        {formatUpdatedAt(item.updatedAt)}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm font-medium leading-6 text-[var(--ink)]">{truncate(item.claimText, 72)}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{truncate(item.nextActionLabel, 44)}</p>
+                    {item.signalLabel ? <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-[var(--muted-ink)]">{item.signalLabel}</p> : null}
+                  </Card>
+                </Link>
+              ))
+            ) : (
+              <Card className="border-black/8 bg-white/80 p-4">
+                <p className="text-sm leading-7 text-[var(--muted-ink)]">Recent work will appear here after your first saved map or round.</p>
+              </Card>
+            )}
           </div>
-        </div>
+        </aside>
 
-        <div className="mx-auto mt-9 grid max-w-4xl gap-3 md:grid-cols-3">
-          {(["capture", "challenge", "learn"] as const).map((intent) => {
-            const copy = INTENT_COPY[intent];
-            const Icon = copy.icon;
-            const active = activeIntent === intent;
-
-            return (
-              <button
-                key={intent}
-                type="button"
-                className={[
-                  "penny-press penny-soft-switch group relative overflow-hidden rounded-[30px] border px-5 py-5 text-left active:translate-y-0",
-                  active
-                    ? "border-[var(--accent-muted)] bg-[linear-gradient(180deg,#fffdf8_0%,#f2e2cf_100%)] shadow-[0_22px_50px_rgba(34,39,46,0.11)]"
-                    : "border-black/8 bg-white/76 shadow-[0_12px_30px_rgba(34,39,46,0.04)] hover:border-black/15 hover:bg-white",
-                ].join(" ")}
-                onClick={() => {
-                  setActiveIntent(intent);
-                  setError(null);
-                  setCaptureFeedback(null);
-                }}
-              >
-                <div
-                  className={[
-                    "pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r opacity-0 transition",
-                    active ? "from-transparent via-[var(--accent-muted)] to-transparent opacity-100" : "from-transparent via-black/10 to-transparent group-hover:opacity-100",
-                  ].join(" ")}
-                />
-                <div className="flex items-center justify-between gap-3">
-                  <span
-                    className={[
-                      "rounded-full p-2.5 text-[var(--ink)] shadow-[0_10px_24px_rgba(34,39,46,0.06)] transition",
-                      active ? "bg-white" : "bg-[var(--accent-paper)] group-hover:bg-white",
-                    ].join(" ")}
-                  >
-                    <Icon className="size-4" />
-                  </span>
-                  <span
-                    className={[
-                      "rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em]",
-                      active ? "bg-white text-[var(--accent-muted)]" : "bg-transparent text-[var(--muted-ink)]",
-                    ].join(" ")}
-                  >
-                    {active ? "Selected" : "Intent"}
-                  </span>
+        <div className="order-1 space-y-5 lg:order-2">
+          <div className="penny-reveal rounded-[34px] border border-black/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.72),transparent_38%),linear-gradient(180deg,rgba(255,250,243,0.99)_0%,rgba(243,233,220,0.96)_100%)] p-5 shadow-[0_24px_60px_rgba(34,39,46,0.08)] sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-white/82 px-3 py-1.5 text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">
+                  <span className="size-2 rounded-full bg-[var(--accent-muted)]" />
+                  Penny
                 </div>
-                <p className="font-display mt-5 text-[1.35rem] font-semibold text-[var(--ink)]">{copy.label}</p>
-                <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{copy.eyebrow}</p>
-              </button>
-            );
-          })}
-        </div>
-
-        <Card className="penny-soft-switch mx-auto mt-6 max-w-4xl overflow-hidden border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f6eee3_100%)] p-0 shadow-[0_24px_60px_rgba(34,39,46,0.08)]">
-          <div className="grid gap-0 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
-            <div className="border-b border-black/8 bg-[radial-gradient(circle_at_top_left,rgba(236,220,198,0.52),transparent_42%),linear-gradient(180deg,rgba(248,242,233,0.98),rgba(243,236,226,0.94))] p-6 lg:border-b-0 lg:border-r lg:p-7">
-              <div className="flex items-center gap-3">
-                <span className="rounded-full bg-white p-2 text-[var(--ink)] shadow-[0_12px_30px_rgba(34,39,46,0.06)]">
-                  <ActiveIcon className="size-4" />
-                </span>
-                <p className={SURFACE_EYEBROW_CLASS}>{activeCopy.eyebrow}</p>
-              </div>
-              <h2 className="font-display mt-4 max-w-sm text-[1.85rem] leading-[1.04] font-semibold text-[var(--ink)]">{activeCopy.title}</h2>
-              <div className={`mt-6 ${QUIET_PANEL_CLASS}`}>
-                <p className={SURFACE_EYEBROW_CLASS}>Fastest path</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
-                  {activeIntent === "capture"
-                    ? captureInputMode === "type"
-                      ? "Turn one rough thought into a live map."
-                      : captureInputMode === "import"
-                        ? "Open Penny’s importer without leaving the capture system."
-                        : "Save the fleeting note first, then decide what it becomes later."
-                    : activeIntent === "challenge"
-                      ? "Put one claim under pressure without opening the whole product first."
-                  : "Open the learning scaffold beside a real claim instead of leaving the work."}
+                <h1 className="font-display mt-4 text-3xl leading-tight text-[var(--ink)] sm:text-[2.6rem]">
+                  What do you want to do?
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted-ink)]">
+                  Capture something new, challenge a claim, or learn what you need in context.
                 </p>
               </div>
-              <div className={`mt-4 space-y-3 ${QUIET_PANEL_CLASS} bg-[var(--panel)]/72`}>
-                <div>
-                  <p className={SURFACE_EYEBROW_CLASS}>Stays quiet</p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-                    The rest of the product stays behind the selection until you need it.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <span className={SUBTLE_BADGE_CLASS}>
-                    Recent work stays secondary
-                  </span>
-                  <span className={SUBTLE_BADGE_CLASS}>
-                    One dominant action
-                  </span>
-                </div>
+
+              <div className="flex flex-wrap gap-2">
+                {(["capture", "challenge", "learn"] as const).map((intent) => {
+                  const copy = INTENT_COPY[intent];
+                  const active = activeIntent === intent;
+
+                  return (
+                    <button
+                      key={intent}
+                      type="button"
+                      className={[
+                        "penny-press rounded-full border px-4 py-2 text-xs uppercase tracking-[0.18em] transition",
+                        active
+                          ? "border-[var(--accent-muted)] bg-[var(--ink)] text-[var(--paper)] shadow-[0_10px_24px_rgba(34,39,46,0.10)]"
+                          : "border-black/8 bg-white/86 text-[var(--muted-ink)] hover:border-black/15 hover:text-[var(--ink)]",
+                      ].join(" ")}
+                      onClick={() => {
+                        setActiveIntent(intent);
+                        setError(null);
+                        setCaptureFeedback(null);
+                      }}
+                    >
+                      {copy.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+          </div>
 
-            <div className="p-6 lg:p-7">
+          <Card className="penny-soft-switch overflow-hidden rounded-[34px] border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f6eee3_100%)] p-0 shadow-[0_24px_60px_rgba(34,39,46,0.08)]">
+            <div className="grid gap-0 lg:grid-cols-[minmax(0,0.56fr)_minmax(0,1.44fr)]">
+              <div className="border-b border-black/8 bg-[linear-gradient(180deg,rgba(248,242,233,0.98),rgba(243,236,226,0.94))] p-5 lg:border-b-0 lg:border-r lg:p-6">
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-white p-2 text-[var(--ink)] shadow-[0_12px_30px_rgba(34,39,46,0.06)]">
+                    <ActiveIcon className="size-4" />
+                  </span>
+                  <p className={SURFACE_EYEBROW_CLASS}>{activeCopy.eyebrow}</p>
+                </div>
+                <h2 className="font-display mt-4 max-w-sm text-[1.55rem] leading-[1.08] font-semibold text-[var(--ink)]">{activeCopy.title}</h2>
+                <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">{activeCopy.description}</p>
+                <div className={`mt-5 ${QUIET_PANEL_CLASS}`}>
+                  <p className={SURFACE_EYEBROW_CLASS}>Fastest path</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                    {activeIntent === "capture"
+                      ? captureInputMode === "type"
+                        ? "Turn one rough thought into a live map."
+                        : captureInputMode === "import"
+                          ? "Open Penny’s importer without leaving the capture system."
+                          : "Save the fleeting note first, then decide what it becomes later."
+                      : activeIntent === "challenge"
+                        ? "Put one claim under pressure without opening the whole product first."
+                        : "Open the learning scaffold beside a real claim instead of leaving the work."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 lg:p-6">
               <div className="space-y-4">
                 {activeIntent === "capture" ? (
                   <div className="flex flex-wrap gap-2">
@@ -584,50 +571,13 @@ export function HomeLauncher({
                   </p>
                 </div>
               </div>
+              </div>
             </div>
-          </div>
-        </Card>
-
-        <div className="mx-auto mt-6 max-w-4xl">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className={SURFACE_EYEBROW_CLASS}>Continue recent work</p>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">Resume the nearest live claim without reopening the whole workspace in your head.</p>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {recentWork.length ? (
-              recentWork.map((item) => (
-                <Link key={item.id} href={item.href}>
-                  <Card className="penny-press h-full border-black/8 bg-white/82 p-5 shadow-[0_16px_36px_rgba(34,39,46,0.05)] hover:border-black/15 hover:bg-white">
-                    <div className="flex items-start justify-between gap-3">
-                      <span className="rounded-full bg-[var(--accent-paper)] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
-                        {item.nextActionLabel}
-                      </span>
-                      <span className={SURFACE_EYEBROW_CLASS}>Updated {formatUpdatedAt(item.updatedAt)}</span>
-                    </div>
-                    <h3 className="mt-4 text-base font-semibold leading-6 text-[var(--ink)]">{truncate(item.claimText, 84)}</h3>
-                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{truncate(item.nextActionDescription, 108)}</p>
-                    <div className="mt-4 flex items-center justify-between gap-3">
-                      <div>
-                        {item.signalLabel ? (
-                          <p className={SURFACE_EYEBROW_CLASS}>{item.signalLabel}</p>
-                        ) : null}
-                        <p className={`mt-1 ${SURFACE_EYEBROW_CLASS}`}>{item.mapTitle}</p>
-                      </div>
-                      <span className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-[var(--accent-paper)] px-3 py-2 text-sm font-medium text-[var(--ink)]">
-                        Continue
-                        <ArrowRight className="size-4" />
-                      </span>
-                    </div>
-                  </Card>
-                </Link>
-              ))
-            ) : (
-              <Card className="border-black/8 bg-white/72 p-4 md:col-span-3">
-                <p className="text-sm leading-7 text-[var(--muted-ink)]">Recent work will appear here after your first map or saved round.</p>
-              </Card>
-            )}
+          </Card>
+          <div className="flex items-center gap-2 px-1 text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+            <span className="rounded-full border border-black/8 bg-white/76 px-3 py-1.5">Three intents</span>
+            <span className="rounded-full border border-black/8 bg-white/76 px-3 py-1.5">One active panel</span>
+            <span className="rounded-full border border-black/8 bg-white/76 px-3 py-1.5">Sidebar history</span>
           </div>
         </div>
       </div>
