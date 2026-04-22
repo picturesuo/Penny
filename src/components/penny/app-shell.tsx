@@ -10,6 +10,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { PennyLogo } from "@/components/penny/penny-logo";
+import { OrnamentalGraph } from "@/components/penny/ornamental-graph";
 import { Nav } from "@/components/penny/nav";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -215,23 +216,19 @@ function BrainClaimInspector() {
         <div className="mt-5">
           <p className="penny-label">Key connections</p>
           <div className="penny-card-soft mt-3 p-4">
-            <div className="relative h-28">
-              <div className="absolute left-1/2 top-2 h-11 w-px -translate-x-1/2 bg-[var(--line)]" />
-              <div className="absolute left-[22%] top-[3.6rem] h-px w-[28%] bg-[var(--line)]" />
-              <div className="absolute right-[22%] top-[3.6rem] h-px w-[28%] bg-[var(--line)]" />
-
-              <div className="absolute left-1/2 top-0 -translate-x-1/2 rounded-full bg-[color:rgba(185,106,69,0.14)] px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--brain)]">
-                Claim
-              </div>
-              <div className="absolute left-0 top-[3rem] rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
-                Market thesis
-              </div>
-              <div className="absolute right-0 top-[3rem] rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
-                Network effects
-              </div>
-              <div className="absolute left-1/2 bottom-0 -translate-x-1/2 rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
-                Retention loop
-              </div>
+            <div className="penny-card-plain px-4 py-3">
+              <OrnamentalGraph variant="brain-map" accent="var(--brain)" className="mx-auto h-28 max-w-[16rem]" />
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {["Claim", "Market thesis", "Network effects", "Retention loop"].map((label, index) => (
+                <div
+                  key={label}
+                  className="rounded-full border border-[var(--line)] bg-white px-3 py-2 text-center text-[11px] uppercase tracking-[0.14em]"
+                  style={index === 0 ? { color: "var(--brain)", background: "color-mix(in srgb, var(--brain) 14%, white)" } : undefined}
+                >
+                  {label}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -264,16 +261,7 @@ function BrainClaimInspector() {
               <p className="penny-label">Tiny mini-map</p>
             </div>
             <div className="penny-card-plain mt-3 h-24 p-3">
-              <div className="flex h-full items-center justify-center">
-                <div className="relative h-full w-full">
-                  <span className="absolute left-[12%] top-[42%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
-                  <span className="absolute left-[38%] top-[18%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
-                  <span className="absolute left-[48%] top-[44%] size-3 rounded-full bg-[var(--brain)]" />
-                  <span className="absolute right-[16%] top-[30%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
-                  <span className="absolute right-[22%] bottom-[18%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
-                  <span className="absolute left-[23%] bottom-[16%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
-                </div>
-              </div>
+              <OrnamentalGraph variant="mini-map" accent="var(--brain)" className="mx-auto h-full max-w-[10rem]" />
             </div>
           </div>
         </div>
