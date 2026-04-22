@@ -18,25 +18,41 @@ export function PennyLogo({
       <span
         aria-hidden="true"
         className={cn(
-          "inline-flex size-10 items-center justify-center rounded-[12px] bg-[var(--ink)] text-[var(--accent-primary)] shadow-[0_14px_40px_rgba(18,16,14,0.18)]",
+          "inline-flex size-10 items-center justify-center text-[var(--accent-primary)] drop-shadow-[0_12px_24px_rgba(18,16,14,0.22)]",
           markClassName,
         )}
       >
-        <svg viewBox="0 0 32 32" className="size-7" fill="none">
-          <path
-            d="M10.5 26V11.7C10.5 7.05 13.77 4 18.08 4C22.12 4 25 6.75 25 10.55C25 14.62 21.9 17.55 17.55 17.55H13.5"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M17.38 17.4C14.78 17.4 12.82 15.55 12.82 12.92C12.82 10.18 14.94 8.4 17.42 8.4C20.08 8.4 21.98 10.34 21.98 12.86C21.98 15.54 19.95 17.4 17.38 17.4Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+        <svg viewBox="0 0 96 96" className="size-full" fill="none">
+          <defs>
+            <radialGradient id="pennyGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(48 48) rotate(90) scale(44)">
+              <stop offset="0" stopColor="#F0A35F" stopOpacity="0.45" />
+              <stop offset="1" stopColor="#F0A35F" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="pennyMedallion" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(36 28) rotate(53) scale(58)">
+              <stop offset="0" stopColor="#F39A4C" />
+              <stop offset="0.62" stopColor="#D97A28" />
+              <stop offset="1" stopColor="#A95216" />
+            </radialGradient>
+            <linearGradient id="pennySymbol" x1="48" y1="18" x2="48" y2="78" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="#F39A4C" />
+              <stop offset="1" stopColor="#C96520" />
+            </linearGradient>
+          </defs>
+
+          <circle cx="48" cy="48" r="46" fill="url(#pennyGlow)" />
+          <circle cx="48" cy="48" r="40" fill="url(#pennyMedallion)" stroke="#8F4312" strokeWidth="1.2" />
+
+          <g fill="url(#pennySymbol)" stroke="#A14E18" strokeWidth="0.9" strokeLinejoin="round">
+            <path d="M44.5 48V24H39L48 11L57 24H51.5V48H44.5Z" />
+            <path d="M44.5 48V24H39L48 11L57 24H51.5V48H44.5Z" transform="rotate(45 48 48)" />
+            <path d="M44.5 48V24H39L48 11L57 24H51.5V48H44.5Z" transform="rotate(90 48 48)" />
+            <path d="M44.5 48V24H39L48 11L57 24H51.5V48H44.5Z" transform="rotate(135 48 48)" />
+            <path d="M44.5 48V24H39L48 11L57 24H51.5V48H44.5Z" transform="rotate(180 48 48)" />
+            <path d="M44.5 48V24H39L48 11L57 24H51.5V48H44.5Z" transform="rotate(225 48 48)" />
+            <path d="M44.5 48V24H39L48 11L57 24H51.5V48H44.5Z" transform="rotate(270 48 48)" />
+            <path d="M44.5 48V24H39L48 11L57 24H51.5V48H44.5Z" transform="rotate(315 48 48)" />
+            <circle cx="48" cy="48" r="6" fill="#CF6A24" stroke="none" />
+          </g>
         </svg>
       </span>
       {showLabel ? <span className={cn("text-lg font-semibold text-[var(--ink)]", labelClassName)}>Penny</span> : null}
