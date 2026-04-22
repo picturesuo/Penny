@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   BrainCircuit,
@@ -47,10 +48,37 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeMode = deriveActiveMode(pathname, searchParams);
+  const previousModeRef = useRef<ModeKey | null>(null);
+  const [modeSwitching, setModeSwitching] = useState(false);
   const breadcrumbs = buildBreadcrumbs(activeMode);
   const surface = describeSurface(pathname);
   const modeRailItems = buildModeRail(pathname, searchParams);
   const showBrainInspector = activeMode === "brain" && (pathname === "/app" || pathname === "/dashboard");
+
+  useEffect(() => {
+    if (previousModeRef.current == null) {
+      previousModeRef.current = activeMode;
+      return;
+    }
+
+    if (previousModeRef.current === activeMode) {
+      return;
+    }
+
+    previousModeRef.current = activeMode;
+
+    const frame = window.requestAnimationFrame(() => {
+      setModeSwitching(true);
+    });
+    const timeout = window.setTimeout(() => {
+      setModeSwitching(false);
+    }, 190);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [activeMode]);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8f2e8_0%,#f5efe4_28%,#f8f6f1_100%)]">
@@ -166,10 +194,10 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
             </div>
           </aside>
 
-          <main className="order-1 min-w-0 xl:order-2">{children}</main>
+          <main className={`order-1 min-w-0 xl:order-2 penny-mode-panel ${modeSwitching ? "is-switching" : ""}`}>{children}</main>
 
           <aside className="order-3">
-            <div className="xl:sticky xl:top-[11.5rem] space-y-4">
+            <div className={`xl:sticky xl:top-[11.5rem] space-y-4 penny-mode-panel ${modeSwitching ? "is-switching" : ""}`}>
               {showBrainInspector ? <BrainClaimInspector /> : <GenericShellInspector surface={surface} />}
             </div>
           </aside>
