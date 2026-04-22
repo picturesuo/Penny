@@ -5,6 +5,7 @@ import type { Claim } from '@/types/mvp-core'
 import type { DialecticResponsePath } from '@/types/thought-map'
 import { Button } from '@/components/ui/button'
 import { ConfidenceSlider } from './confidence-slider'
+import { OrnamentalGraph } from './ornamental-graph'
 import { bestNextMoveCopy, deriveBestNextMove, type BestNextMoveKey, type BestNextMoveRecommendation } from '@/lib/challenge-next-move'
 
 const SURFACE_EYEBROW_CLASS = 'penny-label'
@@ -689,6 +690,9 @@ export function ChallengeRound({
           <div className={QUIET_PANEL_CLASS}>
             <p className={SURFACE_EYEBROW_CLASS}>Dependency cascade</p>
             <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{cascadeSummary}</p>
+            <div className="penny-card-plain mt-4 px-4 py-3">
+              <OrnamentalGraph variant="cascade" accent="var(--challenge)" className="mx-auto h-20 max-w-[15rem]" />
+            </div>
             <div className="mt-4 space-y-3 border-t border-black/8 pt-4">
               {cascadeSteps.map((step) => (
                 <div key={step.id} className="penny-card-inset px-4 py-3">
