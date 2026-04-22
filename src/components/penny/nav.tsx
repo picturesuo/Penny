@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { PennyLogo } from "@/components/penny/penny-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { QuickCapture } from "@/components/penny/quick-capture";
 import { NewMapButton } from "@/components/penny/new-map-modal";
 import { SignOutButton } from "@/components/penny/sign-out-button";
+import { DEMO_USER_ID } from "@/lib/penny";
 
 interface NavProps {
   userId: string;
@@ -15,22 +17,23 @@ interface NavProps {
 
 export function Nav({ userId, userEmail }: NavProps) {
   const pathname = usePathname();
-  const isDashboardActive = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+  const isDashboardActive = pathname === "/app" || pathname.startsWith("/app/");
   const isSettingsActive = pathname === "/app/settings";
+  const isDemoMode = userId === DEMO_USER_ID;
 
   return (
     <nav className="flex flex-col gap-4 border-b border-black/8 pb-5 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex flex-wrap items-center gap-3">
-        <Link href="/dashboard" className="text-lg font-semibold text-[var(--ink)]">
-          Penny
+        <Link href="/app" className="flex items-center gap-3">
+          <PennyLogo markClassName="size-9 rounded-[10px]" labelClassName="text-base" />
         </Link>
-        <Badge className="bg-white text-[var(--muted-ink)]">Signed in</Badge>
-        <span className="text-sm text-[var(--muted-ink)]">{userEmail}</span>
+        <Badge className="bg-white text-[var(--muted-ink)]">{isDemoMode ? "Demo mode" : "Signed in"}</Badge>
+        <span className="text-sm text-[var(--muted-ink)]">{isDemoMode ? "No authentication required" : userEmail}</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <Link
-          href="/dashboard"
+          href="/app"
           className={navLinkClass(isDashboardActive)}
           aria-current={isDashboardActive ? "page" : undefined}
         >
@@ -48,7 +51,7 @@ export function Nav({ userId, userEmail }: NavProps) {
         <Button variant="ghost" asChild>
           <Link href="/app/search">Search</Link>
         </Button>
-        <SignOutButton />
+        {!isDemoMode ? <SignOutButton /> : null}
       </div>
     </nav>
   );

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, BookOpenText, BrainCircuit, GraduationCap, ShieldAlert, Target, Waypoints } from "lucide-react";
+import { PennyLogo } from "@/components/penny/penny-logo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getAuthenticatedUserFromCookies } from "@/server/auth";
@@ -105,13 +106,11 @@ export default async function LandingPage() {
 
   return (
     <main className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 top-[-14rem] h-[32rem] bg-[radial-gradient(circle_at_top,_rgba(230,223,255,0.55),_transparent_58%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-[-14rem] h-[32rem] bg-[radial-gradient(circle_at_top,_rgba(182,106,60,0.18),_transparent_58%)]" />
       <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8 lg:px-10">
         <header className="flex items-center justify-between py-4">
           <Link href="/" className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-full bg-[var(--ink)] text-sm font-semibold text-[var(--paper)]">
-              P
-            </span>
+            <PennyLogo showLabel={false} />
             <div>
               <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Penny</p>
               <p className="mt-1 text-sm text-[var(--muted-ink)]">Pressure-tested second brain for claims, critique, and learning.</p>
