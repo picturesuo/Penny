@@ -95,16 +95,16 @@ export default function FigmaBlueprintPage() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
-                <PreviewChip label="Home" />
-                <PreviewChip label="Brain" />
-                <PreviewChip label="Challenge" />
-                <PreviewChip label="Learn" />
+                <PreviewChip label="Home" href="#screen-home" />
+                <PreviewChip label="Brain" href="#screen-brain" />
+                <PreviewChip label="Challenge" href="#screen-challenge" />
+                <PreviewChip label="Learn" href="#screen-learn" />
               </div>
             </div>
           </div>
 
           <div className="space-y-8 px-3 py-4 sm:px-4 sm:py-5 lg:px-5 lg:py-6">
-            <FrameShell frameLabel="Screen / Home" accent="var(--brain)">
+            <FrameShell frameLabel="Screen / Home" accent="var(--brain)" id="screen-home">
               <section className="relative overflow-hidden rounded-[28px] border border-black/8 bg-[linear-gradient(140deg,#fcf7f2_0%,#f5ede3_52%,#efe3d6_100%)] px-6 py-8 shadow-[0_18px_44px_rgba(45,36,31,0.08)] sm:px-10 sm:py-12 lg:min-h-[820px] lg:px-14 lg:py-14">
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.54),transparent_34%),linear-gradient(180deg,transparent_0%,rgba(255,255,255,0.26)_100%)]" />
                 <div className="relative flex min-h-[720px] flex-col">
@@ -127,7 +127,17 @@ export default function FigmaBlueprintPage() {
 
                     <div className="mt-12 grid w-full gap-5 lg:grid-cols-3">
                       {modeCards.map((card) => (
-                        <ModeCard key={card.title} {...card} />
+                        <ModeCard
+                          key={card.title}
+                          {...card}
+                          href={
+                            card.title === "Brain"
+                              ? "#screen-brain"
+                              : card.title === "Challenge"
+                                ? "#screen-challenge"
+                                : "#screen-learn"
+                          }
+                        />
                       ))}
                     </div>
                   </div>
@@ -135,7 +145,7 @@ export default function FigmaBlueprintPage() {
               </section>
             </FrameShell>
 
-            <FrameShell frameLabel="Screen / Brain" accent="var(--brain)">
+            <FrameShell frameLabel="Screen / Brain" accent="var(--brain)" id="screen-brain">
               <section className="rounded-[28px] border border-black/8 bg-[linear-gradient(180deg,#fcfaf7_0%,#f5ede4_100%)] shadow-[0_18px_44px_rgba(45,36,31,0.08)]">
                 <TopBar label="Brain" accent="var(--brain)" />
                 <div className="grid gap-5 p-4 lg:min-h-[760px] lg:grid-cols-[220px_minmax(0,1fr)_320px]">
@@ -219,7 +229,7 @@ export default function FigmaBlueprintPage() {
               </section>
             </FrameShell>
 
-            <FrameShell frameLabel="Screen / Challenge" accent="var(--challenge)">
+            <FrameShell frameLabel="Screen / Challenge" accent="var(--challenge)" id="screen-challenge">
               <section className="rounded-[28px] border border-black/8 bg-[linear-gradient(180deg,#fffaf0_0%,#f6ecd8_100%)] shadow-[0_18px_44px_rgba(45,36,31,0.08)]">
                 <TopBar label="Challenge" accent="var(--challenge)" />
                 <div className="grid gap-5 p-4 lg:min-h-[760px] lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -280,7 +290,7 @@ export default function FigmaBlueprintPage() {
               </section>
             </FrameShell>
 
-            <FrameShell frameLabel="Screen / Learn" accent="var(--learn)">
+            <FrameShell frameLabel="Screen / Learn" accent="var(--learn)" id="screen-learn">
               <section className="rounded-[28px] border border-black/8 bg-[linear-gradient(180deg,#f7fbf8_0%,#e8f0ea_100%)] shadow-[0_18px_44px_rgba(45,36,31,0.08)]">
                 <TopBar label="Learn" accent="var(--learn)" />
                 <div className="grid gap-5 p-4 lg:min-h-[760px] lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -362,13 +372,15 @@ function FrameShell({
   children,
   frameLabel,
   accent,
+  id,
 }: {
   children: React.ReactNode;
   frameLabel: string;
   accent: string;
+  id: string;
 }) {
   return (
-    <section className="space-y-3">
+    <section id={id} className="scroll-mt-6 space-y-3">
       <div className="flex items-center justify-between gap-3 px-2">
         <div className="flex items-center gap-3">
           <span className="h-3 w-3 rounded-full" style={{ backgroundColor: accent }} />
@@ -383,8 +395,15 @@ function FrameShell({
   );
 }
 
-function PreviewChip({ label }: { label: string }) {
-  return <span className="rounded-full border border-black/8 bg-white/74 px-3 py-2">{label}</span>;
+function PreviewChip({ label, href }: { label: string; href: string }) {
+  return (
+    <a
+      href={href}
+      className="penny-press rounded-full border border-black/8 bg-white/74 px-3 py-2 transition hover:border-black/14 hover:bg-white"
+    >
+      {label}
+    </a>
+  );
 }
 
 function ModeCard({
@@ -392,16 +411,21 @@ function ModeCard({
   description,
   badge,
   accent,
+  href,
   icon: Icon,
 }: {
   title: string;
   description: string;
   badge: string;
   accent: string;
+  href: string;
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <article className="group flex min-h-[320px] flex-col rounded-[30px] border border-black/8 bg-white/84 p-6 shadow-[0_18px_38px_rgba(45,36,31,0.06)] transition duration-200 hover:-translate-y-1">
+    <a
+      href={href}
+      className="group flex min-h-[320px] flex-col rounded-[30px] border border-black/8 bg-white/84 p-6 shadow-[0_18px_38px_rgba(45,36,31,0.06)] transition duration-200 hover:-translate-y-1"
+    >
       <div className="flex items-start justify-between gap-3">
         <div
           className="flex size-14 items-center justify-center rounded-[18px] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.95)_0%,rgba(248,241,232,0.92)_100%)]"
@@ -435,7 +459,7 @@ function ModeCard({
           <ArrowUpRight className="size-5" />
         </div>
       </div>
-    </article>
+    </a>
   );
 }
 
