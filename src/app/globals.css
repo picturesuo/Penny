@@ -87,6 +87,12 @@ a {
   border-radius: var(--radius-xl);
   background: rgb(255 255 255 / 0.86);
   box-shadow: var(--shadow-card);
+  transition:
+    transform 180ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease,
+    opacity 180ms ease;
 }
 
 .penny-card-soft {
@@ -96,18 +102,36 @@ a {
     radial-gradient(circle at top, rgb(255 255 255 / 0.4), transparent 46%),
     linear-gradient(180deg, rgb(253 250 246 / 0.98) 0%, rgb(247 243 238 / 0.94) 100%);
   box-shadow: var(--shadow-lifted);
+  transition:
+    transform 180ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease,
+    opacity 180ms ease;
 }
 
 .penny-card-inset {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--panel);
+  transition:
+    transform 180ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease,
+    opacity 180ms ease;
 }
 
 .penny-card-plain {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: rgb(255 255 255 / 0.92);
+  transition:
+    transform 180ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease,
+    opacity 180ms ease;
 }
 
 .penny-label {
@@ -150,6 +174,19 @@ a {
   animation: penny-saved-glow 560ms ease both;
 }
 
+.penny-mode-panel {
+  transition:
+    opacity 180ms ease,
+    transform 220ms ease,
+    filter 220ms ease;
+}
+
+.penny-mode-panel.is-switching {
+  opacity: 0.68;
+  transform: translateY(4px);
+  filter: saturate(0.96);
+}
+
 @keyframes penny-fade-up {
   from {
     opacity: 0;
@@ -183,11 +220,27 @@ a {
   .penny-press:hover {
     transform: translateY(-1px);
   }
+
+  .penny-card:hover,
+  .penny-card-soft:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lifted);
+  }
+
+  .penny-card-plain:hover,
+  .penny-card-inset:hover {
+    transform: translateY(-1px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .penny-card,
+  .penny-card-soft,
+  .penny-card-inset,
+  .penny-card-plain,
   .penny-soft-switch,
   .penny-press,
+  .penny-mode-panel,
   .penny-reveal,
   .penny-saved-flash {
     animation: none !important;
