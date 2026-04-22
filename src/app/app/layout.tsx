@@ -1,4 +1,4 @@
-import { Nav } from "@/components/penny/nav";
+import { AppShell } from "@/components/penny/app-shell";
 import { GlobalShortcuts } from "@/components/penny/global-shortcuts";
 import { NewMapDialogProvider } from "@/components/penny/new-map-modal";
 import { QuickCaptureModalProvider } from "@/components/penny/quick-capture-modal";
@@ -17,10 +17,9 @@ export default async function AppLayout({
     <NewMapDialogProvider>
       <QuickCaptureModalProvider>
         <div className="min-h-screen" data-user-id={userId}>
-          <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
-            <Nav userId={userId} userEmail={userEmail} />
-            <div className="py-8">{children}</div>
-          </div>
+          <AppShell userId={userId} userEmail={userEmail}>
+            {children}
+          </AppShell>
           <GlobalShortcuts />
         </div>
       </QuickCaptureModalProvider>
