@@ -123,7 +123,6 @@ export function ChallengeRound({
   const [showRoundContext, setShowRoundContext] = useState(false)
   const [selectedResponsePath, setSelectedResponsePath] = useState<DialecticResponsePath>('defend')
   const [submitting, setSubmitting] = useState(false)
-  const [submitted, setSubmitted] = useState(Boolean(round.dialecticRound?.userResponse))
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [actingMove, setActingMove] = useState<BestNextMoveKey | null>(null)
   const [nextMoveError, setNextMoveError] = useState<string | null>(null)
@@ -158,11 +157,11 @@ export function ChallengeRound({
         : generationStatus === 'fallback'
           ? 'bg-[#fff8df] text-[#7a5a13]'
           : generationStatus === 'failed'
-            ? 'bg-[#fff1ef] text-[#8b3d2f]'
-            : ''
+        ? 'bg-[#fff1ef] text-[#8b3d2f]'
+        : ''
 
   useEffect(() => {
-    setSubmitted(Boolean(round.dialecticRound?.userResponse))
+    setSubmitting(false)
     setSelectedResponsePath('defend')
     setShowWhyNow(false)
     setShowPriorRounds(false)
@@ -211,17 +210,15 @@ export function ChallengeRound({
 
     try {
       await onResponseSubmit(trimmedResponse, round.roundContextDraft.confidenceAtRoundEnd, selectedResponsePath)
-      setSubmitted(true)
       setSubmitError(null)
     } catch (error) {
       console.error(error)
       setSubmitError(error instanceof Error ? error.message : "Couldn't save this round. Try again.")
-    } finally {
       setSubmitting(false)
     }
   }
 
-  const hasCompletedResponse = submitted || Boolean(completedRound?.userResponse)
+  const hasCompletedResponse = Boolean(completedRound?.userResponse)
   const confidenceAtRoundEnd = completedRound?.confidenceAtRoundEnd ?? round.roundContextDraft.confidenceAtRoundEnd
   const confidenceChange =
     completedRound?.confidenceDelta ?? confidenceAtRoundEnd - round.confidenceAtRoundStart
