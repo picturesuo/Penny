@@ -89,6 +89,16 @@ export type BestNextMoveActionResult = {
 }
 export type { BestNextMoveKey } from '@/lib/challenge-next-move'
 
+export type ChallengeDependencyCascade = {
+  summary: string
+  steps: Array<{
+    id: string
+    title: string
+    detail: string
+    deltaLabel?: string
+  }>
+}
+
 interface ChallengeRoundProps {
   claim: Pick<Claim, 'id' | 'text' | 'confidence'>
   round: ChallengeRoundModel
@@ -102,6 +112,7 @@ interface ChallengeRoundProps {
   generation?: ChallengeGenerationViewModel | null
   onRetryGeneration?: (() => void | Promise<void>) | undefined
   isSteelManReady: boolean
+  dependencyCascade?: ChallengeDependencyCascade | null
 }
 
 export function ChallengeRound({
@@ -117,6 +128,7 @@ export function ChallengeRound({
   generation = null,
   onRetryGeneration,
   isSteelManReady,
+  dependencyCascade = null,
 }: ChallengeRoundProps) {
   const [showWhyNow, setShowWhyNow] = useState(false)
   const [showPriorRounds, setShowPriorRounds] = useState(false)
@@ -244,6 +256,40 @@ export function ChallengeRound({
         : trimmedResponse.length > 0
           ? 'bg-[#fff8df] text-[#5a460d]'
           : 'bg-white text-[var(--ink)]'
+  const responsePaths = [
+    {
+      key: 'defend' as const,
+      label: 'Defend',
+      description: 'Hold the claim and answer the objection directly.',
+    },
+    {
+      key: 'revise' as const,
+      label: 'Revise',
+      description: 'Change the claim shape or narrow its scope.',
+    },
+    {
+      key: 'absorb' as const,
+      label: 'Absorb',
+      description: 'Accept the critique and carry the update forward.',
+    },
+  ]
+  const cascadeSummary = dependencyCascade?.summary ?? round.argument.pressure
+  const cascadeSteps =
+    dependencyCascade?.steps.length
+      ? dependencyCascade.steps
+      : [
+          {
+            id: `${round.round}-pressure`,
+            title: 'Primary pressure point',
+            detail: round.argument.assumption,
+            deltaLabel: `Start ${formatPercentValue(round.confidenceAtRoundStart)}`,
+          },
+          {
+            id: `${round.round}-shape`,
+            title: 'Pattern check',
+            detail: round.argument.shape,
+          },
+        ]
 
   return (
     <div className={`penny-reveal rounded-[24px] border border-black/8 bg-[linear-gradient(180deg,rgba(250,244,236,0.98)_0%,rgba(242,230,215,0.96)_100%)] p-5 shadow-[0_14px_34px_rgba(34,39,46,0.05)] ${hasCompletedResponse ? 'penny-saved-flash' : ''}`}>
@@ -276,151 +322,260 @@ export function ChallengeRound({
         </div>
       </div>
 
-      {!hasCompletedResponse && generationStatus === 'generating' ? (
-        <div className={`mt-4 ${QUIET_PANEL_CLASS}`}>
-          <p className={SURFACE_EYEBROW_CLASS}>Generating critique</p>
-          <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
-            Penny is turning the claim, steel man, and prior round history into the next challenge.
-          </p>
-          <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
-            The response box will open as soon as the critique is ready.
-          </p>
-        </div>
-      ) : null}
-
-      {!hasCompletedResponse && generationStatus === 'failed' ? (
-        <div className={`mt-4 ${QUIET_PANEL_CLASS}`}>
-          <p className={SURFACE_EYEBROW_CLASS}>Challenge generation failed</p>
-          <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
-            {generation?.error ?? "Couldn't generate this critique. Try again."}
-          </p>
-          {onRetryGeneration ? (
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.16fr)_minmax(0,0.96fr)]">
+        <div className="space-y-4">
+          <div className={QUIET_PANEL_CLASS}>
+            <p className={SURFACE_EYEBROW_CLASS}>Active claim</p>
+            <blockquote className="mt-3 text-base leading-7 text-[var(--ink)]">&quot;{claim.text}&quot;</blockquote>
             <div className="mt-4 flex flex-wrap gap-2">
-                <Button type="button" className="penny-press gap-2" onClick={() => void onRetryGeneration()}>
-                Retry generation
-              </Button>
+              <BadgeChip label={`${formatPercentValue(claim.confidence)} confidence`} />
+              <BadgeChip label={round.strength} />
             </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {generationNotice && !hasCompletedResponse && generationStatus !== 'failed' ? (
-        <div className={`mt-4 ${generationStatus === 'fallback' ? ERROR_NOTICE_CLASS : SUCCESS_NOTICE_CLASS}`}>
-          {generationNotice}
-          {generationStatus === 'fallback' && generation?.fallbackReason ? ` ${generation.fallbackReason}` : ''}
-        </div>
-      ) : null}
-
-      {(priorRounds.length > 0 || round.followUpPrompt) && !generationBlocksResponse ? (
-        <div className={`mt-3 ${QUIET_PANEL_CLASS}`}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className={SURFACE_EYEBROW_CLASS}>Earlier rounds</p>
-              <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{priorRoundLabel}</p>
-            </div>
-            {priorRounds.length > 0 ? (
-              <button className="text-xs font-medium text-[var(--ink)]" type="button" onClick={() => setShowPriorRounds((current) => !current)}>
-                {showPriorRounds ? 'Hide detail' : `Show ${priorRounds.length}`}
-              </button>
-            ) : null}
           </div>
-          {showPriorRounds && priorRounds.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              {priorRounds.slice(-3).map((priorRound) => (
-                <PriorRoundSummary key={priorRound.round} round={priorRound} />
-              ))}
-            </div>
-          ) : null}
-          {showPriorRounds && round.followUpPrompt ? (
-            <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
-              <span className="font-medium text-[var(--ink)]">Follow-up preview:</span> {round.followUpPrompt}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
 
-      <div className="mt-3">
-        <button
-          type="button"
-          className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-ink)]"
-          onClick={() => setShowWhyNow((current) => !current)}
-          disabled={generationBlocksResponse}
-        >
-          {showWhyNow ? 'Hide why this challenge' : 'Why this challenge'}
-        </button>
-        {showWhyNow && !generationBlocksResponse ? (
-          <div className={`mt-3 ${QUIET_PANEL_CLASS}`}>
-            <p className="text-sm leading-6 text-[var(--muted-ink)]">{round.why}</p>
-            <div className={`mt-3 ${INSET_PANEL_CLASS}`}>
-              <p className={SURFACE_EYEBROW_CLASS}>Argument as explanation</p>
-              <div className="mt-3 space-y-2">
-                <p className="text-sm leading-6 text-[var(--ink)]">
-                  <span className="font-medium">Premise:</span> {round.argument.premise}
-                </p>
-                <p className="text-sm leading-6 text-[var(--ink)]">
-                  <span className="font-medium">Assumption:</span> {round.argument.assumption}
-                </p>
-                <p className="text-sm leading-6 text-[var(--ink)]">
-                  <span className="font-medium">Pressure:</span> {round.argument.pressure}
-                </p>
-                <p className="text-sm leading-6 text-[var(--ink)]">
-                  <span className="font-medium">Precedent:</span> {round.argument.precedent}
-                </p>
-                <p className="text-sm leading-6 text-[var(--ink)]">
-                  <span className="font-medium">Shape:</span> {round.argument.shape}
-                </p>
-                <p className="text-sm leading-6 text-[var(--ink)]">
-                  <span className="font-medium">Conclusion:</span> {round.argument.conclusion}
-                </p>
-                <p className="text-sm leading-6 text-[var(--ink)]">
-                  <span className="font-medium">Steel man:</span> {round.steelMan}
-                </p>
+          <div className={QUIET_PANEL_CLASS}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className={SURFACE_EYEBROW_CLASS}>Counterargument</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">The current attack Penny wants answered.</p>
               </div>
+              <span className="rounded-full border border-black/8 bg-white px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-[var(--muted-ink)]">
+                {round.round}
+              </span>
             </div>
-            {round.responseClassification ? (
-              <div className="mt-3 rounded-[18px] border border-[#d9d0ee] bg-[#f7f2ff] p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-[#5c4c88]">Structured reading</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
-                  Penny read this response as <span className="font-medium">{formatClassification(round.responseClassification.type)}</span>
-                  {round.responseClassification.classifiedBy === 'user_explicit' ? ' from your explicit path choice.' : ' by inference from the text.'}
-                </p>
-                <p className={`mt-2 ${SURFACE_EYEBROW_CLASS}`}>
-                  Confidence at start {formatPercentValue(round.confidenceAtRoundStart)} · end {formatPercentValue(round.confidenceAtRoundEnd)}
-                  · delta {round.confidenceDelta >= 0 ? '+' : ''}
-                  {formatPercentValue(round.confidenceDelta)}
-                </p>
-                {round.concessions.length || round.defenses.length || round.dismissals.length ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {round.concessions.length ? <BadgeChip label={`${round.concessions.length} concessions`} /> : null}
-                    {round.defenses.length ? <BadgeChip label={`${round.defenses.length} defenses`} /> : null}
-                    {round.dismissals.length ? <BadgeChip label={`${round.dismissals.length} dismissals`} /> : null}
-                  </div>
+            <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{round.prompt}</p>
+            <div className={`mt-4 ${INSET_PANEL_CLASS}`}>
+              <p className={SURFACE_EYEBROW_CLASS}>Counterweight</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{round.steelMan}</p>
+            </div>
+          </div>
+
+          {(priorRounds.length > 0 || round.followUpPrompt) && !generationBlocksResponse ? (
+            <div className={QUIET_PANEL_CLASS}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className={SURFACE_EYEBROW_CLASS}>Round thread</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{priorRoundLabel}</p>
+                </div>
+                {priorRounds.length > 0 ? (
+                  <button className="text-xs font-medium text-[var(--ink)]" type="button" onClick={() => setShowPriorRounds((current) => !current)}>
+                    {showPriorRounds ? 'Hide detail' : `Show ${priorRounds.length}`}
+                  </button>
                 ) : null}
               </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+              {showPriorRounds && priorRounds.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {priorRounds.slice(-3).map((priorRound) => (
+                    <PriorRoundSummary key={priorRound.round} round={priorRound} />
+                  ))}
+                </div>
+              ) : null}
+              {round.followUpPrompt ? (
+                <div className={`mt-3 ${INSET_PANEL_CLASS}`}>
+                  <p className={SURFACE_EYEBROW_CLASS}>Follow-up preview</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{round.followUpPrompt}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
-      {hasCompletedResponse ? (
-        <div className={`mt-4 ${QUIET_PANEL_CLASS}`}>
-          <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${INSET_PANEL_CLASS} text-sm leading-6 text-[var(--muted-ink)]`}>
-            <span>
-              Confidence: {formatPercentValue(round.confidenceAtRoundStart)} → {formatPercentValue(confidenceAtRoundEnd)}
-            </span>
-            {confidenceChange !== 0 ? (
-              <span className={confidenceChange < 0 ? 'text-[#8b3d2f]' : 'text-[#2f6d47]'}>
-                ({confidenceChange > 0 ? '+' : ''}
-                {formatPercentValue(confidenceChange)})
-              </span>
-            ) : null}
-            {completedRound?.responseClassification ? (
-              <span>{formatClassification(completedRound.responseClassification.type)}</span>
-            ) : null}
-          </div>
+        <div className="space-y-4">
+          {!hasCompletedResponse && generationStatus === 'generating' ? (
+            <div className={QUIET_PANEL_CLASS}>
+              <p className={SURFACE_EYEBROW_CLASS}>Generating critique</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                Penny is turning the claim, steel man, and prior round history into the next challenge.
+              </p>
+              <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                The response controls will open as soon as the critique is ready.
+              </p>
+            </div>
+          ) : null}
+
+          {!hasCompletedResponse && generationStatus === 'failed' ? (
+            <div className={QUIET_PANEL_CLASS}>
+              <p className={SURFACE_EYEBROW_CLASS}>Challenge generation failed</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                {generation?.error ?? "Couldn't generate this critique. Try again."}
+              </p>
+              {onRetryGeneration ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button type="button" className="penny-press gap-2 bg-[var(--challenge)] text-[var(--paper)] hover:bg-[#bf8d37]" onClick={() => void onRetryGeneration()}>
+                    Retry generation
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {generationNotice && !hasCompletedResponse && generationStatus !== 'failed' ? (
+            <div className={generationStatus === 'fallback' ? ERROR_NOTICE_CLASS : SUCCESS_NOTICE_CLASS}>
+              {generationNotice}
+              {generationStatus === 'fallback' && generation?.fallbackReason ? ` ${generation.fallbackReason}` : ''}
+            </div>
+          ) : null}
+
+          {hasCompletedResponse ? (
+            <div className={QUIET_PANEL_CLASS}>
+              <p className={SURFACE_EYEBROW_CLASS}>Saved response</p>
+              <div className={`mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 ${INSET_PANEL_CLASS} text-sm leading-6 text-[var(--muted-ink)]`}>
+                <span>
+                  Confidence: {formatPercentValue(round.confidenceAtRoundStart)} → {formatPercentValue(confidenceAtRoundEnd)}
+                </span>
+                {confidenceChange !== 0 ? (
+                  <span className={confidenceChange < 0 ? 'text-[#8b3d2f]' : 'text-[#2f6d47]'}>
+                    ({confidenceChange > 0 ? '+' : ''}
+                    {formatPercentValue(confidenceChange)})
+                  </span>
+                ) : null}
+                {completedRound?.responseClassification ? (
+                  <span>{formatClassification(completedRound.responseClassification.type)}</span>
+                ) : null}
+              </div>
+              <p className="mt-4 text-sm leading-6 text-[var(--ink)]">{completedRound?.userResponse ?? trimmedResponse}</p>
+            </div>
+          ) : isRoundOpen && !generationBlocksResponse ? (
+            <form onSubmit={handleSubmitResponse} className="space-y-4">
+              <div className={QUIET_PANEL_CLASS}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <label htmlFor={`round-response-${round.round}`} className="text-sm font-medium text-[var(--ink)]">
+                      Response controls
+                    </label>
+                    <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
+                      Choose the path first, then write the response that should persist with this round.
+                    </p>
+                  </div>
+                  {!isSteelManReady ? (
+                    <span className="rounded-full bg-[#fff8df] px-3 py-1 text-xs font-medium text-[#5a460d]">Steel man required</span>
+                  ) : null}
+                </div>
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  {responsePaths.map((path) => {
+                    const selected = selectedResponsePath === path.key
+
+                    return (
+                      <button
+                        key={`${round.round}-${path.key}`}
+                        type="button"
+                        className={`rounded-[18px] border px-4 py-3 text-left transition ${selected ? 'border-[rgba(214,162,70,0.42)] bg-[rgba(214,162,70,0.18)] shadow-[0_12px_28px_rgba(214,162,70,0.16)]' : 'border-black/8 bg-white hover:bg-[var(--panel)]'}`}
+                        onClick={() => setSelectedResponsePath(path.key)}
+                      >
+                        <p className={`text-xs uppercase tracking-[0.18em] ${selected ? 'text-[#8b6520]' : 'text-[var(--muted-ink)]'}`}>{path.label}</p>
+                        <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{path.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+                <textarea
+                  id={`round-response-${round.round}`}
+                  className="penny-soft-switch mt-4 min-h-[180px] w-full rounded-[20px] border border-black/10 bg-[var(--paper)] px-4 py-4 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--challenge)]"
+                  placeholder="Capture the exact response you want saved into the challenge thread."
+                  value={responseDraft}
+                  onChange={(event) => onResponseDraftChange(event.target.value)}
+                  minLength={10}
+                  maxLength={3000}
+                />
+                {submitError ? <p className={ERROR_NOTICE_CLASS}>{submitError}</p> : null}
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-black/8 pt-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Selected path: {selectedResponsePath}</p>
+                  <Button
+                    type="submit"
+                    disabled={submitting || !isSteelManReady || trimmedResponse.length < 10}
+                    className="penny-press gap-2 bg-[var(--challenge)] text-[var(--paper)] shadow-[0_14px_30px_rgba(214,162,70,0.24)] hover:bg-[#bf8d37]"
+                  >
+                    {submitting ? 'Saving round...' : 'Submit response'}
+                  </Button>
+                </div>
+              </div>
+
+              <div className={QUIET_PANEL_CLASS}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className={SURFACE_EYEBROW_CLASS}>Round context</p>
+                    <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
+                      Keep the response primary. Add confidence and dependency notes only if they matter.
+                    </p>
+                  </div>
+                  <button className="text-xs font-medium text-[var(--ink)]" type="button" onClick={() => setShowRoundContext((current) => !current)}>
+                    {showRoundContext ? 'Hide detail' : 'Add detail'}
+                  </button>
+                </div>
+                {showRoundContext ? (
+                  <div className="mt-4 space-y-4">
+                    <div className={INSET_PANEL_CLASS}>
+                      <label className="block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Confidence after this response</label>
+                      <div className="mt-3">
+                        <ConfidenceSlider
+                          value={Math.max(5, Math.min(95, round.roundContextDraft.confidenceAtRoundEnd))}
+                          onChange={(value) => onRoundContextChange({ confidenceAtRoundEnd: value })}
+                          showAnchors={false}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className={INSET_PANEL_CLASS}>
+                        <label className="block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Concession note</label>
+                        <textarea
+                          className="penny-soft-switch mt-2 min-h-[96px] w-full rounded-[16px] border border-black/10 bg-[var(--paper)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--challenge)]"
+                          placeholder="Optional: name the exact point you conceded."
+                          value={round.roundContextDraft.concessionNote}
+                          onChange={(event) => onRoundContextChange({ concessionNote: event.target.value })}
+                        />
+                      </div>
+                      <div className={INSET_PANEL_CLASS}>
+                        <label className="block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Dependency cascade</label>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {([
+                            ['yes', 'Yes'],
+                            ['no', 'No'],
+                            ['unsure', 'Unsure'],
+                          ] as const).map(([value, label]) => (
+                            <Button
+                              key={`${round.round}-connected-${value}`}
+                              type="button"
+                              variant="secondary"
+                              className={`penny-press px-3 py-2 text-xs ${round.roundContextDraft.connectedClaimsChanged === (value === 'yes' ? true : value === 'no' ? false : null) ? 'bg-[rgba(214,162,70,0.18)] text-[#8b6520] ring-[rgba(214,162,70,0.42)]' : ''}`}
+                              onClick={() =>
+                                onRoundContextChange({
+                                  connectedClaimsChanged: value === 'yes' ? true : value === 'no' ? false : null,
+                                })
+                              }
+                            >
+                              {label}
+                            </Button>
+                          ))}
+                        </div>
+                        <textarea
+                          className="penny-soft-switch mt-3 min-h-[72px] w-full rounded-[16px] border border-black/10 bg-[var(--paper)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--challenge)]"
+                          placeholder="Optional: name the connected claims affected."
+                          value={round.roundContextDraft.connectedClaimsNote}
+                          onChange={(event) => onRoundContextChange({ connectedClaimsNote: event.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className={INSET_PANEL_CLASS}>
+                      <label className="block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">New evidence added</label>
+                      <textarea
+                        className="penny-soft-switch mt-2 min-h-[72px] w-full rounded-[16px] border border-black/10 bg-[var(--paper)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--challenge)]"
+                        placeholder="Optional: paste the new evidence or source you added."
+                        value={round.roundContextDraft.newEvidenceNote}
+                        onChange={(event) => onRoundContextChange({ newEvidenceNote: event.target.value })}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+                    Confidence now {formatPercentValue(confidenceAtRoundEnd)}.
+                  </p>
+                )}
+              </div>
+            </form>
+          ) : null}
 
           {bestNextMove ? (
-            <div className="penny-reveal mt-4 rounded-[22px] border border-[#d0c2af] bg-[linear-gradient(180deg,#f7efe2_0%,#efe2cf_100%)] p-5 shadow-[0_12px_28px_rgba(69,96,122,0.08)]">
+            <div className="penny-reveal rounded-[22px] border border-[#d0c2af] bg-[linear-gradient(180deg,#f7efe2_0%,#efe2cf_100%)] p-5 shadow-[0_12px_28px_rgba(69,96,122,0.08)]">
               <p className="text-[11px] uppercase tracking-[0.2em] text-[#45607a]">Best next move</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--ink)]">{bestNextMove.primary.label}</span>
@@ -429,15 +584,12 @@ export function ChallengeRound({
                 ) : null}
               </div>
               <p className="mt-3 text-sm leading-6 text-[var(--ink)]">{bestNextMove.primary.description}</p>
-              {round.followUpPrompt ? (
-                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">{round.followUpPrompt}</p>
-              ) : null}
               <div className="mt-4 flex flex-wrap gap-2">
                 {canHandleNextMove(bestNextMove.primary.key) ? (
-                    <Button
-                      type="button"
-                      className="penny-press gap-2"
-                      disabled={actingMove != null}
+                  <Button
+                    type="button"
+                    className="penny-press gap-2 bg-[var(--challenge)] text-[var(--paper)] hover:bg-[#bf8d37]"
+                    disabled={actingMove != null}
                     onClick={() => void handleBestNextMoveClick(bestNextMove.primary.key)}
                   >
                     {actingMove === bestNextMove.primary.key ? 'Working...' : bestNextMove.primary.label}
@@ -458,157 +610,100 @@ export function ChallengeRound({
                     </Button>
                   ))}
               </div>
-              {nextMoveFeedback ? (
-                <p className={SUCCESS_NOTICE_CLASS}>{nextMoveFeedback}</p>
-              ) : null}
-              {nextMoveError ? (
-                <p className={ERROR_NOTICE_CLASS}>
-                  {nextMoveError}
-                </p>
-              ) : null}
+              {nextMoveFeedback ? <p className={SUCCESS_NOTICE_CLASS}>{nextMoveFeedback}</p> : null}
+              {nextMoveError ? <p className={ERROR_NOTICE_CLASS}>{nextMoveError}</p> : null}
             </div>
           ) : null}
 
-          <div className={`mt-4 ${INSET_PANEL_CLASS}`}>
-            <p className={SURFACE_EYEBROW_CLASS}>Saved response</p>
-            <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{completedRound?.userResponse ?? trimmedResponse}</p>
-          </div>
+          {!hasCompletedResponse && generationStatus === 'fallback' && onRetryGeneration ? (
+            <div className="flex justify-end">
+              <Button type="button" variant="secondary" className="penny-press gap-2" onClick={() => void onRetryGeneration()}>
+                Retry generation
+              </Button>
+            </div>
+          ) : null}
         </div>
-      ) : isRoundOpen && !generationBlocksResponse ? (
-        <form onSubmit={handleSubmitResponse} className="mt-4 space-y-4">
-          <div className={QUIET_PANEL_CLASS}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <label htmlFor={`round-response-${round.round}`} className="text-sm font-medium text-[var(--ink)]">
-                  Your response
-                </label>
-                <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
-                  Defend, revise, or absorb. Minimum 10 non-space characters.
-                </p>
-              </div>
-              {!isSteelManReady ? (
-                <span className="rounded-full bg-[#fff8df] px-3 py-1 text-xs font-medium text-[#5a460d]">Steel man required</span>
-              ) : null}
-            </div>
-            <textarea
-              id={`round-response-${round.round}`}
-                  className="penny-soft-switch mt-3 min-h-[88px] w-full rounded-[18px] border border-black/10 bg-[var(--paper)] px-4 py-3 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--ink)]"
-              placeholder="Capture the response that should persist with this round."
-              value={responseDraft}
-              onChange={(event) => onResponseDraftChange(event.target.value)}
-              minLength={10}
-              maxLength={3000}
-            />
-            {submitError ? (
-              <p className={ERROR_NOTICE_CLASS}>
-                {submitError}
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(['defend', 'revise', 'absorb'] as const).map((path) => (
-                <Button
-                  key={`${round.round}-${path}`}
-                  type="button"
-                  variant={selectedResponsePath === path ? 'primary' : 'secondary'}
-                  className="penny-press px-3 py-2 text-xs"
-                  onClick={() => setSelectedResponsePath(path)}
-                >
-                  {path}
-                </Button>
-              ))}
-            </div>
-          </div>
 
+        <div className="space-y-4">
           <div className={QUIET_PANEL_CLASS}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className={SURFACE_EYEBROW_CLASS}>Round context</p>
+                <p className={SURFACE_EYEBROW_CLASS}>Critique transparency</p>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
-                  Keep the response primary. Add confidence and evidence notes only if they matter.
+                  Why this challenge is appearing and what line of reasoning produced it.
                 </p>
               </div>
-              <button className="text-xs font-medium text-[var(--ink)]" type="button" onClick={() => setShowRoundContext((current) => !current)}>
-                {showRoundContext ? 'Hide detail' : 'Add detail'}
+              <button
+                type="button"
+                className="text-xs font-medium text-[var(--ink)]"
+                onClick={() => setShowWhyNow((current) => !current)}
+                disabled={generationBlocksResponse}
+              >
+                {showWhyNow ? 'Condense' : 'Expand'}
               </button>
             </div>
-            {showRoundContext ? (
-              <div className="mt-4">
-                <label className="block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Did you update your confidence?</label>
-                <div className="mt-2">
-                  <ConfidenceSlider
-                    value={Math.max(5, Math.min(95, round.roundContextDraft.confidenceAtRoundEnd))}
-                    onChange={(value) => onRoundContextChange({ confidenceAtRoundEnd: value })}
-                    showAnchors={false}
-                  />
+            <div className="mt-4 space-y-3">
+              <TransparencyLine label="Why now" value={round.why} />
+              <TransparencyLine label="Premise" value={round.argument.premise} />
+              <TransparencyLine label="Precedent" value={round.argument.precedent} />
+            </div>
+            {showWhyNow && !generationBlocksResponse ? (
+              <div className={`mt-4 ${INSET_PANEL_CLASS}`}>
+                <p className={SURFACE_EYEBROW_CLASS}>Full reading</p>
+                <div className="mt-3 space-y-3">
+                  <TransparencyLine label="Assumption" value={round.argument.assumption} />
+                  <TransparencyLine label="Pressure" value={round.argument.pressure} />
+                  <TransparencyLine label="Shape" value={round.argument.shape} />
+                  <TransparencyLine label="Conclusion" value={round.argument.conclusion} />
+                  <TransparencyLine label="Steel man" value={round.steelMan} />
                 </div>
-                <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">What specifically did you concede?</label>
-                <textarea
-                  className="penny-soft-switch mt-2 min-h-[64px] w-full rounded-[16px] border border-black/10 bg-[var(--paper)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--ink)]"
-                  placeholder="Optional: name the exact point you conceded."
-                  value={round.roundContextDraft.concessionNote}
-                  onChange={(event) => onRoundContextChange({ concessionNote: event.target.value })}
-                />
-                <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Did this critique change connected claims?</label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {([
-                    ['yes', 'Yes'],
-                    ['no', 'No'],
-                    ['unsure', 'Unsure'],
-                  ] as const).map(([value, label]) => (
-                    <Button
-                      key={`${round.round}-connected-${value}`}
-                      type="button"
-                      variant={round.roundContextDraft.connectedClaimsChanged === (value === 'yes' ? true : value === 'no' ? false : null) ? 'primary' : 'secondary'}
-                      className="penny-press px-3 py-2 text-xs"
-                      onClick={() =>
-                        onRoundContextChange({
-                          connectedClaimsChanged: value === 'yes' ? true : value === 'no' ? false : null,
-                        })
-                      }
-                    >
-                      {label}
-                    </Button>
-                  ))}
-                </div>
-                <textarea
-                  className="penny-soft-switch mt-3 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--paper)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--ink)]"
-                  placeholder="Optional: name the claims affected."
-                  value={round.roundContextDraft.connectedClaimsNote}
-                  onChange={(event) => onRoundContextChange({ connectedClaimsNote: event.target.value })}
-                />
-                <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">New evidence added?</label>
-                <textarea
-                  className="penny-soft-switch mt-2 min-h-[56px] w-full rounded-[16px] border border-black/10 bg-[var(--paper)] px-3 py-2 text-sm leading-6 text-[var(--ink)] outline-none focus:border-[var(--ink)]"
-                  placeholder="Optional: paste the new evidence or source you added."
-                  value={round.roundContextDraft.newEvidenceNote}
-                  onChange={(event) => onRoundContextChange({ newEvidenceNote: event.target.value })}
-                />
               </div>
-            ) : (
-              <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
-                Confidence now {formatPercentValue(confidenceAtRoundEnd)}.
-              </p>
-            )}
+            ) : null}
+            {round.responseClassification ? (
+              <div className="mt-4 rounded-[18px] border border-[#d9d0ee] bg-[#f7f2ff] p-4">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-[#5c4c88]">Structured reading</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                  Penny read this response as <span className="font-medium">{formatClassification(round.responseClassification.type)}</span>
+                  {round.responseClassification.classifiedBy === 'user_explicit' ? ' from your explicit path choice.' : ' by inference from the text.'}
+                </p>
+                <p className={`mt-2 ${SURFACE_EYEBROW_CLASS}`}>
+                  Confidence at start {formatPercentValue(round.confidenceAtRoundStart)} · end {formatPercentValue(round.confidenceAtRoundEnd)}
+                  · delta {round.confidenceDelta >= 0 ? '+' : ''}
+                  {formatPercentValue(round.confidenceDelta)}
+                </p>
+              </div>
+            ) : null}
+            {round.critiqueFailureTypes.length || round.concessions.length || round.defenses.length || round.dismissals.length ? (
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-black/8 pt-4">
+                {round.critiqueFailureTypes.map((failureType) => (
+                  <BadgeChip key={`${round.round}-${failureType}`} label={failureType.replaceAll('_', ' ')} />
+                ))}
+                {round.concessions.length ? <BadgeChip label={`${round.concessions.length} concessions`} /> : null}
+                {round.defenses.length ? <BadgeChip label={`${round.defenses.length} defenses`} /> : null}
+                {round.dismissals.length ? <BadgeChip label={`${round.dismissals.length} dismissals`} /> : null}
+              </div>
+            ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
-              Path: {selectedResponsePath}
-            </p>
-            <Button type="submit" disabled={submitting || !isSteelManReady || trimmedResponse.length < 10} className="penny-press gap-2">
-              {submitting ? 'Saving round...' : 'Submit response'}
-            </Button>
+          <div className={QUIET_PANEL_CLASS}>
+            <p className={SURFACE_EYEBROW_CLASS}>Dependency cascade</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{cascadeSummary}</p>
+            <div className="mt-4 space-y-3 border-t border-black/8 pt-4">
+              {cascadeSteps.map((step) => (
+                <div key={step.id} className="rounded-[18px] border border-black/8 bg-[var(--paper)] px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-[var(--ink)]">{step.title}</p>
+                    {step.deltaLabel ? (
+                      <span className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted-ink)]">{step.deltaLabel}</span>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{step.detail}</p>
+                </div>
+              ))}
+            </div>
           </div>
-        </form>
-      ) : null}
-
-      {!hasCompletedResponse && generationStatus === 'fallback' && onRetryGeneration ? (
-        <div className="mt-4 flex justify-end">
-          <Button type="button" variant="secondary" className="penny-press gap-2" onClick={() => void onRetryGeneration()}>
-            Retry generation
-          </Button>
         </div>
-      ) : null}
+      </div>
     </div>
   )
 
@@ -672,6 +767,15 @@ function PriorRoundSummary({ round }: { round: ChallengeRoundModel }) {
 
 function BadgeChip({ label }: { label: string }) {
   return <span className="rounded-full bg-white px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--ink)]">{label}</span>
+}
+
+function TransparencyLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-b border-black/8 pb-3 last:border-b-0 last:pb-0">
+      <p className={SURFACE_EYEBROW_CLASS}>{label}</p>
+      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{value}</p>
+    </div>
+  )
 }
 
 function formatClassification(type: string): string {
