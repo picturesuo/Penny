@@ -14,6 +14,8 @@
   --radius-xl: 24px;
   --radius-lg: 18px;
   --shadow-soft: 0 10px 30px rgba(45, 36, 31, 0.05);
+  --shadow-card: 0 8px 24px rgba(45, 36, 31, 0.04);
+  --shadow-lifted: 0 12px 30px rgba(45, 36, 31, 0.05);
 
   --background: var(--paper);
   --foreground: var(--ink);
@@ -78,6 +80,48 @@ a {
     radial-gradient(circle at top, rgb(255 255 255 / 0.58), transparent 42%),
     linear-gradient(180deg, rgb(253 250 246 / 0.98) 0%, rgb(247 243 238 / 0.96) 100%);
   box-shadow: var(--shadow-soft);
+}
+
+.penny-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: rgb(255 255 255 / 0.86);
+  box-shadow: var(--shadow-card);
+}
+
+.penny-card-soft {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at top, rgb(255 255 255 / 0.4), transparent 46%),
+    linear-gradient(180deg, rgb(253 250 246 / 0.98) 0%, rgb(247 243 238 / 0.94) 100%);
+  box-shadow: var(--shadow-lifted);
+}
+
+.penny-card-inset {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+
+.penny-card-plain {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgb(255 255 255 / 0.92);
+}
+
+.penny-label {
+  color: var(--muted-ink);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.penny-meta {
+  color: var(--muted-ink);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .penny-soft-switch {
