@@ -1,235 +1,98 @@
-import { redirect } from "next/navigation";
-import Link from "next/link";
-import { ArrowRight, BookOpenText, BrainCircuit, GraduationCap, ShieldAlert, Target, Waypoints } from "lucide-react";
+import { ArrowUpRight, BrainCircuit, GraduationCap, ShieldAlert } from "lucide-react";
 import { PennyLogo } from "@/components/penny/penny-logo";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { getAuthenticatedUserFromCookies } from "@/server/auth";
 
-const steps = [
+const lanes = [
   {
-    icon: Target,
-    title: "Capture",
-    copy: "State what you believe as a specific, falsifiable claim and give it a confidence level.",
-  },
-  {
-    icon: ShieldAlert,
-    title: "Challenge",
-    copy: "Pressure-test it against evidence, precedent, dependencies, and the strongest counterargument.",
-  },
-  {
-    icon: Waypoints,
-    title: "Learn",
-    copy: "When something is unclear, teach through the claim you are already working on and leave with the concept attached.",
-  },
-];
-
-const useCases = [
-  {
-    icon: BookOpenText,
-    eyebrow: "01",
-    title: "Brain is the product",
-    copy:
-      "A spatial, accumulating knowledge graph for the user’s thinking over time, not a passive note pile or chatbot sidebar.",
-    focus: "Current focus",
-    bullets: [
-      "Capture claims, moves, shapes, and confidence in one living graph.",
-      "Keep the map structurally healthy, not just visually interesting.",
-      "Move sensitive claims, maps, and sessions into device-only vault storage when needed.",
-      "Let the user revisit old selves, genealogy, and contradictions as part of the product.",
-    ],
-  },
-  {
-    icon: BrainCircuit,
-    eyebrow: "02",
-    title: "Challenge is the dialectic",
-    copy:
-      "Focus a region of Brain and turn on the stress-test machinery so Penny can push on the claim until the structure is honest.",
-    focus: "Next",
-    bullets: [
-      "Run explicit critique rounds with defend, revise, or absorb responses.",
-      "Surface quiet keystones, quiet fragility, and the strongest available precedent.",
-      "Show why each critique exists so the system stays auditable.",
-    ],
-  },
-  {
-    icon: GraduationCap,
-    eyebrow: "03",
-    title: "Learn is just-in-time",
-    copy:
-      "When the user hits confusion, Penny explains the concept in the context of the claim they are already working on.",
-    focus: "Later",
-    bullets: [
-      "Teach back from the live claim instead of from a generic reading list.",
-      "Anchor new understanding to the user’s existing graph.",
-      "Track mastery, relearning, and gaps so future critiques pitch at the right level.",
-    ],
-  },
-];
-
-const tracker = [
-  {
-    lane: "Now",
     title: "Brain",
-    items: [
-      "Keep the graph as the accumulating substrate for claims, moves, shapes, and confidence.",
-      "Treat the Map as the visual payoff and the Stream as the daily work surface.",
-      "Make Brain feel like a place the user returns to, not a set of disposable notes.",
-    ],
+    description: "Capture and organize the ideas you want to keep alive.",
+    icon: BrainCircuit,
+    accent: "var(--brain)",
+    badge: "Think structurally",
   },
   {
-    lane: "Next",
     title: "Challenge",
-    items: [
-      "Keep dialectic rounds, critique strength, provenance, and the why-this-critique panel visible.",
-      "Use Bayesian propagation so a confidence change actually moves the rest of the graph.",
-      "Surface the quiet keystone and the load-bearing assumptions before synthesis.",
-    ],
+    description: "Pressure-test one claim until the structure becomes honest.",
+    icon: ShieldAlert,
+    accent: "var(--challenge)",
+    badge: "Stress-test a claim",
   },
   {
-    lane: "Later",
     title: "Learn",
-    items: [
-      "Make teach-back the default learning motion at the exact point of confusion.",
-      "Anchor every explanation to an existing claim in the graph.",
-      "Let the user leave with understanding, not a reading list.",
-    ],
+    description: "Teach through the exact concept blocking your current work.",
+    icon: GraduationCap,
+    accent: "var(--learn)",
+    badge: "Close a knowledge gap",
   },
-];
+] as const;
 
-export default async function LandingPage() {
-  const user = await getAuthenticatedUserFromCookies();
-
-  if (user) {
-    redirect("/dashboard");
-  }
-
+export default function LandingPage() {
   return (
-    <main className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 top-[-14rem] h-[32rem] bg-[radial-gradient(circle_at_top,_rgba(182,106,60,0.18),_transparent_58%)]" />
-      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-8 lg:px-10">
-        <header className="flex items-center justify-between py-4">
-          <Link href="/" className="flex items-center gap-3">
-            <PennyLogo showLabel={false} />
-            <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Penny</p>
-              <p className="mt-1 text-sm text-[var(--muted-ink)]">Pressure-tested second brain for claims, critique, and learning.</p>
-            </div>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/auth/sign-in">
-              <Button variant="secondary">Sign in</Button>
-            </Link>
-            <Link href="/auth/sign-up">
-              <Button className="gap-2">
-                Start thinking
-                <ArrowRight className="size-4" />
-              </Button>
-            </Link>
-          </div>
+    <main className="relative min-h-screen overflow-hidden bg-[var(--paper)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(185,106,69,0.10),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(95,143,120,0.08),transparent_30%)]" />
+
+      <div className="relative mx-auto flex min-h-screen max-w-[1280px] flex-col px-6 py-8 lg:px-10">
+        <header className="flex items-center justify-start">
+          <PennyLogo markClassName="size-11 rounded-[14px]" labelClassName="text-xl font-medium tracking-[-0.01em]" />
         </header>
 
-        <section className="grid flex-1 items-center gap-12 py-16 lg:grid-cols-[1fr_0.92fr]">
-          <div className="max-w-3xl">
-            <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted-ink)]">Wiki-first personal thinking</p>
-            <h1 className="mt-6 max-w-3xl font-display text-5xl leading-[0.96] text-[var(--ink)] sm:text-6xl lg:text-7xl">
-              A pressure-tested
-              <br />
-              second brain
+        <section className="flex flex-1 flex-col justify-center py-16">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="text-[11px] uppercase tracking-[0.28em] text-[var(--muted-ink)]">Static landing mock</p>
+            <h1 className="mt-6 font-display text-5xl leading-[0.94] text-[var(--ink)] sm:text-6xl lg:text-7xl">
+              What do you want to do today?
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-[var(--muted-ink)]">
-              Penny helps you capture what you believe, challenge it rigorously, and build a durable record of how your thinking evolves.
+            <p className="mx-auto mt-6 max-w-2xl text-base leading-8 text-[var(--muted-ink)] sm:text-lg">
+              Choose one lane and start there. Brain stores the work, Challenge pressure-tests it, and Learn closes the gap
+              that is blocking you right now.
             </p>
-            <div className="mt-10 flex flex-wrap gap-4">
-              <Link href="/auth/sign-up">
-                <Button className="gap-2 px-6 py-3 text-base">
-                  Start thinking
-                  <ArrowRight className="size-4" />
-                </Button>
-              </Link>
-              <Link href="#how-it-works">
-                <Button variant="secondary" className="px-6 py-3 text-base">
-                  See how it works
-                </Button>
-              </Link>
-            </div>
           </div>
 
-          <Card className="p-6 sm:p-8">
-            <div className="rounded-[24px] bg-[var(--ink)] p-5 text-[var(--paper)]">
-              <p className="text-xs uppercase tracking-[0.22em] text-white/60">Penny says</p>
-              <p className="mt-3 text-lg leading-8">
-                “This thought is not done because it exists. Show the claim, the dependency, the counterargument, and what would prove you wrong.”
-              </p>
-            </div>
-            <div className="mt-6 grid gap-4">
-              {steps.map((step) => (
-                <div key={step.title} className="rounded-[24px] bg-[var(--panel)] p-5">
-                  <step.icon className="size-5 text-[var(--ink)]" />
-                  <h2 className="mt-3 text-xl font-semibold text-[var(--ink)]">{step.title}</h2>
-                  <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">{step.copy}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </section>
+          <div className="mt-14 grid gap-6 lg:grid-cols-3">
+            {lanes.map((lane) => {
+              const Icon = lane.icon;
 
-        <section id="how-it-works" className="py-6">
-          <div className="max-w-3xl">
-            <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">How it works</p>
-            <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
-              Capture, challenge, and learn in one flow.
-            </h2>
-          </div>
-          <div className="mt-8 grid gap-5 lg:grid-cols-3">
-            {useCases.map((useCase) => (
-              <Card key={useCase.title} className="p-6">
-                <div className="flex items-center justify-between gap-3">
-                  <useCase.icon className="size-5 text-[var(--ink)]" />
-                  <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted-ink)]">{useCase.focus}</p>
-                </div>
-                <p className="mt-4 text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">{useCase.eyebrow}</p>
-                <h3 className="mt-2 text-2xl font-semibold text-[var(--ink)]">{useCase.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">{useCase.copy}</p>
-                <div className="mt-5 space-y-3">
-                  {useCase.bullets.map((bullet) => (
-                    <p key={bullet} className="rounded-[20px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)]">
-                      {bullet}
-                    </p>
-                  ))}
-                </div>
-              </Card>
-            ))}
-          </div>
-        </section>
-
-        <section className="py-10">
-          <Card className="p-6 sm:p-8">
-            <div className="max-w-3xl">
-              <p className="text-xs uppercase tracking-[0.24em] text-[var(--muted-ink)]">Build tracker</p>
-              <h2 className="mt-3 text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
-                What Penny is working toward.
-              </h2>
-              <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
-                Brain is the product, Challenge is the dialectic, and Learn is the just-in-time understanding layer. The tracker keeps the direction explicit.
-              </p>
-            </div>
-            <div className="mt-8 grid gap-4 lg:grid-cols-3">
-              {tracker.map((column) => (
-                <div key={column.lane} className="rounded-[28px] border border-black/8 bg-[var(--panel)] p-5">
-                  <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-ink)]">{column.lane}</p>
-                  <h3 className="mt-2 text-xl font-semibold text-[var(--ink)]">{column.title}</h3>
-                  <div className="mt-4 space-y-3">
-                    {column.items.map((item) => (
-                      <p key={item} className="rounded-[18px] bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)]">
-                        {item}
-                      </p>
-                    ))}
+              return (
+                <article
+                  key={lane.title}
+                  className="flex min-h-[340px] flex-col rounded-[var(--radius-xl)] border border-[var(--line)] bg-[var(--panel)] p-7 shadow-[var(--shadow-soft)]"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div
+                      className="flex size-14 items-center justify-center rounded-full border border-[var(--line)] bg-white/70"
+                      style={{ color: lane.accent }}
+                    >
+                      <Icon className="size-6" />
+                    </div>
+                    <span
+                      className="rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.18em]"
+                      style={{
+                        borderColor: "color-mix(in srgb, var(--line) 72%, transparent)",
+                        color: lane.accent,
+                        backgroundColor: "rgba(255,255,255,0.68)",
+                      }}
+                    >
+                      {lane.badge}
+                    </span>
                   </div>
-                </div>
-              ))}
-            </div>
-          </Card>
+
+                  <div className="mt-10">
+                    <h2 className="font-display text-[2rem] leading-none text-[var(--ink)]">{lane.title}</h2>
+                    <p className="mt-4 max-w-[18rem] text-sm leading-7 text-[var(--muted-ink)]">{lane.description}</p>
+                  </div>
+
+                  <div className="mt-auto pt-10">
+                    <button
+                      type="button"
+                      aria-label={`Open ${lane.title}`}
+                      className="flex size-14 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink)] transition hover:-translate-y-0.5"
+                    >
+                      <ArrowUpRight className="size-5" />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </section>
       </div>
     </main>
