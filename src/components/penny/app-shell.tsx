@@ -49,6 +49,7 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
   const breadcrumbs = buildBreadcrumbs(activeMode);
   const surface = describeSurface(pathname);
   const modeRailItems = buildModeRail(pathname, searchParams);
+  const showBrainInspector = activeMode === "brain" && (pathname === "/app" || pathname === "/dashboard");
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8f2e8_0%,#f5efe4_28%,#f8f6f1_100%)]">
@@ -168,40 +169,7 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
 
           <aside className="order-3">
             <div className="xl:sticky xl:top-[11.5rem] space-y-4">
-              <Card className="border-black/8 bg-white/84 p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-[#e7defa] text-[#5c4c88]">{surface.badge}</Badge>
-                  <Badge className="bg-[var(--panel)] text-[var(--ink)]">Right inspector</Badge>
-                </div>
-                <h2 className="mt-3 text-xl font-semibold text-[var(--ink)]">{surface.title}</h2>
-                <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">{surface.description}</p>
-              </Card>
-
-              <Card className="border-black/8 bg-white/80 p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Inspector notes</p>
-                <div className="mt-4 space-y-3">
-                  {surface.inspectorNotes.map((note) => (
-                    <div key={note} className="rounded-[18px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)]">
-                      {note}
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              <Card className="border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(240,244,247,0.92))] p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
-                <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-[var(--accent-paper)] p-2 text-[var(--ink)]">
-                    <Compass className="size-4" />
-                  </span>
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Why this shell</p>
-                    <p className="mt-1 text-sm font-medium text-[var(--ink)]">Persistent structure beats page sprawl.</p>
-                  </div>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
-                  The app can add richer route-specific inspectors later without changing the frame or retraining the user.
-                </p>
-              </Card>
+              {showBrainInspector ? <BrainClaimInspector /> : <GenericShellInspector surface={surface} />}
             </div>
           </aside>
         </div>
@@ -222,6 +190,137 @@ function buildBreadcrumbs(activeMode: ModeKey): Breadcrumb[] {
   }
 
   return breadcrumbs;
+}
+
+function BrainClaimInspector() {
+  return (
+    <>
+      <Card className="border-black/8 bg-white/84 p-5 shadow-[var(--shadow-soft)]">
+        <div className="flex items-center gap-2">
+          <Badge className="bg-[color:rgba(185,106,69,0.12)] text-[var(--brain)]">Selected claim</Badge>
+          <Badge className="bg-[var(--panel)] text-[var(--ink)]">Right inspector</Badge>
+        </div>
+        <h2 className="mt-3 font-display text-[1.9rem] leading-[1.03] text-[var(--ink)]">
+          Distribution only compounds if collaboration itself becomes part of acquisition.
+        </h2>
+
+        <div className="mt-5 rounded-[var(--radius-lg)] border border-[var(--line)] bg-[var(--panel)] p-4">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">Confidence</p>
+          <div className="mt-3 flex items-end justify-between gap-4">
+            <p className="text-4xl font-semibold leading-none text-[var(--ink)]">74%</p>
+            <p className="text-sm leading-6 text-[var(--muted-ink)]">Moderately defended, still sensitive to retention evidence.</p>
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">Key connections</p>
+          <div className="mt-3 rounded-[var(--radius-lg)] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(251,248,244,0.9),rgba(245,239,232,0.96))] p-4">
+            <div className="relative h-28">
+              <div className="absolute left-1/2 top-2 h-11 w-px -translate-x-1/2 bg-[var(--line)]" />
+              <div className="absolute left-[22%] top-[3.6rem] h-px w-[28%] bg-[var(--line)]" />
+              <div className="absolute right-[22%] top-[3.6rem] h-px w-[28%] bg-[var(--line)]" />
+
+              <div className="absolute left-1/2 top-0 -translate-x-1/2 rounded-full bg-[color:rgba(185,106,69,0.14)] px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--brain)]">
+                Claim
+              </div>
+              <div className="absolute left-0 top-[3rem] rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
+                Market thesis
+              </div>
+              <div className="absolute right-0 top-[3rem] rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
+                Network effects
+              </div>
+              <div className="absolute left-1/2 bottom-0 -translate-x-1/2 rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
+                Retention loop
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">Dependents</p>
+          <div className="mt-3 space-y-2">
+            {[
+              "Pricing power depends on collaboration density.",
+              "Investor narrative depends on a defensible moat claim.",
+              "Distribution plan depends on product-led activation.",
+            ].map((entry) => (
+              <div key={entry} className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)]">
+                {entry}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+          <div className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-white p-4">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">Last challenged</p>
+            <p className="mt-2 text-sm font-medium text-[var(--ink)]">Today, 9:40 AM</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">Counterargument targeted whether the loop is retention-led or acquisition-led.</p>
+          </div>
+
+          <div className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(251,248,244,0.88),rgba(245,239,232,0.96))] p-4">
+            <div className="flex items-center gap-2">
+              <Compass className="size-4 text-[var(--brain)]" />
+              <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">Tiny mini-map</p>
+            </div>
+            <div className="mt-3 h-24 rounded-[14px] border border-[var(--line)] bg-white/78 p-3">
+              <div className="flex h-full items-center justify-center">
+                <div className="relative h-full w-full">
+                  <span className="absolute left-[12%] top-[42%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
+                  <span className="absolute left-[38%] top-[18%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
+                  <span className="absolute left-[48%] top-[44%] size-3 rounded-full bg-[var(--brain)]" />
+                  <span className="absolute right-[16%] top-[30%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
+                  <span className="absolute right-[22%] bottom-[18%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
+                  <span className="absolute left-[23%] bottom-[16%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </>
+  );
+}
+
+function GenericShellInspector({ surface }: { surface: SurfaceSummary }) {
+  return (
+    <>
+      <Card className="border-black/8 bg-white/84 p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
+        <div className="flex items-center gap-2">
+          <Badge className="bg-[#e7defa] text-[#5c4c88]">{surface.badge}</Badge>
+          <Badge className="bg-[var(--panel)] text-[var(--ink)]">Right inspector</Badge>
+        </div>
+        <h2 className="mt-3 text-xl font-semibold text-[var(--ink)]">{surface.title}</h2>
+        <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">{surface.description}</p>
+      </Card>
+
+      <Card className="border-black/8 bg-white/80 p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
+        <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Inspector notes</p>
+        <div className="mt-4 space-y-3">
+          {surface.inspectorNotes.map((note) => (
+            <div key={note} className="rounded-[18px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)]">
+              {note}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(240,244,247,0.92))] p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-[var(--accent-paper)] p-2 text-[var(--ink)]">
+            <Compass className="size-4" />
+          </span>
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Why this shell</p>
+            <p className="mt-1 text-sm font-medium text-[var(--ink)]">Persistent structure beats page sprawl.</p>
+          </div>
+        </div>
+        <p className="mt-3 text-sm leading-6 text-[var(--muted-ink)]">
+          The app can add richer route-specific inspectors later without changing the frame or retraining the user.
+        </p>
+      </Card>
+    </>
+  );
 }
 
 function describeSurface(pathname: string): SurfaceSummary {
