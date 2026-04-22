@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button'
 import { ConfidenceSlider } from './confidence-slider'
 import { bestNextMoveCopy, deriveBestNextMove, type BestNextMoveKey, type BestNextMoveRecommendation } from '@/lib/challenge-next-move'
 
-const SURFACE_EYEBROW_CLASS = 'text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]'
-const QUIET_PANEL_CLASS = 'rounded-[22px] border border-black/8 bg-white p-4 shadow-[0_10px_24px_rgba(34,39,46,0.04)]'
-const INSET_PANEL_CLASS = 'rounded-[18px] bg-[var(--panel)] px-4 py-3'
+const SURFACE_EYEBROW_CLASS = 'penny-label'
+const QUIET_PANEL_CLASS = 'penny-card p-4 shadow-[var(--shadow-card)]'
+const INSET_PANEL_CLASS = 'penny-card-inset px-4 py-3'
 const ERROR_NOTICE_CLASS = 'mt-3 rounded-[18px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm leading-6 text-[#8b3d2f]'
 const SUCCESS_NOTICE_CLASS = 'mt-3 rounded-[18px] border border-[#b9d3c0] bg-[#eff8f1] px-4 py-3 text-sm leading-6 text-[#2f6d47]'
 
@@ -292,11 +292,11 @@ export function ChallengeRound({
         ]
 
   return (
-    <div className={`penny-reveal rounded-[24px] border border-black/8 bg-[linear-gradient(180deg,rgba(250,244,236,0.98)_0%,rgba(242,230,215,0.96)_100%)] p-5 shadow-[0_14px_34px_rgba(34,39,46,0.05)] ${hasCompletedResponse ? 'penny-saved-flash' : ''}`}>
+    <div className={`penny-reveal penny-card-soft p-5 ${hasCompletedResponse ? 'penny-saved-flash' : ''}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)] shadow-[0_8px_18px_rgba(34,39,46,0.04)]">{round.round}</span>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)] shadow-[var(--shadow-card)]">{round.round}</span>
             <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone}`}>{statusLabel}</span>
             {generationLabel ? <span className={`rounded-full px-3 py-1 text-xs font-medium ${generationTone}`}>{generationLabel}</span> : null}
           </div>
@@ -459,7 +459,8 @@ export function ChallengeRound({
                       <button
                         key={`${round.round}-${path.key}`}
                         type="button"
-                        className={`rounded-[18px] border px-4 py-3 text-left transition ${selected ? 'border-[rgba(214,162,70,0.42)] bg-[rgba(214,162,70,0.18)] shadow-[0_12px_28px_rgba(214,162,70,0.16)]' : 'border-black/8 bg-white hover:bg-[var(--panel)]'}`}
+                        className={`rounded-[18px] border px-4 py-3 text-left transition ${selected ? 'border-[rgba(214,162,70,0.42)] bg-[rgba(214,162,70,0.16)] shadow-[0_10px_24px_rgba(214,162,70,0.14)]' : 'bg-white hover:bg-[var(--panel)]'}`}
+                        style={!selected ? { borderColor: 'var(--line)' } : undefined}
                         onClick={() => setSelectedResponsePath(path.key)}
                       >
                         <p className={`text-xs uppercase tracking-[0.18em] ${selected ? 'text-[#8b6520]' : 'text-[var(--muted-ink)]'}`}>{path.label}</p>
@@ -575,8 +576,8 @@ export function ChallengeRound({
           ) : null}
 
           {bestNextMove ? (
-            <div className="penny-reveal rounded-[22px] border border-[#d0c2af] bg-[linear-gradient(180deg,#f7efe2_0%,#efe2cf_100%)] p-5 shadow-[0_12px_28px_rgba(69,96,122,0.08)]">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-[#45607a]">Best next move</p>
+            <div className="penny-reveal penny-card-soft p-5">
+              <p className="penny-label text-[#7b6d63]">Best next move</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[var(--ink)]">{bestNextMove.primary.label}</span>
                 {bestNextMove.signalLabel ? (
@@ -660,8 +661,8 @@ export function ChallengeRound({
               </div>
             ) : null}
             {round.responseClassification ? (
-              <div className="mt-4 rounded-[18px] border border-[#d9d0ee] bg-[#f7f2ff] p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-[#5c4c88]">Structured reading</p>
+              <div className="mt-4 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] p-4">
+                <p className="penny-label">Structured reading</p>
                 <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
                   Penny read this response as <span className="font-medium">{formatClassification(round.responseClassification.type)}</span>
                   {round.responseClassification.classifiedBy === 'user_explicit' ? ' from your explicit path choice.' : ' by inference from the text.'}
@@ -690,7 +691,7 @@ export function ChallengeRound({
             <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{cascadeSummary}</p>
             <div className="mt-4 space-y-3 border-t border-black/8 pt-4">
               {cascadeSteps.map((step) => (
-                <div key={step.id} className="rounded-[18px] border border-black/8 bg-[var(--paper)] px-4 py-3">
+                <div key={step.id} className="penny-card-inset px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium text-[var(--ink)]">{step.title}</p>
                     {step.deltaLabel ? (
