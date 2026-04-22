@@ -32,7 +32,6 @@ type ModeRailItem = {
 };
 
 type Breadcrumb = {
-  href: string;
   label: string;
 };
 
@@ -46,9 +45,9 @@ type SurfaceSummary = {
 export function AppShell({ children, userEmail, userId }: AppShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const breadcrumbs = buildBreadcrumbs(pathname);
-  const surface = describeSurface(pathname);
   const activeMode = deriveActiveMode(pathname, searchParams);
+  const breadcrumbs = buildBreadcrumbs(activeMode);
+  const surface = describeSurface(pathname);
   const modeRailItems = buildModeRail(pathname, searchParams);
 
   return (
@@ -65,15 +64,11 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
               <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted-ink)]">
                 <Badge className="bg-[var(--accent-paper)] text-[var(--ink)]">Persistent breadcrumb</Badge>
                 {breadcrumbs.map((crumb, index) => (
-                  <div key={`${crumb.href}:${crumb.label}`} className="flex items-center gap-2">
+                  <div key={crumb.label} className="flex items-center gap-2">
                     {index > 0 ? <ChevronRight className="size-4 text-[var(--muted-ink)]" /> : null}
-                    {index === breadcrumbs.length - 1 ? (
-                      <span className="font-medium text-[var(--ink)]">{crumb.label}</span>
-                    ) : (
-                      <Link href={crumb.href} className="transition hover:text-[var(--ink)]">
-                        {crumb.label}
-                      </Link>
-                    )}
+                    <span className={index === breadcrumbs.length - 1 ? "font-medium text-[var(--ink)]" : "text-[var(--muted-ink)]"}>
+                      {crumb.label}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -215,33 +210,15 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
   );
 }
 
-function buildBreadcrumbs(pathname: string): Breadcrumb[] {
-  if (pathname.startsWith("/maps/")) {
-    return [
-      { href: "/app", label: "Brain" },
-      { href: "/app", label: "Maps" },
-      { href: pathname, label: "Map workspace" },
-    ];
-  }
+function buildBreadcrumbs(activeMode: ModeKey): Breadcrumb[] {
+  const breadcrumbs: Breadcrumb[] = [
+    { label: "Work" },
+    { label: "Market Thesis" },
+    { label: "Distribution Claim" },
+  ];
 
-  if (pathname === "/dashboard") {
-    return [{ href: "/dashboard", label: "Brain" }];
-  }
-
-  if (!pathname.startsWith("/app")) {
-    return [{ href: pathname, label: "Penny" }];
-  }
-
-  const segments = pathname.split("/").filter(Boolean).slice(1);
-  const breadcrumbs: Breadcrumb[] = [{ href: "/app", label: "Brain" }];
-  let currentPath = "/app";
-
-  for (const segment of segments) {
-    currentPath += `/${segment}`;
-    breadcrumbs.push({
-      href: currentPath,
-      label: segmentLabel(segment),
-    });
+  if (activeMode === "learn") {
+    breadcrumbs.push({ label: "Network Effects" });
   }
 
   return breadcrumbs;
@@ -408,18 +385,4 @@ function buildModeHref(pathname: string, searchParams: URLSearchParams, mode: Mo
   }
   const query = params.toString();
   return query ? `/app?${query}` : "/app";
-}
-
-function segmentLabel(segment: string) {
-  if (segment === "search") return "Search";
-  if (segment === "settings") return "Settings";
-  if (segment === "lessons") return "Lessons";
-  if (segment === "velocity") return "Velocity";
-  if (segment === "session") return "Session";
-  if (segment === "identity") return "Identity";
-  if (segment === "counterfactuals") return "Counterfactuals";
-  if (segment === "base-rates") return "Base rates";
-  if (segment === "unlocks") return "Unlocks";
-  if (segment === "new") return "New map";
-  return "Map";
 }
