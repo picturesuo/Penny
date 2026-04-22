@@ -1,4 +1,5 @@
-import { ArrowUpRight, Clock3, Network, Sparkles } from "lucide-react";
+import { ArrowUpRight, Clock3, Sparkles } from "lucide-react";
+import { OrnamentalGraph } from "@/components/penny/ornamental-graph";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 
@@ -161,7 +162,7 @@ export default function DashboardPage() {
                     <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">{thought.note}</p>
                   </div>
                   <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--panel)] text-[var(--ink)]">
-                    <Network className="size-4" />
+                    <OrnamentalGraph variant="cluster" accent="var(--brain)" className="h-5 w-5" />
                   </span>
                 </div>
               </Card>
