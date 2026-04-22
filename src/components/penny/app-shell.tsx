@@ -129,7 +129,7 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
                         className={[
                           "flex items-center justify-between rounded-[18px] border px-4 py-3 text-sm transition",
                           active
-                            ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--paper)]"
+                            ? "border-[color:rgba(182,106,60,0.24)] bg-[linear-gradient(180deg,rgba(182,106,60,0.98),rgba(152,88,51,0.98))] text-[var(--paper)] shadow-[0_14px_30px_rgba(182,106,60,0.16)]"
                             : "border-black/8 bg-[var(--panel)] text-[var(--ink)] hover:border-black/16 hover:bg-white",
                         ].join(" ")}
                       >
