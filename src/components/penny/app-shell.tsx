@@ -1,16 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
-  BookOpenText,
   BrainCircuit,
   ChevronRight,
   Compass,
-  Search,
-  Settings2,
-  TimerReset,
+  GraduationCap,
+  ShieldAlert,
 } from "lucide-react";
+import { PennyLogo } from "@/components/penny/penny-logo";
 import { Nav } from "@/components/penny/nav";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -21,11 +20,15 @@ type AppShellProps = {
   userId: string;
 };
 
-type ShellNavItem = {
+type ModeKey = "brain" | "challenge" | "learn";
+
+type ModeRailItem = {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  match: (pathname: string) => boolean;
+  description: string;
+  accent: string;
+  mode: ModeKey;
 };
 
 type Breadcrumb = {
@@ -40,43 +43,13 @@ type SurfaceSummary = {
   inspectorNotes: string[];
 };
 
-const shellNavItems: ShellNavItem[] = [
-  {
-    href: "/app",
-    icon: BrainCircuit,
-    label: "Brain",
-    match: (pathname) => pathname === "/app" || pathname === "/dashboard" || pathname.startsWith("/maps/"),
-  },
-  {
-    href: "/app/search",
-    icon: Search,
-    label: "Search",
-    match: (pathname) => pathname.startsWith("/app/search"),
-  },
-  {
-    href: "/app/lessons",
-    icon: BookOpenText,
-    label: "Lessons",
-    match: (pathname) => pathname.startsWith("/app/lessons"),
-  },
-  {
-    href: "/app/velocity",
-    icon: TimerReset,
-    label: "Velocity",
-    match: (pathname) => pathname.startsWith("/app/velocity"),
-  },
-  {
-    href: "/app/settings",
-    icon: Settings2,
-    label: "Settings",
-    match: (pathname) => pathname.startsWith("/app/settings"),
-  },
-];
-
 export function AppShell({ children, userEmail, userId }: AppShellProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const breadcrumbs = buildBreadcrumbs(pathname);
   const surface = describeSurface(pathname);
+  const activeMode = deriveActiveMode(pathname, searchParams);
+  const modeRailItems = buildModeRail(pathname, searchParams);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8f2e8_0%,#f5efe4_28%,#f8f6f1_100%)]">
@@ -115,29 +88,67 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
           <aside className="order-2 xl:order-1">
             <div className="xl:sticky xl:top-[11.5rem] space-y-4">
               <Card className="border-black/8 bg-white/80 p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Left rail</p>
-                <h2 className="mt-2 text-lg font-semibold text-[var(--ink)]">One shared workspace</h2>
-                <div className="mt-4 space-y-2">
-                  {shellNavItems.map((item) => {
+                <PennyLogo
+                  showLabel
+                  className="items-center"
+                  markClassName="size-11 rounded-[14px]"
+                  labelClassName="text-xl font-medium tracking-[-0.01em]"
+                />
+                <p className="mt-5 text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Mode rail</p>
+                <h2 className="mt-2 text-lg font-semibold text-[var(--ink)]">Three rooms, one product</h2>
+                <div className="mt-4 space-y-2.5">
+                  {modeRailItems.map((item) => {
                     const Icon = item.icon;
-                    const active = item.match(pathname);
+                    const active = item.mode === activeMode;
 
                     return (
                       <Link
                         key={item.href}
                         href={item.href}
                         className={[
-                          "flex items-center justify-between rounded-[18px] border px-4 py-3 text-sm transition",
-                          active
-                            ? "border-[color:rgba(182,106,60,0.24)] bg-[linear-gradient(180deg,rgba(182,106,60,0.98),rgba(152,88,51,0.98))] text-[var(--paper)] shadow-[0_14px_30px_rgba(182,106,60,0.16)]"
-                            : "border-black/8 bg-[var(--panel)] text-[var(--ink)] hover:border-black/16 hover:bg-white",
+                          "block rounded-[var(--radius-lg)] border px-4 py-3.5 transition",
+                          active ? "text-[var(--paper)]" : "bg-[var(--panel)] text-[var(--ink)] hover:bg-white",
                         ].join(" ")}
+                        style={
+                          active
+                            ? {
+                                borderColor: item.accent,
+                                background: `linear-gradient(180deg, color-mix(in srgb, ${item.accent} 92%, white), color-mix(in srgb, ${item.accent} 82%, black 10%))`,
+                                boxShadow: `0 14px 30px color-mix(in srgb, ${item.accent} 22%, transparent)`,
+                              }
+                            : {
+                                borderColor: "var(--line)",
+                              }
+                        }
                       >
-                        <span className="flex items-center gap-3">
-                          <Icon className="size-4" />
-                          {item.label}
-                        </span>
-                        <ChevronRight className="size-4 opacity-70" />
+                        <div className="flex items-start gap-3">
+                          <span
+                            className="flex size-10 shrink-0 items-center justify-center rounded-full border"
+                            style={
+                              active
+                                ? {
+                                    borderColor: "rgba(255,255,255,0.18)",
+                                    backgroundColor: "rgba(255,255,255,0.14)",
+                                  }
+                                : {
+                                    color: item.accent,
+                                    borderColor: "var(--line)",
+                                    backgroundColor: "rgba(255,255,255,0.72)",
+                                  }
+                            }
+                          >
+                            <Icon className="size-4.5" />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-medium">{item.label}</span>
+                              {active ? <span className="text-[11px] uppercase tracking-[0.16em] text-white/72">Active</span> : null}
+                            </div>
+                            <p className={active ? "mt-1 text-sm leading-6 text-white/78" : "mt-1 text-sm leading-6 text-[var(--muted-ink)]"}>
+                              {item.description}
+                            </p>
+                          </div>
+                        </div>
                       </Link>
                     );
                   })}
@@ -145,13 +156,13 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
               </Card>
 
               <Card className="border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.86),rgba(245,236,221,0.92))] p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Modes inside the shell</p>
+                <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Three-room feeling</p>
                 <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--muted-ink)]">
                   <p>
-                    Brain, Challenge, and Learn stay inside one frame so the user never loses navigation, context, or inspection state.
+                    Brain, Challenge, and Learn stay inside one frame so the product feels like three connected rooms rather than separate apps.
                   </p>
                   <p>
-                    The shell carries the route memory. The center panel changes, but the scaffolding stays put.
+                    The active room gets the accent fill. The inactive rooms stay pale and bordered, so the shell signals mode without changing the underlying structure.
                   </p>
                 </div>
               </Card>
@@ -325,6 +336,78 @@ function describeSurface(pathname: string): SurfaceSummary {
       "Once the frame is stable, individual surfaces can become more intentional without reopening the overall architecture.",
     ],
   };
+}
+
+function deriveActiveMode(pathname: string, searchParams: URLSearchParams): ModeKey {
+  if (pathname.startsWith("/app/lessons")) {
+    return "learn";
+  }
+
+  if (pathname.startsWith("/maps/") || pathname.startsWith("/app/maps/")) {
+    const launcher = searchParams.get("launcher");
+    if (launcher === "challenge") return "challenge";
+    if (launcher === "learn") return "learn";
+    return "brain";
+  }
+
+  if (pathname === "/app" || pathname === "/dashboard") {
+    const intent = searchParams.get("intent");
+    if (intent === "challenge") return "challenge";
+    if (intent === "learn") return "learn";
+  }
+
+  return "brain";
+}
+
+function buildModeRail(pathname: string, searchParams: URLSearchParams): ModeRailItem[] {
+  return [
+    {
+      href: buildModeHref(pathname, searchParams, "brain"),
+      icon: BrainCircuit,
+      label: "Brain",
+      description: "Capture and structure the graph.",
+      accent: "var(--brain)",
+      mode: "brain",
+    },
+    {
+      href: buildModeHref(pathname, searchParams, "challenge"),
+      icon: ShieldAlert,
+      label: "Challenge",
+      description: "Pressure-test one claim deeply.",
+      accent: "var(--challenge)",
+      mode: "challenge",
+    },
+    {
+      href: buildModeHref(pathname, searchParams, "learn"),
+      icon: GraduationCap,
+      label: "Learn",
+      description: "Close the exact knowledge gap.",
+      accent: "var(--learn)",
+      mode: "learn",
+    },
+  ];
+}
+
+function buildModeHref(pathname: string, searchParams: URLSearchParams, mode: ModeKey) {
+  const params = new URLSearchParams(searchParams.toString());
+
+  if (pathname.startsWith("/maps/") || pathname.startsWith("/app/maps/")) {
+    if (mode === "brain") {
+      params.delete("launcher");
+    } else {
+      params.set("launcher", mode);
+    }
+    const query = params.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  }
+
+  if (mode === "brain") {
+    params.delete("intent");
+  } else {
+    params.set("intent", mode);
+  }
+  const query = params.toString();
+  return query ? `/app?${query}` : "/app";
 }
 
 function segmentLabel(segment: string) {
