@@ -56,11 +56,11 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[26rem] bg-[radial-gradient(circle_at_top_left,rgba(214,162,82,0.12),transparent_50%),radial-gradient(circle_at_top_right,rgba(63,92,138,0.08),transparent_40%)]" />
       <div className="relative mx-auto max-w-[1600px] px-4 py-4 sm:px-6 lg:px-8">
         <div className="sticky top-0 z-40 space-y-3 pb-3 backdrop-blur supports-[backdrop-filter]:bg-[rgba(248,242,232,0.72)]">
-          <Card className="border-black/8 bg-white/88 px-4 py-3 shadow-[0_14px_34px_rgba(34,39,46,0.08)]">
+          <Card className="penny-card px-4 py-3 shadow-[var(--shadow-card)]">
             <Nav userId={userId} userEmail={userEmail} />
           </Card>
 
-          <Card className="border-black/8 bg-white/78 px-4 py-3 shadow-[0_10px_28px_rgba(34,39,46,0.05)]">
+          <Card className="penny-card px-4 py-3 shadow-[var(--shadow-card)]">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted-ink)]">
                 <Badge className="bg-[var(--accent-paper)] text-[var(--ink)]">Persistent breadcrumb</Badge>
@@ -83,14 +83,14 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
         <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)_300px]">
           <aside className="order-2 xl:order-1">
             <div className="xl:sticky xl:top-[11.5rem] space-y-4">
-              <Card className="border-black/8 bg-white/80 p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
+              <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
                 <PennyLogo
                   showLabel
                   className="items-center"
                   markClassName="size-11 rounded-[14px]"
                   labelClassName="text-xl font-medium tracking-[-0.01em]"
                 />
-                <p className="mt-5 text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Mode rail</p>
+                <p className="penny-label mt-5">Mode rail</p>
                 <h2 className="mt-2 text-lg font-semibold text-[var(--ink)]">Three rooms, one product</h2>
                 <div className="mt-4 space-y-2.5">
                   {modeRailItems.map((item) => {
@@ -103,14 +103,14 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
                         href={item.href}
                         className={[
                           "block rounded-[var(--radius-lg)] border px-4 py-3.5 transition",
-                          active ? "text-[var(--paper)]" : "bg-[var(--panel)] text-[var(--ink)] hover:bg-white",
+                          active ? "text-[var(--paper)]" : "bg-[var(--panel)] text-[var(--ink)] hover:bg-white/96",
                         ].join(" ")}
                         style={
                           active
                             ? {
                                 borderColor: item.accent,
-                                background: `linear-gradient(180deg, color-mix(in srgb, ${item.accent} 92%, white), color-mix(in srgb, ${item.accent} 82%, black 10%))`,
-                                boxShadow: `0 14px 30px color-mix(in srgb, ${item.accent} 22%, transparent)`,
+                                background: `color-mix(in srgb, ${item.accent} 88%, white 12%)`,
+                                boxShadow: `0 10px 24px color-mix(in srgb, ${item.accent} 16%, transparent)`,
                               }
                             : {
                                 borderColor: "var(--line)",
@@ -123,8 +123,8 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
                             style={
                               active
                                 ? {
-                                    borderColor: "rgba(255,255,255,0.18)",
-                                    backgroundColor: "rgba(255,255,255,0.14)",
+                                    borderColor: "rgba(255,255,255,0.22)",
+                                    backgroundColor: "rgba(255,255,255,0.18)",
                                   }
                                 : {
                                     color: item.accent,
@@ -151,8 +151,8 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
                 </div>
               </Card>
 
-              <Card className="border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.86),rgba(245,236,221,0.92))] p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Three-room feeling</p>
+              <Card className="penny-card-soft p-5">
+                <p className="penny-label">Three-room feeling</p>
                 <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--muted-ink)]">
                   <p>
                     Brain, Challenge, and Learn stay inside one frame so the product feels like three connected rooms rather than separate apps.
@@ -195,7 +195,7 @@ function buildBreadcrumbs(activeMode: ModeKey): Breadcrumb[] {
 function BrainClaimInspector() {
   return (
     <>
-      <Card className="border-black/8 bg-white/84 p-5 shadow-[var(--shadow-soft)]">
+      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
         <div className="flex items-center gap-2">
           <Badge className="bg-[color:rgba(185,106,69,0.12)] text-[var(--brain)]">Selected claim</Badge>
           <Badge className="bg-[var(--panel)] text-[var(--ink)]">Right inspector</Badge>
@@ -204,8 +204,8 @@ function BrainClaimInspector() {
           Distribution only compounds if collaboration itself becomes part of acquisition.
         </h2>
 
-        <div className="mt-5 rounded-[var(--radius-lg)] border border-[var(--line)] bg-[var(--panel)] p-4">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">Confidence</p>
+        <div className="penny-card-inset mt-5 p-4">
+          <p className="penny-label">Confidence</p>
           <div className="mt-3 flex items-end justify-between gap-4">
             <p className="text-4xl font-semibold leading-none text-[var(--ink)]">74%</p>
             <p className="text-sm leading-6 text-[var(--muted-ink)]">Moderately defended, still sensitive to retention evidence.</p>
@@ -213,8 +213,8 @@ function BrainClaimInspector() {
         </div>
 
         <div className="mt-5">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">Key connections</p>
-          <div className="mt-3 rounded-[var(--radius-lg)] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(251,248,244,0.9),rgba(245,239,232,0.96))] p-4">
+          <p className="penny-label">Key connections</p>
+          <div className="penny-card-soft mt-3 p-4">
             <div className="relative h-28">
               <div className="absolute left-1/2 top-2 h-11 w-px -translate-x-1/2 bg-[var(--line)]" />
               <div className="absolute left-[22%] top-[3.6rem] h-px w-[28%] bg-[var(--line)]" />
@@ -237,14 +237,14 @@ function BrainClaimInspector() {
         </div>
 
         <div className="mt-5">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">Dependents</p>
+          <p className="penny-label">Dependents</p>
           <div className="mt-3 space-y-2">
             {[
               "Pricing power depends on collaboration density.",
               "Investor narrative depends on a defensible moat claim.",
               "Distribution plan depends on product-led activation.",
             ].map((entry) => (
-              <div key={entry} className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-white px-4 py-3 text-sm leading-6 text-[var(--ink)]">
+              <div key={entry} className="penny-card-plain px-4 py-3 text-sm leading-6 text-[var(--ink)]">
                 {entry}
               </div>
             ))}
@@ -252,18 +252,18 @@ function BrainClaimInspector() {
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-          <div className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-white p-4">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">Last challenged</p>
+          <div className="penny-card-plain p-4">
+            <p className="penny-label">Last challenged</p>
             <p className="mt-2 text-sm font-medium text-[var(--ink)]">Today, 9:40 AM</p>
             <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">Counterargument targeted whether the loop is retention-led or acquisition-led.</p>
           </div>
 
-          <div className="rounded-[var(--radius-lg)] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(251,248,244,0.88),rgba(245,239,232,0.96))] p-4">
+          <div className="penny-card-soft p-4">
             <div className="flex items-center gap-2">
               <Compass className="size-4 text-[var(--brain)]" />
-              <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--muted-ink)]">Tiny mini-map</p>
+              <p className="penny-label">Tiny mini-map</p>
             </div>
-            <div className="mt-3 h-24 rounded-[14px] border border-[var(--line)] bg-white/78 p-3">
+            <div className="penny-card-plain mt-3 h-24 p-3">
               <div className="flex h-full items-center justify-center">
                 <div className="relative h-full w-full">
                   <span className="absolute left-[12%] top-[42%] size-2 rounded-full bg-[var(--muted-ink)]/45" />
@@ -285,7 +285,7 @@ function BrainClaimInspector() {
 function GenericShellInspector({ surface }: { surface: SurfaceSummary }) {
   return (
     <>
-      <Card className="border-black/8 bg-white/84 p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
+      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
         <div className="flex items-center gap-2">
           <Badge className="bg-[#e7defa] text-[#5c4c88]">{surface.badge}</Badge>
           <Badge className="bg-[var(--panel)] text-[var(--ink)]">Right inspector</Badge>
@@ -294,24 +294,24 @@ function GenericShellInspector({ surface }: { surface: SurfaceSummary }) {
         <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">{surface.description}</p>
       </Card>
 
-      <Card className="border-black/8 bg-white/80 p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
-        <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Inspector notes</p>
+      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
+        <p className="penny-label">Inspector notes</p>
         <div className="mt-4 space-y-3">
           {surface.inspectorNotes.map((note) => (
-            <div key={note} className="rounded-[18px] bg-[var(--panel)] px-4 py-3 text-sm leading-6 text-[var(--ink)]">
+            <div key={note} className="penny-card-inset px-4 py-3 text-sm leading-6 text-[var(--ink)]">
               {note}
             </div>
           ))}
         </div>
       </Card>
 
-      <Card className="border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(240,244,247,0.92))] p-5 shadow-[0_12px_28px_rgba(34,39,46,0.05)]">
+      <Card className="penny-card-soft p-5">
         <div className="flex items-center gap-3">
           <span className="rounded-full bg-[var(--accent-paper)] p-2 text-[var(--ink)]">
             <Compass className="size-4" />
           </span>
           <div>
-            <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Why this shell</p>
+            <p className="penny-label">Why this shell</p>
             <p className="mt-1 text-sm font-medium text-[var(--ink)]">Persistent structure beats page sprawl.</p>
           </div>
         </div>
