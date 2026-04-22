@@ -5335,11 +5335,10 @@ export function ThoughtMapWorkspace({
   );
   const learnFocusWorkspace = (
     <div className="space-y-6">
-      {focusedClaimCard}
       <Card id="teach-back-lane" className="penny-reveal penny-card-soft scroll-mt-28 p-6 sm:p-8">
         <div className="max-w-3xl">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>Teach-back</Badge>
+            <Badge>Learn Mode</Badge>
             <Badge className="bg-[rgba(95,143,120,0.18)] text-[#426957]">{selectedKnowledgeSurface.masteryLevel}</Badge>
             {currentTeachBackAttempts.length ? (
               <Badge className="bg-[var(--panel)] text-[var(--ink)]">
@@ -5347,9 +5346,9 @@ export function ThoughtMapWorkspace({
               </Badge>
             ) : null}
           </div>
-          <h2 className="font-display mt-4 text-3xl font-semibold leading-[1.04] text-[var(--ink)]">Learn the claim by teaching it back clearly.</h2>
+          <h2 className="font-display mt-4 text-3xl font-semibold leading-[1.04] text-[var(--ink)]">Understand what is blocking you.</h2>
           <p className="mt-3 text-base leading-7 text-[var(--muted-ink)]">
-            Penny keeps learning tied to the active claim, then checks whether your explanation actually closes the gap that matters here.
+            Penny keeps learning tied to the active claim, then checks whether your explanation closes the exact gap that matters here.
           </p>
         </div>
 
@@ -5360,7 +5359,7 @@ export function ThoughtMapWorkspace({
                 <p className={SURFACE_EYEBROW_CLASS}>Concept nav</p>
                 <div className="mt-4 space-y-3">
                   <div className="rounded-[18px] border border-[rgba(95,143,120,0.22)] bg-[rgba(95,143,120,0.14)] p-4">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-[#426957]">Active concept</p>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-[#426957]">Concept</p>
                     <p className="mt-2 text-sm font-medium text-[var(--ink)]">{selectedTeachBackFocus.concept}</p>
                   </div>
                   <button
@@ -5370,7 +5369,7 @@ export function ThoughtMapWorkspace({
                     onClick={() => setFocusedLearnExampleOpen((current) => !current)}
                   >
                     <p className={SURFACE_EYEBROW_CLASS}>Mode</p>
-                    <p className="mt-2 text-sm font-medium text-[var(--ink)]">Example frame</p>
+                    <p className="mt-2 text-sm font-medium text-[var(--ink)]">Show example</p>
                     <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">See one concise model explanation before you write.</p>
                   </button>
                   <button
@@ -5414,7 +5413,7 @@ export function ThoughtMapWorkspace({
                 <p className="font-display mt-4 text-[1.8rem] font-semibold leading-[1.12] text-[var(--ink)]">{selectedTeachBackFocus.concept}</p>
                 <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">{selectedTeachBackFocus.scaffold}</p>
                 <div className="penny-card-plain mt-4 px-4 py-3">
-                  <p className={SURFACE_EYEBROW_CLASS}>Concept title in use</p>
+                  <p className={SURFACE_EYEBROW_CLASS}>Concept title</p>
                   <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
                     {normalizedInitialLearningQuestion || `Explain ${selectedTeachBackFocus.concept} in the context of this claim.`}
                   </p>
@@ -5454,20 +5453,6 @@ export function ThoughtMapWorkspace({
                     disabled={!currentTeachBackNodeId || isPending}
                   >
                     {isPending ? "Checking..." : "Check explanation"}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="penny-press gap-2"
-                    onClick={() => {
-                      if (!currentTeachBackNodeId) {
-                        return;
-                      }
-
-                      setTeachBackDrafts((prev) => ({ ...prev, [currentTeachBackNodeId]: selectedTeachBackFocus.scaffold }));
-                    }}
-                    disabled={!currentTeachBackNodeId}
-                  >
-                    Use scaffold
                   </Button>
                   <button
                     type="button"
