@@ -87,6 +87,7 @@ import { CritiqueFeedback as CritiqueFeedbackCard } from "@/components/penny/cri
 import { EvidenceEntry } from "@/components/penny/evidence-entry";
 import { MetaCognitionPrompt } from "@/components/penny/meta-cognition-prompt";
 import { LearningPromptCard } from "@/components/penny/learning-prompt-card";
+import { OrnamentalGraph } from "@/components/penny/ornamental-graph";
 import { PersonalizedCritiquePanel } from "@/components/penny/personalized-critique-panel";
 import { ShapeDetail } from "@/components/penny/shape-detail";
 import type { SteelManGateSavedSteelMan } from "@/components/penny/steel-man-gate";
@@ -5557,18 +5558,18 @@ export function ThoughtMapWorkspace({
                   </span>
                 </div>
                 <div className="penny-card-inset mt-5 px-4 py-5">
-                  <div className="flex justify-center">
-                    <div className="rounded-full border border-black/8 bg-white px-4 py-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted-ink)]">
+                  <div className="penny-card-plain px-4 py-3">
+                    <OrnamentalGraph variant="concept-map" accent="var(--learn)" className="mx-auto h-32 max-w-[16rem]" />
+                  </div>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-full border border-[var(--line)] bg-white px-3 py-2 text-center text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
                       {selectedGraphNodeParent?.content ?? "Root frame"}
                     </div>
-                  </div>
-                  <div className="mt-3 flex justify-center">
-                    <div className="h-7 w-px bg-black/10" />
-                  </div>
-                  <div className="flex justify-center">
-                    <div className="rounded-[20px] border border-[rgba(95,143,120,0.24)] bg-[rgba(95,143,120,0.14)] px-4 py-3 text-center shadow-[0_10px_26px_rgba(95,143,120,0.14)]">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[#426957]">Concept</p>
-                      <p className="mt-2 text-sm font-medium text-[var(--ink)]">{selectedTeachBackFocus.concept}</p>
+                    <div className="rounded-full border border-[rgba(95,143,120,0.24)] bg-[rgba(95,143,120,0.12)] px-3 py-2 text-center text-[11px] uppercase tracking-[0.14em] text-[#426957]">
+                      {selectedTeachBackFocus.concept}
+                    </div>
+                    <div className="rounded-full border border-[var(--line)] bg-white px-3 py-2 text-center text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
+                      {selectedGenealogy.dependents.length ? `${selectedGenealogy.dependents.length} connected` : "Connected"}
                     </div>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
