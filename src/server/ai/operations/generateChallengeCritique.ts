@@ -13,13 +13,13 @@ import {
   type AiProviderName,
   type AiRouteDefinition,
   type AiRouteTier,
-} from "@/server/ai/routing/model-policy";
+} from "@/server/ai/routing/modelPolicy";
 import {
   GenerateChallengeCritiqueInputSchema,
   GenerateChallengeCritiqueOutputSchema,
   type GenerateChallengeCritiqueInput,
   type GenerateChallengeCritiqueOutput,
-} from "@/server/ai/schemas/challenge-critique";
+} from "@/server/ai/schemas/challengeCritique";
 
 export type AiTaskContext = {
   claimId?: string | null;

@@ -3,11 +3,11 @@ import "server-only";
 import { getActiveSpanId, getActiveTraceId, startActiveObservation } from "@langfuse/tracing";
 import { z } from "zod";
 import { getDeployMetadata } from "@/lib/deploy-metadata";
-import { generateChallengeCritique as generateChallengeCritiqueOperation } from "@/server/ai/operations/generate-challenge-critique";
+import { generateChallengeCritique as generateChallengeCritiqueOperation } from "@/server/ai/operations/generateChallengeCritique";
 import {
   GenerateChallengeCritiqueInputSchema,
   GenerateChallengeCritiqueOutputSchema,
-} from "@/server/ai/schemas/challenge-critique";
+} from "@/server/ai/schemas/challengeCritique";
 
 type AiProviderName = "grok" | "claude" | "xai" | "anthropic";
 type AiTaskName =
