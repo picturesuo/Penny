@@ -29,15 +29,16 @@ export const movesEventTypeEnum = pgEnum("moves_event_type", [
   "map.created",
   "claim.created",
   "claim.updated",
-  "claim.confidence_changed",
-  "challenge.started",
-  "challenge.critique_generated",
-  "challenge.round_responded",
+  "claim.confidence.changed",
+  "challenge.round.started",
+  "challenge.critique.requested",
+  "challenge.critique.generated",
+  "challenge.response.recorded",
   "learning.prompt_generated",
   "teachback.submitted",
   "concept.created",
   "concept.linked",
-  "workspace.selection_changed",
+  "workspace.selection.changed",
 ]);
 
 // Phase 1 core schema starts here. The older broader tables remain below as
