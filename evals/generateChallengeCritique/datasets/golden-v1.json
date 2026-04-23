@@ -1,0 +1,140 @@
+{
+  "dataset_id": "generate-challenge-critique-golden-v1",
+  "operation": "generateChallengeCritique",
+  "description": "Golden offline evaluation fixtures for Penny's generateChallengeCritique operation.",
+  "metadata": {
+    "dataset_version": "golden.v1",
+    "prompt_version": "generateChallengeCritique.v1",
+    "schema_version": "generateChallengeCritique.golden.v1",
+    "created_at": "2026-04-23T00:00:00.000Z",
+    "labels": ["golden", "offline-eval", "challenge-critique"],
+    "human_notes": "These cases are handcrafted baselines for offline quality checks. They should evolve only when the prompt contract or expected reasoning standard changes."
+  },
+  "entries": [
+    {
+      "id": "distribution-advantage-market-quality",
+      "operation": "generateChallengeCritique",
+      "metadata": {
+        "prompt_version": "generateChallengeCritique.v1",
+        "schema_version": "challengeCritique.input-output.v1",
+        "source": "handcrafted",
+        "labels": ["market-structure", "distribution", "first-round"],
+        "human_notes": "A strong answer should attack the claim's hidden assumptions about defensibility and timing rather than offer generic competition talk."
+      },
+      "input": {
+        "mapTitle": "Go-to-market thesis",
+        "claimId": "11111111-1111-4111-8111-111111111111",
+        "claimText": "Distribution advantage matters more than model quality in this market.",
+        "claimConfidence": 72,
+        "steelmanText": "If sales access and existing workflow slots dominate adoption, incremental model quality gains may not determine who wins.",
+        "neighboringClaims": [
+          {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "text": "Switching costs are high once the product is embedded in the workflow.",
+            "confidence": 68,
+            "kind": "assumption",
+            "relationship": "supports"
+          },
+          {
+            "id": "33333333-3333-4333-8333-333333333333",
+            "text": "Model leapfrogs have repeatedly reset category leaders in adjacent AI products.",
+            "confidence": 61,
+            "kind": "counterevidence",
+            "relationship": "contradicts"
+          }
+        ],
+        "previousRounds": [],
+        "userGoal": "Decide whether to prioritize partnerships over model R&D in the next quarter.",
+        "critiqueMode": "direct"
+      },
+      "expected_output": {
+        "conciseCritiqueSummary": "The claim leans on current distribution friction but underweights the risk that better model performance can reset buyer priorities.",
+        "strongestCounterargument": "Distribution only dominates if model quality has already crossed the threshold buyers care about. If the market is still sensitive to output quality, a visible leap in accuracy, latency, or reliability can reopen evaluation and weaken incumbent channel advantage.",
+        "assumptions": [
+          "Model quality is already good enough for the main buyer workflow.",
+          "Buyers will not re-evaluate vendors when performance improves materially.",
+          "Distribution access is more durable than the current technical lead."
+        ],
+        "likelyFailureModes": [
+          "A competitor ships a quality jump that changes the evaluation criteria.",
+          "The market proves less locked-in than expected because switching costs were overstated.",
+          "Partnership leverage fades if end users start pulling harder for better outputs."
+        ],
+        "followUpQuestions": [
+          "What concrete model gap would make buyers reopen vendor evaluation?",
+          "Which part of the workflow actually creates the switching cost?",
+          "Do adjacent markets show distribution staying dominant after a quality leap?"
+        ],
+        "suggestedConfidenceDelta": -14,
+        "uncertaintyNote": "The key uncertainty is whether model quality has already crossed the buyer's sufficiency threshold or is still a live source of category reset."
+      }
+    },
+    {
+      "id": "consumer-retention-habit-loop-round-two",
+      "operation": "generateChallengeCritique",
+      "metadata": {
+        "prompt_version": "generateChallengeCritique.v1",
+        "schema_version": "challengeCritique.input-output.v1",
+        "source": "handcrafted",
+        "labels": ["consumer", "retention", "multi-round"],
+        "human_notes": "This case should force the model to use prior-round context and tighten the counterargument instead of repeating the first-round critique."
+      },
+      "input": {
+        "mapTitle": "Consumer habit formation",
+        "claimId": "44444444-4444-4444-8444-444444444444",
+        "claimText": "Daily AI journaling can become a durable consumer habit without a social graph.",
+        "claimConfidence": 63,
+        "steelmanText": "Users already maintain reflective routines alone, so AI guidance could deepen the value of a solo practice without needing network effects.",
+        "neighboringClaims": [
+          {
+            "id": "55555555-5555-4555-8555-555555555555",
+            "text": "Users report stronger emotional clarity after five consecutive days of guided journaling.",
+            "confidence": 74,
+            "kind": "evidence",
+            "relationship": "supports"
+          },
+          {
+            "id": "66666666-6666-4666-8666-666666666666",
+            "text": "Most wellness apps decay quickly when the reminder system stops carrying the behavior.",
+            "confidence": 69,
+            "kind": "precedent",
+            "relationship": "contradicts"
+          }
+        ],
+        "previousRounds": [
+          {
+            "roundId": "77777777-7777-4777-8777-777777777777",
+            "roundNumber": 1,
+            "critiqueSummary": "The claim may confuse short-term engagement with durable habit formation.",
+            "userResponse": "The first-week cohort already shows strong repeat usage, and users say the emotional payoff is immediate.",
+            "responsePath": "defend",
+            "confidenceDelta": -4
+          }
+        ],
+        "userGoal": "Decide whether to invest in solo retention loops before building social features.",
+        "critiqueMode": "socratic"
+      },
+      "expected_output": {
+        "conciseCritiqueSummary": "The defense strengthens the short-term payoff story, but it still does not explain why the habit survives once novelty and reminders weaken.",
+        "strongestCounterargument": "Immediate payoff is not the same as durable habit formation. Many solo wellness products produce a strong first-week benefit and still decay because the behavior lacks identity reinforcement, accountability, or external triggers. Unless this journaling loop creates its own returning mechanism, the absence of a social graph may remain a structural retention weakness rather than an optional feature gap.",
+        "assumptions": [
+          "Early repeat usage is a valid proxy for long-term habit durability.",
+          "Emotional payoff alone can replace identity or social reinforcement.",
+          "Reminder-driven engagement will convert into self-propelled behavior."
+        ],
+        "likelyFailureModes": [
+          "Retention collapses once reminder novelty fades.",
+          "Users value the session outcome but do not build a daily routine around it.",
+          "The product mistakes a helpful tool for a habit-forming product."
+        ],
+        "followUpQuestions": [
+          "What mechanism brings the user back after the initial reminder period ends?",
+          "Which user identity or ritual, if any, gets stronger with repeated use?",
+          "What evidence separates first-week repeat usage from month-two habit durability?"
+        ],
+        "suggestedConfidenceDelta": -11,
+        "uncertaintyNote": "The unresolved question is whether the product creates self-sustaining behavioral reinforcement or only a high-quality but reminder-dependent session."
+      }
+    }
+  ]
+}
