@@ -139,6 +139,10 @@ function buildWorkspaceLauncherHref(
     params.set("roundId", selection.roundId);
   }
 
+  if (mode === "challenge" && !selection.claimId) {
+    params.set("claimPicker", "1");
+  }
+
   if (mode !== "brain") {
     params.set("launcher", mode);
   }
