@@ -65,6 +65,7 @@ function buildWhy(input: ChallengeGenerationInput) {
 export class MockChallengeProvider implements ChallengeProvider {
   readonly name = "mock" as const;
   readonly label = "Mock AI";
+  readonly model = "mock-challenge-v1";
 
   async generateChallenge(input: ChallengeGenerationInput): Promise<ChallengeGenerationOutput> {
     return {

@@ -1,8 +1,14 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import {
+  createChallengeFlowLogFields,
+  logChallengeFlow,
+  withChallengeFlowLogFields,
+} from "@/lib/challenge-flow-logger";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { logger } from "@/lib/logger";
 import { track } from "@/lib/analytics";
+import { trackChallengeAnalyticsEvent } from "@/server/posthog-challenge-analytics";
 import { createChallengeDraftRound } from "@/server/dialectic-challenges";
 import {
   getChallengeDraftRound,
@@ -28,11 +34,29 @@ type CompletedChallengeRound = {
 };
 
 export async function POST(request: Request, context: { params: Promise<{ id: string; claimId: string }> }) {
+  const requestLogFields = createChallengeFlowLogFields(request, "challenge.start");
+  let pendingCritiqueAnalytics:
+    | {
+        userId: string;
+        mapId: string;
+        claimId: string;
+        critiqueMode: "direct" | "socratic" | "red_team";
+        critiqueIntensity: number;
+        forceRegenerate: boolean;
+        selectedVoice: string | null;
+      }
+    | null = null;
+
   try {
     const userId = await getCurrentAuthenticatedUserId();
-
     const { id, claimId } = MapClaimParamsSchema.parse(await context.params);
     const json = await request.json();
+    const commandLogFields = withChallengeFlowLogFields(requestLogFields, {
+      user_id: userId,
+      map_id: id,
+      claim_id: claimId,
+      status: "received",
+    });
 
     if (
       json &&
@@ -40,10 +64,31 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       "roundId" in json &&
       typeof (json as { roundId?: unknown }).roundId === "string"
     ) {
+      const responseLogFields = withChallengeFlowLogFields(commandLogFields, {
+        operation_key: "challenge.respond",
+      });
+      logChallengeFlow("info", "challenge_command_received", responseLogFields, {
+        route_path: "/api/maps/[id]/claims/[claimId]/challenge",
+      });
       const roundId = RoundIdSchema.parse((json as { roundId: string }).roundId);
       const parsedResponse = ChallengeResponseSchema.safeParse(json);
 
       if (!parsedResponse.success) {
+        logChallengeFlow(
+          "warn",
+          "challenge_validation_failed",
+          withChallengeFlowLogFields(responseLogFields, {
+            round_id: roundId,
+            status: "validation_failed",
+          }),
+          {
+            issue_count: parsedResponse.error.issues.length,
+            issues: parsedResponse.error.issues.map((issue) => ({
+              path: issue.path.join("."),
+              message: issue.message,
+            })),
+          },
+        );
         return NextResponse.json(
           { error: parsedResponse.error.issues[0]?.message ?? "Invalid challenge response" },
           { status: 400 },
@@ -51,6 +96,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
 
       const input = parsedResponse.data;
+      logChallengeFlow(
+        "info",
+        "challenge_validation_passed",
+        withChallengeFlowLogFields(responseLogFields, {
+          round_id: roundId,
+          status: "validated",
+        }),
+      );
       const draft = await getChallengeDraftRound(roundId, userId);
 
       if (!draft || draft.mapId !== id || draft.claimId !== claimId) {
@@ -82,6 +135,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       });
 
       const completedRound = (finalEvent.payload?.dialecticRound ?? null) as CompletedChallengeRound | null;
+      logChallengeFlow(
+        "info",
+        "challenge_event_written",
+        withChallengeFlowLogFields(responseLogFields, {
+          round_id: roundId,
+          status: "written",
+        }),
+        {
+          event_id: finalEvent.id,
+          completed_round_id: finalEvent.id,
+        },
+      );
 
       if (confidenceDelta !== 0) {
         await updateConfidence(claimId, userId, input.newConfidence, input.confidenceChangeReason ?? null);
@@ -104,6 +169,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
                 confidence: 0,
                 classifiedBy: "inferred",
               },
+        logFields: withChallengeFlowLogFields(responseLogFields, {
+          round_id: roundId,
+        }),
       });
 
       let summaryArtifact: ArtifactRecord | null = null;
@@ -165,6 +233,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       );
     }
 
+    logChallengeFlow("info", "challenge_command_received", commandLogFields, {
+      route_path: "/api/maps/[id]/claims/[claimId]/challenge",
+    });
     const rateLimit = checkRateLimit(userId, "ai_critique");
     if (!rateLimit.allowed) {
       return NextResponse.json(
@@ -176,6 +247,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
 
     const input = await validateBody(ChallengeStartSchema)(json);
+    logChallengeFlow(
+      "info",
+      "challenge_validation_passed",
+      withChallengeFlowLogFields(commandLogFields, {
+        status: "validated",
+      }),
+    );
 
     const round = await createChallengeDraftRound({
       userId,
@@ -185,6 +263,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       critiqueIntensity: input.critiqueIntensity,
       selectedVoice: input.selectedVoice ?? null,
       forceRegenerate: input.forceRegenerate,
+      logFields: commandLogFields,
     });
 
     await track(
@@ -218,6 +297,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     );
   } catch (error) {
     if (error instanceof ValidationError) {
+      logChallengeFlow(
+        "warn",
+        "challenge_validation_failed",
+        withChallengeFlowLogFields(requestLogFields, {
+          status: "validation_failed",
+        }),
+        {
+          error: error.message,
+        },
+      );
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
@@ -233,6 +322,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       error: error instanceof Error ? error.message : String(error),
       featureId: "challenge-rounds",
     });
+    logChallengeFlow(
+      "error",
+      "challenge_command_failed",
+      withChallengeFlowLogFields(requestLogFields, {
+        status: "failed",
+      }),
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
 
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }

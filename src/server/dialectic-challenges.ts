@@ -1,11 +1,13 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import type { DialecticCritiqueStrength, DialecticResponsePath, ResponseClassification } from "@/types/thought-map";
 import { prisma } from "@/db/prisma";
 import { logger } from "@/lib/logger";
-import { generateChallengeWithFallback } from "@/lib/ai/challenge-provider";
+import { generateChallengeWithFallback, peekPrimaryChallengeProviderMeta } from "@/lib/ai/challenge-provider";
 import { buildCalibrationDashboard, buildClaimStructureSnapshot, buildPennyLens } from "@/lib/penny-insights";
 import { buildPersonalizedCritiqueContext } from "@/lib/personalized-critique-engine";
+import { logChallengeFlow, type ChallengeFlowLogFields, withChallengeFlowLogFields } from "@/lib/challenge-flow-logger";
 import { getClaim, getDialecticRoundsForClaim, getMap, recordMove } from "@/server/mvp";
 import { classifyCalibrationDomain } from "@/lib/calibration";
 
@@ -246,6 +248,7 @@ export async function createChallengeDraftRound(params: {
   critiqueIntensity: number;
   selectedVoice: string | null;
   forceRegenerate?: boolean;
+  logFields?: ChallengeFlowLogFields;
 }) {
   const selectedVoice = params.selectedVoice?.trim().length ? params.selectedVoice.trim() : null;
   const [map, claim, priorRounds] = await Promise.all([
@@ -296,6 +299,25 @@ export async function createChallengeDraftRound(params: {
     }
   }
 
+  const aiRunId = randomUUID();
+  const selectedProvider = peekPrimaryChallengeProviderMeta();
+  const aiRunLogFields = params.logFields
+    ? withChallengeFlowLogFields(params.logFields, {
+        status: "created",
+        provider: selectedProvider.provider,
+        model: selectedProvider.model,
+      })
+    : null;
+
+  if (aiRunLogFields) {
+    logChallengeFlow("info", "challenge_ai_run_created", aiRunLogFields, {
+      ai_run_id: aiRunId,
+      round_number: roundNumber,
+      critique_mode: params.critiqueMode,
+      critique_intensity: params.critiqueIntensity,
+    });
+  }
+
   const generatedChallenge = await generateChallengeWithFallback({
     claimText: claim.content,
     steelManText: steelMan?.steelManText ?? null,
@@ -314,6 +336,23 @@ export async function createChallengeDraftRound(params: {
     confidenceAtRoundStart,
     priorRoundSummaries: priorRounds.slice(-2).map(summarizePriorRound),
   });
+
+  if (params.logFields) {
+    logChallengeFlow(
+      generatedChallenge.status === "fallback" ? "warn" : "info",
+      "challenge_provider_selected",
+      withChallengeFlowLogFields(params.logFields, {
+        status: "selected",
+        provider: generatedChallenge.provider,
+        model: generatedChallenge.model,
+      }),
+      {
+        ai_run_id: aiRunId,
+        fallback_reason: generatedChallenge.fallbackReason,
+        generation_status: generatedChallenge.status,
+      },
+    );
+  }
 
   if (generatedChallenge.status === "fallback") {
     logger.warn("challenge_generation_fallback", {
@@ -374,6 +413,23 @@ export async function createChallengeDraftRound(params: {
     },
   });
 
+  if (params.logFields) {
+    logChallengeFlow(
+      "info",
+      "challenge_event_written",
+      withChallengeFlowLogFields(params.logFields, {
+        round_id: event.id,
+        provider: generatedChallenge.provider,
+        model: generatedChallenge.model,
+        status: "written",
+      }),
+      {
+        event_id: event.id,
+        generation_status: generatedChallenge.status,
+      },
+    );
+  }
+
   return {
     id: event.id,
     ...challengePayload,
@@ -406,6 +462,7 @@ export async function markChallengeDraftCompleted(params: {
   confidenceDelta: number;
   engagementScore: number;
   responseClassification: ResponseClassification;
+  logFields?: ChallengeFlowLogFields;
 }) {
   const event = await prisma.thoughtMapEvent.findUnique({
     where: { id: params.roundId },
@@ -446,4 +503,19 @@ export async function markChallengeDraftCompleted(params: {
       engagementScore: params.engagementScore,
     },
   });
+
+  if (params.logFields) {
+    logChallengeFlow(
+      "info",
+      "challenge_round_projection_event_written",
+      withChallengeFlowLogFields(params.logFields, {
+        status: "written",
+        round_id: params.roundId,
+      }),
+      {
+        completed_round_id: params.completedRoundId,
+        engagement_score: params.engagementScore,
+      },
+    );
+  }
 }

@@ -36,6 +36,7 @@ export type ChallengeGenerationResult = {
   status: ChallengeGenerationStatus;
   provider: ChallengeProviderName;
   providerLabel: string;
+  model: string | null;
   fallbackReason: string | null;
   output: ChallengeGenerationOutput;
 };
@@ -43,12 +44,14 @@ export type ChallengeGenerationResult = {
 export interface ChallengeProvider {
   name: ChallengeProviderName;
   label: string;
+  model: string | null;
   generateChallenge(input: ChallengeGenerationInput): Promise<ChallengeGenerationOutput>;
 }
 
 class UnsupportedChallengeProvider implements ChallengeProvider {
   readonly name: ChallengeProviderName;
   readonly label: string;
+  readonly model = null;
 
   constructor(name: Exclude<ChallengeProviderName, "mock">, label: string) {
     this.name = name;
@@ -81,6 +84,15 @@ function getFallbackChallengeProvider() {
   return new MockChallengeProvider();
 }
 
+export function peekPrimaryChallengeProviderMeta() {
+  const provider = getPrimaryChallengeProvider();
+  return {
+    provider: provider.name,
+    providerLabel: provider.label,
+    model: provider.model,
+  };
+}
+
 export async function generateChallengeWithFallback(
   input: ChallengeGenerationInput,
 ): Promise<ChallengeGenerationResult> {
@@ -92,6 +104,7 @@ export async function generateChallengeWithFallback(
       status: "generated",
       provider: primaryProvider.name,
       providerLabel: primaryProvider.label,
+      model: primaryProvider.model,
       fallbackReason: null,
       output,
     };
@@ -107,6 +120,7 @@ export async function generateChallengeWithFallback(
       status: "fallback",
       provider: fallbackProvider.name,
       providerLabel: fallbackProvider.label,
+      model: fallbackProvider.model,
       fallbackReason: error instanceof Error ? error.message : "Challenge provider unavailable.",
       output,
     };
