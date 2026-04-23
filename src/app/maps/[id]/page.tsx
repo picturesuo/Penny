@@ -1,6 +1,8 @@
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import { MapWorkspace } from "@/components/penny/map-workspace";
 import type { BestNextMoveKey } from "@/lib/challenge-next-move";
+import { trackChallengeAnalyticsEvent } from "@/server/posthog-challenge-analytics";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
 import { getArtifactsForMap, getClaimsForMap, getMap, getMapsForUser } from "@/server/mvp";
 import { listMarginFragments } from "@/server/penny";
@@ -49,6 +51,23 @@ export default async function MapPage({
         }
       : null;
 
+  if (shouldTrackChallengeView(launcher, nextAction)) {
+    after(() =>
+      trackChallengeAnalyticsEvent(
+        {
+          event: "challenge_view_loaded",
+          properties: {
+            mapId: map.id,
+            claimId: initialSelectedClaimId,
+            route: "/maps/[id]",
+            source: "map_page",
+          },
+        },
+        userId,
+      ),
+    );
+  }
+
   return (
     <MapWorkspace
       map={map}
@@ -87,4 +106,11 @@ function parseNextAction(value: string | null): BestNextMoveKey | null {
     value === "mark_for_revisit"
     ? value
     : null;
+}
+
+function shouldTrackChallengeView(
+  launcher: "capture" | "challenge" | "learn" | null,
+  nextAction: BestNextMoveKey | null,
+) {
+  return launcher === "challenge" || nextAction === "challenge_dependency" || nextAction === "run_another_round";
 }
