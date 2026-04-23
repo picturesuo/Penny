@@ -64,12 +64,29 @@ export function invalidateWorkspaceProjections(
   const paths = getWorkspaceProjectionPaths(input);
 
   for (const tag of tags) {
-    revalidateTag(tag);
+    try {
+      revalidateTag(tag, "max");
+    } catch (error) {
+      if (!isMissingRevalidationContext(error)) {
+        throw error;
+      }
+    }
   }
 
   for (const path of paths) {
-    revalidatePath(path);
+    try {
+      revalidatePath(path);
+    } catch (error) {
+      if (!isMissingRevalidationContext(error)) {
+        throw error;
+      }
+    }
   }
 
   return { paths, tags };
+}
+
+function isMissingRevalidationContext(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /static generation store missing/i.test(message);
 }
