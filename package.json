@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test:challenge-backend": "node --conditions=react-server --import tsx --test src/server/__tests__/*.test.ts",
     "typecheck": "tsc --noEmit",
     "start": "next start",
     "lint": "eslint",
