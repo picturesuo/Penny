@@ -29,22 +29,23 @@ const lanes = [
 export default function LandingPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[linear-gradient(180deg,#faf7f3_0%,#f7f3ee_100%)]">
-      <div className="mx-auto flex min-h-screen max-w-[1280px] flex-col px-6 py-6 lg:px-10">
-        <header className="flex items-center justify-start border-b border-[var(--line)] pb-4">
+      <div className="mx-auto flex min-h-screen max-w-[1220px] flex-col px-6 py-6 lg:px-10">
+        <header className="flex items-center justify-start pb-2">
           <PennyLogo markClassName="size-9 rounded-[12px]" labelClassName="text-lg font-medium tracking-[-0.01em]" />
         </header>
 
-        <section className="flex flex-1 flex-col justify-center py-12 lg:py-16">
+        <section className="flex flex-1 flex-col justify-center py-16 lg:py-24">
           <div className="mx-auto max-w-3xl text-center">
-            <h1 className="font-display text-[2.8rem] leading-[1.05] text-[var(--ink)] sm:text-6xl">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--muted-ink)]">Choose a mode</p>
+            <h1 className="mt-5 font-display text-[3rem] leading-[1.02] text-[var(--ink)] sm:text-[4.5rem]">
               What do you want to do today?
             </h1>
-            <p className="mx-auto mt-4 max-w-xl text-base leading-8 text-[var(--muted-ink)] sm:text-lg">
-              Three ways to think better.
+            <p className="mx-auto mt-5 max-w-xl text-base leading-8 text-[var(--muted-ink)] sm:text-lg">
+              Three ways to move the same body of thought forward.
             </p>
           </div>
 
-          <div className="mx-auto mt-14 grid w-full max-w-[980px] gap-6 md:grid-cols-3">
+          <div className="mx-auto mt-20 grid w-full max-w-[960px] gap-6 md:grid-cols-3">
             {lanes.map((lane) => {
               const Icon = lane.icon;
 
@@ -53,22 +54,19 @@ export default function LandingPage() {
                   key={lane.title}
                   href={lane.href}
                   aria-label={`Open ${lane.title}`}
-                  className="group flex min-h-[306px] flex-col items-center rounded-[22px] border bg-[rgba(255,255,255,0.76)] px-7 pb-7 pt-8 text-center shadow-[0_8px_24px_rgba(45,36,31,0.03)] penny-press"
+                  className="group flex min-h-[300px] flex-col items-center rounded-[24px] border bg-[rgba(255,255,255,0.7)] px-8 pb-8 pt-9 text-center penny-press"
                   style={{ borderColor: `color-mix(in srgb, ${lane.accent} 24%, var(--line))` }}
                 >
-                  <div
-                    className="flex size-14 items-center justify-center rounded-full border border-[var(--line)] bg-white/80"
-                    style={{ color: lane.accent }}
-                  >
+                  <div className="flex size-14 items-center justify-center rounded-full border border-[var(--line)] bg-white/88" style={{ color: lane.accent }}>
                     <Icon className="size-6" strokeWidth={1.8} />
                   </div>
 
-                  <div className="mt-8">
+                  <div className="mt-9">
                     <h2 className="font-display text-[2rem] leading-none text-[var(--ink)]">{lane.title}</h2>
                     <p className="mx-auto mt-4 max-w-[11rem] text-sm leading-7 text-[var(--muted-ink)]">{lane.description}</p>
                   </div>
 
-                  <div className="mt-auto pt-10">
+                  <div className="mt-auto pt-12">
                     <span
                       className="flex size-11 items-center justify-center rounded-full text-white transition group-hover:-translate-y-0.5"
                       style={{ backgroundColor: lane.accent }}
@@ -81,7 +79,7 @@ export default function LandingPage() {
             })}
           </div>
 
-          <p className="mt-12 text-center text-sm text-[var(--muted-ink)]">Clarity isn&apos;t given. It&apos;s built.</p>
+          <p className="mt-16 text-center text-sm text-[var(--muted-ink)]">Mode selection, not a marketing page.</p>
         </section>
       </div>
     </main>
