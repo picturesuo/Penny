@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { normalizeError, reportError } from "@/lib/error-reporting";
+import { DEMO_USER_ID } from "@/lib/penny";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { logger } from "@/lib/logger";
 import { getCurrentAuthenticatedUserId } from "@/server/auth";
@@ -23,6 +24,7 @@ export const WorkspaceProjectionQuerySchema = z.object({
 });
 
 const JsonObjectSchema = z.record(z.string(), z.unknown());
+const WORKSPACE_DEMO_USER_ID = "11111111-1111-4111-8111-111111111111";
 
 type RouteErrorShape = {
   body: Record<string, unknown>;
@@ -31,7 +33,8 @@ type RouteErrorShape = {
 };
 
 export async function getAuthenticatedRouteUserId() {
-  return getCurrentAuthenticatedUserId();
+  const userId = await getCurrentAuthenticatedUserId();
+  return userId === DEMO_USER_ID ? WORKSPACE_DEMO_USER_ID : userId;
 }
 
 export function checkWorkspaceRouteRateLimit(userId: string) {
