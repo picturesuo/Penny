@@ -3,10 +3,14 @@ import postgres from "postgres";
 import * as schema from "./schema";
 
 function getPostgresUrl() {
-  const url = process.env.POSTGRES_URL ?? process.env.DATABASE_URL;
+  const url = process.env.POSTGRES_URL;
 
   if (!url) {
-    throw new Error("Missing POSTGRES_URL or DATABASE_URL for the Drizzle PostgreSQL client.");
+    throw new Error("Missing POSTGRES_URL for the workspace Drizzle PostgreSQL client.");
+  }
+
+  if (!/^postgres(ql)?:\/\//i.test(url)) {
+    throw new Error(`POSTGRES_URL must use a postgres:// or postgresql:// URL. Received: ${url}`);
   }
 
   return url;
