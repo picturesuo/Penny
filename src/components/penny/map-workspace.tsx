@@ -38,6 +38,7 @@ interface MapWorkspaceProps {
   initialFragments?: MarginFragmentModel[];
   availableMaps?: MapWorkspaceMapOption[];
   initialSelectedClaimId?: string | null;
+  initialSelectedRoundId?: string | null;
   launchState?: MapWorkspaceLaunchState | null;
 }
 
@@ -48,6 +49,7 @@ export function MapWorkspace({
   initialFragments = [],
   availableMaps = [],
   initialSelectedClaimId = null,
+  initialSelectedRoundId = null,
   launchState = null,
 }: MapWorkspaceProps) {
   const [showFullWorkspace, setShowFullWorkspace] = useState(launchState == null);
@@ -250,11 +252,12 @@ export function MapWorkspace({
           initialMap={map}
           initialView="outline"
           initialFragments={initialFragments}
-          availableMaps={availableMaps}
-          initialSelectedClaimId={initialSelectedClaimId}
-          focusIntent={focusIntent}
-          initialLearningQuestion={launchState?.intent === "learn" ? launchState.question ?? null : null}
-          initialNextAction={launchState?.intent === "challenge" ? launchState.nextAction ?? null : null}
+        availableMaps={availableMaps}
+        initialSelectedClaimId={initialSelectedClaimId}
+        initialSelectedRoundId={initialSelectedRoundId}
+        focusIntent={focusIntent}
+        initialLearningQuestion={launchState?.intent === "learn" ? launchState.question ?? null : null}
+        initialNextAction={launchState?.intent === "challenge" ? launchState.nextAction ?? null : null}
         />
       </div>
     );
@@ -290,6 +293,7 @@ export function MapWorkspace({
         initialFragments={initialFragments}
         availableMaps={availableMaps}
         initialSelectedClaimId={initialSelectedClaimId}
+        initialSelectedRoundId={initialSelectedRoundId}
         focusIntent={null}
         initialLearningQuestion={launchState?.intent === "learn" ? launchState.question ?? null : null}
         initialNextAction={launchState?.intent === "challenge" ? launchState.nextAction ?? null : null}
