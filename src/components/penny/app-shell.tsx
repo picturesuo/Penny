@@ -39,7 +39,9 @@ export type AppShellAction = {
 export type AppShellOverrides = {
   actions?: AppShellAction[];
   breadcrumbs?: AppShellBreadcrumb[];
+  currentClaimId?: string | null;
   currentMapId?: string | null;
+  currentRoundId?: string | null;
   inspector?: React.ReactNode;
   inspectorLabel?: string | null;
   spheres?: AppShellSphere[];
@@ -106,13 +108,21 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
   const previousModeRef = useRef<AppShellMode | null>(null);
   const [modeSwitching, setModeSwitching] = useState(false);
   const { open } = useQuickCaptureModal();
-  const modeRailItems = buildModeRail(pathname, searchParams);
   const defaultMapId = deriveMapIdFromPathname(pathname);
   const effectiveOverrides = useMemo(
     () => (overrideEntry.routeKey === routeKey ? overrideEntry.overrides : {}),
     [overrideEntry.overrides, overrideEntry.routeKey, routeKey],
   );
   const shellState = useMemo(() => buildShellState(activeMode, effectiveOverrides), [activeMode, effectiveOverrides]);
+  const modeRailItems = useMemo(
+    () =>
+      buildModeRail(pathname, searchParams, {
+        currentClaimId: shellState.currentClaimId ?? searchParams.get("claimId"),
+        currentMapId: shellState.currentMapId ?? defaultMapId ?? null,
+        currentRoundId: shellState.currentRoundId ?? searchParams.get("roundId"),
+      }),
+    [defaultMapId, pathname, searchParams, shellState.currentClaimId, shellState.currentMapId, shellState.currentRoundId],
+  );
   const userInitials =
     userEmail
       .split("@")[0]
@@ -365,7 +375,9 @@ function buildShellState(activeMode: AppShellMode, overrides: AppShellOverrides)
   return {
     actions: overrides.actions ?? defaults.actions,
     breadcrumbs: overrides.breadcrumbs ?? defaults.breadcrumbs,
+    currentClaimId: overrides.currentClaimId ?? defaults.currentClaimId,
     currentMapId: overrides.currentMapId ?? defaults.currentMapId,
+    currentRoundId: overrides.currentRoundId ?? defaults.currentRoundId,
     inspector: overrides.inspector ?? defaults.inspector,
     inspectorLabel: overrides.inspectorLabel ?? defaults.inspectorLabel,
     spheres: overrides.spheres ?? defaults.spheres,
@@ -373,14 +385,20 @@ function buildShellState(activeMode: AppShellMode, overrides: AppShellOverrides)
   };
 }
 
-function buildDefaultShellState(activeMode: AppShellMode): Required<Omit<AppShellOverrides, "actions" | "currentMapId">> & {
+function buildDefaultShellState(
+  activeMode: AppShellMode,
+): Required<Omit<AppShellOverrides, "actions" | "currentClaimId" | "currentMapId" | "currentRoundId">> & {
   actions: AppShellAction[] | undefined;
+  currentClaimId: string | null;
   currentMapId: string | null;
+  currentRoundId: string | null;
 } {
   return {
     actions: undefined,
     breadcrumbs: activeMode === "learn" ? DEFAULT_LEARN_BREADCRUMBS : DEFAULT_BRAIN_BREADCRUMBS,
+    currentClaimId: null,
     currentMapId: null,
+    currentRoundId: null,
     inspector: renderDefaultInspector(activeMode),
     inspectorLabel: null,
     spheres: DEFAULT_SPHERES,
@@ -458,24 +476,32 @@ function renderDefaultInspector(activeMode: AppShellMode) {
   );
 }
 
-function buildModeRail(pathname: string, searchParams: URLSearchParams): ModeRailItem[] {
+function buildModeRail(
+  pathname: string,
+  searchParams: URLSearchParams,
+  workspaceSelection: {
+    currentClaimId: string | null;
+    currentMapId: string | null;
+    currentRoundId: string | null;
+  },
+): ModeRailItem[] {
   return [
     {
-      href: buildModeHref(pathname, searchParams, "brain"),
+      href: buildModeHref(pathname, searchParams, "brain", workspaceSelection),
       icon: BrainCircuit,
       label: "Brain",
       accent: "var(--brain)",
       mode: "brain",
     },
     {
-      href: buildModeHref(pathname, searchParams, "challenge"),
+      href: buildModeHref(pathname, searchParams, "challenge", workspaceSelection),
       icon: ShieldAlert,
       label: "Challenge",
       accent: "var(--challenge)",
       mode: "challenge",
     },
     {
-      href: buildModeHref(pathname, searchParams, "learn"),
+      href: buildModeHref(pathname, searchParams, "learn", workspaceSelection),
       icon: GraduationCap,
       label: "Learn",
       accent: "var(--learn)",
@@ -505,17 +531,46 @@ function deriveActiveMode(pathname: string, searchParams: URLSearchParams): AppS
   return "brain";
 }
 
-function buildModeHref(pathname: string, searchParams: URLSearchParams, mode: AppShellMode) {
+function buildModeHref(
+  pathname: string,
+  searchParams: URLSearchParams,
+  mode: AppShellMode,
+  workspaceSelection: {
+    currentClaimId: string | null;
+    currentMapId: string | null;
+    currentRoundId: string | null;
+  },
+) {
   const params = new URLSearchParams(searchParams.toString());
+  const targetPath = workspaceSelection.currentMapId
+    ? `/maps/${workspaceSelection.currentMapId}`
+    : pathname;
 
-  if (pathname.startsWith("/maps/") || pathname.startsWith("/app/maps/")) {
+  if (workspaceSelection.currentClaimId) {
+    params.set("claimId", workspaceSelection.currentClaimId);
+  } else {
+    params.delete("claimId");
+  }
+
+  if (workspaceSelection.currentRoundId) {
+    params.set("roundId", workspaceSelection.currentRoundId);
+  } else {
+    params.delete("roundId");
+  }
+
+  if (
+    pathname.startsWith("/maps/") ||
+    pathname.startsWith("/app/maps/") ||
+    (workspaceSelection.currentMapId && pathname.startsWith("/app"))
+  ) {
     if (mode === "brain") {
       params.delete("launcher");
     } else {
       params.set("launcher", mode);
     }
+    params.delete("intent");
     const query = params.toString();
-    return query ? `${pathname}?${query}` : pathname;
+    return query ? `${targetPath}?${query}` : targetPath;
   }
 
   if (mode === "brain") {
