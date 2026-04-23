@@ -9,6 +9,7 @@ import {
   markChallengeCritiqueJobQueued,
   markChallengeCritiqueJobRunning,
   markChallengeCritiqueJobSucceeded,
+  mapChallengeCritiqueFailureStatus,
 } from "@/server/challenge-critique-job-monitor";
 import {
   ChallengeCritiqueModeSchema,
@@ -20,13 +21,14 @@ import { invalidateWorkspaceProjections } from "@/server/workspace-cache";
 const UuidSchema = z.string().uuid("Invalid UUID.");
 
 export const ChallengeCritiqueTaskStateSchema = z.object({
-  critiqueStatus: z.enum(["pending", "ready", "failed"]).nullable().optional().default(null),
+  critiqueStatus: z.enum(["pending", "ready", "failed", "validation_failed"]).nullable().optional().default(null),
   critiqueRequestId: z.string().trim().min(1).max(160).nullable().optional().default(null),
   critiqueRunId: z.string().trim().min(1).max(160).nullable().optional().default(null),
   critiqueRequestedAt: z.string().datetime().nullable().optional().default(null),
   critiqueGeneratedAt: z.string().datetime().nullable().optional().default(null),
   critiqueFailedAt: z.string().datetime().nullable().optional().default(null),
   critiqueError: z.string().trim().min(1).max(1000).nullable().optional().default(null),
+  critiqueRepairAttempted: z.boolean().nullable().optional().default(null),
   userGoal: z.string().trim().min(1).max(800).nullable().optional().default(null),
   suggestedConfidenceDelta: z.number().int().min(-100).max(100).nullable().optional().default(null),
   uncertaintyNote: z.string().trim().min(1).max(400).nullable().optional().default(null),
@@ -202,6 +204,7 @@ export async function queueChallengeCritiqueGeneration(
           critiqueGeneratedAt: null,
           critiqueFailedAt: null,
           critiqueError: null,
+          critiqueRepairAttempted: null,
           userGoal: parsed.userGoal,
         }),
       })
@@ -266,6 +269,7 @@ export async function queueChallengeCritiqueGeneration(
           critiqueRequestId: requestId,
           critiqueRequestedAt: requestedAt,
           critiqueRunId: triggerRunId,
+          critiqueRepairAttempted: null,
           userGoal: parsed.userGoal,
         }),
       })
@@ -284,15 +288,18 @@ export async function queueChallengeCritiqueGeneration(
       error,
     );
 
+    const failureStatus = mapChallengeCritiqueFailureStatus(error);
+
     await db
       .update(dialecticRounds)
       .set({
         uncertainty: mergeCritiqueTaskState(round.uncertainty, {
-          critiqueStatus: "failed",
+          critiqueStatus: failureStatus,
           critiqueRequestId: requestId,
           critiqueRequestedAt: requestedAt,
           critiqueFailedAt: new Date().toISOString(),
           critiqueError: truncateText(message, 1000),
+          critiqueRepairAttempted: false,
           userGoal: parsed.userGoal,
         }),
       })
@@ -477,6 +484,7 @@ export async function runGenerateChallengeCritiqueJob(
         critiqueGeneratedAt: generatedAt,
         critiqueFailedAt: null,
         critiqueError: null,
+        critiqueRepairAttempted: result.meta.repairAttempted,
         userGoal: parsed.userGoal,
         suggestedConfidenceDelta: result.output.suggestedConfidenceDelta,
         uncertaintyNote: result.output.uncertaintyNote,
@@ -501,6 +509,7 @@ export async function runGenerateChallengeCritiqueJob(
           promptVersion: result.meta.promptVersion,
           release: result.meta.release,
           environment: result.meta.environment,
+          repairAttempted: result.meta.repairAttempted,
           traceId: result.meta.traceId,
           observationId: result.meta.observationId,
         },
@@ -593,6 +602,7 @@ export async function runGenerateChallengeCritiqueJob(
   } catch (error) {
     const db = getDrizzleDb();
     const message = truncateText(error instanceof Error ? error.message : String(error), 1000);
+    const failureStatus = mapChallengeCritiqueFailureStatus(error);
 
     await markChallengeCritiqueJobFailed(
       {
@@ -609,11 +619,12 @@ export async function runGenerateChallengeCritiqueJob(
       .update(dialecticRounds)
       .set({
         uncertainty: mergeCritiqueTaskState(state.round.uncertainty, {
-          critiqueStatus: "failed",
+          critiqueStatus: failureStatus,
           critiqueRequestId: parsed.requestId,
           critiqueRunId: parsed.triggerRunId,
           critiqueFailedAt: new Date().toISOString(),
           critiqueError: message,
+          critiqueRepairAttempted: failureStatus === "validation_failed" ? true : null,
           userGoal: parsed.userGoal,
         }),
       })

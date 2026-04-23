@@ -118,6 +118,17 @@ export type ChallengeView = {
         requestedAt: string | null;
         failedAt: string | null;
         errorMessage: string | null;
+        repairAttempted: boolean | null;
+      }
+    | {
+        status: "validation_failed";
+        roundId: string;
+        requestId: string | null;
+        triggerRunId: string | null;
+        requestedAt: string | null;
+        failedAt: string | null;
+        errorMessage: string | null;
+        repairAttempted: boolean | null;
       }
     | {
         status: "ready";
@@ -136,6 +147,7 @@ export type ChallengeView = {
         requestId: string | null;
         triggerRunId: string | null;
         userGoal: string | null;
+        repairAttempted: boolean | null;
         generatedAt: string;
       }
     | null;
@@ -528,8 +540,20 @@ export async function buildChallengeView(input: WorkspaceProjectionInput): Promi
             requestId: critiqueTaskState.critiqueRequestId,
             triggerRunId: critiqueTaskState.critiqueRunId,
             userGoal: critiqueTaskState.userGoal,
+            repairAttempted: critiqueTaskState.critiqueRepairAttempted,
             generatedAt: critiqueRecord.createdAt.toISOString(),
           }
+        : critiqueTaskState.critiqueStatus === "validation_failed"
+          ? {
+              status: "validation_failed",
+              roundId: currentRound.id,
+              requestId: critiqueTaskState.critiqueRequestId,
+              triggerRunId: critiqueTaskState.critiqueRunId,
+              requestedAt: critiqueTaskState.critiqueRequestedAt,
+              failedAt: critiqueTaskState.critiqueFailedAt,
+              errorMessage: critiqueTaskState.critiqueError,
+              repairAttempted: critiqueTaskState.critiqueRepairAttempted,
+            }
         : critiqueTaskState.critiqueStatus === "failed"
           ? {
               status: "failed",
@@ -539,6 +563,7 @@ export async function buildChallengeView(input: WorkspaceProjectionInput): Promi
               requestedAt: critiqueTaskState.critiqueRequestedAt,
               failedAt: critiqueTaskState.critiqueFailedAt,
               errorMessage: critiqueTaskState.critiqueError,
+              repairAttempted: critiqueTaskState.critiqueRepairAttempted,
             }
         : {
             status: "pending",

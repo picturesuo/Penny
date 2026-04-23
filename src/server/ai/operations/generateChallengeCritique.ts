@@ -3,6 +3,7 @@ import "server-only";
 import { getActiveSpanId, getActiveTraceId, startActiveObservation } from "@langfuse/tracing";
 import { z } from "zod";
 import { getDeployMetadata } from "@/lib/deploy-metadata";
+import { ChallengeCritiqueValidationError } from "@/server/ai/challenge-critique-validation";
 import {
   invokeAnthropicStructured,
   type StructuredProviderCost,
@@ -40,6 +41,7 @@ export type AiCallMeta = {
   observationId: string | null;
   promptVersion: string;
   provider: AiProviderName;
+  repairAttempted: boolean;
   release: string;
   routeTier: AiRouteTier;
   traceId: string | null;
@@ -82,15 +84,20 @@ export async function generateChallengeCritique(
             systemPrompt: prompt.systemPrompt,
             userPrompt: prompt.userPrompt,
           });
-          const validatedOutput = GenerateChallengeCritiqueOutputSchema.parse(providerResponse.output);
+          const { repairAttempted, validatedOutput, usage, cost } = await validateChallengeCritiqueWithSingleRepair({
+            jsonSchema,
+            prompt,
+            providerResponse,
+            route,
+          });
           const latencyMs = Date.now() - startedAt;
           const traceId = getActiveTraceId() ?? null;
           const observationId = getActiveSpanId() ?? null;
 
           generation.update({
             output: validatedOutput as JsonCompatibleValue,
-            usageDetails: toLangfuseUsageDetails(providerResponse.usage),
-            costDetails: toLangfuseCostDetails(providerResponse.cost),
+            usageDetails: toLangfuseUsageDetails(usage),
+            costDetails: toLangfuseCostDetails(cost),
             metadata: {
               operation: route.operation,
               provider: route.provider,
@@ -99,6 +106,7 @@ export async function generateChallengeCritique(
               promptVersion: route.promptVersion,
               release: deploy.release,
               environment: deploy.environment,
+              repairAttempted,
               ...toContextMetadata(context),
             },
             model: route.model,
@@ -116,8 +124,9 @@ export async function generateChallengeCritique(
               latencyMs,
               traceId,
               observationId,
-              usage: providerResponse.usage,
-              cost: providerResponse.cost,
+              repairAttempted,
+              usage,
+              cost,
               routeTier: route.tier,
             },
           };
@@ -127,11 +136,68 @@ export async function generateChallengeCritique(
         },
       ) as AiCallResult<GenerateChallengeCritiqueOutput>;
     } catch (error) {
+      if (error instanceof ChallengeCritiqueValidationError) {
+        throw error;
+      }
+
       lastError = error instanceof Error ? error : new Error(String(error));
     }
   }
 
   throw lastError ?? new Error("Challenge critique generation failed.");
+}
+
+async function validateChallengeCritiqueWithSingleRepair(params: {
+  jsonSchema: Record<string, unknown>;
+  prompt: ReturnType<typeof buildChallengeCritiquePrompt>;
+  providerResponse: Awaited<ReturnType<typeof invokeStructuredProvider>>;
+  route: AiRouteDefinition;
+}) {
+  const initialValidation = GenerateChallengeCritiqueOutputSchema.safeParse(params.providerResponse.output);
+
+  if (initialValidation.success) {
+    return {
+      validatedOutput: initialValidation.data,
+      repairAttempted: false,
+      usage: params.providerResponse.usage,
+      cost: params.providerResponse.cost,
+    };
+  }
+
+  const repairResponse = await invokeStructuredProvider({
+    jsonSchema: params.jsonSchema,
+    route: params.route,
+    systemPrompt: buildChallengeCritiqueRepairSystemPrompt(),
+    userPrompt: buildChallengeCritiqueRepairUserPrompt({
+      originalPrompt: params.prompt,
+      invalidOutput: params.providerResponse.output,
+      issues: initialValidation.error.issues,
+    }),
+  });
+
+  const repairedValidation = GenerateChallengeCritiqueOutputSchema.safeParse(repairResponse.output);
+
+  if (repairedValidation.success) {
+    return {
+      validatedOutput: repairedValidation.data,
+      repairAttempted: true,
+      usage: {
+        inputTokens: addNullableNumbers(params.providerResponse.usage.inputTokens, repairResponse.usage.inputTokens),
+        outputTokens: addNullableNumbers(params.providerResponse.usage.outputTokens, repairResponse.usage.outputTokens),
+        totalTokens: addNullableNumbers(params.providerResponse.usage.totalTokens, repairResponse.usage.totalTokens),
+      },
+      cost: {
+        totalUsd: addNullableNumbers(params.providerResponse.cost.totalUsd, repairResponse.cost.totalUsd),
+        currency: params.providerResponse.cost.currency ?? repairResponse.cost.currency,
+      },
+    };
+  }
+
+  throw new ChallengeCritiqueValidationError(
+    "Challenge critique output failed schema validation after one repair pass.",
+    repairedValidation.error,
+    2,
+  );
 }
 
 function buildChallengeCritiquePrompt(input: GenerateChallengeCritiqueInput) {
@@ -180,6 +246,37 @@ function buildChallengeCritiquePrompt(input: GenerateChallengeCritiqueInput) {
       .filter(Boolean)
       .join("\n"),
   };
+}
+
+function buildChallengeCritiqueRepairSystemPrompt() {
+  return [
+    "You are repairing a malformed JSON response for Penny.",
+    "Return only JSON that matches the target schema exactly.",
+    "Do not add commentary, markdown, or extra keys.",
+    "If a field is missing, infer the smallest defensible value from the original prompt and malformed output.",
+  ].join(" ");
+}
+
+function buildChallengeCritiqueRepairUserPrompt(params: {
+  originalPrompt: ReturnType<typeof buildChallengeCritiquePrompt>;
+  invalidOutput: unknown;
+  issues: z.ZodIssue[];
+}) {
+  return [
+    "Original system prompt:",
+    params.originalPrompt.systemPrompt,
+    "",
+    "Original user prompt:",
+    params.originalPrompt.userPrompt,
+    "",
+    "Malformed JSON output to repair:",
+    JSON.stringify(params.invalidOutput, null, 2),
+    "",
+    "Validation issues:",
+    JSON.stringify(params.issues, null, 2),
+    "",
+    'Return valid JSON with exactly these keys: "conciseCritiqueSummary", "strongestCounterargument", "assumptions", "likelyFailureModes", "followUpQuestions", "suggestedConfidenceDelta", "uncertaintyNote".',
+  ].join("\n");
 }
 
 async function invokeStructuredProvider(params: {
@@ -266,6 +363,14 @@ function toLangfuseCostDetails(cost: StructuredProviderCost) {
   }
 
   return Object.keys(details).length ? details : undefined;
+}
+
+function addNullableNumbers(a: number | null, b: number | null) {
+  if (a == null && b == null) {
+    return null;
+  }
+
+  return (a ?? 0) + (b ?? 0);
 }
 
 function toContextMetadata(context: AiTaskContext) {

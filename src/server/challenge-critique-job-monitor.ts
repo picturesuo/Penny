@@ -6,6 +6,7 @@ import { getDrizzleDb } from "@/db/drizzle";
 import { challengeCritiqueJobAttempts } from "@/db/schema";
 import { normalizeError } from "@/lib/error-reporting";
 import { logger } from "@/lib/logger";
+import { isChallengeCritiqueValidationError } from "@/server/ai/challenge-critique-validation";
 
 export const ChallengeCritiqueJobStatusSchema = z.enum([
   "queued",
@@ -256,7 +257,7 @@ export async function markChallengeCritiqueJobSucceeded(
 }
 
 export function mapChallengeCritiqueFailureStatus(error: unknown): ChallengeCritiqueJobStatus {
-  return error instanceof z.ZodError ? "validation_failed" : "failed";
+  return error instanceof z.ZodError || isChallengeCritiqueValidationError(error) ? "validation_failed" : "failed";
 }
 
 export async function markChallengeCritiqueJobFailed(identity: MonitorIdentity, error: unknown) {
@@ -265,7 +266,8 @@ export async function markChallengeCritiqueJobFailed(identity: MonitorIdentity, 
     status: mapChallengeCritiqueFailureStatus(error),
     finishedAt: new Date(),
     errorMessage: normalized.message,
-    validationIssues: error instanceof z.ZodError ? error.flatten() : {},
+    validationIssues:
+      error instanceof z.ZodError ? error.flatten() : isChallengeCritiqueValidationError(error) ? error.issues : {},
   });
 }
 
