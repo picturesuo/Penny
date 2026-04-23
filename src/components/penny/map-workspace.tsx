@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Brain, GraduationCap, Layers3, Swords } from "lucide-react";
 import { ClaimCaptureLauncher } from "@/components/penny/claim-capture-launcher";
 import { DocumentImport } from "@/components/penny/document-import";
@@ -20,6 +21,7 @@ export type MapWorkspaceMapOption = {
 
 export type MapWorkspaceLaunchState = {
   intent: "capture" | "challenge" | "learn";
+  openClaimPicker?: boolean;
   question?: string | null;
   openImport?: boolean;
   nextAction?: BestNextMoveKey | null;
@@ -52,6 +54,7 @@ export function MapWorkspace({
   initialSelectedRoundId = null,
   launchState = null,
 }: MapWorkspaceProps) {
+  const router = useRouter();
   const [showFullWorkspace, setShowFullWorkspace] = useState(launchState == null);
   const [capturePanel, setCapturePanel] = useState<"claim" | "import" | "quick">(
     launchState?.intent === "capture" && launchState.openImport ? "import" : "claim",
@@ -73,6 +76,10 @@ export function MapWorkspace({
     [initialClaims, initialSelectedClaimId],
   );
   const focusIntent = !showFullWorkspace ? launchState?.intent ?? null : null;
+  const needsChallengeClaimPicker =
+    focusIntent === "challenge" &&
+    launchState?.openClaimPicker === true &&
+    initialSelectedClaimId == null;
 
   async function handleQuickCaptureSave() {
     const rawText = quickCaptureText.trim();
@@ -248,17 +255,72 @@ export function MapWorkspace({
           onOpenFullWorkspace={() => setShowFullWorkspace(true)}
         />
 
+        {needsChallengeClaimPicker ? (
+          <Card className="penny-reveal overflow-hidden border-black/8 bg-[linear-gradient(180deg,#fffefb_0%,#f6eee3_100%)] p-6 shadow-[0_18px_44px_rgba(34,39,46,0.06)] sm:p-7">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="max-w-3xl">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>Choose a claim</Badge>
+                  <Badge className="bg-white text-[var(--ink)]">
+                    {initialClaims.length} claim{initialClaims.length === 1 ? "" : "s"}
+                  </Badge>
+                </div>
+                <h2 className="font-display mt-3 text-[1.85rem] font-semibold leading-[1.04] text-[var(--ink)] sm:text-[2rem]">
+                  Pick the claim you want to challenge.
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-ink)]">
+                  Challenge mode should stay attached to one explicit claim. Choose the claim first, then Penny will reopen the challenge lane on that same workspace context.
+                </p>
+              </div>
+              <div className="lg:max-w-sm">
+                <ClaimCaptureLauncher mapId={map.id} availableClaims={claimOptions} />
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              {initialClaims.length ? (
+                initialClaims.map((claim) => (
+                  <button
+                    key={claim.id}
+                    type="button"
+                    className="block rounded-[22px] border border-black/8 bg-white/88 p-5 text-left transition hover:-translate-y-0.5 hover:bg-white"
+                    onClick={() => router.push(buildClaimIntentHref(map.id, claim.id, "challenge", launchState?.nextAction ?? null))}
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className={SURFACE_EYEBROW_CLASS}>Claim</p>
+                        <p className="mt-2 text-sm leading-7 text-[var(--ink)]">{claim.content}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-ink)]">
+                        <span>{claim.nodeStatus}</span>
+                        <span>{Math.round((claim.scores?.confidence ?? 0) * 100)}% confidence</span>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className={`penny-reveal ${QUIET_PANEL_CLASS}`}>
+                  <p className={SURFACE_EYEBROW_CLASS}>No claims yet</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
+                    Add one claim first, then reopen Challenge mode from that same map.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+        ) : (
         <ThoughtMapWorkspace
           initialMap={map}
           initialView="outline"
           initialFragments={initialFragments}
-        availableMaps={availableMaps}
-        initialSelectedClaimId={initialSelectedClaimId}
-        initialSelectedRoundId={initialSelectedRoundId}
-        focusIntent={focusIntent}
-        initialLearningQuestion={launchState?.intent === "learn" ? launchState.question ?? null : null}
-        initialNextAction={launchState?.intent === "challenge" ? launchState.nextAction ?? null : null}
+          availableMaps={availableMaps}
+          initialSelectedClaimId={initialSelectedClaimId}
+          initialSelectedRoundId={initialSelectedRoundId}
+          focusIntent={focusIntent}
+          initialLearningQuestion={launchState?.intent === "learn" ? launchState.question ?? null : null}
+          initialNextAction={launchState?.intent === "challenge" ? launchState.nextAction ?? null : null}
         />
+        )}
       </div>
     );
   }
@@ -300,6 +362,24 @@ export function MapWorkspace({
       />
     </div>
   );
+}
+
+function buildClaimIntentHref(
+  mapId: string,
+  claimId: string,
+  intent: "challenge" | "learn",
+  nextAction: BestNextMoveKey | null,
+) {
+  const params = new URLSearchParams({
+    claimId,
+    launcher: intent,
+  });
+
+  if (nextAction) {
+    params.set("nextAction", nextAction);
+  }
+
+  return `/maps/${mapId}?${params.toString()}`;
 }
 
 function IntentShellHeader({
