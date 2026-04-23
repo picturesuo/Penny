@@ -25,6 +25,18 @@ const jsonObjectDefault = sql`'{}'::jsonb`;
 const jsonArrayDefault = sql`'[]'::jsonb`;
 
 export const workspaceModeEnum = pgEnum("workspace_mode", ["brain", "challenge", "learn"]);
+export const movesEventTypeEnum = pgEnum("moves_event_type", [
+  "claim.created",
+  "claim.updated",
+  "claim.confidence_changed",
+  "challenge.started",
+  "challenge.round_responded",
+  "learning.prompt_generated",
+  "teachback.submitted",
+  "concept.created",
+  "concept.linked",
+  "workspace.selection_changed",
+]);
 
 export const users = pgTable(
   "users",
@@ -337,13 +349,14 @@ export const movesEvents = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
-    mapId: uuid("map_id").references(() => maps.id, { onDelete: "set null", onUpdate: "cascade" }),
+    mapId: uuid("map_id")
+      .notNull()
+      .references(() => maps.id, { onDelete: "cascade", onUpdate: "cascade" }),
     claimId: uuid("claim_id").references(() => claims.id, { onDelete: "set null", onUpdate: "cascade" }),
     conceptId: uuid("concept_id").references(() => concepts.id, { onDelete: "set null", onUpdate: "cascade" }),
-    type: varchar("type", { length: 128 }).notNull(),
+    type: movesEventTypeEnum("type").notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default(jsonObjectDefault),
     createdAt,
-    updatedAt,
   },
   (table) => [
     index("moves_events_user_idx").on(table.userId),
