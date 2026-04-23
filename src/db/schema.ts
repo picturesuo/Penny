@@ -31,6 +31,7 @@ export const movesEventTypeEnum = pgEnum("moves_event_type", [
   "claim.updated",
   "claim.confidence_changed",
   "challenge.started",
+  "challenge.critique_generated",
   "challenge.round_responded",
   "learning.prompt_generated",
   "teachback.submitted",
@@ -39,8 +40,10 @@ export const movesEventTypeEnum = pgEnum("moves_event_type", [
   "workspace.selection_changed",
 ]);
 
-export const users = pgTable(
-  "users",
+// Phase 1 core schema starts here. The older broader tables remain below as
+// deferred compatibility surfaces until the command/projection layer is pruned.
+export const profiles = pgTable(
+  "profiles",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     email: varchar("email", { length: 320 }).notNull(),
@@ -50,10 +53,12 @@ export const users = pgTable(
     updatedAt,
   },
   (table) => [
-    uniqueIndex("users_email_unique").on(table.email),
-    index("users_updated_at_idx").on(table.updatedAt),
+    uniqueIndex("profiles_email_unique").on(table.email),
+    index("profiles_updated_at_idx").on(table.updatedAt),
   ],
 );
+
+export const users = profiles;
 
 export const spheres = pgTable(
   "spheres",
@@ -245,8 +250,8 @@ export const claimConceptEdges = pgTable(
   ],
 );
 
-export const dialecticRounds = pgTable(
-  "dialectic_rounds",
+export const challengeRounds = pgTable(
+  "challenge_rounds",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id")
@@ -262,7 +267,7 @@ export const dialecticRounds = pgTable(
       onDelete: "set null",
       onUpdate: "cascade",
     }),
-    priorRoundId: uuid("prior_round_id").references((): AnyPgColumn => dialecticRounds.id, {
+    priorRoundId: uuid("prior_round_id").references((): AnyPgColumn => challengeRounds.id, {
       onDelete: "set null",
       onUpdate: "cascade",
     }),
@@ -290,20 +295,65 @@ export const dialecticRounds = pgTable(
     updatedAt,
   },
   (table) => [
-    uniqueIndex("dialectic_rounds_claim_round_unique").on(table.claimId, table.roundNumber),
-    index("dialectic_rounds_user_idx").on(table.userId),
-    index("dialectic_rounds_map_idx").on(table.mapId),
-    index("dialectic_rounds_claim_idx").on(table.claimId),
-    index("dialectic_rounds_workspace_context_idx").on(table.workspaceContextId),
-    index("dialectic_rounds_created_at_idx").on(table.createdAt),
+    uniqueIndex("challenge_rounds_claim_round_unique").on(table.claimId, table.roundNumber),
+    index("challenge_rounds_user_idx").on(table.userId),
+    index("challenge_rounds_map_idx").on(table.mapId),
+    index("challenge_rounds_claim_idx").on(table.claimId),
+    index("challenge_rounds_workspace_context_idx").on(table.workspaceContextId),
+    index("challenge_rounds_created_at_idx").on(table.createdAt),
     check(
-      "dialectic_rounds_confidence_start_range",
+      "challenge_rounds_confidence_start_range",
       sql`${table.confidenceAtRoundStart} >= 0 AND ${table.confidenceAtRoundStart} <= 100`,
     ),
     check(
-      "dialectic_rounds_confidence_end_range",
+      "challenge_rounds_confidence_end_range",
       sql`${table.confidenceAtRoundEnd} IS NULL OR (${table.confidenceAtRoundEnd} >= 0 AND ${table.confidenceAtRoundEnd} <= 100)`,
     ),
+  ],
+);
+
+export const dialecticRounds = challengeRounds;
+
+export const challengeCritiques = pgTable(
+  "challenge_critiques",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    mapId: uuid("map_id")
+      .notNull()
+      .references(() => maps.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    challengeRoundId: uuid("challenge_round_id")
+      .notNull()
+      .references(() => challengeRounds.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    workspaceContextId: uuid("workspace_context_id").references(() => workspaceContexts.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    model: varchar("model", { length: 160 }).notNull(),
+    promptVersion: varchar("prompt_version", { length: 64 }).notNull().default("v1"),
+    headline: varchar("headline", { length: 240 }).notNull(),
+    critiqueText: text("critique_text").notNull(),
+    critiqueLens: varchar("critique_lens", { length: 128 }).notNull().default("default"),
+    failureTypes: jsonb("failure_types").$type<string[]>().notNull().default(jsonArrayDefault),
+    dependencyRisks: jsonb("dependency_risks").$type<string[]>().notNull().default(jsonArrayDefault),
+    whyNow: text("why_now").notNull(),
+    validatedOutput: jsonb("validated_output").$type<Record<string, unknown>>().notNull().default(jsonObjectDefault),
+    createdAt,
+    updatedAt,
+  },
+  (table) => [
+    index("challenge_critiques_user_idx").on(table.userId),
+    index("challenge_critiques_map_idx").on(table.mapId),
+    index("challenge_critiques_claim_idx").on(table.claimId),
+    index("challenge_critiques_round_idx").on(table.challengeRoundId),
+    index("challenge_critiques_workspace_context_idx").on(table.workspaceContextId),
+    index("challenge_critiques_created_at_idx").on(table.createdAt),
   ],
 );
 
@@ -316,7 +366,7 @@ export const learningPrompts = pgTable(
       .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
     claimId: uuid("claim_id").references(() => claims.id, { onDelete: "set null", onUpdate: "cascade" }),
     conceptId: uuid("concept_id").references(() => concepts.id, { onDelete: "set null", onUpdate: "cascade" }),
-    roundId: uuid("round_id").references(() => dialecticRounds.id, { onDelete: "set null", onUpdate: "cascade" }),
+    roundId: uuid("round_id").references(() => challengeRounds.id, { onDelete: "set null", onUpdate: "cascade" }),
     workspaceContextId: uuid("workspace_context_id").references(() => workspaceContexts.id, {
       onDelete: "set null",
       onUpdate: "cascade",
