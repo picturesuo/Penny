@@ -26,6 +26,7 @@ const jsonArrayDefault = sql`'[]'::jsonb`;
 
 export const workspaceModeEnum = pgEnum("workspace_mode", ["brain", "challenge", "learn"]);
 export const movesEventTypeEnum = pgEnum("moves_event_type", [
+  "map.created",
   "claim.created",
   "claim.updated",
   "claim.confidence_changed",
