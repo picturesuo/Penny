@@ -10,11 +10,13 @@ import { getCurrentAuthenticatedUserId } from "@/server/auth";
 
 export const WorkspaceViewSchema = z.enum(["shell", "brain", "challenge", "learn"]);
 export const WorkspaceCommandSchema = z.enum([
-  "create-claim",
-  "update-workspace-selection",
-  "start-challenge",
-  "respond-to-challenge",
-  "submit-teachback",
+  "maps/create",
+  "claims/create",
+  "claims/update",
+  "workspace/set-selection",
+  "challenge/start-round",
+  "challenge/generate-critique",
+  "challenge/respond",
 ]);
 export const WorkspaceProjectionQuerySchema = z.object({
   workspaceContextId: z.string().uuid("Invalid workspaceContextId.").nullable().optional().default(null),
