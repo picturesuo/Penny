@@ -19,18 +19,12 @@ const recentThoughts = [
 export default function DashboardPage() {
   return (
     <section className="space-y-5">
-      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="penny-label">Stream</p>
-            <h1 className="mt-2 text-2xl font-semibold text-[var(--ink)]">Continue where you left off</h1>
-          </div>
-          <p className="text-sm text-[var(--muted-ink)]">The center stays focused on one active thread and a short recent trail.</p>
-        </div>
-      </Card>
+      <div>
+        <p className="penny-label">Stream</p>
+      </div>
 
       <Card className="penny-card-soft p-5">
-        <p className="penny-label">Highlighted thread</p>
+        <p className="text-sm font-medium text-[var(--muted-ink)]">Continue where you left off</p>
         <div className="mt-4 flex gap-4">
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold leading-8 text-[var(--ink)]">
@@ -45,9 +39,7 @@ export default function DashboardPage() {
       </Card>
 
       <section className="space-y-3">
-        <div>
-          <p className="penny-label">Recent thoughts</p>
-        </div>
+        <p className="penny-label">Recent thoughts</p>
 
         {recentThoughts.map((thought) => (
           <Card key={thought.title} className="penny-card p-5 shadow-[var(--shadow-card)]">
