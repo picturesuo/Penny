@@ -376,14 +376,16 @@ function summarizeEvent(record: MoveEventRecord): WorkspaceEventSummary {
     "map.created": "Map created",
     "claim.created": "Claim created",
     "claim.updated": "Claim updated",
-    "claim.confidence_changed": "Confidence changed",
-    "challenge.started": "Challenge started",
-    "challenge.round_responded": "Challenge round responded",
+    "claim.confidence.changed": "Confidence changed",
+    "challenge.round.started": "Challenge round started",
+    "challenge.critique.requested": "Challenge critique requested",
+    "challenge.critique.generated": "Challenge critique generated",
+    "challenge.response.recorded": "Challenge response recorded",
     "learning.prompt_generated": "Learning prompt generated",
     "teachback.submitted": "Teach-back submitted",
     "concept.created": "Concept created",
     "concept.linked": "Concept linked",
-    "workspace.selection_changed": "Workspace selection changed",
+    "workspace.selection.changed": "Workspace selection changed",
   };
 
   return {
