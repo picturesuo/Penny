@@ -2,10 +2,12 @@ import { type NextRequest } from "next/server";
 import {
   createClaim,
   createMap,
+  generateLearningPrompt,
   recordChallengeResponse,
   requestChallengeCritique,
   setWorkspaceSelection,
   startChallengeRound,
+  submitTeachback,
   updateClaim,
   workspaceCommandSchemas,
 } from "@/server/workspace-commands";
@@ -120,6 +122,32 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/com
           "round",
           {
             round: result.record,
+            events: result.events,
+            invalidation: result.invalidation,
+          },
+          200,
+        );
+      }
+
+      case "learning/generate-prompt": {
+        const result = await generateLearningPrompt(workspaceCommandSchemas.generateLearningPrompt.parse(rawBody));
+        return createWorkspaceCommandResponse(
+          "learningPrompt",
+          {
+            learningPrompt: result.record,
+            events: result.events,
+            invalidation: result.invalidation,
+          },
+          201,
+        );
+      }
+
+      case "learning/submit-teachback": {
+        const result = await submitTeachback(workspaceCommandSchemas.submitTeachback.parse(rawBody));
+        return createWorkspaceCommandResponse(
+          "learningPrompt",
+          {
+            learningPrompt: result.record,
             events: result.events,
             invalidation: result.invalidation,
           },

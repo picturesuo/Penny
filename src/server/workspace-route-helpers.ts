@@ -17,6 +17,8 @@ export const WorkspaceCommandSchema = z.enum([
   "challenge/start-round",
   "challenge/generate-critique",
   "challenge/respond",
+  "learning/generate-prompt",
+  "learning/submit-teachback",
 ]);
 export const WorkspaceProjectionQuerySchema = z.object({
   workspaceContextId: z.string().uuid("Invalid workspaceContextId.").nullable().optional().default(null),
