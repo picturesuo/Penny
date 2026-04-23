@@ -33,12 +33,14 @@ export default async function MapPage({
   const initialSelectedClaimId = firstQueryValue(query.claimId);
   const initialSelectedRoundId = firstQueryValue(query.roundId);
   const launcher = parseLauncherIntent(firstQueryValue(query.launcher));
+  const openClaimPicker = firstQueryValue(query.claimPicker) === "1";
   const question = firstQueryValue(query.question);
   const openImport = firstQueryValue(query.openImport) === "1";
   const nextAction = parseNextAction(firstQueryValue(query.nextAction));
   const launchState = launcher
     ? {
         intent: launcher,
+        openClaimPicker,
         question,
         openImport,
         nextAction,
