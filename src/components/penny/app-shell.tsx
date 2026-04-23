@@ -1,21 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import {
-  BrainCircuit,
-  ChevronRight,
-  Compass,
-  Filter,
-  GraduationCap,
-  Search,
-  ShieldAlert,
-} from "lucide-react";
+import { BrainCircuit, ChevronRight, Compass, GraduationCap, ShieldAlert } from "lucide-react";
 import { PennyLogo } from "@/components/penny/penny-logo";
 import { OrnamentalGraph } from "@/components/penny/ornamental-graph";
-import { NewMapButton } from "@/components/penny/new-map-modal";
+import { useQuickCaptureModal } from "@/components/penny/quick-capture-modal";
 import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -23,48 +16,111 @@ type AppShellProps = {
   userId: string;
 };
 
-type ModeKey = "brain" | "challenge" | "learn";
+export type AppShellMode = "brain" | "challenge" | "learn";
+
+export type AppShellBreadcrumb = {
+  label: string;
+};
+
+export type AppShellSphere = {
+  label: string;
+  href?: string;
+  active?: boolean;
+  meta?: string | null;
+};
+
+export type AppShellAction = {
+  href?: string;
+  label: string;
+  onClick?: () => void;
+  tone?: "primary" | "secondary";
+};
+
+export type AppShellOverrides = {
+  actions?: AppShellAction[];
+  breadcrumbs?: AppShellBreadcrumb[];
+  currentMapId?: string | null;
+  inspector?: React.ReactNode;
+  inspectorLabel?: string | null;
+  spheres?: AppShellSphere[];
+  topBarLabel?: string | null;
+};
+
+type AppShellContextValue = {
+  activeMode: AppShellMode;
+  resetShell: () => void;
+  setShell: (overrides: AppShellOverrides) => void;
+};
 
 type ModeRailItem = {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   accent: string;
-  mode: ModeKey;
+  mode: AppShellMode;
 };
 
-type SphereRailItem = {
-  label: string;
-  active?: boolean;
-};
-
-type Breadcrumb = {
-  label: string;
-};
-
-const SPHERES: SphereRailItem[] = [
+const DEFAULT_SPHERES: AppShellSphere[] = [
   { label: "Work", active: true },
   { label: "Writing" },
   { label: "Life" },
   { label: "Learning" },
-  { label: "+ New Sphere" },
 ];
+
+const DEFAULT_BRAIN_BREADCRUMBS: AppShellBreadcrumb[] = [
+  { label: "Work" },
+  { label: "Market Thesis" },
+  { label: "Distribution Claim" },
+];
+
+const DEFAULT_LEARN_BREADCRUMBS: AppShellBreadcrumb[] = [
+  ...DEFAULT_BRAIN_BREADCRUMBS,
+  { label: "Network Effects" },
+];
+
+const AppShellContext = createContext<AppShellContextValue | null>(null);
+
+export function useAppShell() {
+  const context = useContext(AppShellContext);
+
+  if (!context) {
+    throw new Error("useAppShell must be used inside AppShell.");
+  }
+
+  return context;
+}
 
 export function AppShell({ children, userEmail, userId }: AppShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  const routeKey = `${pathname}?${search}`;
   const activeMode = deriveActiveMode(pathname, searchParams);
-  const previousModeRef = useRef<ModeKey | null>(null);
+  const [overrideEntry, setOverrideEntry] = useState<{
+    overrides: AppShellOverrides;
+    routeKey: string;
+  }>({
+    overrides: {},
+    routeKey,
+  });
+  const previousModeRef = useRef<AppShellMode | null>(null);
   const [modeSwitching, setModeSwitching] = useState(false);
-  const breadcrumbs = buildBreadcrumbs(activeMode);
+  const { open } = useQuickCaptureModal();
   const modeRailItems = buildModeRail(pathname, searchParams);
-  const userInitials = userEmail
-    .split("@")[0]
-    .split(/[.\-_]/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("") || "P";
+  const defaultMapId = deriveMapIdFromPathname(pathname);
+  const effectiveOverrides = useMemo(
+    () => (overrideEntry.routeKey === routeKey ? overrideEntry.overrides : {}),
+    [overrideEntry.overrides, overrideEntry.routeKey, routeKey],
+  );
+  const shellState = useMemo(() => buildShellState(activeMode, effectiveOverrides), [activeMode, effectiveOverrides]);
+  const userInitials =
+    userEmail
+      .split("@")[0]
+      .split(/[.\-_]/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "P";
 
   useEffect(() => {
     if (previousModeRef.current == null) {
@@ -83,7 +139,7 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
     });
     const timeout = window.setTimeout(() => {
       setModeSwitching(false);
-    }, 190);
+    }, 170);
 
     return () => {
       window.cancelAnimationFrame(frame);
@@ -91,112 +147,141 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
     };
   }, [activeMode]);
 
+  const contextValue = useMemo<AppShellContextValue>(
+    () => ({
+      activeMode,
+      resetShell: () =>
+        setOverrideEntry({
+          overrides: {},
+          routeKey,
+        }),
+      setShell: (nextOverrides) =>
+        setOverrideEntry({
+          overrides: nextOverrides,
+          routeKey,
+        }),
+    }),
+    [activeMode, routeKey],
+  );
+
+  const actions =
+    shellState.actions ??
+    [
+      {
+        label: "New Thought",
+        onClick: () =>
+          open({
+            defaultMapId: shellState.currentMapId ?? defaultMapId ?? undefined,
+          }),
+        tone: "primary",
+      },
+    ];
+
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#faf6f1_0%,#f7f3ee_38%,#f5f0ea_100%)]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[24rem] bg-[radial-gradient(circle_at_top_left,rgba(185,106,69,0.12),transparent_46%),radial-gradient(circle_at_top_right,rgba(95,143,120,0.08),transparent_38%)]" />
-      <div className="relative mx-auto max-w-[1560px] px-4 py-4 sm:px-6 lg:px-8">
-        <div className="grid gap-5 xl:grid-cols-[214px_minmax(0,1fr)]">
-          <aside className="order-2 xl:order-1">
-            <div className="space-y-4 xl:sticky xl:top-4">
-              <Card className="penny-card px-4 py-5 shadow-[var(--shadow-card)]">
-                <PennyLogo
-                  showLabel
-                  className="items-center justify-start"
-                  markClassName="size-10 rounded-[12px]"
-                  labelClassName="text-lg font-medium tracking-[-0.01em]"
-                />
+    <AppShellContext.Provider value={contextValue}>
+      <div className="min-h-screen bg-[linear-gradient(180deg,#faf7f3_0%,#f7f3ee_44%,#f5f0ea_100%)] text-[var(--ink)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[20rem] bg-[radial-gradient(circle_at_top_left,rgba(185,106,69,0.08),transparent_40%),radial-gradient(circle_at_top_right,rgba(95,143,120,0.06),transparent_36%)]" />
+        <div className="relative mx-auto max-w-[1540px] px-4 py-4 sm:px-6 lg:px-8">
+          <div className="grid gap-6 xl:grid-cols-[224px_minmax(0,1fr)_316px]">
+            <aside className="order-2 xl:order-1">
+              <div className="space-y-5 xl:sticky xl:top-4">
+                <div className="rounded-[28px] border border-[var(--line)] bg-[rgba(251,248,244,0.88)] px-4 py-5 shadow-[0_8px_22px_rgba(45,36,31,0.035)]">
+                  <PennyLogo
+                    showLabel
+                    className="items-center justify-start"
+                    markClassName="size-10 rounded-[12px]"
+                    labelClassName="text-lg font-medium tracking-[-0.01em]"
+                  />
 
-                <div className="mt-5 space-y-2">
-                  {modeRailItems.map((item) => {
-                    const Icon = item.icon;
-                    const active = item.mode === activeMode;
+                  <div className="mt-6 space-y-2">
+                    {modeRailItems.map((item) => {
+                      const Icon = item.icon;
+                      const active = item.mode === activeMode;
 
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className="flex items-center gap-3 rounded-[16px] border px-3 py-3 transition"
-                        style={
-                          active
-                            ? {
-                                color: "#fffaf4",
-                                borderColor: item.accent,
-                                backgroundColor: item.accent,
-                                boxShadow: `0 10px 24px color-mix(in srgb, ${item.accent} 18%, transparent)`,
-                              }
-                            : {
-                                borderColor: "var(--line)",
-                                backgroundColor: "rgba(255,255,255,0.72)",
-                                color: "var(--ink)",
-                              }
-                        }
-                      >
-                        <span
-                          className="flex size-8 shrink-0 items-center justify-center rounded-full border"
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className="flex items-center gap-3 rounded-[18px] border px-3 py-3 transition duration-150"
                           style={
                             active
                               ? {
-                                  borderColor: "rgba(255,255,255,0.26)",
-                                  backgroundColor: "rgba(255,255,255,0.16)",
+                                  color: "#fffaf4",
+                                  borderColor: item.accent,
+                                  backgroundColor: item.accent,
                                 }
                               : {
                                   borderColor: "var(--line)",
-                                  backgroundColor: "var(--panel)",
-                                  color: item.accent,
+                                  backgroundColor: "rgba(255,255,255,0.82)",
                                 }
                           }
                         >
-                          <Icon className="size-4" />
-                        </span>
-                        <span className={active ? "text-sm font-medium text-white" : "text-sm font-medium"}>{item.label}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-6 border-t border-[var(--line)] pt-5">
-                  <p className="penny-label">Spheres</p>
-                  <div className="mt-3 space-y-1.5">
-                    {SPHERES.map((sphere) => (
-                      <div
-                        key={sphere.label}
-                        className="flex items-center justify-between rounded-[14px] px-3 py-2.5"
-                        style={sphere.active ? { backgroundColor: "rgba(185,106,69,0.08)" } : undefined}
-                      >
-                        <div className="flex items-center gap-2.5">
                           <span
-                            className="size-2 rounded-full"
-                            style={{
-                              backgroundColor: sphere.active ? "var(--brain)" : "rgba(45,36,31,0.18)",
-                            }}
-                          />
-                          <span className={sphere.active ? "text-sm font-medium text-[var(--ink)]" : "text-sm text-[var(--muted-ink)]"}>
-                            {sphere.label}
+                            className="flex size-8 shrink-0 items-center justify-center rounded-full border"
+                            style={
+                              active
+                                ? {
+                                    borderColor: "rgba(255,255,255,0.22)",
+                                    backgroundColor: "rgba(255,255,255,0.14)",
+                                  }
+                                : {
+                                    borderColor: "var(--line)",
+                                    backgroundColor: "var(--panel)",
+                                    color: item.accent,
+                                  }
+                            }
+                          >
+                            <Icon className="size-4" />
                           </span>
-                        </div>
-                        {sphere.active ? <span className="size-1.5 rounded-full bg-[var(--brain)]" /> : null}
-                      </div>
-                    ))}
+                          <span className={cn("text-sm font-medium", active ? "text-white" : "text-[var(--ink)]")}>{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-7 border-t border-[var(--line)] pt-5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="penny-label">Spheres</p>
+                      <Compass className="size-4 text-[var(--muted-ink)]" />
+                    </div>
+                    <div className="mt-3 space-y-1.5">
+                      {shellState.spheres.map((sphere) => {
+                        const content = (
+                          <div
+                            className="flex items-center justify-between rounded-[16px] px-3 py-2.5 transition"
+                            style={sphere.active ? { backgroundColor: "rgba(185,106,69,0.08)" } : undefined}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span
+                                className="size-2 rounded-full"
+                                style={{
+                                  backgroundColor: sphere.active ? "var(--brain)" : "rgba(45,36,31,0.18)",
+                                }}
+                              />
+                              <div>
+                                <p className={cn("text-sm", sphere.active ? "font-medium text-[var(--ink)]" : "text-[var(--muted-ink)]")}>
+                                  {sphere.label}
+                                </p>
+                                {sphere.meta ? <p className="text-[11px] text-[var(--muted-ink)]">{sphere.meta}</p> : null}
+                              </div>
+                            </div>
+                            {sphere.active ? <span className="size-1.5 rounded-full bg-[var(--brain)]" /> : null}
+                          </div>
+                        );
+
+                        return sphere.href ? (
+                          <Link key={`${sphere.label}-${sphere.href}`} href={sphere.href} className="block">
+                            {content}
+                          </Link>
+                        ) : (
+                          <div key={sphere.label}>{content}</div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </Card>
 
-              <Card className="penny-card px-4 py-4 shadow-[var(--shadow-card)]">
-                <p className="penny-label">Recent sessions</p>
-                <div className="mt-3 space-y-2">
-                  {[
-                    ["Backend Architecture Choices", "Today • 42 min"],
-                    ["Penny Core Loop Design", "Yesterday • 38 min"],
-                    ["Monetization Strategy", "2 days ago • 1h 02m"],
-                  ].map(([title, meta]) => (
-                    <div key={title} className="rounded-[14px] border border-[var(--line)] bg-white/78 px-3 py-2.5">
-                      <p className="text-sm font-medium leading-6 text-[var(--ink)]">{title}</p>
-                      <p className="mt-1 text-xs text-[var(--muted-ink)]">{meta}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 flex items-center justify-between border-t border-[var(--line)] pt-4">
+                <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(251,248,244,0.88)] px-4 py-4">
                   <div className="flex items-center gap-3">
                     <div
                       className="flex size-9 items-center justify-center rounded-full bg-[var(--ink)] text-xs font-semibold text-[var(--paper)]"
@@ -205,236 +290,172 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
                       {userInitials}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-[var(--ink)]">Penny</p>
-                      <p className="text-xs text-[var(--muted-ink)]">Focused workspace</p>
+                      <p className="text-sm font-medium text-[var(--ink)]">Focused workspace</p>
+                      <p className="text-xs text-[var(--muted-ink)]">{userEmail}</p>
                     </div>
                   </div>
                 </div>
-              </Card>
-            </div>
-          </aside>
+              </div>
+            </aside>
 
-          <div className="order-1 min-w-0 xl:order-2">
-            <div className="sticky top-4 z-40 mb-5">
-              <Card className="penny-card px-4 py-3 shadow-[var(--shadow-card)]">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-[var(--muted-ink)]">
-                    {breadcrumbs.map((crumb, index) => (
-                      <div key={crumb.label} className="flex items-center gap-2">
-                        {index > 0 ? <ChevronRight className="size-4 text-[var(--muted-ink)]" /> : null}
-                        <span className={index === breadcrumbs.length - 1 ? "font-medium text-[var(--ink)]" : "text-[var(--muted-ink)]"}>
-                          {crumb.label}
-                        </span>
+            <div className="order-1 min-w-0 xl:order-2">
+              <div className="rounded-[30px] border border-[var(--line)] bg-[rgba(251,248,244,0.78)] px-5 py-4 shadow-[0_12px_36px_rgba(45,36,31,0.035)] sm:px-6">
+                <div className="border-b border-[var(--line)] pb-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      {shellState.topBarLabel ? <p className="penny-label mb-2">{shellState.topBarLabel}</p> : null}
+                      <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-[var(--muted-ink)]">
+                        {shellState.breadcrumbs.map((crumb, index) => (
+                          <div key={`${crumb.label}-${index}`} className="flex min-w-0 items-center gap-2">
+                            {index > 0 ? <ChevronRight className="size-4 shrink-0 text-[var(--muted-ink)]" /> : null}
+                            <span className={cn("truncate", index === shellState.breadcrumbs.length - 1 ? "font-medium text-[var(--ink)]" : "")}>
+                              {crumb.label}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
 
-                  <div className="flex items-center gap-2">
-                    <label className="hidden h-9 items-center gap-2 rounded-[12px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--muted-ink)] md:flex">
-                      <Search className="size-4 text-[var(--muted-ink)]" />
-                      <input
-                        aria-label="Search your brain"
-                        placeholder="Search your brain..."
-                        className="w-40 bg-transparent text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)]"
-                      />
-                      <span className="rounded-[8px] border border-[var(--line)] bg-[var(--panel)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted-ink)]">
-                        ⌘K
-                      </span>
-                    </label>
-                    <button
-                      type="button"
-                      className="inline-flex h-9 items-center gap-2 rounded-[12px] border border-[var(--line)] bg-white px-3 text-sm font-medium text-[var(--ink)] transition hover:bg-[var(--panel)]"
-                    >
-                      <Filter className="size-4 text-[var(--muted-ink)]" />
-                      Filter
-                    </button>
-                    <NewMapButton
-                      label="New Thought"
-                      showIcon={false}
-                      className="h-9 rounded-[12px] bg-[var(--brain)] px-4 text-sm font-medium text-[var(--paper)] hover:bg-[var(--accent-strong)]"
-                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      {actions.map((action) =>
+                        action.href ? (
+                          <Link
+                            key={`${action.label}-${action.href}`}
+                            href={action.href}
+                            className={actionClassName(action.tone)}
+                            style={actionStyle(action.tone)}
+                          >
+                            {action.label}
+                          </Link>
+                        ) : (
+                          <button
+                            key={action.label}
+                            type="button"
+                            onClick={action.onClick}
+                            className={actionClassName(action.tone)}
+                            style={actionStyle(action.tone)}
+                          >
+                            {action.label}
+                          </button>
+                        ),
+                      )}
+                    </div>
                   </div>
                 </div>
-              </Card>
+
+                <main className={cn("mt-6 min-w-0 penny-mode-panel", modeSwitching && "is-switching")}>{children}</main>
+              </div>
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_292px]">
-              <main className={`min-w-0 penny-mode-panel ${modeSwitching ? "is-switching" : ""}`}>{children}</main>
-
-              <aside className="min-w-0">
-                <div className={`space-y-4 xl:sticky xl:top-[5.75rem] penny-mode-panel ${modeSwitching ? "is-switching" : ""}`}>
-                  {activeMode === "brain" ? <BrainClaimInspector /> : activeMode === "challenge" ? <ChallengeClaimInspector /> : <LearnClaimInspector />}
-                </div>
-              </aside>
-            </div>
+            <aside className="order-3 min-w-0">
+              <div className={cn("space-y-4 xl:sticky xl:top-4 penny-mode-panel", modeSwitching && "is-switching")}>
+                {shellState.inspector ?? renderDefaultInspector(activeMode)}
+              </div>
+            </aside>
           </div>
         </div>
       </div>
-    </div>
+    </AppShellContext.Provider>
   );
 }
 
-function buildBreadcrumbs(activeMode: ModeKey): Breadcrumb[] {
-  const breadcrumbs: Breadcrumb[] = [
-    { label: "Work" },
-    { label: "Market Thesis" },
-    { label: "Distribution Claim" },
-  ];
+function buildShellState(activeMode: AppShellMode, overrides: AppShellOverrides) {
+  const defaults = buildDefaultShellState(activeMode);
 
-  if (activeMode === "learn") {
-    breadcrumbs.push({ label: "Network Effects" });
-  }
-
-  return breadcrumbs;
+  return {
+    actions: overrides.actions ?? defaults.actions,
+    breadcrumbs: overrides.breadcrumbs ?? defaults.breadcrumbs,
+    currentMapId: overrides.currentMapId ?? defaults.currentMapId,
+    inspector: overrides.inspector ?? defaults.inspector,
+    inspectorLabel: overrides.inspectorLabel ?? defaults.inspectorLabel,
+    spheres: overrides.spheres ?? defaults.spheres,
+    topBarLabel: overrides.topBarLabel ?? defaults.topBarLabel,
+  };
 }
 
-function BrainClaimInspector() {
+function buildDefaultShellState(activeMode: AppShellMode): Required<Omit<AppShellOverrides, "actions" | "currentMapId">> & {
+  actions: AppShellAction[] | undefined;
+  currentMapId: string | null;
+} {
+  return {
+    actions: undefined,
+    breadcrumbs: activeMode === "learn" ? DEFAULT_LEARN_BREADCRUMBS : DEFAULT_BRAIN_BREADCRUMBS,
+    currentMapId: null,
+    inspector: renderDefaultInspector(activeMode),
+    inspectorLabel: null,
+    spheres: DEFAULT_SPHERES,
+    topBarLabel: activeMode === "challenge" ? "Challenge" : activeMode === "learn" ? "Learn" : "Brain",
+  };
+}
+
+function renderDefaultInspector(activeMode: AppShellMode) {
+  if (activeMode === "challenge") {
+    return (
+      <>
+        <Card className="penny-card px-5 py-5 shadow-[var(--shadow-card)]">
+          <p className="penny-label">Critique transparency</p>
+          <div className="mt-4 space-y-3">
+            {[
+              ["Overall strength", "Strong"],
+              ["Failure type", "Shaky assumption"],
+              ["Evidence quality", "Moderate scrutiny"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-[16px] border border-[var(--line)] bg-white/86 px-4 py-3">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">{label}</p>
+                <p className="mt-2 text-sm font-medium text-[var(--ink)]">{value}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="penny-card px-5 py-5 shadow-[var(--shadow-card)]">
+          <p className="penny-label">Dependency cascade</p>
+          <div className="mt-4 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
+            <OrnamentalGraph variant="cascade" accent="var(--challenge)" className="mx-auto h-20 max-w-[12rem]" />
+          </div>
+        </Card>
+      </>
+    );
+  }
+
+  if (activeMode === "learn") {
+    return (
+      <>
+        <Card className="penny-card px-5 py-5 shadow-[var(--shadow-card)]">
+          <p className="penny-label">Where This Lives In Your Brain</p>
+          <div className="mt-4 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
+            <OrnamentalGraph variant="concept-map" accent="var(--learn)" className="mx-auto h-24 max-w-[12rem]" />
+          </div>
+        </Card>
+
+        <Card className="penny-card px-5 py-5 shadow-[var(--shadow-card)]">
+          <p className="penny-label">Related ideas</p>
+          <div className="mt-3 space-y-2.5">
+            {["Defensibility", "Switching Costs", "Platform Strategy"].map((item) => (
+              <div key={item} className="rounded-[16px] border border-[var(--line)] bg-white/86 px-3 py-2.5 text-sm text-[var(--ink)]">
+                {item}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </>
+    );
+  }
+
   return (
     <>
-      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
-        <h2 className="text-lg font-semibold leading-7 text-[var(--ink)]">Distribution advantage matters more than model quality in winning this market.</h2>
-
+      <Card className="penny-card px-5 py-5 shadow-[var(--shadow-card)]">
+        <h2 className="text-lg font-semibold leading-7 text-[var(--ink)]">Selected claim</h2>
         <div className="mt-5">
           <p className="penny-label">Confidence</p>
           <p className="mt-2 text-[2.3rem] font-semibold leading-none text-[var(--ink)]">72%</p>
-          <p className="mt-2 text-sm text-[var(--muted-ink)]">Medium high</p>
         </div>
-
-        <div className="mt-6">
-          <p className="penny-label">Key connections</p>
-          <div className="mt-3 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
-            <OrnamentalGraph variant="brain-map" accent="var(--brain)" className="mx-auto h-24 max-w-[15rem]" />
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <p className="penny-label">Dependents (3)</p>
-          <div className="mt-3 space-y-2 text-sm leading-6 text-[var(--ink)]">
-            {[
-              "Go-to-market strategy",
-              "User acquisition channels",
-              "Moat durability",
-            ].map((item) => (
-              <div key={item} className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5">
-                {item}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-6 border-t border-[var(--line)] pt-5">
-          <p className="penny-label">Last challenged</p>
-          <p className="mt-2 text-sm text-[var(--ink)]">9 days ago</p>
-          <Link href="/app" className="mt-3 inline-flex text-sm text-[var(--muted-ink)] transition hover:text-[var(--ink)]">
-            View in Brain Map →
-          </Link>
-        </div>
-      </Card>
-
-      <Card className="penny-card p-4 shadow-[var(--shadow-card)]">
-        <div className="flex items-center justify-between gap-2">
-          <p className="penny-label">Work sphere</p>
-          <Compass className="size-4 text-[var(--brain)]" />
-        </div>
-        <div className="mt-3 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] p-3">
-          <OrnamentalGraph variant="mini-map" accent="var(--brain)" className="mx-auto h-20 max-w-[10rem]" />
+        <div className="mt-6 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
+          <OrnamentalGraph variant="brain-map" accent="var(--brain)" className="mx-auto h-24 max-w-[15rem]" />
         </div>
       </Card>
     </>
   );
-}
-
-function ChallengeClaimInspector() {
-  return (
-    <>
-      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
-        <p className="penny-label">Critique transparency</p>
-        <div className="mt-4 space-y-3">
-          {[
-            ["Overall strength", "Strong"],
-            ["Failure type", "Shaky assumption"],
-            ["Evidence quality", "Moderate (43%)"],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-[16px] border border-[var(--line)] bg-white px-4 py-3">
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">{label}</p>
-              <p className="mt-2 text-sm font-medium text-[var(--ink)]">{value}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
-        <p className="penny-label">Dependency cascade</p>
-        <div className="mt-4 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
-          <OrnamentalGraph variant="cascade" accent="var(--challenge)" className="mx-auto h-20 max-w-[12rem]" />
-        </div>
-        <div className="mt-4 space-y-2.5 text-sm leading-6 text-[var(--ink)]">
-          {[
-            "Go-to-market strategy",
-            "User acquisition channels",
-            "Moat durability",
-            "Pricing power",
-          ].map((item) => (
-            <div key={item} className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5">
-              {item}
-            </div>
-          ))}
-        </div>
-      </Card>
-    </>
-  );
-}
-
-function LearnClaimInspector() {
-  return (
-    <>
-      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
-        <p className="penny-label">Where This Lives In Your Brain</p>
-        <div className="mt-4 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
-          <OrnamentalGraph variant="concept-map" accent="var(--learn)" className="mx-auto h-24 max-w-[12rem]" />
-        </div>
-      </Card>
-
-      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
-        <p className="penny-label">Related to your claim</p>
-        <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
-          Network effects strengthen your argument that distribution creates lasting advantage.
-        </p>
-
-        <div className="mt-5 border-t border-[var(--line)] pt-4">
-          <p className="penny-label">Connected ideas</p>
-          <div className="mt-3 space-y-2.5 text-sm leading-6 text-[var(--ink)]">
-            {["Defensibility", "Switching Costs", "Platform Strategy"].map((item) => (
-              <div key={item} className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5">
-                {item}
-              </div>
-            ))}
-          </div>
-        </div>
-      </Card>
-    </>
-  );
-}
-
-function deriveActiveMode(pathname: string, searchParams: URLSearchParams): ModeKey {
-  if (pathname.startsWith("/app/lessons")) {
-    return "learn";
-  }
-
-  if (pathname.startsWith("/maps/") || pathname.startsWith("/app/maps/")) {
-    const launcher = searchParams.get("launcher");
-    if (launcher === "challenge") return "challenge";
-    if (launcher === "learn") return "learn";
-    return "brain";
-  }
-
-  if (pathname === "/app" || pathname === "/dashboard") {
-    const intent = searchParams.get("intent");
-    if (intent === "challenge") return "challenge";
-    if (intent === "learn") return "learn";
-  }
-
-  return "brain";
 }
 
 function buildModeRail(pathname: string, searchParams: URLSearchParams): ModeRailItem[] {
@@ -463,7 +484,28 @@ function buildModeRail(pathname: string, searchParams: URLSearchParams): ModeRai
   ];
 }
 
-function buildModeHref(pathname: string, searchParams: URLSearchParams, mode: ModeKey) {
+function deriveActiveMode(pathname: string, searchParams: URLSearchParams): AppShellMode {
+  if (pathname.startsWith("/app/lessons")) {
+    return "learn";
+  }
+
+  if (pathname.startsWith("/maps/") || pathname.startsWith("/app/maps/")) {
+    const launcher = searchParams.get("launcher");
+    if (launcher === "challenge") return "challenge";
+    if (launcher === "learn") return "learn";
+    return "brain";
+  }
+
+  if (pathname === "/app" || pathname === "/dashboard") {
+    const intent = searchParams.get("intent");
+    if (intent === "challenge") return "challenge";
+    if (intent === "learn") return "learn";
+  }
+
+  return "brain";
+}
+
+function buildModeHref(pathname: string, searchParams: URLSearchParams, mode: AppShellMode) {
   const params = new URLSearchParams(searchParams.toString());
 
   if (pathname.startsWith("/maps/") || pathname.startsWith("/app/maps/")) {
@@ -483,4 +525,27 @@ function buildModeHref(pathname: string, searchParams: URLSearchParams, mode: Mo
   }
   const query = params.toString();
   return query ? `/app?${query}` : "/app";
+}
+
+function deriveMapIdFromPathname(pathname: string) {
+  const match = pathname.match(/^\/(?:app\/)?maps\/([^/?#]+)/);
+  return match?.[1] ?? null;
+}
+
+function actionClassName(tone: AppShellAction["tone"]) {
+  return cn(
+    "inline-flex h-9 items-center rounded-[12px] border px-3.5 text-sm font-medium transition",
+    tone === "primary" ? "text-[var(--paper)]" : "bg-white text-[var(--ink)]",
+  );
+}
+
+function actionStyle(tone: AppShellAction["tone"]) {
+  return tone === "primary"
+    ? {
+        borderColor: "var(--brain)",
+        backgroundColor: "var(--brain)",
+      }
+    : {
+        borderColor: "var(--line)",
+      };
 }
