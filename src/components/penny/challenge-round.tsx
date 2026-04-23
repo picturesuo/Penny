@@ -1,5 +1,6 @@
 'use client'
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { Claim } from '@/types/mvp-core'
 import type { DialecticResponsePath } from '@/types/thought-map'
@@ -109,6 +110,7 @@ interface ChallengeRoundProps {
   onRoundContextChange: (patch: Partial<ChallengeRoundContextDraft>) => void
   onResponseSubmit: (response: string, newConfidence: number, responsePath: DialecticResponsePath) => Promise<void>
   onRequestNewRound?: () => void
+  onEndChallenge?: () => void
   onBestNextMoveAction?: (action: Exclude<BestNextMoveKey, 'run_another_round'>) => Promise<BestNextMoveActionResult | void> | BestNextMoveActionResult | void
   generation?: ChallengeGenerationViewModel | null
   onRetryGeneration?: (() => void | Promise<void>) | undefined
@@ -125,12 +127,17 @@ export function ChallengeRound({
   onRoundContextChange,
   onResponseSubmit,
   onRequestNewRound,
+  onEndChallenge,
   onBestNextMoveAction,
   generation = null,
   onRetryGeneration,
   isSteelManReady,
   dependencyCascade = null,
 }: ChallengeRoundProps) {
+  const pathname = usePathname()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const brainHref = useMemo(() => buildBrainHref(pathname, searchParams), [pathname, searchParams])
   const [showWhyNow, setShowWhyNow] = useState(false)
   const [showPriorRounds, setShowPriorRounds] = useState(false)
   const [showRoundContext, setShowRoundContext] = useState(false)
@@ -206,9 +213,7 @@ export function ChallengeRound({
       .join(' · ')
   }, [priorRounds])
 
-  async function handleSubmitResponse(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
+  async function submitResponse(responsePath: DialecticResponsePath) {
     if (submitting || !isSteelManReady) {
       return
     }
@@ -218,17 +223,23 @@ export function ChallengeRound({
       return
     }
 
+    setSelectedResponsePath(responsePath)
     setSubmitting(true)
     setSubmitError(null)
 
     try {
-      await onResponseSubmit(trimmedResponse, round.roundContextDraft.confidenceAtRoundEnd, selectedResponsePath)
+      await onResponseSubmit(trimmedResponse, round.roundContextDraft.confidenceAtRoundEnd, responsePath)
       setSubmitError(null)
     } catch (error) {
       console.error(error)
       setSubmitError(error instanceof Error ? error.message : "Couldn't save this round. Try again.")
       setSubmitting(false)
     }
+  }
+
+  async function handleSubmitResponse(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await submitResponse(selectedResponsePath)
   }
 
   const hasCompletedResponse = Boolean(completedRound?.userResponse)
@@ -314,15 +325,20 @@ export function ChallengeRound({
           >
             {showWhyNow ? 'Hide Brief' : 'View Brief'}
           </button>
-          {priorRounds.length > 0 ? (
-            <button
-              type="button"
-              className="rounded-[14px] border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)] transition hover:bg-[var(--panel)]"
-              onClick={() => setShowPriorRounds((current) => !current)}
-            >
-              {showPriorRounds ? 'Hide Trail' : 'Round Trail'}
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="rounded-[14px] border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)] transition hover:bg-[var(--panel)]"
+            onClick={() => {
+              if (onEndChallenge) {
+                onEndChallenge()
+                return
+              }
+
+              router.push(brainHref)
+            }}
+          >
+            End Challenge
+          </button>
         </div>
       </div>
 
@@ -517,13 +533,24 @@ export function ChallengeRound({
                 {submitError ? <p className={ERROR_NOTICE_CLASS}>{submitError}</p> : null}
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-black/8 pt-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Selected path: {selectedResponsePath}</p>
-                  <Button
-                    type="submit"
-                    disabled={submitting || !isSteelManReady || trimmedResponse.length < 10}
-                    className="penny-press gap-2 bg-[var(--challenge)] text-[var(--paper)] shadow-[0_14px_30px_rgba(214,162,70,0.24)] hover:bg-[#bf8d37]"
-                  >
-                    {submitting ? 'Saving round...' : 'Submit response'}
-                  </Button>
+                  <div className="grid w-full gap-2 sm:grid-cols-3">
+                    {responsePaths.map((path) => {
+                      const active = selectedResponsePath === path.key
+
+                      return (
+                        <Button
+                          key={`${round.round}-submit-${path.key}`}
+                          type="button"
+                          disabled={submitting || !isSteelManReady || trimmedResponse.length < 10}
+                          className={active ? 'penny-press gap-2 bg-[var(--challenge)] text-[var(--paper)] hover:bg-[#bf8d37]' : 'penny-press gap-2'}
+                          variant={active ? undefined : 'secondary'}
+                          onClick={() => void submitResponse(path.key)}
+                        >
+                          {submitting && selectedResponsePath === path.key ? 'Saving...' : path.label}
+                        </Button>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -649,6 +676,14 @@ export function ChallengeRound({
               </div>
               {nextMoveFeedback ? <p className={SUCCESS_NOTICE_CLASS}>{nextMoveFeedback}</p> : null}
               {nextMoveError ? <p className={ERROR_NOTICE_CLASS}>{nextMoveError}</p> : null}
+            </div>
+          ) : null}
+
+          {hasCompletedResponse && onRequestNewRound ? (
+            <div className="flex justify-end">
+              <Button type="button" variant="secondary" className="penny-press gap-2" onClick={() => onRequestNewRound()}>
+                Run another round
+              </Button>
             </div>
           ) : null}
 
@@ -837,6 +872,20 @@ function formatSavedAt(value: Date | string): string {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+function buildBrainHref(pathname: string, searchParams: URLSearchParams): string {
+  const params = new URLSearchParams(searchParams.toString())
+
+  if (pathname.startsWith('/maps/') || pathname.startsWith('/app/maps/')) {
+    params.delete('launcher')
+    const query = params.toString()
+    return query ? `${pathname}?${query}` : pathname
+  }
+
+  params.delete('intent')
+  const query = params.toString()
+  return query ? `/app?${query}` : '/app'
 }
 
 function deriveBestNextMoveForRound(round: ChallengeRoundModel): BestNextMoveRecommendation {
