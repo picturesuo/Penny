@@ -4,9 +4,9 @@ import Link from "next/link";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { BrainCircuit, ChevronRight, Compass, GraduationCap, ShieldAlert } from "lucide-react";
+import { useNewMapDialog } from "@/components/penny/new-map-modal";
 import { PennyLogo } from "@/components/penny/penny-logo";
 import { OrnamentalGraph } from "@/components/penny/ornamental-graph";
-import { useQuickCaptureModal } from "@/components/penny/quick-capture-modal";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -107,7 +107,7 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
   });
   const previousModeRef = useRef<AppShellMode | null>(null);
   const [modeSwitching, setModeSwitching] = useState(false);
-  const { open } = useQuickCaptureModal();
+  const { open: openNewMap } = useNewMapDialog();
   const defaultMapId = deriveMapIdFromPathname(pathname);
   const effectiveOverrides = useMemo(
     () => (overrideEntry.routeKey === routeKey ? overrideEntry.overrides : {}),
@@ -177,14 +177,17 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
   const actions =
     shellState.actions ??
     [
-      {
-        label: "New Thought",
-        onClick: () =>
-          open({
-            defaultMapId: shellState.currentMapId ?? defaultMapId ?? undefined,
-          }),
-        tone: "primary",
-      },
+      shellState.currentMapId
+        ? {
+            href: buildCaptureHref(shellState.currentMapId, shellState.currentClaimId),
+            label: "New Thought",
+            tone: "primary" as const,
+          }
+        : {
+            label: "New Thought",
+            onClick: () => openNewMap(),
+            tone: "primary" as const,
+          },
     ];
 
   return (
@@ -563,6 +566,12 @@ function buildModeHref(
     pathname.startsWith("/app/maps/") ||
     (workspaceSelection.currentMapId && pathname.startsWith("/app"))
   ) {
+    if (mode === "challenge" && !workspaceSelection.currentClaimId) {
+      params.set("claimPicker", "1");
+    } else {
+      params.delete("claimPicker");
+    }
+
     if (mode === "brain") {
       params.delete("launcher");
     } else {
@@ -585,6 +594,18 @@ function buildModeHref(
 function deriveMapIdFromPathname(pathname: string) {
   const match = pathname.match(/^\/(?:app\/)?maps\/([^/?#]+)/);
   return match?.[1] ?? null;
+}
+
+function buildCaptureHref(mapId: string, claimId: string | null) {
+  const params = new URLSearchParams({
+    launcher: "capture",
+  });
+
+  if (claimId) {
+    params.set("claimId", claimId);
+  }
+
+  return `/maps/${mapId}?${params.toString()}`;
 }
 
 function actionClassName(tone: AppShellAction["tone"]) {
