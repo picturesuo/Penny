@@ -31,6 +31,7 @@ export default async function MapPage({
   }
 
   const initialSelectedClaimId = firstQueryValue(query.claimId);
+  const initialSelectedRoundId = firstQueryValue(query.roundId);
   const launcher = parseLauncherIntent(firstQueryValue(query.launcher));
   const question = firstQueryValue(query.question);
   const openImport = firstQueryValue(query.openImport) === "1";
@@ -76,6 +77,7 @@ export default async function MapPage({
       userId={userId}
       initialFragments={fragments}
       initialSelectedClaimId={initialSelectedClaimId}
+      initialSelectedRoundId={initialSelectedRoundId}
       launchState={launchState}
       availableMaps={maps.map((candidate) => ({
         id: candidate.id,
