@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, ArrowRightLeft, CircleDot, Download, GitBranchPlus, Link2, Lock, Sparkles } from "lucide-react";
@@ -1419,6 +1420,7 @@ export function ThoughtMapWorkspace({
   initialFragments = [],
   availableMaps = [],
   initialSelectedClaimId = null,
+  initialSelectedRoundId = null,
   focusIntent = null,
   initialLearningQuestion = null,
   initialNextAction = null,
@@ -1428,11 +1430,13 @@ export function ThoughtMapWorkspace({
   initialFragments?: MarginFragmentModel[];
   availableMaps?: SessionMapOption[];
   initialSelectedClaimId?: string | null;
+  initialSelectedRoundId?: string | null;
   focusIntent?: "challenge" | "learn" | null;
   initialLearningQuestion?: string | null;
   initialNextAction?: BestNextMoveKey | null;
 }) {
   const { resetShell, setShell } = useAppShell();
+  const router = useRouter();
   const normalizedInitialMap = normalizeMap(initialMap);
   const [map, setMap] = useState(() => normalizedInitialMap);
   const [activeSession, setActiveSession] = useState<ThinkingSession | null>(null);
@@ -1532,6 +1536,7 @@ export function ThoughtMapWorkspace({
   const [vaultModalOpen, setVaultModalOpen] = useState(false);
   const [vaultDraft, setVaultDraft] = useState<VaultDraft | null>(null);
   const consumedInitialNextActionRef = useRef(false);
+  const hydratedInitialRoundRef = useRef(false);
   const [founderBriefError, setFounderBriefError] = useState<string | null>(null);
   const [metaCognitionEventsSeen, setMetaCognitionEventsSeen] = useState<Record<string, boolean>>({});
   const [learningPrompt, setLearningPrompt] = useState<LearningPromptOutput | null>(null);
@@ -3113,6 +3118,9 @@ export function ThoughtMapWorkspace({
       critiqueFailureTypes: draftState.critiqueType ? [draftState.critiqueType] : primaryChallengeRound.critiqueFailureTypes,
     };
   }, [challengeClaim, challengeDraftStates, primaryChallengeRound]);
+  const activeShellRoundId =
+    activeShellChallengeRound?.dialecticRound?.id ??
+    (primaryChallengeRound ? getChallengeDraftStateForRound(primaryChallengeRound)?.roundId ?? null : null);
   const nextOpenChallengeRound = useMemo(
     () => dialecticRounds.find((candidate) => !candidate.dialecticRound?.userResponse) ?? null,
     [dialecticRounds],
@@ -3349,7 +3357,22 @@ export function ThoughtMapWorkspace({
     setFocusedChallengeRoundLabel(null);
     setFocusedChallengeRoundsOpen(false);
     setFocusedChallengeHistoryOpen(false);
+    hydratedInitialRoundRef.current = false;
   }, [focusIntent, selectedGraphNode?.node.id]);
+
+  useEffect(() => {
+    if (hydratedInitialRoundRef.current || !initialSelectedRoundId) {
+      return;
+    }
+
+    const matchingRound = dialecticRounds.find((round) => round.dialecticRound?.id === initialSelectedRoundId);
+    if (!matchingRound) {
+      return;
+    }
+
+    hydratedInitialRoundRef.current = true;
+    setFocusedChallengeRoundLabel(matchingRound.round);
+  }, [dialecticRounds, initialSelectedRoundId]);
 
   const selectedReceiptVoices = useMemo(
     () => buildDevilsAdvocateReceipts(selectedGraphNodeModel),
@@ -3590,7 +3613,9 @@ export function ThoughtMapWorkspace({
         { label: clampShellLabel(selectedClaimLabel, 42) },
         ...(focusIntent === "learn" ? [{ label: clampShellLabel(selectedTeachBackFocus.concept, 24) }] : []),
       ],
+      currentClaimId: selectedGraphNode?.node.id ?? null,
       currentMapId: map.id,
+      currentRoundId: activeShellRoundId,
       inspector,
       spheres,
       topBarLabel: focusIntent === "challenge" ? "Challenge lane" : focusIntent === "learn" ? "Learn mode" : "Brain",
@@ -3599,6 +3624,7 @@ export function ThoughtMapWorkspace({
     return resetShell;
   }, [
     availableMaps.length,
+    activeShellRoundId,
     challengeDependencyCascade,
     dialecticRounds,
     focusIntent,
@@ -3613,11 +3639,34 @@ export function ThoughtMapWorkspace({
     selectedClaimStructure.whyNowTrigger,
     selectedGenealogy.dependents,
     selectedGraphNode?.node.content,
+    selectedGraphNode?.node.id,
     selectedGraphNode?.node.scores?.confidence,
     selectedGraphNodeParent?.content,
     selectedTeachBackFocus.concept,
     setShell,
   ]);
+
+  const buildWorkspaceModeHref = useCallback(
+    (mode: "brain" | "challenge" | "learn") => {
+      const params = new URLSearchParams();
+
+      if (selectedGraphNode?.node.id) {
+        params.set("claimId", selectedGraphNode.node.id);
+      }
+
+      if (activeShellRoundId) {
+        params.set("roundId", activeShellRoundId);
+      }
+
+      if (mode !== "brain") {
+        params.set("launcher", mode);
+      }
+
+      const query = params.toString();
+      return query ? `/maps/${map.id}?${query}` : `/maps/${map.id}`;
+    },
+    [activeShellRoundId, map.id, selectedGraphNode?.node.id],
+  );
   const resolutionLessons = useMemo(
     () =>
       claimResolutionEvents.flatMap((event) => {
@@ -6006,6 +6055,7 @@ export function ThoughtMapWorkspace({
               ? () => focusRoundComposer(dialecticRounds[roundIndex + 1].round)
               : undefined
           }
+          onEndChallenge={() => router.push(buildWorkspaceModeHref("brain"))}
           onBestNextMoveAction={handleBestNextMoveAction}
           onResponseSubmit={async (response, newConfidence, responsePath) => {
             updateDialecticRoundContext(round.round, {
