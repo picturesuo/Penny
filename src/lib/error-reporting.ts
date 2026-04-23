@@ -1,3 +1,4 @@
+import { getDeployMetadata } from "@/lib/deploy-metadata";
 import { DEMO_USER_ID } from "@/lib/penny";
 import { logger } from "@/lib/logger";
 
@@ -29,6 +30,7 @@ export type ErrorReportEvent = {
   };
   additionalData: Record<string, unknown> | null;
   digest: string | null;
+  release: string;
   environment: string;
   capturedAt: string;
 };
@@ -46,6 +48,7 @@ export function reportError(error: Error, context?: ErrorReportContext): void {
       request: event.request,
       additionalData: event.additionalData,
       digest: event.digest,
+      release: event.release,
       environment: event.environment,
       capturedAt: event.capturedAt,
     },
@@ -54,6 +57,7 @@ export function reportError(error: Error, context?: ErrorReportContext): void {
 
 export function buildErrorEvent(error: Error, context?: ErrorReportContext): ErrorReportEvent {
   const stack = typeof error.stack === "string" && error.stack.trim().length > 0 ? error.stack : null;
+  const deploy = getDeployMetadata();
 
   return {
     id: crypto.randomUUID(),
@@ -69,7 +73,8 @@ export function buildErrorEvent(error: Error, context?: ErrorReportContext): Err
     },
     additionalData: context?.additionalData ?? null,
     digest: getErrorDigest(error),
-    environment: process.env.NODE_ENV ?? "unknown",
+    release: deploy.release,
+    environment: deploy.environment,
     capturedAt: new Date().toISOString(),
   };
 }

@@ -1,9 +1,13 @@
+import { getDeployMetadata } from "@/lib/deploy-metadata";
+
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export type LogEntry = {
   level: LogLevel;
   message: string;
   timestamp: string;
+  release: string;
+  environment: string;
   userId?: string;
   featureId?: string;
   durationMs?: number;
@@ -12,10 +16,13 @@ export type LogEntry = {
 };
 
 export function log(level: LogLevel, message: string, context?: Omit<LogEntry, "level" | "message" | "timestamp">): void {
+  const deploy = getDeployMetadata();
   const entry: LogEntry = {
     level,
     message,
     timestamp: new Date().toISOString(),
+    release: deploy.release,
+    environment: deploy.environment,
     ...context,
   };
 
@@ -27,7 +34,11 @@ export function log(level: LogLevel, message: string, context?: Omit<LogEntry, "
       error: "🔴",
     }[level];
 
-    console.log(`${prefix} [${entry.timestamp}] ${message}`, context || "");
+    console.log(`${prefix} [${entry.timestamp}] ${message}`, {
+      release: entry.release,
+      environment: entry.environment,
+      ...(context || {}),
+    });
     return;
   }
 

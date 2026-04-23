@@ -721,7 +721,18 @@ export async function requestChallengeCritique(
             failureTypes: result.output.failureTypes,
             dependencyRisks: result.output.dependencyRisks,
             whyNow: result.output.whyNow,
-            validatedOutput: result.output,
+            validatedOutput: {
+              ...result.output,
+              _aiRun: {
+                provider: result.meta.provider,
+                model: result.meta.model,
+                promptVersion: result.meta.promptVersion,
+                release: result.meta.release,
+                environment: result.meta.environment,
+                traceId: result.meta.traceId,
+                observationId: result.meta.observationId,
+              },
+            },
           })
           .where(eq(challengeCritiques.id, existingCritique.id))
           .returning()
@@ -742,7 +753,18 @@ export async function requestChallengeCritique(
             failureTypes: result.output.failureTypes,
             dependencyRisks: result.output.dependencyRisks,
             whyNow: result.output.whyNow,
-            validatedOutput: result.output,
+            validatedOutput: {
+              ...result.output,
+              _aiRun: {
+                provider: result.meta.provider,
+                model: result.meta.model,
+                promptVersion: result.meta.promptVersion,
+                release: result.meta.release,
+                environment: result.meta.environment,
+                traceId: result.meta.traceId,
+                observationId: result.meta.observationId,
+              },
+            },
           })
           .returning();
 
