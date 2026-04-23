@@ -4,13 +4,12 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
-  Bell,
   BrainCircuit,
   ChevronRight,
   Compass,
+  Filter,
   GraduationCap,
   Search,
-  Settings2,
   ShieldAlert,
 } from "lucide-react";
 import { PennyLogo } from "@/components/penny/penny-logo";
@@ -43,13 +42,6 @@ type Breadcrumb = {
   label: string;
 };
 
-type SurfaceSummary = {
-  title: string;
-  description: string;
-  notes: string[];
-  accent: string;
-};
-
 const SPHERES: SphereRailItem[] = [
   { label: "Work", active: true },
   { label: "Writing" },
@@ -65,9 +57,7 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
   const previousModeRef = useRef<ModeKey | null>(null);
   const [modeSwitching, setModeSwitching] = useState(false);
   const breadcrumbs = buildBreadcrumbs(activeMode);
-  const surface = describeSurface(pathname, activeMode);
   const modeRailItems = buildModeRail(pathname, searchParams);
-  const showBrainInspector = activeMode === "brain" && (pathname === "/app" || pathname === "/dashboard");
   const userInitials = userEmail
     .split("@")[0]
     .split(/[.\-_]/)
@@ -189,16 +179,35 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
                     ))}
                   </div>
                 </div>
+              </Card>
 
-                <div className="mt-6 flex items-center gap-2 border-t border-[var(--line)] pt-4">
-                  <ShellIconLink href="/app/search" label="Search">
-                    <Search className="size-4" />
-                  </ShellIconLink>
-                  <ShellIconLink href="/app/settings" label="Settings">
-                    <Settings2 className="size-4" />
-                  </ShellIconLink>
-                  <div className="ml-auto flex size-8 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--panel)] text-[11px] font-semibold text-[var(--ink)]" title={userId}>
-                    {userInitials}
+              <Card className="penny-card px-4 py-4 shadow-[var(--shadow-card)]">
+                <p className="penny-label">Recent sessions</p>
+                <div className="mt-3 space-y-2">
+                  {[
+                    ["Backend Architecture Choices", "Today • 42 min"],
+                    ["Penny Core Loop Design", "Yesterday • 38 min"],
+                    ["Monetization Strategy", "2 days ago • 1h 02m"],
+                  ].map(([title, meta]) => (
+                    <div key={title} className="rounded-[14px] border border-[var(--line)] bg-white/78 px-3 py-2.5">
+                      <p className="text-sm font-medium leading-6 text-[var(--ink)]">{title}</p>
+                      <p className="mt-1 text-xs text-[var(--muted-ink)]">{meta}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 flex items-center justify-between border-t border-[var(--line)] pt-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="flex size-9 items-center justify-center rounded-full bg-[var(--ink)] text-xs font-semibold text-[var(--paper)]"
+                      title={userId || "Penny user"}
+                    >
+                      {userInitials}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[var(--ink)]">Penny</p>
+                      <p className="text-xs text-[var(--muted-ink)]">Focused workspace</p>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -221,23 +230,29 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <label className="hidden h-9 items-center gap-2 rounded-[12px] border border-[var(--line)] bg-white px-3 text-sm text-[var(--muted-ink)] md:flex">
+                      <Search className="size-4 text-[var(--muted-ink)]" />
+                      <input
+                        aria-label="Search your brain"
+                        placeholder="Search your brain..."
+                        className="w-40 bg-transparent text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)]"
+                      />
+                      <span className="rounded-[8px] border border-[var(--line)] bg-[var(--panel)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted-ink)]">
+                        ⌘K
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      className="inline-flex h-9 items-center gap-2 rounded-[12px] border border-[var(--line)] bg-white px-3 text-sm font-medium text-[var(--ink)] transition hover:bg-[var(--panel)]"
+                    >
+                      <Filter className="size-4 text-[var(--muted-ink)]" />
+                      Filter
+                    </button>
                     <NewMapButton
                       label="New Thought"
                       showIcon={false}
                       className="h-9 rounded-[12px] bg-[var(--brain)] px-4 text-sm font-medium text-[var(--paper)] hover:bg-[var(--accent-strong)]"
                     />
-                    <ShellIconLink href="/app/search" label="Search">
-                      <Search className="size-4" />
-                    </ShellIconLink>
-                    <ShellIconLink href="/app/settings" label="Alerts">
-                      <Bell className="size-4" />
-                    </ShellIconLink>
-                    <Link
-                      href="/app/settings"
-                      className="flex size-9 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--panel)] text-[11px] font-semibold text-[var(--ink)] transition hover:bg-white"
-                    >
-                      {userInitials}
-                    </Link>
                   </div>
                 </div>
               </Card>
@@ -248,7 +263,7 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
 
               <aside className="min-w-0">
                 <div className={`space-y-4 xl:sticky xl:top-[5.75rem] penny-mode-panel ${modeSwitching ? "is-switching" : ""}`}>
-                  {showBrainInspector ? <BrainClaimInspector /> : <GenericShellInspector surface={surface} />}
+                  {activeMode === "brain" ? <BrainClaimInspector /> : activeMode === "challenge" ? <ChallengeClaimInspector /> : <LearnClaimInspector />}
                 </div>
               </aside>
             </div>
@@ -256,26 +271,6 @@ export function AppShell({ children, userEmail, userId }: AppShellProps) {
         </div>
       </div>
     </div>
-  );
-}
-
-function ShellIconLink({
-  children,
-  href,
-  label,
-}: {
-  children: React.ReactNode;
-  href: string;
-  label: string;
-}) {
-  return (
-    <Link
-      href={href}
-      aria-label={label}
-      className="flex size-9 items-center justify-center rounded-full border border-[var(--line)] bg-white text-[var(--ink)] transition hover:bg-[var(--panel)]"
-    >
-      {children}
-    </Link>
   );
 }
 
@@ -349,24 +344,39 @@ function BrainClaimInspector() {
   );
 }
 
-function GenericShellInspector({ surface }: { surface: SurfaceSummary }) {
+function ChallengeClaimInspector() {
   return (
     <>
       <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
-        <p className="penny-label">Inspector</p>
-        <h2 className="mt-3 text-lg font-semibold text-[var(--ink)]">{surface.title}</h2>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{surface.description}</p>
-        <div className="mt-5 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
-          <OrnamentalGraph variant="concept-map" accent={surface.accent} className="mx-auto h-24 max-w-[12rem]" />
+        <p className="penny-label">Critique transparency</p>
+        <div className="mt-4 space-y-3">
+          {[
+            ["Overall strength", "Strong"],
+            ["Failure type", "Shaky assumption"],
+            ["Evidence quality", "Moderate (43%)"],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-[16px] border border-[var(--line)] bg-white px-4 py-3">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">{label}</p>
+              <p className="mt-2 text-sm font-medium text-[var(--ink)]">{value}</p>
+            </div>
+          ))}
         </div>
       </Card>
 
       <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
-        <p className="penny-label">What stays stable</p>
-        <div className="mt-3 space-y-2.5 text-sm leading-6 text-[var(--ink)]">
-          {surface.notes.map((note) => (
-            <div key={note} className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5">
-              {note}
+        <p className="penny-label">Dependency cascade</p>
+        <div className="mt-4 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
+          <OrnamentalGraph variant="cascade" accent="var(--challenge)" className="mx-auto h-20 max-w-[12rem]" />
+        </div>
+        <div className="mt-4 space-y-2.5 text-sm leading-6 text-[var(--ink)]">
+          {[
+            "Go-to-market strategy",
+            "User acquisition channels",
+            "Moat durability",
+            "Pricing power",
+          ].map((item) => (
+            <div key={item} className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5">
+              {item}
             </div>
           ))}
         </div>
@@ -375,56 +385,35 @@ function GenericShellInspector({ surface }: { surface: SurfaceSummary }) {
   );
 }
 
-function describeSurface(pathname: string, activeMode: ModeKey): SurfaceSummary {
-  if (activeMode === "challenge") {
-    return {
-      title: "Critique transparency",
-      description: "The right side stays explanatory rather than dramatic so Challenge feels denser than Brain without breaking the shared grammar.",
-      notes: [
-        "Show why this critique was selected.",
-        "Keep the dependency cascade quiet and readable.",
-        "Reserve the strong accent for the chosen response path.",
-      ],
-      accent: "var(--challenge)",
-    };
-  }
+function LearnClaimInspector() {
+  return (
+    <>
+      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
+        <p className="penny-label">Where This Lives In Your Brain</p>
+        <div className="mt-4 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
+          <OrnamentalGraph variant="concept-map" accent="var(--learn)" className="mx-auto h-24 max-w-[12rem]" />
+        </div>
+      </Card>
 
-  if (activeMode === "learn") {
-    return {
-      title: "Where this lives in your brain",
-      description: "Learn stays claim-anchored, then uses the right rail to show adjacent concepts rather than a separate study product.",
-      notes: [
-        "Keep the concept graph ornamental and small.",
-        "Show one related claim, not a dashboard.",
-        "Keep connected ideas compact and legible.",
-      ],
-      accent: "var(--learn)",
-    };
-  }
+      <Card className="penny-card p-5 shadow-[var(--shadow-card)]">
+        <p className="penny-label">Related to your claim</p>
+        <p className="mt-3 text-sm leading-6 text-[var(--ink)]">
+          Network effects strengthen your argument that distribution creates lasting advantage.
+        </p>
 
-  if (pathname.startsWith("/app/search")) {
-    return {
-      title: "Archive recovery",
-      description: "Search still lives inside the same shell, so recovered reasoning feels adjacent to current work.",
-      notes: [
-        "Use the same card language as live work.",
-        "Keep results framed by the same breadcrumb and rail.",
-        "Avoid making recovery feel like a separate app.",
-      ],
-      accent: "var(--brain)",
-    };
-  }
-
-  return {
-    title: "Selected claim inspector",
-    description: "Brain keeps one claim primary while the stream stays calm in the center.",
-    notes: [
-      "The right rail should stay quiet and legible.",
-      "Connections are decorative until real graph rendering lands.",
-      "Dependents matter more than extra dashboard chrome.",
-    ],
-    accent: "var(--brain)",
-  };
+        <div className="mt-5 border-t border-[var(--line)] pt-4">
+          <p className="penny-label">Connected ideas</p>
+          <div className="mt-3 space-y-2.5 text-sm leading-6 text-[var(--ink)]">
+            {["Defensibility", "Switching Costs", "Platform Strategy"].map((item) => (
+              <div key={item} className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5">
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    </>
+  );
 }
 
 function deriveActiveMode(pathname: string, searchParams: URLSearchParams): ModeKey {
