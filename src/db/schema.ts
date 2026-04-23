@@ -358,6 +358,50 @@ export const challengeCritiques = pgTable(
   ],
 );
 
+export const challengeCritiqueJobAttempts = pgTable(
+  "challenge_critique_job_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    mapId: uuid("map_id")
+      .notNull()
+      .references(() => maps.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    roundId: uuid("round_id")
+      .notNull()
+      .references(() => challengeRounds.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    idempotencyKey: varchar("idempotency_key", { length: 160 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("queued"),
+    provider: varchar("provider", { length: 64 }),
+    model: varchar("model", { length: 160 }),
+    promptVersion: varchar("prompt_version", { length: 64 }),
+    errorMessage: text("error_message"),
+    validationIssues: jsonb("validation_issues").$type<Record<string, unknown>>().notNull().default(jsonObjectDefault),
+    queuedAt: timestamp("queued_at", { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdAt,
+    updatedAt,
+  },
+  (table) => [
+    uniqueIndex("challenge_critique_job_attempts_round_idempotency_unique").on(table.roundId, table.idempotencyKey),
+    index("challenge_critique_job_attempts_user_idx").on(table.userId),
+    index("challenge_critique_job_attempts_map_idx").on(table.mapId),
+    index("challenge_critique_job_attempts_claim_idx").on(table.claimId),
+    index("challenge_critique_job_attempts_round_idx").on(table.roundId),
+    index("challenge_critique_job_attempts_status_idx").on(table.status),
+    index("challenge_critique_job_attempts_queued_at_idx").on(table.queuedAt),
+    check(
+      "challenge_critique_job_attempts_status_check",
+      sql`${table.status} in ('queued', 'running', 'succeeded', 'failed', 'validation_failed')`,
+    ),
+  ],
+);
+
 export const learningPrompts = pgTable(
   "learning_prompts",
   {

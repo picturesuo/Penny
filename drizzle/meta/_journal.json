@@ -8,6 +8,13 @@
       "when": 1776922137194,
       "tag": "0000_hard_hardball",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776924331940,
+      "tag": "0001_smooth_iron_lad",
+      "breakpoints": true
     }
   ]
 }
