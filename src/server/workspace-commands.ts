@@ -439,7 +439,7 @@ export async function updateClaim(input: z.input<typeof updateClaimSchema>): Pro
           userId: parsed.userId,
           mapId: claim.mapId,
           claimId: claim.id,
-          type: "claim.confidence_changed",
+          type: "claim.confidence.changed",
           payload: {
             previousConfidence: existing.confidence,
             nextConfidence: parsed.confidence,
@@ -521,7 +521,7 @@ export async function setWorkspaceSelection(
       mapId: parsed.mapId,
       claimId: parsed.selectedClaimId,
       conceptId: parsed.selectedConceptId,
-      type: "workspace.selection_changed",
+      type: "workspace.selection.changed",
       payload: {
         workspaceContextId: context.id,
         mode: parsed.mode,
@@ -602,7 +602,7 @@ export async function startChallengeRound(
       userId: parsed.userId,
       mapId: map.id,
       claimId: claim.id,
-      type: "challenge.started",
+      type: "challenge.round.started",
       payload: {
         roundId: round.id,
         roundNumber: round.roundNumber,
@@ -632,7 +632,7 @@ export async function requestChallengeCritique(
   const db = getDrizzleDb();
   const requestId = parsed.requestId ?? crypto.randomUUID();
 
-  const { critique, events, round } = await db.transaction(async (tx) => {
+  const { claim, priorRounds, requestedEvent, roundSnapshot } = await db.transaction(async (tx) => {
     const existingRound = await getOwnedRound(tx, parsed.roundId, parsed.userId);
     const claim = await getOwnedClaim(tx, existingRound.claimId, parsed.userId);
     const priorRounds = await tx
@@ -642,31 +642,50 @@ export async function requestChallengeCritique(
       .orderBy(desc(dialecticRounds.roundNumber))
       .limit(6);
 
-    const priorRoundSummaries = priorRounds
-      .filter((round) => round.id !== existingRound.id)
-      .map((round) => {
-        const snippetSource = round.userResponse?.trim().length ? round.userResponse : round.critiqueGenerated;
-        const snippet =
-          snippetSource.trim().length > 120 ? `${snippetSource.trim().slice(0, 119).trimEnd()}...` : snippetSource.trim();
-
-        return `Round ${round.roundNumber}: ${snippet}`;
-      });
-
-    const result = await generateChallengeCritique(
-      {
-        claimText: claim.text,
-        steelmanText: parsed.steelmanText,
-        confidence: existingRound.confidenceAtRoundStart,
-        priorRounds: priorRoundSummaries,
-        critiqueMode: parsed.critiqueMode ?? (existingRound.critiqueMode as "direct" | "socratic" | "red_team" | null) ?? "direct",
+    const requestedEvent = await appendEvent(tx, {
+      userId: parsed.userId,
+      mapId: existingRound.mapId,
+      claimId: existingRound.claimId,
+      type: "challenge.critique.requested",
+      requestId,
+      payload: {
+        roundId: existingRound.id,
+        critiqueMode:
+          parsed.critiqueMode ?? (existingRound.critiqueMode as "direct" | "socratic" | "red_team" | null) ?? "direct",
       },
-      {
-        userId: parsed.userId,
-        mapId: existingRound.mapId,
-        claimId: existingRound.claimId,
-        workspaceContextId: existingRound.workspaceContextId,
-      },
-    );
+    });
+
+    return { claim, priorRounds, requestedEvent, roundSnapshot: existingRound };
+  });
+
+  const priorRoundSummaries = priorRounds
+    .filter((round) => round.id !== roundSnapshot.id)
+    .map((round) => {
+      const snippetSource = round.userResponse?.trim().length ? round.userResponse : round.critiqueGenerated;
+      const snippet =
+        snippetSource.trim().length > 120 ? `${snippetSource.trim().slice(0, 119).trimEnd()}...` : snippetSource.trim();
+
+      return `Round ${round.roundNumber}: ${snippet}`;
+    });
+
+  const result = await generateChallengeCritique(
+    {
+      claimText: claim.text,
+      steelmanText: parsed.steelmanText,
+      confidence: roundSnapshot.confidenceAtRoundStart,
+      priorRounds: priorRoundSummaries,
+      critiqueMode: parsed.critiqueMode ?? (roundSnapshot.critiqueMode as "direct" | "socratic" | "red_team" | null) ?? "direct",
+    },
+    {
+      userId: parsed.userId,
+      mapId: roundSnapshot.mapId,
+      claimId: roundSnapshot.claimId,
+      workspaceContextId: roundSnapshot.workspaceContextId,
+    },
+  );
+
+  const { critique, generatedEvent, round } = await db.transaction(async (tx) => {
+    const existingRound = await getOwnedRound(tx, parsed.roundId, parsed.userId);
 
     const [round] = await tx
       .update(dialecticRounds)
@@ -727,11 +746,11 @@ export async function requestChallengeCritique(
           })
           .returning();
 
-    const event = await appendEvent(tx, {
+    const generatedEvent = await appendEvent(tx, {
       userId: parsed.userId,
       mapId: existingRound.mapId,
       claimId: existingRound.claimId,
-      type: "challenge.critique_generated",
+      type: "challenge.critique.generated",
       requestId,
       payload: {
         roundId: existingRound.id,
@@ -742,7 +761,7 @@ export async function requestChallengeCritique(
       },
     });
 
-    return { critique, events: [event], round };
+    return { critique, generatedEvent, round };
   });
 
   const invalidation = invalidateWorkspaceProjections(
@@ -753,7 +772,7 @@ export async function requestChallengeCritique(
     }),
   );
 
-  return { invalidation, events, record: critique };
+  return { invalidation, events: [requestedEvent, generatedEvent], record: critique };
 }
 
 export async function recordChallengeResponse(
@@ -799,11 +818,11 @@ export async function recordChallengeResponse(
           userId: parsed.userId,
           mapId: round.mapId,
           claimId: claim.id,
-          type: "claim.confidence_changed",
+          type: "claim.confidence.changed",
           payload: {
             previousConfidence: claim.confidence,
             nextConfidence: parsed.confidenceAtRoundEnd,
-            source: "challenge.round_responded",
+            source: "challenge.response.recorded",
             roundId: round.id,
           },
         }),
@@ -811,14 +830,14 @@ export async function recordChallengeResponse(
     }
 
     events.push(
-      await appendEvent(tx, {
-        userId: parsed.userId,
-        mapId: round.mapId,
-        claimId: round.claimId,
-        type: "challenge.round_responded",
-        payload: {
-          roundId: round.id,
-          responsePath: parsed.responsePath,
+        await appendEvent(tx, {
+          userId: parsed.userId,
+          mapId: round.mapId,
+          claimId: round.claimId,
+          type: "challenge.response.recorded",
+          payload: {
+            roundId: round.id,
+            responsePath: parsed.responsePath,
           confidenceAtRoundEnd: parsed.confidenceAtRoundEnd,
           confidenceDelta: parsed.confidenceAtRoundEnd - existing.confidenceAtRoundStart,
         },
