@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDrizzleDb } from "@/db/drizzle";
 import {
   claimConceptEdges,
+  challengeCritiques,
   claims,
   concepts,
   dialecticRounds,
@@ -11,6 +12,7 @@ import {
   movesEvents,
   workspaceContexts,
 } from "@/db/schema";
+import { generateChallengeCritique } from "@/server/ai/service";
 import {
   invalidateWorkspaceProjections,
   type WorkspaceProjectionInvalidationInput,
@@ -59,7 +61,7 @@ const updateClaimSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
-const updateWorkspaceSelectionSchema = z.object({
+const setWorkspaceSelectionSchema = z.object({
   userId: UuidSchema,
   workspaceContextId: UuidSchema.nullable().optional().default(null),
   mapId: UuidSchema,
@@ -72,22 +74,30 @@ const updateWorkspaceSelectionSchema = z.object({
   contextKey: z.string().trim().min(1).max(160).nullable().optional().default(null),
 });
 
-const startChallengeSchema = z.object({
+const startChallengeRoundSchema = z.object({
   userId: UuidSchema,
   mapId: UuidSchema,
   claimId: UuidSchema,
   workspaceContextId: UuidSchema.nullable().optional().default(null),
-  critiqueGenerated: z.string().trim().min(1).max(12000),
-  critiqueFailureTypes: StringArraySchema,
-  critiqueLens: z.string().trim().min(1).max(128).optional().default("default"),
+  critiqueGenerated: z.string().trim().min(1).max(12000).optional(),
+  critiqueFailureTypes: StringArraySchema.optional().default([]),
+  critiqueLens: z.string().trim().min(1).max(128).optional().default("pending"),
   critiqueStrength: z.string().trim().min(1).max(64).optional().default("moderate"),
   critiqueMode: z.string().trim().min(1).max(64).nullable().optional().default(null),
   voiceLabel: z.string().trim().min(1).max(120).nullable().optional().default(null),
-  confidenceAtRoundStart: z.number().int().min(0).max(100),
-  uncertainty: JsonObjectSchema,
+  confidenceAtRoundStart: z.number().int().min(0).max(100).nullable().optional().default(null),
+  uncertainty: JsonObjectSchema.optional().default({}),
 });
 
-const respondToChallengeRoundSchema = z.object({
+const requestChallengeCritiqueSchema = z.object({
+  userId: UuidSchema,
+  roundId: UuidSchema,
+  steelmanText: z.string().trim().min(1).max(6000).nullable().optional().default(null),
+  critiqueMode: z.enum(["direct", "socratic", "red_team"]).nullable().optional().default(null),
+  requestId: z.string().trim().min(1).max(160).nullable().optional().default(null),
+});
+
+const recordChallengeResponseSchema = z.object({
   userId: UuidSchema,
   roundId: UuidSchema,
   userResponse: z.string().trim().min(10).max(3000),
@@ -138,6 +148,7 @@ type MapRecord = typeof maps.$inferSelect;
 type ClaimRecord = typeof claims.$inferSelect;
 type WorkspaceContextRecord = typeof workspaceContexts.$inferSelect;
 type DialecticRoundRecord = typeof dialecticRounds.$inferSelect;
+type ChallengeCritiqueRecord = typeof challengeCritiques.$inferSelect;
 type LearningPromptRecord = typeof learningPrompts.$inferSelect;
 type ClaimConceptEdgeRecord = typeof claimConceptEdges.$inferSelect;
 
@@ -147,7 +158,7 @@ type CommandResult<TRecord> = {
   record: TRecord;
 };
 
-function buildContextKey(input: z.infer<typeof updateWorkspaceSelectionSchema>) {
+function buildContextKey(input: z.infer<typeof setWorkspaceSelectionSchema>) {
   if (input.contextKey) {
     return input.contextKey;
   }
@@ -195,6 +206,7 @@ async function appendEvent(
     conceptId?: string | null;
     type: MoveEventType;
     payload?: Record<string, unknown>;
+    requestId?: string | null;
   },
 ): Promise<MoveEventRecord> {
   const [event] = await tx
@@ -204,6 +216,7 @@ async function appendEvent(
       mapId: data.mapId,
       claimId: data.claimId ?? null,
       conceptId: data.conceptId ?? null,
+      requestId: data.requestId ?? null,
       type: data.type,
       payload: data.payload ?? {},
     })
@@ -442,10 +455,10 @@ export async function updateClaim(input: z.input<typeof updateClaimSchema>): Pro
   return { invalidation, events, record: claim };
 }
 
-export async function updateWorkspaceSelection(
-  input: z.input<typeof updateWorkspaceSelectionSchema>,
+export async function setWorkspaceSelection(
+  input: z.input<typeof setWorkspaceSelectionSchema>,
 ): Promise<CommandResult<WorkspaceContextRecord>> {
-  const parsed = updateWorkspaceSelectionSchema.parse(input);
+  const parsed = setWorkspaceSelectionSchema.parse(input);
   const db = getDrizzleDb();
 
   const { context, events } = await db.transaction(async (tx) => {
@@ -467,7 +480,7 @@ export async function updateWorkspaceSelection(
             tx
               .select()
               .from(workspaceContexts)
-              .where(and(eq(workspaceContexts.userId, parsed.userId), eq(workspaceContexts.contextKey, contextKey)))
+              .where(eq(workspaceContexts.userId, parsed.userId))
               .limit(1),
           );
 
@@ -482,6 +495,7 @@ export async function updateWorkspaceSelection(
             mode: parsed.mode,
             breadcrumb: parsed.breadcrumb,
             contextSnapshot: parsed.contextSnapshot,
+            contextKey,
             lastAccessedAt: new Date(),
           })
           .where(eq(workspaceContexts.id, existing.id))
@@ -530,10 +544,10 @@ export async function updateWorkspaceSelection(
   return { invalidation, events, record: context };
 }
 
-export async function startChallenge(
-  input: z.input<typeof startChallengeSchema>,
+export async function startChallengeRound(
+  input: z.input<typeof startChallengeRoundSchema>,
 ): Promise<CommandResult<DialecticRoundRecord>> {
-  const parsed = startChallengeSchema.parse(input);
+  const parsed = startChallengeRoundSchema.parse(input);
   const db = getDrizzleDb();
 
   const { round, events } = await db.transaction(async (tx) => {
@@ -566,13 +580,13 @@ export async function startChallenge(
         workspaceContextId: parsed.workspaceContextId,
         priorRoundId: priorRound?.id ?? null,
         roundNumber: (priorRound?.roundNumber ?? 0) + 1,
-        critiqueGenerated: parsed.critiqueGenerated,
+        critiqueGenerated: parsed.critiqueGenerated ?? "Critique requested.",
         critiqueFailureTypes: parsed.critiqueFailureTypes,
         critiqueLens: parsed.critiqueLens,
         critiqueStrength: parsed.critiqueStrength,
         critiqueMode: parsed.critiqueMode,
         voiceLabel: parsed.voiceLabel,
-        confidenceAtRoundStart: parsed.confidenceAtRoundStart,
+        confidenceAtRoundStart: parsed.confidenceAtRoundStart ?? claim.confidence,
         uncertainty: parsed.uncertainty,
       })
       .returning();
@@ -611,10 +625,141 @@ export async function startChallenge(
   return { invalidation, events, record: round };
 }
 
-export async function respondToChallengeRound(
-  input: z.input<typeof respondToChallengeRoundSchema>,
+export async function requestChallengeCritique(
+  input: z.input<typeof requestChallengeCritiqueSchema>,
+): Promise<CommandResult<ChallengeCritiqueRecord>> {
+  const parsed = requestChallengeCritiqueSchema.parse(input);
+  const db = getDrizzleDb();
+  const requestId = parsed.requestId ?? crypto.randomUUID();
+
+  const { critique, events, round } = await db.transaction(async (tx) => {
+    const existingRound = await getOwnedRound(tx, parsed.roundId, parsed.userId);
+    const claim = await getOwnedClaim(tx, existingRound.claimId, parsed.userId);
+    const priorRounds = await tx
+      .select()
+      .from(dialecticRounds)
+      .where(and(eq(dialecticRounds.claimId, claim.id), eq(dialecticRounds.userId, parsed.userId)))
+      .orderBy(desc(dialecticRounds.roundNumber))
+      .limit(6);
+
+    const priorRoundSummaries = priorRounds
+      .filter((round) => round.id !== existingRound.id)
+      .map((round) => {
+        const snippetSource = round.userResponse?.trim().length ? round.userResponse : round.critiqueGenerated;
+        const snippet =
+          snippetSource.trim().length > 120 ? `${snippetSource.trim().slice(0, 119).trimEnd()}...` : snippetSource.trim();
+
+        return `Round ${round.roundNumber}: ${snippet}`;
+      });
+
+    const result = await generateChallengeCritique(
+      {
+        claimText: claim.text,
+        steelmanText: parsed.steelmanText,
+        confidence: existingRound.confidenceAtRoundStart,
+        priorRounds: priorRoundSummaries,
+        critiqueMode: parsed.critiqueMode ?? (existingRound.critiqueMode as "direct" | "socratic" | "red_team" | null) ?? "direct",
+      },
+      {
+        userId: parsed.userId,
+        mapId: existingRound.mapId,
+        claimId: existingRound.claimId,
+        workspaceContextId: existingRound.workspaceContextId,
+      },
+    );
+
+    const [round] = await tx
+      .update(dialecticRounds)
+      .set({
+        critiqueGenerated: result.output.critique,
+        critiqueFailureTypes: result.output.failureTypes,
+        critiqueLens: result.output.critiqueLens,
+        critiqueMode: parsed.critiqueMode ?? existingRound.critiqueMode,
+        uncertainty: {
+          ...(existingRound.uncertainty ?? {}),
+          dependencyRisks: result.output.dependencyRisks,
+          headline: result.output.headline,
+          whyNow: result.output.whyNow,
+        },
+      })
+      .where(eq(dialecticRounds.id, existingRound.id))
+      .returning();
+
+    const existingCritique = await selectOne(
+      tx.select().from(challengeCritiques).where(eq(challengeCritiques.roundId, existingRound.id)).limit(1),
+    );
+
+    const [critique] = existingCritique
+      ? await tx
+          .update(challengeCritiques)
+          .set({
+            provider: result.meta.provider,
+            model: result.meta.model,
+            promptVersion: result.meta.promptVersion,
+            headline: result.output.headline,
+            critiqueText: result.output.critique,
+            critiqueLens: result.output.critiqueLens,
+            failureTypes: result.output.failureTypes,
+            dependencyRisks: result.output.dependencyRisks,
+            whyNow: result.output.whyNow,
+            validatedOutput: result.output,
+          })
+          .where(eq(challengeCritiques.id, existingCritique.id))
+          .returning()
+      : await tx
+          .insert(challengeCritiques)
+          .values({
+            userId: parsed.userId,
+            mapId: existingRound.mapId,
+            claimId: existingRound.claimId,
+            roundId: existingRound.id,
+            workspaceContextId: existingRound.workspaceContextId,
+            provider: result.meta.provider,
+            model: result.meta.model,
+            promptVersion: result.meta.promptVersion,
+            headline: result.output.headline,
+            critiqueText: result.output.critique,
+            critiqueLens: result.output.critiqueLens,
+            failureTypes: result.output.failureTypes,
+            dependencyRisks: result.output.dependencyRisks,
+            whyNow: result.output.whyNow,
+            validatedOutput: result.output,
+          })
+          .returning();
+
+    const event = await appendEvent(tx, {
+      userId: parsed.userId,
+      mapId: existingRound.mapId,
+      claimId: existingRound.claimId,
+      type: "challenge.critique_generated",
+      requestId,
+      payload: {
+        roundId: existingRound.id,
+        critiqueId: critique.id,
+        provider: critique.provider,
+        model: critique.model,
+        promptVersion: critique.promptVersion,
+      },
+    });
+
+    return { critique, events: [event], round };
+  });
+
+  const invalidation = invalidateWorkspaceProjections(
+    buildInvalidationInput(parsed.userId, {
+      mapId: round.mapId,
+      claimId: round.claimId,
+      workspaceContextId: round.workspaceContextId,
+    }),
+  );
+
+  return { invalidation, events, record: critique };
+}
+
+export async function recordChallengeResponse(
+  input: z.input<typeof recordChallengeResponseSchema>,
 ): Promise<CommandResult<DialecticRoundRecord>> {
-  const parsed = respondToChallengeRoundSchema.parse(input);
+  const parsed = recordChallengeResponseSchema.parse(input);
   const db = getDrizzleDb();
 
   const { round, events, conceptId } = await db.transaction(async (tx) => {
@@ -694,6 +839,10 @@ export async function respondToChallengeRound(
 
   return { invalidation, events, record: round };
 }
+
+export const updateWorkspaceSelection = setWorkspaceSelection;
+export const startChallenge = startChallengeRound;
+export const respondToChallengeRound = recordChallengeResponse;
 
 export async function generateLearningPrompt(
   input: z.input<typeof generateLearningPromptSchema>,
@@ -905,9 +1054,13 @@ export const workspaceCommandSchemas = {
   createMap: createMapSchema,
   createClaim: createClaimSchema,
   updateClaim: updateClaimSchema,
-  updateWorkspaceSelection: updateWorkspaceSelectionSchema,
-  startChallenge: startChallengeSchema,
-  respondToChallengeRound: respondToChallengeRoundSchema,
+  setWorkspaceSelection: setWorkspaceSelectionSchema,
+  startChallengeRound: startChallengeRoundSchema,
+  requestChallengeCritique: requestChallengeCritiqueSchema,
+  recordChallengeResponse: recordChallengeResponseSchema,
+  updateWorkspaceSelection: setWorkspaceSelectionSchema,
+  startChallenge: startChallengeRoundSchema,
+  respondToChallengeRound: recordChallengeResponseSchema,
   generateLearningPrompt: generateLearningPromptSchema,
   submitTeachback: submitTeachbackSchema,
   linkConceptToClaim: linkConceptToClaimSchema,
