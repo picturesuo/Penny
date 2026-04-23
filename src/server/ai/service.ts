@@ -2,8 +2,14 @@ import "server-only";
 
 import { getActiveSpanId, getActiveTraceId, startActiveObservation } from "@langfuse/tracing";
 import { z } from "zod";
+import { getDeployMetadata } from "@/lib/deploy-metadata";
+import { generateChallengeCritique as generateChallengeCritiqueOperation } from "@/server/ai/operations/generate-challenge-critique";
+import {
+  GenerateChallengeCritiqueInputSchema,
+  GenerateChallengeCritiqueOutputSchema,
+} from "@/server/ai/schemas/challenge-critique";
 
-type AiProviderName = "grok" | "claude";
+type AiProviderName = "grok" | "claude" | "xai" | "anthropic";
 type AiTaskName =
   | "summarizeClaim"
   | "generateSteelman"
@@ -37,6 +43,8 @@ export type AiCallMeta = {
   provider: AiProviderName;
   model: string;
   promptVersion: string;
+  release: string;
+  environment: string;
   latencyMs: number;
   traceId: string | null;
   observationId: string | null;
@@ -97,23 +105,6 @@ const GenerateSteelmanOutputSchema = z.object({
   steelman: z.string(),
   strongestPremises: z.array(z.string()),
   testsToRespect: z.array(z.string()),
-});
-
-const GenerateChallengeCritiqueInputSchema = z.object({
-  claimText: z.string().trim().min(1).max(4000),
-  steelmanText: z.string().trim().max(6000).nullable().optional().default(null),
-  confidence: z.number().int().min(0).max(100),
-  priorRounds: z.array(z.string().trim().min(1).max(800)).max(6).optional().default([]),
-  critiqueMode: z.enum(["direct", "socratic", "red_team"]).optional().default("direct"),
-});
-
-const GenerateChallengeCritiqueOutputSchema = z.object({
-  headline: z.string(),
-  critique: z.string(),
-  critiqueLens: z.string(),
-  failureTypes: z.array(z.string()),
-  dependencyRisks: z.array(z.string()),
-  whyNow: z.string(),
 });
 
 const ExtractConceptCandidatesInputSchema = z.object({
@@ -248,28 +239,7 @@ export async function generateChallengeCritique(
   input: z.input<typeof GenerateChallengeCritiqueInputSchema>,
   context: AiTaskContext = {},
 ): Promise<AiCallResult<z.infer<typeof GenerateChallengeCritiqueOutputSchema>>> {
-  const parsed = GenerateChallengeCritiqueInputSchema.parse(input);
-
-  return executeStructuredTask({
-    context,
-    input: parsed,
-    outputSchema: GenerateChallengeCritiqueOutputSchema,
-    taskName: "generateChallengeCritique",
-    buildPrompt: (data) => ({
-      systemPrompt:
-        "You generate one clear critique round for a claim. Make the weak point explicit, quiet, and actionable. Prefer structural pressure over generic skepticism.",
-      userPrompt: [
-        `Claim: ${data.claimText}`,
-        data.steelmanText ? `Existing steelman: ${data.steelmanText}` : "",
-        `Current confidence: ${data.confidence}%`,
-        `Critique mode: ${data.critiqueMode}`,
-        data.priorRounds.length ? `Prior round summaries:\n- ${data.priorRounds.join("\n- ")}` : "No prior challenge rounds.",
-        'Return JSON with "headline", "critique", "critiqueLens", "failureTypes", "dependencyRisks", and "whyNow".',
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    }),
-  });
+  return generateChallengeCritiqueOperation(input, context);
 }
 
 export async function extractConceptCandidates(
@@ -361,6 +331,7 @@ async function executeStructuredTask<TInput, TOutput>(params: {
   const route = resolveRoute(params.taskName);
   const { systemPrompt, userPrompt } = params.buildPrompt(params.input);
   const jsonSchema = toProviderJsonSchema(params.outputSchema);
+  const deploy = getDeployMetadata();
 
   return startActiveObservation(
     `ai.${params.taskName}`,
@@ -389,6 +360,8 @@ async function executeStructuredTask<TInput, TOutput>(params: {
             taskName: params.taskName,
             provider: route.provider,
             promptVersion: route.promptVersion,
+            release: deploy.release,
+            environment: deploy.environment,
             ...toContextMetadata(params.context),
           },
           statusMessage: `Completed in ${latencyMs}ms`,
@@ -400,6 +373,8 @@ async function executeStructuredTask<TInput, TOutput>(params: {
             provider: route.provider,
             model: route.model,
             promptVersion: route.promptVersion,
+            release: deploy.release,
+            environment: deploy.environment,
             latencyMs,
             traceId,
             observationId,
@@ -418,6 +393,8 @@ async function executeStructuredTask<TInput, TOutput>(params: {
             taskName: params.taskName,
             provider: route.provider,
             promptVersion: route.promptVersion,
+            release: deploy.release,
+            environment: deploy.environment,
             ...toContextMetadata(params.context),
           },
           statusMessage: normalized.message,
@@ -445,6 +422,8 @@ async function executeStructuredTask<TInput, TOutput>(params: {
         taskName: params.taskName,
         provider: route.provider,
         promptVersion: route.promptVersion,
+        release: deploy.release,
+        environment: deploy.environment,
         ...toContextMetadata(params.context),
       },
     },
