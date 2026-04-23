@@ -254,6 +254,31 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         status: "validated",
       }),
     );
+    pendingCritiqueAnalytics = {
+      userId,
+      mapId: id,
+      claimId,
+      critiqueMode: input.critiqueMode,
+      critiqueIntensity: input.critiqueIntensity,
+      forceRegenerate: input.forceRegenerate,
+      selectedVoice: input.selectedVoice ?? null,
+    };
+    after(() =>
+      trackChallengeAnalyticsEvent(
+        {
+          event: "challenge_critique_requested",
+          properties: {
+            claimId,
+            mapId: id,
+            critiqueMode: input.critiqueMode,
+            critiqueIntensity: input.critiqueIntensity,
+            forceRegenerate: input.forceRegenerate,
+            selectedVoice: input.selectedVoice ?? null,
+          },
+        },
+        userId,
+      ),
+    );
 
     const round = await createChallengeDraftRound({
       userId,
@@ -264,6 +289,39 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       selectedVoice: input.selectedVoice ?? null,
       forceRegenerate: input.forceRegenerate,
       logFields: commandLogFields,
+    });
+    after(async () => {
+      await Promise.all([
+        trackChallengeAnalyticsEvent(
+          {
+            event: "challenge_critique_generated",
+            properties: {
+              claimId,
+              mapId: id,
+              roundId: round.id,
+              roundNumber: round.roundNumber,
+              critiqueMode: round.critiqueMode,
+              generationStatus: round.generationStatus,
+              generationProvider: round.generationProvider,
+            },
+          },
+          userId,
+        ),
+        trackChallengeAnalyticsEvent(
+          {
+            event: "challenge_round_started",
+            properties: {
+              claimId,
+              mapId: id,
+              roundId: round.id,
+              roundNumber: round.roundNumber,
+              critiqueMode: round.critiqueMode,
+              generationStatus: round.generationStatus,
+            },
+          },
+          userId,
+        ),
+      ]);
     });
 
     await track(
@@ -296,6 +354,27 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       { status: 201 },
     );
   } catch (error) {
+    if (pendingCritiqueAnalytics) {
+      const analyticsContext = pendingCritiqueAnalytics;
+      after(() =>
+        trackChallengeAnalyticsEvent(
+          {
+            event: "challenge_critique_failed",
+            properties: {
+              claimId: analyticsContext.claimId,
+              mapId: analyticsContext.mapId,
+              critiqueMode: analyticsContext.critiqueMode,
+              critiqueIntensity: analyticsContext.critiqueIntensity,
+              forceRegenerate: analyticsContext.forceRegenerate,
+              selectedVoice: analyticsContext.selectedVoice,
+              reason: error instanceof Error ? error.message : String(error),
+            },
+          },
+          analyticsContext.userId,
+        ),
+      );
+    }
+
     if (error instanceof ValidationError) {
       logChallengeFlow(
         "warn",
