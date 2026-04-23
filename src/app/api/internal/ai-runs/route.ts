@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 const INTERNAL_ADMIN_API_KEY_ENV = "PENNY_INTERNAL_ADMIN_API_KEY";
 const INTERNAL_ADMIN_HEADER = "x-penny-internal-admin-key";
+const INTERNAL_ADMIN_COOKIE = "penny_internal_admin_key";
 const cacheHeaders = {
   "Cache-Control": "no-store",
 };
@@ -85,7 +86,11 @@ function validateInternalAdminRequest(request: NextRequest) {
     };
   }
 
-  const suppliedKey = request.headers.get(INTERNAL_ADMIN_HEADER) ?? extractBearerToken(request.headers.get("authorization"));
+  const suppliedKey =
+    request.headers.get(INTERNAL_ADMIN_HEADER) ??
+    extractBearerToken(request.headers.get("authorization")) ??
+    request.cookies.get(INTERNAL_ADMIN_COOKIE)?.value ??
+    null;
 
   if (suppliedKey !== configuredKey) {
     logger.warn("internal_ai_runs_unauthorized", {
