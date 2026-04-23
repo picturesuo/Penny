@@ -189,7 +189,7 @@ export const workspaceContexts = pgTable(
   },
   (table) => [
     uniqueIndex("workspace_contexts_context_key_unique").on(table.contextKey),
-    index("workspace_contexts_user_idx").on(table.userId),
+    uniqueIndex("workspace_contexts_user_id_unique").on(table.userId),
     index("workspace_contexts_map_idx").on(table.mapId),
     index("workspace_contexts_mode_idx").on(table.mode),
     index("workspace_contexts_updated_at_idx").on(table.updatedAt),
@@ -327,7 +327,7 @@ export const challengeCritiques = pgTable(
     claimId: uuid("claim_id")
       .notNull()
       .references(() => claims.id, { onDelete: "cascade", onUpdate: "cascade" }),
-    challengeRoundId: uuid("challenge_round_id")
+    roundId: uuid("round_id")
       .notNull()
       .references(() => challengeRounds.id, { onDelete: "cascade", onUpdate: "cascade" }),
     workspaceContextId: uuid("workspace_context_id").references(() => workspaceContexts.id, {
@@ -351,7 +351,7 @@ export const challengeCritiques = pgTable(
     index("challenge_critiques_user_idx").on(table.userId),
     index("challenge_critiques_map_idx").on(table.mapId),
     index("challenge_critiques_claim_idx").on(table.claimId),
-    index("challenge_critiques_round_idx").on(table.challengeRoundId),
+    uniqueIndex("challenge_critiques_round_id_unique").on(table.roundId),
     index("challenge_critiques_workspace_context_idx").on(table.workspaceContextId),
     index("challenge_critiques_created_at_idx").on(table.createdAt),
   ],
@@ -405,6 +405,7 @@ export const movesEvents = pgTable(
       .references(() => maps.id, { onDelete: "cascade", onUpdate: "cascade" }),
     claimId: uuid("claim_id").references(() => claims.id, { onDelete: "set null", onUpdate: "cascade" }),
     conceptId: uuid("concept_id").references(() => concepts.id, { onDelete: "set null", onUpdate: "cascade" }),
+    requestId: varchar("request_id", { length: 160 }),
     type: movesEventTypeEnum("type").notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default(jsonObjectDefault),
     createdAt,
@@ -414,6 +415,7 @@ export const movesEvents = pgTable(
     index("moves_events_map_idx").on(table.mapId),
     index("moves_events_claim_idx").on(table.claimId),
     index("moves_events_concept_idx").on(table.conceptId),
+    index("moves_events_request_id_idx").on(table.requestId),
     index("moves_events_type_idx").on(table.type),
     index("moves_events_created_at_idx").on(table.createdAt),
   ],
