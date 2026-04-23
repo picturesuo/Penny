@@ -17,16 +17,29 @@ import {
   type AiRouteTier,
 } from "@/server/ai/routing/modelPolicy";
 import {
+  type ChallengeCritiqueQualityTier,
   GenerateChallengeCritiqueInputSchema,
   GenerateChallengeCritiqueOutputSchema,
   type GenerateChallengeCritiqueInput,
   type GenerateChallengeCritiqueOutput,
 } from "@/server/ai/schemas/challengeCritique";
 
+export const generateChallengeCritiqueDeps = {
+  getActiveObservationId: () => getActiveSpanId(),
+  getDeployMetadata,
+  getTraceId: () => getActiveTraceId(),
+  invokeAnthropicStructured,
+  invokeXaiStructured,
+  resolveModelPolicy,
+  startActiveObservation,
+};
+
 export type AiTaskContext = {
   claimId?: string | null;
   conceptId?: string | null;
   mapId?: string | null;
+  promptVersion?: string | null;
+  qualityTier?: ChallengeCritiqueQualityTier | null;
   sessionId?: string | null;
   tags?: string[];
   userId?: string | null;
@@ -66,15 +79,18 @@ export async function generateChallengeCritique(
   context: AiTaskContext = {},
 ): Promise<AiCallResult<GenerateChallengeCritiqueOutput>> {
   const parsed = GenerateChallengeCritiqueInputSchema.parse(input);
-  const routes = resolveModelPolicy("generateChallengeCritique");
+  const routes = generateChallengeCritiqueDeps.resolveModelPolicy("generateChallengeCritique", {
+    promptVersion: context.promptVersion ?? undefined,
+    qualityTier: context.qualityTier ?? undefined,
+  });
   const prompt = buildChallengeCritiquePrompt(parsed);
   const jsonSchema = toProviderJsonSchema(GenerateChallengeCritiqueOutputSchema);
-  const deploy = getDeployMetadata();
+  const deploy = generateChallengeCritiqueDeps.getDeployMetadata();
   let lastError: Error | null = null;
 
   for (const route of routes) {
     try {
-      return await startActiveObservation(
+      return await generateChallengeCritiqueDeps.startActiveObservation(
         `ai.generateChallengeCritique.${route.tier}`,
         async (generation) => {
           const startedAt = Date.now();
@@ -91,8 +107,8 @@ export async function generateChallengeCritique(
             route,
           });
           const latencyMs = Date.now() - startedAt;
-          const traceId = getActiveTraceId() ?? null;
-          const observationId = getActiveSpanId() ?? null;
+          const traceId = generateChallengeCritiqueDeps.getTraceId() ?? null;
+          const observationId = generateChallengeCritiqueDeps.getActiveObservationId() ?? null;
 
           generation.update({
             output: validatedOutput as JsonCompatibleValue,
@@ -297,9 +313,9 @@ async function invokeStructuredProvider(params: {
 
   switch (params.route.provider) {
     case "anthropic":
-      return invokeAnthropicStructured(request);
+      return generateChallengeCritiqueDeps.invokeAnthropicStructured(request);
     case "xai":
-      return invokeXaiStructured(request);
+      return generateChallengeCritiqueDeps.invokeXaiStructured(request);
     default:
       throw new Error(`Unsupported AI provider: ${params.route.provider satisfies never}`);
   }
@@ -380,6 +396,8 @@ function toContextMetadata(context: AiTaskContext) {
     claimId: context.claimId ?? null,
     conceptId: context.conceptId ?? null,
     workspaceContextId: context.workspaceContextId ?? null,
+    promptVersion: context.promptVersion ?? null,
+    qualityTier: context.qualityTier ?? null,
     sessionId: context.sessionId ?? null,
     tags: context.tags ?? [],
   };

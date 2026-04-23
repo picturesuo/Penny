@@ -95,6 +95,7 @@ const requestChallengeCritiqueSchema = z.object({
   roundId: UuidSchema,
   steelmanText: z.string().trim().min(1).max(6000).nullable().optional().default(null),
   critiqueMode: z.enum(["direct", "socratic", "red_team"]).nullable().optional().default(null),
+  qualityTier: z.enum(["standard", "degraded"]).optional().default("standard"),
   userGoal: z.string().trim().min(1).max(800).nullable().optional().default(null),
   requestId: z.string().trim().min(1).max(160).nullable().optional().default(null),
 });

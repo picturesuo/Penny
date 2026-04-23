@@ -14,6 +14,10 @@ import {
 import { GenerateChallengeCritiqueOutputSchema } from "@/server/ai/schemas/challengeCritique";
 import { ChallengeCritiqueTaskStateSchema } from "@/server/challenge-critique-workflow";
 
+export const workspaceProjectionDeps = {
+  getDrizzleDb,
+};
+
 const WorkspaceProjectionModeSchema = z.enum(["brain", "challenge", "learn"]);
 const WorkspaceProjectionInputSchema = z.object({
   userId: z.string().uuid("Invalid UUID."),
@@ -106,6 +110,10 @@ export type ChallengeView = {
         status: "pending";
         roundId: string;
         requestId: string | null;
+        idempotencyKey: string | null;
+        claimVersion: string | null;
+        promptVersion: string | null;
+        qualityTier: "standard" | "degraded" | null;
         triggerRunId: string | null;
         requestedAt: string | null;
         userGoal: string | null;
@@ -114,6 +122,10 @@ export type ChallengeView = {
         status: "failed";
         roundId: string;
         requestId: string | null;
+        idempotencyKey: string | null;
+        claimVersion: string | null;
+        promptVersion: string | null;
+        qualityTier: "standard" | "degraded" | null;
         triggerRunId: string | null;
         requestedAt: string | null;
         failedAt: string | null;
@@ -124,6 +136,10 @@ export type ChallengeView = {
         status: "validation_failed";
         roundId: string;
         requestId: string | null;
+        idempotencyKey: string | null;
+        claimVersion: string | null;
+        promptVersion: string | null;
+        qualityTier: "standard" | "degraded" | null;
         triggerRunId: string | null;
         requestedAt: string | null;
         failedAt: string | null;
@@ -145,9 +161,12 @@ export type ChallengeView = {
         uncertaintyNote: string;
         critiqueLens: string;
         requestId: string | null;
+        idempotencyKey: string | null;
+        claimVersion: string | null;
         triggerRunId: string | null;
         userGoal: string | null;
         repairAttempted: boolean | null;
+        qualityTier: "standard" | "degraded" | null;
         generatedAt: string;
       }
     | null;
@@ -251,7 +270,7 @@ async function selectOne<T>(promise: Promise<T[]>): Promise<T | null> {
 async function resolvePersistedWorkspaceContext(
   parsed: ParsedWorkspaceProjectionInput,
 ): Promise<WorkspaceContextRecord | null> {
-  const db = getDrizzleDb();
+  const db = workspaceProjectionDeps.getDrizzleDb();
 
   if (parsed.workspaceContextId) {
     return selectOne(
@@ -297,7 +316,7 @@ async function resolveMapRecord(
   parsed: ParsedWorkspaceProjectionInput,
   contextRecord: WorkspaceContextRecord | null,
 ): Promise<MapRecord | null> {
-  const db = getDrizzleDb();
+  const db = workspaceProjectionDeps.getDrizzleDb();
   const candidateMapId = contextRecord?.mapId ?? parsed.mapId ?? null;
 
   if (candidateMapId) {
@@ -329,7 +348,7 @@ function resolveProjectionMode(
 
 async function resolveWorkspaceState(input: WorkspaceProjectionInput): Promise<ResolvedWorkspaceState> {
   const parsed = WorkspaceProjectionInputSchema.parse(input);
-  const db = getDrizzleDb();
+  const db = workspaceProjectionDeps.getDrizzleDb();
   const contextRecord = await resolvePersistedWorkspaceContext(parsed);
   const mode = resolveProjectionMode(parsed, contextRecord);
   const mapRecord = await resolveMapRecord(parsed, contextRecord);
@@ -484,6 +503,10 @@ export async function buildChallengeView(input: WorkspaceProjectionInput): Promi
     ...input,
     mode: input.mode ?? "challenge",
   });
+  return buildChallengeViewFromState(state);
+}
+
+export function buildChallengeViewFromState(state: ResolvedWorkspaceState): ChallengeView {
   const currentRound = state.roundRecords[0] ?? null;
   const critiqueRecord = currentRound ? state.critiqueByRoundId.get(currentRound.id) ?? null : null;
   const critiqueTaskState = parseCritiqueTaskState(currentRound);
@@ -538,9 +561,12 @@ export async function buildChallengeView(input: WorkspaceProjectionInput): Promi
               : critiqueRecord.whyNow,
             critiqueLens: critiqueRecord.critiqueLens,
             requestId: critiqueTaskState.critiqueRequestId,
+            idempotencyKey: critiqueTaskState.critiqueIdempotencyKey,
+            claimVersion: critiqueTaskState.claimVersion,
             triggerRunId: critiqueTaskState.critiqueRunId,
             userGoal: critiqueTaskState.userGoal,
             repairAttempted: critiqueTaskState.critiqueRepairAttempted,
+            qualityTier: critiqueTaskState.qualityTier,
             generatedAt: critiqueRecord.createdAt.toISOString(),
           }
         : critiqueTaskState.critiqueStatus === "validation_failed"
@@ -548,6 +574,10 @@ export async function buildChallengeView(input: WorkspaceProjectionInput): Promi
               status: "validation_failed",
               roundId: currentRound.id,
               requestId: critiqueTaskState.critiqueRequestId,
+              idempotencyKey: critiqueTaskState.critiqueIdempotencyKey,
+              claimVersion: critiqueTaskState.claimVersion,
+              promptVersion: critiqueTaskState.promptVersion,
+              qualityTier: critiqueTaskState.qualityTier,
               triggerRunId: critiqueTaskState.critiqueRunId,
               requestedAt: critiqueTaskState.critiqueRequestedAt,
               failedAt: critiqueTaskState.critiqueFailedAt,
@@ -559,6 +589,10 @@ export async function buildChallengeView(input: WorkspaceProjectionInput): Promi
               status: "failed",
               roundId: currentRound.id,
               requestId: critiqueTaskState.critiqueRequestId,
+              idempotencyKey: critiqueTaskState.critiqueIdempotencyKey,
+              claimVersion: critiqueTaskState.claimVersion,
+              promptVersion: critiqueTaskState.promptVersion,
+              qualityTier: critiqueTaskState.qualityTier,
               triggerRunId: critiqueTaskState.critiqueRunId,
               requestedAt: critiqueTaskState.critiqueRequestedAt,
               failedAt: critiqueTaskState.critiqueFailedAt,
@@ -569,6 +603,10 @@ export async function buildChallengeView(input: WorkspaceProjectionInput): Promi
             status: "pending",
             roundId: currentRound.id,
             requestId: critiqueTaskState.critiqueRequestId,
+            idempotencyKey: critiqueTaskState.critiqueIdempotencyKey,
+            claimVersion: critiqueTaskState.claimVersion,
+            promptVersion: critiqueTaskState.promptVersion,
+            qualityTier: critiqueTaskState.qualityTier,
             triggerRunId: critiqueTaskState.critiqueRunId,
             requestedAt: critiqueTaskState.critiqueRequestedAt,
             userGoal: critiqueTaskState.userGoal,

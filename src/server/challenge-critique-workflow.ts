@@ -13,22 +13,42 @@ import {
 } from "@/server/challenge-critique-job-monitor";
 import {
   ChallengeCritiqueModeSchema,
+  ChallengeCritiqueQualityTierSchema,
   type GenerateChallengeCritiqueOutput,
 } from "@/server/ai/schemas/challengeCritique";
+import { resolveModelPolicy } from "@/server/ai/routing/modelPolicy";
 import { buildInvalidationInput, type CommandResult } from "@/server/workspace-commands-internals";
 import { invalidateWorkspaceProjections } from "@/server/workspace-cache";
 
+export const challengeCritiqueWorkflowDeps = {
+  generateChallengeCritique,
+  getDrizzleDb,
+  invalidateWorkspaceProjections,
+  markChallengeCritiqueJobFailed,
+  markChallengeCritiqueJobQueued,
+  markChallengeCritiqueJobRunning,
+  markChallengeCritiqueJobSucceeded,
+  tasksTrigger: tasks.trigger.bind(tasks),
+};
+
 const UuidSchema = z.string().uuid("Invalid UUID.");
+const PromptVersionSchema = z.string().trim().min(1).max(64);
+const ClaimVersionSchema = z.string().trim().min(1).max(64);
+const IdempotencyKeySchema = z.string().trim().min(1).max(200);
 
 export const ChallengeCritiqueTaskStateSchema = z.object({
   critiqueStatus: z.enum(["pending", "ready", "failed", "validation_failed"]).nullable().optional().default(null),
   critiqueRequestId: z.string().trim().min(1).max(160).nullable().optional().default(null),
+  critiqueIdempotencyKey: IdempotencyKeySchema.nullable().optional().default(null),
   critiqueRunId: z.string().trim().min(1).max(160).nullable().optional().default(null),
   critiqueRequestedAt: z.string().datetime().nullable().optional().default(null),
   critiqueGeneratedAt: z.string().datetime().nullable().optional().default(null),
   critiqueFailedAt: z.string().datetime().nullable().optional().default(null),
   critiqueError: z.string().trim().min(1).max(1000).nullable().optional().default(null),
   critiqueRepairAttempted: z.boolean().nullable().optional().default(null),
+  claimVersion: ClaimVersionSchema.nullable().optional().default(null),
+  promptVersion: PromptVersionSchema.nullable().optional().default(null),
+  qualityTier: ChallengeCritiqueQualityTierSchema.nullable().optional().default(null),
   userGoal: z.string().trim().min(1).max(800).nullable().optional().default(null),
   suggestedConfidenceDelta: z.number().int().min(-100).max(100).nullable().optional().default(null),
   uncertaintyNote: z.string().trim().min(1).max(400).nullable().optional().default(null),
@@ -39,6 +59,7 @@ export const QueueChallengeCritiqueInputSchema = z.object({
   roundId: UuidSchema,
   steelmanText: z.string().trim().min(1).max(6000).nullable().optional().default(null),
   critiqueMode: ChallengeCritiqueModeSchema.nullable().optional().default(null),
+  qualityTier: ChallengeCritiqueQualityTierSchema.optional().default("standard"),
   userGoal: z.string().trim().min(1).max(800).nullable().optional().default(null),
   requestId: z.string().trim().min(1).max(160).nullable().optional().default(null),
 });
@@ -46,6 +67,10 @@ export const QueueChallengeCritiqueInputSchema = z.object({
 export const GenerateChallengeCritiqueJobPayloadSchema = z.object({
   userId: UuidSchema,
   roundId: UuidSchema,
+  claimVersion: ClaimVersionSchema,
+  promptVersion: PromptVersionSchema,
+  qualityTier: ChallengeCritiqueQualityTierSchema,
+  idempotencyKey: IdempotencyKeySchema,
   requestId: z.string().trim().min(1).max(160),
   steelmanText: z.string().trim().min(1).max(6000).nullable().optional().default(null),
   critiqueMode: ChallengeCritiqueModeSchema.nullable().optional().default(null),
@@ -56,6 +81,10 @@ export const GenerateChallengeCritiqueJobPayloadSchema = z.object({
 export const QueuedChallengeCritiqueRequestSchema = z.object({
   roundId: UuidSchema,
   requestId: z.string().trim().min(1).max(160),
+  idempotencyKey: IdempotencyKeySchema,
+  claimVersion: ClaimVersionSchema,
+  promptVersion: PromptVersionSchema,
+  qualityTier: ChallengeCritiqueQualityTierSchema,
   triggerRunId: z.string().trim().min(1).max(160).nullable(),
   status: z.literal("accepted"),
   critiqueMode: ChallengeCritiqueModeSchema,
@@ -155,6 +184,19 @@ function resolveCritiqueMode(round: ChallengeRoundRecord, critiqueMode: QueueCha
   return critiqueMode ?? (round.critiqueMode as z.infer<typeof ChallengeCritiqueModeSchema> | null) ?? "direct";
 }
 
+function resolveClaimVersion(claim: typeof claims.$inferSelect) {
+  return String(claim.updatedAt.getTime());
+}
+
+function buildChallengeCritiqueIdempotencyKey(input: {
+  roundId: string;
+  claimVersion: string;
+  promptVersion: string;
+  qualityTier: z.infer<typeof ChallengeCritiqueQualityTierSchema>;
+}) {
+  return `challenge-critique:${input.roundId}:${input.claimVersion}:${input.promptVersion}:${input.qualityTier}`;
+}
+
 function buildNeighborRelationship(sourceClaim: typeof claims.$inferSelect, neighbor: typeof claims.$inferSelect) {
   if (neighbor.parentClaimId === sourceClaim.id) {
     return "child";
@@ -175,12 +217,16 @@ export async function queueChallengeCritiqueGeneration(
   input: z.input<typeof QueueChallengeCritiqueInputSchema>,
 ): Promise<CommandResult<QueuedChallengeCritiqueRequest>> {
   const parsed = QueueChallengeCritiqueInputSchema.parse(input);
-  const db = getDrizzleDb();
+  const db = challengeCritiqueWorkflowDeps.getDrizzleDb();
   const requestId = parsed.requestId ?? crypto.randomUUID();
   const requestedAt = new Date().toISOString();
 
-  const { round, events } = await db.transaction(async (tx) => {
+  const { round, events, claimVersion, promptVersion, idempotencyKey, reusedRequest } = await db.transaction(async (tx) => {
     const round = await getOwnedRound(tx, parsed.roundId, parsed.userId);
+    const claim = assertFound(
+      await selectOne(tx.select().from(claims).where(and(eq(claims.id, round.claimId), eq(claims.userId, parsed.userId))).limit(1)),
+      "Claim not found.",
+    );
     const existingCritique = await selectOne(
       tx.select().from(challengeCritiques).where(eq(challengeCritiques.roundId, round.id)).limit(1),
     );
@@ -190,6 +236,44 @@ export async function queueChallengeCritiqueGeneration(
     }
 
     const critiqueMode = resolveCritiqueMode(round, parsed.critiqueMode);
+    const claimVersion = resolveClaimVersion(claim);
+    const promptVersion = resolveModelPolicy("generateChallengeCritique", {
+      qualityTier: parsed.qualityTier,
+    })[0]?.promptVersion;
+
+    if (!promptVersion) {
+      throw new Error("Challenge critique prompt policy is not configured.");
+    }
+
+    const idempotencyKey = buildChallengeCritiqueIdempotencyKey({
+      roundId: round.id,
+      claimVersion,
+      promptVersion,
+      qualityTier: parsed.qualityTier,
+    });
+    const critiqueTaskState = parseCritiqueTaskState(round.uncertainty);
+
+    if (
+      critiqueTaskState.critiqueStatus === "pending" &&
+      critiqueTaskState.critiqueIdempotencyKey === idempotencyKey &&
+      critiqueTaskState.critiqueRequestId &&
+      critiqueTaskState.critiqueRequestedAt
+    ) {
+      return {
+        round,
+        events: [],
+        claimVersion,
+        promptVersion,
+        idempotencyKey,
+        reusedRequest: {
+          requestId: critiqueTaskState.critiqueRequestId,
+          requestedAt: critiqueTaskState.critiqueRequestedAt,
+          triggerRunId: critiqueTaskState.critiqueRunId,
+          critiqueMode: resolveCritiqueMode(round, parsed.critiqueMode),
+          userGoal: critiqueTaskState.userGoal ?? parsed.userGoal,
+        },
+      };
+    }
 
     const [updatedRound] = await tx
       .update(dialecticRounds)
@@ -200,11 +284,15 @@ export async function queueChallengeCritiqueGeneration(
         uncertainty: mergeCritiqueTaskState(round.uncertainty, {
           critiqueStatus: "pending",
           critiqueRequestId: requestId,
+          critiqueIdempotencyKey: idempotencyKey,
           critiqueRequestedAt: requestedAt,
           critiqueGeneratedAt: null,
           critiqueFailedAt: null,
           critiqueError: null,
           critiqueRepairAttempted: null,
+          claimVersion,
+          promptVersion,
+          qualityTier: parsed.qualityTier,
           userGoal: parsed.userGoal,
         }),
       })
@@ -220,14 +308,25 @@ export async function queueChallengeCritiqueGeneration(
       payload: {
         roundId: updatedRound.id,
         critiqueMode,
+        claimVersion,
+        promptVersion,
+        qualityTier: parsed.qualityTier,
+        idempotencyKey,
         userGoal: parsed.userGoal,
       },
     });
 
-    return { round: updatedRound, events: [requestedEvent] };
+    return {
+      round: updatedRound,
+      events: [requestedEvent],
+      claimVersion,
+      promptVersion,
+      idempotencyKey,
+      reusedRequest: null,
+    };
   });
 
-  const invalidation = invalidateWorkspaceProjections(
+  const invalidation = challengeCritiqueWorkflowDeps.invalidateWorkspaceProjections(
     buildInvalidationInput(parsed.userId, {
       mapId: round.mapId,
       claimId: round.claimId,
@@ -235,27 +334,49 @@ export async function queueChallengeCritiqueGeneration(
     }),
   );
 
+  if (reusedRequest) {
+    const record = QueuedChallengeCritiqueRequestSchema.parse({
+      roundId: round.id,
+      requestId: reusedRequest.requestId,
+      idempotencyKey,
+      claimVersion,
+      promptVersion,
+      qualityTier: parsed.qualityTier,
+      triggerRunId: reusedRequest.triggerRunId,
+      status: "accepted",
+      critiqueMode: reusedRequest.critiqueMode,
+      userGoal: reusedRequest.userGoal,
+      requestedAt: reusedRequest.requestedAt,
+    });
+
+    return { invalidation, events, record };
+  }
+
   let triggerRunId: string | null = null;
 
   try {
-    await markChallengeCritiqueJobQueued({
+    await challengeCritiqueWorkflowDeps.markChallengeCritiqueJobQueued({
       userId: parsed.userId,
       mapId: round.mapId,
       claimId: round.claimId,
       roundId: round.id,
-      idempotencyKey: requestId,
+      idempotencyKey,
     });
 
-    const handle = await tasks.trigger("generate-challenge-critique", {
+    const handle = await challengeCritiqueWorkflowDeps.tasksTrigger("challenge.critique.generate", {
       userId: parsed.userId,
       roundId: parsed.roundId,
+      claimVersion,
+      promptVersion,
+      qualityTier: parsed.qualityTier,
+      idempotencyKey,
       requestId,
       steelmanText: parsed.steelmanText,
       critiqueMode: parsed.critiqueMode,
       userGoal: parsed.userGoal,
       triggerRunId: null,
     } satisfies GenerateChallengeCritiqueJobPayload, {
-      idempotencyKey: requestId,
+      idempotencyKey,
       tags: ["penny", "challenge", "critique"],
     });
 
@@ -267,8 +388,12 @@ export async function queueChallengeCritiqueGeneration(
         uncertainty: mergeCritiqueTaskState(round.uncertainty, {
           critiqueStatus: "pending",
           critiqueRequestId: requestId,
+          critiqueIdempotencyKey: idempotencyKey,
           critiqueRequestedAt: requestedAt,
           critiqueRunId: triggerRunId,
+          claimVersion,
+          promptVersion,
+          qualityTier: parsed.qualityTier,
           critiqueRepairAttempted: null,
           userGoal: parsed.userGoal,
         }),
@@ -277,13 +402,13 @@ export async function queueChallengeCritiqueGeneration(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
-    await markChallengeCritiqueJobFailed(
+    await challengeCritiqueWorkflowDeps.markChallengeCritiqueJobFailed(
       {
         userId: parsed.userId,
         mapId: round.mapId,
         claimId: round.claimId,
         roundId: round.id,
-        idempotencyKey: requestId,
+        idempotencyKey,
       },
       error,
     );
@@ -296,16 +421,20 @@ export async function queueChallengeCritiqueGeneration(
         uncertainty: mergeCritiqueTaskState(round.uncertainty, {
           critiqueStatus: failureStatus,
           critiqueRequestId: requestId,
+          critiqueIdempotencyKey: idempotencyKey,
           critiqueRequestedAt: requestedAt,
           critiqueFailedAt: new Date().toISOString(),
           critiqueError: truncateText(message, 1000),
           critiqueRepairAttempted: false,
+          claimVersion,
+          promptVersion,
+          qualityTier: parsed.qualityTier,
           userGoal: parsed.userGoal,
         }),
       })
       .where(eq(dialecticRounds.id, round.id));
 
-    invalidateWorkspaceProjections(
+    challengeCritiqueWorkflowDeps.invalidateWorkspaceProjections(
       buildInvalidationInput(parsed.userId, {
         mapId: round.mapId,
         claimId: round.claimId,
@@ -319,6 +448,10 @@ export async function queueChallengeCritiqueGeneration(
   const record = QueuedChallengeCritiqueRequestSchema.parse({
     roundId: round.id,
     requestId,
+    idempotencyKey,
+    claimVersion,
+    promptVersion,
+    qualityTier: parsed.qualityTier,
     triggerRunId,
     status: "accepted",
     critiqueMode: resolveCritiqueMode(round, parsed.critiqueMode),
@@ -330,7 +463,7 @@ export async function queueChallengeCritiqueGeneration(
 }
 
 async function loadChallengeCritiqueJobState(parsed: GenerateChallengeCritiqueJobPayload) {
-  const db = getDrizzleDb();
+  const db = challengeCritiqueWorkflowDeps.getDrizzleDb();
   const round = assertFound(
     await selectOne(
       db.select().from(dialecticRounds).where(and(eq(dialecticRounds.id, parsed.roundId), eq(dialecticRounds.userId, parsed.userId))).limit(1),
@@ -429,15 +562,15 @@ export async function runGenerateChallengeCritiqueJob(
   }
 
   try {
-    await markChallengeCritiqueJobRunning({
+    await challengeCritiqueWorkflowDeps.markChallengeCritiqueJobRunning({
       userId: parsed.userId,
       mapId: state.round.mapId,
       claimId: state.round.claimId,
       roundId: state.round.id,
-      idempotencyKey: parsed.requestId,
+      idempotencyKey: parsed.idempotencyKey,
     });
 
-    const result = await generateChallengeCritique(
+    const result = await challengeCritiqueWorkflowDeps.generateChallengeCritique(
       {
         mapTitle: state.map.title,
         claimId: state.claim.id,
@@ -466,11 +599,13 @@ export async function runGenerateChallengeCritiqueJob(
         userId: parsed.userId,
         mapId: state.round.mapId,
         claimId: state.round.claimId,
+        promptVersion: parsed.promptVersion,
+        qualityTier: parsed.qualityTier,
         workspaceContextId: state.round.workspaceContextId,
       },
     );
 
-    const db = getDrizzleDb();
+    const db = challengeCritiqueWorkflowDeps.getDrizzleDb();
     const generatedAt = new Date().toISOString();
 
     const { critique } = await db.transaction(async (tx) => {
@@ -480,11 +615,15 @@ export async function runGenerateChallengeCritiqueJob(
       const nextTaskState = mergeCritiqueTaskState(round.uncertainty, {
         critiqueStatus: "ready",
         critiqueRequestId: parsed.requestId,
+        critiqueIdempotencyKey: parsed.idempotencyKey,
         critiqueRunId: parsed.triggerRunId,
         critiqueGeneratedAt: generatedAt,
         critiqueFailedAt: null,
         critiqueError: null,
         critiqueRepairAttempted: result.meta.repairAttempted,
+        claimVersion: parsed.claimVersion,
+        promptVersion: parsed.promptVersion,
+        qualityTier: parsed.qualityTier,
         userGoal: parsed.userGoal,
         suggestedConfidenceDelta: result.output.suggestedConfidenceDelta,
         uncertaintyNote: result.output.uncertaintyNote,
@@ -562,16 +701,19 @@ export async function runGenerateChallengeCritiqueJob(
         payload: {
           roundId: round.id,
           critiqueId: critique.id,
+          claimVersion: parsed.claimVersion,
           provider: critique.provider,
           model: critique.model,
-          promptVersion: critique.promptVersion,
+          promptVersion: parsed.promptVersion,
+          qualityTier: parsed.qualityTier,
+          idempotencyKey: parsed.idempotencyKey,
         },
       });
 
       return { critique, round };
     });
 
-    invalidateWorkspaceProjections(
+    challengeCritiqueWorkflowDeps.invalidateWorkspaceProjections(
       buildInvalidationInput(parsed.userId, {
         mapId: state.round.mapId,
         claimId: state.round.claimId,
@@ -579,18 +721,18 @@ export async function runGenerateChallengeCritiqueJob(
       }),
     );
 
-    await markChallengeCritiqueJobSucceeded(
+    await challengeCritiqueWorkflowDeps.markChallengeCritiqueJobSucceeded(
       {
         userId: parsed.userId,
         mapId: state.round.mapId,
         claimId: state.round.claimId,
         roundId: state.round.id,
-        idempotencyKey: parsed.requestId,
+        idempotencyKey: parsed.idempotencyKey,
       },
       {
         provider: result.meta.provider,
         model: result.meta.model,
-        promptVersion: result.meta.promptVersion,
+        promptVersion: parsed.promptVersion,
       },
     );
 
@@ -600,17 +742,17 @@ export async function runGenerateChallengeCritiqueJob(
       critiqueId: critique.id,
     };
   } catch (error) {
-    const db = getDrizzleDb();
+    const db = challengeCritiqueWorkflowDeps.getDrizzleDb();
     const message = truncateText(error instanceof Error ? error.message : String(error), 1000);
     const failureStatus = mapChallengeCritiqueFailureStatus(error);
 
-    await markChallengeCritiqueJobFailed(
+    await challengeCritiqueWorkflowDeps.markChallengeCritiqueJobFailed(
       {
         userId: parsed.userId,
         mapId: state.round.mapId,
         claimId: state.round.claimId,
         roundId: state.round.id,
-        idempotencyKey: parsed.requestId,
+        idempotencyKey: parsed.idempotencyKey,
       },
       error,
     );
@@ -621,16 +763,20 @@ export async function runGenerateChallengeCritiqueJob(
         uncertainty: mergeCritiqueTaskState(state.round.uncertainty, {
           critiqueStatus: failureStatus,
           critiqueRequestId: parsed.requestId,
+          critiqueIdempotencyKey: parsed.idempotencyKey,
           critiqueRunId: parsed.triggerRunId,
           critiqueFailedAt: new Date().toISOString(),
           critiqueError: message,
           critiqueRepairAttempted: failureStatus === "validation_failed" ? true : null,
+          claimVersion: parsed.claimVersion,
+          promptVersion: parsed.promptVersion,
+          qualityTier: parsed.qualityTier,
           userGoal: parsed.userGoal,
         }),
       })
       .where(eq(dialecticRounds.id, state.round.id));
 
-    invalidateWorkspaceProjections(
+    challengeCritiqueWorkflowDeps.invalidateWorkspaceProjections(
       buildInvalidationInput(parsed.userId, {
         mapId: state.round.mapId,
         claimId: state.round.claimId,

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const ChallengeCritiqueModeSchema = z.enum(["direct", "socratic", "red_team"]);
 export const ChallengeResponsePathSchema = z.enum(["defend", "revise", "absorb"]);
+export const ChallengeCritiqueQualityTierSchema = z.enum(["standard", "degraded"]);
 
 export const ChallengeCritiqueNeighborClaimSchema = z.object({
   id: z.string().uuid("Invalid neighboring claim id."),
@@ -45,5 +46,6 @@ export const GenerateChallengeCritiqueOutputSchema = z.object({
 export type GenerateChallengeCritiqueInput = z.infer<typeof GenerateChallengeCritiqueInputSchema>;
 export type GenerateChallengeCritiqueOutput = z.infer<typeof GenerateChallengeCritiqueOutputSchema>;
 export type ChallengeCritiqueMode = z.infer<typeof ChallengeCritiqueModeSchema>;
+export type ChallengeCritiqueQualityTier = z.infer<typeof ChallengeCritiqueQualityTierSchema>;
 export type ChallengeCritiqueNeighborClaim = z.infer<typeof ChallengeCritiqueNeighborClaimSchema>;
 export type ChallengeCritiquePreviousRound = z.infer<typeof ChallengeCritiquePreviousRoundSchema>;

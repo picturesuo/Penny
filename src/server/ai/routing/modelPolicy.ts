@@ -1,5 +1,7 @@
 import "server-only";
 
+import { type ChallengeCritiqueQualityTier } from "@/server/ai/schemas/challengeCritique";
+
 export type AiOperationName = "generateChallengeCritique";
 export type AiProviderName = "anthropic" | "xai";
 export type AiRouteTier = "default" | "fallback" | "degraded";
@@ -15,17 +17,38 @@ export type AiRouteDefinition = {
   tier: AiRouteTier;
 };
 
-export function resolveModelPolicy(operation: AiOperationName): AiRouteDefinition[] {
+export function resolveModelPolicy(
+  operation: AiOperationName,
+  options: {
+    promptVersion?: string;
+    qualityTier?: ChallengeCritiqueQualityTier;
+  } = {},
+): AiRouteDefinition[] {
+  const promptVersion = options.promptVersion?.trim() || "challenge-critique.v1";
+
   switch (operation) {
     case "generateChallengeCritique":
-      return [
+      return (options.qualityTier === "degraded"
+        ? [
+            {
+              operation,
+              provider: "xai",
+              tier: "degraded",
+              displayName: "Grok 4.1 Fast",
+              model: process.env.XAI_FAST_MODEL?.trim() || "grok-4-fast",
+              promptVersion,
+              maxTokens: 1200,
+              temperature: 0.15,
+            },
+          ]
+        : [
         {
           operation,
           provider: "anthropic",
           tier: "default",
           displayName: "Claude Sonnet 4.6",
           model: process.env.ANTHROPIC_CHALLENGE_MODEL?.trim() || "claude-sonnet-4-20250514",
-          promptVersion: "challenge-critique.v1",
+          promptVersion,
           maxTokens: 1800,
           temperature: 0.2,
         },
@@ -35,7 +58,7 @@ export function resolveModelPolicy(operation: AiOperationName): AiRouteDefinitio
           tier: "fallback",
           displayName: "Grok 4.20",
           model: process.env.XAI_CHALLENGE_FALLBACK_MODEL?.trim() || "grok-4.20",
-          promptVersion: "challenge-critique.v1",
+          promptVersion,
           maxTokens: 1800,
           temperature: 0.2,
         },
@@ -45,11 +68,11 @@ export function resolveModelPolicy(operation: AiOperationName): AiRouteDefinitio
           tier: "degraded",
           displayName: "Grok 4.1 Fast",
           model: process.env.XAI_FAST_MODEL?.trim() || "grok-4-fast",
-          promptVersion: "challenge-critique.v1",
+          promptVersion,
           maxTokens: 1200,
           temperature: 0.15,
         },
-      ];
+      ]);
     default:
       throw new Error(`Unsupported AI operation: ${operation satisfies never}`);
   }
