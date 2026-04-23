@@ -1,6 +1,13 @@
 import type { Instrumentation } from "next";
 import { reportError, getRequestUserId, normalizeError } from "@/lib/error-reporting";
 
+export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startLangfuseNodeSdk } = await import("./instrumentation.node");
+    await startLangfuseNodeSdk();
+  }
+}
+
 export const onRequestError: Instrumentation.onRequestError = async (error, request, context) => {
   const normalizedError = normalizeError(error);
 
