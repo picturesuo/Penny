@@ -7,6 +7,7 @@ import {
   setWorkspaceSelection,
   startChallengeRound,
   updateClaim,
+  workspaceCommandSchemas,
 } from "@/server/workspace-commands";
 import {
   WorkspaceCommandSchema,
@@ -19,6 +20,8 @@ import {
   withUserId,
 } from "@/server/workspace-route-helpers";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest, context: RouteContext<"/api/commands/[...command]">) {
   const userId = await getAuthenticatedRouteUserId();
   const rateLimit = checkWorkspaceRouteRateLimit(userId);
@@ -30,11 +33,11 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/com
   try {
     const { command } = await context.params;
     const parsedCommand = WorkspaceCommandSchema.parse(command.join("/"));
-    const body = withUserId(await parseJsonObjectBody(request), userId);
+    const rawBody = withUserId(await parseJsonObjectBody(request), userId);
 
     switch (parsedCommand) {
       case "maps/create": {
-        const result = await createMap(body);
+        const result = await createMap(workspaceCommandSchemas.createMap.parse(rawBody));
         return createWorkspaceCommandResponse(
           "map",
           {
@@ -47,7 +50,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/com
       }
 
       case "claims/create": {
-        const result = await createClaim(body);
+        const result = await createClaim(workspaceCommandSchemas.createClaim.parse(rawBody));
         return createWorkspaceCommandResponse(
           "claim",
           {
@@ -60,7 +63,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/com
       }
 
       case "claims/update": {
-        const result = await updateClaim(body);
+        const result = await updateClaim(workspaceCommandSchemas.updateClaim.parse(rawBody));
         return createWorkspaceCommandResponse(
           "claim",
           {
@@ -73,7 +76,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/com
       }
 
       case "workspace/set-selection": {
-        const result = await setWorkspaceSelection(body);
+        const result = await setWorkspaceSelection(workspaceCommandSchemas.setWorkspaceSelection.parse(rawBody));
         return createWorkspaceCommandResponse(
           "workspaceContext",
           {
@@ -86,7 +89,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/com
       }
 
       case "challenge/start-round": {
-        const result = await startChallengeRound(body);
+        const result = await startChallengeRound(workspaceCommandSchemas.startChallengeRound.parse(rawBody));
         return createWorkspaceCommandResponse(
           "round",
           {
@@ -99,7 +102,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/com
       }
 
       case "challenge/generate-critique": {
-        const result = await requestChallengeCritique(body);
+        const result = await requestChallengeCritique(workspaceCommandSchemas.requestChallengeCritique.parse(rawBody));
         return createWorkspaceCommandResponse(
           "critique",
           {
@@ -112,7 +115,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/com
       }
 
       case "challenge/respond": {
-        const result = await recordChallengeResponse(body);
+        const result = await recordChallengeResponse(workspaceCommandSchemas.recordChallengeResponse.parse(rawBody));
         return createWorkspaceCommandResponse(
           "round",
           {

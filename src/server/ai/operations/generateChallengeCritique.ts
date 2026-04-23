@@ -2,6 +2,7 @@ import "server-only";
 
 import { getActiveSpanId, getActiveTraceId, startActiveObservation } from "@langfuse/tracing";
 import { z } from "zod";
+import { getDeployMetadata } from "@/lib/deploy-metadata";
 import {
   invokeAnthropicStructured,
   type StructuredProviderCost,
@@ -33,11 +34,13 @@ export type AiTaskContext = {
 
 export type AiCallMeta = {
   cost: StructuredProviderCost;
+  environment: string;
   latencyMs: number;
   model: string;
   observationId: string | null;
   promptVersion: string;
   provider: AiProviderName;
+  release: string;
   routeTier: AiRouteTier;
   traceId: string | null;
   usage: StructuredProviderUsage;
@@ -64,6 +67,7 @@ export async function generateChallengeCritique(
   const routes = resolveModelPolicy("generateChallengeCritique");
   const prompt = buildChallengeCritiquePrompt(parsed);
   const jsonSchema = toProviderJsonSchema(GenerateChallengeCritiqueOutputSchema);
+  const deploy = getDeployMetadata();
   let lastError: Error | null = null;
 
   for (const route of routes) {
@@ -93,8 +97,11 @@ export async function generateChallengeCritique(
               model: route.model,
               routeTier: route.tier,
               promptVersion: route.promptVersion,
+              release: deploy.release,
+              environment: deploy.environment,
               ...toContextMetadata(context),
             },
+            model: route.model,
             statusMessage: `Completed in ${latencyMs}ms`,
           });
 
@@ -104,6 +111,8 @@ export async function generateChallengeCritique(
               provider: route.provider,
               model: route.model,
               promptVersion: route.promptVersion,
+              release: deploy.release,
+              environment: deploy.environment,
               latencyMs,
               traceId,
               observationId,
@@ -115,27 +124,8 @@ export async function generateChallengeCritique(
         },
         {
           asType: "generation",
-          model: route.model,
-          modelParameters: {
-            temperature: route.temperature,
-            maxTokens: route.maxTokens,
-          },
-          prompt: {
-            name: route.operation,
-            version: parsePromptVersion(route.promptVersion),
-            isFallback: route.tier !== "default",
-          },
-          input: prompt,
-          metadata: {
-            operation: route.operation,
-            provider: route.provider,
-            model: route.model,
-            routeTier: route.tier,
-            promptVersion: route.promptVersion,
-            ...toContextMetadata(context),
-          },
         },
-      );
+      ) as AiCallResult<GenerateChallengeCritiqueOutput>;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
     }
@@ -147,14 +137,45 @@ export async function generateChallengeCritique(
 function buildChallengeCritiquePrompt(input: GenerateChallengeCritiqueInput) {
   return {
     systemPrompt:
-      "You generate one clear critique round for a claim. Make the weak point explicit, quiet, and actionable. Prefer structural pressure over generic skepticism.",
+      "You generate one rigorous challenge critique for Penny, a pressure-tested second brain. Be concise, specific, and high-signal. Prefer structural pressure over vague skepticism. Output only valid JSON that matches the requested schema.",
     userPrompt: [
+      `Map title: ${input.mapTitle}`,
+      `Claim id: ${input.claimId}`,
       `Claim: ${input.claimText}`,
       input.steelmanText ? `Existing steelman: ${input.steelmanText}` : "",
-      `Current confidence: ${input.confidence}%`,
+      `Current confidence: ${input.claimConfidence}%`,
       `Critique mode: ${input.critiqueMode}`,
-      input.priorRounds.length ? `Prior round summaries:\n- ${input.priorRounds.join("\n- ")}` : "No prior challenge rounds.",
-      'Return JSON with "headline", "critique", "critiqueLens", "failureTypes", "dependencyRisks", and "whyNow".',
+      input.userGoal ? `User goal: ${input.userGoal}` : "User goal: none provided.",
+      input.neighboringClaims.length
+        ? `Neighboring claims:\n- ${input.neighboringClaims
+            .map((claim) =>
+              [
+                claim.text,
+                claim.confidence != null ? `${claim.confidence}% confidence` : null,
+                claim.relationship ? `relationship=${claim.relationship}` : null,
+              ]
+                .filter(Boolean)
+                .join(" | "),
+            )
+            .join("\n- ")}`
+        : "Neighboring claims: none provided.",
+      input.previousRounds.length
+        ? `Previous rounds:\n- ${input.previousRounds
+            .map((round) =>
+              [
+                `Round ${round.roundNumber}`,
+                round.critiqueSummary,
+                round.userResponse ? `response=${round.userResponse}` : null,
+                round.responsePath ? `path=${round.responsePath}` : null,
+                round.confidenceDelta != null ? `delta=${round.confidenceDelta}` : null,
+              ]
+                .filter(Boolean)
+                .join(" | "),
+            )
+            .join("\n- ")}`
+        : "Previous rounds: none.",
+      'Return JSON with "conciseCritiqueSummary", "strongestCounterargument", "assumptions", "likelyFailureModes", "followUpQuestions", "suggestedConfidenceDelta", and "uncertaintyNote".',
+      "Keep the confidence delta conservative and bounded by the evidence in the prompt.",
     ]
       .filter(Boolean)
       .join("\n"),
@@ -257,9 +278,4 @@ function toContextMetadata(context: AiTaskContext) {
     sessionId: context.sessionId ?? null,
     tags: context.tags ?? [],
   };
-}
-
-function parsePromptVersion(promptVersion: string) {
-  const numeric = Number.parseInt(promptVersion.replace(/[^0-9]/g, ""), 10);
-  return Number.isFinite(numeric) && numeric > 0 ? numeric : 1;
 }

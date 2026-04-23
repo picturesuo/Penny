@@ -11,6 +11,8 @@ import {
   movesEvents,
   workspaceContexts,
 } from "@/db/schema";
+import { GenerateChallengeCritiqueOutputSchema } from "@/server/ai/schemas/challengeCritique";
+import { ChallengeCritiqueTaskStateSchema } from "@/server/challenge-critique-workflow";
 
 const WorkspaceProjectionModeSchema = z.enum(["brain", "challenge", "learn"]);
 const WorkspaceProjectionInputSchema = z.object({
@@ -103,6 +105,19 @@ export type ChallengeView = {
     | {
         status: "pending";
         roundId: string;
+        requestId: string | null;
+        triggerRunId: string | null;
+        requestedAt: string | null;
+        userGoal: string | null;
+      }
+    | {
+        status: "failed";
+        roundId: string;
+        requestId: string | null;
+        triggerRunId: string | null;
+        requestedAt: string | null;
+        failedAt: string | null;
+        errorMessage: string | null;
       }
     | {
         status: "ready";
@@ -110,12 +125,17 @@ export type ChallengeView = {
         provider: string;
         model: string;
         promptVersion: string;
-        headline: string;
-        critiqueText: string;
+        conciseCritiqueSummary: string;
+        strongestCounterargument: string;
+        assumptions: string[];
+        likelyFailureModes: string[];
+        followUpQuestions: string[];
+        suggestedConfidenceDelta: number;
+        uncertaintyNote: string;
         critiqueLens: string;
-        failureTypes: string[];
-        dependencyRisks: string[];
-        whyNow: string;
+        requestId: string | null;
+        triggerRunId: string | null;
+        userGoal: string | null;
         generatedAt: string;
       }
     | null;
@@ -423,6 +443,11 @@ function buildPriorRoundState(
   };
 }
 
+function parseCritiqueTaskState(round: ChallengeRoundRecord | null) {
+  const parsed = ChallengeCritiqueTaskStateSchema.safeParse(round?.uncertainty ?? {});
+  return parsed.success ? parsed.data : ChallengeCritiqueTaskStateSchema.parse({});
+}
+
 export async function buildShellView(input: WorkspaceProjectionInput): Promise<ShellView> {
   const state = await resolveWorkspaceState(input);
   return buildShellFromState(state);
@@ -449,6 +474,10 @@ export async function buildChallengeView(input: WorkspaceProjectionInput): Promi
   });
   const currentRound = state.roundRecords[0] ?? null;
   const critiqueRecord = currentRound ? state.critiqueByRoundId.get(currentRound.id) ?? null : null;
+  const critiqueTaskState = parseCritiqueTaskState(currentRound);
+  const validatedCritiqueOutput = critiqueRecord
+    ? GenerateChallengeCritiqueOutputSchema.safeParse(critiqueRecord.validatedOutput)
+    : null;
 
   return {
     shell: buildShellFromState(state),
@@ -476,17 +505,48 @@ export async function buildChallengeView(input: WorkspaceProjectionInput): Promi
             provider: critiqueRecord.provider,
             model: critiqueRecord.model,
             promptVersion: critiqueRecord.promptVersion,
-            headline: critiqueRecord.headline,
-            critiqueText: critiqueRecord.critiqueText,
+            conciseCritiqueSummary: validatedCritiqueOutput?.success
+              ? validatedCritiqueOutput.data.conciseCritiqueSummary
+              : critiqueRecord.headline,
+            strongestCounterargument: validatedCritiqueOutput?.success
+              ? validatedCritiqueOutput.data.strongestCounterargument
+              : critiqueRecord.critiqueText,
+            assumptions: validatedCritiqueOutput?.success
+              ? validatedCritiqueOutput.data.assumptions
+              : critiqueRecord.dependencyRisks,
+            likelyFailureModes: validatedCritiqueOutput?.success
+              ? validatedCritiqueOutput.data.likelyFailureModes
+              : critiqueRecord.failureTypes,
+            followUpQuestions: validatedCritiqueOutput?.success ? validatedCritiqueOutput.data.followUpQuestions : [],
+            suggestedConfidenceDelta: validatedCritiqueOutput?.success
+              ? validatedCritiqueOutput.data.suggestedConfidenceDelta
+              : currentRound.confidenceDelta ?? 0,
+            uncertaintyNote: validatedCritiqueOutput?.success
+              ? validatedCritiqueOutput.data.uncertaintyNote
+              : critiqueRecord.whyNow,
             critiqueLens: critiqueRecord.critiqueLens,
-            failureTypes: critiqueRecord.failureTypes,
-            dependencyRisks: critiqueRecord.dependencyRisks,
-            whyNow: critiqueRecord.whyNow,
+            requestId: critiqueTaskState.critiqueRequestId,
+            triggerRunId: critiqueTaskState.critiqueRunId,
+            userGoal: critiqueTaskState.userGoal,
             generatedAt: critiqueRecord.createdAt.toISOString(),
           }
+        : critiqueTaskState.critiqueStatus === "failed"
+          ? {
+              status: "failed",
+              roundId: currentRound.id,
+              requestId: critiqueTaskState.critiqueRequestId,
+              triggerRunId: critiqueTaskState.critiqueRunId,
+              requestedAt: critiqueTaskState.critiqueRequestedAt,
+              failedAt: critiqueTaskState.critiqueFailedAt,
+              errorMessage: critiqueTaskState.critiqueError,
+            }
         : {
             status: "pending",
             roundId: currentRound.id,
+            requestId: critiqueTaskState.critiqueRequestId,
+            triggerRunId: critiqueTaskState.critiqueRunId,
+            requestedAt: critiqueTaskState.critiqueRequestedAt,
+            userGoal: critiqueTaskState.userGoal,
           }
       : null,
     priorRound: buildPriorRoundState(state.roundRecords, currentRound),

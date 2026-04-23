@@ -3,7 +3,6 @@ import { z } from "zod";
 import { getDrizzleDb } from "@/db/drizzle";
 import {
   claimConceptEdges,
-  challengeCritiques,
   claims,
   concepts,
   dialecticRounds,
@@ -12,17 +11,13 @@ import {
   movesEvents,
   workspaceContexts,
 } from "@/db/schema";
-import { generateChallengeCritique } from "@/server/ai/service";
 import {
-  markChallengeCritiqueJobFailed,
-  markChallengeCritiqueJobQueued,
-  markChallengeCritiqueJobRunning,
-  markChallengeCritiqueJobSucceeded,
-} from "@/server/challenge-critique-job-monitor";
+  queueChallengeCritiqueGeneration,
+  type QueuedChallengeCritiqueRequest,
+} from "@/server/challenge-critique-workflow";
+import { buildInvalidationInput, type CommandResult } from "@/server/workspace-commands-internals";
 import {
   invalidateWorkspaceProjections,
-  type WorkspaceProjectionInvalidationInput,
-  type WorkspaceProjectionInvalidationResult,
 } from "@/server/workspace-cache";
 
 const UuidSchema = z.string().uuid("Invalid UUID.");
@@ -100,6 +95,7 @@ const requestChallengeCritiqueSchema = z.object({
   roundId: UuidSchema,
   steelmanText: z.string().trim().min(1).max(6000).nullable().optional().default(null),
   critiqueMode: z.enum(["direct", "socratic", "red_team"]).nullable().optional().default(null),
+  userGoal: z.string().trim().min(1).max(800).nullable().optional().default(null),
   requestId: z.string().trim().min(1).max(160).nullable().optional().default(null),
 });
 
@@ -154,15 +150,8 @@ type MapRecord = typeof maps.$inferSelect;
 type ClaimRecord = typeof claims.$inferSelect;
 type WorkspaceContextRecord = typeof workspaceContexts.$inferSelect;
 type DialecticRoundRecord = typeof dialecticRounds.$inferSelect;
-type ChallengeCritiqueRecord = typeof challengeCritiques.$inferSelect;
 type LearningPromptRecord = typeof learningPrompts.$inferSelect;
 type ClaimConceptEdgeRecord = typeof claimConceptEdges.$inferSelect;
-
-type CommandResult<TRecord> = {
-  invalidation: WorkspaceProjectionInvalidationResult;
-  events: MoveEventRecord[];
-  record: TRecord;
-};
 
 function buildContextKey(input: z.infer<typeof setWorkspaceSelectionSchema>) {
   if (input.contextKey) {
@@ -183,24 +172,6 @@ function assertFound<T>(value: T | null, message: string): T {
   }
 
   return value;
-}
-
-function buildInvalidationInput(
-  userId: string,
-  data: {
-    mapId?: string | null;
-    claimId?: string | null;
-    conceptId?: string | null;
-    workspaceContextId?: string | null;
-  },
-): WorkspaceProjectionInvalidationInput {
-  return {
-    userId,
-    mapId: data.mapId ?? null,
-    claimId: data.claimId ?? null,
-    conceptId: data.conceptId ?? null,
-    workspaceContextId: data.workspaceContextId ?? null,
-  };
 }
 
 async function appendEvent(
@@ -633,221 +604,8 @@ export async function startChallengeRound(
 
 export async function requestChallengeCritique(
   input: z.input<typeof requestChallengeCritiqueSchema>,
-): Promise<CommandResult<ChallengeCritiqueRecord>> {
-  const parsed = requestChallengeCritiqueSchema.parse(input);
-  const db = getDrizzleDb();
-  const requestId = parsed.requestId ?? crypto.randomUUID();
-
-  const { claim, priorRounds, requestedEvent, roundSnapshot } = await db.transaction(async (tx) => {
-    const existingRound = await getOwnedRound(tx, parsed.roundId, parsed.userId);
-    const claim = await getOwnedClaim(tx, existingRound.claimId, parsed.userId);
-    const priorRounds = await tx
-      .select()
-      .from(dialecticRounds)
-      .where(and(eq(dialecticRounds.claimId, claim.id), eq(dialecticRounds.userId, parsed.userId)))
-      .orderBy(desc(dialecticRounds.roundNumber))
-      .limit(6);
-
-    const requestedEvent = await appendEvent(tx, {
-      userId: parsed.userId,
-      mapId: existingRound.mapId,
-      claimId: existingRound.claimId,
-      type: "challenge.critique.requested",
-      requestId,
-      payload: {
-        roundId: existingRound.id,
-        critiqueMode:
-          parsed.critiqueMode ?? (existingRound.critiqueMode as "direct" | "socratic" | "red_team" | null) ?? "direct",
-      },
-    });
-
-    return { claim, priorRounds, requestedEvent, roundSnapshot: existingRound };
-  });
-
-  await markChallengeCritiqueJobQueued({
-    userId: parsed.userId,
-    mapId: roundSnapshot.mapId,
-    claimId: roundSnapshot.claimId,
-    roundId: roundSnapshot.id,
-    idempotencyKey: requestId,
-  });
-
-  try {
-    const priorRoundSummaries = priorRounds
-      .filter((round) => round.id !== roundSnapshot.id)
-      .map((round) => {
-        const snippetSource = round.userResponse?.trim().length ? round.userResponse : round.critiqueGenerated;
-        const snippet =
-          snippetSource.trim().length > 120 ? `${snippetSource.trim().slice(0, 119).trimEnd()}...` : snippetSource.trim();
-
-        return `Round ${round.roundNumber}: ${snippet}`;
-      });
-
-    await markChallengeCritiqueJobRunning({
-      userId: parsed.userId,
-      mapId: roundSnapshot.mapId,
-      claimId: roundSnapshot.claimId,
-      roundId: roundSnapshot.id,
-      idempotencyKey: requestId,
-    });
-
-    const result = await generateChallengeCritique(
-      {
-        claimText: claim.text,
-        steelmanText: parsed.steelmanText,
-        confidence: roundSnapshot.confidenceAtRoundStart,
-        priorRounds: priorRoundSummaries,
-        critiqueMode:
-          parsed.critiqueMode ?? (roundSnapshot.critiqueMode as "direct" | "socratic" | "red_team" | null) ?? "direct",
-      },
-      {
-        userId: parsed.userId,
-        mapId: roundSnapshot.mapId,
-        claimId: roundSnapshot.claimId,
-        workspaceContextId: roundSnapshot.workspaceContextId,
-      },
-    );
-
-    const { critique, generatedEvent, round } = await db.transaction(async (tx) => {
-      const existingRound = await getOwnedRound(tx, parsed.roundId, parsed.userId);
-
-      const [round] = await tx
-        .update(dialecticRounds)
-        .set({
-          critiqueGenerated: result.output.critique,
-          critiqueFailureTypes: result.output.failureTypes,
-          critiqueLens: result.output.critiqueLens,
-          critiqueMode: parsed.critiqueMode ?? existingRound.critiqueMode,
-          uncertainty: {
-            ...(existingRound.uncertainty ?? {}),
-            dependencyRisks: result.output.dependencyRisks,
-            headline: result.output.headline,
-            whyNow: result.output.whyNow,
-          },
-        })
-        .where(eq(dialecticRounds.id, existingRound.id))
-        .returning();
-
-      const existingCritique = await selectOne(
-        tx.select().from(challengeCritiques).where(eq(challengeCritiques.roundId, existingRound.id)).limit(1),
-      );
-
-      const [critique] = existingCritique
-        ? await tx
-            .update(challengeCritiques)
-            .set({
-              provider: result.meta.provider,
-              model: result.meta.model,
-              promptVersion: result.meta.promptVersion,
-              headline: result.output.headline,
-              critiqueText: result.output.critique,
-              critiqueLens: result.output.critiqueLens,
-              failureTypes: result.output.failureTypes,
-              dependencyRisks: result.output.dependencyRisks,
-              whyNow: result.output.whyNow,
-              validatedOutput: {
-                ...result.output,
-                _aiRun: {
-                  provider: result.meta.provider,
-                  model: result.meta.model,
-                  promptVersion: result.meta.promptVersion,
-                  release: result.meta.release,
-                  environment: result.meta.environment,
-                  traceId: result.meta.traceId,
-                  observationId: result.meta.observationId,
-                },
-              },
-            })
-            .where(eq(challengeCritiques.id, existingCritique.id))
-            .returning()
-        : await tx
-            .insert(challengeCritiques)
-            .values({
-              userId: parsed.userId,
-              mapId: existingRound.mapId,
-              claimId: existingRound.claimId,
-              roundId: existingRound.id,
-              workspaceContextId: existingRound.workspaceContextId,
-              provider: result.meta.provider,
-              model: result.meta.model,
-              promptVersion: result.meta.promptVersion,
-              headline: result.output.headline,
-              critiqueText: result.output.critique,
-              critiqueLens: result.output.critiqueLens,
-              failureTypes: result.output.failureTypes,
-              dependencyRisks: result.output.dependencyRisks,
-              whyNow: result.output.whyNow,
-              validatedOutput: {
-                ...result.output,
-                _aiRun: {
-                  provider: result.meta.provider,
-                  model: result.meta.model,
-                  promptVersion: result.meta.promptVersion,
-                  release: result.meta.release,
-                  environment: result.meta.environment,
-                  traceId: result.meta.traceId,
-                  observationId: result.meta.observationId,
-                },
-              },
-            })
-            .returning();
-
-      const generatedEvent = await appendEvent(tx, {
-        userId: parsed.userId,
-        mapId: existingRound.mapId,
-        claimId: existingRound.claimId,
-        type: "challenge.critique.generated",
-        requestId,
-        payload: {
-          roundId: existingRound.id,
-          critiqueId: critique.id,
-          provider: critique.provider,
-          model: critique.model,
-          promptVersion: critique.promptVersion,
-        },
-      });
-
-      return { critique, generatedEvent, round };
-    });
-
-    await markChallengeCritiqueJobSucceeded(
-      {
-        userId: parsed.userId,
-        mapId: roundSnapshot.mapId,
-        claimId: roundSnapshot.claimId,
-        roundId: roundSnapshot.id,
-        idempotencyKey: requestId,
-      },
-      {
-        provider: result.meta.provider,
-        model: result.meta.model,
-        promptVersion: result.meta.promptVersion,
-      },
-    );
-
-    const invalidation = invalidateWorkspaceProjections(
-      buildInvalidationInput(parsed.userId, {
-        mapId: round.mapId,
-        claimId: round.claimId,
-        workspaceContextId: round.workspaceContextId,
-      }),
-    );
-
-    return { invalidation, events: [requestedEvent, generatedEvent], record: critique };
-  } catch (error) {
-    await markChallengeCritiqueJobFailed(
-      {
-        userId: parsed.userId,
-        mapId: roundSnapshot.mapId,
-        claimId: roundSnapshot.claimId,
-        roundId: roundSnapshot.id,
-        idempotencyKey: requestId,
-      },
-      error,
-    );
-
-    throw error;
-  }
+): Promise<CommandResult<QueuedChallengeCritiqueRequest>> {
+  return queueChallengeCritiqueGeneration(requestChallengeCritiqueSchema.parse(input));
 }
 
 export async function recordChallengeResponse(
