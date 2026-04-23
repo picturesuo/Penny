@@ -19,6 +19,7 @@ import { ResolutionFlow, type ResolutionDownstreamClaim, type ResolutionSubmissi
 import { MarginRail } from "@/components/penny/margin-rail";
 import { RevisitQueue } from "@/components/penny/revisit-queue";
 import { SteelManGate } from "@/components/penny/steel-man-gate";
+import { useAppShell, type AppShellSphere } from "@/components/penny/app-shell";
 import {
   ChallengeRound,
   type BestNextMoveKey,
@@ -1424,6 +1425,7 @@ export function ThoughtMapWorkspace({
   initialLearningQuestion?: string | null;
   initialNextAction?: BestNextMoveKey | null;
 }) {
+  const { resetShell, setShell } = useAppShell();
   const normalizedInitialMap = normalizeMap(initialMap);
   const [map, setMap] = useState(() => normalizedInitialMap);
   const [activeSession, setActiveSession] = useState<ThinkingSession | null>(null);
@@ -3004,6 +3006,29 @@ export function ThoughtMapWorkspace({
   }, [dialecticResponseDrafts, dialecticRounds, focusedChallengeRoundLabel]);
   const primaryChallengeRound = dialecticRounds[primaryChallengeRoundIndex] ?? null;
   const secondaryChallengeRounds = dialecticRounds.filter((_, index) => index !== primaryChallengeRoundIndex);
+  const activeShellChallengeRound = useMemo(() => {
+    if (!primaryChallengeRound || !challengeClaim) {
+      return primaryChallengeRound;
+    }
+
+    const draftState = challengeDraftStates[challengeDraftStateKey(challengeClaim.id, primaryChallengeRound.roundIndex)] ?? null;
+
+    if (!draftState || (draftState.status !== "generated" && draftState.status !== "fallback")) {
+      return primaryChallengeRound;
+    }
+
+    return {
+      ...primaryChallengeRound,
+      title: draftState.title ?? primaryChallengeRound.title,
+      prompt: draftState.prompt ?? primaryChallengeRound.prompt,
+      why: draftState.why ?? primaryChallengeRound.why,
+      strength:
+        draftState.critiqueStrength && draftState.providerLabel
+          ? `${draftState.critiqueStrength} · ${draftState.providerLabel}`
+          : primaryChallengeRound.strength,
+      critiqueFailureTypes: draftState.critiqueType ? [draftState.critiqueType] : primaryChallengeRound.critiqueFailureTypes,
+    };
+  }, [challengeClaim, challengeDraftStates, primaryChallengeRound]);
   const nextOpenChallengeRound = useMemo(
     () => dialecticRounds.find((candidate) => !candidate.dialecticRound?.userResponse) ?? null,
     [dialecticRounds],
@@ -3300,6 +3325,215 @@ export function ThoughtMapWorkspace({
       ),
     [map.events, selectedGraphNode?.node.id],
   );
+  useEffect(() => {
+    const selectedClaimLabel = selectedGraphNode?.node.content ?? map.rawThought;
+    const selectedConfidence = Math.round((selectedGraphNode?.node.scores?.confidence ?? 0) * 100);
+    const dependents = selectedGenealogy.dependents.slice(0, 3);
+    const brainInsight =
+      selectedClaimStructure.whyNowReason ??
+      selectedClaimStructure.whyNowTrigger ??
+      "This claim still needs pressure on the assumptions carrying the most downstream weight.";
+    const challengeTransparency = activeShellChallengeRound
+      ? [
+          ["Why now", activeShellChallengeRound.why],
+          ["Premise", activeShellChallengeRound.argument.premise],
+          ["Precedent", activeShellChallengeRound.argument.precedent],
+        ]
+      : [];
+    const challengeStatus = activeShellChallengeRound?.dialecticRound?.userResponse
+      ? "Saved"
+      : activeShellChallengeRound
+        ? "Open"
+        : "No round";
+    const roundHistory = dialecticRounds.slice(0, 4).map((round) => ({
+      label: round.round,
+      state: round.dialecticRound?.userResponse ? "saved" : "queued",
+      title: round.prompt,
+    }));
+    const spheres: AppShellSphere[] = [
+      { label: "Work", active: true, meta: `${map.nodes.length} claims` },
+      { label: "Writing", meta: `${availableMaps.length} maps` },
+      { label: "Life", meta: "Mode rail only" },
+      { label: "Learning", meta: `${learnConnectedIdeas.length} connected ideas` },
+    ];
+
+    const inspector =
+      focusIntent === "challenge" ? (
+        <>
+          <Card className="penny-card rounded-[24px] px-5 py-5 shadow-[var(--shadow-card)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="penny-label">Round status</p>
+                <h2 className="mt-2 text-lg font-semibold text-[var(--ink)]">{challengeStatus}</h2>
+              </div>
+              {activeShellChallengeRound ? (
+                <span className="rounded-full bg-[rgba(214,162,70,0.14)] px-3 py-1 text-xs font-medium text-[#8b6520]">
+                  {activeShellChallengeRound.round}
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-5 space-y-3">
+              {challengeTransparency.map(([label, value]) => (
+                <div key={label} className="rounded-[16px] border border-[var(--line)] bg-white px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">{label}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{value}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="penny-card rounded-[24px] px-5 py-5 shadow-[var(--shadow-card)]">
+            <p className="penny-label">Dependency cascade</p>
+            <div className="mt-4 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
+              <OrnamentalGraph variant="cascade" accent="var(--challenge)" className="mx-auto h-20 max-w-[12rem]" />
+            </div>
+            <div className="mt-4 space-y-2.5">
+              {(challengeDependencyCascade?.steps.slice(0, 3) ?? []).map((step) => (
+                <div key={step.id} className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5">
+                  <p className="text-sm font-medium text-[var(--ink)]">{step.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{step.detail}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="penny-card rounded-[22px] px-5 py-5 shadow-[var(--shadow-card)]">
+            <p className="penny-label">Round history</p>
+            <div className="mt-3 space-y-2">
+              {roundHistory.length ? (
+                roundHistory.map((round) => (
+                  <div key={round.label} className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-[var(--ink)]">{round.label}</p>
+                      <span className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted-ink)]">{round.state}</span>
+                    </div>
+                    <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{round.title}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5 text-sm text-[var(--muted-ink)]">
+                  No challenge rounds yet.
+                </div>
+              )}
+            </div>
+          </Card>
+        </>
+      ) : focusIntent === "learn" ? (
+        <>
+          <Card className="penny-card rounded-[24px] px-5 py-5 shadow-[var(--shadow-card)]">
+            <p className="penny-label">Where This Lives In Your Brain</p>
+            <div className="mt-4 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
+              <OrnamentalGraph variant="concept-map" accent="var(--learn)" className="mx-auto h-24 max-w-[12rem]" />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="rounded-full border border-[var(--line)] bg-white px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
+                {selectedGraphNodeParent?.content ?? "Root frame"}
+              </span>
+              <span className="rounded-full border border-[rgba(95,143,120,0.24)] bg-[rgba(95,143,120,0.12)] px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-[#426957]">
+                {selectedTeachBackFocus.concept}
+              </span>
+            </div>
+          </Card>
+
+          <Card className="penny-card rounded-[22px] px-5 py-5 shadow-[var(--shadow-card)]">
+            <p className="penny-label">Related claim</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{selectedClaimLabel}</p>
+            <div className="mt-5 border-t border-[var(--line)] pt-4">
+              <p className="penny-label">Connected ideas</p>
+              <div className="mt-3 space-y-2">
+                {learnConnectedIdeas.length ? (
+                  learnConnectedIdeas.slice(0, 4).map((idea) => (
+                    <div key={idea} className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5 text-sm text-[var(--ink)]">
+                      {idea}
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5 text-sm text-[var(--muted-ink)]">
+                    No connected ideas surfaced yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        </>
+      ) : (
+        <>
+          <Card className="penny-card rounded-[24px] px-5 py-5 shadow-[var(--shadow-card)]">
+            <p className="penny-label">Selected claim</p>
+            <h2 className="mt-3 text-lg font-semibold leading-7 text-[var(--ink)]">{selectedClaimLabel}</h2>
+
+            <div className="mt-6">
+              <p className="penny-label">Confidence</p>
+              <p className="mt-2 text-[2.15rem] font-semibold leading-none text-[var(--ink)]">{selectedConfidence}%</p>
+            </div>
+
+            <div className="mt-6">
+              <p className="penny-label">Mini graph</p>
+              <div className="mt-3 rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
+                <OrnamentalGraph variant="brain-map" accent="var(--brain)" className="mx-auto h-24 max-w-[15rem]" />
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <p className="penny-label">Dependents</p>
+              <div className="mt-3 space-y-2">
+                {dependents.length ? (
+                  dependents.map((node) => (
+                    <div key={node.id} className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5 text-sm text-[var(--ink)]">
+                      {node.content}
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[16px] border border-[var(--line)] bg-white px-3 py-2.5 text-sm text-[var(--muted-ink)]">
+                    No downstream claims yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="penny-card rounded-[22px] px-5 py-5 shadow-[var(--shadow-card)]">
+            <p className="penny-label">Insight</p>
+            <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{brainInsight}</p>
+          </Card>
+        </>
+      );
+
+    setShell({
+      breadcrumbs: [
+        { label: "Work" },
+        { label: clampShellLabel(map.title, 26) },
+        { label: clampShellLabel(selectedClaimLabel, 42) },
+        ...(focusIntent === "learn" ? [{ label: clampShellLabel(selectedTeachBackFocus.concept, 24) }] : []),
+      ],
+      currentMapId: map.id,
+      inspector,
+      spheres,
+      topBarLabel: focusIntent === "challenge" ? "Challenge lane" : focusIntent === "learn" ? "Learn mode" : "Brain",
+    });
+
+    return resetShell;
+  }, [
+    availableMaps.length,
+    challengeDependencyCascade,
+    dialecticRounds,
+    focusIntent,
+    learnConnectedIdeas,
+    map.id,
+    map.nodes.length,
+    map.rawThought,
+    map.title,
+    activeShellChallengeRound,
+    resetShell,
+    selectedClaimStructure.whyNowReason,
+    selectedClaimStructure.whyNowTrigger,
+    selectedGenealogy.dependents,
+    selectedGraphNode?.node.content,
+    selectedGraphNode?.node.scores?.confidence,
+    selectedGraphNodeParent?.content,
+    selectedTeachBackFocus.concept,
+    setShell,
+  ]);
   const resolutionLessons = useMemo(
     () =>
       claimResolutionEvents.flatMap((event) => {
@@ -9715,6 +9949,16 @@ export function ThoughtMapWorkspace({
       ) : null}
     </div>
   );
+}
+
+function clampShellLabel(value: string, maxLength: number) {
+  const normalized = value.trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
 function TimelinePanel({
