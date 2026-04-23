@@ -599,8 +599,10 @@ export async function runGenerateChallengeCritiqueJob(
         userId: parsed.userId,
         mapId: state.round.mapId,
         claimId: state.round.claimId,
+        requestId: parsed.requestId,
         promptVersion: parsed.promptVersion,
         qualityTier: parsed.qualityTier,
+        roundId: state.round.id,
         workspaceContextId: state.round.workspaceContextId,
       },
     );
@@ -646,11 +648,13 @@ export async function runGenerateChallengeCritiqueJob(
           provider: result.meta.provider,
           model: result.meta.model,
           promptVersion: result.meta.promptVersion,
+          fallbackHopCount: result.meta.fallbackHopCount,
           release: result.meta.release,
           environment: result.meta.environment,
           repairAttempted: result.meta.repairAttempted,
           traceId: result.meta.traceId,
           observationId: result.meta.observationId,
+          validationResult: result.meta.validationResult,
         },
       };
 

@@ -40,15 +40,24 @@ export type AiTaskContext = {
   mapId?: string | null;
   promptVersion?: string | null;
   qualityTier?: ChallengeCritiqueQualityTier | null;
+  requestId?: string | null;
+  roundId?: string | null;
   sessionId?: string | null;
   tags?: string[];
   userId?: string | null;
   workspaceContextId?: string | null;
 };
 
+export type ChallengeCritiqueValidationResult =
+  | "valid"
+  | "repaired_valid"
+  | "validation_failed"
+  | "not_validated";
+
 export type AiCallMeta = {
   cost: StructuredProviderCost;
   environment: string;
+  fallbackHopCount: number;
   latencyMs: number;
   model: string;
   observationId: string | null;
@@ -59,6 +68,7 @@ export type AiCallMeta = {
   routeTier: AiRouteTier;
   traceId: string | null;
   usage: StructuredProviderUsage;
+  validationResult: ChallengeCritiqueValidationResult;
 };
 
 export type AiCallResult<TOutput> = {
@@ -88,64 +98,83 @@ export async function generateChallengeCritique(
   const deploy = generateChallengeCritiqueDeps.getDeployMetadata();
   let lastError: Error | null = null;
 
-  for (const route of routes) {
+  for (const [routeIndex, route] of routes.entries()) {
     try {
       return await generateChallengeCritiqueDeps.startActiveObservation(
         `ai.generateChallengeCritique.${route.tier}`,
         async (generation) => {
           const startedAt = Date.now();
-          const providerResponse = await invokeStructuredProvider({
-            jsonSchema,
-            route,
-            systemPrompt: prompt.systemPrompt,
-            userPrompt: prompt.userPrompt,
-          });
-          const { repairAttempted, validatedOutput, usage, cost } = await validateChallengeCritiqueWithSingleRepair({
-            jsonSchema,
-            prompt,
-            providerResponse,
-            route,
-          });
-          const latencyMs = Date.now() - startedAt;
-          const traceId = generateChallengeCritiqueDeps.getTraceId() ?? null;
-          const observationId = generateChallengeCritiqueDeps.getActiveObservationId() ?? null;
+          try {
+            const providerResponse = await invokeStructuredProvider({
+              jsonSchema,
+              route,
+              systemPrompt: prompt.systemPrompt,
+              userPrompt: prompt.userPrompt,
+            });
+            const { repairAttempted, validatedOutput, usage, cost } = await validateChallengeCritiqueWithSingleRepair({
+              jsonSchema,
+              prompt,
+              providerResponse,
+              route,
+            });
+            const latencyMs = Date.now() - startedAt;
+            const traceId = generateChallengeCritiqueDeps.getTraceId() ?? null;
+            const observationId = generateChallengeCritiqueDeps.getActiveObservationId() ?? null;
+            const validationResult = repairAttempted ? "repaired_valid" : "valid";
 
-          generation.update({
-            output: validatedOutput as JsonCompatibleValue,
-            usageDetails: toLangfuseUsageDetails(usage),
-            costDetails: toLangfuseCostDetails(cost),
-            metadata: {
-              operation: route.operation,
-              provider: route.provider,
+            generation.update({
+              output: validatedOutput as JsonCompatibleValue,
+              usageDetails: toLangfuseUsageDetails(usage),
+              costDetails: toLangfuseCostDetails(cost),
+              metadata: buildObservationMetadata({
+                context,
+                deploy,
+                fallbackHopCount: routeIndex,
+                repairAttempted,
+                route,
+                validationResult,
+              }),
               model: route.model,
-              routeTier: route.tier,
-              promptVersion: route.promptVersion,
-              release: deploy.release,
-              environment: deploy.environment,
-              repairAttempted,
-              ...toContextMetadata(context),
-            },
-            model: route.model,
-            statusMessage: `Completed in ${latencyMs}ms`,
-          });
+              statusMessage: `Completed in ${latencyMs}ms`,
+            });
 
-          return {
-            output: validatedOutput,
-            meta: {
-              provider: route.provider,
+            return {
+              output: validatedOutput,
+              meta: {
+                provider: route.provider,
+                model: route.model,
+                promptVersion: route.promptVersion,
+                release: deploy.release,
+                environment: deploy.environment,
+                fallbackHopCount: routeIndex,
+                latencyMs,
+                traceId,
+                observationId,
+                repairAttempted,
+                usage,
+                cost,
+                routeTier: route.tier,
+                validationResult,
+              },
+            };
+          } catch (error) {
+            const latencyMs = Date.now() - startedAt;
+
+            generation.update({
+              metadata: buildObservationMetadata({
+                context,
+                deploy,
+                fallbackHopCount: routeIndex,
+                repairAttempted: false,
+                route,
+                validationResult: classifyValidationResult(error),
+              }),
               model: route.model,
-              promptVersion: route.promptVersion,
-              release: deploy.release,
-              environment: deploy.environment,
-              latencyMs,
-              traceId,
-              observationId,
-              repairAttempted,
-              usage,
-              cost,
-              routeTier: route.tier,
-            },
-          };
+              statusMessage: `Failed in ${latencyMs}ms`,
+            });
+
+            throw error;
+          }
         },
         {
           asType: "generation",
@@ -389,13 +418,46 @@ function addNullableNumbers(a: number | null, b: number | null) {
   return (a ?? 0) + (b ?? 0);
 }
 
+function buildObservationMetadata(params: {
+  context: AiTaskContext;
+  deploy: ReturnType<typeof getDeployMetadata>;
+  fallbackHopCount: number;
+  repairAttempted: boolean;
+  route: AiRouteDefinition;
+  validationResult: ChallengeCritiqueValidationResult;
+}) {
+  return {
+    operation: params.route.operation,
+    provider: params.route.provider,
+    model: params.route.model,
+    routeTier: params.route.tier,
+    promptVersion: params.route.promptVersion,
+    release: params.deploy.release,
+    environment: params.deploy.environment,
+    repairAttempted: params.repairAttempted,
+    fallbackHopCount: params.fallbackHopCount,
+    validationResult: params.validationResult,
+    ...toContextMetadata(params.context),
+  };
+}
+
+function classifyValidationResult(error: unknown): ChallengeCritiqueValidationResult {
+  if (error instanceof ChallengeCritiqueValidationError) {
+    return "validation_failed";
+  }
+
+  return "not_validated";
+}
+
 function toContextMetadata(context: AiTaskContext) {
   return {
     userId: context.userId ?? null,
     mapId: context.mapId ?? null,
     claimId: context.claimId ?? null,
     conceptId: context.conceptId ?? null,
+    roundId: context.roundId ?? null,
     workspaceContextId: context.workspaceContextId ?? null,
+    requestId: context.requestId ?? null,
     promptVersion: context.promptVersion ?? null,
     qualityTier: context.qualityTier ?? null,
     sessionId: context.sessionId ?? null,
