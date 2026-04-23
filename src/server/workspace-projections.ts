@@ -1,18 +1,14 @@
 import "server-only";
 
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDrizzleDb } from "@/db/drizzle";
 import {
-  claimConceptEdges,
-  claimEdges,
+  challengeCritiques,
+  challengeRounds,
   claims,
-  concepts,
-  dialecticRounds,
-  learningPrompts,
   maps,
   movesEvents,
-  spheres,
   workspaceContexts,
 } from "@/db/schema";
 
@@ -29,18 +25,14 @@ type WorkspaceProjectionMode = z.infer<typeof WorkspaceProjectionModeSchema>;
 type WorkspaceProjectionInput = z.input<typeof WorkspaceProjectionInputSchema>;
 type ParsedWorkspaceProjectionInput = z.infer<typeof WorkspaceProjectionInputSchema>;
 
-type SphereRecord = typeof spheres.$inferSelect;
+type WorkspaceContextRecord = typeof workspaceContexts.$inferSelect;
 type MapRecord = typeof maps.$inferSelect;
 type ClaimRecord = typeof claims.$inferSelect;
-type ClaimEdgeRecord = typeof claimEdges.$inferSelect;
-type ConceptRecord = typeof concepts.$inferSelect;
-type ClaimConceptEdgeRecord = typeof claimConceptEdges.$inferSelect;
-type WorkspaceContextRecord = typeof workspaceContexts.$inferSelect;
-type DialecticRoundRecord = typeof dialecticRounds.$inferSelect;
-type LearningPromptRecord = typeof learningPrompts.$inferSelect;
+type ChallengeRoundRecord = typeof challengeRounds.$inferSelect;
+type ChallengeCritiqueRecord = typeof challengeCritiques.$inferSelect;
 type MoveEventRecord = typeof movesEvents.$inferSelect;
 
-type WorkspaceMapSummary = {
+type MapSummary = {
   id: string;
   title: string;
   rawThought: string;
@@ -49,16 +41,7 @@ type WorkspaceMapSummary = {
   updatedAt: string;
 };
 
-type WorkspaceSphereSummary = {
-  id: string;
-  title: string;
-  slug: string;
-  colorToken: string | null;
-  isActive: boolean;
-  isArchived: boolean;
-};
-
-type WorkspaceClaimSummary = {
+type ClaimSummary = {
   id: string;
   text: string;
   note: string | null;
@@ -69,239 +52,104 @@ type WorkspaceClaimSummary = {
   updatedAt: string;
 };
 
-type WorkspaceConceptSummary = {
-  id: string;
-  name: string;
-  description: string | null;
-  slug: string;
-  status: string;
-  updatedAt: string;
-};
-
-type WorkspaceMiniGraphNode = {
-  id: string;
-  label: string;
-  emphasis: "focus" | "linked" | "related";
-};
-
-type WorkspaceMiniGraphEdge = {
-  id: string;
-  from: string;
-  to: string;
-  relation: string;
-  weight: number | null;
-};
-
-type WorkspaceMiniGraph = {
-  nodes: WorkspaceMiniGraphNode[];
-  edges: WorkspaceMiniGraphEdge[];
-};
-
-type WorkspaceEventSummary = {
+type EventSummary = {
   id: string;
   type: MoveEventRecord["type"];
   label: string;
   createdAt: string;
   claimId: string | null;
-  conceptId: string | null;
 };
 
-type WorkspaceModeRailItem = {
-  key: WorkspaceProjectionMode;
-  label: string;
-  accentToken: "brain" | "challenge" | "learn";
-  isActive: boolean;
-};
-
-type WorkspaceContextView = {
+type ShellSelection = {
   contextId: string | null;
   contextKey: string;
-  persisted: boolean;
-  projectionMode: WorkspaceProjectionMode;
-  storedMode: WorkspaceProjectionMode | null;
-  breadcrumb: string[];
-  lastAccessedAt: string | null;
-  map: WorkspaceMapSummary | null;
-  sphere: WorkspaceSphereSummary | null;
-  selection: {
-    claim: WorkspaceClaimSummary | null;
-    concept: WorkspaceConceptSummary | null;
-  };
+  mode: WorkspaceProjectionMode;
+  mapId: string | null;
+  claimId: string | null;
 };
 
-export type WorkspaceShellView = {
-  workspace: WorkspaceContextView;
-  topBar: {
-    breadcrumb: string[];
-    title: string;
-    subtitle: string | null;
-  };
-  leftRail: {
-    modes: WorkspaceModeRailItem[];
-    spheres: WorkspaceSphereSummary[];
-  };
+export type ShellView = {
+  breadcrumb: string[];
+  selection: ShellSelection;
+  selectedMapSummary: MapSummary | null;
 };
+
+export type WorkspaceShellView = ShellView;
 
 export type BrainView = {
-  workspace: WorkspaceContextView;
-  stream: {
-    sectionTitle: string;
-    continuePrompt: string;
-    highlightedClaim: WorkspaceClaimSummary | null;
-    recentThoughts: WorkspaceClaimSummary[];
-  };
-  inspector: {
-    claim: WorkspaceClaimSummary;
-    confidenceLabel: string;
-    keyConnections: WorkspaceMiniGraph;
-    dependents: Array<{
-      claim: WorkspaceClaimSummary;
-      relation: string;
-      weight: number;
-    }>;
-    lastChallenged: string | null;
-    miniMap: WorkspaceMiniGraph;
-  } | null;
-  activity: {
-    recentEvents: WorkspaceEventSummary[];
-  };
+  shell: ShellView;
+  claimList: ClaimSummary[];
+  selectedClaim: ClaimSummary | null;
+  recentActivity: EventSummary[];
 };
 
 export type ChallengeView = {
-  workspace: WorkspaceContextView;
-  focus: {
-    claim: WorkspaceClaimSummary | null;
-    counterargument: {
-      roundId: string;
-      roundNumber: number;
-      text: string;
-      failureTypes: string[];
-      lens: string;
-      strength: string;
-      voiceLabel: string | null;
-    } | null;
-  };
-  response: {
-    activeRound: {
-      roundId: string;
-      roundNumber: number;
-      confidenceAtRoundStart: number;
-      confidenceAtRoundEnd: number | null;
-      responsePath: "defend" | "revise" | "absorb" | null;
-      userResponse: string | null;
-      followUpPrompt: string | null;
-      concessions: string[];
-      defenses: string[];
-      dismissals: string[];
-    } | null;
-    responsePaths: Array<{
-      key: "defend" | "revise" | "absorb";
-      label: string;
-      isSelected: boolean;
-      isPrimary: boolean;
-    }>;
-    recentRounds: Array<{
-      roundId: string;
-      roundNumber: number;
-      responsePath: string | null;
-      confidenceDelta: number | null;
-      closedAt: string | null;
-    }>;
-  };
-  transparency: {
-    critique: Array<{
-      label: string;
-      value: string;
-    }>;
-    dependencyCascade: {
-      summary: string;
-      steps: Array<{
-        claim: WorkspaceClaimSummary;
-        relation: string;
-        weight: number;
-      }>;
-    } | null;
-  };
+  shell: ShellView;
+  activeClaim: ClaimSummary | null;
+  currentRound: {
+    id: string;
+    roundNumber: number;
+    priorRoundId: string | null;
+    responsePath: "defend" | "revise" | "absorb" | null;
+    userResponse: string | null;
+    confidenceAtRoundStart: number;
+    confidenceAtRoundEnd: number | null;
+    confidenceDelta: number | null;
+    followUpPrompt: string | null;
+    startedAt: string;
+    closedAt: string | null;
+  } | null;
+  critique:
+    | {
+        status: "pending";
+        roundId: string;
+      }
+    | {
+        status: "ready";
+        roundId: string;
+        provider: string;
+        model: string;
+        promptVersion: string;
+        headline: string;
+        critiqueText: string;
+        critiqueLens: string;
+        failureTypes: string[];
+        dependencyRisks: string[];
+        whyNow: string;
+        generatedAt: string;
+      }
+    | null;
+  priorRound: {
+    id: string;
+    roundNumber: number;
+    responsePath: string | null;
+    userResponse: string | null;
+    confidenceAtRoundEnd: number | null;
+    confidenceDelta: number | null;
+    closedAt: string | null;
+  } | null;
 };
 
 export type LearnView = {
-  workspace: WorkspaceContextView;
-  conceptNav: Array<WorkspaceConceptSummary & { isSelected: boolean }>;
-  teachback: {
-    promptId: string | null;
-    conceptTitle: string;
-    explanation: string;
-    promptText: string | null;
-    submission: string | null;
-    checklist: Array<{
-      id: string;
-      label: string;
-      completed: boolean;
-    }>;
-    secondaryCta: {
-      label: string;
-      exampleText: string | null;
-    };
-  };
-  contextPanel: {
-    conceptGraph: WorkspaceMiniGraph;
-    relatedClaim: WorkspaceClaimSummary | null;
-    connectedIdeas: WorkspaceConceptSummary[];
-  };
+  shell: ShellView;
+  phase: "not_ready";
+  message: string;
 };
 
 type ResolvedWorkspaceState = {
-  contextView: WorkspaceContextView;
+  parsed: ParsedWorkspaceProjectionInput;
+  contextRecord: WorkspaceContextRecord | null;
+  mode: WorkspaceProjectionMode;
   mapRecord: MapRecord | null;
-  sphereRecords: SphereRecord[];
+  claimRecords: ClaimRecord[];
   selectedClaim: ClaimRecord | null;
-  recentClaims: ClaimRecord[];
-  selectedClaimEdges: ClaimEdgeRecord[];
-  relatedClaimIndex: Map<string, ClaimRecord>;
-  selectedConcept: ConceptRecord | null;
-  conceptRecords: ConceptRecord[];
-  conceptEdgeRecords: ClaimConceptEdgeRecord[];
-  roundRecords: DialecticRoundRecord[];
+  roundRecords: ChallengeRoundRecord[];
+  critiqueByRoundId: Map<string, ChallengeCritiqueRecord>;
   eventRecords: MoveEventRecord[];
-  learningPromptRecords: LearningPromptRecord[];
 };
 
 function toIsoString(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return value as Record<string, unknown>;
-}
-
-function asString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length ? value.trim() : null;
-}
-
-function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
-    .filter((entry) => entry.length > 0);
-}
-
-function dedupeIds(ids: Array<string | null | undefined>): string[] {
-  return Array.from(new Set(ids.filter((id): id is string => typeof id === "string" && id.length > 0)));
-}
-
-function truncate(text: string, maxLength = 88): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-
-  return `${text.slice(0, maxLength - 1).trimEnd()}...`;
 }
 
 function buildProjectionBreadcrumb(mode: WorkspaceProjectionMode): string[] {
@@ -309,7 +157,7 @@ function buildProjectionBreadcrumb(mode: WorkspaceProjectionMode): string[] {
   return mode === "learn" ? [...base, "Network Effects"] : base;
 }
 
-function summarizeMap(record: MapRecord | null): WorkspaceMapSummary | null {
+function summarizeMap(record: MapRecord | null): MapSummary | null {
   if (!record) {
     return null;
   }
@@ -324,22 +172,7 @@ function summarizeMap(record: MapRecord | null): WorkspaceMapSummary | null {
   };
 }
 
-function summarizeSphere(record: SphereRecord | null, activeSphereId: string | null): WorkspaceSphereSummary | null {
-  if (!record) {
-    return null;
-  }
-
-  return {
-    id: record.id,
-    title: record.title,
-    slug: record.slug,
-    colorToken: record.colorToken,
-    isActive: record.id === activeSphereId,
-    isArchived: record.isArchived,
-  };
-}
-
-function summarizeClaim(record: ClaimRecord | null): WorkspaceClaimSummary | null {
+function summarizeClaim(record: ClaimRecord | null): ClaimSummary | null {
   if (!record) {
     return null;
   }
@@ -356,23 +189,8 @@ function summarizeClaim(record: ClaimRecord | null): WorkspaceClaimSummary | nul
   };
 }
 
-function summarizeConcept(record: ConceptRecord | null): WorkspaceConceptSummary | null {
-  if (!record) {
-    return null;
-  }
-
-  return {
-    id: record.id,
-    name: record.name,
-    description: record.description,
-    slug: record.slug,
-    status: record.status,
-    updatedAt: record.updatedAt.toISOString(),
-  };
-}
-
-function summarizeEvent(record: MoveEventRecord): WorkspaceEventSummary {
-  const labelMap: Record<MoveEventRecord["type"], string> = {
+function summarizeEvent(record: MoveEventRecord): EventSummary {
+  const labelMap: Partial<Record<MoveEventRecord["type"], string>> = {
     "map.created": "Map created",
     "claim.created": "Claim created",
     "claim.updated": "Claim updated",
@@ -381,133 +199,16 @@ function summarizeEvent(record: MoveEventRecord): WorkspaceEventSummary {
     "challenge.critique.requested": "Challenge critique requested",
     "challenge.critique.generated": "Challenge critique generated",
     "challenge.response.recorded": "Challenge response recorded",
-    "learning.prompt_generated": "Learning prompt generated",
-    "teachback.submitted": "Teach-back submitted",
-    "concept.created": "Concept created",
-    "concept.linked": "Concept linked",
     "workspace.selection.changed": "Workspace selection changed",
   };
 
   return {
     id: record.id,
     type: record.type,
-    label: labelMap[record.type],
+    label: labelMap[record.type] ?? record.type,
     createdAt: record.createdAt.toISOString(),
     claimId: record.claimId,
-    conceptId: record.conceptId,
   };
-}
-
-function buildModeRail(projectionMode: WorkspaceProjectionMode): WorkspaceModeRailItem[] {
-  return [
-    { key: "brain", label: "Brain", accentToken: "brain", isActive: projectionMode === "brain" },
-    { key: "challenge", label: "Challenge", accentToken: "challenge", isActive: projectionMode === "challenge" },
-    { key: "learn", label: "Learn", accentToken: "learn", isActive: projectionMode === "learn" },
-  ];
-}
-
-function buildMiniClaimGraph(params: {
-  selectedClaim: ClaimRecord | null;
-  edges: ClaimEdgeRecord[];
-  claimIndex: Map<string, ClaimRecord>;
-}): WorkspaceMiniGraph {
-  const { selectedClaim, edges, claimIndex } = params;
-
-  if (!selectedClaim) {
-    return { nodes: [], edges: [] };
-  }
-
-  const nodes: WorkspaceMiniGraphNode[] = [
-    {
-      id: selectedClaim.id,
-      label: truncate(selectedClaim.text, 44),
-      emphasis: "focus",
-    },
-  ];
-  const graphEdges: WorkspaceMiniGraphEdge[] = [];
-  const linkedClaimIds = dedupeIds(
-    edges.flatMap((edge) => [edge.fromClaimId === selectedClaim.id ? edge.toClaimId : edge.fromClaimId]),
-  ).slice(0, 5);
-
-  for (const claimId of linkedClaimIds) {
-    const claim = claimIndex.get(claimId);
-
-    if (!claim) {
-      continue;
-    }
-
-    nodes.push({
-      id: claim.id,
-      label: truncate(claim.text, 36),
-      emphasis: "linked",
-    });
-  }
-
-  for (const edge of edges.slice(0, 8)) {
-    const fromId = edge.fromClaimId;
-    const toId = edge.toClaimId;
-    const hasFrom = nodes.some((node) => node.id === fromId);
-    const hasTo = nodes.some((node) => node.id === toId);
-
-    if (!hasFrom || !hasTo) {
-      continue;
-    }
-
-    graphEdges.push({
-      id: edge.id,
-      from: fromId,
-      to: toId,
-      relation: edge.edgeType,
-      weight: edge.weight,
-    });
-  }
-
-  return { nodes, edges: graphEdges };
-}
-
-function buildMiniConceptGraph(params: {
-  selectedConcept: ConceptRecord | null;
-  linkedConcepts: ConceptRecord[];
-}): WorkspaceMiniGraph {
-  const { selectedConcept, linkedConcepts } = params;
-
-  if (!selectedConcept) {
-    return { nodes: [], edges: [] };
-  }
-
-  const nodes: WorkspaceMiniGraphNode[] = [
-    {
-      id: selectedConcept.id,
-      label: selectedConcept.name,
-      emphasis: "focus",
-    },
-  ];
-  const edges: WorkspaceMiniGraphEdge[] = [];
-
-  for (const concept of linkedConcepts.filter((entry) => entry.id !== selectedConcept.id).slice(0, 5)) {
-    nodes.push({
-      id: concept.id,
-      label: concept.name,
-      emphasis: "related",
-    });
-    edges.push({
-      id: `${selectedConcept.id}:${concept.id}`,
-      from: selectedConcept.id,
-      to: concept.id,
-      relation: "connected",
-      weight: null,
-    });
-  }
-
-  return { nodes, edges };
-}
-
-function buildChallengeResponsePaths(activeRound: DialecticRoundRecord | null) {
-  return [
-    { key: "defend" as const, label: "Defend", isSelected: activeRound?.responsePath === "defend", isPrimary: activeRound?.responsePath === "defend" },
-    { key: "revise" as const, label: "Revise", isSelected: activeRound?.responsePath === "revise", isPrimary: activeRound?.responsePath === "revise" },
-    { key: "absorb" as const, label: "Absorb", isSelected: activeRound?.responsePath === "absorb", isPrimary: activeRound?.responsePath === "absorb" },
-  ];
 }
 
 async function selectOne<T>(promise: Promise<T[]>): Promise<T | null> {
@@ -536,7 +237,6 @@ async function resolvePersistedWorkspaceContext(
         .select()
         .from(workspaceContexts)
         .where(and(eq(workspaceContexts.contextKey, parsed.contextKey), eq(workspaceContexts.userId, parsed.userId)))
-        .orderBy(desc(workspaceContexts.lastAccessedAt))
         .limit(1),
     );
   }
@@ -546,8 +246,7 @@ async function resolvePersistedWorkspaceContext(
       db
         .select()
         .from(workspaceContexts)
-        .where(and(eq(workspaceContexts.userId, parsed.userId), eq(workspaceContexts.mapId, parsed.mapId)))
-        .orderBy(desc(workspaceContexts.lastAccessedAt))
+        .where(and(eq(workspaceContexts.mapId, parsed.mapId), eq(workspaceContexts.userId, parsed.userId)))
         .limit(1),
     );
   }
@@ -562,7 +261,10 @@ async function resolvePersistedWorkspaceContext(
   );
 }
 
-async function resolveMapRecord(parsed: ParsedWorkspaceProjectionInput, contextRecord: WorkspaceContextRecord | null): Promise<MapRecord | null> {
+async function resolveMapRecord(
+  parsed: ParsedWorkspaceProjectionInput,
+  contextRecord: WorkspaceContextRecord | null,
+): Promise<MapRecord | null> {
   const db = getDrizzleDb();
   const candidateMapId = contextRecord?.mapId ?? parsed.mapId ?? null;
 
@@ -586,123 +288,71 @@ async function resolveMapRecord(parsed: ParsedWorkspaceProjectionInput, contextR
   );
 }
 
-async function resolveWorkspaceState(input: WorkspaceProjectionInput, projectionMode: WorkspaceProjectionMode): Promise<ResolvedWorkspaceState> {
-  const parsed = WorkspaceProjectionInputSchema.parse({
-    ...input,
-    mode: input.mode ?? projectionMode,
-  });
+function resolveProjectionMode(
+  parsed: ParsedWorkspaceProjectionInput,
+  contextRecord: WorkspaceContextRecord | null,
+): WorkspaceProjectionMode {
+  return WorkspaceProjectionModeSchema.parse(parsed.mode ?? contextRecord?.mode ?? "brain");
+}
+
+async function resolveWorkspaceState(input: WorkspaceProjectionInput): Promise<ResolvedWorkspaceState> {
+  const parsed = WorkspaceProjectionInputSchema.parse(input);
   const db = getDrizzleDb();
   const contextRecord = await resolvePersistedWorkspaceContext(parsed);
+  const mode = resolveProjectionMode(parsed, contextRecord);
   const mapRecord = await resolveMapRecord(parsed, contextRecord);
-  const effectiveSphereId = contextRecord?.sphereId ?? mapRecord?.sphereId ?? null;
-  const [sphereRecords, recentClaims] = await Promise.all([
-    db
-      .select()
-      .from(spheres)
-      .where(eq(spheres.userId, parsed.userId))
-      .orderBy(desc(spheres.updatedAt))
-      .limit(12),
-    mapRecord
-      ? db
-          .select()
-          .from(claims)
-          .where(and(eq(claims.userId, parsed.userId), eq(claims.mapId, mapRecord.id)))
-          .orderBy(desc(claims.updatedAt))
-          .limit(12)
-      : Promise.resolve([] as ClaimRecord[]),
-  ]);
 
-  const sphereRecord =
-    sphereRecords.find((record) => record.id === effectiveSphereId) ??
-    (effectiveSphereId
-      ? await selectOne(
-          db
-            .select()
-            .from(spheres)
-            .where(and(eq(spheres.id, effectiveSphereId), eq(spheres.userId, parsed.userId)))
-            .limit(1),
-        )
-      : null);
+  const claimRecords = mapRecord
+    ? await db
+        .select()
+        .from(claims)
+        .where(and(eq(claims.userId, parsed.userId), eq(claims.mapId, mapRecord.id)))
+        .orderBy(desc(claims.updatedAt))
+        .limit(24)
+    : [];
 
-  const contextSelectedClaimId = contextRecord?.selectedClaimId ?? null;
+  const selectedClaimId = contextRecord?.selectedClaimId ?? null;
   const selectedClaim =
-    recentClaims.find((record) => record.id === contextSelectedClaimId) ??
-    (contextSelectedClaimId
+    claimRecords.find((record) => record.id === selectedClaimId) ??
+    (selectedClaimId
       ? await selectOne(
           db
             .select()
             .from(claims)
-            .where(and(eq(claims.id, contextSelectedClaimId), eq(claims.userId, parsed.userId)))
+            .where(and(eq(claims.id, selectedClaimId), eq(claims.userId, parsed.userId)))
             .limit(1),
         )
       : null) ??
-    recentClaims[0] ??
-    null;
-
-  const mapClaimIdRows = mapRecord
-    ? await db
-        .select({ id: claims.id })
-        .from(claims)
-        .where(and(eq(claims.userId, parsed.userId), eq(claims.mapId, mapRecord.id)))
-    : [];
-  const mapClaimIds = mapClaimIdRows.map((record) => record.id);
-  const selectedClaimEdges =
-    selectedClaim && mapRecord
-      ? await db
-          .select()
-          .from(claimEdges)
-          .where(
-            and(
-              eq(claimEdges.mapId, mapRecord.id),
-              or(eq(claimEdges.fromClaimId, selectedClaim.id), eq(claimEdges.toClaimId, selectedClaim.id)),
-            ),
-          )
-          .orderBy(desc(claimEdges.updatedAt))
-          .limit(12)
-      : [];
-  const conceptEdgeRecords =
-    mapClaimIds.length > 0
-      ? await db
-          .select()
-          .from(claimConceptEdges)
-          .where(inArray(claimConceptEdges.claimId, mapClaimIds))
-          .orderBy(desc(claimConceptEdges.updatedAt))
-          .limit(24)
-      : [];
-  const conceptIds = dedupeIds([
-    contextRecord?.selectedConceptId ?? null,
-    ...conceptEdgeRecords.map((record) => record.conceptId),
-  ]);
-  const conceptRecords =
-    conceptIds.length > 0
-      ? await db
-          .select()
-          .from(concepts)
-          .where(and(eq(concepts.userId, parsed.userId), inArray(concepts.id, conceptIds)))
-          .orderBy(desc(concepts.updatedAt))
-      : [];
-  const selectedConcept =
-    conceptRecords.find((record) => record.id === contextRecord?.selectedConceptId) ??
-    (() => {
-      if (!selectedClaim) {
-        return null;
-      }
-
-      const edge = conceptEdgeRecords.find((record) => record.claimId === selectedClaim.id);
-      return edge ? conceptRecords.find((record) => record.id === edge.conceptId) ?? null : null;
-    })() ??
-    conceptRecords[0] ??
+    claimRecords[0] ??
     null;
 
   const roundRecords =
     selectedClaim != null
       ? await db
           .select()
-          .from(dialecticRounds)
-          .where(and(eq(dialecticRounds.userId, parsed.userId), eq(dialecticRounds.claimId, selectedClaim.id)))
-          .orderBy(desc(dialecticRounds.roundNumber))
-          .limit(6)
+          .from(challengeRounds)
+          .where(and(eq(challengeRounds.userId, parsed.userId), eq(challengeRounds.claimId, selectedClaim.id)))
+          .orderBy(desc(challengeRounds.roundNumber))
+          .limit(8)
       : [];
+
+  const critiqueRecords =
+    roundRecords.length > 0
+      ? await db
+          .select()
+          .from(challengeCritiques)
+          .where(
+            and(
+              eq(challengeCritiques.userId, parsed.userId),
+              inArray(
+                challengeCritiques.roundId,
+                roundRecords.map((record) => record.id),
+              ),
+            ),
+          )
+          .orderBy(desc(challengeCritiques.createdAt))
+      : [];
+
   const eventRecords =
     mapRecord != null
       ? await db
@@ -710,310 +360,153 @@ async function resolveWorkspaceState(input: WorkspaceProjectionInput, projection
           .from(movesEvents)
           .where(and(eq(movesEvents.userId, parsed.userId), eq(movesEvents.mapId, mapRecord.id)))
           .orderBy(desc(movesEvents.createdAt))
-          .limit(10)
+          .limit(12)
       : [];
-
-  let learningPromptRecords: LearningPromptRecord[] = [];
-  if (selectedConcept) {
-    learningPromptRecords = await db
-      .select()
-      .from(learningPrompts)
-      .where(and(eq(learningPrompts.userId, parsed.userId), eq(learningPrompts.conceptId, selectedConcept.id)))
-      .orderBy(desc(learningPrompts.createdAt))
-      .limit(4);
-  } else if (selectedClaim) {
-    learningPromptRecords = await db
-      .select()
-      .from(learningPrompts)
-      .where(and(eq(learningPrompts.userId, parsed.userId), eq(learningPrompts.claimId, selectedClaim.id)))
-      .orderBy(desc(learningPrompts.createdAt))
-      .limit(4);
-  } else if (contextRecord) {
-    learningPromptRecords = await db
-      .select()
-      .from(learningPrompts)
-      .where(and(eq(learningPrompts.userId, parsed.userId), eq(learningPrompts.workspaceContextId, contextRecord.id)))
-      .orderBy(desc(learningPrompts.createdAt))
-      .limit(4);
-  }
-
-  const relatedClaimIds = dedupeIds([
-    ...selectedClaimEdges.flatMap((record) => [record.fromClaimId, record.toClaimId]),
-    ...conceptEdgeRecords.filter((record) => record.conceptId === selectedConcept?.id).map((record) => record.claimId),
-  ]);
-  const recentClaimIds = new Set(recentClaims.map((record) => record.id));
-  const missingRelatedClaimIds = relatedClaimIds.filter((id) => !recentClaimIds.has(id));
-  const additionalRelatedClaims =
-    missingRelatedClaimIds.length > 0
-      ? await db
-          .select()
-          .from(claims)
-          .where(and(eq(claims.userId, parsed.userId), inArray(claims.id, missingRelatedClaimIds)))
-      : [];
-  const relatedClaimIndex = new Map<string, ClaimRecord>(
-    [...recentClaims, ...additionalRelatedClaims]
-      .map((record) => [record.id, record] as const),
-  );
-
-  const contextView: WorkspaceContextView = {
-    contextId: contextRecord?.id ?? null,
-    contextKey: contextRecord?.contextKey ?? `workspace:${parsed.userId}:${mapRecord?.id ?? "none"}:${projectionMode}`,
-    persisted: contextRecord != null,
-    projectionMode,
-    storedMode: contextRecord?.mode ?? null,
-    breadcrumb: buildProjectionBreadcrumb(projectionMode),
-    lastAccessedAt: toIsoString(contextRecord?.lastAccessedAt),
-    map: summarizeMap(mapRecord),
-    sphere: summarizeSphere(sphereRecord, effectiveSphereId),
-    selection: {
-      claim: summarizeClaim(selectedClaim),
-      concept: summarizeConcept(selectedConcept),
-    },
-  };
 
   return {
-    contextView,
+    parsed,
+    contextRecord,
+    mode,
     mapRecord,
-    sphereRecords,
+    claimRecords,
     selectedClaim,
-    recentClaims,
-    selectedClaimEdges,
-    relatedClaimIndex,
-    selectedConcept,
-    conceptRecords,
-    conceptEdgeRecords,
     roundRecords,
+    critiqueByRoundId: new Map(critiqueRecords.map((record) => [record.roundId, record])),
     eventRecords,
-    learningPromptRecords,
   };
 }
 
-export async function buildWorkspaceShellView(input: WorkspaceProjectionInput): Promise<WorkspaceShellView> {
-  const state = await resolveWorkspaceState(input, "brain");
-  const projectionMode = WorkspaceProjectionModeSchema.parse(input.mode ?? state.contextView.storedMode ?? "brain");
-  const activeSphereId = state.contextView.sphere?.id ?? null;
-  const workspace: WorkspaceContextView = {
-    ...state.contextView,
-    projectionMode,
-    breadcrumb: buildProjectionBreadcrumb(projectionMode),
-  };
+function buildShellFromState(state: ResolvedWorkspaceState): ShellView {
+  const selectedMapSummary = summarizeMap(state.mapRecord);
+  const selectedClaim = summarizeClaim(state.selectedClaim);
 
   return {
-    workspace,
-    topBar: {
-      breadcrumb: workspace.breadcrumb,
-      title: workspace.map?.title ?? "Penny",
-      subtitle: workspace.sphere?.title ?? null,
+    breadcrumb: buildProjectionBreadcrumb(state.mode),
+    selection: {
+      contextId: state.contextRecord?.id ?? null,
+      contextKey:
+        state.contextRecord?.contextKey ??
+        `workspace:${state.parsed.userId}:${state.mapRecord?.id ?? "none"}:${state.mode}`,
+      mode: state.mode,
+      mapId: selectedMapSummary?.id ?? state.parsed.mapId ?? null,
+      claimId: selectedClaim?.id ?? null,
     },
-    leftRail: {
-      modes: buildModeRail(projectionMode),
-      spheres: state.sphereRecords.map((record) => ({
-        id: record.id,
-        title: record.title,
-        slug: record.slug,
-        colorToken: record.colorToken,
-        isActive: record.id === activeSphereId,
-        isArchived: record.isArchived,
-      })),
-    },
+    selectedMapSummary,
   };
+}
+
+function buildPriorRoundState(
+  roundRecords: ChallengeRoundRecord[],
+  currentRound: ChallengeRoundRecord | null,
+): ChallengeView["priorRound"] {
+  if (!currentRound) {
+    return null;
+  }
+
+  const priorRound =
+    roundRecords.find((record) => record.id === currentRound.priorRoundId) ??
+    roundRecords.find((record) => record.id !== currentRound.id) ??
+    null;
+
+  if (!priorRound) {
+    return null;
+  }
+
+  return {
+    id: priorRound.id,
+    roundNumber: priorRound.roundNumber,
+    responsePath: priorRound.responsePath,
+    userResponse: priorRound.userResponse,
+    confidenceAtRoundEnd: priorRound.confidenceAtRoundEnd,
+    confidenceDelta: priorRound.confidenceDelta,
+    closedAt: toIsoString(priorRound.closedAt),
+  };
+}
+
+export async function buildShellView(input: WorkspaceProjectionInput): Promise<ShellView> {
+  const state = await resolveWorkspaceState(input);
+  return buildShellFromState(state);
 }
 
 export async function buildBrainView(input: WorkspaceProjectionInput): Promise<BrainView> {
-  const state = await resolveWorkspaceState(input, "brain");
-  const dependentClaims = state.selectedClaimEdges
-    .map((edge) => {
-      const relatedId = edge.fromClaimId === state.selectedClaim?.id ? edge.toClaimId : edge.fromClaimId;
-      const relatedClaim = state.relatedClaimIndex.get(relatedId) ?? null;
-
-      return relatedClaim
-        ? {
-            claim: summarizeClaim(relatedClaim)!,
-            relation: edge.edgeType,
-            weight: edge.weight,
-          }
-        : null;
-    })
-    .filter((entry): entry is NonNullable<typeof entry> => entry != null)
-    .slice(0, 5);
-
-  const recentThoughts = state.recentClaims
-    .filter((record) => record.id !== state.selectedClaim?.id)
-    .slice(0, 5)
-    .map((record) => summarizeClaim(record)!)
-    .filter(Boolean);
+  const state = await resolveWorkspaceState({
+    ...input,
+    mode: input.mode ?? "brain",
+  });
 
   return {
-    workspace: state.contextView,
-    stream: {
-      sectionTitle: "Stream",
-      continuePrompt: "Continue where you left off",
-      highlightedClaim: summarizeClaim(state.selectedClaim),
-      recentThoughts,
-    },
-    inspector: state.selectedClaim
-      ? {
-          claim: summarizeClaim(state.selectedClaim)!,
-          confidenceLabel: `${state.selectedClaim.confidence}%`,
-          keyConnections: buildMiniClaimGraph({
-            selectedClaim: state.selectedClaim,
-            edges: state.selectedClaimEdges,
-            claimIndex: state.relatedClaimIndex,
-          }),
-          dependents: dependentClaims,
-          lastChallenged: toIsoString(state.selectedClaim.lastChallengedAt),
-          miniMap: buildMiniClaimGraph({
-            selectedClaim: state.selectedClaim,
-            edges: state.selectedClaimEdges,
-            claimIndex: state.relatedClaimIndex,
-          }),
-        }
-      : null,
-    activity: {
-      recentEvents: state.eventRecords.map(summarizeEvent),
-    },
+    shell: buildShellFromState(state),
+    claimList: state.claimRecords.map((record) => summarizeClaim(record)!).filter(Boolean),
+    selectedClaim: summarizeClaim(state.selectedClaim),
+    recentActivity: state.eventRecords.map(summarizeEvent),
   };
 }
 
 export async function buildChallengeView(input: WorkspaceProjectionInput): Promise<ChallengeView> {
-  const state = await resolveWorkspaceState(input, "challenge");
-  const activeRound = state.roundRecords[0] ?? null;
-  const cascadeSteps = state.selectedClaimEdges
-    .map((edge) => {
-      const relatedId = edge.fromClaimId === state.selectedClaim?.id ? edge.toClaimId : edge.fromClaimId;
-      const claim = state.relatedClaimIndex.get(relatedId) ?? null;
-
-      return claim
-        ? {
-            claim: summarizeClaim(claim)!,
-            relation: edge.edgeType,
-            weight: edge.weight,
-          }
-        : null;
-    })
-    .filter((entry): entry is NonNullable<typeof entry> => entry != null)
-    .slice(0, 5);
-  const uncertainty = asRecord(activeRound?.uncertainty);
-  const uncertaintySummary = asString(uncertainty.summary) ?? asString(uncertainty.reasoning) ?? null;
+  const state = await resolveWorkspaceState({
+    ...input,
+    mode: input.mode ?? "challenge",
+  });
+  const currentRound = state.roundRecords[0] ?? null;
+  const critiqueRecord = currentRound ? state.critiqueByRoundId.get(currentRound.id) ?? null : null;
 
   return {
-    workspace: state.contextView,
-    focus: {
-      claim: summarizeClaim(state.selectedClaim),
-      counterargument: activeRound
+    shell: buildShellFromState(state),
+    activeClaim: summarizeClaim(state.selectedClaim),
+    currentRound: currentRound
+      ? {
+          id: currentRound.id,
+          roundNumber: currentRound.roundNumber,
+          priorRoundId: currentRound.priorRoundId,
+          responsePath: (currentRound.responsePath as "defend" | "revise" | "absorb" | null) ?? null,
+          userResponse: currentRound.userResponse,
+          confidenceAtRoundStart: currentRound.confidenceAtRoundStart,
+          confidenceAtRoundEnd: currentRound.confidenceAtRoundEnd,
+          confidenceDelta: currentRound.confidenceDelta,
+          followUpPrompt: currentRound.followUpPrompt,
+          startedAt: currentRound.startedAt.toISOString(),
+          closedAt: toIsoString(currentRound.closedAt),
+        }
+      : null,
+    critique: currentRound
+      ? critiqueRecord
         ? {
-            roundId: activeRound.id,
-            roundNumber: activeRound.roundNumber,
-            text: activeRound.critiqueGenerated,
-            failureTypes: activeRound.critiqueFailureTypes,
-            lens: activeRound.critiqueLens,
-            strength: activeRound.critiqueStrength,
-            voiceLabel: activeRound.voiceLabel,
+            status: "ready",
+            roundId: critiqueRecord.roundId,
+            provider: critiqueRecord.provider,
+            model: critiqueRecord.model,
+            promptVersion: critiqueRecord.promptVersion,
+            headline: critiqueRecord.headline,
+            critiqueText: critiqueRecord.critiqueText,
+            critiqueLens: critiqueRecord.critiqueLens,
+            failureTypes: critiqueRecord.failureTypes,
+            dependencyRisks: critiqueRecord.dependencyRisks,
+            whyNow: critiqueRecord.whyNow,
+            generatedAt: critiqueRecord.createdAt.toISOString(),
           }
-        : null,
-    },
-    response: {
-      activeRound: activeRound
-        ? {
-            roundId: activeRound.id,
-            roundNumber: activeRound.roundNumber,
-            confidenceAtRoundStart: activeRound.confidenceAtRoundStart,
-            confidenceAtRoundEnd: activeRound.confidenceAtRoundEnd,
-            responsePath: (activeRound.responsePath as "defend" | "revise" | "absorb" | null) ?? null,
-            userResponse: activeRound.userResponse,
-            followUpPrompt: activeRound.followUpPrompt,
-            concessions: activeRound.concessions,
-            defenses: activeRound.defenses,
-            dismissals: activeRound.dismissals,
+        : {
+            status: "pending",
+            roundId: currentRound.id,
           }
-        : null,
-      responsePaths: buildChallengeResponsePaths(activeRound),
-      recentRounds: state.roundRecords.slice(0, 5).map((round) => ({
-        roundId: round.id,
-        roundNumber: round.roundNumber,
-        responsePath: round.responsePath,
-        confidenceDelta: round.confidenceDelta,
-        closedAt: toIsoString(round.closedAt),
-      })),
-    },
-    transparency: {
-      critique: activeRound
-        ? [
-            { label: "Critique lens", value: activeRound.critiqueLens },
-            { label: "Strength", value: activeRound.critiqueStrength },
-            { label: "Failure types", value: activeRound.critiqueFailureTypes.join(", ") || "Not specified" },
-            { label: "Why now", value: uncertaintySummary ?? "Derived from the current claim and workspace context." },
-          ]
-        : [],
-      dependencyCascade: state.selectedClaim && cascadeSteps.length
-        ? {
-            summary: `${cascadeSteps.length} nearby claim${cascadeSteps.length === 1 ? "" : "s"} would feel this challenge.`,
-            steps: cascadeSteps,
-          }
-        : null,
-    },
+      : null,
+    priorRound: buildPriorRoundState(state.roundRecords, currentRound),
   };
 }
 
 export async function buildLearnView(input: WorkspaceProjectionInput): Promise<LearnView> {
-  const state = await resolveWorkspaceState(input, "learn");
-  const activePrompt = state.learningPromptRecords[0] ?? null;
-  const promptPayload = asRecord(activePrompt?.promptPayload);
-  const latestTeachback = asRecord(promptPayload.latestTeachback);
-  const latestEvaluation = asRecord(latestTeachback.evaluation);
-  const explicitChecklist = asStringArray(promptPayload.feedbackChecklist).length
-    ? asStringArray(promptPayload.feedbackChecklist)
-    : asStringArray(promptPayload.checklist);
-  const completedChecklist = new Set(asStringArray(latestEvaluation.completedChecklist));
-  const selectedClaimSummary = summarizeClaim(state.selectedClaim);
-  const relatedConcepts = state.selectedConcept
-    ? state.conceptRecords.filter((record) => record.id !== state.selectedConcept?.id).slice(0, 5)
-    : state.conceptRecords.slice(0, 5);
-  const checklist = (explicitChecklist.length
-    ? explicitChecklist
-    : [
-        state.selectedConcept
-          ? `Explain ${state.selectedConcept.name} in the context of the active claim.`
-          : "Explain the concept in the context of the active claim.",
-        "Name the mechanism, not just the conclusion.",
-        "Use one concrete example or edge case.",
-      ]).map((label, index) => ({
-        id: `check-${index + 1}`,
-        label,
-        completed: completedChecklist.has(label),
-      }));
+  const state = await resolveWorkspaceState({
+    ...input,
+    mode: "learn",
+  });
 
   return {
-    workspace: state.contextView,
-    conceptNav: state.conceptRecords.slice(0, 8).map((record) => ({
-      ...summarizeConcept(record)!,
-      isSelected: record.id === state.selectedConcept?.id,
-    })),
-    teachback: {
-      promptId: activePrompt?.id ?? null,
-      conceptTitle: state.selectedConcept?.name ?? "Concept",
-      explanation:
-        asString(promptPayload.explanation) ??
-        state.selectedConcept?.description ??
-        "Understand the concept well enough to restate it in the context of your claim.",
-      promptText: activePrompt?.promptText ?? null,
-      submission: asString(latestTeachback.submission),
-      checklist,
-      secondaryCta: {
-        label: "Show me an example",
-        exampleText: asString(promptPayload.exampleText) ?? asString(promptPayload.example) ?? null,
-      },
-    },
-    contextPanel: {
-      conceptGraph: buildMiniConceptGraph({
-        selectedConcept: state.selectedConcept,
-        linkedConcepts: [state.selectedConcept, ...relatedConcepts].filter((record): record is ConceptRecord => record != null),
-      }),
-      relatedClaim: selectedClaimSummary,
-      connectedIdeas: relatedConcepts.map((record) => summarizeConcept(record)!).filter(Boolean),
-    },
+    shell: buildShellFromState(state),
+    phase: "not_ready",
+    message: "Learn mode stays placeholder-only in Phase 1 while challenge critique, events, and shell state are hardened.",
   };
 }
+
+export const buildWorkspaceShellView = buildShellView;
 
 export const workspaceProjectionSchemas = {
   input: WorkspaceProjectionInputSchema,
