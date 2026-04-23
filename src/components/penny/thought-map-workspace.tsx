@@ -1158,6 +1158,7 @@ type TeachBackAnalysis = {
 function teachBackFocusForNode(
   node: ThoughtNodeModel | null,
   surface: ReturnType<typeof knowledgeSurface>,
+  preferredConcept: string | null = null,
 ): {
   concept: string;
   scaffold: string;
@@ -1167,8 +1168,14 @@ function teachBackFocusForNode(
   annotations: TeachBackAnnotation[];
 } {
   const content = node?.content ?? "";
+  const normalizedPreferredConcept = preferredConcept?.trim().toLowerCase() ?? null;
 
-  if (/network effects|direct|indirect/i.test(content)) {
+  if (
+    /network effects|direct|indirect/i.test(content) &&
+    (normalizedPreferredConcept == null ||
+      normalizedPreferredConcept === "direct vs indirect network effects" ||
+      normalizedPreferredConcept.includes("network effect"))
+  ) {
     return {
       concept: "direct vs indirect network effects",
       scaffold: "Direct network effects require users interacting with each other; indirect network effects come from complements or adjacent users.",
@@ -1197,7 +1204,7 @@ function teachBackFocusForNode(
     };
   }
 
-  const focus = surface.teachBackGap[0] ?? "the core concept";
+  const focus = preferredConcept?.trim() || surface.teachBackGap[0] || "the core concept";
 
   return {
     concept: focus,
@@ -1480,6 +1487,8 @@ export function ThoughtMapWorkspace({
   const [teachBackDrafts, setTeachBackDrafts] = useState<Record<string, string>>({});
   const [teachBackFeedback, setTeachBackFeedback] = useState<Record<string, TeachBackAnalysis>>({});
   const [teachBackAttempts, setTeachBackAttempts] = useState<Record<string, string[]>>({});
+  const [teachBackValidationErrors, setTeachBackValidationErrors] = useState<Record<string, string | null>>({});
+  const [learnConceptIndexByNodeId, setLearnConceptIndexByNodeId] = useState<Record<string, number>>({});
   const [elicitationMode, setElicitationMode] = useState<ElicitationMode>("devils advocate");
   const [critiqueMode, setCritiqueMode] = useState<CritiqueMode>("direct");
   const [critiqueIntensity, setCritiqueIntensity] = useState(62);
@@ -2188,18 +2197,36 @@ export function ThoughtMapWorkspace({
         dependencyClaimId: selectedGraphNode.node.id,
       }
     : null;
+  const currentTeachBackNodeId = selectedGraphNode?.node.id ?? null;
+  const learnConceptOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [
+            /network effects|direct|indirect/i.test(selectedGraphNode?.node.content ?? "")
+              ? "direct vs indirect network effects"
+              : null,
+            ...selectedKnowledgeSurface.teachBackGap,
+            ...selectedKnowledgeSurface.understood.slice(0, 2),
+          ].filter((value): value is string => value != null && value.trim().length > 0),
+        ),
+      ),
+    [selectedGraphNode?.node.content, selectedKnowledgeSurface.teachBackGap, selectedKnowledgeSurface.understood],
+  );
+  const currentLearnConceptIndex = currentTeachBackNodeId ? learnConceptIndexByNodeId[currentTeachBackNodeId] ?? 0 : 0;
+  const currentLearnConcept = learnConceptOptions[currentLearnConceptIndex] ?? learnConceptOptions[0] ?? null;
   const selectedTeachBackFocus = useMemo(
-    () => teachBackFocusForNode(selectedGraphNode?.node ?? null, selectedKnowledgeSurface),
-    [selectedGraphNode?.node, selectedKnowledgeSurface],
+    () => teachBackFocusForNode(selectedGraphNode?.node ?? null, selectedKnowledgeSurface, currentLearnConcept),
+    [currentLearnConcept, selectedGraphNode?.node, selectedKnowledgeSurface],
   );
   const selectedTeachBackAnalysis = useMemo(
     () => analyzeTeachBackResponse(teachBackDrafts[selectedGraphNode?.node.id ?? ""] ?? "", selectedTeachBackFocus),
     [selectedGraphNode?.node.id, selectedTeachBackFocus, teachBackDrafts],
   );
-  const currentTeachBackNodeId = selectedGraphNode?.node.id ?? null;
   const currentTeachBackDraft = currentTeachBackNodeId ? teachBackDrafts[currentTeachBackNodeId] ?? "" : "";
   const currentTeachBackFeedback = currentTeachBackNodeId ? teachBackFeedback[currentTeachBackNodeId] ?? null : null;
   const currentTeachBackAttempts = currentTeachBackNodeId ? teachBackAttempts[currentTeachBackNodeId] ?? [] : [];
+  const currentTeachBackValidationError = currentTeachBackNodeId ? teachBackValidationErrors[currentTeachBackNodeId] ?? null : null;
   const currentTeachBackAnalysis = currentTeachBackFeedback ?? selectedTeachBackAnalysis;
   const normalizedInitialLearningQuestion = initialLearningQuestion?.trim() ?? "";
   const teachBackPromptLabel = normalizedInitialLearningQuestion ? "Answer the question in context" : "Explain the concept in context";
@@ -2298,12 +2325,43 @@ export function ThoughtMapWorkspace({
     setFocusedLearnDetailOpen(false);
     setFocusedLearnExampleOpen(false);
   }, [currentTeachBackNodeId]);
+  useEffect(() => {
+    if (!currentTeachBackNodeId) {
+      return;
+    }
+
+    const maxIndex = Math.max(0, learnConceptOptions.length - 1);
+    setLearnConceptIndexByNodeId((current) => {
+      const existingIndex = current[currentTeachBackNodeId] ?? 0;
+      if (existingIndex <= maxIndex) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [currentTeachBackNodeId]: 0,
+      };
+    });
+  }, [currentTeachBackNodeId, learnConceptOptions.length]);
   const handleTeachBackCheck = () => {
     if (!currentTeachBackNodeId) {
       return;
     }
 
-    const response = currentTeachBackDraft;
+    const response = currentTeachBackDraft.trim();
+
+    if (response.length < 24) {
+      setTeachBackValidationErrors((prev) => ({
+        ...prev,
+        [currentTeachBackNodeId]: "Write at least 24 non-space characters so Penny can evaluate the explanation in context.",
+      }));
+      return;
+    }
+
+    setTeachBackValidationErrors((prev) => ({
+      ...prev,
+      [currentTeachBackNodeId]: null,
+    }));
     const analysis = analyzeTeachBackResponse(response, selectedTeachBackFocus);
 
     setTeachBackFeedback((prev) => ({
@@ -2314,6 +2372,32 @@ export function ThoughtMapWorkspace({
       ...prev,
       [currentTeachBackNodeId]: [...(prev[currentTeachBackNodeId] ?? []), response],
     }));
+  };
+  const handleSwitchLearnConcept = () => {
+    if (!currentTeachBackNodeId || learnConceptOptions.length <= 1) {
+      return;
+    }
+
+    setLearnConceptIndexByNodeId((current) => ({
+      ...current,
+      [currentTeachBackNodeId]: ((current[currentTeachBackNodeId] ?? 0) + 1) % learnConceptOptions.length,
+    }));
+    setTeachBackFeedback((current) => {
+      const next = { ...current };
+      delete next[currentTeachBackNodeId];
+      return next;
+    });
+    setTeachBackAttempts((current) => {
+      const next = { ...current };
+      delete next[currentTeachBackNodeId];
+      return next;
+    });
+    setTeachBackValidationErrors((current) => {
+      const next = { ...current };
+      delete next[currentTeachBackNodeId];
+      return next;
+    });
+    setFocusedLearnExampleOpen(false);
   };
   const elicitationPatterns = [
     {
@@ -5587,7 +5671,7 @@ export function ThoughtMapWorkspace({
         </div>
 
         {selectedGraphNode ? (
-          <div className="mt-6 grid gap-4 xl:grid-cols-[240px_minmax(0,1.1fr)_320px]">
+          <div className="mt-6 grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
             <div className="space-y-4">
               <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
                 <p className={SURFACE_EYEBROW_CLASS}>Concept nav</p>
@@ -5598,38 +5682,30 @@ export function ThoughtMapWorkspace({
                   </div>
                   <button
                     type="button"
-                    className={`w-full rounded-[18px] border px-4 py-3 text-left transition ${focusedLearnExampleOpen ? "border-[rgba(95,143,120,0.22)] bg-[rgba(95,143,120,0.12)]" : "bg-[var(--panel)] hover:bg-[#f3eee7]"}`}
-                    style={!focusedLearnExampleOpen ? { borderColor: "var(--line)" } : undefined}
-                    onClick={() => setFocusedLearnExampleOpen((current) => !current)}
+                    className="w-full rounded-[18px] border border-[var(--line)] bg-[var(--panel)] px-4 py-3 text-left transition hover:bg-[#f3eee7]"
+                    onClick={handleSwitchLearnConcept}
+                    disabled={learnConceptOptions.length <= 1}
                   >
-                    <p className={SURFACE_EYEBROW_CLASS}>Mode</p>
-                    <p className="mt-2 text-sm font-medium text-[var(--ink)]">Show example</p>
-                    <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">See one concise model explanation before you write.</p>
-                  </button>
-                  <button
-                    type="button"
-                    className={`w-full rounded-[18px] border px-4 py-3 text-left transition ${focusedLearnDetailOpen ? "border-[rgba(95,143,120,0.22)] bg-[rgba(95,143,120,0.12)]" : "bg-[var(--panel)] hover:bg-[#f3eee7]"}`}
-                    style={!focusedLearnDetailOpen ? { borderColor: "var(--line)" } : undefined}
-                    onClick={() => setFocusedLearnDetailOpen((current) => !current)}
-                  >
-                    <p className={SURFACE_EYEBROW_CLASS}>Mode</p>
-                    <p className="mt-2 text-sm font-medium text-[var(--ink)]">Deep feedback</p>
-                    <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">Open annotations and the next learning prompt.</p>
+                    <p className={SURFACE_EYEBROW_CLASS}>Action</p>
+                    <p className="mt-2 text-sm font-medium text-[var(--ink)]">Switch Concept</p>
+                    <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">
+                      {learnConceptOptions.length > 1 ? "Rotate to another nearby concept on this same claim." : "No nearby concept surfaced yet."}
+                    </p>
                   </button>
                 </div>
               </div>
 
               <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
-                <p className={SURFACE_EYEBROW_CLASS}>Focus gaps</p>
+                <p className={SURFACE_EYEBROW_CLASS}>Nearby concepts</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {selectedKnowledgeSurface.teachBackGap.length ? (
-                    selectedKnowledgeSurface.teachBackGap.map((gap) => (
+                  {learnConceptOptions.length ? (
+                    learnConceptOptions.map((gap) => (
                       <Badge key={gap} className="bg-[#eef6f1] text-[#426957]">
                         {gap}
                       </Badge>
                     ))
                   ) : (
-                    <Badge className="bg-[#eef6f1] text-[#426957]">No obvious gap</Badge>
+                    <Badge className="bg-[#eef6f1] text-[#426957]">No nearby concept</Badge>
                   )}
                 </div>
                 <p className="mt-4 text-sm leading-6 text-[var(--muted-ink)]">{selectedKnowledgeSurface.reviewPrompt}</p>
@@ -5638,56 +5714,13 @@ export function ThoughtMapWorkspace({
 
             <div className="space-y-4">
               <div className="penny-reveal penny-card-soft p-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{teachBackPromptLabel}</span>
-                  <span className="rounded-full bg-[rgba(95,143,120,0.14)] px-3 py-1 text-xs font-medium text-[#426957]">
-                    {selectedTeachBackFocus.concept}
-                  </span>
-                </div>
-                <p className="font-display mt-4 text-[1.8rem] font-semibold leading-[1.12] text-[var(--ink)]">{selectedTeachBackFocus.concept}</p>
-                <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">{selectedTeachBackFocus.scaffold}</p>
-                <div className="penny-card-plain mt-4 px-4 py-3">
-                  <p className={SURFACE_EYEBROW_CLASS}>Concept title</p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
-                    {normalizedInitialLearningQuestion || `Explain ${selectedTeachBackFocus.concept} in the context of this claim.`}
-                  </p>
-                </div>
-              </div>
-
-              <div className="penny-reveal penny-card p-6 shadow-[var(--shadow-card)]">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className={SURFACE_EYEBROW_CLASS}>Teach-back box</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{teachBackPromptBody}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--ink)]">{teachBackPromptLabel}</span>
+                    <span className="rounded-full bg-[rgba(95,143,120,0.14)] px-3 py-1 text-xs font-medium text-[#426957]">
+                      {selectedTeachBackFocus.concept}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-[var(--panel)] px-3 py-1 text-xs font-medium text-[var(--muted-ink)]">
-                    {hasTeachBackReview ? "Checked" : currentTeachBackDraft.trim().length > 0 ? "Draft" : "Ready"}
-                  </span>
-                </div>
-                <div className="penny-card-inset mt-4 px-4 py-3">
-                  <p className={SURFACE_EYEBROW_CLASS}>Related claim</p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedGraphNode.node.content}</p>
-                </div>
-                <textarea
-                  className="penny-soft-switch mt-4 min-h-[220px] w-full rounded-[22px] border border-black/10 bg-[var(--paper)] px-5 py-4 text-[15px] leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
-                  placeholder={teachBackPlaceholder}
-                  autoFocus
-                  value={currentTeachBackDraft}
-                  onChange={(event) =>
-                    setTeachBackDrafts((prev) => ({
-                      ...prev,
-                      [currentTeachBackNodeId ?? ""]: event.target.value,
-                    }))
-                  }
-                />
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <Button
-                    className="penny-press gap-2 bg-[var(--learn)] text-[var(--paper)] shadow-[0_14px_30px_rgba(95,143,120,0.22)] hover:bg-[#4d7663]"
-                    onClick={handleTeachBackCheck}
-                    disabled={!currentTeachBackNodeId || isPending}
-                  >
-                    {isPending ? "Checking..." : "Check explanation"}
-                  </Button>
                   <button
                     type="button"
                     className="rounded-full border border-black/8 bg-white px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-ink)] transition hover:bg-[var(--panel)]"
@@ -5696,41 +5729,115 @@ export function ThoughtMapWorkspace({
                     {focusedLearnExampleOpen ? "Hide example" : "Show me an example"}
                   </button>
                 </div>
-                <p className="mt-3 text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Best in 3-6 concrete sentences.</p>
-
-                <div className="penny-card-inset mt-5 p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className={SURFACE_EYEBROW_CLASS}>Feedback checklist</p>
-                    <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
-                      {hasTeachBackReview ? currentTeachBackAnalysis.summary : "What Penny will check"}
-                    </span>
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    {learnChecklist.map((item) => (
-                      <div key={item.label} className="flex gap-3 rounded-[18px] border border-[var(--line)] bg-white px-4 py-3">
-                        <span
-                          className={cn(
-                            "mt-0.5 h-2.5 w-2.5 rounded-full",
-                            item.tone === "done"
-                              ? "bg-[var(--learn)]"
-                              : item.tone === "working"
-                                ? "bg-[#d6a246]"
-                                : "bg-black/15",
-                          )}
-                        />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-[var(--ink)]">{item.label}</p>
-                          <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{item.detail}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {hasTeachBackReview ? (
-                    <div className="penny-card-plain mt-4 px-4 py-3">
-                      <p className={SURFACE_EYEBROW_CLASS}>Correction</p>
-                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.correction}</p>
+                <p className="font-display mt-4 text-[1.8rem] font-semibold leading-[1.12] text-[var(--ink)]">{selectedTeachBackFocus.concept}</p>
+                <p className="mt-2 text-sm leading-7 text-[var(--muted-ink)]">{selectedTeachBackFocus.scaffold}</p>
+                <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+                  <div className="space-y-4">
+                    <div className="penny-card-plain px-4 py-3">
+                      <p className={SURFACE_EYEBROW_CLASS}>Concept title</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">
+                        {normalizedInitialLearningQuestion || `Explain ${selectedTeachBackFocus.concept} in the context of this claim.`}
+                      </p>
                     </div>
-                  ) : null}
+
+                    <div className="penny-card-plain px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className={SURFACE_EYEBROW_CLASS}>Teach-back</p>
+                          <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{teachBackPromptBody}</p>
+                        </div>
+                        <span className="rounded-full bg-[var(--panel)] px-3 py-1 text-xs font-medium text-[var(--muted-ink)]">
+                          {hasTeachBackReview ? "Checked" : currentTeachBackDraft.trim().length > 0 ? "Draft" : "Ready"}
+                        </span>
+                      </div>
+                      <textarea
+                        className="penny-soft-switch mt-4 min-h-[220px] w-full rounded-[22px] border border-black/10 bg-[var(--paper)] px-5 py-4 text-[15px] leading-7 text-[var(--ink)] outline-none placeholder:text-[var(--muted-ink)] focus:border-black/20"
+                        placeholder={teachBackPlaceholder}
+                        autoFocus
+                        value={currentTeachBackDraft}
+                        onChange={(event) => {
+                          if (!currentTeachBackNodeId) {
+                            return;
+                          }
+
+                          setTeachBackDrafts((prev) => ({
+                            ...prev,
+                            [currentTeachBackNodeId]: event.target.value,
+                          }))
+                          setTeachBackValidationErrors((prev) => ({
+                            ...prev,
+                            [currentTeachBackNodeId]: null,
+                          }))
+                        }}
+                      />
+                      {currentTeachBackValidationError ? (
+                        <p className="mt-3 rounded-[18px] border border-[#f0c0b7] bg-[#fff4f1] px-4 py-3 text-sm leading-6 text-[#8b3d2f]">
+                          {currentTeachBackValidationError}
+                        </p>
+                      ) : null}
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <Button
+                          className="penny-press gap-2 bg-[var(--learn)] text-[var(--paper)] shadow-[0_14px_30px_rgba(95,143,120,0.22)] hover:bg-[#4d7663]"
+                          onClick={handleTeachBackCheck}
+                          disabled={!currentTeachBackNodeId || isPending}
+                        >
+                          {isPending ? "Checking..." : "Submit teach-back"}
+                        </Button>
+                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">Best in 3-6 concrete sentences.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="penny-card-plain px-4 py-3">
+                      <p className={SURFACE_EYEBROW_CLASS}>Related claim</p>
+                      <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{selectedGraphNode.node.content}</p>
+                    </div>
+
+                    <div className="penny-card-plain px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className={SURFACE_EYEBROW_CLASS}>Feedback block</p>
+                        <span className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">
+                          {hasTeachBackReview ? currentTeachBackAnalysis.summary : "What Penny will check"}
+                        </span>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {learnChecklist.map((item) => (
+                          <div key={item.label} className="flex gap-3 rounded-[18px] border border-[var(--line)] bg-white px-4 py-3">
+                            <span
+                              className={cn(
+                                "mt-0.5 h-2.5 w-2.5 rounded-full",
+                                item.tone === "done"
+                                  ? "bg-[var(--learn)]"
+                                  : item.tone === "working"
+                                    ? "bg-[#d6a246]"
+                                    : "bg-black/15",
+                              )}
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-[var(--ink)]">{item.label}</p>
+                              <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">{item.detail}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {hasTeachBackReview ? (
+                        <div className="penny-card-plain mt-4 px-4 py-3">
+                          <p className={SURFACE_EYEBROW_CLASS}>Penny feedback</p>
+                          <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{currentTeachBackAnalysis.correction}</p>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {learningPrompts[0] ? (
+                      <div className="penny-card-plain px-4 py-3">
+                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{learningPrompts[0].label}</p>
+                        <h3 className="mt-2 text-base font-semibold text-[var(--ink)]">{learningPrompts[0].title}</h3>
+                        <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{learningPrompts[0].body}</p>
+                        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{learningPrompts[0].helper}</p>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 
@@ -5745,92 +5852,13 @@ export function ThoughtMapWorkspace({
               ) : null}
 
               {focusedLearnDetailOpen ? (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
-                    <p className={SURFACE_EYEBROW_CLASS}>Your text, annotated</p>
-                    <div className="penny-card-inset mt-3 p-4 text-sm leading-7 text-[var(--ink)]">
-                      {highlightTeachBackResponse(currentTeachBackDraft, currentTeachBackAnalysis.annotations)}
-                    </div>
+                <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
+                  <p className={SURFACE_EYEBROW_CLASS}>Your text, annotated</p>
+                  <div className="penny-card-inset mt-3 p-4 text-sm leading-7 text-[var(--ink)]">
+                    {highlightTeachBackResponse(currentTeachBackDraft, currentTeachBackAnalysis.annotations)}
                   </div>
-
-                  {learningPrompts[0] ? (
-                    <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-ink)]">{learningPrompts[0].label}</p>
-                      <h3 className="mt-2 text-lg font-semibold text-[var(--ink)]">{learningPrompts[0].title}</h3>
-                      <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{learningPrompts[0].body}</p>
-                      <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">{learningPrompts[0].helper}</p>
-                    </div>
-                  ) : null}
                 </div>
               ) : null}
-            </div>
-
-            <div className="space-y-4">
-              <div className="penny-reveal penny-card p-6 shadow-[var(--shadow-card)]">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className={SURFACE_EYEBROW_CLASS}>Where this lives in your brain</p>
-                    <p className="mt-1 text-sm leading-6 text-[var(--muted-ink)]">A small view of how this concept sits inside the active map.</p>
-                  </div>
-                  <span className="rounded-full bg-[rgba(95,143,120,0.14)] px-3 py-1 text-xs font-medium text-[#426957]">
-                    {selectedKnowledgeSurface.masteryLevel}
-                  </span>
-                </div>
-                <div className="penny-card-inset mt-5 px-4 py-5">
-                  <div className="penny-card-plain px-4 py-3">
-                    <OrnamentalGraph variant="concept-map" accent="var(--learn)" className="mx-auto h-32 max-w-[16rem]" />
-                  </div>
-                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    <div className="rounded-full border border-[var(--line)] bg-white px-3 py-2 text-center text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
-                      {selectedGraphNodeParent?.content ?? "Root frame"}
-                    </div>
-                    <div className="rounded-full border border-[rgba(95,143,120,0.24)] bg-[rgba(95,143,120,0.12)] px-3 py-2 text-center text-[11px] uppercase tracking-[0.14em] text-[#426957]">
-                      {selectedTeachBackFocus.concept}
-                    </div>
-                    <div className="rounded-full border border-[var(--line)] bg-white px-3 py-2 text-center text-[11px] uppercase tracking-[0.14em] text-[var(--muted-ink)]">
-                      {selectedGenealogy.dependents.length ? `${selectedGenealogy.dependents.length} connected` : "Connected"}
-                    </div>
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {selectedGenealogy.dependents.slice(0, 2).map((node) => (
-                      <div key={node.id} className="penny-card-plain px-3 py-3">
-                        <p className={SURFACE_EYEBROW_CLASS}>Connected</p>
-                        <p className="mt-2 text-sm leading-6 text-[var(--ink)]">{node.content}</p>
-                      </div>
-                    ))}
-                    {!selectedGenealogy.dependents.length ? (
-                      <div className="penny-card-plain px-3 py-3 sm:col-span-2">
-                        <p className={SURFACE_EYEBROW_CLASS}>Connected</p>
-                        <p className="mt-2 text-sm leading-6 text-[var(--muted-ink)]">
-                          Penny has not linked downstream ideas here yet, so this concept still mostly lives inside the active claim.
-                        </p>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
-                <p className={SURFACE_EYEBROW_CLASS}>Related claim</p>
-                <p className="mt-3 text-sm leading-7 text-[var(--ink)]">{selectedGraphNode.node.content}</p>
-              </div>
-
-              <div className="penny-reveal penny-card p-5 shadow-[var(--shadow-card)]">
-                <p className={SURFACE_EYEBROW_CLASS}>Connected ideas</p>
-                <div className="mt-4 space-y-2">
-                  {learnConnectedIdeas.length ? (
-                    learnConnectedIdeas.map((idea) => (
-                      <div key={idea} className="penny-card-inset px-4 py-3 text-sm leading-6 text-[var(--ink)]">
-                        {idea}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="penny-card-inset px-4 py-3 text-sm leading-6 text-[var(--muted-ink)]">
-                      No connected ideas surfaced yet.
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         ) : (
