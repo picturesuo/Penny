@@ -1,32 +1,25 @@
 import Link from "next/link";
 import { ArrowUpRight, BrainCircuit, GraduationCap, ShieldAlert } from "lucide-react";
 import { PennyLogo } from "@/components/penny/penny-logo";
+import { getCurrentUser } from "@/lib/auth";
+import { buildChallengeView, buildShellView } from "@/server/workspace-projections";
 
-const lanes = [
-  {
-    title: "Brain",
-    description: "Capture and organize what you think.",
-    icon: BrainCircuit,
-    accent: "var(--brain)",
-    href: "/app",
-  },
-  {
-    title: "Challenge",
-    description: "Put an idea under pressure.",
-    icon: ShieldAlert,
-    accent: "var(--challenge)",
-    href: "/app/new?prefill=What%20claim%20should%20Penny%20challenge%3F",
-  },
-  {
-    title: "Learn",
-    description: "Understand what is blocking you.",
-    icon: GraduationCap,
-    accent: "var(--learn)",
-    href: "/app/lessons",
-  },
-] as const;
+export default async function LandingPage() {
+  const user = await getCurrentUser();
+  const shellView = user?.id ? await buildShellView({ userId: user.id }) : null;
+  const challengeView =
+    user?.id && shellView?.selection.mapId
+      ? await buildChallengeView({
+          userId: user.id,
+          mapId: shellView.selection.mapId,
+        })
+      : null;
+  const lanes = buildLandingLanes({
+    claimId: shellView?.selection.claimId ?? null,
+    mapId: shellView?.selection.mapId ?? null,
+    roundId: challengeView?.currentRound?.id ?? null,
+  });
 
-export default function LandingPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[linear-gradient(180deg,#faf7f3_0%,#f7f3ee_100%)]">
       <div className="mx-auto flex min-h-screen max-w-[1220px] flex-col px-6 py-6 lg:px-10">
@@ -84,4 +77,72 @@ export default function LandingPage() {
       </div>
     </main>
   );
+}
+
+function buildLandingLanes(selection: {
+  claimId: string | null;
+  mapId: string | null;
+  roundId: string | null;
+}) {
+  return [
+    {
+      title: "Brain",
+      description: "Capture and organize what you think.",
+      icon: BrainCircuit,
+      accent: "var(--brain)",
+      href: buildWorkspaceLauncherHref("brain", selection),
+    },
+    {
+      title: "Challenge",
+      description: "Put an idea under pressure.",
+      icon: ShieldAlert,
+      accent: "var(--challenge)",
+      href: buildWorkspaceLauncherHref("challenge", selection),
+    },
+    {
+      title: "Learn",
+      description: "Understand what is blocking you.",
+      icon: GraduationCap,
+      accent: "var(--learn)",
+      href: buildWorkspaceLauncherHref("learn", selection),
+    },
+  ] as const;
+}
+
+function buildWorkspaceLauncherHref(
+  mode: "brain" | "challenge" | "learn",
+  selection: {
+    claimId: string | null;
+    mapId: string | null;
+    roundId: string | null;
+  },
+) {
+  if (!selection.mapId) {
+    if (mode === "brain") {
+      return "/app";
+    }
+
+    if (mode === "challenge") {
+      return "/app/new?prefill=What%20claim%20should%20Penny%20challenge%3F";
+    }
+
+    return "/app/lessons";
+  }
+
+  const params = new URLSearchParams();
+
+  if (selection.claimId) {
+    params.set("claimId", selection.claimId);
+  }
+
+  if (selection.roundId) {
+    params.set("roundId", selection.roundId);
+  }
+
+  if (mode !== "brain") {
+    params.set("launcher", mode);
+  }
+
+  const query = params.toString();
+  return query ? `/maps/${selection.mapId}?${query}` : `/maps/${selection.mapId}`;
 }
