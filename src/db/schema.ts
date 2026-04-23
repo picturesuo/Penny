@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -119,7 +120,7 @@ export const claims = pgTable(
     mapId: uuid("map_id")
       .notNull()
       .references(() => maps.id, { onDelete: "cascade", onUpdate: "cascade" }),
-    parentClaimId: uuid("parent_claim_id").references((): typeof claims.$inferSelect.id => claims.id, {
+    parentClaimId: uuid("parent_claim_id").references((): AnyPgColumn => claims.id, {
       onDelete: "set null",
       onUpdate: "cascade",
     }),
@@ -248,7 +249,7 @@ export const dialecticRounds = pgTable(
       onDelete: "set null",
       onUpdate: "cascade",
     }),
-    priorRoundId: uuid("prior_round_id").references((): typeof dialecticRounds.$inferSelect.id => dialecticRounds.id, {
+    priorRoundId: uuid("prior_round_id").references((): AnyPgColumn => dialecticRounds.id, {
       onDelete: "set null",
       onUpdate: "cascade",
     }),
