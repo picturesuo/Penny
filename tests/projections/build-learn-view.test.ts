@@ -163,9 +163,10 @@ test("buildLearnView preserves mapId and claimId after a Brain to Learn switch",
       updatedAt: learnView.selectedClaim?.updatedAt ?? "",
     },
     learnState: {
-      status: "not_implemented",
+      status: "placeholder",
       message: "Learn mode coming soon",
     },
-    status: "not_implemented",
+    status: "placeholder",
+    message: "Learn mode coming soon",
   });
 });
