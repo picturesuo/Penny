@@ -5,6 +5,8 @@ import { graphClusterColors } from "./graph-style";
 
 type GraphLegendProps = {
   clusters: GraphCluster[];
+  focusedCluster?: GraphCluster | null;
+  onFocusCluster?: (cluster: GraphCluster | null) => void;
 };
 
 const legendStyle: CSSProperties = {
@@ -26,16 +28,21 @@ const itemStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 6,
+  border: 0,
+  borderRadius: 6,
+  background: "transparent",
   color: "#68756e",
+  cursor: "pointer",
   fontSize: 12,
   fontWeight: 650,
+  padding: "3px 5px",
 };
 
 function labelForCluster(cluster: GraphCluster) {
   return cluster.charAt(0).toUpperCase() + cluster.slice(1);
 }
 
-export function GraphLegend({ clusters }: GraphLegendProps) {
+export function GraphLegend({ clusters, focusedCluster = null, onFocusCluster }: GraphLegendProps) {
   if (!clusters.length) {
     return null;
   }
@@ -46,7 +53,18 @@ export function GraphLegend({ clusters }: GraphLegendProps) {
         const palette = graphClusterColors[cluster];
 
         return (
-          <span key={cluster} style={itemStyle}>
+          <button
+            key={cluster}
+            type="button"
+            aria-pressed={focusedCluster === cluster}
+            title={`Focus ${labelForCluster(cluster)} cluster`}
+            style={{
+              ...itemStyle,
+              background: focusedCluster === cluster ? "rgba(47, 107, 85, 0.1)" : "transparent",
+              color: focusedCluster === cluster ? "#174c3b" : itemStyle.color,
+            }}
+            onClick={() => onFocusCluster?.(focusedCluster === cluster ? null : cluster)}
+          >
             <span
               aria-hidden="true"
               style={{
@@ -58,7 +76,7 @@ export function GraphLegend({ clusters }: GraphLegendProps) {
               }}
             />
             {labelForCluster(cluster)}
-          </span>
+          </button>
         );
       })}
     </div>

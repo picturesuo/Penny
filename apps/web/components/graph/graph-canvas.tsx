@@ -1,4 +1,4 @@
-import type { GraphEdge as GraphEdgeModel, GraphNode as GraphNodeModel, GraphViewport } from "../../lib/types/graph";
+import type { GraphCluster, GraphEdge as GraphEdgeModel, GraphNode as GraphNodeModel, GraphViewport } from "../../lib/types/graph";
 import { ClusterLabel } from "./cluster-label";
 import { GraphEdge } from "./graph-edge";
 import type { PositionedGraphNode } from "./graph-layout";
@@ -11,19 +11,53 @@ type GraphCanvasProps = {
   nodesById: Map<string, PositionedGraphNode>;
   viewport: GraphViewport;
   selectedNodeId?: string | null;
+  focusNodeId?: string | null;
+  focusedCluster?: GraphCluster | null;
   onSelectNode?: (node: GraphNodeModel) => void;
 };
 
-export function GraphCanvas({ nodes, edges, nodesById, viewport, selectedNodeId, onSelectNode }: GraphCanvasProps) {
+export function GraphCanvas({
+  nodes,
+  edges,
+  nodesById,
+  viewport,
+  selectedNodeId,
+  focusNodeId = null,
+  focusedCluster = null,
+  onSelectNode,
+}: GraphCanvasProps) {
   const viewTransform = `translate(${viewport.translateX} ${viewport.translateY}) scale(${viewport.scale})`;
   const clusters = Array.from(new Set(nodes.map((node) => node.cluster)));
+  const activeEdges = selectedNodeId ? edges.filter((edge) => edge.source === selectedNodeId || edge.target === selectedNodeId) : [];
+  const activeEdgeIds = new Set(activeEdges.map((edge) => edge.id));
+  const focusEdges = focusNodeId ? edges.filter((edge) => edge.source === focusNodeId || edge.target === focusNodeId) : [];
+  const focusEdgeIds = new Set(focusEdges.map((edge) => edge.id));
+  const connectedNodeIds = new Set<string>();
+  const focusedNodeIds = new Set<string>();
+
+  if (selectedNodeId) {
+    connectedNodeIds.add(selectedNodeId);
+    activeEdges.forEach((edge) => {
+      connectedNodeIds.add(edge.source);
+      connectedNodeIds.add(edge.target);
+    });
+  }
+
+  if (focusNodeId) {
+    focusedNodeIds.add(focusNodeId);
+    focusEdges.forEach((edge) => {
+      focusedNodeIds.add(edge.source);
+      focusedNodeIds.add(edge.target);
+    });
+  }
 
   return (
     <svg aria-label="Graph canvas" width="100%" height="100%" viewBox={graphViewBoxValue}>
       <style>
         {`
-          .penny-graph-edge {
-            transition: stroke 160ms ease, stroke-opacity 160ms ease, stroke-width 160ms ease;
+          .penny-graph-edge,
+          .penny-graph-edge-group {
+            transition: opacity 160ms ease, stroke 160ms ease, stroke-opacity 160ms ease, stroke-width 160ms ease;
           }
 
           .penny-graph-node-group .penny-graph-node-shell,
@@ -60,12 +94,19 @@ export function GraphCanvas({ nodes, edges, nodesById, viewport, selectedNodeId,
             return null;
           }
 
+          const active = activeEdgeIds.has(edge.id);
           const emphasized = source.id === selectedNodeId || target.id === selectedNodeId;
-          return <GraphEdge key={edge.id} edge={edge} source={source} target={target} emphasized={emphasized} />;
+          const muted = Boolean(
+            (focusNodeId && !focusEdgeIds.has(edge.id)) || (focusedCluster && source.cluster !== focusedCluster && target.cluster !== focusedCluster),
+          );
+
+          return <GraphEdge key={edge.id} active={active} edge={edge} source={source} target={target} emphasized={emphasized} muted={muted} />;
         })}
         {nodes.map((node) => (
           <GraphNode
+            connected={connectedNodeIds.has(node.id) && node.id !== selectedNodeId}
             key={node.id}
+            muted={Boolean((focusNodeId && !focusedNodeIds.has(node.id)) || (focusedCluster && node.cluster !== focusedCluster))}
             node={node}
             selected={node.id === selectedNodeId}
             onSelectNode={onSelectNode}

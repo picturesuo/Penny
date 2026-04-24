@@ -1,14 +1,16 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent } from "react";
 
-import type { GraphEdge, GraphModel } from "../../lib/types/graph";
+import type { GraphEdge, GraphModel, GraphViewport } from "../../lib/types/graph";
 import { createNodeLookup, positionGraphNodes, type PositionedGraphNode } from "./graph-layout";
-import { graphClusterColors, graphMiniMapStyle, graphViewBoxValue } from "./graph-style";
+import { graphClusterColors, graphMiniMapStyle, graphViewBox, graphViewBoxValue } from "./graph-style";
 
 type MiniMapProps = {
   nodes: PositionedGraphNode[];
   edges: GraphEdge[];
   selectedNodeId?: string | null;
   nodesById: Map<string, PositionedGraphNode>;
+  viewport?: GraphViewport;
+  onViewportChange?: (viewport: GraphViewport | ((current: GraphViewport) => GraphViewport)) => void;
   variant?: "floating" | "inline";
   style?: CSSProperties;
 };
@@ -23,8 +25,38 @@ const inlineMiniMapStyle: CSSProperties = {
   background: "rgba(253, 254, 251, 0.9)",
 };
 
-export function MiniMap({ nodes, edges, selectedNodeId, nodesById, variant = "floating", style }: MiniMapProps) {
+function viewportRect(viewport: GraphViewport | undefined) {
+  if (!viewport) {
+    return null;
+  }
+
+  return {
+    x: (graphViewBox.x - viewport.translateX) / viewport.scale,
+    y: (graphViewBox.y - viewport.translateY) / viewport.scale,
+    width: graphViewBox.width / viewport.scale,
+    height: graphViewBox.height / viewport.scale,
+  };
+}
+
+export function MiniMap({ nodes, edges, selectedNodeId, nodesById, viewport, onViewportChange, variant = "floating", style }: MiniMapProps) {
   const baseStyle = variant === "inline" ? inlineMiniMapStyle : graphMiniMapStyle;
+  const rect = viewportRect(viewport);
+
+  function handlePointerDown(event: PointerEvent<SVGSVGElement>) {
+    if (!onViewportChange || !viewport) {
+      return;
+    }
+
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = graphViewBox.x + ((event.clientX - bounds.left) / bounds.width) * graphViewBox.width;
+    const y = graphViewBox.y + ((event.clientY - bounds.top) / bounds.height) * graphViewBox.height;
+
+    onViewportChange((current) => ({
+      ...current,
+      translateX: -(x * current.scale),
+      translateY: -(y * current.scale),
+    }));
+  }
 
   return (
     <svg
@@ -32,9 +64,11 @@ export function MiniMap({ nodes, edges, selectedNodeId, nodesById, variant = "fl
       data-testid="penny-graph-minimap"
       style={{
         ...baseStyle,
+        cursor: onViewportChange ? "crosshair" : undefined,
         ...style,
       }}
       viewBox={graphViewBoxValue}
+      onPointerDown={handlePointerDown}
     >
       {edges.map((edge) => {
         const source = nodesById.get(edge.source);
@@ -73,6 +107,19 @@ export function MiniMap({ nodes, edges, selectedNodeId, nodesById, variant = "fl
           />
         );
       })}
+      {rect ? (
+        <rect
+          aria-label="Current graph viewport"
+          x={rect.x}
+          y={rect.y}
+          width={rect.width}
+          height={rect.height}
+          fill="rgba(47, 107, 85, 0.08)"
+          stroke="rgba(47, 107, 85, 0.72)"
+          strokeWidth="5"
+          rx="10"
+        />
+      ) : null}
     </svg>
   );
 }

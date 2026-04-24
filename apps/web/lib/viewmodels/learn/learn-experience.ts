@@ -35,6 +35,7 @@ export type LearnExperienceViewModel = {
   selectedClaim: {
     body: string;
     confidenceLabel: string;
+    confidenceBps: number | null;
   } | null;
   teachBackPrompt: string;
   feedback: {
@@ -165,6 +166,7 @@ export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnE
       ? {
           body: selectedClaim.body,
           confidenceLabel: formatConfidence(selectedClaim.confidenceBps),
+          confidenceBps: typeof selectedClaim.confidenceBps === "number" ? selectedClaim.confidenceBps : null,
         }
       : null,
     teachBackPrompt: selectedClaim

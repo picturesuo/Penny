@@ -34,7 +34,8 @@ Command routes accept JSON request bodies. Idempotent commands can use an idempo
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `POST` | `/ai/challenge-idea` | Return a compact challenge/learn response for `{ thoughtId?, claimId?, text? }`: strongest objection, hidden assumption, counterexample, better version, and confidence question. |
+| `POST` | `/ai/challenge-idea` | Return a compact challenge/learn response for `{ thoughtId?, claimId?, text? }`: strongest objection, hidden assumption, counterexample, better version, and confidence question. Successful calls are logged to `ai_jobs` and `activity_events`. |
+| `POST` | `/ai/explain-blocker` | Return a compact Learn response for `{ thoughtId?, claimId?, text?, blocker? }`: blocker summary, likely cause, missing information, next step, and confidence question. Successful calls are logged to `ai_jobs` and `activity_events`. |
 
 ## Boundaries
 

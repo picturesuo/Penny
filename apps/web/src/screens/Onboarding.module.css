@@ -1,0 +1,131 @@
+:global(html):has(.entry),
+:global(body):has(.entry) {
+  background: #0d100f;
+}
+
+.entry {
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  background:
+    linear-gradient(135deg, rgba(47, 107, 85, 0.28), transparent 34%),
+    linear-gradient(225deg, rgba(66, 111, 140, 0.22), transparent 38%),
+    linear-gradient(180deg, #151c18 0%, #101412 52%, #0d100f 100%);
+  color: #f7f3e8;
+}
+
+.ambient {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 253, 247, 0.09), transparent 36%),
+    linear-gradient(90deg, rgba(180, 95, 59, 0.08), transparent 36%, rgba(46, 108, 87, 0.08));
+  mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.7) 62%, transparent 100%);
+}
+
+.shell {
+  width: min(1120px, 100%);
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 44px;
+}
+
+.brand {
+  justify-self: center;
+}
+
+.brand :global(.penny-logo) {
+  color: rgba(247, 243, 232, 0.74);
+}
+
+.brand :global(.penny-logo__mark) {
+  width: 38px;
+  height: 38px;
+  border-color: rgba(247, 243, 232, 0.2);
+  background: rgba(247, 243, 232, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 253, 247, 0.16);
+}
+
+.brand :global(.penny-logo__mark span) {
+  width: 26px;
+  height: 26px;
+  background: rgba(255, 253, 247, 0.12);
+  color: #fffdf7;
+}
+
+.brand :global(.penny-logo__wordmark) {
+  color: rgba(247, 243, 232, 0.74);
+}
+
+.hero {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0;
+  color: rgba(186, 210, 195, 0.8);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  width: 100%;
+  max-width: 760px;
+  margin: 0;
+  font-size: 5.2rem;
+  font-weight: 760;
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.cards {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 760px) {
+  .entry {
+    align-items: start;
+    padding: 24px 18px;
+  }
+
+  .shell {
+    width: calc(100vw - 36px);
+    gap: 30px;
+  }
+
+  .brand {
+    justify-self: start;
+  }
+
+  .hero {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .hero h1 {
+    max-width: 330px;
+    font-size: 2.2rem;
+    line-height: 1.03;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}

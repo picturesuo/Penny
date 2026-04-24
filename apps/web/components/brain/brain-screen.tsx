@@ -1,4 +1,5 @@
 import React, { type CSSProperties } from "react";
+import { ConfidenceChip } from "../confidence/ConfidenceChip";
 import type { BrainThoughtViewModel, BrainViewModel } from "../../lib/viewmodels/brain";
 
 type BrainScreenProps = {
@@ -487,7 +488,7 @@ export function BrainScreen({
               <Fact label="Status" value={model.inspector.status} />
               <Fact label="Thought ID" value={model.inspector.selectedId ?? "None"} />
               <Fact label="Map ID" value={model.inspector.mapId ?? "None"} />
-              <Fact label="Confidence" value={model.inspector.confidenceLabel} />
+              <Fact label="Confidence" value={<ConfidenceChip scale="basis-points" value={model.inspector.confidenceBps} />} />
               <Fact label="Updated" value={model.inspector.updatedAtLabel} />
             </dl>
             <InspectorGroup title="Key connections" items={model.inspector.keyConnections} emptyLabel="No connected claims projected yet." />
@@ -571,7 +572,7 @@ function ThoughtCard({ preview = false, thought }: { preview?: boolean; thought:
           <h3 style={styles.thoughtTitle}>{thought.title}</h3>
           <p style={styles.thoughtBody}>{preview ? thought.bodyPreview : thought.body}</p>
           <div style={styles.metadata}>
-            <span>{thought.confidenceLabel}</span>
+            <ConfidenceChip scale="basis-points" value={thought.confidenceBps} />
             <span>Updated {thought.updatedAtLabel}</span>
           </div>
         </div>
@@ -632,7 +633,7 @@ function SelectedClaimPanel({ model }: { model: NonNullable<BrainViewModel["sele
         <h3 style={styles.thoughtTitle}>{model.title}</h3>
         <p style={styles.thoughtBody}>{model.body}</p>
         <div style={styles.metadata}>
-          <span>{model.confidenceLabel}</span>
+          <ConfidenceChip scale="basis-points" value={model.confidenceBps} />
         </div>
       </article>
 
@@ -645,7 +646,9 @@ function SelectedClaimPanel({ model }: { model: NonNullable<BrainViewModel["sele
               <li key={claim.id} style={styles.relatedItem}>
                 <a href={claim.brainMapHref} style={styles.relatedLink}>
                   <strong>{claim.title}</strong>
-                  <span style={styles.metadata}>{claim.confidenceLabel}</span>
+                  <span style={styles.metadata}>
+                    <ConfidenceChip scale="basis-points" value={claim.confidenceBps} />
+                  </span>
                 </a>
               </li>
             ))}
@@ -667,7 +670,7 @@ function ThoughtSummary({ thought }: { thought: BrainThoughtViewModel }) {
     <article style={styles.thoughtCard}>
       <h3 style={styles.thoughtTitle}>{thought.title}</h3>
       <div style={styles.metadata}>
-        <span>{thought.confidenceLabel}</span>
+        <ConfidenceChip scale="basis-points" value={thought.confidenceBps} />
         <span>{thought.updatedAtLabel}</span>
       </div>
     </article>
@@ -694,7 +697,7 @@ function ConfidenceMiniGraph({ confidenceBps, label }: { confidenceBps: number |
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={styles.factRow}>
       <dt style={styles.factLabel}>{label}</dt>

@@ -44,6 +44,7 @@ export type BrainRelatedClaimPreview = {
   id: string;
   title: string;
   confidenceLabel: string;
+  confidenceBps: number | null;
   brainMapHref: string;
 };
 
@@ -57,6 +58,7 @@ export type BrainSelectedClaimPanel = {
   title: string;
   body: string;
   confidenceLabel: string;
+  confidenceBps: number | null;
   dependenciesLabel: string;
   relatedClaims: BrainRelatedClaimPreview[];
   brainMapHref: string;
@@ -100,6 +102,7 @@ export type BrainViewModel = {
     selectedId: string | null;
     mapId: string | null;
     confidenceLabel: string;
+    confidenceBps: number | null;
     updatedAtLabel: string;
     keyConnections: BrainInspectorItem[];
     dependencies: BrainInspectorItem[];

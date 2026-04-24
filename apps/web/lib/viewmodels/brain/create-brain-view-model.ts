@@ -96,6 +96,7 @@ function toRelatedClaim(thought: BrainThoughtViewModel): BrainRelatedClaimPrevie
     id: thought.id,
     title: thought.title,
     confidenceLabel: thought.confidenceLabel,
+    confidenceBps: thought.confidenceBps,
     brainMapHref: createBrainMapHref(thought.id),
   };
 }
@@ -223,6 +224,7 @@ function createSelectedPanel(selectedThought: BrainThoughtViewModel | null, stre
     title: selectedThought.title,
     body: selectedThought.body,
     confidenceLabel: selectedThought.confidenceLabel,
+    confidenceBps: selectedThought.confidenceBps,
     dependenciesLabel:
       relatedClaims.length > 0
         ? `${relatedClaims.length} related claims from this map`
@@ -317,6 +319,7 @@ export function createBrainViewModel(projection: BrainProjectionView): BrainView
       selectedId: selectedThought?.id ?? null,
       mapId: selectedThought?.mapId ?? projection.mapSummary?.id ?? context.mapId,
       confidenceLabel: selectedThought?.confidenceLabel ?? "No confidence recorded",
+      confidenceBps: selectedThought?.confidenceBps ?? null,
       updatedAtLabel: selectedThought?.updatedAtLabel ?? "Not recorded",
       keyConnections,
       dependencies,

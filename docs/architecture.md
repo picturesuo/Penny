@@ -13,9 +13,9 @@ Penny has been restarted as a minimal monorepo.
 
 ## Current boundaries
 
-- No database
-- No auth
-- No AI integrations
+- Database-backed backend foundation via Drizzle + Postgres
+- No real auth
+- Local challenge critique generation only; no external AI provider integration yet
 - No billing
 - No background jobs
 - No legacy code imports

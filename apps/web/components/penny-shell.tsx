@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { ChallengeExperience, type ChallengeResponsePath } from "./challenge/challenge-experience";
+import { ConfidenceChip } from "./confidence/ConfidenceChip";
+import { BrainGraphMap, createBrainGraph } from "./graph";
 import { LearnExperience } from "./learn/learn-experience";
+import type { GraphModel, GraphNode } from "../lib/types/graph";
+import { CommandPalette } from "../src/components/command/CommandPalette";
+import { InspectorRail } from "../src/components/inspector/InspectorRail";
+import { useCommandPalette, type CommandPaletteItem } from "../src/hooks/useCommandPalette";
 
 type WorkspaceMode = "brain" | "challenge" | "learn";
 type WorkspaceCommandMode = "Brain" | "Challenge" | "Learn";
@@ -30,6 +36,8 @@ type WorkspaceContext = {
 
 type ClaimView = {
   id: string;
+  mapId?: string;
+  userId?: string;
   body: string;
   confidenceBps?: number | null;
   createdAt?: string;
@@ -219,6 +227,264 @@ function formatConfidence(confidenceBps: number | null | undefined) {
   return `${Math.round(confidenceBps / 100)}% confidence`;
 }
 
+function toCommandConfidence(confidenceBps: number | null | undefined) {
+  return typeof confidenceBps === "number" ? Math.round(confidenceBps / 100) : null;
+}
+
+function formatTimestamp(value: string | null | undefined) {
+  if (!value) {
+    return "Time not recorded";
+  }
+
+  const timestamp = new Date(value);
+
+  if (Number.isNaN(timestamp.getTime())) {
+    return "Time not recorded";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(timestamp);
+}
+
+function getNodeLabel(graph: GraphModel, nodeId: string) {
+  return graph.nodes.find((node) => node.id === nodeId)?.label ?? nodeId;
+}
+
+function selectedGraphNode(graph: GraphModel, selectedNodeId: string | null) {
+  return graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+}
+
+function graphConnections(graph: GraphModel, selectedNodeId: string | null) {
+  if (!selectedNodeId) {
+    return [];
+  }
+
+  return graph.edges
+    .filter((edge) => edge.source === selectedNodeId || edge.target === selectedNodeId)
+    .map((edge) => {
+      const otherNodeId = edge.source === selectedNodeId ? edge.target : edge.source;
+
+      return {
+        id: edge.id,
+        title: getNodeLabel(graph, otherNodeId),
+        detail: edge.label ?? "Connected in this map",
+      };
+    });
+}
+
+function recentActivityItems(view: BrainView) {
+  const eventItems = (view.recentEvents ?? [])
+    .map((event, index) => {
+      if (typeof event !== "object" || event === null) {
+        return null;
+      }
+
+      const record = event as Record<string, unknown>;
+      const title =
+        typeof record.type === "string"
+          ? record.type
+          : typeof record.eventType === "string"
+            ? record.eventType
+            : typeof record.name === "string"
+              ? record.name
+              : "Workspace event";
+      const value =
+        typeof record.updatedAt === "string"
+          ? record.updatedAt
+          : typeof record.updated_at === "string"
+            ? record.updated_at
+            : typeof record.createdAt === "string"
+              ? record.createdAt
+              : typeof record.created_at === "string"
+                ? record.created_at
+                : typeof record.timestamp === "string"
+                  ? record.timestamp
+                  : null;
+
+      return {
+        id: typeof record.id === "string" ? record.id : `event-${index + 1}`,
+        title,
+        detail: formatTimestamp(value),
+      };
+    })
+    .filter((item): item is { id: string; title: string; detail: string } => Boolean(item));
+
+  if (eventItems.length > 0) {
+    return eventItems.slice(0, 4);
+  }
+
+  return [...view.claims]
+    .sort((left, right) => new Date(right.updatedAt ?? 0).getTime() - new Date(left.updatedAt ?? 0).getTime())
+    .slice(0, 4)
+    .map((claim) => ({
+      id: claim.id,
+      title: claim.body,
+      detail: `Updated ${formatTimestamp(claim.updatedAt)}`,
+    }));
+}
+
+function createWorkspaceInspector(view: BrainView, graph: GraphModel, selectedNodeId: string | null) {
+  const node = selectedGraphNode(graph, selectedNodeId);
+  const selectedClaim = node?.kind === "claim" ? view.claims.find((claim) => claim.id === node.id) ?? view.selectedClaim : view.selectedClaim;
+  const keyConnections = graphConnections(graph, selectedNodeId).slice(0, 4);
+  const dependencies =
+    node?.kind === "claim" && view.mapSummary
+      ? [
+          {
+            id: `${view.mapSummary.id}:${node.id}`,
+            title: view.mapSummary.title,
+            detail: "Parent map dependency",
+          },
+        ]
+      : keyConnections.filter((connection) => /contain|depend/i.test(connection.detail));
+  const contradictionMarkers = view.claims
+    .filter((claim) => typeof claim.confidenceBps === "number" && claim.confidenceBps < 6000)
+    .slice(0, 3)
+    .map((claim) => ({
+      id: claim.id,
+      title: claim.body,
+      detail: `${formatConfidence(claim.confidenceBps)}; review as a contradiction risk.`,
+    }));
+
+  return {
+    node,
+    selectedClaim,
+    keyConnections,
+    dependencies,
+    contradictionMarkers,
+    recentActivity: recentActivityItems(view),
+  };
+}
+
+function getMapTitle(shell: ShellContext | null, view: ProjectionView | null) {
+  if (view && "mapSummary" in view && view.mapSummary?.title) {
+    return view.mapSummary.title;
+  }
+
+  return getBreadcrumbs(shell, view).find((item) => item.kind === "map")?.label ?? "Current map";
+}
+
+function getMapClaimCount(view: ProjectionView | null) {
+  if (view && "mapSummary" in view && view.mapSummary) {
+    return view.mapSummary.claimCount;
+  }
+
+  return null;
+}
+
+function getSearchableClaims(view: ProjectionView | null) {
+  const claimsById = new Map<string, ClaimView>();
+
+  function addClaim(claim: ClaimView | null | undefined) {
+    if (claim) {
+      claimsById.set(claim.id, claim);
+    }
+  }
+
+  if (view && "claims" in view) {
+    view.claims.forEach(addClaim);
+  }
+
+  if (view && "selectedClaim" in view) {
+    addClaim(view.selectedClaim);
+  }
+
+  if (view && "activeClaim" in view) {
+    addClaim(view.activeClaim);
+  }
+
+  return Array.from(claimsById.values());
+}
+
+function buildCommandItems(input: {
+  activeMode: WorkspaceMode;
+  actionPending: boolean;
+  onSelectClaim: (claimId: string, mapId?: string) => Promise<void>;
+  onSelectMap: (mapId: string) => Promise<void>;
+  onSwitchMode: (mode: WorkspaceMode) => Promise<void>;
+  shell: ShellContext | null;
+  view: ProjectionView | null;
+}): CommandPaletteItem[] {
+  const mapId = getCurrentMapId(input.shell, input.view);
+  const mapTitle = getMapTitle(input.shell, input.view);
+  const mapClaimCount = getMapClaimCount(input.view);
+  const claims = getSearchableClaims(input.view);
+  const items: CommandPaletteItem[] = modes.map((mode) => ({
+    id: `session:${mode.id}`,
+    type: "session",
+    title: `${mode.label} session`,
+    subtitle: mode.id === input.activeMode ? "Current session" : `Jump to ${mode.label}`,
+    href: `/workspace?mode=${mode.id}`,
+    keywords: [mode.id, mode.label, "mode", "workspace"],
+    disabled: input.actionPending,
+    onSelect: () => input.onSwitchMode(mode.id),
+  }));
+
+  if (mapId) {
+    items.push({
+      id: `map:${mapId}`,
+      type: "map",
+      title: mapTitle,
+      subtitle: typeof mapClaimCount === "number" ? `${mapClaimCount} claims` : "Current workspace map",
+      confidence: null,
+      href: "/workspace?mode=brain",
+      keywords: ["map", "brain", mapId],
+      disabled: input.actionPending,
+      onSelect: () => input.onSelectMap(mapId),
+    });
+  }
+
+  claims.forEach((claim) => {
+    const targetMapId = claim.mapId ?? mapId ?? undefined;
+    const confidence = formatConfidence(claim.confidenceBps);
+
+    items.push({
+      id: `thought:${claim.id}`,
+      type: "thought",
+      title: claim.body,
+      subtitle: `Thought - ${confidence}`,
+      confidence: toCommandConfidence(claim.confidenceBps),
+      href: "/workspace?mode=brain",
+      keywords: ["claim", "thought", mapTitle, claim.id],
+      disabled: input.actionPending || !targetMapId,
+      onSelect: () => input.onSelectClaim(claim.id, targetMapId),
+    });
+
+    items.push({
+      id: `claim:${claim.id}`,
+      type: "claim",
+      title: claim.body,
+      subtitle: `Claim - ${confidence}`,
+      confidence: toCommandConfidence(claim.confidenceBps),
+      href: "/workspace?mode=brain",
+      keywords: ["claim", "thought", mapTitle, claim.id],
+      disabled: input.actionPending || !targetMapId,
+      onSelect: () => input.onSelectClaim(claim.id, targetMapId),
+    });
+  });
+
+  if (input.view && "activeChallengeRound" in input.view && input.view.activeChallengeRound) {
+    const round = input.view.activeChallengeRound;
+
+    items.push({
+      id: `session:${round.id}`,
+      type: "session",
+      title: `Challenge round ${round.status}`,
+      subtitle: "Recent challenge session",
+      href: "/workspace?mode=challenge",
+      keywords: ["challenge", "round", "session", round.id],
+      disabled: input.actionPending,
+      onSelect: () => input.onSwitchMode("challenge"),
+    });
+  }
+
+  return items;
+}
+
 async function fetchProjection<T>(path: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(path, {
     headers: {
@@ -253,8 +519,12 @@ async function postCommand<T>(path: string, body: Record<string, unknown>): Prom
   return (await response.json()) as T;
 }
 
-export function PennyShell() {
-  const [activeMode, setActiveMode] = useState<WorkspaceMode>("brain");
+type PennyShellProps = {
+  initialMode?: WorkspaceMode;
+};
+
+export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
+  const [activeMode, setActiveMode] = useState<WorkspaceMode>(initialMode);
   const [state, setState] = useState<ProjectionState>({
     mode: "brain",
     shell: null,
@@ -267,6 +537,20 @@ export function PennyShell() {
   });
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [isPending, startTransition] = useTransition();
+  const commandItems = buildCommandItems({
+    activeMode,
+    actionPending: actionState.status === "pending",
+    onSelectClaim: selectClaim,
+    onSelectMap: selectMap,
+    onSwitchMode: switchMode,
+    shell: state.shell,
+    view: state.view,
+  });
+  const commandPalette = useCommandPalette({ items: commandItems });
+
+  useEffect(() => {
+    setActiveMode(initialMode);
+  }, [initialMode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -349,8 +633,34 @@ export function PennyShell() {
     }
   }
 
-  async function selectClaim(claimId: string) {
-    const mapId = getCurrentMapId(state.shell, state.view);
+  async function selectMap(mapId: string) {
+    setActionState({
+      status: "pending",
+      message: "Updating selected map.",
+    });
+
+    try {
+      await postCommand("/api/commands/workspace/select", {
+        mode: toCommandMode(activeMode),
+        mapId,
+        claimId: null,
+        requestId: createRequestId("select-map"),
+      });
+      setActionState({
+        status: "success",
+        message: "Selected map updated.",
+      });
+      setRefreshVersion((current) => current + 1);
+    } catch (error) {
+      setActionState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Failed to select map.",
+      });
+    }
+  }
+
+  async function selectClaim(claimId: string, targetMapId?: string) {
+    const mapId = targetMapId ?? getCurrentMapId(state.shell, state.view);
 
     if (!mapId) {
       setActionState({
@@ -506,11 +816,23 @@ export function PennyShell() {
 
   return (
     <main className="penny-shell">
+      <CommandPalette
+        isOpen={commandPalette.isOpen}
+        items={commandPalette.filteredItems}
+        onClose={commandPalette.close}
+        onSelectItem={commandPalette.selectItem}
+        query={commandPalette.query}
+        setQuery={commandPalette.setQuery}
+      />
       <header className="penny-topbar">
         <div className="penny-brand" aria-label="Penny">
           <span className="penny-brand-mark">P</span>
           <span className="penny-brand-name">Penny</span>
         </div>
+        <button className="penny-command-button" type="button" onClick={commandPalette.open}>
+          <span>Search your brain…</span>
+          <kbd>Cmd/Ctrl K</kbd>
+        </button>
         <nav className="penny-mode-switcher" aria-label="Workspace mode">
           {modes.map((mode) => (
             <button
@@ -631,54 +953,109 @@ function BrainProjection({
   view: BrainView;
 }) {
   const mapTitle = view.mapSummary?.title ?? "Workspace projection";
+  const graph = useMemo(() => createBrainGraph(view as Parameters<typeof createBrainGraph>[0]), [view]);
+  const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
+  const inspectedNodeExists = graph.nodes.some((node) => node.id === inspectedNodeId);
+  const selectedNodeId = inspectedNodeExists ? inspectedNodeId : graph.selectedNodeId ?? null;
+  const inspector = createWorkspaceInspector(view, graph, selectedNodeId);
+
+  function inspectGraphNode(node: GraphNode) {
+    setInspectedNodeId(node.id);
+
+    if (node.kind === "claim") {
+      void onSelectClaim(node.id);
+    }
+  }
 
   return (
-    <div className="penny-content-grid">
-      <section className="penny-panel penny-hero-panel">
-        <p className="penny-kicker">Brain</p>
-        <h1>{mapTitle}</h1>
-        <p>
-          {view.mapSummary
-            ? `${view.mapSummary.claimCount} claims loaded from the Brain projection.`
-            : "Create or select a map to populate this projection."}
-        </p>
-      </section>
-
-      <section className="penny-panel">
-        <p className="penny-kicker">Selected claim</p>
-        {view.selectedClaim ? <ClaimSummary claim={view.selectedClaim} /> : <p>No claim selected.</p>}
-      </section>
-
-      <section className="penny-panel penny-wide-panel">
-        <p className="penny-kicker">Claims</p>
-        {actionState.message ? (
-          <p className="penny-action-message" data-status={actionState.status}>
-            {actionState.message}
+    <div className="penny-workspace-grid">
+      <div className="penny-workspace-main">
+        <section className="penny-panel penny-hero-panel">
+          <p className="penny-kicker">Brain</p>
+          <h1>{mapTitle}</h1>
+          <p>
+            {view.mapSummary
+              ? `${view.mapSummary.claimCount} claims loaded from the Brain projection.`
+              : "Create or select a map to populate this projection."}
           </p>
-        ) : null}
-        {view.claims.length > 0 ? (
-          <div className="penny-list">
-            {view.claims.map((claim) => (
-              <button
-                key={claim.id}
-                type="button"
-                className="penny-claim-button"
-                data-selected={view.selectedClaim?.id === claim.id}
-                onClick={() => onSelectClaim(claim.id)}
-              >
-                <ClaimSummary claim={claim} />
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p>No claims returned by the Brain projection.</p>
-        )}
-      </section>
+        </section>
 
-      <section className="penny-panel penny-wide-panel">
-        <p className="penny-kicker">Create claim</p>
-        <ClaimComposer disabled={!view.mapSummary || actionState.status === "pending"} onSubmit={onCreateClaim} />
-      </section>
+        <section className="penny-panel penny-graph-panel" id="brain-map">
+          <div className="penny-panel-heading">
+            <div>
+              <p className="penny-kicker">Graph</p>
+              <h2>Claim map</h2>
+            </div>
+            <span>{selectedNodeId ? `Inspecting ${selectedNodeId}` : "No node selected"}</span>
+          </div>
+          <BrainGraphMap graph={graph} selectedNodeId={selectedNodeId} onSelectNode={inspectGraphNode} height={520} />
+        </section>
+
+        <section className="penny-panel">
+          <p className="penny-kicker">Claims</p>
+          {actionState.message ? (
+            <p className="penny-action-message" data-status={actionState.status}>
+              {actionState.message}
+            </p>
+          ) : null}
+          {view.claims.length > 0 ? (
+            <div className="penny-list">
+              {view.claims.map((claim) => (
+                <button
+                  key={claim.id}
+                  type="button"
+                  className="penny-claim-button"
+                  data-selected={view.selectedClaim?.id === claim.id}
+                  onClick={() => {
+                    setInspectedNodeId(claim.id);
+                    void onSelectClaim(claim.id);
+                  }}
+                >
+                  <ClaimSummary claim={claim} />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p>No claims returned by the Brain projection.</p>
+          )}
+        </section>
+
+        <section className="penny-panel">
+          <p className="penny-kicker">Create claim</p>
+          <ClaimComposer disabled={!view.mapSummary || actionState.status === "pending"} onSubmit={onCreateClaim} />
+        </section>
+      </div>
+
+      <InspectorRail
+        activity={inspector.recentActivity}
+        ariaLabel="Brain inspector"
+        className="penny-inspector-rail"
+        connections={inspector.keyConnections}
+        contradictions={inspector.contradictionMarkers.map((marker) => ({ ...marker, severity: "medium" as const }))}
+        dependencies={inspector.dependencies}
+        selectedTitle={inspector.node?.label ?? "No node selected"}
+      >
+        <dl className="penny-facts">
+          <div>
+            <dt>Node type</dt>
+            <dd>{inspector.node?.kind ?? "None"}</dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>{inspector.node?.status ?? "No status"}</dd>
+          </div>
+          <div>
+            <dt>Confidence</dt>
+            <dd>
+              <ConfidenceChip scale="basis-points" value={inspector.selectedClaim?.confidenceBps} />
+            </dd>
+          </div>
+        </dl>
+        <div style={{ marginTop: 16 }}>
+          <p className="penny-kicker">Selected claim</p>
+          {inspector.selectedClaim ? <ClaimSummary claim={inspector.selectedClaim} /> : <p>No claim selected.</p>}
+        </div>
+      </InspectorRail>
     </div>
   );
 }
@@ -687,7 +1064,7 @@ function ClaimSummary({ claim }: { claim: ClaimView }) {
   return (
     <article className="penny-claim">
       <p>{claim.body}</p>
-      <span>{formatConfidence(claim.confidenceBps)}</span>
+      <ConfidenceChip scale="basis-points" value={claim.confidenceBps} />
     </article>
   );
 }

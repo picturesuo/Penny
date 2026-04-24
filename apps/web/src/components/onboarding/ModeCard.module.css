@@ -1,0 +1,107 @@
+.card {
+  min-height: 230px;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  align-content: space-between;
+  gap: 30px;
+  border: 1px solid rgba(255, 253, 247, 0.14);
+  border-radius: 8px;
+  padding: 24px;
+  background:
+    linear-gradient(145deg, rgba(255, 253, 247, 0.13), rgba(255, 253, 247, 0.05)),
+    rgba(255, 253, 247, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 253, 247, 0.16),
+    0 24px 70px rgba(0, 0, 0, 0.26);
+  color: inherit;
+  text-decoration: none;
+  backdrop-filter: blur(22px);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.card[data-mode="brain"]::before {
+  background: linear-gradient(135deg, rgba(46, 108, 87, 0.38), transparent 54%);
+}
+
+.card[data-mode="challenge"]::before {
+  background: linear-gradient(135deg, rgba(180, 95, 59, 0.34), transparent 54%);
+}
+
+.card[data-mode="learn"]::before {
+  background: linear-gradient(135deg, rgba(66, 111, 140, 0.36), transparent 54%);
+}
+
+.card:hover,
+.card:focus-visible {
+  border-color: rgba(255, 253, 247, 0.34);
+  background:
+    linear-gradient(145deg, rgba(255, 253, 247, 0.17), rgba(255, 253, 247, 0.07)),
+    rgba(255, 253, 247, 0.08);
+  transform: translateY(-3px);
+}
+
+.card:focus-visible {
+  outline: 3px solid rgba(226, 237, 243, 0.34);
+  outline-offset: 4px;
+}
+
+.mark,
+.content,
+.arrow {
+  position: relative;
+  z-index: 1;
+}
+
+.mark {
+  width: 46px;
+  height: 46px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(255, 253, 247, 0.18);
+  border-radius: 8px;
+  background: rgba(13, 16, 15, 0.42);
+  color: rgba(255, 253, 247, 0.9);
+  font-weight: 850;
+}
+
+.content {
+  display: grid;
+  gap: 10px;
+}
+
+.title {
+  font-size: 1.45rem;
+  font-weight: 780;
+}
+
+.body {
+  max-width: 270px;
+  color: rgba(247, 243, 232, 0.72);
+  line-height: 1.55;
+}
+
+.arrow {
+  position: absolute;
+  right: 22px;
+  top: 22px;
+  color: rgba(247, 243, 232, 0.62);
+  font-size: 1.25rem;
+}
+
+@media (max-width: 760px) {
+  .card {
+    min-height: 172px;
+  }
+}

@@ -12,21 +12,40 @@ const miniMapPath = new URL("../../apps/web/components/graph/mini-map.tsx", impo
 const zoomControlsPath = new URL("../../apps/web/components/graph/zoom-controls.tsx", import.meta.url);
 const graphIndexPath = new URL("../../apps/web/components/graph/index.ts", import.meta.url);
 const hooksPath = new URL("../../apps/web/lib/hooks/use-workspace-view.ts", import.meta.url);
+const srcGraphToolbarPath = new URL("../../apps/web/src/components/graph/GraphToolbar.tsx", import.meta.url);
+const srcLensToggleBarPath = new URL("../../apps/web/src/components/graph/LensToggleBar.tsx", import.meta.url);
 
 test("graph e2e harness can target the graph surface without redesigning the shell", async () => {
-  const [viewSource, nodeSource, miniMapSource, zoomSource] = await Promise.all([
+  const [viewSource, nodeSource, miniMapSource, zoomSource, toolbarSource, lensSource, canvasSource] = await Promise.all([
     readFile(graphViewPath, "utf8"),
     readFile(graphNodePath, "utf8"),
     readFile(miniMapPath, "utf8"),
     readFile(zoomControlsPath, "utf8"),
+    readFile(srcGraphToolbarPath, "utf8"),
+    readFile(srcLensToggleBarPath, "utf8"),
+    readFile(graphCanvasPath, "utf8"),
   ]);
 
   assert.match(viewSource, /data-testid="penny-graph"/);
   assert.match(nodeSource, /data-testid="penny-graph-node"/);
   assert.match(miniMapSource, /data-testid="penny-graph-minimap"/);
+  assert.match(miniMapSource, /Current graph viewport/);
   assert.match(zoomSource, /aria-label="Zoom in"/);
   assert.match(zoomSource, /aria-label="Zoom out"/);
+  assert.match(zoomSource, /aria-label="Pan left"/);
   assert.match(zoomSource, /aria-label="Fit graph"/);
+  assert.match(viewSource, /onWheel/);
+  assert.match(viewSource, /onPointerMove/);
+  assert.match(viewSource, /localSelectedNodeId/);
+  assert.match(viewSource, /function selectNode/);
+  assert.match(viewSource, /onSelectNode\?\.\(node\)/);
+  assert.match(toolbarSource, /LensToggleBar/);
+  assert.match(toolbarSource, /data-testid="penny-graph-focus-controls"/);
+  assert.match(toolbarSource, /Focus selected node connections/);
+  assert.match(viewSource, /focusSelectedNode/);
+  assert.match(canvasSource, /focusNodeId/);
+  assert.match(lensSource, /data-testid="penny-graph-lens-toggles"/);
+  assert.match(viewSource, /focusedCluster/);
 });
 
 test("graph primitives are exported as standalone QA targets", async () => {

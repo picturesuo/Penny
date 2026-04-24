@@ -1,6 +1,6 @@
 # AI Rules
 
-These rules define Penny's AI contracts. They apply to `generateChallengeCritique` and `challengeIdea`.
+These rules define Penny's AI contracts. They apply to `generateChallengeCritique`, `challengeIdea`, and `explainBlocker`.
 
 ## Core Rules
 
@@ -13,7 +13,8 @@ These rules define Penny's AI contracts. They apply to `generateChallengeCritiqu
 ## Current Operations
 
 - `generateChallengeCritique`: provider-backed critique generation for durable challenge rounds.
-- `challengeIdea`: local deterministic challenge/learn helper behind `POST /ai/challenge-idea`.
+- `challengeIdea`: local deterministic challenge/learn helper behind `POST /ai/challenge-idea`; successful results are logged to `ai_jobs` and `activity_events`.
+- `explainBlocker`: local deterministic learn helper behind `POST /ai/explain-blocker`; successful results are logged to `ai_jobs` and `activity_events`.
 - The output contract lives in `server/ai/schemas/**`.
 - The prompt contract lives in `server/ai/prompts/**`.
 - Any additional operation needs its own schema, prompt version, and tests before it is wired into runtime code.

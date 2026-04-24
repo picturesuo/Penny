@@ -7,6 +7,7 @@ import {
   type ChallengeProjectionView,
   type ChallengeResponseAction,
 } from "../../lib/viewmodels/challenge/challenge-experience";
+import { ConfidenceChip } from "../confidence/ConfidenceChip";
 import styles from "./challenge-experience.module.css";
 
 type ActionState = {
@@ -72,7 +73,7 @@ export function ChallengeExperience({
         {model.selectedClaim ? (
           <>
             <p className={styles.claimText}>{model.selectedClaim.body}</p>
-            <span>{model.selectedClaim.confidenceLabel}</span>
+            <ConfidenceChip scale="basis-points" value={model.selectedClaim.confidenceBps} />
           </>
         ) : (
           <p>No claim selected.</p>

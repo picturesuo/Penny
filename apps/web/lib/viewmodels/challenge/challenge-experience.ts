@@ -58,6 +58,7 @@ export type ChallengeExperienceViewModel = {
   selectedClaim: {
     body: string;
     confidenceLabel: string;
+    confidenceBps: number | null;
   } | null;
   round: {
     id: string;
@@ -252,6 +253,7 @@ export function buildChallengeExperienceViewModel(view: ChallengeProjectionView)
       ? {
           body: selectedClaim.body,
           confidenceLabel: formatConfidence(selectedClaim.confidenceBps),
+          confidenceBps: typeof selectedClaim.confidenceBps === "number" ? selectedClaim.confidenceBps : null,
         }
       : null,
     round: view.activeChallengeRound

@@ -1,12 +1,15 @@
 import type { KeyboardEvent } from "react";
 
 import type { GraphNode as GraphNodeModel } from "../../lib/types/graph";
-import { formatConfidence, getGraphNodeRadius, type PositionedGraphNode } from "./graph-layout";
+import { ConfidenceChip } from "../confidence/ConfidenceChip";
+import { getGraphNodeRadius, type PositionedGraphNode } from "./graph-layout";
 import { graphClusterColors } from "./graph-style";
 import { SelectedNodeHalo } from "./selected-node-halo";
 
 type GraphNodeProps = {
   node: PositionedGraphNode;
+  connected?: boolean;
+  muted?: boolean;
   selected?: boolean;
   onSelectNode?: (node: GraphNodeModel) => void;
 };
@@ -15,10 +18,10 @@ function displayLabel(label: string) {
   return label.length > 32 ? `${label.slice(0, 31)}...` : label;
 }
 
-export function GraphNode({ node, selected = false, onSelectNode }: GraphNodeProps) {
+export function GraphNode({ connected = false, muted = false, node, selected = false, onSelectNode }: GraphNodeProps) {
   const palette = graphClusterColors[node.cluster];
   const radius = getGraphNodeRadius(node, selected);
-  const confidence = formatConfidence(node.confidenceBps);
+  const hasContradictionMarker = node.status === "contradiction" || (typeof node.confidenceBps === "number" && node.confidenceBps < 6000);
 
   function handleKeyDown(event: KeyboardEvent<SVGGElement>) {
     if (!onSelectNode) {
@@ -39,8 +42,9 @@ export function GraphNode({ node, selected = false, onSelectNode }: GraphNodePro
       tabIndex={onSelectNode ? 0 : undefined}
       data-testid="penny-graph-node"
       data-selected={selected}
+      data-connected={connected}
       className="penny-graph-node-group"
-      style={{ cursor: onSelectNode ? "pointer" : "default" }}
+      style={{ cursor: onSelectNode ? "pointer" : "default", opacity: muted ? 0.36 : 1 }}
       onClick={() => onSelectNode?.(node)}
       onKeyDown={handleKeyDown}
     >
@@ -50,7 +54,7 @@ export function GraphNode({ node, selected = false, onSelectNode }: GraphNodePro
         r={radius}
         fill={palette.fill}
         stroke={selected ? palette.accent : palette.stroke}
-        strokeWidth={selected ? 2.1 : 1.05}
+        strokeWidth={selected ? 2.1 : connected ? 1.65 : 1.05}
       />
       <circle
         className="penny-graph-node-core"
@@ -69,10 +73,18 @@ export function GraphNode({ node, selected = false, onSelectNode }: GraphNodePro
       >
         {displayLabel(node.label)}
       </text>
-      {confidence ? (
-        <text x={0} y={radius + 33} textAnchor="middle" fill="#69766f" fontSize="10">
-          {confidence}
-        </text>
+      <foreignObject x="-62" y={radius + 22} width="124" height="28">
+        <div className="penny-graph-node-confidence">
+          <ConfidenceChip scale="basis-points" showLabel={false} value={node.confidenceBps} />
+        </div>
+      </foreignObject>
+      {hasContradictionMarker ? (
+        <g transform={`translate(${radius * 0.72} ${-radius * 0.72})`} aria-label="Contradiction marker">
+          <circle r="7" fill="#a23b32" stroke="#fffdf7" strokeWidth="2" />
+          <text y="3.5" textAnchor="middle" fill="#fffdf7" fontSize="10" fontWeight="900">
+            !
+          </text>
+        </g>
       ) : null}
     </g>
   );

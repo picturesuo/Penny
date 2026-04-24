@@ -7,6 +7,7 @@ import {
   getVisibleLearnState,
   type LearnProjectionView,
 } from "../../lib/viewmodels/learn/learn-experience";
+import { ConfidenceChip } from "../confidence/ConfidenceChip";
 import styles from "./learn-experience.module.css";
 
 export function LearnExperience({ view }: { view: LearnProjectionView }) {
@@ -31,7 +32,7 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
       <section className={`penny-panel ${styles.conceptCard}`}>
         <p className={styles.kicker}>Concept title</p>
         <h2>{model.concept.title}</h2>
-        {model.selectedClaim ? <span>{model.selectedClaim.confidenceLabel}</span> : null}
+        {model.selectedClaim ? <ConfidenceChip scale="basis-points" value={model.selectedClaim.confidenceBps} /> : null}
       </section>
 
       <section className={`penny-panel ${styles.explanationCard}`}>
