@@ -150,6 +150,8 @@ export function buildGenerateChallengeCritiquePrompt(
   };
 }
 
+export const buildPrompt = buildGenerateChallengeCritiquePrompt;
+
 const acceptanceInput: GenerateChallengeCritiquePromptInput = {
   mapTitle: "Retention Thesis",
   claimId: "claim-123",
