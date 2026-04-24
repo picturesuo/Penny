@@ -106,3 +106,114 @@ When final generation fails, backend persistence should set:
 
 The backend command path remains responsible for whether failed attempts are retried,
 how idempotency keys replay, and which failure details are exposed publicly.
+
+## Backend Integration Instructions
+
+These instructions are for the later backend bridge pass. Do not move AI invocation
+into request-acceptance code. `requestChallengeCritique` should remain responsible
+for accepting the request and creating or reusing the pending critique placeholder.
+
+### Where To Call
+
+Call `generateChallengeCritique` from the generation step that owns completion of a
+pending critique, after the backend has:
+
+- loaded the pending `challenge_critiques` row by `critiqueId`
+- verified the requesting user owns the critique, round, map, and claim
+- loaded the persisted claim text and current confidence
+- loaded optional map title, neighboring claims, prior rounds, and steelman context
+- resolved the idempotency or event correlation key for the generation attempt
+
+The generation step should pass backend-loaded state into:
+
+```ts
+await generateChallengeCritique(
+  {
+    claimId,
+    claimText,
+    claimConfidence,
+    mapTitle,
+    critiqueMode,
+    neighboringClaims,
+    previousRounds,
+    steelmanText,
+    userGoal,
+  },
+  {
+    userId,
+    mapId,
+    claimId,
+    roundId,
+    requestId,
+  },
+);
+```
+
+Then convert the operation result to `ChallengeCritiqueResult` from
+`server/ai/contracts/challengeCritiqueResult.ts` before persistence. Keep `roundId`
+either in that envelope or as an external persistence key, but do not require the AI
+operation to own round persistence.
+
+### What To Persist
+
+On success, update the existing durable critique placeholder rather than inserting a
+new critique row. Persist:
+
+- `status`: backend status `ready`; bridge-envelope status `succeeded`
+- `body`: formatted readable critique text derived from `critiqueJson`
+- `critiqueJson`: validated structured critique output
+- `provider`: accepted provider, nullable if unavailable
+- `model`: accepted model, nullable if unavailable
+- `promptVersion`: accepted prompt/schema version
+- `errorCode`: `null`
+- `errorMessage`: `null`
+- `metadata`: JSON-safe object containing trace, observation, usage, cost, route tier, fallback count, repair flag, validation result, environment, release, and latency where available
+- `updatedAt`: backend timestamp from the command or job runner
+
+On final failure, update the same critique placeholder:
+
+- `status`: backend status `failed`; bridge-envelope status `failed`
+- `body`: `null`
+- `critiqueJson`: `null`
+- `provider`: nullable provider if the failing route is known, otherwise `null`
+- `model`: nullable model if the failing route is known, otherwise `null`
+- `promptVersion`: prompt/schema version attempted
+- `errorCode`: stable internal code such as `AI_OPERATION_FAILED`, `AI_OUTPUT_INVALID`, or `AI_PROVIDER_FAILED`
+- `errorMessage`: concise internal failure message
+- `metadata`: JSON-safe trace, provider-attempt, fallback, usage, and latency details when available
+- `updatedAt`: backend timestamp from the command or job runner
+
+### What Events To Emit
+
+Emit events from the backend command or job boundary after the durable critique row
+is updated. The AI operation itself should not write events.
+
+On success, emit one `challenge.critique.generated` event with:
+
+- `roundId`
+- `mapId`
+- `claimId`
+- `status: "ready"`
+- `body`
+- `critiqueJson`
+- `provider`
+- `model`
+- `promptVersion`
+- `metadata`
+
+On final failure, emit one `challenge.critique.failed` event with:
+
+- `roundId`
+- `mapId`
+- `claimId`
+- `status: "failed"`
+- `errorCode`
+- `errorMessage`
+- `provider`
+- `model`
+- `promptVersion`
+- `metadata`
+
+Use the generation `requestId` or event correlation key for idempotency. Replaying
+the same generation request must not create a second critique row or a second
+generated/failed event for the same logical attempt.
