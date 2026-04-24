@@ -24,6 +24,14 @@ Challenge mode reads the existing workspace challenge projection and shapes it i
 
 The mode keeps the stronger amber/orange accent locally in the Challenge component CSS module. Recording a response still uses the existing `POST /api/commands/challenge/respond` route and stores the selected response action as `responsePath`.
 
+Endpoint integration:
+
+- Challenge reads `GET /api/workspace/challenge`.
+- Learn reads `GET /api/workspace/learn`.
+- Starting a Challenge round posts to `POST /api/commands/challenge/start-round`.
+- Requesting critique posts to `POST /api/commands/challenge/request-critique`.
+- Recording Defend / Revise / Absorb responses posts to `POST /api/commands/challenge/respond`.
+
 Challenge state mapping:
 
 - `no_round_yet`: selected claim may exist, but there is no active round.

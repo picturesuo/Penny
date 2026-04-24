@@ -435,7 +435,7 @@ export function PennyShell() {
     });
 
     try {
-      await postCommand("/api/commands/challenge/start", {
+      await postCommand("/api/commands/challenge/start-round", {
         claimId,
         requestId: createRequestId("start-challenge"),
       });
