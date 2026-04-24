@@ -41,6 +41,16 @@ function createThoughtTitle(body: string, index: number) {
   return `${compact.slice(0, 69).trim()}...`;
 }
 
+function createBodyPreview(body: string) {
+  const compact = body.trim().replace(/\s+/g, " ");
+
+  if (compact.length <= 132) {
+    return compact;
+  }
+
+  return `${compact.slice(0, 129).trim()}...`;
+}
+
 function toThought(claim: BrainProjectionClaim, index: number, selectedClaimId: string | null): BrainThoughtViewModel {
   const body = claim.body.trim() || "Untitled thought";
 
@@ -48,6 +58,7 @@ function toThought(claim: BrainProjectionClaim, index: number, selectedClaimId: 
     id: claim.id,
     title: createThoughtTitle(body, index),
     body,
+    bodyPreview: createBodyPreview(body),
     confidenceLabel: formatConfidence(claim.confidenceBps),
     confidenceBps: typeof claim.confidenceBps === "number" ? claim.confidenceBps : null,
     mapId: claim.mapId ?? null,
@@ -73,7 +84,19 @@ export function createBrainViewModel(projection: BrainProjectionView): BrainView
     claimId: null,
   };
   const selectedClaimId = projection.selectedClaim?.id ?? context.claimId;
-  const stream = projection.claims.map((claim, index) => toThought(claim, index, selectedClaimId));
+  const recentClaims = projection.claims
+    .map((claim, index) => ({ claim, index }))
+    .sort((left, right) => {
+      const updatedDifference = getSortTime(right.claim.updatedAt) - getSortTime(left.claim.updatedAt);
+
+      if (updatedDifference !== 0) {
+        return updatedDifference;
+      }
+
+      const createdDifference = getSortTime(right.claim.createdAt) - getSortTime(left.claim.createdAt);
+      return createdDifference === 0 ? left.index - right.index : createdDifference;
+    });
+  const stream = recentClaims.map(({ claim }, index) => toThought(claim, index, selectedClaimId));
   const selectedThought =
     stream.find((thought) => thought.id === selectedClaimId) ??
     (projection.selectedClaim ? toThought(projection.selectedClaim, stream.length, selectedClaimId) : null);
