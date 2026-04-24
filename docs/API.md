@@ -36,7 +36,7 @@ These routes are the current server-side write surface for the MVP. Meaningful w
 | `DELETE` | `/api/graph/edges/:id` | Delete an owned persisted graph edge. |
 
 Command routes accept JSON request bodies. Idempotent commands can use an idempotency key from the route helper surface; duplicate-key behavior should preserve one logical write and replay the existing result.
-`POST /api/confidence` accepts exactly one target ID (`thoughtId`, `claimId`, or `graphNodeId`) plus exactly one rating field (`confidence` as `0..100` percent or `ratingBps` as `0..10000` basis points).
+`POST /api/confidence` accepts exactly one target ID (`thoughtId`, `claimId`, or `graphNodeId`) plus exactly one rating field (`confidence` as a `0..100` number or `ratingBps` as a `0..10000` integer).
 `GET /api/confidence/:targetType/:targetId/history` accepts `thought`, `claim`, or `graphNode` target types and returns `{ target, history }` with newest ratings first.
 
 ## AI Helpers

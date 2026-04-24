@@ -246,6 +246,76 @@ test("POST /api/confidence records confidence for an owned thought", async () =>
   }
 });
 
+test("POST /api/confidence validates confidence as 0 through 100 inclusive", async () => {
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const seeded = await seedWorkspace(sql);
+    const lowResponse = await POST(
+      confidenceRequest(seeded.userId, {
+        claimId: seeded.claimId,
+        confidence: 0,
+      }),
+    );
+    const highResponse = await POST(
+      confidenceRequest(seeded.userId, {
+        claimId: seeded.claimId,
+        confidence: 100,
+      }),
+    );
+    const decimalResponse = await POST(
+      confidenceRequest(seeded.userId, {
+        claimId: seeded.claimId,
+        confidence: 75.5,
+      }),
+    );
+    const negativeResponse = await POST(
+      confidenceRequest(seeded.userId, {
+        claimId: seeded.claimId,
+        confidence: -1,
+      }),
+    );
+    const overRangeResponse = await POST(
+      confidenceRequest(seeded.userId, {
+        claimId: seeded.claimId,
+        confidence: 100.01,
+      }),
+    );
+
+    assert.equal(lowResponse.status, 201);
+    assert.equal(highResponse.status, 201);
+    assert.equal(decimalResponse.status, 201);
+    assert.equal(negativeResponse.status, 400);
+    assert.equal(overRangeResponse.status, 400);
+
+    const lowPayload = (await lowResponse.json()) as { confidence: { confidence: number; ratingBps: number } };
+    const highPayload = (await highResponse.json()) as { confidence: { confidence: number; ratingBps: number } };
+    const decimalPayload = (await decimalResponse.json()) as { confidence: { confidence: number; ratingBps: number } };
+
+    assert.deepEqual(
+      [
+        { confidence: lowPayload.confidence.confidence, ratingBps: lowPayload.confidence.ratingBps },
+        { confidence: highPayload.confidence.confidence, ratingBps: highPayload.confidence.ratingBps },
+        { confidence: decimalPayload.confidence.confidence, ratingBps: decimalPayload.confidence.ratingBps },
+      ],
+      [
+        { confidence: 0, ratingBps: 0 },
+        { confidence: 100, ratingBps: 10_000 },
+        { confidence: 75.5, ratingBps: 7550 },
+      ],
+    );
+
+    assert.deepEqual(await negativeResponse.json(), {
+      error: "confidence must be a number between 0 and 100.",
+    });
+    assert.deepEqual(await overRangeResponse.json(), {
+      error: "confidence must be a number between 0 and 100.",
+    });
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
 test("POST /api/confidence rejects invalid target and rating input", async () => {
   const userId = "00000000-0000-0000-0000-000000014901";
 

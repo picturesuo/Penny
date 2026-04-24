@@ -82,11 +82,11 @@ function readRatingBps(body: Record<string, unknown>) {
 
   const value = body.confidence;
 
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 100) {
-    throw new ConfidenceValidationError("confidence must be an integer between 0 and 100.");
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
+    throw new ConfidenceValidationError("confidence must be a number between 0 and 100.");
   }
 
-  return value * 100;
+  return Math.round(value * 100);
 }
 
 function readOptionalText(body: Record<string, unknown>, key: string, maxLength: number) {
