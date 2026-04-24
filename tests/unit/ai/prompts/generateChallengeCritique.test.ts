@@ -71,6 +71,28 @@ test("buildPrompt includes claim context and the schema output contract", () => 
   assert.match(prompt.userPrompt, /"operation": "generateChallengeCritique"/);
 });
 
+test("buildPrompt includes claim text", () => {
+  const prompt = buildGenerateChallengeCritiquePrompt(promptInput);
+
+  assert.equal(prompt.structuredInput.context.claim.text, promptInput.claimText);
+  assert.equal(prompt.userPrompt.includes(promptInput.claimText), true);
+});
+
+test("buildPrompt requests structured output", () => {
+  const prompt = buildGenerateChallengeCritiquePrompt(promptInput);
+
+  assert.match(prompt.systemPrompt, /Return only JSON/);
+  assert.deepEqual(prompt.structuredInput.outputContract, {
+    summary: "string",
+    strongestCounterargument: "string",
+    assumptions: "string[]",
+    failureModes: "string[]",
+    followUpQuestions: "string[]",
+    suggestedConfidenceBps: "integer|null",
+    uncertaintyNote: "string",
+  });
+});
+
 test("buildPrompt accepts the required input shape with optional map and neighbor context omitted", () => {
   const prompt = buildGenerateChallengeCritiquePrompt({
     claimId: "claim-minimal",
