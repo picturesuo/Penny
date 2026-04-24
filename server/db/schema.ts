@@ -138,6 +138,12 @@ export const graphEdges = pgTable(
     index("graph_edges_target_node_id_idx").on(table.targetNodeId),
     index("graph_edges_kind_idx").on(table.kind),
     index("graph_edges_created_at_idx").on(table.createdAt),
+    uniqueIndex("graph_edges_user_source_target_kind_unique").on(
+      table.userId,
+      table.sourceNodeId,
+      table.targetNodeId,
+      table.kind,
+    ),
     check(
       "graph_edges_kind_valid_check",
       sql`${table.kind} in ('supports', 'depends_on', 'contradicts', 'related', 'relates_to', 'extracted_claim', 'extracts', 'cross_map')`,
@@ -150,9 +156,9 @@ export const confidenceRatings = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id").notNull(),
-    thoughtId: uuid("thought_id"),
-    claimId: uuid("claim_id"),
-    graphNodeId: uuid("graph_node_id"),
+    thoughtId: uuid("thought_id").references(() => thoughts.id, { onDelete: "cascade" }),
+    claimId: uuid("claim_id").references(() => claims.id, { onDelete: "cascade" }),
+    graphNodeId: uuid("graph_node_id").references(() => graphNodes.id, { onDelete: "cascade" }),
     ratingBps: integer("rating_bps").notNull(),
     rationale: text("rationale"),
     source: text("source").notNull(),
@@ -164,6 +170,11 @@ export const confidenceRatings = pgTable(
     index("confidence_ratings_claim_id_idx").on(table.claimId),
     index("confidence_ratings_graph_node_id_idx").on(table.graphNodeId),
     index("confidence_ratings_created_at_idx").on(table.createdAt),
+    check(
+      "confidence_ratings_one_target_check",
+      sql`((((${table.thoughtId} is not null)::integer + (${table.claimId} is not null)::integer) + (${table.graphNodeId} is not null)::integer) = 1)`,
+    ),
+    check("confidence_ratings_rating_bps_check", sql`${table.ratingBps} >= 0 and ${table.ratingBps} <= 10000`),
   ],
 );
 

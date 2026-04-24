@@ -150,6 +150,31 @@ async function createGraphEdge(input: {
   metadata: Record<string, unknown> | null;
 }) {
   const db = getDb();
+  const findExistingEdge = async () => {
+    const existingRows = await db
+      .select({
+        id: graphEdges.id,
+        sourceNodeId: graphEdges.sourceNodeId,
+        targetNodeId: graphEdges.targetNodeId,
+        kind: graphEdges.kind,
+        weightBps: graphEdges.weightBps,
+        metadataJson: graphEdges.metadataJson,
+        createdAt: graphEdges.createdAt,
+        updatedAt: graphEdges.updatedAt,
+      })
+      .from(graphEdges)
+      .where(
+        and(
+          eq(graphEdges.userId, input.userId),
+          eq(graphEdges.sourceNodeId, input.sourceNodeId),
+          eq(graphEdges.targetNodeId, input.targetNodeId),
+          eq(graphEdges.kind, input.kind),
+        ),
+      )
+      .limit(1);
+
+    return existingRows[0] ?? null;
+  };
   const nodeRows = await db
     .select({
       id: graphNodes.id,
@@ -172,28 +197,7 @@ async function createGraphEdge(input: {
     throw new GraphEdgeMapMismatchError("mapId must match the source and target graph nodes.");
   }
 
-  const existingRows = await db
-    .select({
-      id: graphEdges.id,
-      sourceNodeId: graphEdges.sourceNodeId,
-      targetNodeId: graphEdges.targetNodeId,
-      kind: graphEdges.kind,
-      weightBps: graphEdges.weightBps,
-      metadataJson: graphEdges.metadataJson,
-      createdAt: graphEdges.createdAt,
-      updatedAt: graphEdges.updatedAt,
-    })
-    .from(graphEdges)
-    .where(
-      and(
-        eq(graphEdges.userId, input.userId),
-        eq(graphEdges.sourceNodeId, input.sourceNodeId),
-        eq(graphEdges.targetNodeId, input.targetNodeId),
-        eq(graphEdges.kind, input.kind),
-      ),
-    )
-    .limit(1);
-  const existingEdge = existingRows[0] ?? null;
+  const existingEdge = await findExistingEdge();
 
   if (existingEdge) {
     return {
@@ -205,35 +209,54 @@ async function createGraphEdge(input: {
   const now = new Date();
   const id = randomUUID();
 
-  await db.insert(graphEdges).values({
-    id,
-    userId: input.userId,
-    mapId: sourceNode.mapId,
-    sourceNodeId: input.sourceNodeId,
-    targetNodeId: input.targetNodeId,
-    kind: input.kind,
-    weightBps: input.weightBps,
-    metadataJson: input.metadata,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  return {
-    edge: {
+  const insertedRows = await db
+    .insert(graphEdges)
+    .values({
       id,
-      source: input.sourceNodeId,
-      target: input.targetNodeId,
+      userId: input.userId,
+      mapId: sourceNode.mapId,
+      sourceNodeId: input.sourceNodeId,
+      targetNodeId: input.targetNodeId,
       kind: input.kind,
-      label: readOptionalString(input.metadata?.label) ?? input.kind,
-      status: readOptionalString(input.metadata?.status) ?? undefined,
-      strength: readOptionalNumber(input.metadata?.strength) ?? (typeof input.weightBps === "number" ? input.weightBps / 10_000 : undefined),
       weightBps: input.weightBps,
-      metadata: input.metadata,
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-    },
-    created: true,
-  };
+      metadataJson: input.metadata,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing({
+      target: [graphEdges.userId, graphEdges.sourceNodeId, graphEdges.targetNodeId, graphEdges.kind],
+    })
+    .returning({
+      id: graphEdges.id,
+      sourceNodeId: graphEdges.sourceNodeId,
+      targetNodeId: graphEdges.targetNodeId,
+      kind: graphEdges.kind,
+      weightBps: graphEdges.weightBps,
+      metadataJson: graphEdges.metadataJson,
+      createdAt: graphEdges.createdAt,
+      updatedAt: graphEdges.updatedAt,
+    });
+  const insertedEdge = insertedRows[0] ?? null;
+
+  if (!insertedEdge) {
+    const dedupedEdge = await findExistingEdge();
+
+    if (dedupedEdge) {
+      return {
+        edge: serializeEdge(dedupedEdge),
+        created: false,
+      };
+    }
+  }
+
+  if (insertedEdge) {
+    return {
+      edge: serializeEdge(insertedEdge),
+      created: true,
+    };
+  }
+
+  throw new Error("Graph edge insert did not return a created or deduplicated row.");
 }
 
 export async function POST(request: Request) {

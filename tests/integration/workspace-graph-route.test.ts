@@ -284,6 +284,38 @@ test("graph edges cannot reference missing graph nodes", async () => {
   }
 });
 
+test("graph edges are unique by user, source, target, and kind", async () => {
+  const userId = "00000000-0000-0000-0000-000000004028";
+  const mapId = "00000000-0000-0000-0000-000000004029";
+  const sourceNodeId = "00000000-0000-0000-0000-000000004030";
+  const targetNodeId = "00000000-0000-0000-0000-000000004031";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label)
+      values
+        (${sourceNodeId}, ${userId}, ${mapId}, ${"claim"}, ${"Source node"}),
+        (${targetNodeId}, ${userId}, ${mapId}, ${"claim"}, ${"Target node"})
+    `;
+    await sql`
+      insert into graph_edges (user_id, map_id, source_node_id, target_node_id, kind)
+      values (${userId}, ${mapId}, ${sourceNodeId}, ${targetNodeId}, ${"supports"})
+    `;
+
+    await assert.rejects(
+      () =>
+        sql`
+          insert into graph_edges (user_id, map_id, source_node_id, target_node_id, kind)
+          values (${userId}, ${mapId}, ${sourceNodeId}, ${targetNodeId}, ${"supports"})
+        `,
+      (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23505",
+    );
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
 test("deleting thoughts and claims removes or updates graph edges safely", async () => {
   const userId = "00000000-0000-0000-0000-000000004033";
   const mapId = "00000000-0000-0000-0000-000000004034";

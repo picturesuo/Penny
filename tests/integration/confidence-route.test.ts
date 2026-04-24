@@ -423,6 +423,43 @@ test("POST /api/confidence rejects missing or cross-user targets", async () => {
   }
 });
 
+test("confidence rows must attach to exactly one existing target", async () => {
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const seeded = await seedWorkspace(sql);
+
+    await assert.rejects(
+      () =>
+        sql`
+          insert into confidence_ratings (user_id, rating_bps, source)
+          values (${seeded.userId}, ${5000}, ${"test"})
+        `,
+      (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23514",
+    );
+
+    await assert.rejects(
+      () =>
+        sql`
+          insert into confidence_ratings (user_id, claim_id, graph_node_id, rating_bps, source)
+          values (${seeded.userId}, ${seeded.claimId}, ${seeded.graphNodeId}, ${5000}, ${"test"})
+        `,
+      (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23514",
+    );
+
+    await assert.rejects(
+      () =>
+        sql`
+          insert into confidence_ratings (user_id, claim_id, rating_bps, source)
+          values (${seeded.userId}, ${"00000000-0000-0000-0000-000000999999"}, ${5000}, ${"test"})
+        `,
+      (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23503",
+    );
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
 test("GET /api/confidence/:targetType/:targetId/history returns owned rating history newest first", async () => {
   const sql = postgres(databaseUrl, { prepare: false });
 
@@ -435,11 +472,11 @@ test("GET /api/confidence/:targetType/:targetId/history returns owned rating his
     `;
 
     await sql`
-      insert into confidence_ratings (id, user_id, claim_id, rating_bps, rationale, source, created_at)
+      insert into confidence_ratings (id, user_id, claim_id, thought_id, rating_bps, rationale, source, created_at)
       values
-        (${"00000000-0000-0000-0000-000000014601"}, ${seeded.userId}, ${seeded.claimId}, ${5100}, ${"Initial estimate"}, ${"manual"}, ${"2026-04-24T10:00:00.000Z"}),
-        (${"00000000-0000-0000-0000-000000014602"}, ${seeded.userId}, ${seeded.claimId}, ${7400}, ${"Evidence improved confidence"}, ${"challenge"}, ${"2026-04-24T11:00:00.000Z"}),
-        (${"00000000-0000-0000-0000-000000014603"}, ${seeded.userId}, ${seeded.thoughtId}, ${2500}, ${"Thought-only rating"}, ${"manual"}, ${"2026-04-24T12:00:00.000Z"})
+        (${"00000000-0000-0000-0000-000000014601"}, ${seeded.userId}, ${seeded.claimId}, ${null}, ${5100}, ${"Initial estimate"}, ${"manual"}, ${"2026-04-24T10:00:00.000Z"}),
+        (${"00000000-0000-0000-0000-000000014602"}, ${seeded.userId}, ${seeded.claimId}, ${null}, ${7400}, ${"Evidence improved confidence"}, ${"challenge"}, ${"2026-04-24T11:00:00.000Z"}),
+        (${"00000000-0000-0000-0000-000000014603"}, ${seeded.userId}, ${null}, ${seeded.thoughtId}, ${2500}, ${"Thought-only rating"}, ${"manual"}, ${"2026-04-24T12:00:00.000Z"})
     `;
 
     const response = await getConfidenceHistory(confidenceHistoryRequest(seeded.userId, "claim", seeded.claimId), {
