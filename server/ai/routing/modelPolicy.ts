@@ -1,4 +1,4 @@
-export type ModelPolicyOperationName = "generateChallengeCritique" | (string & {});
+export type ModelPolicyOperationName = "captureThought" | "generateChallengeCritique" | (string & {});
 export type ModelPolicyQualityTier = "default" | "fallback" | "cheap";
 export type ModelPolicyProviderName = "anthropic" | "xai";
 
@@ -29,9 +29,12 @@ export function selectModelForOperation(
   operationName: ModelPolicyOperationName,
   qualityTier: ModelPolicyQualityTier = "default",
 ): ModelSelection {
-  if (operationName !== "generateChallengeCritique") {
+  if (operationName !== "generateChallengeCritique" && operationName !== "captureThought") {
     throw new UnknownModelPolicyOperationError(operationName);
   }
+
+  const anthropicEnvName = operationName === "captureThought" ? "ANTHROPIC_CAPTURE_MODEL" : "ANTHROPIC_CHALLENGE_MODEL";
+  const xaiFallbackEnvName = operationName === "captureThought" ? "XAI_CAPTURE_FALLBACK_MODEL" : "XAI_CHALLENGE_FALLBACK_MODEL";
 
   if (qualityTier === "cheap") {
     return {
@@ -39,7 +42,7 @@ export function selectModelForOperation(
       provider: "xai",
       model:
         readEnvOverride(process.env.XAI_FAST_MODEL) ??
-        readEnvOverride(process.env.XAI_CHALLENGE_FALLBACK_MODEL) ??
+        readEnvOverride(process.env[xaiFallbackEnvName]) ??
         DEFAULT_GROK_MODEL,
       qualityTier,
     };
@@ -49,7 +52,7 @@ export function selectModelForOperation(
     return {
       operationName,
       provider: "anthropic",
-      model: readEnvOverride(process.env.ANTHROPIC_CHALLENGE_MODEL) ?? DEFAULT_CLAUDE_SONNET_MODEL,
+      model: readEnvOverride(process.env[anthropicEnvName]) ?? DEFAULT_CLAUDE_SONNET_MODEL,
       qualityTier,
     };
   }
@@ -57,7 +60,7 @@ export function selectModelForOperation(
   return {
     operationName,
     provider: "xai",
-    model: readEnvOverride(process.env.XAI_CHALLENGE_FALLBACK_MODEL) ?? DEFAULT_GROK_MODEL,
+    model: readEnvOverride(process.env[xaiFallbackEnvName]) ?? DEFAULT_GROK_MODEL,
     qualityTier: "fallback",
   };
 }
