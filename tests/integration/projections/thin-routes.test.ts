@@ -11,6 +11,7 @@ import { POST as createGraphEdge } from "../../../apps/web/app/api/graph/edges/r
 import { DELETE as deleteGraphEdge, PATCH as updateGraphEdge } from "../../../apps/web/app/api/graph/edges/[id]/route.ts";
 import { GET as getGraphView } from "../../../apps/web/app/api/graph/route.ts";
 import { GET as getGraphNodeDetail } from "../../../apps/web/app/api/graph/nodes/[id]/detail/route.ts";
+import { GET as searchWorkspace } from "../../../apps/web/app/api/search/route.ts";
 import { GET as getBrainView } from "../../../apps/web/app/api/workspace/brain/route.ts";
 import { GET as getChallengeView } from "../../../apps/web/app/api/workspace/challenge/route.ts";
 import { GET as getLearnView } from "../../../apps/web/app/api/workspace/learn/route.ts";
@@ -108,6 +109,7 @@ test("workspace projection route handlers authenticate before projection executi
         id: "00000000-0000-0000-0000-000000000005",
       },
     }),
+    searchWorkspace(new Request("http://localhost/api/search?q=test", { method: "GET", headers })),
     getShellView(new Request("http://localhost/api/workspace/shell", { method: "GET", headers })),
     getBrainView(new Request("http://localhost/api/workspace/brain", { method: "GET", headers })),
     getChallengeView(new Request("http://localhost/api/workspace/challenge", { method: "GET", headers })),
