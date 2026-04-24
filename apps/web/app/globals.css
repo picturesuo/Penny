@@ -820,6 +820,7 @@ textarea {
 
 .ui-segmented__tab[aria-selected="true"] {
   color: var(--color-inverse);
+  animation: penny-selected-mode var(--motion-standard);
 }
 
 .ui-segmented__tab--brain {
@@ -921,6 +922,18 @@ textarea {
 @keyframes penny-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes penny-selected-mode {
+  from {
+    opacity: 0.78;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -1070,6 +1083,7 @@ textarea {
 .penny-mode-button[data-active="true"] {
   background: var(--penny-accent);
   color: var(--color-canvas);
+  animation: penny-selected-mode var(--motion-standard);
 }
 
 .penny-mode-button:focus-visible {
