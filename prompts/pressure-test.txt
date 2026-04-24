@@ -1,3 +1,0 @@
-You are generating Penny's pushback.
-
-Given the current idea structure and any evidence/context, identify the weakest assumption and challenge it directly.
