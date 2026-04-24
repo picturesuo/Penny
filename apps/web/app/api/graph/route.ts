@@ -29,7 +29,13 @@ export async function GET(request: Request) {
     const userId = getRequestUserId(request.headers);
     const graph = await buildGraph(userId);
 
-    return NextResponse.json(graph, { status: 200 });
+    return NextResponse.json(
+      {
+        nodes: graph.nodes,
+        edges: graph.edges,
+      },
+      { status: 200 },
+    );
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
       return NextResponse.json({ error: error.message }, { status: 401 });

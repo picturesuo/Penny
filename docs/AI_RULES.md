@@ -1,6 +1,6 @@
 # AI Rules
 
-These rules define Penny's first AI contract. They apply to `generateChallengeCritique` only until another operation is explicitly added.
+These rules define Penny's AI contracts. They apply to `generateChallengeCritique` and `challengeIdea`.
 
 ## Core Rules
 
@@ -10,9 +10,10 @@ These rules define Penny's first AI contract. They apply to `generateChallengeCr
 - One repair pass max. If the repaired output still fails validation, the operation must fail with a structured error.
 - Provider logic only lives in `server/ai/providers/**`. Other AI modules may select or call providers, but they must not contain provider-specific transport, auth, response parsing, or error-normalization code.
 
-## Initial Operation
+## Current Operations
 
-- Start with `generateChallengeCritique` only.
+- `generateChallengeCritique`: provider-backed critique generation for durable challenge rounds.
+- `challengeIdea`: local deterministic challenge/learn helper behind `POST /ai/challenge-idea`.
 - The output contract lives in `server/ai/schemas/**`.
 - The prompt contract lives in `server/ai/prompts/**`.
 - Any additional operation needs its own schema, prompt version, and tests before it is wired into runtime code.

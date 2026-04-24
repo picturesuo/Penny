@@ -133,16 +133,11 @@ test("GET /api/graph returns the graph model for the current workspace mode", as
     assert.equal(brainResponse.status, 200);
 
     const brainPayload = (await brainResponse.json()) as {
-      id: string;
-      title: string;
-      selectedNodeId: string | null;
       nodes: Array<{ id: string; kind: string; cluster: string; status?: string }>;
       edges: Array<{ id: string; source: string; target: string }>;
     };
 
-    assert.equal(brainPayload.id, `brain:${mapId}`);
-    assert.equal(brainPayload.title, "Graph route map");
-    assert.equal(brainPayload.selectedNodeId, selectedClaimId);
+    assert.deepEqual(Object.keys(brainPayload).sort(), ["edges", "nodes"]);
     assert.equal(brainPayload.nodes.length, 3);
     assert.equal(brainPayload.edges.length, 2);
     assert.deepEqual(
@@ -192,16 +187,11 @@ test("GET /api/graph returns the graph model for the current workspace mode", as
     assert.equal(challengeResponse.status, 200);
 
     const challengePayload = (await challengeResponse.json()) as {
-      id: string;
-      title: string;
-      selectedNodeId: string | null;
       nodes: Array<{ id: string; kind: string; status?: string }>;
       edges: Array<{ source: string; target: string }>;
     };
 
-    assert.equal(challengePayload.id, `challenge:${mapId}:${selectedClaimId}`);
-    assert.equal(challengePayload.title, "Challenge graph");
-    assert.equal(challengePayload.selectedNodeId, selectedClaimId);
+    assert.deepEqual(Object.keys(challengePayload).sort(), ["edges", "nodes"]);
     assert.ok(challengePayload.nodes.some((node) => node.id === selectedClaimId && node.kind === "claim" && node.status === "selected"));
     assert.ok(challengePayload.nodes.some((node) => node.id === roundId && node.kind === "round" && node.status === "responded"));
     assert.ok(challengePayload.nodes.some((node) => node.id === critiqueId && node.kind === "critique" && node.status === "ready"));
@@ -230,16 +220,11 @@ test("GET /api/graph returns the graph model for the current workspace mode", as
     assert.equal(learnResponse.status, 200);
 
     const learnPayload = (await learnResponse.json()) as {
-      id: string;
-      title: string;
-      selectedNodeId: string | null;
       nodes: Array<{ id: string; kind: string; status?: string }>;
       edges: Array<{ source: string; target: string; label?: string }>;
     };
 
-    assert.equal(learnPayload.id, `learn:${mapId}:${selectedClaimId}`);
-    assert.equal(learnPayload.title, "Learn graph");
-    assert.equal(learnPayload.selectedNodeId, selectedClaimId);
+    assert.deepEqual(Object.keys(learnPayload).sort(), ["edges", "nodes"]);
     assert.ok(learnPayload.nodes.some((node) => node.id === mapId && node.kind === "map"));
     assert.ok(learnPayload.nodes.some((node) => node.id === selectedClaimId && node.kind === "claim" && node.status === "selected"));
     assert.ok(learnPayload.nodes.some((node) => node.id === "learn-placeholder" && node.kind === "learn" && node.status === "placeholder"));
