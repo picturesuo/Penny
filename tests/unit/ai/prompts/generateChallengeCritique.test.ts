@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   PROMPT_VERSION,
+  buildGenerateChallengeCritiquePrompt,
   buildPrompt,
 } from "../../../../server/ai/prompts/generateChallengeCritique/v1.ts";
 
@@ -39,12 +40,16 @@ test("generateChallengeCritique prompt has a pinned v1 version", () => {
 });
 
 test("buildPrompt returns deterministic structured input", () => {
-  const firstPrompt = buildPrompt(promptInput);
-  const secondPrompt = buildPrompt(promptInput);
+  const firstPrompt = buildGenerateChallengeCritiquePrompt(promptInput);
+  const secondPrompt = buildGenerateChallengeCritiquePrompt(promptInput);
 
   assert.deepEqual(firstPrompt, secondPrompt);
   assert.equal(firstPrompt.promptVersion, PROMPT_VERSION);
   assert.equal(firstPrompt.structuredInput.operation, "generateChallengeCritique");
+});
+
+test("buildPrompt remains a compatibility alias for buildGenerateChallengeCritiquePrompt", () => {
+  assert.equal(buildPrompt, buildGenerateChallengeCritiquePrompt);
 });
 
 test("buildPrompt includes claim context and the schema output contract", () => {
