@@ -230,7 +230,8 @@ export async function buildChallengeView(
           .limit(1);
 
   const critiqueEventPayload = asRecord(critiqueEventRows[0]?.payloadJson);
-  const critiquePayload = critiqueEventPayload?.critiqueJson ?? parseCritiqueBodyPayload(critiqueRow?.body ?? null);
+  const critiqueBody = readOptionalString(critiqueRow?.body) ?? readOptionalString(critiqueEventPayload?.body);
+  const critiquePayload = critiqueEventPayload?.critiqueJson ?? parseCritiqueBodyPayload(critiqueBody);
   const provider = readOptionalString(critiqueEventPayload?.provider);
   const model = readOptionalString(critiqueEventPayload?.model);
   const promptVersion = readOptionalString(critiqueEventPayload?.promptVersion);
@@ -243,7 +244,7 @@ export async function buildChallengeView(
       : {
           status: critiqueRow.status,
           critiqueId: critiqueRow.id,
-          ...(critiqueRow.status === "ready" && critiqueRow.body ? { body: critiqueRow.body } : {}),
+          ...(critiqueRow.status === "ready" && critiqueBody ? { body: critiqueBody } : {}),
           ...(critiquePayload !== undefined ? { critiquePayload } : {}),
           ...(provider ? { provider } : {}),
           ...(model ? { model } : {}),
