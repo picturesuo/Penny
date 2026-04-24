@@ -91,6 +91,11 @@
   --interaction-focus-border: var(--color-mode-brain);
   --interaction-focus-shadow: 0 0 0 3px var(--interaction-focus-ring);
   --interaction-transition: 140ms ease;
+  --motion-fast: 120ms ease;
+  --motion-standard: 160ms ease;
+  --motion-slow: 220ms ease;
+  --motion-lift-sm: translateY(-2px);
+  --motion-lift-md: translateY(-3px);
 
   --shell-sidebar-width: 280px;
   --shell-inspector-width: 336px;
