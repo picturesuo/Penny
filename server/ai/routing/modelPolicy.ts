@@ -9,6 +9,13 @@ export type ModelSelection = {
   qualityTier: ModelPolicyQualityTier;
 };
 
+export class UnknownModelPolicyOperationError extends Error {
+  constructor(operationName: string) {
+    super(`No model policy is defined for operation: ${operationName}`);
+    this.name = "UnknownModelPolicyOperationError";
+  }
+}
+
 const DEFAULT_CLAUDE_SONNET_MODEL = "claude-sonnet-4-20250514";
 const DEFAULT_GROK_MODEL = "grok-4.20";
 const DEFAULT_GROK_FAST_MODEL = "grok-4-fast";
@@ -22,16 +29,23 @@ export function selectModelForOperation(
   operationName: ModelPolicyOperationName,
   qualityTier: ModelPolicyQualityTier = "default",
 ): ModelSelection {
+  if (operationName !== "generateChallengeCritique") {
+    throw new UnknownModelPolicyOperationError(operationName);
+  }
+
   if (qualityTier === "cheap") {
     return {
       operationName,
       provider: "xai",
-      model: readEnvOverride(process.env.XAI_FAST_MODEL) ?? DEFAULT_GROK_FAST_MODEL,
+      model:
+        readEnvOverride(process.env.XAI_FAST_MODEL) ??
+        readEnvOverride(process.env.XAI_CHALLENGE_FALLBACK_MODEL) ??
+        DEFAULT_GROK_MODEL,
       qualityTier,
     };
   }
 
-  if (operationName === "generateChallengeCritique" && qualityTier === "default") {
+  if (qualityTier === "default") {
     return {
       operationName,
       provider: "anthropic",
