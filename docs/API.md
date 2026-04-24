@@ -2,7 +2,7 @@
 
 Penny's MVP API surface lives in the Next.js app under `apps/web/app/api`. The legacy Fastify service in `apps/api` only exposes the health endpoint and is not the domain write path.
 
-All workspace command and projection routes require a UUID-valued `x-user-id` or `x-penny-user-id` header. Missing or invalid user headers return `401`.
+All workspace command, projection, and AI helper routes require a UUID-valued `x-user-id` or `x-penny-user-id` header. Missing or invalid user headers return `401`.
 
 ## Read Projections
 
