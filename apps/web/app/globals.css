@@ -324,6 +324,21 @@ button {
   white-space: pre-wrap;
 }
 
+.penny-placeholder-card {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid rgba(47, 107, 85, 0.18);
+  border-radius: 8px;
+  background: #fffdf7;
+}
+
+.penny-placeholder-card h2 {
+  margin: 0;
+  font-size: 1.28rem;
+  line-height: 1.25;
+}
+
 .penny-claim-form {
   display: grid;
   gap: 12px;

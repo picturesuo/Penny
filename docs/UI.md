@@ -38,6 +38,14 @@ The Challenge screen reads `GET /api/workspace/challenge` through the shell proj
 
 After start, critique request, or response submission succeeds, the shell reloads the Challenge projection.
 
+## Learn Screen
+
+The Learn screen reads `GET /api/workspace/learn` through the shell projection loader.
+
+- Selected claim comes from `selectedClaim`.
+- Placeholder status and message come from top-level `status` / `message` when present, with `learnState` as the same placeholder source.
+- The placeholder card also shows the selected map and claim ids returned by the projection.
+
 ## Screen Contract
 
 - Top bar: Penny placeholder mark and name.

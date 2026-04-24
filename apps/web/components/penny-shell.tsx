@@ -80,6 +80,7 @@ type LearnView = {
     message: string;
   };
   status: string;
+  message?: string;
 };
 
 type ProjectionView = BrainView | ChallengeView | LearnView;
@@ -666,17 +667,41 @@ function ChallengeProjection({
 }
 
 function LearnProjection({ view }: { view: LearnView }) {
+  const placeholderMessage = view.message ?? view.learnState.message;
+  const placeholderStatus = view.status ?? view.learnState.status;
+
   return (
     <div className="penny-content-grid">
       <section className="penny-panel penny-hero-panel">
         <p className="penny-kicker">Learn</p>
-        <h1>{view.learnState.message}</h1>
-        <p>Status: {view.status}</p>
+        <h1>{placeholderMessage}</h1>
+        <p>Status: {placeholderStatus}</p>
       </section>
 
       <section className="penny-panel">
         <p className="penny-kicker">Selected claim</p>
         {view.selectedClaim ? <ClaimSummary claim={view.selectedClaim} /> : <p>No claim selected.</p>}
+      </section>
+
+      <section className="penny-panel penny-wide-panel">
+        <p className="penny-kicker">Placeholder</p>
+        <div className="penny-placeholder-card">
+          <h2>{placeholderMessage}</h2>
+          <dl className="penny-facts">
+            <div>
+              <dt>Status</dt>
+              <dd>{placeholderStatus}</dd>
+            </div>
+            <div>
+              <dt>Map</dt>
+              <dd>{view.selectedMapId ?? "No map selected"}</dd>
+            </div>
+            <div>
+              <dt>Claim</dt>
+              <dd>{view.selectedClaimId ?? "No claim selected"}</dd>
+            </div>
+          </dl>
+        </div>
       </section>
     </div>
   );
