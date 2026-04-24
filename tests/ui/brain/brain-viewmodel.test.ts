@@ -26,17 +26,17 @@ test("createBrainViewModel maps Brain projection claims into thought stream and 
         id: "claim-1",
         mapId: "map-1",
         body: "Enterprise buyers need audit trails before rollout.",
-        confidenceBps: 6200,
-        createdAt: "2026-04-24T10:00:00.000Z",
-        updatedAt: "2026-04-24T10:05:00.000Z",
+        confidenceBps: 5200,
+        createdAt: "2026-04-24T10:00:00.000",
+        updatedAt: "2026-04-24T10:05:00.000",
       },
       {
         id: "claim-2",
         mapId: "map-1",
         body: "The wedge should start with founder-led diligence workflows.",
         confidenceBps: 8100,
-        createdAt: "2026-04-24T10:10:00.000Z",
-        updatedAt: "2026-04-24T10:20:00.000Z",
+        createdAt: "2026-04-24T10:10:00.000",
+        updatedAt: "2026-04-24T10:20:00.000",
       },
     ],
     selectedClaim: {
@@ -44,10 +44,16 @@ test("createBrainViewModel maps Brain projection claims into thought stream and 
       mapId: "map-1",
       body: "The wedge should start with founder-led diligence workflows.",
       confidenceBps: 8100,
-      createdAt: "2026-04-24T10:10:00.000Z",
-      updatedAt: "2026-04-24T10:20:00.000Z",
+      createdAt: "2026-04-24T10:10:00.000",
+      updatedAt: "2026-04-24T10:20:00.000",
     },
-    recentEvents: [],
+    recentEvents: [
+      {
+        id: "event-1",
+        eventType: "claim.updated",
+        created_at: "2026-04-24T10:22:00.000",
+      },
+    ],
   };
 
   const model = createBrainViewModel(projection);
@@ -72,7 +78,7 @@ test("createBrainViewModel maps Brain projection claims into thought stream and 
     {
       id: "claim-1",
       title: "Enterprise buyers need audit trails before rollout.",
-      confidenceLabel: "62% confidence",
+      confidenceLabel: "52% confidence",
       brainMapHref: "/brain?claimId=claim-1#brain-map",
     },
   ]);
@@ -104,6 +110,34 @@ test("createBrainViewModel maps Brain projection claims into thought stream and 
   );
   assert.equal(model.inspector.status, "Selected thought");
   assert.equal(model.inspector.selectedId, "claim-2");
+  assert.deepEqual(model.inspector.keyConnections, [
+    {
+      id: "claim-1",
+      title: "Enterprise buyers need audit trails before rollout.",
+      detail: "52% confidence; updated Apr 24, 10:05 AM",
+    },
+  ]);
+  assert.deepEqual(model.inspector.dependencies, [
+    {
+      id: "map:map-1",
+      title: "Parent map",
+      detail: "Fundraising map contains this claim.",
+    },
+  ]);
+  assert.deepEqual(model.inspector.contradictionMarkers, [
+    {
+      id: "claim-1",
+      title: "Enterprise buyers need audit trails before rollout.",
+      detail: "52% confidence; review against the selected claim.",
+    },
+  ]);
+  assert.deepEqual(model.inspector.recentActivity, [
+    {
+      id: "event-1",
+      title: "claim.updated",
+      detail: "Apr 24, 10:22 AM",
+    },
+  ]);
   assert.deepEqual(
     model.recentThoughts.map((thought) => thought.id),
     ["claim-2", "claim-1"],
@@ -138,4 +172,8 @@ test("createBrainViewModel keeps empty Brain state explicit", () => {
   assert.deepEqual(model.sphere.recentSessions, []);
   assert.equal(model.sphere.selectedSessionId, null);
   assert.equal(model.inspector.status, "No thought selected");
+  assert.deepEqual(model.inspector.keyConnections, []);
+  assert.deepEqual(model.inspector.dependencies, []);
+  assert.deepEqual(model.inspector.contradictionMarkers, []);
+  assert.deepEqual(model.inspector.recentActivity, []);
 });
