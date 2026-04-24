@@ -17,10 +17,11 @@ Keep it current.
 - Keep scope tight.
 - Prefer small, reversible changes.
 - State assumptions explicitly when needed.
-- Auto-push coherent repo-visible changes by default.
-- When the work moves from one file to another, automatically commit and push the finished file before starting the next one.
-- Do not ask the user for permission before pushing a coherent repo-visible change set.
-- Auto-push coherent repo-visible changes by default with .
-- Use  when changing more than one file so each file gets its own short commit message and push before the next file starts.
-- Use  only when a local-only commit is intentional.
-- Do not auto-publish partial, failing, or unverified work.
+- Automatically commit and push every repo-visible file change to the GitHub repo.
+- Do not ask for permission before committing or pushing repo-visible changes.
+- When changing more than one file, commit and push each finished file before starting the next file.
+- Prefer many minimal commits over one large commit; each commit should cover one file or one tightly scoped file change.
+- Use short, specific commit messages that name the file or behavior changed.
+- Push immediately after each commit so GitHub always has the latest completed file change.
+- If verification is not possible or fails for reasons outside the changed file, still commit and push the file change, then state the verification status clearly.
+- Use local-only commits only when the user explicitly requests local-only work.
