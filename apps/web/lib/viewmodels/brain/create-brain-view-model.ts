@@ -3,6 +3,8 @@ import type {
   BrainProjectionView,
   BrainRelatedClaimPreview,
   BrainSelectedClaimPanel,
+  BrainSessionAffordance,
+  BrainSphereAffordance,
   BrainThoughtViewModel,
   BrainViewModel,
 } from "./types";
@@ -117,6 +119,29 @@ function createSelectedPanel(selectedThought: BrainThoughtViewModel | null, stre
   };
 }
 
+function createWorkSphere(mapId: string | null, mapTitle: string): BrainSphereAffordance {
+  return {
+    id: mapId ? `work-sphere-${mapId}` : "work-sphere-empty",
+    label: "Work sphere",
+    description: mapId ? `${mapTitle} workspace` : "No map selected",
+    isSelected: true,
+  };
+}
+
+function createRecentSessions(stream: BrainThoughtViewModel[], mapTitle: string, selectedThoughtId: string | null): BrainSessionAffordance[] {
+  if (stream.length === 0) {
+    return [];
+  }
+
+  return stream.slice(0, 4).map((thought, index) => ({
+    id: `session-${thought.id}`,
+    title: index === 0 ? "Current Brain session" : `Recent session ${index + 1}`,
+    summary: `${thought.title} in ${mapTitle}`,
+    updatedAtLabel: thought.updatedAtLabel,
+    isSelected: thought.id === selectedThoughtId || (!selectedThoughtId && index === 0),
+  }));
+}
+
 export function createBrainViewModel(projection: BrainProjectionView): BrainViewModel {
   const context = projection.currentContext ?? projection.workspaceContext ?? {
     mode: "brain",
@@ -149,11 +174,13 @@ export function createBrainViewModel(projection: BrainProjectionView): BrainView
     .map((id) => stream.find((thought) => thought.id === id))
     .filter((thought): thought is BrainThoughtViewModel => Boolean(thought));
   const mapTitle = projection.mapSummary?.title?.trim() || "No map selected";
+  const mapId = projection.mapSummary?.id ?? context.mapId;
+  const recentSessions = createRecentSessions(stream, mapTitle, selectedThought?.id ?? context.claimId);
 
   return {
     context: {
       mode: context.mode,
-      mapId: projection.mapSummary?.id ?? context.mapId,
+      mapId,
       claimId: selectedThought?.id ?? context.claimId,
       mapTitle,
       sphereLabel: "No sphere projected",
@@ -162,6 +189,11 @@ export function createBrainViewModel(projection: BrainProjectionView): BrainView
     stream,
     selectedThought,
     selectedPanel,
+    sphere: {
+      workSphere: createWorkSphere(mapId, mapTitle),
+      recentSessions,
+      selectedSessionId: recentSessions.find((session) => session.isSelected)?.id ?? null,
+    },
     recentThoughts,
     inspector: {
       status: selectedThought ? "Selected thought" : "No thought selected",
