@@ -140,6 +140,74 @@ function getBreadcrumbs(shell: ShellContext | null, view: ProjectionView | null)
   return shell?.breadcrumb ?? shell?.breadcrumbItems ?? [];
 }
 
+function getProjectionContext(view: ProjectionView | null): ShellContext | WorkspaceContext | null {
+  if (!view) {
+    return null;
+  }
+
+  if ("workspaceContext" in view && view.workspaceContext) {
+    return view.workspaceContext;
+  }
+
+  if ("shellContext" in view && view.shellContext) {
+    return view.shellContext;
+  }
+
+  if ("currentContext" in view && view.currentContext) {
+    return view.currentContext;
+  }
+
+  return null;
+}
+
+function getCurrentMapId(shell: ShellContext | null, view: ProjectionView | null) {
+  const viewContext = getProjectionContext(view);
+
+  if (shell?.mapId) {
+    return shell.mapId;
+  }
+
+  if (viewContext?.mapId) {
+    return viewContext.mapId;
+  }
+
+  if (view && "mapSummary" in view && view.mapSummary?.id) {
+    return view.mapSummary.id;
+  }
+
+  if (view && "selectedMapId" in view && view.selectedMapId) {
+    return view.selectedMapId;
+  }
+
+  return null;
+}
+
+function getCurrentClaimId(shell: ShellContext | null, view: ProjectionView | null) {
+  const viewContext = getProjectionContext(view);
+
+  if (shell?.claimId) {
+    return shell.claimId;
+  }
+
+  if (viewContext?.claimId) {
+    return viewContext.claimId;
+  }
+
+  if (view && "selectedClaim" in view && view.selectedClaim?.id) {
+    return view.selectedClaim.id;
+  }
+
+  if (view && "activeClaim" in view && view.activeClaim?.id) {
+    return view.activeClaim.id;
+  }
+
+  if (view && "selectedClaimId" in view && view.selectedClaimId) {
+    return view.selectedClaimId;
+  }
+
+  return null;
+}
+
 function formatConfidence(confidenceBps: number | null | undefined) {
   if (typeof confidenceBps !== "number") {
     return "No confidence";
@@ -236,8 +304,50 @@ export function PennyShell() {
     };
   }, [activeMode, refreshVersion]);
 
+  async function switchMode(mode: WorkspaceMode) {
+    if (mode === activeMode && !state.error) {
+      return;
+    }
+
+    const mapId = getCurrentMapId(state.shell, state.view);
+    const claimId = getCurrentClaimId(state.shell, state.view);
+
+    if (!mapId) {
+      setActionState({
+        status: "error",
+        message: "Select or create a map before switching workspace modes.",
+      });
+      return;
+    }
+
+    setActionState({
+      status: "pending",
+      message: `Switching to ${toCommandMode(mode)}.`,
+    });
+
+    try {
+      await postCommand("/api/commands/workspace/select", {
+        mode: toCommandMode(mode),
+        mapId,
+        claimId,
+        requestId: createRequestId("switch-mode"),
+      });
+      setActiveMode(mode);
+      setActionState({
+        status: "success",
+        message: `${toCommandMode(mode)} mode selected.`,
+      });
+      setRefreshVersion((current) => current + 1);
+    } catch (error) {
+      setActionState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Failed to switch workspace mode.",
+      });
+    }
+  }
+
   async function selectClaim(claimId: string) {
-    const mapId = state.shell?.mapId ?? (state.view && "mapSummary" in state.view ? state.view.mapSummary?.id : null);
+    const mapId = getCurrentMapId(state.shell, state.view);
 
     if (!mapId) {
       setActionState({
@@ -405,7 +515,10 @@ export function PennyShell() {
               type="button"
               className="penny-mode-button"
               data-active={activeMode === mode.id}
-              onClick={() => setActiveMode(mode.id)}
+              disabled={actionState.status === "pending"}
+              onClick={() => {
+                void switchMode(mode.id);
+              }}
             >
               {mode.label}
             </button>

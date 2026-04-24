@@ -13,6 +13,10 @@ The shell consumes the backend workspace projection routes:
 
 The UI sends a UUID-valued `x-user-id` header so the existing route auth helper accepts local projection requests. The mode switcher changes which projection endpoint is read; breadcrumb content, selected map, selected claim, critique status, and Learn placeholder state all come from the projection payloads.
 
+## Mode Switcher
+
+Brain, Challenge, and Learn mode changes post to `POST /api/commands/workspace/select` with the current `mapId` and `claimId`. The selected claim is preserved by sending the current `claimId` with the target mode before the shell reloads the active projection.
+
 ## Brain Screen
 
 The Brain screen reads `GET /api/workspace/brain` through the shell projection loader.
