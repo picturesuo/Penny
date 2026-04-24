@@ -45,7 +45,7 @@ after(async () => {
   }
 });
 
-test("POST /api/commands/claims/create inserts a claim row and claim.created event", async () => {
+test("POST /api/commands/claims/create inserts a claim row plus move and activity events", async () => {
   const userId = "00000000-0000-0000-0000-000000000456";
   const db = createDbClient(databaseUrl);
   const sql = postgres(databaseUrl, { prepare: false });
@@ -101,6 +101,19 @@ test("POST /api/commands/claims/create inserts a claim row and claim.created eve
     assert.equal(storedEvents[0].aggregate_type, "claim");
     assert.equal(storedEvents[0].aggregate_id, payload.claimId);
     assert.equal(storedEvents[0].type, "claim.created");
+
+    const storedActivityEvents = await sql<
+      {
+        aggregate_type: string;
+        aggregate_id: string | null;
+        type: string;
+      }[]
+    >`select aggregate_type, aggregate_id, type from activity_events where aggregate_id = ${payload.claimId}`;
+
+    assert.equal(storedActivityEvents.length, 1);
+    assert.equal(storedActivityEvents[0].aggregate_type, "claim");
+    assert.equal(storedActivityEvents[0].aggregate_id, payload.claimId);
+    assert.equal(storedActivityEvents[0].type, "claim.created");
   } finally {
     await sql.end({ timeout: 1 });
   }
@@ -184,11 +197,25 @@ test("POST /api/commands/claims/create replays the original result for the same 
         and type = ${"claim.created"}
     `;
 
+    const storedActivityEvents = await sql<
+      {
+        aggregate_id: string | null;
+      }[]
+    >`
+      select aggregate_id
+      from activity_events
+      where user_id = ${userId}
+        and request_id = ${requestId}
+        and type = ${"claim.created"}
+    `;
+
     assert.equal(storedClaims.length, 1);
     assert.equal(storedClaims[0].id, firstPayload.claimId);
     assert.equal(storedClaims[0].body, "Retried claim body");
     assert.equal(storedEvents.length, 1);
     assert.equal(storedEvents[0].aggregate_id, firstPayload.claimId);
+    assert.equal(storedActivityEvents.length, 1);
+    assert.equal(storedActivityEvents[0].aggregate_id, firstPayload.claimId);
   } finally {
     await sql.end({ timeout: 1 });
   }
