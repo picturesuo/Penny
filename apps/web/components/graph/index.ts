@@ -1,4 +1,6 @@
+export * from "./brain-graph-map";
 export * from "./cluster-label";
+export * from "./context-graph-view";
 export * from "./graph-canvas";
 export * from "./graph-adapters";
 export * from "./graph-edge";

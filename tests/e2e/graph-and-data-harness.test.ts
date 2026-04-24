@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+const brainGraphMapPath = new URL("../../apps/web/components/graph/brain-graph-map.tsx", import.meta.url);
+const contextGraphViewPath = new URL("../../apps/web/components/graph/context-graph-view.tsx", import.meta.url);
 const graphViewPath = new URL("../../apps/web/components/graph/graph-view.tsx", import.meta.url);
 const graphCanvasPath = new URL("../../apps/web/components/graph/graph-canvas.tsx", import.meta.url);
 const graphNodePath = new URL("../../apps/web/components/graph/graph-node.tsx", import.meta.url);
@@ -31,7 +33,9 @@ test("graph primitives are exported as standalone QA targets", async () => {
   const [canvasSource, indexSource] = await Promise.all([readFile(graphCanvasPath, "utf8"), readFile(graphIndexPath, "utf8")]);
 
   assert.match(canvasSource, /function GraphCanvas/);
+  assert.match(indexSource, /brain-graph-map/);
   assert.match(indexSource, /cluster-label/);
+  assert.match(indexSource, /context-graph-view/);
   assert.match(indexSource, /graph-canvas/);
   assert.match(indexSource, /graph-edge/);
   assert.match(indexSource, /graph-legend/);
@@ -40,6 +44,24 @@ test("graph primitives are exported as standalone QA targets", async () => {
   assert.match(indexSource, /mock-graph-data/);
   assert.match(indexSource, /selected-node-halo/);
   assert.match(indexSource, /zoom-controls/);
+});
+
+test("graph contexts expose large Brain and compact side-panel variants", async () => {
+  const [brainSource, contextSource, miniMapSource] = await Promise.all([
+    readFile(brainGraphMapPath, "utf8"),
+    readFile(contextGraphViewPath, "utf8"),
+    readFile(miniMapPath, "utf8"),
+  ]);
+
+  assert.match(brainSource, /function BrainGraphMap/);
+  assert.match(brainSource, /data-testid="penny-brain-graph-map"/);
+  assert.match(brainSource, /height = 640/);
+  assert.match(contextSource, /function ContextGraphView/);
+  assert.match(contextSource, /data-testid="penny-context-graph"/);
+  assert.match(contextSource, /scale: 0\.86/);
+  assert.match(miniMapSource, /function SidePanelMiniMap/);
+  assert.match(miniMapSource, /data-testid="penny-side-panel-minimap"/);
+  assert.match(miniMapSource, /variant="inline"/);
 });
 
 test("graph e2e harness has mock data available before live projection wiring", async () => {

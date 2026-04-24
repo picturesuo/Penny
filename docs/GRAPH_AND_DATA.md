@@ -52,14 +52,26 @@ The selected mock node is `mock-claim-distribution`, which gives the canvas a st
 
 `GraphView` remains the high-level wrapper, but the presentation layer is split into reusable primitives:
 
+- `BrainGraphMap`: large Brain-mode map context for the main map view.
+- `ContextGraphView`: compact graph context for side panels.
 - `GraphCanvas`: owns the SVG world, viewport transform, edges, nodes, and cluster labels.
 - `GraphNode`: renders one accessible node target and its label.
 - `GraphEdge`: renders one thin node-link connection.
 - `GraphLegend`: renders muted cluster swatches.
 - `MiniMap`: renders the lower-right overview.
+- `SidePanelMiniMap`: inline mini-map variant for side panels.
 - `ZoomControls`: renders zoom in, zoom out, and fit controls.
 - `ClusterLabel`: renders lightweight labels for repeated clusters.
 - `SelectedNodeHalo`: renders the subtle selected-state emphasis behind active nodes.
+
+## Graph Contexts
+
+Use the graph components in two contexts before live shell wiring:
+
+- Brain large map view: render `BrainGraphMap` with `mockGraphs.brain` or a graph produced by `createBrainGraph(view)`.
+- Side panels: render `ContextGraphView` for a compact local graph, or `SidePanelMiniMap` when the panel only needs an overview.
+
+The side-panel variants intentionally omit the full legend and zoom rail so they stay quiet in dense panels.
 
 ## Visual Contract
 

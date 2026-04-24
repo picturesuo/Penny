@@ -1,5 +1,7 @@
-import type { GraphEdge } from "../../lib/types/graph";
-import type { PositionedGraphNode } from "./graph-layout";
+import type { CSSProperties } from "react";
+
+import type { GraphEdge, GraphModel } from "../../lib/types/graph";
+import { createNodeLookup, positionGraphNodes, type PositionedGraphNode } from "./graph-layout";
 import { graphClusterColors, graphMiniMapStyle, graphViewBoxValue } from "./graph-style";
 
 type MiniMapProps = {
@@ -7,14 +9,31 @@ type MiniMapProps = {
   edges: GraphEdge[];
   selectedNodeId?: string | null;
   nodesById: Map<string, PositionedGraphNode>;
+  variant?: "floating" | "inline";
+  style?: CSSProperties;
 };
 
-export function MiniMap({ nodes, edges, selectedNodeId, nodesById }: MiniMapProps) {
+const inlineMiniMapStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  height: "100%",
+  minHeight: 112,
+  border: "1px solid rgba(23, 32, 27, 0.1)",
+  borderRadius: 8,
+  background: "rgba(253, 254, 251, 0.9)",
+};
+
+export function MiniMap({ nodes, edges, selectedNodeId, nodesById, variant = "floating", style }: MiniMapProps) {
+  const baseStyle = variant === "inline" ? inlineMiniMapStyle : graphMiniMapStyle;
+
   return (
     <svg
       aria-label="Graph mini map"
       data-testid="penny-graph-minimap"
-      style={graphMiniMapStyle}
+      style={{
+        ...baseStyle,
+        ...style,
+      }}
       viewBox={graphViewBoxValue}
     >
       {edges.map((edge) => {
@@ -55,5 +74,28 @@ export function MiniMap({ nodes, edges, selectedNodeId, nodesById }: MiniMapProp
         );
       })}
     </svg>
+  );
+}
+
+type SidePanelMiniMapProps = {
+  graph: Pick<GraphModel, "nodes" | "edges" | "selectedNodeId">;
+  selectedNodeId?: string | null;
+  height?: number;
+};
+
+export function SidePanelMiniMap({ graph, selectedNodeId, height = 138 }: SidePanelMiniMapProps) {
+  const nodes = positionGraphNodes(graph.nodes);
+  const nodesById = createNodeLookup(nodes);
+
+  return (
+    <div data-testid="penny-side-panel-minimap" style={{ height }}>
+      <MiniMap
+        nodes={nodes}
+        edges={graph.edges}
+        nodesById={nodesById}
+        selectedNodeId={selectedNodeId ?? graph.selectedNodeId ?? null}
+        variant="inline"
+      />
+    </div>
   );
 }
