@@ -7,6 +7,7 @@ import { after, test } from "node:test";
 import postgres from "postgres";
 
 import { POST } from "../../apps/web/app/api/confidence/route.ts";
+import { GET as getConfidenceHistory } from "../../apps/web/app/api/confidence/[targetType]/[targetId]/history/route.ts";
 
 const PG_PORT = 63000 + Math.floor(Math.random() * 1000);
 const PG_USER = "postgres";
@@ -55,15 +56,31 @@ function confidenceRequest(userId: string, body: Record<string, unknown>) {
   });
 }
 
+function confidenceHistoryRequest(userId: string, targetType: string, targetId: string) {
+  return new Request(`http://localhost/api/confidence/${targetType}/${targetId}/history`, {
+    method: "GET",
+    headers: {
+      "x-user-id": userId,
+    },
+  });
+}
+
+let seedCounter = 0;
+
+function testUuid(value: number) {
+  return `00000000-0000-0000-0000-${String(value).padStart(12, "0")}`;
+}
+
 async function seedWorkspace(sql: postgres.Sql) {
-  const userId = "00000000-0000-0000-0000-000000014001";
-  const otherUserId = "00000000-0000-0000-0000-000000014002";
-  const mapId = "00000000-0000-0000-0000-000000014101";
-  const otherMapId = "00000000-0000-0000-0000-000000014102";
-  const thoughtId = "00000000-0000-0000-0000-000000014201";
-  const claimId = "00000000-0000-0000-0000-000000014301";
-  const graphNodeId = "00000000-0000-0000-0000-000000014401";
-  const otherClaimId = "00000000-0000-0000-0000-000000014302";
+  const base = 140_000 + seedCounter++ * 100;
+  const userId = testUuid(base + 1);
+  const otherUserId = testUuid(base + 2);
+  const mapId = testUuid(base + 11);
+  const otherMapId = testUuid(base + 12);
+  const thoughtId = testUuid(base + 21);
+  const claimId = testUuid(base + 31);
+  const graphNodeId = testUuid(base + 41);
+  const otherClaimId = testUuid(base + 32);
 
   await sql`
     insert into maps (id, user_id, title)
@@ -88,12 +105,21 @@ async function seedWorkspace(sql: postgres.Sql) {
   `;
 
   await sql`
-    insert into graph_nodes (id, user_id, map_id, claim_id, kind, label)
-    values (${graphNodeId}, ${userId}, ${mapId}, ${claimId}, ${"claim"}, ${"Confidence graph node"})
+    insert into graph_nodes (id, user_id, map_id, kind, label)
+    values (${graphNodeId}, ${userId}, ${mapId}, ${"context"}, ${"Confidence graph node"})
     on conflict (id) do nothing
   `;
 
-  return { userId, otherClaimId, thoughtId, claimId, graphNodeId };
+  const graphNodes = await sql<{ id: string }[]>`
+    select id
+    from graph_nodes
+    where id = ${graphNodeId}
+      and user_id = ${userId}
+  `;
+
+  assert.ok(graphNodes[0]?.id);
+
+  return { userId, otherClaimId, thoughtId, claimId, graphNodeId: graphNodes[0].id };
 }
 
 test("POST /api/confidence records percent confidence for an owned claim", async () => {
@@ -280,6 +306,168 @@ test("POST /api/confidence rejects missing or cross-user targets", async () => {
 
     assert.equal(response.status, 404);
     assert.deepEqual(await response.json(), {
+      error: "Confidence target not found.",
+    });
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("GET /api/confidence/:targetType/:targetId/history returns owned rating history newest first", async () => {
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const seeded = await seedWorkspace(sql);
+
+    await sql`
+      delete from confidence_ratings
+      where user_id = ${seeded.userId}
+    `;
+
+    await sql`
+      insert into confidence_ratings (id, user_id, claim_id, rating_bps, rationale, source, created_at)
+      values
+        (${"00000000-0000-0000-0000-000000014601"}, ${seeded.userId}, ${seeded.claimId}, ${5100}, ${"Initial estimate"}, ${"manual"}, ${"2026-04-24T10:00:00.000Z"}),
+        (${"00000000-0000-0000-0000-000000014602"}, ${seeded.userId}, ${seeded.claimId}, ${7400}, ${"Evidence improved confidence"}, ${"challenge"}, ${"2026-04-24T11:00:00.000Z"}),
+        (${"00000000-0000-0000-0000-000000014603"}, ${seeded.userId}, ${seeded.thoughtId}, ${2500}, ${"Thought-only rating"}, ${"manual"}, ${"2026-04-24T12:00:00.000Z"})
+    `;
+
+    const response = await getConfidenceHistory(confidenceHistoryRequest(seeded.userId, "claim", seeded.claimId), {
+      params: {
+        targetType: "claim",
+        targetId: seeded.claimId,
+      },
+    });
+
+    assert.equal(response.status, 200);
+
+    const payload = (await response.json()) as {
+      target: { type: string; id: string };
+      history: Array<{
+        id: string;
+        ratingBps: number;
+        confidence: number;
+        rationale: string | null;
+        source: string;
+        createdAt: string;
+      }>;
+    };
+
+    assert.deepEqual(payload.target, {
+      type: "claim",
+      id: seeded.claimId,
+    });
+    assert.deepEqual(
+      payload.history.map((rating) => ({
+        id: rating.id,
+        ratingBps: rating.ratingBps,
+        confidence: rating.confidence,
+        rationale: rating.rationale,
+        source: rating.source,
+        createdAt: rating.createdAt,
+      })),
+      [
+        {
+          id: "00000000-0000-0000-0000-000000014602",
+          ratingBps: 7400,
+          confidence: 74,
+          rationale: "Evidence improved confidence",
+          source: "challenge",
+          createdAt: "2026-04-24T11:00:00.000Z",
+        },
+        {
+          id: "00000000-0000-0000-0000-000000014601",
+          ratingBps: 5100,
+          confidence: 51,
+          rationale: "Initial estimate",
+          source: "manual",
+          createdAt: "2026-04-24T10:00:00.000Z",
+        },
+      ],
+    );
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("GET /api/confidence/:targetType/:targetId/history supports graph node aliases", async () => {
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const seeded = await seedWorkspace(sql);
+
+    await sql`
+      insert into confidence_ratings (id, user_id, graph_node_id, rating_bps, rationale, source, created_at)
+      values (${"00000000-0000-0000-0000-000000014701"}, ${seeded.userId}, ${seeded.graphNodeId}, ${8250}, ${null}, ${"graph-inspector"}, ${"2026-04-24T13:00:00.000Z"})
+      on conflict (id) do nothing
+    `;
+
+    const response = await getConfidenceHistory(confidenceHistoryRequest(seeded.userId, "graph-node", seeded.graphNodeId), {
+      params: {
+        targetType: "graph-node",
+        targetId: seeded.graphNodeId,
+      },
+    });
+
+    assert.equal(response.status, 200);
+
+    const payload = (await response.json()) as {
+      target: { type: string; id: string };
+      history: Array<{ id: string; ratingBps: number; confidence: number; source: string }>;
+    };
+
+    assert.deepEqual(payload.target, {
+      type: "graph_node",
+      id: seeded.graphNodeId,
+    });
+    assert.ok(
+      payload.history.some(
+        (rating) =>
+          rating.id === "00000000-0000-0000-0000-000000014701" &&
+          rating.ratingBps === 8250 &&
+          rating.confidence === 82.5 &&
+          rating.source === "graph-inspector",
+      ),
+    );
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("GET /api/confidence/:targetType/:targetId/history validates target params and ownership", async () => {
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const seeded = await seedWorkspace(sql);
+    const invalidTypeResponse = await getConfidenceHistory(confidenceHistoryRequest(seeded.userId, "map", seeded.claimId), {
+      params: {
+        targetType: "map",
+        targetId: seeded.claimId,
+      },
+    });
+    const invalidIdResponse = await getConfidenceHistory(confidenceHistoryRequest(seeded.userId, "claim", "not-a-uuid"), {
+      params: {
+        targetType: "claim",
+        targetId: "not-a-uuid",
+      },
+    });
+    const crossUserResponse = await getConfidenceHistory(confidenceHistoryRequest(seeded.userId, "claim", seeded.otherClaimId), {
+      params: {
+        targetType: "claim",
+        targetId: seeded.otherClaimId,
+      },
+    });
+
+    assert.equal(invalidTypeResponse.status, 400);
+    assert.deepEqual(await invalidTypeResponse.json(), {
+      error: "targetType must be thought, claim, or graphNode.",
+    });
+    assert.equal(invalidIdResponse.status, 400);
+    assert.deepEqual(await invalidIdResponse.json(), {
+      error: "Invalid target id. Expected a UUID.",
+    });
+    assert.equal(crossUserResponse.status, 404);
+    assert.deepEqual(await crossUserResponse.json(), {
       error: "Confidence target not found.",
     });
   } finally {

@@ -7,6 +7,7 @@ import { POST as createClaim } from "../../../apps/web/app/api/commands/claims/c
 import { POST as createMap } from "../../../apps/web/app/api/commands/maps/create/route.ts";
 import { POST as selectWorkspace } from "../../../apps/web/app/api/commands/workspace/select/route.ts";
 import { POST as captureThought } from "../../../apps/web/app/ai/capture-thought/route.ts";
+import { GET as getConfidenceHistory } from "../../../apps/web/app/api/confidence/[targetType]/[targetId]/history/route.ts";
 import { POST as recordConfidence } from "../../../apps/web/app/api/confidence/route.ts";
 import { POST as createGraphEdge } from "../../../apps/web/app/api/graph/edges/route.ts";
 import { DELETE as deleteGraphEdge, PATCH as updateGraphEdge } from "../../../apps/web/app/api/graph/edges/[id]/route.ts";
@@ -116,6 +117,18 @@ test("workspace projection route handlers authenticate before projection executi
         id: "00000000-0000-0000-0000-000000000005",
       },
     }),
+    getConfidenceHistory(
+      new Request("http://localhost/api/confidence/claim/00000000-0000-0000-0000-000000000010/history", {
+        method: "GET",
+        headers,
+      }),
+      {
+        params: {
+          targetType: "claim",
+          targetId: "00000000-0000-0000-0000-000000000010",
+        },
+      },
+    ),
     searchWorkspace(new Request("http://localhost/api/search?q=test", { method: "GET", headers })),
     getShellView(new Request("http://localhost/api/workspace/shell", { method: "GET", headers })),
     getBrainView(new Request("http://localhost/api/workspace/brain", { method: "GET", headers })),

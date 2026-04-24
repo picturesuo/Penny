@@ -17,6 +17,7 @@ These routes return backend-shaped workspace views. The frontend should consume 
 | `GET` | `/api/graph` | `graph_nodes` + `graph_edges` | Persisted graph payload as `{ nodes, edges }` for the authenticated user, with optional `sessionId`, `mapId`, and `type` query filters. |
 | `GET` | `/api/graph/nodes/:id/detail` | `graph_nodes` + `graph_edges` + `confidence_ratings` | Authenticated graph node detail with the node, incoming/outgoing edges, and confidence ratings. |
 | `GET` | `/api/search?q=` | `maps` + `claims` + `thoughts` + `sessions` | Authenticated global search for command-palette results across owned workspace records. Each result has `id`, `type`, `title`, `subtitle`, `confidence`, and `href`. |
+| `GET` | `/api/confidence/:targetType/:targetId/history` | `confidence_ratings` | Authenticated confidence history for one owned thought, claim, or graph node. |
 
 ## Write Commands
 
@@ -36,6 +37,7 @@ These routes are the current server-side write surface for the MVP. Meaningful w
 
 Command routes accept JSON request bodies. Idempotent commands can use an idempotency key from the route helper surface; duplicate-key behavior should preserve one logical write and replay the existing result.
 `POST /api/confidence` accepts exactly one target ID (`thoughtId`, `claimId`, or `graphNodeId`) plus exactly one rating field (`confidence` as `0..100` percent or `ratingBps` as `0..10000` basis points).
+`GET /api/confidence/:targetType/:targetId/history` accepts `thought`, `claim`, or `graphNode` target types and returns `{ target, history }` with newest ratings first.
 
 ## AI Helpers
 
