@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { DbClient } from "../db/client.ts";
 import { getDb } from "../db/client.ts";
 import { challengeRounds, claims, maps, workspaceContexts } from "../db/schema.ts";
-import { buildShellView, type BuildShellViewRepository } from "./build-shell-view.ts";
+import { buildShellView, type BuildShellViewRepository, type WorkspaceShellView } from "./build-shell-view.ts";
 
 export type ChallengeClaimView = {
   id: string;
@@ -25,9 +25,16 @@ export type ChallengeRoundView = {
   updatedAt: string;
 };
 
+export type ChallengeCritiqueStateView = {
+  status: "not_requested";
+  critiqueId: null;
+};
+
 export type WorkspaceChallengeView = {
-  selectedClaim: ChallengeClaimView | null;
-  challengeRound: ChallengeRoundView | null;
+  shellContext: WorkspaceShellView;
+  activeClaim: ChallengeClaimView | null;
+  activeChallengeRound: ChallengeRoundView | null;
+  critiqueState: ChallengeCritiqueStateView;
 };
 
 export type BuildChallengeViewInput = {
@@ -81,11 +88,17 @@ export async function buildChallengeView(
   db: DbClient = getDb(),
 ): Promise<WorkspaceChallengeView> {
   const shellView = await buildShellView(input, createShellRepository(db));
+  const critiqueState: ChallengeCritiqueStateView = {
+    status: "not_requested",
+    critiqueId: null,
+  };
 
   if (!shellView.mapId || !shellView.claimId) {
     return {
-      selectedClaim: null,
-      challengeRound: null,
+      shellContext: shellView,
+      activeClaim: null,
+      activeChallengeRound: null,
+      critiqueState,
     };
   }
 
@@ -107,8 +120,10 @@ export async function buildChallengeView(
 
   if (!selectedClaimRow) {
     return {
-      selectedClaim: null,
-      challengeRound: null,
+      shellContext: shellView,
+      activeClaim: null,
+      activeChallengeRound: null,
+      critiqueState,
     };
   }
 
@@ -136,7 +151,8 @@ export async function buildChallengeView(
   const challengeRoundRow = roundRows[0] ?? null;
 
   return {
-    selectedClaim: {
+    shellContext: shellView,
+    activeClaim: {
       id: selectedClaimRow.id,
       mapId: selectedClaimRow.mapId,
       userId: selectedClaimRow.userId,
@@ -145,7 +161,7 @@ export async function buildChallengeView(
       createdAt: selectedClaimRow.createdAt.toISOString(),
       updatedAt: selectedClaimRow.updatedAt.toISOString(),
     },
-    challengeRound: challengeRoundRow
+    activeChallengeRound: challengeRoundRow
       ? {
           id: challengeRoundRow.id,
           mapId: challengeRoundRow.mapId,
@@ -156,5 +172,6 @@ export async function buildChallengeView(
           updatedAt: challengeRoundRow.updatedAt.toISOString(),
         }
       : null,
+    critiqueState,
   };
 }

@@ -43,7 +43,7 @@ after(async () => {
   }
 });
 
-test("GET /api/workspace/challenge returns the selected claim and latest challenge round", async () => {
+test("GET /api/workspace/challenge returns shell context, active claim, latest challenge round, and placeholder critique state", async () => {
   const userId = "00000000-0000-0000-0000-000000000123";
   const mapId = "00000000-0000-0000-0000-000000000321";
   const claimId = "00000000-0000-0000-0000-000000000456";
@@ -86,7 +86,17 @@ test("GET /api/workspace/challenge returns the selected claim and latest challen
     assert.equal(response.status, 200);
 
     const payload = (await response.json()) as {
-      selectedClaim: {
+      shellContext: {
+        mode: string;
+        mapId: string | null;
+        claimId: string | null;
+        breadcrumbItems: Array<{
+          kind: string;
+          id: string;
+          label: string;
+        }>;
+      };
+      activeClaim: {
         id: string;
         mapId: string;
         userId: string;
@@ -95,7 +105,7 @@ test("GET /api/workspace/challenge returns the selected claim and latest challen
         createdAt: string;
         updatedAt: string;
       } | null;
-      challengeRound: {
+      activeChallengeRound: {
         id: string;
         mapId: string;
         claimId: string;
@@ -104,17 +114,44 @@ test("GET /api/workspace/challenge returns the selected claim and latest challen
         createdAt: string;
         updatedAt: string;
       } | null;
+      critiqueState: {
+        status: string;
+        critiqueId: string | null;
+      };
     };
 
-    assert.ok(payload.selectedClaim);
-    assert.equal(payload.selectedClaim?.id, claimId);
-    assert.equal(payload.selectedClaim?.body, "Selected challenge claim");
-    assert.equal(payload.selectedClaim?.confidenceBps, 6300);
+    assert.deepEqual(payload.shellContext, {
+      mode: "challenge",
+      mapId,
+      claimId,
+      breadcrumbItems: [
+        {
+          kind: "map",
+          id: mapId,
+          label: "Challenge map",
+        },
+        {
+          kind: "claim",
+          id: claimId,
+          label: "Selected challenge claim",
+        },
+      ],
+    });
 
-    assert.ok(payload.challengeRound);
-    assert.equal(payload.challengeRound?.id, latestRoundId);
-    assert.equal(payload.challengeRound?.claimId, claimId);
-    assert.equal(payload.challengeRound?.status, "ready");
+    assert.ok(payload.activeClaim);
+    assert.equal(payload.activeClaim?.id, claimId);
+    assert.equal(payload.activeClaim?.body, "Selected challenge claim");
+    assert.equal(payload.activeClaim?.confidenceBps, 6300);
+
+    assert.ok(payload.activeChallengeRound);
+    assert.equal(payload.activeChallengeRound?.id, latestRoundId);
+    assert.equal(payload.activeChallengeRound?.claimId, claimId);
+    assert.equal(payload.activeChallengeRound?.status, "ready");
+
+    assert.deepEqual(payload.critiqueState, {
+      status: "not_requested",
+      critiqueId: null,
+    });
   } finally {
     await sql.end({ timeout: 1 });
   }
