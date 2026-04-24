@@ -18,6 +18,12 @@ Current backend structure:
 - `server/ai/schemas/**`: structured output validation.
 - `server/ai/tracing/**`: Langfuse tracing helpers.
 
+Current service foundation:
+
+- `operation-names.ts`: canonical MVP AI operation names.
+- `prompt-version-seeds.ts`: seed records for the first `prompt_versions` row for each MVP operation.
+- `ai-job.ts`: repository-shaped helper for creating queued jobs and marking them succeeded or failed.
+
 Initial service rule: do not add a new service until it has a narrow caller and a
 testable boundary. The first expected service should wrap challenge critique
 generation without moving provider-specific logic or prompt text into this folder.
