@@ -161,6 +161,21 @@ As of 2026-04-24, `pnpm typecheck` is still expected to fail in `@penny/web` on 
 
 Run `pnpm test:mvp-verification` when you want the longer command, projection, route, and AI-contract suite rather than the smaller integration-only pass.
 
+## Final MVP checklist
+
+Use this as the last pre-demo pass after install, migrations, seed, and app startup:
+
+- Onboarding loads and the Brain card opens Brain mode.
+- A user can capture a thought, see it appear, and extract claims from it.
+- The graph updates after claim extraction, a graph node can be selected, and the inspector reflects the selected node.
+- Confidence can be rated and confidence history remains visible.
+- Cmd+K opens the command palette, and search finds the captured thought or claim.
+- Challenge mode can request critique for the selected claim.
+- Learn mode can explain a blocker or missing concept.
+- Switching Brain -> Challenge -> Learn -> Brain preserves the selected claim and map context.
+- Console output is limited to useful CLI, request, and failure logs.
+- No obvious dead code or duplicate component remains in the MVP path.
+
 ## Current boundaries
 
 This repo is not yet a finished single-app deployment shape. The current state is:
