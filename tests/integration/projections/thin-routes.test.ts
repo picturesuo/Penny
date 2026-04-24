@@ -6,6 +6,7 @@ import { POST as respondToChallenge } from "../../../apps/web/app/api/commands/c
 import { POST as createClaim } from "../../../apps/web/app/api/commands/claims/create/route.ts";
 import { POST as createMap } from "../../../apps/web/app/api/commands/maps/create/route.ts";
 import { POST as selectWorkspace } from "../../../apps/web/app/api/commands/workspace/select/route.ts";
+import { POST as captureThought } from "../../../apps/web/app/ai/capture-thought/route.ts";
 import { GET as getGraphView } from "../../../apps/web/app/api/graph/route.ts";
 import { GET as getBrainView } from "../../../apps/web/app/api/workspace/brain/route.ts";
 import { GET as getChallengeView } from "../../../apps/web/app/api/workspace/challenge/route.ts";
@@ -48,6 +49,7 @@ test("command route handlers authenticate before command execution", async () =>
         mapId: "00000000-0000-0000-0000-000000000004",
       }),
     ),
+    captureThought(commandRequest("/ai/capture-thought", { text: "Unauthenticated capture." })),
   ]);
 
   for (const response of responses) {
