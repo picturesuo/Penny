@@ -1,22 +1,25 @@
 # Penny
 
-Penny is being restarted as a minimal monorepo. The active local rebuild is intentionally small: a Next.js web app, a Fastify API, and one shared TypeScript package with a simple health-check flow between them.
+Penny is currently a Turbo workspace in transition. The older restart shell is still present, but the repo now also contains the first backend foundation slice: Drizzle migrations, PostgreSQL-backed command handlers, event emission, and workspace projection routes.
 
-This README is the first durable project artifact for the restart. It describes the intended baseline for the active working tree while the broader rebuild is still being published and verified.
+Use this README as the current top-level artifact for the repo. If it conflicts with older restart docs, trust this file and the live tree.
 
-## Restart layout
+## Current layout
 
-- `apps/web`: Next.js App Router frontend with a simple restart landing page and backend health-check UI
-- `apps/api`: Fastify API exposing `GET /health`
-- `packages/shared`: shared TypeScript types used by both apps
-- `docs/architecture.md`: current system boundaries and restart scope
-- `docs/setup.md`: short local setup and verification notes
-- `_archive_old_restart/`: historical reference only, not part of the active restart baseline
+- `apps/web`: Next.js App Router app with the current command and workspace API routes under `app/api`
+- `server`: backend logic shared by the web routes, including `commands`, `events`, `projections`, `db`, and `auth`
+- `drizzle`: checked-in PostgreSQL migrations and metadata for the Phase 1 backend tables
+- `tests`: command, projection, and integration coverage for the backend slice
+- `apps/api`: legacy Fastify health-check service still wired into the workspace
+- `packages/shared`: shared TypeScript package
+- `_archive_old_restart/`: historical reference only, not part of the active implementation surface
 
 ## Requirements
 
 - Node.js 20+
 - `pnpm` 10+
+- PostgreSQL available through `DATABASE_URL` or `DATABASE_DIRECT_URL`
+- Local Postgres CLI tools if you want to run the integration tests as written (`initdb`, `pg_ctl`, `createdb`)
 
 ## Quick start
 
@@ -26,28 +29,52 @@ This README is the first durable project artifact for the restart. It describes 
    pnpm install
    ```
 
-2. Start the workspace:
+2. Set a Postgres connection string for the backend slice:
+
+   ```bash
+   export DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/penny
+   export DATABASE_DIRECT_URL="$DATABASE_URL"
+   ```
+
+3. Apply the checked-in migrations:
+
+   ```bash
+   pnpm db:migrate
+   ```
+
+4. Start the workspace:
 
    ```bash
    pnpm dev
    ```
 
-3. Open the local apps:
+5. Open the local surfaces:
 
-- Web: `http://localhost:3000`
-- API health endpoint: `http://localhost:3001/health`
+- Next.js app: `http://localhost:3000`
+- Fastify health endpoint: `http://localhost:3001/health`
 
-## Default local environment
+## Current backend surface
 
-If you want explicit local values, use:
+The domain write path lives in the Next.js app, not the legacy Fastify service.
 
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
-API_HOST=0.0.0.0
-API_PORT=3001
-```
+- Command routes:
+  - `POST /api/commands/maps/create`
+  - `POST /api/commands/claims/create`
+  - `POST /api/commands/challenge/request-critique`
+- Workspace projection routes:
+  - `GET /api/workspace/shell`
+  - `GET /api/workspace/brain`
+  - `GET /api/workspace/challenge`
+  - `GET /api/workspace/learn`
+- Core tables in `server/db/schema.ts` and `drizzle/`:
+  - `maps`
+  - `claims`
+  - `workspace_contexts`
+  - `challenge_rounds`
+  - `challenge_critiques`
+  - `moves_events`
 
-`apps/web` uses `NEXT_PUBLIC_API_BASE_URL` for the browser health-check request. `apps/api` uses `API_HOST` and `API_PORT` when starting the Fastify server.
+Requests can supply `x-user-id` or `x-penny-user-id`; if neither header is present, the current auth helper falls back to a fixed placeholder UUID for local development.
 
 ## Workspace commands
 
@@ -56,26 +83,22 @@ pnpm dev
 pnpm build
 pnpm lint
 pnpm typecheck
+pnpm db:generate
+pnpm db:migrate
+pnpm db:typecheck
+pnpm test:integration
 ```
-
-These fan out through Turborepo to the web app, API, and shared package.
 
 ## Verification
 
-After `pnpm dev` starts:
+For a minimal backend sanity pass, run:
 
-1. Visit `http://localhost:3000`.
-2. Click `Check backend health`.
-3. Confirm the UI shows this payload:
+```bash
+pnpm db:typecheck
+pnpm test:integration
+```
 
-   ```json
-   {
-     "ok": true,
-     "service": "penny-api"
-   }
-   ```
-
-For non-interactive verification, run:
+For a broader workspace pass, run:
 
 ```bash
 pnpm lint
@@ -85,15 +108,9 @@ pnpm build
 
 ## Current boundaries
 
-This restart is intentionally small. It does not currently include:
+This repo is not yet a finished single-app deployment shape. The current state is:
 
-- a database
-- authentication
-- AI integrations
-- billing
-- background jobs
-- legacy code imports
-
-## Current intent
-
-The restart goal is a clean baseline that installs, runs, and verifies from a blank machine before larger product work resumes.
+- the active backend logic lives in `apps/web` and `server`, while `apps/api` still exists from the earlier restart shell
+- database access is wired through Drizzle and Postgres, but real Supabase auth is not implemented yet
+- AI behavior and job orchestration are placeholders only
+- the homepage and older docs still reflect the earlier restart and have not all caught up to the backend foundation
