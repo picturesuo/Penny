@@ -1,59 +1,69 @@
 # Penny
 
-Penny is currently a Turbo workspace in transition. The older restart shell is still present, but the repo now also contains the first backend foundation slice: Drizzle migrations, PostgreSQL-backed command handlers, event emission, and workspace projection routes.
+Penny is a Turbo monorepo in transition. The active backend foundation lives in `apps/web` and `server`: Drizzle migrations, PostgreSQL-backed command handlers, event emission, workspace projections, and the first challenge-critique AI plumbing all live there today.
 
-Use this README as the current top-level artifact for the repo. If it conflicts with older restart docs, trust this file and the live tree.
+Use this README as the top-level repo artifact. If it conflicts with older restart docs or archived files, trust this file and the live tree.
 
-## Current layout
+## What is active
 
-- `apps/web`: Next.js App Router app with the current command and workspace API routes under `app/api`
-- `server`: backend logic shared by the web routes, including `commands`, `events`, `projections`, `db`, and `auth`
-- `drizzle`: checked-in PostgreSQL migrations and metadata for the Phase 1 backend tables
-- `tests`: command, projection, and integration coverage for the backend slice
-- `apps/api`: legacy Fastify health-check service still wired into the workspace
-- `packages/shared`: shared TypeScript package
-- `_archive_old_restart/`: historical reference only, not part of the active implementation surface
+- `apps/web`: Next.js App Router app with the active command and workspace routes under `app/api`
+- `server`: shared backend logic for commands, projections, auth, AI operations, idempotency, events, and DB access
+- `drizzle`: checked-in PostgreSQL migrations and metadata for the current backend tables
+- `tests`: command, projection, AI, and integration coverage for the active backend slice
+- `packages/shared`: shared TypeScript package used by both apps
+- `apps/api`: legacy Fastify service that currently exposes only `GET /health`
+- `_archive_old_restart/`: historical reference only; not part of the active implementation surface
 
 ## Requirements
 
 - Node.js 20+
 - `pnpm` 10+
-- PostgreSQL available through `DATABASE_URL` or `DATABASE_DIRECT_URL`
-- Local Postgres CLI tools if you want to run the integration tests as written (`initdb`, `pg_ctl`, `createdb`)
+- PostgreSQL reachable through `DATABASE_URL` or `DATABASE_DIRECT_URL`
+- Local Postgres CLI tools if you want to run the integration tests as written: `initdb`, `pg_ctl`, and `createdb`
 
 ## Quick start
 
-1. Install dependencies:
+1. Install dependencies.
 
    ```bash
    pnpm install
    ```
 
-2. Set a Postgres connection string for the backend slice:
+2. Point the backend at Postgres.
 
    ```bash
    export DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/penny
    export DATABASE_DIRECT_URL="$DATABASE_URL"
    ```
 
-3. Apply the checked-in migrations:
+3. Apply the checked-in Drizzle migrations.
 
    ```bash
    pnpm db:migrate
    ```
 
-4. Start the workspace:
+4. Start the workspace.
 
    ```bash
    pnpm dev
    ```
 
-If you want to exercise the provider-backed critique path instead of the local fallback/stub behavior, also set the AI and tracing environment variables described in `docs/setup.md`.
-
-5. Open the local surfaces:
+5. Open the local surfaces.
 
 - Next.js app: `http://localhost:3000`
 - Fastify health endpoint: `http://localhost:3001/health`
+
+## Environment notes
+
+- The active backend requires a Postgres URL with a `postgres://` or `postgresql://` scheme.
+- Command and workspace routes require a UUID user header: send `x-user-id` or `x-penny-user-id`.
+- There is no anonymous fallback user in the current route auth helper.
+- Optional provider and tracing env vars are only needed for the live AI path or provider-focused work:
+  - `ANTHROPIC_API_KEY`
+  - `XAI_API_KEY`
+  - `LANGFUSE_PUBLIC_KEY`
+  - `LANGFUSE_SECRET_KEY`
+  - Optional base URL overrides: `ANTHROPIC_BASE_URL`, `XAI_BASE_URL`, `LANGFUSE_BASE_URL`
 
 ## Current backend surface
 
@@ -62,14 +72,14 @@ The domain write path lives in the Next.js app, not the legacy Fastify service.
 - Command routes:
   - `POST /api/commands/maps/create`
   - `POST /api/commands/claims/create`
-  - `POST /api/commands/challenge/respond`
   - `POST /api/commands/challenge/request-critique`
+  - `POST /api/commands/challenge/respond`
 - Workspace projection routes:
   - `GET /api/workspace/shell`
   - `GET /api/workspace/brain`
   - `GET /api/workspace/challenge`
   - `GET /api/workspace/learn`
-- Core tables in `server/db/schema.ts` and `drizzle/`:
+- Core tables defined in `server/db/schema.ts` and migrated from `drizzle/`:
   - `maps`
   - `claims`
   - `workspace_contexts`
@@ -77,9 +87,7 @@ The domain write path lives in the Next.js app, not the legacy Fastify service.
   - `challenge_critiques`
   - `moves_events`
 
-Requests must supply a UUID-valued `x-user-id` or `x-penny-user-id` header. Missing or invalid user headers currently return `401`; the local development shortcut is to send any valid UUID yourself.
-
-## Workspace commands
+## Useful commands
 
 ```bash
 pnpm dev
@@ -90,6 +98,7 @@ pnpm db:generate
 pnpm db:migrate
 pnpm db:typecheck
 pnpm test:integration
+pnpm test:mvp-verification
 ```
 
 ## Verification
@@ -100,14 +109,14 @@ For a doc-only check on this artifact, run:
 git diff --check -- README.md
 ```
 
-For the current backend sanity pass, run:
+For a minimal backend sanity pass, run:
 
 ```bash
 pnpm db:typecheck
 pnpm test:integration
 ```
 
-For the broader workspace command surface, run:
+For a broader repo pass, run:
 
 ```bash
 pnpm lint
@@ -115,13 +124,13 @@ pnpm typecheck
 pnpm build
 ```
 
-As of 2026-04-24, `pnpm typecheck` is not clean in `apps/web`; it currently fails on `.ts` import suffixes and a `build-challenge-view` typing mismatch. Treat the broader list above as the intended command surface, not a fully green gate for this exact snapshot.
+Run `pnpm test:mvp-verification` when you want the longer command, projection, route, and AI-contract suite rather than the smaller integration-only pass.
 
 ## Current boundaries
 
 This repo is not yet a finished single-app deployment shape. The current state is:
 
-- the active backend logic lives in `apps/web` and `server`, while `apps/api` still exists from the earlier restart shell
-- database access is wired through Drizzle and Postgres, but real Supabase auth is not implemented yet
-- AI behavior and job orchestration are placeholders only
-- the homepage and older docs still reflect the earlier restart and have not all caught up to the backend foundation
+- The active product/backend slice lives in `apps/web` and `server`, while `apps/api` remains a thin legacy health service.
+- Database access is wired through Drizzle and Postgres, but full production auth and Supabase integration are not complete.
+- The AI path has provider adapters, routing policy, schemas, and prompt code, but the overall product flow is still an early backend foundation rather than a finished user experience.
+- Some older docs still reflect the earlier restart shell. When they disagree with the live code, prefer this README and the active tree over `_archive_old_restart/`.
