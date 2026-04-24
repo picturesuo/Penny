@@ -2,11 +2,21 @@ import React, { type CSSProperties } from "react";
 import type { BrainThoughtViewModel, BrainViewModel } from "../../lib/viewmodels/brain";
 
 type BrainScreenProps = {
+  activeMode?: "brain" | "challenge" | "learn";
   model: BrainViewModel;
+  interactionMessage?: string | null;
   state?: "empty" | "error" | "loading" | "populated";
   statusMessage?: string | null;
+  onChangeMode?: (mode: "brain" | "challenge" | "learn") => void;
+  onNewThought?: () => void;
   onSelectThought?: (thoughtId: string) => void;
 };
+
+const workspaceModes = [
+  { id: "brain", label: "Brain" },
+  { id: "challenge", label: "Challenge" },
+  { id: "learn", label: "Learn" },
+] as const;
 
 const styles = {
   shell: {
@@ -46,6 +56,42 @@ const styles = {
     display: "grid",
     gap: 10,
     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  },
+  toolbar: {
+    alignItems: "center",
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 16,
+  },
+  modeSwitcher: {
+    display: "inline-grid",
+    gap: 4,
+    gridTemplateColumns: "repeat(3, minmax(86px, 1fr))",
+  },
+  modeButton: {
+    background: "#ffffff",
+    border: "1px solid #d8ded5",
+    borderRadius: 6,
+    color: "#637069",
+    cursor: "pointer",
+    minHeight: 36,
+    padding: "0 12px",
+  },
+  modeButtonSelected: {
+    background: "#2f6b55",
+    borderColor: "#2f6b55",
+    color: "#fffdf7",
+  },
+  primaryButton: {
+    background: "#17201b",
+    border: 0,
+    borderRadius: 6,
+    color: "#fffdf7",
+    cursor: "pointer",
+    fontWeight: 750,
+    minHeight: 36,
+    padding: "0 14px",
   },
   contextItem: {
     border: "1px solid #d8ded5",
@@ -257,7 +303,7 @@ const styles = {
   },
   status: {
     color: "#637069",
-    margin: "0 0 12px",
+    margin: "12px 0 0",
   },
   stateBanner: {
     border: "1px solid #d8ded5",
@@ -293,7 +339,16 @@ const styles = {
   },
 } satisfies Record<string, CSSProperties>;
 
-export function BrainScreen({ model, onSelectThought, state, statusMessage }: BrainScreenProps) {
+export function BrainScreen({
+  activeMode = "brain",
+  interactionMessage,
+  model,
+  onChangeMode,
+  onNewThought,
+  onSelectThought,
+  state,
+  statusMessage,
+}: BrainScreenProps) {
   const screenState = state ?? (model.stream.length > 0 ? "populated" : "empty");
 
   return (
@@ -312,6 +367,32 @@ export function BrainScreen({ model, onSelectThought, state, statusMessage }: Br
           <ContextValue label="Sphere" value={model.context.sphereLabel} />
           <ContextValue label="Selected thought" value={model.context.claimId ?? "No thought selected"} />
         </section>
+        <div aria-label="Brain actions" style={styles.toolbar}>
+          <div aria-label="Workspace mode" style={styles.modeSwitcher}>
+            {workspaceModes.map((mode) => (
+              <button
+                aria-pressed={activeMode === mode.id}
+                key={mode.id}
+                onClick={() => onChangeMode?.(mode.id)}
+                style={{
+                  ...styles.modeButton,
+                  ...(activeMode === mode.id ? styles.modeButtonSelected : {}),
+                }}
+                type="button"
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={onNewThought} style={styles.primaryButton} type="button">
+            New Thought
+          </button>
+        </div>
+        {interactionMessage ? (
+          <p aria-live="polite" style={styles.status}>
+            {interactionMessage}
+          </p>
+        ) : null}
       </header>
 
       <div style={styles.main}>
