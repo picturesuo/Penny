@@ -209,6 +209,22 @@ button {
   gap: 12px;
 }
 
+.penny-claim-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.penny-claim-button[data-selected="true"] .penny-claim {
+  border-color: var(--penny-accent);
+  box-shadow: inset 4px 0 0 var(--penny-accent);
+}
+
 .penny-claim {
   padding: 16px;
   border: 1px solid rgba(23, 32, 27, 0.08);
@@ -254,6 +270,59 @@ button {
 
 .penny-notice {
   max-width: 720px;
+}
+
+.penny-action-message {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+}
+
+.penny-action-message[data-status="success"] {
+  color: var(--penny-accent-strong);
+}
+
+.penny-action-message[data-status="error"] {
+  color: #9b3328;
+}
+
+.penny-claim-form {
+  display: grid;
+  gap: 12px;
+}
+
+.penny-claim-form label {
+  color: var(--penny-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.penny-claim-form textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--penny-line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fffdf7;
+  color: var(--penny-ink);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.penny-claim-form button {
+  justify-self: start;
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 16px;
+  background: var(--penny-ink);
+  color: #fffdf7;
+  cursor: pointer;
+}
+
+.penny-claim-form button:disabled,
+.penny-claim-form textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 @media (max-width: 760px) {

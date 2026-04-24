@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 
 type WorkspaceMode = "brain" | "challenge" | "learn";
+type WorkspaceCommandMode = "Brain" | "Challenge" | "Learn";
 
 type BreadcrumbItem = {
   kind: "map" | "claim";
@@ -88,6 +89,11 @@ type ProjectionState = {
   error: string | null;
 };
 
+type ActionState = {
+  status: "idle" | "pending" | "success" | "error";
+  message: string | null;
+};
+
 const modes: Array<{ id: WorkspaceMode; label: string }> = [
   { id: "brain", label: "Brain" },
   { id: "challenge", label: "Challenge" },
@@ -95,6 +101,22 @@ const modes: Array<{ id: WorkspaceMode; label: string }> = [
 ];
 
 const localUserId = "00000000-0000-4000-8000-000000000001";
+
+function toCommandMode(mode: WorkspaceMode): WorkspaceCommandMode {
+  if (mode === "challenge") {
+    return "Challenge";
+  }
+
+  if (mode === "learn") {
+    return "Learn";
+  }
+
+  return "Brain";
+}
+
+function createRequestId(prefix: string) {
+  return `${prefix}-${globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)}`;
+}
 
 function hasBreadcrumbs(context: ShellContext | WorkspaceContext | null | undefined): context is ShellContext {
   return Boolean(context && ("breadcrumb" in context || "breadcrumbItems" in context));
@@ -139,6 +161,24 @@ async function fetchProjection<T>(path: string, signal: AbortSignal): Promise<T>
   return (await response.json()) as T;
 }
 
+async function postCommand<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": localUserId,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? `Command failed with ${response.status}.`);
+  }
+
+  return (await response.json()) as T;
+}
+
 export function PennyShell() {
   const [activeMode, setActiveMode] = useState<WorkspaceMode>("brain");
   const [state, setState] = useState<ProjectionState>({
@@ -147,6 +187,11 @@ export function PennyShell() {
     view: null,
     error: null,
   });
+  const [actionState, setActionState] = useState<ActionState>({
+    status: "idle",
+    message: null,
+  });
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -186,7 +231,86 @@ export function PennyShell() {
     return () => {
       controller.abort();
     };
-  }, [activeMode]);
+  }, [activeMode, refreshVersion]);
+
+  async function selectClaim(claimId: string) {
+    const mapId = state.shell?.mapId ?? (state.view && "mapSummary" in state.view ? state.view.mapSummary?.id : null);
+
+    if (!mapId) {
+      setActionState({
+        status: "error",
+        message: "Select or create a map before selecting a claim.",
+      });
+      return;
+    }
+
+    setActionState({
+      status: "pending",
+      message: "Updating selected claim.",
+    });
+
+    try {
+      await postCommand("/api/commands/workspace/select", {
+        mode: toCommandMode(activeMode),
+        mapId,
+        claimId,
+        requestId: createRequestId("select-claim"),
+      });
+      setActionState({
+        status: "success",
+        message: "Selected claim updated.",
+      });
+      setRefreshVersion((current) => current + 1);
+    } catch (error) {
+      setActionState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Failed to select claim.",
+      });
+    }
+  }
+
+  async function createBrainClaim(text: string) {
+    const mapId = state.shell?.mapId ?? (state.view && "mapSummary" in state.view ? state.view.mapSummary?.id : null);
+
+    if (!mapId) {
+      setActionState({
+        status: "error",
+        message: "Select or create a map before creating a claim.",
+      });
+      return;
+    }
+
+    setActionState({
+      status: "pending",
+      message: "Creating claim.",
+    });
+
+    try {
+      const created = await postCommand<{ claimId: string }>("/api/commands/claims/create", {
+        mapId,
+        text,
+        requestId: createRequestId("create-claim"),
+      });
+
+      await postCommand("/api/commands/workspace/select", {
+        mode: "Brain",
+        mapId,
+        claimId: created.claimId,
+        requestId: createRequestId("select-created-claim"),
+      });
+
+      setActionState({
+        status: "success",
+        message: "Claim created and selected.",
+      });
+      setRefreshVersion((current) => current + 1);
+    } catch (error) {
+      setActionState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Failed to create claim.",
+      });
+    }
+  }
 
   const breadcrumbs = getBreadcrumbs(state.shell, state.view);
 
@@ -231,7 +355,15 @@ export function PennyShell() {
       <section className="penny-main-content" aria-busy={isPending}>
         {state.error ? <ProjectionNotice title="Projection unavailable" body={state.error} /> : null}
         {!state.error && !state.view ? <ProjectionNotice title="Loading projection" body="Reading workspace state." /> : null}
-        {!state.error && state.view ? <ProjectionContent mode={state.mode} view={state.view} /> : null}
+        {!state.error && state.view ? (
+          <ProjectionContent
+            actionState={actionState}
+            mode={state.mode}
+            onCreateClaim={createBrainClaim}
+            onSelectClaim={selectClaim}
+            view={state.view}
+          />
+        ) : null}
       </section>
     </main>
   );
@@ -246,7 +378,19 @@ function ProjectionNotice({ title, body }: { title: string; body: string }) {
   );
 }
 
-function ProjectionContent({ mode, view }: { mode: WorkspaceMode; view: ProjectionView }) {
+function ProjectionContent({
+  actionState,
+  mode,
+  onCreateClaim,
+  onSelectClaim,
+  view,
+}: {
+  actionState: ActionState;
+  mode: WorkspaceMode;
+  onCreateClaim: (text: string) => Promise<void>;
+  onSelectClaim: (claimId: string) => Promise<void>;
+  view: ProjectionView;
+}) {
   if (mode === "challenge") {
     return <ChallengeProjection view={view as ChallengeView} />;
   }
@@ -255,15 +399,34 @@ function ProjectionContent({ mode, view }: { mode: WorkspaceMode; view: Projecti
     return <LearnProjection view={view as LearnView} />;
   }
 
-  return <BrainProjection view={view as BrainView} />;
+  return (
+    <BrainProjection
+      actionState={actionState}
+      onCreateClaim={onCreateClaim}
+      onSelectClaim={onSelectClaim}
+      view={view as BrainView}
+    />
+  );
 }
 
-function BrainProjection({ view }: { view: BrainView }) {
+function BrainProjection({
+  actionState,
+  onCreateClaim,
+  onSelectClaim,
+  view,
+}: {
+  actionState: ActionState;
+  onCreateClaim: (text: string) => Promise<void>;
+  onSelectClaim: (claimId: string) => Promise<void>;
+  view: BrainView;
+}) {
+  const mapTitle = view.mapSummary?.title ?? "Workspace projection";
+
   return (
     <div className="penny-content-grid">
       <section className="penny-panel penny-hero-panel">
         <p className="penny-kicker">Brain</p>
-        <h1>{view.mapSummary?.title ?? "Workspace projection"}</h1>
+        <h1>{mapTitle}</h1>
         <p>
           {view.mapSummary
             ? `${view.mapSummary.claimCount} claims loaded from the Brain projection.`
@@ -278,15 +441,33 @@ function BrainProjection({ view }: { view: BrainView }) {
 
       <section className="penny-panel penny-wide-panel">
         <p className="penny-kicker">Claims</p>
+        {actionState.message ? (
+          <p className="penny-action-message" data-status={actionState.status}>
+            {actionState.message}
+          </p>
+        ) : null}
         {view.claims.length > 0 ? (
           <div className="penny-list">
             {view.claims.map((claim) => (
-              <ClaimSummary key={claim.id} claim={claim} />
+              <button
+                key={claim.id}
+                type="button"
+                className="penny-claim-button"
+                data-selected={view.selectedClaim?.id === claim.id}
+                onClick={() => onSelectClaim(claim.id)}
+              >
+                <ClaimSummary claim={claim} />
+              </button>
             ))}
           </div>
         ) : (
           <p>No claims returned by the Brain projection.</p>
         )}
+      </section>
+
+      <section className="penny-panel penny-wide-panel">
+        <p className="penny-kicker">Create claim</p>
+        <ClaimComposer disabled={!view.mapSummary || actionState.status === "pending"} onSubmit={onCreateClaim} />
       </section>
     </div>
   );
@@ -350,5 +531,44 @@ function ClaimSummary({ claim }: { claim: ClaimView }) {
       <p>{claim.body}</p>
       <span>{formatConfidence(claim.confidenceBps)}</span>
     </article>
+  );
+}
+
+function ClaimComposer({
+  disabled,
+  onSubmit,
+}: {
+  disabled: boolean;
+  onSubmit: (text: string) => Promise<void>;
+}) {
+  const [text, setText] = useState("");
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = text.trim();
+
+    if (!trimmed || disabled) {
+      return;
+    }
+
+    await onSubmit(trimmed);
+    setText("");
+  }
+
+  return (
+    <form className="penny-claim-form" onSubmit={handleSubmit}>
+      <label htmlFor="claim-text">Claim</label>
+      <textarea
+        id="claim-text"
+        name="claim"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        disabled={disabled}
+        rows={4}
+      />
+      <button type="submit" disabled={disabled || !text.trim()}>
+        Create claim
+      </button>
+    </form>
   );
 }

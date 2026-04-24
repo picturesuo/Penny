@@ -13,6 +13,18 @@ The shell consumes the backend workspace projection routes:
 
 The UI sends a UUID-valued `x-user-id` header so the existing route auth helper accepts local projection requests. The mode switcher changes which projection endpoint is read; breadcrumb content, selected map, selected claim, critique status, and Learn placeholder state all come from the projection payloads.
 
+## Brain Screen
+
+The Brain screen reads `GET /api/workspace/brain` through the shell projection loader.
+
+- Map title comes from `mapSummary.title`.
+- Claim rows come from `claims`.
+- The selected claim comes from `selectedClaim`.
+- Claim creation posts to `POST /api/commands/claims/create` when a selected map exists.
+- Claim selection posts to `POST /api/commands/workspace/select`, which wraps `setWorkspaceSelection`.
+
+After claim creation or selection succeeds, the shell reloads the active projection so the visible selected claim and breadcrumb remain backend-derived.
+
 ## Screen Contract
 
 - Top bar: Penny placeholder mark and name.
