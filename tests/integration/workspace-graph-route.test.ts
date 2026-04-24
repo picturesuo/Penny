@@ -43,86 +43,100 @@ after(async () => {
   }
 });
 
-test("GET /api/graph returns the graph model for the current workspace mode", async () => {
-  const userId = "00000000-0000-0000-0000-000000002123";
-  const mapId = "00000000-0000-0000-0000-000000002321";
-  const selectedClaimId = "00000000-0000-0000-0000-000000002456";
-  const otherClaimId = "00000000-0000-0000-0000-000000002654";
-  const roundId = "00000000-0000-0000-0000-000000002777";
-  const critiqueId = "00000000-0000-0000-0000-000000002888";
+test("GET /api/graph supports mapId, sessionId, and type filters over persisted graph rows", async () => {
+  const userId = "00000000-0000-0000-0000-000000003123";
+  const mapId = "00000000-0000-0000-0000-000000003321";
+  const otherMapId = "00000000-0000-0000-0000-000000003322";
+  const sessionId = "00000000-0000-0000-0000-000000003777";
+  const otherSessionId = "00000000-0000-0000-0000-000000003778";
+  const thoughtNodeId = "00000000-0000-0000-0000-000000003401";
+  const claimNodeId = "00000000-0000-0000-0000-000000003402";
+  const supportingClaimNodeId = "00000000-0000-0000-0000-000000003403";
+  const foreignNodeId = "00000000-0000-0000-0000-000000003404";
+  const mapEdgeId = "00000000-0000-0000-0000-000000003501";
+  const claimEdgeId = "00000000-0000-0000-0000-000000003502";
+  const foreignEdgeId = "00000000-0000-0000-0000-000000003503";
   const sql = postgres(databaseUrl, { prepare: false });
 
   try {
     await sql`
-      insert into maps (id, user_id, title)
-      values (${mapId}, ${userId}, ${"Graph route map"})
-    `;
-
-    await sql`
-      insert into claims (id, map_id, user_id, body, confidence_bps)
-      values
-        (${selectedClaimId}, ${mapId}, ${userId}, ${"Selected graph claim"}, ${7400}),
-        (${otherClaimId}, ${mapId}, ${userId}, ${"Other graph claim"}, ${4900})
-    `;
-
-    await sql`
-      insert into challenge_rounds (id, map_id, claim_id, user_id, status)
-      values (${roundId}, ${mapId}, ${selectedClaimId}, ${userId}, ${"responded"})
-    `;
-
-    await sql`
-      insert into challenge_critiques (id, round_id, map_id, claim_id, user_id, status, body)
-      values (${critiqueId}, ${roundId}, ${mapId}, ${selectedClaimId}, ${userId}, ${"ready"}, ${"Main challenge: The graph claim needs tighter scope."})
-    `;
-
-    await sql`
-      insert into moves_events (user_id, aggregate_type, aggregate_id, type, payload_json, request_id)
+      insert into graph_nodes (id, user_id, session_id, map_id, kind, label, metadata_json)
       values
         (
+          ${thoughtNodeId},
           ${userId},
-          ${"challenge_critique"},
-          ${critiqueId},
-          ${"challenge.critique.generated"},
-          ${JSON.stringify({
-            roundId,
-            mapId,
-            claimId: selectedClaimId,
-            status: "ready",
-            body: "Main challenge: The graph claim needs tighter scope.",
-            critiqueJson: {
-              conciseCritiqueSummary: "The graph claim needs tighter scope.",
-            },
-            provider: "test-provider",
-            model: "test-model",
-            promptVersion: "test-prompt-v1",
-          })}::jsonb,
-          ${"workspace-graph-generated-event"}
+          ${sessionId},
+          ${mapId},
+          ${"thought"},
+          ${"Founder note"},
+          ${JSON.stringify({ cluster: "context", x: -20, y: 15 })}::jsonb
         ),
         (
+          ${claimNodeId},
           ${userId},
-          ${"challenge_round"},
-          ${roundId},
-          ${"challenge.response.recorded"},
-          ${JSON.stringify({
-            mapId,
-            claimId: selectedClaimId,
-            response: "The graph route should still show the response state.",
-            responsePath: "direct",
-            confidenceBps: 7100,
-            previousStatus: "started",
-            status: "responded",
-          })}::jsonb,
-          ${"workspace-graph-response-event"}
+          ${sessionId},
+          ${mapId},
+          ${"claim"},
+          ${"Distribution is the moat"},
+          ${JSON.stringify({ cluster: "claim", status: "selected", confidenceBps: 7400 })}::jsonb
+        ),
+        (
+          ${supportingClaimNodeId},
+          ${userId},
+          ${otherSessionId},
+          ${mapId},
+          ${"claim"},
+          ${"Network density compounds"},
+          ${JSON.stringify({ cluster: "claim" })}::jsonb
+        ),
+        (
+          ${foreignNodeId},
+          ${userId},
+          ${sessionId},
+          ${otherMapId},
+          ${"claim"},
+          ${"Unrelated map claim"},
+          ${JSON.stringify({ cluster: "claim" })}::jsonb
         )
     `;
 
     await sql`
-      insert into workspace_contexts (user_id, map_id, claim_id, mode)
-      values (${userId}, ${mapId}, ${selectedClaimId}, ${"brain"})
+      insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind, weight_bps, metadata_json)
+      values
+        (
+          ${mapEdgeId},
+          ${userId},
+          ${mapId},
+          ${thoughtNodeId},
+          ${claimNodeId},
+          ${"supports"},
+          ${6400},
+          ${JSON.stringify({ label: "supports", strength: 0.64 })}::jsonb
+        ),
+        (
+          ${claimEdgeId},
+          ${userId},
+          ${mapId},
+          ${claimNodeId},
+          ${supportingClaimNodeId},
+          ${"relates_to"},
+          ${5100},
+          ${JSON.stringify({ label: "relates to" })}::jsonb
+        ),
+        (
+          ${foreignEdgeId},
+          ${userId},
+          ${otherMapId},
+          ${foreignNodeId},
+          ${claimNodeId},
+          ${"cross_map"},
+          ${3000},
+          ${JSON.stringify({ label: "cross map" })}::jsonb
+        )
     `;
 
-    const brainResponse = await GET(
-      new Request("http://localhost/api/graph", {
+    const mapResponse = await GET(
+      new Request(`http://localhost/api/graph?mapId=${mapId}`, {
         method: "GET",
         headers: {
           "x-user-id": userId,
@@ -130,110 +144,112 @@ test("GET /api/graph returns the graph model for the current workspace mode", as
       }),
     );
 
-    assert.equal(brainResponse.status, 200);
+    assert.equal(mapResponse.status, 200);
 
-    const brainPayload = (await brainResponse.json()) as {
-      nodes: Array<{ id: string; kind: string; cluster: string; status?: string }>;
-      edges: Array<{ id: string; source: string; target: string }>;
+    const mapPayload = (await mapResponse.json()) as {
+      nodes: Array<{ id: string; kind: string; cluster: string }>;
+      edges: Array<{ id: string; source: string; target: string; label?: string }>;
     };
 
-    assert.deepEqual(Object.keys(brainPayload).sort(), ["edges", "nodes"]);
-    assert.equal(brainPayload.nodes.length, 3);
-    assert.equal(brainPayload.edges.length, 2);
+    assert.deepEqual(Object.keys(mapPayload).sort(), ["edges", "nodes"]);
     assert.deepEqual(
-      brainPayload.nodes.map((node) => ({
+      mapPayload.nodes.map((node) => node.id),
+      [thoughtNodeId, claimNodeId, supportingClaimNodeId],
+    );
+    assert.deepEqual(
+      mapPayload.edges.map((edge) => edge.id),
+      [mapEdgeId, claimEdgeId],
+    );
+
+    const sessionResponse = await GET(
+      new Request(`http://localhost/api/graph?sessionId=${sessionId}`, {
+        method: "GET",
+        headers: {
+          "x-user-id": userId,
+        },
+      }),
+    );
+
+    assert.equal(sessionResponse.status, 200);
+
+    const sessionPayload = (await sessionResponse.json()) as {
+      nodes: Array<{ id: string }>;
+      edges: Array<{ id: string }>;
+    };
+
+    assert.deepEqual(
+      sessionPayload.nodes.map((node) => node.id),
+      [thoughtNodeId, claimNodeId, foreignNodeId],
+    );
+    assert.deepEqual(
+      sessionPayload.edges.map((edge) => edge.id),
+      [mapEdgeId, foreignEdgeId],
+    );
+
+    const typeResponse = await GET(
+      new Request(`http://localhost/api/graph?mapId=${mapId}&type=claim`, {
+        method: "GET",
+        headers: {
+          "x-user-id": userId,
+        },
+      }),
+    );
+
+    assert.equal(typeResponse.status, 200);
+
+    const typePayload = (await typeResponse.json()) as {
+      nodes: Array<{ id: string; kind: string; status?: string; confidenceBps?: number }>;
+      edges: Array<{ id: string; label?: string; strength?: number }>;
+    };
+
+    assert.deepEqual(
+      typePayload.nodes.map((node) => ({
         id: node.id,
         kind: node.kind,
-        cluster: node.cluster,
         status: node.status ?? null,
+        confidenceBps: node.confidenceBps ?? null,
       })),
       [
         {
-          id: mapId,
-          kind: "map",
-          cluster: "map",
-          status: null,
-        },
-        {
-          id: selectedClaimId,
+          id: claimNodeId,
           kind: "claim",
-          cluster: "claim",
           status: "selected",
+          confidenceBps: 7400,
         },
         {
-          id: otherClaimId,
+          id: supportingClaimNodeId,
           kind: "claim",
-          cluster: "claim",
           status: null,
+          confidenceBps: null,
         },
       ],
     );
-
-    await sql`
-      update workspace_contexts
-      set mode = ${"challenge"}, updated_at = now()
-      where user_id = ${userId}
-    `;
-
-    const challengeResponse = await GET(
-      new Request("http://localhost/api/graph", {
-        method: "GET",
-        headers: {
-          "x-user-id": userId,
-        },
-      }),
-    );
-
-    assert.equal(challengeResponse.status, 200);
-
-    const challengePayload = (await challengeResponse.json()) as {
-      nodes: Array<{ id: string; kind: string; status?: string }>;
-      edges: Array<{ source: string; target: string }>;
-    };
-
-    assert.deepEqual(Object.keys(challengePayload).sort(), ["edges", "nodes"]);
-    assert.ok(challengePayload.nodes.some((node) => node.id === selectedClaimId && node.kind === "claim" && node.status === "selected"));
-    assert.ok(challengePayload.nodes.some((node) => node.id === roundId && node.kind === "round" && node.status === "responded"));
-    assert.ok(challengePayload.nodes.some((node) => node.id === critiqueId && node.kind === "critique" && node.status === "ready"));
-    assert.ok(
-      challengePayload.nodes.some(
-        (node) => node.id === `${roundId}:response` && node.kind === "response" && node.status === "responded",
-      ),
-    );
-    assert.ok(challengePayload.edges.some((edge) => edge.source === roundId && edge.target === critiqueId));
-
-    await sql`
-      update workspace_contexts
-      set mode = ${"learn"}, updated_at = now()
-      where user_id = ${userId}
-    `;
-
-    const learnResponse = await GET(
-      new Request("http://localhost/api/graph", {
-        method: "GET",
-        headers: {
-          "x-user-id": userId,
-        },
-      }),
-    );
-
-    assert.equal(learnResponse.status, 200);
-
-    const learnPayload = (await learnResponse.json()) as {
-      nodes: Array<{ id: string; kind: string; status?: string }>;
-      edges: Array<{ source: string; target: string; label?: string }>;
-    };
-
-    assert.deepEqual(Object.keys(learnPayload).sort(), ["edges", "nodes"]);
-    assert.ok(learnPayload.nodes.some((node) => node.id === mapId && node.kind === "map"));
-    assert.ok(learnPayload.nodes.some((node) => node.id === selectedClaimId && node.kind === "claim" && node.status === "selected"));
-    assert.ok(learnPayload.nodes.some((node) => node.id === "learn-placeholder" && node.kind === "learn" && node.status === "placeholder"));
-    assert.ok(
-      learnPayload.edges.some(
-        (edge) => edge.source === selectedClaimId && edge.target === "learn-placeholder" && edge.label === "feeds",
-      ),
-    );
+    assert.deepEqual(typePayload.edges, [
+      {
+        id: claimEdgeId,
+        source: claimNodeId,
+        target: supportingClaimNodeId,
+        label: "relates to",
+        strength: 0.51,
+      },
+    ]);
   } finally {
     await sql.end({ timeout: 1 });
   }
+});
+
+test("GET /api/graph rejects invalid UUID query params", async () => {
+  const response = await GET(
+    new Request("http://localhost/api/graph?mapId=not-a-uuid", {
+      method: "GET",
+      headers: {
+        "x-user-id": "00000000-0000-0000-0000-000000003999",
+      },
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "Invalid mapId. Expected a UUID.",
+  });
 });

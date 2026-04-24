@@ -14,7 +14,7 @@ These routes return backend-shaped workspace views. The frontend should consume 
 | `GET` | `/api/workspace/brain` | `buildBrainView` | Brain mode claim list, map summary, selected claim, and current workspace context. |
 | `GET` | `/api/workspace/challenge` | `buildChallengeView` | Current context, active claim, latest challenge round, critique state/payload, and recorded response state. |
 | `GET` | `/api/workspace/learn` | `buildLearnView` | Learn mode context, selected claim, and the MVP placeholder status/message. |
-| `GET` | `/api/graph` | `buildShellView` + mode-matched workspace builder | Current workspace graph as `{ nodes, edges }`, derived from the canonical Brain, Challenge, or Learn projection for the active mode. |
+| `GET` | `/api/graph` | `graph_nodes` + `graph_edges` | Persisted graph payload as `{ nodes, edges }` for the authenticated user, with optional `sessionId`, `mapId`, and `type` query filters. |
 
 ## Write Commands
 
