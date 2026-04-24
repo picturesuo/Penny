@@ -6,6 +6,9 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import postgres from "postgres";
 
+import { GET as getActivity } from "../../apps/web/app/api/activity/route.ts";
+import { POST as createClaimRoute } from "../../apps/web/app/api/commands/claims/create/route.ts";
+import { POST as createMapRoute } from "../../apps/web/app/api/commands/maps/create/route.ts";
 import { POST } from "../../apps/web/app/api/confidence/route.ts";
 import { GET as getConfidenceHistory } from "../../apps/web/app/api/confidence/[targetType]/[targetId]/history/route.ts";
 
@@ -58,6 +61,27 @@ function confidenceRequest(userId: string, body: Record<string, unknown>) {
 
 function confidenceHistoryRequest(userId: string, targetType: string, targetId: string) {
   return new Request(`http://localhost/api/confidence/${targetType}/${targetId}/history`, {
+    method: "GET",
+    headers: {
+      "x-user-id": userId,
+    },
+  });
+}
+
+function jsonCommandRequest(route: string, userId: string, requestId: string, body: Record<string, unknown>) {
+  return new Request(`http://localhost${route}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": userId,
+      "x-request-id": requestId,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function recentActivityRequest(userId: string, claimId: string) {
+  return new Request(`http://localhost/api/activity/recent?claimId=${claimId}&type=confidence.recorded&limit=5`, {
     method: "GET",
     headers: {
       "x-user-id": userId,
@@ -220,6 +244,125 @@ test("POST /api/confidence records percent confidence for an owned claim", async
         },
       },
     ]);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("MVP confidence flow records history and recent activity for a route-created claim", async () => {
+  const userId = "00000000-0000-0000-0000-000000019001";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const mapResponse = await createMapRoute(
+      jsonCommandRequest("/api/commands/maps/create", userId, "confidence-mvp-create-map", {
+        title: "Confidence MVP map",
+      }),
+    );
+    assert.equal(mapResponse.status, 201);
+
+    const mapPayload = (await mapResponse.json()) as { mapId: string };
+    const claimResponse = await createClaimRoute(
+      jsonCommandRequest("/api/commands/claims/create", userId, "confidence-mvp-create-claim", {
+        mapId: mapPayload.mapId,
+        text: "Confidence history should be visible in recent activity.",
+      }),
+    );
+    assert.equal(claimResponse.status, 201);
+
+    const claimPayload = (await claimResponse.json()) as { claimId: string };
+    const confidenceResponse = await POST(
+      confidenceRequest(userId, {
+        claimId: claimPayload.claimId,
+        confidence: 68,
+        rationale: "The current evidence is useful but incomplete.",
+      }),
+    );
+    assert.equal(confidenceResponse.status, 201);
+
+    const confidencePayload = (await confidenceResponse.json()) as {
+      confidence: {
+        id: string;
+        claimId: string | null;
+        ratingBps: number;
+        confidence: number;
+        rationale: string | null;
+      };
+    };
+    assert.equal(confidencePayload.confidence.claimId, claimPayload.claimId);
+    assert.equal(confidencePayload.confidence.ratingBps, 6800);
+    assert.equal(confidencePayload.confidence.confidence, 68);
+    assert.equal(confidencePayload.confidence.rationale, "The current evidence is useful but incomplete.");
+
+    const historyResponse = await getConfidenceHistory(confidenceHistoryRequest(userId, "claim", claimPayload.claimId), {
+      params: {
+        targetType: "claim",
+        targetId: claimPayload.claimId,
+      },
+    });
+    assert.equal(historyResponse.status, 200);
+
+    const historyPayload = (await historyResponse.json()) as {
+      history: Array<{
+        id: string;
+        ratingBps: number;
+        confidence: number;
+        rationale: string | null;
+      }>;
+    };
+    assert.ok(
+      historyPayload.history.some(
+        (rating) =>
+          rating.id === confidencePayload.confidence.id &&
+          rating.ratingBps === 6800 &&
+          rating.confidence === 68 &&
+          rating.rationale === "The current evidence is useful but incomplete.",
+      ),
+    );
+
+    const storedActivityEvents = await sql<
+      Array<{
+        type: string;
+        claim_id: string | null;
+        confidence_rating_id: string | null;
+      }>
+    >`
+      select type, claim_id, confidence_rating_id
+      from activity_events
+      where confidence_rating_id = ${confidencePayload.confidence.id}
+    `;
+    assert.deepEqual([...storedActivityEvents], [
+      {
+        type: "confidence.recorded",
+        claim_id: claimPayload.claimId,
+        confidence_rating_id: confidencePayload.confidence.id,
+      },
+    ]);
+
+    const recentActivityResponse = await getActivity(recentActivityRequest(userId, claimPayload.claimId));
+    assert.equal(recentActivityResponse.status, 200);
+
+    const recentActivityPayload = (await recentActivityResponse.json()) as {
+      activity: Array<{
+        type: string;
+        claimId: string | null;
+        confidenceRatingId: string | null;
+        payloadJson: {
+          ratingBps?: unknown;
+          target?: { type?: unknown; id?: unknown };
+        };
+      }>;
+    };
+    assert.ok(
+      recentActivityPayload.activity.some(
+        (event) =>
+          event.type === "confidence.recorded" &&
+          event.claimId === claimPayload.claimId &&
+          event.confidenceRatingId === confidencePayload.confidence.id &&
+          event.payloadJson.ratingBps === 6800 &&
+          event.payloadJson.target?.id === claimPayload.claimId,
+      ),
+    );
   } finally {
     await sql.end({ timeout: 1 });
   }
