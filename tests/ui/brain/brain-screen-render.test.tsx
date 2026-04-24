@@ -100,6 +100,25 @@ test("BrainScreen renders the populated Brain state", () => {
   assert.match(html, /Populated Brain state/);
 });
 
+test("BrainScreen keeps selected claim visible while another mode is active", () => {
+  const model = createBrainViewModel(populatedProjection());
+
+  const html = renderToStaticMarkup(
+    createElement(BrainScreen, {
+      activeMode: "challenge",
+      interactionMessage: "Challenge mode selected with current claim preserved.",
+      model,
+      state: "populated",
+    }),
+  );
+
+  assert.match(html, /aria-pressed="true"[^>]*>Challenge/);
+  assert.match(html, /Challenge mode selected with current claim preserved/);
+  assert.match(html, /Claim panel/);
+  assert.match(html, /Penny should make claim history inspectable/);
+  assert.match(html, /View on Brain Map/);
+});
+
 test("BrainScreen renders the empty Brain state", () => {
   const model = createBrainViewModel(emptyProjection());
 
