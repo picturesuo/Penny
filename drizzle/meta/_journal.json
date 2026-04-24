@@ -43,6 +43,13 @@
       "when": 1777006563897,
       "tag": "0005_salty_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777010808828,
+      "tag": "0006_lethal_killraven",
+      "breakpoints": true
     }
   ]
 }
