@@ -25,6 +25,19 @@ The Brain screen reads `GET /api/workspace/brain` through the shell projection l
 
 After claim creation or selection succeeds, the shell reloads the active projection so the visible selected claim and breadcrumb remain backend-derived.
 
+## Challenge Screen
+
+The Challenge screen reads `GET /api/workspace/challenge` through the shell projection loader.
+
+- Selected claim comes from `activeClaim`.
+- Challenge round details come from `activeChallengeRound`.
+- Start Challenge posts to `POST /api/commands/challenge/start`, which wraps `startChallengeRound`.
+- Request Critique posts to the existing `POST /api/commands/challenge/request-critique` route.
+- Challenge responses post to the existing `POST /api/commands/challenge/respond` route when a round exists.
+- Critique status comes from `critiqueStatus`; critique body and structured payload come from `critiqueState` / `critiquePayload` when present.
+
+After start, critique request, or response submission succeeds, the shell reloads the Challenge projection.
+
 ## Screen Contract
 
 - Top bar: Penny placeholder mark and name.

@@ -61,10 +61,12 @@ type ChallengeView = {
     status: string;
     critiqueId: string | null;
     body?: string;
+    critiquePayload?: unknown;
     provider?: string;
     model?: string;
     promptVersion?: string;
   };
+  critiquePayload?: unknown;
 };
 
 type LearnView = {
@@ -312,6 +314,80 @@ export function PennyShell() {
     }
   }
 
+  async function startChallenge(claimId: string) {
+    setActionState({
+      status: "pending",
+      message: "Starting challenge round.",
+    });
+
+    try {
+      await postCommand("/api/commands/challenge/start", {
+        claimId,
+        requestId: createRequestId("start-challenge"),
+      });
+      setActionState({
+        status: "success",
+        message: "Challenge round started.",
+      });
+      setRefreshVersion((current) => current + 1);
+    } catch (error) {
+      setActionState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Failed to start challenge round.",
+      });
+    }
+  }
+
+  async function requestCritique(roundId: string) {
+    setActionState({
+      status: "pending",
+      message: "Requesting critique.",
+    });
+
+    try {
+      await postCommand("/api/commands/challenge/request-critique", {
+        roundId,
+        requestId: createRequestId("request-critique"),
+      });
+      setActionState({
+        status: "success",
+        message: "Critique requested.",
+      });
+      setRefreshVersion((current) => current + 1);
+    } catch (error) {
+      setActionState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Failed to request critique.",
+      });
+    }
+  }
+
+  async function recordChallengeResponse(roundId: string, response: string) {
+    setActionState({
+      status: "pending",
+      message: "Recording challenge response.",
+    });
+
+    try {
+      await postCommand("/api/commands/challenge/respond", {
+        roundId,
+        response,
+        responsePath: "direct",
+        requestId: createRequestId("challenge-response"),
+      });
+      setActionState({
+        status: "success",
+        message: "Challenge response recorded.",
+      });
+      setRefreshVersion((current) => current + 1);
+    } catch (error) {
+      setActionState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Failed to record challenge response.",
+      });
+    }
+  }
+
   const breadcrumbs = getBreadcrumbs(state.shell, state.view);
 
   return (
@@ -360,7 +436,10 @@ export function PennyShell() {
             actionState={actionState}
             mode={state.mode}
             onCreateClaim={createBrainClaim}
+            onRecordChallengeResponse={recordChallengeResponse}
+            onRequestCritique={requestCritique}
             onSelectClaim={selectClaim}
+            onStartChallenge={startChallenge}
             view={state.view}
           />
         ) : null}
@@ -382,17 +461,31 @@ function ProjectionContent({
   actionState,
   mode,
   onCreateClaim,
+  onRecordChallengeResponse,
+  onRequestCritique,
   onSelectClaim,
+  onStartChallenge,
   view,
 }: {
   actionState: ActionState;
   mode: WorkspaceMode;
   onCreateClaim: (text: string) => Promise<void>;
+  onRecordChallengeResponse: (roundId: string, response: string) => Promise<void>;
+  onRequestCritique: (roundId: string) => Promise<void>;
   onSelectClaim: (claimId: string) => Promise<void>;
+  onStartChallenge: (claimId: string) => Promise<void>;
   view: ProjectionView;
 }) {
   if (mode === "challenge") {
-    return <ChallengeProjection view={view as ChallengeView} />;
+    return (
+      <ChallengeProjection
+        actionState={actionState}
+        onRecordResponse={onRecordChallengeResponse}
+        onRequestCritique={onRequestCritique}
+        onStartChallenge={onStartChallenge}
+        view={view as ChallengeView}
+      />
+    );
   }
 
   if (mode === "learn") {
@@ -473,7 +566,23 @@ function BrainProjection({
   );
 }
 
-function ChallengeProjection({ view }: { view: ChallengeView }) {
+function ChallengeProjection({
+  actionState,
+  onRecordResponse,
+  onRequestCritique,
+  onStartChallenge,
+  view,
+}: {
+  actionState: ActionState;
+  onRecordResponse: (roundId: string, response: string) => Promise<void>;
+  onRequestCritique: (roundId: string) => Promise<void>;
+  onStartChallenge: (claimId: string) => Promise<void>;
+  view: ChallengeView;
+}) {
+  const critiquePayload = view.critiqueState?.critiquePayload ?? view.critiquePayload;
+  const roundId = view.activeChallengeRound?.id ?? null;
+  const isBusy = actionState.status === "pending";
+
   return (
     <div className="penny-content-grid">
       <section className="penny-panel penny-hero-panel">
@@ -483,7 +592,12 @@ function ChallengeProjection({ view }: { view: ChallengeView }) {
       </section>
 
       <section className="penny-panel">
-        <p className="penny-kicker">Latest round</p>
+        <p className="penny-kicker">Selected claim</p>
+        {view.activeClaim ? <ClaimSummary claim={view.activeClaim} /> : <p>No claim selected.</p>}
+      </section>
+
+      <section className="penny-panel">
+        <p className="penny-kicker">Challenge round</p>
         {view.activeChallengeRound ? (
           <dl className="penny-facts">
             <div>
@@ -500,9 +614,52 @@ function ChallengeProjection({ view }: { view: ChallengeView }) {
         )}
       </section>
 
+      <section className="penny-panel">
+        <p className="penny-kicker">Actions</p>
+        {actionState.message ? (
+          <p className="penny-action-message" data-status={actionState.status}>
+            {actionState.message}
+          </p>
+        ) : null}
+        <div className="penny-action-row">
+          <button
+            type="button"
+            disabled={!view.activeClaim || isBusy}
+            onClick={() => (view.activeClaim ? onStartChallenge(view.activeClaim.id) : undefined)}
+          >
+            Start Challenge
+          </button>
+          <button type="button" disabled={!roundId || isBusy} onClick={() => (roundId ? onRequestCritique(roundId) : undefined)}>
+            Request Critique
+          </button>
+        </div>
+      </section>
+
+      <section className="penny-panel">
+        <p className="penny-kicker">Response</p>
+        <ChallengeResponseForm disabled={!roundId || isBusy} onSubmit={(response) => (roundId ? onRecordResponse(roundId, response) : Promise.resolve())} />
+      </section>
+
       <section className="penny-panel penny-wide-panel">
         <p className="penny-kicker">Critique</p>
-        {view.critiqueState?.body ? <p className="penny-critique-body">{view.critiqueState.body}</p> : <p>No critique body returned.</p>}
+        <dl className="penny-facts">
+          <div>
+            <dt>Status</dt>
+            <dd>{view.critiqueStatus}</dd>
+          </div>
+          {view.critiqueState?.critiqueId ? (
+            <div>
+              <dt>Critique</dt>
+              <dd>{view.critiqueState.critiqueId}</dd>
+            </div>
+          ) : null}
+        </dl>
+        {view.critiqueState?.body ? (
+          <p className="penny-critique-body">{view.critiqueState.body}</p>
+        ) : (
+          <p>No critique body returned.</p>
+        )}
+        {critiquePayload ? <pre className="penny-payload">{JSON.stringify(critiquePayload, null, 2)}</pre> : null}
       </section>
     </div>
   );
@@ -568,6 +725,45 @@ function ClaimComposer({
       />
       <button type="submit" disabled={disabled || !text.trim()}>
         Create claim
+      </button>
+    </form>
+  );
+}
+
+function ChallengeResponseForm({
+  disabled,
+  onSubmit,
+}: {
+  disabled: boolean;
+  onSubmit: (response: string) => Promise<void>;
+}) {
+  const [response, setResponse] = useState("");
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = response.trim();
+
+    if (!trimmed || disabled) {
+      return;
+    }
+
+    await onSubmit(trimmed);
+    setResponse("");
+  }
+
+  return (
+    <form className="penny-claim-form" onSubmit={handleSubmit}>
+      <label htmlFor="challenge-response">Response</label>
+      <textarea
+        id="challenge-response"
+        name="response"
+        value={response}
+        onChange={(event) => setResponse(event.target.value)}
+        disabled={disabled}
+        rows={5}
+      />
+      <button type="submit" disabled={disabled || !response.trim()}>
+        Record response
       </button>
     </form>
   );

@@ -285,6 +285,45 @@ button {
   color: #9b3328;
 }
 
+.penny-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.penny-action-row button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: var(--penny-ink);
+  color: #fffdf7;
+  cursor: pointer;
+}
+
+.penny-action-row button:last-child {
+  background: var(--penny-accent);
+}
+
+.penny-action-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.penny-payload {
+  max-height: 360px;
+  overflow: auto;
+  margin: 16px 0 0;
+  border: 1px solid var(--penny-line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #17201b;
+  color: #fffdf7;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .penny-claim-form {
   display: grid;
   gap: 12px;
