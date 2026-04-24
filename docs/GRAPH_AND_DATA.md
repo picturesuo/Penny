@@ -37,6 +37,19 @@ Adapters are provided for the current projection shapes:
 - `createChallengeGraph(view)` maps selected claim, latest round, critique state, and response state.
 - `createLearnGraph(view)` maps the selected claim into the current Learn placeholder state.
 
+## Graph Primitives
+
+`GraphView` remains the high-level wrapper, but the presentation layer is split into reusable primitives:
+
+- `GraphCanvas`: owns the SVG world, viewport transform, edges, nodes, and cluster labels.
+- `GraphNode`: renders one accessible node target and its label.
+- `GraphEdge`: renders one thin node-link connection.
+- `GraphLegend`: renders muted cluster swatches.
+- `MiniMap`: renders the lower-right overview.
+- `ZoomControls`: renders zoom in, zoom out, and fit controls.
+- `ClusterLabel`: renders lightweight labels for repeated clusters.
+- `SelectedNodeHalo`: renders the subtle selected-state emphasis behind active nodes.
+
 ## Visual Contract
 
 `GraphView` is intentionally lightweight SVG:
