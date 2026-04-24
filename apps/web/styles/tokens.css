@@ -46,6 +46,19 @@
   --text-xl: 1.35rem;
   --text-2xl: 1.75rem;
 
+  --type-page-title-size: 2.1rem;
+  --type-page-title-weight: 780;
+  --type-page-title-leading: 1.08;
+  --type-section-title-size: 1.08rem;
+  --type-section-title-weight: 760;
+  --type-section-title-leading: 1.25;
+  --type-section-label-size: var(--text-xs);
+  --type-section-label-weight: 820;
+  --type-metadata-size: var(--text-xs);
+  --type-metadata-weight: 650;
+  --type-empty-size: var(--text-sm);
+  --type-empty-leading: var(--leading-relaxed);
+
   --leading-tight: 1.18;
   --leading-normal: 1.45;
   --leading-relaxed: 1.65;
