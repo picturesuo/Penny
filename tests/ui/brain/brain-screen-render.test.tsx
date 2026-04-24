@@ -72,12 +72,13 @@ test("BrainScreen renders the populated Brain state", () => {
 
   assert.match(html, /Thought stream/);
   assert.match(html, /Map and sphere context/);
-  assert.match(html, /Current thoughts/);
+  assert.match(html, /Recent claims and thoughts/);
   assert.match(html, /Focus card/);
   assert.match(html, /Claim inspector/);
   assert.match(html, /Recent thoughts/);
   assert.match(html, /Investor diligence map/);
   assert.match(html, /Penny should make claim history inspectable/);
+  assert.match(html, /Confidence mini graph: 74% confidence/);
   assert.match(html, /Populated Brain state/);
 });
 
