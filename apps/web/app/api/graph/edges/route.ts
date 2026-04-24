@@ -149,6 +149,10 @@ async function createGraphEdge(input: {
   weightBps: number | null;
   metadata: Record<string, unknown> | null;
 }) {
+  if (input.sourceNodeId === input.targetNodeId) {
+    throw new GraphEdgeValidationError("sourceNodeId and targetNodeId must be different.");
+  }
+
   const db = getDb();
   const findExistingEdge = async () => {
     const existingRows = await db

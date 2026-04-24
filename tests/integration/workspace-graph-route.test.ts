@@ -316,6 +316,51 @@ test("graph edges are unique by user, source, target, and kind", async () => {
   }
 });
 
+test("graph edges reject self loops", async () => {
+  const userId = "00000000-0000-0000-0000-000000004032";
+  const mapId = "00000000-0000-0000-0000-000000004042";
+  const nodeId = "00000000-0000-0000-0000-000000004043";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label)
+      values (${nodeId}, ${userId}, ${mapId}, ${"claim"}, ${"Self-loop node"})
+    `;
+
+    const response = await createGraphEdge(
+      new Request("http://localhost/api/graph/edges", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          sourceNodeId: nodeId,
+          targetNodeId: nodeId,
+          kind: "supports",
+        }),
+      }),
+    );
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      error: "sourceNodeId and targetNodeId must be different.",
+    });
+
+    await assert.rejects(
+      () =>
+        sql`
+          insert into graph_edges (user_id, map_id, source_node_id, target_node_id, kind)
+          values (${userId}, ${mapId}, ${nodeId}, ${nodeId}, ${"supports"})
+        `,
+      (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23514",
+    );
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
 test("deleting thoughts and claims removes or updates graph edges safely", async () => {
   const userId = "00000000-0000-0000-0000-000000004033";
   const mapId = "00000000-0000-0000-0000-000000004034";

@@ -148,6 +148,7 @@ export const graphEdges = pgTable(
       "graph_edges_kind_valid_check",
       sql`${table.kind} in ('supports', 'depends_on', 'contradicts', 'related', 'relates_to', 'extracted_claim', 'extracts', 'cross_map')`,
     ),
+    check("graph_edges_no_self_loop_check", sql`${table.sourceNodeId} <> ${table.targetNodeId}`),
   ],
 );
 

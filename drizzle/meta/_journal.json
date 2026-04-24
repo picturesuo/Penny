@@ -92,6 +92,13 @@
       "when": 1777013600000,
       "tag": "0012_confidence_targets_and_edge_dedup",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1777014200000,
+      "tag": "0013_graph_edge_self_loop_guard",
+      "breakpoints": true
     }
   ]
 }
