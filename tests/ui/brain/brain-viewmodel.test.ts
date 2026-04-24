@@ -76,6 +76,32 @@ test("createBrainViewModel maps Brain projection claims into thought stream and 
       brainMapHref: "/brain?claimId=claim-1#brain-map",
     },
   ]);
+  assert.deepEqual(model.sphere.workSphere, {
+    id: "work-sphere-map-1",
+    label: "Work sphere",
+    description: "Fundraising map workspace",
+    isSelected: true,
+  });
+  assert.equal(model.sphere.selectedSessionId, "session-claim-2");
+  assert.deepEqual(
+    model.sphere.recentSessions.map((session) => ({
+      id: session.id,
+      title: session.title,
+      isSelected: session.isSelected,
+    })),
+    [
+      {
+        id: "session-claim-2",
+        title: "Current Brain session",
+        isSelected: true,
+      },
+      {
+        id: "session-claim-1",
+        title: "Recent session 2",
+        isSelected: false,
+      },
+    ],
+  );
   assert.equal(model.inspector.status, "Selected thought");
   assert.equal(model.inspector.selectedId, "claim-2");
   assert.deepEqual(
@@ -107,5 +133,9 @@ test("createBrainViewModel keeps empty Brain state explicit", () => {
   assert.equal(model.stream.length, 0);
   assert.equal(model.selectedThought, null);
   assert.equal(model.selectedPanel, null);
+  assert.equal(model.sphere.workSphere.id, "work-sphere-empty");
+  assert.equal(model.sphere.workSphere.isSelected, true);
+  assert.deepEqual(model.sphere.recentSessions, []);
+  assert.equal(model.sphere.selectedSessionId, null);
   assert.equal(model.inspector.status, "No thought selected");
 });
