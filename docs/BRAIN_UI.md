@@ -26,6 +26,8 @@ The route screen reads `GET /api/workspace/brain` with the same local UUID heade
 
 The viewmodel intentionally maps backend `claims` to UI `thoughts` for the Brain experience while preserving projection IDs, confidence, timestamps, and map context.
 
+The Brain fetch adapter reads both `GET /api/workspace/shell` and `GET /api/workspace/brain` with the UUID user header. Mock mode bypasses this adapter so UI work can continue without live backend data.
+
 ## Mock Data
 
 Use `/brain?mock=1` or `/brain?brainMock=true` to render deterministic mock Brain data without calling `GET /api/workspace/brain`. The mock projection lives in `apps/web/lib/viewmodels/brain/mock-data.ts` and covers populated stream rows, selected claim panel, related claims, Work sphere, and recent sessions.
