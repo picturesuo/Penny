@@ -22,6 +22,16 @@ export const claims = pgTable(
   (table) => [index("claims_map_id_idx").on(table.mapId), index("claims_user_id_idx").on(table.userId)],
 );
 
+export const challengeRounds = pgTable("challenge_rounds", {
+  id: uuid("id").primaryKey(),
+  mapId: uuid("map_id").notNull(),
+  claimId: uuid("claim_id").notNull(),
+  userId: uuid("user_id").notNull(),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const movesEvents = pgTable(
   "moves_events",
   {
