@@ -1,6 +1,7 @@
 import type {
   BrainProjectionClaim,
   BrainProjectionView,
+  BrainInspectorItem,
   BrainRelatedClaimPreview,
   BrainSelectedClaimPanel,
   BrainSessionAffordance,
@@ -99,6 +100,118 @@ function toRelatedClaim(thought: BrainThoughtViewModel): BrainRelatedClaimPrevie
   };
 }
 
+function createKeyConnections(selectedThought: BrainThoughtViewModel | null, stream: BrainThoughtViewModel[]): BrainInspectorItem[] {
+  if (!selectedThought) {
+    return [];
+  }
+
+  return stream
+    .filter((thought) => thought.id !== selectedThought.id)
+    .slice(0, 3)
+    .map((thought) => ({
+      id: thought.id,
+      title: thought.title,
+      detail: `${thought.confidenceLabel}; updated ${thought.updatedAtLabel}`,
+    }));
+}
+
+function createDependencies(mapId: string | null, mapTitle: string, selectedThought: BrainThoughtViewModel | null): BrainInspectorItem[] {
+  if (!selectedThought) {
+    return [];
+  }
+
+  return [
+    {
+      id: mapId ? `map:${mapId}` : `claim:${selectedThought.id}:map`,
+      title: "Parent map",
+      detail: mapId ? `${mapTitle} contains this claim.` : "No parent map is projected for this claim.",
+    },
+  ];
+}
+
+function createContradictionMarkers(selectedThought: BrainThoughtViewModel | null, stream: BrainThoughtViewModel[]): BrainInspectorItem[] {
+  if (!selectedThought) {
+    return [];
+  }
+
+  const markers = stream
+    .filter((thought) => thought.id !== selectedThought.id && typeof thought.confidenceBps === "number" && thought.confidenceBps < 6000)
+    .slice(0, 2)
+    .map((thought) => ({
+      id: thought.id,
+      title: thought.title,
+      detail: `${thought.confidenceLabel}; review against the selected claim.`,
+    }));
+
+  if (typeof selectedThought.confidenceBps === "number" && selectedThought.confidenceBps < 6000) {
+    return [
+      {
+        id: selectedThought.id,
+        title: "Selected claim needs challenge",
+        detail: `${selectedThought.confidenceLabel}; confidence is below the contradiction review threshold.`,
+      },
+      ...markers,
+    ];
+  }
+
+  return markers;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function eventLabel(event: unknown, index: number): BrainInspectorItem | null {
+  if (!isRecord(event)) {
+    return null;
+  }
+
+  const id = typeof event.id === "string" ? event.id : `event-${index + 1}`;
+  const type =
+    typeof event.type === "string"
+      ? event.type
+      : typeof event.eventType === "string"
+        ? event.eventType
+        : typeof event.name === "string"
+          ? event.name
+          : "Workspace event";
+  const createdAt =
+    typeof event.createdAt === "string"
+      ? event.createdAt
+      : typeof event.created_at === "string"
+        ? event.created_at
+        : typeof event.updatedAt === "string"
+          ? event.updatedAt
+          : typeof event.updated_at === "string"
+            ? event.updated_at
+            : typeof event.timestamp === "string"
+              ? event.timestamp
+              : null;
+
+  return {
+    id,
+    title: type,
+    detail: createdAt ? formatTimestamp(createdAt) : "Time not recorded",
+  };
+}
+
+function createRecentActivity(projection: BrainProjectionView, recentThoughts: BrainThoughtViewModel[]): BrainInspectorItem[] {
+  const eventItems = (projection.recentEvents ?? [])
+    .map(eventLabel)
+    .filter((event): event is BrainInspectorItem => Boolean(event))
+    .slice(0, 3);
+
+  if (eventItems.length > 0) {
+    return eventItems;
+  }
+
+  return recentThoughts.slice(0, 3).map((thought) => ({
+    id: thought.id,
+    title: thought.title,
+    detail: `Updated ${thought.updatedAtLabel}`,
+  }));
+}
+
 function createSelectedPanel(selectedThought: BrainThoughtViewModel | null, stream: BrainThoughtViewModel[]): BrainSelectedClaimPanel | null {
   if (!selectedThought) {
     return null;
@@ -176,6 +289,10 @@ export function createBrainViewModel(projection: BrainProjectionView): BrainView
   const mapTitle = projection.mapSummary?.title?.trim() || "No map selected";
   const mapId = projection.mapSummary?.id ?? context.mapId;
   const recentSessions = createRecentSessions(stream, mapTitle, selectedThought?.id ?? context.claimId);
+  const keyConnections = createKeyConnections(selectedThought, stream);
+  const dependencies = createDependencies(mapId, mapTitle, selectedThought);
+  const contradictionMarkers = createContradictionMarkers(selectedThought, stream);
+  const recentActivity = createRecentActivity(projection, recentThoughts);
 
   return {
     context: {
@@ -201,6 +318,10 @@ export function createBrainViewModel(projection: BrainProjectionView): BrainView
       mapId: selectedThought?.mapId ?? projection.mapSummary?.id ?? context.mapId,
       confidenceLabel: selectedThought?.confidenceLabel ?? "No confidence recorded",
       updatedAtLabel: selectedThought?.updatedAtLabel ?? "Not recorded",
+      keyConnections,
+      dependencies,
+      contradictionMarkers,
+      recentActivity,
     },
   };
 }
