@@ -28,6 +28,10 @@
   --color-mode-learn-soft: rgba(131, 183, 216, 0.16);
   --color-mode-learn-ink: #c4e0ef;
 
+  --color-brand-mark: #d87516;
+  --color-brand-mark-soft: rgba(216, 117, 22, 0.16);
+  --color-brand-mark-ink: #f1a456;
+
   --space-0: 0;
   --space-1: 4px;
   --space-2: 8px;

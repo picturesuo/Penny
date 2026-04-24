@@ -52,12 +52,23 @@ export function InspectorRail({
   dependencies = [],
   selectedTitle = "No node selected",
 }: InspectorRailProps) {
+  const hasSelectedNode = selectedTitle.trim().toLowerCase() !== "no node selected";
+
   return (
     <aside aria-label={ariaLabel} className={className} style={railStyle}>
       <section style={panelStyle}>
         <p className="penny-kicker">Inspector</p>
         <h2 style={{ margin: 0, fontSize: "1.08rem", lineHeight: 1.28 }}>{selectedTitle}</h2>
-        {children}
+        {hasSelectedNode ? (
+          children
+        ) : (
+          <>
+            <p style={{ color: "#637069", lineHeight: 1.55, margin: "10px 0 0" }}>
+              Select a graph node or claim to inspect confidence, dependencies, and recent activity.
+            </p>
+            {children}
+          </>
+        )}
       </section>
 
       <section style={panelStyle}>

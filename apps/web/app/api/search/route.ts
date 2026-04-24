@@ -47,6 +47,10 @@ function sessionTitle(id: string) {
   return `Session ${id.slice(0, 8)}`;
 }
 
+function confidenceBpsToPercent(value: number | null) {
+  return typeof value === "number" ? Math.round(value / 100) : null;
+}
+
 async function searchWorkspace(input: { userId: string; query: string }) {
   if (!input.query) {
     return [];
@@ -117,7 +121,7 @@ async function searchWorkspace(input: { userId: string; query: string }) {
       type: "claim" as const,
       title: truncate(row.body),
       subtitle: "Claim",
-      confidence: row.confidenceBps,
+      confidence: confidenceBpsToPercent(row.confidenceBps),
       href: `/workspace?mapId=${row.mapId}&claimId=${row.id}`,
       sortAt: row.updatedAt,
     })),

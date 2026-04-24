@@ -20,9 +20,6 @@ export function ModeCard({ body, mode, title }: ModeCardProps) {
         <span className={styles.title}>{title}</span>
         <span className={styles.body}>{body}</span>
       </span>
-      <span className={styles.arrow} aria-hidden="true">
-        &rarr;
-      </span>
     </Link>
   );
 }

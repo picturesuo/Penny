@@ -33,10 +33,26 @@ export function ConfidenceSparkline({
   const accessibleSummary =
     lastValue === null ? `${label}: no rated confidence history` : `${label}: latest rating ${lastValue}%`;
 
+  if (ratedPoints.length === 0) {
+    return (
+      <div
+        aria-label={accessibleSummary}
+        className={cx("confidence-sparkline confidence-sparkline--empty", className)}
+        role="img"
+        {...props}
+      >
+        <svg aria-hidden="true" focusable="false" height={height} viewBox={`0 0 ${width} ${height}`} width={width}>
+          <line className="confidence-sparkline__baseline" x1="0" x2={width} y1={height - 4} y2={height - 4} />
+        </svg>
+        <span style={{ color: "var(--color-faint)", fontSize: 12, lineHeight: 1.2 }}>No confidence history</span>
+      </div>
+    );
+  }
+
   return (
     <div
       aria-label={accessibleSummary}
-      className={cx("confidence-sparkline", ratedPoints.length === 0 && "confidence-sparkline--empty", className)}
+      className={cx("confidence-sparkline", className)}
       role="img"
       {...props}
     >

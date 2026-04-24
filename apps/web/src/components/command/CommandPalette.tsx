@@ -2,11 +2,13 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
+import { Skeleton } from "../../../components/ui";
 import type { CommandPaletteItem } from "../../hooks/useCommandPalette";
 
 type CommandPaletteProps = {
   isOpen: boolean;
   items: CommandPaletteItem[];
+  isLoading?: boolean;
   onClose: () => void;
   onSelectItem: (item: CommandPaletteItem) => void | Promise<void>;
   placeholder?: string;
@@ -22,6 +24,27 @@ const typeLabels: Record<CommandPaletteItem["type"], string> = {
 };
 
 const typeOrder: CommandPaletteItem["type"][] = ["thought", "map", "claim", "session"];
+
+const searchSkeletonStyles = {
+  list: {
+    display: "grid",
+    gap: 8,
+    padding: "10px 8px 14px",
+  },
+  row: {
+    minHeight: 66,
+    display: "grid",
+    gridTemplateColumns: "34px minmax(0, 1fr) 70px",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 8,
+    padding: 10,
+  },
+  copy: {
+    display: "grid",
+    gap: 8,
+  },
+} as const;
 
 function formatResultMeta(item: CommandPaletteItem) {
   if (typeof item.confidence !== "number") {
@@ -53,6 +76,7 @@ function getNextEnabledIndex(items: CommandPaletteItem[], startIndex: number, di
 export function CommandPalette({
   isOpen,
   items,
+  isLoading = false,
   onClose,
   onSelectItem,
   placeholder = "Search your brain…",
@@ -142,6 +166,7 @@ export function CommandPalette({
             aria-activedescendant={activeItemId}
             aria-controls={`${inputId}-results`}
             aria-label="Search Penny"
+            autoFocus
             autoComplete="off"
             className="command-palette__input"
             id={inputId}
@@ -156,7 +181,9 @@ export function CommandPalette({
         </div>
 
         <div className="command-palette__results" id={`${inputId}-results`} role="listbox" aria-label="Search results">
-          {items.length > 0 ? (
+          {isLoading ? (
+            <SearchResultsSkeleton />
+          ) : items.length > 0 ? (
             groupedItems.map((group) => (
               <div key={group.type} className="command-palette__group" role="group" aria-label={typeLabels[group.type]}>
                 <div className="command-palette__group-heading">{typeLabels[group.type]}</div>
@@ -175,10 +202,30 @@ export function CommandPalette({
               </div>
             ))
           ) : (
-            <p className="command-palette__empty">Nothing found yet.</p>
+            <div className="command-palette__empty" role="status">
+              <strong style={{ color: "var(--penny-ink)", display: "block", marginBottom: 6 }}>No search results</strong>
+              <span>Try a thought, claim, map title, or session keyword.</span>
+            </div>
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+function SearchResultsSkeleton() {
+  return (
+    <div style={searchSkeletonStyles.list} role="status" aria-label="Loading search results">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div style={searchSkeletonStyles.row} key={index}>
+          <Skeleton height={34} label="Loading search result icon" />
+          <span style={searchSkeletonStyles.copy}>
+            <Skeleton height={14} label="Loading search result title" width="72%" />
+            <Skeleton height={12} label="Loading search result subtitle" width="48%" />
+          </span>
+          <Skeleton height={24} label="Loading search result type" />
+        </div>
+      ))}
     </div>
   );
 }

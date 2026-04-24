@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type PointerEvent, type WheelEvent } from "react";
 
+import { useWorkspaceState } from "../../lib/state/workspace-state";
 import type { GraphCluster, GraphModel, GraphNode, GraphViewport } from "../../lib/types/graph";
 import { GraphToolbar } from "../../src/components/graph/GraphToolbar";
 import { MiniMap } from "../../src/components/graph/MiniMap";
@@ -17,7 +18,7 @@ type GraphViewProps = {
 };
 
 export function GraphView({ graph, selectedNodeId, onSelectNode, height = 460 }: GraphViewProps) {
-  const [localSelectedNodeId, setLocalSelectedNodeId] = useState<string | null>(null);
+  const { selectedNodeId: storedSelectedNodeId, setSelectedNodeId } = useWorkspaceState();
   const [viewport, setViewport] = useState<GraphViewport>(initialGraphViewport);
   const [focusedCluster, setFocusedCluster] = useState<GraphCluster | null>(null);
   const [focusSelectedNode, setFocusSelectedNode] = useState(false);
@@ -26,11 +27,35 @@ export function GraphView({ graph, selectedNodeId, onSelectNode, height = 460 }:
   const nodes = useMemo(() => positionGraphNodes(graph.nodes), [graph.nodes]);
   const nodesById = useMemo(() => createNodeLookup(nodes), [nodes]);
   const hasControlledSelection = selectedNodeId !== undefined;
-  const activeNodeId = hasControlledSelection ? selectedNodeId : localSelectedNodeId ?? graph.selectedNodeId ?? null;
+  const activeNodeId = hasControlledSelection ? selectedNodeId : storedSelectedNodeId ?? graph.selectedNodeId ?? null;
   const clusters = useMemo(() => Array.from(new Set(nodes.map((node) => getGraphNodeCluster(node)))), [nodes]);
 
+  if (nodes.length === 0) {
+    return (
+      <section
+        aria-label={`${graph.title} empty state`}
+        data-testid="penny-graph"
+        style={{
+          ...graphSurfaceStyle,
+          display: "grid",
+          minHeight: height,
+          placeItems: "center",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ maxWidth: 360, padding: 24 }}>
+          <p className="penny-kicker">Graph</p>
+          <h2 style={{ color: "var(--penny-ink)", margin: 0 }}>No graph nodes yet</h2>
+          <p style={{ color: "var(--penny-muted)", lineHeight: 1.55, margin: "10px 0 0" }}>
+            Capture a thought or create a claim to give this map something to render.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   function selectNode(node: GraphNode) {
-    setLocalSelectedNodeId(node.id);
+    setSelectedNodeId(node.id);
     onSelectNode?.(node);
   }
 

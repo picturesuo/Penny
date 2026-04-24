@@ -126,7 +126,7 @@ test("GET /api/search returns owned maps, claims, thoughts, and sessions for q",
           type: "claim",
           title: "Distribution is the moat",
           subtitle: "Claim",
-          confidence: 7400,
+          confidence: 74,
           href: `/workspace?mapId=${mapId}&claimId=${claimId}`,
         },
         {

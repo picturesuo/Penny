@@ -87,6 +87,7 @@ export function TopToolbar() {
       <CommandPalette
         isOpen={commandPalette.isOpen}
         items={commandPalette.filteredItems}
+        isLoading={commandPalette.backendSearchStatus === "loading"}
         onClose={commandPalette.close}
         onSelectItem={commandPalette.selectItem}
         query={commandPalette.query}

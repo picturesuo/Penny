@@ -243,7 +243,16 @@ function createWorkSphere(mapId: string | null, mapTitle: string): BrainSphereAf
   };
 }
 
-function createRecentSessions(stream: BrainThoughtViewModel[], mapTitle: string, selectedThoughtId: string | null): BrainSessionAffordance[] {
+type BrainViewModelOptions = {
+  activeSessionId?: string | null;
+};
+
+function createRecentSessions(
+  stream: BrainThoughtViewModel[],
+  mapTitle: string,
+  selectedThoughtId: string | null,
+  activeSessionId: string | null | undefined,
+): BrainSessionAffordance[] {
   if (stream.length === 0) {
     return [];
   }
@@ -253,11 +262,11 @@ function createRecentSessions(stream: BrainThoughtViewModel[], mapTitle: string,
     title: index === 0 ? "Current Brain session" : `Recent session ${index + 1}`,
     summary: `${thought.title} in ${mapTitle}`,
     updatedAtLabel: thought.updatedAtLabel,
-    isSelected: thought.id === selectedThoughtId || (!selectedThoughtId && index === 0),
+    isSelected: activeSessionId === undefined ? thought.id === selectedThoughtId || (!selectedThoughtId && index === 0) : activeSessionId === `session-${thought.id}`,
   }));
 }
 
-export function createBrainViewModel(projection: BrainProjectionView): BrainViewModel {
+export function createBrainViewModel(projection: BrainProjectionView, options: BrainViewModelOptions = {}): BrainViewModel {
   const context = projection.currentContext ?? projection.workspaceContext ?? {
     mode: "brain",
     mapId: null,
@@ -290,7 +299,7 @@ export function createBrainViewModel(projection: BrainProjectionView): BrainView
     .filter((thought): thought is BrainThoughtViewModel => Boolean(thought));
   const mapTitle = projection.mapSummary?.title?.trim() || "No map selected";
   const mapId = projection.mapSummary?.id ?? context.mapId;
-  const recentSessions = createRecentSessions(stream, mapTitle, selectedThought?.id ?? context.claimId);
+  const recentSessions = createRecentSessions(stream, mapTitle, selectedThought?.id ?? context.claimId, options.activeSessionId);
   const keyConnections = createKeyConnections(selectedThought, stream);
   const dependencies = createDependencies(mapId, mapTitle, selectedThought);
   const contradictionMarkers = createContradictionMarkers(selectedThought, stream);

@@ -9,18 +9,18 @@ const entryCards: Array<{
 }> = [
   {
     mode: "brain",
-    title: "Brain",
-    body: "Capture and organize what you think.",
+    title: "Start in Brain",
+    body: "Open your workspace, inspect the first claim, and capture the next thought.",
   },
   {
     mode: "challenge",
-    title: "Challenge",
-    body: "Put an idea under pressure.",
+    title: "Then Challenge",
+    body: "Put the selected claim under pressure when Brain has enough context.",
   },
   {
     mode: "learn",
-    title: "Learn",
-    body: "Understand what is blocking you.",
+    title: "Then Learn",
+    body: "Turn the critique into a blocker, concept, or next explanation.",
   },
 ];
 
@@ -35,8 +35,8 @@ export function Onboarding() {
         </div>
 
         <div className={styles.hero}>
-          <p className={styles.eyebrow}>Choose a lens</p>
-          <h1 id="entry-title">What do you want to do today?</h1>
+          <p className={styles.eyebrow}>Start in Brain</p>
+          <h1 id="entry-title">Begin with one thought Penny can trace.</h1>
         </div>
 
         <div className={styles.cards} aria-label="Workspace modes">

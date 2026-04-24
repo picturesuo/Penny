@@ -8,6 +8,7 @@ type BrainScreenProps = {
   interactionMessage?: string | null;
   state?: "empty" | "error" | "loading" | "populated";
   statusMessage?: string | null;
+  technicalDetail?: string | null;
   onChangeMode?: (mode: "brain" | "challenge" | "learn") => void;
   onNewThought?: () => void;
   onSelectThought?: (thoughtId: string) => void;
@@ -423,6 +424,14 @@ const styles = {
     lineHeight: 1.5,
     margin: "4px 0 0",
   },
+  stateTechnicalDetail: {
+    margin: "10px 0 0",
+  },
+  stateTechnicalSummary: {
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 800,
+  },
 } satisfies Record<string, CSSProperties>;
 
 export function BrainScreen({
@@ -434,6 +443,7 @@ export function BrainScreen({
   onSelectThought,
   state,
   statusMessage,
+  technicalDetail,
 }: BrainScreenProps) {
   const screenState = state ?? (model.stream.length > 0 ? "populated" : "empty");
 
@@ -487,7 +497,7 @@ export function BrainScreen({
           <h2 id="brain-stream-heading" style={styles.thoughtTitle}>
             Recent claims and thoughts
           </h2>
-          <BrainStateBanner state={screenState} message={statusMessage} />
+          <BrainStateBanner state={screenState} message={statusMessage} technicalDetail={technicalDetail} />
           {model.stream.length > 0 ? (
             <ol style={styles.list}>
               {model.stream.map((thought) => (
@@ -573,7 +583,16 @@ export function BrainScreen({
   );
 }
 
-function BrainStateBanner({ message, state }: { message?: string | null; state: NonNullable<BrainScreenProps["state"]> }) {
+function BrainStateBanner({
+  message,
+  state,
+  technicalDetail,
+}: {
+  message?: string | null;
+  state: NonNullable<BrainScreenProps["state"]>;
+  technicalDetail?: string | null;
+}) {
+  const showTechnicalDetail = state === "error" && process.env.NODE_ENV !== "production" && Boolean(technicalDetail);
   const copy = {
     empty: {
       title: "Empty Brain state",
@@ -582,7 +601,7 @@ function BrainStateBanner({ message, state }: { message?: string | null; state: 
     },
     error: {
       title: "Brain error state",
-      body: message ?? "The Brain projection could not be loaded.",
+      body: message ?? "The Brain projection could not be loaded. Retry the page or return to the workspace shell.",
       style: styles.stateBannerError,
     },
     loading: {
@@ -601,6 +620,12 @@ function BrainStateBanner({ message, state }: { message?: string | null; state: 
     <div aria-live={state === "loading" ? "polite" : undefined} role={state === "error" ? "alert" : "status"} style={{ ...styles.stateBanner, ...copy.style }}>
       <p style={styles.stateTitle}>{copy.title}</p>
       <p style={styles.stateBody}>{copy.body}</p>
+      {showTechnicalDetail ? (
+        <details style={styles.stateTechnicalDetail}>
+          <summary style={styles.stateTechnicalSummary}>Technical detail</summary>
+          <p style={styles.stateBody}>{technicalDetail}</p>
+        </details>
+      ) : null}
     </div>
   );
 }

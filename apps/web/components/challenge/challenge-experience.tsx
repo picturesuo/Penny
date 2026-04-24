@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   buildChallengeExperienceViewModel,
@@ -8,6 +8,7 @@ import {
   type ChallengeResponseAction,
 } from "../../lib/viewmodels/challenge/challenge-experience";
 import { ConfidenceChip } from "../confidence/ConfidenceChip";
+import { Skeleton } from "../ui";
 import styles from "./challenge-experience.module.css";
 
 type ActionState = {
@@ -31,11 +32,57 @@ export function ChallengeExperience({
   view: ChallengeProjectionView;
 }) {
   const model = useMemo(() => buildChallengeExperienceViewModel(view), [view]);
+  const responseFormRef = useRef<HTMLFormElement>(null);
+  const responseTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedAction, setSelectedAction] = useState<ChallengeResponsePath>("defend");
   const [response, setResponse] = useState("");
   const roundId = model.round?.id ?? null;
   const isBusy = actionState.status === "pending";
+  const isAiResponseLoading =
+    model.challengeState.id === "critique_pending" ||
+    (actionState.status === "pending" && /critique/i.test(actionState.message ?? ""));
   const selectedActionModel = model.responseActions.find((action) => action.id === selectedAction) ?? model.responseActions[0];
+
+  useEffect(() => {
+    if (model.canRecordResponse && !isBusy) {
+      responseTextareaRef.current?.focus();
+    }
+  }, [isBusy, model.canRecordResponse, roundId]);
+
+  useEffect(() => {
+    function handleChallengeShortcut(event: KeyboardEvent) {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target) || isBusy) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "s" && model.canStartChallenge && view.activeClaim) {
+        event.preventDefault();
+        void onStartChallenge(view.activeClaim.id);
+        return;
+      }
+
+      if (key === "r" && model.canRequestCritique && roundId) {
+        event.preventDefault();
+        void onRequestCritique(roundId);
+        return;
+      }
+
+      const action = model.responseActions.find((candidate) => candidate.id.startsWith(key));
+
+      if (action && model.canRecordResponse) {
+        event.preventDefault();
+        chooseAction(action);
+      }
+    }
+
+    window.addEventListener("keydown", handleChallengeShortcut);
+
+    return () => {
+      window.removeEventListener("keydown", handleChallengeShortcut);
+    };
+  });
 
   async function submitResponse(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,12 +129,19 @@ export function ChallengeExperience({
 
       <section className={`penny-panel ${styles.counterCard}`}>
         <p className={styles.kicker}>Strongest counterargument</p>
-        <p>{model.strongestCounterargument}</p>
+        {isAiResponseLoading ? <AiResponseSkeleton /> : <p>{model.strongestCounterargument}</p>}
       </section>
 
       <section className={`penny-panel ${styles.weaknessCard}`}>
         <p className={styles.kicker}>Key weakness</p>
-        <p>{model.keyWeaknessSummary}</p>
+        {isAiResponseLoading ? (
+          <span className={styles.aiSkeletonBlock}>
+            <Skeleton height={16} width="86%" label="Loading AI weakness summary" />
+            <Skeleton height={16} width="58%" label="Loading AI weakness detail" />
+          </span>
+        ) : (
+          <p>{model.keyWeaknessSummary}</p>
+        )}
       </section>
 
       <section className={`penny-panel ${styles.stakesCard}`}>
@@ -153,6 +207,7 @@ export function ChallengeExperience({
           <button
             type="button"
             disabled={!model.canStartChallenge || isBusy}
+            aria-keyshortcuts="s"
             onClick={() => (view.activeClaim ? onStartChallenge(view.activeClaim.id) : undefined)}
           >
             Start Challenge
@@ -160,6 +215,7 @@ export function ChallengeExperience({
           <button
             type="button"
             disabled={!model.canRequestCritique || isBusy}
+            aria-keyshortcuts="r"
             onClick={() => (roundId ? onRequestCritique(roundId) : undefined)}
           >
             Request Critique
@@ -173,6 +229,7 @@ export function ChallengeExperience({
               type="button"
               data-active={selectedAction === action.id}
               disabled={!model.canRecordResponse || isBusy}
+              aria-keyshortcuts={action.id.slice(0, 1)}
               onClick={() => chooseAction(action)}
             >
               {action.label}
@@ -180,23 +237,39 @@ export function ChallengeExperience({
           ))}
         </div>
 
-        <form className={styles.responseForm} onSubmit={submitResponse}>
+        <form ref={responseFormRef} className={styles.responseForm} onSubmit={submitResponse}>
           <label htmlFor="challenge-response">{selectedActionModel.label} response</label>
           <textarea
+            ref={responseTextareaRef}
             id="challenge-response"
             value={response}
             onChange={(event) => setResponse(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                event.preventDefault();
+                responseFormRef.current?.requestSubmit();
+              }
+            }}
             disabled={!model.canRecordResponse || isBusy}
             placeholder={selectedActionModel.prompt}
+            autoFocus={model.canRecordResponse}
             rows={6}
           />
-          <button type="submit" disabled={!model.canRecordResponse || isBusy || !response.trim()}>
+          <button type="submit" disabled={!model.canRecordResponse || isBusy || !response.trim()} aria-keyshortcuts="Meta+Enter Control+Enter">
             Record {selectedActionModel.label}
           </button>
         </form>
       </section>
     </div>
   );
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
 
 function CascadeGroup({ title, items }: { title: string; items: string[] }) {
@@ -212,6 +285,16 @@ function CascadeGroup({ title, items }: { title: string; items: string[] }) {
       ) : (
         <p>None returned yet.</p>
       )}
+    </div>
+  );
+}
+
+function AiResponseSkeleton() {
+  return (
+    <div className={styles.aiSkeletonBlock} role="status" aria-label="Loading AI response">
+      <Skeleton height={16} width="92%" label="Loading AI response line" />
+      <Skeleton height={16} width="76%" label="Loading AI response line" />
+      <Skeleton height={16} width="64%" label="Loading AI response line" />
     </div>
   );
 }

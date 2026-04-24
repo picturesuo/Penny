@@ -38,7 +38,8 @@ test("graph e2e harness can target the graph surface without redesigning the she
   assert.match(zoomSource, /aria-label="Fit graph"/);
   assert.match(viewSource, /onWheel/);
   assert.match(viewSource, /onPointerMove/);
-  assert.match(viewSource, /localSelectedNodeId/);
+  assert.match(viewSource, /useWorkspaceState/);
+  assert.match(viewSource, /setSelectedNodeId\(node\.id\)/);
   assert.match(viewSource, /function selectNode/);
   assert.match(viewSource, /onSelectNode\?\.\(node\)/);
   assert.match(toolbarSource, /LensToggleBar/);

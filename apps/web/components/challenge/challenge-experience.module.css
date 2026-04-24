@@ -1,7 +1,7 @@
 .challengeLayout {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
-  gap: 16px;
+  gap: var(--shell-card-gap);
 }
 
 .heroPanel {
@@ -10,11 +10,12 @@
   flex-direction: column;
   justify-content: flex-end;
   grid-column: 1 / -1;
-  border-color: rgba(183, 91, 22, 0.28);
+  border-color: rgba(220, 140, 99, 0.28);
   background:
-    linear-gradient(135deg, rgba(230, 127, 30, 0.24), transparent 46%),
-    linear-gradient(225deg, rgba(73, 47, 25, 0.1), transparent 38%),
-    #fffdf7;
+    linear-gradient(135deg, var(--color-mode-challenge-soft), transparent 46%),
+    linear-gradient(225deg, rgba(216, 117, 22, 0.1), transparent 38%),
+    var(--glass-panel),
+    rgba(23, 32, 27, 0.68);
 }
 
 .heroPanel h1 {
@@ -27,9 +28,9 @@
 
 .kicker {
   margin: 0 0 10px;
-  color: #9a4f0f;
-  font-size: 0.76rem;
-  font-weight: 800;
+  color: var(--color-mode-challenge-ink);
+  font-size: var(--type-section-label-size);
+  font-weight: var(--type-section-label-weight);
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -42,34 +43,35 @@
 .transparencyCard,
 .cascadeCard,
 .actionsCard {
-  border-color: rgba(154, 79, 15, 0.18);
+  border-color: rgba(220, 140, 99, 0.18);
 }
 
 .selectedClaim {
-  background: #fffaf0;
+  background: rgba(220, 140, 99, 0.08);
 }
 
 .stateCard {
-  background: #fff7ea;
-  box-shadow: inset 4px 0 0 #d87516;
+  background: rgba(220, 140, 99, 0.08);
+  box-shadow: inset 4px 0 0 var(--color-mode-challenge);
 }
 
 .stateCard[data-state="critique_pending"] {
-  box-shadow: inset 4px 0 0 #d8952e;
+  box-shadow: inset 4px 0 0 var(--color-brand-mark-ink);
 }
 
 .stateCard[data-state="critique_loaded"] {
-  box-shadow: inset 4px 0 0 #7d8f2f;
+  box-shadow: inset 4px 0 0 var(--color-success);
 }
 
 .stateCard[data-state="critique_failed"] {
-  box-shadow: inset 4px 0 0 #a64129;
+  box-shadow: inset 4px 0 0 var(--color-danger);
 }
 
 .stateCard h2 {
   margin: 0;
-  color: #3a2a1d;
-  font-size: 1.12rem;
+  color: var(--penny-ink);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--type-section-title-weight);
 }
 
 .claimText,
@@ -83,8 +85,8 @@
 .selectedClaim span {
   display: inline-block;
   margin-top: 12px;
-  color: #9a4f0f;
-  font-size: 0.88rem;
+  color: var(--color-mode-challenge-ink);
+  font-size: var(--type-metadata-size);
 }
 
 .transparencyCard,
@@ -100,7 +102,9 @@
 
 .facts dt {
   color: var(--penny-muted);
-  font-size: 0.76rem;
+  font-size: var(--type-section-label-size);
+  font-weight: var(--type-section-label-weight);
+  text-transform: uppercase;
 }
 
 .facts dd {
@@ -118,8 +122,8 @@
 
 .signalList li {
   padding-left: 14px;
-  border-left: 3px solid #d87516;
-  color: #3a2a1d;
+  border-left: 3px solid var(--color-mode-challenge);
+  color: var(--penny-ink);
   line-height: 1.5;
 }
 
@@ -129,8 +133,8 @@
 
 .cascadeGroup h2 {
   margin: 0;
-  color: #3a2a1d;
-  font-size: 0.92rem;
+  color: var(--penny-ink);
+  font-size: var(--text-sm);
 }
 
 .commandRow,
@@ -147,13 +151,13 @@
   border: 0;
   border-radius: 6px;
   padding: 0 14px;
-  background: #2f251c;
-  color: #fffdf7;
+  background: var(--penny-ink);
+  color: var(--color-canvas);
   cursor: pointer;
 }
 
 .commandRow button:last-child {
-  background: #b75b16;
+  background: var(--color-mode-challenge);
 }
 
 .responseChoices {
@@ -161,14 +165,14 @@
 }
 
 .responseChoices button {
-  border: 1px solid rgba(183, 91, 22, 0.24);
-  background: #fff7ea;
-  color: #63340f;
+  border: var(--glass-border);
+  background: rgba(255, 253, 247, 0.08);
+  color: var(--color-mode-challenge-ink);
 }
 
 .responseChoices button[data-active="true"] {
-  background: #b75b16;
-  color: #fffdf7;
+  background: var(--color-mode-challenge);
+  color: var(--color-canvas);
 }
 
 .responseForm {
@@ -178,18 +182,19 @@
 }
 
 .responseForm label {
-  color: #63340f;
-  font-size: 0.82rem;
-  font-weight: 800;
+  color: var(--color-mode-challenge-ink);
+  font-size: var(--type-section-label-size);
+  font-weight: var(--type-section-label-weight);
+  text-transform: uppercase;
 }
 
 .responseForm textarea {
   width: 100%;
   resize: vertical;
-  border: 1px solid rgba(183, 91, 22, 0.3);
+  border: var(--glass-border);
   border-radius: 8px;
   padding: 12px;
-  background: #fffdf7;
+  background: rgba(255, 253, 247, 0.08);
   color: var(--penny-ink);
   font: inherit;
   line-height: 1.5;
@@ -197,7 +202,7 @@
 
 .responseForm button {
   justify-self: start;
-  background: #9a4f0f;
+  background: var(--color-mode-challenge);
 }
 
 .actionMessage {
@@ -206,11 +211,17 @@
 }
 
 .actionMessage[data-status="success"] {
-  color: #476b2b;
+  color: var(--color-success);
 }
 
 .actionMessage[data-status="error"] {
-  color: #9b3328;
+  color: var(--color-danger);
+}
+
+.aiSkeletonBlock {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .commandRow button:disabled,

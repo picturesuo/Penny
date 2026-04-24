@@ -1,6 +1,10 @@
 :global(html):has(.entry),
 :global(body):has(.entry) {
-  background: #0d100f;
+  background: var(--color-canvas);
+}
+
+:global(body):has(.entry) {
+  overflow-y: auto;
 }
 
 .entry {
@@ -8,15 +12,14 @@
   min-height: 100dvh;
   position: relative;
   overflow-x: hidden;
-  overflow-y: auto;
   display: grid;
-  place-items: center;
-  padding: 40px;
+  align-items: center;
+  justify-items: center;
+  padding: clamp(var(--space-6), 5vh, var(--space-10)) var(--space-10);
   background:
-    linear-gradient(135deg, rgba(47, 107, 85, 0.28), transparent 34%),
-    linear-gradient(225deg, rgba(66, 111, 140, 0.22), transparent 38%),
-    linear-gradient(180deg, #151c18 0%, #101412 52%, #0d100f 100%);
-  color: #f7f3e8;
+    linear-gradient(135deg, rgba(105, 185, 154, 0.08), transparent 40%),
+    linear-gradient(180deg, rgba(20, 28, 24, 0.96) 0%, #101512 60%, var(--color-canvas) 100%);
+  color: var(--color-ink);
 }
 
 .ambient {
@@ -24,8 +27,8 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 0%, rgba(255, 253, 247, 0.09), transparent 36%),
-    linear-gradient(90deg, rgba(180, 95, 59, 0.08), transparent 36%, rgba(46, 108, 87, 0.08));
+    radial-gradient(circle at 50% 0%, rgba(255, 253, 247, 0.035), transparent 40%),
+    linear-gradient(90deg, rgba(220, 140, 99, 0.025), transparent 42%, rgba(105, 185, 154, 0.025));
   mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.7) 62%, transparent 100%);
 }
 
@@ -35,7 +38,7 @@
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 44px;
+  gap: var(--space-8);
 }
 
 .brand {
@@ -43,26 +46,27 @@
 }
 
 .brand :global(.penny-logo) {
-  color: rgba(247, 243, 232, 0.74);
+  color: var(--color-ink-soft);
 }
 
 .brand :global(.penny-logo__mark) {
-  width: 38px;
-  height: 38px;
-  border-color: rgba(247, 243, 232, 0.2);
-  background: rgba(247, 243, 232, 0.08);
+  width: var(--space-10);
+  height: var(--space-10);
+  border-color: var(--color-line-strong);
+  background: var(--color-panel-muted);
   box-shadow: inset 0 1px 0 rgba(255, 253, 247, 0.16);
 }
 
 .brand :global(.penny-logo__mark span) {
-  width: 26px;
-  height: 26px;
-  background: rgba(255, 253, 247, 0.12);
-  color: #fffdf7;
+  width: var(--space-6);
+  height: var(--space-6);
+  background: rgba(255, 253, 247, 0.13);
+  color: var(--color-inverse);
 }
 
 .brand :global(.penny-logo__wordmark) {
-  color: rgba(247, 243, 232, 0.74);
+  color: var(--color-ink-soft);
+  font-size: var(--text-lg);
 }
 
 .hero {
@@ -70,15 +74,16 @@
   min-width: 0;
   display: grid;
   justify-items: center;
-  gap: 14px;
+  gap: var(--space-4);
   text-align: center;
 }
 
 .eyebrow {
   margin: 0;
-  color: rgba(186, 210, 195, 0.8);
-  font-size: 0.76rem;
-  font-weight: 850;
+  color: var(--color-mode-brain-ink);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  line-height: var(--leading-tight);
   text-transform: uppercase;
 }
 
@@ -86,28 +91,30 @@
   width: 100%;
   max-width: 760px;
   margin: 0;
-  font-size: 5.2rem;
+  font-size: clamp(3rem, 7vw, 5rem);
   font-weight: 760;
-  line-height: 0.98;
+  line-height: 1;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .cards {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: var(--space-4);
 }
 
 @media (max-width: 760px) {
   .entry {
     align-items: start;
-    padding: 24px 18px;
+    padding: var(--space-6) var(--space-4);
   }
 
   .shell {
-    width: calc(100vw - 36px);
-    gap: 30px;
+    width: 100%;
+    gap: var(--space-8);
   }
 
   .brand {
@@ -121,11 +128,17 @@
 
   .hero h1 {
     max-width: 330px;
-    font-size: 2.2rem;
-    line-height: 1.03;
+    font-size: clamp(var(--text-2xl), 10vw, 3rem);
+    line-height: var(--leading-tight);
   }
 
   .cards {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 760px) and (min-width: 761px) {
+  .entry {
+    align-items: start;
   }
 }

@@ -1,12 +1,12 @@
 # Queue
 
 ## Now
-- [ ] Initialize the first real task artifact.
+- [x] Define and lock the Penny MVP checklist in `docs/MVP.md`.
 
 ## Next
-- [ ] Add the next smallest shippable step.
-- [ ] Capture the main edge case.
-- [ ] Capture one cleanup item.
+- [ ] Map current implementation status against each locked MVP checklist item.
+- [ ] Capture the main edge case for any incomplete checklist item.
+- [ ] Capture one cleanup item needed before MVP verification.
 
 ## Later
 - [ ] Expand only when the project grows.
@@ -15,4 +15,4 @@
 - [ ] No blockers recorded yet.
 
 ## Discovered While Working
-- [ ] Fill this in as the session learns new details.
+- [ ] `docs/UI.md` still says the MVP shell does not render an interactive graph; reconcile it with the current graph MVP once status mapping is done.

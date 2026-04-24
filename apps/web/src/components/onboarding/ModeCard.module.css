@@ -1,22 +1,20 @@
 .card {
-  min-height: 230px;
+  min-height: 224px;
   position: relative;
   overflow: hidden;
   display: grid;
-  align-content: space-between;
-  gap: 30px;
-  border: 1px solid rgba(255, 253, 247, 0.14);
-  border-radius: 8px;
-  padding: 24px;
-  background:
-    linear-gradient(145deg, rgba(255, 253, 247, 0.13), rgba(255, 253, 247, 0.05)),
-    rgba(255, 253, 247, 0.06);
+  align-content: start;
+  gap: var(--space-8);
+  border: var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  background: rgba(23, 32, 27, 0.72);
   box-shadow:
-    inset 0 1px 0 rgba(255, 253, 247, 0.16),
-    0 24px 70px rgba(0, 0, 0, 0.26);
+    inset 0 1px 0 rgba(255, 253, 247, 0.1),
+    var(--shadow-md);
   color: inherit;
   text-decoration: none;
-  backdrop-filter: blur(22px);
+  backdrop-filter: blur(18px);
   transition:
     border-color 160ms ease,
     background 160ms ease,
@@ -27,81 +25,92 @@
   content: "";
   position: absolute;
   inset: 0;
-  opacity: 0.72;
+  opacity: 0.36;
   pointer-events: none;
 }
 
 .card[data-mode="brain"]::before {
-  background: linear-gradient(135deg, rgba(46, 108, 87, 0.38), transparent 54%);
+  background: linear-gradient(135deg, var(--color-mode-brain-soft), transparent 68%);
 }
 
 .card[data-mode="challenge"]::before {
-  background: linear-gradient(135deg, rgba(180, 95, 59, 0.34), transparent 54%);
+  background: linear-gradient(135deg, var(--color-mode-challenge-soft), transparent 68%);
 }
 
 .card[data-mode="learn"]::before {
-  background: linear-gradient(135deg, rgba(66, 111, 140, 0.36), transparent 54%);
+  background: linear-gradient(135deg, var(--color-mode-learn-soft), transparent 68%);
 }
 
 .card:hover,
 .card:focus-visible {
-  border-color: rgba(255, 253, 247, 0.34);
+  border-color: var(--color-line-strong);
   background:
-    linear-gradient(145deg, rgba(255, 253, 247, 0.17), rgba(255, 253, 247, 0.07)),
-    rgba(255, 253, 247, 0.08);
-  transform: translateY(-3px);
+    linear-gradient(145deg, rgba(255, 253, 247, 0.08), rgba(255, 253, 247, 0.04)),
+    rgba(23, 32, 27, 0.78);
+  transform: translateY(-2px);
 }
 
 .card:focus-visible {
-  outline: 3px solid rgba(226, 237, 243, 0.34);
-  outline-offset: 4px;
+  outline: 2px solid var(--color-mode-learn-ink);
+  outline-offset: var(--space-1);
 }
 
 .mark,
-.content,
-.arrow {
+.content {
   position: relative;
   z-index: 1;
 }
 
 .mark {
-  width: 46px;
-  height: 46px;
+  width: var(--space-12);
+  height: var(--space-12);
   display: inline-grid;
   place-items: center;
-  border: 1px solid rgba(255, 253, 247, 0.18);
-  border-radius: 8px;
-  background: rgba(13, 16, 15, 0.42);
-  color: rgba(255, 253, 247, 0.9);
-  font-weight: 850;
+  border: var(--border-strong);
+  border-radius: var(--radius-md);
+  background: rgba(13, 18, 16, 0.5);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.card[data-mode="brain"] .mark {
+  color: var(--color-mode-brain-ink);
+}
+
+.card[data-mode="challenge"] .mark {
+  color: var(--color-mode-challenge-ink);
+}
+
+.card[data-mode="learn"] .mark {
+  color: var(--color-mode-learn-ink);
 }
 
 .content {
   display: grid;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .title {
-  font-size: 1.45rem;
+  color: var(--color-ink);
+  font-size: var(--text-xl);
   font-weight: 780;
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
 }
 
 .body {
-  max-width: 270px;
-  color: rgba(247, 243, 232, 0.72);
-  line-height: 1.55;
-}
-
-.arrow {
-  position: absolute;
-  right: 22px;
-  top: 22px;
-  color: rgba(247, 243, 232, 0.62);
-  font-size: 1.25rem;
+  max-width: 30ch;
+  color: var(--color-ink-soft);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 760px) {
   .card {
-    min-height: 172px;
+    min-height: 176px;
+    gap: var(--space-6);
   }
 }

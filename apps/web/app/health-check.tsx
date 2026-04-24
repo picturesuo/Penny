@@ -97,10 +97,11 @@ export function HealthCheck() {
       {state.status === "error" ? (
         <ErrorState
           actionLabel="Retry health check"
-          message={state.message}
+          message="Penny could not reach the backend health endpoint. Check that the API server is running, then retry."
           onAction={() => {
             void checkHealth();
           }}
+          technicalDetail={state.message}
           title="Backend health check failed"
         />
       ) : null}

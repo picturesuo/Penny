@@ -42,16 +42,46 @@ Use this README as the top-level repo artifact. If it conflicts with older resta
    pnpm db:migrate
    ```
 
-4. Start the workspace.
+4. Seed the local demo workspace.
+
+   ```bash
+   pnpm db:seed
+   ```
+
+5. Start the workspace.
 
    ```bash
    pnpm dev
    ```
 
-5. Open the local surfaces.
+6. Open the local surfaces.
 
 - Next.js app: `http://localhost:3000`
 - Fastify health endpoint: `http://localhost:3001/health`
+
+## Local demo path
+
+For the MVP demo, run the migrations and seed before starting the app:
+
+```bash
+pnpm db:migrate
+pnpm db:seed
+pnpm dev
+```
+
+Then open `http://localhost:3000/app?mode=brain`.
+
+The seed creates the local demo user used by the frontend workspace headers: `00000000-0000-4000-8000-000000000001`. No manual API headers or database edits are needed after the seed.
+
+Suggested demo flow:
+
+1. Start in Brain and inspect the seeded Penny workspace.
+2. Use the selected claim as the bridge into Challenge.
+3. Request critique and respond with Defend, Revise, or Absorb.
+4. Switch to Learn to review the concept/blocker surface.
+5. Return to Brain to show the same claim and map context carrying through.
+
+If the database is empty instead of seeded, Brain shows a guided first-run state with sample prompts rather than hardcoded production demo data.
 
 ## Environment notes
 
@@ -97,6 +127,7 @@ pnpm lint
 pnpm typecheck
 pnpm db:generate
 pnpm db:migrate
+pnpm db:seed
 pnpm db:typecheck
 pnpm test:integration
 pnpm test:mvp

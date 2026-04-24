@@ -8,4 +8,5 @@ export { Input } from "./Input";
 export { LoadingState } from "./LoadingState";
 export { Panel } from "./Panel";
 export { SegmentedTabs } from "./SegmentedTabs";
+export { Skeleton } from "./Skeleton";
 export { Textarea } from "./Textarea";

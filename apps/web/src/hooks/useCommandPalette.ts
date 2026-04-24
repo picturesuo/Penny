@@ -177,14 +177,6 @@ export function useCommandPalette({ enableBackendSearch = true, items }: UseComm
       }
 
       await item.onSelect();
-      console.info("Selected command result", {
-        id: item.id,
-        type: item.type,
-        title: item.title,
-        subtitle: item.subtitle,
-        confidence: item.confidence,
-        href: item.href,
-      } satisfies CommandResult);
       close();
     },
     [close],

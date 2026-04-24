@@ -14,6 +14,7 @@
   --penny-accent-strong: var(--color-mode-brain-ink);
   --penny-warm: var(--color-mode-challenge);
   --penny-blue: var(--color-mode-learn);
+  --penny-mark: var(--color-brand-mark);
 }
 
 * {
@@ -117,6 +118,7 @@ textarea {
   border: var(--border-strong);
   border-radius: var(--radius-md);
   background:
+    radial-gradient(circle at 50% 50%, var(--color-brand-mark-soft), transparent 56%),
     linear-gradient(145deg, rgba(105, 185, 154, 0.2), transparent 58%),
     var(--color-panel);
   box-shadow: var(--shadow-sm);
@@ -131,6 +133,21 @@ textarea {
   background: var(--color-ink);
   color: var(--color-canvas);
   font-weight: 800;
+}
+
+.penny-logo__mark span::after,
+.penny-brand-mark::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  box-shadow:
+    0 -7px 0 -5px currentColor,
+    0 7px 0 -5px currentColor,
+    7px 0 0 -5px currentColor,
+    -7px 0 0 -5px currentColor;
+  opacity: 0.42;
 }
 
 .penny-logo__wordmark {
@@ -895,9 +912,31 @@ textarea {
 }
 
 .penny-shell {
+  position: relative;
+  isolation: isolate;
   min-height: 100vh;
   display: grid;
   grid-template-rows: auto auto 1fr;
+}
+
+.penny-shell::before {
+  content: "";
+  position: fixed;
+  right: max(-120px, -8vw);
+  top: 86px;
+  z-index: -1;
+  width: min(42vw, 520px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(216, 117, 22, 0.12);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent 43%, rgba(216, 117, 22, 0.12) 43% 57%, transparent 57%),
+    linear-gradient(0deg, transparent 43%, rgba(216, 117, 22, 0.12) 43% 57%, transparent 57%),
+    radial-gradient(circle, transparent 0 31%, rgba(216, 117, 22, 0.08) 31% 32%, transparent 32%),
+    radial-gradient(circle, rgba(216, 117, 22, 0.1), transparent 64%);
+  filter: blur(0.2px);
+  opacity: 0.34;
+  pointer-events: none;
 }
 
 .penny-topbar {
@@ -926,11 +965,18 @@ textarea {
   height: 36px;
   display: inline-grid;
   place-items: center;
+  position: relative;
   border-radius: 8px;
   border: var(--glass-border);
-  background: var(--penny-ink);
+  background:
+    radial-gradient(circle at 50% 45%, rgba(216, 117, 22, 0.24), transparent 58%),
+    var(--penny-ink);
   color: var(--color-canvas);
   font-weight: 800;
+}
+
+.penny-brand-mark {
+  font-size: 0;
 }
 
 .penny-brand-name {
@@ -1102,6 +1148,8 @@ textarea {
 
 .penny-panel {
   min-width: 0;
+  position: relative;
+  overflow: hidden;
   padding: var(--shell-card-padding);
   border: var(--glass-border);
   border-radius: var(--radius-lg);
@@ -1110,6 +1158,23 @@ textarea {
     rgba(23, 32, 27, 0.68);
   box-shadow: var(--glass-shadow);
   backdrop-filter: var(--glass-blur);
+}
+
+.penny-hero-panel::after {
+  content: "";
+  position: absolute;
+  right: var(--space-6);
+  top: var(--space-5);
+  width: 96px;
+  aspect-ratio: 1;
+  border: 1px solid rgba(216, 117, 22, 0.14);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent 43%, rgba(216, 117, 22, 0.14) 43% 57%, transparent 57%),
+    linear-gradient(0deg, transparent 43%, rgba(216, 117, 22, 0.14) 43% 57%, transparent 57%),
+    radial-gradient(circle, rgba(216, 117, 22, 0.11), transparent 62%);
+  opacity: 0.3;
+  pointer-events: none;
 }
 
 .penny-panel-heading {

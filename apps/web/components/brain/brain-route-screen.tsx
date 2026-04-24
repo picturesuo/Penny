@@ -12,6 +12,7 @@ import {
   type BrainShellProjectionView,
   type BrainProjectionView,
 } from "../../lib/viewmodels/brain";
+import { useWorkspaceState } from "../../lib/state/workspace-state";
 import { BrainScreen } from "./brain-screen";
 
 type BrainRouteState =
@@ -52,14 +53,20 @@ function writeBrainUrl(mode: BrainWorkspaceMode, claimId: string | null) {
 }
 
 export function BrainRouteScreen() {
+  const {
+    activeSessionId,
+    currentMode: activeMode,
+    selectedNodeId,
+    setActiveSessionId,
+    setCurrentMode,
+    setSelectedNodeId,
+  } = useWorkspaceState();
   const [state, setState] = useState<BrainRouteState>({
     status: "loading",
     projection: null,
     error: null,
   });
-  const [activeMode, setActiveMode] = useState<BrainWorkspaceMode>("brain");
   const [interactionMessage, setInteractionMessage] = useState<string | null>(null);
-  const [selectedThoughtId, setSelectedThoughtId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -67,7 +74,7 @@ export function BrainRouteScreen() {
     const requestedMode = new URLSearchParams(window.location.search).get("mode");
 
     if (requestedMode === "brain" || requestedMode === "challenge" || requestedMode === "learn") {
-      setActiveMode(requestedMode);
+      setCurrentMode(requestedMode);
     }
 
     async function loadBrain() {
@@ -81,7 +88,7 @@ export function BrainRouteScreen() {
             source: "mock",
             error: null,
           });
-          setSelectedThoughtId(requestedClaimId ?? projection.selectedClaim?.id ?? projection.currentContext?.claimId ?? null);
+          setSelectedNodeId(requestedClaimId ?? projection.selectedClaim?.id ?? projection.currentContext?.claimId ?? null);
           return;
         }
 
@@ -96,7 +103,7 @@ export function BrainRouteScreen() {
           source: "api",
           error: null,
         });
-        setSelectedThoughtId(
+        setSelectedNodeId(
           requestedClaimId ?? workspace.brain.selectedClaim?.id ?? workspace.brain.currentContext?.claimId ?? workspace.shell.claimId ?? null,
         );
       } catch (error) {
@@ -117,17 +124,18 @@ export function BrainRouteScreen() {
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [setCurrentMode, setSelectedNodeId]);
 
   function handleSelectThought(thoughtId: string) {
-    setSelectedThoughtId(thoughtId);
+    setSelectedNodeId(thoughtId);
+    setActiveSessionId(`session-${thoughtId}`);
     setInteractionMessage("Selected claim preserved in Brain.");
     writeBrainUrl(activeMode, thoughtId);
   }
 
   function handleChangeMode(mode: BrainWorkspaceMode) {
-    const claimId = selectedThoughtId ?? (state.status === "ready" ? state.projection.currentContext?.claimId ?? null : null);
-    setActiveMode(mode);
+    const claimId = selectedNodeId ?? (state.status === "ready" ? state.projection.currentContext?.claimId ?? null : null);
+    setCurrentMode(mode);
     setInteractionMessage(`${mode[0]?.toUpperCase() ?? ""}${mode.slice(1)} mode selected with current claim preserved.`);
     writeBrainUrl(mode, claimId);
   }
@@ -141,21 +149,30 @@ export function BrainRouteScreen() {
       return null;
     }
 
-    if (!selectedThoughtId) {
+    if (!selectedNodeId) {
       return state.projection;
     }
 
-    const selectedClaim = state.projection.claims.find((claim) => claim.id === selectedThoughtId) ?? state.projection.selectedClaim;
+    const selectedClaim = state.projection.claims.find((claim) => claim.id === selectedNodeId) ?? state.projection.selectedClaim;
 
     return {
       ...state.projection,
       currentContext: {
         ...(state.projection.currentContext ?? state.projection.workspaceContext ?? { mode: "brain", mapId: null }),
-        claimId: selectedThoughtId,
+        claimId: selectedNodeId,
       },
       selectedClaim,
     };
-  }, [selectedThoughtId, state]);
+  }, [selectedNodeId, state]);
+
+  useEffect(() => {
+    if (state.status !== "ready") {
+      return;
+    }
+
+    const claimId = selectedNodeId ?? state.projection.selectedClaim?.id ?? state.projection.currentContext?.claimId ?? null;
+    setActiveSessionId(claimId ? `session-${claimId}` : null);
+  }, [selectedNodeId, setActiveSessionId, state]);
 
   if (state.status === "loading") {
     return <BrainScreen model={createBrainViewModel(createEmptyBrainProjection())} state="loading" statusMessage="Loading Brain projection." />;
@@ -175,7 +192,7 @@ export function BrainRouteScreen() {
     );
   }
 
-  const model = createBrainViewModel(projection ?? state.projection);
+  const model = createBrainViewModel(projection ?? state.projection, { activeSessionId });
 
   return (
     <BrainScreen

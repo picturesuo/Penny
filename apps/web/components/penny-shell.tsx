@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from "react";
 
 import { ChallengeExperience, type ChallengeResponsePath } from "./challenge/challenge-experience";
 import { ConfidenceChip } from "./confidence/ConfidenceChip";
 import { BrainGraphMap, createBrainGraph } from "./graph";
 import { LearnExperience } from "./learn/learn-experience";
-import { EmptyState, ErrorState, LoadingState } from "./ui";
+import { EmptyState, ErrorState, Skeleton } from "./ui";
+import { useWorkspaceState, type WorkspaceMode } from "../lib/state/workspace-state";
 import type { GraphModel, GraphNode } from "../lib/types/graph";
 import { CommandPalette } from "../src/components/command/CommandPalette";
 import { InspectorRail } from "../src/components/inspector/InspectorRail";
-import { useCommandPalette, type CommandPaletteItem } from "../src/hooks/useCommandPalette";
+import { useCommandPalette, type CommandPaletteItem, type CommandResult } from "../src/hooks/useCommandPalette";
 
-type WorkspaceMode = "brain" | "challenge" | "learn";
 type WorkspaceCommandMode = "Brain" | "Challenge" | "Learn";
 
 type BreadcrumbItem = {
@@ -34,6 +34,14 @@ type WorkspaceContext = {
   mapId: string | null;
   claimId: string | null;
 };
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
 
 type ClaimView = {
   id: string;
@@ -110,6 +118,12 @@ type ActionState = {
   message: string | null;
 };
 
+type WorkspaceSelectionResult = {
+  mode: WorkspaceCommandMode;
+  mapId: string;
+  claimId: string | null;
+};
+
 const modes: Array<{ id: WorkspaceMode; label: string }> = [
   { id: "brain", label: "Brain" },
   { id: "challenge", label: "Challenge" },
@@ -117,6 +131,63 @@ const modes: Array<{ id: WorkspaceMode; label: string }> = [
 ];
 
 const localUserId = "00000000-0000-4000-8000-000000000001";
+
+const projectionSkeletonStyles = {
+  shell: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 340px)",
+    gap: 18,
+  },
+  main: {
+    display: "grid",
+    gap: 18,
+  },
+  thought: {
+    display: "grid",
+    gap: 12,
+  },
+  cluster: {
+    display: "grid",
+    gap: 12,
+  },
+  row: {
+    display: "grid",
+    gap: 8,
+  },
+  claim: {
+    display: "grid",
+    gap: 12,
+    border: "var(--glass-border)",
+    borderRadius: 8,
+    padding: 16,
+    background: "rgba(255, 253, 247, 0.07)",
+  },
+  graph: {
+    position: "relative",
+    minHeight: "var(--graph-area-min-height)",
+    overflow: "hidden",
+    border: "var(--glass-border)",
+    borderRadius: 14,
+    background:
+      "radial-gradient(circle at 50% 46%, rgba(105, 185, 154, 0.18), transparent 9%), radial-gradient(circle at 28% 28%, rgba(131, 183, 216, 0.14), transparent 7%), radial-gradient(circle at 72% 30%, rgba(220, 140, 99, 0.12), transparent 7%), radial-gradient(circle at 26% 74%, rgba(255, 253, 247, 0.11), transparent 7%), radial-gradient(circle at 74% 72%, rgba(105, 185, 154, 0.12), transparent 7%), rgba(255, 253, 247, 0.045)",
+  },
+  graphRingOuter: {
+    position: "absolute",
+    inset: "24% 18%",
+    border: "1px solid rgba(255, 253, 247, 0.1)",
+    borderRadius: 999,
+  },
+  graphRingInner: {
+    position: "absolute",
+    inset: "35% 30%",
+    border: "1px solid rgba(255, 253, 247, 0.1)",
+    borderRadius: 999,
+  },
+  inspector: {
+    display: "grid",
+    gap: 12,
+  },
+} satisfies Record<string, CSSProperties>;
 
 function toCommandMode(mode: WorkspaceMode): WorkspaceCommandMode {
   if (mode === "challenge") {
@@ -128,6 +199,30 @@ function toCommandMode(mode: WorkspaceMode): WorkspaceCommandMode {
   }
 
   return "Brain";
+}
+
+function fromCommandMode(mode: WorkspaceCommandMode): WorkspaceMode {
+  if (mode === "Challenge") {
+    return "challenge";
+  }
+
+  if (mode === "Learn") {
+    return "learn";
+  }
+
+  return "brain";
+}
+
+function readWorkspaceMode(value: string | null): WorkspaceMode | null {
+  if (value === "brain" || value === "challenge" || value === "learn") {
+    return value;
+  }
+
+  return null;
+}
+
+function getSessionIdForSelection(mode: WorkspaceMode, claimId: string | null) {
+  return claimId ? `session-${claimId}` : `mode-${mode}`;
 }
 
 function createRequestId(prefix: string) {
@@ -219,6 +314,20 @@ function getCurrentClaimId(shell: ShellContext | null, view: ProjectionView | nu
   }
 
   return null;
+}
+
+function getActiveSessionId(mode: WorkspaceMode, shell: ShellContext | null, view: ProjectionView | null) {
+  if (view && "activeChallengeRound" in view && view.activeChallengeRound?.id) {
+    return `challenge-round-${view.activeChallengeRound.id}`;
+  }
+
+  const claimId = getCurrentClaimId(shell, view);
+
+  if (claimId) {
+    return `session-${claimId}`;
+  }
+
+  return `mode-${mode}`;
 }
 
 function formatConfidence(confidenceBps: number | null | undefined) {
@@ -523,15 +632,43 @@ async function postCommand<T>(path: string, body: Record<string, unknown>): Prom
   return (await response.json()) as T;
 }
 
+function parseWorkspaceSelectionHref(href: string | null | undefined) {
+  if (!href || typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const url = new URL(href, window.location.origin);
+
+    if (url.origin !== window.location.origin || url.pathname !== "/workspace") {
+      return null;
+    }
+
+    const mapId = url.searchParams.get("mapId")?.trim();
+
+    if (!mapId) {
+      return null;
+    }
+
+    return {
+      mode: readWorkspaceMode(url.searchParams.get("mode")) ?? "brain",
+      mapId,
+      claimId: url.searchParams.get("claimId")?.trim() || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 type PennyShellProps = {
   initialMode?: WorkspaceMode;
 };
 
 export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
-  const [activeMode, setActiveMode] = useState<WorkspaceMode>(initialMode);
+  const { currentMode: activeMode, setActiveSessionId, setCurrentMode, setSelectedNodeId } = useWorkspaceState();
   const [state, setState] = useState<ProjectionState>({
     isLoading: true,
-    mode: "brain",
+    mode: initialMode,
     shell: null,
     view: null,
     error: null,
@@ -542,6 +679,69 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
   });
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [isPending, startTransition] = useTransition();
+  const syncWorkspaceSelection = useCallback(
+    (selection: WorkspaceSelectionResult) => {
+      const mode = fromCommandMode(selection.mode);
+      const context = {
+        mode,
+        mapId: selection.mapId,
+        claimId: selection.claimId,
+      };
+
+      setCurrentMode(mode);
+      setSelectedNodeId(selection.claimId);
+      setActiveSessionId(getSessionIdForSelection(mode, selection.claimId));
+      setState((current) => {
+        const shell = current.shell
+          ? {
+              ...current.shell,
+              ...context,
+            }
+          : current.shell;
+        let view = current.view;
+
+        if (view && "currentContext" in view) {
+          const selectedClaim = selection.claimId
+            ? view.claims.find((claim) => claim.id === selection.claimId) ?? view.selectedClaim
+            : null;
+
+          view = {
+            ...view,
+            currentContext: {
+              ...(view.currentContext ?? view.workspaceContext ?? context),
+              ...context,
+            },
+            selectedClaim,
+          };
+        } else if (view && "workspaceContext" in view) {
+          view = {
+            ...view,
+            workspaceContext: {
+              ...(view.workspaceContext ?? context),
+              ...context,
+            },
+          };
+        }
+
+        if (view && "selectedClaimId" in view) {
+          view = {
+            ...view,
+            selectedMapId: selection.mapId,
+            selectedClaimId: selection.claimId,
+            selectedClaim: selection.claimId === view.selectedClaim?.id ? view.selectedClaim : null,
+          };
+        }
+
+        return {
+          ...current,
+          mode,
+          shell,
+          view,
+        };
+      });
+    },
+    [setActiveSessionId, setCurrentMode, setSelectedNodeId],
+  );
   const commandItems = buildCommandItems({
     activeMode,
     actionPending: actionState.status === "pending",
@@ -551,11 +751,80 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
     shell: state.shell,
     view: state.view,
   });
-  const commandPalette = useCommandPalette({ items: commandItems });
+  const selectBackendSearchResult = useCallback(async (result: CommandResult) => {
+    const parsedSelection = parseWorkspaceSelectionHref(result.href);
+
+    if (!parsedSelection) {
+      if (result.href) {
+        window.location.assign(result.href);
+      }
+
+      return;
+    }
+
+    setActionState({
+      status: "pending",
+      message: "Opening search result.",
+    });
+
+    try {
+      const workspaceSelection = await postCommand<WorkspaceSelectionResult>("/api/commands/workspace/select", {
+        mode: toCommandMode(parsedSelection.mode),
+        mapId: parsedSelection.mapId,
+        claimId: parsedSelection.claimId,
+        requestId: createRequestId("select-search-result"),
+      });
+      syncWorkspaceSelection(workspaceSelection);
+      setActionState({
+        status: "success",
+        message: "Search result opened.",
+      });
+      setRefreshVersion((current) => current + 1);
+      window.history.replaceState(null, "", result.href ?? `/workspace?mode=${parsedSelection.mode}`);
+    } catch (error) {
+      setActionState({
+        status: "error",
+        message: error instanceof Error ? error.message : "Failed to open search result.",
+      });
+    }
+  }, [syncWorkspaceSelection]);
+  const commandPalette = useCommandPalette({
+    items: commandItems,
+    onSelectBackendResult: selectBackendSearchResult,
+  });
 
   useEffect(() => {
-    setActiveMode(initialMode);
-  }, [initialMode]);
+    setCurrentMode(initialMode);
+  }, [initialMode, setCurrentMode]);
+
+  useEffect(() => {
+    function handleWorkspaceShortcut(event: KeyboardEvent) {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      const modeByKey: Partial<Record<string, WorkspaceMode>> = {
+        b: "brain",
+        c: "challenge",
+        l: "learn",
+      };
+      const nextMode = modeByKey[key];
+
+      if (!nextMode || actionState.status === "pending") {
+        return;
+      }
+
+      event.preventDefault();
+      void switchMode(nextMode);
+    }
+
+    window.addEventListener("keydown", handleWorkspaceShortcut);
+
+    return () => {
+      window.removeEventListener("keydown", handleWorkspaceShortcut);
+    };
+  }, [actionState.status, switchMode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -581,6 +850,9 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
             view,
             error: null,
           });
+          setCurrentMode(mode);
+          setActiveSessionId(getActiveSessionId(mode, shell, view));
+          setSelectedNodeId(getCurrentClaimId(shell, view));
         });
       } catch (error) {
         if (controller.signal.aborted) {
@@ -627,13 +899,13 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
     });
 
     try {
-      await postCommand("/api/commands/workspace/select", {
+      const selection = await postCommand<WorkspaceSelectionResult>("/api/commands/workspace/select", {
         mode: toCommandMode(mode),
         mapId,
         claimId,
         requestId: createRequestId("switch-mode"),
       });
-      setActiveMode(mode);
+      syncWorkspaceSelection(selection);
       setActionState({
         status: "success",
         message: `${toCommandMode(mode)} mode selected.`,
@@ -654,12 +926,13 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
     });
 
     try {
-      await postCommand("/api/commands/workspace/select", {
+      const selection = await postCommand<WorkspaceSelectionResult>("/api/commands/workspace/select", {
         mode: toCommandMode(activeMode),
         mapId,
         claimId: null,
         requestId: createRequestId("select-map"),
       });
+      syncWorkspaceSelection(selection);
       setActionState({
         status: "success",
         message: "Selected map updated.",
@@ -690,12 +963,13 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
     });
 
     try {
-      await postCommand("/api/commands/workspace/select", {
+      const selection = await postCommand<WorkspaceSelectionResult>("/api/commands/workspace/select", {
         mode: toCommandMode(activeMode),
         mapId,
         claimId,
         requestId: createRequestId("select-claim"),
       });
+      syncWorkspaceSelection(selection);
       setActionState({
         status: "success",
         message: "Selected claim updated.",
@@ -732,12 +1006,13 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         requestId: createRequestId("create-claim"),
       });
 
-      await postCommand("/api/commands/workspace/select", {
+      const selection = await postCommand<WorkspaceSelectionResult>("/api/commands/workspace/select", {
         mode: "Brain",
         mapId,
         claimId: created.claimId,
         requestId: createRequestId("select-created-claim"),
       });
+      syncWorkspaceSelection(selection);
 
       setActionState({
         status: "success",
@@ -759,10 +1034,11 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
     });
 
     try {
-      await postCommand("/api/commands/challenge/start-round", {
+      const started = await postCommand<{ roundId: string }>("/api/commands/challenge/start-round", {
         claimId,
         requestId: createRequestId("start-challenge"),
       });
+      setActiveSessionId(`challenge-round-${started.roundId}`);
       setActionState({
         status: "success",
         message: "Challenge round started.",
@@ -787,6 +1063,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         roundId,
         requestId: createRequestId("request-critique"),
       });
+      setActiveSessionId(`challenge-round-${roundId}`);
       setActionState({
         status: "success",
         message: "Critique requested.",
@@ -813,6 +1090,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         responsePath,
         requestId: createRequestId("challenge-response"),
       });
+      setActiveSessionId(`challenge-round-${roundId}`);
       setActionState({
         status: "success",
         message: "Challenge response recorded.",
@@ -833,6 +1111,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       <CommandPalette
         isOpen={commandPalette.isOpen}
         items={commandPalette.filteredItems}
+        isLoading={commandPalette.backendSearchStatus === "loading"}
         onClose={commandPalette.close}
         onSelectItem={commandPalette.selectItem}
         query={commandPalette.query}
@@ -843,9 +1122,9 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
           <span className="penny-brand-mark">P</span>
           <span className="penny-brand-name">Penny</span>
         </div>
-        <button className="penny-command-button" type="button" onClick={commandPalette.open}>
+        <button className="penny-command-button" type="button" onClick={commandPalette.open} aria-keyshortcuts="Meta+K Control+K /">
           <span>Search your brain…</span>
-          <kbd>Cmd/Ctrl K</kbd>
+          <kbd>/</kbd>
         </button>
         <nav className="penny-mode-switcher" aria-label="Workspace mode">
           {modes.map((mode) => (
@@ -855,6 +1134,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
               className="penny-mode-button"
               data-active={activeMode === mode.id}
               disabled={actionState.status === "pending"}
+              aria-keyshortcuts={mode.id.slice(0, 1)}
               onClick={() => {
                 void switchMode(mode.id);
               }}
@@ -885,13 +1165,14 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         {state.error ? (
           <ErrorState
             actionLabel="Retry"
-            message={state.error}
+            message="Penny could not load this workspace view. Retry the projection, or switch modes if the workspace is still starting up."
             onAction={() => setRefreshVersion((current) => current + 1)}
+            technicalDetail={state.error}
             title="Projection unavailable"
           />
         ) : null}
         {!state.error && state.isLoading && !state.view ? (
-          <LoadingState label="Reading workspace state." />
+          <ProjectionSkeleton />
         ) : null}
         {!state.error && state.isLoading && state.view ? (
           <ProjectionNotice title="Updating projection" body="Refreshing the workspace view while preserving the current selection." />
@@ -918,6 +1199,59 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         ) : null}
       </section>
     </main>
+  );
+}
+
+function ProjectionSkeleton() {
+  return (
+    <div style={projectionSkeletonStyles.shell} role="status" aria-label="Loading workspace projection">
+      <div style={projectionSkeletonStyles.main}>
+        <section className="penny-panel penny-hero-panel" style={projectionSkeletonStyles.thought} aria-label="Loading thoughts">
+          <Skeleton height={12} width={72} label="Loading thought label" />
+          <Skeleton height={40} width="72%" label="Loading thought title" />
+          <Skeleton height={16} width="88%" label="Loading thought summary" />
+          <Skeleton height={16} width="62%" label="Loading thought metadata" />
+        </section>
+
+        <section className="penny-panel penny-graph-panel" aria-label="Loading graph">
+          <div className="penny-panel-heading">
+            <div style={projectionSkeletonStyles.cluster}>
+              <Skeleton height={12} width={64} label="Loading graph label" />
+              <Skeleton height={22} width={160} label="Loading graph title" />
+            </div>
+            <Skeleton height={14} width={128} label="Loading graph selected node" />
+          </div>
+          <div style={projectionSkeletonStyles.graph}>
+            <span style={projectionSkeletonStyles.graphRingOuter} />
+            <span style={projectionSkeletonStyles.graphRingInner} />
+          </div>
+        </section>
+
+        <section className="penny-panel" aria-label="Loading claims">
+          <p className="penny-kicker">Claims</p>
+          <div className="penny-list">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div style={projectionSkeletonStyles.claim} key={index}>
+                <Skeleton height={16} width="88%" label="Loading claim body" />
+                <Skeleton height={16} width="64%" label="Loading claim preview" />
+                <Skeleton height={24} width={124} label="Loading claim confidence" />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <aside className="penny-panel" style={projectionSkeletonStyles.inspector} aria-label="Loading inspector">
+        <Skeleton height={12} width={86} label="Loading inspector label" />
+        <Skeleton height={24} width="70%" label="Loading inspector title" />
+        {Array.from({ length: 6 }).map((_, index) => (
+          <span style={projectionSkeletonStyles.row} key={index}>
+            <Skeleton height={12} width="38%" label="Loading inspector field" />
+            <Skeleton height={16} width="76%" label="Loading inspector value" />
+          </span>
+        ))}
+      </aside>
+    </div>
   );
 }
 
@@ -986,15 +1320,14 @@ function BrainProjection({
   onSelectClaim: (claimId: string) => Promise<void>;
   view: BrainView;
 }) {
+  const { selectedNodeId: storedSelectedNodeId, setSelectedNodeId } = useWorkspaceState();
   const mapTitle = view.mapSummary?.title ?? "Workspace projection";
   const graph = useMemo(() => createBrainGraph(view as Parameters<typeof createBrainGraph>[0]), [view]);
-  const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
-  const inspectedNodeExists = graph.nodes.some((node) => node.id === inspectedNodeId);
-  const selectedNodeId = inspectedNodeExists ? inspectedNodeId : graph.selectedNodeId ?? null;
+  const selectedNodeId = storedSelectedNodeId ?? graph.selectedNodeId ?? null;
   const inspector = createWorkspaceInspector(view, graph, selectedNodeId);
 
   function inspectGraphNode(node: GraphNode) {
-    setInspectedNodeId(node.id);
+    setSelectedNodeId(node.id);
 
     if (node.kind === "claim") {
       void onSelectClaim(node.id);
@@ -1039,9 +1372,9 @@ function BrainProjection({
                   key={claim.id}
                   type="button"
                   className="penny-claim-button"
-                  data-selected={view.selectedClaim?.id === claim.id}
+                  data-selected={selectedNodeId === claim.id}
                   onClick={() => {
-                    setInspectedNodeId(claim.id);
+                    setSelectedNodeId(claim.id);
                     void onSelectClaim(claim.id);
                   }}
                 >
@@ -1113,7 +1446,15 @@ function ClaimComposer({
   disabled: boolean;
   onSubmit: (text: string) => Promise<void>;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
+
+  useEffect(() => {
+    if (!disabled) {
+      textareaRef.current?.focus();
+    }
+  }, [disabled]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1128,17 +1469,25 @@ function ClaimComposer({
   }
 
   return (
-    <form className="penny-claim-form" onSubmit={handleSubmit}>
+    <form ref={formRef} className="penny-claim-form" onSubmit={handleSubmit}>
       <label htmlFor="claim-text">Claim</label>
       <textarea
+        ref={textareaRef}
         id="claim-text"
         name="claim"
         value={text}
         onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+            event.preventDefault();
+            formRef.current?.requestSubmit();
+          }
+        }}
         disabled={disabled}
+        autoFocus
         rows={4}
       />
-      <button type="submit" disabled={disabled || !text.trim()}>
+      <button type="submit" disabled={disabled || !text.trim()} aria-keyshortcuts="Meta+Enter Control+Enter">
         Create claim
       </button>
     </form>

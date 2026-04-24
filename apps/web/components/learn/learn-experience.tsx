@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   buildLearnExperienceViewModel,
@@ -12,8 +12,32 @@ import styles from "./learn-experience.module.css";
 
 export function LearnExperience({ view }: { view: LearnProjectionView }) {
   const model = useMemo(() => buildLearnExperienceViewModel(view), [view]);
+  const teachBackRef = useRef<HTMLTextAreaElement>(null);
   const [teachBack, setTeachBack] = useState("");
   const visibleState = getVisibleLearnState(model.experienceState, teachBack);
+
+  useEffect(() => {
+    teachBackRef.current?.focus();
+  }, [model.selectedClaim?.body]);
+
+  useEffect(() => {
+    function handleLearnShortcut(event: KeyboardEvent) {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) {
+        return;
+      }
+
+      if (event.key.toLowerCase() === "t") {
+        event.preventDefault();
+        teachBackRef.current?.focus();
+      }
+    }
+
+    window.addEventListener("keydown", handleLearnShortcut);
+
+    return () => {
+      window.removeEventListener("keydown", handleLearnShortcut);
+    };
+  }, []);
 
   return (
     <div className={styles.learnLayout}>
@@ -45,10 +69,13 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
         <p>{model.teachBackPrompt}</p>
         <label htmlFor="learn-teach-back">Your explanation</label>
         <textarea
+          ref={teachBackRef}
           id="learn-teach-back"
           value={teachBack}
           onChange={(event) => setTeachBack(event.target.value)}
           placeholder="Explain the claim, give an example, then name an edge case."
+          aria-keyshortcuts="t"
+          autoFocus
           rows={7}
         />
       </section>
@@ -135,6 +162,14 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
       </section>
     </div>
   );
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
 
 function feedbackForDraft(baseFeedback: string, teachBack: string): string {
