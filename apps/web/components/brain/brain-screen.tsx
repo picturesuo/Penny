@@ -754,7 +754,7 @@ function SelectedClaimPanel({ model }: { model: NonNullable<BrainViewModel["sele
         </div>
       </article>
 
-      <section aria-label="Dependencies and related claims preview">
+      <section aria-label="Dependencies and related claims">
         <p style={styles.eyebrow}>Find what this depends on</p>
         <p style={styles.thoughtBody}>{model.dependenciesLabel}</p>
         {model.relatedClaims.length > 0 ? (

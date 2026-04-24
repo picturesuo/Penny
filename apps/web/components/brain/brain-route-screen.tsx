@@ -130,7 +130,7 @@ export function BrainRouteScreen() {
         setState({
           status: "error",
           projection: null,
-          error: error instanceof Error ? error.message : "Brain projection failed.",
+          error: error instanceof Error ? error.message : "Brain did not load.",
         });
       }
     }
@@ -191,7 +191,7 @@ export function BrainRouteScreen() {
   }, [selectedNodeId, setActiveSessionId, state]);
 
   if (state.status === "loading") {
-    return <BrainScreen model={createBrainViewModel(createEmptyBrainProjection())} state="loading" statusMessage="Loading Brain projection." />;
+    return <BrainScreen model={createBrainViewModel(createEmptyBrainProjection())} state="loading" statusMessage="Loading Brain." />;
   }
 
   if (state.status === "error") {
@@ -204,7 +204,7 @@ export function BrainRouteScreen() {
         onNewThought={handleNewThought}
         onRetry={() => setRetryVersion((current) => current + 1)}
         state="error"
-        statusMessage="Penny could not load the Brain projection. Retry the page or open the workspace shell."
+        statusMessage="Penny could not load Brain. Retry, or open the workspace."
         technicalDetail={state.error}
       />
     );
@@ -222,7 +222,7 @@ export function BrainRouteScreen() {
       onSelectThought={handleSelectThought}
       state={model.stream.length > 0 ? "populated" : "empty"}
       statusMessage={
-        state.source === "mock" ? "Mock Brain data loaded." : "Workspace shell and Brain projection loaded."
+        state.source === "mock" ? "Demo Brain loaded." : "Brain loaded."
       }
     />
   );

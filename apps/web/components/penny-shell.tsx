@@ -1608,7 +1608,7 @@ function BrainProjection({
   view: BrainView;
 }) {
   const { selectedNodeId: storedSelectedNodeId, setSelectedNodeId } = useWorkspaceState();
-  const mapTitle = view.mapSummary?.title ?? "Workspace projection";
+  const mapTitle = view.mapSummary?.title ?? "Workspace map";
   const graph = useMemo(() => createBrainGraph(view as Parameters<typeof createBrainGraph>[0]), [view]);
   const selectedNodeId = storedSelectedNodeId ?? graph.selectedNodeId ?? null;
   const inspector = createWorkspaceInspector(view, graph, selectedNodeId);
@@ -1679,7 +1679,7 @@ function BrainProjection({
         </section>
 
         <section className="penny-panel">
-          <p className="penny-kicker">Create claim</p>
+          <p className="penny-kicker">Capture claim</p>
           <ClaimComposer
             disabled={!view.mapSummary || actionState.status === "pending"}
             inputRef={claimComposerTextareaRef}
