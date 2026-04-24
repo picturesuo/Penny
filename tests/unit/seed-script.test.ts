@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DEFAULT_SEED_USER_ID, readSeedConfig } from "../../scripts/seed.ts";
+import { DEFAULT_SEED_USER_ID, SEED_STORY, readSeedConfig } from "../../scripts/seed.ts";
 
 test("readSeedConfig returns deterministic MVP seed defaults", () => {
   assert.deepEqual(readSeedConfig({}), {
@@ -24,4 +24,13 @@ test("readSeedConfig accepts environment overrides", () => {
       userDisplayName: "Founder Demo",
     },
   );
+});
+
+test("seed story describes a coherent Penny first-run loop", () => {
+  assert.match(SEED_STORY.mapTitle, /Building Penny/);
+  assert.match(SEED_STORY.rawThought, /raw founder thought/);
+  assert.match(SEED_STORY.primaryClaim, /raw thought to challenge and learn-back/);
+  assert.match(SEED_STORY.supportingClaim, /Brain, Challenge, and Learn/);
+  assert.match(SEED_STORY.evidenceClaim, /provenance, confidence, and critique history/);
+  assert.match(SEED_STORY.tensionClaim, /weak assumptions/);
 });
