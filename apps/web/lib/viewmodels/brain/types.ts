@@ -56,6 +56,21 @@ export type BrainSelectedClaimPanel = {
   brainMapHref: string;
 };
 
+export type BrainSphereAffordance = {
+  id: string;
+  label: string;
+  description: string;
+  isSelected: boolean;
+};
+
+export type BrainSessionAffordance = {
+  id: string;
+  title: string;
+  summary: string;
+  updatedAtLabel: string;
+  isSelected: boolean;
+};
+
 export type BrainViewModel = {
   context: {
     mode: string;
@@ -68,6 +83,11 @@ export type BrainViewModel = {
   stream: BrainThoughtViewModel[];
   selectedThought: BrainThoughtViewModel | null;
   selectedPanel: BrainSelectedClaimPanel | null;
+  sphere: {
+    workSphere: BrainSphereAffordance;
+    recentSessions: BrainSessionAffordance[];
+    selectedSessionId: string | null;
+  };
   recentThoughts: BrainThoughtViewModel[];
   inspector: {
     status: string;
