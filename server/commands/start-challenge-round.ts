@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
+import { getDb } from "../db/client.ts";
+import { challengeRounds, claims, movesEvents } from "../db/schema.ts";
 
 export type StartChallengeRoundEventType = "challenge.round.started";
 
@@ -40,6 +43,23 @@ export type StartChallengeRoundRepositoryTx = {
 
 export type StartChallengeRoundRepository = {
   transaction<T>(callback: (tx: StartChallengeRoundRepositoryTx) => Promise<T>): Promise<T>;
+};
+
+type StartChallengeRoundDbTx = {
+  select: (...args: unknown[]) => {
+    from: (table: unknown) => {
+      where: (condition: unknown) => {
+        limit: (count: number) => Promise<Array<{ id: string; mapId: string; userId: string }>>;
+      };
+    };
+  };
+  insert: (table: unknown) => {
+    values: (value: Record<string, unknown>) => Promise<unknown>;
+  };
+};
+
+type StartChallengeRoundDb = {
+  transaction<T>(callback: (tx: StartChallengeRoundDbTx) => Promise<T>): Promise<T>;
 };
 
 export type StartChallengeRoundResult = {
@@ -129,6 +149,19 @@ function readOptionalString(
   return trimmed;
 }
 
+function isStartChallengeRoundRepositoryTx(value: unknown): value is StartChallengeRoundRepositoryTx {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "findOwnedClaim" in value &&
+      typeof (value as StartChallengeRoundRepositoryTx).findOwnedClaim === "function" &&
+      "insertChallengeRound" in value &&
+      typeof (value as StartChallengeRoundRepositoryTx).insertChallengeRound === "function" &&
+      "insertMoveEvent" in value &&
+      typeof (value as StartChallengeRoundRepositoryTx).insertMoveEvent === "function",
+  );
+}
+
 export function validateStartChallengeRoundInput(input: unknown): NormalizedStartChallengeRoundInput {
   const object = asObject(input);
 
@@ -141,7 +174,7 @@ export function validateStartChallengeRoundInput(input: unknown): NormalizedStar
 
 export async function startChallengeRound(
   input: unknown,
-  repository: StartChallengeRoundRepository,
+  repository: StartChallengeRoundRepository | StartChallengeRoundDb = getDb(),
   dependencies: StartChallengeRoundDependencies = {},
 ): Promise<StartChallengeRoundResult> {
   const normalized = validateStartChallengeRoundInput(input);
@@ -149,10 +182,22 @@ export async function startChallengeRound(
   const now = dependencies.now ?? (() => new Date());
 
   return repository.transaction(async (tx) => {
-    const ownedClaim = await tx.findOwnedClaim({
-      claimId: normalized.claimId,
-      userId: normalized.userId,
-    });
+    const ownedClaim = isStartChallengeRoundRepositoryTx(tx)
+      ? await tx.findOwnedClaim({
+          claimId: normalized.claimId,
+          userId: normalized.userId,
+        })
+      : (
+          await tx
+            .select({
+              id: claims.id,
+              mapId: claims.mapId,
+              userId: claims.userId,
+            })
+            .from(claims)
+            .where(and(eq(claims.id, normalized.claimId), eq(claims.userId, normalized.userId)))
+            .limit(1)
+        )[0] ?? null;
 
     if (!ownedClaim) {
       throw new StartChallengeRoundClaimNotFoundError(normalized.claimId);
@@ -162,29 +207,55 @@ export async function startChallengeRound(
     const roundId = createId();
     const requestId = normalized.requestId ?? createId();
 
-    await tx.insertChallengeRound({
-      id: roundId,
-      mapId: ownedClaim.mapId,
-      claimId: ownedClaim.id,
-      userId: normalized.userId,
-      status: DEFAULT_CHALLENGE_ROUND_STATUS,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    });
-
-    await tx.insertMoveEvent({
-      userId: normalized.userId,
-      aggregateType: "challenge_round",
-      aggregateId: roundId,
-      requestId,
-      type: "challenge.round.started",
-      payload: {
+    if (isStartChallengeRoundRepositoryTx(tx)) {
+      await tx.insertChallengeRound({
+        id: roundId,
         mapId: ownedClaim.mapId,
         claimId: ownedClaim.id,
+        userId: normalized.userId,
         status: DEFAULT_CHALLENGE_ROUND_STATUS,
-      },
-      createdAt: timestamp,
-    });
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+
+      await tx.insertMoveEvent({
+        userId: normalized.userId,
+        aggregateType: "challenge_round",
+        aggregateId: roundId,
+        requestId,
+        type: "challenge.round.started",
+        payload: {
+          mapId: ownedClaim.mapId,
+          claimId: ownedClaim.id,
+          status: DEFAULT_CHALLENGE_ROUND_STATUS,
+        },
+        createdAt: timestamp,
+      });
+    } else {
+      await tx.insert(challengeRounds).values({
+        id: roundId,
+        mapId: ownedClaim.mapId,
+        claimId: ownedClaim.id,
+        userId: normalized.userId,
+        status: DEFAULT_CHALLENGE_ROUND_STATUS,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+
+      await tx.insert(movesEvents).values({
+        userId: normalized.userId,
+        aggregateType: "challenge_round",
+        aggregateId: roundId,
+        requestId,
+        type: "challenge.round.started",
+        payloadJson: {
+          mapId: ownedClaim.mapId,
+          claimId: ownedClaim.id,
+          status: DEFAULT_CHALLENGE_ROUND_STATUS,
+        },
+        createdAt: timestamp,
+      });
+    }
 
     return {
       roundId,

@@ -22,6 +22,10 @@ class FakeRecordChallengeResponseRepositoryTx implements RecordChallengeResponse
     return this.rounds.find((round) => round.id === input.roundId && round.userId === input.userId) ?? null;
   }
 
+  async findMoveEventByRequestId() {
+    return null;
+  }
+
   async updateChallengeRound(record: RecordChallengeResponseRoundRecord) {
     this.updatedRounds.push(record);
   }

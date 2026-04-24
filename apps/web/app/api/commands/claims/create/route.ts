@@ -4,7 +4,10 @@ import {
   CreateClaimValidationError,
   createClaim,
 } from "../../../../../../../server/commands/create-claim.ts";
-import { getRequestUserId } from "../../../../../../../server/auth/get-request-user-id.ts";
+import {
+  RequestUserNotAuthenticatedError,
+  getRequestUserId,
+} from "../../../../../../../server/auth/get-request-user-id.ts";
 import { getIdempotencyKey } from "../../../../../../../server/idempotency/get-idempotency-key.ts";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -35,6 +38,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    if (error instanceof RequestUserNotAuthenticatedError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+
     if (error instanceof CreateClaimValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

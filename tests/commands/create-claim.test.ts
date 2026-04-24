@@ -22,6 +22,10 @@ class FakeCreateClaimRepositoryTx implements CreateClaimRepositoryTx {
     return this.maps.find((map) => map.id === input.mapId && map.userId === input.userId) ?? null;
   }
 
+  async findMoveEventByRequestId() {
+    return null;
+  }
+
   async insertClaim(record: CreateClaimRecord) {
     this.claims.push(record);
   }
