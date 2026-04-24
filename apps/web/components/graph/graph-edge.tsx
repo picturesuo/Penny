@@ -11,12 +11,13 @@ type GraphEdgeProps = {
 export function GraphEdge({ edge, source, target, emphasized = false }: GraphEdgeProps) {
   return (
     <line
+      className="penny-graph-edge"
       x1={source.x}
       y1={source.y}
       x2={target.x}
       y2={target.y}
-      stroke={emphasized ? "rgba(47, 107, 85, 0.62)" : "rgba(23, 32, 27, 0.2)"}
-      strokeWidth={(edge.strength ?? 1) * (emphasized ? 1.35 : 1)}
+      stroke={emphasized ? "rgba(71, 106, 85, 0.48)" : "rgba(23, 32, 27, 0.16)"}
+      strokeWidth={(edge.strength ?? 1) * (emphasized ? 1.18 : 0.86)}
       strokeLinecap="round"
     />
   );

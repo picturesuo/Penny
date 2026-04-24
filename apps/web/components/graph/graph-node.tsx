@@ -39,23 +39,38 @@ export function GraphNode({ node, selected = false, onSelectNode }: GraphNodePro
       tabIndex={onSelectNode ? 0 : undefined}
       data-testid="penny-graph-node"
       data-selected={selected}
+      className="penny-graph-node-group"
       style={{ cursor: onSelectNode ? "pointer" : "default" }}
       onClick={() => onSelectNode?.(node)}
       onKeyDown={handleKeyDown}
     >
       {selected ? <SelectedNodeHalo radius={radius} /> : null}
       <circle
+        className="penny-graph-node-shell"
         r={radius}
         fill={palette.fill}
-        stroke={selected ? "#17201b" : palette.stroke}
-        strokeWidth={selected ? 2.4 : 1.2}
+        stroke={selected ? palette.accent : palette.stroke}
+        strokeWidth={selected ? 2.1 : 1.05}
       />
-      <circle r={Math.max(5, radius * 0.25)} fill={palette.stroke} opacity={selected ? 0.95 : 0.62} />
-      <text x={0} y={radius + 18} textAnchor="middle" fill="#17201b" fontSize="12" fontWeight={selected ? 700 : 560}>
+      <circle
+        className="penny-graph-node-core"
+        r={Math.max(5, radius * 0.25)}
+        fill={palette.accent}
+        opacity={selected ? 0.76 : 0.48}
+      />
+      <text
+        className="penny-graph-node-label"
+        x={0}
+        y={radius + 18}
+        textAnchor="middle"
+        fill="#243029"
+        fontSize="12"
+        fontWeight={selected ? 680 : 540}
+      >
         {displayLabel(node.label)}
       </text>
       {confidence ? (
-        <text x={0} y={radius + 33} textAnchor="middle" fill="#637069" fontSize="10">
+        <text x={0} y={radius + 33} textAnchor="middle" fill="#69766f" fontSize="10">
           {confidence}
         </text>
       ) : null}

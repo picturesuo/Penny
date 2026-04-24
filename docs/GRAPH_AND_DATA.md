@@ -66,9 +66,10 @@ The selected mock node is `mock-claim-distribution`, which gives the canvas a st
 `GraphView` is intentionally lightweight SVG:
 
 - airy node-link layout
-- muted cluster colors
-- thin, low-contrast lines
-- selected nodes get a stronger stroke and subtle shadow
+- light canvas background with a quiet green-tinted wash
+- muted cluster colors with separate fill, stroke, and accent values
+- thin, low-opacity lines that only strengthen slightly near selected nodes
+- selected nodes get a soft halo, muted accent stroke, and gentle hover/focus states
 - mini-map is pinned to the lower-right corner
 - zoom and fit controls are pinned to the lower-left corner
 

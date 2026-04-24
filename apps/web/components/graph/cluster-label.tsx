@@ -24,8 +24,8 @@ export function ClusterLabel({ cluster, nodes }: ClusterLabelProps) {
 
   return (
     <g transform={`translate(${x} ${y})`} aria-hidden="true">
-      <rect x={-44} y={-13} width={88} height={26} rx={6} fill={palette.fill} stroke={palette.stroke} opacity="0.72" />
-      <text x={0} y={4} textAnchor="middle" fill="#17201b" fontSize="11" fontWeight="700">
+      <rect x={-44} y={-13} width={88} height={26} rx={6} fill={palette.fill} stroke={palette.stroke} opacity="0.58" />
+      <text x={0} y={4} textAnchor="middle" fill="#3d493f" fontSize="11" fontWeight="660">
         {labelForCluster(cluster)}
       </text>
     </g>

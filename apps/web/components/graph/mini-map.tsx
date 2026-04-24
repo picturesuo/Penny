@@ -32,8 +32,8 @@ export function MiniMap({ nodes, edges, selectedNodeId, nodesById }: MiniMapProp
             y1={source.y}
             x2={target.x}
             y2={target.y}
-            stroke="rgba(23, 32, 27, 0.2)"
-            strokeWidth="3"
+            stroke="rgba(23, 32, 27, 0.14)"
+            strokeWidth="2.4"
             strokeLinecap="round"
           />
         );
@@ -49,8 +49,8 @@ export function MiniMap({ nodes, edges, selectedNodeId, nodesById }: MiniMapProp
             cy={node.y}
             r={selected ? 17 : 12}
             fill={palette.fill}
-            stroke={selected ? "#17201b" : palette.stroke}
-            strokeWidth={selected ? 6 : 3}
+            stroke={selected ? palette.accent : palette.stroke}
+            strokeWidth={selected ? 4.6 : 2.4}
           />
         );
       })}

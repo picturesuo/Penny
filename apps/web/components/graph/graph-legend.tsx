@@ -16,17 +16,17 @@ const legendStyle: CSSProperties = {
   gap: 8,
   maxWidth: "calc(100% - 28px)",
   padding: "7px 8px",
-  border: "1px solid rgba(23, 32, 27, 0.1)",
+  border: "1px solid rgba(23, 32, 27, 0.08)",
   borderRadius: 8,
-  background: "rgba(251, 252, 247, 0.86)",
-  boxShadow: "0 10px 28px rgba(23, 32, 27, 0.06)",
+  background: "rgba(253, 254, 251, 0.82)",
+  boxShadow: "0 10px 26px rgba(23, 32, 27, 0.045)",
 };
 
 const itemStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 6,
-  color: "#637069",
+  color: "#68756e",
   fontSize: 12,
   fontWeight: 650,
 };
