@@ -11,6 +11,7 @@ The Brain MVP screen lives at `/brain` and is implemented under `apps/web/compon
 - Claim inspector: shows selected thought status, IDs, confidence, and update time.
 - Recent thoughts: derives the most recently updated thoughts from the same Brain projection payload.
 - Map and sphere context: shows the projected map title and ID. The current backend projection does not expose a sphere, so the UI states `No sphere projected` rather than inventing one.
+- Sphere/session affordances: shows a selected `Work sphere` derived from the current map and a recent sessions list derived from recent Brain projection activity. Session buttons expose selected state with `aria-pressed`.
 
 ## States
 
