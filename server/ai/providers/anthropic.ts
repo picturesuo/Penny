@@ -1,4 +1,5 @@
 import {
+  type AiProvider,
   AiProviderError as ProviderError,
   type AiProviderCost as StructuredProviderCost,
   type AiProviderErrorReason as ProviderErrorReason,
@@ -119,6 +120,11 @@ export async function invokeAnthropicStructured(
 }
 
 export const invokeAnthropic = invokeAnthropicStructured;
+
+export const anthropicProvider = {
+  name: "anthropic",
+  invokeStructured: invokeAnthropicStructured,
+} satisfies AiProvider;
 
 async function parseJsonResponse(response: Response, provider: string): Promise<JsonRecord> {
   const text = await response.text();

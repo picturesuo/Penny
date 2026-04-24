@@ -1,4 +1,5 @@
 import {
+  type AiProvider,
   AiProviderError as ProviderError,
   type AiProviderCost as StructuredProviderCost,
   type AiProviderRequest as StructuredProviderRequest,
@@ -90,6 +91,11 @@ export async function invokeXaiStructured(request: StructuredProviderRequest): P
     raw: payload,
   };
 }
+
+export const xaiProvider = {
+  name: "xai",
+  invokeStructured: invokeXaiStructured,
+} satisfies AiProvider;
 
 async function parseJsonResponse(response: Response): Promise<JsonRecord> {
   const text = await response.text();

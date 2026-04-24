@@ -29,6 +29,13 @@ export type AiProviderResponse = {
   usage: AiProviderUsage;
 };
 
+export type AiProviderName = "anthropic" | "mock" | "xai" | (string & {});
+
+export type AiProvider = {
+  invokeStructured(request: AiProviderRequest): Promise<AiProviderResponse>;
+  name: AiProviderName;
+};
+
 export type AiProviderErrorReason = "configuration" | "http" | "invalid_response" | "network";
 
 export class AiProviderError extends Error {

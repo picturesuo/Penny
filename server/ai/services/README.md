@@ -14,6 +14,8 @@ Current backend structure:
 - `server/ai/operations/**`: provider-using AI operations such as `generateChallengeCritique`.
 - `server/ai/prompts/**`: versioned prompt builders.
 - `server/ai/providers/**`: Anthropic/xAI transport wrappers and provider errors.
+- `server/ai/providers/types.ts`: shared AI provider interface and normalized request/response/error types.
+- `server/ai/providers/mock.ts`: deterministic mock provider for tests and no-key local flows.
 - `server/ai/routing/**`: model policy and provider route selection.
 - `server/ai/schemas/**`: structured output validation.
 - `server/ai/tracing/**`: Langfuse tracing helpers.
