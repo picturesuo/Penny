@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getRequestId, logRequest } from "./lib/request-logging";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const requestId = getRequestId(request.headers);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
