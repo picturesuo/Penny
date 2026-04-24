@@ -4,6 +4,8 @@ Penny's MVP API surface lives in the Next.js app under `apps/web/app/api`. The l
 
 All workspace command, projection, and AI helper routes require a UUID-valued `x-user-id` or `x-penny-user-id` header. Missing or invalid user headers return `401`.
 
+Successful responses keep the route-specific payload shape shown below. Error responses are normalized as `{ error: string }`, with `issues: string[]` included for validation errors that can report multiple field issues.
+
 ## Read Projections
 
 These routes return backend-shaped workspace views. The frontend should consume these projections instead of assembling canonical workspace state itself.
