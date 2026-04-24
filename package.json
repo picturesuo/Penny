@@ -12,9 +12,10 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
-    "db:migrate": "drizzle-kit migrate --config=drizzle.config.ts",
-    "db:typecheck": "tsc -p server/db/tsconfig.json --noEmit"
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "db:typecheck": "tsc -p server/db/tsconfig.json --noEmit",
+    "test:integration": "tsx --test tests/integration/**/*.test.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -22,6 +23,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.1",
     "globals": "^16.4.0",
+    "tsx": "^4.21.0",
     "turbo": "^2.5.8",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.1"
