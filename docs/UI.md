@@ -13,6 +13,12 @@ The shell consumes the backend workspace projection routes:
 
 The UI sends a UUID-valued `x-user-id` header so the existing route auth helper accepts local projection requests. The mode switcher changes which projection endpoint is read; breadcrumb content, selected map, selected claim, critique status, and Learn placeholder state all come from the projection payloads.
 
+## MVP UI Constraints
+
+- The MVP shell is text-first and projection-backed. It does not render an interactive graph or decorative graph canvas.
+- Loading and state changes stay static. Do not add custom animation, reveal motion, or animated spinners in this shell slice.
+- AI interactions use normal request/response command routes. Do not add client-side AI streaming, `EventSource`, WebSocket, or `ReadableStream` flows here.
+
 ## Mode Switcher
 
 Brain, Challenge, and Learn mode changes post to `POST /api/commands/workspace/select` with the current `mapId` and `claimId`. The selected claim is preserved by sending the current `claimId` with the target mode before the shell reloads the active projection.
