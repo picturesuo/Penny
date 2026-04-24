@@ -10,6 +10,7 @@ import postgres from "postgres";
 import { GET as getBrain } from "../../apps/web/app/api/workspace/brain/route.ts";
 import { GET as getChallenge } from "../../apps/web/app/api/workspace/challenge/route.ts";
 import { GET as getLearn } from "../../apps/web/app/api/workspace/learn/route.ts";
+import { generateChallengeCritiqueDeps } from "../../server/ai/operations/generateChallengeCritique.ts";
 import { createClaim } from "../../server/commands/create-claim.ts";
 import { createMap } from "../../server/commands/create-map.ts";
 import { recordChallengeResponse } from "../../server/commands/record-challenge-response.ts";
@@ -99,6 +100,14 @@ run("pnpm", ["db:migrate"], {
 process.env.DATABASE_URL = databaseUrl;
 process.env.DATABASE_DIRECT_URL = databaseUrl;
 
+function snapshotGenerateDeps() {
+  return { ...generateChallengeCritiqueDeps };
+}
+
+function restoreGenerateDeps(snapshot: ReturnType<typeof snapshotGenerateDeps>) {
+  Object.assign(generateChallengeCritiqueDeps, snapshot);
+}
+
 after(async () => {
   try {
     run("pg_ctl", ["-D", PGDATA_DIR, "stop", "-m", "immediate"]);
@@ -111,8 +120,38 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
   const userId = "00000000-0000-0000-0000-000000000999";
   const db = createDbClient(databaseUrl);
   const sql = postgres(databaseUrl, { prepare: false });
+  const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
+  const originalXaiKey = process.env.XAI_API_KEY;
+  const depsSnapshot = snapshotGenerateDeps();
 
   try {
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.XAI_API_KEY;
+    generateChallengeCritiqueDeps.invokeAnthropicStructured = async () => ({
+      output: {
+        summary: "The acceptance-flow claim still needs a sharper falsifiability boundary.",
+        strongestCounterargument:
+          "The route only helps if the generated critique survives persistence and comes back through the projection.",
+        assumptions: ["The challenge request bridges directly into generation."],
+        failureModes: ["The projection returns only pending state after generation succeeds."],
+        followUpQuestions: ["Which field is the canonical critique payload for the route response?"],
+        suggestedConfidenceBps: null,
+        uncertaintyNote: "The contract is only useful if the challenge route returns the stored critique.",
+      },
+      usage: {
+        inputTokens: 42,
+        outputTokens: 17,
+        totalTokens: 59,
+      },
+      cost: {
+        totalUsd: 0.01,
+        currency: "USD",
+      },
+    });
+    generateChallengeCritiqueDeps.invokeXaiStructured = async () => {
+      throw new Error("xAI should not be called in the acceptance-flow provider mock.");
+    };
+
     const map = await createMap(
       {
         userId,
@@ -225,6 +264,23 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
         claimId: string;
         status: string;
       } | null;
+      critiqueStatus: string;
+      critiquePayload?: {
+        critique?: {
+          conciseCritiqueSummary?: string;
+          strongestCounterargument?: string;
+          assumptions?: string[];
+          likelyFailureModes?: string[];
+          followUpQuestions?: string[];
+          suggestedConfidenceDelta?: number;
+          uncertaintyNote?: string;
+        };
+        metadata?: {
+          provider?: string;
+          model?: string;
+          promptVersion?: string;
+        };
+      };
     };
 
     assert.deepEqual(challengePayload.shellContext, {
@@ -259,6 +315,24 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
     assert.equal(challengePayload.activeClaim?.id, claim.claimId);
     assert.equal(challengePayload.activeChallengeRound?.id, round.roundId);
     assert.equal(challengePayload.activeChallengeRound?.claimId, claim.claimId);
+    assert.equal(challengePayload.critiqueStatus, "ready");
+    assert.deepEqual(challengePayload.critiquePayload, {
+      critique: {
+        conciseCritiqueSummary: "The acceptance-flow claim still needs a sharper falsifiability boundary.",
+        strongestCounterargument:
+          "The route only helps if the generated critique survives persistence and comes back through the projection.",
+        assumptions: ["The challenge request bridges directly into generation."],
+        likelyFailureModes: ["The projection returns only pending state after generation succeeds."],
+        followUpQuestions: ["Which field is the canonical critique payload for the route response?"],
+        suggestedConfidenceDelta: 0,
+        uncertaintyNote: "The contract is only useful if the challenge route returns the stored critique.",
+      },
+      metadata: {
+        provider: "anthropic",
+        model: "claude-sonnet-4-20250514",
+        promptVersion: "generateChallengeCritique.v1",
+      },
+    });
 
     const responseResult = await recordChallengeResponse(
       {
@@ -406,7 +480,7 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
 
     assert.equal(storedCritiques.length, 1);
     assert.equal(storedCritiques[0].round_id, round.roundId);
-    assert.equal(storedCritiques[0].status, "pending");
+    assert.equal(storedCritiques[0].status, "ready");
 
     const eventRows = await sql<
       {
@@ -421,6 +495,7 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
       where user_id = ${userId}
     `;
     const eventByRequestId = new Map(eventRows.map((event) => [event.request_id, event]));
+    const critiqueRequestEvents = eventRows.filter((event) => event.request_id === "acceptance-critique-request");
 
     assert.deepEqual(eventByRequestId.get("acceptance-map-request"), {
       type: "map.created",
@@ -440,12 +515,30 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
       aggregate_id: round.roundId,
       request_id: "acceptance-round-request",
     });
-    assert.deepEqual(eventByRequestId.get("acceptance-critique-request"), {
-      type: "challenge.critique.requested",
-      aggregate_type: "challenge_critique",
-      aggregate_id: critique.critiqueId,
-      request_id: "acceptance-critique-request",
-    });
+    assert.deepEqual(
+      critiqueRequestEvents
+        .map((event) => ({
+          type: event.type,
+          aggregate_type: event.aggregate_type,
+          aggregate_id: event.aggregate_id,
+          request_id: event.request_id,
+        }))
+        .sort((left, right) => left.type.localeCompare(right.type)),
+      [
+        {
+          type: "challenge.critique.generated",
+          aggregate_type: "challenge_critique",
+          aggregate_id: critique.critiqueId,
+          request_id: "acceptance-critique-request",
+        },
+        {
+          type: "challenge.critique.requested",
+          aggregate_type: "challenge_critique",
+          aggregate_id: critique.critiqueId,
+          request_id: "acceptance-critique-request",
+        },
+      ],
+    );
     assert.deepEqual(eventByRequestId.get("acceptance-response-request"), {
       type: "challenge.response.recorded",
       aggregate_type: "challenge_round",
@@ -467,6 +560,19 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
       ],
     );
   } finally {
+    restoreGenerateDeps(depsSnapshot);
+    if (originalAnthropicKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
+    }
+
+    if (originalXaiKey === undefined) {
+      delete process.env.XAI_API_KEY;
+    } else {
+      process.env.XAI_API_KEY = originalXaiKey;
+    }
+
     await sql.end({ timeout: 1 });
   }
 });
