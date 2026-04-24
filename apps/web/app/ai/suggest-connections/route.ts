@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-
+import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
 import {
   SuggestConnectionsTargetNotFoundError,
   SuggestConnectionsValidationError,
@@ -20,11 +19,11 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    return invalidJsonResponse();
   }
 
   if (!isObject(body)) {
-    return NextResponse.json({ error: "Request body must be a JSON object." }, { status: 400 });
+    return invalidObjectResponse();
   }
 
   try {
@@ -36,21 +35,21 @@ export async function POST(request: Request) {
       autoCreate: body.autoCreate,
     });
 
-    return NextResponse.json(result, { status: 200 });
+    return apiOk(result);
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return apiError(error.message, 401);
     }
 
     if (error instanceof SuggestConnectionsValidationError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return apiError(error.message, 400);
     }
 
     if (error instanceof SuggestConnectionsTargetNotFoundError) {
-      return NextResponse.json({ error: "Target not found." }, { status: 404 });
+      return apiError("Target not found.", 404);
     }
 
     console.error("POST /ai/suggest-connections failed", error);
-    return NextResponse.json({ error: "Failed to suggest connections." }, { status: 500 });
+    return apiError("Failed to suggest connections.", 500);
   }
 }

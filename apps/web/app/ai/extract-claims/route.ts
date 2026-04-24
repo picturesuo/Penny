@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-
+import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
 import {
   ExtractClaimsError,
   ExtractClaimsNotFoundError,
@@ -23,11 +22,11 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    return invalidJsonResponse();
   }
 
   if (!isObject(body)) {
-    return NextResponse.json({ error: "Request body must be a JSON object." }, { status: 400 });
+    return invalidObjectResponse();
   }
 
   try {
@@ -43,30 +42,30 @@ export async function POST(request: Request) {
       },
     );
 
-    return NextResponse.json(result, { status: 201 });
+    return apiOk(result, 201);
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return apiError(error.message, 401);
     }
 
     if (error instanceof ExtractClaimsValidationError) {
-      return NextResponse.json({ error: error.message, issues: error.issues }, { status: 400 });
+      return apiError(error.message, 400, error.issues);
     }
 
     if (error instanceof ExtractClaimsNotFoundError) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+      return apiError(error.message, 404);
     }
 
     if (error instanceof ExtractClaimsWorkspaceError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return apiError(error.message, 409);
     }
 
     if (error instanceof ExtractClaimsError) {
       console.error("POST /ai/extract-claims failed", error);
-      return NextResponse.json({ error: "Failed to extract claims." }, { status: 502 });
+      return apiError("Failed to extract claims.", 502);
     }
 
     console.error("POST /ai/extract-claims failed", error);
-    return NextResponse.json({ error: "Failed to extract claims." }, { status: 500 });
+    return apiError("Failed to extract claims.", 500);
   }
 }

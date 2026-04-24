@@ -1,4 +1,4 @@
-import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../lib/api/response";
+import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
 import { challengeIdea, ChallengeIdeaValidationError } from "../../../../../server/ai/operations/challengeIdea.ts";
 import { aiOperationLogDeps } from "../../../../../server/ai/services/ai-operation-log.ts";
 import { AI_OPERATIONS } from "../../../../../server/ai/services/operation-names.ts";

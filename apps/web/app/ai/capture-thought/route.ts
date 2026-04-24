@@ -1,4 +1,4 @@
-import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../lib/api/response";
+import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
 import {
   CaptureThoughtError,
   CaptureThoughtValidationError,
