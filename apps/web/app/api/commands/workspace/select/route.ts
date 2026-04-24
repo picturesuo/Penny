@@ -1,22 +1,18 @@
 import { NextResponse } from "next/server";
-import { pathToFileURL } from "node:url";
 
+import {
+  SetWorkspaceSelectionClaimForbiddenError,
+  SetWorkspaceSelectionClaimNotFoundError,
+  SetWorkspaceSelectionMapForbiddenError,
+  SetWorkspaceSelectionMapNotFoundError,
+  SetWorkspaceSelectionValidationError,
+  setWorkspaceSelection,
+} from "../../../../../../../server/commands/set-workspace-selection.ts";
 import {
   RequestUserNotAuthenticatedError,
   getRequestUserId,
 } from "../../../../../../../server/auth/get-request-user-id.ts";
 import { getIdempotencyKey } from "../../../../../../../server/idempotency/get-idempotency-key.ts";
-
-type SetWorkspaceSelectionModule = {
-  setWorkspaceSelection(input: unknown): Promise<unknown>;
-};
-
-const importServerModule = new Function("specifier", "return import(specifier);") as (
-  specifier: string,
-) => Promise<SetWorkspaceSelectionModule>;
-const setWorkspaceSelectionUrl = pathToFileURL(
-  `${process.cwd()}/../../server/commands/set-workspace-selection.ts`,
-).href;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -38,7 +34,6 @@ export async function POST(request: Request) {
   try {
     const userId = getRequestUserId(request.headers);
     const requestId = getIdempotencyKey(request.headers, body);
-    const { setWorkspaceSelection } = await importServerModule(setWorkspaceSelectionUrl);
     const result = await setWorkspaceSelection({
       ...body,
       userId,
@@ -51,21 +46,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
-    if (error instanceof Error && error.name === "SetWorkspaceSelectionValidationError") {
+    if (error instanceof SetWorkspaceSelectionValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     if (
-      error instanceof Error &&
-      (error.name === "SetWorkspaceSelectionMapForbiddenError" ||
-        error.name === "SetWorkspaceSelectionClaimForbiddenError")
+      error instanceof SetWorkspaceSelectionMapForbiddenError ||
+      error instanceof SetWorkspaceSelectionClaimForbiddenError
     ) {
       return NextResponse.json({ error: error.message }, { status: 403 });
     }
 
     if (
-      error instanceof Error &&
-      (error.name === "SetWorkspaceSelectionMapNotFoundError" || error.name === "SetWorkspaceSelectionClaimNotFoundError")
+      error instanceof SetWorkspaceSelectionMapNotFoundError ||
+      error instanceof SetWorkspaceSelectionClaimNotFoundError
     ) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
