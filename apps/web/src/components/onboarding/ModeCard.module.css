@@ -16,9 +16,10 @@
   text-decoration: none;
   backdrop-filter: blur(18px);
   transition:
-    border-color 160ms ease,
-    background 160ms ease,
-    transform 160ms ease;
+    background var(--motion-standard),
+    border-color var(--motion-standard),
+    box-shadow var(--motion-standard),
+    transform var(--motion-standard);
 }
 
 .card::before {
@@ -27,6 +28,7 @@
   inset: 0;
   opacity: 0.36;
   pointer-events: none;
+  transition: opacity var(--motion-standard);
 }
 
 .card[data-mode="brain"]::before {
@@ -47,7 +49,15 @@
   background:
     linear-gradient(145deg, rgba(255, 253, 247, 0.08), rgba(255, 253, 247, 0.04)),
     rgba(23, 32, 27, 0.78);
-  transform: translateY(-2px);
+  box-shadow:
+    var(--glass-shadow),
+    var(--interaction-hover-shadow);
+  transform: var(--motion-lift-md);
+}
+
+.card:hover::before,
+.card:focus-visible::before {
+  opacity: 0.52;
 }
 
 .card:focus-visible {
