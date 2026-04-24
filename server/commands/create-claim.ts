@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
-import { findExistingMoveEvent } from "../idempotency/find-existing-move-event.ts";
+import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
 import { claims, maps, movesEvents } from "../db/schema.ts";
 
 export type CreateClaimEventType = "claim.created";
@@ -38,6 +38,8 @@ export type CreateClaimEventRecord = {
     mapId: string;
     parentClaimId: string | null;
     kind: string;
+    note: string | null;
+    text: string;
   };
   createdAt: Date;
 };
@@ -71,10 +73,16 @@ type CreateClaimDbTx = {
   insert: (table: unknown) => {
     values: (value: Record<string, unknown>) => Promise<unknown>;
   };
-};
+} & SelectableDbTx;
+
+type CreateClaimTx = CreateClaimRepositoryTx | CreateClaimDbTx;
 
 type CreateClaimDb = {
-  transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
+  transaction<T>(callback: (tx: CreateClaimDbTx) => Promise<T>): Promise<T>;
+};
+
+type CreateClaimTransactional = {
+  transaction<T>(callback: (tx: CreateClaimTx) => Promise<T>): Promise<T>;
 };
 
 export type CreateClaimResult = {
@@ -195,14 +203,15 @@ export function validateCreateClaimInput(input: unknown): NormalizedCreateClaimI
 
 export async function createClaim(
   input: unknown,
-  repository: CreateClaimRepository | CreateClaimDb = getDb(),
+  repository: CreateClaimRepository | CreateClaimDb = getDb() as unknown as CreateClaimDb,
   dependencies: CreateClaimDependencies = {},
 ): Promise<CreateClaimResult> {
   const normalized = validateCreateClaimInput(input);
   const createId = dependencies.createId ?? randomUUID;
   const now = dependencies.now ?? (() => new Date());
+  const transactionalRepository = repository as CreateClaimTransactional;
 
-  return repository.transaction(async (tx) => {
+  return transactionalRepository.transaction(async (tx) => {
     const requestId = normalized.requestId ?? createId();
     const existingEvent = await findExistingMoveEvent(tx, {
       userId: normalized.userId,
@@ -262,6 +271,8 @@ export async function createClaim(
           mapId: ownedMap.id,
           parentClaimId: normalized.parentClaimId,
           kind: normalized.kind,
+          note: normalized.note,
+          text: normalized.text,
         },
         createdAt: timestamp,
       });

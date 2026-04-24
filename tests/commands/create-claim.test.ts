@@ -131,6 +131,8 @@ test("createClaim emits a claim.created event for the inserted claim", async () 
       mapId: "map-1",
       parentClaimId: "parent-1",
       kind: "counterclaim",
+      note: null,
+      text: "Persist and emit the matching event.",
     },
     createdAt: timestamp,
   });

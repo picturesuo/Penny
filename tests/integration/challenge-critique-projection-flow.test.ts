@@ -10,6 +10,7 @@ import postgres from "postgres";
 import { GET as getChallenge } from "../../apps/web/app/api/workspace/challenge/route.ts";
 import { createClaim } from "../../server/commands/create-claim.ts";
 import { createMap } from "../../server/commands/create-map.ts";
+import { generateChallengeCritique } from "../../server/commands/generate-challenge-critique.ts";
 import { requestChallengeCritique } from "../../server/commands/request-challenge-critique.ts";
 import { setWorkspaceSelection } from "../../server/commands/set-workspace-selection.ts";
 import {
@@ -149,31 +150,37 @@ test("challenge flow stores a generated critique and exposes it in the challenge
       createStartChallengeRoundRepository(db),
     );
 
-    const critique = await requestChallengeCritique(
+    const requestedCritique = await requestChallengeCritique(
       {
         userId,
         roundId: round.roundId,
         requestId: "critique-flow-request",
       },
       db,
+    );
+
+    assert.equal(requestedCritique.status, "pending");
+
+    const critique = await generateChallengeCritique(
+      {
+        userId,
+        critiqueId: requestedCritique.critiqueId,
+        requestId: "critique-flow-generate-request",
+      },
+      db,
       {
         generateCritique: async () => ({
-          body: JSON.stringify(
-            {
-              critique: {
-                summary: "The current claim still needs a stronger boundary condition.",
-                strongestCounterargument:
-                  "A stored critique is not useful unless the projection surfaces it back to the user context.",
-              },
-              metadata: {
-                provider: "test-provider",
-                model: "test-model",
-                promptVersion: "test-prompt-v1",
-              },
-            },
-            null,
-            2,
-          ),
+          body: "Main challenge: The current claim still needs a stronger boundary condition.",
+          critiqueJson: {
+            conciseCritiqueSummary: "The current claim still needs a stronger boundary condition.",
+            strongestCounterargument:
+              "A stored critique is not useful unless the projection surfaces it back to the user context.",
+            assumptions: ["The projection must understand the persisted critique shape."],
+            likelyFailureModes: ["The stored row and view drift apart."],
+            followUpQuestions: ["Which field is the canonical display body?"],
+            suggestedConfidenceDelta: -20,
+            uncertaintyNote: "The read model should not need to guess.",
+          },
           metadata: {
             provider: "test-provider",
             model: "test-model",
@@ -210,8 +217,13 @@ test("challenge flow stores a generated critique and exposes it in the challenge
         body?: string;
         critiquePayload?: {
           critique?: {
-            summary?: string;
+            conciseCritiqueSummary?: string;
             strongestCounterargument?: string;
+            assumptions?: string[];
+            likelyFailureModes?: string[];
+            followUpQuestions?: string[];
+            suggestedConfidenceDelta?: number;
+            uncertaintyNote?: string;
           };
           metadata?: {
             provider?: string;
@@ -247,27 +259,17 @@ test("challenge flow stores a generated critique and exposes it in the challenge
     assert.deepEqual(payload.critiqueState, {
       status: "ready",
       critiqueId: critique.critiqueId,
-      body: JSON.stringify(
-        {
-          critique: {
-            summary: "The current claim still needs a stronger boundary condition.",
-            strongestCounterargument:
-              "A stored critique is not useful unless the projection surfaces it back to the user context.",
-          },
-          metadata: {
-            provider: "test-provider",
-            model: "test-model",
-            promptVersion: "test-prompt-v1",
-          },
-        },
-        null,
-        2,
-      ),
+      body: "Main challenge: The current claim still needs a stronger boundary condition.",
       critiquePayload: {
         critique: {
-          summary: "The current claim still needs a stronger boundary condition.",
+          conciseCritiqueSummary: "The current claim still needs a stronger boundary condition.",
           strongestCounterargument:
             "A stored critique is not useful unless the projection surfaces it back to the user context.",
+          assumptions: ["The projection must understand the persisted critique shape."],
+          likelyFailureModes: ["The stored row and view drift apart."],
+          followUpQuestions: ["Which field is the canonical display body?"],
+          suggestedConfidenceDelta: -20,
+          uncertaintyNote: "The read model should not need to guess.",
         },
         metadata: {
           provider: "test-provider",

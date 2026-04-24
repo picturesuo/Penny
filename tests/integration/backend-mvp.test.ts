@@ -12,7 +12,11 @@ import { createMap } from "../../server/commands/create-map.ts";
 import { recordChallengeResponse } from "../../server/commands/record-challenge-response.ts";
 import { requestChallengeCritique } from "../../server/commands/request-challenge-critique.ts";
 import { setWorkspaceSelection } from "../../server/commands/set-workspace-selection.ts";
-import { startChallengeRound, type StartChallengeRoundRepository } from "../../server/commands/start-challenge-round.ts";
+import {
+  startChallengeRound,
+  type StartChallengeRoundRepository,
+  type StartChallengeRoundRepositoryTx,
+} from "../../server/commands/start-challenge-round.ts";
 import { createDbClient } from "../../server/db/client.ts";
 import { challengeRounds, claims, movesEvents } from "../../server/db/schema.ts";
 import { buildBrainView } from "../../server/projections/build-brain-view.ts";
@@ -49,7 +53,7 @@ process.env.DATABASE_DIRECT_URL = databaseUrl;
 
 function createStartChallengeRoundRepository(db: ReturnType<typeof createDbClient>): StartChallengeRoundRepository {
   return {
-    async transaction<T>(callback) {
+    async transaction<T>(callback: (tx: StartChallengeRoundRepositoryTx) => Promise<T>) {
       return db.transaction(async (tx) =>
         callback({
           async findOwnedClaim(input) {
@@ -218,8 +222,8 @@ test("backend MVP commands, projections, and required event trail stay coherent"
     assert.equal(challengeView.activeClaim?.id, claim.claimId);
     assert.equal(challengeView.activeChallengeRound?.id, round.roundId);
     assert.deepEqual(challengeView.critiqueState, {
-      status: "not_requested",
-      critiqueId: null,
+      status: "pending",
+      critiqueId: critique.critiqueId,
     });
 
     const responseResult = await recordChallengeResponse(

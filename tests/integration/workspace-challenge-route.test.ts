@@ -156,3 +156,119 @@ test("GET /api/workspace/challenge returns shell context, active claim, latest c
     await sql.end({ timeout: 1 });
   }
 });
+
+test("GET /api/workspace/challenge returns a ready critique when one exists for the active round", async () => {
+  const userId = "00000000-0000-0000-0000-000000000124";
+  const mapId = "00000000-0000-0000-0000-000000000322";
+  const claimId = "00000000-0000-0000-0000-000000000457";
+  const roundId = "00000000-0000-0000-0000-000000000778";
+  const critiqueId = "00000000-0000-0000-0000-000000000779";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into maps (id, user_id, title)
+      values (${mapId}, ${userId}, ${"Challenge critique map"})
+    `;
+
+    await sql`
+      insert into claims (id, map_id, user_id, body, confidence_bps)
+      values (${claimId}, ${mapId}, ${userId}, ${"Selected critique claim"}, ${6100})
+    `;
+
+    await sql`
+      insert into challenge_rounds (id, map_id, claim_id, user_id, status)
+      values (${roundId}, ${mapId}, ${claimId}, ${userId}, ${"started"})
+    `;
+
+    await sql`
+      insert into challenge_critiques (id, round_id, map_id, claim_id, user_id, status, body)
+      values (${critiqueId}, ${roundId}, ${mapId}, ${claimId}, ${userId}, ${"ready"}, ${"Main challenge: The claim needs boundaries."})
+    `;
+
+    await sql`
+      insert into moves_events (user_id, aggregate_type, aggregate_id, type, payload_json, request_id)
+      values (
+        ${userId},
+        ${"challenge_critique"},
+        ${critiqueId},
+        ${"challenge.critique.generated"},
+        ${JSON.stringify({
+          roundId,
+          mapId,
+          claimId,
+          status: "ready",
+          body: "Main challenge: The claim needs boundaries.",
+          critiqueJson: {
+            conciseCritiqueSummary: "The claim needs boundaries.",
+            strongestCounterargument: "Some users will commit before a hard boundary is clear.",
+            assumptions: ["All users evaluate the same way."],
+            likelyFailureModes: ["The team optimizes around one persona."],
+            followUpQuestions: ["Which audience segment breaks the claim first?"],
+            suggestedConfidenceDelta: -10,
+            uncertaintyNote: "Behavior can differ by deal size.",
+          },
+          provider: "test-provider",
+          model: "test-model",
+          promptVersion: "test-prompt-v1",
+        })}::jsonb,
+        ${"workspace-challenge-generated-event"}
+      )
+    `;
+
+    await sql`
+      insert into workspace_contexts (user_id, map_id, claim_id, mode)
+      values (${userId}, ${mapId}, ${claimId}, ${"challenge"})
+    `;
+
+    const response = await GET(
+      new Request("http://localhost/api/workspace/challenge", {
+        method: "GET",
+        headers: {
+          "x-user-id": userId,
+        },
+      }),
+    );
+
+    assert.equal(response.status, 200);
+
+    const payload = (await response.json()) as {
+      critiqueState: {
+        status: string;
+        critiqueId: string | null;
+        body?: string;
+        critiquePayload?: unknown;
+        provider?: string;
+        model?: string;
+        promptVersion?: string;
+      };
+    };
+
+    assert.deepEqual(payload.critiqueState, {
+      status: "ready",
+      critiqueId,
+      body: "Main challenge: The claim needs boundaries.",
+      critiquePayload: {
+        critique: {
+          conciseCritiqueSummary: "The claim needs boundaries.",
+          strongestCounterargument: "Some users will commit before a hard boundary is clear.",
+          assumptions: ["All users evaluate the same way."],
+          likelyFailureModes: ["The team optimizes around one persona."],
+          followUpQuestions: ["Which audience segment breaks the claim first?"],
+          suggestedConfidenceDelta: -10,
+          uncertaintyNote: "Behavior can differ by deal size.",
+        },
+        metadata: {
+          provider: "test-provider",
+          model: "test-model",
+          promptVersion: "test-prompt-v1",
+        },
+      },
+      provider: "test-provider",
+      model: "test-model",
+      promptVersion: "test-prompt-v1",
+    });
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});

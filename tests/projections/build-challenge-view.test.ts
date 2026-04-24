@@ -132,3 +132,113 @@ test("buildChallengeView preserves claimId after a Brain to Challenge switch", a
     await sql.end({ timeout: 1 });
   }
 });
+
+test("buildChallengeView returns the latest ready critique state for the active round", async () => {
+  const userId = "00000000-0000-0000-0000-000000000889";
+  const db = createDbClient(databaseUrl);
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const map = await createMap(
+      {
+        userId,
+        title: "Challenge critique map",
+        requestId: "challenge-critique-map-request",
+      },
+      db,
+    );
+
+    const claim = await createClaim(
+      {
+        userId,
+        mapId: map.mapId,
+        text: "Buyers always need external proof before they commit.",
+        requestId: "challenge-critique-claim-request",
+      },
+      db,
+    );
+
+    await setWorkspaceSelection(
+      {
+        userId,
+        mode: "Challenge",
+        mapId: map.mapId,
+        claimId: claim.claimId,
+        requestId: "challenge-critique-selection",
+      },
+      db,
+    );
+
+    const roundId = "00000000-0000-0000-0000-000000000998";
+    const critiqueId = "00000000-0000-0000-0000-000000000997";
+
+    await sql`
+      insert into challenge_rounds (id, map_id, claim_id, user_id, status)
+      values (${roundId}, ${map.mapId}, ${claim.claimId}, ${userId}, ${"started"})
+    `;
+
+    await sql`
+      insert into challenge_critiques (id, round_id, map_id, claim_id, user_id, status, body)
+      values (${critiqueId}, ${roundId}, ${map.mapId}, ${claim.claimId}, ${userId}, ${"ready"}, ${"Main challenge: The wording is too absolute."})
+    `;
+
+    await sql`
+      insert into moves_events (user_id, aggregate_type, aggregate_id, type, payload_json, request_id)
+      values (
+        ${userId},
+        ${"challenge_critique"},
+        ${critiqueId},
+        ${"challenge.critique.generated"},
+        ${JSON.stringify({
+          roundId,
+          mapId: map.mapId,
+          claimId: claim.claimId,
+          status: "ready",
+          body: "Main challenge: The wording is too absolute.",
+          critiqueJson: {
+            conciseCritiqueSummary: "The wording is too absolute.",
+            strongestCounterargument: "There are credible exceptions where buyers commit with trust instead of proof.",
+            assumptions: ["Every buyer follows the same procurement process."],
+            likelyFailureModes: ["The team overfits to enterprise sales."],
+            followUpQuestions: ["Which segment actually requires proof before commitment?"],
+            suggestedConfidenceDelta: -15,
+            uncertaintyNote: "Segment mix could change the conclusion.",
+          },
+          provider: "test-provider",
+          model: "test-model",
+          promptVersion: "test-prompt-v1",
+        })}::jsonb,
+        ${"challenge-view-generated-event"}
+      )
+    `;
+
+    const challengeView = await buildChallengeView({ userId }, db);
+
+    assert.deepEqual(challengeView.critiqueState, {
+      status: "ready",
+      critiqueId,
+      body: "Main challenge: The wording is too absolute.",
+      critiquePayload: {
+        critique: {
+          conciseCritiqueSummary: "The wording is too absolute.",
+          strongestCounterargument: "There are credible exceptions where buyers commit with trust instead of proof.",
+          assumptions: ["Every buyer follows the same procurement process."],
+          likelyFailureModes: ["The team overfits to enterprise sales."],
+          followUpQuestions: ["Which segment actually requires proof before commitment?"],
+          suggestedConfidenceDelta: -15,
+          uncertaintyNote: "Segment mix could change the conclusion.",
+        },
+        metadata: {
+          provider: "test-provider",
+          model: "test-model",
+          promptVersion: "test-prompt-v1",
+        },
+      },
+      provider: "test-provider",
+      model: "test-model",
+      promptVersion: "test-prompt-v1",
+    });
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});

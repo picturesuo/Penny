@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.ts";
-import { findExistingMoveEvent } from "../idempotency/find-existing-move-event.ts";
+import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
 import { challengeRounds, movesEvents } from "../db/schema.ts";
 
 export type RecordChallengeResponseEventType = "challenge.response.recorded";
@@ -69,26 +69,25 @@ type RecordChallengeResponseDbRow = {
   status: string;
 };
 
-type RecordChallengeResponseDbTx = {
-  select: (...args: any[]) => {
-    from: (table: any) => {
-      where: (condition: any) => {
-        limit: (count: number) => Promise<any[]>;
-      };
-    };
-  };
-  update: (table: any) => {
+type RecordChallengeResponseDbTx = SelectableDbTx & {
+  update: (table: unknown) => {
     set: (value: Record<string, unknown>) => {
-      where: (condition: any) => Promise<unknown>;
+      where: (condition: unknown) => Promise<unknown>;
     };
   };
-  insert: (table: any) => {
+  insert: (table: unknown) => {
     values: (value: Record<string, unknown>) => Promise<unknown>;
   };
 };
 
+type RecordChallengeResponseTx = RecordChallengeResponseRepositoryTx | RecordChallengeResponseDbTx;
+
 type RecordChallengeResponseDb = {
-  transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
+  transaction<T>(callback: (tx: RecordChallengeResponseDbTx) => Promise<T>): Promise<T>;
+};
+
+type RecordChallengeResponseTransactional = {
+  transaction<T>(callback: (tx: RecordChallengeResponseTx) => Promise<T>): Promise<T>;
 };
 
 export type RecordChallengeResponseResult = {
@@ -234,14 +233,15 @@ export function validateRecordChallengeResponseInput(input: unknown): Normalized
 
 export async function recordChallengeResponse(
   input: unknown,
-  repository: RecordChallengeResponseRepository | RecordChallengeResponseDb = getDb(),
+  repository: RecordChallengeResponseRepository | RecordChallengeResponseDb = getDb() as unknown as RecordChallengeResponseDb,
   dependencies: RecordChallengeResponseDependencies = {},
 ): Promise<RecordChallengeResponseResult> {
   const normalized = validateRecordChallengeResponseInput(input);
   const createId = dependencies.createId ?? randomUUID;
   const now = dependencies.now ?? (() => new Date());
+  const transactionalRepository = repository as RecordChallengeResponseTransactional;
 
-  return repository.transaction(async (tx) => {
+  return transactionalRepository.transaction(async (tx) => {
     const requestId = normalized.requestId ?? createId();
     const existingEvent = await findExistingMoveEvent(tx, {
       userId: normalized.userId,

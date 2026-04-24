@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "../db/client.ts";
-import { findExistingMoveEvent } from "../idempotency/find-existing-move-event.ts";
+import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
 import { maps, movesEvents } from "../db/schema.ts";
 
 export type CreateMapEventType = "map.created";
@@ -47,10 +47,16 @@ type CreateMapDbTx = {
   insert: (table: unknown) => {
     values: (value: Record<string, unknown>) => Promise<unknown>;
   };
-};
+} & SelectableDbTx;
+
+type CreateMapTx = CreateMapRepositoryTx | CreateMapDbTx;
 
 type CreateMapDb = {
-  transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
+  transaction<T>(callback: (tx: CreateMapDbTx) => Promise<T>): Promise<T>;
+};
+
+type CreateMapTransactional = {
+  transaction<T>(callback: (tx: CreateMapTx) => Promise<T>): Promise<T>;
 };
 
 export type CreateMapResult = {
@@ -154,14 +160,15 @@ export function validateCreateMapInput(input: unknown): NormalizedCreateMapInput
 
 export async function createMap(
   input: unknown,
-  repository: CreateMapRepository | CreateMapDb = getDb(),
+  repository: CreateMapRepository | CreateMapDb = getDb() as unknown as CreateMapDb,
   dependencies: CreateMapDependencies = {},
 ): Promise<CreateMapResult> {
   const normalized = validateCreateMapInput(input);
   const createId = dependencies.createId ?? randomUUID;
   const now = dependencies.now ?? (() => new Date());
+  const transactionalRepository = repository as CreateMapTransactional;
 
-  return repository.transaction(async (tx) => {
+  return transactionalRepository.transaction(async (tx) => {
     const timestamp = now();
     const requestId = normalized.requestId ?? createId();
     const existingEvent = await findExistingMoveEvent(tx, {

@@ -31,7 +31,7 @@ export type ChallengeCritiqueStateView =
       critiqueId: null;
     }
   | {
-      status: string;
+      status: "pending" | "failed";
       critiqueId: string;
       critiquePayload?: unknown;
       provider?: string;
@@ -39,7 +39,7 @@ export type ChallengeCritiqueStateView =
       promptVersion?: string;
     }
   | {
-      status: string;
+      status: "ready";
       critiqueId: string;
       body: string;
       critiquePayload?: unknown;
@@ -71,16 +71,120 @@ function readOptionalString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function parseCritiqueBodyPayload(body: string | null): unknown | undefined {
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item) => item.length > 0);
+}
+
+function parseCritiqueBodyPayload(body: string | null): Record<string, unknown> | undefined {
   if (!body || !body.trim()) {
     return undefined;
   }
 
   try {
-    return JSON.parse(body);
+    return asRecord(JSON.parse(body)) ?? undefined;
   } catch {
     return undefined;
   }
+}
+
+function buildMetadataPayload(input: {
+  provider: string | null;
+  model: string | null;
+  promptVersion: string | null;
+}): Record<string, unknown> | undefined {
+  const metadata: Record<string, unknown> = {};
+
+  if (input.provider) {
+    metadata.provider = input.provider;
+  }
+
+  if (input.model) {
+    metadata.model = input.model;
+  }
+
+  if (input.promptVersion) {
+    metadata.promptVersion = input.promptVersion;
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+function buildCritiquePayload(
+  eventPayload: Record<string, unknown> | null,
+  parsedStoredBodyPayload: Record<string, unknown> | undefined,
+  provider: string | null,
+  model: string | null,
+  promptVersion: string | null,
+): Record<string, unknown> | undefined {
+  const critiqueJson = asRecord(eventPayload?.critiqueJson);
+
+  if (critiqueJson) {
+    const payload: Record<string, unknown> = {
+      critique: critiqueJson,
+    };
+    const metadata = buildMetadataPayload({ provider, model, promptVersion });
+
+    if (metadata) {
+      payload.metadata = metadata;
+    }
+
+    return payload;
+  }
+
+  return parsedStoredBodyPayload;
+}
+
+function formatListSection(title: string, items: string[]): string | null {
+  if (!items.length) {
+    return null;
+  }
+
+  return `${title}:\n- ${items.join("\n- ")}`;
+}
+
+function formatCritiqueBodyFromPayload(payload: Record<string, unknown> | undefined): string | null {
+  const critique = asRecord(payload?.critique) ?? payload;
+
+  if (!critique) {
+    return null;
+  }
+
+  const directBody = readOptionalString(critique.body);
+
+  if (directBody) {
+    return directBody;
+  }
+
+  const sections = [
+    readOptionalString(critique.conciseCritiqueSummary) ? `Main challenge: ${readOptionalString(critique.conciseCritiqueSummary)}` : null,
+    readOptionalString(critique.strongestCounterargument)
+      ? `Strongest counterargument: ${readOptionalString(critique.strongestCounterargument)}`
+      : null,
+    formatListSection("Assumptions", readStringArray(critique.assumptions)),
+    formatListSection("Likely failure modes", readStringArray(critique.likelyFailureModes)),
+    formatListSection("Follow-up questions", readStringArray(critique.followUpQuestions)),
+    typeof critique.suggestedConfidenceDelta === "number"
+      ? `Suggested confidence delta: ${critique.suggestedConfidenceDelta}`
+      : null,
+    readOptionalString(critique.uncertaintyNote) ? `Uncertainty note: ${readOptionalString(critique.uncertaintyNote)}` : null,
+  ];
+
+  const body = sections.filter((section): section is string => Boolean(section)).join("\n\n");
+  return body || null;
+}
+
+function normalizeCritiqueStatus(status: string | null | undefined): "pending" | "ready" | "failed" {
+  if (status === "ready" || status === "failed") {
+    return status;
+  }
+
+  return "pending";
 }
 
 function createShellRepository(db: DbClient): BuildShellViewRepository {
@@ -230,11 +334,20 @@ export async function buildChallengeView(
           .limit(1);
 
   const critiqueEventPayload = asRecord(critiqueEventRows[0]?.payloadJson);
-  const critiqueBody = readOptionalString(critiqueRow?.body) ?? readOptionalString(critiqueEventPayload?.body);
-  const critiquePayload = critiqueEventPayload?.critiqueJson ?? parseCritiqueBodyPayload(critiqueBody);
-  const provider = readOptionalString(critiqueEventPayload?.provider);
-  const model = readOptionalString(critiqueEventPayload?.model);
-  const promptVersion = readOptionalString(critiqueEventPayload?.promptVersion);
+  const parsedStoredBodyPayload = parseCritiqueBodyPayload(critiqueRow?.body ?? null);
+  const eventBody = readOptionalString(critiqueEventPayload?.body);
+  const parsedEventBodyPayload = parseCritiqueBodyPayload(eventBody);
+  const parsedBodyPayload = parsedStoredBodyPayload ?? parsedEventBodyPayload;
+  const parsedBodyMetadata = asRecord(parsedBodyPayload?.metadata);
+  const provider = readOptionalString(critiqueEventPayload?.provider) ?? readOptionalString(parsedBodyMetadata?.provider);
+  const model = readOptionalString(critiqueEventPayload?.model) ?? readOptionalString(parsedBodyMetadata?.model);
+  const promptVersion =
+    readOptionalString(critiqueEventPayload?.promptVersion) ?? readOptionalString(parsedBodyMetadata?.promptVersion);
+  const critiquePayload = buildCritiquePayload(critiqueEventPayload, parsedBodyPayload, provider, model, promptVersion);
+  const critiqueBody =
+    (critiqueRow?.body && !parsedStoredBodyPayload ? readOptionalString(critiqueRow.body) : null) ??
+    (eventBody && !parsedEventBodyPayload ? eventBody : null) ??
+    formatCritiqueBodyFromPayload(critiquePayload);
   const critiqueState =
     critiqueRow === null
       ? ({
@@ -242,9 +355,9 @@ export async function buildChallengeView(
           critiqueId: null,
         } satisfies ChallengeCritiqueStateView)
       : {
-          status: critiqueRow.status,
+          status: normalizeCritiqueStatus(critiqueRow.status),
           critiqueId: critiqueRow.id,
-          ...(critiqueRow.status === "ready" && critiqueBody ? { body: critiqueBody } : {}),
+          ...(normalizeCritiqueStatus(critiqueRow.status) === "ready" && critiqueBody ? { body: critiqueBody } : {}),
           ...(critiquePayload !== undefined ? { critiquePayload } : {}),
           ...(provider ? { provider } : {}),
           ...(model ? { model } : {}),

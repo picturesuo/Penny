@@ -25,11 +25,11 @@ type FindExistingMoveEventDbRow = {
   payloadJson: unknown;
 };
 
-type FindExistingMoveEventDbTx = {
+export type SelectableDbTx = {
   select: (...args: unknown[]) => {
     from: (table: unknown) => {
       where: (condition: unknown) => {
-        limit: (count: number) => Promise<FindExistingMoveEventDbRow[]>;
+        limit: (count: number) => Promise<unknown[]>;
       };
     };
   };
@@ -48,7 +48,14 @@ function hasRepositoryLookup(value: unknown): value is IdempotencyAwareRepositor
   );
 }
 
-export async function findExistingMoveEvent(tx: IdempotencyAwareRepositoryTx | FindExistingMoveEventDbTx | any, input: FindExistingMoveEventInput): Promise<ExistingMoveEvent | null> {
+function hasSelectQuery(value: unknown): value is SelectableDbTx {
+  return Boolean(value && typeof value === "object" && "select" in value && typeof (value as SelectableDbTx).select === "function");
+}
+
+export async function findExistingMoveEvent(
+  tx: IdempotencyAwareRepositoryTx | SelectableDbTx,
+  input: FindExistingMoveEventInput,
+): Promise<ExistingMoveEvent | null> {
   if (hasRepositoryLookup(tx)) {
     const existingEvent = (await tx.findMoveEventByRequestId?.(input)) ?? null;
 
@@ -62,6 +69,10 @@ export async function findExistingMoveEvent(tx: IdempotencyAwareRepositoryTx | F
     };
   }
 
+  if (!hasSelectQuery(tx)) {
+    return null;
+  }
+
   const rows = await tx
     .select({
       aggregateId: movesEvents.aggregateId,
@@ -69,7 +80,7 @@ export async function findExistingMoveEvent(tx: IdempotencyAwareRepositoryTx | F
     })
     .from(movesEvents)
     .where(and(eq(movesEvents.userId, input.userId), eq(movesEvents.requestId, input.requestId), eq(movesEvents.type, input.type)))
-    .limit(1);
+    .limit(1) as FindExistingMoveEventDbRow[];
 
   const row = rows[0];
 

@@ -5,9 +5,10 @@ const EVENT_TYPES = [
   "map.created",
   "claim.created",
   "claim.updated",
-  "workspace.selection.set",
+  "workspace.selection.changed",
   "challenge.round.started",
   "challenge.critique.requested",
+  "challenge.critique.generated",
   "challenge.response.recorded",
 ] as const;
 

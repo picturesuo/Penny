@@ -1,16 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
-import { generateChallengeCritique as generateChallengeCritiqueOperation } from "../ai/operations/generateChallengeCritique.ts";
-import { generateChallengeCritique as generateChallengeCritiqueStub } from "../ai/generate-challenge-critique.ts";
 import { getDb } from "../db/client.ts";
-import { challengeCritiques, challengeRounds, claims, maps, movesEvents } from "../db/schema.ts";
-import { findExistingMoveEvent } from "../idempotency/find-existing-move-event.ts";
+import { challengeCritiques, challengeRounds, movesEvents } from "../db/schema.ts";
+import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
 
-export type RequestChallengeCritiqueEventType =
-  | "challenge.critique.requested"
-  | "challenge.critique.generated"
-  | "challenge.critique.failed";
+export type RequestChallengeCritiqueEventType = "challenge.critique.requested";
 
 export type ChallengeCritiqueStatus = "pending" | "ready" | "failed";
 
@@ -32,15 +27,7 @@ export type ChallengeCritiqueRecord = {
   updatedAt: Date;
 };
 
-export type ChallengeCritiqueStoredRecord = {
-  id: string;
-  userId: string;
-  status: Exclude<ChallengeCritiqueStatus, "pending">;
-  body: string | null;
-  updatedAt: Date;
-};
-
-export type ChallengeCritiqueEventRecord = {
+export type ChallengeCritiqueRequestedEventRecord = {
   userId: string;
   aggregateType: "challenge_critique";
   aggregateId: string;
@@ -51,16 +38,9 @@ export type ChallengeCritiqueEventRecord = {
     mapId: string;
     claimId: string;
     status: ChallengeCritiqueStatus;
-    body?: string | null;
-    provider?: string | null;
-    model?: string | null;
-    promptVersion?: string | null;
-    error?: string | null;
   };
   createdAt: Date;
 };
-
-export type ChallengeCritiqueRequestedEventRecord = ChallengeCritiqueEventRecord;
 
 export type RequestChallengeCritiqueRepositoryTx = {
   findMoveEventByRequestId?(input: {
@@ -76,19 +56,8 @@ export type RequestChallengeCritiqueRepositoryTx = {
     roundId: string;
     userId: string;
   }): Promise<{ id: string; mapId: string; claimId: string; userId: string } | null>;
-  findCritiqueGenerationContext?(input: {
-    claimId: string;
-    mapId: string;
-    roundId: string;
-    userId: string;
-  }): Promise<{
-    claimText: string | null;
-    claimConfidenceBps: number | null;
-    mapTitle: string | null;
-  } | null>;
   insertChallengeCritique(record: ChallengeCritiqueRecord): Promise<void>;
-  updateChallengeCritique?(record: ChallengeCritiqueStoredRecord): Promise<void>;
-  insertMoveEvent(event: ChallengeCritiqueEventRecord): Promise<void>;
+  insertMoveEvent(event: ChallengeCritiqueRequestedEventRecord): Promise<void>;
 };
 
 export type RequestChallengeCritiqueRepository = {
@@ -108,54 +77,20 @@ type RequestChallengeCritiqueDbCritiqueRow = {
   body: string | null;
 };
 
-type RequestChallengeCritiqueDbGenerationContextRow = {
-  claimText: string;
-  claimConfidenceBps: number;
-};
-
-type RequestChallengeCritiqueDbMapRow = {
-  mapTitle: string;
-};
-
-type RequestChallengeCritiqueDbTx = {
-  select: (...args: unknown[]) => {
-    from: (table: unknown) => {
-      where: (condition: unknown) => {
-        limit: (count: number) => Promise<unknown[]>;
-      };
-    };
-  };
+type RequestChallengeCritiqueDbTx = SelectableDbTx & {
   insert: (table: unknown) => {
     values: (value: Record<string, unknown>) => Promise<unknown>;
   };
-  update: (table: unknown) => {
-    set: (value: Record<string, unknown>) => {
-      where: (condition: unknown) => Promise<unknown>;
-    };
-  };
 };
+
+type RequestChallengeCritiqueTx = RequestChallengeCritiqueRepositoryTx | RequestChallengeCritiqueDbTx;
 
 type RequestChallengeCritiqueDb = {
   transaction<T>(callback: (tx: RequestChallengeCritiqueDbTx) => Promise<T>): Promise<T>;
 };
 
-type LoadedChallengeCritiqueContext = {
-  roundId: string;
-  mapId: string;
-  claimId: string;
-  userId: string;
-  claimText: string | null;
-  claimConfidenceBps: number | null;
-  mapTitle: string | null;
-};
-
-type GeneratedChallengeCritiqueArtifact = {
-  body: string;
-  metadata: {
-    model: string | null;
-    promptVersion: string | null;
-    provider: string | null;
-  };
+type RequestChallengeCritiqueTransactional = {
+  transaction<T>(callback: (tx: RequestChallengeCritiqueTx) => Promise<T>): Promise<T>;
 };
 
 export type RequestChallengeCritiqueResult = {
@@ -165,7 +100,6 @@ export type RequestChallengeCritiqueResult = {
 
 export type RequestChallengeCritiqueDependencies = {
   createId?: () => string;
-  generateCritique?: (input: LoadedChallengeCritiqueContext) => Promise<GeneratedChallengeCritiqueArtifact>;
   now?: () => Date;
 };
 
@@ -192,18 +126,17 @@ type NormalizedRequestChallengeCritiqueInput = {
 const PENDING_STATUS = "pending" as const;
 const READY_STATUS = "ready" as const;
 const FAILED_STATUS = "failed" as const;
-const FALLBACK_PROMPT_VERSION = "generateChallengeCritique.stub.v1";
-const FALLBACK_MODEL = "heuristic-stub";
-const FALLBACK_PROVIDER = "local";
 
-function readPayloadStatus(payload: Record<string, unknown> | null): ChallengeCritiqueStatus {
-  const status = payload?.status;
-
+function normalizeStoredStatus(status: string | null | undefined): ChallengeCritiqueStatus {
   if (status === READY_STATUS || status === FAILED_STATUS || status === PENDING_STATUS) {
     return status;
   }
 
   return PENDING_STATUS;
+}
+
+function readPayloadStatus(payload: Record<string, unknown> | null): ChallengeCritiqueStatus {
+  return normalizeStoredStatus(typeof payload?.status === "string" ? payload.status : null);
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -275,6 +208,10 @@ function isRequestChallengeCritiqueRepositoryTx(value: unknown): value is Reques
   );
 }
 
+function hasSelectQuery(value: RequestChallengeCritiqueTx): value is RequestChallengeCritiqueDbTx {
+  return "select" in value && typeof value.select === "function";
+}
+
 export function validateRequestChallengeCritiqueInput(input: unknown): NormalizedRequestChallengeCritiqueInput {
   const object = asObject(input);
 
@@ -285,104 +222,19 @@ export function validateRequestChallengeCritiqueInput(input: unknown): Normalize
   };
 }
 
-function normalizeClaimConfidencePercent(confidenceBps: number | null) {
-  if (typeof confidenceBps !== "number" || !Number.isFinite(confidenceBps)) {
-    return 50;
-  }
-
-  return Math.max(0, Math.min(100, Math.round(confidenceBps / 100)));
-}
-
-function serializeGeneratedCritique(
-  critique: unknown,
-  metadata: { provider: string | null; model: string | null; promptVersion: string | null },
-) {
-  return JSON.stringify(
-    {
-      critique,
-      metadata,
-    },
-    null,
-    2,
-  );
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-
-  return String(error);
-}
-
-async function defaultGenerateCritique(input: LoadedChallengeCritiqueContext): Promise<GeneratedChallengeCritiqueArtifact> {
-  const claimText = input.claimText?.trim() || "This claim needs a sharper challenge critique and a falsifiable test.";
-
-  try {
-    const generated = await generateChallengeCritiqueOperation(
-      {
-        claimId: input.claimId,
-        claimText,
-        claimConfidence: normalizeClaimConfidencePercent(input.claimConfidenceBps),
-        mapTitle: input.mapTitle,
-        neighboringClaims: [],
-        previousRounds: [],
-      },
-      {
-        userId: input.userId,
-        mapId: input.mapId,
-        claimId: input.claimId,
-        roundId: input.roundId,
-      },
-    );
-
-    return {
-      body: serializeGeneratedCritique(generated.output, {
-        provider: generated.meta.provider,
-        model: generated.meta.model,
-        promptVersion: generated.meta.promptVersion,
-      }),
-      metadata: {
-        provider: generated.meta.provider,
-        model: generated.meta.model,
-        promptVersion: generated.meta.promptVersion,
-      },
-    };
-  } catch {
-    const generated = generateChallengeCritiqueStub({
-      claim: claimText,
-    });
-
-    return {
-      body: serializeGeneratedCritique(
-        {
-          body: generated.body,
-        },
-        {
-          provider: FALLBACK_PROVIDER,
-          model: FALLBACK_MODEL,
-          promptVersion: FALLBACK_PROMPT_VERSION,
-        },
-      ),
-      metadata: {
-        provider: FALLBACK_PROVIDER,
-        model: FALLBACK_MODEL,
-        promptVersion: FALLBACK_PROMPT_VERSION,
-      },
-    };
-  }
-}
-
 async function findOwnedCritique(
-  tx: RequestChallengeCritiqueRepositoryTx | RequestChallengeCritiqueDbTx,
+  tx: RequestChallengeCritiqueTx,
   input: { critiqueId: string; userId: string },
 ): Promise<{ id: string; status: string; body: string | null } | null> {
   if (isRequestChallengeCritiqueRepositoryTx(tx) && tx.findOwnedCritique) {
     return (await tx.findOwnedCritique(input)) ?? null;
   }
 
-  const dbTx = tx as RequestChallengeCritiqueDbTx;
-  const rows = (await dbTx
+  if (!hasSelectQuery(tx)) {
+    return null;
+  }
+
+  const rows = (await tx
     .select({
       id: challengeCritiques.id,
       status: challengeCritiques.status,
@@ -395,86 +247,16 @@ async function findOwnedCritique(
   return rows[0] ?? null;
 }
 
-async function loadChallengeCritiqueContext(
-  tx: RequestChallengeCritiqueRepositoryTx | RequestChallengeCritiqueDbTx,
-  input: { claimId: string; mapId: string; roundId: string; userId: string },
-): Promise<LoadedChallengeCritiqueContext> {
-  if (isRequestChallengeCritiqueRepositoryTx(tx) && tx.findCritiqueGenerationContext) {
-    const context = await tx.findCritiqueGenerationContext(input);
-
-    return {
-      roundId: input.roundId,
-      mapId: input.mapId,
-      claimId: input.claimId,
-      userId: input.userId,
-      claimText: context?.claimText ?? null,
-      claimConfidenceBps: context?.claimConfidenceBps ?? null,
-      mapTitle: context?.mapTitle ?? null,
-    };
-  }
-
-  const dbTx = tx as RequestChallengeCritiqueDbTx;
-  const generationRows = (await dbTx
-    .select({
-      claimText: claims.body,
-      claimConfidenceBps: claims.confidenceBps,
-    })
-    .from(claims)
-    .where(and(eq(claims.id, input.claimId), eq(claims.mapId, input.mapId), eq(claims.userId, input.userId)))
-    .limit(1)) as RequestChallengeCritiqueDbGenerationContextRow[];
-
-  const generationRow = generationRows[0] ?? null;
-  const mapRows = (await dbTx
-    .select({
-      mapTitle: maps.title,
-    })
-    .from(maps)
-    .where(and(eq(maps.id, input.mapId), eq(maps.userId, input.userId)))
-    .limit(1)) as RequestChallengeCritiqueDbMapRow[];
-  const mapRow = mapRows[0] ?? null;
-
-  return {
-    roundId: input.roundId,
-    mapId: input.mapId,
-    claimId: input.claimId,
-      userId: input.userId,
-      claimText: generationRow?.claimText ?? null,
-      claimConfidenceBps: generationRow?.claimConfidenceBps ?? null,
-      mapTitle: mapRow?.mapTitle ?? null,
-    };
-}
-
-async function updateStoredCritique(
-  tx: RequestChallengeCritiqueRepositoryTx | RequestChallengeCritiqueDbTx,
-  record: ChallengeCritiqueStoredRecord,
-) {
-  if (isRequestChallengeCritiqueRepositoryTx(tx) && tx.updateChallengeCritique) {
-    await tx.updateChallengeCritique(record);
-    return;
-  }
-
-  const dbTx = tx as RequestChallengeCritiqueDbTx;
-  await dbTx
-    .update(challengeCritiques)
-    .set({
-      status: record.status,
-      body: record.body,
-      updatedAt: record.updatedAt,
-    })
-    .where(and(eq(challengeCritiques.id, record.id), eq(challengeCritiques.userId, record.userId)));
-}
-
 async function insertCritiqueEvent(
-  tx: RequestChallengeCritiqueRepositoryTx | RequestChallengeCritiqueDbTx,
-  event: ChallengeCritiqueEventRecord,
+  tx: RequestChallengeCritiqueTx,
+  event: ChallengeCritiqueRequestedEventRecord,
 ) {
   if (isRequestChallengeCritiqueRepositoryTx(tx)) {
     await tx.insertMoveEvent(event);
     return;
   }
 
-  const dbTx = tx as RequestChallengeCritiqueDbTx;
-  await dbTx.insert(movesEvents).values({
+  await tx.insert(movesEvents).values({
     userId: event.userId,
     aggregateType: event.aggregateType,
     aggregateId: event.aggregateId,
@@ -487,17 +269,15 @@ async function insertCritiqueEvent(
 
 export async function requestChallengeCritique(
   input: unknown,
-  repository: RequestChallengeCritiqueRepository | RequestChallengeCritiqueDb = getDb() as unknown as
-    | RequestChallengeCritiqueRepository
-    | RequestChallengeCritiqueDb,
+  repository: RequestChallengeCritiqueRepository | RequestChallengeCritiqueDb = getDb() as unknown as RequestChallengeCritiqueDb,
   dependencies: RequestChallengeCritiqueDependencies = {},
 ): Promise<RequestChallengeCritiqueResult> {
   const normalized = validateRequestChallengeCritiqueInput(input);
   const createId = dependencies.createId ?? randomUUID;
   const now = dependencies.now ?? (() => new Date());
-  const generateCritique = dependencies.generateCritique ?? defaultGenerateCritique;
+  const transactionalRepository = repository as RequestChallengeCritiqueTransactional;
 
-  return repository.transaction(async (tx) => {
+  return transactionalRepository.transaction(async (tx) => {
     const requestId = normalized.requestId ?? createId();
     const existingEvent = await findExistingMoveEvent(tx, {
       userId: normalized.userId,
@@ -513,9 +293,7 @@ export async function requestChallengeCritique(
 
       return {
         critiqueId: existingEvent.aggregateId,
-        status: existingCritique
-          ? (existingCritique.status as ChallengeCritiqueStatus)
-          : readPayloadStatus(existingEvent.payload),
+        status: existingCritique ? normalizeStoredStatus(existingCritique.status) : readPayloadStatus(existingEvent.payload),
       };
     }
 
@@ -525,7 +303,7 @@ export async function requestChallengeCritique(
           userId: normalized.userId,
         })
       : (
-          (await (tx as RequestChallengeCritiqueDbTx)
+          (await tx
             .select({
               id: challengeRounds.id,
               mapId: challengeRounds.mapId,
@@ -585,78 +363,9 @@ export async function requestChallengeCritique(
       createdAt: timestamp,
     });
 
-    try {
-      const context = await loadChallengeCritiqueContext(tx, {
-        roundId: ownedRound.id,
-        mapId: ownedRound.mapId,
-        claimId: ownedRound.claimId,
-        userId: normalized.userId,
-      });
-      const generated = await generateCritique(context);
-      const updatedAt = now();
-
-      await updateStoredCritique(tx, {
-        id: critiqueId,
-        userId: normalized.userId,
-        status: READY_STATUS,
-        body: generated.body,
-        updatedAt,
-      });
-
-      await insertCritiqueEvent(tx, {
-        userId: normalized.userId,
-        aggregateType: "challenge_critique",
-        aggregateId: critiqueId,
-        requestId,
-        type: "challenge.critique.generated",
-        payload: {
-          roundId: ownedRound.id,
-          mapId: ownedRound.mapId,
-          claimId: ownedRound.claimId,
-          status: READY_STATUS,
-          body: generated.body,
-          provider: generated.metadata.provider,
-          model: generated.metadata.model,
-          promptVersion: generated.metadata.promptVersion,
-        },
-        createdAt: updatedAt,
-      });
-
-      return {
-        critiqueId,
-        status: READY_STATUS,
-      };
-    } catch (error) {
-      const updatedAt = now();
-
-      await updateStoredCritique(tx, {
-        id: critiqueId,
-        userId: normalized.userId,
-        status: FAILED_STATUS,
-        body: null,
-        updatedAt,
-      });
-
-      await insertCritiqueEvent(tx, {
-        userId: normalized.userId,
-        aggregateType: "challenge_critique",
-        aggregateId: critiqueId,
-        requestId,
-        type: "challenge.critique.failed",
-        payload: {
-          roundId: ownedRound.id,
-          mapId: ownedRound.mapId,
-          claimId: ownedRound.claimId,
-          status: FAILED_STATUS,
-          error: getErrorMessage(error),
-        },
-        createdAt: updatedAt,
-      });
-
-      return {
-        critiqueId,
-        status: FAILED_STATUS,
-      };
-    }
+    return {
+      critiqueId,
+      status: PENDING_STATUS,
+    };
   });
 }
