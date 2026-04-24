@@ -16,6 +16,8 @@ Current backend structure:
 - `server/ai/providers/**`: Anthropic/xAI transport wrappers and provider errors.
 - `server/ai/providers/types.ts`: shared AI provider interface and normalized request/response/error types.
 - `server/ai/providers/mock.ts`: deterministic mock provider for tests and no-key local flows.
+- `server/ai/providers/openai.ts`: OpenAI Responses API structured-output wrapper.
+- `server/ai/providers/configured.ts`: chooses OpenAI only when `OPENAI_API_KEY` exists; otherwise uses the mock provider.
 - `server/ai/routing/**`: model policy and provider route selection.
 - `server/ai/schemas/**`: structured output validation.
 - `server/ai/tracing/**`: Langfuse tracing helpers.

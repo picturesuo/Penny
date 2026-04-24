@@ -29,7 +29,7 @@ export type AiProviderResponse = {
   usage: AiProviderUsage;
 };
 
-export type AiProviderName = "anthropic" | "mock" | "xai" | (string & {});
+export type AiProviderName = "anthropic" | "mock" | "openai" | "xai" | (string & {});
 
 export type AiProvider = {
   invokeStructured(request: AiProviderRequest): Promise<AiProviderResponse>;
