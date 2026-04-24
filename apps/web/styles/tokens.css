@@ -68,6 +68,13 @@
   --glass-blur: blur(22px);
 
   --shell-sidebar-width: 280px;
-  --shell-inspector-width: 320px;
+  --shell-inspector-width: 336px;
   --shell-topbar-height: 72px;
+  --shell-page-gutter: var(--space-8);
+  --shell-page-gutter-mobile: var(--space-4);
+  --shell-content-gap: var(--space-6);
+  --shell-card-gap: var(--space-4);
+  --shell-card-padding: var(--space-6);
+  --graph-panel-padding: var(--space-4);
+  --graph-area-min-height: 520px;
 }

@@ -67,9 +67,9 @@ textarea {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--shell-content-gap);
   border-right: var(--border-subtle);
-  padding: var(--space-5);
+  padding: var(--shell-card-padding);
   background:
     var(--glass-panel),
     rgba(13, 18, 16, 0.74);
@@ -218,9 +218,9 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-5);
+  gap: var(--shell-card-gap);
   border-bottom: var(--border-subtle);
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--shell-page-gutter);
   background:
     var(--glass-panel),
     rgba(13, 18, 16, 0.64);
@@ -303,8 +303,8 @@ textarea {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--shell-inspector-width);
-  gap: var(--space-6);
-  padding: var(--space-6);
+  gap: var(--shell-content-gap);
+  padding: var(--shell-content-gap) var(--shell-page-gutter);
 }
 
 .workspace-layout__main {
@@ -314,7 +314,7 @@ textarea {
 .inspector-rail {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--shell-card-gap);
 }
 
 .inspector-rail__copy {
@@ -332,17 +332,17 @@ textarea {
 
 .workspace-home {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--shell-content-gap);
 }
 
 .workspace-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
-  gap: var(--space-6);
+  gap: var(--shell-content-gap);
   border: var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: var(--space-8);
+  padding: var(--shell-page-gutter);
   background:
     linear-gradient(135deg, rgba(105, 185, 154, 0.16), transparent 42%),
     var(--glass-panel),
@@ -368,7 +368,7 @@ textarea {
 .workspace-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
-  gap: var(--space-6);
+  gap: var(--shell-content-gap);
 }
 
 .mode-card-stack {
@@ -466,7 +466,7 @@ textarea {
 }
 
 .ui-card {
-  padding: var(--space-4);
+  padding: var(--shell-card-padding);
 }
 
 .ui-card--muted {
@@ -477,8 +477,8 @@ textarea {
 
 .ui-panel {
   display: grid;
-  gap: var(--space-4);
-  padding: var(--space-5);
+  gap: var(--shell-card-gap);
+  padding: var(--shell-card-padding);
 }
 
 .ui-panel__header {
@@ -841,8 +841,8 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 18px 32px;
+  gap: var(--shell-card-gap);
+  padding: var(--space-4) var(--shell-page-gutter);
   border-bottom: var(--border-subtle);
   background:
     var(--glass-panel),
@@ -950,8 +950,8 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 14px 32px;
+  gap: var(--shell-card-gap);
+  padding: var(--space-3) var(--shell-page-gutter);
   border-bottom: var(--border-subtle);
   background:
     linear-gradient(180deg, rgba(255, 253, 247, 0.06), rgba(255, 253, 247, 0.035)),
@@ -994,37 +994,37 @@ textarea {
 .penny-main-content {
   width: min(1180px, 100%);
   margin: 0 auto;
-  padding: 40px 32px 56px;
+  padding: var(--shell-content-gap) var(--shell-page-gutter) var(--space-12);
 }
 
 .penny-content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
-  gap: 18px;
+  gap: var(--shell-content-gap);
 }
 
 .penny-workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(290px, 340px);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, var(--shell-inspector-width));
   align-items: start;
-  gap: 18px;
+  gap: var(--shell-content-gap);
 }
 
 .penny-workspace-main,
 .penny-inspector-rail {
   min-width: 0;
   display: grid;
-  gap: 18px;
+  gap: var(--shell-card-gap);
 }
 
 .penny-inspector-rail {
   position: sticky;
-  top: 18px;
+  top: var(--shell-card-gap);
 }
 
 .penny-panel {
   min-width: 0;
-  padding: 24px;
+  padding: var(--shell-card-padding);
   border: var(--glass-border);
   border-radius: var(--radius-lg);
   background:
@@ -1038,8 +1038,8 @@ textarea {
   display: flex;
   align-items: start;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--shell-card-gap);
+  margin-bottom: var(--shell-card-gap);
 }
 
 .penny-panel-heading h2,
@@ -1059,11 +1059,11 @@ textarea {
 }
 
 .penny-graph-panel {
-  padding: 18px;
+  padding: var(--graph-panel-padding);
 }
 
 .penny-graph-panel [data-testid="penny-brain-graph-map"] {
-  min-height: 520px;
+  min-height: var(--graph-area-min-height);
 }
 
 .penny-hero-panel {
@@ -1104,7 +1104,7 @@ textarea {
 
 .penny-list {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .penny-claim-button {
@@ -1155,7 +1155,7 @@ textarea {
 
 .penny-facts {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   margin: 0;
 }
 
@@ -1174,12 +1174,12 @@ textarea {
 }
 
 .penny-inspector-section {
-  padding: 18px;
+  padding: var(--space-5);
 }
 
 .penny-inspector-list {
   display: grid;
-  gap: 10px;
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
 }
@@ -1275,8 +1275,8 @@ textarea {
 
 .penny-placeholder-card {
   display: grid;
-  gap: 18px;
-  padding: 18px;
+  gap: var(--shell-card-gap);
+  padding: var(--space-5);
   border: 1px solid rgba(47, 107, 85, 0.18);
   border-radius: 8px;
   background:
@@ -1525,9 +1525,10 @@ textarea {
   .app-sidebar {
     position: static;
     height: auto;
-    gap: var(--space-4);
+    gap: var(--shell-card-gap);
     border-right: 0;
     border-bottom: var(--border-subtle);
+    padding: var(--shell-page-gutter-mobile);
   }
 
   .app-sidebar__nav {
@@ -1545,7 +1546,7 @@ textarea {
   .top-toolbar {
     align-items: stretch;
     flex-direction: column;
-    padding: var(--space-4);
+    padding: var(--space-4) var(--shell-page-gutter-mobile);
   }
 
   .top-toolbar__actions {
@@ -1568,7 +1569,7 @@ textarea {
   }
 
   .workspace-layout {
-    padding: var(--space-4);
+    padding: var(--shell-page-gutter-mobile);
   }
 
   .workspace-hero {
@@ -1588,7 +1589,7 @@ textarea {
   .penny-breadcrumb-band {
     align-items: stretch;
     flex-direction: column;
-    padding-inline: 18px;
+    padding-inline: var(--shell-page-gutter-mobile);
   }
 
   .penny-command-button {
@@ -1606,7 +1607,7 @@ textarea {
   }
 
   .penny-main-content {
-    padding: 24px 18px 40px;
+    padding: var(--space-5) var(--shell-page-gutter-mobile) var(--space-10);
   }
 
   .penny-content-grid,
@@ -1619,7 +1620,7 @@ textarea {
   }
 
   .penny-panel {
-    padding: 18px;
+    padding: var(--space-5);
   }
 
   .penny-panel-heading {
