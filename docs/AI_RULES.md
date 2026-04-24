@@ -4,15 +4,26 @@ These rules define the initial server-side contract for AI work in Penny. This f
 
 ## Core rules
 
-- No UI component calls model APIs directly.
-- No route handler contains raw prompt logic unless it delegates immediately to the server AI layer.
-- Every AI operation has a name, schema, prompt version, provider, and trace name.
-- All AI outputs must be schema-validated before persistence.
-- One repair pass max is allowed on invalid output.
-- No provider-specific logic exists outside `server/ai/providers` and `server/ai/routing`.
+- No model calls from UI.
+- No raw prompt logic in route handlers.
+- All outputs are schema-validated.
+- One repair pass max.
+- Provider-specific logic stays in `server/ai/providers` and `server/ai/routing`.
 
 ## Initial scope
 
-Start with one operation only:
+Start with `generateChallengeCritique` only.
 
-- `generateChallengeCritique`
+## Manual audit
+
+Check for provider calls outside `server/ai`:
+
+```bash
+rg -n "invokeAnthropic|invokeXai|ANTHROPIC_API_KEY|XAI_API_KEY|api\\.anthropic\\.com|api\\.x\\.ai" . --glob '!server/ai/**' --glob '!node_modules'
+```
+
+Check for raw prompts outside `server/ai/prompts`:
+
+```bash
+rg -n "system prompt|user prompt|Return only JSON|You generate|Response format instructions" . --glob '!server/ai/prompts/**' --glob '!node_modules'
+```
