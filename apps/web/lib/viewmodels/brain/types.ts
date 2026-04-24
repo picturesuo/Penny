@@ -40,6 +40,22 @@ export type BrainThoughtViewModel = {
   isSelected: boolean;
 };
 
+export type BrainRelatedClaimPreview = {
+  id: string;
+  title: string;
+  confidenceLabel: string;
+  brainMapHref: string;
+};
+
+export type BrainSelectedClaimPanel = {
+  title: string;
+  body: string;
+  confidenceLabel: string;
+  dependenciesLabel: string;
+  relatedClaims: BrainRelatedClaimPreview[];
+  brainMapHref: string;
+};
+
 export type BrainViewModel = {
   context: {
     mode: string;
@@ -51,6 +67,7 @@ export type BrainViewModel = {
   };
   stream: BrainThoughtViewModel[];
   selectedThought: BrainThoughtViewModel | null;
+  selectedPanel: BrainSelectedClaimPanel | null;
   recentThoughts: BrainThoughtViewModel[];
   inspector: {
     status: string;
