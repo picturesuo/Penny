@@ -132,17 +132,27 @@ test("buildChallengeView preserves claimId after a Brain to Challenge switch", a
       ],
     });
     assert.deepEqual(challengeView.workspaceContext, challengeView.shellContext);
+    assert.deepEqual(challengeView.currentContext, challengeView.shellContext);
 
     assert.equal(challengeView.activeClaim?.id, claim.claimId);
     assert.equal(challengeView.activeClaim?.body, "Challenge mode should preserve this claim.");
+    assert.equal(challengeView.selectedClaim?.id, claim.claimId);
+    assert.equal(challengeView.selectedClaim?.body, "Challenge mode should preserve this claim.");
     assert.equal(challengeView.activeChallengeRound?.id, roundId);
     assert.equal(challengeView.activeChallengeRound?.claimId, claim.claimId);
+    assert.equal(challengeView.latestChallengeRound?.id, roundId);
+    assert.equal(challengeView.latestChallengeRound?.claimId, claim.claimId);
     assert.deepEqual(challengeView.critiqueState, {
       status: "not_requested",
       critiqueId: null,
     });
     assert.equal(challengeView.critiqueStatus, "not_requested");
     assert.equal(challengeView.critiquePayload, undefined);
+    assert.deepEqual(challengeView.responseState, {
+      status: "not_recorded",
+    });
+    assert.equal(challengeView.responseStatus, "not_recorded");
+    assert.equal(challengeView.responsePayload, undefined);
   } finally {
     await sql.end({ timeout: 1 });
   }
