@@ -32,6 +32,8 @@ Endpoint integration:
 - Requesting critique posts to `POST /api/commands/challenge/request-critique`.
 - Recording Defend / Revise / Absorb responses posts to `POST /api/commands/challenge/respond`.
 
+Mocked adapters are not used for this slice because the required Challenge and Learn endpoints are mounted. The UI still has local placeholder and error states for incomplete data or unavailable projection responses.
+
 Challenge state mapping:
 
 - `no_round_yet`: selected claim may exist, but there is no active round.
@@ -78,7 +80,7 @@ Learn state mapping:
 Targeted checks run on 2026-04-24:
 
 ```bash
-pnpm exec tsx --test tests/ui/challenge/challenge-experience.test.ts tests/ui/learn/learn-experience.test.ts
+pnpm exec tsx --test tests/ui/challenge/challenge-endpoints.test.ts tests/ui/challenge/challenge-experience.test.ts tests/ui/learn/learn-experience.test.ts
 pnpm exec eslint apps/web/components/penny-shell.tsx apps/web/components/challenge/challenge-experience.tsx apps/web/components/learn/learn-experience.tsx apps/web/lib/viewmodels/challenge/challenge-experience.ts apps/web/lib/viewmodels/learn/learn-experience.ts tests/ui/challenge/challenge-experience.test.ts tests/ui/learn/learn-experience.test.ts
 ```
 
