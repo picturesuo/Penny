@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike } from "drizzle-orm";
+import { and, desc, eq, ilike, sql } from "drizzle-orm";
 
 import { apiError, apiOk } from "../../../lib/api/response";
 import { logBackendError } from "../../../lib/backend-error-logging";
@@ -100,12 +100,11 @@ async function searchWorkspace(input: { userId: string; query: string }) {
         expiresAt: sessions.expiresAt,
       })
       .from(sessions)
-      .where(eq(sessions.userId, input.userId))
+      .where(and(eq(sessions.userId, input.userId), sql`${sessions.id}::text ilike ${pattern}`))
       .orderBy(desc(sessions.createdAt), desc(sessions.id))
-      .limit(20),
+      .limit(6),
   ]);
 
-  const normalizedQuery = input.query.toLowerCase();
   const results: RankedSearchResult[] = [
     ...mapRows.map((row) => ({
       id: row.id,
@@ -134,17 +133,15 @@ async function searchWorkspace(input: { userId: string; query: string }) {
       href: row.mapId ? `/workspace?mapId=${row.mapId}` : null,
       sortAt: row.updatedAt,
     })),
-    ...sessionRows
-      .filter((row) => row.id.toLowerCase().includes(normalizedQuery))
-      .map((row) => ({
-        id: row.id,
-        type: "session" as const,
-        title: sessionTitle(row.id),
-        subtitle: `Expires ${row.expiresAt.toISOString()}`,
-        confidence: null,
-        href: null,
-        sortAt: row.createdAt,
-      })),
+    ...sessionRows.map((row) => ({
+      id: row.id,
+      type: "session" as const,
+      title: sessionTitle(row.id),
+      subtitle: `Expires ${row.expiresAt.toISOString()}`,
+      confidence: null,
+      href: null,
+      sortAt: row.createdAt,
+    })),
   ];
 
   const sortedResults: RankedSearchResult[] = [...results].sort(
