@@ -108,3 +108,56 @@ test("GET /api/workspace/shell returns the current workspace context", async () 
     await sql.end({ timeout: 1 });
   }
 });
+
+test("workspace context preserves mapId and claimId when mode switches from brain to challenge", async () => {
+  const userId = "00000000-0000-0000-0000-000000000124";
+  const mapId = "00000000-0000-0000-0000-000000000654";
+  const claimId = "00000000-0000-0000-0000-000000000655";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into maps (id, user_id, title)
+      values (${mapId}, ${userId}, ${"Critical workspace map"})
+    `;
+
+    await sql`
+      insert into claims (id, map_id, user_id, body, confidence_bps)
+      values (${claimId}, ${mapId}, ${userId}, ${"Critical workspace claim"}, ${6400})
+    `;
+
+    await sql`
+      insert into workspace_contexts (user_id, map_id, claim_id, mode)
+      values (${userId}, ${mapId}, ${claimId}, ${"brain"})
+    `;
+
+    await sql`
+      update workspace_contexts
+      set mode = ${"challenge"}, updated_at = now()
+      where user_id = ${userId}
+    `;
+
+    const response = await GET(
+      new Request("http://localhost/api/workspace/shell", {
+        method: "GET",
+        headers: {
+          "x-user-id": userId,
+        },
+      }),
+    );
+
+    assert.equal(response.status, 200);
+
+    const payload = (await response.json()) as {
+      mode: string;
+      mapId: string | null;
+      claimId: string | null;
+    };
+
+    assert.equal(payload.mode, "challenge");
+    assert.equal(payload.mapId, mapId);
+    assert.equal(payload.claimId, claimId);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
