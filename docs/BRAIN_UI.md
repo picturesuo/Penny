@@ -28,6 +28,12 @@ The viewmodel intentionally maps backend `claims` to UI `thoughts` for the Brain
 
 The Brain fetch adapter reads both `GET /api/workspace/shell` and `GET /api/workspace/brain` with the UUID user header. Mock mode bypasses this adapter so UI work can continue without live backend data.
 
+## Interactions
+
+- Selecting a claim updates local Brain selection and stores the selected `claimId` in the URL.
+- Switching Brain / Challenge / Learn mode updates local mode state while preserving the selected `claimId` in the URL. The Brain screen does not build Challenge or Learn detail.
+- `New Thought` is a placeholder action that announces the future creation flow without writing data.
+
 ## Mock Data
 
 Use `/brain?mock=1` or `/brain?brainMock=true` to render deterministic mock Brain data without calling `GET /api/workspace/brain`. The mock projection lives in `apps/web/lib/viewmodels/brain/mock-data.ts` and covers populated stream rows, selected claim panel, related claims, Work sphere, and recent sessions.
