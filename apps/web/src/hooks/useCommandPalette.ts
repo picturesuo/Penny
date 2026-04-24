@@ -11,18 +11,31 @@ export type { CommandResult };
 export type CommandPaletteItem = CommandResult & {
   keywords?: string[];
   disabled?: boolean;
+  shouldNavigateAfterSelect?: boolean;
   onSelect: () => void | Promise<void>;
 };
 
 type UseCommandPaletteInput = {
   items: CommandPaletteItem[];
   enableBackendSearch?: boolean;
+  onClearSelection?: () => boolean;
+  onFocusContextInput?: () => boolean;
+  onSelectBackendResult?: (result: CommandResult) => void | Promise<void>;
+  onSwitchMode?: (mode: "brain" | "challenge" | "learn") => void | Promise<void>;
 };
 
 type BackendSearchStatus = "idle" | "loading" | "available" | "unavailable" | "error";
 
 function normalizeSearchText(value: string) {
   return value.trim().toLowerCase();
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
 
 function itemSearchText(item: CommandPaletteItem) {
@@ -33,12 +46,17 @@ function itemSearchText(item: CommandPaletteItem) {
   );
 }
 
-function backendResultToCommandItem(result: CommandResult): CommandPaletteItem {
+function backendResultToCommandItem(
+  result: CommandResult,
+  onSelectBackendResult?: (result: CommandResult) => void | Promise<void>,
+): CommandPaletteItem {
   return {
     ...result,
     id: `backend:${result.type}:${result.id}`,
+    href: onSelectBackendResult ? null : result.href,
+    shouldNavigateAfterSelect: !onSelectBackendResult,
     title: result.title,
-    onSelect: () => undefined,
+    onSelect: () => onSelectBackendResult?.(result),
   };
 }
 
@@ -46,17 +64,24 @@ function createSearchTodoItem(): CommandPaletteItem {
   return {
     id: "todo:global-search-backend",
     type: "session",
-    title: "TODO: Connect backend global search",
-    subtitle: "Using frontend-only placeholder results until /api/search exists.",
+    title: "Search is temporarily unavailable",
+    subtitle: "Showing local workspace commands until backend search responds.",
     confidence: null,
     href: null,
     disabled: true,
-    keywords: ["todo", "search", "backend", "placeholder"],
+    keywords: ["search", "backend", "unavailable"],
     onSelect: () => undefined,
   };
 }
 
-export function useCommandPalette({ enableBackendSearch = true, items }: UseCommandPaletteInput) {
+export function useCommandPalette({
+  enableBackendSearch = true,
+  items,
+  onClearSelection,
+  onFocusContextInput,
+  onSelectBackendResult,
+  onSwitchMode,
+}: UseCommandPaletteInput) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [backendResults, setBackendResults] = useState<CommandPaletteItem[] | null>(null);
@@ -81,14 +106,55 @@ export function useCommandPalette({ enableBackendSearch = true, items }: UseComm
         return;
       }
 
-      const isCommandK = event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey);
+      const targetIsEditable = isEditableTarget(event.target);
+      const key = event.key.toLowerCase();
+      const isCommandK = key === "k" && (event.metaKey || event.ctrlKey) && !event.altKey;
 
-      if (!isCommandK) {
+      if (isCommandK && !targetIsEditable) {
+        event.preventDefault();
+        open();
         return;
       }
 
-      event.preventDefault();
-      toggle();
+      if (event.key === "Escape") {
+        if (isOpen) {
+          event.preventDefault();
+          close();
+          return;
+        }
+
+        if (!targetIsEditable && onClearSelection?.()) {
+          event.preventDefault();
+        }
+
+        return;
+      }
+
+      if (targetIsEditable || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      if (event.key === "/") {
+        event.preventDefault();
+
+        if (!onFocusContextInput?.()) {
+          open();
+        }
+
+        return;
+      }
+
+      const modeByKey = {
+        b: "brain",
+        c: "challenge",
+        l: "learn",
+      } as const;
+      const nextMode = modeByKey[key as keyof typeof modeByKey];
+
+      if (nextMode) {
+        event.preventDefault();
+        void onSwitchMode?.(nextMode);
+      }
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -96,7 +162,7 @@ export function useCommandPalette({ enableBackendSearch = true, items }: UseComm
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [toggle]);
+  }, [close, isOpen, onClearSelection, onFocusContextInput, onSwitchMode, open]);
 
   useEffect(() => {
     const normalizedQuery = normalizeSearchText(query);
@@ -124,7 +190,7 @@ export function useCommandPalette({ enableBackendSearch = true, items }: UseComm
             return;
           }
 
-          setBackendResults(results.map(backendResultToCommandItem));
+          setBackendResults(results.map((result) => backendResultToCommandItem(result, onSelectBackendResult)));
           setBackendSearchStatus("available");
         })
         .catch(() => {
@@ -141,7 +207,7 @@ export function useCommandPalette({ enableBackendSearch = true, items }: UseComm
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [enableBackendSearch, query]);
+  }, [enableBackendSearch, onSelectBackendResult, query]);
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = normalizeSearchText(query);
@@ -156,7 +222,6 @@ export function useCommandPalette({ enableBackendSearch = true, items }: UseComm
 
     const localResults = items.filter((item) => itemSearchText(item).includes(normalizedQuery));
 
-    // TODO: Replace these frontend-only placeholder results once /api/search is implemented.
     if (backendSearchStatus === "unavailable") {
       return [...localResults, createSearchTodoItem()];
     }
@@ -170,13 +235,12 @@ export function useCommandPalette({ enableBackendSearch = true, items }: UseComm
         return;
       }
 
-      if (item.href) {
+      await item.onSelect();
+
+      if (item.href && item.shouldNavigateAfterSelect) {
         window.location.assign(item.href);
-        close();
-        return;
       }
 
-      await item.onSelect();
       close();
     },
     [close],

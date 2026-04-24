@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type 
 
 import { ChallengeExperience, type ChallengeResponsePath } from "./challenge/challenge-experience";
 import { ConfidenceChip } from "./confidence/ConfidenceChip";
+import { ConfidenceRatingControl } from "./confidence/ConfidenceRatingControl";
 import { BrainGraphMap, createBrainGraph } from "./graph";
 import { LearnExperience } from "./learn/learn-experience";
 import { EmptyState, ErrorState, Skeleton } from "./ui";
@@ -34,14 +35,6 @@ type WorkspaceContext = {
   mapId: string | null;
   claimId: string | null;
 };
-
-function isEditableTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
-}
 
 type ClaimView = {
   id: string;
@@ -225,6 +218,10 @@ function getSessionIdForSelection(mode: WorkspaceMode, claimId: string | null) {
   return claimId ? `session-${claimId}` : `mode-${mode}`;
 }
 
+function isOptimisticClaimId(claimId: string) {
+  return claimId.startsWith("optimistic-claim-");
+}
+
 function createRequestId(prefix: string) {
   return `${prefix}-${globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36)}`;
 }
@@ -330,6 +327,10 @@ function getActiveSessionId(mode: WorkspaceMode, shell: ShellContext | null, vie
   return `mode-${mode}`;
 }
 
+function getClaimBody(claim: ClaimView | null | undefined) {
+  return claim?.body?.trim() || "Untitled claim";
+}
+
 function formatConfidence(confidenceBps: number | null | undefined) {
   if (typeof confidenceBps !== "number") {
     return "No confidence";
@@ -433,7 +434,7 @@ function recentActivityItems(view: BrainView) {
     .slice(0, 4)
     .map((claim) => ({
       id: claim.id,
-      title: claim.body,
+      title: getClaimBody(claim),
       detail: `Updated ${formatTimestamp(claim.updatedAt)}`,
     }));
 }
@@ -528,7 +529,7 @@ function buildCommandItems(input: {
     id: `session:${mode.id}`,
     type: "session",
     title: `${mode.label} session`,
-    subtitle: mode.id === input.activeMode ? "Current session" : `Jump to ${mode.label}`,
+    subtitle: mode.id === input.activeMode ? "Current mode" : `Open ${mode.label}`,
     confidence: null,
     href: `/workspace?mode=${mode.id}`,
     keywords: [mode.id, mode.label, "mode", "workspace"],
@@ -541,7 +542,7 @@ function buildCommandItems(input: {
       id: `map:${mapId}`,
       type: "map",
       title: mapTitle,
-      subtitle: typeof mapClaimCount === "number" ? `${mapClaimCount} claims` : "Current workspace map",
+      subtitle: typeof mapClaimCount === "number" ? `${mapClaimCount} claims` : "Current map",
       confidence: null,
       href: "/workspace?mode=brain",
       keywords: ["map", "brain", mapId],
@@ -557,7 +558,7 @@ function buildCommandItems(input: {
     items.push({
       id: `thought:${claim.id}`,
       type: "thought",
-      title: claim.body,
+      title: getClaimBody(claim),
       subtitle: `Thought - ${confidence}`,
       confidence: toCommandConfidence(claim.confidenceBps),
       href: "/workspace?mode=brain",
@@ -569,7 +570,7 @@ function buildCommandItems(input: {
     items.push({
       id: `claim:${claim.id}`,
       type: "claim",
-      title: claim.body,
+      title: getClaimBody(claim),
       subtitle: `Claim - ${confidence}`,
       confidence: toCommandConfidence(claim.confidenceBps),
       href: "/workspace?mode=brain",
@@ -586,7 +587,7 @@ function buildCommandItems(input: {
       id: `session:${round.id}`,
       type: "session",
       title: `Challenge round ${round.status}`,
-      subtitle: "Recent challenge session",
+      subtitle: "Recent pressure test",
       confidence: null,
       href: "/workspace?mode=challenge",
       keywords: ["challenge", "round", "session", round.id],
@@ -600,6 +601,7 @@ function buildCommandItems(input: {
 
 async function fetchProjection<T>(path: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(path, {
+    cache: "no-store",
     headers: {
       "x-user-id": localUserId,
     },
@@ -630,6 +632,38 @@ async function postCommand<T>(path: string, body: Record<string, unknown>): Prom
   }
 
   return (await response.json()) as T;
+}
+
+type ConfidenceRecordResponse = {
+  confidence: {
+    id: string;
+    thoughtId: string | null;
+    claimId: string | null;
+    graphNodeId: string | null;
+    ratingBps: number;
+    confidence: number;
+    rationale: string | null;
+    source: string;
+    createdAt: string;
+  };
+};
+
+async function postConfidence(body: Record<string, unknown>): Promise<ConfidenceRecordResponse> {
+  const response = await fetch("/api/confidence", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": localUserId,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? `Confidence update failed with ${response.status}.`);
+  }
+
+  return response.json() as Promise<ConfidenceRecordResponse>;
 }
 
 function parseWorkspaceSelectionHref(href: string | null | undefined) {
@@ -665,7 +699,14 @@ type PennyShellProps = {
 };
 
 export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
-  const { currentMode: activeMode, setActiveSessionId, setCurrentMode, setSelectedNodeId } = useWorkspaceState();
+  const {
+    activeSessionId: currentActiveSessionId,
+    currentMode: activeMode,
+    selectedNodeId: currentSelectedNodeId,
+    setActiveSessionId,
+    setCurrentMode,
+    setSelectedNodeId,
+  } = useWorkspaceState();
   const [state, setState] = useState<ProjectionState>({
     isLoading: true,
     mode: initialMode,
@@ -679,6 +720,86 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
   });
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [isPending, startTransition] = useTransition();
+  const claimComposerTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const requestInFlightRef = useRef(false);
+  const projectionLoadSeqRef = useRef(0);
+  const mutationSeqRef = useRef(0);
+  const beginRequest = useCallback(() => {
+    if (requestInFlightRef.current) {
+      return false;
+    }
+
+    requestInFlightRef.current = true;
+    return true;
+  }, []);
+  const finishRequest = useCallback(() => {
+    requestInFlightRef.current = false;
+  }, []);
+  const refreshProjection = useCallback(() => {
+    setRefreshVersion((current) => current + 1);
+  }, []);
+  const invalidateProjection = useCallback(() => {
+    mutationSeqRef.current += 1;
+    refreshProjection();
+  }, [refreshProjection]);
+  const patchClaimInCurrentView = useCallback((claimId: string, patch: Partial<ClaimView>) => {
+    setState((current) => {
+      const view = current.view;
+
+      if (!view || !("claims" in view)) {
+        return current;
+      }
+
+      const claims = view.claims.map((claim) => (claim.id === claimId ? { ...claim, ...patch } : claim));
+      const selectedClaim = view.selectedClaim?.id === claimId ? { ...view.selectedClaim, ...patch } : view.selectedClaim;
+
+      return {
+        ...current,
+        view: {
+          ...view,
+          claims,
+          selectedClaim,
+        },
+      };
+    });
+  }, []);
+  const updateClaimConfidence = useCallback(
+    async (claimId: string, ratingBps: number) => {
+      if (isOptimisticClaimId(claimId)) {
+        return;
+      }
+
+      const view = state.view;
+      const previousClaim = view && "claims" in view ? view.claims.find((claim) => claim.id === claimId) ?? null : null;
+      const previousSelectedClaim = view && "selectedClaim" in view && view.selectedClaim?.id === claimId ? view.selectedClaim : null;
+      const previousConfidenceBps = previousClaim?.confidenceBps ?? previousSelectedClaim?.confidenceBps ?? null;
+
+      patchClaimInCurrentView(claimId, {
+        confidenceBps: ratingBps,
+        updatedAt: new Date().toISOString(),
+      });
+
+      try {
+        const result = await postConfidence({
+          claimId,
+          ratingBps,
+          source: "brain-inspector",
+        });
+
+        patchClaimInCurrentView(claimId, {
+          confidenceBps: result.confidence.ratingBps,
+        });
+        invalidateProjection();
+      } catch (error) {
+        patchClaimInCurrentView(claimId, {
+          confidenceBps: previousConfidenceBps,
+          updatedAt: previousClaim?.updatedAt ?? previousSelectedClaim?.updatedAt,
+        });
+        throw error;
+      }
+    },
+    [invalidateProjection, patchClaimInCurrentView, state.view],
+  );
   const syncWorkspaceSelection = useCallback(
     (selection: WorkspaceSelectionResult) => {
       const mode = fromCommandMode(selection.mode);
@@ -692,13 +813,16 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       setSelectedNodeId(selection.claimId);
       setActiveSessionId(getSessionIdForSelection(mode, selection.claimId));
       setState((current) => {
+        const modeChanged = current.mode !== mode;
+        const mapChanged = getCurrentMapId(current.shell, current.view) !== selection.mapId;
+        const shouldResetProjection = modeChanged || mapChanged;
         const shell = current.shell
           ? {
               ...current.shell,
               ...context,
             }
           : current.shell;
-        let view = current.view;
+        let view = shouldResetProjection ? null : current.view;
 
         if (view && "currentContext" in view) {
           const selectedClaim = selection.claimId
@@ -734,6 +858,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
         return {
           ...current,
+          isLoading: shouldResetProjection ? true : current.isLoading,
           mode,
           shell,
           view,
@@ -762,6 +887,10 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       return;
     }
 
+    if (!beginRequest()) {
+      return;
+    }
+
     setActionState({
       status: "pending",
       message: "Opening search result.",
@@ -779,18 +908,41 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         status: "success",
         message: "Search result opened.",
       });
-      setRefreshVersion((current) => current + 1);
+      invalidateProjection();
       window.history.replaceState(null, "", result.href ?? `/workspace?mode=${parsedSelection.mode}`);
     } catch (error) {
       setActionState({
         status: "error",
         message: error instanceof Error ? error.message : "Failed to open search result.",
       });
+    } finally {
+      finishRequest();
     }
-  }, [syncWorkspaceSelection]);
+  }, [beginRequest, finishRequest, invalidateProjection, syncWorkspaceSelection]);
   const commandPalette = useCommandPalette({
     items: commandItems,
+    onClearSelection: () => {
+      if (!currentSelectedNodeId) {
+        return false;
+      }
+
+      setSelectedNodeId(null);
+      return true;
+    },
+    onFocusContextInput: () => {
+      if (activeMode !== "brain" || !claimComposerTextareaRef.current || claimComposerTextareaRef.current.disabled) {
+        return false;
+      }
+
+      claimComposerTextareaRef.current.focus();
+      return true;
+    },
     onSelectBackendResult: selectBackendSearchResult,
+    onSwitchMode: (mode) => {
+      if (actionState.status !== "pending") {
+        void switchMode(mode);
+      }
+    },
   });
 
   useEffect(() => {
@@ -798,36 +950,14 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
   }, [initialMode, setCurrentMode]);
 
   useEffect(() => {
-    function handleWorkspaceShortcut(event: KeyboardEvent) {
-      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) {
-        return;
-      }
-
-      const key = event.key.toLowerCase();
-      const modeByKey: Partial<Record<string, WorkspaceMode>> = {
-        b: "brain",
-        c: "challenge",
-        l: "learn",
-      };
-      const nextMode = modeByKey[key];
-
-      if (!nextMode || actionState.status === "pending") {
-        return;
-      }
-
-      event.preventDefault();
-      void switchMode(nextMode);
-    }
-
-    window.addEventListener("keydown", handleWorkspaceShortcut);
-
-    return () => {
-      window.removeEventListener("keydown", handleWorkspaceShortcut);
-    };
-  }, [actionState.status, switchMode]);
-
-  useEffect(() => {
     const controller = new AbortController();
+    const loadSeq = projectionLoadSeqRef.current + 1;
+    const mutationSeqAtStart = mutationSeqRef.current;
+    projectionLoadSeqRef.current = loadSeq;
+
+    function isCurrentLoad() {
+      return projectionLoadSeqRef.current === loadSeq && mutationSeqRef.current === mutationSeqAtStart;
+    }
 
     async function loadProjection() {
       try {
@@ -842,7 +972,15 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         const mode = activeMode || shell.mode || "brain";
         const view = await fetchProjection<ProjectionView>(`/api/workspace/${mode}`, controller.signal);
 
+        if (!isCurrentLoad()) {
+          return;
+        }
+
         startTransition(() => {
+          if (!isCurrentLoad()) {
+            return;
+          }
+
           setState({
             isLoading: false,
             mode,
@@ -855,11 +993,15 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
           setSelectedNodeId(getCurrentClaimId(shell, view));
         });
       } catch (error) {
-        if (controller.signal.aborted) {
+        if (controller.signal.aborted || !isCurrentLoad()) {
           return;
         }
 
         startTransition(() => {
+          if (!isCurrentLoad()) {
+            return;
+          }
+
           setState((current) => ({
             ...current,
             isLoading: false,
@@ -893,6 +1035,10 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       return;
     }
 
+    if (!beginRequest()) {
+      return;
+    }
+
     setActionState({
       status: "pending",
       message: `Switching to ${toCommandMode(mode)}.`,
@@ -910,16 +1056,22 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         status: "success",
         message: `${toCommandMode(mode)} mode selected.`,
       });
-      setRefreshVersion((current) => current + 1);
+      invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
         message: error instanceof Error ? error.message : "Failed to switch workspace mode.",
       });
+    } finally {
+      finishRequest();
     }
   }
 
   async function selectMap(mapId: string) {
+    if (!beginRequest()) {
+      return;
+    }
+
     setActionState({
       status: "pending",
       message: "Updating selected map.",
@@ -937,12 +1089,14 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         status: "success",
         message: "Selected map updated.",
       });
-      setRefreshVersion((current) => current + 1);
+      invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
         message: error instanceof Error ? error.message : "Failed to select map.",
       });
+    } finally {
+      finishRequest();
     }
   }
 
@@ -954,6 +1108,10 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         status: "error",
         message: "Select or create a map before selecting a claim.",
       });
+      return;
+    }
+
+    if (!beginRequest()) {
       return;
     }
 
@@ -974,12 +1132,14 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         status: "success",
         message: "Selected claim updated.",
       });
-      setRefreshVersion((current) => current + 1);
+      invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
         message: error instanceof Error ? error.message : "Failed to select claim.",
       });
+    } finally {
+      finishRequest();
     }
   }
 
@@ -994,9 +1154,49 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       return;
     }
 
+    if (!beginRequest()) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const optimisticClaim: ClaimView = {
+      id: createRequestId("optimistic-claim"),
+      mapId,
+      body: text,
+      confidenceBps: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const previousSelectedNodeId = currentSelectedNodeId;
+    const previousActiveSessionId = currentActiveSessionId;
+
     setActionState({
       status: "pending",
       message: "Creating claim.",
+    });
+    setSelectedNodeId(optimisticClaim.id);
+    setActiveSessionId(`session-${optimisticClaim.id}`);
+    setState((current) => {
+      const view = current.view;
+
+      if (!view || !("claims" in view)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        view: {
+          ...view,
+          mapSummary: view.mapSummary
+            ? {
+                ...view.mapSummary,
+                claimCount: view.mapSummary.claimCount + 1,
+              }
+            : view.mapSummary,
+          claims: [optimisticClaim, ...view.claims],
+          selectedClaim: optimisticClaim,
+        },
+      };
     });
 
     try {
@@ -1006,6 +1206,27 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         requestId: createRequestId("create-claim"),
       });
 
+      setState((current) => {
+        const view = current.view;
+
+        if (!view || !("claims" in view)) {
+          return current;
+        }
+
+        const persistedClaim = {
+          ...optimisticClaim,
+          id: created.claimId,
+        };
+
+        return {
+          ...current,
+          view: {
+            ...view,
+            claims: view.claims.map((claim) => (claim.id === optimisticClaim.id ? persistedClaim : claim)),
+            selectedClaim: view.selectedClaim?.id === optimisticClaim.id ? persistedClaim : view.selectedClaim,
+          },
+        };
+      });
       const selection = await postCommand<WorkspaceSelectionResult>("/api/commands/workspace/select", {
         mode: "Brain",
         mapId,
@@ -1018,16 +1239,51 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         status: "success",
         message: "Claim created and selected.",
       });
-      setRefreshVersion((current) => current + 1);
+      invalidateProjection();
     } catch (error) {
+      setSelectedNodeId(previousSelectedNodeId);
+      setActiveSessionId(previousActiveSessionId);
+      setState((current) => {
+        const view = current.view;
+
+        if (!view || !("claims" in view)) {
+          return current;
+        }
+
+        const claims = view.claims.filter((claim) => claim.id !== optimisticClaim.id);
+
+        return {
+          ...current,
+          view: {
+            ...view,
+            mapSummary: view.mapSummary
+              ? {
+                  ...view.mapSummary,
+                  claimCount: Math.max(0, view.mapSummary.claimCount - 1),
+                }
+              : view.mapSummary,
+            claims,
+            selectedClaim:
+              view.selectedClaim?.id === optimisticClaim.id
+                ? claims.find((claim) => claim.id === previousSelectedNodeId) ?? null
+                : view.selectedClaim,
+          },
+        };
+      });
       setActionState({
         status: "error",
         message: error instanceof Error ? error.message : "Failed to create claim.",
       });
+    } finally {
+      finishRequest();
     }
   }
 
   async function startChallenge(claimId: string) {
+    if (!beginRequest()) {
+      return;
+    }
+
     setActionState({
       status: "pending",
       message: "Starting challenge round.",
@@ -1043,16 +1299,22 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         status: "success",
         message: "Challenge round started.",
       });
-      setRefreshVersion((current) => current + 1);
+      invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
         message: error instanceof Error ? error.message : "Failed to start challenge round.",
       });
+    } finally {
+      finishRequest();
     }
   }
 
   async function requestCritique(roundId: string) {
+    if (!beginRequest()) {
+      return;
+    }
+
     setActionState({
       status: "pending",
       message: "Requesting critique.",
@@ -1068,16 +1330,22 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         status: "success",
         message: "Critique requested.",
       });
-      setRefreshVersion((current) => current + 1);
+      invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
         message: error instanceof Error ? error.message : "Failed to request critique.",
       });
+    } finally {
+      finishRequest();
     }
   }
 
   async function recordChallengeResponse(roundId: string, response: string, responsePath: ChallengeResponsePath = "defend") {
+    if (!beginRequest()) {
+      return;
+    }
+
     setActionState({
       status: "pending",
       message: "Recording challenge response.",
@@ -1095,12 +1363,14 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         status: "success",
         message: "Challenge response recorded.",
       });
-      setRefreshVersion((current) => current + 1);
+      invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
         message: error instanceof Error ? error.message : "Failed to record challenge response.",
       });
+    } finally {
+      finishRequest();
     }
   }
 
@@ -1114,6 +1384,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         isLoading={commandPalette.backendSearchStatus === "loading"}
         onClose={commandPalette.close}
         onSelectItem={commandPalette.selectItem}
+        placeholder="Search claims, maps, sessions, or actions..."
         query={commandPalette.query}
         setQuery={commandPalette.setQuery}
       />
@@ -1123,7 +1394,8 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
           <span className="penny-brand-name">Penny</span>
         </div>
         <button className="penny-command-button" type="button" onClick={commandPalette.open} aria-keyshortcuts="Meta+K Control+K /">
-          <span>Search your brain…</span>
+          <span>Search claims and actions...</span>
+          <kbd>⌘K</kbd>
           <kbd>/</kbd>
         </button>
         <nav className="penny-mode-switcher" aria-label="Workspace mode">
@@ -1139,7 +1411,8 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
                 void switchMode(mode.id);
               }}
             >
-              {mode.label}
+              <span>{mode.label}</span>
+              <kbd>{mode.label.slice(0, 1)}</kbd>
             </button>
           ))}
         </nav>
@@ -1166,7 +1439,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
           <ErrorState
             actionLabel="Retry"
             message="Penny could not load this workspace view. Retry the projection, or switch modes if the workspace is still starting up."
-            onAction={() => setRefreshVersion((current) => current + 1)}
+            onAction={refreshProjection}
             technicalDetail={state.error}
             title="Projection unavailable"
           />
@@ -1181,7 +1454,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
           <EmptyState
             actionLabel="Retry"
             body="The workspace API responded, but no projection was available for the selected mode."
-            onAction={() => setRefreshVersion((current) => current + 1)}
+            onAction={refreshProjection}
             title="No workspace projection"
           />
         ) : null}
@@ -1190,10 +1463,12 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
             actionState={actionState}
             mode={state.mode}
             onCreateClaim={createBrainClaim}
+            onRateClaim={updateClaimConfidence}
             onRecordChallengeResponse={recordChallengeResponse}
             onRequestCritique={requestCritique}
             onSelectClaim={selectClaim}
             onStartChallenge={startChallenge}
+            claimComposerTextareaRef={claimComposerTextareaRef}
             view={state.view}
           />
         ) : null}
@@ -1266,8 +1541,10 @@ function ProjectionNotice({ title, body }: { title: string; body: string }) {
 
 function ProjectionContent({
   actionState,
+  claimComposerTextareaRef,
   mode,
   onCreateClaim,
+  onRateClaim,
   onRecordChallengeResponse,
   onRequestCritique,
   onSelectClaim,
@@ -1275,8 +1552,10 @@ function ProjectionContent({
   view,
 }: {
   actionState: ActionState;
+  claimComposerTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   mode: WorkspaceMode;
   onCreateClaim: (text: string) => Promise<void>;
+  onRateClaim: (claimId: string, ratingBps: number) => Promise<void>;
   onRecordChallengeResponse: (roundId: string, response: string, responsePath: ChallengeResponsePath) => Promise<void>;
   onRequestCritique: (roundId: string) => Promise<void>;
   onSelectClaim: (claimId: string) => Promise<void>;
@@ -1302,7 +1581,9 @@ function ProjectionContent({
   return (
     <BrainProjection
       actionState={actionState}
+      claimComposerTextareaRef={claimComposerTextareaRef}
       onCreateClaim={onCreateClaim}
+      onRateClaim={onRateClaim}
       onSelectClaim={onSelectClaim}
       view={view as BrainView}
     />
@@ -1311,12 +1592,16 @@ function ProjectionContent({
 
 function BrainProjection({
   actionState,
+  claimComposerTextareaRef,
   onCreateClaim,
+  onRateClaim,
   onSelectClaim,
   view,
 }: {
   actionState: ActionState;
+  claimComposerTextareaRef: React.RefObject<HTMLTextAreaElement | null>;
   onCreateClaim: (text: string) => Promise<void>;
+  onRateClaim: (claimId: string, ratingBps: number) => Promise<void>;
   onSelectClaim: (claimId: string) => Promise<void>;
   view: BrainView;
 }) {
@@ -1325,6 +1610,7 @@ function BrainProjection({
   const graph = useMemo(() => createBrainGraph(view as Parameters<typeof createBrainGraph>[0]), [view]);
   const selectedNodeId = storedSelectedNodeId ?? graph.selectedNodeId ?? null;
   const inspector = createWorkspaceInspector(view, graph, selectedNodeId);
+  const selectedClaim = inspector.selectedClaim;
 
   function inspectGraphNode(node: GraphNode) {
     setSelectedNodeId(node.id);
@@ -1353,7 +1639,7 @@ function BrainProjection({
               <p className="penny-kicker">Graph</p>
               <h2>Claim map</h2>
             </div>
-            <span>{selectedNodeId ? `Inspecting ${selectedNodeId}` : "No node selected"}</span>
+            <span>{selectedNodeId ? `Inspecting ${selectedNodeId} · Esc clears` : "No node selected"}</span>
           </div>
           <BrainGraphMap graph={graph} selectedNodeId={selectedNodeId} onSelectNode={inspectGraphNode} height={520} />
         </section>
@@ -1392,7 +1678,11 @@ function BrainProjection({
 
         <section className="penny-panel">
           <p className="penny-kicker">Create claim</p>
-          <ClaimComposer disabled={!view.mapSummary || actionState.status === "pending"} onSubmit={onCreateClaim} />
+          <ClaimComposer
+            disabled={!view.mapSummary || actionState.status === "pending"}
+            inputRef={claimComposerTextareaRef}
+            onSubmit={onCreateClaim}
+          />
         </section>
       </div>
 
@@ -1423,7 +1713,22 @@ function BrainProjection({
         </dl>
         <div style={{ marginTop: 16 }}>
           <p className="penny-kicker">Selected claim</p>
-          {inspector.selectedClaim ? <ClaimSummary claim={inspector.selectedClaim} /> : <p>No claim selected.</p>}
+          {selectedClaim ? (
+            <>
+              <ClaimSummary claim={selectedClaim} />
+              <div style={{ marginTop: 14 }}>
+                <ConfidenceRatingControl
+                  disabled={isOptimisticClaimId(selectedClaim.id)}
+                  label="Rate confidence"
+                  onValueChange={(ratingBps) => onRateClaim(selectedClaim.id, ratingBps)}
+                  scale="basis-points"
+                  value={selectedClaim.confidenceBps}
+                />
+              </div>
+            </>
+          ) : (
+            <p>No claim selected.</p>
+          )}
         </div>
       </InspectorRail>
     </div>
@@ -1433,7 +1738,7 @@ function BrainProjection({
 function ClaimSummary({ claim }: { claim: ClaimView }) {
   return (
     <article className="penny-claim">
-      <p>{claim.body}</p>
+      <p>{getClaimBody(claim)}</p>
       <ConfidenceChip scale="basis-points" value={claim.confidenceBps} />
     </article>
   );
@@ -1441,40 +1746,50 @@ function ClaimSummary({ claim }: { claim: ClaimView }) {
 
 function ClaimComposer({
   disabled,
+  inputRef,
   onSubmit,
 }: {
   disabled: boolean;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
   onSubmit: (text: string) => Promise<void>;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isLocked = disabled || isSubmitting;
 
   useEffect(() => {
     if (!disabled) {
-      textareaRef.current?.focus();
+      inputRef.current?.focus();
     }
-  }, [disabled]);
+  }, [disabled, inputRef]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = text.trim();
 
-    if (!trimmed || disabled) {
+    if (!trimmed || isLocked) {
       return;
     }
 
-    await onSubmit(trimmed);
-    setText("");
+    setIsSubmitting(true);
+
+    try {
+      await onSubmit(trimmed);
+      setText("");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
     <form ref={formRef} className="penny-claim-form" onSubmit={handleSubmit}>
       <label htmlFor="claim-text">Claim</label>
       <textarea
-        ref={textareaRef}
+        ref={inputRef}
         id="claim-text"
         name="claim"
+        placeholder="Write one claim Penny should track, for example: Distribution is the durable moat."
         value={text}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
@@ -1483,12 +1798,13 @@ function ClaimComposer({
             formRef.current?.requestSubmit();
           }
         }}
-        disabled={disabled}
+        disabled={isLocked}
         autoFocus
         rows={4}
       />
-      <button type="submit" disabled={disabled || !text.trim()} aria-keyshortcuts="Meta+Enter Control+Enter">
-        Create claim
+      <p className="penny-shortcut-hint">Press / from Brain to focus this capture box. Press Cmd+Enter to create the claim.</p>
+      <button type="submit" disabled={isLocked || !text.trim()} aria-keyshortcuts="Meta+Enter Control+Enter">
+        {isSubmitting ? "Creating..." : "Create claim"}
       </button>
     </form>
   );
