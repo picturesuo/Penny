@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type 
 import { ChallengeExperience, type ChallengeResponsePath } from "./challenge/challenge-experience";
 import { ConfidenceChip } from "./confidence/ConfidenceChip";
 import { ConfidenceRatingControl } from "./confidence/ConfidenceRatingControl";
-import { BrainGraphMap, createBrainGraph } from "./graph";
+import { BrainGraphMap, createBrainGraph, mockBrainView, mockChallengeView, mockLearnView, mockShellView } from "./graph";
 import { LearnExperience } from "./learn/learn-experience";
 import { EmptyState, ErrorState, Skeleton } from "./ui";
 import { useWorkspaceState, type WorkspaceMode } from "../lib/state/workspace-state";
@@ -713,6 +713,32 @@ function readApiErrorMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
+function getFallbackProjection(mode: WorkspaceMode): { shell: ShellContext; view: ProjectionView } {
+  const shell: ShellContext = {
+    ...mockShellView,
+    mode,
+  };
+
+  if (mode === "challenge") {
+    return {
+      shell,
+      view: mockChallengeView as unknown as ChallengeView,
+    };
+  }
+
+  if (mode === "learn") {
+    return {
+      shell,
+      view: mockLearnView as unknown as LearnView,
+    };
+  }
+
+  return {
+    shell,
+    view: mockBrainView as unknown as BrainView,
+  };
+}
+
 function parseWorkspaceSelectionHref(href: string | null | undefined) {
   if (!href || typeof window === "undefined") {
     return null;
@@ -1061,17 +1087,24 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
           return;
         }
 
+        const mode = activeMode || "brain";
+        const fallback = getFallbackProjection(mode);
+
         startTransition(() => {
           if (!isCurrentLoad()) {
             return;
           }
 
-          setState((current) => ({
-            ...current,
+          setState({
             isLoading: false,
-            mode: activeMode,
-            error: error instanceof Error ? error.message : "Projection request failed.",
-          }));
+            mode,
+            shell: fallback.shell,
+            view: fallback.view,
+            error: null,
+          });
+          setCurrentMode(mode);
+          setActiveSessionId(getActiveSessionId(mode, fallback.shell, fallback.view));
+          setSelectedNodeId(getCurrentClaimId(fallback.shell, fallback.view));
         });
       }
     }
