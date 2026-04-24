@@ -130,7 +130,11 @@ test("BrainScreen renders the empty Brain state", () => {
   const html = renderToStaticMarkup(createElement(BrainScreen, { model, state: "empty" }));
 
   assert.match(html, /Empty Brain state/);
-  assert.match(html, /No thoughts returned by the Brain projection/);
+  assert.match(html, /Guided first-run empty state/);
+  assert.match(html, /Start by giving Penny one belief to remember/);
+  assert.match(html, /Penny should help me trace one raw product belief/);
+  assert.match(html, /Capture the raw thought/);
+  assert.match(html, /Use this prompt/);
   assert.match(html, /No map selected/);
   assert.match(html, /Select a thought to inspect it/);
 });

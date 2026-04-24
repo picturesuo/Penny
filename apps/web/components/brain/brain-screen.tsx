@@ -19,6 +19,9 @@ const workspaceModes = [
   { id: "learn", label: "Learn" },
 ] as const;
 
+const firstThoughtPrompt =
+  "Penny should help me trace one raw product belief from thought to claim, critique, and next learning step.";
+
 const styles = {
   shell: {
     minHeight: "100vh",
@@ -337,6 +340,33 @@ const styles = {
     margin: 0,
     padding: 18,
   },
+  firstRunState: {
+    background: "#ffffff",
+    border: "1px solid #c9d2c8",
+    borderRadius: 8,
+    display: "grid",
+    gap: 14,
+    marginTop: 14,
+    padding: 18,
+  },
+  firstRunPrompt: {
+    background: "#f4f6f2",
+    border: "1px solid #d8ded5",
+    borderRadius: 8,
+    color: "#17201b",
+    lineHeight: 1.55,
+    margin: 0,
+    padding: 14,
+  },
+  firstRunSteps: {
+    display: "grid",
+    gap: 8,
+    margin: 0,
+    padding: 0,
+  },
+  firstRunStep: {
+    listStyle: "none",
+  },
   status: {
     color: "#637069",
     margin: "12px 0 0",
@@ -454,7 +484,7 @@ export function BrainScreen({
               ))}
             </ol>
           ) : (
-            <p style={styles.emptyState}>No thoughts returned by the Brain projection.</p>
+            <FirstRunFallback onNewThought={onNewThought} />
           )}
         </section>
 
@@ -552,6 +582,29 @@ function BrainStateBanner({ message, state }: { message?: string | null; state: 
       <p style={styles.stateTitle}>{copy.title}</p>
       <p style={styles.stateBody}>{copy.body}</p>
     </div>
+  );
+}
+
+function FirstRunFallback({ onNewThought }: { onNewThought?: () => void }) {
+  return (
+    <section aria-label="Guided first-run empty state" style={styles.firstRunState}>
+      <div>
+        <p style={styles.eyebrow}>First run</p>
+        <h3 style={styles.thoughtTitle}>Start by giving Penny one belief to remember.</h3>
+        <p style={styles.thoughtBody}>
+          The database is empty, so Penny has no thoughts, claims, confidence history, or challenge results to show yet.
+        </p>
+      </div>
+      <blockquote style={styles.firstRunPrompt}>{firstThoughtPrompt}</blockquote>
+      <ul style={styles.firstRunSteps}>
+        <li style={styles.firstRunStep}>1. Capture the raw thought.</li>
+        <li style={styles.firstRunStep}>2. Extract one claim Penny can track.</li>
+        <li style={styles.firstRunStep}>3. Challenge it, then use Learn to explain the blocker.</li>
+      </ul>
+      <button onClick={onNewThought} style={styles.primaryButton} type="button">
+        Use this prompt
+      </button>
+    </section>
   );
 }
 
