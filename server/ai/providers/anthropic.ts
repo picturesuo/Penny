@@ -1,67 +1,18 @@
+import {
+  AiProviderError as ProviderError,
+  type AiProviderCost as StructuredProviderCost,
+  type AiProviderErrorReason as ProviderErrorReason,
+  type AiProviderRequest as StructuredProviderRequest,
+  type AiProviderResponse as StructuredProviderResponse,
+  type AiProviderUsage as StructuredProviderUsage,
+} from "./types.ts";
+
 type JsonRecord = Record<string, unknown>;
 
-export type StructuredProviderRequest = {
-  jsonSchema: Record<string, unknown>;
-  maxTokens: number;
-  model: string;
-  schemaName: string;
-  systemPrompt: string;
-  temperature: number;
-  userPrompt: string;
-};
-
-export type StructuredProviderUsage = {
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-};
-
-export type StructuredProviderCost = {
-  currency: string | null;
-  totalUsd: number | null;
-};
-
-export type StructuredProviderResponse = {
-  cost: StructuredProviderCost;
-  json: unknown;
-  output: unknown;
-  raw: JsonRecord;
-  stopReason: string | null;
-  text: string | null;
-  usage: StructuredProviderUsage;
-};
+export { ProviderError };
 
 export type AnthropicProviderRequest = StructuredProviderRequest;
 export type AnthropicProviderResponse = StructuredProviderResponse;
-
-export type ProviderErrorReason = "configuration" | "http" | "invalid_response" | "network";
-
-export class ProviderError extends Error {
-  code: "PROVIDER_ERROR";
-  details: JsonRecord | null;
-  provider: string;
-  reason: ProviderErrorReason;
-  retryable: boolean;
-  status: number | null;
-
-  constructor(params: {
-    details?: JsonRecord | null;
-    message: string;
-    provider: string;
-    reason: ProviderErrorReason;
-    retryable?: boolean;
-    status?: number | null;
-  }) {
-    super(params.message);
-    this.name = "ProviderError";
-    this.code = "PROVIDER_ERROR";
-    this.provider = params.provider;
-    this.reason = params.reason;
-    this.status = params.status ?? null;
-    this.details = params.details ?? null;
-    this.retryable = params.retryable ?? false;
-  }
-}
 
 export async function invokeAnthropicStructured(
   request: StructuredProviderRequest,

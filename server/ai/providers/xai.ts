@@ -1,18 +1,14 @@
 import {
-  ProviderError,
-  type StructuredProviderRequest,
-  type StructuredProviderResponse,
-} from "./anthropic.ts";
+  AiProviderError as ProviderError,
+  type AiProviderCost as StructuredProviderCost,
+  type AiProviderRequest as StructuredProviderRequest,
+  type AiProviderResponse as StructuredProviderResponse,
+  type AiProviderUsage as StructuredProviderUsage,
+} from "./types.ts";
 
 type JsonRecord = Record<string, unknown>;
 
-export { ProviderError } from "./anthropic.ts";
-export type {
-  StructuredProviderCost,
-  StructuredProviderRequest,
-  StructuredProviderResponse,
-  StructuredProviderUsage,
-} from "./anthropic.ts";
+export { ProviderError };
 
 export type XaiProviderRequest = StructuredProviderRequest;
 export type XaiProviderResponse = StructuredProviderResponse;
