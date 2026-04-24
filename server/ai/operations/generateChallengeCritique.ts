@@ -5,7 +5,8 @@ import {
   buildGenerateChallengeCritiquePrompt,
 } from "../prompts/generateChallengeCritique/v1.ts";
 import {
-  GenerateChallengeCritiqueOutputSchema,
+  ChallengeCritiqueSchema,
+  type ChallengeCritique,
   type GenerateChallengeCritiqueOutput as CanonicalGenerateChallengeCritiqueOutput,
 } from "../schemas/challengeCritique.ts";
 import { selectModelForOperation } from "../routing/modelPolicy.ts";
@@ -34,14 +35,15 @@ export type GenerateChallengeCritiquePreviousRound = {
 };
 
 export type GenerateChallengeCritiqueInput = {
-  claimId: string;
+  claimId?: string | null;
   claimText: string;
-  claimConfidence: number;
+  claimConfidence?: number | null;
   critiqueMode?: ChallengeCritiqueMode | null;
   mapTitle?: string | null;
   neighboringClaims?: GenerateChallengeCritiqueNeighborClaim[] | null;
   previousRounds?: GenerateChallengeCritiquePreviousRound[] | null;
   priorRoundContext?: GenerateChallengeCritiquePreviousRound | GenerateChallengeCritiquePreviousRound[] | null;
+  qualityTier?: ChallengeCritiqueQualityTier | null;
   steelmanText?: string | null;
   userGoal?: string | null;
 };
@@ -94,6 +96,8 @@ export type StructuredProviderResponse = {
 };
 
 export type GenerateChallengeCritiqueResult = {
+  critique: ChallengeCritique;
+  fallbackUsed: boolean;
   meta: {
     cost: StructuredProviderCost;
     environment: string;
@@ -110,7 +114,12 @@ export type GenerateChallengeCritiqueResult = {
     usage: StructuredProviderUsage;
     validationResult: "valid" | "repaired_valid";
   };
+  model: string;
   output: GenerateChallengeCritiqueOutput;
+  promptVersion: string;
+  provider: ChallengeCritiqueProviderName;
+  repaired: boolean;
+  traceId?: string | null;
 };
 
 export class GenerateChallengeCritiqueValidationError extends Error {
@@ -168,8 +177,9 @@ type PromptBundle = {
 type NormalizedGenerateChallengeCritiqueInput = {
   claimId: string;
   claimText: string;
-  claimConfidence: number;
+  claimConfidence: number | null;
   critiqueMode: ChallengeCritiqueMode;
+  qualityTier: ChallengeCritiqueQualityTier | null;
   mapTitle: string | null;
   neighboringClaims: GenerateChallengeCritiqueNeighborClaim[];
   previousRounds: GenerateChallengeCritiquePreviousRound[];
@@ -276,7 +286,7 @@ export async function generateChallengeCritique(
   const prompt = buildChallengeCritiquePromptV1(normalizedInput, promptVersion);
   const routes = generateChallengeCritiqueDeps.resolveModelPolicy(GENERATE_CHALLENGE_CRITIQUE_OPERATION, {
     promptVersion,
-    qualityTier: normalizeQualityTier(context.qualityTier),
+    qualityTier: normalizedInput.qualityTier ?? context.qualityTier ?? null,
   });
   const failures: Array<{ message: string; model?: string; provider?: string; tier?: string }> = [];
 
@@ -291,6 +301,7 @@ export async function generateChallengeCritique(
             const validation = await validateWithSingleRepair(route, prompt, firstResponse, normalizedInput.claimConfidence);
             const latencyMs = Date.now() - startedAt;
             const deploy = generateChallengeCritiqueDeps.getDeployMetadata();
+            const traceId = generateChallengeCritiqueDeps.getTraceId();
 
             generation.update({
               metadata: {
@@ -308,6 +319,13 @@ export async function generateChallengeCritique(
             });
 
             return {
+              critique: validation.critique,
+              fallbackUsed: routeIndex > 0,
+              provider: route.provider,
+              model: route.model,
+              promptVersion: route.promptVersion,
+              repaired: validation.repairAttempted,
+              ...(traceId !== null ? { traceId } : {}),
               output: validation.output,
               meta: {
                 provider: route.provider,
@@ -317,7 +335,7 @@ export async function generateChallengeCritique(
                 repairAttempted: validation.repairAttempted,
                 validationResult: validation.repairAttempted ? "repaired_valid" : "valid",
                 routeTier: route.tier,
-                traceId: generateChallengeCritiqueDeps.getTraceId(),
+                traceId,
                 observationId: generateChallengeCritiqueDeps.getActiveObservationId(),
                 release: deploy.release,
                 environment: deploy.environment,
@@ -431,9 +449,10 @@ async function validateWithSingleRepair(
   route: GenerateChallengeCritiqueRoute,
   prompt: PromptBundle,
   firstResponse: StructuredProviderResponse,
-  claimConfidence: number,
+  claimConfidence: number | null,
 ): Promise<{
   cost: StructuredProviderCost;
+  critique: ChallengeCritique;
   output: GenerateChallengeCritiqueOutput;
   repairAttempted: boolean;
   usage: StructuredProviderUsage;
@@ -442,6 +461,7 @@ async function validateWithSingleRepair(
 
   if (initial.success) {
     return {
+      critique: initial.critique,
       output: initial.data,
       repairAttempted: false,
       usage: normalizeUsage(firstResponse.usage),
@@ -461,6 +481,7 @@ async function validateWithSingleRepair(
   }
 
   return {
+    critique: repaired.critique,
     output: repaired.data,
     repairAttempted: true,
     usage: {
@@ -547,10 +568,11 @@ function validateGenerateChallengeCritiqueInput(input: unknown): NormalizedGener
   const previousRounds = normalizePreviousRounds(object.previousRounds, object.priorRoundContext);
 
   return {
-    claimId: readRequiredString(object.claimId, "claimId", 1, 200),
+    claimId: readOptionalInputString(object.claimId, "claimId", { maxLength: 200 }) ?? "claim-unknown",
     claimText: readRequiredString(object.claimText, "claimText", 1, 4000),
-    claimConfidence: readRequiredInteger(object.claimConfidence, "claimConfidence", 0, 100),
+    claimConfidence: readNullableInteger(object.claimConfidence, "claimConfidence", 0, 100),
     critiqueMode: readCritiqueMode(object.critiqueMode),
+    qualityTier: readQualityTier(object.qualityTier),
     mapTitle: readOptionalString(object.mapTitle),
     steelmanText: readOptionalString(object.steelmanText),
     userGoal: readOptionalString(object.userGoal),
@@ -618,10 +640,10 @@ function normalizePreviousRounds(
 
 function safeParseChallengeCritiqueOutput(
   value: unknown,
-  claimConfidence: number,
-): { data: GenerateChallengeCritiqueOutput; success: true } | { issues: string[]; success: false } {
+  claimConfidence: number | null,
+): { critique: ChallengeCritique; data: GenerateChallengeCritiqueOutput; success: true } | { issues: string[]; success: false } {
   const normalized = normalizeCritiqueOutputForSchema(value, claimConfidence);
-  const result = GenerateChallengeCritiqueOutputSchema.safeParse(normalized);
+  const result = ChallengeCritiqueSchema.safeParse(normalized);
 
   if (!result.success) {
     return {
@@ -635,11 +657,12 @@ function safeParseChallengeCritiqueOutput(
 
   return {
     success: true,
+    critique: result.data,
     data: mapCanonicalOutputToLegacy(result.data, claimConfidence),
   };
 }
 
-function normalizeCritiqueOutputForSchema(value: unknown, claimConfidence: number): unknown {
+function normalizeCritiqueOutputForSchema(value: unknown, claimConfidence: number | null): unknown {
   const object = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 
   if (!object) {
@@ -671,7 +694,7 @@ function normalizeCritiqueOutputForSchema(value: unknown, claimConfidence: numbe
 
 function mapCanonicalOutputToLegacy(
   output: CanonicalGenerateChallengeCritiqueOutput,
-  claimConfidence: number,
+  claimConfidence: number | null,
 ): GenerateChallengeCritiqueOutput {
   return {
     conciseCritiqueSummary: output.summary,
@@ -684,7 +707,7 @@ function mapCanonicalOutputToLegacy(
   };
 }
 
-function legacyDeltaToSuggestedConfidenceBps(value: unknown, claimConfidence: number): number | null | unknown {
+function legacyDeltaToSuggestedConfidenceBps(value: unknown, claimConfidence: number | null): number | null | unknown {
   if (value === null || value === undefined) {
     return null;
   }
@@ -693,11 +716,11 @@ function legacyDeltaToSuggestedConfidenceBps(value: unknown, claimConfidence: nu
     return value;
   }
 
-  return Math.trunc((claimConfidence + value) * 100);
+  return claimConfidence == null ? null : Math.trunc((claimConfidence + value) * 100);
 }
 
-function suggestedConfidenceBpsToLegacyDelta(value: number | null, claimConfidence: number): number {
-  if (value === null) {
+function suggestedConfidenceBpsToLegacyDelta(value: number | null, claimConfidence: number | null): number {
+  if (value === null || claimConfidence == null) {
     return 0;
   }
 
@@ -724,6 +747,27 @@ function readCritiqueMode(value: unknown): ChallengeCritiqueMode {
   throw new GenerateChallengeCritiqueValidationError("critiqueMode must be one of direct, socratic, or red_team.", [
     "critiqueMode must be one of direct, socratic, or red_team.",
   ]);
+}
+
+function readQualityTier(value: unknown): ChallengeCritiqueQualityTier | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (
+    value === "default" ||
+    value === "fallback" ||
+    value === "cheap" ||
+    value === "standard" ||
+    value === "degraded"
+  ) {
+    return value;
+  }
+
+  throw new GenerateChallengeCritiqueValidationError(
+    "qualityTier must be one of default, fallback, cheap, standard, or degraded.",
+    ["qualityTier must be one of default, fallback, cheap, standard, or degraded."],
+  );
 }
 
 function readResponsePath(value: unknown): ChallengeResponsePath | null {
@@ -785,6 +829,37 @@ function readOptionalString(value: unknown): string | null {
 
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function readOptionalInputString(
+  value: unknown,
+  fieldName: string,
+  options: { maxLength?: number } = {},
+): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new GenerateChallengeCritiqueValidationError(`${fieldName} must be a string when provided.`, [
+      `${fieldName} must be a string when provided.`,
+    ]);
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (options.maxLength !== undefined && trimmed.length > options.maxLength) {
+    throw new GenerateChallengeCritiqueValidationError(
+      `${fieldName} must be at most ${options.maxLength} character(s).`,
+      [`${fieldName} must be at most ${options.maxLength} character(s).`],
+    );
+  }
+
+  return trimmed;
 }
 
 function readRequiredInteger(value: unknown, fieldName: string, minValue: number, maxValue: number): number {
