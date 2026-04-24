@@ -63,6 +63,19 @@ test("createBrainViewModel maps Brain projection claims into thought stream and 
   assert.equal(model.stream[0]?.bodyPreview, "The wedge should start with founder-led diligence workflows.");
   assert.equal(model.selectedThought?.id, "claim-2");
   assert.equal(model.selectedThought?.confidenceLabel, "81% confidence");
+  assert.equal(model.selectedPanel?.title, "The wedge should start with founder-led diligence workflows.");
+  assert.equal(model.selectedPanel?.body, "The wedge should start with founder-led diligence workflows.");
+  assert.equal(model.selectedPanel?.confidenceLabel, "81% confidence");
+  assert.equal(model.selectedPanel?.dependenciesLabel, "1 related claims from this map");
+  assert.equal(model.selectedPanel?.brainMapHref, "/brain?claimId=claim-2#brain-map");
+  assert.deepEqual(model.selectedPanel?.relatedClaims, [
+    {
+      id: "claim-1",
+      title: "Enterprise buyers need audit trails before rollout.",
+      confidenceLabel: "62% confidence",
+      brainMapHref: "/brain?claimId=claim-1#brain-map",
+    },
+  ]);
   assert.equal(model.inspector.status, "Selected thought");
   assert.equal(model.inspector.selectedId, "claim-2");
   assert.deepEqual(
@@ -93,5 +106,6 @@ test("createBrainViewModel keeps empty Brain state explicit", () => {
   assert.equal(model.context.claimCountLabel, "0 thoughts");
   assert.equal(model.stream.length, 0);
   assert.equal(model.selectedThought, null);
+  assert.equal(model.selectedPanel, null);
   assert.equal(model.inspector.status, "No thought selected");
 });
