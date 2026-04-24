@@ -78,7 +78,27 @@ test("workspace GET routes return shell, brain, challenge, and learn projections
 
     await sql`
       insert into challenge_rounds (id, map_id, claim_id, user_id, status)
-      values (${roundId}, ${mapId}, ${selectedClaimId}, ${userId}, ${"started"})
+      values (${roundId}, ${mapId}, ${selectedClaimId}, ${userId}, ${"responded"})
+    `;
+
+    await sql`
+      insert into moves_events (user_id, aggregate_type, aggregate_id, type, payload_json, request_id)
+      values (
+        ${userId},
+        ${"challenge_round"},
+        ${roundId},
+        ${"challenge.response.recorded"},
+        ${JSON.stringify({
+          mapId,
+          claimId: selectedClaimId,
+          response: "Route-level response to the active challenge.",
+          responsePath: "direct",
+          confidenceBps: 7600,
+          previousStatus: "started",
+          status: "responded",
+        })}::jsonb,
+        ${"projection-route-response-event"}
+      )
     `;
 
     await sql`
@@ -111,10 +131,17 @@ test("workspace GET routes return shell, brain, challenge, and learn projections
       selectedClaim: { id: string; body: string } | null;
     };
     const challengePayload = (await challengeResponse.json()) as {
+      currentContext: { mode: string; mapId: string | null; claimId: string | null };
       workspaceContext: { mode: string; mapId: string | null; claimId: string | null };
       activeClaim: { id: string; body: string; confidenceBps: number } | null;
+      selectedClaim: { id: string; body: string; confidenceBps: number } | null;
       activeChallengeRound: { id: string; claimId: string; status: string } | null;
+      latestChallengeRound: { id: string; claimId: string; status: string } | null;
       critiqueState: { status: string; critiqueId: string | null };
+      critiqueStatus: string;
+      responseState: { status: string; responsePayload?: Record<string, unknown> };
+      responseStatus: string;
+      responsePayload?: Record<string, unknown>;
     };
     const learnPayload = (await learnResponse.json()) as {
       workspaceContext: { mode: string; mapId: string | null; claimId: string | null };
@@ -173,17 +200,40 @@ test("workspace GET routes return shell, brain, challenge, and learn projections
     );
     assert.equal(brainPayload.selectedClaim?.id, selectedClaimId);
 
+    assert.equal(challengePayload.currentContext.mode, "challenge");
+    assert.equal(challengePayload.currentContext.mapId, mapId);
+    assert.equal(challengePayload.currentContext.claimId, selectedClaimId);
     assert.equal(challengePayload.workspaceContext.mode, "challenge");
     assert.equal(challengePayload.workspaceContext.mapId, mapId);
     assert.equal(challengePayload.workspaceContext.claimId, selectedClaimId);
     assert.equal(challengePayload.activeClaim?.id, selectedClaimId);
     assert.equal(challengePayload.activeClaim?.confidenceBps, 7200);
+    assert.equal(challengePayload.selectedClaim?.id, selectedClaimId);
+    assert.equal(challengePayload.selectedClaim?.confidenceBps, 7200);
     assert.equal(challengePayload.activeChallengeRound?.id, roundId);
     assert.equal(challengePayload.activeChallengeRound?.claimId, selectedClaimId);
-    assert.equal(challengePayload.activeChallengeRound?.status, "started");
+    assert.equal(challengePayload.activeChallengeRound?.status, "responded");
+    assert.equal(challengePayload.latestChallengeRound?.id, roundId);
+    assert.equal(challengePayload.latestChallengeRound?.claimId, selectedClaimId);
+    assert.equal(challengePayload.latestChallengeRound?.status, "responded");
     assert.deepEqual(challengePayload.critiqueState, {
       status: "not_requested",
       critiqueId: null,
+    });
+    assert.equal(challengePayload.critiqueStatus, "not_requested");
+    assert.equal(challengePayload.responseStatus, "responded");
+    assert.deepEqual(challengePayload.responsePayload, {
+      mapId,
+      claimId: selectedClaimId,
+      response: "Route-level response to the active challenge.",
+      responsePath: "direct",
+      confidenceBps: 7600,
+      previousStatus: "started",
+      status: "responded",
+    });
+    assert.deepEqual(challengePayload.responseState, {
+      status: "responded",
+      responsePayload: challengePayload.responsePayload,
     });
 
     assert.equal(learnPayload.workspaceContext.mode, "challenge");
