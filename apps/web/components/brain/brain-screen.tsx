@@ -294,6 +294,41 @@ const styles = {
     margin: 0,
     overflowWrap: "anywhere",
   },
+  inspectorGroup: {
+    display: "grid",
+    gap: 8,
+    marginTop: 14,
+  },
+  inspectorList: {
+    display: "grid",
+    gap: 8,
+    margin: 0,
+    padding: 0,
+  },
+  inspectorItem: {
+    background: "#ffffff",
+    border: "1px solid #d8ded5",
+    borderRadius: 8,
+    listStyle: "none",
+    padding: 10,
+  },
+  inspectorItemWarning: {
+    borderColor: "#e0b4aa",
+    boxShadow: "inset 3px 0 0 #a23b32",
+  },
+  inspectorItemTitle: {
+    display: "block",
+    fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+  inspectorItemDetail: {
+    color: "#637069",
+    display: "block",
+    fontSize: 13,
+    lineHeight: 1.45,
+    marginTop: 4,
+    overflowWrap: "anywhere",
+  },
   emptyState: {
     border: "1px dashed #b8c3b8",
     borderRadius: 8,
@@ -455,6 +490,15 @@ export function BrainScreen({
               <Fact label="Confidence" value={model.inspector.confidenceLabel} />
               <Fact label="Updated" value={model.inspector.updatedAtLabel} />
             </dl>
+            <InspectorGroup title="Key connections" items={model.inspector.keyConnections} emptyLabel="No connected claims projected yet." />
+            <InspectorGroup title="Dependencies" items={model.inspector.dependencies} emptyLabel="No dependencies projected yet." />
+            <InspectorGroup
+              title="Contradiction markers"
+              items={model.inspector.contradictionMarkers}
+              emptyLabel="No contradiction markers detected."
+              warning
+            />
+            <InspectorGroup title="Recent activity" items={model.inspector.recentActivity} emptyLabel="No recent activity projected yet." />
           </section>
 
           <section aria-labelledby="recent-thoughts-heading" style={styles.panel}>
@@ -656,5 +700,35 @@ function Fact({ label, value }: { label: string; value: string }) {
       <dt style={styles.factLabel}>{label}</dt>
       <dd style={styles.factValue}>{value}</dd>
     </div>
+  );
+}
+
+function InspectorGroup({
+  emptyLabel,
+  items,
+  title,
+  warning = false,
+}: {
+  emptyLabel: string;
+  items: Array<{ id: string; title: string; detail: string }>;
+  title: string;
+  warning?: boolean;
+}) {
+  return (
+    <section aria-label={title} style={styles.inspectorGroup}>
+      <p style={styles.eyebrow}>{title}</p>
+      {items.length > 0 ? (
+        <ul style={styles.inspectorList}>
+          {items.map((item) => (
+            <li key={item.id} style={{ ...styles.inspectorItem, ...(warning ? styles.inspectorItemWarning : {}) }}>
+              <strong style={styles.inspectorItemTitle}>{item.title}</strong>
+              <span style={styles.inspectorItemDetail}>{item.detail}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p style={styles.emptyState}>{emptyLabel}</p>
+      )}
+    </section>
   );
 }
