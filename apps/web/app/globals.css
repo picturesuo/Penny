@@ -49,12 +49,12 @@ a,
 input,
 textarea {
   transition:
-    background-color var(--interaction-transition),
-    border-color var(--interaction-transition),
-    box-shadow var(--interaction-transition),
-    color var(--interaction-transition),
-    opacity var(--interaction-transition),
-    transform var(--interaction-transition);
+    background-color var(--motion-standard),
+    border-color var(--motion-standard),
+    box-shadow var(--motion-standard),
+    color var(--motion-standard),
+    opacity var(--motion-standard),
+    transform var(--motion-standard);
 }
 
 button:focus-visible,
@@ -530,6 +530,11 @@ textarea {
     rgba(23, 32, 27, 0.68);
   box-shadow: var(--glass-shadow);
   backdrop-filter: var(--glass-blur);
+  transition:
+    background var(--motion-standard),
+    border-color var(--motion-standard),
+    box-shadow var(--motion-standard),
+    transform var(--motion-standard);
 }
 
 .ui-card {
@@ -540,6 +545,14 @@ textarea {
   background:
     linear-gradient(145deg, rgba(255, 253, 247, 0.075), rgba(255, 253, 247, 0.035)),
     rgba(255, 253, 247, 0.045);
+}
+
+.ui-card:hover,
+.ui-panel:hover {
+  border-color: var(--interaction-hover-border);
+  box-shadow:
+    var(--glass-shadow),
+    var(--interaction-hover-shadow);
 }
 
 .ui-panel {
@@ -1158,6 +1171,18 @@ textarea {
     rgba(23, 32, 27, 0.68);
   box-shadow: var(--glass-shadow);
   backdrop-filter: var(--glass-blur);
+  transition:
+    background var(--motion-standard),
+    border-color var(--motion-standard),
+    box-shadow var(--motion-standard),
+    transform var(--motion-standard);
+}
+
+.penny-panel:hover {
+  border-color: var(--interaction-hover-border);
+  box-shadow:
+    var(--glass-shadow),
+    var(--interaction-hover-shadow);
 }
 
 .penny-hero-panel::after {
