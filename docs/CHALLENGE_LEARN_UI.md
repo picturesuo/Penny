@@ -42,6 +42,8 @@ Challenge state mapping:
 - `critique_loaded`: generated critique content is ready for response.
 - `critique_failed`: critique generation failed, so the user can retry or record a manual response.
 
+Challenge action gating follows the state model: users can start only when no round exists, request critique only before a critique exists or after failure, and record Defend / Revise / Absorb only when a critique is loaded or failed.
+
 ## Learn
 
 Learn mode reads the existing workspace Learn projection and builds a muted green teach-back surface:

@@ -229,6 +229,7 @@ export function buildChallengeExperienceViewModel(view: ChallengeProjectionView)
   const followUpQuestions = readStringArray(critique?.followUpQuestions);
   const responseStatus = view.responseState?.status ?? view.responseStatus ?? "not_recorded";
   const critiqueStatus = view.critiqueState?.status ?? view.critiqueStatus;
+  const hasRound = Boolean(view.activeChallengeRound);
   const critiqueBody = readString(view.critiqueState?.body);
   const challengeState = buildChallengeState({
     selectedClaim,
@@ -296,8 +297,8 @@ export function buildChallengeExperienceViewModel(view: ChallengeProjectionView)
         prompt: "I absorb this critique and now believe ",
       },
     ],
-    canStartChallenge: Boolean(selectedClaim),
-    canRequestCritique: Boolean(view.activeChallengeRound),
-    canRecordResponse: Boolean(view.activeChallengeRound),
+    canStartChallenge: Boolean(selectedClaim && !hasRound),
+    canRequestCritique: Boolean(hasRound && (critiqueStatus === "not_requested" || critiqueStatus === "failed")),
+    canRecordResponse: Boolean(hasRound && (critiqueStatus === "ready" || critiqueStatus === "failed")),
   };
 }

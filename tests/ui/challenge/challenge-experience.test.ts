@@ -58,7 +58,8 @@ test("challenge experience surfaces critique cards and dependency cascade", () =
     viewModel.responseActions.map((action) => action.label),
     ["Defend", "Revise", "Absorb"],
   );
-  assert.equal(viewModel.canRequestCritique, true);
+  assert.equal(viewModel.canStartChallenge, false);
+  assert.equal(viewModel.canRequestCritique, false);
   assert.equal(viewModel.canRecordResponse, true);
 });
 
@@ -94,69 +95,79 @@ test("challenge experience distinguishes all round and critique states", () => {
     status: "started",
   };
 
-  assert.equal(
-    buildChallengeExperienceViewModel({
-      activeClaim: claim,
-      activeChallengeRound: null,
-      critiqueStatus: "not_requested",
-      critiqueState: {
-        status: "not_requested",
-        critiqueId: null,
-      },
-    }).challengeState.id,
-    "no_round_yet",
-  );
+  const noRound = buildChallengeExperienceViewModel({
+    activeClaim: claim,
+    activeChallengeRound: null,
+    critiqueStatus: "not_requested",
+    critiqueState: {
+      status: "not_requested",
+      critiqueId: null,
+    },
+  });
 
-  assert.equal(
-    buildChallengeExperienceViewModel({
-      activeClaim: claim,
-      activeChallengeRound: round,
-      critiqueStatus: "not_requested",
-      critiqueState: {
-        status: "not_requested",
-        critiqueId: null,
-      },
-    }).challengeState.id,
-    "round_started",
-  );
+  assert.equal(noRound.challengeState.id, "no_round_yet");
+  assert.equal(noRound.canStartChallenge, true);
+  assert.equal(noRound.canRequestCritique, false);
+  assert.equal(noRound.canRecordResponse, false);
 
-  assert.equal(
-    buildChallengeExperienceViewModel({
-      activeClaim: claim,
-      activeChallengeRound: round,
-      critiqueStatus: "pending",
-      critiqueState: {
-        status: "pending",
-        critiqueId: "critique-1",
-      },
-    }).challengeState.id,
-    "critique_pending",
-  );
+  const roundStarted = buildChallengeExperienceViewModel({
+    activeClaim: claim,
+    activeChallengeRound: round,
+    critiqueStatus: "not_requested",
+    critiqueState: {
+      status: "not_requested",
+      critiqueId: null,
+    },
+  });
 
-  assert.equal(
-    buildChallengeExperienceViewModel({
-      activeClaim: claim,
-      activeChallengeRound: round,
-      critiqueStatus: "ready",
-      critiqueState: {
-        status: "ready",
-        critiqueId: "critique-1",
-        body: "Main challenge: the claim needs sharper evidence.",
-      },
-    }).challengeState.id,
-    "critique_loaded",
-  );
+  assert.equal(roundStarted.challengeState.id, "round_started");
+  assert.equal(roundStarted.canStartChallenge, false);
+  assert.equal(roundStarted.canRequestCritique, true);
+  assert.equal(roundStarted.canRecordResponse, false);
 
-  assert.equal(
-    buildChallengeExperienceViewModel({
-      activeClaim: claim,
-      activeChallengeRound: round,
-      critiqueStatus: "failed",
-      critiqueState: {
-        status: "failed",
-        critiqueId: "critique-1",
-      },
-    }).challengeState.id,
-    "critique_failed",
-  );
+  const critiquePending = buildChallengeExperienceViewModel({
+    activeClaim: claim,
+    activeChallengeRound: round,
+    critiqueStatus: "pending",
+    critiqueState: {
+      status: "pending",
+      critiqueId: "critique-1",
+    },
+  });
+
+  assert.equal(critiquePending.challengeState.id, "critique_pending");
+  assert.equal(critiquePending.canStartChallenge, false);
+  assert.equal(critiquePending.canRequestCritique, false);
+  assert.equal(critiquePending.canRecordResponse, false);
+
+  const critiqueLoaded = buildChallengeExperienceViewModel({
+    activeClaim: claim,
+    activeChallengeRound: round,
+    critiqueStatus: "ready",
+    critiqueState: {
+      status: "ready",
+      critiqueId: "critique-1",
+      body: "Main challenge: the claim needs sharper evidence.",
+    },
+  });
+
+  assert.equal(critiqueLoaded.challengeState.id, "critique_loaded");
+  assert.equal(critiqueLoaded.canStartChallenge, false);
+  assert.equal(critiqueLoaded.canRequestCritique, false);
+  assert.equal(critiqueLoaded.canRecordResponse, true);
+
+  const critiqueFailed = buildChallengeExperienceViewModel({
+    activeClaim: claim,
+    activeChallengeRound: round,
+    critiqueStatus: "failed",
+    critiqueState: {
+      status: "failed",
+      critiqueId: "critique-1",
+    },
+  });
+
+  assert.equal(critiqueFailed.challengeState.id, "critique_failed");
+  assert.equal(critiqueFailed.canStartChallenge, false);
+  assert.equal(critiqueFailed.canRequestCritique, true);
+  assert.equal(critiqueFailed.canRecordResponse, true);
 });

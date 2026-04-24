@@ -151,12 +151,16 @@ export function ChallengeExperience({
         <div className={styles.commandRow}>
           <button
             type="button"
-            disabled={!view.activeClaim || isBusy}
+            disabled={!model.canStartChallenge || isBusy}
             onClick={() => (view.activeClaim ? onStartChallenge(view.activeClaim.id) : undefined)}
           >
             Start Challenge
           </button>
-          <button type="button" disabled={!roundId || isBusy} onClick={() => (roundId ? onRequestCritique(roundId) : undefined)}>
+          <button
+            type="button"
+            disabled={!model.canRequestCritique || isBusy}
+            onClick={() => (roundId ? onRequestCritique(roundId) : undefined)}
+          >
             Request Critique
           </button>
         </div>
