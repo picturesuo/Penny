@@ -19,11 +19,19 @@ export type LearnProjectionView = {
 export type LearnExperienceViewModel = {
   heroTitle: string;
   heroDetail: string;
+  concept: {
+    title: string;
+    explanation: string;
+  };
   selectedClaim: {
     body: string;
     confidenceLabel: string;
   } | null;
   teachBackPrompt: string;
+  feedback: {
+    title: string;
+    body: string;
+  };
   practiceSteps: Array<{
     title: string;
     body: string;
@@ -32,6 +40,18 @@ export type LearnExperienceViewModel = {
     title: string;
     prompt: string;
   }>;
+  relatedIdeas: Array<{
+    title: string;
+    body: string;
+  }>;
+  brainMiniMap: {
+    current: string;
+    neighbors: string[];
+  };
+  switchConcept: {
+    label: string;
+    disabled: true;
+  };
   reviewState: {
     status: string;
     mapLabel: string;
@@ -47,16 +67,38 @@ function formatConfidence(confidenceBps: number | null | undefined): string {
   return `${Math.round(confidenceBps / 100)}% confidence`;
 }
 
+function buildConceptTitle(selectedClaim: LearnClaimView | null, fallback: string): string {
+  if (!selectedClaim) {
+    return fallback;
+  }
+
+  const firstSentence = selectedClaim.body.split(/[.!?]/)[0]?.trim();
+
+  if (firstSentence && firstSentence.length <= 72) {
+    return firstSentence;
+  }
+
+  return `${selectedClaim.body.slice(0, 69).trim()}...`;
+}
+
 export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnExperienceViewModel {
   const selectedClaim = view.selectedClaim;
   const status = view.status ?? view.learnState.status;
   const message = view.message ?? view.learnState.message;
+  const conceptTitle = buildConceptTitle(selectedClaim, "No concept selected");
+  const conceptExplanation = selectedClaim
+    ? selectedClaim.body
+    : "Choose a claim from Brain or Challenge so Learn can turn it into a teach-back concept.";
 
   return {
-    heroTitle: selectedClaim ? "Teach back the selected claim" : message,
+    heroTitle: selectedClaim ? conceptTitle : message,
     heroDetail: selectedClaim
       ? "Turn the claim into a short explanation, then check whether it still holds when examples and edge cases move."
       : "Select a claim in Brain or Challenge to start a Learn pass.",
+    concept: {
+      title: conceptTitle,
+      explanation: conceptExplanation,
+    },
     selectedClaim: selectedClaim
       ? {
           body: selectedClaim.body,
@@ -66,6 +108,12 @@ export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnE
     teachBackPrompt: selectedClaim
       ? `Explain this claim in your own words: ${selectedClaim.body}`
       : "Select a claim before writing a teach-back.",
+    feedback: {
+      title: selectedClaim ? "Penny feedback" : "Penny feedback pending",
+      body: selectedClaim
+        ? "Write a teach-back that explains the concept, gives one concrete example, and names the edge case you would watch."
+        : "Select a concept before Penny can compare your explanation against the source claim.",
+    },
     practiceSteps: [
       {
         title: "Explain",
@@ -94,6 +142,32 @@ export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnE
         prompt: "Which counterargument should you remember before using this claim?",
       },
     ],
+    relatedIdeas: [
+      {
+        title: "Source claim",
+        body: selectedClaim ? selectedClaim.body : "No source claim selected.",
+      },
+      {
+        title: "Evidence to recall",
+        body: "Name the observation that would make this concept easier to trust.",
+      },
+      {
+        title: "Challenge memory",
+        body: "Bring forward the counterargument before using this concept in a decision.",
+      },
+    ],
+    brainMiniMap: {
+      current: conceptTitle,
+      neighbors: [
+        view.selectedMapId ? `Map ${view.selectedMapId}` : "No map selected",
+        view.selectedClaimId ? `Claim ${view.selectedClaimId}` : "No claim selected",
+        "Challenge memory",
+      ],
+    },
+    switchConcept: {
+      label: "Switch concept",
+      disabled: true,
+    },
     reviewState: {
       status,
       mapLabel: view.selectedMapId ?? "No map selected",

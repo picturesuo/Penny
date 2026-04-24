@@ -36,13 +36,18 @@ Challenge state mapping:
 
 Learn mode reads the existing workspace Learn projection and builds a muted green teach-back surface:
 
-- selected claim card
+- concept title derived from the selected claim
+- concept explanation grounded in the selected claim body
 - teach-back writing area
+- Penny feedback card with draft-sensitive local guidance
+- related ideas list
+- "where this lives in your brain" mini-map
+- disabled `Switch concept` placeholder button
 - three-step practice path: Explain, Example, Edge case
 - retrieval checks for recall, evidence, and remembered challenge
 - learning state card with selected map, selected claim, placeholder status, and local draft length
 
-Learn is intentionally local-only for this slice. It does not add backend schema, provider calls, or command writes.
+Learn is intentionally local-only for this slice. It does not add backend schema, provider calls, command writes, or real concept switching yet.
 
 ## Boundaries
 

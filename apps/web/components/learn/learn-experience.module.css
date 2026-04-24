@@ -34,27 +34,39 @@
   text-transform: uppercase;
 }
 
-.selectedClaim,
+.conceptCard,
+.explanationCard,
 .teachBackCard,
+.feedbackCard,
+.relatedCard,
+.miniMapCard,
 .stepsCard,
 .retrievalCard,
 .stateCard {
   border-color: rgba(47, 107, 85, 0.18);
 }
 
-.selectedClaim {
+.conceptCard {
   background: #f4f8ef;
 }
 
-.claimText {
-  color: var(--penny-ink);
+.conceptCard h2,
+.feedbackCard h2,
+.relatedItem h2 {
+  margin: 0;
+  color: #174c3b;
+  font-size: 1rem;
 }
 
-.selectedClaim span {
+.conceptCard span {
   display: inline-block;
   margin-top: 12px;
   color: #2f6b55;
   font-size: 0.88rem;
+}
+
+.explanationCard p {
+  color: var(--penny-ink);
 }
 
 .teachBackCard {
@@ -80,14 +92,20 @@
   line-height: 1.5;
 }
 
+.feedbackCard {
+  background: #f4f8ef;
+}
+
 .stepList,
-.retrievalGrid {
+.retrievalGrid,
+.relatedList {
   display: grid;
   gap: 12px;
 }
 
 .stepItem,
-.retrievalItem {
+.retrievalItem,
+.relatedItem {
   padding: 14px;
   border: 1px solid rgba(47, 107, 85, 0.16);
   border-radius: 8px;
@@ -104,6 +122,30 @@
 .stepItem p,
 .retrievalItem p {
   margin: 8px 0 0;
+}
+
+.miniMap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.mapNode {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(47, 107, 85, 0.18);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fffdf7;
+  color: #31443a;
+}
+
+.mapNode[data-current="true"] {
+  border-color: rgba(47, 107, 85, 0.38);
+  background: #e8f0e2;
+  color: #174c3b;
+  font-weight: 800;
 }
 
 .retrievalCard {
@@ -128,6 +170,21 @@
 .facts dd {
   margin: 3px 0 0;
   overflow-wrap: anywhere;
+}
+
+.switchButton {
+  min-height: 38px;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #2f6b55;
+  color: #fffdf7;
+}
+
+.switchButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 @media (max-width: 860px) {
