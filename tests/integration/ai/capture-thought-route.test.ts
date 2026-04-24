@@ -53,6 +53,15 @@ function restoreDeps(originalDeps: ReturnType<typeof snapshotDeps>) {
   Object.assign(captureThoughtDeps, originalDeps);
 }
 
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}
+
 function request(body: unknown, headers: Record<string, string> = {}) {
   return new Request("http://localhost/ai/capture-thought", {
     method: "POST",
@@ -228,6 +237,148 @@ test("POST /ai/capture-thought returns extracted thought and claims", async () =
     assert.equal(storedActivity[0].ai_job_id, payload.aiJobId);
   } finally {
     restoreDeps(originalDeps);
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("POST /ai/capture-thought uses the mock provider without OPENAI_API_KEY and records the AI job lifecycle", async () => {
+  const originalDeps = snapshotDeps();
+  const previousOpenAIKey = process.env.OPENAI_API_KEY;
+  const previousMockModel = process.env.MOCK_AI_MODEL;
+  const sql = postgres(databaseUrl, { prepare: false });
+  const userId = "00000000-0000-0000-0000-000000000124";
+  const mapId = "00000000-0000-0000-0000-000000000457";
+  const sessionId = "00000000-0000-0000-0000-000000000790";
+  let mockCalls = 0;
+
+  delete process.env.OPENAI_API_KEY;
+  process.env.MOCK_AI_MODEL = "mock-ai-job-test";
+
+  captureThoughtDeps.invokeAnthropicStructured = async () => {
+    throw new Error("anthropic should not be called when mock provider is forced");
+  };
+  captureThoughtDeps.invokeOpenAIStructured = async () => {
+    throw new Error("openai should not be called without OPENAI_API_KEY");
+  };
+  captureThoughtDeps.invokeXaiStructured = async () => {
+    throw new Error("xai should not be called when mock provider is forced");
+  };
+  captureThoughtDeps.invokeMockStructured = async () => {
+    mockCalls += 1;
+
+    return {
+      output: {
+        thought: {
+          title: "Mock AI job lifecycle",
+          summary: "The mock provider produced structured capture output without live API credentials.",
+        },
+        claims: [
+          {
+            text: "AI endpoint tests should persist structured AI job output without live provider keys.",
+            confidenceBps: 8300,
+            rationale: "The route is running under forced mock provider configuration.",
+          },
+        ],
+      },
+      usage: {
+        inputTokens: 12,
+        outputTokens: 18,
+        totalTokens: 30,
+      },
+      cost: {
+        totalUsd: 0,
+        currency: "USD",
+      },
+    };
+  };
+
+  try {
+    await sql`
+      insert into maps (id, user_id, title)
+      values (${mapId}, ${userId}, ${"Mock AI job map"})
+    `;
+    await sql`
+      insert into workspace_contexts (user_id, map_id, mode)
+      values (${userId}, ${mapId}, ${"brain"})
+      on conflict (user_id) do update set map_id = excluded.map_id, mode = excluded.mode
+    `;
+
+    const response = await POST(
+      request(
+        {
+          text: "Test the AI job lifecycle with the mock provider.",
+          sessionId,
+        },
+        {
+          "x-user-id": userId,
+          "x-request-id": "capture-route-mock-ai-job",
+        },
+      ),
+    );
+
+    assert.equal(response.status, 201);
+    assert.equal(mockCalls, 1);
+
+    const payload = (await response.json()) as {
+      aiJobId: string;
+      meta: {
+        model: string;
+        provider: string;
+      };
+    };
+
+    assert.match(payload.aiJobId, /^[0-9a-f-]{36}$/i);
+    assert.equal(payload.meta.provider, "mock");
+    assert.equal(payload.meta.model, "mock-ai-job-test");
+
+    const storedJobs = await sql<
+      {
+        id: string;
+        status: string;
+        operation: string;
+        input_json: {
+          mapId?: string;
+          requestId?: string;
+          sessionId?: string | null;
+          text?: string;
+        } | null;
+        output_json: {
+          claims?: Array<{ confidenceBps?: number; text?: string }>;
+          meta?: { model?: string; provider?: string };
+          suggestedTitle?: string;
+          thought?: { summary?: string; title?: string };
+        } | null;
+        started_at: Date | null;
+        completed_at: Date | null;
+      }[]
+    >`select id, status, operation, input_json, output_json, started_at, completed_at from ai_jobs where id = ${payload.aiJobId}`;
+
+    assert.equal(storedJobs.length, 1);
+
+    const job = storedJobs[0];
+
+    assert.equal(job.id, payload.aiJobId);
+    assert.equal(job.operation, "captureThought");
+    assert.equal(job.status, "succeeded");
+    assert.ok(job.started_at, "AI job should record when execution started");
+    assert.ok(job.completed_at, "AI job should record when execution completed");
+    assert.ok(job.completed_at >= job.started_at);
+    assert.deepEqual(job.input_json, {
+      text: "Test the AI job lifecycle with the mock provider.",
+      sessionId,
+      mapId,
+      requestId: "capture-route-mock-ai-job",
+    });
+    assert.equal(job.output_json?.suggestedTitle, "Mock AI job lifecycle");
+    assert.equal(job.output_json?.thought?.title, "Mock AI job lifecycle");
+    assert.equal(job.output_json?.claims?.length, 1);
+    assert.equal(job.output_json?.claims?.[0]?.confidenceBps, 8300);
+    assert.equal(job.output_json?.meta?.provider, "mock");
+    assert.equal(job.output_json?.meta?.model, "mock-ai-job-test");
+  } finally {
+    restoreDeps(originalDeps);
+    restoreEnv("OPENAI_API_KEY", previousOpenAIKey);
+    restoreEnv("MOCK_AI_MODEL", previousMockModel);
     await sql.end({ timeout: 1 });
   }
 });
