@@ -1,14 +1,17 @@
 # Penny
 
-Penny is a minimal monorepo restart with a Next.js web app, a Fastify API, and a shared TypeScript package. The current goal is a clean baseline that installs, runs, and verifies from a blank machine without any database, auth, AI, billing, or job-system dependencies.
+Penny is being restarted as a minimal monorepo. The active local rebuild is intentionally small: a Next.js web app, a Fastify API, and one shared TypeScript package with a simple health-check flow between them.
 
-## What is in this repo
+This README is the first durable project artifact for the restart. It describes the intended baseline for the active working tree while the broader rebuild is still being published and verified.
 
-- `apps/web`: Next.js App Router frontend with a simple restart landing page and backend health-check UI.
-- `apps/api`: Fastify API exposing `GET /health`.
-- `packages/shared`: shared TypeScript types used by both apps.
-- `docs/architecture.md`: current system boundaries and restart scope.
-- `docs/setup.md`: short local setup and verification notes.
+## Restart layout
+
+- `apps/web`: Next.js App Router frontend with a simple restart landing page and backend health-check UI
+- `apps/api`: Fastify API exposing `GET /health`
+- `packages/shared`: shared TypeScript types used by both apps
+- `docs/architecture.md`: current system boundaries and restart scope
+- `docs/setup.md`: short local setup and verification notes
+- `_archive_old_restart/`: historical reference only, not part of the active restart baseline
 
 ## Requirements
 
@@ -23,26 +26,20 @@ Penny is a minimal monorepo restart with a Next.js web app, a Fastify API, and a
    pnpm install
    ```
 
-2. Copy the example environment file if you want explicit local values:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Start the workspace:
+2. Start the workspace:
 
    ```bash
    pnpm dev
    ```
 
-4. Open the local apps:
+3. Open the local apps:
 
 - Web: `http://localhost:3000`
 - API health endpoint: `http://localhost:3001/health`
 
-## Environment
+## Default local environment
 
-The repo ships with a small `.env.example`:
+If you want explicit local values, use:
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
@@ -96,3 +93,7 @@ This restart is intentionally small. It does not currently include:
 - billing
 - background jobs
 - legacy code imports
+
+## Current intent
+
+The restart goal is a clean baseline that installs, runs, and verifies from a blank machine before larger product work resumes.
