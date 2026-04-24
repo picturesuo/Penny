@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import * as schema from "./schema.ts";
 
 const DATABASE_URL_ERROR = "Missing DATABASE_URL or DATABASE_DIRECT_URL for the Supabase Postgres client.";
 
@@ -26,7 +27,7 @@ export function createPostgresClient(url = getRuntimeDatabaseUrl()) {
 export function createDbClient(url = getRuntimeDatabaseUrl()) {
   const sql = createPostgresClient(url);
 
-  return drizzle(sql);
+  return drizzle(sql, { schema });
 }
 
 type PostgresClient = ReturnType<typeof createPostgresClient>;
@@ -41,7 +42,7 @@ export function getDb() {
   if (!globalForDb.__pennyPostgresClient || !globalForDb.__pennyDbClient) {
     const url = getRuntimeDatabaseUrl();
     const sql = createPostgresClient(url);
-    const db = drizzle(sql);
+    const db = drizzle(sql, { schema });
 
     globalForDb.__pennyPostgresClient = sql;
     globalForDb.__pennyDbClient = db;

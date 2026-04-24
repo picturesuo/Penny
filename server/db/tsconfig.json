@@ -1,9 +1,15 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "noEmit": true
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": ["node"]
   },
   "include": ["./schema.ts", "./client.ts", "../events/emitEvent.ts"]
 }
