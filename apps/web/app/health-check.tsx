@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { HealthResponse } from "@penny/shared";
+import { EmptyState, ErrorState, LoadingState } from "../components/ui";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 
@@ -68,6 +69,17 @@ export function HealthCheck() {
       <p style={{ marginTop: 16, color: "#2a2927" }}>
         API base URL: <code>{apiBaseUrl}</code>
       </p>
+      {state.status === "idle" ? (
+        <EmptyState
+          actionLabel="Run health check"
+          body="No backend request has been sent from this browser session yet."
+          onAction={() => {
+            void checkHealth();
+          }}
+          title="Backend health not checked"
+        />
+      ) : null}
+      {state.status === "loading" ? <LoadingState label="Checking backend health." /> : null}
       {state.status === "success" ? (
         <pre
           style={{
@@ -83,7 +95,14 @@ export function HealthCheck() {
         </pre>
       ) : null}
       {state.status === "error" ? (
-        <p style={{ marginTop: 16, color: "#b00020" }}>{state.message}</p>
+        <ErrorState
+          actionLabel="Retry health check"
+          message={state.message}
+          onAction={() => {
+            void checkHealth();
+          }}
+          title="Backend health check failed"
+        />
       ) : null}
     </section>
   );

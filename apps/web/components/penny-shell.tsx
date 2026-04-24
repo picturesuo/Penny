@@ -6,6 +6,7 @@ import { ChallengeExperience, type ChallengeResponsePath } from "./challenge/cha
 import { ConfidenceChip } from "./confidence/ConfidenceChip";
 import { BrainGraphMap, createBrainGraph } from "./graph";
 import { LearnExperience } from "./learn/learn-experience";
+import { EmptyState, ErrorState, LoadingState } from "./ui";
 import type { GraphModel, GraphNode } from "../lib/types/graph";
 import { CommandPalette } from "../src/components/command/CommandPalette";
 import { InspectorRail } from "../src/components/inspector/InspectorRail";
@@ -97,6 +98,7 @@ type LearnView = {
 type ProjectionView = BrainView | ChallengeView | LearnView;
 
 type ProjectionState = {
+  isLoading: boolean;
   mode: WorkspaceMode;
   shell: ShellContext | null;
   view: ProjectionView | null;
@@ -528,6 +530,7 @@ type PennyShellProps = {
 export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
   const [activeMode, setActiveMode] = useState<WorkspaceMode>(initialMode);
   const [state, setState] = useState<ProjectionState>({
+    isLoading: true,
     mode: "brain",
     shell: null,
     view: null,
@@ -559,12 +562,20 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
     async function loadProjection() {
       try {
+        setState((current) => ({
+          ...current,
+          isLoading: true,
+          mode: activeMode,
+          error: null,
+        }));
+
         const shell = await fetchProjection<ShellContext>("/api/workspace/shell", controller.signal);
         const mode = activeMode || shell.mode || "brain";
         const view = await fetchProjection<ProjectionView>(`/api/workspace/${mode}`, controller.signal);
 
         startTransition(() => {
           setState({
+            isLoading: false,
             mode,
             shell,
             view,
@@ -579,6 +590,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         startTransition(() => {
           setState((current) => ({
             ...current,
+            isLoading: false,
             mode: activeMode,
             error: error instanceof Error ? error.message : "Projection request failed.",
           }));
@@ -869,9 +881,29 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         <span className="penny-context-label">Stored mode: {state.shell?.mode ?? "brain"}</span>
       </section>
 
-      <section className="penny-main-content" aria-busy={isPending}>
-        {state.error ? <ProjectionNotice title="Projection unavailable" body={state.error} /> : null}
-        {!state.error && !state.view ? <ProjectionNotice title="Loading projection" body="Reading workspace state." /> : null}
+      <section className="penny-main-content" aria-busy={state.isLoading || isPending}>
+        {state.error ? (
+          <ErrorState
+            actionLabel="Retry"
+            message={state.error}
+            onAction={() => setRefreshVersion((current) => current + 1)}
+            title="Projection unavailable"
+          />
+        ) : null}
+        {!state.error && state.isLoading && !state.view ? (
+          <LoadingState label="Reading workspace state." />
+        ) : null}
+        {!state.error && state.isLoading && state.view ? (
+          <ProjectionNotice title="Updating projection" body="Refreshing the workspace view while preserving the current selection." />
+        ) : null}
+        {!state.error && !state.isLoading && !state.view ? (
+          <EmptyState
+            actionLabel="Retry"
+            body="The workspace API responded, but no projection was available for the selected mode."
+            onAction={() => setRefreshVersion((current) => current + 1)}
+            title="No workspace projection"
+          />
+        ) : null}
         {!state.error && state.view ? (
           <ProjectionContent
             actionState={actionState}
@@ -1018,7 +1050,10 @@ function BrainProjection({
               ))}
             </div>
           ) : (
-            <p>No claims returned by the Brain projection.</p>
+            <EmptyState
+              body="This Brain map is ready, but it does not have any projected claims yet. Create a claim below to start the stream."
+              title="No claims in this Brain map"
+            />
           )}
         </section>
 
