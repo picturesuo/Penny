@@ -277,6 +277,19 @@ export const generateChallengeCritiqueDeps = {
   startActiveObservation: defaultStartActiveObservation as StartActiveObservation,
 };
 
+function hasApiKey(value: string | undefined): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+export function canGenerateChallengeCritiqueNow(): boolean {
+  return (
+    hasApiKey(process.env.ANTHROPIC_API_KEY) ||
+    hasApiKey(process.env.XAI_API_KEY) ||
+    generateChallengeCritiqueDeps.invokeAnthropicStructured !== invokeAnthropicStructured ||
+    generateChallengeCritiqueDeps.invokeXaiStructured !== invokeXaiStructured
+  );
+}
+
 export async function generateChallengeCritique(
   input: unknown,
   context: GenerateChallengeCritiqueContext = {},
