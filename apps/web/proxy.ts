@@ -1,0 +1,24 @@
+import { NextResponse, type NextRequest } from "next/server";
+
+import { getRequestId, logRequest } from "./lib/request-logging";
+
+export function proxy(request: NextRequest) {
+  const requestId = getRequestId(request.headers);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
+
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+
+  logRequest(request, requestId);
+  response.headers.set("x-request-id", requestId);
+
+  return response;
+}
+
+export const config = {
+  matcher: ["/api/:path*", "/health"],
+};

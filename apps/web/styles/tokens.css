@@ -1,0 +1,110 @@
+:root {
+  color-scheme: dark;
+
+  --font-sans: "Avenir Next", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+
+  --color-canvas: #0d1210;
+  --color-canvas-raised: rgba(20, 28, 24, 0.88);
+  --color-panel: rgba(23, 32, 27, 0.78);
+  --color-panel-muted: rgba(255, 253, 247, 0.07);
+  --color-ink: #f6f1e6;
+  --color-ink-soft: #d6d0c2;
+  --color-muted: #a7ad9f;
+  --color-faint: #777f72;
+  --color-line: rgba(255, 253, 247, 0.12);
+  --color-line-strong: rgba(255, 253, 247, 0.22);
+  --color-inverse: #fffdf7;
+  --color-success: #8fc9a8;
+  --color-danger: #e39386;
+
+  --color-mode-brain: #69b99a;
+  --color-mode-brain-soft: rgba(105, 185, 154, 0.16);
+  --color-mode-brain-ink: #bce4d3;
+  --color-mode-challenge: #dc8c63;
+  --color-mode-challenge-soft: rgba(220, 140, 99, 0.16);
+  --color-mode-challenge-ink: #f1c3aa;
+  --color-mode-learn: #83b7d8;
+  --color-mode-learn-soft: rgba(131, 183, 216, 0.16);
+  --color-mode-learn-ink: #c4e0ef;
+
+  --color-brand-mark: #d87516;
+  --color-brand-mark-soft: rgba(216, 117, 22, 0.16);
+  --color-brand-mark-ink: #f1a456;
+
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.35rem;
+  --text-2xl: 1.75rem;
+
+  --type-page-title-size: 2.1rem;
+  --type-page-title-weight: 780;
+  --type-page-title-leading: 1.08;
+  --type-section-title-size: 1.08rem;
+  --type-section-title-weight: 760;
+  --type-section-title-leading: 1.25;
+  --type-section-label-size: var(--text-xs);
+  --type-section-label-weight: 820;
+  --type-metadata-size: var(--text-xs);
+  --type-metadata-weight: 650;
+  --type-empty-size: var(--text-sm);
+  --type-empty-leading: var(--leading-relaxed);
+
+  --leading-tight: 1.18;
+  --leading-normal: 1.45;
+  --leading-relaxed: 1.65;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --border-subtle: 1px solid var(--color-line);
+  --border-strong: 1px solid var(--color-line-strong);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 18px 48px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.36);
+
+  --glass-panel: linear-gradient(145deg, rgba(255, 253, 247, 0.1), rgba(255, 253, 247, 0.045));
+  --glass-border: 1px solid rgba(255, 253, 247, 0.14);
+  --glass-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  --glass-blur: blur(22px);
+
+  --interaction-hover-bg: rgba(255, 253, 247, 0.1);
+  --interaction-hover-border: rgba(255, 253, 247, 0.28);
+  --interaction-hover-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  --interaction-focus-ring: rgba(105, 185, 154, 0.34);
+  --interaction-focus-border: var(--color-mode-brain);
+  --interaction-focus-shadow: 0 0 0 3px var(--interaction-focus-ring);
+  --interaction-transition: 140ms ease;
+  --motion-fast: 120ms ease;
+  --motion-standard: 160ms ease;
+  --motion-slow: 220ms ease;
+  --motion-lift-sm: translateY(-2px);
+  --motion-lift-md: translateY(-3px);
+
+  --shell-sidebar-width: 280px;
+  --shell-inspector-width: 336px;
+  --shell-topbar-height: 72px;
+  --shell-page-gutter: var(--space-8);
+  --shell-page-gutter-mobile: var(--space-4);
+  --shell-content-gap: var(--space-6);
+  --shell-card-gap: var(--space-4);
+  --shell-card-padding: var(--space-6);
+  --graph-panel-padding: var(--space-4);
+  --graph-area-min-height: 520px;
+}

@@ -5,8 +5,99 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1776994613660,
-      "tag": "0000_aromatic_blacklash",
+      "when": 1776994421350,
+      "tag": "0000_sharp_kid_colt",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776994881087,
+      "tag": "0001_brave_doctor_strange",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776994952174,
+      "tag": "0002_overjoyed_next_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1776995307458,
+      "tag": "0003_bitter_morgan_stark",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777002771811,
+      "tag": "0004_ambiguous_crusher_hogan",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777006563897,
+      "tag": "0005_salty_harrier",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777010808828,
+      "tag": "0006_lethal_killraven",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777011025722,
+      "tag": "0007_small_nomad",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777011186362,
+      "tag": "0008_known_risque",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777011800000,
+      "tag": "0009_graph_node_consistency",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777012400000,
+      "tag": "0010_graph_edge_node_constraints",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777013000000,
+      "tag": "0011_graph_edge_validation_and_entity_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777013600000,
+      "tag": "0012_confidence_targets_and_edge_dedup",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1777014200000,
+      "tag": "0013_graph_edge_self_loop_guard",
       "breakpoints": true
     }
   ]

@@ -1,0 +1,243 @@
+.learnLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+  gap: var(--shell-card-gap);
+}
+
+.heroPanel {
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  grid-column: 1 / -1;
+  border-color: rgba(131, 183, 216, 0.24);
+  background:
+    linear-gradient(135deg, var(--color-mode-learn-soft), transparent 46%),
+    linear-gradient(225deg, rgba(216, 117, 22, 0.08), transparent 38%),
+    var(--glass-panel),
+    rgba(23, 32, 27, 0.68);
+}
+
+.heroPanel h1 {
+  max-width: 860px;
+}
+
+.heroPanel p {
+  max-width: 760px;
+}
+
+.kicker {
+  margin: 0 0 10px;
+  color: var(--color-mode-learn-ink);
+  font-size: var(--type-section-label-size);
+  font-weight: var(--type-section-label-weight);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.conceptCard,
+.explanationCard,
+.teachBackCard,
+.feedbackCard,
+.relatedCard,
+.miniMapCard,
+.stepsCard,
+.retrievalCard,
+.stateCard,
+.stateDetailsCard {
+  border-color: rgba(131, 183, 216, 0.18);
+}
+
+.conceptCard {
+  background: rgba(131, 183, 216, 0.08);
+}
+
+.conceptCard h2,
+.feedbackCard h2,
+.relatedItem h2 {
+  margin: 0;
+  color: var(--penny-ink);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--type-section-title-weight);
+}
+
+.conceptCard span {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--color-mode-learn-ink);
+  font-size: var(--type-metadata-size);
+}
+
+.explanationCard p {
+  color: var(--penny-ink);
+}
+
+.teachBackCard {
+  display: grid;
+  gap: 10px;
+}
+
+.teachBackCard label {
+  color: var(--color-mode-learn-ink);
+  font-size: var(--type-section-label-size);
+  font-weight: var(--type-section-label-weight);
+  text-transform: uppercase;
+}
+
+.teachBackCard textarea {
+  width: 100%;
+  resize: vertical;
+  border: var(--glass-border);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 253, 247, 0.08);
+  color: var(--penny-ink);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.feedbackCard {
+  background: rgba(131, 183, 216, 0.08);
+}
+
+.stateCard {
+  background: rgba(131, 183, 216, 0.08);
+  box-shadow: inset 4px 0 0 var(--color-mode-learn);
+}
+
+.stateCard[data-state="placeholder"] {
+  box-shadow: inset 4px 0 0 var(--color-faint);
+}
+
+.stateCard[data-state="feedback_shown"] {
+  box-shadow: inset 4px 0 0 var(--color-mode-learn);
+}
+
+.stateCard[data-state="loading"] {
+  box-shadow: inset 4px 0 0 var(--color-mode-brain);
+}
+
+.stateCard[data-state="error"] {
+  box-shadow: inset 4px 0 0 var(--color-danger);
+}
+
+.stateCard h2 {
+  margin: 0;
+  color: var(--penny-ink);
+  font-size: var(--type-section-title-size);
+  font-weight: var(--type-section-title-weight);
+}
+
+.stepList,
+.retrievalGrid,
+.relatedList {
+  display: grid;
+  gap: 12px;
+}
+
+.stepItem,
+.retrievalItem,
+.relatedItem {
+  padding: 14px;
+  border: var(--glass-border);
+  border-radius: 8px;
+  background: rgba(255, 253, 247, 0.07);
+}
+
+.stepItem h2,
+.retrievalItem h2 {
+  margin: 0;
+  color: var(--penny-ink);
+  font-size: var(--text-sm);
+}
+
+.stepItem p,
+.retrievalItem p {
+  margin: 8px 0 0;
+}
+
+.miniMap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.mapNode {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  border: var(--glass-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 253, 247, 0.07);
+  color: var(--penny-ink);
+}
+
+.mapNode[data-current="true"] {
+  border-color: rgba(131, 183, 216, 0.38);
+  background: var(--color-mode-learn-soft);
+  color: var(--color-mode-learn-ink);
+  font-weight: 800;
+}
+
+.retrievalCard {
+  grid-column: 1 / -1;
+}
+
+.retrievalGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.facts {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--penny-muted);
+  font-size: var(--type-section-label-size);
+  font-weight: var(--type-section-label-weight);
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.switchButton {
+  min-height: 38px;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: var(--color-mode-learn);
+  color: var(--color-canvas);
+}
+
+.switchButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+@media (max-width: 860px) {
+  .learnLayout,
+  .retrievalGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .heroPanel {
+    min-height: 190px;
+  }
+
+  .teachBackCard textarea {
+    min-height: 150px;
+  }
+
+  .switchButton {
+    width: 100%;
+  }
+}

@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  SetWorkspaceSelectionClaimForbiddenError,
   SetWorkspaceSelectionClaimNotFoundError,
+  SetWorkspaceSelectionMapForbiddenError,
   SetWorkspaceSelectionMapNotFoundError,
   SetWorkspaceSelectionValidationError,
   setWorkspaceSelection,
@@ -20,8 +22,16 @@ class FakeSetWorkspaceSelectionRepositoryTx implements SetWorkspaceSelectionRepo
     private readonly events: WorkspaceSelectionChangedEventRecord[],
   ) {}
 
+  async findMapById(input: { mapId: string }) {
+    return this.maps.find((map) => map.id === input.mapId) ?? null;
+  }
+
   async findOwnedMap(input: { mapId: string; userId: string }) {
     return this.maps.find((map) => map.id === input.mapId && map.userId === input.userId) ?? null;
+  }
+
+  async findClaimById(input: { claimId: string }) {
+    return this.claims.find((claim) => claim.id === input.claimId) ?? null;
   }
 
   async findOwnedClaim(input: { claimId: string; mapId: string; userId: string }) {
@@ -219,11 +229,32 @@ test("setWorkspaceSelection rejects an unowned map", async () => {
         },
         repository,
       ),
-    SetWorkspaceSelectionMapNotFoundError,
+    SetWorkspaceSelectionMapForbiddenError,
   );
 });
 
 test("setWorkspaceSelection rejects an unowned claim", async () => {
+  const repository = new FakeSetWorkspaceSelectionRepository(
+    [{ id: "map-1", userId: "user-1" }],
+    [{ id: "claim-1", mapId: "map-1", userId: "other-user" }],
+  );
+
+  await assert.rejects(
+    () =>
+      setWorkspaceSelection(
+        {
+          userId: "user-1",
+          mode: "Challenge",
+          mapId: "map-1",
+          claimId: "claim-1",
+        },
+        repository,
+      ),
+    SetWorkspaceSelectionClaimForbiddenError,
+  );
+});
+
+test("setWorkspaceSelection rejects a missing claim", async () => {
   const repository = new FakeSetWorkspaceSelectionRepository([{ id: "map-1", userId: "user-1" }], []);
 
   await assert.rejects(

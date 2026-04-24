@@ -1,0 +1,78 @@
+import type { BrainProjectionView } from "./types";
+
+export type BrainShellProjectionView = {
+  mode: string;
+  mapId: string | null;
+  claimId: string | null;
+  breadcrumb?: Array<{
+    kind: "map" | "claim";
+    id: string;
+    label: string;
+  }>;
+  breadcrumbItems?: Array<{
+    kind: "map" | "claim";
+    id: string;
+    label: string;
+  }>;
+};
+
+export type BrainWorkspaceFetchResult = {
+  shell: BrainShellProjectionView;
+  brain: BrainProjectionView;
+};
+
+export type BrainWorkspaceFetchInput = {
+  userId: string;
+  signal?: AbortSignal;
+  fetcher?: typeof fetch;
+  shellPath?: string;
+  brainPath?: string;
+};
+
+function readApiErrorMessage(payload: unknown, fallback: string) {
+  if (payload && typeof payload === "object" && "error" in payload) {
+    const message = (payload as { error?: unknown }).error;
+
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
+async function readProjection<T>(
+  fetcher: typeof fetch,
+  path: string,
+  input: Pick<BrainWorkspaceFetchInput, "signal" | "userId">,
+): Promise<T> {
+  const response = await fetcher(path, {
+    cache: "no-store",
+    headers: {
+      "x-user-id": input.userId,
+    },
+    signal: input.signal,
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(readApiErrorMessage(payload, `${path} failed with ${response.status}.`));
+  }
+
+  return (await response.json()) as T;
+}
+
+export async function fetchBrainWorkspace(input: BrainWorkspaceFetchInput): Promise<BrainWorkspaceFetchResult> {
+  const fetcher = input.fetcher ?? fetch;
+  const shellPath = input.shellPath ?? "/api/workspace/shell";
+  const brainPath = input.brainPath ?? "/api/workspace/brain";
+  const [shell, brain] = await Promise.all([
+    readProjection<BrainShellProjectionView>(fetcher, shellPath, input),
+    readProjection<BrainProjectionView>(fetcher, brainPath, input),
+  ]);
+
+  return {
+    shell,
+    brain,
+  };
+}

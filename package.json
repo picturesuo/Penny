@@ -1,34 +1,34 @@
 {
   "name": "penny",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
-    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
-    "db:typecheck": "tsc -p server/db/tsconfig.json --noEmit",
-    "test:commands": "tsx --test tests/commands/**/*.test.ts"
-  },
+  "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "drizzle-orm": "^0.45.2",
-    "next": "16.2.4",
-    "postgres": "^3.4.9",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "postgres": "^3.4.9"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:typecheck": "tsc -p server/db/tsconfig.json --noEmit",
+    "test:integration": "tsx --test --test-concurrency=1 tests/integration/**/*.test.ts",
+    "test:mvp": "tsx --test --test-concurrency=1 tests/integration/backend-acceptance-flow.test.ts tests/integration/workspace-brain-route.test.ts tests/integration/start-challenge-round-command.test.ts tests/integration/challenge-respond-route.test.ts tests/integration/create-claim-route.test.ts tests/integration/request-challenge-critique-route.test.ts",
+    "test:mvp-verification": "tsx --test --test-concurrency=1 tests/ai/*.test.ts tests/commands/*.test.ts tests/projections/*.test.ts tests/unit/emitEvent.test.ts tests/integration/auth-required-routes.test.ts tests/integration/create-map-route.test.ts tests/integration/create-claim-route.test.ts tests/integration/set-workspace-selection-command.test.ts tests/integration/start-challenge-round-command.test.ts tests/integration/request-challenge-critique-route.test.ts tests/integration/challenge-respond-route.test.ts tests/integration/workspace-shell-route.test.ts tests/integration/workspace-brain-route.test.ts tests/integration/workspace-challenge-route.test.ts tests/integration/workspace-learn-route.test.ts tests/integration/challenge-critique-placeholder-flow.test.ts tests/integration/challenge-critique-projection-flow.test.ts tests/integration/challenge-critique-failure-projection-flow.test.ts tests/integration/moves-events-command-matrix.test.ts tests/integration/backend-mvp.test.ts tests/integration/backend-acceptance-flow.test.ts"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.9.1",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.4",
-    "tailwindcss": "^4",
+    "eslint": "^9.39.1",
+    "globals": "^16.4.0",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "turbo": "^2.5.8",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.1"
   }
 }
