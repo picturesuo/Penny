@@ -27,8 +27,19 @@ class FakeRecordChallengeResponseRepositoryTx implements RecordChallengeResponse
     return this.rounds.find((round) => round.id === input.roundId && round.userId === input.userId) ?? null;
   }
 
-  async findMoveEventByRequestId() {
-    return null;
+  async findMoveEventByRequestId(input: { userId: string; requestId: string; type: string }) {
+    const event = this.events.find(
+      (candidate) =>
+        candidate.userId === input.userId &&
+        candidate.requestId === input.requestId &&
+        candidate.type === input.type,
+    );
+
+    return event
+      ? {
+          aggregateId: event.aggregateId,
+        }
+      : null;
   }
 
   async updateChallengeRound(record: RecordChallengeResponseRoundRecord) {
@@ -140,6 +151,53 @@ test("recordChallengeResponse emits challenge.response.recorded with response me
       createdAt: timestamp,
     },
   ]);
+});
+
+test("recordChallengeResponse replays a safe duplicate response for the same requestId", async () => {
+  const repository = new FakeRecordChallengeResponseRepository([
+    {
+      id: "round-5",
+      mapId: "map-5",
+      claimId: "claim-5",
+      userId: "user-5",
+      status: "started",
+    },
+  ]);
+  const timestamp = new Date("2026-04-24T14:15:00.000Z");
+
+  const firstResult = await recordChallengeResponse(
+    {
+      userId: "user-5",
+      roundId: "round-5",
+      response: "Persist this only once.",
+      requestId: "request-duplicate",
+    },
+    repository,
+    {
+      now: () => timestamp,
+    },
+  );
+
+  const secondResult = await recordChallengeResponse(
+    {
+      userId: "user-5",
+      roundId: "round-5",
+      response: "Persist this only once.",
+      requestId: "request-duplicate",
+    },
+    repository,
+    {
+      now: () => new Date("2026-04-24T14:16:00.000Z"),
+    },
+  );
+
+  assert.deepEqual(firstResult, {
+    roundId: "round-5",
+    status: "responded",
+  });
+  assert.deepEqual(secondResult, firstResult);
+  assert.equal(repository.updatedRounds.length, 1);
+  assert.equal(repository.events.length, 1);
 });
 
 test("recordChallengeResponse rejects an unowned round", async () => {

@@ -27,8 +27,19 @@ class FakeCreateClaimRepositoryTx implements CreateClaimRepositoryTx {
     return this.maps.find((map) => map.id === input.mapId && map.userId === input.userId) ?? null;
   }
 
-  async findMoveEventByRequestId() {
-    return null;
+  async findMoveEventByRequestId(input: { userId: string; requestId: string; type: string }) {
+    const event = this.events.find(
+      (candidate) =>
+        candidate.userId === input.userId &&
+        candidate.requestId === input.requestId &&
+        candidate.type === input.type,
+    );
+
+    return event
+      ? {
+          aggregateId: event.aggregateId,
+        }
+      : null;
   }
 
   async insertClaim(record: CreateClaimRecord) {
@@ -161,6 +172,45 @@ test("createClaim emits a claim.created event for the inserted claim", async () 
     },
     createdAt: timestamp,
   });
+});
+
+test("createClaim replays the original result for the same requestId", async () => {
+  const repository = new FakeCreateClaimRepository([{ id: "map-1", userId: "user-1" }]);
+  const timestamp = new Date("2026-04-24T14:05:00.000Z");
+  const ids = ["claim-3", "claim-4"];
+
+  const firstResult = await createClaim(
+    {
+      userId: "user-1",
+      mapId: "map-1",
+      text: "A duplicate-safe claim",
+      requestId: "request-duplicate",
+    },
+    repository,
+    {
+      createId: () => ids.shift() ?? "unexpected-claim-id",
+      now: () => timestamp,
+    },
+  );
+
+  const secondResult = await createClaim(
+    {
+      userId: "user-1",
+      mapId: "map-1",
+      text: "A duplicate-safe claim",
+      requestId: "request-duplicate",
+    },
+    repository,
+    {
+      createId: () => ids.shift() ?? "unexpected-claim-id",
+      now: () => new Date("2026-04-24T14:06:00.000Z"),
+    },
+  );
+
+  assert.deepEqual(firstResult, { claimId: "claim-3" });
+  assert.deepEqual(secondResult, firstResult);
+  assert.equal(repository.claims.length, 1);
+  assert.equal(repository.events.length, 1);
 });
 
 test("createClaim validates required text input", async () => {

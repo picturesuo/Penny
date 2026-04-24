@@ -19,16 +19,32 @@ class FakeRequestChallengeCritiqueRepositoryTx implements RequestChallengeCritiq
     private readonly events: ChallengeCritiqueRequestedEventRecord[],
   ) {}
 
+  async findMoveEventByRequestId(input: { userId: string; requestId: string; type: string }) {
+    const event = this.events.find(
+      (candidate) =>
+        candidate.userId === input.userId &&
+        candidate.requestId === input.requestId &&
+        candidate.type === input.type,
+    );
+
+    return event
+      ? {
+          aggregateId: event.aggregateId,
+          payload: event.payload,
+        }
+      : null;
+  }
+
+  async findOwnedCritique(input: { critiqueId: string; userId: string }) {
+    return this.critiques.find((critique) => critique.id === input.critiqueId && critique.userId === input.userId) ?? null;
+  }
+
   async findRoundById(input: { roundId: string }) {
     return this.rounds.find((round) => round.id === input.roundId) ?? null;
   }
 
   async findOwnedRound(input: { roundId: string; userId: string }) {
     return this.rounds.find((round) => round.id === input.roundId && round.userId === input.userId) ?? null;
-  }
-
-  async findMoveEventByRequestId() {
-    return null;
   }
 
   async insertChallengeCritique(record: ChallengeCritiqueRecord) {
@@ -121,6 +137,48 @@ test("requestChallengeCritique emits challenge.critique.requested", async () => 
     },
     createdAt: timestamp,
   });
+});
+
+test("requestChallengeCritique replays the original result for the same requestId", async () => {
+  const repository = new FakeRequestChallengeCritiqueRepository([
+    { id: "round-1", mapId: "map-1", claimId: "claim-1", userId: "user-1" },
+  ]);
+  const timestamp = new Date("2026-04-24T14:10:00.000Z");
+  const ids = ["critique-3", "critique-4"];
+
+  const firstResult = await requestChallengeCritique(
+    {
+      userId: "user-1",
+      roundId: "round-1",
+      requestId: "request-duplicate",
+    },
+    repository,
+    {
+      createId: () => ids.shift() ?? "unexpected-critique-id",
+      now: () => timestamp,
+    },
+  );
+
+  const secondResult = await requestChallengeCritique(
+    {
+      userId: "user-1",
+      roundId: "round-1",
+      requestId: "request-duplicate",
+    },
+    repository,
+    {
+      createId: () => ids.shift() ?? "unexpected-critique-id",
+      now: () => new Date("2026-04-24T14:11:00.000Z"),
+    },
+  );
+
+  assert.deepEqual(firstResult, {
+    critiqueId: "critique-3",
+    status: "pending",
+  });
+  assert.deepEqual(secondResult, firstResult);
+  assert.equal(repository.critiques.length, 1);
+  assert.equal(repository.events.length, 1);
 });
 
 test("requestChallengeCritique rejects an unowned round", async () => {
