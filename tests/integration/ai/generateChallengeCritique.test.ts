@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { invokeAnthropicStructured } from "../../../server/ai/providers/anthropic.ts";
-import { invokeXaiStructured } from "../../../server/ai/providers/xai.ts";
 import {
   generateChallengeCritique,
   generateChallengeCritiqueDeps,
@@ -38,9 +36,48 @@ function applyCommonTestDeps() {
     });
 }
 
-test("generateChallengeCritique wires the real provider adapters by default", () => {
-  assert.equal(generateChallengeCritiqueDeps.invokeAnthropicStructured, invokeAnthropicStructured);
-  assert.equal(generateChallengeCritiqueDeps.invokeXaiStructured, invokeXaiStructured);
+test("generateChallengeCritique uses injected mocked provider functions in tests", async () => {
+  const originalDeps = snapshotDeps();
+  const providerCalls: string[] = [];
+
+  applyCommonTestDeps();
+  generateChallengeCritiqueDeps.invokeAnthropicStructured = async () => {
+    providerCalls.push("anthropic");
+    return {
+      output: {
+        summary: "Mocked provider output.",
+        strongestCounterargument: "The test should not hit a live provider.",
+        assumptions: ["The injected provider function controls the response."],
+        failureModes: ["A live API call would violate the test contract."],
+        followUpQuestions: ["Did the test stay fully mocked?"],
+        suggestedConfidenceBps: 5000,
+        uncertaintyNote: "This is a synthetic response from a mocked provider.",
+      },
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        totalTokens: 2,
+      },
+      cost: {
+        totalUsd: 0,
+        currency: "USD",
+      },
+    };
+  };
+  generateChallengeCritiqueDeps.invokeXaiStructured = async () => {
+    providerCalls.push("xai");
+    throw new Error("xai should not be called");
+  };
+
+  try {
+    const result = await generateChallengeCritique({ claimText: validInput.claimText });
+
+    assert.deepEqual(providerCalls, ["anthropic"]);
+    assert.equal(result.provider, "anthropic");
+    assert.equal(result.critique.summary, "Mocked provider output.");
+  } finally {
+    restoreDeps(originalDeps);
+  }
 });
 
 test("generateChallengeCritique falls back from the default Anthropic route to the xAI fallback route", async () => {
