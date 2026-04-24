@@ -10,7 +10,7 @@ Use this README as the top-level repo artifact. If it conflicts with older resta
 
 - Artifact ID: `README-INIT-001`
 - Queue item: `Initialize the first real task artifact.`
-- Current role: `DEBUGGER`, responding to CRITIC artifact `266`
+- Owner role: `BACKEND`
 - Scope: keep this README as the durable restart contract for the active Penny tree, including setup, verification, backend surface, and active-vs-archive boundaries.
 - Completion signal: a new role can start from this file, `AGENTS.md`, the shared context, `docs/queue.md`, and `docs/knowledge.md` without relying on stale restart notes.
 
