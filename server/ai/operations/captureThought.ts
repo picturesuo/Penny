@@ -1,3 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
+import { getDb, type DbClient } from "../../db/client.ts";
+import { activityEvents, aiJobs, graphNodes, maps, thoughts, workspaceContexts } from "../../db/schema.ts";
 import { invokeAnthropicStructured } from "../providers/anthropic.ts";
 import { invokeXaiStructured } from "../providers/xai.ts";
 import { PROMPT_VERSION, buildCaptureThoughtPrompt } from "../prompts/captureThought/v1.ts";
@@ -47,6 +51,26 @@ export type CaptureThoughtResult = CaptureThoughtOutput & {
   };
 };
 
+export type PersistedCaptureThought = {
+  id: string;
+  userId: string;
+  sessionId: string | null;
+  mapId: string;
+  rawText: string;
+  source: string;
+  suggestedTitle: string;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PersistedCaptureThoughtResult = Omit<CaptureThoughtResult, "thought"> & {
+  aiJobId: string;
+  graphNodeId: string;
+  suggestedTitle: string;
+  thought: PersistedCaptureThought;
+};
+
 export class CaptureThoughtValidationError extends Error {
   issues: string[];
 
@@ -75,6 +99,13 @@ export class CaptureThoughtError extends Error {
     this.operationName = params.operationName;
     this.attempts = params.attempts;
     this.failures = params.failures;
+  }
+}
+
+export class CaptureThoughtWorkspaceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CaptureThoughtWorkspaceError";
   }
 }
 
@@ -151,6 +182,10 @@ export const captureThoughtDeps = {
   resolveModelPolicy: defaultResolveModelPolicy as ResolveModelPolicy,
 };
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 export async function captureThought(input: unknown, context: CaptureThoughtContext = {}): Promise<CaptureThoughtResult> {
   const normalizedInput = validateCaptureThoughtInput(input);
   const promptVersion = readOptionalString(context.promptVersion) ?? DEFAULT_PROMPT_VERSION;
@@ -212,12 +247,201 @@ export async function captureThought(input: unknown, context: CaptureThoughtCont
   });
 }
 
+export async function captureThoughtAndPersist(
+  input: unknown,
+  context: CaptureThoughtContext & { userId: string },
+  db: DbClient = getDb(),
+): Promise<PersistedCaptureThoughtResult> {
+  const normalizedInput = validateCaptureThoughtInput(input);
+  const userId = readRequiredString(context.userId, "userId", 1, 200);
+  const mapId = await resolveCurrentMapId(db, userId);
+  const requestId = readOptionalString(context.requestId, "requestId", { maxLength: 200 });
+  const aiJobId = randomUUID();
+  const startedAt = new Date();
+
+  await db.insert(aiJobs).values({
+    id: aiJobId,
+    userId,
+    operation: CAPTURE_THOUGHT_OPERATION,
+    status: "running",
+    inputJson: {
+      text: normalizedInput.text,
+      sessionId: normalizedInput.sessionId,
+      mapId,
+      requestId,
+    },
+    createdAt: startedAt,
+    updatedAt: startedAt,
+    startedAt,
+  });
+
+  let extraction: CaptureThoughtResult;
+
+  try {
+    extraction = await captureThought(normalizedInput, context);
+  } catch (error) {
+    await markAiJobFailed(db, {
+      aiJobId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+
+  const thoughtId = randomUUID();
+  const graphNodeId = randomUUID();
+  const completedAt = new Date();
+  const suggestedTitle = extraction.thought.title;
+  const thoughtSummary = extraction.thought.summary;
+  const outputJson = {
+    thought: extraction.thought,
+    claims: extraction.claims,
+    meta: extraction.meta,
+    thoughtId,
+    graphNodeId,
+    suggestedTitle,
+  };
+
+  await db.transaction(async (tx) => {
+    await tx.insert(thoughts).values({
+      id: thoughtId,
+      userId,
+      sessionId: normalizedInput.sessionId,
+      mapId,
+      rawText: normalizedInput.text,
+      source: "ai.capture-thought",
+      metadataJson: {
+        aiJobId,
+        suggestedTitle,
+        summary: thoughtSummary,
+        extractedClaims: extraction.claims,
+        provider: extraction.meta.provider,
+        model: extraction.meta.model,
+        promptVersion: extraction.meta.promptVersion,
+      },
+      createdAt: completedAt,
+      updatedAt: completedAt,
+    });
+
+    await tx.insert(graphNodes).values({
+      id: graphNodeId,
+      userId,
+      sessionId: normalizedInput.sessionId,
+      mapId,
+      thoughtId,
+      kind: "thought",
+      label: suggestedTitle,
+      metadataJson: {
+        aiJobId,
+        cluster: "thought",
+        description: thoughtSummary,
+        source: "ai.capture-thought",
+        claimCount: extraction.claims.length,
+      },
+      createdAt: completedAt,
+      updatedAt: completedAt,
+    });
+
+    await tx.insert(activityEvents).values({
+      userId,
+      sessionId: normalizedInput.sessionId,
+      mapId,
+      thoughtId,
+      graphNodeId,
+      aiJobId,
+      aggregateType: "thought",
+      aggregateId: thoughtId,
+      type: "thought.captured",
+      payloadJson: {
+        rawText: normalizedInput.text,
+        suggestedTitle,
+        summary: thoughtSummary,
+        graphNodeId,
+        claims: extraction.claims,
+      },
+      requestId,
+      createdAt: completedAt,
+    });
+
+    await tx
+      .update(aiJobs)
+      .set({
+        status: "succeeded",
+        outputJson,
+        updatedAt: completedAt,
+        completedAt,
+      })
+      .where(eq(aiJobs.id, aiJobId));
+  });
+
+  return {
+    ...extraction,
+    aiJobId,
+    graphNodeId,
+    suggestedTitle,
+    thought: {
+      id: thoughtId,
+      userId,
+      sessionId: normalizedInput.sessionId,
+      mapId,
+      rawText: normalizedInput.text,
+      source: "ai.capture-thought",
+      suggestedTitle,
+      summary: thoughtSummary,
+      createdAt: completedAt.toISOString(),
+      updatedAt: completedAt.toISOString(),
+    },
+  };
+}
+
+async function resolveCurrentMapId(db: DbClient, userId: string) {
+  const contextRows = await db
+    .select({
+      mapId: workspaceContexts.mapId,
+    })
+    .from(workspaceContexts)
+    .where(eq(workspaceContexts.userId, userId))
+    .limit(1);
+  const mapId = contextRows[0]?.mapId ?? null;
+
+  if (!mapId) {
+    throw new CaptureThoughtWorkspaceError("A selected workspace map is required to capture a thought.");
+  }
+
+  const mapRows = await db
+    .select({
+      id: maps.id,
+    })
+    .from(maps)
+    .where(and(eq(maps.id, mapId), eq(maps.userId, userId)))
+    .limit(1);
+
+  if (!mapRows[0]) {
+    throw new CaptureThoughtWorkspaceError("The selected workspace map is not available for this user.");
+  }
+
+  return mapRows[0].id;
+}
+
+async function markAiJobFailed(db: DbClient, input: { aiJobId: string; errorMessage: string }) {
+  const failedAt = new Date();
+
+  await db
+    .update(aiJobs)
+    .set({
+      status: "failed",
+      errorMessage: input.errorMessage,
+      updatedAt: failedAt,
+      completedAt: failedAt,
+    })
+    .where(eq(aiJobs.id, input.aiJobId));
+}
+
 function validateCaptureThoughtInput(input: unknown): CaptureThoughtInput & { sessionId: string | null } {
   const object = asRecord(input, "captureThought input must be an object.");
 
   return {
     text: readRequiredString(object.text, "text", 1, 8000),
-    sessionId: readOptionalString(object.sessionId, "sessionId", { maxLength: 200 }),
+    sessionId: readOptionalUuid(object.sessionId, "sessionId"),
     qualityTier: readQualityTier(object.qualityTier),
   };
 }
@@ -441,6 +665,22 @@ function readOptionalString(
   if (options.maxLength !== undefined && trimmed.length > options.maxLength) {
     throw new CaptureThoughtValidationError(`${fieldName} must be at most ${options.maxLength} character(s).`, [
       `${fieldName} must be at most ${options.maxLength} character(s).`,
+    ]);
+  }
+
+  return trimmed;
+}
+
+function readOptionalUuid(value: unknown, fieldName: string): string | null {
+  const trimmed = readOptionalString(value, fieldName, { maxLength: 200 });
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (!isUuid(trimmed)) {
+    throw new CaptureThoughtValidationError(`${fieldName} must be a UUID when provided.`, [
+      `${fieldName} must be a UUID when provided.`,
     ]);
   }
 
