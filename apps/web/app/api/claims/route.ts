@@ -13,6 +13,7 @@ class ClaimsQueryValidationError extends Error {}
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
+const DEFAULT_OFFSET = 0;
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -46,6 +47,20 @@ function readLimit(value: string | null) {
   return limit;
 }
 
+function readOffset(value: string | null) {
+  if (!value?.trim()) {
+    return DEFAULT_OFFSET;
+  }
+
+  const offset = Number(value);
+
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new ClaimsQueryValidationError("offset must be a non-negative integer.");
+  }
+
+  return offset;
+}
+
 export async function GET(request: Request) {
   try {
     const userId = getRequestUserId(request.headers);
@@ -53,6 +68,8 @@ export async function GET(request: Request) {
     const conditions = [eq(claims.userId, userId)];
     const mapId = readOptionalUuid(searchParams.get("mapId"), "mapId");
     const thoughtId = readOptionalUuid(searchParams.get("thoughtId"), "thoughtId");
+    const limit = readLimit(searchParams.get("limit"));
+    const offset = readOffset(searchParams.get("offset"));
 
     if (mapId) {
       conditions.push(eq(claims.mapId, mapId));
@@ -75,7 +92,8 @@ export async function GET(request: Request) {
       .from(claims)
       .where(and(...conditions))
       .orderBy(desc(claims.updatedAt), desc(claims.createdAt), desc(claims.id))
-      .limit(readLimit(searchParams.get("limit")));
+      .limit(limit)
+      .offset(offset);
 
     return apiOk(
       {
@@ -84,6 +102,11 @@ export async function GET(request: Request) {
           createdAt: row.createdAt.toISOString(),
           updatedAt: row.updatedAt.toISOString(),
         })),
+        pagination: {
+          limit,
+          offset,
+          nextOffset: rows.length === limit ? offset + limit : null,
+        },
       },
     );
   } catch (error) {

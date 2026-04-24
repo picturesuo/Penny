@@ -13,6 +13,7 @@ class ThoughtsQueryValidationError extends Error {}
 
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 50;
+const DEFAULT_OFFSET = 0;
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -46,6 +47,20 @@ function readLimit(value: string | null) {
   return limit;
 }
 
+function readOffset(value: string | null) {
+  if (!value?.trim()) {
+    return DEFAULT_OFFSET;
+  }
+
+  const offset = Number(value);
+
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new ThoughtsQueryValidationError("offset must be a non-negative integer.");
+  }
+
+  return offset;
+}
+
 export async function GET(request: Request) {
   try {
     const userId = getRequestUserId(request.headers);
@@ -53,6 +68,8 @@ export async function GET(request: Request) {
     const conditions = [eq(thoughts.userId, userId)];
     const mapId = readOptionalUuid(searchParams.get("mapId"), "mapId");
     const sessionId = readOptionalUuid(searchParams.get("sessionId"), "sessionId");
+    const limit = readLimit(searchParams.get("limit"));
+    const offset = readOffset(searchParams.get("offset"));
 
     if (mapId) {
       conditions.push(eq(thoughts.mapId, mapId));
@@ -76,7 +93,8 @@ export async function GET(request: Request) {
       .from(thoughts)
       .where(and(...conditions))
       .orderBy(desc(thoughts.updatedAt), desc(thoughts.createdAt), desc(thoughts.id))
-      .limit(readLimit(searchParams.get("limit")));
+      .limit(limit)
+      .offset(offset);
 
     return apiOk(
       {
@@ -85,6 +103,11 @@ export async function GET(request: Request) {
           createdAt: row.createdAt.toISOString(),
           updatedAt: row.updatedAt.toISOString(),
         })),
+        pagination: {
+          limit,
+          offset,
+          nextOffset: rows.length === limit ? offset + limit : null,
+        },
       },
     );
   } catch (error) {

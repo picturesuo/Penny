@@ -8,6 +8,7 @@ import { POST as explainBlocker } from "../../apps/web/app/ai/explain-blocker/ro
 import { POST as extractClaims } from "../../apps/web/app/ai/extract-claims/route.ts";
 import { POST as suggestConnections } from "../../apps/web/app/ai/suggest-connections/route.ts";
 import { POST as summarizeMap } from "../../apps/web/app/ai/summarize-map/route.ts";
+import { GET as getActivity } from "../../apps/web/app/api/activity/route.ts";
 import { GET as getClaims } from "../../apps/web/app/api/claims/route.ts";
 import { POST as recordConfidence } from "../../apps/web/app/api/confidence/route.ts";
 import { GET as getGraph } from "../../apps/web/app/api/graph/route.ts";
@@ -19,6 +20,7 @@ import { GET as getThoughts } from "../../apps/web/app/api/thoughts/route.ts";
 test("requested frontend-backend endpoint surface is mounted", () => {
   assert.equal(typeof getThoughts, "function", "GET /api/thoughts");
   assert.equal(typeof getClaims, "function", "GET /api/claims");
+  assert.equal(typeof getActivity, "function", "GET /api/activity");
   assert.equal(typeof getSessions, "function", "GET /api/sessions");
   assert.equal(typeof getGraph, "function", "GET /api/graph");
   assert.equal(typeof getGraphNodeDetail, "function", "GET /api/graph/nodes/:id/detail");
