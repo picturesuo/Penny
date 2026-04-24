@@ -14,7 +14,14 @@ export function SidebarNav() {
 
       <nav className="app-sidebar__nav" aria-label="Modes">
         {modes.map((mode) => (
-          <a className="app-sidebar__link" data-mode={mode} data-active={mode === "brain"} href="#" key={mode}>
+          <a
+            aria-current={mode === "brain" ? "page" : undefined}
+            className="app-sidebar__link"
+            data-mode={mode}
+            data-active={mode === "brain"}
+            href="#"
+            key={mode}
+          >
             <span className="app-sidebar__dot" aria-hidden="true" />
             <span>{modeAccents[mode].label}</span>
           </a>

@@ -388,6 +388,20 @@ textarea {
   font-weight: 900;
 }
 
+.ui-button--icon-only {
+  width: 40px;
+  padding-inline: 0;
+}
+
+.ui-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .ui-card,
 .ui-panel {
   min-width: 0;
@@ -581,8 +595,15 @@ textarea {
   width: 22px;
   height: 22px;
   border: 2px solid var(--color-line);
-  background: var(--color-mode-brain);
+  border-top-color: var(--color-mode-brain);
   border-radius: 999px;
+  animation: penny-spin 0.8s linear infinite;
+}
+
+@keyframes penny-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .penny-shell {

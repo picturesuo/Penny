@@ -15,7 +15,9 @@ export function TopToolbar() {
         <Input aria-label="Search" className="top-toolbar__search" placeholder="Search thoughts" type="search" />
         <Button icon="F" variant="secondary">Filter</Button>
         <Button icon="+">New Thought</Button>
-        <Button aria-label="Settings" icon="S" variant="ghost">Settings</Button>
+        <Button aria-label="Settings" className="ui-button--icon-only" icon="S" variant="ghost">
+          <span className="ui-sr-only">Settings</span>
+        </Button>
       </div>
     </header>
   );

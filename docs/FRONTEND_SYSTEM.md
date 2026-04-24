@@ -27,7 +27,7 @@ Reusable primitives live in `apps/web/components/ui`.
 - `Card`: repeated-item framing only.
 - `Panel`: larger workspace sections with optional eyebrow and title.
 - `Badge`: neutral, success, danger, and mode-accent variants.
-- `SegmentedTabs`: mode switcher for Brain, Challenge, and Learn.
+- `SegmentedTabs`: mode switcher for Brain, Challenge, and Learn; pass `onSelect` when a surface needs local mode changes.
 - `Input` and `Textarea`: labeled field wrappers.
 - `EmptyState`, `LoadingState`, `ErrorState`: standard non-happy path surfaces.
 - `ConfidenceBadge`: normalized confidence display.
@@ -48,6 +48,7 @@ Reusable layout wrappers live in `apps/web/components/layout`.
 - Use cards for repeated items, not as page-section decoration.
 - Use `Panel` for major workspace areas and `Card` for repeated claim/session/mode items.
 - Keep Brain, Challenge, and Learn accents consistent across nav, badges, and segmented controls.
+- Keep icon-only controls accessible with an `aria-label` and visually hidden text.
 - Do not add heavy graph rendering in this shell layer.
 - Do not introduce backend fetches into design-system components.
 - Do not edit AI files from this frontend system slice.
