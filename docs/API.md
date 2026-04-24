@@ -23,6 +23,7 @@ These routes are the current server-side write surface for the MVP. Meaningful w
 | --- | --- | --- |
 | `POST` | `/api/commands/maps/create` | Create a map and establish workspace context. |
 | `POST` | `/api/commands/claims/create` | Create a claim in an owned map. |
+| `POST` | `/api/commands/workspace/select` | Update the current workspace mode and selected map/claim context. |
 | `POST` | `/api/commands/challenge/request-critique` | Create or replay a challenge critique request for a challenge round. |
 | `POST` | `/api/commands/challenge/respond` | Record the user's response to a challenge round. |
 
