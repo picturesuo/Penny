@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getDb } from "../db/client.ts";
 import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
 import { maps, movesEvents } from "../db/schema.ts";
+import { resolveCommandContext } from "./command-context.ts";
 
 export type CreateMapEventType = "map.created";
 
@@ -169,11 +170,15 @@ export async function createMap(
   const transactionalRepository = repository as CreateMapTransactional;
 
   return transactionalRepository.transaction(async (tx) => {
-    const timestamp = now();
-    const requestId = normalized.requestId ?? createId();
+    const commandContext = resolveCommandContext({
+      actorUserId: normalized.userId,
+      requestId: normalized.requestId,
+      now,
+      createId,
+    });
     const existingEvent = await findExistingMoveEvent(tx, {
-      userId: normalized.userId,
-      requestId,
+      userId: commandContext.actorUserId,
+      requestId: commandContext.requestId,
       type: "map.created",
     });
 
@@ -188,42 +193,42 @@ export async function createMap(
     if (isCreateMapRepositoryTx(tx)) {
       await tx.insertMap({
         id: mapId,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         title: normalized.title,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: commandContext.now,
+        updatedAt: commandContext.now,
       });
 
       await tx.insertMoveEvent({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         aggregateType: "map",
         aggregateId: mapId,
-        requestId,
+        requestId: commandContext.requestId,
         type: "map.created",
         payload: {
           title: normalized.title,
         },
-        createdAt: timestamp,
+        createdAt: commandContext.now,
       });
     } else {
       await tx.insert(maps).values({
         id: mapId,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         title: normalized.title,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: commandContext.now,
+        updatedAt: commandContext.now,
       });
 
       await tx.insert(movesEvents).values({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         aggregateType: "map",
         aggregateId: mapId,
-        requestId,
+        requestId: commandContext.requestId,
         type: "map.created",
         payloadJson: {
           title: normalized.title,
         },
-        createdAt: timestamp,
+        createdAt: commandContext.now,
       });
     }
 

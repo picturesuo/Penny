@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { challengeRounds, claims, movesEvents } from "../db/schema.ts";
+import { resolveCommandContext } from "./command-context.ts";
 
 export type StartChallengeRoundEventType = "challenge.round.started";
 
@@ -215,70 +216,74 @@ export async function startChallengeRound(
   const now = dependencies.now ?? (() => new Date());
 
   return repository.transaction(async (tx) => {
+    const commandContext = resolveCommandContext({
+      actorUserId: normalized.userId,
+      requestId: normalized.requestId,
+      now,
+      createId,
+    });
     const targetClaim = await findClaimForChallengeRound(tx, {
       claimId: normalized.claimId,
-      userId: normalized.userId,
+      userId: commandContext.actorUserId,
     });
 
     if (!targetClaim) {
       throw new StartChallengeRoundClaimNotFoundError(normalized.claimId);
     }
 
-    if (targetClaim.userId !== normalized.userId) {
+    if (targetClaim.userId !== commandContext.actorUserId) {
       throw new StartChallengeRoundClaimForbiddenError(normalized.claimId);
     }
 
-    const timestamp = now();
     const roundId = createId();
-    const requestId = normalized.requestId ?? createId();
 
     if (isStartChallengeRoundRepositoryTx(tx)) {
       await tx.insertChallengeRound({
         id: roundId,
         mapId: targetClaim.mapId,
         claimId: targetClaim.id,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         status: DEFAULT_CHALLENGE_ROUND_STATUS,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: commandContext.now,
+        updatedAt: commandContext.now,
       });
 
       await tx.insertMoveEvent({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         aggregateType: "challenge_round",
         aggregateId: roundId,
-        requestId,
+        requestId: commandContext.requestId,
         type: "challenge.round.started",
         payload: {
           mapId: targetClaim.mapId,
           claimId: targetClaim.id,
           status: DEFAULT_CHALLENGE_ROUND_STATUS,
         },
-        createdAt: timestamp,
+        createdAt: commandContext.now,
       });
     } else {
       await tx.insert(challengeRounds).values({
         id: roundId,
         mapId: targetClaim.mapId,
         claimId: targetClaim.id,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         status: DEFAULT_CHALLENGE_ROUND_STATUS,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: commandContext.now,
+        updatedAt: commandContext.now,
       });
 
       await tx.insert(movesEvents).values({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         aggregateType: "challenge_round",
         aggregateId: roundId,
-        requestId,
+        requestId: commandContext.requestId,
         type: "challenge.round.started",
         payloadJson: {
           mapId: targetClaim.mapId,
           claimId: targetClaim.id,
           status: DEFAULT_CHALLENGE_ROUND_STATUS,
         },
-        createdAt: timestamp,
+        createdAt: commandContext.now,
       });
     }
 

@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
 import { challengeRounds, movesEvents } from "../db/schema.ts";
+import { resolveCommandContext } from "./command-context.ts";
 
 export type RecordChallengeResponseEventType = "challenge.response.recorded";
 
@@ -279,10 +280,15 @@ export async function recordChallengeResponse(
   const transactionalRepository = repository as RecordChallengeResponseTransactional;
 
   return transactionalRepository.transaction(async (tx) => {
-    const requestId = normalized.requestId ?? createId();
+    const commandContext = resolveCommandContext({
+      actorUserId: normalized.userId,
+      requestId: normalized.requestId,
+      now,
+      createId,
+    });
     const existingEvent = await findExistingMoveEvent(tx, {
-      userId: normalized.userId,
-      requestId,
+      userId: commandContext.actorUserId,
+      requestId: commandContext.requestId,
       type: "challenge.response.recorded",
     });
 
@@ -295,18 +301,16 @@ export async function recordChallengeResponse(
 
     const targetRound = await findRoundForChallengeResponse(tx, {
       roundId: normalized.roundId,
-      userId: normalized.userId,
+      userId: commandContext.actorUserId,
     });
 
     if (!targetRound) {
       throw new RecordChallengeResponseRoundNotFoundError(normalized.roundId);
     }
 
-    if (targetRound.userId !== normalized.userId) {
+    if (targetRound.userId !== commandContext.actorUserId) {
       throw new RecordChallengeResponseRoundForbiddenError(normalized.roundId);
     }
-
-    const timestamp = now();
 
     if (isRecordChallengeResponseRepositoryTx(tx)) {
       await tx.updateChallengeRound({
@@ -315,14 +319,14 @@ export async function recordChallengeResponse(
         claimId: targetRound.claimId,
         userId: targetRound.userId,
         status: RESPONDED_STATUS,
-        updatedAt: timestamp,
+        updatedAt: commandContext.now,
       });
 
       await tx.insertMoveEvent({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         aggregateType: "challenge_round",
         aggregateId: targetRound.id,
-        requestId,
+        requestId: commandContext.requestId,
         type: "challenge.response.recorded",
         payload: {
           mapId: targetRound.mapId,
@@ -333,22 +337,22 @@ export async function recordChallengeResponse(
           previousStatus: targetRound.status,
           status: RESPONDED_STATUS,
         },
-        createdAt: timestamp,
+        createdAt: commandContext.now,
       });
     } else {
       await tx
         .update(challengeRounds)
         .set({
           status: RESPONDED_STATUS,
-          updatedAt: timestamp,
+          updatedAt: commandContext.now,
         })
-        .where(and(eq(challengeRounds.id, targetRound.id), eq(challengeRounds.userId, normalized.userId)));
+        .where(and(eq(challengeRounds.id, targetRound.id), eq(challengeRounds.userId, commandContext.actorUserId)));
 
       await tx.insert(movesEvents).values({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         aggregateType: "challenge_round",
         aggregateId: targetRound.id,
-        requestId,
+        requestId: commandContext.requestId,
         type: "challenge.response.recorded",
         payloadJson: {
           mapId: targetRound.mapId,
@@ -359,7 +363,7 @@ export async function recordChallengeResponse(
           previousStatus: targetRound.status,
           status: RESPONDED_STATUS,
         },
-        createdAt: timestamp,
+        createdAt: commandContext.now,
       });
     }
 

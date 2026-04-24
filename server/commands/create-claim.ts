@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
 import { claims, maps, movesEvents } from "../db/schema.ts";
+import { resolveCommandContext } from "./command-context.ts";
 
 export type CreateClaimEventType = "claim.created";
 
@@ -244,10 +245,15 @@ export async function createClaim(
   const transactionalRepository = repository as CreateClaimTransactional;
 
   return transactionalRepository.transaction(async (tx) => {
-    const requestId = normalized.requestId ?? createId();
+    const commandContext = resolveCommandContext({
+      actorUserId: normalized.userId,
+      requestId: normalized.requestId,
+      now,
+      createId,
+    });
     const existingEvent = await findExistingMoveEvent(tx, {
-      userId: normalized.userId,
-      requestId,
+      userId: commandContext.actorUserId,
+      requestId: commandContext.requestId,
       type: "claim.created",
     });
 
@@ -259,38 +265,37 @@ export async function createClaim(
 
     const targetMap = await findMapForCreateClaim(tx, {
       mapId: normalized.mapId,
-      userId: normalized.userId,
+      userId: commandContext.actorUserId,
     });
 
     if (!targetMap) {
       throw new CreateClaimMapNotFoundError(normalized.mapId);
     }
 
-    if (targetMap.userId !== normalized.userId) {
+    if (targetMap.userId !== commandContext.actorUserId) {
       throw new CreateClaimMapForbiddenError(normalized.mapId);
     }
 
-    const timestamp = now();
     const claimId = createId();
 
     if (isCreateClaimRepositoryTx(tx)) {
       await tx.insertClaim({
         id: claimId,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         mapId: targetMap.id,
         text: normalized.text,
         note: normalized.note,
         parentClaimId: normalized.parentClaimId,
         kind: normalized.kind,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: commandContext.now,
+        updatedAt: commandContext.now,
       });
 
       await tx.insertMoveEvent({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         aggregateType: "claim",
         aggregateId: claimId,
-        requestId,
+        requestId: commandContext.requestId,
         type: "claim.created",
         payload: {
           mapId: targetMap.id,
@@ -299,24 +304,24 @@ export async function createClaim(
           note: normalized.note,
           text: normalized.text,
         },
-        createdAt: timestamp,
+        createdAt: commandContext.now,
       });
     } else {
       await tx.insert(claims).values({
         id: claimId,
         mapId: targetMap.id,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         body: normalized.text,
         confidenceBps: 0,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: commandContext.now,
+        updatedAt: commandContext.now,
       });
 
       await tx.insert(movesEvents).values({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         aggregateType: "claim",
         aggregateId: claimId,
-        requestId,
+        requestId: commandContext.requestId,
         type: "claim.created",
         payloadJson: {
           mapId: targetMap.id,
@@ -325,7 +330,7 @@ export async function createClaim(
           note: normalized.note,
           text: normalized.text,
         },
-        createdAt: timestamp,
+        createdAt: commandContext.now,
       });
     }
 

@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { challengeCritiques, challengeRounds, claims, maps, movesEvents } from "../db/schema.ts";
 import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
+import { resolveCommandContext } from "./command-context.ts";
 
 export type RequestChallengeCritiqueEventType = "challenge.critique.requested";
 
@@ -451,17 +452,22 @@ export async function requestChallengeCritique(
   const transactionalRepository = repository as RequestChallengeCritiqueTransactional;
 
   return transactionalRepository.transaction(async (tx) => {
-    const requestId = normalized.requestId ?? createId();
+    const commandContext = resolveCommandContext({
+      actorUserId: normalized.userId,
+      requestId: normalized.requestId,
+      now,
+      createId,
+    });
     const existingEvent = await findExistingMoveEvent(tx, {
-      userId: normalized.userId,
-      requestId,
+      userId: commandContext.actorUserId,
+      requestId: commandContext.requestId,
       type: "challenge.critique.requested",
     });
 
     if (existingEvent) {
       const existingCritique = await findOwnedCritique(tx, {
         critiqueId: existingEvent.aggregateId,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
       });
 
       return {
@@ -475,14 +481,14 @@ export async function requestChallengeCritique(
 
     const targetRound = await findRoundForChallengeCritique(tx, {
       roundId: normalized.roundId,
-      userId: normalized.userId,
+      userId: commandContext.actorUserId,
     });
 
     if (!targetRound) {
       throw new RequestChallengeCritiqueRoundNotFoundError(normalized.roundId);
     }
 
-    if (targetRound.userId !== normalized.userId) {
+    if (targetRound.userId !== commandContext.actorUserId) {
       throw new RequestChallengeCritiqueRoundForbiddenError(normalized.roundId);
     }
 
@@ -492,27 +498,26 @@ export async function requestChallengeCritique(
     if (
       !targetMap ||
       !targetClaim ||
-      targetMap.userId !== normalized.userId ||
-      targetClaim.userId !== normalized.userId ||
+      targetMap.userId !== commandContext.actorUserId ||
+      targetClaim.userId !== commandContext.actorUserId ||
       targetClaim.mapId !== targetRound.mapId
     ) {
       throw new RequestChallengeCritiqueRoundForbiddenError(normalized.roundId);
     }
 
-    const timestamp = now();
     const existingCritique = await findOwnedCritiqueByRound(tx, {
       roundId: targetRound.id,
-      userId: normalized.userId,
+      userId: commandContext.actorUserId,
     });
     const critiqueId = existingCritique?.id ?? createId();
 
     if (existingCritique) {
       await updateCritiquePlaceholder(tx, {
         id: critiqueId,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         status: PENDING_STATUS,
         body: null,
-        updatedAt: timestamp,
+        updatedAt: commandContext.now,
       });
     } else if (isRequestChallengeCritiqueRepositoryTx(tx)) {
       await tx.insertChallengeCritique({
@@ -520,11 +525,11 @@ export async function requestChallengeCritique(
         roundId: targetRound.id,
         mapId: targetRound.mapId,
         claimId: targetRound.claimId,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         status: PENDING_STATUS,
         body: null,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: commandContext.now,
+        updatedAt: commandContext.now,
       });
     } else {
       await tx.insert(challengeCritiques).values({
@@ -532,19 +537,19 @@ export async function requestChallengeCritique(
         roundId: targetRound.id,
         mapId: targetRound.mapId,
         claimId: targetRound.claimId,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         status: PENDING_STATUS,
         body: null,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        createdAt: commandContext.now,
+        updatedAt: commandContext.now,
       });
     }
 
     await insertCritiqueEvent(tx, {
-      userId: normalized.userId,
+      userId: commandContext.actorUserId,
       aggregateType: "challenge_critique",
       aggregateId: critiqueId,
-      requestId,
+      requestId: commandContext.requestId,
       type: "challenge.critique.requested",
       payload: {
         roundId: targetRound.id,
@@ -552,7 +557,7 @@ export async function requestChallengeCritique(
         claimId: targetRound.claimId,
         status: PENDING_STATUS,
       },
-      createdAt: timestamp,
+      createdAt: commandContext.now,
     });
 
     return {

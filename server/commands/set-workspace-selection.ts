@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { claims, maps, movesEvents, workspaceContexts } from "../db/schema.ts";
+import { resolveCommandContext } from "./command-context.ts";
 
 export const WORKSPACE_SELECTION_MODES = ["Brain", "Challenge", "Learn"] as const;
 
@@ -301,22 +302,28 @@ export async function setWorkspaceSelection(
   const now = dependencies.now ?? (() => new Date());
 
   return repository.transaction(async (tx) => {
+    const commandContext = resolveCommandContext({
+      actorUserId: normalized.userId,
+      requestId: normalized.requestId,
+      now,
+      createId,
+    });
     const targetMap = await findMapForWorkspaceSelection(tx, {
       mapId: normalized.mapId,
-      userId: normalized.userId,
+      userId: commandContext.actorUserId,
     });
 
     if (!targetMap) {
       throw new SetWorkspaceSelectionMapNotFoundError(normalized.mapId);
     }
 
-    if (targetMap.userId !== normalized.userId) {
+    if (targetMap.userId !== commandContext.actorUserId) {
       throw new SetWorkspaceSelectionMapForbiddenError(normalized.mapId);
     }
 
     const existingContext = isSetWorkspaceSelectionRepositoryTx(tx)
       ? await tx.getWorkspaceContext({
-          userId: normalized.userId,
+          userId: commandContext.actorUserId,
         })
       : (((await tx
           .select({
@@ -325,7 +332,7 @@ export async function setWorkspaceSelection(
             claimId: workspaceContexts.claimId,
           })
           .from(workspaceContexts)
-          .where(eq(workspaceContexts.userId, normalized.userId))
+          .where(eq(workspaceContexts.userId, commandContext.actorUserId))
           .limit(1))[0] as WorkspaceContextDbRow | undefined) ?? null);
 
     const nextClaimId =
@@ -335,14 +342,14 @@ export async function setWorkspaceSelection(
       const targetClaim = await findClaimForWorkspaceSelection(tx, {
         claimId: nextClaimId,
         mapId: targetMap.id,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
       });
 
       if (!targetClaim) {
         throw new SetWorkspaceSelectionClaimNotFoundError(nextClaimId);
       }
 
-      if (targetClaim.userId && targetClaim.userId !== normalized.userId) {
+      if (targetClaim.userId && targetClaim.userId !== commandContext.actorUserId) {
         throw new SetWorkspaceSelectionClaimForbiddenError(nextClaimId);
       }
 
@@ -351,29 +358,26 @@ export async function setWorkspaceSelection(
       }
     }
 
-    const timestamp = now();
-    const requestId = normalized.requestId ?? createId();
-
     if (isSetWorkspaceSelectionRepositoryTx(tx)) {
       await tx.upsertWorkspaceContext({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         mode: normalized.mode,
         mapId: targetMap.id,
         claimId: nextClaimId,
-        updatedAt: timestamp,
+        updatedAt: commandContext.now,
       });
 
       await tx.insertMoveEvent({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         aggregateId: createId(),
-        requestId,
+        requestId: commandContext.requestId,
         type: "workspace.selection.changed",
         payload: {
           mode: normalized.mode,
           mapId: targetMap.id,
           claimId: nextClaimId,
         },
-        createdAt: timestamp,
+        createdAt: commandContext.now,
       });
     } else {
       if (existingContext) {
@@ -383,31 +387,31 @@ export async function setWorkspaceSelection(
             mode: normalizeModeForStorage(normalized.mode),
             mapId: targetMap.id,
             claimId: nextClaimId,
-            updatedAt: timestamp,
+            updatedAt: commandContext.now,
           })
-          .where(eq(workspaceContexts.userId, normalized.userId));
+          .where(eq(workspaceContexts.userId, commandContext.actorUserId));
       } else {
         await tx.insert(workspaceContexts).values({
-          userId: normalized.userId,
+          userId: commandContext.actorUserId,
           mode: normalizeModeForStorage(normalized.mode),
           mapId: targetMap.id,
           claimId: nextClaimId,
-          updatedAt: timestamp,
+          updatedAt: commandContext.now,
         });
       }
 
       await tx.insert(movesEvents).values({
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
         aggregateType: "workspace_context",
         aggregateId: createId(),
-        requestId,
+        requestId: commandContext.requestId,
         type: "workspace.selection.changed",
         payloadJson: {
           mode: normalized.mode,
           mapId: targetMap.id,
           claimId: nextClaimId,
         },
-        createdAt: timestamp,
+        createdAt: commandContext.now,
       });
     }
 

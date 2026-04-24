@@ -6,6 +6,7 @@ import { generateChallengeCritique as generateChallengeCritiqueStub } from "../a
 import { getDb } from "../db/client.ts";
 import { challengeCritiques, claims, maps, movesEvents } from "../db/schema.ts";
 import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
+import { resolveCommandContext } from "./command-context.ts";
 
 export type GenerateChallengeCritiqueEventType = "challenge.critique.generated" | "challenge.critique.failed";
 
@@ -582,17 +583,22 @@ export async function generateChallengeCritique(
   const transactionalRepository = repository as GenerateChallengeCritiqueTransactional;
 
   return transactionalRepository.transaction(async (tx) => {
-    const requestId = normalized.requestId ?? createId();
+    const commandContext = resolveCommandContext({
+      actorUserId: normalized.userId,
+      requestId: normalized.requestId,
+      now,
+      createId,
+    });
     const existingEvent = await findExistingMoveEvent(tx, {
-      userId: normalized.userId,
-      requestId,
+      userId: commandContext.actorUserId,
+      requestId: commandContext.requestId,
       type: "challenge.critique.generated",
     });
 
     if (existingEvent) {
       const existingCritique = await findOwnedCritique(tx, {
         critiqueId: existingEvent.aggregateId,
-        userId: normalized.userId,
+        userId: commandContext.actorUserId,
       });
 
       const existingBody =
@@ -614,7 +620,7 @@ export async function generateChallengeCritique(
 
     const critique = await findOwnedCritique(tx, {
       critiqueId: normalized.critiqueId,
-      userId: normalized.userId,
+      userId: commandContext.actorUserId,
     });
 
     if (!critique) {
@@ -638,23 +644,22 @@ export async function generateChallengeCritique(
 
     try {
       const generated = await generateCritique(context);
-      const timestamp = now();
 
       if (isGenerateChallengeCritiqueRepositoryTx(tx)) {
         await tx.updateChallengeCritique({
           id: critique.id,
-          userId: normalized.userId,
+          userId: commandContext.actorUserId,
           status: READY_STATUS,
           body: generated.body,
           critiqueJson: generated.critiqueJson ?? null,
-          updatedAt: timestamp,
+          updatedAt: commandContext.now,
         });
 
         await tx.insertMoveEvent({
-          userId: normalized.userId,
+          userId: commandContext.actorUserId,
           aggregateType: "challenge_critique",
           aggregateId: critique.id,
-          requestId,
+          requestId: commandContext.requestId,
           type: "challenge.critique.generated",
           payload: {
             roundId: critique.roundId,
@@ -667,7 +672,7 @@ export async function generateChallengeCritique(
             ...(generated.metadata.model ? { model: generated.metadata.model } : {}),
             ...(generated.metadata.promptVersion ? { promptVersion: generated.metadata.promptVersion } : {}),
           },
-          createdAt: timestamp,
+          createdAt: commandContext.now,
         });
       } else {
         await tx
@@ -676,15 +681,15 @@ export async function generateChallengeCritique(
             status: READY_STATUS,
             body: generated.body,
             critiqueJson: generated.critiqueJson ?? null,
-            updatedAt: timestamp,
+            updatedAt: commandContext.now,
           })
-          .where(and(eq(challengeCritiques.id, critique.id), eq(challengeCritiques.userId, normalized.userId)));
+          .where(and(eq(challengeCritiques.id, critique.id), eq(challengeCritiques.userId, commandContext.actorUserId)));
 
         await tx.insert(movesEvents).values({
-          userId: normalized.userId,
+          userId: commandContext.actorUserId,
           aggregateType: "challenge_critique",
           aggregateId: critique.id,
-          requestId,
+          requestId: commandContext.requestId,
           type: "challenge.critique.generated",
           payloadJson: {
             roundId: critique.roundId,
@@ -697,7 +702,7 @@ export async function generateChallengeCritique(
             ...(generated.metadata.model ? { model: generated.metadata.model } : {}),
             ...(generated.metadata.promptVersion ? { promptVersion: generated.metadata.promptVersion } : {}),
           },
-          createdAt: timestamp,
+          createdAt: commandContext.now,
         });
       }
 
@@ -707,35 +712,34 @@ export async function generateChallengeCritique(
         body: generated.body,
       };
     } catch (error) {
-      const timestamp = now();
       const errorMessage = readErrorMessage(error);
 
       if (isGenerateChallengeCritiqueRepositoryTx(tx)) {
         if (tx.markChallengeCritiqueFailed) {
           await tx.markChallengeCritiqueFailed({
             id: critique.id,
-            userId: normalized.userId,
+            userId: commandContext.actorUserId,
             status: "failed",
             body: null,
             critiqueJson: null,
-            updatedAt: timestamp,
+            updatedAt: commandContext.now,
           });
         } else {
           await tx.updateChallengeCritique({
             id: critique.id,
-            userId: normalized.userId,
+            userId: commandContext.actorUserId,
             status: "failed",
             body: null,
             critiqueJson: null,
-            updatedAt: timestamp,
+            updatedAt: commandContext.now,
           } as unknown as ChallengeCritiqueReadyRecord);
         }
 
         await tx.insertMoveEvent({
-          userId: normalized.userId,
+          userId: commandContext.actorUserId,
           aggregateType: "challenge_critique",
           aggregateId: critique.id,
-          requestId,
+          requestId: commandContext.requestId,
           type: "challenge.critique.failed",
           payload: {
             roundId: critique.roundId,
@@ -744,7 +748,7 @@ export async function generateChallengeCritique(
             status: "failed",
             errorMessage,
           },
-          createdAt: timestamp,
+          createdAt: commandContext.now,
         });
       } else {
         await tx
@@ -753,15 +757,15 @@ export async function generateChallengeCritique(
             status: "failed",
             body: null,
             critiqueJson: null,
-            updatedAt: timestamp,
+            updatedAt: commandContext.now,
           })
-          .where(and(eq(challengeCritiques.id, critique.id), eq(challengeCritiques.userId, normalized.userId)));
+          .where(and(eq(challengeCritiques.id, critique.id), eq(challengeCritiques.userId, commandContext.actorUserId)));
 
         await tx.insert(movesEvents).values({
-          userId: normalized.userId,
+          userId: commandContext.actorUserId,
           aggregateType: "challenge_critique",
           aggregateId: critique.id,
-          requestId,
+          requestId: commandContext.requestId,
           type: "challenge.critique.failed",
           payloadJson: {
             roundId: critique.roundId,
@@ -770,7 +774,7 @@ export async function generateChallengeCritique(
             status: "failed",
             errorMessage,
           },
-          createdAt: timestamp,
+          createdAt: commandContext.now,
         });
       }
 
