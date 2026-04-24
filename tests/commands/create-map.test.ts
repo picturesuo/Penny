@@ -82,6 +82,7 @@ test("createMap emits a map.created event for the inserted map", async () => {
   assert.equal(repository.events.length, 1);
   assert.deepEqual(repository.events[0], {
     userId: "user-1",
+    aggregateType: "map",
     aggregateId: result.mapId,
     requestId: "request-1",
     type: "map.created",

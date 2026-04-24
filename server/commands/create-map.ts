@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { getDb } from "../db/client.ts";
+import { maps, movesEvents } from "../db/schema.ts";
 
 export type CreateMapEventType = "map.created";
 
@@ -18,8 +20,9 @@ export type CreateMapRecord = {
 
 export type CreateMapEventRecord = {
   userId: string;
+  aggregateType: "map";
   aggregateId: string;
-  requestId: string | null;
+  requestId: string;
   type: CreateMapEventType;
   payload: {
     title: string;
@@ -34,6 +37,16 @@ export type CreateMapRepositoryTx = {
 
 export type CreateMapRepository = {
   transaction<T>(callback: (tx: CreateMapRepositoryTx) => Promise<T>): Promise<T>;
+};
+
+type CreateMapDbTx = {
+  insert: (table: unknown) => {
+    values: (value: Record<string, unknown>) => Promise<unknown>;
+  };
+};
+
+type CreateMapDb = {
+  transaction<T>(callback: (tx: CreateMapDbTx) => Promise<T>): Promise<T>;
 };
 
 export type CreateMapResult = {
@@ -114,6 +127,17 @@ function readOptionalString(
   return trimmed;
 }
 
+function isCreateMapRepositoryTx(value: unknown): value is CreateMapRepositoryTx {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "insertMap" in value &&
+      typeof (value as CreateMapRepositoryTx).insertMap === "function" &&
+      "insertMoveEvent" in value &&
+      typeof (value as CreateMapRepositoryTx).insertMoveEvent === "function",
+  );
+}
+
 export function validateCreateMapInput(input: unknown): NormalizedCreateMapInput {
   const object = asObject(input);
 
@@ -126,7 +150,7 @@ export function validateCreateMapInput(input: unknown): NormalizedCreateMapInput
 
 export async function createMap(
   input: unknown,
-  repository: CreateMapRepository,
+  repository: CreateMapRepository | CreateMapDb = getDb(),
   dependencies: CreateMapDependencies = {},
 ): Promise<CreateMapResult> {
   const normalized = validateCreateMapInput(input);
@@ -136,25 +160,49 @@ export async function createMap(
   return repository.transaction(async (tx) => {
     const timestamp = now();
     const mapId = createId();
+    const requestId = normalized.requestId ?? createId();
 
-    await tx.insertMap({
-      id: mapId,
-      userId: normalized.userId,
-      title: normalized.title,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    });
-
-    await tx.insertMoveEvent({
-      userId: normalized.userId,
-      aggregateId: mapId,
-      requestId: normalized.requestId,
-      type: "map.created",
-      payload: {
+    if (isCreateMapRepositoryTx(tx)) {
+      await tx.insertMap({
+        id: mapId,
+        userId: normalized.userId,
         title: normalized.title,
-      },
-      createdAt: timestamp,
-    });
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+
+      await tx.insertMoveEvent({
+        userId: normalized.userId,
+        aggregateType: "map",
+        aggregateId: mapId,
+        requestId,
+        type: "map.created",
+        payload: {
+          title: normalized.title,
+        },
+        createdAt: timestamp,
+      });
+    } else {
+      await tx.insert(maps).values({
+        id: mapId,
+        userId: normalized.userId,
+        title: normalized.title,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+
+      await tx.insert(movesEvents).values({
+        userId: normalized.userId,
+        aggregateType: "map",
+        aggregateId: mapId,
+        requestId,
+        type: "map.created",
+        payloadJson: {
+          title: normalized.title,
+        },
+        createdAt: timestamp,
+      });
+    }
 
     return {
       mapId,
