@@ -5,7 +5,9 @@ import {
   createBrainViewModel,
   createEmptyBrainProjection,
   createMockBrainProjection,
+  fetchBrainWorkspace,
   shouldUseMockBrainData,
+  type BrainShellProjectionView,
   type BrainProjectionView,
 } from "../../lib/viewmodels/brain";
 import { BrainScreen } from "./brain-screen";
@@ -18,6 +20,7 @@ type BrainRouteState =
     }
   | {
       status: "ready";
+      shell: BrainShellProjectionView | null;
       projection: BrainProjectionView;
       source: "api" | "mock";
       error: null;
@@ -47,6 +50,7 @@ export function BrainRouteScreen() {
           const projection = createMockBrainProjection();
           setState({
             status: "ready",
+            shell: null,
             projection,
             source: "mock",
             error: null,
@@ -55,26 +59,18 @@ export function BrainRouteScreen() {
           return;
         }
 
-        const response = await fetch("/api/workspace/brain", {
-          headers: {
-            "x-user-id": localUserId,
-          },
+        const workspace = await fetchBrainWorkspace({
+          userId: localUserId,
           signal: controller.signal,
         });
-
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(payload?.error ?? `Brain projection failed with ${response.status}.`);
-        }
-
-        const projection = (await response.json()) as BrainProjectionView;
         setState({
           status: "ready",
-          projection,
+          shell: workspace.shell,
+          projection: workspace.brain,
           source: "api",
           error: null,
         });
-        setSelectedThoughtId(projection.selectedClaim?.id ?? projection.currentContext?.claimId ?? null);
+        setSelectedThoughtId(workspace.brain.selectedClaim?.id ?? workspace.brain.currentContext?.claimId ?? workspace.shell.claimId ?? null);
       } catch (error) {
         if (controller.signal.aborted) {
           return;
@@ -131,7 +127,9 @@ export function BrainRouteScreen() {
       model={model}
       onSelectThought={setSelectedThoughtId}
       state={model.stream.length > 0 ? "populated" : "empty"}
-      statusMessage={state.source === "mock" ? "Mock Brain data loaded." : "Projection loaded from /api/workspace/brain."}
+      statusMessage={
+        state.source === "mock" ? "Mock Brain data loaded." : "Workspace shell and Brain projection loaded."
+      }
     />
   );
 }
