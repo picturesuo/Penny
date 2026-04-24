@@ -1,5 +1,5 @@
-import { relations } from "drizzle-orm";
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable(
   "users",
@@ -94,7 +94,7 @@ export const graphNodes = pgTable(
     userId: uuid("user_id").notNull(),
     sessionId: uuid("session_id"),
     mapId: uuid("map_id").notNull(),
-    claimId: uuid("claim_id"),
+    claimId: uuid("claim_id").references(() => claims.id, { onDelete: "cascade" }),
     thoughtId: uuid("thought_id"),
     kind: text("kind").notNull(),
     label: text("label").notNull(),
@@ -138,6 +138,10 @@ export const graphEdges = pgTable(
     index("graph_edges_target_node_id_idx").on(table.targetNodeId),
     index("graph_edges_kind_idx").on(table.kind),
     index("graph_edges_created_at_idx").on(table.createdAt),
+    check(
+      "graph_edges_kind_valid_check",
+      sql`${table.kind} in ('supports', 'depends_on', 'contradicts', 'related', 'relates_to', 'extracted_claim', 'extracts', 'cross_map')`,
+    ),
   ],
 );
 

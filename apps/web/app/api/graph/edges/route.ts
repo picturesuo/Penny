@@ -14,6 +14,17 @@ class GraphEdgeValidationError extends Error {}
 class GraphEdgeNodeNotFoundError extends Error {}
 class GraphEdgeMapMismatchError extends Error {}
 
+const VALID_EDGE_KINDS = new Set([
+  "supports",
+  "depends_on",
+  "contradicts",
+  "related",
+  "relates_to",
+  "extracted_claim",
+  "extracts",
+  "cross_map",
+]);
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -53,7 +64,13 @@ function readKind(body: Record<string, unknown>) {
     throw new GraphEdgeValidationError("kind or type is required.");
   }
 
-  return value.trim();
+  const kind = value.trim();
+
+  if (!VALID_EDGE_KINDS.has(kind)) {
+    throw new GraphEdgeValidationError("kind or type must be a valid graph edge type.");
+  }
+
+  return kind;
 }
 
 function readOptionalWeightBps(body: Record<string, unknown>): number | null {

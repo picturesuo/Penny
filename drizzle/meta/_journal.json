@@ -78,6 +78,13 @@
       "when": 1777012400000,
       "tag": "0010_graph_edge_node_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777013000000,
+      "tag": "0011_graph_edge_validation_and_entity_delete",
+      "breakpoints": true
     }
   ]
 }

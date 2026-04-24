@@ -284,6 +284,88 @@ test("graph edges cannot reference missing graph nodes", async () => {
   }
 });
 
+test("deleting thoughts and claims removes or updates graph edges safely", async () => {
+  const userId = "00000000-0000-0000-0000-000000004033";
+  const mapId = "00000000-0000-0000-0000-000000004034";
+  const thoughtId = "00000000-0000-0000-0000-000000004035";
+  const claimId = "00000000-0000-0000-0000-000000004036";
+  const thoughtNodeId = "00000000-0000-0000-0000-000000004037";
+  const claimNodeId = "00000000-0000-0000-0000-000000004038";
+  const supportingNodeId = "00000000-0000-0000-0000-000000004039";
+  const thoughtEdgeId = "00000000-0000-0000-0000-000000004040";
+  const claimEdgeId = "00000000-0000-0000-0000-000000004041";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into thoughts (id, user_id, map_id, raw_text, source)
+      values (${thoughtId}, ${userId}, ${mapId}, ${"Thought connected to a claim."}, ${"test"})
+    `;
+    await sql`
+      insert into claims (id, user_id, map_id, thought_id, body, confidence_bps)
+      values (${claimId}, ${userId}, ${mapId}, ${thoughtId}, ${"Claim connected to the thought."}, ${7000})
+    `;
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, thought_id, kind, label)
+      values (${thoughtNodeId}, ${userId}, ${mapId}, ${thoughtId}, ${"thought"}, ${"Thought node"})
+      on conflict (thought_id) where thought_id is not null and kind = 'thought'
+      do update set id = excluded.id
+    `;
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, claim_id, thought_id, kind, label)
+      values (${claimNodeId}, ${userId}, ${mapId}, ${claimId}, ${thoughtId}, ${"claim"}, ${"Claim node"})
+      on conflict (claim_id) where claim_id is not null and kind = 'claim'
+      do update set id = excluded.id
+    `;
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label)
+      values (${supportingNodeId}, ${userId}, ${mapId}, ${"claim"}, ${"Supporting node"})
+    `;
+    await sql`
+      insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind)
+      values
+        (${thoughtEdgeId}, ${userId}, ${mapId}, ${thoughtNodeId}, ${claimNodeId}, ${"extracted_claim"}),
+        (${claimEdgeId}, ${userId}, ${mapId}, ${claimNodeId}, ${supportingNodeId}, ${"supports"})
+    `;
+
+    await sql`delete from thoughts where id = ${thoughtId}`;
+
+    const afterThoughtDelete = await sql<
+      { thought_nodes: string; claim_nodes_with_thought: string; claims_with_thought: string; thought_edges: string; claim_edges: string }[]
+    >`
+      select
+        (select count(*)::text from graph_nodes where id = ${thoughtNodeId}) as thought_nodes,
+        (select count(*)::text from graph_nodes where id = ${claimNodeId} and thought_id is not null) as claim_nodes_with_thought,
+        (select count(*)::text from claims where id = ${claimId} and thought_id is not null) as claims_with_thought,
+        (select count(*)::text from graph_edges where id = ${thoughtEdgeId}) as thought_edges,
+        (select count(*)::text from graph_edges where id = ${claimEdgeId}) as claim_edges
+    `;
+
+    assert.deepEqual(afterThoughtDelete[0], {
+      thought_nodes: "0",
+      claim_nodes_with_thought: "0",
+      claims_with_thought: "0",
+      thought_edges: "0",
+      claim_edges: "1",
+    });
+
+    await sql`delete from claims where id = ${claimId}`;
+
+    const afterClaimDelete = await sql<{ claim_nodes: string; claim_edges: string }[]>`
+      select
+        (select count(*)::text from graph_nodes where id = ${claimNodeId}) as claim_nodes,
+        (select count(*)::text from graph_edges where id = ${claimEdgeId}) as claim_edges
+    `;
+
+    assert.deepEqual(afterClaimDelete[0], {
+      claim_nodes: "0",
+      claim_edges: "0",
+    });
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
 test("GET /api/graph/nodes/:id/detail returns owned node detail with edges and confidence", async () => {
   const userId = "00000000-0000-0000-0000-000000004123";
   const otherUserId = "00000000-0000-0000-0000-000000004124";
@@ -694,6 +776,26 @@ test("POST /api/graph/edges validates request body", async () => {
   assert.deepEqual(await response.json(), {
     error: "sourceNodeId must be a UUID.",
   });
+
+  const invalidKindResponse = await createGraphEdge(
+    new Request("http://localhost/api/graph/edges", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "00000000-0000-0000-0000-000000007123",
+      },
+      body: JSON.stringify({
+        sourceNodeId: "00000000-0000-0000-0000-000000007401",
+        targetNodeId: "00000000-0000-0000-0000-000000007402",
+        kind: "invalid_edge_type",
+      }),
+    }),
+  );
+
+  assert.equal(invalidKindResponse.status, 400);
+  assert.deepEqual(await invalidKindResponse.json(), {
+    error: "kind or type must be a valid graph edge type.",
+  });
 });
 
 test("PATCH /api/graph/edges/:id updates mutable edge fields", async () => {
@@ -874,6 +976,25 @@ test("PATCH /api/graph/edges/:id rejects invalid ids and cross-user updates", as
     assert.equal(invalidWeightResponse.status, 400);
     assert.deepEqual(await invalidWeightResponse.json(), {
       error: "weightBps must be an integer between 0 and 10000.",
+    });
+
+    const invalidKindResponse = await updateGraphEdge(
+      new Request(`http://localhost/api/graph/edges/${edgeId}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": otherUserId,
+        },
+        body: JSON.stringify({
+          kind: "invalid_edge_type",
+        }),
+      }),
+      { params: { id: edgeId } },
+    );
+
+    assert.equal(invalidKindResponse.status, 400);
+    assert.deepEqual(await invalidKindResponse.json(), {
+      error: "kind or type must be a valid graph edge type.",
     });
   } finally {
     await sql.end({ timeout: 1 });
