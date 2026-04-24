@@ -9,8 +9,17 @@ export const SYSTEM_PROMPT_TEXT = [
   "Set suggestedConfidenceBps to null when the prompt does not justify a numeric recommendation.",
 ].join(" ");
 
+export type GenerateChallengeCritiqueRoundContext = {
+  roundId: string;
+  roundNumber: number;
+  summary: string;
+  userResponse?: string | null;
+  responsePath?: string | null;
+  confidenceDeltaBps?: number | null;
+};
+
 export type GenerateChallengeCritiquePromptInput = {
-  mapTitle: string;
+  mapTitle?: string | null;
   claimId: string;
   claimText: string;
   claimConfidenceBps: number | null;
@@ -23,14 +32,8 @@ export type GenerateChallengeCritiquePromptInput = {
     confidenceBps?: number | null;
     relationship?: string | null;
   }>;
-  previousRounds?: Array<{
-    roundId: string;
-    roundNumber: number;
-    summary: string;
-    userResponse?: string | null;
-    responsePath?: string | null;
-    confidenceDeltaBps?: number | null;
-  }>;
+  priorRoundContext?: GenerateChallengeCritiqueRoundContext | GenerateChallengeCritiqueRoundContext[] | null;
+  previousRounds?: GenerateChallengeCritiqueRoundContext[];
 };
 
 export type GenerateChallengeCritiquePromptPayload = {
@@ -46,7 +49,7 @@ export type GenerateChallengeCritiquePromptPayload = {
     uncertaintyNote: "string";
   };
   context: {
-    mapTitle: string;
+    mapTitle: string | null;
     claim: {
       id: string;
       text: string;
@@ -62,6 +65,14 @@ export type GenerateChallengeCritiquePromptPayload = {
       relationship: string | null;
     }>;
     previousRounds: Array<{
+      roundId: string;
+      roundNumber: number;
+      summary: string;
+      userResponse: string | null;
+      responsePath: string | null;
+      confidenceDeltaBps: number | null;
+    }>;
+    priorRoundContext: Array<{
       roundId: string;
       roundNumber: number;
       summary: string;
@@ -100,6 +111,19 @@ function normalizeNullableInteger(value: number | null | undefined): number | nu
   return Math.trunc(value);
 }
 
+function normalizePriorRoundContext(value: GenerateChallengeCritiquePromptInput["priorRoundContext"]) {
+  const rounds: GenerateChallengeCritiqueRoundContext[] = Array.isArray(value) ? value : value ? [value] : [];
+
+  return rounds.map((round) => ({
+    roundId: normalizeRequiredString(round.roundId),
+    roundNumber: Math.trunc(round.roundNumber),
+    summary: normalizeRequiredString(round.summary),
+    userResponse: normalizeOptionalString(round.userResponse),
+    responsePath: normalizeOptionalString(round.responsePath),
+    confidenceDeltaBps: normalizeNullableInteger(round.confidenceDeltaBps),
+  }));
+}
+
 export function buildGenerateChallengeCritiquePrompt(
   input: GenerateChallengeCritiquePromptInput,
 ): GenerateChallengeCritiquePrompt {
@@ -116,7 +140,7 @@ export function buildGenerateChallengeCritiquePrompt(
       uncertaintyNote: "string",
     },
     context: {
-      mapTitle: normalizeRequiredString(input.mapTitle),
+      mapTitle: normalizeOptionalString(input.mapTitle),
       claim: {
         id: normalizeRequiredString(input.claimId),
         text: normalizeRequiredString(input.claimText),
@@ -139,6 +163,7 @@ export function buildGenerateChallengeCritiquePrompt(
         responsePath: normalizeOptionalString(round.responsePath),
         confidenceDeltaBps: normalizeNullableInteger(round.confidenceDeltaBps),
       })),
+      priorRoundContext: normalizePriorRoundContext(input.priorRoundContext),
     },
   };
 

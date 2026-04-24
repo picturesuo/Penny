@@ -57,6 +57,7 @@ test("buildPrompt includes claim context and the schema output contract", () => 
 
   assert.equal(prompt.structuredInput.context.claim.text, promptInput.claimText);
   assert.equal(prompt.structuredInput.context.claim.confidenceBps, 6_200);
+  assert.deepEqual(prompt.structuredInput.context.priorRoundContext, []);
   assert.deepEqual(Object.keys(prompt.structuredInput.outputContract), [
     "summary",
     "strongestCounterargument",
@@ -68,6 +69,47 @@ test("buildPrompt includes claim context and the schema output contract", () => 
   ]);
   assert.match(prompt.systemPrompt, /Return only JSON/);
   assert.match(prompt.userPrompt, /"operation": "generateChallengeCritique"/);
+});
+
+test("buildPrompt accepts the required input shape with optional map and neighbor context omitted", () => {
+  const prompt = buildGenerateChallengeCritiquePrompt({
+    claimId: "claim-minimal",
+    claimText: "Self-serve users will retain without founder-led onboarding.",
+    claimConfidenceBps: null,
+  });
+
+  assert.equal(prompt.structuredInput.context.mapTitle, null);
+  assert.equal(prompt.structuredInput.context.claim.text, "Self-serve users will retain without founder-led onboarding.");
+  assert.deepEqual(prompt.structuredInput.context.neighboringClaims, []);
+  assert.deepEqual(prompt.structuredInput.context.priorRoundContext, []);
+});
+
+test("buildPrompt accepts and normalizes priorRoundContext", () => {
+  const prompt = buildGenerateChallengeCritiquePrompt({
+    claimId: "claim-prior",
+    claimText: "The current retention signal is durable.",
+    claimConfidenceBps: 5_500,
+    priorRoundContext: {
+      roundId: "  round-previous  ",
+      roundNumber: 2.8,
+      summary: "  Prior critique questioned onboarding bias.  ",
+      userResponse: "  I will segment self-serve users.  ",
+      responsePath: "  revise  ",
+      confidenceDeltaBps: -725.9,
+    },
+  });
+
+  assert.deepEqual(prompt.structuredInput.context.priorRoundContext, [
+    {
+      roundId: "round-previous",
+      roundNumber: 2,
+      summary: "Prior critique questioned onboarding bias.",
+      userResponse: "I will segment self-serve users.",
+      responsePath: "revise",
+      confidenceDeltaBps: -725,
+    },
+  ]);
+  assert.match(prompt.userPrompt, /"priorRoundContext"/);
 });
 
 test("buildPrompt normalizes optional strings and numeric context", () => {
