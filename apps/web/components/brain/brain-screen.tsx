@@ -165,6 +165,44 @@ const styles = {
     borderRadius: 8,
     padding: 18,
   },
+  selectedPanel: {
+    display: "grid",
+    gap: 16,
+  },
+  selectedActions: {
+    alignItems: "center",
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  actionLink: {
+    background: "#17201b",
+    borderRadius: 6,
+    color: "#fffdf7",
+    display: "inline-flex",
+    fontSize: 14,
+    fontWeight: 750,
+    minHeight: 36,
+    padding: "8px 12px",
+    textDecoration: "none",
+  },
+  relatedList: {
+    display: "grid",
+    gap: 8,
+    margin: 0,
+    padding: 0,
+  },
+  relatedItem: {
+    listStyle: "none",
+  },
+  relatedLink: {
+    border: "1px solid #d8ded5",
+    borderRadius: 8,
+    color: "inherit",
+    display: "block",
+    padding: 12,
+    textDecoration: "none",
+  },
   facts: {
     display: "grid",
     gap: 10,
@@ -277,14 +315,12 @@ export function BrainScreen({ model, onSelectThought, state, statusMessage }: Br
 
         <aside aria-label="Brain inspector" style={styles.sideRail}>
           <section aria-labelledby="selected-thought-heading" style={styles.panel}>
-            <p style={styles.eyebrow}>Selected thought</p>
+            <p style={styles.eyebrow}>Selected claim</p>
             <h2 id="selected-thought-heading" style={styles.thoughtTitle}>
-              Focus card
+              Claim panel
             </h2>
-            {model.selectedThought ? (
-              <div style={styles.selectedCard}>
-                <ThoughtCard thought={model.selectedThought} />
-              </div>
+            {model.selectedPanel ? (
+              <SelectedClaimPanel model={model.selectedPanel} />
             ) : (
               <p style={styles.emptyState}>Select a thought to inspect it.</p>
             )}
@@ -381,6 +417,43 @@ function ThoughtCard({ preview = false, thought }: { preview?: boolean; thought:
         <ConfidenceMiniGraph confidenceBps={thought.confidenceBps} label={thought.confidenceLabel} />
       </div>
     </article>
+  );
+}
+
+function SelectedClaimPanel({ model }: { model: NonNullable<BrainViewModel["selectedPanel"]> }) {
+  return (
+    <div style={styles.selectedPanel}>
+      <article style={styles.selectedCard}>
+        <h3 style={styles.thoughtTitle}>{model.title}</h3>
+        <p style={styles.thoughtBody}>{model.body}</p>
+        <div style={styles.metadata}>
+          <span>{model.confidenceLabel}</span>
+        </div>
+      </article>
+
+      <section aria-label="Dependencies and related claims preview">
+        <p style={styles.eyebrow}>Dependencies and related claims</p>
+        <p style={styles.thoughtBody}>{model.dependenciesLabel}</p>
+        {model.relatedClaims.length > 0 ? (
+          <ul style={styles.relatedList}>
+            {model.relatedClaims.map((claim) => (
+              <li key={claim.id} style={styles.relatedItem}>
+                <a href={claim.brainMapHref} style={styles.relatedLink}>
+                  <strong>{claim.title}</strong>
+                  <span style={styles.metadata}>{claim.confidenceLabel}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      <div style={styles.selectedActions}>
+        <a href={model.brainMapHref} style={styles.actionLink}>
+          View on Brain Map
+        </a>
+      </div>
+    </div>
   );
 }
 
