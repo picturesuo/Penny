@@ -429,8 +429,10 @@ export async function buildChallengeView(
     };
   } else {
     const normalizedStatus = normalizeCritiqueStatus(critiqueRow.status);
+    const safeStatus: ChallengeCritiqueStateView["status"] =
+      normalizedStatus === "ready" && !critiqueBody ? "pending" : normalizedStatus;
 
-    if (normalizedStatus === "ready" && critiqueBody) {
+    if (safeStatus === "ready" && critiqueBody) {
       critiqueState = {
         status: "ready",
         critiqueId: critiqueRow.id,
@@ -441,8 +443,11 @@ export async function buildChallengeView(
         ...(promptVersion ? { promptVersion } : {}),
       };
     } else {
+      const nonReadyStatus: Extract<ChallengeCritiqueStateView, { critiqueId: string }>["status"] =
+        safeStatus === "ready" ? "pending" : safeStatus;
+
       critiqueState = {
-        status: normalizedStatus,
+        status: nonReadyStatus,
         critiqueId: critiqueRow.id,
         ...(critiquePayload !== undefined ? { critiquePayload } : {}),
         ...(provider ? { provider } : {}),
