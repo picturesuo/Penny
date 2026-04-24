@@ -1,0 +1,49 @@
+export type ModelPolicyOperationName = "generateChallengeCritique" | (string & {});
+export type ModelPolicyQualityTier = "default" | "fallback" | "cheap";
+export type ModelPolicyProviderName = "anthropic" | "xai";
+
+export type ModelSelection = {
+  operationName: string;
+  provider: ModelPolicyProviderName;
+  model: string;
+  qualityTier: ModelPolicyQualityTier;
+};
+
+const DEFAULT_CLAUDE_SONNET_MODEL = "claude-sonnet-4-20250514";
+const DEFAULT_GROK_MODEL = "grok-4.20";
+const DEFAULT_GROK_FAST_MODEL = "grok-4-fast";
+
+function readEnvOverride(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function selectModelForOperation(
+  operationName: ModelPolicyOperationName,
+  qualityTier: ModelPolicyQualityTier = "default",
+): ModelSelection {
+  if (qualityTier === "cheap") {
+    return {
+      operationName,
+      provider: "xai",
+      model: readEnvOverride(process.env.XAI_FAST_MODEL) ?? DEFAULT_GROK_FAST_MODEL,
+      qualityTier,
+    };
+  }
+
+  if (operationName === "generateChallengeCritique" && qualityTier === "default") {
+    return {
+      operationName,
+      provider: "anthropic",
+      model: readEnvOverride(process.env.ANTHROPIC_CHALLENGE_MODEL) ?? DEFAULT_CLAUDE_SONNET_MODEL,
+      qualityTier,
+    };
+  }
+
+  return {
+    operationName,
+    provider: "xai",
+    model: readEnvOverride(process.env.XAI_CHALLENGE_FALLBACK_MODEL) ?? DEFAULT_GROK_MODEL,
+    qualityTier: "fallback",
+  };
+}
