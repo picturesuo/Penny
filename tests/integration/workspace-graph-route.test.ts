@@ -7,6 +7,7 @@ import { after, test } from "node:test";
 import postgres from "postgres";
 
 import { GET } from "../../apps/web/app/api/graph/route";
+import { POST as createGraphEdge } from "../../apps/web/app/api/graph/edges/route";
 import { GET as getNodeDetail } from "../../apps/web/app/api/graph/nodes/[id]/detail/route";
 
 const PG_PORT = 62000 + Math.floor(Math.random() * 1000);
@@ -473,5 +474,196 @@ test("GET /api/graph/nodes/:id/detail rejects invalid node ids", async () => {
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), {
     error: "Invalid node id. Expected a UUID.",
+  });
+});
+
+test("POST /api/graph/edges creates an owned edge and replays duplicates", async () => {
+  const userId = "00000000-0000-0000-0000-000000005123";
+  const mapId = "00000000-0000-0000-0000-000000005321";
+  const sourceNodeId = "00000000-0000-0000-0000-000000005401";
+  const targetNodeId = "00000000-0000-0000-0000-000000005402";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label, metadata_json)
+      values
+        (${sourceNodeId}, ${userId}, ${mapId}, ${"thought"}, ${"Source edge thought"}, ${JSON.stringify({ cluster: "context" })}::jsonb),
+        (${targetNodeId}, ${userId}, ${mapId}, ${"claim"}, ${"Target edge claim"}, ${JSON.stringify({ cluster: "claim" })}::jsonb)
+    `;
+
+    const requestBody = {
+      sourceNodeId,
+      targetNodeId,
+      type: "supports",
+      mapId,
+      weightBps: 6900,
+      metadata: {
+        label: "supports",
+        status: "suggested",
+      },
+    };
+    const firstResponse = await createGraphEdge(
+      new Request("http://localhost/api/graph/edges", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify(requestBody),
+      }),
+    );
+
+    assert.equal(firstResponse.status, 201);
+
+    const firstPayload = (await firstResponse.json()) as {
+      edge: {
+        id: string;
+        source: string;
+        target: string;
+        kind: string;
+        label: string;
+        status?: string;
+        strength: number;
+        weightBps: number;
+      };
+    };
+
+    assert.match(firstPayload.edge.id, /^[0-9a-f-]{36}$/);
+    assert.deepEqual(
+      {
+        source: firstPayload.edge.source,
+        target: firstPayload.edge.target,
+        kind: firstPayload.edge.kind,
+        label: firstPayload.edge.label,
+        status: firstPayload.edge.status,
+        strength: firstPayload.edge.strength,
+        weightBps: firstPayload.edge.weightBps,
+      },
+      {
+        source: sourceNodeId,
+        target: targetNodeId,
+        kind: "supports",
+        label: "supports",
+        status: "suggested",
+        strength: 0.69,
+        weightBps: 6900,
+      },
+    );
+
+    const storedRows = await sql<{ count: string }[]>`
+      select count(*)::text as count
+      from graph_edges
+      where user_id = ${userId}
+        and source_node_id = ${sourceNodeId}
+        and target_node_id = ${targetNodeId}
+        and kind = ${"supports"}
+    `;
+
+    assert.equal(storedRows[0]?.count, "1");
+
+    const replayResponse = await createGraphEdge(
+      new Request("http://localhost/api/graph/edges", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify(requestBody),
+      }),
+    );
+
+    assert.equal(replayResponse.status, 200);
+
+    const replayPayload = (await replayResponse.json()) as { edge: { id: string } };
+
+    assert.equal(replayPayload.edge.id, firstPayload.edge.id);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("POST /api/graph/edges rejects cross-map and cross-user edges", async () => {
+  const userId = "00000000-0000-0000-0000-000000006123";
+  const otherUserId = "00000000-0000-0000-0000-000000006124";
+  const mapId = "00000000-0000-0000-0000-000000006321";
+  const otherMapId = "00000000-0000-0000-0000-000000006322";
+  const sourceNodeId = "00000000-0000-0000-0000-000000006401";
+  const otherMapNodeId = "00000000-0000-0000-0000-000000006402";
+  const otherUserNodeId = "00000000-0000-0000-0000-000000006403";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label, metadata_json)
+      values
+        (${sourceNodeId}, ${userId}, ${mapId}, ${"thought"}, ${"Owned source"}, ${JSON.stringify({ cluster: "context" })}::jsonb),
+        (${otherMapNodeId}, ${userId}, ${otherMapId}, ${"claim"}, ${"Other map target"}, ${JSON.stringify({ cluster: "claim" })}::jsonb),
+        (${otherUserNodeId}, ${otherUserId}, ${mapId}, ${"claim"}, ${"Other user target"}, ${JSON.stringify({ cluster: "claim" })}::jsonb)
+    `;
+
+    const crossMapResponse = await createGraphEdge(
+      new Request("http://localhost/api/graph/edges", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          sourceNodeId,
+          targetNodeId: otherMapNodeId,
+          kind: "supports",
+        }),
+      }),
+    );
+
+    assert.equal(crossMapResponse.status, 409);
+    assert.deepEqual(await crossMapResponse.json(), {
+      error: "Graph edge endpoints must belong to the same map.",
+    });
+
+    const crossUserResponse = await createGraphEdge(
+      new Request("http://localhost/api/graph/edges", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          sourceNodeId,
+          targetNodeId: otherUserNodeId,
+          kind: "supports",
+        }),
+      }),
+    );
+
+    assert.equal(crossUserResponse.status, 404);
+    assert.deepEqual(await crossUserResponse.json(), {
+      error: "Source or target graph node not found.",
+    });
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("POST /api/graph/edges validates request body", async () => {
+  const response = await createGraphEdge(
+    new Request("http://localhost/api/graph/edges", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "00000000-0000-0000-0000-000000007123",
+      },
+      body: JSON.stringify({
+        sourceNodeId: "not-a-uuid",
+        targetNodeId: "00000000-0000-0000-0000-000000007402",
+        kind: "supports",
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "sourceNodeId must be a UUID.",
   });
 });

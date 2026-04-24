@@ -28,6 +28,7 @@ These routes are the current server-side write surface for the MVP. Meaningful w
 | `POST` | `/api/commands/workspace/select` | Update the current workspace mode and selected map/claim context. |
 | `POST` | `/api/commands/challenge/request-critique` | Create or replay a challenge critique request for a challenge round. |
 | `POST` | `/api/commands/challenge/respond` | Record the user's response to a challenge round. |
+| `POST` | `/api/graph/edges` | Create or replay a persisted graph edge between two owned graph nodes. |
 
 Command routes accept JSON request bodies. Idempotent commands can use an idempotency key from the route helper surface; duplicate-key behavior should preserve one logical write and replay the existing result.
 
@@ -36,7 +37,8 @@ Command routes accept JSON request bodies. Idempotent commands can use an idempo
 | Method | Route | Purpose |
 | --- | --- | --- |
 | `POST` | `/ai/challenge-idea` | Return a compact challenge/learn response for `{ thoughtId?, claimId?, text? }`: strongest objection, hidden assumption, counterexample, better version, and confidence question. Successful calls are logged to `ai_jobs` and `activity_events`. |
-| `POST` | `/ai/explain-blocker` | Return a compact Learn response for `{ thoughtId?, claimId?, text?, blocker? }`: blocker summary, likely cause, missing information, next step, and confidence question. Successful calls are logged to `ai_jobs` and `activity_events`. |
+| `POST` | `/ai/explain-blocker` | Return a compact Learn response for `{ text, sessionId? }`: likely blocker, missing concept, simpler explanation, and next exercise. Successful calls are logged to `ai_jobs` and `activity_events`. |
+| `POST` | `/ai/summarize-map` | Return a compact map summary for `{ mapId }`: summary, key claims, tensions, and next questions. Successful calls are logged to `ai_jobs` and `activity_events`. |
 
 ## Boundaries
 
