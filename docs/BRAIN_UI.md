@@ -33,6 +33,7 @@ The Brain fetch adapter reads both `GET /api/workspace/shell` and `GET /api/work
 - Selecting a claim updates local Brain selection and stores the selected `claimId` in the URL.
 - Switching Brain / Challenge / Learn mode updates local mode state while preserving the selected `claimId` in the URL. The Brain screen does not build Challenge or Learn detail.
 - `New Thought` is a placeholder action that announces the future creation flow without writing data.
+- Acceptance coverage verifies that the selected claim panel remains visible when Challenge mode is selected from the Brain screen.
 
 ## Mock Data
 
