@@ -18,6 +18,36 @@ export type SearchResponse = {
 
 export const globalSearchPath = "/api/search";
 
+function isSearchResult(value: unknown): value is SearchResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const result = value as Partial<SearchResult>;
+  const validType =
+    result.type === "thought" ||
+    result.type === "map" ||
+    result.type === "claim" ||
+    result.type === "session";
+
+  return (
+    typeof result.id === "string" &&
+    validType &&
+    typeof result.title === "string" &&
+    (typeof result.subtitle === "string" || result.subtitle === null) &&
+    (typeof result.confidence === "number" || result.confidence === null) &&
+    (typeof result.href === "string" || result.href === null)
+  );
+}
+
+function normalizeSearchResponse(response: SearchResponse | null | undefined) {
+  if (!response || !Array.isArray(response.results)) {
+    return [];
+  }
+
+  return response.results.filter(isSearchResult);
+}
+
 export function createSearchApiClient(options: PennyApiClientOptions = {}) {
   const client = createPennyApiClient(options);
 
@@ -28,7 +58,7 @@ export function createSearchApiClient(options: PennyApiClientOptions = {}) {
 
       try {
         const response = await client.get<SearchResponse>(`${globalSearchPath}?${params.toString()}`, requestOptions);
-        return response.results;
+        return normalizeSearchResponse(response);
       } catch (error) {
         if (error instanceof PennyApiError && (error.status === 404 || error.status === 405)) {
           return null;

@@ -1,4 +1,5 @@
 import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
+import { logBackendError } from "../../../lib/backend-error-logging";
 import {
   SummarizeMapNotFoundError,
   SummarizeMapValidationError,
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
       return apiError("Map not found.", 404);
     }
 
-    console.error("POST /ai/summarize-map failed", error);
+    logBackendError({ error, request, route: "POST /ai/summarize-map" });
     return apiError("Failed to summarize map.", 500);
   }
 }

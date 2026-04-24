@@ -1,4 +1,5 @@
 import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
+import { logBackendError } from "../../../lib/backend-error-logging";
 import {
   DetectContradictionsTargetNotFoundError,
   DetectContradictionsValidationError,
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
       return apiError("Target not found.", 404);
     }
 
-    console.error("POST /ai/detect-contradictions failed", error);
+    logBackendError({ error, request, route: "POST /ai/detect-contradictions" });
     return apiError("Failed to detect contradictions.", 500);
   }
 }

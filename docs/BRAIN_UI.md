@@ -28,7 +28,7 @@ The viewmodel intentionally maps backend `claims` to UI `thoughts` for the Brain
 
 Inspector sections are derived from the current Brain projection. Key connections and dependency previews use sibling claims and map context until the backend exposes first-class graph edges; contradiction markers flag low-confidence claims for review rather than inventing a challenge result.
 
-The Brain fetch adapter reads both `GET /api/workspace/shell` and `GET /api/workspace/brain` with the UUID user header. Mock mode bypasses this adapter so UI work can continue without live backend data.
+The Brain fetch adapter reads both `GET /api/workspace/shell` and `GET /api/workspace/brain` with the UUID user header. The route uses those live endpoints by default.
 
 ## Interactions
 
@@ -39,4 +39,4 @@ The Brain fetch adapter reads both `GET /api/workspace/shell` and `GET /api/work
 
 ## Mock Data
 
-Use `/brain?mock=1` or `/brain?brainMock=true` to render deterministic mock Brain data without calling `GET /api/workspace/brain`. The mock projection lives in `apps/web/lib/viewmodels/brain/mock-data.ts` and covers populated stream rows, selected claim panel, related claims, Work sphere, and recent sessions.
+Deterministic Brain mock data is gated to local/test runs by `NEXT_PUBLIC_ENABLE_BRAIN_MOCK=1`. With that flag set, `/brain?mock=1` or `/brain?brainMock=true` renders the fixture from `apps/web/lib/viewmodels/brain/mock-data.ts` without calling `GET /api/workspace/brain`.

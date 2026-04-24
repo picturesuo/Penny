@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { pathToFileURL } from "node:url";
 
+import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../../../lib/api/response";
 import { logBackendError } from "../../../../../lib/backend-error-logging";
 import {
   RequestUserNotAuthenticatedError,
@@ -27,11 +27,11 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    return invalidJsonResponse();
   }
 
   if (!isObject(body)) {
-    return NextResponse.json({ error: "Request body must be a JSON object." }, { status: 400 });
+    return invalidObjectResponse();
   }
 
   try {
@@ -44,25 +44,25 @@ export async function POST(request: Request) {
       requestId,
     });
 
-    return NextResponse.json(result, { status: 201 });
+    return apiOk(result, 201);
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return apiError(error.message, 401);
     }
 
     if (error instanceof Error && error.name === "StartChallengeRoundValidationError") {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return apiError(error.message, 400);
     }
 
     if (error instanceof Error && error.name === "StartChallengeRoundClaimForbiddenError") {
-      return NextResponse.json({ error: error.message }, { status: 403 });
+      return apiError(error.message, 403);
     }
 
     if (error instanceof Error && error.name === "StartChallengeRoundClaimNotFoundError") {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+      return apiError(error.message, 404);
     }
 
     logBackendError({ error, request, route: "POST /api/commands/challenge/start" });
-    return NextResponse.json({ error: "Failed to start challenge round." }, { status: 500 });
+    return apiError("Failed to start challenge round.", 500);
   }
 }

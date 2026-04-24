@@ -155,8 +155,8 @@ export function ChallengeExperience({
         <p className={styles.kicker}>What changed your confidence?</p>
         <p>{model.whatsAtStake.summary}</p>
         <ul className={styles.signalList}>
-          {model.whatsAtStake.items.map((item) => (
-            <li key={item}>{item}</li>
+          {model.whatsAtStake.items.map((item, index) => (
+            <li key={`${item}:${index}`}>{item}</li>
           ))}
         </ul>
       </section>
@@ -285,8 +285,8 @@ function CascadeGroup({ title, items }: { title: string; items: string[] }) {
       <h2>{title}</h2>
       {items.length > 0 ? (
         <ul className={styles.signalList}>
-          {items.map((item) => (
-            <li key={item}>{item}</li>
+          {items.map((item, index) => (
+            <li key={`${item}:${index}`}>{item}</li>
           ))}
         </ul>
       ) : (

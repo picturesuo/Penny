@@ -1,4 +1,5 @@
 import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
+import { logBackendError } from "../../../lib/backend-error-logging";
 import {
   ExtractClaimsError,
   ExtractClaimsNotFoundError,
@@ -61,11 +62,11 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof ExtractClaimsError) {
-      console.error("POST /ai/extract-claims failed", error);
+      logBackendError({ error, request, route: "POST /ai/extract-claims" });
       return apiError("Failed to extract claims.", 502);
     }
 
-    console.error("POST /ai/extract-claims failed", error);
+    logBackendError({ error, request, route: "POST /ai/extract-claims" });
     return apiError("Failed to extract claims.", 500);
   }
 }

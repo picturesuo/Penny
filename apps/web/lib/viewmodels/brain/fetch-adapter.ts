@@ -29,6 +29,18 @@ export type BrainWorkspaceFetchInput = {
   brainPath?: string;
 };
 
+function readApiErrorMessage(payload: unknown, fallback: string) {
+  if (payload && typeof payload === "object" && "error" in payload) {
+    const message = (payload as { error?: unknown }).error;
+
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
 async function readProjection<T>(
   fetcher: typeof fetch,
   path: string,
@@ -43,8 +55,8 @@ async function readProjection<T>(
   });
 
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error ?? `${path} failed with ${response.status}.`);
+    const payload = await response.json().catch(() => null);
+    throw new Error(readApiErrorMessage(payload, `${path} failed with ${response.status}.`));
   }
 
   return (await response.json()) as T;

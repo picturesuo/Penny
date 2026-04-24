@@ -1,4 +1,5 @@
 import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
+import { logBackendError } from "../../../lib/backend-error-logging";
 import {
   SuggestConnectionsTargetNotFoundError,
   SuggestConnectionsValidationError,
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
       return apiError("Target not found.", 404);
     }
 
-    console.error("POST /ai/suggest-connections failed", error);
+    logBackendError({ error, request, route: "POST /ai/suggest-connections" });
     return apiError("Failed to suggest connections.", 500);
   }
 }

@@ -504,8 +504,8 @@ export function BrainScreen({
           <BrainStateBanner state={screenState} message={statusMessage} onRetry={onRetry} technicalDetail={technicalDetail} />
           {model.stream.length > 0 ? (
             <ol style={styles.list}>
-              {model.stream.map((thought) => (
-                <li key={thought.id} style={styles.listItem}>
+              {model.stream.map((thought, index) => (
+                <li key={`${thought.id}:${index}`} style={styles.listItem}>
                   <button
                     aria-pressed={thought.isSelected}
                     onClick={() => onSelectThought?.(thought.id)}
@@ -573,8 +573,8 @@ export function BrainScreen({
             </h2>
             {model.recentThoughts.length > 0 ? (
               <div style={styles.stack}>
-                {model.recentThoughts.map((thought) => (
-                  <ThoughtSummary key={thought.id} thought={thought} />
+                {model.recentThoughts.map((thought, index) => (
+                  <ThoughtSummary key={`${thought.id}:${index}`} thought={thought} />
                 ))}
               </div>
             ) : (
@@ -718,8 +718,8 @@ function SphereSessionAffordances({ model }: { model: BrainViewModel }) {
         <p style={styles.eyebrow}>Recent sessions</p>
         {model.sphere.recentSessions.length > 0 ? (
           <ol style={styles.relatedList}>
-            {model.sphere.recentSessions.map((session) => (
-              <li key={session.id} style={styles.relatedItem}>
+            {model.sphere.recentSessions.map((session, index) => (
+              <li key={`${session.id}:${index}`} style={styles.relatedItem}>
                 <button
                   aria-pressed={session.isSelected}
                   style={{
@@ -759,8 +759,8 @@ function SelectedClaimPanel({ model }: { model: NonNullable<BrainViewModel["sele
         <p style={styles.thoughtBody}>{model.dependenciesLabel}</p>
         {model.relatedClaims.length > 0 ? (
           <ul style={styles.relatedList}>
-            {model.relatedClaims.map((claim) => (
-              <li key={claim.id} style={styles.relatedItem}>
+            {model.relatedClaims.map((claim, index) => (
+              <li key={`${claim.id}:${index}`} style={styles.relatedItem}>
                 <a href={claim.brainMapHref} style={styles.relatedLink}>
                   <strong>{claim.title}</strong>
                   <span style={styles.metadata}>
@@ -802,7 +802,7 @@ function ConfidenceMiniGraph({ confidenceBps, label }: { confidenceBps: number |
     <div aria-label={`Confidence mini graph: ${label}`} role="img" style={styles.confidenceGraph}>
       {heights.map((height, index) => (
         <span
-          key={height}
+          key={`${height}:${index}`}
           style={{
             ...styles.confidenceBar,
             ...(index < activeBars ? styles.confidenceBarActive : {}),
@@ -839,8 +839,8 @@ function InspectorGroup({
       <p style={styles.eyebrow}>{title}</p>
       {items.length > 0 ? (
         <ul style={styles.inspectorList}>
-          {items.map((item) => (
-            <li key={item.id} style={{ ...styles.inspectorItem, ...(warning ? styles.inspectorItemWarning : {}) }}>
+          {items.map((item, index) => (
+            <li key={`${item.id}:${index}`} style={{ ...styles.inspectorItem, ...(warning ? styles.inspectorItemWarning : {}) }}>
               <strong style={styles.inspectorItemTitle}>{item.title}</strong>
               <span style={styles.inspectorItemDetail}>{item.detail}</span>
             </li>

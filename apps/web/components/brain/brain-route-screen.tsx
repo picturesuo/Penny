@@ -35,6 +35,7 @@ type BrainRouteState =
     };
 
 const localUserId = "00000000-0000-4000-8000-000000000001";
+const enableBrainMockData = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_ENABLE_BRAIN_MOCK === "1";
 
 function readClaimIdFromLocation() {
   return new URLSearchParams(window.location.search).get("claimId");
@@ -87,7 +88,7 @@ export function BrainRouteScreen() {
 
     async function loadBrain() {
       try {
-        if (shouldUseMockBrainData(window.location.search)) {
+        if (enableBrainMockData && shouldUseMockBrainData(window.location.search)) {
           const projection = createMockBrainProjection();
           if (!isCurrentLoad()) {
             return;

@@ -89,8 +89,8 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
       <section className={`penny-panel ${styles.relatedCard}`}>
         <p className={styles.kicker}>Related ideas</p>
         <div className={styles.relatedList}>
-          {model.relatedIdeas.map((idea) => (
-            <article key={idea.title} className={styles.relatedItem}>
+          {model.relatedIdeas.map((idea, index) => (
+            <article key={`${idea.title}:${index}`} className={styles.relatedItem}>
               <h2>{idea.title}</h2>
               <p>{idea.body}</p>
             </article>
@@ -104,8 +104,8 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
           <div className={styles.mapNode} data-current="true">
             {model.brainMiniMap.current}
           </div>
-          {model.brainMiniMap.neighbors.map((neighbor) => (
-            <div key={neighbor} className={styles.mapNode}>
+          {model.brainMiniMap.neighbors.map((neighbor, index) => (
+            <div key={`${neighbor}:${index}`} className={styles.mapNode}>
               {neighbor}
             </div>
           ))}
@@ -115,8 +115,8 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
       <section className={`penny-panel ${styles.stepsCard}`}>
         <p className={styles.kicker}>Practice path</p>
         <div className={styles.stepList}>
-          {model.practiceSteps.map((step) => (
-            <article key={step.title} className={styles.stepItem}>
+          {model.practiceSteps.map((step, index) => (
+            <article key={`${step.title}:${index}`} className={styles.stepItem}>
               <h2>{step.title}</h2>
               <p>{step.body}</p>
             </article>
@@ -127,8 +127,8 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
       <section className={`penny-panel ${styles.retrievalCard}`}>
         <p className={styles.kicker}>Retrieval checks</p>
         <div className={styles.retrievalGrid}>
-          {model.retrievalCards.map((card) => (
-            <article key={card.title} className={styles.retrievalItem}>
+          {model.retrievalCards.map((card, index) => (
+            <article key={`${card.title}:${index}`} className={styles.retrievalItem}>
               <h2>{card.title}</h2>
               <p>{card.prompt}</p>
             </article>

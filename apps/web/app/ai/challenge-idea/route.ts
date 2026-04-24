@@ -1,4 +1,5 @@
 import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
+import { logBackendError } from "../../../lib/backend-error-logging";
 import { challengeIdea, ChallengeIdeaValidationError } from "../../../../../server/ai/operations/challengeIdea.ts";
 import { aiOperationLogDeps } from "../../../../../server/ai/services/ai-operation-log.ts";
 import { AI_OPERATIONS } from "../../../../../server/ai/services/operation-names.ts";
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
       return apiError(error.message, 400, error.issues);
     }
 
-    console.error("POST /ai/challenge-idea failed", error);
+    logBackendError({ error, request, route: "POST /ai/challenge-idea" });
     return apiError("Failed to challenge idea.", 500);
   }
 }

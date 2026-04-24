@@ -40,7 +40,7 @@ test("graph e2e harness can target the graph surface without redesigning the she
   assert.match(viewSource, /onPointerMove/);
   assert.match(viewSource, /useWorkspaceState/);
   assert.match(viewSource, /setSelectedNodeId\(node\.id\)/);
-  assert.match(viewSource, /function selectNode/);
+  assert.match(viewSource, /const selectNode = useCallback|function selectNode/);
   assert.match(viewSource, /onSelectNode\?\.\(node\)/);
   assert.match(toolbarSource, /LensToggleBar/);
   assert.match(toolbarSource, /data-testid="penny-graph-focus-controls"/);

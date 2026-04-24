@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-
+import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../../../lib/api/response";
+import { logBackendError } from "../../../../../lib/backend-error-logging";
 import {
   RequestChallengeCritiqueRoundForbiddenError,
   RequestChallengeCritiqueRoundNotFoundError,
@@ -22,11 +22,11 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    return invalidJsonResponse();
   }
 
   if (!isObject(body)) {
-    return NextResponse.json({ error: "Request body must be a JSON object." }, { status: 400 });
+    return invalidObjectResponse();
   }
 
   try {
@@ -38,25 +38,25 @@ export async function POST(request: Request) {
       requestId,
     });
 
-    return NextResponse.json(result, { status: 201 });
+    return apiOk(result, 201);
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return apiError(error.message, 401);
     }
 
     if (error instanceof RequestChallengeCritiqueValidationError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return apiError(error.message, 400);
     }
 
     if (error instanceof RequestChallengeCritiqueRoundForbiddenError) {
-      return NextResponse.json({ error: error.message }, { status: 403 });
+      return apiError(error.message, 403);
     }
 
     if (error instanceof RequestChallengeCritiqueRoundNotFoundError) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+      return apiError(error.message, 404);
     }
 
-    console.error("POST /api/commands/challenge/request-critique failed", error);
-    return NextResponse.json({ error: "Failed to request challenge critique." }, { status: 500 });
+    logBackendError({ error, request, route: "POST /api/commands/challenge/request-critique" });
+    return apiError("Failed to request challenge critique.", 500);
   }
 }

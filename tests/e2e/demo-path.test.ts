@@ -113,7 +113,7 @@ test("E2E demo path critique step uses the live command route contract", async (
   assert.match(route, /requestChallengeCritique/);
   assert.match(route, /getRequestUserId/);
   assert.match(route, /getIdempotencyKey/);
-  assert.match(route, /status: 201/);
+  assert.match(route, /apiOk\(result, 201\)|status: 201/);
 });
 
 test("E2E demo path is documented from seed to Brain without manual setup", async () => {

@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-
+import { apiError, apiOk } from "../../../../lib/api/response";
 import { logBackendError } from "../../../../lib/backend-error-logging";
 import {
   RequestUserNotAuthenticatedError,
@@ -12,13 +11,13 @@ export async function GET(request: Request) {
     const userId = getRequestUserId(request.headers);
     const brainView = await buildBrainView({ userId });
 
-    return NextResponse.json(brainView, { status: 200 });
+    return apiOk(brainView);
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return apiError(error.message, 401);
     }
 
     logBackendError({ error, request, route: "GET /api/workspace/brain" });
-    return NextResponse.json({ error: "Failed to build workspace brain view." }, { status: 500 });
+    return apiError("Failed to build workspace brain view.", 500);
   }
 }

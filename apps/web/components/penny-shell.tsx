@@ -1030,9 +1030,11 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
           error: null,
         }));
 
-        const shell = await fetchProjection<ShellContext>("/api/workspace/shell", controller.signal);
-        const mode = activeMode || shell.mode || "brain";
-        const view = await fetchProjection<ProjectionView>(`/api/workspace/${mode}`, controller.signal);
+        const mode = activeMode || "brain";
+        const [shell, view] = await Promise.all([
+          fetchProjection<ShellContext>("/api/workspace/shell", controller.signal),
+          fetchProjection<ProjectionView>(`/api/workspace/${mode}`, controller.signal),
+        ]);
 
         if (!isCurrentLoad()) {
           return;

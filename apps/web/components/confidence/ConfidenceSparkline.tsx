@@ -61,12 +61,12 @@ export function ConfidenceSparkline({
         {linePaths.map((path, index) => (
           <path className="confidence-sparkline__line" d={path} key={`${path}-${index}`} />
         ))}
-        {ratedPoints.map((point) => (
+        {ratedPoints.map((point, index) => (
           <circle
             className="confidence-sparkline__dot"
             cx={point.x}
             cy={point.y}
-            key={`${point.x}-${point.y}-${point.value}`}
+            key={`${point.x}-${point.y}-${point.value}-${index}`}
             r="2.4"
           />
         ))}

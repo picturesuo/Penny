@@ -1,4 +1,5 @@
 import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
+import { logBackendError } from "../../../lib/backend-error-logging";
 import {
   CaptureThoughtError,
   CaptureThoughtValidationError,
@@ -57,11 +58,11 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof CaptureThoughtError) {
-      console.error("POST /ai/capture-thought failed", error);
+      logBackendError({ error, request, route: "POST /ai/capture-thought" });
       return apiError("Failed to capture thought.", 502);
     }
 
-    console.error("POST /ai/capture-thought failed", error);
+    logBackendError({ error, request, route: "POST /ai/capture-thought" });
     return apiError("Failed to capture thought.", 500);
   }
 }

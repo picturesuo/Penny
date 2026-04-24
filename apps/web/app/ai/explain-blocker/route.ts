@@ -1,4 +1,5 @@
 import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
+import { logBackendError } from "../../../lib/backend-error-logging";
 import { explainBlocker, ExplainBlockerValidationError } from "../../../../../server/ai/operations/explainBlocker.ts";
 import { aiOperationLogDeps } from "../../../../../server/ai/services/ai-operation-log.ts";
 import { AI_OPERATIONS } from "../../../../../server/ai/services/operation-names.ts";
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
       return apiError(error.message, 400, error.issues);
     }
 
-    console.error("POST /ai/explain-blocker failed", error);
+    logBackendError({ error, request, route: "POST /ai/explain-blocker" });
     return apiError("Failed to explain blocker.", 500);
   }
 }
