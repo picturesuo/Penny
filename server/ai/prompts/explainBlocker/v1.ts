@@ -1,10 +1,8 @@
 export const EXPLAIN_BLOCKER_PROMPT_VERSION = "explainBlocker.v1";
 
 export type ExplainBlockerPromptInput = {
-  thoughtId?: string;
-  claimId?: string;
-  text?: string;
-  blocker?: string;
+  text: string;
+  sessionId?: string;
 };
 
 export function buildExplainBlockerPromptInput(input: ExplainBlockerPromptInput) {
@@ -13,11 +11,10 @@ export function buildExplainBlockerPromptInput(input: ExplainBlockerPromptInput)
     promptVersion: EXPLAIN_BLOCKER_PROMPT_VERSION,
     input,
     responseFields: [
-      "blockerSummary",
-      "likelyCause",
-      "missingInformation",
-      "nextStep",
-      "confidenceQuestion",
+      "likelyBlocker",
+      "missingConcept",
+      "simplerExplanation",
+      "nextExercise",
     ] as const,
   };
 }

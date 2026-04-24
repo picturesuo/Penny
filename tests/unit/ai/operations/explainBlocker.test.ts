@@ -12,24 +12,24 @@ import {
 
 test("explainBlocker returns all required Learn blocker fields", () => {
   const result = explainBlocker({
-    claimId: "claim-123",
-    blocker: "I am blocked because the customer evidence is unclear.",
+    text: "I am blocked because the customer evidence is unclear.",
   });
 
-  assert.match(result.blockerSummary, /customer evidence is unclear/i);
-  assert.match(result.likelyCause, /dependency|undefined|uncertainty|scope/i);
-  assert.match(result.missingInformation, /source|baseline|example|expected outcome|comparison/i);
-  assert.match(result.nextStep, /question|check|dependency/i);
-  assert.match(result.confidenceQuestion, /20 points/);
+  assert.match(result.likelyBlocker, /unclear definition|dependency|scope|uncertainty/i);
+  assert.equal(result.missingConcept, "Evidence threshold");
+  assert.match(result.simplerExplanation, /customer evidence is unclear/i);
+  assert.match(result.nextExercise, /baseline|metric|change your mind/i);
 });
 
-test("explainBlocker accepts ID-only context for selected ideas", () => {
+test("explainBlocker accepts session context with blocker text", () => {
   const result = explainBlocker({
-    thoughtId: "thought-123",
+    text: "I am not sure why the onboarding example matters.",
+    sessionId: "session-123",
   });
 
-  assert.match(result.blockerSummary, /the selected idea thought-123/);
-  assert.match(result.confidenceQuestion, /thought-123/);
+  assert.match(result.likelyBlocker, /definition|success condition/i);
+  assert.equal(result.missingConcept, "Concrete user example");
+  assert.match(result.nextExercise, /yes\/no question/i);
 });
 
 test("explainBlocker rejects an empty body", () => {
@@ -37,7 +37,7 @@ test("explainBlocker rejects an empty body", () => {
     () => explainBlocker({}),
     (error) => {
       assert.ok(error instanceof ExplainBlockerValidationError);
-      assert.equal(error.message, "Provide at least one of thoughtId, claimId, text, or blocker.");
+      assert.equal(error.message, "text must be a string.");
       return true;
     },
   );
@@ -45,18 +45,17 @@ test("explainBlocker rejects an empty body", () => {
 
 test("explainBlocker prompt input exposes the operation metadata without provider code", () => {
   const promptInput = buildExplainBlockerPromptInput({
-    claimId: "claim-123",
-    blocker: "A test blocker.",
+    text: "A test blocker.",
+    sessionId: "session-123",
   });
 
   assert.equal(EXPLAIN_BLOCKER_PROMPT_VERSION, "explainBlocker.v1");
   assert.equal(promptInput.operation, "explainBlocker");
   assert.equal(promptInput.promptVersion, "explainBlocker.v1");
   assert.deepEqual(promptInput.responseFields, [
-    "blockerSummary",
-    "likelyCause",
-    "missingInformation",
-    "nextStep",
-    "confidenceQuestion",
+    "likelyBlocker",
+    "missingConcept",
+    "simplerExplanation",
+    "nextExercise",
   ]);
 });

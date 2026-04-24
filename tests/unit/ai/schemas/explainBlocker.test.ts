@@ -8,19 +8,17 @@ import {
 
 test("validateExplainBlockerOutput accepts the explain blocker contract", () => {
   const output = validateExplainBlockerOutput({
-    blockerSummary: "The blocker is unclear evidence.",
-    likelyCause: "The success condition is undefined.",
-    missingInformation: "A baseline and threshold are missing.",
-    nextStep: "Write one testable question.",
-    confidenceQuestion: "What answer would raise confidence by 20 points?",
+    likelyBlocker: "The success condition is undefined.",
+    missingConcept: "Evidence threshold",
+    simplerExplanation: "The idea needs a clearer evidence threshold.",
+    nextExercise: "Write one testable question.",
   });
 
   assert.deepEqual(output, {
-    blockerSummary: "The blocker is unclear evidence.",
-    likelyCause: "The success condition is undefined.",
-    missingInformation: "A baseline and threshold are missing.",
-    nextStep: "Write one testable question.",
-    confidenceQuestion: "What answer would raise confidence by 20 points?",
+    likelyBlocker: "The success condition is undefined.",
+    missingConcept: "Evidence threshold",
+    simplerExplanation: "The idea needs a clearer evidence threshold.",
+    nextExercise: "Write one testable question.",
   });
 });
 
@@ -28,12 +26,12 @@ test("validateExplainBlockerOutput rejects missing required fields", () => {
   assert.throws(
     () =>
       validateExplainBlockerOutput({
-        blockerSummary: "Missing the rest.",
+        likelyBlocker: "Missing the rest.",
       }),
     (error) => {
       assert.ok(error instanceof ExplainBlockerOutputValidationError);
-      assert.ok(error.issues.includes("likelyCause must be a non-empty string"));
-      assert.ok(error.issues.includes("confidenceQuestion must be a non-empty string"));
+      assert.ok(error.issues.includes("missingConcept must be a non-empty string"));
+      assert.ok(error.issues.includes("nextExercise must be a non-empty string"));
       return true;
     },
   );

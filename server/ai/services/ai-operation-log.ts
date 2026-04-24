@@ -24,6 +24,7 @@ export type LoggedAIOperationInput<TOutput extends JsonObject> = {
   requestId?: string | null;
   promptVersionId?: string | null;
   sessionId?: string | null;
+  mapId?: string | null;
   thoughtId?: string | null;
   claimId?: string | null;
 };
@@ -117,6 +118,7 @@ export async function runLoggedAIOperation<TOutput extends JsonObject>(
         outputJson: output,
       });
       const now = completedJob.completedAt ?? completedJob.updatedAt;
+      const mapId = isUuid(input.mapId) ? input.mapId : null;
       const claimId = isUuid(input.claimId) ? input.claimId : null;
       const thoughtId = isUuid(input.thoughtId) ? input.thoughtId : null;
       const sessionId = isUuid(input.sessionId) ? input.sessionId : null;
@@ -124,6 +126,7 @@ export async function runLoggedAIOperation<TOutput extends JsonObject>(
       await tx.insert(activityEvents).values({
         userId: input.userId,
         sessionId,
+        mapId,
         thoughtId,
         claimId,
         aiJobId: completedJob.id,

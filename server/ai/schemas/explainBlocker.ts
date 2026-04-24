@@ -1,9 +1,8 @@
 export type ExplainBlockerOutput = {
-  blockerSummary: string;
-  likelyCause: string;
-  missingInformation: string;
-  nextStep: string;
-  confidenceQuestion: string;
+  likelyBlocker: string;
+  missingConcept: string;
+  simplerExplanation: string;
+  nextExercise: string;
 };
 
 export class ExplainBlockerOutputValidationError extends Error {
@@ -17,11 +16,10 @@ export class ExplainBlockerOutputValidationError extends Error {
 }
 
 const requiredFields = [
-  "blockerSummary",
-  "likelyCause",
-  "missingInformation",
-  "nextStep",
-  "confidenceQuestion",
+  "likelyBlocker",
+  "missingConcept",
+  "simplerExplanation",
+  "nextExercise",
 ] as const;
 
 function asRecord(value: unknown): Record<string, unknown> {

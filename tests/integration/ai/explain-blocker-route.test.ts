@@ -36,8 +36,8 @@ test("POST /ai/explain-blocker returns the blocker explanation contract", async 
           "x-request-id": "blocker-route-1",
         },
         body: JSON.stringify({
-          claimId: "claim-123",
-          blocker: "I am stuck because the user evidence is unclear.",
+          text: "I am stuck because the user evidence is unclear.",
+          sessionId: "22222222-2222-4222-8222-222222222222",
         }),
       }),
     );
@@ -46,17 +46,15 @@ test("POST /ai/explain-blocker returns the blocker explanation contract", async 
 
     const payload = (await response.json()) as Record<string, unknown>;
 
-    assert.equal(typeof payload.blockerSummary, "string");
-    assert.equal(typeof payload.likelyCause, "string");
-    assert.equal(typeof payload.missingInformation, "string");
-    assert.equal(typeof payload.nextStep, "string");
-    assert.equal(typeof payload.confidenceQuestion, "string");
+    assert.equal(typeof payload.likelyBlocker, "string");
+    assert.equal(typeof payload.missingConcept, "string");
+    assert.equal(typeof payload.simplerExplanation, "string");
+    assert.equal(typeof payload.nextExercise, "string");
     assert.deepEqual(Object.keys(payload).sort(), [
-      "blockerSummary",
-      "confidenceQuestion",
-      "likelyCause",
-      "missingInformation",
-      "nextStep",
+      "likelyBlocker",
+      "missingConcept",
+      "nextExercise",
+      "simplerExplanation",
     ]);
 
     assert.equal(logCalls.length, 1);
@@ -64,9 +62,10 @@ test("POST /ai/explain-blocker returns the blocker explanation contract", async 
     assert.equal(logCalls[0]?.eventType, "ai.explain_blocker.completed");
     assert.equal(logCalls[0]?.requestId, "blocker-route-1");
     assert.deepEqual(logCalls[0]?.inputJson, {
-      claimId: "claim-123",
-      blocker: "I am stuck because the user evidence is unclear.",
+      text: "I am stuck because the user evidence is unclear.",
+      sessionId: "22222222-2222-4222-8222-222222222222",
     });
+    assert.equal(logCalls[0]?.sessionId, "22222222-2222-4222-8222-222222222222");
   } finally {
     restoreDeps(originalDeps);
   }
@@ -87,7 +86,7 @@ test("POST /ai/explain-blocker requires an authenticated user before logging", a
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          blocker: "I am stuck.",
+          text: "I am stuck.",
         }),
       }),
     );
@@ -109,15 +108,15 @@ test("POST /ai/explain-blocker rejects invalid input", async () => {
         "content-type": "application/json",
         "x-user-id": validUserId,
       },
-      body: JSON.stringify({ blocker: "   " }),
+      body: JSON.stringify({ text: "   " }),
     }),
   );
 
   assert.equal(response.status, 400);
   const payload = (await response.json()) as { error?: string; issues?: string[] };
 
-  assert.equal(payload.error, "blocker must not be blank.");
-  assert.deepEqual(payload.issues, ["blocker must not be blank."]);
+  assert.equal(payload.error, "text must not be blank.");
+  assert.deepEqual(payload.issues, ["text must not be blank."]);
 });
 
 test("POST /ai/explain-blocker rejects malformed JSON", async () => {

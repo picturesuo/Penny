@@ -2,10 +2,8 @@ import { EXPLAIN_BLOCKER_PROMPT_VERSION, buildExplainBlockerPromptInput } from "
 import { validateExplainBlockerOutput, type ExplainBlockerOutput } from "../schemas/explainBlocker.ts";
 
 export type ExplainBlockerInput = {
-  thoughtId?: string;
-  claimId?: string;
-  text?: string;
-  blocker?: string;
+  text: string;
+  sessionId?: string;
 };
 
 export type ExplainBlockerResult = ExplainBlockerOutput;
@@ -21,11 +19,8 @@ export class ExplainBlockerValidationError extends Error {
 }
 
 type NormalizedExplainBlockerInput = {
-  thoughtId?: string;
-  claimId?: string;
-  text?: string;
-  blocker?: string;
-  subject: string;
+  text: string;
+  sessionId?: string;
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -34,6 +29,24 @@ function asRecord(value: unknown): Record<string, unknown> {
   }
 
   return value as Record<string, unknown>;
+}
+
+function readRequiredString(value: unknown, fieldName: string, maxLength: number) {
+  if (typeof value !== "string") {
+    throw new ExplainBlockerValidationError(`${fieldName} must be a string.`);
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    throw new ExplainBlockerValidationError(`${fieldName} must not be blank.`);
+  }
+
+  if (trimmed.length > maxLength) {
+    throw new ExplainBlockerValidationError(`${fieldName} must be at most ${maxLength} characters.`);
+  }
+
+  return trimmed;
 }
 
 function readOptionalString(value: unknown, fieldName: string, maxLength: number) {
@@ -60,25 +73,16 @@ function readOptionalString(value: unknown, fieldName: string, maxLength: number
 
 function normalizeInput(input: unknown): NormalizedExplainBlockerInput {
   const object = asRecord(input);
-  const thoughtId = readOptionalString(object.thoughtId, "thoughtId", 200);
-  const claimId = readOptionalString(object.claimId, "claimId", 200);
-  const text = readOptionalString(object.text, "text", 4000);
-  const blocker = readOptionalString(object.blocker, "blocker", 4000);
-
-  if (!thoughtId && !claimId && !text && !blocker) {
-    throw new ExplainBlockerValidationError("Provide at least one of thoughtId, claimId, text, or blocker.");
-  }
+  const text = readRequiredString(object.text, "text", 4000);
+  const sessionId = readOptionalString(object.sessionId, "sessionId", 200);
 
   return {
-    ...(thoughtId ? { thoughtId } : {}),
-    ...(claimId ? { claimId } : {}),
-    ...(text ? { text } : {}),
-    ...(blocker ? { blocker } : {}),
-    subject: blocker ?? text ?? `the selected idea ${claimId ?? thoughtId}`,
+    text,
+    ...(sessionId ? { sessionId } : {}),
   };
 }
 
-function compactSubject(value: string) {
+function compactText(value: string) {
   const normalized = value.replace(/\s+/g, " ").trim();
 
   if (normalized.length <= 180) {
@@ -88,61 +92,60 @@ function compactSubject(value: string) {
   return `${normalized.slice(0, 177).trim()}...`;
 }
 
-function deriveLikelyCause(subject: string) {
-  if (/\b(don't understand|confus|unclear|not sure|stuck)\b/i.test(subject)) {
-    return "The blocker is probably an undefined term, missing example, or unclear success condition.";
+function deriveLikelyBlocker(text: string) {
+  if (/\b(confus|unclear|not sure|stuck|don't understand)\b/i.test(text)) {
+    return "The likely blocker is an unclear definition or success condition.";
   }
 
-  if (/\b(can't|cannot|blocked|waiting|dependency|depends)\b/i.test(subject)) {
-    return "The blocker is probably an unresolved dependency rather than lack of effort.";
+  if (/\b(can't|cannot|blocked|waiting|dependency|depends)\b/i.test(text)) {
+    return "The likely blocker is an unresolved dependency that needs one explicit owner or answer.";
   }
 
-  if (/\b(too much|overwhelmed|many|complex|complicated)\b/i.test(subject)) {
-    return "The blocker is probably too much scope competing for one next action.";
+  if (/\b(too much|overwhelmed|many|complex|complicated)\b/i.test(text)) {
+    return "The likely blocker is too much scope competing for the next action.";
   }
 
-  return "The blocker is probably a hidden uncertainty that has not been turned into a testable question.";
+  return "The likely blocker is a vague uncertainty that has not been turned into a testable question.";
 }
 
-function deriveMissingInformation(subject: string) {
-  if (/\b(metric|measure|number|data|evidence)\b/i.test(subject)) {
-    return "You need the source, comparison baseline, and threshold that would make the evidence decision-grade.";
+function deriveMissingConcept(text: string) {
+  if (/\b(metric|measure|number|data|evidence)\b/i.test(text)) {
+    return "Evidence threshold";
   }
 
-  if (/\b(user|customer|team|people)\b/i.test(subject)) {
-    return "You need one concrete user or team example that shows where the confusion appears.";
+  if (/\b(user|customer|team|people|onboarding|example)\b/i.test(text)) {
+    return "Concrete user example";
   }
 
-  return "You need the smallest concrete example, the expected outcome, and the condition that would prove it resolved.";
+  if (/\b(because|cause|why|therefore)\b/i.test(text)) {
+    return "Causal mechanism";
+  }
+
+  return "Decision criterion";
 }
 
-function deriveNextStep(subject: string) {
-  if (/\b(can't|cannot|blocked|waiting|dependency|depends)\b/i.test(subject)) {
-    return "Name the dependency owner and write the single question that would unblock the next decision.";
+function deriveNextExercise(text: string) {
+  if (/\b(metric|measure|number|data|evidence)\b/i.test(text)) {
+    return "Write one sentence naming the baseline, the metric, and the result that would change your mind.";
   }
 
-  if (/\b(confus|unclear|not sure|stuck)\b/i.test(subject)) {
-    return "Rewrite the blocker as one yes/no or either/or question, then answer only that question first.";
+  if (/\b(confus|unclear|not sure|stuck|don't understand)\b/i.test(text)) {
+    return "Rewrite the blocker as one yes/no question and answer it with the smallest example you can find.";
   }
 
-  return "Run a ten-minute check: define the blocker, pick one example, and decide what evidence would change your mind.";
+  return "Set a ten-minute timer, pick one concrete example, and write the next observable action.";
 }
 
 export function explainBlocker(input: unknown): ExplainBlockerResult {
   const normalized = normalizeInput(input);
-  const promptInput = buildExplainBlockerPromptInput({
-    thoughtId: normalized.thoughtId,
-    claimId: normalized.claimId,
-    text: normalized.text,
-    blocker: normalized.blocker,
-  });
-  const subject = compactSubject(normalized.subject);
+  const promptInput = buildExplainBlockerPromptInput(normalized);
+  const subject = compactText(normalized.text);
+  const missingConcept = deriveMissingConcept(subject);
   const output = {
-    blockerSummary: `The current blocker is: "${subject}".`,
-    likelyCause: deriveLikelyCause(subject),
-    missingInformation: deriveMissingInformation(subject),
-    nextStep: deriveNextStep(subject),
-    confidenceQuestion: `What answer would make you at least 20 points more confident about moving past "${subject}"?`,
+    likelyBlocker: deriveLikelyBlocker(subject),
+    missingConcept,
+    simplerExplanation: `You are probably stuck because "${subject}" needs a clearer ${missingConcept.toLowerCase()} before the next step is obvious.`,
+    nextExercise: deriveNextExercise(subject),
   };
 
   void promptInput;

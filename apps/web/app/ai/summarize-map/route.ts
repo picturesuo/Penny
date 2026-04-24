@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { explainBlocker, ExplainBlockerValidationError } from "../../../../../server/ai/operations/explainBlocker.ts";
+import {
+  SummarizeMapNotFoundError,
+  SummarizeMapValidationError,
+  summarizeMap,
+} from "../../../../../server/ai/operations/summarizeMap.ts";
 import { aiOperationLogDeps } from "../../../../../server/ai/services/ai-operation-log.ts";
 import { AI_OPERATIONS } from "../../../../../server/ai/services/operation-names.ts";
 import {
@@ -34,33 +38,38 @@ export async function POST(request: Request) {
   try {
     const userId = getRequestUserId(request.headers);
     const requestId = getIdempotencyKey(request.headers, body);
-    const output = explainBlocker(body);
-    const inputJson = {
-      text: readBodyString(body, "text") ?? "",
-      ...(readBodyString(body, "sessionId") ? { sessionId: readBodyString(body, "sessionId") } : {}),
-    };
+    const mapId = readBodyString(body, "mapId") ?? "";
 
-    await aiOperationLogDeps.runLoggedAIOperation({
+    if (!mapId) {
+      return NextResponse.json({ error: "mapId must not be blank.", issues: ["mapId must not be blank."] }, { status: 400 });
+    }
+
+    const inputJson = { mapId };
+    const output = await aiOperationLogDeps.runLoggedAIOperation({
       userId,
-      operation: AI_OPERATIONS.explainBlocker,
+      operation: AI_OPERATIONS.summarizeMap,
       inputJson,
-      run: () => output,
-      eventType: "ai.explain_blocker.completed",
+      run: () => summarizeMap({ userId, mapId }),
+      eventType: "ai.summarize_map.completed",
       requestId,
-      sessionId: readBodyString(body, "sessionId") ?? null,
+      mapId,
     });
 
-    return NextResponse.json(output, { status: 200 });
+    return NextResponse.json(output.output, { status: 200 });
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
-    if (error instanceof ExplainBlockerValidationError) {
+    if (error instanceof SummarizeMapValidationError) {
       return NextResponse.json({ error: error.message, issues: error.issues }, { status: 400 });
     }
 
-    console.error("POST /ai/explain-blocker failed", error);
-    return NextResponse.json({ error: "Failed to explain blocker." }, { status: 500 });
+    if (error instanceof SummarizeMapNotFoundError) {
+      return NextResponse.json({ error: "Map not found." }, { status: 404 });
+    }
+
+    console.error("POST /ai/summarize-map failed", error);
+    return NextResponse.json({ error: "Failed to summarize map." }, { status: 500 });
   }
 }
