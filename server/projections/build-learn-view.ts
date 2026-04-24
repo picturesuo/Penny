@@ -6,7 +6,7 @@ import { claims, maps, workspaceContexts } from "../db/schema.ts";
 import { buildShellView, type BuildShellViewRepository, type WorkspaceShellView } from "./build-shell-view.ts";
 
 export type LearnPlaceholderView = {
-  status: "not_implemented";
+  status: "placeholder";
   message: "Learn mode coming soon";
 };
 
@@ -28,6 +28,7 @@ export type WorkspaceLearnView = {
   selectedClaim: LearnClaimView | null;
   learnState: LearnPlaceholderView;
   status: LearnPlaceholderView["status"];
+  message: LearnPlaceholderView["message"];
 };
 
 export type BuildLearnViewInput = {
@@ -116,9 +117,10 @@ export async function buildLearnView(
         }
       : null,
     learnState: {
-      status: "not_implemented",
+      status: "placeholder",
       message: "Learn mode coming soon",
     },
-    status: "not_implemented",
+    status: "placeholder",
+    message: "Learn mode coming soon",
   };
 }
