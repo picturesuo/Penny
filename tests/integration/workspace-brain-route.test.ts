@@ -129,3 +129,61 @@ test("GET /api/workspace/brain returns claims and the selected claim", async () 
     await sql.end({ timeout: 1 });
   }
 });
+
+test("GET /api/workspace/brain does not expose another user's selected map", async () => {
+  const ownerUserId = "00000000-0000-0000-0000-000000001123";
+  const otherUserId = "00000000-0000-0000-0000-000000001124";
+  const mapId = "00000000-0000-0000-0000-000000001321";
+  const claimId = "00000000-0000-0000-0000-000000001456";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into maps (id, user_id, title)
+      values (${mapId}, ${ownerUserId}, ${"Owner-only Brain map"})
+    `;
+
+    await sql`
+      insert into claims (id, map_id, user_id, body, confidence_bps)
+      values (${claimId}, ${mapId}, ${ownerUserId}, ${"Owner-only claim"}, ${5800})
+    `;
+
+    await sql`
+      insert into workspace_contexts (user_id, map_id, claim_id, mode)
+      values (${otherUserId}, ${mapId}, ${claimId}, ${"brain"})
+    `;
+
+    const response = await GET(
+      new Request("http://localhost/api/workspace/brain", {
+        method: "GET",
+        headers: {
+          "x-user-id": otherUserId,
+        },
+      }),
+    );
+
+    assert.equal(response.status, 200);
+
+    const payload = (await response.json()) as {
+      currentContext: {
+        mode: string;
+        mapId: string | null;
+        claimId: string | null;
+      };
+      mapSummary: { id: string } | null;
+      claims: Array<{ id: string; mapId: string; userId: string }>;
+      selectedClaim: { id: string } | null;
+    };
+
+    assert.deepEqual(payload.currentContext, {
+      mode: "brain",
+      mapId: null,
+      claimId: null,
+    });
+    assert.equal(payload.mapSummary, null);
+    assert.deepEqual(payload.claims, []);
+    assert.equal(payload.selectedClaim, null);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
