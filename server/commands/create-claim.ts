@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
-import { claims, maps, movesEvents } from "../db/schema.ts";
+import { maps, movesEvents } from "../db/schema.ts";
 import { resolveCommandContext } from "./command-context.ts";
 
 export type CreateClaimEventType = "claim.created";
@@ -45,6 +45,23 @@ export type CreateClaimEventRecord = {
   createdAt: Date;
 };
 
+export type CreateClaimActivityEventRecord = {
+  userId: string;
+  sessionId: string | null;
+  aggregateType: "claim";
+  aggregateId: string;
+  requestId: string;
+  type: CreateClaimEventType;
+  payload: {
+    mapId: string;
+    parentClaimId: string | null;
+    kind: string;
+    note: string | null;
+    text: string;
+  };
+  createdAt: Date;
+};
+
 export type CreateClaimRepositoryTx = {
   findMoveEventByRequestId?(input: { userId: string; requestId: string; type: string }): Promise<{
     aggregateId: string;
@@ -53,6 +70,7 @@ export type CreateClaimRepositoryTx = {
   findOwnedMap(input: { mapId: string; userId: string }): Promise<{ id: string; userId: string } | null>;
   insertClaim(record: CreateClaimRecord): Promise<void>;
   insertMoveEvent(event: CreateClaimEventRecord): Promise<void>;
+  insertActivityEvent?(event: CreateClaimActivityEventRecord): Promise<void>;
 };
 
 export type CreateClaimRepository = {
@@ -72,6 +90,7 @@ type CreateClaimDbTx = {
       };
     };
   };
+  execute: (query: unknown) => Promise<unknown>;
   insert: (table: unknown) => {
     values: (value: Record<string, unknown>) => Promise<unknown>;
   };
@@ -279,6 +298,14 @@ export async function createClaim(
     const claimId = createId();
 
     if (isCreateClaimRepositoryTx(tx)) {
+      const eventPayload = {
+        mapId: targetMap.id,
+        parentClaimId: normalized.parentClaimId,
+        kind: normalized.kind,
+        note: normalized.note,
+        text: normalized.text,
+      };
+
       await tx.insertClaim({
         id: claimId,
         userId: commandContext.actorUserId,
@@ -297,25 +324,43 @@ export async function createClaim(
         aggregateId: claimId,
         requestId: commandContext.requestId,
         type: "claim.created",
-        payload: {
-          mapId: targetMap.id,
-          parentClaimId: normalized.parentClaimId,
-          kind: normalized.kind,
-          note: normalized.note,
-          text: normalized.text,
-        },
+        payload: eventPayload,
         createdAt: commandContext.now,
       });
+
+      if (tx.insertActivityEvent) {
+        await tx.insertActivityEvent({
+          userId: commandContext.actorUserId,
+          sessionId: null,
+          aggregateType: "claim",
+          aggregateId: claimId,
+          requestId: commandContext.requestId,
+          type: "claim.created",
+          payload: eventPayload,
+          createdAt: commandContext.now,
+        });
+      }
     } else {
-      await tx.insert(claims).values({
-        id: claimId,
+      const payloadJson = {
         mapId: targetMap.id,
-        userId: commandContext.actorUserId,
-        body: normalized.text,
-        confidenceBps: 0,
-        createdAt: commandContext.now,
-        updatedAt: commandContext.now,
-      });
+        parentClaimId: normalized.parentClaimId,
+        kind: normalized.kind,
+        note: normalized.note,
+        text: normalized.text,
+      };
+
+      await tx.execute(sql`
+        insert into claims (id, map_id, user_id, body, confidence_bps, created_at, updated_at)
+        values (
+          ${claimId},
+          ${targetMap.id},
+          ${commandContext.actorUserId},
+          ${normalized.text},
+          ${0},
+          ${commandContext.now.toISOString()},
+          ${commandContext.now.toISOString()}
+        )
+      `);
 
       await tx.insert(movesEvents).values({
         userId: commandContext.actorUserId,
@@ -323,15 +368,32 @@ export async function createClaim(
         aggregateId: claimId,
         requestId: commandContext.requestId,
         type: "claim.created",
-        payloadJson: {
-          mapId: targetMap.id,
-          parentClaimId: normalized.parentClaimId,
-          kind: normalized.kind,
-          note: normalized.note,
-          text: normalized.text,
-        },
+        payloadJson,
         createdAt: commandContext.now,
       });
+
+      await tx.execute(sql`
+        insert into activity_events (
+          user_id,
+          session_id,
+          aggregate_type,
+          aggregate_id,
+          type,
+          payload_json,
+          request_id,
+          created_at
+        )
+        values (
+          ${commandContext.actorUserId},
+          ${null},
+          ${"claim"},
+          ${claimId},
+          ${"claim.created"},
+          ${JSON.stringify(payloadJson)}::jsonb,
+          ${commandContext.requestId},
+          ${commandContext.now.toISOString()}
+        )
+      `);
     }
 
     return {
