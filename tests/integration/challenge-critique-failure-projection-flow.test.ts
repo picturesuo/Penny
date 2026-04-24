@@ -159,7 +159,7 @@ test("AI failure does not corrupt the challenge round or critique projection", a
       db,
     );
 
-    assert.equal(requestedCritique.status, "pending");
+    assert.equal(requestedCritique.critiqueStatus, "pending");
 
     const failedCritique = await generateChallengeCritique(
       {

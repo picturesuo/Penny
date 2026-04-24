@@ -84,11 +84,13 @@ test("POST /api/commands/challenge/request-critique inserts a pending critique r
 
     const payload = (await response.json()) as {
       critiqueId: string;
-      status: string;
+      roundId: string;
+      critiqueStatus: string;
     };
 
     assert.match(payload.critiqueId, /^[0-9a-f-]{36}$/i);
-    assert.equal(payload.status, "pending");
+    assert.equal(payload.roundId, roundId);
+    assert.equal(payload.critiqueStatus, "pending");
 
     const storedCritiques = await sql<
       {
@@ -174,10 +176,12 @@ test("POST /api/commands/challenge/request-critique replays the original result 
     assert.equal(firstResponse.status, 201);
     assert.equal(secondResponse.status, 201);
 
-    const firstPayload = (await firstResponse.json()) as { critiqueId: string; status: string };
-    const secondPayload = (await secondResponse.json()) as { critiqueId: string; status: string };
+    const firstPayload = (await firstResponse.json()) as { critiqueId: string; roundId: string; critiqueStatus: string };
+    const secondPayload = (await secondResponse.json()) as { critiqueId: string; roundId: string; critiqueStatus: string };
 
     assert.deepEqual(secondPayload, firstPayload);
+    assert.equal(firstPayload.roundId, roundId);
+    assert.equal(firstPayload.critiqueStatus, "pending");
 
     const storedCritiques = await sql`
       select id

@@ -158,7 +158,7 @@ test("requestChallengeCritique leaves a pending placeholder and the challenge pr
       db as never,
     );
 
-    assert.equal(critique.status, "pending");
+    assert.equal(critique.critiqueStatus, "pending");
 
     const response = await getChallenge(requestWithUser("http://localhost/api/workspace/challenge", userId));
     assert.equal(response.status, 200);

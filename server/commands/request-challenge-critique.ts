@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.ts";
-import { challengeCritiques, challengeRounds, movesEvents } from "../db/schema.ts";
+import { challengeCritiques, challengeRounds, claims, maps, movesEvents } from "../db/schema.ts";
 import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
 
 export type RequestChallengeCritiqueEventType = "challenge.critique.requested";
@@ -51,7 +51,17 @@ export type RequestChallengeCritiqueRepositoryTx = {
   findOwnedCritique?(input: {
     critiqueId: string;
     userId: string;
-  }): Promise<{ id: string; status: string; body: string | null } | null>;
+  }): Promise<{ id: string; roundId: string; status: string; body: string | null } | null>;
+  findOwnedCritiqueByRound(input: {
+    roundId: string;
+    userId: string;
+  }): Promise<{ id: string; roundId: string; status: string; body: string | null } | null>;
+  findMapById(input: {
+    mapId: string;
+  }): Promise<{ id: string; userId: string } | null>;
+  findClaimById(input: {
+    claimId: string;
+  }): Promise<{ id: string; mapId: string; userId: string } | null>;
   findRoundById?(input: {
     roundId: string;
   }): Promise<{ id: string; mapId: string; claimId: string; userId: string } | null>;
@@ -60,6 +70,13 @@ export type RequestChallengeCritiqueRepositoryTx = {
     userId: string;
   }): Promise<{ id: string; mapId: string; claimId: string; userId: string } | null>;
   insertChallengeCritique(record: ChallengeCritiqueRecord): Promise<void>;
+  updateChallengeCritiquePlaceholder(record: {
+    id: string;
+    userId: string;
+    status: ChallengeCritiqueStatus;
+    body: string | null;
+    updatedAt: Date;
+  }): Promise<void>;
   insertMoveEvent(event: ChallengeCritiqueRequestedEventRecord): Promise<void>;
 };
 
@@ -76,13 +93,30 @@ type RequestChallengeCritiqueDbRoundRow = {
 
 type RequestChallengeCritiqueDbCritiqueRow = {
   id: string;
+  roundId: string;
   status: string;
   body: string | null;
+};
+
+type RequestChallengeCritiqueDbMapRow = {
+  id: string;
+  userId: string;
+};
+
+type RequestChallengeCritiqueDbClaimRow = {
+  id: string;
+  mapId: string;
+  userId: string;
 };
 
 type RequestChallengeCritiqueDbTx = SelectableDbTx & {
   insert: (table: unknown) => {
     values: (value: Record<string, unknown>) => Promise<unknown>;
+  };
+  update: (table: unknown) => {
+    set: (value: Record<string, unknown>) => {
+      where: (condition: unknown) => Promise<unknown>;
+    };
   };
 };
 
@@ -98,7 +132,8 @@ type RequestChallengeCritiqueTransactional = {
 
 export type RequestChallengeCritiqueResult = {
   critiqueId: string;
-  status: ChallengeCritiqueStatus;
+  roundId: string;
+  critiqueStatus: ChallengeCritiqueStatus;
 };
 
 export type RequestChallengeCritiqueDependencies = {
@@ -211,8 +246,16 @@ function isRequestChallengeCritiqueRepositoryTx(value: unknown): value is Reques
       typeof value === "object" &&
       "findOwnedRound" in value &&
       typeof (value as RequestChallengeCritiqueRepositoryTx).findOwnedRound === "function" &&
+      "findOwnedCritiqueByRound" in value &&
+      typeof (value as RequestChallengeCritiqueRepositoryTx).findOwnedCritiqueByRound === "function" &&
+      "findMapById" in value &&
+      typeof (value as RequestChallengeCritiqueRepositoryTx).findMapById === "function" &&
+      "findClaimById" in value &&
+      typeof (value as RequestChallengeCritiqueRepositoryTx).findClaimById === "function" &&
       "insertChallengeCritique" in value &&
       typeof (value as RequestChallengeCritiqueRepositoryTx).insertChallengeCritique === "function" &&
+      "updateChallengeCritiquePlaceholder" in value &&
+      typeof (value as RequestChallengeCritiqueRepositoryTx).updateChallengeCritiquePlaceholder === "function" &&
       "insertMoveEvent" in value &&
       typeof (value as RequestChallengeCritiqueRepositoryTx).insertMoveEvent === "function",
   );
@@ -235,7 +278,7 @@ export function validateRequestChallengeCritiqueInput(input: unknown): Normalize
 async function findOwnedCritique(
   tx: RequestChallengeCritiqueTx,
   input: { critiqueId: string; userId: string },
-): Promise<{ id: string; status: string; body: string | null } | null> {
+): Promise<{ id: string; roundId: string; status: string; body: string | null } | null> {
   if (isRequestChallengeCritiqueRepositoryTx(tx) && tx.findOwnedCritique) {
     return (await tx.findOwnedCritique(input)) ?? null;
   }
@@ -247,12 +290,80 @@ async function findOwnedCritique(
   const rows = (await tx
     .select({
       id: challengeCritiques.id,
+      roundId: challengeCritiques.roundId,
       status: challengeCritiques.status,
       body: challengeCritiques.body,
     })
     .from(challengeCritiques)
     .where(and(eq(challengeCritiques.id, input.critiqueId), eq(challengeCritiques.userId, input.userId)))
     .limit(1)) as RequestChallengeCritiqueDbCritiqueRow[];
+
+  return rows[0] ?? null;
+}
+
+async function findOwnedCritiqueByRound(
+  tx: RequestChallengeCritiqueTx,
+  input: { roundId: string; userId: string },
+): Promise<{ id: string; roundId: string; status: string; body: string | null } | null> {
+  if (isRequestChallengeCritiqueRepositoryTx(tx)) {
+    return tx.findOwnedCritiqueByRound(input);
+  }
+
+  if (!hasSelectQuery(tx)) {
+    return null;
+  }
+
+  const rows = (await tx
+    .select({
+      id: challengeCritiques.id,
+      roundId: challengeCritiques.roundId,
+      status: challengeCritiques.status,
+      body: challengeCritiques.body,
+    })
+    .from(challengeCritiques)
+    .where(and(eq(challengeCritiques.roundId, input.roundId), eq(challengeCritiques.userId, input.userId)))
+    .limit(1)) as RequestChallengeCritiqueDbCritiqueRow[];
+
+  return rows[0] ?? null;
+}
+
+async function findMapById(
+  tx: RequestChallengeCritiqueTx,
+  input: { mapId: string },
+): Promise<{ id: string; userId: string } | null> {
+  if (isRequestChallengeCritiqueRepositoryTx(tx)) {
+    return tx.findMapById(input);
+  }
+
+  const rows = (await tx
+    .select({
+      id: maps.id,
+      userId: maps.userId,
+    })
+    .from(maps)
+    .where(eq(maps.id, input.mapId))
+    .limit(1)) as RequestChallengeCritiqueDbMapRow[];
+
+  return rows[0] ?? null;
+}
+
+async function findClaimById(
+  tx: RequestChallengeCritiqueTx,
+  input: { claimId: string },
+): Promise<{ id: string; mapId: string; userId: string } | null> {
+  if (isRequestChallengeCritiqueRepositoryTx(tx)) {
+    return tx.findClaimById(input);
+  }
+
+  const rows = (await tx
+    .select({
+      id: claims.id,
+      mapId: claims.mapId,
+      userId: claims.userId,
+    })
+    .from(claims)
+    .where(eq(claims.id, input.claimId))
+    .limit(1)) as RequestChallengeCritiqueDbClaimRow[];
 
   return rows[0] ?? null;
 }
@@ -281,6 +392,32 @@ async function findRoundForChallengeCritique(
       .where(eq(challengeRounds.id, input.roundId))
       .limit(1)) as RequestChallengeCritiqueDbRoundRow[]
   )[0] ?? null;
+}
+
+async function updateCritiquePlaceholder(
+  tx: RequestChallengeCritiqueTx,
+  record: {
+    id: string;
+    userId: string;
+    status: ChallengeCritiqueStatus;
+    body: string | null;
+    updatedAt: Date;
+  },
+) {
+  if (isRequestChallengeCritiqueRepositoryTx(tx)) {
+    await tx.updateChallengeCritiquePlaceholder(record);
+    return;
+  }
+
+  await tx
+    .update(challengeCritiques)
+    .set({
+      status: record.status,
+      body: record.body,
+      critiqueJson: null,
+      updatedAt: record.updatedAt,
+    })
+    .where(and(eq(challengeCritiques.id, record.id), eq(challengeCritiques.userId, record.userId)));
 }
 
 async function insertCritiqueEvent(
@@ -329,7 +466,10 @@ export async function requestChallengeCritique(
 
       return {
         critiqueId: existingEvent.aggregateId,
-        status: existingCritique ? normalizeStoredStatus(existingCritique.status) : readPayloadStatus(existingEvent.payload),
+        roundId:
+          existingCritique?.roundId ??
+          (typeof existingEvent.payload?.roundId === "string" ? existingEvent.payload.roundId : normalized.roundId),
+        critiqueStatus: readPayloadStatus(existingEvent.payload),
       };
     }
 
@@ -346,10 +486,35 @@ export async function requestChallengeCritique(
       throw new RequestChallengeCritiqueRoundForbiddenError(normalized.roundId);
     }
 
-    const timestamp = now();
-    const critiqueId = createId();
+    const targetMap = await findMapById(tx, { mapId: targetRound.mapId });
+    const targetClaim = await findClaimById(tx, { claimId: targetRound.claimId });
 
-    if (isRequestChallengeCritiqueRepositoryTx(tx)) {
+    if (
+      !targetMap ||
+      !targetClaim ||
+      targetMap.userId !== normalized.userId ||
+      targetClaim.userId !== normalized.userId ||
+      targetClaim.mapId !== targetRound.mapId
+    ) {
+      throw new RequestChallengeCritiqueRoundForbiddenError(normalized.roundId);
+    }
+
+    const timestamp = now();
+    const existingCritique = await findOwnedCritiqueByRound(tx, {
+      roundId: targetRound.id,
+      userId: normalized.userId,
+    });
+    const critiqueId = existingCritique?.id ?? createId();
+
+    if (existingCritique) {
+      await updateCritiquePlaceholder(tx, {
+        id: critiqueId,
+        userId: normalized.userId,
+        status: PENDING_STATUS,
+        body: null,
+        updatedAt: timestamp,
+      });
+    } else if (isRequestChallengeCritiqueRepositoryTx(tx)) {
       await tx.insertChallengeCritique({
         id: critiqueId,
         roundId: targetRound.id,
@@ -392,7 +557,8 @@ export async function requestChallengeCritique(
 
     return {
       critiqueId,
-      status: PENDING_STATUS,
+      roundId: targetRound.id,
+      critiqueStatus: PENDING_STATUS,
     };
   });
 }

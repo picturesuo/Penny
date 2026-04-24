@@ -194,7 +194,7 @@ test("backend MVP commands, projections, and required event trail stay coherent"
       db,
     );
 
-    assert.equal(critique.status, "pending");
+    assert.equal(critique.critiqueStatus, "pending");
 
     const challengeSelection = await setWorkspaceSelection(
       {

@@ -194,7 +194,7 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
       db,
     );
 
-    assert.equal(critique.status, "pending");
+    assert.equal(critique.critiqueStatus, "pending");
 
     const challengeResponse = await getChallenge(requestWithUser("http://localhost/api/workspace/challenge", userId));
     assert.equal(challengeResponse.status, 200);
