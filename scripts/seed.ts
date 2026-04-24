@@ -4,7 +4,7 @@ import postgres from "postgres";
 import { createClaim } from "../server/commands/create-claim.ts";
 import { createMap } from "../server/commands/create-map.ts";
 import { setWorkspaceSelection } from "../server/commands/set-workspace-selection.ts";
-import { getRuntimeDatabaseUrl } from "../server/db/client.ts";
+import { closeDb, getRuntimeDatabaseUrl } from "../server/db/client.ts";
 
 export const DEFAULT_SEED_USER_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -705,9 +705,13 @@ export async function seedMvpBackend(config = readSeedConfig()): Promise<SeedRes
 }
 
 async function main() {
-  const result = await seedMvpBackend();
+  try {
+    const result = await seedMvpBackend();
 
-  console.log(JSON.stringify({ ok: true, seed: result }, null, 2));
+    console.log(JSON.stringify({ ok: true, seed: result }, null, 2));
+  } finally {
+    await closeDb();
+  }
 }
 
 const isMain = process.argv[1] ? pathToFileURL(process.argv[1]).href === import.meta.url : false;

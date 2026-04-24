@@ -55,5 +55,15 @@ export function getDb() {
   return globalForDb.__pennyDbClient;
 }
 
+export async function closeDb() {
+  const sql = globalForDb.__pennyPostgresClient;
+
+  globalForDb.__pennyDatabaseUrl = undefined;
+  globalForDb.__pennyPostgresClient = undefined;
+  globalForDb.__pennyDbClient = undefined;
+
+  await sql?.end({ timeout: 1 });
+}
+
 export { getRuntimeDatabaseUrl };
 export type { DbClient, PostgresClient };
