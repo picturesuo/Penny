@@ -56,6 +56,11 @@ test("createBrainViewModel maps Brain projection claims into thought stream and 
   assert.equal(model.context.sphereLabel, "No sphere projected");
   assert.equal(model.context.claimCountLabel, "2 thoughts");
   assert.equal(model.stream.length, 2);
+  assert.deepEqual(
+    model.stream.map((thought) => thought.id),
+    ["claim-2", "claim-1"],
+  );
+  assert.equal(model.stream[0]?.bodyPreview, "The wedge should start with founder-led diligence workflows.");
   assert.equal(model.selectedThought?.id, "claim-2");
   assert.equal(model.selectedThought?.confidenceLabel, "81% confidence");
   assert.equal(model.inspector.status, "Selected thought");
