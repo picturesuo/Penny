@@ -8,7 +8,7 @@ import {
   getRequestUserId,
 } from "../../../../../server/auth/get-request-user-id.ts";
 import { getDb } from "../../../../../server/db/client.ts";
-import { claims, confidenceRatings, graphNodes, movesEvents, thoughts } from "../../../../../server/db/schema.ts";
+import { activityEvents, claims, confidenceRatings, graphNodes, movesEvents, thoughts } from "../../../../../server/db/schema.ts";
 import { getIdempotencyKey } from "../../../../../server/idempotency/get-idempotency-key.ts";
 
 type ConfidenceTarget = {
@@ -212,6 +212,28 @@ async function recordConfidence(input: {
 
     await tx.insert(movesEvents).values({
       userId: input.userId,
+      aggregateType: input.target.aggregateType,
+      aggregateId: input.target.id,
+      type: "confidence.recorded",
+      requestId: input.requestId,
+      payloadJson: {
+        confidenceRatingId: createdRating.id,
+        ratingBps: input.ratingBps,
+        source: input.source,
+        target: {
+          type: input.target.aggregateType,
+          id: input.target.id,
+        },
+      },
+      createdAt: now,
+    });
+
+    await tx.insert(activityEvents).values({
+      userId: input.userId,
+      thoughtId: input.target.key === "thoughtId" ? input.target.id : null,
+      claimId: input.target.key === "claimId" ? input.target.id : null,
+      graphNodeId: input.target.key === "graphNodeId" ? input.target.id : null,
+      confidenceRatingId: createdRating.id,
       aggregateType: input.target.aggregateType,
       aggregateId: input.target.id,
       type: "confidence.recorded",

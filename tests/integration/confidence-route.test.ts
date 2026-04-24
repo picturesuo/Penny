@@ -180,6 +180,46 @@ test("POST /api/confidence records percent confidence for an owned claim", async
         request_id: "confidence-route-test-request",
       },
     ]);
+
+    const activityEvents = await sql<
+      Array<{
+        type: string;
+        aggregate_type: string;
+        aggregate_id: string | null;
+        claim_id: string | null;
+        confidence_rating_id: string | null;
+        request_id: string | null;
+        payload_json: {
+          confidenceRatingId?: unknown;
+          ratingBps?: unknown;
+          source?: unknown;
+          target?: { type?: unknown; id?: unknown };
+        };
+      }>
+    >`
+      select type, aggregate_type, aggregate_id, claim_id, confidence_rating_id, request_id, payload_json
+      from activity_events
+      where confidence_rating_id = ${payload.confidence.id}
+    `;
+    assert.deepEqual([...activityEvents], [
+      {
+        type: "confidence.recorded",
+        aggregate_type: "claim",
+        aggregate_id: seeded.claimId,
+        claim_id: seeded.claimId,
+        confidence_rating_id: payload.confidence.id,
+        request_id: "confidence-route-test-request",
+        payload_json: {
+          confidenceRatingId: payload.confidence.id,
+          ratingBps: 7400,
+          source: "manual",
+          target: {
+            type: "claim",
+            id: seeded.claimId,
+          },
+        },
+      },
+    ]);
   } finally {
     await sql.end({ timeout: 1 });
   }
