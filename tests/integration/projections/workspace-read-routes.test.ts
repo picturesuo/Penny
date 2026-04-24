@@ -122,6 +122,8 @@ test("workspace GET routes return shell, brain, challenge, and learn projections
       selectedClaimId: string | null;
       selectedClaim: { id: string; body: string; confidenceBps: number } | null;
       learnState: { status: string; message: string };
+      status: string;
+      message: string;
     };
 
     assert.equal(shellPayload.mode, "challenge");
@@ -191,8 +193,10 @@ test("workspace GET routes return shell, brain, challenge, and learn projections
     assert.equal(learnPayload.selectedClaimId, selectedClaimId);
     assert.equal(learnPayload.selectedClaim?.id, selectedClaimId);
     assert.equal(learnPayload.selectedClaim?.confidenceBps, 7200);
+    assert.equal(learnPayload.status, "placeholder");
+    assert.equal(learnPayload.message, "Learn mode coming soon");
     assert.deepEqual(learnPayload.learnState, {
-      status: "not_implemented",
+      status: "placeholder",
       message: "Learn mode coming soon",
     });
   } finally {
