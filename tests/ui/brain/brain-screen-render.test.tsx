@@ -133,6 +133,9 @@ test("BrainScreen renders the empty Brain state", () => {
   assert.match(html, /Guided first-run empty state/);
   assert.match(html, /Start by giving Penny one belief to remember/);
   assert.match(html, /Penny should help me trace one raw product belief/);
+  assert.match(html, /I think Penny should help me think better, not just store notes/);
+  assert.match(html, /Challenge my current backend architecture/);
+  assert.match(html, /Explain what is blocking this idea from becoming useful/);
   assert.match(html, /Capture the raw thought/);
   assert.match(html, /Use this prompt/);
   assert.match(html, /No map selected/);

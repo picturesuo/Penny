@@ -21,6 +21,11 @@ const workspaceModes = [
 
 const firstThoughtPrompt =
   "Penny should help me trace one raw product belief from thought to claim, critique, and next learning step.";
+const samplePrompts = [
+  "I think Penny should help me think better, not just store notes.",
+  "Challenge my current backend architecture.",
+  "Explain what is blocking this idea from becoming useful.",
+] as const;
 
 const styles = {
   shell: {
@@ -367,6 +372,21 @@ const styles = {
   firstRunStep: {
     listStyle: "none",
   },
+  samplePromptList: {
+    display: "grid",
+    gap: 8,
+    margin: 0,
+    padding: 0,
+  },
+  samplePromptItem: {
+    background: "#fbfcf7",
+    border: "1px solid #d8ded5",
+    borderRadius: 8,
+    color: "#17201b",
+    lineHeight: 1.45,
+    listStyle: "none",
+    padding: 12,
+  },
   status: {
     color: "#637069",
     margin: "12px 0 0",
@@ -601,6 +621,16 @@ function FirstRunFallback({ onNewThought }: { onNewThought?: () => void }) {
         <li style={styles.firstRunStep}>2. Extract one claim Penny can track.</li>
         <li style={styles.firstRunStep}>3. Challenge it, then use Learn to explain the blocker.</li>
       </ul>
+      <section aria-label="Sample first-run prompts">
+        <p style={styles.eyebrow}>Sample prompts</p>
+        <ul style={styles.samplePromptList}>
+          {samplePrompts.map((prompt) => (
+            <li key={prompt} style={styles.samplePromptItem}>
+              {prompt}
+            </li>
+          ))}
+        </ul>
+      </section>
       <button onClick={onNewThought} style={styles.primaryButton} type="button">
         Use this prompt
       </button>
