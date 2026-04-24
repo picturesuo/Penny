@@ -274,7 +274,7 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
 
     assert.deepEqual(responseResult, {
       roundId: round.roundId,
-      status: "responded",
+      responseRecorded: true,
     });
 
     await setWorkspaceSelection(
