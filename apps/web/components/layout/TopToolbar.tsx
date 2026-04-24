@@ -10,6 +10,7 @@ const defaultCommandItems: CommandPaletteItem[] = [
     type: "session",
     title: "Brain session",
     subtitle: "Jump to Brain",
+    confidence: null,
     href: "/workspace?mode=brain",
     keywords: ["workspace", "mode", "thoughts"],
     onSelect: () => {
@@ -21,6 +22,7 @@ const defaultCommandItems: CommandPaletteItem[] = [
     type: "session",
     title: "Challenge session",
     subtitle: "Jump to Challenge",
+    confidence: null,
     href: "/workspace?mode=challenge",
     keywords: ["workspace", "mode", "claims"],
     onSelect: () => {
@@ -32,6 +34,7 @@ const defaultCommandItems: CommandPaletteItem[] = [
     type: "session",
     title: "Learn session",
     subtitle: "Jump to Learn",
+    confidence: null,
     href: "/workspace?mode=learn",
     keywords: ["workspace", "mode"],
     onSelect: () => {

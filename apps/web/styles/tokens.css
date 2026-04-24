@@ -1,32 +1,32 @@
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 
   --font-sans: "Avenir Next", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
 
-  --color-canvas: #f4f2ea;
-  --color-canvas-raised: #fbfaf5;
-  --color-panel: #fffdf7;
-  --color-panel-muted: #f7f4ea;
-  --color-ink: #171b18;
-  --color-ink-soft: #42483f;
-  --color-muted: #687064;
-  --color-faint: #858d81;
-  --color-line: #ddd8c9;
-  --color-line-strong: #c8c0ad;
+  --color-canvas: #0d1210;
+  --color-canvas-raised: rgba(20, 28, 24, 0.88);
+  --color-panel: rgba(23, 32, 27, 0.78);
+  --color-panel-muted: rgba(255, 253, 247, 0.07);
+  --color-ink: #f6f1e6;
+  --color-ink-soft: #d6d0c2;
+  --color-muted: #a7ad9f;
+  --color-faint: #777f72;
+  --color-line: rgba(255, 253, 247, 0.12);
+  --color-line-strong: rgba(255, 253, 247, 0.22);
   --color-inverse: #fffdf7;
-  --color-success: #256a4a;
-  --color-danger: #a23b32;
+  --color-success: #8fc9a8;
+  --color-danger: #e39386;
 
-  --color-mode-brain: #2e6c57;
-  --color-mode-brain-soft: #e4f0ea;
-  --color-mode-brain-ink: #164b3a;
-  --color-mode-challenge: #b45f3b;
-  --color-mode-challenge-soft: #f7e5da;
-  --color-mode-challenge-ink: #7b351f;
-  --color-mode-learn: #426f8c;
-  --color-mode-learn-soft: #e2edf3;
-  --color-mode-learn-ink: #254f69;
+  --color-mode-brain: #69b99a;
+  --color-mode-brain-soft: rgba(105, 185, 154, 0.16);
+  --color-mode-brain-ink: #bce4d3;
+  --color-mode-challenge: #dc8c63;
+  --color-mode-challenge-soft: rgba(220, 140, 99, 0.16);
+  --color-mode-challenge-ink: #f1c3aa;
+  --color-mode-learn: #83b7d8;
+  --color-mode-learn-soft: rgba(131, 183, 216, 0.16);
+  --color-mode-learn-ink: #c4e0ef;
 
   --space-0: 0;
   --space-1: 4px;
@@ -58,9 +58,14 @@
   --border-subtle: 1px solid var(--color-line);
   --border-strong: 1px solid var(--color-line-strong);
 
-  --shadow-sm: 0 1px 2px rgba(24, 27, 24, 0.06);
-  --shadow-md: 0 14px 34px rgba(24, 27, 24, 0.08);
-  --shadow-lg: 0 24px 70px rgba(24, 27, 24, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 18px 48px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.36);
+
+  --glass-panel: linear-gradient(145deg, rgba(255, 253, 247, 0.1), rgba(255, 253, 247, 0.045));
+  --glass-border: 1px solid rgba(255, 253, 247, 0.14);
+  --glass-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  --glass-blur: blur(22px);
 
   --shell-sidebar-width: 280px;
   --shell-inspector-width: 320px;

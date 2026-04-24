@@ -48,6 +48,8 @@ function createSearchTodoItem(): CommandPaletteItem {
     type: "session",
     title: "TODO: Connect backend global search",
     subtitle: "Using frontend-only placeholder results until /api/search exists.",
+    confidence: null,
+    href: null,
     disabled: true,
     keywords: ["todo", "search", "backend", "placeholder"],
     onSelect: () => undefined,
