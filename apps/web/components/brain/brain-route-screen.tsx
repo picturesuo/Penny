@@ -97,17 +97,20 @@ export function BrainRouteScreen() {
   }, [selectedThoughtId, state]);
 
   if (state.status === "loading") {
-    return <BrainScreen model={createBrainViewModel(emptyBrainProjection())} statusMessage="Loading Brain projection." />;
+    return <BrainScreen model={createBrainViewModel(emptyBrainProjection())} state="loading" statusMessage="Loading Brain projection." />;
   }
 
   if (state.status === "error") {
-    return <BrainScreen model={createBrainViewModel(emptyBrainProjection())} statusMessage={state.error} />;
+    return <BrainScreen model={createBrainViewModel(emptyBrainProjection())} state="error" statusMessage={state.error} />;
   }
+
+  const model = createBrainViewModel(projection ?? state.projection);
 
   return (
     <BrainScreen
-      model={createBrainViewModel(projection ?? state.projection)}
+      model={model}
       onSelectThought={setSelectedThoughtId}
+      state={model.stream.length > 0 ? "populated" : "empty"}
       statusMessage="Projection loaded from /api/workspace/brain."
     />
   );
