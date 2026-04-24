@@ -128,7 +128,7 @@ test("GET /api/workspace/learn returns shell context, selected IDs, and a placeh
     assert.equal(payload.selectedMapId, mapId);
     assert.equal(payload.selectedClaimId, claimId);
     assert.deepEqual(payload.learnState, {
-      status: "not_implemented",
+      status: "placeholder",
       message: "Learn mode coming soon",
     });
   } finally {
