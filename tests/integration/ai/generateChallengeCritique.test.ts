@@ -105,3 +105,70 @@ test("generateChallengeCritique falls back from the default Anthropic route to t
     restoreDeps(originalDeps);
   }
 });
+
+test("generateChallengeCritique succeeds without any database configuration when providers are mocked", async () => {
+  const originalDeps = snapshotDeps();
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  const previousDatabaseDirectUrl = process.env.DATABASE_DIRECT_URL;
+
+  applyCommonTestDeps();
+  delete process.env.DATABASE_URL;
+  delete process.env.DATABASE_DIRECT_URL;
+  generateChallengeCritiqueDeps.invokeAnthropicStructured = async () => ({
+    output: {
+      summary: "The claim may overfit to a founder-supported pilot cohort.",
+      strongestCounterargument:
+        "The observed retention lift may come from unusually motivated early users rather than a durable product effect.",
+      assumptions: [
+        "Pilot users resemble the broader target segment.",
+        "Manual onboarding is not doing most of the retention work.",
+      ],
+      failureModes: [
+        "Retention falls once founder-led onboarding is removed.",
+        "Only the most motivated users sustain the behavior change.",
+      ],
+      followUpQuestions: [
+        "What happens to retention when onboarding becomes fully self-serve?",
+        "Which user segment falsifies this claim fastest?",
+      ],
+      suggestedConfidenceBps: 4700,
+      uncertaintyNote: "The current evidence is directionally useful but still narrow.",
+    },
+    usage: {
+      inputTokens: 50,
+      outputTokens: 30,
+      totalTokens: 80,
+    },
+    cost: {
+      totalUsd: 0.004,
+      currency: "USD",
+    },
+  });
+  generateChallengeCritiqueDeps.invokeXaiStructured = async () => {
+    throw new Error("xai should not be called");
+  };
+
+  try {
+    const result = await generateChallengeCritique({
+      claimText: validInput.claimText,
+    });
+
+    assert.equal(result.provider, "anthropic");
+    assert.equal(result.fallbackUsed, false);
+    assert.equal(result.critique.summary, "The claim may overfit to a founder-supported pilot cohort.");
+  } finally {
+    if (previousDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    if (previousDatabaseDirectUrl === undefined) {
+      delete process.env.DATABASE_DIRECT_URL;
+    } else {
+      process.env.DATABASE_DIRECT_URL = previousDatabaseDirectUrl;
+    }
+
+    restoreDeps(originalDeps);
+  }
+});
