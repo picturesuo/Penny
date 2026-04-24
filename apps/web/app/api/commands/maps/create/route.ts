@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { logBackendError } from "../../../../../lib/backend-error-logging";
 import { CreateMapValidationError, createMap } from "../../../../../../../server/commands/create-map.ts";
 import {
   RequestUserNotAuthenticatedError,
@@ -42,7 +44,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    console.error("POST /api/commands/maps/create failed", error);
+    logBackendError({ error, request, route: "POST /api/commands/maps/create" });
     return NextResponse.json({ error: "Failed to create map." }, { status: 500 });
   }
 }

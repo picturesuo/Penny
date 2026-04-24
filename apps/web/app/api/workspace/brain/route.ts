@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { logBackendError } from "../../../../lib/backend-error-logging";
 import {
   RequestUserNotAuthenticatedError,
   getRequestUserId,
@@ -16,7 +18,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
-    console.error("GET /api/workspace/brain failed", error);
+    logBackendError({ error, request, route: "GET /api/workspace/brain" });
     return NextResponse.json({ error: "Failed to build workspace brain view." }, { status: 500 });
   }
 }

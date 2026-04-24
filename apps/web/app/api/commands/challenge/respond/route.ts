@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { logBackendError } from "../../../../../lib/backend-error-logging";
 import {
   RecordChallengeResponseRoundForbiddenError,
   RecordChallengeResponseRoundNotFoundError,
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
-    console.error("POST /api/commands/challenge/respond failed", error);
+    logBackendError({ error, request, route: "POST /api/commands/challenge/respond" });
     return NextResponse.json({ error: "Failed to record challenge response." }, { status: 500 });
   }
 }

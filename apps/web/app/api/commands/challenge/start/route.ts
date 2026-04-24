@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { pathToFileURL } from "node:url";
 
+import { logBackendError } from "../../../../../lib/backend-error-logging";
 import {
   RequestUserNotAuthenticatedError,
   getRequestUserId,
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
-    console.error("POST /api/commands/challenge/start failed", error);
+    logBackendError({ error, request, route: "POST /api/commands/challenge/start" });
     return NextResponse.json({ error: "Failed to start challenge round." }, { status: 500 });
   }
 }

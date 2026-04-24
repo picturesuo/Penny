@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { logBackendError } from "../../../../../lib/backend-error-logging";
 import {
   SetWorkspaceSelectionClaimForbiddenError,
   SetWorkspaceSelectionClaimNotFoundError,
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
-    console.error("POST /api/commands/workspace/select failed", error);
+    logBackendError({ error, request, route: "POST /api/commands/workspace/select" });
     return NextResponse.json({ error: "Failed to set workspace selection." }, { status: 500 });
   }
 }

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { logBackendError } from "../../../../../lib/backend-error-logging";
 import {
   CreateClaimMapForbiddenError,
   CreateClaimMapNotFoundError,
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
-    console.error("POST /api/commands/claims/create failed", error);
+    logBackendError({ error, request, route: "POST /api/commands/claims/create" });
     return NextResponse.json({ error: "Failed to create claim." }, { status: 500 });
   }
 }

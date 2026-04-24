@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createBrainGraph, createChallengeGraph, createLearnGraph } from "../../../components/graph/graph-adapters.ts";
+import { logBackendError } from "../../../lib/backend-error-logging";
 import {
   RequestUserNotAuthenticatedError,
   getRequestUserId,
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
-    console.error("GET /api/graph failed", error);
+    logBackendError({ error, request, route: "GET /api/graph" });
     return NextResponse.json({ error: "Failed to build graph view." }, { status: 500 });
   }
 }
