@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 
+import { AI_OPERATIONS } from "../services/operation-names.ts";
 import type { DbClient } from "../../db/client.ts";
 import { getDb } from "../../db/client.ts";
-import { claims, graphEdges, graphNodes, thoughts } from "../../db/schema.ts";
+import { activityEvents, aiJobs, claims, graphEdges, graphNodes, thoughts } from "../../db/schema.ts";
 
 export type SuggestConnectionsTargetType = "thought" | "claim";
 
@@ -21,7 +22,7 @@ export type SuggestConnectionsEntity = {
   text: string;
 };
 
-export type SuggestedConnectionRelation = "related" | "supports" | "contradicts";
+export type SuggestedConnectionRelation = "related" | "supports" | "depends_on";
 
 export type SuggestedConnection = {
   targetType: SuggestConnectionsTargetType;
@@ -30,6 +31,7 @@ export type SuggestedConnection = {
   confidenceBps: number;
   reason: string;
   sharedTerms: string[];
+  contradictionDetected: boolean;
   autoCreated: boolean;
 };
 
@@ -43,6 +45,7 @@ export type CreatedConnectionEdge = {
 };
 
 export type SuggestConnectionsResult = {
+  aiJobId: string;
   target: SuggestConnectionsEntity;
   suggestions: SuggestedConnection[];
   createdEdges: CreatedConnectionEdge[];
@@ -83,6 +86,30 @@ export type SuggestConnectionsRepository = {
     relation: SuggestedConnectionRelation;
     confidenceBps: number;
     metadata: Record<string, unknown>;
+    createdAt: Date;
+  }): Promise<void>;
+  insertAIJob(record: {
+    userId: string;
+    inputJson: Record<string, unknown>;
+    createdAt: Date;
+  }): Promise<{ id: string }>;
+  completeAIJob(record: {
+    id: string;
+    outputJson: Record<string, unknown>;
+    completedAt: Date;
+  }): Promise<void>;
+  failAIJob(record: {
+    id: string;
+    errorMessage: string;
+    completedAt: Date;
+  }): Promise<void>;
+  insertActivityEvent(record: {
+    id: string;
+    userId: string;
+    aiJobId: string;
+    target: SuggestConnectionsEntity;
+    graphEdgeId: string | null;
+    outputJson: Record<string, unknown>;
     createdAt: Date;
   }): Promise<void>;
 };
@@ -172,6 +199,25 @@ const ANTONYM_PAIRS: Array<[string, string]> = [
   ["trust", "doubt"],
 ];
 
+const DEPENDENCY_TERMS = [
+  "because",
+  "block",
+  "blocks",
+  "blocked",
+  "depends",
+  "depending",
+  "enables",
+  "enable",
+  "needs",
+  "need",
+  "prerequisite",
+  "requires",
+  "require",
+  "relies",
+  "rely",
+  "unless",
+];
+
 function asObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new SuggestConnectionsValidationError("suggestConnections input must be an object.");
@@ -251,6 +297,12 @@ function hasAntonymPair(leftTokens: Set<string>, rightTokens: Set<string>) {
   );
 }
 
+function hasDependencyCue(text: string, tokens: string[]) {
+  const lowerText = text.toLowerCase();
+
+  return DEPENDENCY_TERMS.some((term) => tokens.includes(term) || lowerText.includes(term));
+}
+
 function scoreCandidate(target: SuggestConnectionsEntity, candidate: SuggestConnectionsEntity): SuggestedConnection | null {
   const targetTokens = tokenize(target.text);
   const candidateTokens = tokenize(candidate.text);
@@ -261,23 +313,26 @@ function scoreCandidate(target: SuggestConnectionsEntity, candidate: SuggestConn
   const jaccard = sharedTerms.length / unionSize;
   const negationMismatch = hasNegation(targetTokens) !== hasNegation(candidateTokens);
   const antonymPair = hasAntonymPair(targetTokenSet, candidateTokenSet);
-  const contradicts = sharedTerms.length >= 2 && (negationMismatch || antonymPair);
+  const contradictionDetected = sharedTerms.length >= 2 && (negationMismatch || antonymPair);
+  const dependencyCue = hasDependencyCue(target.text, targetTokens) || hasDependencyCue(candidate.text, candidateTokens);
 
-  if (!contradicts && sharedTerms.length === 0) {
+  if (!contradictionDetected && sharedTerms.length === 0) {
     return null;
   }
 
   const confidenceBps = Math.min(
     9500,
-    Math.round(3400 + sharedTerms.length * 700 + jaccard * 2600 + (contradicts ? 1200 : 0)),
+    Math.round(3400 + sharedTerms.length * 700 + jaccard * 2600 + (contradictionDetected ? 1200 : 0)),
   );
-  const relation: SuggestedConnectionRelation = contradicts ? "contradicts" : jaccard >= 0.3 ? "supports" : "related";
+  const relation: SuggestedConnectionRelation = dependencyCue ? "depends_on" : jaccard >= 0.3 ? "supports" : "related";
   const reason =
-    relation === "contradicts"
-      ? `Potential contradiction: ${negationMismatch ? "negation differs" : "opposing terms appear"} while sharing ${sharedTerms.join(", ")}.`
-      : relation === "supports"
-        ? `Strong overlap around ${sharedTerms.join(", ")}.`
-        : `Related through ${sharedTerms.join(", ")}.`;
+    contradictionDetected
+      ? `Potential contradiction detected: ${negationMismatch ? "negation differs" : "opposing terms appear"} while sharing ${sharedTerms.join(", ")}.`
+      : relation === "depends_on"
+        ? `Possible dependency around ${sharedTerms.join(", ")}.`
+        : relation === "supports"
+          ? `Strong overlap around ${sharedTerms.join(", ")}.`
+          : `Related through ${sharedTerms.join(", ")}.`;
 
   return {
     targetType: candidate.type,
@@ -286,6 +341,7 @@ function scoreCandidate(target: SuggestConnectionsEntity, candidate: SuggestConn
     confidenceBps,
     reason,
     sharedTerms,
+    contradictionDetected,
     autoCreated: false,
   };
 }
@@ -296,11 +352,11 @@ function buildSuggestions(target: SuggestConnectionsEntity, candidates: SuggestC
     .map((candidate) => scoreCandidate(target, candidate))
     .filter((suggestion): suggestion is SuggestedConnection => Boolean(suggestion))
     .sort((left, right) => {
-      if (left.relation === "contradicts" && right.relation !== "contradicts") {
+      if (left.contradictionDetected && !right.contradictionDetected) {
         return -1;
       }
 
-      if (right.relation === "contradicts" && left.relation !== "contradicts") {
+      if (right.contradictionDetected && !left.contradictionDetected) {
         return 1;
       }
 
@@ -443,6 +499,14 @@ async function autoCreateEdges(input: {
   return createdEdges;
 }
 
+function buildOutputJson(result: Omit<SuggestConnectionsResult, "aiJobId">): Record<string, unknown> {
+  return {
+    target: result.target,
+    suggestions: result.suggestions,
+    createdEdges: result.createdEdges,
+  };
+}
+
 export async function suggestConnections(
   input: unknown,
   repository?: SuggestConnectionsRepository,
@@ -452,34 +516,75 @@ export async function suggestConnections(
   const resolvedRepository = repository ?? createSuggestConnectionsRepository(getDb());
   const createId = dependencies.createId ?? randomUUID;
   const now = dependencies.now?.() ?? new Date();
-  const target = await resolvedRepository.findTarget(normalized);
-
-  if (!target) {
-    throw new SuggestConnectionsTargetNotFoundError(normalized.targetType, normalized.targetId);
-  }
-
-  const candidates = await resolvedRepository.findCandidates({
+  const aiJob = await resolvedRepository.insertAIJob({
     userId: normalized.userId,
-    target,
+    inputJson: {
+      targetType: normalized.targetType,
+      targetId: normalized.targetId,
+      autoCreate: normalized.autoCreate,
+    },
+    createdAt: now,
   });
-  const suggestions = buildSuggestions(target, candidates);
-  const createdEdges = normalized.autoCreate
-    ? await autoCreateEdges({
-        userId: normalized.userId,
-        target,
-        candidates,
-        suggestions,
-        repository: resolvedRepository,
-        createId,
-        now,
-      })
-    : [];
 
-  return {
-    target,
-    suggestions,
-    createdEdges,
-  };
+  try {
+    const target = await resolvedRepository.findTarget(normalized);
+
+    if (!target) {
+      throw new SuggestConnectionsTargetNotFoundError(normalized.targetType, normalized.targetId);
+    }
+
+    const candidates = await resolvedRepository.findCandidates({
+      userId: normalized.userId,
+      target,
+    });
+    const suggestions = buildSuggestions(target, candidates);
+    const createdEdges = normalized.autoCreate
+      ? await autoCreateEdges({
+          userId: normalized.userId,
+          target,
+          candidates,
+          suggestions,
+          repository: resolvedRepository,
+          createId,
+          now,
+        })
+      : [];
+    const outputJson = buildOutputJson({
+      target,
+      suggestions,
+      createdEdges,
+    });
+
+    await resolvedRepository.completeAIJob({
+      id: aiJob.id,
+      outputJson,
+      completedAt: now,
+    });
+    await resolvedRepository.insertActivityEvent({
+      id: createId(),
+      userId: normalized.userId,
+      aiJobId: aiJob.id,
+      target,
+      graphEdgeId: createdEdges[0]?.id ?? null,
+      outputJson,
+      createdAt: now,
+    });
+
+    return {
+      aiJobId: aiJob.id,
+      target,
+      suggestions,
+      createdEdges,
+    };
+  } catch (error) {
+    await resolvedRepository.failAIJob({
+      id: aiJob.id,
+      errorMessage: error instanceof Error ? error.message : "Unknown suggestConnections failure.",
+      completedAt: now,
+    });
+
+    throw error;
+  }
 }
 
 export function createSuggestConnectionsRepository(db: DbClient): SuggestConnectionsRepository {
@@ -602,6 +707,77 @@ export function createSuggestConnectionsRepository(db: DbClient): SuggestConnect
         metadataJson: record.metadata,
         createdAt: record.createdAt,
         updatedAt: record.createdAt,
+      });
+    },
+    async insertAIJob(record) {
+      const rows = await db
+        .insert(aiJobs)
+        .values({
+          userId: record.userId,
+          operation: AI_OPERATIONS.suggestConnections,
+          promptVersionId: null,
+          status: "queued",
+          inputJson: record.inputJson,
+          outputJson: null,
+          errorMessage: null,
+          createdAt: record.createdAt,
+          updatedAt: record.createdAt,
+          startedAt: record.createdAt,
+          completedAt: null,
+        })
+        .returning({ id: aiJobs.id });
+
+      const row = rows[0];
+
+      if (!row) {
+        throw new Error("Failed to create suggestConnections AI job.");
+      }
+
+      return row;
+    },
+    async completeAIJob(record) {
+      await db
+        .update(aiJobs)
+        .set({
+          status: "succeeded",
+          outputJson: record.outputJson,
+          errorMessage: null,
+          updatedAt: record.completedAt,
+          completedAt: record.completedAt,
+        })
+        .where(eq(aiJobs.id, record.id));
+    },
+    async failAIJob(record) {
+      await db
+        .update(aiJobs)
+        .set({
+          status: "failed",
+          outputJson: null,
+          errorMessage: record.errorMessage,
+          updatedAt: record.completedAt,
+          completedAt: record.completedAt,
+        })
+        .where(eq(aiJobs.id, record.id));
+    },
+    async insertActivityEvent(record) {
+      await db.insert(activityEvents).values({
+        id: record.id,
+        userId: record.userId,
+        sessionId: null,
+        mapId: record.target.mapId,
+        thoughtId: record.target.type === "thought" ? record.target.id : null,
+        claimId: record.target.type === "claim" ? record.target.id : null,
+        graphNodeId: null,
+        graphEdgeId: record.graphEdgeId,
+        confidenceRatingId: null,
+        promptVersionId: null,
+        aiJobId: record.aiJobId,
+        aggregateType: "ai_job",
+        aggregateId: record.aiJobId,
+        type: "ai.suggest_connections.completed",
+        payloadJson: record.outputJson,
+        requestId: null,
+        createdAt: record.createdAt,
       });
     },
   };

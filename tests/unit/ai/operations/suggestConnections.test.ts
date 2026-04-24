@@ -31,6 +31,34 @@ class FakeSuggestConnectionsRepository implements SuggestConnectionsRepository {
     createdAt: Date;
   }> = [];
 
+  public readonly insertedJobs: Array<{
+    userId: string;
+    inputJson: Record<string, unknown>;
+    createdAt: Date;
+  }> = [];
+
+  public readonly completedJobs: Array<{
+    id: string;
+    outputJson: Record<string, unknown>;
+    completedAt: Date;
+  }> = [];
+
+  public readonly failedJobs: Array<{
+    id: string;
+    errorMessage: string;
+    completedAt: Date;
+  }> = [];
+
+  public readonly insertedActivityEvents: Array<{
+    id: string;
+    userId: string;
+    aiJobId: string;
+    target: SuggestConnectionsEntity;
+    graphEdgeId: string | null;
+    outputJson: Record<string, unknown>;
+    createdAt: Date;
+  }> = [];
+
   private readonly graphNodes = new Map<string, { id: string }>();
   private readonly graphEdges = new Map<string, { id: string }>();
 
@@ -82,6 +110,44 @@ class FakeSuggestConnectionsRepository implements SuggestConnectionsRepository {
     this.graphEdges.set(this.edgeKey(record), { id: record.id });
   }
 
+  async insertAIJob(record: {
+    userId: string;
+    inputJson: Record<string, unknown>;
+    createdAt: Date;
+  }) {
+    this.insertedJobs.push(record);
+
+    return { id: `job-${this.insertedJobs.length}` };
+  }
+
+  async completeAIJob(record: {
+    id: string;
+    outputJson: Record<string, unknown>;
+    completedAt: Date;
+  }) {
+    this.completedJobs.push(record);
+  }
+
+  async failAIJob(record: {
+    id: string;
+    errorMessage: string;
+    completedAt: Date;
+  }) {
+    this.failedJobs.push(record);
+  }
+
+  async insertActivityEvent(record: {
+    id: string;
+    userId: string;
+    aiJobId: string;
+    target: SuggestConnectionsEntity;
+    graphEdgeId: string | null;
+    outputJson: Record<string, unknown>;
+    createdAt: Date;
+  }) {
+    this.insertedActivityEvents.push(record);
+  }
+
   private nodeKey(user: string, entity: SuggestConnectionsEntity) {
     return `${user}:${entity.type}:${entity.id}`;
   }
@@ -128,11 +194,15 @@ test("suggestConnections ranks likely contradictions first", async () => {
   );
 
   assert.equal(result.target.id, "claim-target");
+  assert.equal(result.aiJobId, "job-1");
   assert.equal(result.suggestions[0]?.targetId, "claim-contradiction");
-  assert.equal(result.suggestions[0]?.relation, "contradicts");
+  assert.equal(result.suggestions[0]?.relation, "depends_on");
+  assert.equal(result.suggestions[0]?.contradictionDetected, true);
   assert.ok(result.suggestions[0]?.confidenceBps && result.suggestions[0].confidenceBps > 6000);
   assert.deepEqual(result.suggestions[0]?.sharedTerms, ["users", "need", "proof", "before", "they", "buy", "product"]);
   assert.equal(result.suggestions.some((suggestion) => suggestion.targetId === "claim-target"), false);
+  assert.equal(repository.completedJobs.length, 1);
+  assert.deepEqual(repository.insertedActivityEvents[0]?.outputJson, repository.completedJobs[0]?.outputJson);
 });
 
 test("suggestConnections can auto-create graph nodes and edges for suggestions in the target map", async () => {
@@ -171,7 +241,7 @@ test("suggestConnections can auto-create graph nodes and edges for suggestions i
   assert.deepEqual(result.createdEdges, [
     {
       id: "generated-3",
-      relation: "contradicts",
+      relation: "supports",
       sourceNodeId: "generated-1",
       targetNodeId: "generated-2",
       targetType: "thought",
@@ -179,7 +249,41 @@ test("suggestConnections can auto-create graph nodes and edges for suggestions i
     },
   ]);
   assert.equal(result.suggestions[0]?.autoCreated, true);
+  assert.equal(result.suggestions[0]?.contradictionDetected, true);
   assert.deepEqual(repository.insertedEdges[0]?.metadata.sharedTerms, ["remote", "work", "focus", "senior", "engineers"]);
+  assert.equal(repository.insertedActivityEvents[0]?.id, "generated-4");
+  assert.equal(repository.insertedActivityEvents[0]?.graphEdgeId, "generated-3");
+  assert.equal(repository.completedJobs[0]?.outputJson.createdEdges, result.createdEdges);
+});
+
+test("suggestConnections returns depends_on when a candidate carries dependency language", async () => {
+  const repository = new FakeSuggestConnectionsRepository([
+    {
+      type: "claim",
+      id: "claim-target",
+      mapId: "map-1",
+      text: "Launch speed improves onboarding conversion.",
+    },
+    {
+      type: "thought",
+      id: "thought-dependency",
+      mapId: "map-1",
+      text: "Onboarding conversion depends on launch speed and support coverage.",
+    },
+  ]);
+
+  const result = await suggestConnections(
+    {
+      userId,
+      targetType: "claim",
+      targetId: "claim-target",
+    },
+    repository,
+  );
+
+  assert.equal(result.suggestions[0]?.targetId, "thought-dependency");
+  assert.equal(result.suggestions[0]?.relation, "depends_on");
+  assert.equal(result.suggestions[0]?.contradictionDetected, false);
 });
 
 test("suggestConnections rejects invalid input before repository access", async () => {
@@ -201,4 +305,33 @@ test("suggestConnections rejects invalid input before repository access", async 
       return true;
     },
   );
+  assert.equal(repository.insertedJobs.length, 0);
+});
+
+test("suggestConnections marks the AI job failed when the target cannot be loaded", async () => {
+  const repository = new FakeSuggestConnectionsRepository([]);
+  const now = new Date("2026-04-24T12:00:00.000Z");
+
+  await assert.rejects(() =>
+    suggestConnections(
+      {
+        userId,
+        targetType: "claim",
+        targetId: "missing-claim",
+      },
+      repository,
+      {
+        now: () => now,
+      },
+    ),
+  );
+
+  assert.equal(repository.insertedJobs.length, 1);
+  assert.deepEqual(repository.failedJobs, [
+    {
+      id: "job-1",
+      errorMessage: "Target claim not found for suggestConnections: missing-claim",
+      completedAt: now,
+    },
+  ]);
 });
