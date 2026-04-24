@@ -950,6 +950,28 @@ textarea {
   }
 }
 
+@keyframes penny-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes penny-palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .penny-shell {
   position: relative;
   isolation: isolate;
@@ -1586,6 +1608,7 @@ textarea {
   align-items: center;
   justify-items: center;
   padding: 24px 18px;
+  animation: penny-fade-in var(--motion-fast) both;
 }
 
 .command-palette__scrim {
@@ -1594,6 +1617,7 @@ textarea {
   border: 0;
   background: rgba(14, 18, 16, 0.62);
   cursor: default;
+  animation: penny-fade-in var(--motion-fast) both;
 }
 
 .command-palette__dialog {
@@ -1607,6 +1631,7 @@ textarea {
     rgba(13, 18, 16, 0.92);
   box-shadow: var(--shadow-lg);
   backdrop-filter: var(--glass-blur);
+  animation: penny-palette-in var(--motion-standard) both;
 }
 
 .command-palette__header {
