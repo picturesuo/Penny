@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "../db/client.ts";
+import { findExistingMoveEvent } from "../idempotency/find-existing-move-event.ts";
 import { maps, movesEvents } from "../db/schema.ts";
 
 export type CreateMapEventType = "map.created";
@@ -31,6 +32,9 @@ export type CreateMapEventRecord = {
 };
 
 export type CreateMapRepositoryTx = {
+  findMoveEventByRequestId?(input: { userId: string; requestId: string; type: string }): Promise<{
+    aggregateId: string;
+  } | null>;
   insertMap(record: CreateMapRecord): Promise<void>;
   insertMoveEvent(event: CreateMapEventRecord): Promise<void>;
 };
@@ -46,7 +50,7 @@ type CreateMapDbTx = {
 };
 
 type CreateMapDb = {
-  transaction<T>(callback: (tx: CreateMapDbTx) => Promise<T>): Promise<T>;
+  transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
 };
 
 export type CreateMapResult = {
@@ -159,8 +163,20 @@ export async function createMap(
 
   return repository.transaction(async (tx) => {
     const timestamp = now();
-    const mapId = createId();
     const requestId = normalized.requestId ?? createId();
+    const existingEvent = await findExistingMoveEvent(tx, {
+      userId: normalized.userId,
+      requestId,
+      type: "map.created",
+    });
+
+    if (existingEvent) {
+      return {
+        mapId: existingEvent.aggregateId,
+      };
+    }
+
+    const mapId = createId();
 
     if (isCreateMapRepositoryTx(tx)) {
       await tx.insertMap({

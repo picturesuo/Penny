@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
+import { findExistingMoveEvent } from "../idempotency/find-existing-move-event.ts";
 import { claims, maps, movesEvents } from "../db/schema.ts";
 
 export type CreateClaimEventType = "claim.created";
@@ -42,6 +43,9 @@ export type CreateClaimEventRecord = {
 };
 
 export type CreateClaimRepositoryTx = {
+  findMoveEventByRequestId?(input: { userId: string; requestId: string; type: string }): Promise<{
+    aggregateId: string;
+  } | null>;
   findOwnedMap(input: { mapId: string; userId: string }): Promise<{ id: string; userId: string } | null>;
   insertClaim(record: CreateClaimRecord): Promise<void>;
   insertMoveEvent(event: CreateClaimEventRecord): Promise<void>;
@@ -70,7 +74,7 @@ type CreateClaimDbTx = {
 };
 
 type CreateClaimDb = {
-  transaction<T>(callback: (tx: CreateClaimDbTx) => Promise<T>): Promise<T>;
+  transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
 };
 
 export type CreateClaimResult = {
@@ -199,6 +203,19 @@ export async function createClaim(
   const now = dependencies.now ?? (() => new Date());
 
   return repository.transaction(async (tx) => {
+    const requestId = normalized.requestId ?? createId();
+    const existingEvent = await findExistingMoveEvent(tx, {
+      userId: normalized.userId,
+      requestId,
+      type: "claim.created",
+    });
+
+    if (existingEvent) {
+      return {
+        claimId: existingEvent.aggregateId,
+      };
+    }
+
     const ownedMap = isCreateClaimRepositoryTx(tx)
       ? await tx.findOwnedMap({
           mapId: normalized.mapId,
@@ -221,7 +238,6 @@ export async function createClaim(
 
     const timestamp = now();
     const claimId = createId();
-    const requestId = normalized.requestId ?? createId();
 
     if (isCreateClaimRepositoryTx(tx)) {
       await tx.insertClaim({

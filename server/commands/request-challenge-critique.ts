@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
+import { findExistingMoveEvent } from "../idempotency/find-existing-move-event.ts";
 import { challengeCritiques, challengeRounds, movesEvents } from "../db/schema.ts";
 
 export type RequestChallengeCritiqueEventType = "challenge.critique.requested";
@@ -39,6 +40,11 @@ export type ChallengeCritiqueRequestedEventRecord = {
 };
 
 export type RequestChallengeCritiqueRepositoryTx = {
+  findMoveEventByRequestId?(input: {
+    userId: string;
+    requestId: string;
+    type: string;
+  }): Promise<{ aggregateId: string; payload: Record<string, unknown> | null } | null>;
   findOwnedRound(input: {
     roundId: string;
     userId: string;
@@ -99,6 +105,14 @@ type NormalizedRequestChallengeCritiqueInput = {
 };
 
 const DEFAULT_CHALLENGE_CRITIQUE_STATUS = "pending";
+
+function readPayloadStatus(payload: Record<string, unknown> | null): string {
+  if (typeof payload?.status === "string" && payload.status.trim()) {
+    return payload.status;
+  }
+
+  return DEFAULT_CHALLENGE_CRITIQUE_STATUS;
+}
 
 function asObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -181,7 +195,9 @@ export function validateRequestChallengeCritiqueInput(input: unknown): Normalize
 
 export async function requestChallengeCritique(
   input: unknown,
-  repository: RequestChallengeCritiqueRepository | RequestChallengeCritiqueDb = getDb(),
+  repository: RequestChallengeCritiqueRepository | RequestChallengeCritiqueDb = getDb() as
+    | RequestChallengeCritiqueRepository
+    | RequestChallengeCritiqueDb,
   dependencies: RequestChallengeCritiqueDependencies = {},
 ): Promise<RequestChallengeCritiqueResult> {
   const normalized = validateRequestChallengeCritiqueInput(input);
@@ -189,6 +205,20 @@ export async function requestChallengeCritique(
   const now = dependencies.now ?? (() => new Date());
 
   return repository.transaction(async (tx) => {
+    const requestId = normalized.requestId ?? createId();
+    const existingEvent = await findExistingMoveEvent(tx, {
+      userId: normalized.userId,
+      requestId,
+      type: "challenge.critique.requested",
+    });
+
+    if (existingEvent) {
+      return {
+        critiqueId: existingEvent.aggregateId,
+        status: readPayloadStatus(existingEvent.payload),
+      };
+    }
+
     const ownedRound = isRequestChallengeCritiqueRepositoryTx(tx)
       ? await tx.findOwnedRound({
           roundId: normalized.roundId,
@@ -213,7 +243,6 @@ export async function requestChallengeCritique(
 
     const timestamp = now();
     const critiqueId = createId();
-    const requestId = normalized.requestId ?? createId();
 
     if (isRequestChallengeCritiqueRepositoryTx(tx)) {
       await tx.insertChallengeCritique({

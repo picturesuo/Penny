@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
 import { getDb } from "../db/client.ts";
+import { findExistingMoveEvent } from "../idempotency/find-existing-move-event.ts";
 import { challengeRounds, movesEvents } from "../db/schema.ts";
 
 export type RecordChallengeResponseEventType = "challenge.response.recorded";
@@ -43,6 +44,11 @@ export type ChallengeResponseRecordedEventRecord = {
 };
 
 export type RecordChallengeResponseRepositoryTx = {
+  findMoveEventByRequestId?(input: {
+    userId: string;
+    requestId: string;
+    type: string;
+  }): Promise<{ aggregateId: string } | null>;
   findOwnedRound(input: {
     roundId: string;
     userId: string;
@@ -82,7 +88,7 @@ type RecordChallengeResponseDbTx = {
 };
 
 type RecordChallengeResponseDb = {
-  transaction<T>(callback: (tx: RecordChallengeResponseDbTx) => Promise<T>): Promise<T>;
+  transaction<T>(callback: (tx: any) => Promise<T>): Promise<T>;
 };
 
 export type RecordChallengeResponseResult = {
@@ -236,6 +242,20 @@ export async function recordChallengeResponse(
   const now = dependencies.now ?? (() => new Date());
 
   return repository.transaction(async (tx) => {
+    const requestId = normalized.requestId ?? createId();
+    const existingEvent = await findExistingMoveEvent(tx, {
+      userId: normalized.userId,
+      requestId,
+      type: "challenge.response.recorded",
+    });
+
+    if (existingEvent) {
+      return {
+        roundId: existingEvent.aggregateId,
+        status: RESPONDED_STATUS,
+      };
+    }
+
     const ownedRound = isRecordChallengeResponseRepositoryTx(tx)
       ? await tx.findOwnedRound({
           roundId: normalized.roundId,
@@ -260,7 +280,6 @@ export async function recordChallengeResponse(
     }
 
     const timestamp = now();
-    const requestId = normalized.requestId ?? createId();
 
     if (isRecordChallengeResponseRepositoryTx(tx)) {
       await tx.updateChallengeRound({

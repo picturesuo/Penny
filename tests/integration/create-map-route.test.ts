@@ -91,3 +91,66 @@ test("POST /api/commands/maps/create inserts a map row and map.created event", a
     await sql.end({ timeout: 1 });
   }
 });
+
+test("POST /api/commands/maps/create replays the original result for the same idempotency key", async () => {
+  const userId = "00000000-0000-0000-0000-000000000999";
+  const idempotencyKey = "create-map-idempotency-1";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const firstResponse = await POST(
+      new Request("http://localhost/api/commands/maps/create", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": idempotencyKey,
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          title: "Retried map create",
+        }),
+      }),
+    );
+
+    const secondResponse = await POST(
+      new Request("http://localhost/api/commands/maps/create", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": idempotencyKey,
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          title: "Retried map create",
+        }),
+      }),
+    );
+
+    assert.equal(firstResponse.status, 201);
+    assert.equal(secondResponse.status, 201);
+
+    const firstPayload = (await firstResponse.json()) as { mapId: string };
+    const secondPayload = (await secondResponse.json()) as { mapId: string };
+
+    assert.equal(secondPayload.mapId, firstPayload.mapId);
+
+    const storedMaps = await sql`
+      select id
+      from maps
+      where user_id = ${userId}
+    `;
+
+    const storedEvents = await sql`
+      select id
+      from moves_events
+      where user_id = ${userId}
+        and request_id = ${idempotencyKey}
+        and type = ${"map.created"}
+    `;
+
+    assert.equal(storedMaps.length, 1);
+    assert.equal(storedEvents.length, 1);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});

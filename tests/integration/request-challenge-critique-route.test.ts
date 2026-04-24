@@ -118,3 +118,85 @@ test("POST /api/commands/challenge/request-critique inserts a pending critique r
     await sql.end({ timeout: 1 });
   }
 });
+
+test("POST /api/commands/challenge/request-critique replays the original result for the same request ID", async () => {
+  const userId = "00000000-0000-0000-0000-000000000222";
+  const mapId = "00000000-0000-0000-0000-000000000322";
+  const claimId = "00000000-0000-0000-0000-000000000422";
+  const roundId = "00000000-0000-0000-0000-000000000522";
+  const requestId = "challenge-critique-idempotency-1";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into maps (id, user_id, title)
+      values (${mapId}, ${userId}, ${"Challenge critique idempotency map"})
+    `;
+
+    await sql`
+      insert into claims (id, map_id, user_id, body, confidence_bps)
+      values (${claimId}, ${mapId}, ${userId}, ${"Challenge critique idempotency claim"}, ${5100})
+    `;
+
+    await sql`
+      insert into challenge_rounds (id, map_id, claim_id, user_id, status)
+      values (${roundId}, ${mapId}, ${claimId}, ${userId}, ${"started"})
+    `;
+
+    const firstResponse = await POST(
+      new Request("http://localhost/api/commands/challenge/request-critique", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": requestId,
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          roundId,
+        }),
+      }),
+    );
+
+    const secondResponse = await POST(
+      new Request("http://localhost/api/commands/challenge/request-critique", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": requestId,
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          roundId,
+        }),
+      }),
+    );
+
+    assert.equal(firstResponse.status, 201);
+    assert.equal(secondResponse.status, 201);
+
+    const firstPayload = (await firstResponse.json()) as { critiqueId: string; status: string };
+    const secondPayload = (await secondResponse.json()) as { critiqueId: string; status: string };
+
+    assert.deepEqual(secondPayload, firstPayload);
+
+    const storedCritiques = await sql`
+      select id
+      from challenge_critiques
+      where user_id = ${userId}
+        and round_id = ${roundId}
+    `;
+
+    const storedEvents = await sql`
+      select id
+      from moves_events
+      where user_id = ${userId}
+        and request_id = ${requestId}
+        and type = ${"challenge.critique.requested"}
+    `;
+
+    assert.equal(storedCritiques.length, 1);
+    assert.equal(storedEvents.length, 1);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});

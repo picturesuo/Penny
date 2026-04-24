@@ -123,3 +123,94 @@ test("POST /api/commands/challenge/respond records a response event and updates 
     await sql.end({ timeout: 1 });
   }
 });
+
+test("POST /api/commands/challenge/respond replays the original result for the same idempotency key", async () => {
+  const userId = "00000000-0000-0000-0000-000000000223";
+  const mapId = "00000000-0000-0000-0000-000000000323";
+  const claimId = "00000000-0000-0000-0000-000000000423";
+  const roundId = "00000000-0000-0000-0000-000000000523";
+  const idempotencyKey = "challenge-respond-idempotency-1";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into maps (id, user_id, title)
+      values (${mapId}, ${userId}, ${"Challenge response idempotency map"})
+    `;
+
+    await sql`
+      insert into claims (id, map_id, user_id, body, confidence_bps)
+      values (${claimId}, ${mapId}, ${userId}, ${"Challenge response idempotency claim"}, ${5400})
+    `;
+
+    await sql`
+      insert into challenge_rounds (id, map_id, claim_id, user_id, status)
+      values (${roundId}, ${mapId}, ${claimId}, ${userId}, ${"ready"})
+    `;
+
+    const firstResponse = await POST(
+      new Request("http://localhost/api/commands/challenge/respond", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": idempotencyKey,
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          roundId,
+          response: "This response should only be recorded once.",
+          responsePath: "direct",
+          confidenceBps: 6100,
+        }),
+      }),
+    );
+
+    const secondResponse = await POST(
+      new Request("http://localhost/api/commands/challenge/respond", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": idempotencyKey,
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          roundId,
+          response: "This response should only be recorded once.",
+          responsePath: "direct",
+          confidenceBps: 6100,
+        }),
+      }),
+    );
+
+    assert.equal(firstResponse.status, 200);
+    assert.equal(secondResponse.status, 200);
+    assert.deepEqual(await firstResponse.json(), {
+      roundId,
+      status: "responded",
+    });
+    assert.deepEqual(await secondResponse.json(), {
+      roundId,
+      status: "responded",
+    });
+
+    const roundRows = await sql`
+      select status
+      from challenge_rounds
+      where id = ${roundId}
+    `;
+
+    const eventRows = await sql`
+      select id
+      from moves_events
+      where user_id = ${userId}
+        and request_id = ${idempotencyKey}
+        and type = ${"challenge.response.recorded"}
+    `;
+
+    assert.equal(roundRows.length, 1);
+    assert.equal(roundRows[0]?.status, "responded");
+    assert.equal(eventRows.length, 1);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});

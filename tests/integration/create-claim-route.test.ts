@@ -105,3 +105,79 @@ test("POST /api/commands/claims/create inserts a claim row and claim.created eve
     await sql.end({ timeout: 1 });
   }
 });
+
+test("POST /api/commands/claims/create replays the original result for the same requestId", async () => {
+  const userId = "00000000-0000-0000-0000-000000000654";
+  const requestId = "claim-route-idempotency-1";
+  const db = createDbClient(databaseUrl);
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const map = await createMap(
+      {
+        userId,
+        title: "Claim idempotency parent map",
+        requestId: "create-map-for-claim-idempotency",
+      },
+      db,
+    );
+
+    const firstResponse = await POST(
+      new Request("http://localhost/api/commands/claims/create", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          mapId: map.mapId,
+          text: "Retried claim body",
+          requestId,
+        }),
+      }),
+    );
+
+    const secondResponse = await POST(
+      new Request("http://localhost/api/commands/claims/create", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          mapId: map.mapId,
+          text: "Retried claim body",
+          requestId,
+        }),
+      }),
+    );
+
+    assert.equal(firstResponse.status, 201);
+    assert.equal(secondResponse.status, 201);
+
+    const firstPayload = (await firstResponse.json()) as { claimId: string };
+    const secondPayload = (await secondResponse.json()) as { claimId: string };
+
+    assert.equal(secondPayload.claimId, firstPayload.claimId);
+
+    const storedClaims = await sql`
+      select id
+      from claims
+      where user_id = ${userId}
+        and map_id = ${map.mapId}
+    `;
+
+    const storedEvents = await sql`
+      select id
+      from moves_events
+      where user_id = ${userId}
+        and request_id = ${requestId}
+        and type = ${"claim.created"}
+    `;
+
+    assert.equal(storedClaims.length, 1);
+    assert.equal(storedEvents.length, 1);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});

@@ -6,6 +6,7 @@ import {
   requestChallengeCritique,
 } from "../../../../../../../server/commands/request-challenge-critique.ts";
 import { getRequestUserId } from "../../../../../../../server/auth/get-request-user-id.ts";
+import { getIdempotencyKey } from "../../../../../../../server/idempotency/get-idempotency-key.ts";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
 
   try {
     const userId = getRequestUserId(request.headers);
-    const requestId = request.headers.get("x-request-id");
+    const requestId = getIdempotencyKey(request.headers, body);
     const result = await requestChallengeCritique({
       ...body,
       userId,
