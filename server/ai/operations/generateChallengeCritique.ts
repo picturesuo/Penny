@@ -1,0 +1,862 @@
+import { selectModelForOperation } from "../routing/modelPolicy.ts";
+
+export type ChallengeCritiqueProviderName = "anthropic" | "xai";
+export type ChallengeCritiqueRouteTier = "default" | "fallback" | "cheap";
+export type ChallengeCritiqueQualityTier = "default" | "fallback" | "cheap" | "standard" | "degraded";
+export type ChallengeCritiqueMode = "direct" | "socratic" | "red_team";
+export type ChallengeResponsePath = "defend" | "revise" | "absorb";
+
+export type GenerateChallengeCritiqueNeighborClaim = {
+  id: string;
+  text: string;
+  confidence?: number | null;
+  kind?: string | null;
+  relationship?: string | null;
+};
+
+export type GenerateChallengeCritiquePreviousRound = {
+  roundId: string;
+  roundNumber: number;
+  critiqueSummary: string;
+  userResponse?: string | null;
+  responsePath?: ChallengeResponsePath | null;
+  confidenceDelta?: number | null;
+};
+
+export type GenerateChallengeCritiqueInput = {
+  claimId: string;
+  claimText: string;
+  claimConfidence: number;
+  critiqueMode?: ChallengeCritiqueMode | null;
+  mapTitle?: string | null;
+  neighboringClaims?: GenerateChallengeCritiqueNeighborClaim[] | null;
+  previousRounds?: GenerateChallengeCritiquePreviousRound[] | null;
+  priorRoundContext?: GenerateChallengeCritiquePreviousRound | GenerateChallengeCritiquePreviousRound[] | null;
+  steelmanText?: string | null;
+  userGoal?: string | null;
+};
+
+export type GenerateChallengeCritiqueOutput = {
+  conciseCritiqueSummary: string;
+  strongestCounterargument: string;
+  assumptions: string[];
+  likelyFailureModes: string[];
+  followUpQuestions: string[];
+  suggestedConfidenceDelta: number;
+  uncertaintyNote: string;
+};
+
+export type GenerateChallengeCritiqueContext = {
+  claimId?: string | null;
+  mapId?: string | null;
+  promptVersion?: string | null;
+  qualityTier?: ChallengeCritiqueQualityTier | null;
+  requestId?: string | null;
+  roundId?: string | null;
+  sessionId?: string | null;
+  tags?: string[];
+  userId?: string | null;
+  workspaceContextId?: string | null;
+};
+
+export type GenerateChallengeCritiqueRoute = {
+  model: string;
+  promptVersion: string;
+  provider: ChallengeCritiqueProviderName;
+  tier: string;
+};
+
+export type StructuredProviderUsage = {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+};
+
+export type StructuredProviderCost = {
+  currency: string | null;
+  totalUsd: number | null;
+};
+
+export type StructuredProviderResponse = {
+  cost: StructuredProviderCost;
+  output: unknown;
+  usage: StructuredProviderUsage;
+};
+
+export type GenerateChallengeCritiqueResult = {
+  meta: {
+    cost: StructuredProviderCost;
+    environment: string;
+    fallbackHopCount: number;
+    latencyMs: number;
+    model: string;
+    observationId: string | null;
+    promptVersion: string;
+    provider: ChallengeCritiqueProviderName;
+    repairAttempted: boolean;
+    release: string;
+    routeTier: string;
+    traceId: string | null;
+    usage: StructuredProviderUsage;
+    validationResult: "valid" | "repaired_valid";
+  };
+  output: GenerateChallengeCritiqueOutput;
+};
+
+export class GenerateChallengeCritiqueValidationError extends Error {
+  issues: string[];
+
+  constructor(message: string, issues: string[]) {
+    super(message);
+    this.name = "GenerateChallengeCritiqueValidationError";
+    this.issues = issues;
+  }
+}
+
+export class GenerateChallengeCritiqueError extends Error {
+  attempts: number;
+  code: string;
+  failures: Array<{ message: string; model?: string; provider?: string; tier?: string }>;
+  operationName: string;
+
+  constructor(params: {
+    attempts: number;
+    failures: Array<{ message: string; model?: string; provider?: string; tier?: string }>;
+    message?: string;
+    operationName: string;
+  }) {
+    super(params.message ?? "AI operation failed.");
+    this.name = "GenerateChallengeCritiqueError";
+    this.code = "AI_OPERATION_FAILED";
+    this.operationName = params.operationName;
+    this.attempts = params.attempts;
+    this.failures = params.failures;
+  }
+}
+
+type Observation = {
+  update: (input: unknown) => void;
+};
+
+type StructuredProviderInvoker = (input: unknown) => Promise<unknown>;
+type StartActiveObservation = (
+  name: string,
+  callback: (generation: Observation) => Promise<unknown>,
+  options?: unknown,
+) => Promise<unknown>;
+type ResolveModelPolicy = (
+  operationName: string,
+  options?: { promptVersion?: string; qualityTier?: ChallengeCritiqueQualityTier | null },
+) => GenerateChallengeCritiqueRoute[];
+
+type PromptBundle = {
+  promptVersion: string;
+  systemPrompt: string;
+  userPrompt: string;
+};
+
+type NormalizedGenerateChallengeCritiqueInput = {
+  claimId: string;
+  claimText: string;
+  claimConfidence: number;
+  critiqueMode: ChallengeCritiqueMode;
+  mapTitle: string | null;
+  neighboringClaims: GenerateChallengeCritiqueNeighborClaim[];
+  previousRounds: GenerateChallengeCritiquePreviousRound[];
+  steelmanText: string | null;
+  userGoal: string | null;
+};
+
+const GENERATE_CHALLENGE_CRITIQUE_OPERATION = "generateChallengeCritique";
+const DEFAULT_PROMPT_VERSION = "challenge-critique-v1";
+const OUTPUT_KEYS: Array<keyof GenerateChallengeCritiqueOutput> = [
+  "conciseCritiqueSummary",
+  "strongestCounterargument",
+  "assumptions",
+  "likelyFailureModes",
+  "followUpQuestions",
+  "suggestedConfidenceDelta",
+  "uncertaintyNote",
+];
+
+function unsupportedProvider(provider: string): Error {
+  return new Error(`Unsupported AI provider: ${provider}`);
+}
+
+async function invokeUnsupportedProvider(): Promise<never> {
+  throw new Error("No AI provider adapter has been configured for generateChallengeCritique.");
+}
+
+function defaultStartActiveObservation(
+  _name: string,
+  callback: (generation: Observation) => Promise<unknown>,
+): Promise<unknown> {
+  return callback({
+    update() {
+      return undefined;
+    },
+  });
+}
+
+function defaultResolveModelPolicy(
+  operationName: string,
+  options: { promptVersion?: string; qualityTier?: ChallengeCritiqueQualityTier | null } = {},
+): GenerateChallengeCritiqueRoute[] {
+  const promptVersion = readOptionalString(options.promptVersion) ?? DEFAULT_PROMPT_VERSION;
+  const normalizedTier = normalizeQualityTier(options.qualityTier);
+
+  if (normalizedTier === "cheap") {
+    const selection = selectModelForOperation(operationName, "cheap");
+    return [
+      {
+        provider: selection.provider,
+        model: selection.model,
+        promptVersion,
+        tier: selection.qualityTier,
+      },
+    ];
+  }
+
+  if (operationName === GENERATE_CHALLENGE_CRITIQUE_OPERATION) {
+    const defaultSelection = selectModelForOperation(operationName, "default");
+    const fallbackSelection = selectModelForOperation(operationName, "fallback");
+
+    return [
+      {
+        provider: defaultSelection.provider,
+        model: defaultSelection.model,
+        promptVersion,
+        tier: defaultSelection.qualityTier,
+      },
+      {
+        provider: fallbackSelection.provider,
+        model: fallbackSelection.model,
+        promptVersion,
+        tier: fallbackSelection.qualityTier,
+      },
+    ];
+  }
+
+  const fallbackSelection = selectModelForOperation(operationName, "fallback");
+  return [
+    {
+      provider: fallbackSelection.provider,
+      model: fallbackSelection.model,
+      promptVersion,
+      tier: fallbackSelection.qualityTier,
+    },
+  ];
+}
+
+export const generateChallengeCritiqueDeps = {
+  getActiveObservationId: () => null as string | null,
+  getDeployMetadata: () => ({
+    environment: process.env.NODE_ENV?.trim() || "development",
+    release: process.env.VERCEL_GIT_COMMIT_SHA?.trim() || "local",
+  }),
+  getTraceId: () => null as string | null,
+  invokeAnthropicStructured: invokeUnsupportedProvider as StructuredProviderInvoker,
+  invokeXaiStructured: invokeUnsupportedProvider as StructuredProviderInvoker,
+  resolveModelPolicy: defaultResolveModelPolicy as ResolveModelPolicy,
+  startActiveObservation: defaultStartActiveObservation as StartActiveObservation,
+};
+
+export async function generateChallengeCritique(
+  input: unknown,
+  context: GenerateChallengeCritiqueContext = {},
+): Promise<GenerateChallengeCritiqueResult> {
+  const normalizedInput = validateGenerateChallengeCritiqueInput(input);
+  const promptVersion = readOptionalString(context.promptVersion) ?? DEFAULT_PROMPT_VERSION;
+  const prompt = buildChallengeCritiquePromptV1(normalizedInput, promptVersion);
+  const routes = generateChallengeCritiqueDeps.resolveModelPolicy(GENERATE_CHALLENGE_CRITIQUE_OPERATION, {
+    promptVersion,
+    qualityTier: normalizeQualityTier(context.qualityTier),
+  });
+  const failures: Array<{ message: string; model?: string; provider?: string; tier?: string }> = [];
+
+  for (const [routeIndex, route] of routes.entries()) {
+    try {
+      return (await generateChallengeCritiqueDeps.startActiveObservation(
+        `ai.${GENERATE_CHALLENGE_CRITIQUE_OPERATION}.${route.tier}`,
+        async (generation) => {
+          const startedAt = Date.now();
+          try {
+            const firstResponse = await invokeStructuredProvider(route, prompt);
+            const validation = await validateWithSingleRepair(route, prompt, firstResponse);
+            const latencyMs = Date.now() - startedAt;
+            const deploy = generateChallengeCritiqueDeps.getDeployMetadata();
+
+            generation.update({
+              metadata: {
+                fallbackHopCount: routeIndex,
+                operation: GENERATE_CHALLENGE_CRITIQUE_OPERATION,
+                promptVersion: route.promptVersion,
+                provider: route.provider,
+                repairAttempted: validation.repairAttempted,
+                routeTier: route.tier,
+                validationResult: validation.repairAttempted ? "repaired_valid" : "valid",
+              },
+              model: route.model,
+              output: validation.output,
+              statusMessage: `Completed in ${latencyMs}ms`,
+            });
+
+            return {
+              output: validation.output,
+              meta: {
+                provider: route.provider,
+                model: route.model,
+                promptVersion: route.promptVersion,
+                fallbackHopCount: routeIndex,
+                repairAttempted: validation.repairAttempted,
+                validationResult: validation.repairAttempted ? "repaired_valid" : "valid",
+                routeTier: route.tier,
+                traceId: generateChallengeCritiqueDeps.getTraceId(),
+                observationId: generateChallengeCritiqueDeps.getActiveObservationId(),
+                release: deploy.release,
+                environment: deploy.environment,
+                latencyMs,
+                usage: validation.usage,
+                cost: validation.cost,
+              },
+            } satisfies GenerateChallengeCritiqueResult;
+          } catch (error) {
+            generation.update({
+              metadata: {
+                fallbackHopCount: routeIndex,
+                operation: GENERATE_CHALLENGE_CRITIQUE_OPERATION,
+                promptVersion: route.promptVersion,
+                provider: route.provider,
+                routeTier: route.tier,
+              },
+              model: route.model,
+              statusMessage: "Failed",
+            });
+            throw error;
+          }
+        },
+        { asType: "generation" },
+      )) as GenerateChallengeCritiqueResult;
+    } catch (error) {
+      failures.push({
+        provider: route.provider,
+        model: route.model,
+        tier: route.tier,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  throw new GenerateChallengeCritiqueError({
+    operationName: GENERATE_CHALLENGE_CRITIQUE_OPERATION,
+    attempts: routes.length,
+    failures,
+    message: "Challenge critique generation failed across all configured providers.",
+  });
+}
+
+export function buildChallengeCritiquePromptV1(
+  input: NormalizedGenerateChallengeCritiqueInput,
+  promptVersion = DEFAULT_PROMPT_VERSION,
+): PromptBundle {
+  const userPromptParts = [
+    `Prompt version: ${promptVersion}`,
+    input.mapTitle ? `Map title: ${input.mapTitle}` : "Map title: none provided.",
+    `Claim id: ${input.claimId}`,
+    `Claim: ${input.claimText}`,
+    `Claim confidence: ${input.claimConfidence}%`,
+    input.steelmanText ? `Existing steelman: ${input.steelmanText}` : "Existing steelman: none provided.",
+    `Critique mode: ${input.critiqueMode}`,
+    input.userGoal ? `User goal: ${input.userGoal}` : "User goal: none provided.",
+    input.neighboringClaims.length
+      ? `Neighboring claims:\n- ${input.neighboringClaims
+          .map((claim) =>
+            [
+              claim.text,
+              claim.confidence != null ? `${claim.confidence}% confidence` : null,
+              claim.kind ? `kind=${claim.kind}` : null,
+              claim.relationship ? `relationship=${claim.relationship}` : null,
+            ]
+              .filter(Boolean)
+              .join(" | "),
+          )
+          .join("\n- ")}`
+      : "Neighboring claims: none provided.",
+    input.previousRounds.length
+      ? `Prior round context:\n- ${input.previousRounds
+          .map((round) =>
+            [
+              `Round ${round.roundNumber}`,
+              round.critiqueSummary,
+              round.userResponse ? `response=${round.userResponse}` : null,
+              round.responsePath ? `path=${round.responsePath}` : null,
+              round.confidenceDelta != null ? `delta=${round.confidenceDelta}` : null,
+            ]
+              .filter(Boolean)
+              .join(" | "),
+          )
+          .join("\n- ")}`
+      : "Prior round context: none provided.",
+    `Return JSON with exactly these keys: ${OUTPUT_KEYS.join(", ")}.`,
+    "Keep the critique concise, specific, and structurally rigorous.",
+  ];
+
+  return {
+    promptVersion,
+    systemPrompt: [
+      "You generate one rigorous challenge critique for Penny.",
+      "Be concise, specific, and high-signal.",
+      "Prefer structural pressure over vague skepticism.",
+      "Return only valid JSON matching the requested schema.",
+    ].join(" "),
+    userPrompt: userPromptParts.join("\n"),
+  };
+}
+
+function buildChallengeCritiqueRepairPrompt(prompt: PromptBundle, invalidOutput: unknown, issues: string[]): PromptBundle {
+  return {
+    promptVersion: prompt.promptVersion,
+    systemPrompt: [
+      "You are repairing a malformed JSON response for Penny.",
+      "Return only valid JSON matching the requested critique schema.",
+      "Do not add markdown, explanation, or extra keys.",
+    ].join(" "),
+    userPrompt: [
+      "Original system prompt:",
+      prompt.systemPrompt,
+      "",
+      "Original user prompt:",
+      prompt.userPrompt,
+      "",
+      "Malformed output:",
+      JSON.stringify(invalidOutput, null, 2),
+      "",
+      "Validation issues:",
+      JSON.stringify(issues, null, 2),
+      "",
+      `Return JSON with exactly these keys: ${OUTPUT_KEYS.join(", ")}.`,
+    ].join("\n"),
+  };
+}
+
+async function validateWithSingleRepair(
+  route: GenerateChallengeCritiqueRoute,
+  prompt: PromptBundle,
+  firstResponse: StructuredProviderResponse,
+): Promise<{
+  cost: StructuredProviderCost;
+  output: GenerateChallengeCritiqueOutput;
+  repairAttempted: boolean;
+  usage: StructuredProviderUsage;
+}> {
+  const initial = safeParseChallengeCritiqueOutput(firstResponse.output);
+
+  if (initial.success) {
+    return {
+      output: initial.data,
+      repairAttempted: false,
+      usage: normalizeUsage(firstResponse.usage),
+      cost: normalizeCost(firstResponse.cost),
+    };
+  }
+
+  const repairPrompt = buildChallengeCritiqueRepairPrompt(prompt, firstResponse.output, initial.issues);
+  const repairResponse = await invokeStructuredProvider(route, repairPrompt);
+  const repaired = safeParseChallengeCritiqueOutput(repairResponse.output);
+
+  if (!repaired.success) {
+    throw new GenerateChallengeCritiqueValidationError(
+      "Challenge critique output failed validation after one repair pass.",
+      repaired.issues,
+    );
+  }
+
+  return {
+    output: repaired.data,
+    repairAttempted: true,
+    usage: {
+      inputTokens: addNullableNumbers(firstResponse.usage?.inputTokens ?? null, repairResponse.usage?.inputTokens ?? null),
+      outputTokens: addNullableNumbers(firstResponse.usage?.outputTokens ?? null, repairResponse.usage?.outputTokens ?? null),
+      totalTokens: addNullableNumbers(firstResponse.usage?.totalTokens ?? null, repairResponse.usage?.totalTokens ?? null),
+    },
+    cost: {
+      totalUsd: addNullableNumbers(firstResponse.cost?.totalUsd ?? null, repairResponse.cost?.totalUsd ?? null),
+      currency: readOptionalString(firstResponse.cost?.currency) ?? readOptionalString(repairResponse.cost?.currency) ?? null,
+    },
+  };
+}
+
+async function invokeStructuredProvider(route: GenerateChallengeCritiqueRoute, prompt: PromptBundle): Promise<StructuredProviderResponse> {
+  const request = {
+    jsonSchema: challengeCritiqueJsonSchema,
+    maxTokens: route.tier === "cheap" ? 1200 : 1800,
+    model: route.model,
+    schemaName: GENERATE_CHALLENGE_CRITIQUE_OPERATION,
+    systemPrompt: prompt.systemPrompt,
+    temperature: route.tier === "cheap" ? 0.15 : 0.2,
+    userPrompt: prompt.userPrompt,
+  };
+
+  const response =
+    route.provider === "anthropic"
+      ? await generateChallengeCritiqueDeps.invokeAnthropicStructured(request)
+      : route.provider === "xai"
+        ? await generateChallengeCritiqueDeps.invokeXaiStructured(request)
+        : Promise.reject(unsupportedProvider(route.provider));
+
+  return normalizeStructuredProviderResponse(response);
+}
+
+const challengeCritiqueJsonSchema = {
+  type: "object",
+  required: OUTPUT_KEYS,
+  additionalProperties: false,
+  properties: {
+    conciseCritiqueSummary: { type: "string" },
+    strongestCounterargument: { type: "string" },
+    assumptions: { type: "array", items: { type: "string" } },
+    likelyFailureModes: { type: "array", items: { type: "string" } },
+    followUpQuestions: { type: "array", items: { type: "string" } },
+    suggestedConfidenceDelta: { type: "integer" },
+    uncertaintyNote: { type: "string" },
+  },
+} as const;
+
+function normalizeStructuredProviderResponse(value: unknown): StructuredProviderResponse {
+  const object = asRecord(value, "Structured provider response must be an object.");
+
+  return {
+    output: object.output,
+    usage: normalizeUsage(object.usage),
+    cost: normalizeCost(object.cost),
+  };
+}
+
+function normalizeUsage(value: unknown): StructuredProviderUsage {
+  const object = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+  return {
+    inputTokens: readNullableNumber(object.inputTokens),
+    outputTokens: readNullableNumber(object.outputTokens),
+    totalTokens: readNullableNumber(object.totalTokens),
+  };
+}
+
+function normalizeCost(value: unknown): StructuredProviderCost {
+  const object = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+  return {
+    totalUsd: readNullableNumber(object.totalUsd),
+    currency: readOptionalString(object.currency),
+  };
+}
+
+function validateGenerateChallengeCritiqueInput(input: unknown): NormalizedGenerateChallengeCritiqueInput {
+  const object = asRecord(input, "generateChallengeCritique input must be an object.");
+  const previousRounds = normalizePreviousRounds(object.previousRounds, object.priorRoundContext);
+
+  return {
+    claimId: readRequiredString(object.claimId, "claimId", 1, 200),
+    claimText: readRequiredString(object.claimText, "claimText", 1, 4000),
+    claimConfidence: readRequiredInteger(object.claimConfidence, "claimConfidence", 0, 100),
+    critiqueMode: readCritiqueMode(object.critiqueMode),
+    mapTitle: readOptionalString(object.mapTitle),
+    steelmanText: readOptionalString(object.steelmanText),
+    userGoal: readOptionalString(object.userGoal),
+    neighboringClaims: normalizeNeighboringClaims(object.neighboringClaims),
+    previousRounds,
+  };
+}
+
+function normalizeNeighboringClaims(value: unknown): GenerateChallengeCritiqueNeighborClaim[] {
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new GenerateChallengeCritiqueValidationError("neighboringClaims must be an array when provided.", [
+      "neighboringClaims must be an array when provided.",
+    ]);
+  }
+
+  return value.map((entry, index) => {
+    const object = asRecord(entry, `neighboringClaims[${index}] must be an object.`);
+
+    return {
+      id: readRequiredString(object.id, `neighboringClaims[${index}].id`, 1, 200),
+      text: readRequiredString(object.text, `neighboringClaims[${index}].text`, 1, 4000),
+      confidence: readNullableInteger(object.confidence, `neighboringClaims[${index}].confidence`, 0, 100),
+      kind: readOptionalString(object.kind),
+      relationship: readOptionalString(object.relationship),
+    };
+  });
+}
+
+function normalizePreviousRounds(
+  previousRoundsValue: unknown,
+  priorRoundContextValue: unknown,
+): GenerateChallengeCritiquePreviousRound[] {
+  const sourceValue =
+    previousRoundsValue !== undefined
+      ? previousRoundsValue
+      : priorRoundContextValue === undefined || priorRoundContextValue === null
+        ? []
+        : Array.isArray(priorRoundContextValue)
+          ? priorRoundContextValue
+          : [priorRoundContextValue];
+
+  if (!Array.isArray(sourceValue)) {
+    throw new GenerateChallengeCritiqueValidationError("prior round context must be an array or object when provided.", [
+      "prior round context must be an array or object when provided.",
+    ]);
+  }
+
+  return sourceValue.map((entry, index) => {
+    const object = asRecord(entry, `previousRounds[${index}] must be an object.`);
+
+    return {
+      roundId: readRequiredString(object.roundId, `previousRounds[${index}].roundId`, 1, 200),
+      roundNumber: readRequiredInteger(object.roundNumber, `previousRounds[${index}].roundNumber`, 1, 1000),
+      critiqueSummary: readRequiredString(object.critiqueSummary, `previousRounds[${index}].critiqueSummary`, 1, 800),
+      userResponse: readOptionalString(object.userResponse),
+      responsePath: readResponsePath(object.responsePath),
+      confidenceDelta: readNullableInteger(object.confidenceDelta, `previousRounds[${index}].confidenceDelta`, -100, 100),
+    };
+  });
+}
+
+function safeParseChallengeCritiqueOutput(
+  value: unknown,
+): { data: GenerateChallengeCritiqueOutput; success: true } | { issues: string[]; success: false } {
+  const issues: string[] = [];
+  const object = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
+  if (!object) {
+    return { success: false, issues: ["Critique output must be an object."] };
+  }
+
+  const conciseCritiqueSummary = collectStringIssue(object.conciseCritiqueSummary, "conciseCritiqueSummary", 1, 240, issues);
+  const strongestCounterargument = collectStringIssue(
+    object.strongestCounterargument,
+    "strongestCounterargument",
+    1,
+    2400,
+    issues,
+  );
+  const assumptions = collectStringArrayIssue(object.assumptions, "assumptions", 6, issues);
+  const likelyFailureModes = collectStringArrayIssue(object.likelyFailureModes, "likelyFailureModes", 6, issues);
+  const followUpQuestions = collectStringArrayIssue(object.followUpQuestions, "followUpQuestions", 6, issues);
+  const suggestedConfidenceDelta = collectIntegerIssue(
+    object.suggestedConfidenceDelta,
+    "suggestedConfidenceDelta",
+    -100,
+    100,
+    issues,
+  );
+  const uncertaintyNote = collectStringIssue(object.uncertaintyNote, "uncertaintyNote", 1, 400, issues);
+
+  if (issues.length > 0) {
+    return { success: false, issues };
+  }
+
+  return {
+    success: true,
+    data: {
+      conciseCritiqueSummary,
+      strongestCounterargument,
+      assumptions,
+      likelyFailureModes,
+      followUpQuestions,
+      suggestedConfidenceDelta,
+      uncertaintyNote,
+    },
+  };
+}
+
+function collectStringIssue(
+  value: unknown,
+  fieldName: string,
+  minLength: number,
+  maxLength: number,
+  issues: string[],
+): string {
+  if (typeof value !== "string") {
+    issues.push(`${fieldName} must be a string.`);
+    return "";
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length < minLength) {
+    issues.push(`${fieldName} must be at least ${minLength} character(s).`);
+  }
+
+  if (trimmed.length > maxLength) {
+    issues.push(`${fieldName} must be at most ${maxLength} character(s).`);
+  }
+
+  return trimmed;
+}
+
+function collectStringArrayIssue(
+  value: unknown,
+  fieldName: string,
+  maxItems: number,
+  issues: string[],
+): string[] {
+  if (!Array.isArray(value)) {
+    issues.push(`${fieldName} must be an array.`);
+    return [];
+  }
+
+  if (value.length > maxItems) {
+    issues.push(`${fieldName} must contain at most ${maxItems} item(s).`);
+  }
+
+  return value.map((entry, index) => collectStringIssue(entry, `${fieldName}[${index}]`, 1, 240, issues));
+}
+
+function collectIntegerIssue(
+  value: unknown,
+  fieldName: string,
+  minValue: number,
+  maxValue: number,
+  issues: string[],
+): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    issues.push(`${fieldName} must be an integer.`);
+    return 0;
+  }
+
+  if (value < minValue || value > maxValue) {
+    issues.push(`${fieldName} must be between ${minValue} and ${maxValue}.`);
+  }
+
+  return value;
+}
+
+function readCritiqueMode(value: unknown): ChallengeCritiqueMode {
+  if (value === undefined || value === null) {
+    return "direct";
+  }
+
+  if (value === "direct" || value === "socratic" || value === "red_team") {
+    return value;
+  }
+
+  throw new GenerateChallengeCritiqueValidationError("critiqueMode must be one of direct, socratic, or red_team.", [
+    "critiqueMode must be one of direct, socratic, or red_team.",
+  ]);
+}
+
+function readResponsePath(value: unknown): ChallengeResponsePath | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (value === "defend" || value === "revise" || value === "absorb") {
+    return value;
+  }
+
+  throw new GenerateChallengeCritiqueValidationError("responsePath must be one of defend, revise, or absorb.", [
+    "responsePath must be one of defend, revise, or absorb.",
+  ]);
+}
+
+function normalizeQualityTier(value: ChallengeCritiqueQualityTier | null | undefined): "default" | "cheap" {
+  if (value === "cheap" || value === "degraded") {
+    return "cheap";
+  }
+
+  return "default";
+}
+
+function readRequiredString(value: unknown, fieldName: string, minLength: number, maxLength: number): string {
+  if (typeof value !== "string") {
+    throw new GenerateChallengeCritiqueValidationError(`${fieldName} must be a string.`, [`${fieldName} must be a string.`]);
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length < minLength) {
+    throw new GenerateChallengeCritiqueValidationError(
+      `${fieldName} must be at least ${minLength} character(s).`,
+      [`${fieldName} must be at least ${minLength} character(s).`],
+    );
+  }
+
+  if (trimmed.length > maxLength) {
+    throw new GenerateChallengeCritiqueValidationError(
+      `${fieldName} must be at most ${maxLength} character(s).`,
+      [`${fieldName} must be at most ${maxLength} character(s).`],
+    );
+  }
+
+  return trimmed;
+}
+
+function readOptionalString(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new GenerateChallengeCritiqueValidationError("Optional string field must be a string when provided.", [
+      "Optional string field must be a string when provided.",
+    ]);
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function readRequiredInteger(value: unknown, fieldName: string, minValue: number, maxValue: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new GenerateChallengeCritiqueValidationError(`${fieldName} must be an integer.`, [`${fieldName} must be an integer.`]);
+  }
+
+  if (value < minValue || value > maxValue) {
+    throw new GenerateChallengeCritiqueValidationError(
+      `${fieldName} must be between ${minValue} and ${maxValue}.`,
+      [`${fieldName} must be between ${minValue} and ${maxValue}.`],
+    );
+  }
+
+  return value;
+}
+
+function readNullableInteger(value: unknown, fieldName: string, minValue: number, maxValue: number): number | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  return readRequiredInteger(value, fieldName, minValue, maxValue);
+}
+
+function readNullableNumber(value: unknown): number | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+
+  return value;
+}
+
+function asRecord(value: unknown, message: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new GenerateChallengeCritiqueValidationError(message, [message]);
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function addNullableNumbers(a: number | null, b: number | null): number | null {
+  if (a == null && b == null) {
+    return null;
+  }
+
+  return (a ?? 0) + (b ?? 0);
+}
