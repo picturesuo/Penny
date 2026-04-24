@@ -1,94 +1,175 @@
 type JsonRecord = Record<string, unknown>;
 
-export type AnthropicProviderRequest = {
+export type StructuredProviderRequest = {
+  jsonSchema: Record<string, unknown>;
+  maxTokens: number;
   model: string;
-  system: string;
-  userContent: string;
-  responseFormatInstructions: string;
-  maxTokens?: number;
-  temperature?: number;
+  schemaName: string;
+  systemPrompt: string;
+  temperature: number;
+  userPrompt: string;
 };
 
-export type AnthropicProviderUsage = {
+export type StructuredProviderUsage = {
   inputTokens: number | null;
   outputTokens: number | null;
   totalTokens: number | null;
 };
 
-export type AnthropicProviderResponse = {
-  rawText: string | null;
-  structuredContent: unknown;
-  stopReason: string | null;
-  usage: AnthropicProviderUsage;
-  raw: JsonRecord;
+export type StructuredProviderCost = {
+  currency: string | null;
+  totalUsd: number | null;
 };
 
-export async function invokeAnthropic(request: AnthropicProviderRequest): Promise<AnthropicProviderResponse> {
+export type StructuredProviderResponse = {
+  cost: StructuredProviderCost;
+  json: unknown;
+  output: unknown;
+  raw: JsonRecord;
+  stopReason: string | null;
+  text: string | null;
+  usage: StructuredProviderUsage;
+};
+
+export type AnthropicProviderRequest = StructuredProviderRequest;
+export type AnthropicProviderResponse = StructuredProviderResponse;
+
+export type ProviderErrorReason = "configuration" | "http" | "invalid_response" | "network";
+
+export class ProviderError extends Error {
+  code: "PROVIDER_ERROR";
+  details: JsonRecord | null;
+  provider: string;
+  reason: ProviderErrorReason;
+  retryable: boolean;
+  status: number | null;
+
+  constructor(params: {
+    details?: JsonRecord | null;
+    message: string;
+    provider: string;
+    reason: ProviderErrorReason;
+    retryable?: boolean;
+    status?: number | null;
+  }) {
+    super(params.message);
+    this.name = "ProviderError";
+    this.code = "PROVIDER_ERROR";
+    this.provider = params.provider;
+    this.reason = params.reason;
+    this.status = params.status ?? null;
+    this.details = params.details ?? null;
+    this.retryable = params.retryable ?? false;
+  }
+}
+
+export async function invokeAnthropicStructured(
+  request: StructuredProviderRequest,
+): Promise<StructuredProviderResponse> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
 
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not configured.");
+    throw new ProviderError({
+      message: "ANTHROPIC_API_KEY is not configured.",
+      provider: "anthropic",
+      reason: "configuration",
+    });
   }
 
-  const response = await fetch(`${resolveAnthropicBaseUrl()}/messages`, {
-    method: "POST",
-    headers: {
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-    },
-    body: JSON.stringify({
-      model: request.model,
-      max_tokens: normalizeMaxTokens(request.maxTokens),
-      temperature: normalizeTemperature(request.temperature),
-      system: request.system,
-      messages: [
-        {
-          role: "user",
-          content: buildUserMessage(request),
-        },
-      ],
-    }),
-  });
+  let response: Response;
 
-  const payload = await parseJsonResponse(response);
+  try {
+    response = await fetch(`${resolveAnthropicBaseUrl()}/messages`, {
+      method: "POST",
+      headers: {
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        model: request.model,
+        max_tokens: normalizeMaxTokens(request.maxTokens),
+        temperature: normalizeTemperature(request.temperature),
+        system: request.systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content: request.userPrompt,
+          },
+        ],
+        tools: [
+          {
+            name: request.schemaName,
+            description: "Return the final structured JSON result for this task.",
+            input_schema: request.jsonSchema,
+          },
+        ],
+        tool_choice: {
+          type: "tool",
+          name: request.schemaName,
+        },
+      }),
+    });
+  } catch (error) {
+    throw new ProviderError({
+      message: error instanceof Error ? error.message : "Anthropic request failed before receiving a response.",
+      provider: "anthropic",
+      reason: "network",
+      retryable: true,
+    });
+  }
+
+  const payload = await parseJsonResponse(response, "anthropic");
 
   if (!response.ok) {
-    throw new Error(`Anthropic request failed with status ${response.status}: ${extractErrorMessage(payload)}`);
+    throw new ProviderError({
+      message: `Anthropic request failed with status ${response.status}: ${extractErrorMessage(payload)}`,
+      provider: "anthropic",
+      reason: "http",
+      retryable: isRetryableStatus(response.status),
+      status: response.status,
+      details: payload,
+    });
   }
 
-  const rawText = extractTextContent(payload);
-  const structuredContent = extractStructuredContent(payload, rawText);
+  const text = extractTextContent(payload);
+  const json = extractStructuredJson(payload, text);
+
+  if (json == null) {
+    throw new ProviderError({
+      message: "Anthropic response did not contain structured JSON.",
+      provider: "anthropic",
+      reason: "invalid_response",
+      retryable: false,
+      status: response.status,
+      details: payload,
+    });
+  }
+
   const inputTokens = readNumber(payload.usage, "input_tokens");
   const outputTokens = readNumber(payload.usage, "output_tokens");
 
   return {
-    rawText,
-    structuredContent,
-    stopReason: readString(payload, "stop_reason"),
+    text,
+    json,
+    output: json,
     usage: {
       inputTokens,
       outputTokens,
       totalTokens: addNullableNumbers(inputTokens, outputTokens),
     },
+    cost: {
+      totalUsd: readNumber(payload.usage, "cost_usd"),
+      currency: readString(payload.usage, "currency"),
+    },
+    stopReason: readString(payload, "stop_reason"),
     raw: payload,
   };
 }
 
-function buildUserMessage(request: AnthropicProviderRequest) {
-  return [
-    {
-      type: "text",
-      text: request.userContent,
-    },
-    {
-      type: "text",
-      text: `Response format instructions:\n${request.responseFormatInstructions}`,
-    },
-  ];
-}
+export const invokeAnthropic = invokeAnthropicStructured;
 
-async function parseJsonResponse(response: Response): Promise<JsonRecord> {
+async function parseJsonResponse(response: Response, provider: string): Promise<JsonRecord> {
   const text = await response.text();
 
   if (!text.trim()) {
@@ -96,9 +177,15 @@ async function parseJsonResponse(response: Response): Promise<JsonRecord> {
   }
 
   try {
-    return asRecord(JSON.parse(text), "Anthropic provider returned invalid JSON.");
+    return asRecord(JSON.parse(text), `${provider} provider returned invalid JSON.`);
   } catch {
-    throw new Error(`Anthropic provider returned non-JSON response (${response.status}).`);
+    throw new ProviderError({
+      message: `Anthropic provider returned non-JSON response (${response.status}).`,
+      provider,
+      reason: "invalid_response",
+      retryable: false,
+      status: response.status,
+    });
   }
 }
 
@@ -116,14 +203,10 @@ function extractTextContent(payload: JsonRecord): string | null {
     }
   }
 
-  if (!textBlocks.length) {
-    return null;
-  }
-
-  return textBlocks.join("\n\n");
+  return textBlocks.length ? textBlocks.join("\n\n") : null;
 }
 
-function extractStructuredContent(payload: JsonRecord, rawText: string | null): unknown {
+function extractStructuredJson(payload: JsonRecord, rawText: string | null): unknown {
   const content = Array.isArray(payload.content) ? payload.content : [];
 
   for (const block of content) {
@@ -177,16 +260,16 @@ function readString(source: unknown, key: string): string | null {
   return typeof value === "string" && value.trim().length ? value.trim() : null;
 }
 
-function normalizeMaxTokens(value: number | undefined): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+function normalizeMaxTokens(value: number): number {
+  if (!Number.isFinite(value)) {
     return 1024;
   }
 
   return Math.max(1, Math.trunc(value));
 }
 
-function normalizeTemperature(value: number | undefined): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+function normalizeTemperature(value: number): number {
+  if (!Number.isFinite(value)) {
     return 0;
   }
 
@@ -199,6 +282,10 @@ function addNullableNumbers(a: number | null, b: number | null): number | null {
   }
 
   return (a ?? 0) + (b ?? 0);
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 429 || status >= 500;
 }
 
 function resolveAnthropicBaseUrl(): string {
