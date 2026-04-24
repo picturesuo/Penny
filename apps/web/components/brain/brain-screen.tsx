@@ -106,6 +106,15 @@ const styles = {
     borderRadius: 8,
     padding: 16,
   },
+  thoughtRow: {
+    alignItems: "start",
+    display: "grid",
+    gap: 14,
+    gridTemplateColumns: "minmax(0, 1fr) 96px",
+  },
+  thoughtCopy: {
+    minWidth: 0,
+  },
   thoughtCardSelected: {
     borderColor: "#2f6b55",
     boxShadow: "inset 4px 0 0 #2f6b55",
@@ -128,6 +137,23 @@ const styles = {
     fontSize: 13,
     gap: 10,
     marginTop: 12,
+  },
+  confidenceGraph: {
+    alignSelf: "stretch",
+    display: "grid",
+    gap: 4,
+    gridTemplateColumns: "repeat(5, 1fr)",
+    minHeight: 42,
+  },
+  confidenceBar: {
+    alignSelf: "end",
+    background: "#d8ded5",
+    borderRadius: 3,
+    display: "block",
+    minHeight: 8,
+  },
+  confidenceBarActive: {
+    background: "#2f6b55",
   },
   sideRail: {
     display: "grid",
@@ -226,7 +252,7 @@ export function BrainScreen({ model, onSelectThought, state, statusMessage }: Br
         <section aria-labelledby="brain-stream-heading" style={styles.panel}>
           <p style={styles.eyebrow}>Main stream</p>
           <h2 id="brain-stream-heading" style={styles.thoughtTitle}>
-            Current thoughts
+            Recent claims and thoughts
           </h2>
           <BrainStateBanner state={screenState} message={statusMessage} />
           {model.stream.length > 0 ? (
@@ -239,7 +265,7 @@ export function BrainScreen({ model, onSelectThought, state, statusMessage }: Br
                     style={styles.thoughtButton}
                     type="button"
                   >
-                    <ThoughtCard thought={thought} />
+                    <ThoughtCard preview thought={thought} />
                   </button>
                 </li>
               ))}
@@ -340,14 +366,19 @@ function ContextValue({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ThoughtCard({ thought }: { thought: BrainThoughtViewModel }) {
+function ThoughtCard({ preview = false, thought }: { preview?: boolean; thought: BrainThoughtViewModel }) {
   return (
     <article style={{ ...styles.thoughtCard, ...(thought.isSelected ? styles.thoughtCardSelected : {}) }}>
-      <h3 style={styles.thoughtTitle}>{thought.title}</h3>
-      <p style={styles.thoughtBody}>{thought.body}</p>
-      <div style={styles.metadata}>
-        <span>{thought.confidenceLabel}</span>
-        <span>Updated {thought.updatedAtLabel}</span>
+      <div style={styles.thoughtRow}>
+        <div style={styles.thoughtCopy}>
+          <h3 style={styles.thoughtTitle}>{thought.title}</h3>
+          <p style={styles.thoughtBody}>{preview ? thought.bodyPreview : thought.body}</p>
+          <div style={styles.metadata}>
+            <span>{thought.confidenceLabel}</span>
+            <span>Updated {thought.updatedAtLabel}</span>
+          </div>
+        </div>
+        <ConfidenceMiniGraph confidenceBps={thought.confidenceBps} label={thought.confidenceLabel} />
       </div>
     </article>
   );
@@ -362,6 +393,26 @@ function ThoughtSummary({ thought }: { thought: BrainThoughtViewModel }) {
         <span>{thought.updatedAtLabel}</span>
       </div>
     </article>
+  );
+}
+
+function ConfidenceMiniGraph({ confidenceBps, label }: { confidenceBps: number | null; label: string }) {
+  const activeBars = typeof confidenceBps === "number" ? Math.max(1, Math.ceil(Math.max(0, Math.min(confidenceBps, 10000)) / 2000)) : 0;
+  const heights = ["34%", "52%", "72%", "88%", "100%"];
+
+  return (
+    <div aria-label={`Confidence mini graph: ${label}`} role="img" style={styles.confidenceGraph}>
+      {heights.map((height, index) => (
+        <span
+          key={height}
+          style={{
+            ...styles.confidenceBar,
+            ...(index < activeBars ? styles.confidenceBarActive : {}),
+            height,
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
