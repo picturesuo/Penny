@@ -16,7 +16,7 @@ These routes return backend-shaped workspace views. The frontend should consume 
 | `GET` | `/api/workspace/learn` | `buildLearnView` | Learn mode context, selected claim, and the MVP placeholder status/message. |
 | `GET` | `/api/graph` | `graph_nodes` + `graph_edges` | Persisted graph payload as `{ nodes, edges }` for the authenticated user, with optional `sessionId`, `mapId`, and `type` query filters. |
 | `GET` | `/api/graph/nodes/:id/detail` | `graph_nodes` + `graph_edges` + `confidence_ratings` | Authenticated graph node detail with the node, incoming/outgoing edges, and confidence ratings. |
-| `GET` | `/api/search?q=` | `maps` + `claims` + `thoughts` + `sessions` | Authenticated global search for command-palette results across owned workspace records. |
+| `GET` | `/api/search?q=` | `maps` + `claims` + `thoughts` + `sessions` | Authenticated global search for command-palette results across owned workspace records. Each result has `id`, `type`, `title`, `subtitle`, `confidence`, and `href`. |
 
 ## Write Commands
 

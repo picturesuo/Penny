@@ -4,13 +4,13 @@ export type CommandResult = {
   id: string;
   type: "thought" | "map" | "claim" | "session";
   title: string;
-  subtitle: string | null;
-  confidence: number | null;
-  href: string | null;
+  subtitle?: string | null;
+  confidence?: number | null;
+  href?: string | null;
 };
 
 export type SearchResultKind = CommandResult["type"];
-export type SearchResult = CommandResult;
+export type SearchResult = Required<Pick<CommandResult, "id" | "type" | "title" | "subtitle" | "confidence" | "href">>;
 
 export type SearchResponse = {
   results: SearchResult[];
