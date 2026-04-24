@@ -341,7 +341,7 @@ export function canGenerateChallengeCritiqueNow(): boolean {
 }
 
 export function canAutoGenerateChallengeCritiqueNow(): boolean {
-  return true;
+  return false;
 }
 
 export async function generateChallengeCritique(

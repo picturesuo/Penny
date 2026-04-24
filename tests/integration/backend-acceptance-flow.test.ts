@@ -10,7 +10,6 @@ import postgres from "postgres";
 import { GET as getBrain } from "../../apps/web/app/api/workspace/brain/route.ts";
 import { GET as getChallenge } from "../../apps/web/app/api/workspace/challenge/route.ts";
 import { GET as getLearn } from "../../apps/web/app/api/workspace/learn/route.ts";
-import { generateChallengeCritiqueDeps } from "../../server/ai/operations/generateChallengeCritique.ts";
 import { createClaim } from "../../server/commands/create-claim.ts";
 import { createMap } from "../../server/commands/create-map.ts";
 import { recordChallengeResponse } from "../../server/commands/record-challenge-response.ts";
@@ -86,6 +85,11 @@ function requestWithUser(url: string, userId: string) {
   });
 }
 
+function useAcceptanceDatabase() {
+  process.env.DATABASE_URL = databaseUrl;
+  process.env.DATABASE_DIRECT_URL = databaseUrl;
+}
+
 run("initdb", ["-D", PGDATA_DIR, "-U", PG_USER, "-A", "trust"]);
 run("pg_ctl", ["-D", PGDATA_DIR, "-l", join(PGDATA_DIR, "postgres.log"), "-o", `-p ${PG_PORT}`, "start"]);
 run("createdb", ["-h", "127.0.0.1", "-p", String(PG_PORT), "-U", PG_USER, DB_NAME]);
@@ -100,14 +104,6 @@ run("pnpm", ["db:migrate"], {
 process.env.DATABASE_URL = databaseUrl;
 process.env.DATABASE_DIRECT_URL = databaseUrl;
 
-function snapshotGenerateDeps() {
-  return { ...generateChallengeCritiqueDeps };
-}
-
-function restoreGenerateDeps(snapshot: ReturnType<typeof snapshotGenerateDeps>) {
-  Object.assign(generateChallengeCritiqueDeps, snapshot);
-}
-
 after(async () => {
   try {
     run("pg_ctl", ["-D", PGDATA_DIR, "stop", "-m", "immediate"]);
@@ -120,37 +116,10 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
   const userId = "00000000-0000-0000-0000-000000000999";
   const db = createDbClient(databaseUrl);
   const sql = postgres(databaseUrl, { prepare: false });
-  const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
-  const originalXaiKey = process.env.XAI_API_KEY;
-  const depsSnapshot = snapshotGenerateDeps();
+  const originalOpenAIKey = process.env.OPENAI_API_KEY;
 
   try {
-    delete process.env.ANTHROPIC_API_KEY;
-    delete process.env.XAI_API_KEY;
-    generateChallengeCritiqueDeps.invokeAnthropicStructured = async () => ({
-      output: {
-        summary: "The acceptance-flow claim still needs a sharper falsifiability boundary.",
-        strongestCounterargument:
-          "The route only helps if the generated critique survives persistence and comes back through the projection.",
-        assumptions: ["The challenge request bridges directly into generation."],
-        failureModes: ["The projection returns only pending state after generation succeeds."],
-        followUpQuestions: ["Which field is the canonical critique payload for the route response?"],
-        suggestedConfidenceBps: null,
-        uncertaintyNote: "The contract is only useful if the challenge route returns the stored critique.",
-      },
-      usage: {
-        inputTokens: 42,
-        outputTokens: 17,
-        totalTokens: 59,
-      },
-      cost: {
-        totalUsd: 0.01,
-        currency: "USD",
-      },
-    });
-    generateChallengeCritiqueDeps.invokeXaiStructured = async () => {
-      throw new Error("xAI should not be called in the acceptance-flow provider mock.");
-    };
+    delete process.env.OPENAI_API_KEY;
 
     const map = await createMap(
       {
@@ -182,6 +151,7 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
       db,
     );
 
+    useAcceptanceDatabase();
     const brainResponse = await getBrain(requestWithUser("http://localhost/api/workspace/brain", userId));
     assert.equal(brainResponse.status, 200);
 
@@ -235,6 +205,7 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
 
     assert.equal(critique.critiqueStatus, "pending");
 
+    useAcceptanceDatabase();
     const challengeResponse = await getChallenge(requestWithUser("http://localhost/api/workspace/challenge", userId));
     assert.equal(challengeResponse.status, 200);
 
@@ -315,24 +286,8 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
     assert.equal(challengePayload.activeClaim?.id, claim.claimId);
     assert.equal(challengePayload.activeChallengeRound?.id, round.roundId);
     assert.equal(challengePayload.activeChallengeRound?.claimId, claim.claimId);
-    assert.equal(challengePayload.critiqueStatus, "ready");
-    assert.deepEqual(challengePayload.critiquePayload, {
-      critique: {
-        conciseCritiqueSummary: "The acceptance-flow claim still needs a sharper falsifiability boundary.",
-        strongestCounterargument:
-          "The route only helps if the generated critique survives persistence and comes back through the projection.",
-        assumptions: ["The challenge request bridges directly into generation."],
-        likelyFailureModes: ["The projection returns only pending state after generation succeeds."],
-        followUpQuestions: ["Which field is the canonical critique payload for the route response?"],
-        suggestedConfidenceDelta: 0,
-        uncertaintyNote: "The contract is only useful if the challenge route returns the stored critique.",
-      },
-      metadata: {
-        provider: "anthropic",
-        model: "claude-sonnet-4-20250514",
-        promptVersion: "generateChallengeCritique.v1",
-      },
-    });
+    assert.equal(challengePayload.critiqueStatus, "pending");
+    assert.equal(challengePayload.critiquePayload, undefined);
 
     const responseResult = await recordChallengeResponse(
       {
@@ -361,6 +316,7 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
       db,
     );
 
+    useAcceptanceDatabase();
     const learnResponse = await getLearn(requestWithUser("http://localhost/api/workspace/learn", userId));
     assert.equal(learnResponse.status, 200);
 
@@ -434,6 +390,7 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
       db,
     );
 
+    useAcceptanceDatabase();
     const finalBrainResponse = await getBrain(requestWithUser("http://localhost/api/workspace/brain", userId));
     assert.equal(finalBrainResponse.status, 200);
 
@@ -480,7 +437,7 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
 
     assert.equal(storedCritiques.length, 1);
     assert.equal(storedCritiques[0].round_id, round.roundId);
-    assert.equal(storedCritiques[0].status, "ready");
+    assert.equal(storedCritiques[0].status, "pending");
 
     const eventRows = await sql<
       {
@@ -526,12 +483,6 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
         .sort((left, right) => left.type.localeCompare(right.type)),
       [
         {
-          type: "challenge.critique.generated",
-          aggregate_type: "challenge_critique",
-          aggregate_id: critique.critiqueId,
-          request_id: "acceptance-critique-request",
-        },
-        {
           type: "challenge.critique.requested",
           aggregate_type: "challenge_critique",
           aggregate_id: critique.critiqueId,
@@ -560,17 +511,10 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
       ],
     );
   } finally {
-    restoreGenerateDeps(depsSnapshot);
-    if (originalAnthropicKey === undefined) {
-      delete process.env.ANTHROPIC_API_KEY;
+    if (originalOpenAIKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
     } else {
-      process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
-    }
-
-    if (originalXaiKey === undefined) {
-      delete process.env.XAI_API_KEY;
-    } else {
-      process.env.XAI_API_KEY = originalXaiKey;
+      process.env.OPENAI_API_KEY = originalOpenAIKey;
     }
 
     await sql.end({ timeout: 1 });

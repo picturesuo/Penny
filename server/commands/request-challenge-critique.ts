@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
 import {
-  canAutoGenerateChallengeCritiqueNow,
   generateChallengeCritique as generateChallengeCritiqueOperation,
   type ChallengeResponsePath,
   type GenerateChallengeCritiquePreviousRound,
@@ -91,6 +90,10 @@ export type RequestChallengeCritiqueRepository = {
   transaction<T>(callback: (tx: RequestChallengeCritiqueRepositoryTx) => Promise<T>): Promise<T>;
 };
 
+function shouldAutoBridgeChallengeCritiqueRequests() {
+  return process.env.PENNY_AUTO_GENERATE_CHALLENGE_CRITIQUE?.trim() === "1";
+}
+
 type RequestChallengeCritiqueDbRoundRow = {
   id: string;
   mapId: string;
@@ -169,6 +172,7 @@ export type RequestChallengeCritiqueResult = {
 };
 
 export type RequestChallengeCritiqueDependencies = {
+  autoGenerate?: boolean;
   createId?: () => string;
   now?: () => Date;
 };
@@ -908,6 +912,7 @@ export async function requestChallengeCritique(
 ): Promise<RequestChallengeCritiqueResult> {
   const normalized = validateRequestChallengeCritiqueInput(input);
   const repositoryWasProvided = arguments.length >= 2;
+  const shouldAutoGenerate = dependencies.autoGenerate ?? true;
   const createId = dependencies.createId ?? randomUUID;
   const now = dependencies.now ?? (() => new Date());
   const transactionalRepository = repository as RequestChallengeCritiqueTransactional;
@@ -1021,7 +1026,7 @@ export async function requestChallengeCritique(
       createdAt: commandContext.now,
     });
 
-    if (repositoryWasProvided && hasSelectQuery(tx) && canAutoGenerateChallengeCritiqueNow()) {
+    if (shouldAutoGenerate && repositoryWasProvided && hasSelectQuery(tx) && shouldAutoBridgeChallengeCritiqueRequests()) {
       await bridgeGenerateCritique(tx, {
         critiqueId,
         roundId: targetRound.id,

@@ -12,11 +12,12 @@ const miniMapPath = new URL("../../apps/web/components/graph/mini-map.tsx", impo
 const zoomControlsPath = new URL("../../apps/web/components/graph/zoom-controls.tsx", import.meta.url);
 const graphIndexPath = new URL("../../apps/web/components/graph/index.ts", import.meta.url);
 const hooksPath = new URL("../../apps/web/lib/hooks/use-workspace-view.ts", import.meta.url);
+const graphTypesPath = new URL("../../apps/web/lib/types/graph.ts", import.meta.url);
 const srcGraphToolbarPath = new URL("../../apps/web/src/components/graph/GraphToolbar.tsx", import.meta.url);
 const srcLensToggleBarPath = new URL("../../apps/web/src/components/graph/LensToggleBar.tsx", import.meta.url);
 
 test("graph e2e harness can target the graph surface without redesigning the shell", async () => {
-  const [viewSource, nodeSource, miniMapSource, zoomSource, toolbarSource, lensSource, canvasSource] = await Promise.all([
+  const [viewSource, nodeSource, miniMapSource, zoomSource, toolbarSource, lensSource, canvasSource, typeSource] = await Promise.all([
     readFile(graphViewPath, "utf8"),
     readFile(graphNodePath, "utf8"),
     readFile(miniMapPath, "utf8"),
@@ -24,6 +25,7 @@ test("graph e2e harness can target the graph surface without redesigning the she
     readFile(srcGraphToolbarPath, "utf8"),
     readFile(srcLensToggleBarPath, "utf8"),
     readFile(graphCanvasPath, "utf8"),
+    readFile(graphTypesPath, "utf8"),
   ]);
 
   assert.match(viewSource, /data-testid="penny-graph"/);
@@ -44,7 +46,16 @@ test("graph e2e harness can target the graph surface without redesigning the she
   assert.match(toolbarSource, /Focus selected node connections/);
   assert.match(viewSource, /focusSelectedNode/);
   assert.match(canvasSource, /focusNodeId/);
+  assert.match(canvasSource, /activeLensIds/);
   assert.match(lensSource, /data-testid="penny-graph-lens-toggles"/);
+  assert.match(lensSource, /Claims/);
+  assert.match(lensSource, /Contradictions/);
+  assert.match(lensSource, /Dependencies/);
+  assert.match(lensSource, /Recent/);
+  assert.match(typeSource, /type\?: GraphNodeType/);
+  assert.match(typeSource, /confidence\?: number \| null/);
+  assert.match(typeSource, /activityAt\?: string/);
+  assert.match(typeSource, /type\?: GraphEdgeType/);
   assert.match(viewSource, /focusedCluster/);
 });
 

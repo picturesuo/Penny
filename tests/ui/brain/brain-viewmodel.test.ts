@@ -79,6 +79,7 @@ test("createBrainViewModel maps Brain projection claims into thought stream and 
       id: "claim-1",
       title: "Enterprise buyers need audit trails before rollout.",
       confidenceLabel: "52% confidence",
+      confidenceBps: 5200,
       brainMapHref: "/brain?claimId=claim-1#brain-map",
     },
   ]);

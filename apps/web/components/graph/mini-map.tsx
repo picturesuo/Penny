@@ -1,7 +1,7 @@
 import type { CSSProperties, PointerEvent } from "react";
 
 import type { GraphEdge, GraphModel, GraphViewport } from "../../lib/types/graph";
-import { createNodeLookup, positionGraphNodes, type PositionedGraphNode } from "./graph-layout";
+import { createNodeLookup, getGraphNodeCluster, positionGraphNodes, type PositionedGraphNode } from "./graph-layout";
 import { graphClusterColors, graphMiniMapStyle, graphViewBox, graphViewBoxValue } from "./graph-style";
 
 type MiniMapProps = {
@@ -93,7 +93,7 @@ export function MiniMap({ nodes, edges, selectedNodeId, nodesById, viewport, onV
       })}
       {nodes.map((node) => {
         const selected = node.id === selectedNodeId;
-        const palette = graphClusterColors[node.cluster];
+        const palette = graphClusterColors[getGraphNodeCluster(node)];
 
         return (
           <circle

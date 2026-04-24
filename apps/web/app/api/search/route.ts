@@ -13,9 +13,9 @@ type SearchResult = {
   id: string;
   type: "thought" | "map" | "claim" | "session";
   title: string;
-  subtitle?: string;
-  confidence?: number | null;
-  href?: string;
+  subtitle: string | null;
+  confidence: number | null;
+  href: string | null;
 };
 
 type RankedSearchResult = SearchResult & {
@@ -108,6 +108,7 @@ async function searchWorkspace(input: { userId: string; query: string }) {
       type: "map" as const,
       title: row.title,
       subtitle: "Map",
+      confidence: null,
       href: `/workspace?mapId=${row.id}`,
       sortAt: row.createdAt,
     })),
@@ -125,7 +126,8 @@ async function searchWorkspace(input: { userId: string; query: string }) {
       type: "thought" as const,
       title: truncate(row.rawText),
       subtitle: row.source ? `Thought from ${row.source}` : "Thought",
-      href: row.mapId ? `/workspace?mapId=${row.mapId}` : undefined,
+      confidence: null,
+      href: row.mapId ? `/workspace?mapId=${row.mapId}` : null,
       sortAt: row.updatedAt,
     })),
     ...sessionRows
@@ -135,6 +137,8 @@ async function searchWorkspace(input: { userId: string; query: string }) {
         type: "session" as const,
         title: sessionTitle(row.id),
         subtitle: `Expires ${row.expiresAt.toISOString()}`,
+        confidence: null,
+        href: null,
         sortAt: row.createdAt,
       })),
   ];

@@ -34,16 +34,20 @@ type PostgresClient = ReturnType<typeof createPostgresClient>;
 type DbClient = ReturnType<typeof createDbClient>;
 
 const globalForDb = globalThis as typeof globalThis & {
+  __pennyDatabaseUrl?: string;
   __pennyPostgresClient?: PostgresClient;
   __pennyDbClient?: DbClient;
 };
 
 export function getDb() {
-  if (!globalForDb.__pennyPostgresClient || !globalForDb.__pennyDbClient) {
-    const url = getRuntimeDatabaseUrl();
+  const url = getRuntimeDatabaseUrl();
+
+  if (globalForDb.__pennyDatabaseUrl !== url || !globalForDb.__pennyPostgresClient || !globalForDb.__pennyDbClient) {
+    void globalForDb.__pennyPostgresClient?.end({ timeout: 1 }).catch(() => undefined);
     const sql = createPostgresClient(url);
     const db = drizzle(sql, { schema });
 
+    globalForDb.__pennyDatabaseUrl = url;
     globalForDb.__pennyPostgresClient = sql;
     globalForDb.__pennyDbClient = db;
   }

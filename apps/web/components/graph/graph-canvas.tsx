@@ -1,33 +1,82 @@
 import type { GraphCluster, GraphEdge as GraphEdgeModel, GraphNode as GraphNodeModel, GraphViewport } from "../../lib/types/graph";
 import { ClusterLabel } from "./cluster-label";
 import { GraphEdge } from "./graph-edge";
-import type { PositionedGraphNode } from "./graph-layout";
+import { getGraphNodeCluster, getGraphNodeKind, type PositionedGraphNode } from "./graph-layout";
 import { GraphNode } from "./graph-node";
 import { graphViewBoxValue } from "./graph-style";
+
+export type GraphLensId = "claims" | "contradictions" | "dependencies" | "recent";
 
 type GraphCanvasProps = {
   nodes: PositionedGraphNode[];
   edges: GraphEdgeModel[];
   nodesById: Map<string, PositionedGraphNode>;
   viewport: GraphViewport;
+  activeLensIds?: Set<GraphLensId>;
   selectedNodeId?: string | null;
   focusNodeId?: string | null;
   focusedCluster?: GraphCluster | null;
   onSelectNode?: (node: GraphNodeModel) => void;
 };
 
+function confidenceValue(node: PositionedGraphNode) {
+  if (typeof node.confidence === "number") {
+    return node.confidence;
+  }
+
+  if (typeof node.confidenceBps === "number") {
+    return Math.round(node.confidenceBps / 100);
+  }
+
+  return null;
+}
+
+function isClaimNode(node: PositionedGraphNode) {
+  return node.type === "claim" || node.type === "thought" || getGraphNodeKind(node) === "claim";
+}
+
+function isContradictionNode(node: PositionedGraphNode) {
+  const confidence = confidenceValue(node);
+  return node.status === "contradiction" || (typeof confidence === "number" && confidence < 60);
+}
+
+function isRecentNode(node: PositionedGraphNode) {
+  return Boolean(node.activityAt);
+}
+
+function isDependencyEdge(edge: GraphEdgeModel) {
+  return edge.type === "depends_on" || edge.status === "dependency";
+}
+
+function isContradictionEdge(edge: GraphEdgeModel) {
+  return edge.type === "contradicts" || edge.status === "contradiction";
+}
+
+function isClaimEdge(edge: GraphEdgeModel, nodesById: Map<string, PositionedGraphNode>) {
+  const source = nodesById.get(edge.source);
+  const target = nodesById.get(edge.target);
+  return Boolean((source && isClaimNode(source)) || (target && isClaimNode(target)));
+}
+
+function isRecentEdge(edge: GraphEdgeModel, nodesById: Map<string, PositionedGraphNode>) {
+  const source = nodesById.get(edge.source);
+  const target = nodesById.get(edge.target);
+  return Boolean((source && isRecentNode(source)) || (target && isRecentNode(target)));
+}
+
 export function GraphCanvas({
   nodes,
   edges,
   nodesById,
   viewport,
+  activeLensIds = new Set<GraphLensId>(["claims", "contradictions", "dependencies", "recent"]),
   selectedNodeId,
   focusNodeId = null,
   focusedCluster = null,
   onSelectNode,
 }: GraphCanvasProps) {
   const viewTransform = `translate(${viewport.translateX} ${viewport.translateY}) scale(${viewport.scale})`;
-  const clusters = Array.from(new Set(nodes.map((node) => node.cluster)));
+  const clusters = Array.from(new Set(nodes.map((node) => getGraphNodeCluster(node))));
   const activeEdges = selectedNodeId ? edges.filter((edge) => edge.source === selectedNodeId || edge.target === selectedNodeId) : [];
   const activeEdgeIds = new Set(activeEdges.map((edge) => edge.id));
   const focusEdges = focusNodeId ? edges.filter((edge) => edge.source === focusNodeId || edge.target === focusNodeId) : [];
@@ -97,7 +146,12 @@ export function GraphCanvas({
           const active = activeEdgeIds.has(edge.id);
           const emphasized = source.id === selectedNodeId || target.id === selectedNodeId;
           const muted = Boolean(
-            (focusNodeId && !focusEdgeIds.has(edge.id)) || (focusedCluster && source.cluster !== focusedCluster && target.cluster !== focusedCluster),
+            (focusNodeId && !focusEdgeIds.has(edge.id)) ||
+              (focusedCluster && getGraphNodeCluster(source) !== focusedCluster && getGraphNodeCluster(target) !== focusedCluster) ||
+              (!activeLensIds.has("claims") && isClaimEdge(edge, nodesById)) ||
+              (!activeLensIds.has("contradictions") && isContradictionEdge(edge)) ||
+              (!activeLensIds.has("dependencies") && isDependencyEdge(edge)) ||
+              (!activeLensIds.has("recent") && isRecentEdge(edge, nodesById)),
           );
 
           return <GraphEdge key={edge.id} active={active} edge={edge} source={source} target={target} emphasized={emphasized} muted={muted} />;
@@ -106,7 +160,13 @@ export function GraphCanvas({
           <GraphNode
             connected={connectedNodeIds.has(node.id) && node.id !== selectedNodeId}
             key={node.id}
-            muted={Boolean((focusNodeId && !focusedNodeIds.has(node.id)) || (focusedCluster && node.cluster !== focusedCluster))}
+            muted={Boolean(
+              (focusNodeId && !focusedNodeIds.has(node.id)) ||
+                (focusedCluster && getGraphNodeCluster(node) !== focusedCluster) ||
+                (!activeLensIds.has("claims") && isClaimNode(node)) ||
+                (!activeLensIds.has("contradictions") && isContradictionNode(node)) ||
+                (!activeLensIds.has("recent") && isRecentNode(node)),
+            )}
             node={node}
             selected={node.id === selectedNodeId}
             onSelectNode={onSelectNode}

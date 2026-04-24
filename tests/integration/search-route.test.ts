@@ -95,8 +95,19 @@ test("GET /api/search returns owned maps, claims, thoughts, and sessions for q",
     assert.equal(response.status, 200);
 
     const payload = (await response.json()) as {
-      results: Array<{ id: string; type: string; title: string; subtitle?: string; confidence?: number | null; href?: string }>;
+      results: Array<{
+        id: string;
+        type: string;
+        title: string;
+        subtitle: string | null;
+        confidence: number | null;
+        href: string | null;
+      }>;
     };
+
+    for (const result of payload.results) {
+      assert.deepEqual(Object.keys(result).sort(), ["confidence", "href", "id", "subtitle", "title", "type"]);
+    }
 
     assert.deepEqual(
       payload.results
@@ -104,7 +115,9 @@ test("GET /api/search returns owned maps, claims, thoughts, and sessions for q",
           id: result.id,
           type: result.type,
           title: result.title,
-          confidence: result.confidence ?? null,
+          subtitle: result.subtitle,
+          confidence: result.confidence,
+          href: result.href,
         }))
         .sort((left, right) => left.type.localeCompare(right.type)),
       [
@@ -112,19 +125,25 @@ test("GET /api/search returns owned maps, claims, thoughts, and sessions for q",
           id: claimId,
           type: "claim",
           title: "Distribution is the moat",
+          subtitle: "Claim",
           confidence: 7400,
+          href: `/workspace?mapId=${mapId}&claimId=${claimId}`,
         },
         {
           id: mapId,
           type: "map",
           title: "Distribution memo",
+          subtitle: "Map",
           confidence: null,
+          href: `/workspace?mapId=${mapId}`,
         },
         {
           id: thoughtId,
           type: "thought",
           title: "Founder note about distribution loops",
+          subtitle: "Thought from capture",
           confidence: null,
+          href: `/workspace?mapId=${mapId}`,
         },
       ],
     );
@@ -142,7 +161,14 @@ test("GET /api/search returns owned maps, claims, thoughts, and sessions for q",
     assert.equal(sessionResponse.status, 200);
 
     const sessionPayload = (await sessionResponse.json()) as {
-      results: Array<{ id: string; type: string; title: string }>;
+      results: Array<{
+        id: string;
+        type: string;
+        title: string;
+        subtitle: string | null;
+        confidence: number | null;
+        href: string | null;
+      }>;
     };
 
     assert.deepEqual(sessionPayload.results, [
@@ -151,6 +177,8 @@ test("GET /api/search returns owned maps, claims, thoughts, and sessions for q",
         type: "session",
         title: "Session 00000000",
         subtitle: "Expires 2030-01-01T00:00:00.000Z",
+        confidence: null,
+        href: null,
       },
     ]);
   } finally {

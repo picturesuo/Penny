@@ -36,7 +36,10 @@ function claimNode(claim: ClaimView, index: number, total: number, selectedClaim
     label: truncateLabel(claim.body),
     kind: "claim",
     cluster: "claim",
+    type: "claim",
+    confidence: typeof claim.confidenceBps === "number" ? Math.round(claim.confidenceBps / 100) : null,
     confidenceBps: claim.confidenceBps,
+    activityAt: claim.updatedAt ?? claim.createdAt,
     status: selectedClaimId === claim.id ? "selected" : undefined,
     x: point.x,
     y: point.y,
@@ -49,6 +52,7 @@ function mapNode(id: string, title: string, claimCount?: number): GraphNode {
     label: title || "Untitled map",
     kind: "map",
     cluster: "map",
+    type: "map",
     description: typeof claimCount === "number" ? `${claimCount} claims` : undefined,
     x: 0,
     y: 0,
@@ -78,6 +82,7 @@ export function createBrainGraph(view: BrainView): GraphModel {
     source: map.id,
     target: claim.id,
     label: "contains",
+    type: "related",
     strength: claim.id === selectedClaimId ? 1.35 : 1,
   }));
 
@@ -106,7 +111,10 @@ export function createChallengeGraph(view: ChallengeView): GraphModel {
       label: truncateLabel(activeClaim.body),
       kind: "claim",
       cluster: "claim",
+      type: "claim",
+      confidence: typeof activeClaim.confidenceBps === "number" ? Math.round(activeClaim.confidenceBps / 100) : null,
       confidenceBps: activeClaim.confidenceBps,
+      activityAt: activeClaim.updatedAt ?? activeClaim.createdAt,
       status: "selected",
       x: -160,
       y: 0,
@@ -117,6 +125,7 @@ export function createChallengeGraph(view: ChallengeView): GraphModel {
         id: `${shell.mapId}:${activeClaim.id}`,
         source: shell.mapId,
         target: activeClaim.id,
+        type: "related",
         strength: 1.25,
       });
     }
@@ -128,7 +137,9 @@ export function createChallengeGraph(view: ChallengeView): GraphModel {
       label: "Challenge round",
       kind: "round",
       cluster: "challenge",
+      type: "session",
       status: view.activeChallengeRound.status,
+      activityAt: view.activeChallengeRound.updatedAt ?? view.activeChallengeRound.createdAt,
       x: 80,
       y: -96,
     });
@@ -139,6 +150,7 @@ export function createChallengeGraph(view: ChallengeView): GraphModel {
         source: activeClaim.id,
         target: view.activeChallengeRound.id,
         label: "challenged by",
+        type: "related",
         strength: 1.2,
       });
     }
@@ -150,6 +162,7 @@ export function createChallengeGraph(view: ChallengeView): GraphModel {
         kind: "critique",
         cluster: "critique",
         status: view.critiqueState.status,
+        type: "thought",
         x: 260,
         y: -120,
       });
@@ -158,6 +171,8 @@ export function createChallengeGraph(view: ChallengeView): GraphModel {
         source: view.activeChallengeRound.id,
         target: view.critiqueState.critiqueId,
         label: "requests",
+        type: "contradicts",
+        status: "contradiction",
       });
     }
 
@@ -168,7 +183,9 @@ export function createChallengeGraph(view: ChallengeView): GraphModel {
         label: "Response recorded",
         kind: "response",
         cluster: "event",
+        type: "session",
         status: view.responseStatus,
+        activityAt: view.activeChallengeRound.updatedAt,
         x: 245,
         y: 95,
       });
@@ -177,6 +194,7 @@ export function createChallengeGraph(view: ChallengeView): GraphModel {
         source: view.activeChallengeRound.id,
         target: responseNodeId,
         label: "answered by",
+        type: "related",
       });
     }
   }
@@ -204,7 +222,10 @@ export function createLearnGraph(view: LearnView): GraphModel {
       label: truncateLabel(view.selectedClaim.body),
       kind: "claim",
       cluster: "claim",
+      type: "claim",
+      confidence: typeof view.selectedClaim.confidenceBps === "number" ? Math.round(view.selectedClaim.confidenceBps / 100) : null,
       confidenceBps: view.selectedClaim.confidenceBps,
+      activityAt: view.selectedClaim.updatedAt ?? view.selectedClaim.createdAt,
       status: "selected",
       x: -120,
       y: 0,
@@ -215,6 +236,7 @@ export function createLearnGraph(view: LearnView): GraphModel {
         id: `${view.selectedMapId}:${view.selectedClaim.id}`,
         source: view.selectedMapId,
         target: view.selectedClaim.id,
+        type: "related",
       });
     }
   }
@@ -224,6 +246,7 @@ export function createLearnGraph(view: LearnView): GraphModel {
     label: view.message ?? view.learnState.message,
     kind: "learn",
     cluster: "learn",
+    type: "thought",
     status: view.status,
     x: 170,
     y: 10,
@@ -235,6 +258,7 @@ export function createLearnGraph(view: LearnView): GraphModel {
       source: view.selectedClaim.id,
       target: "learn-placeholder",
       label: "feeds",
+      type: "supports",
     });
   }
 

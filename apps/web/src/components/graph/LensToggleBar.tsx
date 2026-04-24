@@ -1,5 +1,5 @@
 export type LensToggle = {
-  id: string;
+  id: "claims" | "contradictions" | "dependencies" | "recent";
   label: string;
   disabled?: boolean;
   pressed?: boolean;
@@ -11,8 +11,10 @@ type LensToggleBarProps = {
 };
 
 const defaultToggles: LensToggle[] = [
-  { id: "lens", label: "Lens", disabled: true },
-  { id: "filter", label: "Filter", disabled: true },
+  { id: "claims", label: "Claims", pressed: true },
+  { id: "contradictions", label: "Contradictions", pressed: true },
+  { id: "dependencies", label: "Dependencies", pressed: true },
+  { id: "recent", label: "Recent", pressed: true },
 ];
 
 const railStyle = {
@@ -41,14 +43,14 @@ const buttonStyle = {
 
 export function LensToggleBar({ toggles = defaultToggles }: LensToggleBarProps) {
   return (
-    <div aria-label="Graph lens and filter placeholders" data-testid="penny-graph-lens-toggles" style={railStyle}>
+    <div aria-label="Graph lens toggles" data-testid="penny-graph-lens-toggles" style={railStyle}>
       {toggles.map((toggle) => (
         <button
           key={toggle.id}
           type="button"
           aria-pressed={toggle.pressed}
           disabled={toggle.disabled ?? !toggle.onToggle}
-          title={`${toggle.label} toggle${toggle.disabled ?? !toggle.onToggle ? " placeholder" : ""}`}
+          title={`${toggle.label} lens`}
           style={{
             ...buttonStyle,
             background: toggle.pressed ? "rgba(47, 107, 85, 0.12)" : buttonStyle.background,

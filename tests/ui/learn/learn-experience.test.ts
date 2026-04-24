@@ -32,6 +32,7 @@ test("learn experience builds a teach-back surface for the selected claim", () =
   assert.deepEqual(viewModel.selectedClaim, {
     body: "Users retain concepts better when they teach them back.",
     confidenceLabel: "72% confidence",
+    confidenceBps: 7200,
   });
   assert.match(viewModel.teachBackPrompt, /Users retain concepts/);
   assert.equal(viewModel.feedback.title, "Penny feedback");

@@ -44,6 +44,7 @@ test("challenge experience surfaces critique cards and dependency cascade", () =
   assert.deepEqual(viewModel.selectedClaim, {
     body: "Penny should challenge claims before users rely on them.",
     confidenceLabel: "64% confidence",
+    confidenceBps: 6400,
   });
   assert.equal(viewModel.challengeState.id, "critique_loaded");
   assert.equal(viewModel.strongestCounterargument, "A fast capture loop may matter more than rigorous critique for early use.");

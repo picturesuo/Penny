@@ -116,8 +116,8 @@ test("generateChallengeCritique fills a pending critique and returns ready outpu
   assert.equal(result.critiqueId, "critique-1");
   assert.equal(result.status, "ready");
   assert.match(result.body, /Main challenge:/);
-  assert.match(result.body, /Pressure test:/);
-  assert.match(result.body, /Fastest next test:/);
+  assert.match(result.body, /Pressure test:|Strongest counterargument:/);
+  assert.match(result.body, /Fastest next test:|Follow-up questions:/);
 
   assert.deepEqual(repository.updates, [
     {

@@ -156,6 +156,7 @@ test("requestChallengeCritique leaves a pending placeholder and the challenge pr
         requestId: "placeholder-critique-request",
       },
       db as never,
+      { autoGenerate: false },
     );
 
     assert.equal(critique.critiqueStatus, "pending");

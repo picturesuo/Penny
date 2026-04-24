@@ -1,5 +1,5 @@
 import type { GraphCluster } from "../../lib/types/graph";
-import type { PositionedGraphNode } from "./graph-layout";
+import { getGraphNodeCluster, type PositionedGraphNode } from "./graph-layout";
 import { graphClusterColors } from "./graph-style";
 
 type ClusterLabelProps = {
@@ -12,7 +12,7 @@ function labelForCluster(cluster: GraphCluster) {
 }
 
 export function ClusterLabel({ cluster, nodes }: ClusterLabelProps) {
-  const clusterNodes = nodes.filter((node) => node.cluster === cluster);
+  const clusterNodes = nodes.filter((node) => getGraphNodeCluster(node) === cluster);
 
   if (clusterNodes.length < 2) {
     return null;

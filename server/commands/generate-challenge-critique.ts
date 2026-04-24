@@ -429,55 +429,63 @@ async function findOwnedCritique(
 async function defaultGenerateCritique(input: LoadedChallengeCritiqueContext): Promise<GeneratedChallengeCritiqueArtifact> {
   const claimText = input.claimText?.trim() || "This claim needs a sharper challenge critique and a falsifiable test.";
 
-  try {
-    const generated = await generateChallengeCritiqueOperation(
-      {
-        claimId: input.claimId,
-        claimText,
-        claimConfidence:
-          typeof input.claimConfidenceBps === "number" && Number.isFinite(input.claimConfidenceBps)
-            ? Math.max(0, Math.min(100, Math.round(input.claimConfidenceBps / 100)))
-            : 50,
-        mapTitle: input.mapTitle,
-        neighboringClaims: [],
-        previousRounds: [],
-      },
-      {
-        userId: input.userId,
-        mapId: input.mapId,
-        claimId: input.claimId,
-        roundId: input.roundId,
-      },
-    );
+  if (process.env.PENNY_USE_PROVIDER_CHALLENGE_CRITIQUE?.trim() === "1") {
+    try {
+      const generated = await generateChallengeCritiqueOperation(
+        {
+          claimId: input.claimId,
+          claimText,
+          claimConfidence:
+            typeof input.claimConfidenceBps === "number" && Number.isFinite(input.claimConfidenceBps)
+              ? Math.max(0, Math.min(100, Math.round(input.claimConfidenceBps / 100)))
+              : 50,
+          mapTitle: input.mapTitle,
+          neighboringClaims: [],
+          previousRounds: [],
+        },
+        {
+          userId: input.userId,
+          mapId: input.mapId,
+          claimId: input.claimId,
+          roundId: input.roundId,
+        },
+      );
 
-    const critiqueJson = generated.output as unknown as Record<string, unknown>;
+      const critiqueJson = generated.output as unknown as Record<string, unknown>;
 
-    return {
-      body: formatStructuredCritique(critiqueJson),
-      critiqueJson,
-      metadata: {
-        provider: generated.meta.provider,
-        model: generated.meta.model,
-        promptVersion: generated.meta.promptVersion,
-      },
-    };
-  } catch {
-    const generated = generateChallengeCritiqueStub({
-      claim: claimText,
-    });
-
-    return {
-      body: generated.body,
-      critiqueJson: {
-        body: generated.body,
-      },
-      metadata: {
-        provider: FALLBACK_PROVIDER,
-        model: FALLBACK_MODEL,
-        promptVersion: FALLBACK_PROMPT_VERSION,
-      },
-    };
+      return {
+        body: formatStructuredCritique(critiqueJson),
+        critiqueJson,
+        metadata: {
+          provider: generated.meta.provider,
+          model: generated.meta.model,
+          promptVersion: generated.meta.promptVersion,
+        },
+      };
+    } catch {
+      return generateFallbackCritiqueArtifact(claimText);
+    }
   }
+
+  return generateFallbackCritiqueArtifact(claimText);
+}
+
+function generateFallbackCritiqueArtifact(claimText: string): GeneratedChallengeCritiqueArtifact {
+  const generated = generateChallengeCritiqueStub({
+    claim: claimText,
+  });
+
+  return {
+    body: generated.body,
+    critiqueJson: {
+      body: generated.body,
+    },
+    metadata: {
+      provider: FALLBACK_PROVIDER,
+      model: FALLBACK_MODEL,
+      promptVersion: FALLBACK_PROMPT_VERSION,
+    },
+  };
 }
 
 async function loadChallengeCritiqueContext(

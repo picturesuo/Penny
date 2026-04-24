@@ -63,7 +63,11 @@ function readOptionalWeightBps(body: Record<string, unknown>): number | null {
     return null;
   }
 
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 10_000) {
+  if (typeof value !== "number") {
+    throw new GraphEdgeValidationError("weightBps must be an integer between 0 and 10000.");
+  }
+
+  if (!Number.isInteger(value) || value < 0 || value > 10_000) {
     throw new GraphEdgeValidationError("weightBps must be an integer between 0 and 10000.");
   }
 

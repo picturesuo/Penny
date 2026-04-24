@@ -192,6 +192,7 @@ test("backend MVP commands, projections, and required event trail stay coherent"
         requestId: "mvp-critique-request",
       },
       db,
+      { autoGenerate: false },
     );
 
     assert.equal(critique.critiqueStatus, "pending");

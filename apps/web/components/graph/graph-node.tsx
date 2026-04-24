@@ -2,7 +2,7 @@ import type { KeyboardEvent } from "react";
 
 import type { GraphNode as GraphNodeModel } from "../../lib/types/graph";
 import { ConfidenceChip } from "../confidence/ConfidenceChip";
-import { getGraphNodeRadius, type PositionedGraphNode } from "./graph-layout";
+import { getGraphNodeCluster, getGraphNodeRadius, type PositionedGraphNode } from "./graph-layout";
 import { graphClusterColors } from "./graph-style";
 import { SelectedNodeHalo } from "./selected-node-halo";
 
@@ -19,9 +19,10 @@ function displayLabel(label: string) {
 }
 
 export function GraphNode({ connected = false, muted = false, node, selected = false, onSelectNode }: GraphNodeProps) {
-  const palette = graphClusterColors[node.cluster];
+  const palette = graphClusterColors[getGraphNodeCluster(node)];
   const radius = getGraphNodeRadius(node, selected);
-  const hasContradictionMarker = node.status === "contradiction" || (typeof node.confidenceBps === "number" && node.confidenceBps < 6000);
+  const confidenceBps = typeof node.confidenceBps === "number" ? node.confidenceBps : typeof node.confidence === "number" ? node.confidence * 100 : null;
+  const hasContradictionMarker = node.status === "contradiction" || (typeof confidenceBps === "number" && confidenceBps < 6000);
 
   function handleKeyDown(event: KeyboardEvent<SVGGElement>) {
     if (!onSelectNode) {
@@ -75,7 +76,7 @@ export function GraphNode({ connected = false, muted = false, node, selected = f
       </text>
       <foreignObject x="-62" y={radius + 22} width="124" height="28">
         <div className="penny-graph-node-confidence">
-          <ConfidenceChip scale="basis-points" showLabel={false} value={node.confidenceBps} />
+          <ConfidenceChip scale="basis-points" showLabel={false} value={confidenceBps} />
         </div>
       </foreignObject>
       {hasContradictionMarker ? (

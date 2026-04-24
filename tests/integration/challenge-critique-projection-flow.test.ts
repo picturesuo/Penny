@@ -157,6 +157,7 @@ test("challenge flow stores a generated critique and exposes it in the challenge
         requestId: "critique-flow-request",
       },
       db,
+      { autoGenerate: false },
     );
 
     assert.equal(requestedCritique.critiqueStatus, "pending");

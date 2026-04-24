@@ -10,14 +10,21 @@ export type GraphNodeKind =
   | "event"
   | "context";
 
+export type GraphNodeType = "thought" | "claim" | "session" | "map";
+
+export type GraphEdgeType = "supports" | "depends_on" | "contradicts" | "related";
+
 export type GraphNode = {
   id: string;
   label: string;
-  kind: GraphNodeKind;
-  cluster: GraphCluster;
+  kind?: GraphNodeKind;
+  cluster?: GraphCluster;
+  type?: GraphNodeType;
   description?: string;
   status?: string;
+  confidence?: number | null;
   confidenceBps?: number | null;
+  activityAt?: string;
   x?: number;
   y?: number;
 };
@@ -26,6 +33,7 @@ export type GraphEdge = {
   id: string;
   source: string;
   target: string;
+  type?: GraphEdgeType;
   label?: string;
   status?: string;
   strength?: number;

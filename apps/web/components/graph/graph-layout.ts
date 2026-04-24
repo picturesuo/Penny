@@ -1,6 +1,8 @@
-import type { GraphNode } from "../../lib/types/graph";
+import type { GraphCluster, GraphNode, GraphNodeKind } from "../../lib/types/graph";
 
 export type PositionedGraphNode = GraphNode & {
+  cluster: GraphCluster;
+  kind: GraphNodeKind;
   x: number;
   y: number;
 };
@@ -24,6 +26,8 @@ export function positionGraphNodes(nodes: GraphNode[]): PositionedGraphNode[] {
     if (typeof node.x === "number" && typeof node.y === "number") {
       return {
         ...node,
+        cluster: getGraphNodeCluster(node),
+        kind: getGraphNodeKind(node),
         x: node.x,
         y: node.y,
       };
@@ -31,6 +35,8 @@ export function positionGraphNodes(nodes: GraphNode[]): PositionedGraphNode[] {
 
     return {
       ...node,
+      cluster: getGraphNodeCluster(node),
+      kind: getGraphNodeKind(node),
       ...fallbackPosition(index, nodes.length),
     };
   });
@@ -40,12 +46,54 @@ export function createNodeLookup(nodes: PositionedGraphNode[]) {
   return new Map(nodes.map((node) => [node.id, node]));
 }
 
+export function getGraphNodeKind(node: GraphNode): GraphNodeKind {
+  if (node.kind) {
+    return node.kind;
+  }
+
+  if (node.type === "map") {
+    return "map";
+  }
+
+  if (node.type === "claim" || node.type === "thought") {
+    return "claim";
+  }
+
+  if (node.type === "session") {
+    return "event";
+  }
+
+  return "context";
+}
+
+export function getGraphNodeCluster(node: GraphNode): GraphCluster {
+  if (node.cluster) {
+    return node.cluster;
+  }
+
+  if (node.type === "map") {
+    return "map";
+  }
+
+  if (node.type === "claim" || node.type === "thought") {
+    return "claim";
+  }
+
+  if (node.type === "session") {
+    return "event";
+  }
+
+  return "context";
+}
+
 export function getGraphNodeRadius(node: GraphNode, selected: boolean) {
-  if (node.kind === "map") {
+  const kind = getGraphNodeKind(node);
+
+  if (kind === "map") {
     return selected ? 31 : 27;
   }
 
-  if (node.kind === "claim") {
+  if (kind === "claim") {
     return selected ? 25 : 22;
   }
 
