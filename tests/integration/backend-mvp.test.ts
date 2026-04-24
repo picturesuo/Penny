@@ -317,7 +317,7 @@ test("backend MVP commands, projections, and required event trail stay coherent"
     assert.equal(learnView.selectedMapId, map.mapId);
     assert.equal(learnView.selectedClaimId, claim.claimId);
     assert.deepEqual(learnView.learnState, {
-      status: "not_implemented",
+      status: "placeholder",
       message: "Learn mode coming soon",
     });
 
