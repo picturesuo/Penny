@@ -8,6 +8,7 @@ import { POST as createMap } from "../../../apps/web/app/api/commands/maps/creat
 import { POST as selectWorkspace } from "../../../apps/web/app/api/commands/workspace/select/route.ts";
 import { POST as captureThought } from "../../../apps/web/app/ai/capture-thought/route.ts";
 import { GET as getGraphView } from "../../../apps/web/app/api/graph/route.ts";
+import { GET as getGraphNodeDetail } from "../../../apps/web/app/api/graph/nodes/[id]/detail/route.ts";
 import { GET as getBrainView } from "../../../apps/web/app/api/workspace/brain/route.ts";
 import { GET as getChallengeView } from "../../../apps/web/app/api/workspace/challenge/route.ts";
 import { GET as getLearnView } from "../../../apps/web/app/api/workspace/learn/route.ts";
@@ -67,6 +68,11 @@ test("workspace projection route handlers authenticate before projection executi
 
   const responses = await Promise.all([
     getGraphView(new Request("http://localhost/api/graph", { method: "GET", headers })),
+    getGraphNodeDetail(new Request("http://localhost/api/graph/nodes/00000000-0000-0000-0000-000000000005/detail", { method: "GET", headers }), {
+      params: {
+        id: "00000000-0000-0000-0000-000000000005",
+      },
+    }),
     getShellView(new Request("http://localhost/api/workspace/shell", { method: "GET", headers })),
     getBrainView(new Request("http://localhost/api/workspace/brain", { method: "GET", headers })),
     getChallengeView(new Request("http://localhost/api/workspace/challenge", { method: "GET", headers })),

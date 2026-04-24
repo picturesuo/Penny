@@ -7,6 +7,7 @@ import { after, test } from "node:test";
 import postgres from "postgres";
 
 import { GET } from "../../apps/web/app/api/graph/route";
+import { GET as getNodeDetail } from "../../apps/web/app/api/graph/nodes/[id]/detail/route";
 
 const PG_PORT = 62000 + Math.floor(Math.random() * 1000);
 const PG_USER = "postgres";
@@ -251,5 +252,226 @@ test("GET /api/graph rejects invalid UUID query params", async () => {
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), {
     error: "Invalid mapId. Expected a UUID.",
+  });
+});
+
+test("GET /api/graph/nodes/:id/detail returns owned node detail with edges and confidence", async () => {
+  const userId = "00000000-0000-0000-0000-000000004123";
+  const otherUserId = "00000000-0000-0000-0000-000000004124";
+  const mapId = "00000000-0000-0000-0000-000000004321";
+  const sourceNodeId = "00000000-0000-0000-0000-000000004401";
+  const targetNodeId = "00000000-0000-0000-0000-000000004402";
+  const outgoingNodeId = "00000000-0000-0000-0000-000000004403";
+  const otherUserNodeId = "00000000-0000-0000-0000-000000004404";
+  const incomingEdgeId = "00000000-0000-0000-0000-000000004501";
+  const outgoingEdgeId = "00000000-0000-0000-0000-000000004502";
+  const ratingId = "00000000-0000-0000-0000-000000004601";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label, metadata_json)
+      values
+        (
+          ${sourceNodeId},
+          ${userId},
+          ${mapId},
+          ${"thought"},
+          ${"Source thought"},
+          ${JSON.stringify({ cluster: "context" })}::jsonb
+        ),
+        (
+          ${targetNodeId},
+          ${userId},
+          ${mapId},
+          ${"claim"},
+          ${"Detailed claim"},
+          ${JSON.stringify({ cluster: "claim", status: "selected", confidenceBps: 8100, description: "Primary inspected node" })}::jsonb
+        ),
+        (
+          ${outgoingNodeId},
+          ${userId},
+          ${mapId},
+          ${"claim"},
+          ${"Related claim"},
+          ${JSON.stringify({ cluster: "claim" })}::jsonb
+        ),
+        (
+          ${otherUserNodeId},
+          ${otherUserId},
+          ${mapId},
+          ${"claim"},
+          ${"Other user claim"},
+          ${JSON.stringify({ cluster: "claim" })}::jsonb
+        )
+    `;
+
+    await sql`
+      insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind, weight_bps, metadata_json)
+      values
+        (
+          ${incomingEdgeId},
+          ${userId},
+          ${mapId},
+          ${sourceNodeId},
+          ${targetNodeId},
+          ${"supports"},
+          ${6800},
+          ${JSON.stringify({ label: "supports" })}::jsonb
+        ),
+        (
+          ${outgoingEdgeId},
+          ${userId},
+          ${mapId},
+          ${targetNodeId},
+          ${outgoingNodeId},
+          ${"depends_on"},
+          ${7200},
+          ${JSON.stringify({ label: "depends on", status: "active" })}::jsonb
+        )
+    `;
+
+    await sql`
+      insert into confidence_ratings (id, user_id, graph_node_id, rating_bps, rationale, source)
+      values (${ratingId}, ${userId}, ${targetNodeId}, ${8100}, ${"The claim is backed by repeated founder notes."}, ${"manual"})
+    `;
+
+    const response = await getNodeDetail(
+      new Request(`http://localhost/api/graph/nodes/${targetNodeId}/detail`, {
+        method: "GET",
+        headers: {
+          "x-user-id": userId,
+        },
+      }),
+      { params: { id: targetNodeId } },
+    );
+
+    assert.equal(response.status, 200);
+
+    const payload = (await response.json()) as {
+      node: {
+        id: string;
+        mapId: string;
+        kind: string;
+        label: string;
+        cluster: string;
+        status?: string;
+        confidenceBps?: number;
+        description?: string;
+      };
+      incomingEdges: Array<{ id: string; source: string; target: string; label: string; strength: number }>;
+      outgoingEdges: Array<{ id: string; source: string; target: string; label: string; status?: string; strength: number }>;
+      confidenceRatings: Array<{ id: string; ratingBps: number; rationale: string | null; source: string }>;
+    };
+
+    assert.deepEqual(payload.node, {
+      id: targetNodeId,
+      sessionId: null,
+      mapId,
+      claimId: null,
+      thoughtId: null,
+      label: "Detailed claim",
+      kind: "claim",
+      cluster: "claim",
+      description: "Primary inspected node",
+      status: "selected",
+      confidenceBps: 8100,
+      metadata: {
+        cluster: "claim",
+        status: "selected",
+        confidenceBps: 8100,
+        description: "Primary inspected node",
+      },
+      createdAt: payload.node.createdAt,
+      updatedAt: payload.node.updatedAt,
+    });
+    assert.deepEqual(
+      payload.incomingEdges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        label: edge.label,
+        strength: edge.strength,
+      })),
+      [
+        {
+          id: incomingEdgeId,
+          source: sourceNodeId,
+          target: targetNodeId,
+          label: "supports",
+          strength: 0.68,
+        },
+      ],
+    );
+    assert.deepEqual(
+      payload.outgoingEdges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        label: edge.label,
+        status: edge.status ?? null,
+        strength: edge.strength,
+      })),
+      [
+        {
+          id: outgoingEdgeId,
+          source: targetNodeId,
+          target: outgoingNodeId,
+          label: "depends on",
+          status: "active",
+          strength: 0.72,
+        },
+      ],
+    );
+    assert.deepEqual(
+      payload.confidenceRatings.map((rating) => ({
+        id: rating.id,
+        ratingBps: rating.ratingBps,
+        rationale: rating.rationale,
+        source: rating.source,
+      })),
+      [
+        {
+          id: ratingId,
+          ratingBps: 8100,
+          rationale: "The claim is backed by repeated founder notes.",
+          source: "manual",
+        },
+      ],
+    );
+
+    const forbiddenResponse = await getNodeDetail(
+      new Request(`http://localhost/api/graph/nodes/${otherUserNodeId}/detail`, {
+        method: "GET",
+        headers: {
+          "x-user-id": userId,
+        },
+      }),
+      { params: { id: otherUserNodeId } },
+    );
+
+    assert.equal(forbiddenResponse.status, 404);
+    assert.deepEqual(await forbiddenResponse.json(), {
+      error: "Graph node not found.",
+    });
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("GET /api/graph/nodes/:id/detail rejects invalid node ids", async () => {
+  const response = await getNodeDetail(
+    new Request("http://localhost/api/graph/nodes/not-a-uuid/detail", {
+      method: "GET",
+      headers: {
+        "x-user-id": "00000000-0000-0000-0000-000000004999",
+      },
+    }),
+    { params: { id: "not-a-uuid" } },
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: "Invalid node id. Expected a UUID.",
   });
 });
