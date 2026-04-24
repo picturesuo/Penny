@@ -30,6 +30,7 @@ These routes are the current server-side write surface for the MVP. Meaningful w
 | `POST` | `/api/commands/challenge/respond` | Record the user's response to a challenge round. |
 | `POST` | `/api/graph/edges` | Create or replay a persisted graph edge between two owned graph nodes. |
 | `PATCH` | `/api/graph/edges/:id` | Update mutable fields on an owned persisted graph edge. |
+| `DELETE` | `/api/graph/edges/:id` | Delete an owned persisted graph edge. |
 
 Command routes accept JSON request bodies. Idempotent commands can use an idempotency key from the route helper surface; duplicate-key behavior should preserve one logical write and replay the existing result.
 

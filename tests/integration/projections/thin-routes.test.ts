@@ -8,7 +8,7 @@ import { POST as createMap } from "../../../apps/web/app/api/commands/maps/creat
 import { POST as selectWorkspace } from "../../../apps/web/app/api/commands/workspace/select/route.ts";
 import { POST as captureThought } from "../../../apps/web/app/ai/capture-thought/route.ts";
 import { POST as createGraphEdge } from "../../../apps/web/app/api/graph/edges/route.ts";
-import { PATCH as updateGraphEdge } from "../../../apps/web/app/api/graph/edges/[id]/route.ts";
+import { DELETE as deleteGraphEdge, PATCH as updateGraphEdge } from "../../../apps/web/app/api/graph/edges/[id]/route.ts";
 import { GET as getGraphView } from "../../../apps/web/app/api/graph/route.ts";
 import { GET as getGraphNodeDetail } from "../../../apps/web/app/api/graph/nodes/[id]/detail/route.ts";
 import { GET as getBrainView } from "../../../apps/web/app/api/workspace/brain/route.ts";
@@ -73,6 +73,16 @@ test("command route handlers authenticate before command execution", async () =>
       {
         params: {
           id: "00000000-0000-0000-0000-000000000008",
+        },
+      },
+    ),
+    deleteGraphEdge(
+      new Request("http://localhost/api/graph/edges/00000000-0000-0000-0000-000000000009", {
+        method: "DELETE",
+      }),
+      {
+        params: {
+          id: "00000000-0000-0000-0000-000000000009",
         },
       },
     ),

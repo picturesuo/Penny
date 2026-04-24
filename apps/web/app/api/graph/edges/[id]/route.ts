@@ -193,6 +193,25 @@ async function updateGraphEdge(input: {
   return serializeEdge(updatedRows[0] ?? existingEdge);
 }
 
+async function deleteGraphEdge(input: { userId: string; edgeId: string }) {
+  const db = getDb();
+  const deletedRows = await db
+    .delete(graphEdges)
+    .where(and(eq(graphEdges.id, input.edgeId), eq(graphEdges.userId, input.userId)))
+    .returning({
+      id: graphEdges.id,
+      sourceNodeId: graphEdges.sourceNodeId,
+      targetNodeId: graphEdges.targetNodeId,
+      kind: graphEdges.kind,
+      weightBps: graphEdges.weightBps,
+      metadataJson: graphEdges.metadataJson,
+      createdAt: graphEdges.createdAt,
+      updatedAt: graphEdges.updatedAt,
+    });
+
+  return deletedRows[0] ? serializeEdge(deletedRows[0]) : null;
+}
+
 export async function PATCH(request: Request, context: RouteContext) {
   let body: unknown;
 
@@ -233,5 +252,33 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     logBackendError({ error, request, route: "PATCH /api/graph/edges/[id]" });
     return NextResponse.json({ error: "Failed to update graph edge." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, context: RouteContext) {
+  try {
+    const userId = getRequestUserId(request.headers);
+    const params = await Promise.resolve(context.params);
+    const edge = await deleteGraphEdge({
+      userId,
+      edgeId: readEdgeId(params.id),
+    });
+
+    if (!edge) {
+      return NextResponse.json({ error: "Graph edge not found." }, { status: 404 });
+    }
+
+    return NextResponse.json({ edge, deleted: true }, { status: 200 });
+  } catch (error) {
+    if (error instanceof RequestUserNotAuthenticatedError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+
+    if (error instanceof GraphEdgeValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    logBackendError({ error, request, route: "DELETE /api/graph/edges/[id]" });
+    return NextResponse.json({ error: "Failed to delete graph edge." }, { status: 500 });
   }
 }

@@ -8,7 +8,7 @@ import postgres from "postgres";
 
 import { GET } from "../../apps/web/app/api/graph/route";
 import { POST as createGraphEdge } from "../../apps/web/app/api/graph/edges/route";
-import { PATCH as updateGraphEdge } from "../../apps/web/app/api/graph/edges/[id]/route";
+import { DELETE as deleteGraphEdge, PATCH as updateGraphEdge } from "../../apps/web/app/api/graph/edges/[id]/route";
 import { GET as getNodeDetail } from "../../apps/web/app/api/graph/nodes/[id]/detail/route";
 
 const PG_PORT = 62000 + Math.floor(Math.random() * 1000);
@@ -840,6 +840,126 @@ test("PATCH /api/graph/edges/:id rejects invalid ids and cross-user updates", as
     assert.equal(invalidWeightResponse.status, 400);
     assert.deepEqual(await invalidWeightResponse.json(), {
       error: "weightBps must be an integer between 0 and 10000.",
+    });
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("DELETE /api/graph/edges/:id deletes an owned edge", async () => {
+  const userId = "00000000-0000-0000-0000-000000010123";
+  const mapId = "00000000-0000-0000-0000-000000010321";
+  const sourceNodeId = "00000000-0000-0000-0000-000000010401";
+  const targetNodeId = "00000000-0000-0000-0000-000000010402";
+  const edgeId = "00000000-0000-0000-0000-000000010501";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind, weight_bps, metadata_json)
+      values (${edgeId}, ${userId}, ${mapId}, ${sourceNodeId}, ${targetNodeId}, ${"supports"}, ${5000}, ${JSON.stringify({ label: "supports" })}::jsonb)
+    `;
+
+    const response = await deleteGraphEdge(
+      new Request(`http://localhost/api/graph/edges/${edgeId}`, {
+        method: "DELETE",
+        headers: {
+          "x-user-id": userId,
+        },
+      }),
+      { params: { id: edgeId } },
+    );
+
+    assert.equal(response.status, 200);
+
+    const payload = (await response.json()) as {
+      deleted: boolean;
+      edge: {
+        id: string;
+        source: string;
+        target: string;
+        kind: string;
+        label: string;
+        strength: number;
+      };
+    };
+
+    assert.deepEqual(
+      {
+        deleted: payload.deleted,
+        id: payload.edge.id,
+        source: payload.edge.source,
+        target: payload.edge.target,
+        kind: payload.edge.kind,
+        label: payload.edge.label,
+        strength: payload.edge.strength,
+      },
+      {
+        deleted: true,
+        id: edgeId,
+        source: sourceNodeId,
+        target: targetNodeId,
+        kind: "supports",
+        label: "supports",
+        strength: 0.5,
+      },
+    );
+
+    const storedRows = await sql<{ count: string }[]>`
+      select count(*)::text as count
+      from graph_edges
+      where id = ${edgeId}
+    `;
+
+    assert.equal(storedRows[0]?.count, "0");
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("DELETE /api/graph/edges/:id rejects invalid ids and cross-user deletes", async () => {
+  const userId = "00000000-0000-0000-0000-000000011123";
+  const otherUserId = "00000000-0000-0000-0000-000000011124";
+  const mapId = "00000000-0000-0000-0000-000000011321";
+  const sourceNodeId = "00000000-0000-0000-0000-000000011401";
+  const targetNodeId = "00000000-0000-0000-0000-000000011402";
+  const edgeId = "00000000-0000-0000-0000-000000011501";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind, weight_bps, metadata_json)
+      values (${edgeId}, ${otherUserId}, ${mapId}, ${sourceNodeId}, ${targetNodeId}, ${"supports"}, ${5000}, ${JSON.stringify({ label: "supports" })}::jsonb)
+    `;
+
+    const notFoundResponse = await deleteGraphEdge(
+      new Request(`http://localhost/api/graph/edges/${edgeId}`, {
+        method: "DELETE",
+        headers: {
+          "x-user-id": userId,
+        },
+      }),
+      { params: { id: edgeId } },
+    );
+
+    assert.equal(notFoundResponse.status, 404);
+    assert.deepEqual(await notFoundResponse.json(), {
+      error: "Graph edge not found.",
+    });
+
+    const invalidIdResponse = await deleteGraphEdge(
+      new Request("http://localhost/api/graph/edges/not-a-uuid", {
+        method: "DELETE",
+        headers: {
+          "x-user-id": userId,
+        },
+      }),
+      { params: { id: "not-a-uuid" } },
+    );
+
+    assert.equal(invalidIdResponse.status, 400);
+    assert.deepEqual(await invalidIdResponse.json(), {
+      error: "Invalid edge id. Expected a UUID.",
     });
   } finally {
     await sql.end({ timeout: 1 });
