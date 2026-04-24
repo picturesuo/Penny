@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import type { DbClient } from "../db/client.ts";
 import { getDb } from "../db/client.ts";
-import { challengeRounds, claims, maps, workspaceContexts } from "../db/schema.ts";
+import { challengeCritiques, challengeRounds, claims, maps, movesEvents, workspaceContexts } from "../db/schema.ts";
 import { buildShellView, type BuildShellViewRepository, type WorkspaceShellView } from "./build-shell-view.ts";
 
 export type ChallengeClaimView = {
@@ -25,10 +25,28 @@ export type ChallengeRoundView = {
   updatedAt: string;
 };
 
-export type ChallengeCritiqueStateView = {
-  status: "not_requested";
-  critiqueId: null;
-};
+export type ChallengeCritiqueStateView =
+  | {
+      status: "not_requested";
+      critiqueId: null;
+    }
+  | {
+      status: string;
+      critiqueId: string;
+      critiquePayload?: unknown;
+      provider?: string;
+      model?: string;
+      promptVersion?: string;
+    }
+  | {
+      status: string;
+      critiqueId: string;
+      body: string;
+      critiquePayload?: unknown;
+      provider?: string;
+      model?: string;
+      promptVersion?: string;
+    };
 
 export type WorkspaceChallengeView = {
   shellContext: WorkspaceShellView;
@@ -40,6 +58,30 @@ export type WorkspaceChallengeView = {
 export type BuildChallengeViewInput = {
   userId: string;
 };
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function readOptionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function parseCritiqueBodyPayload(body: string | null): unknown | undefined {
+  if (!body || !body.trim()) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+}
 
 function createShellRepository(db: DbClient): BuildShellViewRepository {
   return {
@@ -88,17 +130,16 @@ export async function buildChallengeView(
   db: DbClient = getDb(),
 ): Promise<WorkspaceChallengeView> {
   const shellView = await buildShellView(input, createShellRepository(db));
-  const critiqueState: ChallengeCritiqueStateView = {
-    status: "not_requested",
-    critiqueId: null,
-  };
 
   if (!shellView.mapId || !shellView.claimId) {
     return {
       shellContext: shellView,
       activeClaim: null,
       activeChallengeRound: null,
-      critiqueState,
+      critiqueState: {
+        status: "not_requested",
+        critiqueId: null,
+      },
     };
   }
 
@@ -123,7 +164,10 @@ export async function buildChallengeView(
       shellContext: shellView,
       activeClaim: null,
       activeChallengeRound: null,
-      critiqueState,
+      critiqueState: {
+        status: "not_requested",
+        critiqueId: null,
+      },
     };
   }
 
@@ -149,6 +193,62 @@ export async function buildChallengeView(
     .limit(1);
 
   const challengeRoundRow = roundRows[0] ?? null;
+  const critiqueRows =
+    challengeRoundRow === null
+      ? []
+      : await db
+          .select({
+            id: challengeCritiques.id,
+            status: challengeCritiques.status,
+            body: challengeCritiques.body,
+            createdAt: challengeCritiques.createdAt,
+          })
+          .from(challengeCritiques)
+          .where(and(eq(challengeCritiques.roundId, challengeRoundRow.id), eq(challengeCritiques.userId, input.userId)))
+          .orderBy(desc(challengeCritiques.createdAt), desc(challengeCritiques.id))
+          .limit(1);
+
+  const critiqueRow = critiqueRows[0] ?? null;
+  const critiqueEventRows =
+    critiqueRow === null
+      ? []
+      : await db
+          .select({
+            payloadJson: movesEvents.payloadJson,
+            createdAt: movesEvents.createdAt,
+          })
+          .from(movesEvents)
+          .where(
+            and(
+              eq(movesEvents.aggregateType, "challenge_critique"),
+              eq(movesEvents.aggregateId, critiqueRow.id),
+              eq(movesEvents.userId, input.userId),
+              eq(movesEvents.type, "challenge.critique.generated"),
+            ),
+          )
+          .orderBy(desc(movesEvents.createdAt), desc(movesEvents.id))
+          .limit(1);
+
+  const critiqueEventPayload = asRecord(critiqueEventRows[0]?.payloadJson);
+  const critiquePayload = critiqueEventPayload?.critiqueJson ?? parseCritiqueBodyPayload(critiqueRow?.body ?? null);
+  const provider = readOptionalString(critiqueEventPayload?.provider);
+  const model = readOptionalString(critiqueEventPayload?.model);
+  const promptVersion = readOptionalString(critiqueEventPayload?.promptVersion);
+  const critiqueState =
+    critiqueRow === null
+      ? ({
+          status: "not_requested",
+          critiqueId: null,
+        } satisfies ChallengeCritiqueStateView)
+      : {
+          status: critiqueRow.status,
+          critiqueId: critiqueRow.id,
+          ...(critiqueRow.status === "ready" && critiqueRow.body ? { body: critiqueRow.body } : {}),
+          ...(critiquePayload !== undefined ? { critiquePayload } : {}),
+          ...(provider ? { provider } : {}),
+          ...(model ? { model } : {}),
+          ...(promptVersion ? { promptVersion } : {}),
+        };
 
   return {
     shellContext: shellView,
