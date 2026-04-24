@@ -1,0 +1,288 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, test } from "node:test";
+import postgres from "postgres";
+
+import { POST } from "../../apps/web/app/api/confidence/route.ts";
+
+const PG_PORT = 63000 + Math.floor(Math.random() * 1000);
+const PG_USER = "postgres";
+const DB_NAME = "penny_confidence_route_test";
+const PGDATA_DIR = mkdtempSync(join(tmpdir(), "penny-pgdata-confidence-route-"));
+
+function run(command: string, args: string[], env?: NodeJS.ProcessEnv) {
+  execFileSync(command, args, {
+    cwd: "/Users/bensuo/Desktop/penny",
+    env: env ? { ...process.env, ...env } : process.env,
+    stdio: "pipe",
+  });
+}
+
+run("initdb", ["-D", PGDATA_DIR, "-U", PG_USER, "-A", "trust"]);
+run("pg_ctl", ["-D", PGDATA_DIR, "-l", join(PGDATA_DIR, "postgres.log"), "-o", `-p ${PG_PORT}`, "start"]);
+run("createdb", ["-h", "127.0.0.1", "-p", String(PG_PORT), "-U", PG_USER, DB_NAME]);
+
+const databaseUrl = `postgresql://${PG_USER}@127.0.0.1:${PG_PORT}/${DB_NAME}`;
+
+run("pnpm", ["db:migrate"], {
+  DATABASE_URL: databaseUrl,
+  DATABASE_DIRECT_URL: databaseUrl,
+});
+
+process.env.DATABASE_URL = databaseUrl;
+process.env.DATABASE_DIRECT_URL = databaseUrl;
+
+after(async () => {
+  try {
+    run("pg_ctl", ["-D", PGDATA_DIR, "stop", "-m", "immediate"]);
+  } finally {
+    rmSync(PGDATA_DIR, { recursive: true, force: true });
+  }
+});
+
+function confidenceRequest(userId: string, body: Record<string, unknown>) {
+  return new Request("http://localhost/api/confidence", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": userId,
+      "x-request-id": "confidence-route-test-request",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+async function seedWorkspace(sql: postgres.Sql) {
+  const userId = "00000000-0000-0000-0000-000000014001";
+  const otherUserId = "00000000-0000-0000-0000-000000014002";
+  const mapId = "00000000-0000-0000-0000-000000014101";
+  const otherMapId = "00000000-0000-0000-0000-000000014102";
+  const thoughtId = "00000000-0000-0000-0000-000000014201";
+  const claimId = "00000000-0000-0000-0000-000000014301";
+  const graphNodeId = "00000000-0000-0000-0000-000000014401";
+  const otherClaimId = "00000000-0000-0000-0000-000000014302";
+
+  await sql`
+    insert into maps (id, user_id, title)
+    values
+      (${mapId}, ${userId}, ${"Confidence map"}),
+      (${otherMapId}, ${otherUserId}, ${"Other confidence map"})
+    on conflict (id) do nothing
+  `;
+
+  await sql`
+    insert into thoughts (id, user_id, map_id, raw_text, source)
+    values (${thoughtId}, ${userId}, ${mapId}, ${"Confidence thought"}, ${"capture"})
+    on conflict (id) do nothing
+  `;
+
+  await sql`
+    insert into claims (id, map_id, user_id, body, confidence_bps)
+    values
+      (${claimId}, ${mapId}, ${userId}, ${"Confidence should be explicit"}, ${5100}),
+      (${otherClaimId}, ${otherMapId}, ${otherUserId}, ${"Other user claim"}, ${6200})
+    on conflict (id) do nothing
+  `;
+
+  await sql`
+    insert into graph_nodes (id, user_id, map_id, claim_id, kind, label)
+    values (${graphNodeId}, ${userId}, ${mapId}, ${claimId}, ${"claim"}, ${"Confidence graph node"})
+    on conflict (id) do nothing
+  `;
+
+  return { userId, otherClaimId, thoughtId, claimId, graphNodeId };
+}
+
+test("POST /api/confidence records percent confidence for an owned claim", async () => {
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const seeded = await seedWorkspace(sql);
+    const response = await POST(
+      confidenceRequest(seeded.userId, {
+        claimId: seeded.claimId,
+        confidence: 74,
+        rationale: "Enough evidence to proceed.",
+      }),
+    );
+
+    assert.equal(response.status, 201);
+
+    const payload = (await response.json()) as {
+      confidence: {
+        id: string;
+        claimId: string | null;
+        thoughtId: string | null;
+        graphNodeId: string | null;
+        ratingBps: number;
+        confidence: number;
+        rationale: string | null;
+        source: string;
+        createdAt: string;
+      };
+    };
+
+    assert.equal(payload.confidence.claimId, seeded.claimId);
+    assert.equal(payload.confidence.thoughtId, null);
+    assert.equal(payload.confidence.graphNodeId, null);
+    assert.equal(payload.confidence.ratingBps, 7400);
+    assert.equal(payload.confidence.confidence, 74);
+    assert.equal(payload.confidence.rationale, "Enough evidence to proceed.");
+    assert.equal(payload.confidence.source, "manual");
+    assert.match(payload.confidence.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+
+    const rows = await sql<Array<{ rating_bps: number; claim_id: string | null; source: string }>>`
+      select rating_bps, claim_id, source
+      from confidence_ratings
+      where id = ${payload.confidence.id}
+    `;
+    assert.deepEqual([...rows], [{ rating_bps: 7400, claim_id: seeded.claimId, source: "manual" }]);
+
+    const events = await sql<Array<{ type: string; aggregate_type: string; aggregate_id: string; request_id: string }>>`
+      select type, aggregate_type, aggregate_id, request_id
+      from moves_events
+      where payload_json->>'confidenceRatingId' = ${payload.confidence.id}
+    `;
+    assert.deepEqual([...events], [
+      {
+        type: "confidence.recorded",
+        aggregate_type: "claim",
+        aggregate_id: seeded.claimId,
+        request_id: "confidence-route-test-request",
+      },
+    ]);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("POST /api/confidence records ratingBps for an owned graph node", async () => {
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const seeded = await seedWorkspace(sql);
+    const response = await POST(
+      confidenceRequest(seeded.userId, {
+        graphNodeId: seeded.graphNodeId,
+        ratingBps: 8250,
+        source: "graph-inspector",
+      }),
+    );
+
+    assert.equal(response.status, 201);
+
+    const payload = (await response.json()) as {
+      confidence: {
+        graphNodeId: string | null;
+        ratingBps: number;
+        confidence: number;
+        source: string;
+      };
+    };
+
+    assert.equal(payload.confidence.graphNodeId, seeded.graphNodeId);
+    assert.equal(payload.confidence.ratingBps, 8250);
+    assert.equal(payload.confidence.confidence, 82.5);
+    assert.equal(payload.confidence.source, "graph-inspector");
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("POST /api/confidence records confidence for an owned thought", async () => {
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const seeded = await seedWorkspace(sql);
+    const response = await POST(
+      confidenceRequest(seeded.userId, {
+        thoughtId: seeded.thoughtId,
+        confidence: 25,
+      }),
+    );
+
+    assert.equal(response.status, 201);
+
+    const payload = (await response.json()) as {
+      confidence: {
+        thoughtId: string | null;
+        ratingBps: number;
+      };
+    };
+
+    assert.equal(payload.confidence.thoughtId, seeded.thoughtId);
+    assert.equal(payload.confidence.ratingBps, 2500);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("POST /api/confidence rejects invalid target and rating input", async () => {
+  const userId = "00000000-0000-0000-0000-000000014901";
+
+  const responses = await Promise.all([
+    POST(confidenceRequest(userId, { confidence: 50 })),
+    POST(
+      confidenceRequest(userId, {
+        thoughtId: "00000000-0000-0000-0000-000000014902",
+        claimId: "00000000-0000-0000-0000-000000014903",
+        confidence: 50,
+      }),
+    ),
+    POST(
+      confidenceRequest(userId, {
+        claimId: "not-a-uuid",
+        confidence: 50,
+      }),
+    ),
+    POST(
+      confidenceRequest(userId, {
+        claimId: "00000000-0000-0000-0000-000000014904",
+        confidence: 101,
+      }),
+    ),
+    POST(
+      confidenceRequest(userId, {
+        claimId: "00000000-0000-0000-0000-000000014905",
+        ratingBps: 10_001,
+      }),
+    ),
+    POST(
+      confidenceRequest(userId, {
+        claimId: "00000000-0000-0000-0000-000000014906",
+        confidence: 50,
+        ratingBps: 5000,
+      }),
+    ),
+  ]);
+
+  for (const response of responses) {
+    assert.equal(response.status, 400);
+    const payload = (await response.json()) as { error: string };
+    assert.match(payload.error, /required|UUID|between|Exactly one/);
+  }
+});
+
+test("POST /api/confidence rejects missing or cross-user targets", async () => {
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const seeded = await seedWorkspace(sql);
+    const response = await POST(
+      confidenceRequest(seeded.userId, {
+        claimId: seeded.otherClaimId,
+        confidence: 50,
+      }),
+    );
+
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), {
+      error: "Confidence target not found.",
+    });
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
