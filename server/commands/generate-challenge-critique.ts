@@ -20,6 +20,7 @@ export type ChallengeCritiqueReadyRecord = {
   userId: string;
   status: "ready";
   body: string;
+  critiqueJson: Record<string, unknown> | null;
   updatedAt: Date;
 };
 
@@ -48,6 +49,7 @@ export type ChallengeCritiqueFailedRecord = {
   userId: string;
   status: "failed";
   body: null;
+  critiqueJson: null;
   updatedAt: Date;
 };
 
@@ -76,7 +78,16 @@ export type GenerateChallengeCritiqueRepositoryTx = {
   findOwnedCritique(input: {
     critiqueId: string;
     userId: string;
-  }): Promise<{ id: string; roundId: string; mapId: string; claimId: string; userId: string; status: string; body: string | null } | null>;
+  }): Promise<{
+    id: string;
+    roundId: string;
+    mapId: string;
+    claimId: string;
+    userId: string;
+    status: string;
+    body: string | null;
+    critiqueJson: Record<string, unknown> | null;
+  } | null>;
   findOwnedClaim(input: {
     claimId: string;
     mapId: string;
@@ -108,6 +119,7 @@ type GenerateChallengeCritiqueDbCritiqueRow = {
   userId: string;
   status: string;
   body: string | null;
+  critiqueJson: Record<string, unknown> | null;
 };
 
 type GenerateChallengeCritiqueDbClaimRow = {
@@ -270,6 +282,17 @@ function readGeneratedBody(payload: Record<string, unknown> | null): string | nu
   return critiqueJson ? formatStructuredCritique(critiqueJson) || null : null;
 }
 
+function readStoredCritiqueBody(input: {
+  body: string | null;
+  critiqueJson: Record<string, unknown> | null;
+}): string | null {
+  if (input.body && input.body.trim()) {
+    return input.body;
+  }
+
+  return input.critiqueJson ? formatStructuredCritique(input.critiqueJson) || null : null;
+}
+
 function asObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new GenerateChallengeCritiqueValidationError("generateChallengeCritique input must be an object.");
@@ -374,6 +397,7 @@ async function findOwnedCritique(
   userId: string;
   status: string;
   body: string | null;
+  critiqueJson: Record<string, unknown> | null;
 } | null> {
   if (isGenerateChallengeCritiqueRepositoryTx(tx)) {
     return tx.findOwnedCritique(input);
@@ -392,6 +416,7 @@ async function findOwnedCritique(
       userId: challengeCritiques.userId,
       status: challengeCritiques.status,
       body: challengeCritiques.body,
+      critiqueJson: challengeCritiques.critiqueJson,
     })
     .from(challengeCritiques)
     .where(and(eq(challengeCritiques.id, input.critiqueId), eq(challengeCritiques.userId, input.userId)))
@@ -570,7 +595,13 @@ export async function generateChallengeCritique(
         userId: normalized.userId,
       });
 
-      const existingBody = existingCritique?.body ?? readGeneratedBody(existingEvent.payload);
+      const existingBody =
+        (existingCritique
+          ? readStoredCritiqueBody({
+              body: existingCritique.body,
+              critiqueJson: existingCritique.critiqueJson,
+            })
+          : null) ?? readGeneratedBody(existingEvent.payload);
 
       if (existingCritique?.status === READY_STATUS && existingBody) {
         return {
@@ -590,11 +621,16 @@ export async function generateChallengeCritique(
       throw new GenerateChallengeCritiqueNotFoundError(normalized.critiqueId);
     }
 
-    if (critique.status === READY_STATUS && critique.body) {
+    const readyBody = readStoredCritiqueBody({
+      body: critique.body,
+      critiqueJson: critique.critiqueJson,
+    });
+
+    if (critique.status === READY_STATUS && readyBody) {
       return {
         critiqueId: critique.id,
         status: READY_STATUS,
-        body: critique.body,
+        body: readyBody,
       };
     }
 
@@ -610,6 +646,7 @@ export async function generateChallengeCritique(
           userId: normalized.userId,
           status: READY_STATUS,
           body: generated.body,
+          critiqueJson: generated.critiqueJson ?? null,
           updatedAt: timestamp,
         });
 
@@ -638,6 +675,7 @@ export async function generateChallengeCritique(
           .set({
             status: READY_STATUS,
             body: generated.body,
+            critiqueJson: generated.critiqueJson ?? null,
             updatedAt: timestamp,
           })
           .where(and(eq(challengeCritiques.id, critique.id), eq(challengeCritiques.userId, normalized.userId)));
@@ -679,6 +717,7 @@ export async function generateChallengeCritique(
             userId: normalized.userId,
             status: "failed",
             body: null,
+            critiqueJson: null,
             updatedAt: timestamp,
           });
         } else {
@@ -687,6 +726,7 @@ export async function generateChallengeCritique(
             userId: normalized.userId,
             status: "failed",
             body: null,
+            critiqueJson: null,
             updatedAt: timestamp,
           } as unknown as ChallengeCritiqueReadyRecord);
         }
@@ -712,6 +752,7 @@ export async function generateChallengeCritique(
           .set({
             status: "failed",
             body: null,
+            critiqueJson: null,
             updatedAt: timestamp,
           })
           .where(and(eq(challengeCritiques.id, critique.id), eq(challengeCritiques.userId, normalized.userId)));

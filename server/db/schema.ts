@@ -42,6 +42,7 @@ export const challengeCritiques = pgTable(
     userId: uuid("user_id").notNull(),
     status: text("status").notNull(),
     body: text("body"),
+    critiqueJson: jsonb("critique_json"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

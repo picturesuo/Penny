@@ -24,6 +24,7 @@ class FakeGenerateChallengeCritiqueRepositoryTx implements GenerateChallengeCrit
       userId: string;
       status: string;
       body: string | null;
+      critiqueJson: Record<string, unknown> | null;
     }>,
     private readonly claims: Array<{ id: string; mapId: string; userId: string; body: string }>,
     private readonly updates: ChallengeCritiqueReadyRecord[],
@@ -86,6 +87,7 @@ test("generateChallengeCritique fills a pending critique and returns ready outpu
         userId: "user-1",
         status: "pending",
         body: null,
+        critiqueJson: null,
       },
     ],
     [
@@ -123,6 +125,9 @@ test("generateChallengeCritique fills a pending critique and returns ready outpu
       userId: "user-1",
       status: "ready",
       body: result.body,
+      critiqueJson: {
+        body: result.body,
+      },
       updatedAt: timestamp,
     },
   ]);
@@ -162,6 +167,9 @@ test("generateChallengeCritique is idempotent for a ready critique with an exist
         userId: "user-2",
         status: "ready",
         body: "Already generated critique body.",
+        critiqueJson: {
+          body: "Already generated critique body.",
+        },
       },
     ],
     [],
@@ -195,6 +203,7 @@ test("generateChallengeCritique rejects an unowned critique", async () => {
         userId: "other-user",
         status: "pending",
         body: null,
+        critiqueJson: null,
       },
     ],
     [],
@@ -224,6 +233,7 @@ test("generateChallengeCritique rejects a critique with no readable claim", asyn
         userId: "user-4",
         status: "pending",
         body: null,
+        critiqueJson: null,
       },
     ],
     [],
@@ -274,6 +284,7 @@ test("generateChallengeCritique marks the critique failed and emits challenge.cr
             userId: "user-5",
             status: "pending",
             body: null,
+            critiqueJson: null,
           };
         },
         async findOwnedClaim() {
@@ -319,6 +330,7 @@ test("generateChallengeCritique marks the critique failed and emits challenge.cr
       userId: "user-5",
       status: "failed",
       body: null,
+      critiqueJson: null,
       updatedAt: timestamp,
     },
   ]);

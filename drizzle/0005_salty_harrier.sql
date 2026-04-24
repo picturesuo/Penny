@@ -1,0 +1,1 @@
+ALTER TABLE "challenge_critiques" ADD COLUMN "critique_json" jsonb;
