@@ -346,7 +346,7 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
     assert.equal(learnPayload.selectedMapId, map.mapId);
     assert.equal(learnPayload.selectedClaimId, claim.claimId);
     assert.deepEqual(learnPayload.learnState, {
-      status: "not_implemented",
+      status: "placeholder",
       message: "Learn mode coming soon",
     });
 
