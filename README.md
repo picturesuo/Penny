@@ -124,6 +124,8 @@ pnpm typecheck
 pnpm build
 ```
 
+As of 2026-04-24, `pnpm typecheck` is still expected to fail in `@penny/web` on `.ts` import suffix handling and one challenge critique state typing mismatch. Keep the command in the broader pass, but do not treat this README as claiming the repo-wide typecheck is green yet.
+
 Run `pnpm test:mvp-verification` when you want the longer command, projection, route, and AI-contract suite rather than the smaller integration-only pass.
 
 ## Current boundaries
