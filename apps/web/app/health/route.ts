@@ -4,7 +4,8 @@ export function GET() {
   return NextResponse.json(
     {
       ok: true,
-      service: "penny-web",
+      service: "penny",
+      timestamp: new Date().toISOString(),
     },
     { status: 200 },
   );

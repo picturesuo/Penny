@@ -7,8 +7,10 @@ test("GET /health returns an unauthenticated backend health response", async () 
   const response = GET();
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
-    ok: true,
-    service: "penny-web",
-  });
+  const body = (await response.json()) as { ok?: unknown; service?: unknown; timestamp?: unknown };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.service, "penny");
+  assert.equal(typeof body.timestamp, "string");
+  assert.doesNotThrow(() => new Date(body.timestamp as string).toISOString());
 });
