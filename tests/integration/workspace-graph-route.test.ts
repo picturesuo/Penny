@@ -257,6 +257,33 @@ test("GET /api/graph rejects invalid UUID query params", async () => {
   });
 });
 
+test("graph edges cannot reference missing graph nodes", async () => {
+  const userId = "00000000-0000-0000-0000-000000004023";
+  const mapId = "00000000-0000-0000-0000-000000004024";
+  const sourceNodeId = "00000000-0000-0000-0000-000000004025";
+  const missingNodeId = "00000000-0000-0000-0000-000000004026";
+  const edgeId = "00000000-0000-0000-0000-000000004027";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label)
+      values (${sourceNodeId}, ${userId}, ${mapId}, ${"claim"}, ${"Existing node"})
+    `;
+
+    await assert.rejects(
+      () =>
+        sql`
+          insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind)
+          values (${edgeId}, ${userId}, ${mapId}, ${sourceNodeId}, ${missingNodeId}, ${"supports"})
+        `,
+      (error: unknown) => typeof error === "object" && error !== null && "code" in error && error.code === "23503",
+    );
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
 test("GET /api/graph/nodes/:id/detail returns owned node detail with edges and confidence", async () => {
   const userId = "00000000-0000-0000-0000-000000004123";
   const otherUserId = "00000000-0000-0000-0000-000000004124";
@@ -781,6 +808,13 @@ test("PATCH /api/graph/edges/:id rejects invalid ids and cross-user updates", as
 
   try {
     await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label)
+      values
+        (${sourceNodeId}, ${otherUserId}, ${mapId}, ${"claim"}, ${"Other user source"}),
+        (${targetNodeId}, ${otherUserId}, ${mapId}, ${"claim"}, ${"Other user target"})
+    `;
+
+    await sql`
       insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind, weight_bps, metadata_json)
       values (${edgeId}, ${otherUserId}, ${mapId}, ${sourceNodeId}, ${targetNodeId}, ${"supports"}, ${5000}, ${JSON.stringify({ label: "supports" })}::jsonb)
     `;
@@ -856,6 +890,13 @@ test("DELETE /api/graph/edges/:id deletes an owned edge", async () => {
 
   try {
     await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label)
+      values
+        (${sourceNodeId}, ${userId}, ${mapId}, ${"claim"}, ${"Source claim"}),
+        (${targetNodeId}, ${userId}, ${mapId}, ${"claim"}, ${"Target claim"})
+    `;
+
+    await sql`
       insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind, weight_bps, metadata_json)
       values (${edgeId}, ${userId}, ${mapId}, ${sourceNodeId}, ${targetNodeId}, ${"supports"}, ${5000}, ${JSON.stringify({ label: "supports" })}::jsonb)
     `;
@@ -927,6 +968,13 @@ test("DELETE /api/graph/edges/:id rejects invalid ids and cross-user deletes", a
   const sql = postgres(databaseUrl, { prepare: false });
 
   try {
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label)
+      values
+        (${sourceNodeId}, ${otherUserId}, ${mapId}, ${"claim"}, ${"Other user source"}),
+        (${targetNodeId}, ${otherUserId}, ${mapId}, ${"claim"}, ${"Other user target"})
+    `;
+
     await sql`
       insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind, weight_bps, metadata_json)
       values (${edgeId}, ${otherUserId}, ${mapId}, ${sourceNodeId}, ${targetNodeId}, ${"supports"}, ${5000}, ${JSON.stringify({ label: "supports" })}::jsonb)

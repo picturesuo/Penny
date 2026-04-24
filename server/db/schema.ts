@@ -119,8 +119,12 @@ export const graphEdges = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id").notNull(),
     mapId: uuid("map_id").notNull(),
-    sourceNodeId: uuid("source_node_id").notNull(),
-    targetNodeId: uuid("target_node_id").notNull(),
+    sourceNodeId: uuid("source_node_id")
+      .notNull()
+      .references(() => graphNodes.id, { onDelete: "cascade" }),
+    targetNodeId: uuid("target_node_id")
+      .notNull()
+      .references(() => graphNodes.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
     weightBps: integer("weight_bps"),
     metadataJson: jsonb("metadata_json"),
