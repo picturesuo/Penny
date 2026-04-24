@@ -12,12 +12,14 @@ export type SeedResult = {
   userId: string;
   mapId: string;
   thoughtId: string;
+  blockerThoughtId: string;
   primaryClaimId: string;
   supportingClaimId: string;
   evidenceClaimId: string;
   tensionClaimId: string;
   challengeRoundId: string;
   critiqueId: string;
+  blockerAiJobId: string;
 };
 
 type SeedConfig = {
@@ -30,14 +32,19 @@ export const SEED_STORY = {
   mapTitle: "Building Penny: traceable product judgment",
   rawThought:
     "If Penny can show one raw founder thought becoming a claim, then a critique, then a teach-back, the demo proves the product remembers how beliefs changed.",
+  blockerThought:
+    "The riskiest blocker is explaining why traceability matters before the graph feels like extra ceremony.",
   primaryClaim: "Penny should make every product claim traceable from raw thought to challenge and learn-back.",
   supportingClaim: "A first-run demo should keep the same selected idea visible across Brain, Challenge, and Learn.",
   evidenceClaim: "Founder notes become useful when Penny preserves provenance, confidence, and critique history.",
   tensionClaim: "Generative polish can hide weak assumptions unless the demo makes critique results inspectable.",
+  blockerExample:
+    "Users may not understand traceability until Penny shows a concrete belief update from raw thought to challenge result.",
 } as const;
 
 const SEED_IDS = {
   thought: "00000000-0000-4000-8000-000000000101",
+  blockerThought: "00000000-0000-4000-8000-000000000102",
   thoughtNode: "00000000-0000-4000-8000-000000000201",
   primaryNode: "00000000-0000-4000-8000-000000000202",
   supportingNode: "00000000-0000-4000-8000-000000000203",
@@ -49,8 +56,14 @@ const SEED_IDS = {
   edgeTensionPrimary: "00000000-0000-4000-8000-000000000304",
   challengeRound: "00000000-0000-4000-8000-000000000401",
   critique: "00000000-0000-4000-8000-000000000402",
+  confidenceInitial: "00000000-0000-4000-8000-000000000403",
+  confidenceAfterEvidence: "00000000-0000-4000-8000-000000000404",
+  confidenceAfterChallenge: "00000000-0000-4000-8000-000000000405",
+  blockerAiJob: "00000000-0000-4000-8000-000000000406",
   activityThought: "00000000-0000-4000-8000-000000000501",
   activityCritique: "00000000-0000-4000-8000-000000000502",
+  activityConfidence: "00000000-0000-4000-8000-000000000503",
+  activityBlocker: "00000000-0000-4000-8000-000000000504",
 } as const;
 
 export function readSeedConfig(env: NodeJS.ProcessEnv = process.env): SeedConfig {
@@ -110,6 +123,13 @@ async function polishSeedStory(input: {
     suggestedConfidenceBps: 6100,
     uncertaintyNote: "Seeded critique for the local Penny demo; not a live provider judgment.",
   };
+  const blockerOutput = {
+    likelyBlocker: "Traceability sounds abstract until the demo shows a concrete belief update.",
+    missingConcept: "Belief provenance",
+    simplerExplanation:
+      "A claim is easier to trust when Penny can show the raw thought, extracted claim, critique result, and confidence change in one place.",
+    nextExercise: "Ask a user to explain why the selected claim became less certain after the critique.",
+  };
 
   try {
     await sql`
@@ -156,6 +176,26 @@ async function polishSeedStory(input: {
         ${SEED_STORY.rawThought},
         ${"seed"},
         ${sql.json({ story: "first-run-demo", stage: "raw-thought" })},
+        ${now.toISOString()},
+        ${now.toISOString()}
+      )
+      on conflict (id) do update
+        set user_id = excluded.user_id,
+            map_id = excluded.map_id,
+            raw_text = excluded.raw_text,
+            source = excluded.source,
+            metadata_json = excluded.metadata_json,
+            updated_at = excluded.updated_at
+    `;
+    await sql`
+      insert into thoughts (id, user_id, map_id, raw_text, source, metadata_json, created_at, updated_at)
+      values (
+        ${SEED_IDS.blockerThought},
+        ${input.config.userId},
+        ${input.mapId},
+        ${SEED_STORY.blockerThought},
+        ${"seed"},
+        ${sql.json({ story: "first-run-demo", stage: "learn-blocker" })},
         ${now.toISOString()},
         ${now.toISOString()}
       )
@@ -338,6 +378,92 @@ async function polishSeedStory(input: {
             updated_at = excluded.updated_at
     `;
 
+    const confidenceRatings = [
+      {
+        id: SEED_IDS.confidenceInitial,
+        ratingBps: 5800,
+        rationale: "Initial confidence after extracting the claim from the raw founder thought.",
+        source: "seed.initial",
+      },
+      {
+        id: SEED_IDS.confidenceAfterEvidence,
+        ratingBps: 7000,
+        rationale: "Confidence increased after adding provenance and first-run continuity evidence.",
+        source: "seed.evidence",
+      },
+      {
+        id: SEED_IDS.confidenceAfterChallenge,
+        ratingBps: 6100,
+        rationale: "Confidence moved down after Challenge exposed the static-demo risk.",
+        source: "seed.challenge",
+      },
+    ];
+
+    for (const rating of confidenceRatings) {
+      await sql`
+        insert into confidence_ratings (id, user_id, thought_id, claim_id, graph_node_id, rating_bps, rationale, source, created_at)
+        values (
+          ${rating.id},
+          ${input.config.userId},
+          ${SEED_IDS.thought},
+          ${input.primaryClaimId},
+          ${SEED_IDS.primaryNode},
+          ${rating.ratingBps},
+          ${rating.rationale},
+          ${rating.source},
+          ${now.toISOString()}
+        )
+        on conflict (id) do update
+          set user_id = excluded.user_id,
+              thought_id = excluded.thought_id,
+              claim_id = excluded.claim_id,
+              graph_node_id = excluded.graph_node_id,
+              rating_bps = excluded.rating_bps,
+              rationale = excluded.rationale,
+              source = excluded.source,
+              created_at = excluded.created_at
+      `;
+    }
+
+    await sql`
+      insert into ai_jobs (
+        id,
+        user_id,
+        operation,
+        status,
+        input_json,
+        output_json,
+        error_message,
+        created_at,
+        updated_at,
+        started_at,
+        completed_at
+      )
+      values (
+        ${SEED_IDS.blockerAiJob},
+        ${input.config.userId},
+        ${"explain_blocker"},
+        ${"succeeded"},
+        ${sql.json({ text: SEED_STORY.blockerExample, thoughtId: SEED_IDS.blockerThought })},
+        ${sql.json(blockerOutput)},
+        ${null},
+        ${now.toISOString()},
+        ${now.toISOString()},
+        ${now.toISOString()},
+        ${now.toISOString()}
+      )
+      on conflict (id) do update
+        set user_id = excluded.user_id,
+            operation = excluded.operation,
+            status = excluded.status,
+            input_json = excluded.input_json,
+            output_json = excluded.output_json,
+            error_message = excluded.error_message,
+            updated_at = excluded.updated_at,
+            started_at = excluded.started_at,
+            completed_at = excluded.completed_at
+    `;
+
     await sql`
       insert into activity_events (
         id,
@@ -406,6 +532,90 @@ async function polishSeedStory(input: {
         set user_id = excluded.user_id,
             map_id = excluded.map_id,
             claim_id = excluded.claim_id,
+            aggregate_type = excluded.aggregate_type,
+            aggregate_id = excluded.aggregate_id,
+            type = excluded.type,
+            payload_json = excluded.payload_json,
+            request_id = excluded.request_id,
+            created_at = excluded.created_at
+    `;
+    await sql`
+      insert into activity_events (
+        id,
+        user_id,
+        map_id,
+        thought_id,
+        claim_id,
+        confidence_rating_id,
+        aggregate_type,
+        aggregate_id,
+        type,
+        payload_json,
+        request_id,
+        created_at
+      )
+      values (
+        ${SEED_IDS.activityConfidence},
+        ${input.config.userId},
+        ${input.mapId},
+        ${SEED_IDS.thought},
+        ${input.primaryClaimId},
+        ${SEED_IDS.confidenceAfterChallenge},
+        ${"confidence_rating"},
+        ${SEED_IDS.confidenceAfterChallenge},
+        ${"seed.confidence_updated"},
+        ${sql.json({ story: "first-run-demo", ratingBps: 6100, previousRatingBps: 7000 })},
+        ${"seed:mvp:confidence"},
+        ${now.toISOString()}
+      )
+      on conflict (id) do update
+        set user_id = excluded.user_id,
+            map_id = excluded.map_id,
+            thought_id = excluded.thought_id,
+            claim_id = excluded.claim_id,
+            confidence_rating_id = excluded.confidence_rating_id,
+            aggregate_type = excluded.aggregate_type,
+            aggregate_id = excluded.aggregate_id,
+            type = excluded.type,
+            payload_json = excluded.payload_json,
+            request_id = excluded.request_id,
+            created_at = excluded.created_at
+    `;
+    await sql`
+      insert into activity_events (
+        id,
+        user_id,
+        map_id,
+        thought_id,
+        claim_id,
+        ai_job_id,
+        aggregate_type,
+        aggregate_id,
+        type,
+        payload_json,
+        request_id,
+        created_at
+      )
+      values (
+        ${SEED_IDS.activityBlocker},
+        ${input.config.userId},
+        ${input.mapId},
+        ${SEED_IDS.blockerThought},
+        ${input.primaryClaimId},
+        ${SEED_IDS.blockerAiJob},
+        ${"ai_job"},
+        ${SEED_IDS.blockerAiJob},
+        ${"ai.explain_blocker.completed"},
+        ${sql.json({ story: "first-run-demo", input: SEED_STORY.blockerExample, output: blockerOutput })},
+        ${"seed:mvp:blocker"},
+        ${now.toISOString()}
+      )
+      on conflict (id) do update
+        set user_id = excluded.user_id,
+            map_id = excluded.map_id,
+            thought_id = excluded.thought_id,
+            claim_id = excluded.claim_id,
+            ai_job_id = excluded.ai_job_id,
             aggregate_type = excluded.aggregate_type,
             aggregate_id = excluded.aggregate_id,
             type = excluded.type,
@@ -483,12 +693,14 @@ export async function seedMvpBackend(config = readSeedConfig()): Promise<SeedRes
     userId: config.userId,
     mapId: map.mapId,
     thoughtId: SEED_IDS.thought,
+    blockerThoughtId: SEED_IDS.blockerThought,
     primaryClaimId: primaryClaim.claimId,
     supportingClaimId: supportingClaim.claimId,
     evidenceClaimId: evidenceClaim.claimId,
     tensionClaimId: tensionClaim.claimId,
     challengeRoundId: SEED_IDS.challengeRound,
     critiqueId: SEED_IDS.critique,
+    blockerAiJobId: SEED_IDS.blockerAiJob,
   };
 }
 

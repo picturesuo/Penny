@@ -29,8 +29,10 @@ test("readSeedConfig accepts environment overrides", () => {
 test("seed story describes a coherent Penny first-run loop", () => {
   assert.match(SEED_STORY.mapTitle, /Building Penny/);
   assert.match(SEED_STORY.rawThought, /raw founder thought/);
+  assert.match(SEED_STORY.blockerThought, /blocker/);
   assert.match(SEED_STORY.primaryClaim, /raw thought to challenge and learn-back/);
   assert.match(SEED_STORY.supportingClaim, /Brain, Challenge, and Learn/);
   assert.match(SEED_STORY.evidenceClaim, /provenance, confidence, and critique history/);
   assert.match(SEED_STORY.tensionClaim, /weak assumptions/);
+  assert.match(SEED_STORY.blockerExample, /belief update/);
 });
