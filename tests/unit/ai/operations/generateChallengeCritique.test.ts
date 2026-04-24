@@ -101,16 +101,21 @@ function applyCommonTestDeps() {
 test("generateChallengeCritique sends the canonical prompt/schema contract and returns the legacy operation shape", async () => {
   const originalDeps = snapshotDeps();
   let capturedRequest: Record<string, unknown> | null = null;
+  let capturedQualityTier: unknown = null;
 
   applyCommonTestDeps();
-  generateChallengeCritiqueDeps.resolveModelPolicy = () => [
-    {
-      provider: "anthropic",
-      model: "claude-test",
-      promptVersion: PROMPT_VERSION,
-      tier: "default",
-    },
-  ];
+  generateChallengeCritiqueDeps.resolveModelPolicy = (_operationName, options) => {
+    capturedQualityTier = options?.qualityTier ?? null;
+
+    return [
+      {
+        provider: "anthropic",
+        model: "claude-test",
+        promptVersion: PROMPT_VERSION,
+        tier: "default",
+      },
+    ];
+  };
   generateChallengeCritiqueDeps.invokeAnthropicStructured = async (request) => {
     capturedRequest = request as Record<string, unknown>;
 
@@ -132,19 +137,39 @@ test("generateChallengeCritique sends the canonical prompt/schema contract and r
   };
 
   try {
-    const result = await generateChallengeCritique(validInput, {
+    const result = await generateChallengeCritique(
+      {
+        claimText: validInput.claimText,
+        mapTitle: validInput.mapTitle,
+        neighboringClaims: validInput.neighboringClaims,
+        priorRoundContext: validInput.previousRounds,
+        qualityTier: "cheap",
+      },
+      {
       userId: "44444444-4444-4444-8444-444444444444",
       mapId: "55555555-5555-4555-8555-555555555555",
       claimId: validInput.claimId,
       roundId: "66666666-6666-4666-8666-666666666666",
       promptVersion: PROMPT_VERSION,
-    });
+      },
+    );
 
-    assert.deepEqual(result.output, legacyProviderOutput);
+    assert.deepEqual(result.critique, canonicalProviderOutput);
+    assert.equal(result.provider, "anthropic");
+    assert.equal(result.model, "claude-test");
+    assert.equal(result.promptVersion, PROMPT_VERSION);
+    assert.equal(result.repaired, false);
+    assert.equal(result.fallbackUsed, false);
+    assert.equal(result.traceId, "trace-123");
+    assert.deepEqual(result.output, {
+      ...legacyProviderOutput,
+      suggestedConfidenceDelta: 0,
+    });
     assert.equal(result.meta.provider, "anthropic");
     assert.equal(result.meta.promptVersion, PROMPT_VERSION);
     assert.equal(result.meta.validationResult, "valid");
     assert.equal(result.meta.repairAttempted, false);
+    assert.equal(capturedQualityTier, "cheap");
 
     assert.equal(capturedRequest?.schemaName, "generateChallengeCritique");
     assert.match(String(capturedRequest?.userPrompt), /"summary": "string"/);
@@ -198,6 +223,10 @@ test("generateChallengeCritique still accepts legacy mocked provider output", as
   try {
     const result = await generateChallengeCritique(validInput);
 
+    assert.deepEqual(result.critique, canonicalProviderOutput);
+    assert.equal(result.provider, "anthropic");
+    assert.equal(result.repaired, false);
+    assert.equal(result.fallbackUsed, false);
     assert.deepEqual(result.output, legacyProviderOutput);
     assert.equal(result.meta.validationResult, "valid");
     assert.equal(result.meta.repairAttempted, false);
@@ -260,6 +289,10 @@ test("generateChallengeCritique repairs one malformed response and accepts the c
     const result = await generateChallengeCritique(validInput);
 
     assert.equal(anthropicCalls, 2);
+    assert.deepEqual(result.critique, canonicalProviderOutput);
+    assert.equal(result.provider, "anthropic");
+    assert.equal(result.repaired, true);
+    assert.equal(result.fallbackUsed, false);
     assert.deepEqual(result.output, legacyProviderOutput);
     assert.equal(result.meta.repairAttempted, true);
     assert.equal(result.meta.validationResult, "repaired_valid");
