@@ -48,6 +48,8 @@ Use this README as the current top-level artifact for the repo. If it conflicts 
    pnpm dev
    ```
 
+If you want to exercise the provider-backed critique path instead of the local fallback/stub behavior, also set the AI and tracing environment variables described in `docs/setup.md`.
+
 5. Open the local surfaces:
 
 - Next.js app: `http://localhost:3000`
@@ -60,6 +62,7 @@ The domain write path lives in the Next.js app, not the legacy Fastify service.
 - Command routes:
   - `POST /api/commands/maps/create`
   - `POST /api/commands/claims/create`
+  - `POST /api/commands/challenge/respond`
   - `POST /api/commands/challenge/request-critique`
 - Workspace projection routes:
   - `GET /api/workspace/shell`
@@ -74,7 +77,7 @@ The domain write path lives in the Next.js app, not the legacy Fastify service.
   - `challenge_critiques`
   - `moves_events`
 
-Requests can supply `x-user-id` or `x-penny-user-id`; if neither header is present, the current auth helper falls back to a fixed placeholder UUID for local development.
+Requests must supply a UUID-valued `x-user-id` or `x-penny-user-id` header. Missing or invalid user headers currently return `401`; the local development shortcut is to send any valid UUID yourself.
 
 ## Workspace commands
 
@@ -91,20 +94,28 @@ pnpm test:integration
 
 ## Verification
 
-For a minimal backend sanity pass, run:
+For a doc-only check on this artifact, run:
+
+```bash
+git diff --check -- README.md
+```
+
+For the current backend sanity pass, run:
 
 ```bash
 pnpm db:typecheck
 pnpm test:integration
 ```
 
-For a broader workspace pass, run:
+For the broader workspace command surface, run:
 
 ```bash
 pnpm lint
 pnpm typecheck
 pnpm build
 ```
+
+As of 2026-04-24, `pnpm typecheck` is not clean in `apps/web`; it currently fails on `.ts` import suffixes and a `build-challenge-view` typing mismatch. Treat the broader list above as the intended command surface, not a fully green gate for this exact snapshot.
 
 ## Current boundaries
 
