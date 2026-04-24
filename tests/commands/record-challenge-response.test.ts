@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  RecordChallengeResponseRoundForbiddenError,
   RecordChallengeResponseRoundNotFoundError,
   RecordChallengeResponseValidationError,
   recordChallengeResponse,
@@ -17,6 +18,10 @@ class FakeRecordChallengeResponseRepositoryTx implements RecordChallengeResponse
     private readonly updatedRounds: RecordChallengeResponseRoundRecord[],
     private readonly events: ChallengeResponseRecordedEventRecord[],
   ) {}
+
+  async findRoundById(input: { roundId: string }) {
+    return this.rounds.find((round) => round.id === input.roundId) ?? null;
+  }
 
   async findOwnedRound(input: { roundId: string; userId: string }) {
     return this.rounds.find((round) => round.id === input.roundId && round.userId === input.userId) ?? null;
@@ -155,6 +160,26 @@ test("recordChallengeResponse rejects an unowned round", async () => {
           userId: "user-3",
           roundId: "round-3",
           response: "This should not be accepted for a different user's round.",
+        },
+        repository,
+      ),
+    RecordChallengeResponseRoundForbiddenError,
+  );
+
+  assert.equal(repository.updatedRounds.length, 0);
+  assert.equal(repository.events.length, 0);
+});
+
+test("recordChallengeResponse rejects a missing round", async () => {
+  const repository = new FakeRecordChallengeResponseRepository([]);
+
+  await assert.rejects(
+    () =>
+      recordChallengeResponse(
+        {
+          userId: "user-3",
+          roundId: "round-3",
+          response: "This should not be accepted for a missing round.",
         },
         repository,
       ),

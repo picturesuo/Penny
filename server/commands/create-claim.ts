@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
 import { claims, maps, movesEvents } from "../db/schema.ts";
@@ -48,6 +48,7 @@ export type CreateClaimRepositoryTx = {
   findMoveEventByRequestId?(input: { userId: string; requestId: string; type: string }): Promise<{
     aggregateId: string;
   } | null>;
+  findMapById?(input: { mapId: string }): Promise<{ id: string; userId: string } | null>;
   findOwnedMap(input: { mapId: string; userId: string }): Promise<{ id: string; userId: string } | null>;
   insertClaim(record: CreateClaimRecord): Promise<void>;
   insertMoveEvent(event: CreateClaimEventRecord): Promise<void>;
@@ -105,6 +106,13 @@ export class CreateClaimMapNotFoundError extends Error {
   constructor(mapId: string) {
     super(`Map not found for createClaim: ${mapId}`);
     this.name = "CreateClaimMapNotFoundError";
+  }
+}
+
+export class CreateClaimMapForbiddenError extends Error {
+  constructor(mapId: string) {
+    super(`User does not own map for createClaim: ${mapId}`);
+    this.name = "CreateClaimMapForbiddenError";
   }
 }
 
@@ -187,6 +195,30 @@ function isCreateClaimRepositoryTx(value: unknown): value is CreateClaimReposito
   );
 }
 
+async function findMapForCreateClaim(
+  tx: CreateClaimTx,
+  input: { mapId: string; userId: string },
+): Promise<{ id: string; userId: string } | null> {
+  if (isCreateClaimRepositoryTx(tx)) {
+    if (tx.findMapById) {
+      return tx.findMapById({ mapId: input.mapId });
+    }
+
+    return tx.findOwnedMap(input);
+  }
+
+  return (
+    await tx
+      .select({
+        id: maps.id,
+        userId: maps.userId,
+      })
+      .from(maps)
+      .where(eq(maps.id, input.mapId))
+      .limit(1)
+  )[0] ?? null;
+}
+
 export function validateCreateClaimInput(input: unknown): NormalizedCreateClaimInput {
   const object = asObject(input);
 
@@ -225,24 +257,17 @@ export async function createClaim(
       };
     }
 
-    const ownedMap = isCreateClaimRepositoryTx(tx)
-      ? await tx.findOwnedMap({
-          mapId: normalized.mapId,
-          userId: normalized.userId,
-        })
-      : (
-          await tx
-            .select({
-              id: maps.id,
-              userId: maps.userId,
-            })
-            .from(maps)
-            .where(and(eq(maps.id, normalized.mapId), eq(maps.userId, normalized.userId)))
-            .limit(1)
-        )[0] ?? null;
+    const targetMap = await findMapForCreateClaim(tx, {
+      mapId: normalized.mapId,
+      userId: normalized.userId,
+    });
 
-    if (!ownedMap) {
+    if (!targetMap) {
       throw new CreateClaimMapNotFoundError(normalized.mapId);
+    }
+
+    if (targetMap.userId !== normalized.userId) {
+      throw new CreateClaimMapForbiddenError(normalized.mapId);
     }
 
     const timestamp = now();
@@ -252,7 +277,7 @@ export async function createClaim(
       await tx.insertClaim({
         id: claimId,
         userId: normalized.userId,
-        mapId: ownedMap.id,
+        mapId: targetMap.id,
         text: normalized.text,
         note: normalized.note,
         parentClaimId: normalized.parentClaimId,
@@ -268,7 +293,7 @@ export async function createClaim(
         requestId,
         type: "claim.created",
         payload: {
-          mapId: ownedMap.id,
+          mapId: targetMap.id,
           parentClaimId: normalized.parentClaimId,
           kind: normalized.kind,
           note: normalized.note,
@@ -279,7 +304,7 @@ export async function createClaim(
     } else {
       await tx.insert(claims).values({
         id: claimId,
-        mapId: ownedMap.id,
+        mapId: targetMap.id,
         userId: normalized.userId,
         body: normalized.text,
         confidenceBps: 0,
@@ -294,7 +319,7 @@ export async function createClaim(
         requestId,
         type: "claim.created",
         payloadJson: {
-          mapId: ownedMap.id,
+          mapId: targetMap.id,
           parentClaimId: normalized.parentClaimId,
           kind: normalized.kind,
           note: normalized.note,

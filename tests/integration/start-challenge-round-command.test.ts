@@ -131,7 +131,7 @@ test("startChallengeRound rejects a claim owned by another user in the DB path",
           db,
         ),
       {
-        name: "StartChallengeRoundClaimNotFoundError",
+        name: "StartChallengeRoundClaimForbiddenError",
       },
     );
 

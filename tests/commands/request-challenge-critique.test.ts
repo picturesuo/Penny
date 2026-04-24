@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  RequestChallengeCritiqueRoundForbiddenError,
   RequestChallengeCritiqueRoundNotFoundError,
   RequestChallengeCritiqueValidationError,
   requestChallengeCritique,
@@ -18,8 +19,16 @@ class FakeRequestChallengeCritiqueRepositoryTx implements RequestChallengeCritiq
     private readonly events: ChallengeCritiqueRequestedEventRecord[],
   ) {}
 
+  async findRoundById(input: { roundId: string }) {
+    return this.rounds.find((round) => round.id === input.roundId) ?? null;
+  }
+
   async findOwnedRound(input: { roundId: string; userId: string }) {
     return this.rounds.find((round) => round.id === input.roundId && round.userId === input.userId) ?? null;
+  }
+
+  async findMoveEventByRequestId() {
+    return null;
   }
 
   async insertChallengeCritique(record: ChallengeCritiqueRecord) {
@@ -118,6 +127,22 @@ test("requestChallengeCritique rejects an unowned round", async () => {
   const repository = new FakeRequestChallengeCritiqueRepository([
     { id: "round-1", mapId: "map-1", claimId: "claim-1", userId: "other-user" },
   ]);
+
+  await assert.rejects(
+    () =>
+      requestChallengeCritique(
+        {
+          userId: "user-1",
+          roundId: "round-1",
+        },
+        repository,
+      ),
+    RequestChallengeCritiqueRoundForbiddenError,
+  );
+});
+
+test("requestChallengeCritique rejects a missing round", async () => {
+  const repository = new FakeRequestChallengeCritiqueRepository([]);
 
   await assert.rejects(
     () =>

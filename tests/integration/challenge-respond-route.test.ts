@@ -214,3 +214,59 @@ test("POST /api/commands/challenge/respond replays the original result for the s
     await sql.end({ timeout: 1 });
   }
 });
+
+test("POST /api/commands/challenge/respond returns 403 when the round belongs to another user", async () => {
+  const ownerUserId = "00000000-0000-0000-0000-000000000623";
+  const otherUserId = "00000000-0000-0000-0000-000000000723";
+  const mapId = "00000000-0000-0000-0000-000000000823";
+  const claimId = "00000000-0000-0000-0000-000000000923";
+  const roundId = "00000000-0000-0000-0000-000000001023";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into maps (id, user_id, title)
+      values (${mapId}, ${ownerUserId}, ${"Challenge response ownership map"})
+    `;
+
+    await sql`
+      insert into claims (id, map_id, user_id, body, confidence_bps)
+      values (${claimId}, ${mapId}, ${ownerUserId}, ${"Challenge response ownership claim"}, ${5400})
+    `;
+
+    await sql`
+      insert into challenge_rounds (id, map_id, claim_id, user_id, status)
+      values (${roundId}, ${mapId}, ${claimId}, ${ownerUserId}, ${"ready"})
+    `;
+
+    const response = await POST(
+      new Request("http://localhost/api/commands/challenge/respond", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": otherUserId,
+          "x-request-id": "challenge-respond-ownership-request-1",
+        },
+        body: JSON.stringify({
+          roundId,
+          response: "This should not be allowed for a different user's round.",
+          responsePath: "direct",
+        }),
+      }),
+    );
+
+    assert.equal(response.status, 403);
+
+    const eventRows = await sql`
+      select id
+      from moves_events
+      where aggregate_id = ${roundId}
+        and user_id = ${otherUserId}
+        and type = ${"challenge.response.recorded"}
+    `;
+
+    assert.equal(eventRows.length, 0);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});

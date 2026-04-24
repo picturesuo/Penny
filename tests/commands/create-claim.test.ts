@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CreateClaimMapForbiddenError,
   CreateClaimMapNotFoundError,
   CreateClaimValidationError,
   createClaim,
@@ -17,6 +18,10 @@ class FakeCreateClaimRepositoryTx implements CreateClaimRepositoryTx {
     private readonly claims: CreateClaimRecord[],
     private readonly events: CreateClaimEventRecord[],
   ) {}
+
+  async findMapById(input: { mapId: string }) {
+    return this.maps.find((map) => map.id === input.mapId) ?? null;
+  }
 
   async findOwnedMap(input: { mapId: string; userId: string }) {
     return this.maps.find((map) => map.id === input.mapId && map.userId === input.userId) ?? null;
@@ -90,6 +95,26 @@ test("createClaim rejects a map the user does not own", async () => {
           userId: "user-1",
           mapId: "map-1",
           text: "This insert should fail because the map is not owned by the user.",
+        },
+        repository,
+      ),
+    CreateClaimMapForbiddenError,
+  );
+
+  assert.equal(repository.claims.length, 0);
+  assert.equal(repository.events.length, 0);
+});
+
+test("createClaim rejects a missing map", async () => {
+  const repository = new FakeCreateClaimRepository([]);
+
+  await assert.rejects(
+    () =>
+      createClaim(
+        {
+          userId: "user-1",
+          mapId: "map-1",
+          text: "This insert should fail because the map does not exist.",
         },
         repository,
       ),

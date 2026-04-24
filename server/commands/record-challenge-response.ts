@@ -49,6 +49,9 @@ export type RecordChallengeResponseRepositoryTx = {
     requestId: string;
     type: string;
   }): Promise<{ aggregateId: string } | null>;
+  findRoundById?(input: {
+    roundId: string;
+  }): Promise<{ id: string; mapId: string; claimId: string; userId: string; status: string } | null>;
   findOwnedRound(input: {
     roundId: string;
     userId: string;
@@ -111,6 +114,13 @@ export class RecordChallengeResponseRoundNotFoundError extends Error {
   constructor(roundId: string) {
     super(`Challenge round not found for recordChallengeResponse: ${roundId}`);
     this.name = "RecordChallengeResponseRoundNotFoundError";
+  }
+}
+
+export class RecordChallengeResponseRoundForbiddenError extends Error {
+  constructor(roundId: string) {
+    super(`User does not own challenge round for recordChallengeResponse: ${roundId}`);
+    this.name = "RecordChallengeResponseRoundForbiddenError";
   }
 }
 
@@ -218,6 +228,33 @@ function isRecordChallengeResponseRepositoryTx(value: unknown): value is RecordC
   );
 }
 
+async function findRoundForChallengeResponse(
+  tx: RecordChallengeResponseTx,
+  input: { roundId: string; userId: string },
+): Promise<{ id: string; mapId: string; claimId: string; userId: string; status: string } | null> {
+  if (isRecordChallengeResponseRepositoryTx(tx)) {
+    if (tx.findRoundById) {
+      return tx.findRoundById({ roundId: input.roundId });
+    }
+
+    return tx.findOwnedRound(input);
+  }
+
+  return (
+    (await tx
+      .select({
+        id: challengeRounds.id,
+        mapId: challengeRounds.mapId,
+        claimId: challengeRounds.claimId,
+        userId: challengeRounds.userId,
+        status: challengeRounds.status,
+      })
+      .from(challengeRounds)
+      .where(eq(challengeRounds.id, input.roundId))
+      .limit(1)) as RecordChallengeResponseDbRow[]
+  )[0] ?? null;
+}
+
 export function validateRecordChallengeResponseInput(input: unknown): NormalizedRecordChallengeResponseInput {
   const object = asObject(input);
 
@@ -256,37 +293,27 @@ export async function recordChallengeResponse(
       };
     }
 
-    const ownedRound = isRecordChallengeResponseRepositoryTx(tx)
-      ? await tx.findOwnedRound({
-          roundId: normalized.roundId,
-          userId: normalized.userId,
-        })
-      : (
-          ((await tx
-            .select({
-              id: challengeRounds.id,
-              mapId: challengeRounds.mapId,
-              claimId: challengeRounds.claimId,
-              userId: challengeRounds.userId,
-              status: challengeRounds.status,
-            })
-            .from(challengeRounds)
-            .where(and(eq(challengeRounds.id, normalized.roundId), eq(challengeRounds.userId, normalized.userId)))
-            .limit(1)) as RecordChallengeResponseDbRow[])[0] ?? null
-        );
+    const targetRound = await findRoundForChallengeResponse(tx, {
+      roundId: normalized.roundId,
+      userId: normalized.userId,
+    });
 
-    if (!ownedRound) {
+    if (!targetRound) {
       throw new RecordChallengeResponseRoundNotFoundError(normalized.roundId);
+    }
+
+    if (targetRound.userId !== normalized.userId) {
+      throw new RecordChallengeResponseRoundForbiddenError(normalized.roundId);
     }
 
     const timestamp = now();
 
     if (isRecordChallengeResponseRepositoryTx(tx)) {
       await tx.updateChallengeRound({
-        id: ownedRound.id,
-        mapId: ownedRound.mapId,
-        claimId: ownedRound.claimId,
-        userId: ownedRound.userId,
+        id: targetRound.id,
+        mapId: targetRound.mapId,
+        claimId: targetRound.claimId,
+        userId: targetRound.userId,
         status: RESPONDED_STATUS,
         updatedAt: timestamp,
       });
@@ -294,16 +321,16 @@ export async function recordChallengeResponse(
       await tx.insertMoveEvent({
         userId: normalized.userId,
         aggregateType: "challenge_round",
-        aggregateId: ownedRound.id,
+        aggregateId: targetRound.id,
         requestId,
         type: "challenge.response.recorded",
         payload: {
-          mapId: ownedRound.mapId,
-          claimId: ownedRound.claimId,
+          mapId: targetRound.mapId,
+          claimId: targetRound.claimId,
           response: normalized.response,
           responsePath: normalized.responsePath,
           confidenceBps: normalized.confidenceBps,
-          previousStatus: ownedRound.status,
+          previousStatus: targetRound.status,
           status: RESPONDED_STATUS,
         },
         createdAt: timestamp,
@@ -315,21 +342,21 @@ export async function recordChallengeResponse(
           status: RESPONDED_STATUS,
           updatedAt: timestamp,
         })
-        .where(and(eq(challengeRounds.id, ownedRound.id), eq(challengeRounds.userId, normalized.userId)));
+        .where(and(eq(challengeRounds.id, targetRound.id), eq(challengeRounds.userId, normalized.userId)));
 
       await tx.insert(movesEvents).values({
         userId: normalized.userId,
         aggregateType: "challenge_round",
-        aggregateId: ownedRound.id,
+        aggregateId: targetRound.id,
         requestId,
         type: "challenge.response.recorded",
         payloadJson: {
-          mapId: ownedRound.mapId,
-          claimId: ownedRound.claimId,
+          mapId: targetRound.mapId,
+          claimId: targetRound.claimId,
           response: normalized.response,
           responsePath: normalized.responsePath,
           confidenceBps: normalized.confidenceBps,
-          previousStatus: ownedRound.status,
+          previousStatus: targetRound.status,
           status: RESPONDED_STATUS,
         },
         createdAt: timestamp,
@@ -337,7 +364,7 @@ export async function recordChallengeResponse(
     }
 
     return {
-      roundId: ownedRound.id,
+      roundId: targetRound.id,
       status: RESPONDED_STATUS,
     };
   });

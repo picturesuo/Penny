@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "../db/client.ts";
 import { claims, maps, movesEvents, workspaceContexts } from "../db/schema.ts";
 
@@ -236,14 +236,14 @@ async function findMapForWorkspaceSelection(
   }
 
   return (
-    await tx
+    (await tx
       .select({
         id: maps.id,
         userId: maps.userId,
       })
       .from(maps)
       .where(eq(maps.id, input.mapId))
-      .limit(1)
+      .limit(1)) as Array<{ id: string; userId: string }>
   )[0] ?? null;
 }
 
@@ -256,11 +256,18 @@ async function findClaimForWorkspaceSelection(
       return tx.findClaimById({ claimId: input.claimId });
     }
 
-    return tx.findOwnedClaim(input);
+    const ownedClaim = await tx.findOwnedClaim(input);
+    return ownedClaim
+      ? {
+          id: ownedClaim.id,
+          mapId: input.mapId,
+          userId: input.userId,
+        }
+      : null;
   }
 
   return (
-    await tx
+    (await tx
       .select({
         id: claims.id,
         mapId: claims.mapId,
@@ -268,7 +275,7 @@ async function findClaimForWorkspaceSelection(
       })
       .from(claims)
       .where(eq(claims.id, input.claimId))
-      .limit(1)
+      .limit(1)) as Array<{ id: string; mapId: string; userId: string }>
   )[0] ?? null;
 }
 

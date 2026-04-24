@@ -200,3 +200,56 @@ test("POST /api/commands/challenge/request-critique replays the original result 
     await sql.end({ timeout: 1 });
   }
 });
+
+test("POST /api/commands/challenge/request-critique returns 403 when the round belongs to another user", async () => {
+  const ownerUserId = "00000000-0000-0000-0000-000000000333";
+  const otherUserId = "00000000-0000-0000-0000-000000000444";
+  const mapId = "00000000-0000-0000-0000-000000000433";
+  const claimId = "00000000-0000-0000-0000-000000000533";
+  const roundId = "00000000-0000-0000-0000-000000000633";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into maps (id, user_id, title)
+      values (${mapId}, ${ownerUserId}, ${"Challenge critique ownership map"})
+    `;
+
+    await sql`
+      insert into claims (id, map_id, user_id, body, confidence_bps)
+      values (${claimId}, ${mapId}, ${ownerUserId}, ${"Challenge critique ownership claim"}, ${5100})
+    `;
+
+    await sql`
+      insert into challenge_rounds (id, map_id, claim_id, user_id, status)
+      values (${roundId}, ${mapId}, ${claimId}, ${ownerUserId}, ${"started"})
+    `;
+
+    const response = await POST(
+      new Request("http://localhost/api/commands/challenge/request-critique", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": "challenge-critique-ownership-request-1",
+          "x-user-id": otherUserId,
+        },
+        body: JSON.stringify({
+          roundId,
+        }),
+      }),
+    );
+
+    assert.equal(response.status, 403);
+
+    const storedCritiques = await sql`
+      select id
+      from challenge_critiques
+      where round_id = ${roundId}
+        and user_id = ${otherUserId}
+    `;
+
+    assert.equal(storedCritiques.length, 0);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});

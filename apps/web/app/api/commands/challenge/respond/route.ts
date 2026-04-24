@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
+  RecordChallengeResponseRoundForbiddenError,
   RecordChallengeResponseRoundNotFoundError,
   RecordChallengeResponseValidationError,
   recordChallengeResponse,
@@ -45,6 +46,10 @@ export async function POST(request: Request) {
 
     if (error instanceof RecordChallengeResponseValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    if (error instanceof RecordChallengeResponseRoundForbiddenError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
     }
 
     if (error instanceof RecordChallengeResponseRoundNotFoundError) {

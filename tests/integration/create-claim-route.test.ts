@@ -181,3 +181,49 @@ test("POST /api/commands/claims/create replays the original result for the same 
     await sql.end({ timeout: 1 });
   }
 });
+
+test("POST /api/commands/claims/create returns 403 when the map belongs to another user", async () => {
+  const ownerUserId = "00000000-0000-0000-0000-000000000901";
+  const otherUserId = "00000000-0000-0000-0000-000000000902";
+  const db = createDbClient(databaseUrl);
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    const map = await createMap(
+      {
+        userId: ownerUserId,
+        title: "Claim route ownership map",
+        requestId: "create-map-for-claim-ownership",
+      },
+      db,
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/commands/claims/create", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": "claim-route-ownership-request-1",
+          "x-user-id": otherUserId,
+        },
+        body: JSON.stringify({
+          mapId: map.mapId,
+          text: "Unauthorized claim body",
+        }),
+      }),
+    );
+
+    assert.equal(response.status, 403);
+
+    const storedClaims = await sql`
+      select id
+      from claims
+      where map_id = ${map.mapId}
+        and user_id = ${otherUserId}
+    `;
+
+    assert.equal(storedClaims.length, 0);
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});

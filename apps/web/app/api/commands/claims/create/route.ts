@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  CreateClaimMapForbiddenError,
   CreateClaimMapNotFoundError,
   CreateClaimValidationError,
   createClaim,
@@ -44,6 +45,10 @@ export async function POST(request: Request) {
 
     if (error instanceof CreateClaimValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    if (error instanceof CreateClaimMapForbiddenError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
     }
 
     if (error instanceof CreateClaimMapNotFoundError) {

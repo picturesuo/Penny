@@ -52,6 +52,9 @@ export type RequestChallengeCritiqueRepositoryTx = {
     critiqueId: string;
     userId: string;
   }): Promise<{ id: string; status: string; body: string | null } | null>;
+  findRoundById?(input: {
+    roundId: string;
+  }): Promise<{ id: string; mapId: string; claimId: string; userId: string } | null>;
   findOwnedRound(input: {
     roundId: string;
     userId: string;
@@ -114,6 +117,13 @@ export class RequestChallengeCritiqueRoundNotFoundError extends Error {
   constructor(roundId: string) {
     super(`Challenge round not found for requestChallengeCritique: ${roundId}`);
     this.name = "RequestChallengeCritiqueRoundNotFoundError";
+  }
+}
+
+export class RequestChallengeCritiqueRoundForbiddenError extends Error {
+  constructor(roundId: string) {
+    super(`User does not own challenge round for requestChallengeCritique: ${roundId}`);
+    this.name = "RequestChallengeCritiqueRoundForbiddenError";
   }
 }
 
@@ -247,6 +257,32 @@ async function findOwnedCritique(
   return rows[0] ?? null;
 }
 
+async function findRoundForChallengeCritique(
+  tx: RequestChallengeCritiqueTx,
+  input: { roundId: string; userId: string },
+): Promise<{ id: string; mapId: string; claimId: string; userId: string } | null> {
+  if (isRequestChallengeCritiqueRepositoryTx(tx)) {
+    if (tx.findRoundById) {
+      return tx.findRoundById({ roundId: input.roundId });
+    }
+
+    return tx.findOwnedRound(input);
+  }
+
+  return (
+    (await tx
+      .select({
+        id: challengeRounds.id,
+        mapId: challengeRounds.mapId,
+        claimId: challengeRounds.claimId,
+        userId: challengeRounds.userId,
+      })
+      .from(challengeRounds)
+      .where(eq(challengeRounds.id, input.roundId))
+      .limit(1)) as RequestChallengeCritiqueDbRoundRow[]
+  )[0] ?? null;
+}
+
 async function insertCritiqueEvent(
   tx: RequestChallengeCritiqueTx,
   event: ChallengeCritiqueRequestedEventRecord,
@@ -297,26 +333,17 @@ export async function requestChallengeCritique(
       };
     }
 
-    const ownedRound = isRequestChallengeCritiqueRepositoryTx(tx)
-      ? await tx.findOwnedRound({
-          roundId: normalized.roundId,
-          userId: normalized.userId,
-        })
-      : (
-          (await tx
-            .select({
-              id: challengeRounds.id,
-              mapId: challengeRounds.mapId,
-              claimId: challengeRounds.claimId,
-              userId: challengeRounds.userId,
-            })
-            .from(challengeRounds)
-            .where(and(eq(challengeRounds.id, normalized.roundId), eq(challengeRounds.userId, normalized.userId)))
-            .limit(1)) as RequestChallengeCritiqueDbRoundRow[]
-        )[0] ?? null;
+    const targetRound = await findRoundForChallengeCritique(tx, {
+      roundId: normalized.roundId,
+      userId: normalized.userId,
+    });
 
-    if (!ownedRound) {
+    if (!targetRound) {
       throw new RequestChallengeCritiqueRoundNotFoundError(normalized.roundId);
+    }
+
+    if (targetRound.userId !== normalized.userId) {
+      throw new RequestChallengeCritiqueRoundForbiddenError(normalized.roundId);
     }
 
     const timestamp = now();
@@ -325,9 +352,9 @@ export async function requestChallengeCritique(
     if (isRequestChallengeCritiqueRepositoryTx(tx)) {
       await tx.insertChallengeCritique({
         id: critiqueId,
-        roundId: ownedRound.id,
-        mapId: ownedRound.mapId,
-        claimId: ownedRound.claimId,
+        roundId: targetRound.id,
+        mapId: targetRound.mapId,
+        claimId: targetRound.claimId,
         userId: normalized.userId,
         status: PENDING_STATUS,
         body: null,
@@ -337,9 +364,9 @@ export async function requestChallengeCritique(
     } else {
       await tx.insert(challengeCritiques).values({
         id: critiqueId,
-        roundId: ownedRound.id,
-        mapId: ownedRound.mapId,
-        claimId: ownedRound.claimId,
+        roundId: targetRound.id,
+        mapId: targetRound.mapId,
+        claimId: targetRound.claimId,
         userId: normalized.userId,
         status: PENDING_STATUS,
         body: null,
@@ -355,9 +382,9 @@ export async function requestChallengeCritique(
       requestId,
       type: "challenge.critique.requested",
       payload: {
-        roundId: ownedRound.id,
-        mapId: ownedRound.mapId,
-        claimId: ownedRound.claimId,
+        roundId: targetRound.id,
+        mapId: targetRound.mapId,
+        claimId: targetRound.claimId,
         status: PENDING_STATUS,
       },
       createdAt: timestamp,
