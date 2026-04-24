@@ -5,6 +5,7 @@ The Brain MVP screen lives at `/brain` and is implemented under `apps/web/compon
 ## Surface
 
 - Main thought stream: renders the Brain projection `claims` as MVP thoughts.
+- Thought stream rows are ordered by recent update and include a title, body preview, confidence preview, updated timestamp, and a lightweight confidence mini-graph.
 - Selected thought card: mirrors `selectedClaim` or the current `claimId` from projection context.
 - Claim inspector: shows selected thought status, IDs, confidence, and update time.
 - Recent thoughts: derives the most recently updated thoughts from the same Brain projection payload.
