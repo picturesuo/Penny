@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
 import {
+  canGenerateChallengeCritiqueNow,
   generateChallengeCritique as generateChallengeCritiqueOperation,
+  type ChallengeResponsePath,
   type GenerateChallengeCritiquePreviousRound,
 } from "../ai/operations/generateChallengeCritique.ts";
 import { getDb } from "../db/client.ts";
@@ -132,6 +134,14 @@ type RequestChallengeCritiqueDbMoveEventRow = {
 };
 
 type RequestChallengeCritiqueDbTx = SelectableDbTx & {
+  select: (...args: unknown[]) => {
+    from: (table: unknown) => {
+      where: (condition: unknown) => {
+        orderBy: (...args: unknown[]) => Promise<unknown[]>;
+        limit: (count: number) => Promise<unknown[]>;
+      };
+    };
+  };
   insert: (table: unknown) => {
     values: (value: Record<string, unknown>) => Promise<unknown>;
   };
@@ -208,6 +218,14 @@ function readPayloadStatus(payload: Record<string, unknown> | null): ChallengeCr
 
 function readLooseOptionalString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readResponsePath(value: unknown): ChallengeResponsePath | null {
+  if (value === "defend" || value === "revise" || value === "absorb") {
+    return value;
+  }
+
+  return null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -595,7 +613,7 @@ async function loadPriorChallengeContext(
       roundNumber: index + 1,
       critiqueSummary,
       userResponse: readLooseOptionalString(responsePayload?.response),
-      responsePath: readLooseOptionalString(responsePayload?.responsePath),
+      responsePath: readResponsePath(responsePayload?.responsePath),
       confidenceDelta: null,
     });
   }
@@ -1002,7 +1020,7 @@ export async function requestChallengeCritique(
       createdAt: commandContext.now,
     });
 
-    if (hasSelectQuery(tx)) {
+    if (hasSelectQuery(tx) && canGenerateChallengeCritiqueNow()) {
       await bridgeGenerateCritique(tx, {
         critiqueId,
         roundId: targetRound.id,
