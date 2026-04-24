@@ -90,6 +90,12 @@ test("generateChallengeCritique falls back from the default Anthropic route to t
     const result = await generateChallengeCritique(validInput);
 
     assert.deepEqual(providerCalls, ["anthropic", "xai"]);
+    assert.equal(result.provider, "xai");
+    assert.equal(result.model, "grok-4.20");
+    assert.equal(result.repaired, false);
+    assert.equal(result.fallbackUsed, true);
+    assert.equal(result.traceId, "trace-123");
+    assert.equal(result.critique.summary, "The claim may overfit to a founder-supported pilot cohort.");
     assert.equal(result.meta.provider, "xai");
     assert.equal(result.meta.routeTier, "fallback");
     assert.equal(result.meta.fallbackHopCount, 1);
