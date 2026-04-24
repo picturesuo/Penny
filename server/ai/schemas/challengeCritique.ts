@@ -4,7 +4,7 @@ const ChallengeCritiqueListItemSchema = z.string().trim().min(1).max(240);
 
 const ChallengeCritiqueListSchema = z.array(ChallengeCritiqueListItemSchema).max(6);
 
-export const GenerateChallengeCritiqueOutputSchema = z
+export const ChallengeCritiqueSchema = z
   .object({
     summary: z.string().trim().min(1).max(240),
     strongestCounterargument: z.string().trim().min(1).max(2400),
@@ -16,6 +16,9 @@ export const GenerateChallengeCritiqueOutputSchema = z
   })
   .strict();
 
+export const GenerateChallengeCritiqueOutputSchema = ChallengeCritiqueSchema;
+
+export type ChallengeCritique = z.infer<typeof ChallengeCritiqueSchema>;
 export type GenerateChallengeCritiqueOutput = z.infer<typeof GenerateChallengeCritiqueOutputSchema>;
 
 const validGenerateChallengeCritiqueOutputSample: z.input<typeof GenerateChallengeCritiqueOutputSchema> = {

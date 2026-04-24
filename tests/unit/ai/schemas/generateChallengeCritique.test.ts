@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { GenerateChallengeCritiqueOutputSchema } from "../../../../server/ai/schemas/challengeCritique.ts";
+import {
+  ChallengeCritiqueSchema,
+  GenerateChallengeCritiqueOutputSchema,
+} from "../../../../server/ai/schemas/challengeCritique.ts";
 
 test("GenerateChallengeCritiqueOutputSchema accepts the v1 critique contract", () => {
-  const parsed = GenerateChallengeCritiqueOutputSchema.parse({
+  const parsed = ChallengeCritiqueSchema.parse({
     summary: "The claim depends on a retention lift that may not survive outside the pilot.",
     strongestCounterargument:
       "The observed lift may be an artifact of unusually motivated users and founder-led onboarding rather than a durable product effect.",
@@ -26,6 +29,10 @@ test("GenerateChallengeCritiqueOutputSchema accepts the v1 critique contract", (
 
   assert.equal(parsed.summary, "The claim depends on a retention lift that may not survive outside the pilot.");
   assert.equal(parsed.suggestedConfidenceBps, 4_700);
+});
+
+test("GenerateChallengeCritiqueOutputSchema remains an alias of ChallengeCritiqueSchema", () => {
+  assert.equal(GenerateChallengeCritiqueOutputSchema, ChallengeCritiqueSchema);
 });
 
 test("GenerateChallengeCritiqueOutputSchema permits null suggested confidence", () => {
