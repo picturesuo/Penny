@@ -6,6 +6,14 @@ The active product surface is the Next.js app in `apps/web`. The active backend 
 
 Use this README as the top-level repo artifact. If it conflicts with older restart docs or archived files, trust this file and the live tree.
 
+## Task artifact
+
+- Artifact ID: `README-INIT-001`
+- Queue item: `Initialize the first real task artifact.`
+- Current role: `DEBUGGER`, responding to CRITIC artifact `266`
+- Scope: keep this README as the durable restart contract for the active Penny tree, including setup, verification, backend surface, and active-vs-archive boundaries.
+- Completion signal: a new role can start from this file, `AGENTS.md`, the shared context, `docs/queue.md`, and `docs/knowledge.md` without relying on stale restart notes.
+
 ## What is active
 
 - `apps/web`: Next.js App Router app with the active command and workspace routes under `app/api`
