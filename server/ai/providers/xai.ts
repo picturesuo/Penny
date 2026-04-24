@@ -1,79 +1,86 @@
-const JsonObjectSchema = {
-  parse(value: unknown) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("xAI provider returned invalid JSON.");
-    }
+import {
+  ProviderError,
+  type StructuredProviderRequest,
+  type StructuredProviderResponse,
+} from "./anthropic.ts";
 
-    return value as Record<string, unknown>;
-  },
-};
+type JsonRecord = Record<string, unknown>;
 
-export type StructuredProviderRequest = {
-  jsonSchema: Record<string, unknown>;
-  maxTokens: number;
-  model: string;
-  schemaName: string;
-  systemPrompt: string;
-  temperature: number;
-  userPrompt: string;
-};
+export { ProviderError } from "./anthropic.ts";
+export type {
+  StructuredProviderCost,
+  StructuredProviderRequest,
+  StructuredProviderResponse,
+  StructuredProviderUsage,
+} from "./anthropic.ts";
 
-export type StructuredProviderUsage = {
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-};
-
-export type StructuredProviderCost = {
-  currency: string | null;
-  totalUsd: number | null;
-};
-
-export type StructuredProviderResponse = {
-  cost: StructuredProviderCost;
-  output: unknown;
-  usage: StructuredProviderUsage;
-};
+export type XaiProviderRequest = StructuredProviderRequest;
+export type XaiProviderResponse = StructuredProviderResponse;
 
 export async function invokeXaiStructured(request: StructuredProviderRequest): Promise<StructuredProviderResponse> {
   const apiKey = process.env.XAI_API_KEY?.trim();
 
   if (!apiKey) {
-    throw new Error("XAI_API_KEY is not configured.");
+    throw new ProviderError({
+      message: "XAI_API_KEY is not configured.",
+      provider: "xai",
+      reason: "configuration",
+    });
   }
 
-  const response = await fetch(`${resolveXaiBaseUrl()}/responses`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: request.model,
-      input: `${request.systemPrompt}\n\n${request.userPrompt}`,
-      max_output_tokens: request.maxTokens,
-      temperature: request.temperature,
-      text: {
-        format: {
-          type: "json_schema",
-          name: request.schemaName,
-          schema: request.jsonSchema,
-          strict: true,
-        },
+  let response: Response;
+
+  try {
+    response = await fetch(`${resolveXaiBaseUrl()}/responses`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-    }),
-  });
+      body: JSON.stringify({
+        model: request.model,
+        input: `${request.systemPrompt}\n\n${request.userPrompt}`,
+        max_output_tokens: normalizeMaxTokens(request.maxTokens),
+        temperature: normalizeTemperature(request.temperature),
+        text: {
+          format: {
+            type: "json_schema",
+            name: request.schemaName,
+            schema: request.jsonSchema,
+            strict: true,
+          },
+        },
+      }),
+    });
+  } catch (error) {
+    throw new ProviderError({
+      message: error instanceof Error ? error.message : "xAI request failed before receiving a response.",
+      provider: "xai",
+      reason: "network",
+      retryable: true,
+    });
+  }
 
   const payload = await parseJsonResponse(response);
 
   if (!response.ok) {
-    throw new Error(`xAI request failed with status ${response.status}: ${extractErrorMessage(payload)}`);
+    throw new ProviderError({
+      message: `xAI request failed with status ${response.status}: ${extractErrorMessage(payload)}`,
+      provider: "xai",
+      reason: "http",
+      retryable: isRetryableStatus(response.status),
+      status: response.status,
+      details: payload,
+    });
   }
 
-  const outputText = extractXaiOutputText(payload);
+  const text = extractXaiOutputText(payload);
+  const json = parseStructuredOutput(text, response.status, payload);
 
   return {
-    output: parseStructuredOutput(outputText),
+    text,
+    json,
+    output: json,
     usage: {
       inputTokens: readNumber(payload.usage, "input_tokens"),
       outputTokens: readNumber(payload.usage, "output_tokens"),
@@ -83,10 +90,12 @@ export async function invokeXaiStructured(request: StructuredProviderRequest): P
       totalUsd: readNumber(payload.usage, "cost_usd"),
       currency: readString(payload.usage, "currency"),
     },
+    stopReason: readString(payload, "status") ?? readString(payload, "stop_reason"),
+    raw: payload,
   };
 }
 
-async function parseJsonResponse(response: Response) {
+async function parseJsonResponse(response: Response): Promise<JsonRecord> {
   const text = await response.text();
 
   if (!text.trim()) {
@@ -94,21 +103,34 @@ async function parseJsonResponse(response: Response) {
   }
 
   try {
-    return JsonObjectSchema.parse(JSON.parse(text));
+    return asRecord(JSON.parse(text), "xAI provider returned invalid JSON.");
   } catch {
-    throw new Error(`xAI provider returned non-JSON response (${response.status}).`);
+    throw new ProviderError({
+      message: `xAI provider returned non-JSON response (${response.status}).`,
+      provider: "xai",
+      reason: "invalid_response",
+      retryable: false,
+      status: response.status,
+    });
   }
 }
 
-function parseStructuredOutput(text: string) {
+function parseStructuredOutput(text: string, status: number, payload: JsonRecord): unknown {
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error("xAI provider returned invalid structured JSON.");
+    throw new ProviderError({
+      message: "xAI provider returned invalid structured JSON.",
+      provider: "xai",
+      reason: "invalid_response",
+      retryable: false,
+      status,
+      details: payload,
+    });
   }
 }
 
-function extractXaiOutputText(payload: Record<string, unknown>) {
+function extractXaiOutputText(payload: JsonRecord): string {
   const output = Array.isArray(payload.output) ? payload.output : [];
 
   for (const item of output) {
@@ -125,15 +147,29 @@ function extractXaiOutputText(payload: Record<string, unknown>) {
     }
   }
 
-  throw new Error("xAI response did not contain structured output text.");
+  throw new ProviderError({
+    message: "xAI response did not contain structured output text.",
+    provider: "xai",
+    reason: "invalid_response",
+    retryable: false,
+    details: payload,
+  });
 }
 
-function extractErrorMessage(payload: Record<string, unknown>) {
+function extractErrorMessage(payload: JsonRecord): string {
   if (payload.error && typeof payload.error === "object") {
-    return readString(payload.error as Record<string, unknown>, "message") ?? JSON.stringify(payload.error);
+    return readString(payload.error as JsonRecord, "message") ?? JSON.stringify(payload.error);
   }
 
   return JSON.stringify(payload);
+}
+
+function asRecord(value: unknown, message: string): JsonRecord {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(message);
+  }
+
+  return value as JsonRecord;
 }
 
 function readNumber(source: unknown, key: string): number | null {
@@ -141,7 +177,7 @@ function readNumber(source: unknown, key: string): number | null {
     return null;
   }
 
-  const value = (source as Record<string, unknown>)[key];
+  const value = (source as JsonRecord)[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
@@ -150,10 +186,30 @@ function readString(source: unknown, key: string): string | null {
     return null;
   }
 
-  const value = (source as Record<string, unknown>)[key];
+  const value = (source as JsonRecord)[key];
   return typeof value === "string" && value.trim().length ? value.trim() : null;
 }
 
-function resolveXaiBaseUrl() {
+function normalizeMaxTokens(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1024;
+  }
+
+  return Math.max(1, Math.trunc(value));
+}
+
+function normalizeTemperature(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return value;
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+function resolveXaiBaseUrl(): string {
   return (process.env.XAI_BASE_URL?.trim() || "https://api.x.ai/v1").replace(/\/+$/, "");
 }
