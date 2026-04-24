@@ -30,6 +30,7 @@ export type SelectableDbTx = {
     from: (table: unknown) => {
       where: (condition: unknown) => {
         limit: (count: number) => Promise<unknown[]>;
+        orderBy: (...columns: unknown[]) => Promise<unknown[]>;
       };
     };
   };
