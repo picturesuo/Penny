@@ -22,6 +22,7 @@ const validProviderOutput = {
     },
   ],
 };
+const sessionId = "00000000-0000-0000-0000-000000000777";
 
 function snapshotDeps() {
   return { ...captureThoughtDeps };
@@ -72,7 +73,7 @@ test("captureThought sends the structured capture prompt and returns extracted c
     const result = await captureThought(
       {
         text: " Penny should make every investor-facing claim traceable to its original thought. ",
-        sessionId: "session-1",
+        sessionId,
         qualityTier: "cheap",
       },
       {
@@ -81,7 +82,7 @@ test("captureThought sends the structured capture prompt and returns extracted c
     );
 
     assert.equal(result.rawText, "Penny should make every investor-facing claim traceable to its original thought.");
-    assert.equal(result.sessionId, "session-1");
+    assert.equal(result.sessionId, sessionId);
     assert.deepEqual(result.thought, validProviderOutput.thought);
     assert.deepEqual(result.claims, validProviderOutput.claims);
     assert.equal(result.meta.provider, "anthropic");
@@ -101,7 +102,7 @@ test("captureThought sends the structured capture prompt and returns extracted c
     assert.ok(requestForAssertions);
     assert.equal(requestForAssertions.schemaName, "captureThought");
     assert.match(String(requestForAssertions.userPrompt), /"operation": "captureThought"/);
-    assert.match(String(requestForAssertions.userPrompt), /"sessionId": "session-1"/);
+    assert.match(String(requestForAssertions.userPrompt), /"sessionId": "00000000-0000-0000-0000-000000000777"/);
     assert.deepEqual((requestForAssertions.jsonSchema as { required?: unknown[] }).required, ["thought", "claims"]);
   } finally {
     restoreDeps(originalDeps);
