@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import {
   CaptureThoughtError,
   CaptureThoughtValidationError,
-  captureThought,
+  CaptureThoughtWorkspaceError,
+  captureThoughtAndPersist,
 } from "../../../../../server/ai/operations/captureThought.ts";
 import {
   RequestUserNotAuthenticatedError,
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
   try {
     const userId = getRequestUserId(request.headers);
     const requestId = getIdempotencyKey(request.headers, body);
-    const result = await captureThought(
+    const result = await captureThoughtAndPersist(
       {
         text: body.text,
         sessionId: body.sessionId,
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
       },
     );
 
-    return NextResponse.json(result, { status: 200 });
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
@@ -49,6 +50,10 @@ export async function POST(request: Request) {
 
     if (error instanceof CaptureThoughtValidationError) {
       return NextResponse.json({ error: error.message, issues: error.issues }, { status: 400 });
+    }
+
+    if (error instanceof CaptureThoughtWorkspaceError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
     }
 
     if (error instanceof CaptureThoughtError) {
