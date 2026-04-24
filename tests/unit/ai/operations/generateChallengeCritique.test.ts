@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import test from "node:test";
 
 import {
@@ -308,4 +310,139 @@ test("generateChallengeCritique repairs one malformed response and accepts the c
   } finally {
     restoreDeps(originalDeps);
   }
+});
+
+test("generateChallengeCritique returns a structured failure when repair output is still invalid", async () => {
+  const originalDeps = snapshotDeps();
+  let anthropicCalls = 0;
+
+  applyCommonTestDeps();
+  generateChallengeCritiqueDeps.resolveModelPolicy = () => [
+    {
+      provider: "anthropic",
+      model: "claude-test",
+      promptVersion: PROMPT_VERSION,
+      tier: "default",
+    },
+  ];
+  generateChallengeCritiqueDeps.invokeAnthropicStructured = async () => {
+    anthropicCalls += 1;
+
+    return {
+      output: {
+        strongestCounterargument: anthropicCalls === 1 ? "First invalid response." : "Repair still invalid.",
+      },
+      usage: {
+        inputTokens: anthropicCalls === 1 ? 100 : 20,
+        outputTokens: anthropicCalls === 1 ? 50 : 10,
+        totalTokens: anthropicCalls === 1 ? 150 : 30,
+      },
+      cost: {
+        totalUsd: anthropicCalls === 1 ? 0.008 : 0.002,
+        currency: "USD",
+      },
+    };
+  };
+  generateChallengeCritiqueDeps.invokeXaiStructured = async () => {
+    throw new Error("xai should not be called");
+  };
+
+  try {
+    await assert.rejects(
+      () => generateChallengeCritique(validInput),
+      (error: unknown) => {
+        assert.equal(anthropicCalls, 2);
+        assert.equal(error instanceof Error, true);
+        assert.equal((error as Error).name, "GenerateChallengeCritiqueError");
+
+        const structuredError = error as Error & {
+          attempts?: number;
+          code?: string;
+          failures?: Array<{ message?: string; provider?: string; tier?: string }>;
+          operationName?: string;
+        };
+
+        assert.equal(structuredError.code, "AI_OPERATION_FAILED");
+        assert.equal(structuredError.operationName, "generateChallengeCritique");
+        assert.equal(structuredError.attempts, 1);
+        assert.equal(structuredError.failures?.length, 1);
+        assert.equal(structuredError.failures?.[0]?.provider, "anthropic");
+        assert.match(String(structuredError.failures?.[0]?.message), /failed validation after one repair pass/i);
+
+        return true;
+      },
+    );
+  } finally {
+    restoreDeps(originalDeps);
+  }
+});
+
+test("generateChallengeCritique returns a structured failure when all providers fail", async () => {
+  const originalDeps = snapshotDeps();
+
+  applyCommonTestDeps();
+  generateChallengeCritiqueDeps.resolveModelPolicy = () => [
+    {
+      provider: "anthropic",
+      model: "claude-test",
+      promptVersion: PROMPT_VERSION,
+      tier: "default",
+    },
+    {
+      provider: "xai",
+      model: "grok-test",
+      promptVersion: PROMPT_VERSION,
+      tier: "fallback",
+    },
+  ];
+  generateChallengeCritiqueDeps.invokeAnthropicStructured = async () => {
+    throw new Error("Anthropic unavailable");
+  };
+  generateChallengeCritiqueDeps.invokeXaiStructured = async () => {
+    throw new Error("xAI unavailable");
+  };
+
+  try {
+    await assert.rejects(
+      () => generateChallengeCritique(validInput),
+      (error: unknown) => {
+        assert.equal(error instanceof Error, true);
+
+        const structuredError = error as Error & {
+          attempts?: number;
+          code?: string;
+          failures?: Array<{ message?: string; provider?: string }>;
+          operationName?: string;
+        };
+
+        assert.equal(structuredError.name, "GenerateChallengeCritiqueError");
+        assert.equal(structuredError.code, "AI_OPERATION_FAILED");
+        assert.equal(structuredError.operationName, "generateChallengeCritique");
+        assert.equal(structuredError.attempts, 2);
+        assert.deepEqual(
+          structuredError.failures?.map((failure) => ({
+            provider: failure.provider,
+            message: failure.message,
+          })),
+          [
+            { provider: "anthropic", message: "Anthropic unavailable" },
+            { provider: "xai", message: "xAI unavailable" },
+          ],
+        );
+
+        return true;
+      },
+    );
+  } finally {
+    restoreDeps(originalDeps);
+  }
+});
+
+test("generateChallengeCritique does not import or require DB write paths", () => {
+  const operationSource = readFileSync(
+    resolve(process.cwd(), "server/ai/operations/generateChallengeCritique.ts"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(operationSource, /server\/db|from "\.\.\/\.\.\/db|from "\.\.\/db|insertMoveEvent|updateChallengeCritique|getDb/);
 });
