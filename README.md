@@ -72,6 +72,7 @@ The domain write path lives in the Next.js app, not the legacy Fastify service.
 - Command routes:
   - `POST /api/commands/maps/create`
   - `POST /api/commands/claims/create`
+  - `POST /api/commands/workspace/select`
   - `POST /api/commands/challenge/request-critique`
   - `POST /api/commands/challenge/respond`
 - Workspace projection routes:
@@ -98,6 +99,7 @@ pnpm db:generate
 pnpm db:migrate
 pnpm db:typecheck
 pnpm test:integration
+pnpm test:mvp
 pnpm test:mvp-verification
 ```
 
