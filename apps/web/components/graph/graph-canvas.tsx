@@ -112,18 +112,22 @@ export function GraphCanvas({
           .penny-graph-node-group .penny-graph-node-shell,
           .penny-graph-node-group .penny-graph-node-core,
           .penny-graph-node-group .penny-graph-node-label {
-            transition: stroke 160ms ease, stroke-width 160ms ease, opacity 160ms ease, transform 160ms ease;
+            transform-box: fill-box;
+            transform-origin: center;
+            transition: stroke var(--motion-standard), stroke-width var(--motion-standard), opacity var(--motion-standard), transform var(--motion-standard);
           }
 
           .penny-graph-node-group:hover .penny-graph-node-shell,
           .penny-graph-node-group:focus-visible .penny-graph-node-shell {
             stroke-width: 2;
             opacity: 0.98;
+            transform: scale(1.025);
           }
 
           .penny-graph-node-group:hover .penny-graph-node-core,
           .penny-graph-node-group:focus-visible .penny-graph-node-core {
             opacity: 0.86;
+            transform: scale(1.04);
           }
 
           .penny-graph-node-group:focus-visible {
