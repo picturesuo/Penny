@@ -88,6 +88,44 @@ test("selectModelForOperation routes cheap traffic to Grok fallback when no fast
   }
 });
 
+test("selectModelForOperation routes captureThought default traffic to Claude", () => {
+  const previousClaude = process.env.ANTHROPIC_CAPTURE_MODEL;
+
+  try {
+    process.env.ANTHROPIC_CAPTURE_MODEL = "claude-capture";
+
+    const selection = selectModelForOperation("captureThought");
+
+    assert.deepEqual(selection, {
+      operationName: "captureThought",
+      provider: "anthropic",
+      model: "claude-capture",
+      qualityTier: "default",
+    });
+  } finally {
+    restoreEnv("ANTHROPIC_CAPTURE_MODEL", previousClaude);
+  }
+});
+
+test("selectModelForOperation routes captureThought fallback traffic to Grok", () => {
+  const previousFallback = process.env.XAI_CAPTURE_FALLBACK_MODEL;
+
+  try {
+    process.env.XAI_CAPTURE_FALLBACK_MODEL = "grok-capture";
+
+    const selection = selectModelForOperation("captureThought", "fallback");
+
+    assert.deepEqual(selection, {
+      operationName: "captureThought",
+      provider: "xai",
+      model: "grok-capture",
+      qualityTier: "fallback",
+    });
+  } finally {
+    restoreEnv("XAI_CAPTURE_FALLBACK_MODEL", previousFallback);
+  }
+});
+
 test("selectModelForOperation fails safely for an unknown operation", () => {
   assert.throws(
     () => selectModelForOperation("unknownOperation"),
