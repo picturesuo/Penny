@@ -80,6 +80,9 @@ test("BrainScreen renders the populated Brain state", () => {
 
   assert.match(html, /Thought stream/);
   assert.match(html, /Map and sphere context/);
+  assert.match(html, /Work sphere/);
+  assert.match(html, /Recent sessions/);
+  assert.match(html, /Current Brain session/);
   assert.match(html, /Recent claims and thoughts/);
   assert.match(html, /Claim panel/);
   assert.match(html, /Claim inspector/);
