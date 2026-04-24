@@ -14,6 +14,7 @@ These routes return backend-shaped workspace views. The frontend should consume 
 | `GET` | `/api/workspace/brain` | `buildBrainView` | Brain mode claim list, map summary, selected claim, and current workspace context. |
 | `GET` | `/api/workspace/challenge` | `buildChallengeView` | Current context, active claim, latest challenge round, critique state/payload, and recorded response state. |
 | `GET` | `/api/workspace/learn` | `buildLearnView` | Learn mode context, selected claim, and the MVP placeholder status/message. |
+| `GET` | `/api/graph` | `buildShellView` + mode-matched workspace builder | Current workspace graph as a `GraphModel`, derived from the canonical Brain, Challenge, or Learn projection for the active mode. |
 
 ## Write Commands
 
@@ -28,6 +29,12 @@ These routes are the current server-side write surface for the MVP. Meaningful w
 | `POST` | `/api/commands/challenge/respond` | Record the user's response to a challenge round. |
 
 Command routes accept JSON request bodies. Idempotent commands can use an idempotency key from the route helper surface; duplicate-key behavior should preserve one logical write and replay the existing result.
+
+## AI Helpers
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/ai/challenge-idea` | Return a compact challenge/learn response for `{ thoughtId?, claimId?, text? }`: strongest objection, hidden assumption, counterexample, better version, and confidence question. |
 
 ## Boundaries
 
