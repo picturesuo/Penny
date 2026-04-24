@@ -7,6 +7,17 @@ import { after, test } from "node:test";
 import postgres from "postgres";
 
 import { GET } from "../../apps/web/app/api/search/route";
+import { PROMPT_VERSION_SEED_RECORDS } from "../../server/ai/services/prompt-version-seeds.ts";
+
+const MVP_PROMPT_OPERATIONS = [
+  "capture_thought",
+  "extract_claims",
+  "suggest_connections",
+  "detect_contradictions",
+  "challenge_idea",
+  "explain_blocker",
+  "summarize_map",
+] as const;
 
 const PG_PORT = 63000 + Math.floor(Math.random() * 1000);
 const PG_USER = "postgres";
@@ -109,6 +120,31 @@ test("GET /api/search returns owned maps, claims, thoughts, and sessions for q",
       assert.deepEqual(Object.keys(result).sort(), ["confidence", "href", "id", "subtitle", "title", "type"]);
     }
 
+    assert.ok(
+      payload.results.some(
+        (result) =>
+          result.id === thoughtId &&
+          result.type === "thought" &&
+          result.title === "Founder note about distribution loops" &&
+          result.subtitle === "Thought from capture" &&
+          result.confidence === null &&
+          result.href === `/workspace?mapId=${mapId}`,
+      ),
+      "expected search results to include the created thought",
+    );
+    assert.ok(
+      payload.results.some(
+        (result) =>
+          result.id === claimId &&
+          result.type === "claim" &&
+          result.title === "Distribution is the moat" &&
+          result.subtitle === "Claim" &&
+          result.confidence === 74 &&
+          result.href === `/workspace?mapId=${mapId}&claimId=${claimId}`,
+      ),
+      "expected search results to include the created claim",
+    );
+
     assert.deepEqual(
       payload.results
         .map((result) => ({
@@ -200,4 +236,41 @@ test("GET /api/search returns no results for blank q", async () => {
   assert.deepEqual(await response.json(), {
     results: [],
   });
+});
+
+test("MVP PromptVersion records exist for every AI operation", async () => {
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    for (const record of PROMPT_VERSION_SEED_RECORDS) {
+      await sql`
+        insert into prompt_versions (operation, version, prompt_hash, prompt_text, output_schema_json)
+        values (
+          ${record.operation},
+          ${record.version},
+          ${record.promptHash},
+          ${record.promptText},
+          ${sql.json(record.outputSchemaJson)}
+        )
+        on conflict (operation, version) do update
+          set prompt_hash = excluded.prompt_hash,
+              prompt_text = excluded.prompt_text,
+              output_schema_json = excluded.output_schema_json
+      `;
+    }
+
+    const rows = await sql<{ operation: string }[]>`
+      select operation
+      from prompt_versions
+      where operation in ${sql(MVP_PROMPT_OPERATIONS)}
+      order by operation
+    `;
+
+    assert.deepEqual(
+      rows.map((row) => row.operation).sort(),
+      [...MVP_PROMPT_OPERATIONS].sort(),
+    );
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
 });
