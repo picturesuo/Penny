@@ -11,6 +11,7 @@ type BrainScreenProps = {
   technicalDetail?: string | null;
   onChangeMode?: (mode: "brain" | "challenge" | "learn") => void;
   onNewThought?: () => void;
+  onRetry?: () => void;
   onSelectThought?: (thoughtId: string) => void;
 };
 
@@ -21,22 +22,23 @@ const workspaceModes = [
 ] as const;
 
 const firstThoughtPrompt =
-  "Penny should help me trace one raw product belief from thought to claim, critique, and next learning step.";
+  "Penny should help me trace one product belief from thought to claim, pressure, and what changed.";
 const samplePrompts = [
-  "I think Penny should help me think better, not just store notes.",
-  "Challenge my current backend architecture.",
-  "Explain what is blocking this idea from becoming useful.",
+  "I think Penny should sharpen judgment, not just store notes.",
+  "Put this architecture idea under pressure.",
+  "Find what this idea depends on.",
 ] as const;
 
 const styles = {
   shell: {
     minHeight: "100vh",
-    background: "#f4f6f2",
-    color: "#17201b",
+    background: "var(--color-canvas)",
+    color: "var(--penny-ink)",
   },
   header: {
-    borderBottom: "1px solid #d8ded5",
-    background: "#fbfcf7",
+    borderBottom: "var(--border-subtle)",
+    background: "var(--glass-panel), rgba(13, 18, 16, 0.72)",
+    backdropFilter: "var(--glass-blur)",
     padding: "20px clamp(18px, 4vw, 40px)",
   },
   brandRow: {
@@ -50,9 +52,9 @@ const styles = {
     minWidth: 0,
   },
   eyebrow: {
-    color: "#2f6b55",
-    fontSize: 12,
-    fontWeight: 800,
+    color: "var(--penny-accent-strong)",
+    fontSize: "var(--type-section-label-size)",
+    fontWeight: "var(--type-section-label-weight)",
     letterSpacing: 0,
     margin: 0,
     textTransform: "uppercase",
@@ -80,37 +82,37 @@ const styles = {
     gridTemplateColumns: "repeat(3, minmax(86px, 1fr))",
   },
   modeButton: {
-    background: "#ffffff",
-    border: "1px solid #d8ded5",
+    background: "rgba(255, 253, 247, 0.08)",
+    border: "var(--glass-border)",
     borderRadius: 6,
-    color: "#637069",
+    color: "var(--penny-muted)",
     cursor: "pointer",
     minHeight: 36,
     padding: "0 12px",
   },
   modeButtonSelected: {
-    background: "#2f6b55",
-    borderColor: "#2f6b55",
-    color: "#fffdf7",
+    background: "var(--penny-accent)",
+    borderColor: "var(--penny-accent)",
+    color: "var(--color-canvas)",
   },
   primaryButton: {
-    background: "#17201b",
+    background: "var(--penny-ink)",
     border: 0,
     borderRadius: 6,
-    color: "#fffdf7",
+    color: "var(--color-canvas)",
     cursor: "pointer",
     fontWeight: 750,
     minHeight: 36,
     padding: "0 14px",
   },
   contextItem: {
-    border: "1px solid #d8ded5",
+    border: "var(--glass-border)",
     borderRadius: 8,
-    background: "#ffffff",
+    background: "rgba(255, 253, 247, 0.07)",
     padding: 14,
   },
   contextLabel: {
-    color: "#637069",
+    color: "var(--penny-muted)",
     display: "block",
     fontSize: 12,
     marginBottom: 4,
@@ -127,9 +129,10 @@ const styles = {
     padding: "24px clamp(18px, 4vw, 40px) 44px",
   },
   panel: {
-    background: "#fbfcf7",
-    border: "1px solid #d8ded5",
+    background: "var(--glass-panel), rgba(23, 32, 27, 0.68)",
+    border: "var(--glass-border)",
     borderRadius: 8,
+    boxShadow: "var(--glass-shadow)",
     padding: 18,
   },
   stack: {
@@ -157,8 +160,8 @@ const styles = {
     width: "100%",
   },
   thoughtCard: {
-    background: "#ffffff",
-    border: "1px solid #d8ded5",
+    background: "rgba(255, 253, 247, 0.07)",
+    border: "var(--glass-border)",
     borderRadius: 8,
     padding: 16,
   },
@@ -172,8 +175,8 @@ const styles = {
     minWidth: 0,
   },
   thoughtCardSelected: {
-    borderColor: "#2f6b55",
-    boxShadow: "inset 4px 0 0 #2f6b55",
+    borderColor: "var(--penny-accent)",
+    boxShadow: "inset 4px 0 0 var(--penny-accent)",
   },
   thoughtTitle: {
     fontSize: 17,
@@ -181,13 +184,13 @@ const styles = {
     margin: 0,
   },
   thoughtBody: {
-    color: "#4d5b52",
+    color: "var(--penny-muted)",
     lineHeight: 1.55,
     margin: "8px 0 0",
   },
   metadata: {
     alignItems: "center",
-    color: "#3c6177",
+    color: "var(--penny-blue)",
     display: "flex",
     flexWrap: "wrap",
     fontSize: 13,
@@ -203,21 +206,21 @@ const styles = {
   },
   confidenceBar: {
     alignSelf: "end",
-    background: "#d8ded5",
+    background: "rgba(255, 253, 247, 0.14)",
     borderRadius: 3,
     display: "block",
     minHeight: 8,
   },
   confidenceBarActive: {
-    background: "#2f6b55",
+    background: "var(--penny-accent)",
   },
   sideRail: {
     display: "grid",
     gap: 18,
   },
   selectedCard: {
-    background: "#ffffff",
-    border: "1px solid #c9d2c8",
+    background: "rgba(255, 253, 247, 0.07)",
+    border: "var(--glass-border)",
     borderRadius: 8,
     padding: 18,
   },
@@ -232,9 +235,9 @@ const styles = {
     gap: 10,
   },
   actionLink: {
-    background: "#17201b",
+    background: "var(--penny-ink)",
     borderRadius: 6,
-    color: "#fffdf7",
+    color: "var(--color-canvas)",
     display: "inline-flex",
     fontSize: 14,
     fontWeight: 750,
@@ -252,7 +255,7 @@ const styles = {
     listStyle: "none",
   },
   relatedLink: {
-    border: "1px solid #d8ded5",
+    border: "var(--glass-border)",
     borderRadius: 8,
     color: "inherit",
     display: "block",
@@ -260,8 +263,8 @@ const styles = {
     textDecoration: "none",
   },
   affordanceButton: {
-    background: "#ffffff",
-    border: "1px solid #d8ded5",
+    background: "rgba(255, 253, 247, 0.07)",
+    border: "var(--glass-border)",
     borderRadius: 8,
     color: "inherit",
     cursor: "pointer",
@@ -271,8 +274,8 @@ const styles = {
     width: "100%",
   },
   affordanceButtonSelected: {
-    borderColor: "#2f6b55",
-    boxShadow: "inset 4px 0 0 #2f6b55",
+    borderColor: "var(--penny-accent)",
+    boxShadow: "inset 4px 0 0 var(--penny-accent)",
   },
   affordanceTitle: {
     display: "block",
@@ -280,7 +283,7 @@ const styles = {
     overflowWrap: "anywhere",
   },
   affordanceDescription: {
-    color: "#637069",
+    color: "var(--penny-muted)",
     display: "block",
     fontSize: 13,
     lineHeight: 1.45,
@@ -297,7 +300,7 @@ const styles = {
     gap: 3,
   },
   factLabel: {
-    color: "#637069",
+    color: "var(--penny-muted)",
     fontSize: 12,
   },
   factValue: {
@@ -316,15 +319,15 @@ const styles = {
     padding: 0,
   },
   inspectorItem: {
-    background: "#ffffff",
-    border: "1px solid #d8ded5",
+    background: "rgba(255, 253, 247, 0.07)",
+    border: "var(--glass-border)",
     borderRadius: 8,
     listStyle: "none",
     padding: 10,
   },
   inspectorItemWarning: {
-    borderColor: "#e0b4aa",
-    boxShadow: "inset 3px 0 0 #a23b32",
+    borderColor: "rgba(227, 147, 134, 0.32)",
+    boxShadow: "inset 3px 0 0 var(--color-danger)",
   },
   inspectorItemTitle: {
     display: "block",
@@ -332,7 +335,7 @@ const styles = {
     overflowWrap: "anywhere",
   },
   inspectorItemDetail: {
-    color: "#637069",
+    color: "var(--penny-muted)",
     display: "block",
     fontSize: 13,
     lineHeight: 1.45,
@@ -340,15 +343,15 @@ const styles = {
     overflowWrap: "anywhere",
   },
   emptyState: {
-    border: "1px dashed #b8c3b8",
+    border: "1px dashed var(--color-line-strong)",
     borderRadius: 8,
-    color: "#637069",
+    color: "var(--penny-muted)",
     margin: 0,
     padding: 18,
   },
   firstRunState: {
-    background: "#ffffff",
-    border: "1px solid #c9d2c8",
+    background: "rgba(255, 253, 247, 0.07)",
+    border: "var(--glass-border)",
     borderRadius: 8,
     display: "grid",
     gap: 14,
@@ -356,10 +359,10 @@ const styles = {
     padding: 18,
   },
   firstRunPrompt: {
-    background: "#f4f6f2",
-    border: "1px solid #d8ded5",
+    background: "rgba(255, 253, 247, 0.08)",
+    border: "var(--glass-border)",
     borderRadius: 8,
-    color: "#17201b",
+    color: "var(--penny-ink)",
     lineHeight: 1.55,
     margin: 0,
     padding: 14,
@@ -380,40 +383,40 @@ const styles = {
     padding: 0,
   },
   samplePromptItem: {
-    background: "#fbfcf7",
-    border: "1px solid #d8ded5",
+    background: "rgba(255, 253, 247, 0.07)",
+    border: "var(--glass-border)",
     borderRadius: 8,
-    color: "#17201b",
+    color: "var(--penny-ink)",
     lineHeight: 1.45,
     listStyle: "none",
     padding: 12,
   },
   status: {
-    color: "#637069",
+    color: "var(--penny-muted)",
     margin: "12px 0 0",
   },
   stateBanner: {
-    border: "1px solid #d8ded5",
+    border: "var(--glass-border)",
     borderRadius: 8,
     margin: "0 0 14px",
     padding: 14,
   },
   stateBannerLoading: {
-    background: "#eef2eb",
-    color: "#3c6177",
+    background: "rgba(131, 183, 216, 0.12)",
+    color: "var(--color-mode-learn-ink)",
   },
   stateBannerError: {
-    background: "#fff7f4",
-    borderColor: "#e0b4aa",
-    color: "#8f3027",
+    background: "rgba(227, 147, 134, 0.12)",
+    borderColor: "rgba(227, 147, 134, 0.32)",
+    color: "var(--color-danger)",
   },
   stateBannerEmpty: {
-    background: "#fffdf7",
-    color: "#637069",
+    background: "rgba(255, 253, 247, 0.07)",
+    color: "var(--penny-muted)",
   },
   stateBannerPopulated: {
-    background: "#eff6f1",
-    color: "#174c3b",
+    background: "var(--color-mode-brain-soft)",
+    color: "var(--color-mode-brain-ink)",
   },
   stateTitle: {
     fontSize: 14,
@@ -440,6 +443,7 @@ export function BrainScreen({
   model,
   onChangeMode,
   onNewThought,
+  onRetry,
   onSelectThought,
   state,
   statusMessage,
@@ -481,7 +485,7 @@ export function BrainScreen({
             ))}
           </div>
           <button onClick={onNewThought} style={styles.primaryButton} type="button">
-            New Thought
+            Capture Thought
           </button>
         </div>
         {interactionMessage ? (
@@ -497,7 +501,7 @@ export function BrainScreen({
           <h2 id="brain-stream-heading" style={styles.thoughtTitle}>
             Recent claims and thoughts
           </h2>
-          <BrainStateBanner state={screenState} message={statusMessage} technicalDetail={technicalDetail} />
+          <BrainStateBanner state={screenState} message={statusMessage} onRetry={onRetry} technicalDetail={technicalDetail} />
           {model.stream.length > 0 ? (
             <ol style={styles.list}>
               {model.stream.map((thought) => (
@@ -535,7 +539,7 @@ export function BrainScreen({
             {model.selectedPanel ? (
               <SelectedClaimPanel model={model.selectedPanel} />
             ) : (
-              <p style={styles.emptyState}>Select a thought to inspect it.</p>
+              <p style={styles.emptyState}>Select a claim to inspect it.</p>
             )}
           </section>
 
@@ -551,15 +555,15 @@ export function BrainScreen({
               <Fact label="Confidence" value={<ConfidenceChip scale="basis-points" value={model.inspector.confidenceBps} />} />
               <Fact label="Updated" value={model.inspector.updatedAtLabel} />
             </dl>
-            <InspectorGroup title="Key connections" items={model.inspector.keyConnections} emptyLabel="No connected claims projected yet." />
-            <InspectorGroup title="Dependencies" items={model.inspector.dependencies} emptyLabel="No dependencies projected yet." />
+            <InspectorGroup title="Key connections" items={model.inspector.keyConnections} emptyLabel="No connected claims yet." />
+            <InspectorGroup title="Dependencies" items={model.inspector.dependencies} emptyLabel="Nothing this depends on yet." />
             <InspectorGroup
-              title="Contradiction markers"
+              title="Tension"
               items={model.inspector.contradictionMarkers}
-              emptyLabel="No contradiction markers detected."
+              emptyLabel="No tension found yet."
               warning
             />
-            <InspectorGroup title="Recent activity" items={model.inspector.recentActivity} emptyLabel="No recent activity projected yet." />
+            <InspectorGroup title="Recent activity" items={model.inspector.recentActivity} emptyLabel="No recent activity yet." />
           </section>
 
           <section aria-labelledby="recent-thoughts-heading" style={styles.panel}>
@@ -585,33 +589,35 @@ export function BrainScreen({
 
 function BrainStateBanner({
   message,
+  onRetry,
   state,
   technicalDetail,
 }: {
   message?: string | null;
+  onRetry?: () => void;
   state: NonNullable<BrainScreenProps["state"]>;
   technicalDetail?: string | null;
 }) {
   const showTechnicalDetail = state === "error" && process.env.NODE_ENV !== "production" && Boolean(technicalDetail);
   const copy = {
     empty: {
-      title: "Empty Brain state",
-      body: message ?? "No thoughts have been projected for this map yet.",
+      title: "Nothing here yet",
+      body: message ?? "Capture one thought to start the map.",
       style: styles.stateBannerEmpty,
     },
     error: {
-      title: "Brain error state",
-      body: message ?? "The Brain projection could not be loaded. Retry the page or return to the workspace shell.",
+      title: "Brain did not load",
+      body: message ?? "Retry, or return to the workspace and keep the same context.",
       style: styles.stateBannerError,
     },
     loading: {
-      title: "Brain loading state",
-      body: message ?? "Loading the Brain projection.",
+      title: "Loading Brain",
+      body: message ?? "Loading the current map.",
       style: styles.stateBannerLoading,
     },
     populated: {
-      title: "Populated Brain state",
-      body: message ?? "Thoughts are loaded from the Brain projection.",
+      title: "Brain is ready",
+      body: message ?? "Claims are loaded for this map.",
       style: styles.stateBannerPopulated,
     },
   }[state];
@@ -626,6 +632,11 @@ function BrainStateBanner({
           <p style={styles.stateBody}>{technicalDetail}</p>
         </details>
       ) : null}
+      {state === "error" && onRetry ? (
+        <button onClick={onRetry} style={{ ...styles.primaryButton, marginTop: 12 }} type="button">
+          Retry
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -635,16 +646,14 @@ function FirstRunFallback({ onNewThought }: { onNewThought?: () => void }) {
     <section aria-label="Guided first-run empty state" style={styles.firstRunState}>
       <div>
         <p style={styles.eyebrow}>First run</p>
-        <h3 style={styles.thoughtTitle}>Start by giving Penny one belief to remember.</h3>
-        <p style={styles.thoughtBody}>
-          The database is empty, so Penny has no thoughts, claims, confidence history, or challenge results to show yet.
-        </p>
+        <h3 style={styles.thoughtTitle}>Start with one belief.</h3>
+        <p style={styles.thoughtBody}>Penny needs one thought before it can show claims, confidence, or tension.</p>
       </div>
       <blockquote style={styles.firstRunPrompt}>{firstThoughtPrompt}</blockquote>
       <ul style={styles.firstRunSteps}>
         <li style={styles.firstRunStep}>1. Capture the raw thought.</li>
-        <li style={styles.firstRunStep}>2. Extract one claim Penny can track.</li>
-        <li style={styles.firstRunStep}>3. Challenge it, then use Learn to explain the blocker.</li>
+        <li style={styles.firstRunStep}>2. Find the claim inside it.</li>
+        <li style={styles.firstRunStep}>3. Put the claim under pressure.</li>
       </ul>
       <section aria-label="Sample first-run prompts">
         <p style={styles.eyebrow}>Sample prompts</p>
@@ -657,7 +666,7 @@ function FirstRunFallback({ onNewThought }: { onNewThought?: () => void }) {
         </ul>
       </section>
       <button onClick={onNewThought} style={styles.primaryButton} type="button">
-        Use this prompt
+        Capture this thought
       </button>
     </section>
   );
@@ -746,7 +755,7 @@ function SelectedClaimPanel({ model }: { model: NonNullable<BrainViewModel["sele
       </article>
 
       <section aria-label="Dependencies and related claims preview">
-        <p style={styles.eyebrow}>Dependencies and related claims</p>
+        <p style={styles.eyebrow}>Find what this depends on</p>
         <p style={styles.thoughtBody}>{model.dependenciesLabel}</p>
         {model.relatedClaims.length > 0 ? (
           <ul style={styles.relatedList}>
@@ -766,7 +775,7 @@ function SelectedClaimPanel({ model }: { model: NonNullable<BrainViewModel["sele
 
       <div style={styles.selectedActions}>
         <a href={model.brainMapHref} style={styles.actionLink}>
-          View on Brain Map
+          Show in Brain
         </a>
       </div>
     </div>
