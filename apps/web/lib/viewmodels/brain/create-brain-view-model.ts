@@ -1,4 +1,11 @@
-import type { BrainProjectionClaim, BrainProjectionView, BrainThoughtViewModel, BrainViewModel } from "./types";
+import type {
+  BrainProjectionClaim,
+  BrainProjectionView,
+  BrainRelatedClaimPreview,
+  BrainSelectedClaimPanel,
+  BrainThoughtViewModel,
+  BrainViewModel,
+} from "./types";
 
 function formatConfidence(confidenceBps: number | null | undefined) {
   if (typeof confidenceBps !== "number") {
@@ -77,6 +84,39 @@ function getSortTime(value: string | null | undefined) {
   return Number.isNaN(timestamp.getTime()) ? 0 : timestamp.getTime();
 }
 
+function createBrainMapHref(thoughtId: string) {
+  return `/brain?claimId=${encodeURIComponent(thoughtId)}#brain-map`;
+}
+
+function toRelatedClaim(thought: BrainThoughtViewModel): BrainRelatedClaimPreview {
+  return {
+    id: thought.id,
+    title: thought.title,
+    confidenceLabel: thought.confidenceLabel,
+    brainMapHref: createBrainMapHref(thought.id),
+  };
+}
+
+function createSelectedPanel(selectedThought: BrainThoughtViewModel | null, stream: BrainThoughtViewModel[]): BrainSelectedClaimPanel | null {
+  if (!selectedThought) {
+    return null;
+  }
+
+  const relatedClaims = stream.filter((thought) => thought.id !== selectedThought.id).slice(0, 3).map(toRelatedClaim);
+
+  return {
+    title: selectedThought.title,
+    body: selectedThought.body,
+    confidenceLabel: selectedThought.confidenceLabel,
+    dependenciesLabel:
+      relatedClaims.length > 0
+        ? `${relatedClaims.length} related claims from this map`
+        : "No explicit dependencies projected yet",
+    relatedClaims,
+    brainMapHref: createBrainMapHref(selectedThought.id),
+  };
+}
+
 export function createBrainViewModel(projection: BrainProjectionView): BrainViewModel {
   const context = projection.currentContext ?? projection.workspaceContext ?? {
     mode: "brain",
@@ -100,6 +140,7 @@ export function createBrainViewModel(projection: BrainProjectionView): BrainView
   const selectedThought =
     stream.find((thought) => thought.id === selectedClaimId) ??
     (projection.selectedClaim ? toThought(projection.selectedClaim, stream.length, selectedClaimId) : null);
+  const selectedPanel = createSelectedPanel(selectedThought, stream);
   const recentThoughtIds = [...projection.claims]
     .sort((left, right) => getSortTime(right.updatedAt) - getSortTime(left.updatedAt))
     .slice(0, 4)
@@ -120,6 +161,7 @@ export function createBrainViewModel(projection: BrainProjectionView): BrainView
     },
     stream,
     selectedThought,
+    selectedPanel,
     recentThoughts,
     inspector: {
       status: selectedThought ? "Selected thought" : "No thought selected",
