@@ -1,3 +1,13 @@
+import { invokeAnthropicStructured } from "../providers/anthropic.ts";
+import { invokeXaiStructured } from "../providers/xai.ts";
+import {
+  PROMPT_VERSION,
+  buildGenerateChallengeCritiquePrompt,
+} from "../prompts/generateChallengeCritique/v1.ts";
+import {
+  GenerateChallengeCritiqueOutputSchema,
+  type GenerateChallengeCritiqueOutput as CanonicalGenerateChallengeCritiqueOutput,
+} from "../schemas/challengeCritique.ts";
 import { selectModelForOperation } from "../routing/modelPolicy.ts";
 
 export type ChallengeCritiqueProviderName = "anthropic" | "xai";
@@ -168,23 +178,19 @@ type NormalizedGenerateChallengeCritiqueInput = {
 };
 
 const GENERATE_CHALLENGE_CRITIQUE_OPERATION = "generateChallengeCritique";
-const DEFAULT_PROMPT_VERSION = "challenge-critique-v1";
-const OUTPUT_KEYS: Array<keyof GenerateChallengeCritiqueOutput> = [
-  "conciseCritiqueSummary",
+const DEFAULT_PROMPT_VERSION = PROMPT_VERSION;
+const CANONICAL_OUTPUT_KEYS = [
+  "summary",
   "strongestCounterargument",
   "assumptions",
-  "likelyFailureModes",
+  "failureModes",
   "followUpQuestions",
-  "suggestedConfidenceDelta",
+  "suggestedConfidenceBps",
   "uncertaintyNote",
-];
+] as const;
 
 function unsupportedProvider(provider: string): Error {
   return new Error(`Unsupported AI provider: ${provider}`);
-}
-
-async function invokeUnsupportedProvider(): Promise<never> {
-  throw new Error("No AI provider adapter has been configured for generateChallengeCritique.");
 }
 
 function defaultStartActiveObservation(
@@ -255,8 +261,8 @@ export const generateChallengeCritiqueDeps = {
     release: process.env.VERCEL_GIT_COMMIT_SHA?.trim() || "local",
   }),
   getTraceId: () => null as string | null,
-  invokeAnthropicStructured: invokeUnsupportedProvider as StructuredProviderInvoker,
-  invokeXaiStructured: invokeUnsupportedProvider as StructuredProviderInvoker,
+  invokeAnthropicStructured: invokeAnthropicStructured as StructuredProviderInvoker,
+  invokeXaiStructured: invokeXaiStructured as StructuredProviderInvoker,
   resolveModelPolicy: defaultResolveModelPolicy as ResolveModelPolicy,
   startActiveObservation: defaultStartActiveObservation as StartActiveObservation,
 };
@@ -282,7 +288,7 @@ export async function generateChallengeCritique(
           const startedAt = Date.now();
           try {
             const firstResponse = await invokeStructuredProvider(route, prompt);
-            const validation = await validateWithSingleRepair(route, prompt, firstResponse);
+            const validation = await validateWithSingleRepair(route, prompt, firstResponse, normalizedInput.claimConfidence);
             const latencyMs = Date.now() - startedAt;
             const deploy = generateChallengeCritiqueDeps.getDeployMetadata();
 
@@ -359,57 +365,39 @@ export function buildChallengeCritiquePromptV1(
   input: NormalizedGenerateChallengeCritiqueInput,
   promptVersion = DEFAULT_PROMPT_VERSION,
 ): PromptBundle {
-  const userPromptParts = [
-    `Prompt version: ${promptVersion}`,
-    input.mapTitle ? `Map title: ${input.mapTitle}` : "Map title: none provided.",
-    `Claim id: ${input.claimId}`,
-    `Claim: ${input.claimText}`,
-    `Claim confidence: ${input.claimConfidence}%`,
-    input.steelmanText ? `Existing steelman: ${input.steelmanText}` : "Existing steelman: none provided.",
-    `Critique mode: ${input.critiqueMode}`,
-    input.userGoal ? `User goal: ${input.userGoal}` : "User goal: none provided.",
-    input.neighboringClaims.length
-      ? `Neighboring claims:\n- ${input.neighboringClaims
-          .map((claim) =>
-            [
-              claim.text,
-              claim.confidence != null ? `${claim.confidence}% confidence` : null,
-              claim.kind ? `kind=${claim.kind}` : null,
-              claim.relationship ? `relationship=${claim.relationship}` : null,
-            ]
-              .filter(Boolean)
-              .join(" | "),
-          )
-          .join("\n- ")}`
-      : "Neighboring claims: none provided.",
-    input.previousRounds.length
-      ? `Prior round context:\n- ${input.previousRounds
-          .map((round) =>
-            [
-              `Round ${round.roundNumber}`,
-              round.critiqueSummary,
-              round.userResponse ? `response=${round.userResponse}` : null,
-              round.responsePath ? `path=${round.responsePath}` : null,
-              round.confidenceDelta != null ? `delta=${round.confidenceDelta}` : null,
-            ]
-              .filter(Boolean)
-              .join(" | "),
-          )
-          .join("\n- ")}`
-      : "Prior round context: none provided.",
-    `Return JSON with exactly these keys: ${OUTPUT_KEYS.join(", ")}.`,
-    "Keep the critique concise, specific, and structurally rigorous.",
-  ];
+  const builtPrompt = buildGenerateChallengeCritiquePrompt({
+    mapTitle: input.mapTitle ?? "Untitled map",
+    claimId: input.claimId,
+    claimText: input.claimText,
+    claimConfidenceBps: percentToBps(input.claimConfidence),
+    critiqueMode: input.critiqueMode,
+    steelmanText: input.steelmanText,
+    userGoal: input.userGoal,
+    neighboringClaims: input.neighboringClaims.map((claim) => ({
+      id: claim.id,
+      text: claim.text,
+      confidenceBps: percentToBps(claim.confidence),
+      relationship: claim.relationship ?? claim.kind ?? null,
+    })),
+    previousRounds: input.previousRounds.map((round) => ({
+      roundId: round.roundId,
+      roundNumber: round.roundNumber,
+      summary: round.critiqueSummary,
+      userResponse: round.userResponse ?? null,
+      responsePath: round.responsePath ?? null,
+      confidenceDeltaBps: percentToBps(round.confidenceDelta),
+    })),
+  });
+
+  const structuredInput =
+    promptVersion === builtPrompt.promptVersion
+      ? builtPrompt.structuredInput
+      : { ...builtPrompt.structuredInput, promptVersion };
 
   return {
     promptVersion,
-    systemPrompt: [
-      "You generate one rigorous challenge critique for Penny.",
-      "Be concise, specific, and high-signal.",
-      "Prefer structural pressure over vague skepticism.",
-      "Return only valid JSON matching the requested schema.",
-    ].join(" "),
-    userPrompt: userPromptParts.join("\n"),
+    systemPrompt: builtPrompt.systemPrompt,
+    userPrompt: JSON.stringify(structuredInput, null, 2),
   };
 }
 
@@ -434,7 +422,7 @@ function buildChallengeCritiqueRepairPrompt(prompt: PromptBundle, invalidOutput:
       "Validation issues:",
       JSON.stringify(issues, null, 2),
       "",
-      `Return JSON with exactly these keys: ${OUTPUT_KEYS.join(", ")}.`,
+      `Return JSON with exactly these keys: ${CANONICAL_OUTPUT_KEYS.join(", ")}.`,
     ].join("\n"),
   };
 }
@@ -443,13 +431,14 @@ async function validateWithSingleRepair(
   route: GenerateChallengeCritiqueRoute,
   prompt: PromptBundle,
   firstResponse: StructuredProviderResponse,
+  claimConfidence: number,
 ): Promise<{
   cost: StructuredProviderCost;
   output: GenerateChallengeCritiqueOutput;
   repairAttempted: boolean;
   usage: StructuredProviderUsage;
 }> {
-  const initial = safeParseChallengeCritiqueOutput(firstResponse.output);
+  const initial = safeParseChallengeCritiqueOutput(firstResponse.output, claimConfidence);
 
   if (initial.success) {
     return {
@@ -462,7 +451,7 @@ async function validateWithSingleRepair(
 
   const repairPrompt = buildChallengeCritiqueRepairPrompt(prompt, firstResponse.output, initial.issues);
   const repairResponse = await invokeStructuredProvider(route, repairPrompt);
-  const repaired = safeParseChallengeCritiqueOutput(repairResponse.output);
+  const repaired = safeParseChallengeCritiqueOutput(repairResponse.output, claimConfidence);
 
   if (!repaired.success) {
     throw new GenerateChallengeCritiqueValidationError(
@@ -509,15 +498,17 @@ async function invokeStructuredProvider(route: GenerateChallengeCritiqueRoute, p
 
 const challengeCritiqueJsonSchema = {
   type: "object",
-  required: OUTPUT_KEYS,
+  required: CANONICAL_OUTPUT_KEYS,
   additionalProperties: false,
   properties: {
-    conciseCritiqueSummary: { type: "string" },
+    summary: { type: "string" },
     strongestCounterargument: { type: "string" },
     assumptions: { type: "array", items: { type: "string" } },
-    likelyFailureModes: { type: "array", items: { type: "string" } },
+    failureModes: { type: "array", items: { type: "string" } },
     followUpQuestions: { type: "array", items: { type: "string" } },
-    suggestedConfidenceDelta: { type: "integer" },
+    suggestedConfidenceBps: {
+      anyOf: [{ type: "integer" }, { type: "null" }],
+    },
     uncertaintyNote: { type: "string" },
   },
 } as const;
@@ -627,112 +618,98 @@ function normalizePreviousRounds(
 
 function safeParseChallengeCritiqueOutput(
   value: unknown,
+  claimConfidence: number,
 ): { data: GenerateChallengeCritiqueOutput; success: true } | { issues: string[]; success: false } {
-  const issues: string[] = [];
-  const object = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+  const normalized = normalizeCritiqueOutputForSchema(value, claimConfidence);
+  const result = GenerateChallengeCritiqueOutputSchema.safeParse(normalized);
 
-  if (!object) {
-    return { success: false, issues: ["Critique output must be an object."] };
-  }
-
-  const conciseCritiqueSummary = collectStringIssue(object.conciseCritiqueSummary, "conciseCritiqueSummary", 1, 240, issues);
-  const strongestCounterargument = collectStringIssue(
-    object.strongestCounterargument,
-    "strongestCounterargument",
-    1,
-    2400,
-    issues,
-  );
-  const assumptions = collectStringArrayIssue(object.assumptions, "assumptions", 6, issues);
-  const likelyFailureModes = collectStringArrayIssue(object.likelyFailureModes, "likelyFailureModes", 6, issues);
-  const followUpQuestions = collectStringArrayIssue(object.followUpQuestions, "followUpQuestions", 6, issues);
-  const suggestedConfidenceDelta = collectIntegerIssue(
-    object.suggestedConfidenceDelta,
-    "suggestedConfidenceDelta",
-    -100,
-    100,
-    issues,
-  );
-  const uncertaintyNote = collectStringIssue(object.uncertaintyNote, "uncertaintyNote", 1, 400, issues);
-
-  if (issues.length > 0) {
-    return { success: false, issues };
+  if (!result.success) {
+    return {
+      success: false,
+      issues: result.error.issues.map((issue) => {
+        const path = issue.path.length ? `${issue.path.join(".")}: ` : "";
+        return `${path}${issue.message}`;
+      }),
+    };
   }
 
   return {
     success: true,
-    data: {
-      conciseCritiqueSummary,
-      strongestCounterargument,
-      assumptions,
-      likelyFailureModes,
-      followUpQuestions,
-      suggestedConfidenceDelta,
-      uncertaintyNote,
-    },
+    data: mapCanonicalOutputToLegacy(result.data, claimConfidence),
   };
 }
 
-function collectStringIssue(
-  value: unknown,
-  fieldName: string,
-  minLength: number,
-  maxLength: number,
-  issues: string[],
-): string {
-  if (typeof value !== "string") {
-    issues.push(`${fieldName} must be a string.`);
-    return "";
+function normalizeCritiqueOutputForSchema(value: unknown, claimConfidence: number): unknown {
+  const object = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
+  if (!object) {
+    return value;
   }
 
-  const trimmed = value.trim();
-
-  if (trimmed.length < minLength) {
-    issues.push(`${fieldName} must be at least ${minLength} character(s).`);
+  if ("summary" in object || "failureModes" in object || "suggestedConfidenceBps" in object) {
+    return object;
   }
 
-  if (trimmed.length > maxLength) {
-    issues.push(`${fieldName} must be at most ${maxLength} character(s).`);
+  if (
+    "conciseCritiqueSummary" in object ||
+    "likelyFailureModes" in object ||
+    "suggestedConfidenceDelta" in object
+  ) {
+    return {
+      summary: object.conciseCritiqueSummary,
+      strongestCounterargument: object.strongestCounterargument,
+      assumptions: object.assumptions,
+      failureModes: object.likelyFailureModes,
+      followUpQuestions: object.followUpQuestions,
+      suggestedConfidenceBps: legacyDeltaToSuggestedConfidenceBps(object.suggestedConfidenceDelta, claimConfidence),
+      uncertaintyNote: object.uncertaintyNote,
+    };
   }
 
-  return trimmed;
+  return object;
 }
 
-function collectStringArrayIssue(
-  value: unknown,
-  fieldName: string,
-  maxItems: number,
-  issues: string[],
-): string[] {
-  if (!Array.isArray(value)) {
-    issues.push(`${fieldName} must be an array.`);
-    return [];
-  }
-
-  if (value.length > maxItems) {
-    issues.push(`${fieldName} must contain at most ${maxItems} item(s).`);
-  }
-
-  return value.map((entry, index) => collectStringIssue(entry, `${fieldName}[${index}]`, 1, 240, issues));
+function mapCanonicalOutputToLegacy(
+  output: CanonicalGenerateChallengeCritiqueOutput,
+  claimConfidence: number,
+): GenerateChallengeCritiqueOutput {
+  return {
+    conciseCritiqueSummary: output.summary,
+    strongestCounterargument: output.strongestCounterargument,
+    assumptions: output.assumptions,
+    likelyFailureModes: output.failureModes,
+    followUpQuestions: output.followUpQuestions,
+    suggestedConfidenceDelta: suggestedConfidenceBpsToLegacyDelta(output.suggestedConfidenceBps, claimConfidence),
+    uncertaintyNote: output.uncertaintyNote,
+  };
 }
 
-function collectIntegerIssue(
-  value: unknown,
-  fieldName: string,
-  minValue: number,
-  maxValue: number,
-  issues: string[],
-): number {
+function legacyDeltaToSuggestedConfidenceBps(value: unknown, claimConfidence: number): number | null | unknown {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
   if (typeof value !== "number" || !Number.isInteger(value)) {
-    issues.push(`${fieldName} must be an integer.`);
+    return value;
+  }
+
+  return Math.trunc((claimConfidence + value) * 100);
+}
+
+function suggestedConfidenceBpsToLegacyDelta(value: number | null, claimConfidence: number): number {
+  if (value === null) {
     return 0;
   }
 
-  if (value < minValue || value > maxValue) {
-    issues.push(`${fieldName} must be between ${minValue} and ${maxValue}.`);
+  return Math.max(-100, Math.min(100, Math.trunc(value / 100) - claimConfidence));
+}
+
+function percentToBps(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
   }
 
-  return value;
+  return Math.trunc(value * 100);
 }
 
 function readCritiqueMode(value: unknown): ChallengeCritiqueMode {
