@@ -16,7 +16,16 @@ export type LearnProjectionView = {
   message?: string;
 };
 
+export type LearnExperienceStateId = "placeholder" | "active_concept" | "feedback_shown" | "loading" | "error";
+
+export type LearnExperienceState = {
+  id: LearnExperienceStateId;
+  title: string;
+  body: string;
+};
+
 export type LearnExperienceViewModel = {
+  experienceState: LearnExperienceState;
   heroTitle: string;
   heroDetail: string;
   concept: {
@@ -81,6 +90,54 @@ function buildConceptTitle(selectedClaim: LearnClaimView | null, fallback: strin
   return `${selectedClaim.body.slice(0, 69).trim()}...`;
 }
 
+function buildLearnExperienceState(input: {
+  selectedClaim: LearnClaimView | null;
+  status: string;
+  message: string;
+}): LearnExperienceState {
+  if (input.status === "loading") {
+    return {
+      id: "loading",
+      title: "Loading concept",
+      body: "Penny is reading the current Learn projection.",
+    };
+  }
+
+  if (input.status === "error") {
+    return {
+      id: "error",
+      title: "Learn unavailable",
+      body: input.message || "Penny could not load this Learn concept.",
+    };
+  }
+
+  if (!input.selectedClaim) {
+    return {
+      id: "placeholder",
+      title: "Placeholder",
+      body: "Select a claim before Learn can build an active concept.",
+    };
+  }
+
+  return {
+    id: "active_concept",
+    title: "Active concept",
+    body: "A concept is selected and ready for teach-back.",
+  };
+}
+
+export function getVisibleLearnState(baseState: LearnExperienceState, teachBack: string): LearnExperienceState {
+  if (baseState.id !== "active_concept" || !teachBack.trim()) {
+    return baseState;
+  }
+
+  return {
+    id: "feedback_shown",
+    title: "Feedback shown",
+    body: "Penny is responding to the current teach-back draft.",
+  };
+}
+
 export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnExperienceViewModel {
   const selectedClaim = view.selectedClaim;
   const status = view.status ?? view.learnState.status;
@@ -91,6 +148,11 @@ export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnE
     : "Choose a claim from Brain or Challenge so Learn can turn it into a teach-back concept.";
 
   return {
+    experienceState: buildLearnExperienceState({
+      selectedClaim,
+      status,
+      message,
+    }),
     heroTitle: selectedClaim ? conceptTitle : message,
     heroDetail: selectedClaim
       ? "Turn the claim into a short explanation, then check whether it still holds when examples and edge cases move."

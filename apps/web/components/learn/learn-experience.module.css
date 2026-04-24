@@ -42,7 +42,8 @@
 .miniMapCard,
 .stepsCard,
 .retrievalCard,
-.stateCard {
+.stateCard,
+.stateDetailsCard {
   border-color: rgba(47, 107, 85, 0.18);
 }
 
@@ -94,6 +95,33 @@
 
 .feedbackCard {
   background: #f4f8ef;
+}
+
+.stateCard {
+  background: #f4f8ef;
+  box-shadow: inset 4px 0 0 #2f6b55;
+}
+
+.stateCard[data-state="placeholder"] {
+  box-shadow: inset 4px 0 0 #8da384;
+}
+
+.stateCard[data-state="feedback_shown"] {
+  box-shadow: inset 4px 0 0 #3c6177;
+}
+
+.stateCard[data-state="loading"] {
+  box-shadow: inset 4px 0 0 #6f8d79;
+}
+
+.stateCard[data-state="error"] {
+  box-shadow: inset 4px 0 0 #9b3328;
+}
+
+.stateCard h2 {
+  margin: 0;
+  color: #174c3b;
+  font-size: 1.08rem;
 }
 
 .stepList,

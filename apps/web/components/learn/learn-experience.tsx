@@ -2,12 +2,17 @@
 
 import { useMemo, useState } from "react";
 
-import { buildLearnExperienceViewModel, type LearnProjectionView } from "../../lib/viewmodels/learn/learn-experience";
+import {
+  buildLearnExperienceViewModel,
+  getVisibleLearnState,
+  type LearnProjectionView,
+} from "../../lib/viewmodels/learn/learn-experience";
 import styles from "./learn-experience.module.css";
 
 export function LearnExperience({ view }: { view: LearnProjectionView }) {
   const model = useMemo(() => buildLearnExperienceViewModel(view), [view]);
   const [teachBack, setTeachBack] = useState("");
+  const visibleState = getVisibleLearnState(model.experienceState, teachBack);
 
   return (
     <div className={styles.learnLayout}>
@@ -15,6 +20,12 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
         <p className={styles.kicker}>Learn</p>
         <h1>{model.heroTitle}</h1>
         <p>{model.heroDetail}</p>
+      </section>
+
+      <section className={`penny-panel ${styles.stateCard}`} data-state={visibleState.id}>
+        <p className={styles.kicker}>Learn state</p>
+        <h2>{visibleState.title}</h2>
+        <p>{visibleState.body}</p>
       </section>
 
       <section className={`penny-panel ${styles.conceptCard}`}>
@@ -97,8 +108,8 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
         </div>
       </section>
 
-      <section className={`penny-panel ${styles.stateCard}`}>
-        <p className={styles.kicker}>Learning state</p>
+      <section className={`penny-panel ${styles.stateDetailsCard}`}>
+        <p className={styles.kicker}>Learning details</p>
         <dl className={styles.facts}>
           <div>
             <dt>Status</dt>

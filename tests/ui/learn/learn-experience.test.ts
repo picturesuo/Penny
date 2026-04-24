@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildLearnExperienceViewModel } from "../../../apps/web/lib/viewmodels/learn/learn-experience.ts";
+import {
+  buildLearnExperienceViewModel,
+  getVisibleLearnState,
+} from "../../../apps/web/lib/viewmodels/learn/learn-experience.ts";
 
 test("learn experience builds a teach-back surface for the selected claim", () => {
   const viewModel = buildLearnExperienceViewModel({
@@ -20,6 +23,7 @@ test("learn experience builds a teach-back surface for the selected claim", () =
     message: "Learn mode coming soon",
   });
 
+  assert.equal(viewModel.experienceState.id, "active_concept");
   assert.equal(viewModel.heroTitle, "Users retain concepts better when they teach them back");
   assert.deepEqual(viewModel.concept, {
     title: "Users retain concepts better when they teach them back",
@@ -73,6 +77,7 @@ test("learn experience keeps a clear no-claim state", () => {
   });
 
   assert.equal(viewModel.heroTitle, "Learn mode coming soon");
+  assert.equal(viewModel.experienceState.id, "placeholder");
   assert.deepEqual(viewModel.concept, {
     title: "No concept selected",
     explanation: "Choose a claim from Brain or Challenge so Learn can turn it into a teach-back concept.",
@@ -84,4 +89,67 @@ test("learn experience keeps a clear no-claim state", () => {
   assert.equal(viewModel.brainMiniMap.current, "No concept selected");
   assert.equal(viewModel.reviewState.mapLabel, "No map selected");
   assert.equal(viewModel.reviewState.claimLabel, "No claim selected");
+});
+
+test("learn experience distinguishes loading and error states from projection status", () => {
+  const loadingViewModel = buildLearnExperienceViewModel({
+    selectedMapId: null,
+    selectedClaimId: null,
+    selectedClaim: null,
+    learnState: {
+      status: "loading",
+      message: "Loading Learn mode",
+    },
+    status: "loading",
+    message: "Loading Learn mode",
+  });
+
+  assert.deepEqual(loadingViewModel.experienceState, {
+    id: "loading",
+    title: "Loading concept",
+    body: "Penny is reading the current Learn projection.",
+  });
+
+  const errorViewModel = buildLearnExperienceViewModel({
+    selectedMapId: null,
+    selectedClaimId: null,
+    selectedClaim: null,
+    learnState: {
+      status: "error",
+      message: "Learn projection failed",
+    },
+    status: "error",
+    message: "Learn projection failed",
+  });
+
+  assert.deepEqual(errorViewModel.experienceState, {
+    id: "error",
+    title: "Learn unavailable",
+    body: "Learn projection failed",
+  });
+});
+
+test("learn experience shows feedback state once a teach-back draft exists", () => {
+  const viewModel = buildLearnExperienceViewModel({
+    selectedMapId: "map-1",
+    selectedClaimId: "claim-1",
+    selectedClaim: {
+      id: "claim-1",
+      body: "Teach-back makes concept gaps visible.",
+      confidenceBps: 6700,
+    },
+    learnState: {
+      status: "placeholder",
+      message: "Learn mode coming soon",
+    },
+    status: "placeholder",
+    message: "Learn mode coming soon",
+  });
+
+  assert.equal(getVisibleLearnState(viewModel.experienceState, "").id, "active_concept");
+  assert.deepEqual(getVisibleLearnState(viewModel.experienceState, "A draft explanation"), {
+    id: "feedback_shown",
+    title: "Feedback shown",
+    body: "Penny is responding to the current teach-back draft.",
+  });
 });

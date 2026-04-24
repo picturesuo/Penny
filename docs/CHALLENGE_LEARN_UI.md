@@ -36,6 +36,7 @@ Challenge state mapping:
 
 Learn mode reads the existing workspace Learn projection and builds a muted green teach-back surface:
 
+- explicit Learn state card for placeholder, active concept, feedback shown, loading, and error states
 - concept title derived from the selected claim
 - concept explanation grounded in the selected claim body
 - teach-back writing area
@@ -48,6 +49,14 @@ Learn mode reads the existing workspace Learn projection and builds a muted gree
 - learning state card with selected map, selected claim, placeholder status, and local draft length
 
 Learn is intentionally local-only for this slice. It does not add backend schema, provider calls, command writes, or real concept switching yet.
+
+Learn state mapping:
+
+- `placeholder`: no active concept has been selected.
+- `active_concept`: a selected claim is available as the current concept.
+- `feedback_shown`: local teach-back text exists and the feedback card is responding to it.
+- `loading`: a loading projection status is present.
+- `error`: an error projection status is present.
 
 ## Boundaries
 
