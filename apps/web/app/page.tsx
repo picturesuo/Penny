@@ -1,5 +1,5 @@
-import { PennyShell } from "../components/penny-shell";
+import { AppShell } from "../components/layout";
 
 export default function HomePage() {
-  return <PennyShell />;
+  return <AppShell />;
 }

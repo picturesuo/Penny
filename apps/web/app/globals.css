@@ -937,6 +937,71 @@ textarea {
 }
 
 @media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    position: static;
+    height: auto;
+    gap: var(--space-4);
+    border-right: 0;
+    border-bottom: var(--border-subtle);
+  }
+
+  .app-sidebar__nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .app-sidebar__link {
+    justify-content: center;
+  }
+
+  .app-sidebar__section {
+    display: none;
+  }
+
+  .top-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    padding: var(--space-4);
+  }
+
+  .top-toolbar__actions {
+    justify-content: stretch;
+  }
+
+  .top-toolbar__actions .ui-button {
+    flex: 1 1 auto;
+  }
+
+  .top-toolbar__search {
+    width: 100%;
+  }
+
+  .workspace-layout,
+  .workspace-grid,
+  .workspace-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-layout {
+    padding: var(--space-4);
+  }
+
+  .workspace-hero {
+    padding: var(--space-5);
+  }
+
+  .workspace-hero h1 {
+    font-size: var(--text-xl);
+  }
+
+  .ui-segmented {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .penny-topbar,
   .penny-breadcrumb-band {
     align-items: stretch;

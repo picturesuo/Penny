@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Penny",
-  description: "Minimal Penny restart workspace",
+  description: "Penny MVP workspace shell",
 };
 
 type RootLayoutProps = {
