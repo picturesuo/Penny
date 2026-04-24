@@ -119,6 +119,7 @@ test("createClaim emits a claim.created event for the inserted claim", async () 
   assert.equal(repository.events.length, 1);
   assert.deepEqual(repository.events[0], {
     userId: "user-1",
+    aggregateType: "claim",
     aggregateId: result.claimId,
     requestId: "request-1",
     type: "claim.created",

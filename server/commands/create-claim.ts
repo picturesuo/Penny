@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
+import { getDb } from "../db/client.ts";
+import { claims, maps, movesEvents } from "../db/schema.ts";
 
 export type CreateClaimEventType = "claim.created";
 
@@ -26,8 +29,9 @@ export type CreateClaimRecord = {
 
 export type CreateClaimEventRecord = {
   userId: string;
+  aggregateType: "claim";
   aggregateId: string;
-  requestId: string | null;
+  requestId: string;
   type: CreateClaimEventType;
   payload: {
     mapId: string;
@@ -45,6 +49,28 @@ export type CreateClaimRepositoryTx = {
 
 export type CreateClaimRepository = {
   transaction<T>(callback: (tx: CreateClaimRepositoryTx) => Promise<T>): Promise<T>;
+};
+
+type CreateClaimDbRow = {
+  id: string;
+  userId: string;
+};
+
+type CreateClaimDbTx = {
+  select: (...args: unknown[]) => {
+    from: (table: unknown) => {
+      where: (condition: unknown) => {
+        limit: (count: number) => Promise<CreateClaimDbRow[]>;
+      };
+    };
+  };
+  insert: (table: unknown) => {
+    values: (value: Record<string, unknown>) => Promise<unknown>;
+  };
+};
+
+type CreateClaimDb = {
+  transaction<T>(callback: (tx: CreateClaimDbTx) => Promise<T>): Promise<T>;
 };
 
 export type CreateClaimResult = {
@@ -136,6 +162,19 @@ function readOptionalString(
   return trimmed;
 }
 
+function isCreateClaimRepositoryTx(value: unknown): value is CreateClaimRepositoryTx {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "findOwnedMap" in value &&
+      typeof (value as CreateClaimRepositoryTx).findOwnedMap === "function" &&
+      "insertClaim" in value &&
+      typeof (value as CreateClaimRepositoryTx).insertClaim === "function" &&
+      "insertMoveEvent" in value &&
+      typeof (value as CreateClaimRepositoryTx).insertMoveEvent === "function",
+  );
+}
+
 export function validateCreateClaimInput(input: unknown): NormalizedCreateClaimInput {
   const object = asObject(input);
 
@@ -152,7 +191,7 @@ export function validateCreateClaimInput(input: unknown): NormalizedCreateClaimI
 
 export async function createClaim(
   input: unknown,
-  repository: CreateClaimRepository,
+  repository: CreateClaimRepository | CreateClaimDb = getDb(),
   dependencies: CreateClaimDependencies = {},
 ): Promise<CreateClaimResult> {
   const normalized = validateCreateClaimInput(input);
@@ -160,10 +199,21 @@ export async function createClaim(
   const now = dependencies.now ?? (() => new Date());
 
   return repository.transaction(async (tx) => {
-    const ownedMap = await tx.findOwnedMap({
-      mapId: normalized.mapId,
-      userId: normalized.userId,
-    });
+    const ownedMap = isCreateClaimRepositoryTx(tx)
+      ? await tx.findOwnedMap({
+          mapId: normalized.mapId,
+          userId: normalized.userId,
+        })
+      : (
+          await tx
+            .select({
+              id: maps.id,
+              userId: maps.userId,
+            })
+            .from(maps)
+            .where(and(eq(maps.id, normalized.mapId), eq(maps.userId, normalized.userId)))
+            .limit(1)
+        )[0] ?? null;
 
     if (!ownedMap) {
       throw new CreateClaimMapNotFoundError(normalized.mapId);
@@ -171,31 +221,61 @@ export async function createClaim(
 
     const timestamp = now();
     const claimId = createId();
+    const requestId = normalized.requestId ?? createId();
 
-    await tx.insertClaim({
-      id: claimId,
-      userId: normalized.userId,
-      mapId: ownedMap.id,
-      text: normalized.text,
-      note: normalized.note,
-      parentClaimId: normalized.parentClaimId,
-      kind: normalized.kind,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    });
-
-    await tx.insertMoveEvent({
-      userId: normalized.userId,
-      aggregateId: claimId,
-      requestId: normalized.requestId,
-      type: "claim.created",
-      payload: {
+    if (isCreateClaimRepositoryTx(tx)) {
+      await tx.insertClaim({
+        id: claimId,
+        userId: normalized.userId,
         mapId: ownedMap.id,
+        text: normalized.text,
+        note: normalized.note,
         parentClaimId: normalized.parentClaimId,
         kind: normalized.kind,
-      },
-      createdAt: timestamp,
-    });
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+
+      await tx.insertMoveEvent({
+        userId: normalized.userId,
+        aggregateType: "claim",
+        aggregateId: claimId,
+        requestId,
+        type: "claim.created",
+        payload: {
+          mapId: ownedMap.id,
+          parentClaimId: normalized.parentClaimId,
+          kind: normalized.kind,
+        },
+        createdAt: timestamp,
+      });
+    } else {
+      await tx.insert(claims).values({
+        id: claimId,
+        mapId: ownedMap.id,
+        userId: normalized.userId,
+        body: normalized.text,
+        confidenceBps: 0,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+
+      await tx.insert(movesEvents).values({
+        userId: normalized.userId,
+        aggregateType: "claim",
+        aggregateId: claimId,
+        requestId,
+        type: "claim.created",
+        payloadJson: {
+          mapId: ownedMap.id,
+          parentClaimId: normalized.parentClaimId,
+          kind: normalized.kind,
+          note: normalized.note,
+          text: normalized.text,
+        },
+        createdAt: timestamp,
+      });
+    }
 
     return {
       claimId,
