@@ -41,6 +41,14 @@ test("generateChallengeCritique uses injected mocked provider functions in tests
   const providerCalls: string[] = [];
 
   applyCommonTestDeps();
+  generateChallengeCritiqueDeps.resolveModelPolicy = () => [
+    {
+      provider: "anthropic",
+      model: "claude-test",
+      promptVersion: "generateChallengeCritique.v1",
+      tier: "default",
+    },
+  ];
   generateChallengeCritiqueDeps.invokeAnthropicStructured = async () => {
     providerCalls.push("anthropic");
     return {
@@ -80,11 +88,25 @@ test("generateChallengeCritique uses injected mocked provider functions in tests
   }
 });
 
-test("generateChallengeCritique falls back from the default Anthropic route to the xAI fallback route", async () => {
+test("generateChallengeCritique can fall back from an injected Anthropic route to an injected xAI route", async () => {
   const originalDeps = snapshotDeps();
   const providerCalls: string[] = [];
 
   applyCommonTestDeps();
+  generateChallengeCritiqueDeps.resolveModelPolicy = () => [
+    {
+      provider: "anthropic",
+      model: "claude-test",
+      promptVersion: "generateChallengeCritique.v1",
+      tier: "default",
+    },
+    {
+      provider: "xai",
+      model: "grok-test",
+      promptVersion: "generateChallengeCritique.v1",
+      tier: "fallback",
+    },
+  ];
   generateChallengeCritiqueDeps.invokeAnthropicStructured = async () => {
     providerCalls.push("anthropic");
     throw new Error("Anthropic unavailable");
@@ -128,7 +150,7 @@ test("generateChallengeCritique falls back from the default Anthropic route to t
 
     assert.deepEqual(providerCalls, ["anthropic", "xai"]);
     assert.equal(result.provider, "xai");
-    assert.equal(result.model, "grok-4.20");
+    assert.equal(result.model, "grok-test");
     assert.equal(result.repaired, false);
     assert.equal(result.fallbackUsed, true);
     assert.equal(result.traceId, "trace-123");
@@ -143,56 +165,25 @@ test("generateChallengeCritique falls back from the default Anthropic route to t
   }
 });
 
-test("generateChallengeCritique succeeds without any database configuration when providers are mocked", async () => {
+test("generateChallengeCritique succeeds without database configuration on the default mock path", async () => {
   const originalDeps = snapshotDeps();
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousDatabaseDirectUrl = process.env.DATABASE_DIRECT_URL;
+  const previousOpenAIKey = process.env.OPENAI_API_KEY;
 
   applyCommonTestDeps();
   delete process.env.DATABASE_URL;
   delete process.env.DATABASE_DIRECT_URL;
-  generateChallengeCritiqueDeps.invokeAnthropicStructured = async () => ({
-    output: {
-      summary: "The claim may overfit to a founder-supported pilot cohort.",
-      strongestCounterargument:
-        "The observed retention lift may come from unusually motivated early users rather than a durable product effect.",
-      assumptions: [
-        "Pilot users resemble the broader target segment.",
-        "Manual onboarding is not doing most of the retention work.",
-      ],
-      failureModes: [
-        "Retention falls once founder-led onboarding is removed.",
-        "Only the most motivated users sustain the behavior change.",
-      ],
-      followUpQuestions: [
-        "What happens to retention when onboarding becomes fully self-serve?",
-        "Which user segment falsifies this claim fastest?",
-      ],
-      suggestedConfidenceBps: 4700,
-      uncertaintyNote: "The current evidence is directionally useful but still narrow.",
-    },
-    usage: {
-      inputTokens: 50,
-      outputTokens: 30,
-      totalTokens: 80,
-    },
-    cost: {
-      totalUsd: 0.004,
-      currency: "USD",
-    },
-  });
-  generateChallengeCritiqueDeps.invokeXaiStructured = async () => {
-    throw new Error("xai should not be called");
-  };
+  delete process.env.OPENAI_API_KEY;
 
   try {
     const result = await generateChallengeCritique({
       claimText: validInput.claimText,
     });
 
-    assert.equal(result.provider, "anthropic");
+    assert.equal(result.provider, "mock");
     assert.equal(result.fallbackUsed, false);
-    assert.equal(result.critique.summary, "The claim may overfit to a founder-supported pilot cohort.");
+    assert.match(result.critique.summary, /Weekly active usage will keep climbing/);
   } finally {
     if (previousDatabaseUrl === undefined) {
       delete process.env.DATABASE_URL;
@@ -204,6 +195,12 @@ test("generateChallengeCritique succeeds without any database configuration when
       delete process.env.DATABASE_DIRECT_URL;
     } else {
       process.env.DATABASE_DIRECT_URL = previousDatabaseDirectUrl;
+    }
+
+    if (previousOpenAIKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = previousOpenAIKey;
     }
 
     restoreDeps(originalDeps);

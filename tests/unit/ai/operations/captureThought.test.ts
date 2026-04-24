@@ -223,3 +223,34 @@ test("captureThought returns a structured failure after provider exhaustion", as
     restoreDeps(originalDeps);
   }
 });
+
+test("captureThought uses deterministic mock output by default when OPENAI_API_KEY is absent", async () => {
+  const originalDeps = snapshotDeps();
+  const previousOpenAIKey = process.env.OPENAI_API_KEY;
+
+  delete process.env.OPENAI_API_KEY;
+
+  try {
+    const result = await captureThought({
+      text: "Penny should make every claim easy to challenge before the investor demo.",
+    });
+
+    assert.equal(result.meta.provider, "mock");
+    assert.equal(result.meta.model, "mock-demo");
+    assert.equal(result.meta.validationResult, "valid");
+    assert.equal(result.thought.title, "Penny Should Make Every Claim Easy");
+    assert.equal(result.claims.length, 2);
+  } finally {
+    restoreEnv("OPENAI_API_KEY", previousOpenAIKey);
+    restoreDeps(originalDeps);
+  }
+});
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}

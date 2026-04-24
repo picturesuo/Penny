@@ -6,49 +6,50 @@ import {
   selectModelForOperation,
 } from "../../server/ai/routing/modelPolicy.ts";
 
-test("selectModelForOperation returns Claude by default for generateChallengeCritique", () => {
-  const previousClaude = process.env.ANTHROPIC_CHALLENGE_MODEL;
+test("selectModelForOperation returns mock by default when OpenAI is not configured", () => {
+  const previousOpenAIKey = process.env.OPENAI_API_KEY;
+  const previousMockModel = process.env.MOCK_AI_MODEL;
 
   try {
-    delete process.env.ANTHROPIC_CHALLENGE_MODEL;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.MOCK_AI_MODEL;
 
     const selection = selectModelForOperation("generateChallengeCritique");
 
     assert.deepEqual(selection, {
       operationName: "generateChallengeCritique",
-      provider: "anthropic",
-      model: "claude-sonnet-4-20250514",
+      provider: "mock",
+      model: "mock-demo",
       qualityTier: "default",
     });
   } finally {
-    if (previousClaude === undefined) {
-      delete process.env.ANTHROPIC_CHALLENGE_MODEL;
-    } else {
-      process.env.ANTHROPIC_CHALLENGE_MODEL = previousClaude;
-    }
+    restoreEnv("OPENAI_API_KEY", previousOpenAIKey);
+    restoreEnv("MOCK_AI_MODEL", previousMockModel);
   }
 });
 
-test("selectModelForOperation returns Grok for the fallback tier", () => {
-  const previousFallback = process.env.XAI_CHALLENGE_FALLBACK_MODEL;
+test("selectModelForOperation returns OpenAI when configured", () => {
+  const previousOpenAIKey = process.env.OPENAI_API_KEY;
+  const previousOpenAIModel = process.env.OPENAI_MODEL;
+  const previousChallengeModel = process.env.OPENAI_CHALLENGE_MODEL;
 
   try {
-    delete process.env.XAI_CHALLENGE_FALLBACK_MODEL;
+    process.env.OPENAI_API_KEY = "sk-test";
+    process.env.OPENAI_MODEL = "gpt-shared-test";
+    process.env.OPENAI_CHALLENGE_MODEL = "gpt-challenge-test";
 
     const selection = selectModelForOperation("generateChallengeCritique", "fallback");
 
     assert.deepEqual(selection, {
       operationName: "generateChallengeCritique",
-      provider: "xai",
-      model: "grok-4.20",
+      provider: "openai",
+      model: "gpt-challenge-test",
       qualityTier: "fallback",
     });
   } finally {
-    if (previousFallback === undefined) {
-      delete process.env.XAI_CHALLENGE_FALLBACK_MODEL;
-    } else {
-      process.env.XAI_CHALLENGE_FALLBACK_MODEL = previousFallback;
-    }
+    restoreEnv("OPENAI_API_KEY", previousOpenAIKey);
+    restoreEnv("OPENAI_MODEL", previousOpenAIModel);
+    restoreEnv("OPENAI_CHALLENGE_MODEL", previousChallengeModel);
   }
 });
 
@@ -60,3 +61,12 @@ test("selectModelForOperation fails safely for an unknown operation", () => {
       error.message === "No model policy is defined for operation: unknownOperation",
   );
 });
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}

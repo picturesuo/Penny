@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 import {
+  canGenerateChallengeCritiqueNow,
   generateChallengeCritique,
   generateChallengeCritiqueDeps,
 } from "../../../../server/ai/operations/generateChallengeCritique.ts";
@@ -173,12 +174,15 @@ test("generateChallengeCritique sends the canonical prompt/schema contract and r
     assert.equal(result.meta.repairAttempted, false);
     assert.equal(capturedQualityTier, "cheap");
 
-    assert.equal(capturedRequest?.schemaName, "generateChallengeCritique");
-    assert.match(String(capturedRequest?.userPrompt), /"summary": "string"/);
-    assert.match(String(capturedRequest?.userPrompt), /"suggestedConfidenceBps": "integer\|null"/);
-    assert.doesNotMatch(String(capturedRequest?.userPrompt), /conciseCritiqueSummary/);
+    const requestForAssertions = capturedRequest as Record<string, unknown> | null;
+
+    assert.ok(requestForAssertions);
+    assert.equal(requestForAssertions.schemaName, "generateChallengeCritique");
+    assert.match(String(requestForAssertions.userPrompt), /"summary": "string"/);
+    assert.match(String(requestForAssertions.userPrompt), /"suggestedConfidenceBps": "integer\|null"/);
+    assert.doesNotMatch(String(requestForAssertions.userPrompt), /conciseCritiqueSummary/);
     assert.deepEqual(
-      (capturedRequest?.jsonSchema as { required?: unknown[] }).required,
+      (requestForAssertions.jsonSchema as { required?: unknown[] }).required,
       [
         "summary",
         "strongestCounterargument",
@@ -438,6 +442,29 @@ test("generateChallengeCritique returns a structured failure when all providers 
   }
 });
 
+test("generateChallengeCritique uses deterministic mock output by default when OPENAI_API_KEY is absent", async () => {
+  const originalDeps = snapshotDeps();
+  const previousOpenAIKey = process.env.OPENAI_API_KEY;
+
+  delete process.env.OPENAI_API_KEY;
+  applyCommonTestDeps();
+
+  try {
+    const result = await generateChallengeCritique(validInput);
+
+    assert.equal(canGenerateChallengeCritiqueNow(), true);
+    assert.equal(result.provider, "mock");
+    assert.equal(result.model, "mock-demo");
+    assert.equal(result.meta.provider, "mock");
+    assert.equal(result.meta.validationResult, "valid");
+    assert.match(result.critique.summary, /Weekly active usage will keep climbing/);
+    assert.equal(result.fallbackUsed, false);
+  } finally {
+    restoreEnv("OPENAI_API_KEY", previousOpenAIKey);
+    restoreDeps(originalDeps);
+  }
+});
+
 test("generateChallengeCritique does not import or require DB write paths", () => {
   const operationSource = readFileSync(
     resolve(process.cwd(), "server/ai/operations/generateChallengeCritique.ts"),
@@ -446,3 +473,12 @@ test("generateChallengeCritique does not import or require DB write paths", () =
 
   assert.doesNotMatch(operationSource, /server\/db|from "\.\.\/\.\.\/db|from "\.\.\/db|insertMoveEvent|updateChallengeCritique|getDb/);
 });
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
 import {
-  canGenerateChallengeCritiqueNow,
+  canAutoGenerateChallengeCritiqueNow,
   generateChallengeCritique as generateChallengeCritiqueOperation,
   type ChallengeResponsePath,
   type GenerateChallengeCritiquePreviousRound,
@@ -907,6 +907,7 @@ export async function requestChallengeCritique(
   dependencies: RequestChallengeCritiqueDependencies = {},
 ): Promise<RequestChallengeCritiqueResult> {
   const normalized = validateRequestChallengeCritiqueInput(input);
+  const repositoryWasProvided = arguments.length >= 2;
   const createId = dependencies.createId ?? randomUUID;
   const now = dependencies.now ?? (() => new Date());
   const transactionalRepository = repository as RequestChallengeCritiqueTransactional;
@@ -1020,7 +1021,7 @@ export async function requestChallengeCritique(
       createdAt: commandContext.now,
     });
 
-    if (hasSelectQuery(tx) && canGenerateChallengeCritiqueNow()) {
+    if (repositoryWasProvided && hasSelectQuery(tx) && canAutoGenerateChallengeCritiqueNow()) {
       await bridgeGenerateCritique(tx, {
         critiqueId,
         roundId: targetRound.id,

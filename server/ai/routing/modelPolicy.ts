@@ -1,6 +1,6 @@
 export type ModelPolicyOperationName = "captureThought" | "generateChallengeCritique" | (string & {});
 export type ModelPolicyQualityTier = "default" | "fallback" | "cheap";
-export type ModelPolicyProviderName = "anthropic" | "xai";
+export type ModelPolicyProviderName = "anthropic" | "mock" | "openai" | "xai";
 
 export type ModelSelection = {
   operationName: string;
@@ -16,13 +16,35 @@ export class UnknownModelPolicyOperationError extends Error {
   }
 }
 
-const DEFAULT_CLAUDE_SONNET_MODEL = "claude-sonnet-4-20250514";
-const DEFAULT_GROK_MODEL = "grok-4.20";
-const DEFAULT_GROK_FAST_MODEL = "grok-4-fast";
+const DEFAULT_OPENAI_MODEL = "gpt-5.4";
+const DEFAULT_MOCK_MODEL = "mock-demo";
 
 function readEnvOverride(value: string | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function hasOpenAIKey(): boolean {
+  return Boolean(readEnvOverride(process.env.OPENAI_API_KEY));
+}
+
+function selectConfiguredProviderModel(operationName: ModelPolicyOperationName): Pick<ModelSelection, "model" | "provider"> {
+  if (!hasOpenAIKey()) {
+    return {
+      provider: "mock",
+      model: readEnvOverride(process.env.MOCK_AI_MODEL) ?? DEFAULT_MOCK_MODEL,
+    };
+  }
+
+  const operationModelEnvName = operationName === "captureThought" ? "OPENAI_CAPTURE_MODEL" : "OPENAI_CHALLENGE_MODEL";
+
+  return {
+    provider: "openai",
+    model:
+      readEnvOverride(process.env[operationModelEnvName]) ??
+      readEnvOverride(process.env.OPENAI_MODEL) ??
+      DEFAULT_OPENAI_MODEL,
+  };
 }
 
 export function selectModelForOperation(
@@ -33,34 +55,25 @@ export function selectModelForOperation(
     throw new UnknownModelPolicyOperationError(operationName);
   }
 
-  const anthropicEnvName = operationName === "captureThought" ? "ANTHROPIC_CAPTURE_MODEL" : "ANTHROPIC_CHALLENGE_MODEL";
-  const xaiFallbackEnvName = operationName === "captureThought" ? "XAI_CAPTURE_FALLBACK_MODEL" : "XAI_CHALLENGE_FALLBACK_MODEL";
-
   if (qualityTier === "cheap") {
-    return {
-      operationName,
-      provider: "xai",
-      model:
-        readEnvOverride(process.env.XAI_FAST_MODEL) ??
-        readEnvOverride(process.env[xaiFallbackEnvName]) ??
-        DEFAULT_GROK_MODEL,
-      qualityTier,
-    };
+    const selection = selectConfiguredProviderModel(operationName);
+    return { operationName, ...selection, qualityTier };
   }
 
   if (qualityTier === "default") {
-    return {
-      operationName,
-      provider: "anthropic",
-      model: readEnvOverride(process.env[anthropicEnvName]) ?? DEFAULT_CLAUDE_SONNET_MODEL,
-      qualityTier,
-    };
+    const selection = selectConfiguredProviderModel(operationName);
+    return { operationName, ...selection, qualityTier };
+  }
+
+  if (hasOpenAIKey()) {
+    const selection = selectConfiguredProviderModel(operationName);
+    return { operationName, ...selection, qualityTier: "fallback" };
   }
 
   return {
     operationName,
-    provider: "xai",
-    model: readEnvOverride(process.env[xaiFallbackEnvName]) ?? DEFAULT_GROK_MODEL,
+    provider: "mock",
+    model: readEnvOverride(process.env.MOCK_AI_MODEL) ?? DEFAULT_MOCK_MODEL,
     qualityTier: "fallback",
   };
 }

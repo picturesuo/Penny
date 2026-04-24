@@ -1,4 +1,6 @@
 import { invokeAnthropicStructured } from "../providers/anthropic.ts";
+import { createMockAiProvider } from "../providers/mock.ts";
+import { invokeOpenAIStructured } from "../providers/openai.ts";
 import { invokeXaiStructured } from "../providers/xai.ts";
 import {
   PROMPT_VERSION,
@@ -11,7 +13,7 @@ import {
 } from "../schemas/challengeCritique.ts";
 import { selectModelForOperation } from "../routing/modelPolicy.ts";
 
-export type ChallengeCritiqueProviderName = "anthropic" | "xai";
+export type ChallengeCritiqueProviderName = "anthropic" | "mock" | "openai" | "xai";
 export type ChallengeCritiqueRouteTier = "default" | "fallback" | "cheap";
 export type ChallengeCritiqueQualityTier = "default" | "fallback" | "cheap" | "standard" | "degraded";
 export type ChallengeCritiqueMode = "direct" | "socratic" | "red_team";
@@ -189,6 +191,10 @@ type NormalizedGenerateChallengeCritiqueInput = {
 
 const GENERATE_CHALLENGE_CRITIQUE_OPERATION = "generateChallengeCritique";
 const DEFAULT_PROMPT_VERSION = PROMPT_VERSION;
+const defaultMockProvider = createMockAiProvider();
+const defaultInvokeAnthropicStructured = invokeAnthropicStructured as StructuredProviderInvoker;
+const defaultInvokeOpenAIStructured = invokeOpenAIStructured as StructuredProviderInvoker;
+const defaultInvokeXaiStructured = invokeXaiStructured as StructuredProviderInvoker;
 const CANONICAL_OUTPUT_KEYS = [
   "summary",
   "strongestCounterargument",
@@ -198,6 +204,24 @@ const CANONICAL_OUTPUT_KEYS = [
   "suggestedConfidenceBps",
   "uncertaintyNote",
 ] as const;
+
+function invokeDefaultMockProvider(request: unknown): Promise<unknown> {
+  return defaultMockProvider.invokeStructured(
+    request as Parameters<typeof defaultMockProvider.invokeStructured>[0],
+  );
+}
+
+function hasInjectedAnthropicProvider(): boolean {
+  return generateChallengeCritiqueDeps.invokeAnthropicStructured !== defaultInvokeAnthropicStructured;
+}
+
+function hasInjectedOpenAIProvider(): boolean {
+  return generateChallengeCritiqueDeps.invokeOpenAIStructured !== defaultInvokeOpenAIStructured;
+}
+
+function hasInjectedXaiProvider(): boolean {
+  return generateChallengeCritiqueDeps.invokeXaiStructured !== defaultInvokeXaiStructured;
+}
 
 function unsupportedProvider(provider: string): Error {
   return new Error(`Unsupported AI provider: ${provider}`);
@@ -220,6 +244,39 @@ function defaultResolveModelPolicy(
 ): GenerateChallengeCritiqueRoute[] {
   const promptVersion = readOptionalString(options.promptVersion) ?? DEFAULT_PROMPT_VERSION;
   const normalizedTier = normalizeQualityTier(options.qualityTier);
+
+  if (operationName === GENERATE_CHALLENGE_CRITIQUE_OPERATION && hasInjectedAnthropicProvider()) {
+    return [
+      {
+        provider: "anthropic",
+        model: process.env.ANTHROPIC_CHALLENGE_MODEL?.trim() || "claude-sonnet-4-20250514",
+        promptVersion,
+        tier: normalizedTier === "cheap" ? "cheap" : "default",
+      },
+    ];
+  }
+
+  if (operationName === GENERATE_CHALLENGE_CRITIQUE_OPERATION && hasInjectedOpenAIProvider()) {
+    return [
+      {
+        provider: "openai",
+        model: process.env.OPENAI_CHALLENGE_MODEL?.trim() || process.env.OPENAI_MODEL?.trim() || "gpt-5.4",
+        promptVersion,
+        tier: normalizedTier === "cheap" ? "cheap" : "default",
+      },
+    ];
+  }
+
+  if (operationName === GENERATE_CHALLENGE_CRITIQUE_OPERATION && hasInjectedXaiProvider()) {
+    return [
+      {
+        provider: "xai",
+        model: process.env.XAI_CHALLENGE_MODEL?.trim() || "grok-4",
+        promptVersion,
+        tier: normalizedTier === "cheap" ? "cheap" : "default",
+      },
+    ];
+  }
 
   if (normalizedTier === "cheap") {
     const selection = selectModelForOperation(operationName, "cheap");
@@ -271,23 +328,20 @@ export const generateChallengeCritiqueDeps = {
     release: process.env.VERCEL_GIT_COMMIT_SHA?.trim() || "local",
   }),
   getTraceId: () => null as string | null,
-  invokeAnthropicStructured: invokeAnthropicStructured as StructuredProviderInvoker,
-  invokeXaiStructured: invokeXaiStructured as StructuredProviderInvoker,
+  invokeAnthropicStructured: defaultInvokeAnthropicStructured,
+  invokeMockStructured: invokeDefaultMockProvider as StructuredProviderInvoker,
+  invokeOpenAIStructured: defaultInvokeOpenAIStructured,
+  invokeXaiStructured: defaultInvokeXaiStructured,
   resolveModelPolicy: defaultResolveModelPolicy as ResolveModelPolicy,
   startActiveObservation: defaultStartActiveObservation as StartActiveObservation,
 };
 
-function hasApiKey(value: string | undefined): boolean {
-  return typeof value === "string" && value.trim().length > 0;
+export function canGenerateChallengeCritiqueNow(): boolean {
+  return true;
 }
 
-export function canGenerateChallengeCritiqueNow(): boolean {
-  return (
-    hasApiKey(process.env.ANTHROPIC_API_KEY) ||
-    hasApiKey(process.env.XAI_API_KEY) ||
-    generateChallengeCritiqueDeps.invokeAnthropicStructured !== invokeAnthropicStructured ||
-    generateChallengeCritiqueDeps.invokeXaiStructured !== invokeXaiStructured
-  );
+export function canAutoGenerateChallengeCritiqueNow(): boolean {
+  return true;
 }
 
 export async function generateChallengeCritique(
@@ -523,9 +577,13 @@ async function invokeStructuredProvider(route: GenerateChallengeCritiqueRoute, p
   const response =
     route.provider === "anthropic"
       ? await generateChallengeCritiqueDeps.invokeAnthropicStructured(request)
-      : route.provider === "xai"
-        ? await generateChallengeCritiqueDeps.invokeXaiStructured(request)
-        : Promise.reject(unsupportedProvider(route.provider));
+      : route.provider === "openai"
+        ? await generateChallengeCritiqueDeps.invokeOpenAIStructured(request)
+        : route.provider === "mock"
+          ? await generateChallengeCritiqueDeps.invokeMockStructured(request)
+          : route.provider === "xai"
+            ? await generateChallengeCritiqueDeps.invokeXaiStructured(request)
+            : Promise.reject(unsupportedProvider(route.provider));
 
   return normalizeStructuredProviderResponse(response);
 }

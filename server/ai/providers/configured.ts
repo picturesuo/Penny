@@ -2,9 +2,7 @@ import { createMockAiProvider } from "./mock.ts";
 import { openAIProvider } from "./openai.ts";
 import type { AiProvider } from "./types.ts";
 
-export type AIProviderEnvironment = {
-  OPENAI_API_KEY?: string;
-};
+export type AIProviderEnvironment = Record<string, string | undefined>;
 
 export function createConfiguredAiProvider(env: AIProviderEnvironment = process.env): AiProvider {
   if (hasOpenAIKey(env)) {

@@ -3,12 +3,14 @@ import { and, eq } from "drizzle-orm";
 import { getDb, type DbClient } from "../../db/client.ts";
 import { activityEvents, aiJobs, graphNodes, maps, thoughts, workspaceContexts } from "../../db/schema.ts";
 import { invokeAnthropicStructured } from "../providers/anthropic.ts";
+import { createMockAiProvider } from "../providers/mock.ts";
+import { invokeOpenAIStructured } from "../providers/openai.ts";
 import { invokeXaiStructured } from "../providers/xai.ts";
 import { PROMPT_VERSION, buildCaptureThoughtPrompt } from "../prompts/captureThought/v1.ts";
 import { selectModelForOperation } from "../routing/modelPolicy.ts";
 import { CaptureThoughtOutputSchema, type CaptureThoughtOutput } from "../schemas/captureThought.ts";
 
-export type CaptureThoughtProviderName = "anthropic" | "xai";
+export type CaptureThoughtProviderName = "anthropic" | "mock" | "openai" | "xai";
 export type CaptureThoughtQualityTier = "default" | "fallback" | "cheap";
 
 export type CaptureThoughtInput = {
@@ -137,6 +139,13 @@ type ResolveModelPolicy = (
 const CAPTURE_THOUGHT_OPERATION = "captureThought";
 const DEFAULT_PROMPT_VERSION = PROMPT_VERSION;
 const CAPTURE_THOUGHT_OUTPUT_KEYS = ["thought", "claims"] as const;
+const defaultMockProvider = createMockAiProvider();
+
+function invokeDefaultMockProvider(request: unknown): Promise<unknown> {
+  return defaultMockProvider.invokeStructured(
+    request as Parameters<typeof defaultMockProvider.invokeStructured>[0],
+  );
+}
 
 function defaultResolveModelPolicy(
   operationName: string,
@@ -178,6 +187,8 @@ function defaultResolveModelPolicy(
 
 export const captureThoughtDeps = {
   invokeAnthropicStructured: invokeAnthropicStructured as StructuredProviderInvoker,
+  invokeMockStructured: invokeDefaultMockProvider as StructuredProviderInvoker,
+  invokeOpenAIStructured: invokeOpenAIStructured as StructuredProviderInvoker,
   invokeXaiStructured: invokeXaiStructured as StructuredProviderInvoker,
   resolveModelPolicy: defaultResolveModelPolicy as ResolveModelPolicy,
 };
@@ -525,9 +536,13 @@ async function invokeStructuredProvider(route: CaptureThoughtRoute, prompt: Prom
   const response =
     route.provider === "anthropic"
       ? await captureThoughtDeps.invokeAnthropicStructured(request)
-      : route.provider === "xai"
-        ? await captureThoughtDeps.invokeXaiStructured(request)
-        : Promise.reject(new Error(`Unsupported AI provider: ${route.provider}`));
+      : route.provider === "openai"
+        ? await captureThoughtDeps.invokeOpenAIStructured(request)
+        : route.provider === "mock"
+          ? await captureThoughtDeps.invokeMockStructured(request)
+          : route.provider === "xai"
+            ? await captureThoughtDeps.invokeXaiStructured(request)
+            : Promise.reject(new Error(`Unsupported AI provider: ${route.provider}`));
 
   return normalizeStructuredProviderResponse(response);
 }

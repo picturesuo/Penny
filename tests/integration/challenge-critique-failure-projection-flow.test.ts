@@ -23,10 +23,10 @@ import {
 import { createDbClient } from "../../server/db/client.ts";
 import { challengeRounds, claims, movesEvents } from "../../server/db/schema.ts";
 
-const PG_PORT = 62100 + Math.floor(Math.random() * 1000);
 const PG_USER = "postgres";
 const DB_NAME = "penny_challenge_critique_failure_projection_flow_test";
 const PGDATA_DIR = mkdtempSync(join(tmpdir(), "penny-pgdata-challenge-critique-failure-projection-flow-"));
+let PG_PORT = 62100 + Math.floor(Math.random() * 1000);
 
 function run(command: string, args: string[], env?: NodeJS.ProcessEnv) {
   execFileSync(command, args, {
@@ -83,8 +83,24 @@ function requestWithUser(url: string, userId: string) {
   });
 }
 
+function startPostgres() {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    try {
+      run("pg_ctl", ["-D", PGDATA_DIR, "-l", join(PGDATA_DIR, "postgres.log"), "-o", `-p ${PG_PORT}`, "start"]);
+      return;
+    } catch (error) {
+      lastError = error;
+      PG_PORT += 1;
+    }
+  }
+
+  throw lastError;
+}
+
 run("initdb", ["-D", PGDATA_DIR, "-U", PG_USER, "-A", "trust"]);
-run("pg_ctl", ["-D", PGDATA_DIR, "-l", join(PGDATA_DIR, "postgres.log"), "-o", `-p ${PG_PORT}`, "start"]);
+startPostgres();
 run("createdb", ["-h", "127.0.0.1", "-p", String(PG_PORT), "-U", PG_USER, DB_NAME]);
 
 const databaseUrl = `postgresql://${PG_USER}@127.0.0.1:${PG_PORT}/${DB_NAME}`;
@@ -156,7 +172,6 @@ test("AI failure does not corrupt the challenge round or critique projection", a
         roundId: round.roundId,
         requestId: "failure-flow-request",
       },
-      db,
     );
 
     assert.equal(requestedCritique.critiqueStatus, "pending");
