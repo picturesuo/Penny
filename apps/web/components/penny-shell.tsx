@@ -2,6 +2,9 @@
 
 import { useEffect, useState, useTransition } from "react";
 
+import { ChallengeExperience, type ChallengeResponsePath } from "./challenge/challenge-experience";
+import { LearnExperience } from "./learn/learn-experience";
+
 type WorkspaceMode = "brain" | "challenge" | "learn";
 type WorkspaceCommandMode = "Brain" | "Challenge" | "Learn";
 
@@ -473,7 +476,7 @@ export function PennyShell() {
     }
   }
 
-  async function recordChallengeResponse(roundId: string, response: string) {
+  async function recordChallengeResponse(roundId: string, response: string, responsePath: ChallengeResponsePath = "defend") {
     setActionState({
       status: "pending",
       message: "Recording challenge response.",
@@ -483,7 +486,7 @@ export function PennyShell() {
       await postCommand("/api/commands/challenge/respond", {
         roundId,
         response,
-        responsePath: "direct",
+        responsePath,
         requestId: createRequestId("challenge-response"),
       });
       setActionState({
@@ -584,7 +587,7 @@ function ProjectionContent({
   actionState: ActionState;
   mode: WorkspaceMode;
   onCreateClaim: (text: string) => Promise<void>;
-  onRecordChallengeResponse: (roundId: string, response: string) => Promise<void>;
+  onRecordChallengeResponse: (roundId: string, response: string, responsePath: ChallengeResponsePath) => Promise<void>;
   onRequestCritique: (roundId: string) => Promise<void>;
   onSelectClaim: (claimId: string) => Promise<void>;
   onStartChallenge: (claimId: string) => Promise<void>;
@@ -592,7 +595,7 @@ function ProjectionContent({
 }) {
   if (mode === "challenge") {
     return (
-      <ChallengeProjection
+      <ChallengeExperience
         actionState={actionState}
         onRecordResponse={onRecordChallengeResponse}
         onRequestCritique={onRequestCritique}
@@ -603,7 +606,7 @@ function ProjectionContent({
   }
 
   if (mode === "learn") {
-    return <LearnProjection view={view as LearnView} />;
+    return <LearnExperience view={view as LearnView} />;
   }
 
   return (
@@ -680,146 +683,6 @@ function BrainProjection({
   );
 }
 
-function ChallengeProjection({
-  actionState,
-  onRecordResponse,
-  onRequestCritique,
-  onStartChallenge,
-  view,
-}: {
-  actionState: ActionState;
-  onRecordResponse: (roundId: string, response: string) => Promise<void>;
-  onRequestCritique: (roundId: string) => Promise<void>;
-  onStartChallenge: (claimId: string) => Promise<void>;
-  view: ChallengeView;
-}) {
-  const critiquePayload = view.critiqueState?.critiquePayload ?? view.critiquePayload;
-  const roundId = view.activeChallengeRound?.id ?? null;
-  const isBusy = actionState.status === "pending";
-
-  return (
-    <div className="penny-content-grid">
-      <section className="penny-panel penny-hero-panel">
-        <p className="penny-kicker">Challenge</p>
-        <h1>{view.activeClaim?.body ?? "No active claim"}</h1>
-        <p>Critique status: {view.critiqueStatus}</p>
-      </section>
-
-      <section className="penny-panel">
-        <p className="penny-kicker">Selected claim</p>
-        {view.activeClaim ? <ClaimSummary claim={view.activeClaim} /> : <p>No claim selected.</p>}
-      </section>
-
-      <section className="penny-panel">
-        <p className="penny-kicker">Challenge round</p>
-        {view.activeChallengeRound ? (
-          <dl className="penny-facts">
-            <div>
-              <dt>Round</dt>
-              <dd>{view.activeChallengeRound.id}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{view.activeChallengeRound.status}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p>No challenge round returned.</p>
-        )}
-      </section>
-
-      <section className="penny-panel">
-        <p className="penny-kicker">Actions</p>
-        {actionState.message ? (
-          <p className="penny-action-message" data-status={actionState.status}>
-            {actionState.message}
-          </p>
-        ) : null}
-        <div className="penny-action-row">
-          <button
-            type="button"
-            disabled={!view.activeClaim || isBusy}
-            onClick={() => (view.activeClaim ? onStartChallenge(view.activeClaim.id) : undefined)}
-          >
-            Start Challenge
-          </button>
-          <button type="button" disabled={!roundId || isBusy} onClick={() => (roundId ? onRequestCritique(roundId) : undefined)}>
-            Request Critique
-          </button>
-        </div>
-      </section>
-
-      <section className="penny-panel">
-        <p className="penny-kicker">Response</p>
-        <ChallengeResponseForm disabled={!roundId || isBusy} onSubmit={(response) => (roundId ? onRecordResponse(roundId, response) : Promise.resolve())} />
-      </section>
-
-      <section className="penny-panel penny-wide-panel">
-        <p className="penny-kicker">Critique</p>
-        <dl className="penny-facts">
-          <div>
-            <dt>Status</dt>
-            <dd>{view.critiqueStatus}</dd>
-          </div>
-          {view.critiqueState?.critiqueId ? (
-            <div>
-              <dt>Critique</dt>
-              <dd>{view.critiqueState.critiqueId}</dd>
-            </div>
-          ) : null}
-        </dl>
-        {view.critiqueState?.body ? (
-          <p className="penny-critique-body">{view.critiqueState.body}</p>
-        ) : (
-          <p>No critique body returned.</p>
-        )}
-        {critiquePayload ? <pre className="penny-payload">{JSON.stringify(critiquePayload, null, 2)}</pre> : null}
-      </section>
-    </div>
-  );
-}
-
-function LearnProjection({ view }: { view: LearnView }) {
-  const placeholderMessage = view.message ?? view.learnState.message;
-  const placeholderStatus = view.status ?? view.learnState.status;
-
-  return (
-    <div className="penny-content-grid">
-      <section className="penny-panel penny-hero-panel">
-        <p className="penny-kicker">Learn</p>
-        <h1>{placeholderMessage}</h1>
-        <p>Status: {placeholderStatus}</p>
-      </section>
-
-      <section className="penny-panel">
-        <p className="penny-kicker">Selected claim</p>
-        {view.selectedClaim ? <ClaimSummary claim={view.selectedClaim} /> : <p>No claim selected.</p>}
-      </section>
-
-      <section className="penny-panel penny-wide-panel">
-        <p className="penny-kicker">Placeholder</p>
-        <div className="penny-placeholder-card">
-          <h2>{placeholderMessage}</h2>
-          <dl className="penny-facts">
-            <div>
-              <dt>Status</dt>
-              <dd>{placeholderStatus}</dd>
-            </div>
-            <div>
-              <dt>Map</dt>
-              <dd>{view.selectedMapId ?? "No map selected"}</dd>
-            </div>
-            <div>
-              <dt>Claim</dt>
-              <dd>{view.selectedClaimId ?? "No claim selected"}</dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function ClaimSummary({ claim }: { claim: ClaimView }) {
   return (
     <article className="penny-claim">
@@ -863,45 +726,6 @@ function ClaimComposer({
       />
       <button type="submit" disabled={disabled || !text.trim()}>
         Create claim
-      </button>
-    </form>
-  );
-}
-
-function ChallengeResponseForm({
-  disabled,
-  onSubmit,
-}: {
-  disabled: boolean;
-  onSubmit: (response: string) => Promise<void>;
-}) {
-  const [response, setResponse] = useState("");
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = response.trim();
-
-    if (!trimmed || disabled) {
-      return;
-    }
-
-    await onSubmit(trimmed);
-    setResponse("");
-  }
-
-  return (
-    <form className="penny-claim-form" onSubmit={handleSubmit}>
-      <label htmlFor="challenge-response">Response</label>
-      <textarea
-        id="challenge-response"
-        name="response"
-        value={response}
-        onChange={(event) => setResponse(event.target.value)}
-        disabled={disabled}
-        rows={5}
-      />
-      <button type="submit" disabled={disabled || !response.trim()}>
-        Record response
       </button>
     </form>
   );

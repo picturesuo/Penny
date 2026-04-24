@@ -1,0 +1,209 @@
+.challengeLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+  gap: 16px;
+}
+
+.heroPanel {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  grid-column: 1 / -1;
+  border-color: rgba(183, 91, 22, 0.28);
+  background:
+    linear-gradient(135deg, rgba(230, 127, 30, 0.24), transparent 46%),
+    linear-gradient(225deg, rgba(73, 47, 25, 0.1), transparent 38%),
+    #fffdf7;
+}
+
+.heroPanel h1 {
+  max-width: 900px;
+}
+
+.heroPanel p {
+  max-width: 780px;
+}
+
+.kicker {
+  margin: 0 0 10px;
+  color: #9a4f0f;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.selectedClaim,
+.counterCard,
+.weaknessCard,
+.stakesCard,
+.transparencyCard,
+.cascadeCard,
+.actionsCard {
+  border-color: rgba(154, 79, 15, 0.18);
+}
+
+.selectedClaim {
+  background: #fffaf0;
+}
+
+.claimText,
+.counterCard p,
+.weaknessCard p,
+.stakesCard p,
+.cascadeCard p {
+  color: var(--penny-ink);
+}
+
+.selectedClaim span {
+  display: inline-block;
+  margin-top: 12px;
+  color: #9a4f0f;
+  font-size: 0.88rem;
+}
+
+.transparencyCard,
+.actionsCard {
+  grid-row: span 2;
+}
+
+.facts {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--penny-muted);
+  font-size: 0.76rem;
+}
+
+.facts dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.signalList {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.signalList li {
+  padding-left: 14px;
+  border-left: 3px solid #d87516;
+  color: #3a2a1d;
+  line-height: 1.5;
+}
+
+.cascadeGroup {
+  margin-top: 16px;
+}
+
+.cascadeGroup h2 {
+  margin: 0;
+  color: #3a2a1d;
+  font-size: 0.92rem;
+}
+
+.commandRow,
+.responseChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.commandRow button,
+.responseChoices button,
+.responseForm button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #2f251c;
+  color: #fffdf7;
+  cursor: pointer;
+}
+
+.commandRow button:last-child {
+  background: #b75b16;
+}
+
+.responseChoices {
+  margin-top: 18px;
+}
+
+.responseChoices button {
+  border: 1px solid rgba(183, 91, 22, 0.24);
+  background: #fff7ea;
+  color: #63340f;
+}
+
+.responseChoices button[data-active="true"] {
+  background: #b75b16;
+  color: #fffdf7;
+}
+
+.responseForm {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.responseForm label {
+  color: #63340f;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.responseForm textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(183, 91, 22, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fffdf7;
+  color: var(--penny-ink);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.responseForm button {
+  justify-self: start;
+  background: #9a4f0f;
+}
+
+.actionMessage {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+}
+
+.actionMessage[data-status="success"] {
+  color: #476b2b;
+}
+
+.actionMessage[data-status="error"] {
+  color: #9b3328;
+}
+
+.commandRow button:disabled,
+.responseChoices button:disabled,
+.responseForm textarea:disabled,
+.responseForm button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+@media (max-width: 860px) {
+  .challengeLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .transparencyCard,
+  .actionsCard {
+    grid-row: auto;
+  }
+}

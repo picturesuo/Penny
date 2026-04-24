@@ -1,0 +1,138 @@
+.learnLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+  gap: 16px;
+}
+
+.heroPanel {
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  grid-column: 1 / -1;
+  border-color: rgba(55, 112, 83, 0.24);
+  background:
+    linear-gradient(135deg, rgba(80, 134, 98, 0.24), transparent 46%),
+    linear-gradient(225deg, rgba(60, 97, 119, 0.08), transparent 38%),
+    #fbfcf7;
+}
+
+.heroPanel h1 {
+  max-width: 860px;
+}
+
+.heroPanel p {
+  max-width: 760px;
+}
+
+.kicker {
+  margin: 0 0 10px;
+  color: #2f6b55;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.selectedClaim,
+.teachBackCard,
+.stepsCard,
+.retrievalCard,
+.stateCard {
+  border-color: rgba(47, 107, 85, 0.18);
+}
+
+.selectedClaim {
+  background: #f4f8ef;
+}
+
+.claimText {
+  color: var(--penny-ink);
+}
+
+.selectedClaim span {
+  display: inline-block;
+  margin-top: 12px;
+  color: #2f6b55;
+  font-size: 0.88rem;
+}
+
+.teachBackCard {
+  display: grid;
+  gap: 10px;
+}
+
+.teachBackCard label {
+  color: #2f6b55;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.teachBackCard textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(47, 107, 85, 0.28);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fffdf7;
+  color: var(--penny-ink);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.stepList,
+.retrievalGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.stepItem,
+.retrievalItem {
+  padding: 14px;
+  border: 1px solid rgba(47, 107, 85, 0.16);
+  border-radius: 8px;
+  background: #fffdf7;
+}
+
+.stepItem h2,
+.retrievalItem h2 {
+  margin: 0;
+  color: #174c3b;
+  font-size: 0.96rem;
+}
+
+.stepItem p,
+.retrievalItem p {
+  margin: 8px 0 0;
+}
+
+.retrievalCard {
+  grid-column: 1 / -1;
+}
+
+.retrievalGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.facts {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--penny-muted);
+  font-size: 0.76rem;
+}
+
+.facts dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+  .learnLayout,
+  .retrievalGrid {
+    grid-template-columns: 1fr;
+  }
+}
