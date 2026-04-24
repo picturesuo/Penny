@@ -90,7 +90,7 @@ test("recordChallengeResponse updates the owned round status to responded", asyn
 
   assert.deepEqual(result, {
     roundId: "round-1",
-    status: "responded",
+    responseRecorded: true,
   });
 
   assert.deepEqual(repository.updatedRounds, [
@@ -193,7 +193,7 @@ test("recordChallengeResponse replays a safe duplicate response for the same req
 
   assert.deepEqual(firstResult, {
     roundId: "round-5",
-    status: "responded",
+    responseRecorded: true,
   });
   assert.deepEqual(secondResult, firstResult);
   assert.equal(repository.updatedRounds.length, 1);

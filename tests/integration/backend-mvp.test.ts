@@ -264,7 +264,7 @@ test("backend MVP commands, projections, and required event trail stay coherent"
 
     assert.deepEqual(responseResult, {
       roundId: round.roundId,
-      status: "responded",
+      responseRecorded: true,
     });
 
     const learnSelection = await setWorkspaceSelection(

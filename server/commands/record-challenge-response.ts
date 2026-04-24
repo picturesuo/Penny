@@ -95,7 +95,7 @@ type RecordChallengeResponseTransactional = {
 
 export type RecordChallengeResponseResult = {
   roundId: string;
-  status: "responded";
+  responseRecorded: true;
 };
 
 export type RecordChallengeResponseDependencies = {
@@ -289,7 +289,7 @@ export async function recordChallengeResponse(
     if (existingEvent) {
       return {
         roundId: existingEvent.aggregateId,
-        status: RESPONDED_STATUS,
+        responseRecorded: true,
       };
     }
 
@@ -365,7 +365,7 @@ export async function recordChallengeResponse(
 
     return {
       roundId: targetRound.id,
-      status: RESPONDED_STATUS,
+      responseRecorded: true,
     };
   });
 }

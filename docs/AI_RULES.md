@@ -1,18 +1,21 @@
 # AI Rules
 
-These rules define the initial server-side contract for AI work in Penny. This file is policy only. It does not imply the implementation already exists.
+These rules define Penny's first AI contract. They apply to `generateChallengeCritique` only until another operation is explicitly added.
 
-## Core rules
+## Core Rules
 
-- No model calls from UI.
-- No raw prompt logic in route handlers.
-- All outputs are schema-validated.
-- One repair pass max.
-- Provider-specific logic stays in `server/ai/providers` and `server/ai/routing`.
+- No UI model calls. Client code must call server-owned commands, routes, or operations instead of AI providers directly.
+- No raw prompts in route handlers. Prompt text and prompt payload assembly belong in `server/ai/prompts/**`.
+- All AI outputs are schema-validated before they are persisted, returned, or used by downstream code.
+- One repair pass max. If the repaired output still fails validation, the operation must fail with a structured error.
+- Provider logic only lives in `server/ai/providers/**`. Other AI modules may select or call providers, but they must not contain provider-specific transport, auth, response parsing, or error-normalization code.
 
-## Initial scope
+## Initial Operation
 
-Start with `generateChallengeCritique` only.
+- Start with `generateChallengeCritique` only.
+- The output contract lives in `server/ai/schemas/**`.
+- The prompt contract lives in `server/ai/prompts/**`.
+- Any additional operation needs its own schema, prompt version, and tests before it is wired into runtime code.
 
 ## Manual audit
 

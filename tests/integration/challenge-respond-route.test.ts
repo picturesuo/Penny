@@ -87,7 +87,7 @@ test("POST /api/commands/challenge/respond records a response event and updates 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
       roundId,
-      status: "responded",
+      responseRecorded: true,
     });
 
     const roundRows = await sql`
@@ -186,11 +186,11 @@ test("POST /api/commands/challenge/respond replays the original result for the s
     assert.equal(secondResponse.status, 200);
     assert.deepEqual(await firstResponse.json(), {
       roundId,
-      status: "responded",
+      responseRecorded: true,
     });
     assert.deepEqual(await secondResponse.json(), {
       roundId,
-      status: "responded",
+      responseRecorded: true,
     });
 
     const roundRows = await sql`

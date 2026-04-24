@@ -183,7 +183,10 @@ test("write commands produce the expected durable moves_events rows", async () =
       db,
     );
 
-    assert.equal(response.status, "responded");
+    assert.deepEqual(response, {
+      roundId: round.roundId,
+      responseRecorded: true,
+    });
 
     const eventRows = await sql<
       {
