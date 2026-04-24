@@ -2111,3 +2111,33 @@ textarea {
     padding-inline: 8px;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+
+  .penny-mode-button[data-active="true"],
+  .ui-segmented__tab[aria-selected="true"],
+  .inspector-rail,
+  .penny-inspector-rail,
+  .command-palette,
+  .command-palette__scrim,
+  .command-palette__dialog,
+  .ui-state--loading,
+  .penny-skeleton {
+    animation: none !important;
+  }
+
+  .penny-graph-node-group:hover .penny-graph-node-shell,
+  .penny-graph-node-group:focus-visible .penny-graph-node-shell,
+  .penny-graph-node-group:hover .penny-graph-node-core,
+  .penny-graph-node-group:focus-visible .penny-graph-node-core {
+    transform: none !important;
+  }
+}
