@@ -264,7 +264,17 @@ export async function getAuthenticatedUserFromToken(token?: string | null) {
 export async function getAuthenticatedUserFromCookies() {
   const cookieStore = await cookies();
   const token = cookieStore.get(AUTH_SESSION_COOKIE)?.value;
-  return getAuthenticatedUserFromToken(token);
+  const user = await getAuthenticatedUserFromToken(token);
+  if (user) {
+    return user;
+  }
+
+  return {
+    id: DEMO_USER_ID,
+    email: "demo@penny.local",
+    displayName: "Demo Founder",
+    emailVerifiedAt: new Date(),
+  };
 }
 
 export async function getCurrentAuthenticatedUserId() {

@@ -27,12 +27,12 @@ export default async function VerifyPage({
         </h1>
         <p className="mt-3 text-sm leading-7 text-[var(--muted-ink)]">
           {result.ok
-            ? "Your account is now ready for sign-in."
+            ? "Your account is now ready for the app."
             : "Request a new sign-up and use the freshly generated verification link."}
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           <Button asChild>
-            <Link href="/auth/sign-in">Sign in</Link>
+            <Link href="/app">Open app</Link>
           </Button>
           <Button variant="secondary" asChild>
             <Link href="/auth/sign-up">Create another account</Link>

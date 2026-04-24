@@ -32,7 +32,7 @@ export function GlobalShortcuts() {
 
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === "h") {
         event.preventDefault();
-        router.push("/dashboard");
+        router.push("/app");
       }
     }
 

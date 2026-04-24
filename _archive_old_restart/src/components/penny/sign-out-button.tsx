@@ -12,7 +12,7 @@ export function SignOutButton() {
     setLoading(true);
     try {
       await fetch("/api/auth/sign-out", { method: "POST" });
-      router.push("/auth/sign-in");
+      router.push("/app");
       router.refresh();
     } finally {
       setLoading(false);

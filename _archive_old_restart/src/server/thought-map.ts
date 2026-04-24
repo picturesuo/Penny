@@ -1,4 +1,4 @@
-import type {
+import {
   Prisma,
   CognitiveBiasProfile as CognitiveBiasProfileRecord,
   BlindSpotMapCache as BlindSpotMapCacheRecord,
@@ -3378,7 +3378,6 @@ export async function recordRevisitAction(params: {
   snoozedUntil?: Date | null;
   userId?: string;
 }) {
-  const userId = params.userId ?? (await getCurrentAuthenticatedUserId());
   const mapRecord = await prisma.thoughtMap.findUnique({
     where: { id: params.mapId },
     select: {
@@ -3490,7 +3489,11 @@ async function syncThoughtMapInterventions(params: {
   map: ThoughtMapModel;
   beforeMap?: ThoughtMapModel | null;
 }) {
-  const candidateInterventions = params.map.interventions;
+  const candidateInterventions = Array.from(
+    new Map(
+      params.map.interventions.map((intervention) => [interventionDedupeKey(intervention), intervention]),
+    ).values(),
+  );
   const candidateKeys = new Set(candidateInterventions.map((intervention) => interventionDedupeKey(intervention)));
   const candidateOrder = new Map(
     candidateInterventions.map((intervention, index) => [interventionDedupeKey(intervention), index]),
@@ -3507,20 +3510,41 @@ async function syncThoughtMapInterventions(params: {
       const existingRecord = existingByKey.get(dedupeKey);
 
       if (!existingRecord) {
-        const created = await tx.thoughtMapIntervention.create({
-          data: {
-            dedupeKey,
-            mapId: candidate.mapId,
-            targetNodeId: candidate.targetNodeId,
-            type: candidate.type,
-            detector: candidate.detector,
-            triggerReason: candidate.triggerReason,
-            prompt: candidate.prompt,
-            inputMode: candidate.inputMode,
-            status: "open",
-            shownAt: candidate.shownAt,
-          },
-        });
+        let created = null as ThoughtMapIntervention | null;
+
+        try {
+          created = await tx.thoughtMapIntervention.create({
+            data: {
+              dedupeKey,
+              mapId: candidate.mapId,
+              targetNodeId: candidate.targetNodeId,
+              type: candidate.type,
+              detector: candidate.detector,
+              triggerReason: candidate.triggerReason,
+              prompt: candidate.prompt,
+              inputMode: candidate.inputMode,
+              status: "open",
+              shownAt: candidate.shownAt,
+            },
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            created = await tx.thoughtMapIntervention.findUnique({
+              where: { dedupeKey },
+            });
+          } else {
+            throw error;
+          }
+        }
+
+        if (!created) {
+          throw new Error(`Thought map intervention missing after dedupe resolution: ${dedupeKey}`);
+        }
+
+        existingByKey.set(dedupeKey, created);
 
         await createThoughtMapEvent(tx, {
           mapId: candidate.mapId,

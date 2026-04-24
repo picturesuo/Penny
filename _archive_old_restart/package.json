@@ -1,0 +1,59 @@
+{
+  "name": "penny",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "test:challenge-backend": "node --conditions=react-server --import tsx --test src/server/__tests__/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "start": "next start",
+    "lint": "eslint",
+    "trigger:dev": "trigger dev",
+    "trigger:deploy": "trigger deploy",
+    "db:drizzle:generate": "drizzle-kit generate",
+    "db:drizzle:export": "drizzle-kit export",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
+    "db:setup": "prisma migrate deploy && prisma db seed"
+  },
+  "prisma": {
+    "seed": "tsx src/scripts/seed.ts"
+  },
+  "dependencies": {
+    "@langfuse/otel": "^5.2.0",
+    "@langfuse/tracing": "^5.2.0",
+    "@opentelemetry/sdk-node": "^0.215.0",
+    "@prisma/adapter-better-sqlite3": "^7.6.0",
+    "@prisma/client": "^7.6.0",
+    "@trigger.dev/sdk": "^4.4.4",
+    "better-sqlite3": "^12.8.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "drizzle-orm": "^0.45.2",
+    "lucide-react": "^1.7.0",
+    "next": "16.2.2",
+    "postgres": "^3.4.9",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@trigger.dev/build": "^4.4.4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.2",
+    "prisma": "^7.6.0",
+    "tailwindcss": "^4",
+    "trigger.dev": "^4.4.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}
