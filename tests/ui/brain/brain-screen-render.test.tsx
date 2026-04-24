@@ -5,9 +5,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { BrainScreen } from "../../../apps/web/components/brain/brain-screen.tsx";
 import { createBrainViewModel } from "../../../apps/web/lib/viewmodels/brain/create-brain-view-model.ts";
+import type { BrainProjectionView } from "../../../apps/web/lib/viewmodels/brain/types.ts";
 
-test("BrainScreen renders the MVP Brain regions", () => {
-  const model = createBrainViewModel({
+function populatedProjection(): BrainProjectionView {
+  return {
     currentContext: {
       mode: "brain",
       mapId: "map-1",
@@ -42,9 +43,32 @@ test("BrainScreen renders the MVP Brain regions", () => {
       updatedAt: "2026-04-24T10:05:00.000Z",
     },
     recentEvents: [],
-  });
+  };
+}
 
-  const html = renderToStaticMarkup(createElement(BrainScreen, { model }));
+function emptyProjection(): BrainProjectionView {
+  return {
+    currentContext: {
+      mode: "brain",
+      mapId: null,
+      claimId: null,
+    },
+    workspaceContext: {
+      mode: "brain",
+      mapId: null,
+      claimId: null,
+    },
+    mapSummary: null,
+    claims: [],
+    selectedClaim: null,
+    recentEvents: [],
+  };
+}
+
+test("BrainScreen renders the populated Brain state", () => {
+  const model = createBrainViewModel(populatedProjection());
+
+  const html = renderToStaticMarkup(createElement(BrainScreen, { model, state: "populated" }));
 
   assert.match(html, /Thought stream/);
   assert.match(html, /Map and sphere context/);
@@ -54,4 +78,46 @@ test("BrainScreen renders the MVP Brain regions", () => {
   assert.match(html, /Recent thoughts/);
   assert.match(html, /Investor diligence map/);
   assert.match(html, /Penny should make claim history inspectable/);
+  assert.match(html, /Populated Brain state/);
+});
+
+test("BrainScreen renders the empty Brain state", () => {
+  const model = createBrainViewModel(emptyProjection());
+
+  const html = renderToStaticMarkup(createElement(BrainScreen, { model, state: "empty" }));
+
+  assert.match(html, /Empty Brain state/);
+  assert.match(html, /No thoughts returned by the Brain projection/);
+  assert.match(html, /No map selected/);
+  assert.match(html, /Select a thought to inspect it/);
+});
+
+test("BrainScreen renders the loading Brain state", () => {
+  const model = createBrainViewModel(emptyProjection());
+
+  const html = renderToStaticMarkup(
+    createElement(BrainScreen, {
+      model,
+      state: "loading",
+      statusMessage: "Loading Brain projection.",
+    }),
+  );
+
+  assert.match(html, /Brain loading state/);
+  assert.match(html, /Loading Brain projection/);
+});
+
+test("BrainScreen renders the error Brain state", () => {
+  const model = createBrainViewModel(emptyProjection());
+
+  const html = renderToStaticMarkup(
+    createElement(BrainScreen, {
+      model,
+      state: "error",
+      statusMessage: "Projection request failed.",
+    }),
+  );
+
+  assert.match(html, /Brain error state/);
+  assert.match(html, /Projection request failed/);
 });
