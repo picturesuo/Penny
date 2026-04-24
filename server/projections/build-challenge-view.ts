@@ -48,14 +48,25 @@ export type ChallengeCritiqueStateView =
       promptVersion?: string;
     };
 
+export type ChallengeResponseStateView = {
+  status: string;
+  responsePayload?: Record<string, unknown>;
+};
+
 export type WorkspaceChallengeView = {
   shellContext: WorkspaceShellView;
+  currentContext: WorkspaceShellView;
   workspaceContext: WorkspaceShellView;
   activeClaim: ChallengeClaimView | null;
+  selectedClaim: ChallengeClaimView | null;
   activeChallengeRound: ChallengeRoundView | null;
+  latestChallengeRound: ChallengeRoundView | null;
   critiqueState: ChallengeCritiqueStateView;
   critiqueStatus: ChallengeCritiqueStateView["status"];
   critiquePayload?: unknown;
+  responseState: ChallengeResponseStateView;
+  responseStatus: string;
+  responsePayload?: Record<string, unknown>;
 };
 
 export type BuildChallengeViewInput = {
@@ -194,6 +205,19 @@ function normalizeCritiqueStatus(status: string | null | undefined): "pending" |
   return "pending";
 }
 
+function buildResponseState(payload: Record<string, unknown> | null, roundStatus?: string | null): ChallengeResponseStateView {
+  if (!payload) {
+    return {
+      status: roundStatus === "responded" ? "responded" : "not_recorded",
+    };
+  }
+
+  return {
+    status: readOptionalString(payload.status) ?? "recorded",
+    responsePayload: payload,
+  };
+}
+
 function createShellRepository(db: DbClient): BuildShellViewRepository {
   return {
     async getWorkspaceContext(input) {
@@ -243,16 +267,23 @@ export async function buildChallengeView(
   const shellView = await buildShellView(input, createShellRepository(db));
 
   if (!shellView.mapId || !shellView.claimId) {
+    const responseState = buildResponseState(null);
+
     return {
       shellContext: shellView,
+      currentContext: shellView,
       workspaceContext: shellView,
       activeClaim: null,
+      selectedClaim: null,
       activeChallengeRound: null,
+      latestChallengeRound: null,
       critiqueState: {
         status: "not_requested",
         critiqueId: null,
       },
       critiqueStatus: "not_requested",
+      responseState,
+      responseStatus: responseState.status,
     };
   }
 
@@ -273,16 +304,23 @@ export async function buildChallengeView(
   const selectedClaimRow = claimRows[0];
 
   if (!selectedClaimRow) {
+    const responseState = buildResponseState(null);
+
     return {
       shellContext: shellView,
+      currentContext: shellView,
       workspaceContext: shellView,
       activeClaim: null,
+      selectedClaim: null,
       activeChallengeRound: null,
+      latestChallengeRound: null,
       critiqueState: {
         status: "not_requested",
         critiqueId: null,
       },
       critiqueStatus: "not_requested",
+      responseState,
+      responseStatus: responseState.status,
     };
   }
 
@@ -346,6 +384,27 @@ export async function buildChallengeView(
           .limit(1);
 
   const critiqueEventPayload = asRecord(critiqueEventRows[0]?.payloadJson);
+  const responseEventRows =
+    challengeRoundRow === null
+      ? []
+      : await db
+          .select({
+            payloadJson: movesEvents.payloadJson,
+            createdAt: movesEvents.createdAt,
+          })
+          .from(movesEvents)
+          .where(
+            and(
+              eq(movesEvents.aggregateType, "challenge_round"),
+              eq(movesEvents.aggregateId, challengeRoundRow.id),
+              eq(movesEvents.userId, input.userId),
+              eq(movesEvents.type, "challenge.response.recorded"),
+            ),
+          )
+          .orderBy(desc(movesEvents.createdAt), desc(movesEvents.id))
+          .limit(1);
+  const responsePayload = asRecord(responseEventRows[0]?.payloadJson);
+  const responseState = buildResponseState(responsePayload, challengeRoundRow?.status);
   const storedCritiqueJson = parseStoredCritiqueJson(critiqueRow?.critiqueJson);
   const parsedStoredBodyPayload = parseCritiqueBodyPayload(critiqueRow?.body ?? null);
   const eventBody = readOptionalString(critiqueEventPayload?.body);
@@ -393,31 +452,40 @@ export async function buildChallengeView(
     }
   }
 
+  const activeClaim = {
+    id: selectedClaimRow.id,
+    mapId: selectedClaimRow.mapId,
+    userId: selectedClaimRow.userId,
+    body: selectedClaimRow.body,
+    confidenceBps: selectedClaimRow.confidenceBps,
+    createdAt: selectedClaimRow.createdAt.toISOString(),
+    updatedAt: selectedClaimRow.updatedAt.toISOString(),
+  };
+  const activeChallengeRound = challengeRoundRow
+    ? {
+        id: challengeRoundRow.id,
+        mapId: challengeRoundRow.mapId,
+        claimId: challengeRoundRow.claimId,
+        userId: challengeRoundRow.userId,
+        status: challengeRoundRow.status,
+        createdAt: challengeRoundRow.createdAt.toISOString(),
+        updatedAt: challengeRoundRow.updatedAt.toISOString(),
+      }
+    : null;
+
   return {
     shellContext: shellView,
+    currentContext: shellView,
     workspaceContext: shellView,
-    activeClaim: {
-      id: selectedClaimRow.id,
-      mapId: selectedClaimRow.mapId,
-      userId: selectedClaimRow.userId,
-      body: selectedClaimRow.body,
-      confidenceBps: selectedClaimRow.confidenceBps,
-      createdAt: selectedClaimRow.createdAt.toISOString(),
-      updatedAt: selectedClaimRow.updatedAt.toISOString(),
-    },
-    activeChallengeRound: challengeRoundRow
-      ? {
-          id: challengeRoundRow.id,
-          mapId: challengeRoundRow.mapId,
-          claimId: challengeRoundRow.claimId,
-          userId: challengeRoundRow.userId,
-          status: challengeRoundRow.status,
-          createdAt: challengeRoundRow.createdAt.toISOString(),
-          updatedAt: challengeRoundRow.updatedAt.toISOString(),
-        }
-      : null,
+    activeClaim,
+    selectedClaim: activeClaim,
+    activeChallengeRound,
+    latestChallengeRound: activeChallengeRound,
     critiqueState,
     critiqueStatus: critiqueState.status,
     ...(critiquePayload !== undefined ? { critiquePayload } : {}),
+    responseState,
+    responseStatus: responseState.status,
+    ...(responsePayload !== null ? { responsePayload } : {}),
   };
 }
