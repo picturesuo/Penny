@@ -47,6 +47,12 @@ export type BrainRelatedClaimPreview = {
   brainMapHref: string;
 };
 
+export type BrainInspectorItem = {
+  id: string;
+  title: string;
+  detail: string;
+};
+
 export type BrainSelectedClaimPanel = {
   title: string;
   body: string;
@@ -95,5 +101,9 @@ export type BrainViewModel = {
     mapId: string | null;
     confidenceLabel: string;
     updatedAtLabel: string;
+    keyConnections: BrainInspectorItem[];
+    dependencies: BrainInspectorItem[];
+    contradictionMarkers: BrainInspectorItem[];
+    recentActivity: BrainInspectorItem[];
   };
 };
