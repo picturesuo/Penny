@@ -106,6 +106,18 @@ test("buildChallengeView preserves claimId after a Brain to Challenge switch", a
       mode: "challenge",
       mapId: map.mapId,
       claimId: claim.claimId,
+      breadcrumb: [
+        {
+          kind: "map",
+          id: map.mapId,
+          label: "Challenge view map",
+        },
+        {
+          kind: "claim",
+          id: claim.claimId,
+          label: "Challenge mode should preserve this claim.",
+        },
+      ],
       breadcrumbItems: [
         {
           kind: "map",
@@ -119,6 +131,7 @@ test("buildChallengeView preserves claimId after a Brain to Challenge switch", a
         },
       ],
     });
+    assert.deepEqual(challengeView.workspaceContext, challengeView.shellContext);
 
     assert.equal(challengeView.activeClaim?.id, claim.claimId);
     assert.equal(challengeView.activeClaim?.body, "Challenge mode should preserve this claim.");
@@ -128,6 +141,8 @@ test("buildChallengeView preserves claimId after a Brain to Challenge switch", a
       status: "not_requested",
       critiqueId: null,
     });
+    assert.equal(challengeView.critiqueStatus, "not_requested");
+    assert.equal(challengeView.critiquePayload, undefined);
   } finally {
     await sql.end({ timeout: 1 });
   }
@@ -237,6 +252,23 @@ test("buildChallengeView returns the latest ready critique state for the active 
       provider: "test-provider",
       model: "test-model",
       promptVersion: "test-prompt-v1",
+    });
+    assert.equal(challengeView.critiqueStatus, "ready");
+    assert.deepEqual(challengeView.critiquePayload, {
+      critique: {
+        conciseCritiqueSummary: "The wording is too absolute.",
+        strongestCounterargument: "There are credible exceptions where buyers commit with trust instead of proof.",
+        assumptions: ["Every buyer follows the same procurement process."],
+        likelyFailureModes: ["The team overfits to enterprise sales."],
+        followUpQuestions: ["Which segment actually requires proof before commitment?"],
+        suggestedConfidenceDelta: -15,
+        uncertaintyNote: "Segment mix could change the conclusion.",
+      },
+      metadata: {
+        provider: "test-provider",
+        model: "test-model",
+        promptVersion: "test-prompt-v1",
+      },
     });
   } finally {
     await sql.end({ timeout: 1 });

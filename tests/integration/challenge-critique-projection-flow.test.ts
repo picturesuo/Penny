@@ -192,6 +192,43 @@ test("challenge flow stores a generated critique and exposes it in the challenge
 
     assert.equal(critique.status, "ready");
 
+    const storedCritiqueRows = await sql<{
+      id: string;
+      status: string;
+      critique_json: unknown;
+    }[]>`
+      select id, status, critique_json
+      from challenge_critiques
+      where id = ${requestedCritique.critiqueId}
+    `;
+
+    assert.equal(storedCritiqueRows.length, 1);
+    assert.equal(storedCritiqueRows[0]?.id, requestedCritique.critiqueId);
+    assert.equal(storedCritiqueRows[0]?.status, "ready");
+    assert.deepEqual(storedCritiqueRows[0]?.critique_json, {
+      conciseCritiqueSummary: "The current claim still needs a stronger boundary condition.",
+      strongestCounterargument:
+        "A stored critique is not useful unless the projection surfaces it back to the user context.",
+      assumptions: ["The projection must understand the persisted critique shape."],
+      likelyFailureModes: ["The stored row and view drift apart."],
+      followUpQuestions: ["Which field is the canonical display body?"],
+      suggestedConfidenceDelta: -20,
+      uncertaintyNote: "The read model should not need to guess.",
+    });
+
+    const generatedEventRows = await sql<{
+      type: string;
+      payload_json: unknown;
+    }[]>`
+      select type, payload_json
+      from moves_events
+      where aggregate_id = ${requestedCritique.critiqueId}
+        and type = ${"challenge.critique.generated"}
+    `;
+
+    assert.equal(generatedEventRows.length, 1);
+    assert.equal(generatedEventRows[0]?.type, "challenge.critique.generated");
+
     const response = await getChallenge(requestWithUser("http://localhost/api/workspace/challenge", userId));
     assert.equal(response.status, 200);
 
@@ -200,6 +237,26 @@ test("challenge flow stores a generated critique and exposes it in the challenge
         mode: string;
         mapId: string | null;
         claimId: string | null;
+        breadcrumb: Array<{
+          kind: string;
+          id: string;
+          label: string;
+        }>;
+        breadcrumbItems: Array<{
+          kind: string;
+          id: string;
+          label: string;
+        }>;
+      };
+      workspaceContext: {
+        mode: string;
+        mapId: string | null;
+        claimId: string | null;
+        breadcrumb: Array<{
+          kind: string;
+          id: string;
+          label: string;
+        }>;
         breadcrumbItems: Array<{
           kind: string;
           id: string;
@@ -211,6 +268,23 @@ test("challenge flow stores a generated critique and exposes it in the challenge
         claimId: string;
         status: string;
       } | null;
+      critiqueStatus: string;
+      critiquePayload?: {
+        critique?: {
+          conciseCritiqueSummary?: string;
+          strongestCounterargument?: string;
+          assumptions?: string[];
+          likelyFailureModes?: string[];
+          followUpQuestions?: string[];
+          suggestedConfidenceDelta?: number;
+          uncertaintyNote?: string;
+        };
+        metadata?: {
+          provider?: string;
+          model?: string;
+          promptVersion?: string;
+        };
+      };
       critiqueState: {
         status: string;
         critiqueId: string | null;
@@ -241,6 +315,18 @@ test("challenge flow stores a generated critique and exposes it in the challenge
       mode: "challenge",
       mapId: map.mapId,
       claimId: claim.claimId,
+      breadcrumb: [
+        {
+          kind: "map",
+          id: map.mapId,
+          label: "Critique projection flow map",
+        },
+        {
+          kind: "claim",
+          id: claim.claimId,
+          label: "The challenge projection should expose the generated critique.",
+        },
+      ],
       breadcrumbItems: [
         {
           kind: "map",
@@ -254,8 +340,27 @@ test("challenge flow stores a generated critique and exposes it in the challenge
         },
       ],
     });
+    assert.deepEqual(payload.workspaceContext, payload.shellContext);
     assert.equal(payload.activeChallengeRound?.id, round.roundId);
     assert.equal(payload.activeChallengeRound?.claimId, claim.claimId);
+    assert.equal(payload.critiqueStatus, "ready");
+    assert.deepEqual(payload.critiquePayload, {
+      critique: {
+        conciseCritiqueSummary: "The current claim still needs a stronger boundary condition.",
+        strongestCounterargument:
+          "A stored critique is not useful unless the projection surfaces it back to the user context.",
+        assumptions: ["The projection must understand the persisted critique shape."],
+        likelyFailureModes: ["The stored row and view drift apart."],
+        followUpQuestions: ["Which field is the canonical display body?"],
+        suggestedConfidenceDelta: -20,
+        uncertaintyNote: "The read model should not need to guess.",
+      },
+      metadata: {
+        provider: "test-provider",
+        model: "test-model",
+        promptVersion: "test-prompt-v1",
+      },
+    });
     assert.deepEqual(payload.critiqueState, {
       status: "ready",
       critiqueId: critique.critiqueId,

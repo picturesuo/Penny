@@ -50,9 +50,12 @@ export type ChallengeCritiqueStateView =
 
 export type WorkspaceChallengeView = {
   shellContext: WorkspaceShellView;
+  workspaceContext: WorkspaceShellView;
   activeClaim: ChallengeClaimView | null;
   activeChallengeRound: ChallengeRoundView | null;
   critiqueState: ChallengeCritiqueStateView;
+  critiqueStatus: ChallengeCritiqueStateView["status"];
+  critiquePayload?: unknown;
 };
 
 export type BuildChallengeViewInput = {
@@ -91,6 +94,10 @@ function parseCritiqueBodyPayload(body: string | null): Record<string, unknown> 
   } catch {
     return undefined;
   }
+}
+
+function parseStoredCritiqueJson(value: unknown): Record<string, unknown> | undefined {
+  return asRecord(value) ?? undefined;
 }
 
 function buildMetadataPayload(input: {
@@ -238,12 +245,14 @@ export async function buildChallengeView(
   if (!shellView.mapId || !shellView.claimId) {
     return {
       shellContext: shellView,
+      workspaceContext: shellView,
       activeClaim: null,
       activeChallengeRound: null,
       critiqueState: {
         status: "not_requested",
         critiqueId: null,
       },
+      critiqueStatus: "not_requested",
     };
   }
 
@@ -266,12 +275,14 @@ export async function buildChallengeView(
   if (!selectedClaimRow) {
     return {
       shellContext: shellView,
+      workspaceContext: shellView,
       activeClaim: null,
       activeChallengeRound: null,
       critiqueState: {
         status: "not_requested",
         critiqueId: null,
       },
+      critiqueStatus: "not_requested",
     };
   }
 
@@ -305,6 +316,7 @@ export async function buildChallengeView(
             id: challengeCritiques.id,
             status: challengeCritiques.status,
             body: challengeCritiques.body,
+            critiqueJson: challengeCritiques.critiqueJson,
             createdAt: challengeCritiques.createdAt,
           })
           .from(challengeCritiques)
@@ -334,10 +346,11 @@ export async function buildChallengeView(
           .limit(1);
 
   const critiqueEventPayload = asRecord(critiqueEventRows[0]?.payloadJson);
+  const storedCritiqueJson = parseStoredCritiqueJson(critiqueRow?.critiqueJson);
   const parsedStoredBodyPayload = parseCritiqueBodyPayload(critiqueRow?.body ?? null);
   const eventBody = readOptionalString(critiqueEventPayload?.body);
   const parsedEventBodyPayload = parseCritiqueBodyPayload(eventBody);
-  const parsedBodyPayload = parsedStoredBodyPayload ?? parsedEventBodyPayload;
+  const parsedBodyPayload = storedCritiqueJson ?? parsedStoredBodyPayload ?? parsedEventBodyPayload;
   const parsedBodyMetadata = asRecord(parsedBodyPayload?.metadata);
   const provider = readOptionalString(critiqueEventPayload?.provider) ?? readOptionalString(parsedBodyMetadata?.provider);
   const model = readOptionalString(critiqueEventPayload?.model) ?? readOptionalString(parsedBodyMetadata?.model);
@@ -348,24 +361,41 @@ export async function buildChallengeView(
     (critiqueRow?.body && !parsedStoredBodyPayload ? readOptionalString(critiqueRow.body) : null) ??
     (eventBody && !parsedEventBodyPayload ? eventBody : null) ??
     formatCritiqueBodyFromPayload(critiquePayload);
-  const critiqueState =
-    critiqueRow === null
-      ? ({
-          status: "not_requested",
-          critiqueId: null,
-        } satisfies ChallengeCritiqueStateView)
-      : {
-          status: normalizeCritiqueStatus(critiqueRow.status),
-          critiqueId: critiqueRow.id,
-          ...(normalizeCritiqueStatus(critiqueRow.status) === "ready" && critiqueBody ? { body: critiqueBody } : {}),
-          ...(critiquePayload !== undefined ? { critiquePayload } : {}),
-          ...(provider ? { provider } : {}),
-          ...(model ? { model } : {}),
-          ...(promptVersion ? { promptVersion } : {}),
-        };
+  let critiqueState: ChallengeCritiqueStateView;
+
+  if (critiqueRow === null) {
+    critiqueState = {
+      status: "not_requested",
+      critiqueId: null,
+    };
+  } else {
+    const normalizedStatus = normalizeCritiqueStatus(critiqueRow.status);
+
+    if (normalizedStatus === "ready" && critiqueBody) {
+      critiqueState = {
+        status: "ready",
+        critiqueId: critiqueRow.id,
+        body: critiqueBody,
+        ...(critiquePayload !== undefined ? { critiquePayload } : {}),
+        ...(provider ? { provider } : {}),
+        ...(model ? { model } : {}),
+        ...(promptVersion ? { promptVersion } : {}),
+      };
+    } else {
+      critiqueState = {
+        status: normalizedStatus,
+        critiqueId: critiqueRow.id,
+        ...(critiquePayload !== undefined ? { critiquePayload } : {}),
+        ...(provider ? { provider } : {}),
+        ...(model ? { model } : {}),
+        ...(promptVersion ? { promptVersion } : {}),
+      };
+    }
+  }
 
   return {
     shellContext: shellView,
+    workspaceContext: shellView,
     activeClaim: {
       id: selectedClaimRow.id,
       mapId: selectedClaimRow.mapId,
@@ -387,5 +417,7 @@ export async function buildChallengeView(
         }
       : null,
     critiqueState,
+    critiqueStatus: critiqueState.status,
+    ...(critiquePayload !== undefined ? { critiquePayload } : {}),
   };
 }

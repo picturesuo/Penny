@@ -204,6 +204,11 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
         mode: string;
         mapId: string | null;
         claimId: string | null;
+        breadcrumb: Array<{
+          kind: string;
+          id: string;
+          label: string;
+        }>;
         breadcrumbItems: Array<{
           kind: string;
           id: string;
@@ -226,6 +231,18 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
       mode: "challenge",
       mapId: map.mapId,
       claimId: claim.claimId,
+      breadcrumb: [
+        {
+          kind: "map",
+          id: map.mapId,
+          label: "Acceptance flow map",
+        },
+        {
+          kind: "claim",
+          id: claim.claimId,
+          label: "Acceptance flow claim",
+        },
+      ],
       breadcrumbItems: [
         {
           kind: "map",
@@ -278,6 +295,11 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
         mode: string;
         mapId: string | null;
         claimId: string | null;
+        breadcrumb: Array<{
+          kind: string;
+          id: string;
+          label: string;
+        }>;
         breadcrumbItems: Array<{
           kind: string;
           id: string;
@@ -296,6 +318,18 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
       mode: "learn",
       mapId: map.mapId,
       claimId: claim.claimId,
+      breadcrumb: [
+        {
+          kind: "map",
+          id: map.mapId,
+          label: "Acceptance flow map",
+        },
+        {
+          kind: "claim",
+          id: claim.claimId,
+          label: "Acceptance flow claim",
+        },
+      ],
       breadcrumbItems: [
         {
           kind: "map",

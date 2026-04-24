@@ -99,6 +99,18 @@ test("GET /api/workspace/learn returns shell context, selected IDs, and a placeh
       mode: "learn",
       mapId,
       claimId,
+      breadcrumb: [
+        {
+          kind: "map",
+          id: mapId,
+          label: "Learn map",
+        },
+        {
+          kind: "claim",
+          id: claimId,
+          label: "Selected learn claim",
+        },
+      ],
       breadcrumbItems: [
         {
           kind: "map",

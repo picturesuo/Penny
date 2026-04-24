@@ -124,6 +124,18 @@ test("GET /api/workspace/challenge returns shell context, active claim, latest c
       mode: "challenge",
       mapId,
       claimId,
+      breadcrumb: [
+        {
+          kind: "map",
+          id: mapId,
+          label: "Challenge map",
+        },
+        {
+          kind: "claim",
+          id: claimId,
+          label: "Selected challenge claim",
+        },
+      ],
       breadcrumbItems: [
         {
           kind: "map",

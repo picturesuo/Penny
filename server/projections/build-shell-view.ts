@@ -16,6 +16,7 @@ export type WorkspaceShellView = {
   mode: WorkspaceMode;
   mapId: string | null;
   claimId: string | null;
+  breadcrumb: ShellBreadcrumbItem[];
   breadcrumbItems: ShellBreadcrumbItem[];
 };
 
@@ -113,6 +114,7 @@ export async function buildShellView(
       mode: DEFAULT_WORKSPACE_MODE,
       mapId: null,
       claimId: null,
+      breadcrumb: [],
       breadcrumbItems: [],
     };
   }
@@ -159,6 +161,7 @@ export async function buildShellView(
     mode,
     mapId,
     claimId,
+    breadcrumb: breadcrumbItems,
     breadcrumbItems,
   };
 }

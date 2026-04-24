@@ -145,6 +145,18 @@ test("backend MVP commands, projections, and required event trail stay coherent"
       mode: "brain",
       mapId: map.mapId,
       claimId: claim.claimId,
+      breadcrumb: [
+        {
+          kind: "map",
+          id: map.mapId,
+          label: "Backend MVP map",
+        },
+        {
+          kind: "claim",
+          id: claim.claimId,
+          label: "Backend MVP selected claim",
+        },
+      ],
       breadcrumbItems: [
         {
           kind: "map",
@@ -206,6 +218,18 @@ test("backend MVP commands, projections, and required event trail stay coherent"
       mode: "challenge",
       mapId: map.mapId,
       claimId: claim.claimId,
+      breadcrumb: [
+        {
+          kind: "map",
+          id: map.mapId,
+          label: "Backend MVP map",
+        },
+        {
+          kind: "claim",
+          id: claim.claimId,
+          label: "Backend MVP selected claim",
+        },
+      ],
       breadcrumbItems: [
         {
           kind: "map",
@@ -265,6 +289,18 @@ test("backend MVP commands, projections, and required event trail stay coherent"
       mode: "learn",
       mapId: map.mapId,
       claimId: claim.claimId,
+      breadcrumb: [
+        {
+          kind: "map",
+          id: map.mapId,
+          label: "Backend MVP map",
+        },
+        {
+          kind: "claim",
+          id: claim.claimId,
+          label: "Backend MVP selected claim",
+        },
+      ],
       breadcrumbItems: [
         {
           kind: "map",

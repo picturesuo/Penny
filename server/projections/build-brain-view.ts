@@ -20,6 +20,11 @@ export type WorkspaceBrainView = {
     mapId: string | null;
     claimId: string | null;
   };
+  workspaceContext: {
+    mode: string;
+    mapId: string | null;
+    claimId: string | null;
+  };
   mapSummary: {
     id: string;
     title: string;
@@ -27,6 +32,7 @@ export type WorkspaceBrainView = {
   } | null;
   claims: BrainClaimView[];
   selectedClaim: BrainClaimView | null;
+  recentEvents: [];
 };
 
 export type BuildBrainViewInput = {
@@ -84,15 +90,19 @@ export async function buildBrainView(
   const selectedClaimId = shellView.claimId;
 
   if (!mapId) {
+    const workspaceContext = {
+      mode: shellView.mode,
+      mapId: null,
+      claimId: null,
+    };
+
     return {
-      currentContext: {
-        mode: shellView.mode,
-        mapId: null,
-        claimId: null,
-      },
+      currentContext: workspaceContext,
+      workspaceContext,
       mapSummary: null,
       claims: [],
       selectedClaim: null,
+      recentEvents: [],
     };
   }
 
@@ -120,18 +130,22 @@ export async function buildBrainView(
     updatedAt: claim.updatedAt.toISOString(),
   }));
 
+  const workspaceContext = {
+    mode: shellView.mode,
+    mapId,
+    claimId: selectedClaimId,
+  };
+
   return {
-    currentContext: {
-      mode: shellView.mode,
-      mapId,
-      claimId: selectedClaimId,
-    },
+    currentContext: workspaceContext,
+    workspaceContext,
     mapSummary: {
       id: mapId,
-      title: shellView.breadcrumbItems.find((item) => item.kind === "map")?.label ?? "",
+      title: shellView.breadcrumb.find((item) => item.kind === "map")?.label ?? "",
       claimCount: normalizedClaims.length,
     },
     claims: normalizedClaims,
     selectedClaim: normalizedClaims.find((claim) => claim.id === selectedClaimId) ?? null,
+    recentEvents: [],
   };
 }

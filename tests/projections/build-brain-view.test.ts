@@ -87,6 +87,7 @@ test("buildBrainView returns the selected claim after createClaim and setWorkspa
     mapId: map.mapId,
     claimId: claim.claimId,
   });
+  assert.deepEqual(brainView.workspaceContext, brainView.currentContext);
   assert.deepEqual(brainView.mapSummary, {
     id: map.mapId,
     title: "Brain view map",
@@ -95,4 +96,5 @@ test("buildBrainView returns the selected claim after createClaim and setWorkspa
   assert.equal(brainView.claims.length, 1);
   assert.equal(brainView.selectedClaim?.id, claim.claimId);
   assert.equal(brainView.selectedClaim?.body, "Brain view selected claim");
+  assert.deepEqual(brainView.recentEvents, []);
 });

@@ -46,7 +46,13 @@ class SharedWorkspaceRepositoryTx implements SetWorkspaceSelectionRepositoryTx {
         candidate.id === input.claimId && candidate.mapId === input.mapId && candidate.userId === input.userId,
     );
 
-    return claim ? { id: claim.id } : null;
+    return claim
+      ? {
+          id: claim.id,
+          mapId: claim.mapId,
+          userId: claim.userId,
+        }
+      : null;
   }
 
   async getWorkspaceContext(input: { userId: string }) {
@@ -126,6 +132,8 @@ class SharedWorkspaceRepository implements SetWorkspaceSelectionRepository, Buil
 
     return {
       id: claim.id,
+      mapId: claim.mapId,
+      userId: claim.userId,
       body: claim.body,
     };
   }
@@ -177,6 +185,18 @@ test("buildShellView returns the same map and claim context after a mode switch"
     mode: "challenge",
     mapId: "map-1",
     claimId: "claim-1",
+    breadcrumb: [
+      {
+        kind: "map",
+        id: "map-1",
+        label: "Fundraising map",
+      },
+      {
+        kind: "claim",
+        id: "claim-1",
+        label: "Enterprise buyers need proof before committing.",
+      },
+    ] satisfies ShellBreadcrumbItem[],
     breadcrumbItems: [
       {
         kind: "map",

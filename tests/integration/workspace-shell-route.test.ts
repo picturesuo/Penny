@@ -80,6 +80,11 @@ test("GET /api/workspace/shell returns the current workspace context", async () 
       mode: string;
       mapId: string | null;
       claimId: string | null;
+      breadcrumb: Array<{
+        kind: string;
+        id: string;
+        label: string;
+      }>;
       breadcrumbItems: Array<{
         kind: string;
         id: string;
@@ -91,6 +96,18 @@ test("GET /api/workspace/shell returns the current workspace context", async () 
       mode: "challenge",
       mapId,
       claimId,
+      breadcrumb: [
+        {
+          kind: "map",
+          id: mapId,
+          label: "Shell map",
+        },
+        {
+          kind: "claim",
+          id: claimId,
+          label: "Shell claim",
+        },
+      ],
       breadcrumbItems: [
         {
           kind: "map",
@@ -152,11 +169,28 @@ test("workspace context preserves mapId and claimId when mode switches from brai
       mode: string;
       mapId: string | null;
       claimId: string | null;
+      breadcrumb: Array<{
+        kind: string;
+        id: string;
+        label: string;
+      }>;
     };
 
     assert.equal(payload.mode, "challenge");
     assert.equal(payload.mapId, mapId);
     assert.equal(payload.claimId, claimId);
+    assert.deepEqual(payload.breadcrumb, [
+      {
+        kind: "map",
+        id: mapId,
+        label: "Critical workspace map",
+      },
+      {
+        kind: "claim",
+        id: claimId,
+        label: "Critical workspace claim",
+      },
+    ]);
   } finally {
     await sql.end({ timeout: 1 });
   }
