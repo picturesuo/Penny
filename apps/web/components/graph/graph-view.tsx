@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type PointerEvent, type WheelEvent } from "react";
+import { memo, useCallback, useMemo, useState, type PointerEvent, type WheelEvent } from "react";
 
 import { useWorkspaceState } from "../../lib/state/workspace-state";
 import type { GraphCluster, GraphModel, GraphNode, GraphViewport } from "../../lib/types/graph";
@@ -17,7 +17,7 @@ type GraphViewProps = {
   height?: number;
 };
 
-export function GraphView({ graph, selectedNodeId, onSelectNode, height = 460 }: GraphViewProps) {
+export const GraphView = memo(function GraphView({ graph, selectedNodeId, onSelectNode, height = 460 }: GraphViewProps) {
   const { selectedNodeId: storedSelectedNodeId, setSelectedNodeId } = useWorkspaceState();
   const [viewport, setViewport] = useState<GraphViewport>(initialGraphViewport);
   const [focusedCluster, setFocusedCluster] = useState<GraphCluster | null>(null);
@@ -29,6 +29,60 @@ export function GraphView({ graph, selectedNodeId, onSelectNode, height = 460 }:
   const hasControlledSelection = selectedNodeId !== undefined;
   const activeNodeId = hasControlledSelection ? selectedNodeId : storedSelectedNodeId ?? graph.selectedNodeId ?? null;
   const clusters = useMemo(() => Array.from(new Set(nodes.map((node) => getGraphNodeCluster(node)))), [nodes]);
+
+  const lensToggles = useMemo(
+    () => [
+      { id: "claims" as const, label: "Claims", pressed: activeLensIds.has("claims") },
+      { id: "contradictions" as const, label: "Contradictions", pressed: activeLensIds.has("contradictions") },
+      { id: "dependencies" as const, label: "Dependencies", pressed: activeLensIds.has("dependencies") },
+      { id: "recent" as const, label: "Recent", pressed: activeLensIds.has("recent") },
+    ],
+    [activeLensIds],
+  );
+
+  const selectNode = useCallback(function selectNode(node: GraphNode) {
+    setSelectedNodeId(node.id);
+    onSelectNode?.(node);
+  }, [onSelectNode, setSelectedNodeId]);
+
+  const toggleLens = useCallback((lensId: GraphLensId) => {
+    setActiveLensIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(lensId)) {
+        next.delete(lensId);
+      } else {
+        next.add(lensId);
+      }
+
+      return next;
+    });
+  }, []);
+
+  const focusCluster = useCallback((cluster: GraphCluster | null) => {
+    setFocusedCluster(cluster);
+
+    if (!cluster) {
+      setViewport(initialGraphViewport);
+      return;
+    }
+
+    const clusterNodes = nodes.filter((node) => getGraphNodeCluster(node) === cluster);
+
+    if (clusterNodes.length === 0) {
+      return;
+    }
+
+    const centerX = clusterNodes.reduce((sum, node) => sum + node.x, 0) / clusterNodes.length;
+    const centerY = clusterNodes.reduce((sum, node) => sum + node.y, 0) / clusterNodes.length;
+    const scale = clusterNodes.length > 2 ? 1.14 : 1.24;
+
+    setViewport({
+      scale,
+      translateX: -(centerX * scale),
+      translateY: -(centerY * scale),
+    });
+  }, [nodes]);
 
   if (nodes.length === 0) {
     return (
@@ -52,50 +106,6 @@ export function GraphView({ graph, selectedNodeId, onSelectNode, height = 460 }:
         </div>
       </section>
     );
-  }
-
-  function selectNode(node: GraphNode) {
-    setSelectedNodeId(node.id);
-    onSelectNode?.(node);
-  }
-
-  function toggleLens(lensId: GraphLensId) {
-    setActiveLensIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(lensId)) {
-        next.delete(lensId);
-      } else {
-        next.add(lensId);
-      }
-
-      return next;
-    });
-  }
-
-  function focusCluster(cluster: GraphCluster | null) {
-    setFocusedCluster(cluster);
-
-    if (!cluster) {
-      setViewport(initialGraphViewport);
-      return;
-    }
-
-    const clusterNodes = nodes.filter((node) => getGraphNodeCluster(node) === cluster);
-
-    if (clusterNodes.length === 0) {
-      return;
-    }
-
-    const centerX = clusterNodes.reduce((sum, node) => sum + node.x, 0) / clusterNodes.length;
-    const centerY = clusterNodes.reduce((sum, node) => sum + node.y, 0) / clusterNodes.length;
-    const scale = clusterNodes.length > 2 ? 1.14 : 1.24;
-
-    setViewport({
-      scale,
-      translateX: -(centerX * scale),
-      translateY: -(centerY * scale),
-    });
   }
 
   function handlePointerDown(event: PointerEvent<HTMLElement>) {
@@ -177,22 +187,7 @@ export function GraphView({ graph, selectedNodeId, onSelectNode, height = 460 }:
         onFocusCluster={focusCluster}
         onToggleFocusSelectedNode={() => setFocusSelectedNode((current) => !current)}
         onViewportChange={setViewport}
-        lensToggles={[
-          { id: "claims", label: "Claims", pressed: activeLensIds.has("claims"), onToggle: () => toggleLens("claims") },
-          {
-            id: "contradictions",
-            label: "Contradictions",
-            pressed: activeLensIds.has("contradictions"),
-            onToggle: () => toggleLens("contradictions"),
-          },
-          {
-            id: "dependencies",
-            label: "Dependencies",
-            pressed: activeLensIds.has("dependencies"),
-            onToggle: () => toggleLens("dependencies"),
-          },
-          { id: "recent", label: "Recent", pressed: activeLensIds.has("recent"), onToggle: () => toggleLens("recent") },
-        ]}
+        lensToggles={lensToggles.map((lens) => ({ ...lens, onToggle: () => toggleLens(lens.id) }))}
         selectedNodeId={activeNodeId}
       />
       <MiniMap
@@ -205,4 +200,4 @@ export function GraphView({ graph, selectedNodeId, onSelectNode, height = 460 }:
       />
     </section>
   );
-}
+});

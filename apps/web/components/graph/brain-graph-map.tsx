@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { memo, useMemo, type CSSProperties } from "react";
 
 import type { GraphModel, GraphNode } from "../../lib/types/graph";
 import { GraphView } from "./graph-view";
@@ -18,17 +18,22 @@ const brainMapStyle: CSSProperties = {
   minHeight: 560,
 };
 
-export function BrainGraphMap({ graph, selectedNodeId, onSelectNode, height = 640, style }: BrainGraphMapProps) {
+export const BrainGraphMap = memo(function BrainGraphMap({ graph, selectedNodeId, onSelectNode, height = 640, style }: BrainGraphMapProps) {
+  const sectionStyle = useMemo(
+    () => ({
+      ...brainMapStyle,
+      ...style,
+    }),
+    [style],
+  );
+
   return (
     <section
       aria-label="Brain map graph"
       data-testid="penny-brain-graph-map"
-      style={{
-        ...brainMapStyle,
-        ...style,
-      }}
+      style={sectionStyle}
     >
       <GraphView graph={graph} selectedNodeId={selectedNodeId} onSelectNode={onSelectNode} height={height} />
     </section>
   );
-}
+});

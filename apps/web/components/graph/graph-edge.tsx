@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import type { GraphEdge as GraphEdgeModel } from "../../lib/types/graph";
 import type { PositionedGraphNode } from "./graph-layout";
 
@@ -22,7 +24,7 @@ function edgeStroke(edge: GraphEdgeModel, emphasized: boolean) {
   return emphasized ? "rgba(71, 106, 85, 0.48)" : "rgba(23, 32, 27, 0.16)";
 }
 
-export function GraphEdge({ active = false, edge, source, target, emphasized = false, muted = false }: GraphEdgeProps) {
+export const GraphEdge = memo(function GraphEdge({ active = false, edge, source, target, emphasized = false, muted = false }: GraphEdgeProps) {
   return (
     <g className="penny-graph-edge-group" opacity={muted ? 0.24 : 1}>
       <line
@@ -50,4 +52,4 @@ export function GraphEdge({ active = false, edge, source, target, emphasized = f
       ) : null}
     </g>
   );
-}
+});

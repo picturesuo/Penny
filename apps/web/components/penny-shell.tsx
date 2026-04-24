@@ -343,6 +343,41 @@ function toCommandConfidence(confidenceBps: number | null | undefined) {
   return typeof confidenceBps === "number" ? Math.round(confidenceBps / 100) : null;
 }
 
+function isWorkspaceSelectionResult(value: unknown): value is WorkspaceSelectionResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const result = value as Partial<WorkspaceSelectionResult>;
+
+  return (
+    (result.mode === "Brain" || result.mode === "Challenge" || result.mode === "Learn") &&
+    typeof result.mapId === "string" &&
+    (typeof result.claimId === "string" || result.claimId === null)
+  );
+}
+
+function isClaimCreateResult(value: unknown): value is { claimId: string } {
+  return Boolean(value && typeof value === "object" && typeof (value as { claimId?: unknown }).claimId === "string");
+}
+
+function isChallengeStartResult(value: unknown): value is { roundId: string } {
+  return Boolean(value && typeof value === "object" && typeof (value as { roundId?: unknown }).roundId === "string");
+}
+
+function isConfidenceRecordResponse(value: unknown): value is ConfidenceRecordResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const confidence = (value as { confidence?: unknown }).confidence;
+
+  return (
+    Boolean(confidence && typeof confidence === "object") &&
+    typeof (confidence as { ratingBps?: unknown }).ratingBps === "number"
+  );
+}
+
 function formatTimestamp(value: string | null | undefined) {
   if (!value) {
     return "Time not recorded";
@@ -609,8 +644,8 @@ async function fetchProjection<T>(path: string, signal: AbortSignal): Promise<T>
   });
 
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error ?? `Projection request failed with ${response.status}.`);
+    const payload = await response.json().catch(() => null);
+    throw new Error(readApiErrorMessage(payload, `Projection request failed with ${response.status}.`));
   }
 
   return (await response.json()) as T;
@@ -627,8 +662,8 @@ async function postCommand<T>(path: string, body: Record<string, unknown>): Prom
   });
 
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error ?? `Command failed with ${response.status}.`);
+    const payload = await response.json().catch(() => null);
+    throw new Error(readApiErrorMessage(payload, `Command failed with ${response.status}.`));
   }
 
   return (await response.json()) as T;
@@ -659,11 +694,23 @@ async function postConfidence(body: Record<string, unknown>): Promise<Confidence
   });
 
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error ?? `Confidence update failed with ${response.status}.`);
+    const payload = await response.json().catch(() => null);
+    throw new Error(readApiErrorMessage(payload, `Confidence update failed with ${response.status}.`));
   }
 
   return response.json() as Promise<ConfidenceRecordResponse>;
+}
+
+function readApiErrorMessage(payload: unknown, fallback: string) {
+  if (payload && typeof payload === "object" && "error" in payload) {
+    const message = (payload as { error?: unknown }).error;
+
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
 }
 
 function parseWorkspaceSelectionHref(href: string | null | undefined) {
@@ -787,6 +834,9 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
           ratingBps,
           source: "brain-inspector",
         });
+        if (!isConfidenceRecordResponse(result)) {
+          throw new Error("Confidence update response was incomplete.");
+        }
 
         patchClaimInCurrentView(claimId, {
           confidenceBps: result.confidence.ratingBps,
@@ -826,7 +876,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
           : current.shell;
         let view = shouldResetProjection ? null : current.view;
 
-        if (view && "currentContext" in view) {
+        if (view && "currentContext" in view && "claims" in view) {
           const selectedClaim = selection.claimId
             ? view.claims.find((claim) => claim.id === selection.claimId) ?? view.selectedClaim
             : null;
@@ -869,15 +919,19 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
     },
     [setActiveSessionId, setCurrentMode, setSelectedNodeId],
   );
-  const commandItems = buildCommandItems({
-    activeMode,
-    actionPending: actionState.status === "pending",
-    onSelectClaim: selectClaim,
-    onSelectMap: selectMap,
-    onSwitchMode: switchMode,
-    shell: state.shell,
-    view: state.view,
-  });
+  const commandItems = useMemo(
+    () =>
+      buildCommandItems({
+        activeMode,
+        actionPending: actionState.status === "pending",
+        onSelectClaim: selectClaim,
+        onSelectMap: selectMap,
+        onSwitchMode: switchMode,
+        shell: state.shell,
+        view: state.view,
+      }),
+    [activeMode, actionState.status, state.shell, state.view],
+  );
   const selectBackendSearchResult = useCallback(async (result: CommandResult) => {
     const parsedSelection = parseWorkspaceSelectionHref(result.href);
 
@@ -905,6 +959,9 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         claimId: parsedSelection.claimId,
         requestId: createRequestId("select-search-result"),
       });
+      if (!isWorkspaceSelectionResult(workspaceSelection)) {
+        throw new Error("Workspace selection response was incomplete.");
+      }
       syncWorkspaceSelection(workspaceSelection);
       setActionState({
         status: "success",
@@ -921,30 +978,33 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       finishRequest();
     }
   }, [beginRequest, finishRequest, invalidateProjection, syncWorkspaceSelection]);
+  const clearGraphSelection = useCallback(() => {
+    if (!currentSelectedNodeId) {
+      return false;
+    }
+
+    setSelectedNodeId(null);
+    return true;
+  }, [currentSelectedNodeId, setSelectedNodeId]);
+  const focusContextInput = useCallback(() => {
+    if (activeMode !== "brain" || !claimComposerTextareaRef.current || claimComposerTextareaRef.current.disabled) {
+      return false;
+    }
+
+    claimComposerTextareaRef.current.focus();
+    return true;
+  }, [activeMode]);
+  const switchModeFromShortcut = useCallback((mode: WorkspaceMode) => {
+    if (actionState.status !== "pending") {
+      void switchMode(mode);
+    }
+  }, [actionState.status]);
   const commandPalette = useCommandPalette({
     items: commandItems,
-    onClearSelection: () => {
-      if (!currentSelectedNodeId) {
-        return false;
-      }
-
-      setSelectedNodeId(null);
-      return true;
-    },
-    onFocusContextInput: () => {
-      if (activeMode !== "brain" || !claimComposerTextareaRef.current || claimComposerTextareaRef.current.disabled) {
-        return false;
-      }
-
-      claimComposerTextareaRef.current.focus();
-      return true;
-    },
+    onClearSelection: clearGraphSelection,
+    onFocusContextInput: focusContextInput,
     onSelectBackendResult: selectBackendSearchResult,
-    onSwitchMode: (mode) => {
-      if (actionState.status !== "pending") {
-        void switchMode(mode);
-      }
-    },
+    onSwitchMode: switchModeFromShortcut,
   });
 
   useEffect(() => {
@@ -1053,6 +1113,9 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         claimId,
         requestId: createRequestId("switch-mode"),
       });
+      if (!isWorkspaceSelectionResult(selection)) {
+        throw new Error("Workspace selection response was incomplete.");
+      }
       syncWorkspaceSelection(selection);
       setActionState({
         status: "success",
@@ -1086,6 +1149,9 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         claimId: null,
         requestId: createRequestId("select-map"),
       });
+      if (!isWorkspaceSelectionResult(selection)) {
+        throw new Error("Workspace selection response was incomplete.");
+      }
       syncWorkspaceSelection(selection);
       setActionState({
         status: "success",
@@ -1129,6 +1195,9 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         claimId,
         requestId: createRequestId("select-claim"),
       });
+      if (!isWorkspaceSelectionResult(selection)) {
+        throw new Error("Workspace selection response was incomplete.");
+      }
       syncWorkspaceSelection(selection);
       setActionState({
         status: "success",
@@ -1207,6 +1276,9 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         text,
         requestId: createRequestId("create-claim"),
       });
+      if (!isClaimCreateResult(created)) {
+        throw new Error("Create claim response was incomplete.");
+      }
 
       setState((current) => {
         const view = current.view;
@@ -1235,6 +1307,9 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         claimId: created.claimId,
         requestId: createRequestId("select-created-claim"),
       });
+      if (!isWorkspaceSelectionResult(selection)) {
+        throw new Error("Workspace selection response was incomplete.");
+      }
       syncWorkspaceSelection(selection);
 
       setActionState({
@@ -1296,6 +1371,9 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         claimId,
         requestId: createRequestId("start-challenge"),
       });
+      if (!isChallengeStartResult(started)) {
+        throw new Error("Challenge start response was incomplete.");
+      }
       setActiveSessionId(`challenge-round-${started.roundId}`);
       setActionState({
         status: "success",
@@ -1424,7 +1502,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         <div className="penny-breadcrumbs">
           {breadcrumbs.length > 0 ? (
             breadcrumbs.map((item, index) => (
-              <span key={item.id} className="penny-breadcrumb-item">
+              <span key={`${item.kind}:${item.id}:${index}`} className="penny-breadcrumb-item">
                 {index > 0 ? <span className="penny-breadcrumb-separator">/</span> : null}
                 <span>{item.label}</span>
               </span>
@@ -1611,16 +1689,20 @@ function BrainProjection({
   const mapTitle = view.mapSummary?.title ?? "Workspace map";
   const graph = useMemo(() => createBrainGraph(view as Parameters<typeof createBrainGraph>[0]), [view]);
   const selectedNodeId = storedSelectedNodeId ?? graph.selectedNodeId ?? null;
-  const inspector = createWorkspaceInspector(view, graph, selectedNodeId);
+  const inspector = useMemo(() => createWorkspaceInspector(view, graph, selectedNodeId), [graph, selectedNodeId, view]);
   const selectedClaim = inspector.selectedClaim;
+  const contradictionMarkers = useMemo(
+    () => inspector.contradictionMarkers.map((marker) => ({ ...marker, severity: "medium" as const })),
+    [inspector.contradictionMarkers],
+  );
 
-  function inspectGraphNode(node: GraphNode) {
+  const inspectGraphNode = useCallback((node: GraphNode) => {
     setSelectedNodeId(node.id);
 
     if (node.kind === "claim") {
       void onSelectClaim(node.id);
     }
-  }
+  }, [onSelectClaim, setSelectedNodeId]);
 
   return (
     <div className="penny-workspace-grid">
@@ -1655,9 +1737,9 @@ function BrainProjection({
           ) : null}
           {view.claims.length > 0 ? (
             <div className="penny-list">
-              {view.claims.map((claim) => (
+              {view.claims.map((claim, index) => (
                 <button
-                  key={claim.id}
+                  key={`${claim.id}:${index}`}
                   type="button"
                   className="penny-claim-button"
                   data-selected={selectedNodeId === claim.id}
@@ -1693,7 +1775,7 @@ function BrainProjection({
         ariaLabel="Brain inspector"
         className="penny-inspector-rail"
         connections={inspector.keyConnections}
-        contradictions={inspector.contradictionMarkers.map((marker) => ({ ...marker, severity: "medium" as const }))}
+        contradictions={contradictionMarkers}
         dependencies={inspector.dependencies}
         selectedTitle={inspector.node?.label ?? "No node selected"}
       >

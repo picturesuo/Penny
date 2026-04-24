@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import { memo, type KeyboardEvent } from "react";
 
 import type { GraphNode as GraphNodeModel } from "../../lib/types/graph";
 import { ConfidenceChip } from "../confidence/ConfidenceChip";
@@ -18,7 +18,7 @@ function displayLabel(label: string) {
   return label.length > 32 ? `${label.slice(0, 31)}...` : label;
 }
 
-export function GraphNode({ connected = false, muted = false, node, selected = false, onSelectNode }: GraphNodeProps) {
+export const GraphNode = memo(function GraphNode({ connected = false, muted = false, node, selected = false, onSelectNode }: GraphNodeProps) {
   const palette = graphClusterColors[getGraphNodeCluster(node)];
   const radius = getGraphNodeRadius(node, selected);
   const confidenceBps = typeof node.confidenceBps === "number" ? node.confidenceBps : typeof node.confidence === "number" ? node.confidence * 100 : null;
@@ -89,4 +89,4 @@ export function GraphNode({ connected = false, muted = false, node, selected = f
       ) : null}
     </g>
   );
-}
+});

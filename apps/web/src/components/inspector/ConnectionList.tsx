@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 export type InspectorConnection = {
   id: string;
   title: string;
@@ -38,13 +40,13 @@ const buttonStyle = {
   textAlign: "left",
 } as const;
 
-export function ConnectionList({ emptyLabel = "No connections projected yet.", items, title = "Key connections" }: ConnectionListProps) {
+export const ConnectionList = memo(function ConnectionList({ emptyLabel = "No connections projected yet.", items, title = "Key connections" }: ConnectionListProps) {
   return (
     <section aria-label={title}>
       <p className="penny-kicker">{title}</p>
       {items.length > 0 ? (
         <ul style={listStyle}>
-          {items.map((item) => {
+          {items.map((item, index) => {
             const content = (
               <>
                 <strong style={{ color: "#17201b", overflowWrap: "anywhere" }}>{item.title}</strong>
@@ -53,7 +55,7 @@ export function ConnectionList({ emptyLabel = "No connections projected yet.", i
             );
 
             return (
-              <li key={item.id} style={{ listStyle: "none" }}>
+              <li key={`${item.id}:${index}`} style={{ listStyle: "none" }}>
                 {item.onSelect ? (
                   <button type="button" style={buttonStyle} onClick={item.onSelect}>
                     {content}
@@ -70,4 +72,4 @@ export function ConnectionList({ emptyLabel = "No connections projected yet.", i
       )}
     </section>
   );
-}
+});

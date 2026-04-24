@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 export type ContradictionMarker = {
   id: string;
   title: string;
@@ -35,7 +37,7 @@ const markerStyle = {
   boxShadow: "inset 3px 0 0 #a23b32",
 } as const;
 
-export function ContradictionMarkers({
+export const ContradictionMarkers = memo(function ContradictionMarkers({
   emptyLabel = "No tension found yet.",
   markers,
   title = "Show the tension",
@@ -73,4 +75,4 @@ export function ContradictionMarkers({
       )}
     </section>
   );
-}
+});

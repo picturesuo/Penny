@@ -1,3 +1,5 @@
+import { memo, useMemo } from "react";
+
 import type { GraphCluster, GraphEdge as GraphEdgeModel, GraphNode as GraphNodeModel, GraphViewport } from "../../lib/types/graph";
 import { ClusterLabel } from "./cluster-label";
 import { GraphEdge } from "./graph-edge";
@@ -18,6 +20,8 @@ type GraphCanvasProps = {
   focusedCluster?: GraphCluster | null;
   onSelectNode?: (node: GraphNodeModel) => void;
 };
+
+const defaultActiveLensIds = new Set<GraphLensId>(["claims", "contradictions", "dependencies", "recent"]);
 
 function confidenceValue(node: PositionedGraphNode) {
   if (typeof node.confidence === "number") {
@@ -64,41 +68,67 @@ function isRecentEdge(edge: GraphEdgeModel, nodesById: Map<string, PositionedGra
   return Boolean((source && isRecentNode(source)) || (target && isRecentNode(target)));
 }
 
-export function GraphCanvas({
+export const GraphCanvas = memo(function GraphCanvas({
   nodes,
   edges,
   nodesById,
   viewport,
-  activeLensIds = new Set<GraphLensId>(["claims", "contradictions", "dependencies", "recent"]),
+  activeLensIds = defaultActiveLensIds,
   selectedNodeId,
   focusNodeId = null,
   focusedCluster = null,
   onSelectNode,
 }: GraphCanvasProps) {
   const viewTransform = `translate(${viewport.translateX} ${viewport.translateY}) scale(${viewport.scale})`;
-  const clusters = Array.from(new Set(nodes.map((node) => getGraphNodeCluster(node))));
-  const activeEdges = selectedNodeId ? edges.filter((edge) => edge.source === selectedNodeId || edge.target === selectedNodeId) : [];
-  const activeEdgeIds = new Set(activeEdges.map((edge) => edge.id));
-  const focusEdges = focusNodeId ? edges.filter((edge) => edge.source === focusNodeId || edge.target === focusNodeId) : [];
-  const focusEdgeIds = new Set(focusEdges.map((edge) => edge.id));
-  const connectedNodeIds = new Set<string>();
-  const focusedNodeIds = new Set<string>();
+  const clusters = useMemo(() => Array.from(new Set(nodes.map((node) => getGraphNodeCluster(node)))), [nodes]);
+  const activeEdgeIds = useMemo(() => {
+    if (!selectedNodeId) {
+      return new Set<string>();
+    }
 
-  if (selectedNodeId) {
-    connectedNodeIds.add(selectedNodeId);
-    activeEdges.forEach((edge) => {
-      connectedNodeIds.add(edge.source);
-      connectedNodeIds.add(edge.target);
-    });
-  }
+    return new Set(edges.filter((edge) => edge.source === selectedNodeId || edge.target === selectedNodeId).map((edge) => edge.id));
+  }, [edges, selectedNodeId]);
+  const focusEdgeIds = useMemo(() => {
+    if (!focusNodeId) {
+      return new Set<string>();
+    }
 
-  if (focusNodeId) {
-    focusedNodeIds.add(focusNodeId);
-    focusEdges.forEach((edge) => {
-      focusedNodeIds.add(edge.source);
-      focusedNodeIds.add(edge.target);
+    return new Set(edges.filter((edge) => edge.source === focusNodeId || edge.target === focusNodeId).map((edge) => edge.id));
+  }, [edges, focusNodeId]);
+  const connectedNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    if (!selectedNodeId) {
+      return ids;
+    }
+
+    ids.add(selectedNodeId);
+    edges.forEach((edge) => {
+      if (edge.source === selectedNodeId || edge.target === selectedNodeId) {
+        ids.add(edge.source);
+        ids.add(edge.target);
+      }
     });
-  }
+
+    return ids;
+  }, [edges, selectedNodeId]);
+  const focusedNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    if (!focusNodeId) {
+      return ids;
+    }
+
+    ids.add(focusNodeId);
+    edges.forEach((edge) => {
+      if (edge.source === focusNodeId || edge.target === focusNodeId) {
+        ids.add(edge.source);
+        ids.add(edge.target);
+      }
+    });
+
+    return ids;
+  }, [edges, focusNodeId]);
 
   return (
     <svg aria-label="Graph canvas" width="100%" height="100%" viewBox={graphViewBoxValue}>
@@ -114,7 +144,7 @@ export function GraphCanvas({
           .penny-graph-node-group .penny-graph-node-label {
             transform-box: fill-box;
             transform-origin: center;
-            transition: stroke var(--motion-standard), stroke-width var(--motion-standard), opacity var(--motion-standard), transform var(--motion-standard);
+            transition: stroke 160ms ease, stroke-width var(--motion-standard), opacity var(--motion-standard), transform var(--motion-standard);
           }
 
           .penny-graph-node-group:hover .penny-graph-node-shell,
@@ -179,4 +209,4 @@ export function GraphCanvas({
       </g>
     </svg>
   );
-}
+});

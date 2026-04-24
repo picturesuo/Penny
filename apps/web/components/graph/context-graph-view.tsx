@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 
 import type { GraphModel, GraphNode } from "../../lib/types/graph";
 import { GraphCanvas } from "./graph-canvas";
@@ -14,7 +14,12 @@ type ContextGraphViewProps = {
   height?: number;
 };
 
-export function ContextGraphView({ graph, selectedNodeId, onSelectNode, height = 260 }: ContextGraphViewProps) {
+const contextViewport = {
+  ...initialGraphViewport,
+  scale: 0.86,
+};
+
+export const ContextGraphView = memo(function ContextGraphView({ graph, selectedNodeId, onSelectNode, height = 260 }: ContextGraphViewProps) {
   const nodes = useMemo(() => positionGraphNodes(graph.nodes), [graph.nodes]);
   const nodesById = useMemo(() => createNodeLookup(nodes), [nodes]);
   const activeNodeId = selectedNodeId ?? graph.selectedNodeId ?? null;
@@ -33,13 +38,10 @@ export function ContextGraphView({ graph, selectedNodeId, onSelectNode, height =
         nodes={nodes}
         edges={graph.edges}
         nodesById={nodesById}
-        viewport={{
-          ...initialGraphViewport,
-          scale: 0.86,
-        }}
+        viewport={contextViewport}
         selectedNodeId={activeNodeId}
         onSelectNode={onSelectNode}
       />
     </section>
   );
-}
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { searchApiClient, type CommandResult } from "../../lib/api/search";
 
@@ -25,6 +25,8 @@ type UseCommandPaletteInput = {
 };
 
 type BackendSearchStatus = "idle" | "loading" | "available" | "unavailable" | "error";
+
+const BACKEND_SEARCH_DEBOUNCE_MS = 220;
 
 function normalizeSearchText(value: string) {
   return value.trim().toLowerCase();
@@ -74,6 +76,20 @@ function createSearchTodoItem(): CommandPaletteItem {
   };
 }
 
+function createSearchErrorItem(): CommandPaletteItem {
+  return {
+    id: "error:global-search-backend",
+    type: "session",
+    title: "Search request failed",
+    subtitle: "Local commands are still available.",
+    confidence: null,
+    href: null,
+    disabled: true,
+    keywords: ["search", "backend", "error"],
+    onSelect: () => undefined,
+  };
+}
+
 export function useCommandPalette({
   enableBackendSearch = true,
   items,
@@ -84,8 +100,14 @@ export function useCommandPalette({
 }: UseCommandPaletteInput) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [debouncedBackendQuery, setDebouncedBackendQuery] = useState("");
   const [backendResults, setBackendResults] = useState<CommandPaletteItem[] | null>(null);
   const [backendSearchStatus, setBackendSearchStatus] = useState<BackendSearchStatus>("idle");
+  const onSelectBackendResultRef = useRef(onSelectBackendResult);
+
+  useEffect(() => {
+    onSelectBackendResultRef.current = onSelectBackendResult;
+  }, [onSelectBackendResult]);
 
   const open = useCallback(() => {
     setIsOpen(true);
@@ -168,46 +190,59 @@ export function useCommandPalette({
     const normalizedQuery = normalizeSearchText(query);
 
     if (!enableBackendSearch || !normalizedQuery) {
+      setDebouncedBackendQuery("");
       setBackendResults(null);
       setBackendSearchStatus("idle");
       return;
     }
 
-    const controller = new AbortController();
+    setBackendResults(null);
+    setBackendSearchStatus("loading");
     const timeout = window.setTimeout(() => {
-      setBackendSearchStatus("loading");
+      setDebouncedBackendQuery(normalizedQuery);
+    }, BACKEND_SEARCH_DEBOUNCE_MS);
 
-      searchApiClient
-        .search(normalizedQuery, { signal: controller.signal })
-        .then((results) => {
-          if (controller.signal.aborted) {
-            return;
-          }
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [enableBackendSearch, query]);
 
-          if (results === null) {
-            setBackendResults(null);
-            setBackendSearchStatus("unavailable");
-            return;
-          }
+  useEffect(() => {
+    if (!enableBackendSearch || !debouncedBackendQuery) {
+      return;
+    }
 
-          setBackendResults(results.map((result) => backendResultToCommandItem(result, onSelectBackendResult)));
-          setBackendSearchStatus("available");
-        })
-        .catch(() => {
-          if (controller.signal.aborted) {
-            return;
-          }
+    const controller = new AbortController();
 
+    searchApiClient
+      .search(debouncedBackendQuery, { signal: controller.signal })
+      .then((results) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        if (results === null) {
           setBackendResults(null);
-          setBackendSearchStatus("error");
-        });
-    }, 160);
+          setBackendSearchStatus("unavailable");
+          return;
+        }
+
+        setBackendResults(results.map((result) => backendResultToCommandItem(result, onSelectBackendResultRef.current)));
+        setBackendSearchStatus("available");
+      })
+      .catch(() => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setBackendResults(null);
+        setBackendSearchStatus("error");
+      });
 
     return () => {
       controller.abort();
-      window.clearTimeout(timeout);
     };
-  }, [enableBackendSearch, onSelectBackendResult, query]);
+  }, [debouncedBackendQuery, enableBackendSearch]);
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = normalizeSearchText(query);
@@ -226,6 +261,10 @@ export function useCommandPalette({
       return [...localResults, createSearchTodoItem()];
     }
 
+    if (backendSearchStatus === "error") {
+      return [...localResults, createSearchErrorItem()];
+    }
+
     return localResults;
   }, [backendResults, backendSearchStatus, items, query]);
 
@@ -235,10 +274,15 @@ export function useCommandPalette({
         return;
       }
 
-      await item.onSelect();
+      try {
+        await item.onSelect();
 
-      if (item.href && item.shouldNavigateAfterSelect) {
-        window.location.assign(item.href);
+        if (item.href && item.shouldNavigateAfterSelect) {
+          window.location.assign(item.href);
+        }
+      } catch {
+        setBackendSearchStatus("error");
+        return;
       }
 
       close();

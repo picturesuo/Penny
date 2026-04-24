@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 
 import { ConnectionList, type InspectorConnection } from "./ConnectionList";
 import { ContradictionMarkers, type ContradictionMarker } from "./ContradictionMarkers";
@@ -42,7 +42,7 @@ const activityListStyle = {
   padding: 0,
 } as const;
 
-export function InspectorRail({
+export const InspectorRail = memo(function InspectorRail({
   ariaLabel = "Inspector",
   activity = [],
   children,
@@ -87,8 +87,8 @@ export function InspectorRail({
         <p className="penny-kicker">Recent activity</p>
         {activity.length > 0 ? (
           <ul style={activityListStyle}>
-            {activity.map((item) => (
-              <li key={item.id} style={{ listStyle: "none" }}>
+            {activity.map((item, index) => (
+              <li key={`${item.id}:${index}`} style={{ listStyle: "none" }}>
                 <strong style={{ color: "#17201b", overflowWrap: "anywhere" }}>{item.title}</strong>
                 {item.detail ? <span style={{ color: "#637069", display: "block", fontSize: 13, lineHeight: 1.45 }}>{item.detail}</span> : null}
               </li>
@@ -100,4 +100,4 @@ export function InspectorRail({
       </section>
     </aside>
   );
-}
+});
