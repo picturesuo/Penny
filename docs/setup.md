@@ -11,6 +11,23 @@
 pnpm install
 ```
 
+## Environment
+
+Set these before running the backend or AI verification suite:
+
+- `DATABASE_URL`
+- `DATABASE_DIRECT_URL`
+- `ANTHROPIC_API_KEY`
+- `XAI_API_KEY`
+- `LANGFUSE_PUBLIC_KEY`
+- `LANGFUSE_SECRET_KEY`
+
+Optional local overrides:
+
+- `ANTHROPIC_BASE_URL`
+- `XAI_BASE_URL`
+- `LANGFUSE_BASE_URL`
+
 ## Run locally
 
 ```bash

@@ -15,7 +15,8 @@
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
     "db:typecheck": "tsc -p server/db/tsconfig.json --noEmit",
-    "test:integration": "tsx --test tests/integration/**/*.test.ts"
+    "test:integration": "tsx --test tests/integration/**/*.test.ts",
+    "test:mvp-verification": "tsx --test tests/ai/*.test.ts tests/commands/*.test.ts tests/projections/*.test.ts tests/unit/emitEvent.test.ts tests/integration/auth-required-routes.test.ts tests/integration/create-map-route.test.ts tests/integration/create-claim-route.test.ts tests/integration/set-workspace-selection-command.test.ts tests/integration/start-challenge-round-command.test.ts tests/integration/request-challenge-critique-route.test.ts tests/integration/challenge-respond-route.test.ts tests/integration/workspace-shell-route.test.ts tests/integration/workspace-brain-route.test.ts tests/integration/workspace-challenge-route.test.ts tests/integration/workspace-learn-route.test.ts tests/integration/challenge-critique-placeholder-flow.test.ts tests/integration/challenge-critique-projection-flow.test.ts tests/integration/challenge-critique-failure-projection-flow.test.ts tests/integration/moves-events-command-matrix.test.ts tests/integration/backend-mvp.test.ts tests/integration/backend-acceptance-flow.test.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

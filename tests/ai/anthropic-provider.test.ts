@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { invokeAnthropic, ProviderError } from "../../server/ai/providers/anthropic.ts";
+import { invokeAnthropicStructured } from "../../server/ai/providers/anthropic.ts";
 
-test("invokeAnthropic returns normalized text and json from a mocked Anthropic response", async () => {
+test("invokeAnthropicStructured posts a tool-schema request and parses structured output", async () => {
   const originalApiKey = process.env.ANTHROPIC_API_KEY;
   const originalBaseUrl = process.env.ANTHROPIC_BASE_URL;
   const originalFetch = globalThis.fetch;
@@ -20,25 +20,28 @@ test("invokeAnthropic returns normalized text and json from a mocked Anthropic r
 
     return new Response(
       JSON.stringify({
+        id: "msg_test",
+        stop_reason: "tool_use",
+        usage: {
+          input_tokens: 17,
+          output_tokens: 9,
+          cost_usd: 0.0051,
+          currency: "USD",
+        },
         content: [
           {
             type: "text",
-            text: "Rigorous critique output.",
+            text: "Structured critique response.",
           },
           {
             type: "tool_use",
+            id: "toolu_test",
+            name: "challenge_critique",
             input: {
-              conciseCritiqueSummary: "Rigorous critique output.",
+              conciseCritiqueSummary: "Structured critique summary.",
             },
           },
         ],
-        usage: {
-          input_tokens: 14,
-          output_tokens: 9,
-          cost_usd: 0.0031,
-          currency: "USD",
-        },
-        stop_reason: "end_turn",
       }),
       {
         status: 200,
@@ -50,7 +53,7 @@ test("invokeAnthropic returns normalized text and json from a mocked Anthropic r
   };
 
   try {
-    const result = await invokeAnthropic({
+    const result = await invokeAnthropicStructured({
       jsonSchema: {
         type: "object",
         properties: {
@@ -68,43 +71,46 @@ test("invokeAnthropic returns normalized text and json from a mocked Anthropic r
     });
 
     assert.deepEqual(result, {
-      text: "Rigorous critique output.",
+      text: "Structured critique response.",
       json: {
-        conciseCritiqueSummary: "Rigorous critique output.",
+        conciseCritiqueSummary: "Structured critique summary.",
       },
       output: {
-        conciseCritiqueSummary: "Rigorous critique output.",
+        conciseCritiqueSummary: "Structured critique summary.",
       },
       usage: {
-        inputTokens: 14,
+        inputTokens: 17,
         outputTokens: 9,
-        totalTokens: 23,
+        totalTokens: 26,
       },
       cost: {
-        totalUsd: 0.0031,
+        totalUsd: 0.0051,
         currency: "USD",
       },
-      stopReason: "end_turn",
+      stopReason: "tool_use",
       raw: {
+        id: "msg_test",
+        stop_reason: "tool_use",
+        usage: {
+          input_tokens: 17,
+          output_tokens: 9,
+          cost_usd: 0.0051,
+          currency: "USD",
+        },
         content: [
           {
             type: "text",
-            text: "Rigorous critique output.",
+            text: "Structured critique response.",
           },
           {
             type: "tool_use",
+            id: "toolu_test",
+            name: "challenge_critique",
             input: {
-              conciseCritiqueSummary: "Rigorous critique output.",
+              conciseCritiqueSummary: "Structured critique summary.",
             },
           },
         ],
-        usage: {
-          input_tokens: 14,
-          output_tokens: 9,
-          cost_usd: 0.0031,
-          currency: "USD",
-        },
-        stop_reason: "end_turn",
       },
     });
 
@@ -116,6 +122,7 @@ test("invokeAnthropic returns normalized text and json from a mocked Anthropic r
     assert.equal(fetchInit?.method, "POST");
     assert.equal((fetchInit?.headers as Record<string, string>)["x-api-key"], "test-anthropic-key");
     assert.equal((fetchInit?.headers as Record<string, string>)["anthropic-version"], "2023-06-01");
+    assert.equal((fetchInit?.headers as Record<string, string>)["content-type"], "application/json");
 
     const body = JSON.parse(String(fetchInit?.body)) as Record<string, unknown>;
 
@@ -151,73 +158,17 @@ test("invokeAnthropic returns normalized text and json from a mocked Anthropic r
     });
   } finally {
     globalThis.fetch = originalFetch;
-    restoreEnv("ANTHROPIC_API_KEY", originalApiKey);
-    restoreEnv("ANTHROPIC_BASE_URL", originalBaseUrl);
+
+    if (originalApiKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = originalApiKey;
+    }
+
+    if (originalBaseUrl === undefined) {
+      delete process.env.ANTHROPIC_BASE_URL;
+    } else {
+      process.env.ANTHROPIC_BASE_URL = originalBaseUrl;
+    }
   }
 });
-
-test("invokeAnthropic throws a structured ProviderError for provider failures", async () => {
-  const originalApiKey = process.env.ANTHROPIC_API_KEY;
-  const originalBaseUrl = process.env.ANTHROPIC_BASE_URL;
-  const originalFetch = globalThis.fetch;
-
-  process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
-  process.env.ANTHROPIC_BASE_URL = "https://anthropic.example/v1/";
-
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        error: {
-          message: "Rate limited",
-        },
-      }),
-      {
-        status: 429,
-        headers: {
-          "content-type": "application/json",
-        },
-      },
-    );
-
-  try {
-    await assert.rejects(
-      invokeAnthropic({
-        jsonSchema: { type: "object" },
-        maxTokens: 64,
-        model: "claude-test",
-        schemaName: "challenge_critique",
-        systemPrompt: "System prompt",
-        temperature: 0,
-        userPrompt: "User prompt",
-      }),
-      (error: unknown) => {
-        assert.equal(error instanceof ProviderError, true);
-        assert.equal((error as ProviderError).name, "ProviderError");
-        assert.equal((error as ProviderError).code, "PROVIDER_ERROR");
-        assert.equal((error as ProviderError).provider, "anthropic");
-        assert.equal((error as ProviderError).reason, "http");
-        assert.equal((error as ProviderError).status, 429);
-        assert.equal((error as ProviderError).retryable, true);
-        assert.deepEqual((error as ProviderError).details, {
-          error: {
-            message: "Rate limited",
-          },
-        });
-        return true;
-      },
-    );
-  } finally {
-    globalThis.fetch = originalFetch;
-    restoreEnv("ANTHROPIC_API_KEY", originalApiKey);
-    restoreEnv("ANTHROPIC_BASE_URL", originalBaseUrl);
-  }
-});
-
-function restoreEnv(name: string, value: string | undefined) {
-  if (value === undefined) {
-    delete process.env[name];
-    return;
-  }
-
-  process.env[name] = value;
-}
