@@ -3,6 +3,7 @@ import type { BrainThoughtViewModel, BrainViewModel } from "../../lib/viewmodels
 
 type BrainScreenProps = {
   model: BrainViewModel;
+  state?: "empty" | "error" | "loading" | "populated";
   statusMessage?: string | null;
   onSelectThought?: (thoughtId: string) => void;
 };
@@ -166,9 +167,43 @@ const styles = {
     color: "#637069",
     margin: "0 0 12px",
   },
+  stateBanner: {
+    border: "1px solid #d8ded5",
+    borderRadius: 8,
+    margin: "0 0 14px",
+    padding: 14,
+  },
+  stateBannerLoading: {
+    background: "#eef2eb",
+    color: "#3c6177",
+  },
+  stateBannerError: {
+    background: "#fff7f4",
+    borderColor: "#e0b4aa",
+    color: "#8f3027",
+  },
+  stateBannerEmpty: {
+    background: "#fffdf7",
+    color: "#637069",
+  },
+  stateBannerPopulated: {
+    background: "#eff6f1",
+    color: "#174c3b",
+  },
+  stateTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    margin: 0,
+  },
+  stateBody: {
+    lineHeight: 1.5,
+    margin: "4px 0 0",
+  },
 } satisfies Record<string, CSSProperties>;
 
-export function BrainScreen({ model, onSelectThought, statusMessage }: BrainScreenProps) {
+export function BrainScreen({ model, onSelectThought, state, statusMessage }: BrainScreenProps) {
+  const screenState = state ?? (model.stream.length > 0 ? "populated" : "empty");
+
   return (
     <main style={styles.shell}>
       <header style={styles.header}>
@@ -193,7 +228,7 @@ export function BrainScreen({ model, onSelectThought, statusMessage }: BrainScre
           <h2 id="brain-stream-heading" style={styles.thoughtTitle}>
             Current thoughts
           </h2>
-          {statusMessage ? <p style={styles.status}>{statusMessage}</p> : null}
+          <BrainStateBanner state={screenState} message={statusMessage} />
           {model.stream.length > 0 ? (
             <ol style={styles.list}>
               {model.stream.map((thought) => (
@@ -261,6 +296,38 @@ export function BrainScreen({ model, onSelectThought, statusMessage }: BrainScre
         </aside>
       </div>
     </main>
+  );
+}
+
+function BrainStateBanner({ message, state }: { message?: string | null; state: NonNullable<BrainScreenProps["state"]> }) {
+  const copy = {
+    empty: {
+      title: "Empty Brain state",
+      body: message ?? "No thoughts have been projected for this map yet.",
+      style: styles.stateBannerEmpty,
+    },
+    error: {
+      title: "Brain error state",
+      body: message ?? "The Brain projection could not be loaded.",
+      style: styles.stateBannerError,
+    },
+    loading: {
+      title: "Brain loading state",
+      body: message ?? "Loading the Brain projection.",
+      style: styles.stateBannerLoading,
+    },
+    populated: {
+      title: "Populated Brain state",
+      body: message ?? "Thoughts are loaded from the Brain projection.",
+      style: styles.stateBannerPopulated,
+    },
+  }[state];
+
+  return (
+    <div aria-live={state === "loading" ? "polite" : undefined} role={state === "error" ? "alert" : "status"} style={{ ...styles.stateBanner, ...copy.style }}>
+      <p style={styles.stateTitle}>{copy.title}</p>
+      <p style={styles.stateBody}>{copy.body}</p>
+    </div>
   );
 }
 
