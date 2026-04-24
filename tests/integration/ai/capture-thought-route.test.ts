@@ -1,9 +1,49 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, test } from "node:test";
+import postgres from "postgres";
 
 import { POST } from "../../../apps/web/app/ai/capture-thought/route.ts";
 import { captureThoughtDeps } from "../../../server/ai/operations/captureThought.ts";
 import { PROMPT_VERSION } from "../../../server/ai/prompts/captureThought/v1.ts";
+
+const PG_PORT = 62000 + Math.floor(Math.random() * 1000);
+const PG_USER = "postgres";
+const DB_NAME = "penny_capture_thought_route_test";
+const PGDATA_DIR = mkdtempSync(join(tmpdir(), "penny-pgdata-capture-thought-route-"));
+
+function run(command: string, args: string[], env?: NodeJS.ProcessEnv) {
+  execFileSync(command, args, {
+    cwd: "/Users/bensuo/Desktop/penny",
+    env: env ? { ...process.env, ...env } : process.env,
+    stdio: "pipe",
+  });
+}
+
+run("initdb", ["-D", PGDATA_DIR, "-U", PG_USER, "-A", "trust"]);
+run("pg_ctl", ["-D", PGDATA_DIR, "-l", join(PGDATA_DIR, "postgres.log"), "-o", `-p ${PG_PORT}`, "start"]);
+run("createdb", ["-h", "127.0.0.1", "-p", String(PG_PORT), "-U", PG_USER, DB_NAME]);
+
+const databaseUrl = `postgresql://${PG_USER}@127.0.0.1:${PG_PORT}/${DB_NAME}`;
+
+run("pnpm", ["db:migrate"], {
+  DATABASE_URL: databaseUrl,
+  DATABASE_DIRECT_URL: databaseUrl,
+});
+
+process.env.DATABASE_URL = databaseUrl;
+process.env.DATABASE_DIRECT_URL = databaseUrl;
+
+after(async () => {
+  try {
+    run("pg_ctl", ["-D", PGDATA_DIR, "stop", "-m", "immediate"]);
+  } finally {
+    rmSync(PGDATA_DIR, { recursive: true, force: true });
+  }
+});
 
 function snapshotDeps() {
   return { ...captureThoughtDeps };
@@ -45,6 +85,10 @@ test("POST /ai/capture-thought authenticates before AI execution", async () => {
 
 test("POST /ai/capture-thought returns extracted thought and claims", async () => {
   const originalDeps = snapshotDeps();
+  const sql = postgres(databaseUrl, { prepare: false });
+  const userId = "00000000-0000-0000-0000-000000000123";
+  const mapId = "00000000-0000-0000-0000-000000000456";
+  const sessionId = "00000000-0000-0000-0000-000000000789";
 
   captureThoughtDeps.resolveModelPolicy = () => [
     {
@@ -83,26 +127,42 @@ test("POST /ai/capture-thought returns extracted thought and claims", async () =
   };
 
   try {
+    await sql`
+      insert into maps (id, user_id, title)
+      values (${mapId}, ${userId}, ${"Capture map"})
+    `;
+    await sql`
+      insert into workspace_contexts (user_id, map_id, mode)
+      values (${userId}, ${mapId}, ${"brain"})
+      on conflict (user_id) do update set map_id = excluded.map_id, mode = excluded.mode
+    `;
+
     const response = await POST(
       request(
         {
           text: "Penny should capture raw ideas and extract reviewable claims.",
-          sessionId: "session-route-1",
+          sessionId,
         },
         {
-          "x-user-id": "00000000-0000-0000-0000-000000000123",
+          "x-user-id": userId,
           "x-request-id": "capture-route-1",
         },
       ),
     );
 
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 201);
 
     const payload = (await response.json()) as {
-      rawText: string;
-      sessionId: string | null;
+      aiJobId: string;
+      graphNodeId: string;
+      suggestedTitle: string;
       thought: {
-        title: string;
+        id: string;
+        userId: string;
+        sessionId: string | null;
+        mapId: string;
+        rawText: string;
+        suggestedTitle: string;
         summary: string;
       };
       claims: Array<{
@@ -116,13 +176,86 @@ test("POST /ai/capture-thought returns extracted thought and claims", async () =
       };
     };
 
-    assert.equal(payload.rawText, "Penny should capture raw ideas and extract reviewable claims.");
-    assert.equal(payload.sessionId, "session-route-1");
-    assert.equal(payload.thought.title, "Capture loop");
+    assert.match(payload.aiJobId, /^[0-9a-f-]{36}$/i);
+    assert.match(payload.graphNodeId, /^[0-9a-f-]{36}$/i);
+    assert.equal(payload.suggestedTitle, "Capture loop");
+    assert.equal(payload.thought.rawText, "Penny should capture raw ideas and extract reviewable claims.");
+    assert.equal(payload.thought.userId, userId);
+    assert.equal(payload.thought.sessionId, sessionId);
+    assert.equal(payload.thought.mapId, mapId);
+    assert.equal(payload.thought.suggestedTitle, "Capture loop");
     assert.equal(payload.claims.length, 1);
     assert.equal(payload.claims[0]?.confidenceBps, 8100);
     assert.equal(payload.meta.provider, "anthropic");
     assert.equal(payload.meta.model, "claude-capture-test");
+
+    const storedJobs = await sql<
+      { id: string; status: string; operation: string; output_json: { suggestedTitle?: string } | null }[]
+    >`select id, status, operation, output_json from ai_jobs where id = ${payload.aiJobId}`;
+    const storedThoughts = await sql<
+      { id: string; user_id: string; session_id: string | null; map_id: string | null; raw_text: string; source: string | null }[]
+    >`select id, user_id, session_id, map_id, raw_text, source from thoughts where id = ${payload.thought.id}`;
+    const storedNodes = await sql<
+      { id: string; user_id: string; session_id: string | null; map_id: string; thought_id: string | null; kind: string; label: string }[]
+    >`select id, user_id, session_id, map_id, thought_id, kind, label from graph_nodes where id = ${payload.graphNodeId}`;
+    const storedActivity = await sql<
+      { aggregate_type: string; aggregate_id: string | null; type: string; thought_id: string | null; graph_node_id: string | null; ai_job_id: string | null }[]
+    >`select aggregate_type, aggregate_id, type, thought_id, graph_node_id, ai_job_id from activity_events where ai_job_id = ${payload.aiJobId}`;
+
+    assert.equal(storedJobs.length, 1);
+    assert.equal(storedJobs[0].status, "succeeded");
+    assert.equal(storedJobs[0].operation, "captureThought");
+    assert.equal(storedJobs[0].output_json?.suggestedTitle, "Capture loop");
+    assert.equal(storedThoughts.length, 1);
+    assert.equal(storedThoughts[0].user_id, userId);
+    assert.equal(storedThoughts[0].session_id, sessionId);
+    assert.equal(storedThoughts[0].map_id, mapId);
+    assert.equal(storedThoughts[0].raw_text, "Penny should capture raw ideas and extract reviewable claims.");
+    assert.equal(storedThoughts[0].source, "ai.capture-thought");
+    assert.equal(storedNodes.length, 1);
+    assert.equal(storedNodes[0].user_id, userId);
+    assert.equal(storedNodes[0].session_id, sessionId);
+    assert.equal(storedNodes[0].map_id, mapId);
+    assert.equal(storedNodes[0].thought_id, payload.thought.id);
+    assert.equal(storedNodes[0].kind, "thought");
+    assert.equal(storedNodes[0].label, "Capture loop");
+    assert.equal(storedActivity.length, 1);
+    assert.equal(storedActivity[0].aggregate_type, "thought");
+    assert.equal(storedActivity[0].aggregate_id, payload.thought.id);
+    assert.equal(storedActivity[0].type, "thought.captured");
+    assert.equal(storedActivity[0].thought_id, payload.thought.id);
+    assert.equal(storedActivity[0].graph_node_id, payload.graphNodeId);
+    assert.equal(storedActivity[0].ai_job_id, payload.aiJobId);
+  } finally {
+    restoreDeps(originalDeps);
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("POST /ai/capture-thought requires a selected workspace map before provider execution", async () => {
+  const originalDeps = snapshotDeps();
+  const userId = "00000000-0000-0000-0000-000000000321";
+
+  captureThoughtDeps.invokeAnthropicStructured = async () => {
+    throw new Error("provider should not be called without a selected map");
+  };
+
+  try {
+    const response = await POST(
+      request(
+        {
+          text: "Capture without a selected map.",
+        },
+        {
+          "x-user-id": userId,
+        },
+      ),
+    );
+
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), {
+      error: "A selected workspace map is required to capture a thought.",
+    });
   } finally {
     restoreDeps(originalDeps);
   }
