@@ -407,6 +407,65 @@ test("backend acceptance flow preserves the same mapId and claimId across Brain,
     assert.equal(storedCritiques.length, 1);
     assert.equal(storedCritiques[0].round_id, round.roundId);
     assert.equal(storedCritiques[0].status, "pending");
+
+    const eventRows = await sql<
+      {
+        type: string;
+        aggregate_type: string;
+        aggregate_id: string;
+        request_id: string;
+      }[]
+    >`
+      select type, aggregate_type, aggregate_id, request_id
+      from moves_events
+      where user_id = ${userId}
+    `;
+    const eventByRequestId = new Map(eventRows.map((event) => [event.request_id, event]));
+
+    assert.deepEqual(eventByRequestId.get("acceptance-map-request"), {
+      type: "map.created",
+      aggregate_type: "map",
+      aggregate_id: map.mapId,
+      request_id: "acceptance-map-request",
+    });
+    assert.deepEqual(eventByRequestId.get("acceptance-claim-request"), {
+      type: "claim.created",
+      aggregate_type: "claim",
+      aggregate_id: claim.claimId,
+      request_id: "acceptance-claim-request",
+    });
+    assert.deepEqual(eventByRequestId.get("acceptance-round-request"), {
+      type: "challenge.round.started",
+      aggregate_type: "challenge_round",
+      aggregate_id: round.roundId,
+      request_id: "acceptance-round-request",
+    });
+    assert.deepEqual(eventByRequestId.get("acceptance-critique-request"), {
+      type: "challenge.critique.requested",
+      aggregate_type: "challenge_critique",
+      aggregate_id: critique.critiqueId,
+      request_id: "acceptance-critique-request",
+    });
+    assert.deepEqual(eventByRequestId.get("acceptance-response-request"), {
+      type: "challenge.response.recorded",
+      aggregate_type: "challenge_round",
+      aggregate_id: round.roundId,
+      request_id: "acceptance-response-request",
+    });
+    assert.deepEqual(
+      [
+        eventByRequestId.get("acceptance-brain-select-request")?.type,
+        eventByRequestId.get("acceptance-challenge-select-request")?.type,
+        eventByRequestId.get("acceptance-learn-select-request")?.type,
+        eventByRequestId.get("acceptance-brain-return-request")?.type,
+      ],
+      [
+        "workspace.selection.changed",
+        "workspace.selection.changed",
+        "workspace.selection.changed",
+        "workspace.selection.changed",
+      ],
+    );
   } finally {
     await sql.end({ timeout: 1 });
   }
