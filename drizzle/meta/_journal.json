@@ -57,6 +57,13 @@
       "when": 1777011025722,
       "tag": "0007_small_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777011186362,
+      "tag": "0008_known_risque",
+      "breakpoints": true
     }
   ]
 }

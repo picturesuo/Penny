@@ -1,0 +1,19 @@
+CREATE INDEX "activity_events_created_at_idx" ON "activity_events" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "ai_jobs_created_at_idx" ON "ai_jobs" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "challenge_critiques_claim_id_idx" ON "challenge_critiques" USING btree ("claim_id");--> statement-breakpoint
+CREATE INDEX "challenge_critiques_created_at_idx" ON "challenge_critiques" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "challenge_rounds_claim_id_idx" ON "challenge_rounds" USING btree ("claim_id");--> statement-breakpoint
+CREATE INDEX "challenge_rounds_created_at_idx" ON "challenge_rounds" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "claims_created_at_idx" ON "claims" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "confidence_ratings_created_at_idx" ON "confidence_ratings" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "graph_edges_kind_idx" ON "graph_edges" USING btree ("kind");--> statement-breakpoint
+CREATE INDEX "graph_edges_created_at_idx" ON "graph_edges" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "graph_nodes_kind_idx" ON "graph_nodes" USING btree ("kind");--> statement-breakpoint
+CREATE INDEX "graph_nodes_created_at_idx" ON "graph_nodes" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "maps_created_at_idx" ON "maps" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "moves_events_created_at_idx" ON "moves_events" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "prompt_versions_created_at_idx" ON "prompt_versions" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "sessions_created_at_idx" ON "sessions" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "thoughts_created_at_idx" ON "thoughts" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "users_created_at_idx" ON "users" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "workspace_contexts_updated_at_idx" ON "workspace_contexts" USING btree ("updated_at");

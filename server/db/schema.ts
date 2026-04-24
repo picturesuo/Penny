@@ -10,7 +10,10 @@ export const users = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [uniqueIndex("users_email_unique").on(table.email)],
+  (table) => [
+    uniqueIndex("users_email_unique").on(table.email),
+    index("users_created_at_idx").on(table.createdAt),
+  ],
 );
 
 export const sessions = pgTable(
@@ -26,17 +29,22 @@ export const sessions = pgTable(
   },
   (table) => [
     index("sessions_user_id_idx").on(table.userId),
+    index("sessions_created_at_idx").on(table.createdAt),
     uniqueIndex("sessions_token_hash_unique").on(table.tokenHash),
   ],
 );
 
-export const maps = pgTable("maps", {
-  id: uuid("id").primaryKey(),
-  userId: uuid("user_id").notNull(),
-  title: text("title").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const maps = pgTable(
+  "maps",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id").notNull(),
+    title: text("title").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("maps_created_at_idx").on(table.createdAt)],
+);
 
 export const thoughts = pgTable(
   "thoughts",
@@ -55,6 +63,7 @@ export const thoughts = pgTable(
     index("thoughts_user_id_idx").on(table.userId),
     index("thoughts_session_id_idx").on(table.sessionId),
     index("thoughts_map_id_idx").on(table.mapId),
+    index("thoughts_created_at_idx").on(table.createdAt),
   ],
 );
 
@@ -74,6 +83,7 @@ export const claims = pgTable(
     index("claims_map_id_idx").on(table.mapId),
     index("claims_user_id_idx").on(table.userId),
     index("claims_thought_id_idx").on(table.thoughtId),
+    index("claims_created_at_idx").on(table.createdAt),
   ],
 );
 
@@ -98,6 +108,8 @@ export const graphNodes = pgTable(
     index("graph_nodes_map_id_idx").on(table.mapId),
     index("graph_nodes_claim_id_idx").on(table.claimId),
     index("graph_nodes_thought_id_idx").on(table.thoughtId),
+    index("graph_nodes_kind_idx").on(table.kind),
+    index("graph_nodes_created_at_idx").on(table.createdAt),
   ],
 );
 
@@ -120,6 +132,8 @@ export const graphEdges = pgTable(
     index("graph_edges_map_id_idx").on(table.mapId),
     index("graph_edges_source_node_id_idx").on(table.sourceNodeId),
     index("graph_edges_target_node_id_idx").on(table.targetNodeId),
+    index("graph_edges_kind_idx").on(table.kind),
+    index("graph_edges_created_at_idx").on(table.createdAt),
   ],
 );
 
@@ -141,18 +155,23 @@ export const confidenceRatings = pgTable(
     index("confidence_ratings_thought_id_idx").on(table.thoughtId),
     index("confidence_ratings_claim_id_idx").on(table.claimId),
     index("confidence_ratings_graph_node_id_idx").on(table.graphNodeId),
+    index("confidence_ratings_created_at_idx").on(table.createdAt),
   ],
 );
 
-export const challengeRounds = pgTable("challenge_rounds", {
-  id: uuid("id").primaryKey(),
-  mapId: uuid("map_id").notNull(),
-  claimId: uuid("claim_id").notNull(),
-  userId: uuid("user_id").notNull(),
-  status: text("status").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+export const challengeRounds = pgTable(
+  "challenge_rounds",
+  {
+    id: uuid("id").primaryKey(),
+    mapId: uuid("map_id").notNull(),
+    claimId: uuid("claim_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    status: text("status").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("challenge_rounds_claim_id_idx").on(table.claimId), index("challenge_rounds_created_at_idx").on(table.createdAt)],
+);
 
 export const challengeCritiques = pgTable(
   "challenge_critiques",
@@ -168,7 +187,12 @@ export const challengeCritiques = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("challenge_critiques_round_id_idx").on(table.roundId), index("challenge_critiques_user_id_idx").on(table.userId)],
+  (table) => [
+    index("challenge_critiques_round_id_idx").on(table.roundId),
+    index("challenge_critiques_user_id_idx").on(table.userId),
+    index("challenge_critiques_claim_id_idx").on(table.claimId),
+    index("challenge_critiques_created_at_idx").on(table.createdAt),
+  ],
 );
 
 export const movesEvents = pgTable(
@@ -187,6 +211,7 @@ export const movesEvents = pgTable(
     index("moves_events_user_id_idx").on(table.userId),
     index("moves_events_aggregate_id_idx").on(table.aggregateId),
     index("moves_events_request_id_idx").on(table.requestId),
+    index("moves_events_created_at_idx").on(table.createdAt),
   ],
 );
 
@@ -224,6 +249,7 @@ export const activityEvents = pgTable(
     index("activity_events_ai_job_id_idx").on(table.aiJobId),
     index("activity_events_aggregate_id_idx").on(table.aggregateId),
     index("activity_events_type_idx").on(table.type),
+    index("activity_events_created_at_idx").on(table.createdAt),
   ],
 );
 
@@ -241,7 +267,10 @@ export const workspaceContexts = pgTable(
     mode: workspaceMode("mode").notNull().default("brain"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [uniqueIndex("workspace_contexts_user_id_unique").on(table.userId)],
+  (table) => [
+    uniqueIndex("workspace_contexts_user_id_unique").on(table.userId),
+    index("workspace_contexts_updated_at_idx").on(table.updatedAt),
+  ],
 );
 
 export const promptVersions = pgTable(
@@ -258,6 +287,7 @@ export const promptVersions = pgTable(
   (table) => [
     uniqueIndex("prompt_versions_operation_version_unique").on(table.operation, table.version),
     uniqueIndex("prompt_versions_prompt_hash_unique").on(table.promptHash),
+    index("prompt_versions_created_at_idx").on(table.createdAt),
   ],
 );
 
@@ -282,6 +312,7 @@ export const aiJobs = pgTable(
     index("ai_jobs_operation_idx").on(table.operation),
     index("ai_jobs_prompt_version_id_idx").on(table.promptVersionId),
     index("ai_jobs_status_idx").on(table.status),
+    index("ai_jobs_created_at_idx").on(table.createdAt),
   ],
 );
 
