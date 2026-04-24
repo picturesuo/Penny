@@ -33,6 +33,14 @@ function populatedProjection(): BrainProjectionView {
         createdAt: "2026-04-24T10:00:00.000Z",
         updatedAt: "2026-04-24T10:05:00.000Z",
       },
+      {
+        id: "claim-2",
+        mapId: "map-1",
+        body: "Related claims should stay visible beside the selected claim.",
+        confidenceBps: 6600,
+        createdAt: "2026-04-24T10:06:00.000Z",
+        updatedAt: "2026-04-24T10:07:00.000Z",
+      },
     ],
     selectedClaim: {
       id: "claim-1",
@@ -73,8 +81,11 @@ test("BrainScreen renders the populated Brain state", () => {
   assert.match(html, /Thought stream/);
   assert.match(html, /Map and sphere context/);
   assert.match(html, /Recent claims and thoughts/);
-  assert.match(html, /Focus card/);
+  assert.match(html, /Claim panel/);
   assert.match(html, /Claim inspector/);
+  assert.match(html, /Dependencies and related claims/);
+  assert.match(html, /Related claims should stay visible beside the selected claim/);
+  assert.match(html, /View on Brain Map/);
   assert.match(html, /Recent thoughts/);
   assert.match(html, /Investor diligence map/);
   assert.match(html, /Penny should make claim history inspectable/);
