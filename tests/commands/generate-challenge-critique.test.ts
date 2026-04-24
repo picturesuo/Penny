@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  type ChallengeCritiqueFailedEventRecord,
+  type ChallengeCritiqueFailedRecord,
   GenerateChallengeCritiqueClaimNotFoundError,
   GenerateChallengeCritiqueNotFoundError,
   GenerateChallengeCritiqueValidationError,
@@ -254,4 +256,87 @@ test("generateChallengeCritique validates critiqueId", async () => {
       ),
     GenerateChallengeCritiqueValidationError,
   );
+});
+
+test("generateChallengeCritique marks the critique failed and emits challenge.critique.failed when generation throws", async () => {
+  const updates: ChallengeCritiqueFailedRecord[] = [];
+  const events: ChallengeCritiqueFailedEventRecord[] = [];
+
+  const repository: GenerateChallengeCritiqueRepository = {
+    async transaction<T>(callback) {
+      return callback({
+        async findOwnedCritique() {
+          return {
+            id: "critique-5",
+            roundId: "round-5",
+            mapId: "map-5",
+            claimId: "claim-5",
+            userId: "user-5",
+            status: "pending",
+            body: null,
+          };
+        },
+        async findOwnedClaim() {
+          return {
+            body: "This claim should fail generation.",
+          };
+        },
+        async updateChallengeCritique(record) {
+          updates.push(record as unknown as ChallengeCritiqueFailedRecord);
+        },
+        async insertMoveEvent(event) {
+          events.push(event as ChallengeCritiqueFailedEventRecord);
+        },
+      });
+    },
+  };
+
+  const timestamp = new Date("2026-04-24T04:00:00.000Z");
+
+  const result = await generateChallengeCritique(
+    {
+      userId: "user-5",
+      critiqueId: "critique-5",
+      requestId: "request-5",
+    },
+    repository,
+    {
+      now: () => timestamp,
+      generateCritique: async () => {
+        throw new Error("Synthetic generation failure.");
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    critiqueId: "critique-5",
+    status: "failed",
+    body: null,
+  });
+  assert.deepEqual(updates, [
+    {
+      id: "critique-5",
+      userId: "user-5",
+      status: "failed",
+      body: null,
+      updatedAt: timestamp,
+    },
+  ]);
+  assert.deepEqual(events, [
+    {
+      userId: "user-5",
+      aggregateType: "challenge_critique",
+      aggregateId: "critique-5",
+      requestId: "request-5",
+      type: "challenge.critique.failed",
+      payload: {
+        roundId: "round-5",
+        mapId: "map-5",
+        claimId: "claim-5",
+        status: "failed",
+        errorMessage: "Synthetic generation failure.",
+      },
+      createdAt: timestamp,
+    },
+  ]);
 });

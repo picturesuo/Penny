@@ -66,3 +66,50 @@ test("emitEvent rejects an invalid event type", async () => {
     },
   );
 });
+
+test("emitEvent accepts challenge.critique.failed as a durable event type", async () => {
+  const inserts: Array<{ table: unknown; values: unknown }> = [];
+
+  const db = {
+    insert(table: unknown) {
+      return {
+        async values(value: unknown) {
+          inserts.push({ table, values: value });
+        },
+      };
+    },
+  };
+
+  await emitEvent({
+    db,
+    userId: "user-456",
+    aggregateType: "challenge_critique",
+    aggregateId: "critique-456",
+    type: "challenge.critique.failed",
+    payloadJson: {
+      roundId: "round-456",
+      mapId: "map-456",
+      claimId: "claim-456",
+      status: "failed",
+      errorMessage: "Synthetic critique failure.",
+    },
+    requestId: "req-456",
+  });
+
+  assert.equal(inserts.length, 1);
+  assert.equal(inserts[0]?.table, movesEvents);
+  assert.deepEqual(inserts[0]?.values, {
+    userId: "user-456",
+    aggregateType: "challenge_critique",
+    aggregateId: "critique-456",
+    type: "challenge.critique.failed",
+    payloadJson: {
+      roundId: "round-456",
+      mapId: "map-456",
+      claimId: "claim-456",
+      status: "failed",
+      errorMessage: "Synthetic critique failure.",
+    },
+    requestId: "req-456",
+  });
+});

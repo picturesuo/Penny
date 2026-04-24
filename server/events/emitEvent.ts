@@ -9,6 +9,7 @@ const EVENT_TYPES = [
   "challenge.round.started",
   "challenge.critique.requested",
   "challenge.critique.generated",
+  "challenge.critique.failed",
   "challenge.response.recorded",
 ] as const;
 

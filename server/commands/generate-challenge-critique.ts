@@ -7,7 +7,7 @@ import { getDb } from "../db/client.ts";
 import { challengeCritiques, claims, maps, movesEvents } from "../db/schema.ts";
 import { findExistingMoveEvent, type SelectableDbTx } from "../idempotency/find-existing-move-event.ts";
 
-export type GenerateChallengeCritiqueEventType = "challenge.critique.generated";
+export type GenerateChallengeCritiqueEventType = "challenge.critique.generated" | "challenge.critique.failed";
 
 export type GenerateChallengeCritiqueInput = {
   userId: string;
@@ -43,6 +43,30 @@ export type ChallengeCritiqueGeneratedEventRecord = {
   createdAt: Date;
 };
 
+export type ChallengeCritiqueFailedRecord = {
+  id: string;
+  userId: string;
+  status: "failed";
+  body: null;
+  updatedAt: Date;
+};
+
+export type ChallengeCritiqueFailedEventRecord = {
+  userId: string;
+  aggregateType: "challenge_critique";
+  aggregateId: string;
+  requestId: string;
+  type: "challenge.critique.failed";
+  payload: {
+    roundId: string;
+    mapId: string;
+    claimId: string;
+    status: "failed";
+    errorMessage: string;
+  };
+  createdAt: Date;
+};
+
 export type GenerateChallengeCritiqueRepositoryTx = {
   findMoveEventByRequestId?(input: {
     userId: string;
@@ -68,7 +92,8 @@ export type GenerateChallengeCritiqueRepositoryTx = {
     mapTitle: string | null;
   } | null>;
   updateChallengeCritique(record: ChallengeCritiqueReadyRecord): Promise<void>;
-  insertMoveEvent(event: ChallengeCritiqueGeneratedEventRecord): Promise<void>;
+  markChallengeCritiqueFailed?(record: ChallengeCritiqueFailedRecord): Promise<void>;
+  insertMoveEvent(event: ChallengeCritiqueGeneratedEventRecord | ChallengeCritiqueFailedEventRecord): Promise<void>;
 };
 
 export type GenerateChallengeCritiqueRepository = {
@@ -138,8 +163,8 @@ type GeneratedChallengeCritiqueArtifact = {
 
 export type GenerateChallengeCritiqueResult = {
   critiqueId: string;
-  status: "ready";
-  body: string;
+  status: "ready" | "failed";
+  body: string | null;
 };
 
 export type GenerateChallengeCritiqueDependencies = {
@@ -318,6 +343,14 @@ function isGenerateChallengeCritiqueRepositoryTx(value: unknown): value is Gener
 
 function hasSelectQuery(value: GenerateChallengeCritiqueTx): value is GenerateChallengeCritiqueDbTx {
   return "select" in value && typeof value.select === "function";
+}
+
+function readErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return "Challenge critique generation failed.";
 }
 
 export function validateGenerateChallengeCritiqueInput(input: unknown): NormalizedGenerateChallengeCritiqueInput {
@@ -566,72 +599,145 @@ export async function generateChallengeCritique(
     }
 
     const context = await loadChallengeCritiqueContext(tx, critique);
-    const generated = await generateCritique(context);
-    const timestamp = now();
 
-    if (isGenerateChallengeCritiqueRepositoryTx(tx)) {
-      await tx.updateChallengeCritique({
-        id: critique.id,
-        userId: normalized.userId,
-        status: READY_STATUS,
-        body: generated.body,
-        updatedAt: timestamp,
-      });
+    try {
+      const generated = await generateCritique(context);
+      const timestamp = now();
 
-      await tx.insertMoveEvent({
-        userId: normalized.userId,
-        aggregateType: "challenge_critique",
-        aggregateId: critique.id,
-        requestId,
-        type: "challenge.critique.generated",
-        payload: {
-          roundId: critique.roundId,
-          mapId: critique.mapId,
-          claimId: critique.claimId,
-          status: READY_STATUS,
-          body: generated.body,
-          ...(generated.critiqueJson ? { critiqueJson: generated.critiqueJson } : {}),
-          ...(generated.metadata.provider ? { provider: generated.metadata.provider } : {}),
-          ...(generated.metadata.model ? { model: generated.metadata.model } : {}),
-          ...(generated.metadata.promptVersion ? { promptVersion: generated.metadata.promptVersion } : {}),
-        },
-        createdAt: timestamp,
-      });
-    } else {
-      await tx
-        .update(challengeCritiques)
-        .set({
+      if (isGenerateChallengeCritiqueRepositoryTx(tx)) {
+        await tx.updateChallengeCritique({
+          id: critique.id,
+          userId: normalized.userId,
           status: READY_STATUS,
           body: generated.body,
           updatedAt: timestamp,
-        })
-        .where(and(eq(challengeCritiques.id, critique.id), eq(challengeCritiques.userId, normalized.userId)));
+        });
 
-      await tx.insert(movesEvents).values({
-        userId: normalized.userId,
-        aggregateType: "challenge_critique",
-        aggregateId: critique.id,
-        requestId,
-        type: "challenge.critique.generated",
-        payloadJson: {
-          roundId: critique.roundId,
-          mapId: critique.mapId,
-          claimId: critique.claimId,
-          status: READY_STATUS,
-          body: generated.body,
-          ...(generated.critiqueJson ? { critiqueJson: generated.critiqueJson } : {}),
-          ...(generated.metadata.provider ? { provider: generated.metadata.provider } : {}),
-          ...(generated.metadata.model ? { model: generated.metadata.model } : {}),
-          ...(generated.metadata.promptVersion ? { promptVersion: generated.metadata.promptVersion } : {}),
-        },
-        createdAt: timestamp,
-      });
+        await tx.insertMoveEvent({
+          userId: normalized.userId,
+          aggregateType: "challenge_critique",
+          aggregateId: critique.id,
+          requestId,
+          type: "challenge.critique.generated",
+          payload: {
+            roundId: critique.roundId,
+            mapId: critique.mapId,
+            claimId: critique.claimId,
+            status: READY_STATUS,
+            body: generated.body,
+            ...(generated.critiqueJson ? { critiqueJson: generated.critiqueJson } : {}),
+            ...(generated.metadata.provider ? { provider: generated.metadata.provider } : {}),
+            ...(generated.metadata.model ? { model: generated.metadata.model } : {}),
+            ...(generated.metadata.promptVersion ? { promptVersion: generated.metadata.promptVersion } : {}),
+          },
+          createdAt: timestamp,
+        });
+      } else {
+        await tx
+          .update(challengeCritiques)
+          .set({
+            status: READY_STATUS,
+            body: generated.body,
+            updatedAt: timestamp,
+          })
+          .where(and(eq(challengeCritiques.id, critique.id), eq(challengeCritiques.userId, normalized.userId)));
+
+        await tx.insert(movesEvents).values({
+          userId: normalized.userId,
+          aggregateType: "challenge_critique",
+          aggregateId: critique.id,
+          requestId,
+          type: "challenge.critique.generated",
+          payloadJson: {
+            roundId: critique.roundId,
+            mapId: critique.mapId,
+            claimId: critique.claimId,
+            status: READY_STATUS,
+            body: generated.body,
+            ...(generated.critiqueJson ? { critiqueJson: generated.critiqueJson } : {}),
+            ...(generated.metadata.provider ? { provider: generated.metadata.provider } : {}),
+            ...(generated.metadata.model ? { model: generated.metadata.model } : {}),
+            ...(generated.metadata.promptVersion ? { promptVersion: generated.metadata.promptVersion } : {}),
+          },
+          createdAt: timestamp,
+        });
+      }
+
+      return {
+        critiqueId: critique.id,
+        status: READY_STATUS,
+        body: generated.body,
+      };
+    } catch (error) {
+      const timestamp = now();
+      const errorMessage = readErrorMessage(error);
+
+      if (isGenerateChallengeCritiqueRepositoryTx(tx)) {
+        if (tx.markChallengeCritiqueFailed) {
+          await tx.markChallengeCritiqueFailed({
+            id: critique.id,
+            userId: normalized.userId,
+            status: "failed",
+            body: null,
+            updatedAt: timestamp,
+          });
+        } else {
+          await tx.updateChallengeCritique({
+            id: critique.id,
+            userId: normalized.userId,
+            status: "failed",
+            body: null,
+            updatedAt: timestamp,
+          } as unknown as ChallengeCritiqueReadyRecord);
+        }
+
+        await tx.insertMoveEvent({
+          userId: normalized.userId,
+          aggregateType: "challenge_critique",
+          aggregateId: critique.id,
+          requestId,
+          type: "challenge.critique.failed",
+          payload: {
+            roundId: critique.roundId,
+            mapId: critique.mapId,
+            claimId: critique.claimId,
+            status: "failed",
+            errorMessage,
+          },
+          createdAt: timestamp,
+        });
+      } else {
+        await tx
+          .update(challengeCritiques)
+          .set({
+            status: "failed",
+            body: null,
+            updatedAt: timestamp,
+          })
+          .where(and(eq(challengeCritiques.id, critique.id), eq(challengeCritiques.userId, normalized.userId)));
+
+        await tx.insert(movesEvents).values({
+          userId: normalized.userId,
+          aggregateType: "challenge_critique",
+          aggregateId: critique.id,
+          requestId,
+          type: "challenge.critique.failed",
+          payloadJson: {
+            roundId: critique.roundId,
+            mapId: critique.mapId,
+            claimId: critique.claimId,
+            status: "failed",
+            errorMessage,
+          },
+          createdAt: timestamp,
+        });
+      }
+
+      return {
+        critiqueId: critique.id,
+        status: "failed",
+        body: null,
+      };
     }
-
-    return {
-      critiqueId: critique.id,
-      status: READY_STATUS,
-      body: generated.body,
-    };
   });
 }

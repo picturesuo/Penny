@@ -37,7 +37,9 @@ export type WorkspaceSelectionChangedEventRecord = {
 };
 
 export type SetWorkspaceSelectionRepositoryTx = {
+  findMapById?(input: { mapId: string }): Promise<{ id: string; userId: string } | null>;
   findOwnedMap(input: { mapId: string; userId: string }): Promise<{ id: string; userId: string } | null>;
+  findClaimById?(input: { claimId: string }): Promise<{ id: string; mapId: string; userId: string } | null>;
   findOwnedClaim(input: { claimId: string; mapId: string; userId: string }): Promise<{ id: string } | null>;
   getWorkspaceContext(input: { userId: string }): Promise<WorkspaceContextRecord | null>;
   upsertWorkspaceContext(record: WorkspaceContextRecord): Promise<void>;
@@ -101,10 +103,24 @@ export class SetWorkspaceSelectionMapNotFoundError extends Error {
   }
 }
 
+export class SetWorkspaceSelectionMapForbiddenError extends Error {
+  constructor(mapId: string) {
+    super(`User does not own map for setWorkspaceSelection: ${mapId}`);
+    this.name = "SetWorkspaceSelectionMapForbiddenError";
+  }
+}
+
 export class SetWorkspaceSelectionClaimNotFoundError extends Error {
   constructor(claimId: string) {
     super(`Claim not found for setWorkspaceSelection: ${claimId}`);
     this.name = "SetWorkspaceSelectionClaimNotFoundError";
+  }
+}
+
+export class SetWorkspaceSelectionClaimForbiddenError extends Error {
+  constructor(claimId: string) {
+    super(`User does not own claim for setWorkspaceSelection: ${claimId}`);
+    this.name = "SetWorkspaceSelectionClaimForbiddenError";
   }
 }
 
@@ -207,6 +223,55 @@ function isSetWorkspaceSelectionRepositoryTx(value: unknown): value is SetWorksp
   );
 }
 
+async function findMapForWorkspaceSelection(
+  tx: SetWorkspaceSelectionRepositoryTx | SetWorkspaceSelectionDbTx,
+  input: { mapId: string; userId: string },
+): Promise<{ id: string; userId: string } | null> {
+  if (isSetWorkspaceSelectionRepositoryTx(tx)) {
+    if (tx.findMapById) {
+      return tx.findMapById({ mapId: input.mapId });
+    }
+
+    return tx.findOwnedMap(input);
+  }
+
+  return (
+    await tx
+      .select({
+        id: maps.id,
+        userId: maps.userId,
+      })
+      .from(maps)
+      .where(eq(maps.id, input.mapId))
+      .limit(1)
+  )[0] ?? null;
+}
+
+async function findClaimForWorkspaceSelection(
+  tx: SetWorkspaceSelectionRepositoryTx | SetWorkspaceSelectionDbTx,
+  input: { claimId: string; mapId: string; userId: string },
+): Promise<{ id: string; mapId: string; userId?: string } | null> {
+  if (isSetWorkspaceSelectionRepositoryTx(tx)) {
+    if (tx.findClaimById) {
+      return tx.findClaimById({ claimId: input.claimId });
+    }
+
+    return tx.findOwnedClaim(input);
+  }
+
+  return (
+    await tx
+      .select({
+        id: claims.id,
+        mapId: claims.mapId,
+        userId: claims.userId,
+      })
+      .from(claims)
+      .where(eq(claims.id, input.claimId))
+      .limit(1)
+  )[0] ?? null;
+}
+
 export function validateSetWorkspaceSelectionInput(input: unknown): NormalizedSetWorkspaceSelectionInput {
   const object = asObject(input);
 
@@ -229,24 +294,17 @@ export async function setWorkspaceSelection(
   const now = dependencies.now ?? (() => new Date());
 
   return repository.transaction(async (tx) => {
-    const ownedMap = isSetWorkspaceSelectionRepositoryTx(tx)
-      ? await tx.findOwnedMap({
-          mapId: normalized.mapId,
-          userId: normalized.userId,
-        })
-      : (
-          await tx
-            .select({
-              id: maps.id,
-              userId: maps.userId,
-            })
-            .from(maps)
-            .where(and(eq(maps.id, normalized.mapId), eq(maps.userId, normalized.userId)))
-            .limit(1)
-        )[0] ?? null;
+    const targetMap = await findMapForWorkspaceSelection(tx, {
+      mapId: normalized.mapId,
+      userId: normalized.userId,
+    });
 
-    if (!ownedMap) {
+    if (!targetMap) {
       throw new SetWorkspaceSelectionMapNotFoundError(normalized.mapId);
+    }
+
+    if (targetMap.userId !== normalized.userId) {
+      throw new SetWorkspaceSelectionMapForbiddenError(normalized.mapId);
     }
 
     const existingContext = isSetWorkspaceSelectionRepositoryTx(tx)
@@ -267,29 +325,21 @@ export async function setWorkspaceSelection(
       normalized.claimId ?? (existingContext?.mapId === normalized.mapId ? existingContext.claimId : null);
 
     if (nextClaimId) {
-      const ownedClaim = isSetWorkspaceSelectionRepositoryTx(tx)
-        ? await tx.findOwnedClaim({
-            claimId: nextClaimId,
-            mapId: ownedMap.id,
-            userId: normalized.userId,
-          })
-        : (
-            await tx
-              .select({
-                id: claims.id,
-              })
-              .from(claims)
-              .where(
-                and(
-                  eq(claims.id, nextClaimId),
-                  eq(claims.mapId, ownedMap.id),
-                  eq(claims.userId, normalized.userId),
-                ),
-              )
-              .limit(1)
-          )[0] ?? null;
+      const targetClaim = await findClaimForWorkspaceSelection(tx, {
+        claimId: nextClaimId,
+        mapId: targetMap.id,
+        userId: normalized.userId,
+      });
 
-      if (!ownedClaim) {
+      if (!targetClaim) {
+        throw new SetWorkspaceSelectionClaimNotFoundError(nextClaimId);
+      }
+
+      if (targetClaim.userId && targetClaim.userId !== normalized.userId) {
+        throw new SetWorkspaceSelectionClaimForbiddenError(nextClaimId);
+      }
+
+      if (targetClaim.mapId !== targetMap.id) {
         throw new SetWorkspaceSelectionClaimNotFoundError(nextClaimId);
       }
     }
@@ -301,7 +351,7 @@ export async function setWorkspaceSelection(
       await tx.upsertWorkspaceContext({
         userId: normalized.userId,
         mode: normalized.mode,
-        mapId: ownedMap.id,
+        mapId: targetMap.id,
         claimId: nextClaimId,
         updatedAt: timestamp,
       });
@@ -313,7 +363,7 @@ export async function setWorkspaceSelection(
         type: "workspace.selection.changed",
         payload: {
           mode: normalized.mode,
-          mapId: ownedMap.id,
+          mapId: targetMap.id,
           claimId: nextClaimId,
         },
         createdAt: timestamp,
@@ -324,7 +374,7 @@ export async function setWorkspaceSelection(
           .update(workspaceContexts)
           .set({
             mode: normalizeModeForStorage(normalized.mode),
-            mapId: ownedMap.id,
+            mapId: targetMap.id,
             claimId: nextClaimId,
             updatedAt: timestamp,
           })
@@ -333,7 +383,7 @@ export async function setWorkspaceSelection(
         await tx.insert(workspaceContexts).values({
           userId: normalized.userId,
           mode: normalizeModeForStorage(normalized.mode),
-          mapId: ownedMap.id,
+          mapId: targetMap.id,
           claimId: nextClaimId,
           updatedAt: timestamp,
         });
@@ -347,7 +397,7 @@ export async function setWorkspaceSelection(
         type: "workspace.selection.changed",
         payloadJson: {
           mode: normalized.mode,
-          mapId: ownedMap.id,
+          mapId: targetMap.id,
           claimId: nextClaimId,
         },
         createdAt: timestamp,
@@ -356,7 +406,7 @@ export async function setWorkspaceSelection(
 
     return {
       mode: normalized.mode,
-      mapId: ownedMap.id,
+      mapId: targetMap.id,
       claimId: nextClaimId,
     };
   });
