@@ -89,6 +89,17 @@ test("POST /api/commands/claims/create inserts a claim row plus move and activit
     assert.equal(storedClaims[0].user_id, userId);
     assert.equal(storedClaims[0].body, "Route-created claim body");
 
+    const storedGraphNodes = await sql<
+      { claim_id: string; map_id: string; user_id: string; kind: string; label: string }[]
+    >`select claim_id, map_id, user_id, kind, label from graph_nodes where claim_id = ${payload.claimId}`;
+
+    assert.equal(storedGraphNodes.length, 1);
+    assert.equal(storedGraphNodes[0].claim_id, payload.claimId);
+    assert.equal(storedGraphNodes[0].map_id, map.mapId);
+    assert.equal(storedGraphNodes[0].user_id, userId);
+    assert.equal(storedGraphNodes[0].kind, "claim");
+    assert.equal(storedGraphNodes[0].label, "Route-created claim body");
+
     const storedEvents = await sql<
       {
         aggregate_type: string;

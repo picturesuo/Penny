@@ -68,7 +68,6 @@ function request(body: unknown, headers: Record<string, string> = {}) {
 async function seedThought(sql: postgres.Sql, input: { mapId?: string; userId: string }) {
   const mapId = input.mapId ?? randomUUID();
   const thoughtId = randomUUID();
-  const thoughtNodeId = randomUUID();
 
   await sql`
     insert into maps (id, user_id, title)
@@ -85,18 +84,15 @@ async function seedThought(sql: postgres.Sql, input: { mapId?: string; userId: s
       ${JSON.stringify({ suggestedTitle: "Traceable claims", summary: "A thought about claim provenance." })}::jsonb
     )
   `;
-  await sql`
-    insert into graph_nodes (id, user_id, map_id, thought_id, kind, label, metadata_json)
-    values (
-      ${thoughtNodeId},
-      ${input.userId},
-      ${mapId},
-      ${thoughtId},
-      ${"thought"},
-      ${"Traceable claims"},
-      ${JSON.stringify({ source: "test" })}::jsonb
-    )
+  const thoughtNodes = await sql<{ id: string }[]>`
+    select id
+    from graph_nodes
+    where thought_id = ${thoughtId}
+      and kind = ${"thought"}
   `;
+  const thoughtNodeId = thoughtNodes[0]?.id;
+
+  assert.ok(thoughtNodeId);
 
   return { mapId, thoughtId, thoughtNodeId };
 }
