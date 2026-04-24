@@ -53,7 +53,7 @@ test("E2E demo path has a committed route and UI contract for every step", async
   assert.match(appPage, /AppShell|penny-entry/);
   assert.match(brainPage, /BrainRouteScreen/);
   assert.match(onboarding, /Start in Brain/);
-  assert.match(onboarding, /Begin with one thought Penny can trace/);
+  assert.match(onboarding, /Capture one thought. See the claim Penny can trace/);
   assert.match(shell, /id: "brain", label: "Brain"/);
   assert.match(shell, /id: "challenge", label: "Challenge"/);
   assert.match(shell, /id: "learn", label: "Learn"/);
@@ -61,7 +61,7 @@ test("E2E demo path has a committed route and UI contract for every step", async
   assert.match(shell, /claimId,/);
   assert.match(shell, /\/api\/commands\/challenge\/request-critique/);
   assert.match(shell, /fetchProjection<ProjectionView>\(`\/api\/workspace\/\$\{mode\}`/);
-  assert.match(challengeExperience, /Request Critique/);
+  assert.match(challengeExperience, /Show the tension/);
 });
 
 test("E2E demo path preserves selected claim through Brain, Challenge, Learn, and back", () => {

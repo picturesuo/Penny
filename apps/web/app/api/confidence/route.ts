@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
 
+import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../../lib/api/response";
 import { logBackendError } from "../../../lib/backend-error-logging";
 import {
   RequestUserNotAuthenticatedError,
@@ -262,11 +262,11 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    return invalidJsonResponse();
   }
 
   if (!isObject(body)) {
-    return NextResponse.json({ error: "Request body must be a JSON object." }, { status: 400 });
+    return invalidObjectResponse();
   }
 
   try {
@@ -280,21 +280,21 @@ export async function POST(request: Request) {
       requestId: getIdempotencyKey(request.headers, body) ?? randomUUID(),
     });
 
-    return NextResponse.json({ confidence }, { status: 201 });
+    return apiOk({ confidence }, 201);
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return apiError(error.message, 401);
     }
 
     if (error instanceof ConfidenceValidationError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return apiError(error.message, 400);
     }
 
     if (error instanceof ConfidenceTargetNotFoundError) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+      return apiError(error.message, 404);
     }
 
     logBackendError({ error, request, route: "POST /api/confidence" });
-    return NextResponse.json({ error: "Failed to record confidence." }, { status: 500 });
+    return apiError("Failed to record confidence.", 500);
   }
 }

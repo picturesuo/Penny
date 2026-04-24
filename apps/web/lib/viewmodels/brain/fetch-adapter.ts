@@ -35,6 +35,7 @@ async function readProjection<T>(
   input: Pick<BrainWorkspaceFetchInput, "signal" | "userId">,
 ): Promise<T> {
   const response = await fetcher(path, {
+    cache: "no-store",
     headers: {
       "x-user-id": input.userId,
     },

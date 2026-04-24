@@ -242,3 +242,25 @@
     grid-row: auto;
   }
 }
+
+@media (max-width: 560px) {
+  .heroPanel {
+    min-height: 190px;
+  }
+
+  .commandRow,
+  .responseChoices {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .commandRow button,
+  .responseChoices button,
+  .responseForm button {
+    width: 100%;
+  }
+
+  .responseForm textarea {
+    min-height: 150px;
+  }
+}

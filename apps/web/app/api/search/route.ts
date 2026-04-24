@@ -1,6 +1,6 @@
 import { and, desc, eq, ilike } from "drizzle-orm";
-import { NextResponse } from "next/server";
 
+import { apiError, apiOk } from "../../../lib/api/response";
 import { logBackendError } from "../../../lib/backend-error-logging";
 import {
   RequestUserNotAuthenticatedError,
@@ -167,13 +167,13 @@ export async function GET(request: Request) {
       query: normalizeQuery(searchParams.get("q")),
     });
 
-    return NextResponse.json({ results }, { status: 200 });
+    return apiOk({ results });
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return apiError(error.message, 401);
     }
 
     logBackendError({ error, request, route: "GET /api/search" });
-    return NextResponse.json({ error: "Failed to search workspace." }, { status: 500 });
+    return apiError("Failed to search workspace.", 500);
   }
 }

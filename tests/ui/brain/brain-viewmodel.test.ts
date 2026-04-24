@@ -59,7 +59,7 @@ test("createBrainViewModel maps Brain projection claims into thought stream and 
   const model = createBrainViewModel(projection);
 
   assert.equal(model.context.mapTitle, "Fundraising map");
-  assert.equal(model.context.sphereLabel, "No sphere projected");
+  assert.equal(model.context.sphereLabel, "No sphere selected");
   assert.equal(model.context.claimCountLabel, "2 thoughts");
   assert.equal(model.stream.length, 2);
   assert.deepEqual(
@@ -109,7 +109,7 @@ test("createBrainViewModel maps Brain projection claims into thought stream and 
       },
     ],
   );
-  assert.equal(model.inspector.status, "Selected thought");
+  assert.equal(model.inspector.status, "Selected claim");
   assert.equal(model.inspector.selectedId, "claim-2");
   assert.deepEqual(model.inspector.keyConnections, [
     {
@@ -172,7 +172,7 @@ test("createBrainViewModel keeps empty Brain state explicit", () => {
   assert.equal(model.sphere.workSphere.isSelected, true);
   assert.deepEqual(model.sphere.recentSessions, []);
   assert.equal(model.sphere.selectedSessionId, null);
-  assert.equal(model.inspector.status, "No thought selected");
+  assert.equal(model.inspector.status, "No claim selected");
   assert.deepEqual(model.inspector.keyConnections, []);
   assert.deepEqual(model.inspector.dependencies, []);
   assert.deepEqual(model.inspector.contradictionMarkers, []);

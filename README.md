@@ -1,6 +1,8 @@
 # Penny
 
-Penny is a Turbo monorepo in transition. The active backend foundation lives in `apps/web` and `server`: Drizzle migrations, PostgreSQL-backed command handlers, event emission, workspace projections, and the first challenge-critique AI plumbing all live there today.
+Penny turns messy founder thinking into traceable product judgment. The v0 MVP lets a user capture a thought, extract claims, visualize the graph around those claims, inspect a selected node, rate confidence, search with Cmd+K, challenge an idea, and review the blocker surfaced by the challenge loop.
+
+The active product surface is the Next.js app in `apps/web`. The active backend foundation lives in `server`: Drizzle migrations, PostgreSQL-backed command handlers, event emission, workspace projections, graph data, confidence ratings, search, and challenge/learn AI plumbing live there today.
 
 Use this README as the top-level repo artifact. If it conflicts with older restart docs or archived files, trust this file and the live tree.
 
@@ -18,8 +20,8 @@ Use this README as the top-level repo artifact. If it conflicts with older resta
 
 - Node.js 20+
 - `pnpm` 10+
-- PostgreSQL reachable through `DATABASE_URL` or `DATABASE_DIRECT_URL`
-- Local Postgres CLI tools if you want to run the integration tests as written: `initdb`, `pg_ctl`, and `createdb`
+- PostgreSQL 15+ reachable through `DATABASE_URL` or `DATABASE_DIRECT_URL`
+- Local Postgres CLI tools for integration tests: `initdb`, `pg_ctl`, and `createdb`
 
 ## Quick start
 
@@ -29,34 +31,44 @@ Use this README as the top-level repo artifact. If it conflicts with older resta
    pnpm install
    ```
 
-2. Point the backend at Postgres.
+2. Create a local database.
 
    ```bash
-   export DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/penny
-   export DATABASE_DIRECT_URL="$DATABASE_URL"
+   createdb penny
    ```
 
-3. Apply the checked-in Drizzle migrations.
+3. Copy and export local environment variables.
+
+   ```bash
+   cp .env.example .env.local
+   set -a
+   source .env.local
+   set +a
+   ```
+
+   Drizzle commands read shell environment variables directly. Export `.env.local` in each new shell before running `pnpm db:migrate`, `pnpm db:seed`, or other database commands.
+
+4. Apply the checked-in Drizzle migrations.
 
    ```bash
    pnpm db:migrate
    ```
 
-4. Seed the local demo workspace.
+5. Seed the local demo workspace.
 
    ```bash
    pnpm db:seed
    ```
 
-5. Start the workspace.
+6. Start the workspace.
 
    ```bash
    pnpm dev
    ```
 
-6. Open the local surfaces.
+7. Open the local surfaces.
 
-- Next.js app: `http://localhost:3000`
+- Next.js app: `http://localhost:3000/app?mode=brain`
 - Fastify health endpoint: `http://localhost:3001/health`
 
 ## Local demo path
@@ -75,11 +87,15 @@ The seed creates the local demo user used by the frontend workspace headers: `00
 
 Suggested demo flow:
 
-1. Start in Brain and inspect the seeded Penny workspace.
-2. Use the selected claim as the bridge into Challenge.
-3. Request critique and respond with Defend, Revise, or Absorb.
-4. Switch to Learn to review the concept/blocker surface.
-5. Return to Brain to show the same claim and map context carrying through.
+1. Start in Brain and show the captured raw thought plus extracted claims.
+2. Select the traceability claim and inspect its graph context, confidence, dependencies, contradiction marker, and recent activity.
+3. Use Cmd+K to search for a claim or workspace item.
+4. Switch to Challenge and request or review the critique.
+5. Respond with Defend, Revise, or Absorb.
+6. Switch to Learn to review the blocker explanation.
+7. Return to Brain to show the same claim and map context carrying through.
+
+The prepared walkthrough is in `docs/DEMO.md`.
 
 If the database is empty instead of seeded, Brain shows a guided first-run state with sample prompts rather than hardcoded production demo data.
 
@@ -88,12 +104,29 @@ If the database is empty instead of seeded, Brain shows a guided first-run state
 - The active backend requires a Postgres URL with a `postgres://` or `postgresql://` scheme.
 - Command and workspace routes require a UUID user header: send `x-user-id` or `x-penny-user-id`.
 - There is no anonymous fallback user in the current route auth helper.
-- Optional provider and tracing env vars are only needed for the live AI path or provider-focused work:
+- Optional seed override env vars are only needed when changing the demo identity:
+  - `PENNY_SEED_USER_ID`
+  - `PENNY_SEED_USER_EMAIL`
+  - `PENNY_SEED_USER_NAME`
+- Optional provider and tracing env vars are only needed for live AI/provider-focused work:
+  - `OPENAI_API_KEY`
+  - `OPENAI_MODEL`
+  - `OPENAI_CAPTURE_MODEL`
+  - `OPENAI_CHALLENGE_MODEL`
+  - `OPENAI_EXTRACT_CLAIMS_MODEL`
+  - `OPENAI_BASE_URL`
+  - `MOCK_AI_MODEL`
   - `ANTHROPIC_API_KEY`
+  - `ANTHROPIC_CHALLENGE_MODEL`
+  - `ANTHROPIC_BASE_URL`
   - `XAI_API_KEY`
+  - `XAI_CHALLENGE_MODEL`
+  - `XAI_BASE_URL`
   - `LANGFUSE_PUBLIC_KEY`
   - `LANGFUSE_SECRET_KEY`
-  - Optional base URL overrides: `ANTHROPIC_BASE_URL`, `XAI_BASE_URL`, `LANGFUSE_BASE_URL`
+  - `LANGFUSE_BASE_URL`
+  - `PENNY_AUTO_GENERATE_CHALLENGE_CRITIQUE`
+  - `PENNY_USE_PROVIDER_CHALLENGE_CRITIQUE`
 
 ## Current backend surface
 
@@ -110,6 +143,9 @@ The domain write path lives in the Next.js app, not the legacy Fastify service.
   - `GET /api/workspace/brain`
   - `GET /api/workspace/challenge`
   - `GET /api/workspace/learn`
+  - `GET /api/graph`
+  - `GET /api/search?q=`
+  - `GET /api/confidence/:targetType/:targetId/history`
 - Core tables defined in `server/db/schema.ts` and migrated from `drizzle/`:
   - `maps`
   - `claims`
@@ -136,30 +172,21 @@ pnpm test:mvp-verification
 
 ## Verification
 
-For a doc-only check on this artifact, run:
+The locked MVP verification pass is:
 
 ```bash
-git diff --check -- README.md
-```
-
-For a minimal backend sanity pass, run:
-
-```bash
-pnpm db:typecheck
-pnpm test:integration
-```
-
-For a broader repo pass, run:
-
-```bash
-pnpm lint
 pnpm typecheck
-pnpm build
+pnpm test:mvp
+pnpm test:mvp-verification
 ```
 
-As of 2026-04-24, `pnpm typecheck` is still expected to fail in `@penny/web` on `.ts` import suffix handling and one challenge critique state typing mismatch. Keep the command in the broader pass, but do not treat this README as claiming the repo-wide typecheck is green yet.
+As of 2026-04-24, those commands pass in the current workspace:
 
-Run `pnpm test:mvp-verification` when you want the longer command, projection, route, and AI-contract suite rather than the smaller integration-only pass.
+- `pnpm typecheck`: 3 packages passed
+- `pnpm test:mvp`: 14 tests passed
+- `pnpm test:mvp-verification`: 106 tests passed
+
+The PostgreSQL `57P01` shutdown warnings in passing integration runs come from intentionally stopping temporary test clusters.
 
 ## Final MVP checklist
 
@@ -182,5 +209,6 @@ This repo is not yet a finished single-app deployment shape. The current state i
 
 - The active product/backend slice lives in `apps/web` and `server`, while `apps/api` remains a thin legacy health service.
 - Database access is wired through Drizzle and Postgres, but full production auth and Supabase integration are not complete.
-- The AI path has provider adapters, routing policy, schemas, and prompt code, but the overall product flow is still an early backend foundation rather than a finished user experience.
+- The MVP checklist and freeze policy are in `docs/MVP.md`. New feature work is frozen for v0 MVP; only blocker fixes should land until the `v0-mvp` tag is created from a clean, verified commit.
+- The AI path has provider adapters, routing policy, schemas, and prompt code; the v0 MVP demo does not require live provider credentials.
 - Some older docs still reflect the earlier restart shell. When they disagree with the live code, prefer this README and the active tree over `_archive_old_restart/`.

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { apiError, apiOk, invalidJsonResponse, invalidObjectResponse } from "../../lib/api/response";
 import {
   CaptureThoughtError,
   CaptureThoughtValidationError,
@@ -21,11 +21,11 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Request body must be valid JSON." }, { status: 400 });
+    return invalidJsonResponse();
   }
 
   if (!isObject(body)) {
-    return NextResponse.json({ error: "Request body must be a JSON object." }, { status: 400 });
+    return invalidObjectResponse();
   }
 
   try {
@@ -42,26 +42,26 @@ export async function POST(request: Request) {
       },
     );
 
-    return NextResponse.json(result, { status: 201 });
+    return apiOk(result, 201);
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return apiError(error.message, 401);
     }
 
     if (error instanceof CaptureThoughtValidationError) {
-      return NextResponse.json({ error: error.message, issues: error.issues }, { status: 400 });
+      return apiError(error.message, 400, error.issues);
     }
 
     if (error instanceof CaptureThoughtWorkspaceError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return apiError(error.message, 409);
     }
 
     if (error instanceof CaptureThoughtError) {
       console.error("POST /ai/capture-thought failed", error);
-      return NextResponse.json({ error: "Failed to capture thought." }, { status: 502 });
+      return apiError("Failed to capture thought.", 502);
     }
 
     console.error("POST /ai/capture-thought failed", error);
-    return NextResponse.json({ error: "Failed to capture thought." }, { status: 500 });
+    return apiError("Failed to capture thought.", 500);
   }
 }

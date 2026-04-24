@@ -64,7 +64,7 @@ export function InspectorRail({
         ) : (
           <>
             <p style={{ color: "#637069", lineHeight: 1.55, margin: "10px 0 0" }}>
-              Select a graph node or claim to inspect confidence, dependencies, and recent activity.
+              Select a node to inspect confidence, dependencies, and recent activity.
             </p>
             {children}
           </>
@@ -76,7 +76,7 @@ export function InspectorRail({
       </section>
 
       <section style={panelStyle}>
-        <ConnectionList emptyLabel="No dependencies projected yet." items={dependencies} title="Dependencies" />
+        <ConnectionList emptyLabel="Nothing this depends on yet." items={dependencies} title="Dependencies" />
       </section>
 
       <section style={panelStyle}>
@@ -95,7 +95,7 @@ export function InspectorRail({
             ))}
           </ul>
         ) : (
-          <p>No recent activity projected yet.</p>
+          <p>No recent activity yet.</p>
         )}
       </section>
     </aside>

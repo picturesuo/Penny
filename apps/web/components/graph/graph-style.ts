@@ -30,7 +30,9 @@ export const graphClusterColors: Record<GraphCluster, { fill: string; stroke: st
 export const graphSurfaceStyle: CSSProperties = {
   position: "relative",
   minHeight: 360,
-  overflow: "hidden",
+  overflow: "auto",
+  WebkitOverflowScrolling: "touch",
+  overscrollBehavior: "contain",
   border: "1px solid rgba(23, 32, 27, 0.08)",
   borderRadius: 8,
   background:

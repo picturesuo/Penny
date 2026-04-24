@@ -150,7 +150,8 @@ export function GraphView({ graph, selectedNodeId, onSelectNode, height = 460 }:
         ...graphSurfaceStyle,
         cursor: panStart ? "grabbing" : "grab",
         height,
-        touchAction: "none",
+        maxWidth: "100%",
+        touchAction: "pan-x pan-y",
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

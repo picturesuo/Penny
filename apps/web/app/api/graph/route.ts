@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { NextResponse } from "next/server";
 
+import { apiError, apiOk } from "../../../lib/api/response";
 import { logBackendError } from "../../../lib/backend-error-logging";
 import {
   RequestUserNotAuthenticatedError,
@@ -185,17 +185,17 @@ export async function GET(request: Request) {
       type: readOptionalType(searchParams.get("type")),
     });
 
-    return NextResponse.json(graph, { status: 200 });
+    return apiOk(graph);
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return apiError(error.message, 401);
     }
 
     if (error instanceof GraphQueryValidationError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return apiError(error.message, 400);
     }
 
     logBackendError({ error, request, route: "GET /api/graph" });
-    return NextResponse.json({ error: "Failed to build graph view." }, { status: 500 });
+    return apiError("Failed to build graph view.", 500);
   }
 }

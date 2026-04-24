@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createBrainViewModel,
   createEmptyBrainProjection,
@@ -67,11 +67,19 @@ export function BrainRouteScreen() {
     error: null,
   });
   const [interactionMessage, setInteractionMessage] = useState<string | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
+    const loadSeq = loadSeqRef.current + 1;
+    loadSeqRef.current = loadSeq;
     const requestedClaimId = readClaimIdFromLocation();
     const requestedMode = new URLSearchParams(window.location.search).get("mode");
+
+    function isCurrentLoad() {
+      return loadSeqRef.current === loadSeq;
+    }
 
     if (requestedMode === "brain" || requestedMode === "challenge" || requestedMode === "learn") {
       setCurrentMode(requestedMode);
@@ -81,6 +89,10 @@ export function BrainRouteScreen() {
       try {
         if (shouldUseMockBrainData(window.location.search)) {
           const projection = createMockBrainProjection();
+          if (!isCurrentLoad()) {
+            return;
+          }
+
           setState({
             status: "ready",
             shell: null,
@@ -96,6 +108,10 @@ export function BrainRouteScreen() {
           userId: localUserId,
           signal: controller.signal,
         });
+        if (!isCurrentLoad()) {
+          return;
+        }
+
         setState({
           status: "ready",
           shell: workspace.shell,
@@ -107,7 +123,7 @@ export function BrainRouteScreen() {
           requestedClaimId ?? workspace.brain.selectedClaim?.id ?? workspace.brain.currentContext?.claimId ?? workspace.shell.claimId ?? null,
         );
       } catch (error) {
-        if (controller.signal.aborted) {
+        if (controller.signal.aborted || !isCurrentLoad()) {
           return;
         }
 
@@ -124,7 +140,7 @@ export function BrainRouteScreen() {
     return () => {
       controller.abort();
     };
-  }, [setCurrentMode, setSelectedNodeId]);
+  }, [retryVersion, setCurrentMode, setSelectedNodeId]);
 
   function handleSelectThought(thoughtId: string) {
     setSelectedNodeId(thoughtId);
@@ -141,7 +157,7 @@ export function BrainRouteScreen() {
   }
 
   function handleNewThought() {
-    setInteractionMessage("New Thought placeholder: creation flow is not wired yet.");
+    setInteractionMessage("Use the claim composer in the workspace shell to capture this thought for now.");
   }
 
   const projection = useMemo(() => {
@@ -186,8 +202,10 @@ export function BrainRouteScreen() {
         model={createBrainViewModel(createEmptyBrainProjection())}
         onChangeMode={handleChangeMode}
         onNewThought={handleNewThought}
+        onRetry={() => setRetryVersion((current) => current + 1)}
         state="error"
-        statusMessage={state.error}
+        statusMessage="Penny could not load the Brain projection. Retry the page or open the workspace shell."
+        technicalDetail={state.error}
       />
     );
   }

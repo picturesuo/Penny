@@ -14,8 +14,13 @@ type HealthState =
 
 export function HealthCheck() {
   const [state, setState] = useState<HealthState>({ status: "idle" });
+  const isLoading = state.status === "loading";
 
   async function checkHealth() {
+    if (isLoading) {
+      return;
+    }
+
     setState({ status: "loading" });
 
     try {
@@ -53,6 +58,7 @@ export function HealthCheck() {
       <p style={{ lineHeight: 1.6 }}>Call the Fastify backend and confirm the restart wiring is live.</p>
       <button
         type="button"
+        disabled={isLoading}
         onClick={checkHealth}
         style={{
           background: "#b66a3c",
@@ -61,10 +67,11 @@ export function HealthCheck() {
           borderRadius: 999,
           padding: "12px 18px",
           fontWeight: 600,
-          cursor: "pointer",
+          cursor: isLoading ? "not-allowed" : "pointer",
+          opacity: isLoading ? 0.64 : 1,
         }}
       >
-        {state.status === "loading" ? "Checking..." : "Check backend health"}
+        {isLoading ? "Checking..." : "Check backend health"}
       </button>
       <p style={{ marginTop: 16, color: "#2a2927" }}>
         API base URL: <code>{apiBaseUrl}</code>

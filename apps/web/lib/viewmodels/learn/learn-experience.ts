@@ -77,18 +77,23 @@ function formatConfidence(confidenceBps: number | null | undefined): string {
   return `${Math.round(confidenceBps / 100)}% confidence`;
 }
 
+function readClaimBody(selectedClaim: LearnClaimView | null): string {
+  return selectedClaim?.body?.trim() || "Untitled claim";
+}
+
 function buildConceptTitle(selectedClaim: LearnClaimView | null, fallback: string): string {
   if (!selectedClaim) {
     return fallback;
   }
 
-  const firstSentence = selectedClaim.body.split(/[.!?]/)[0]?.trim();
+  const body = readClaimBody(selectedClaim);
+  const firstSentence = body.split(/[.!?]/)[0]?.trim();
 
   if (firstSentence && firstSentence.length <= 72) {
     return firstSentence;
   }
 
-  return `${selectedClaim.body.slice(0, 69).trim()}...`;
+  return `${body.slice(0, 69).trim()}...`;
 }
 
 function buildLearnExperienceState(input: {
@@ -99,8 +104,8 @@ function buildLearnExperienceState(input: {
   if (input.status === "loading") {
     return {
       id: "loading",
-      title: "Loading concept",
-      body: "Penny is reading the current Learn projection.",
+      title: "Loading Learn",
+      body: "Loading the current claim.",
     };
   }
 
@@ -108,22 +113,22 @@ function buildLearnExperienceState(input: {
     return {
       id: "error",
       title: "Learn unavailable",
-      body: input.message || "Penny could not load this Learn concept.",
+      body: input.message || "Penny could not load this claim.",
     };
   }
 
   if (!input.selectedClaim) {
     return {
       id: "placeholder",
-      title: "Placeholder",
-      body: "Select a claim before Learn can build an active concept.",
+      title: "Select a claim",
+      body: "Learn needs one claim to explain.",
     };
   }
 
   return {
     id: "active_concept",
-    title: "Active concept",
-    body: "A concept is selected and ready for teach-back.",
+    title: "Ready to explain",
+    body: "Write the idea in your own words.",
   };
 }
 
@@ -134,19 +139,20 @@ export function getVisibleLearnState(baseState: LearnExperienceState, teachBack:
 
   return {
     id: "feedback_shown",
-    title: "Feedback shown",
-    body: "Penny is responding to the current teach-back draft.",
+    title: "Draft ready",
+    body: "Check the example and the edge case.",
   };
 }
 
 export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnExperienceViewModel {
   const selectedClaim = view.selectedClaim;
+  const selectedClaimBody = readClaimBody(selectedClaim);
   const status = view.status ?? view.learnState.status;
   const message = view.message ?? view.learnState.message;
   const conceptTitle = buildConceptTitle(selectedClaim, "No concept selected");
   const conceptExplanation = selectedClaim
-    ? selectedClaim.body
-    : "Choose a claim from Brain or Challenge so Learn can turn it into a teach-back concept.";
+    ? selectedClaimBody
+    : "Choose a claim from Brain or Challenge to start.";
 
   return {
     experienceState: buildLearnExperienceState({
@@ -156,7 +162,7 @@ export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnE
     }),
     heroTitle: selectedClaim ? conceptTitle : message,
     heroDetail: selectedClaim
-      ? "Turn the claim into a short explanation, then check whether it still holds when examples and edge cases move."
+      ? "Explain the claim, then test it with an example and an edge case."
       : "Select a claim in Brain or Challenge to start a Learn pass.",
     concept: {
       title: conceptTitle,
@@ -164,19 +170,19 @@ export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnE
     },
     selectedClaim: selectedClaim
       ? {
-          body: selectedClaim.body,
+          body: selectedClaimBody,
           confidenceLabel: formatConfidence(selectedClaim.confidenceBps),
           confidenceBps: typeof selectedClaim.confidenceBps === "number" ? selectedClaim.confidenceBps : null,
         }
       : null,
     teachBackPrompt: selectedClaim
-      ? `Explain this claim in your own words: ${selectedClaim.body}`
+      ? `Explain this in your own words: ${selectedClaimBody}`
       : "Select a claim before writing a teach-back.",
     feedback: {
-      title: selectedClaim ? "Penny feedback" : "Penny feedback pending",
+      title: selectedClaim ? "Review" : "Review pending",
       body: selectedClaim
-        ? "Write a teach-back that explains the concept, gives one concrete example, and names the edge case you would watch."
-        : "Select a concept before Penny can compare your explanation against the source claim.",
+        ? "Name the idea, one concrete example, and the edge case that would weaken it."
+        : "Select a claim before Penny can compare your explanation.",
     },
     practiceSteps: [
       {
@@ -199,25 +205,25 @@ export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnE
       },
       {
         title: "Evidence hook",
-        prompt: "What observation would make you more confident this claim is true?",
+        prompt: "What changed your confidence?",
       },
       {
-        title: "Challenge memory",
-        prompt: "Which counterargument should you remember before using this claim?",
+        title: "Tension",
+        prompt: "Which objection should you remember before using this claim?",
       },
     ],
     relatedIdeas: [
       {
         title: "Source claim",
-        body: selectedClaim ? selectedClaim.body : "No source claim selected.",
+        body: selectedClaim ? selectedClaimBody : "No source claim selected.",
       },
       {
         title: "Evidence to recall",
-        body: "Name the observation that would make this concept easier to trust.",
+        body: "Name what changed your confidence.",
       },
       {
-        title: "Challenge memory",
-        body: "Bring forward the counterargument before using this concept in a decision.",
+        title: "Show the tension",
+        body: "Bring the strongest objection into the decision.",
       },
     ],
     brainMiniMap: {
@@ -225,11 +231,11 @@ export function buildLearnExperienceViewModel(view: LearnProjectionView): LearnE
       neighbors: [
         view.selectedMapId ? `Map ${view.selectedMapId}` : "No map selected",
         view.selectedClaimId ? `Claim ${view.selectedClaimId}` : "No claim selected",
-        "Challenge memory",
+        "Show the tension",
       ],
     },
     switchConcept: {
-      label: "Switch concept",
+      label: "Switch claim",
       disabled: true,
     },
     reviewState: {

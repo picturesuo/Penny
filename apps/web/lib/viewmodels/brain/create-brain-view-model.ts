@@ -148,8 +148,8 @@ function createContradictionMarkers(selectedThought: BrainThoughtViewModel | nul
     return [
       {
         id: selectedThought.id,
-        title: "Selected claim needs challenge",
-        detail: `${selectedThought.confidenceLabel}; confidence is below the contradiction review threshold.`,
+        title: "Show the tension",
+        detail: `${selectedThought.confidenceLabel}; put this idea under pressure.`,
       },
       ...markers,
     ];
@@ -228,7 +228,7 @@ function createSelectedPanel(selectedThought: BrainThoughtViewModel | null, stre
     dependenciesLabel:
       relatedClaims.length > 0
         ? `${relatedClaims.length} related claims from this map`
-        : "No explicit dependencies projected yet",
+        : "No clear dependencies yet",
     relatedClaims,
     brainMapHref: createBrainMapHref(selectedThought.id),
   };
@@ -311,7 +311,7 @@ export function createBrainViewModel(projection: BrainProjectionView, options: B
       mapId,
       claimId: selectedThought?.id ?? context.claimId,
       mapTitle,
-      sphereLabel: "No sphere projected",
+      sphereLabel: "No sphere selected",
       claimCountLabel: `${projection.mapSummary?.claimCount ?? stream.length} thoughts`,
     },
     stream,
@@ -324,7 +324,7 @@ export function createBrainViewModel(projection: BrainProjectionView, options: B
     },
     recentThoughts,
     inspector: {
-      status: selectedThought ? "Selected thought" : "No thought selected",
+      status: selectedThought ? "Selected claim" : "No claim selected",
       selectedId: selectedThought?.id ?? null,
       mapId: selectedThought?.mapId ?? projection.mapSummary?.id ?? context.mapId,
       confidenceLabel: selectedThought?.confidenceLabel ?? "No confidence recorded",

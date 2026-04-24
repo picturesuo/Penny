@@ -14,6 +14,9 @@ These routes return backend-shaped workspace views. The frontend should consume 
 | `GET` | `/api/workspace/brain` | `buildBrainView` | Brain mode claim list, map summary, selected claim, and current workspace context. |
 | `GET` | `/api/workspace/challenge` | `buildChallengeView` | Current context, active claim, latest challenge round, critique state/payload, and recorded response state. |
 | `GET` | `/api/workspace/learn` | `buildLearnView` | Learn mode context, selected claim, and the MVP placeholder status/message. |
+| `GET` | `/api/thoughts` | `thoughts` | Authenticated list of owned thoughts, with optional `mapId`, `sessionId`, and `limit` query filters. |
+| `GET` | `/api/claims` | `claims` | Authenticated list of owned claims, with optional `mapId`, `thoughtId`, and `limit` query filters. |
+| `GET` | `/api/sessions` | `sessions` | Authenticated list of owned sessions without exposing token hashes, with optional `limit` query filter. |
 | `GET` | `/api/graph` | `graph_nodes` + `graph_edges` | Persisted graph payload as `{ nodes, edges }` for the authenticated user, with optional `sessionId`, `mapId`, and `type` query filters. |
 | `GET` | `/api/graph/nodes/:id/detail` | `graph_nodes` + `graph_edges` + `confidence_ratings` | Authenticated graph node detail with the node, incoming/outgoing edges, and confidence ratings. |
 | `GET` | `/api/search?q=` | `maps` + `claims` + `thoughts` + `sessions` | Authenticated global search for command-palette results across owned workspace records. Each result has `id`, `type`, `title`, `subtitle`, `confidence`, and `href`. |

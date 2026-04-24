@@ -35,7 +35,7 @@ test("learn experience builds a teach-back surface for the selected claim", () =
     confidenceBps: 7200,
   });
   assert.match(viewModel.teachBackPrompt, /Users retain concepts/);
-  assert.equal(viewModel.feedback.title, "Penny feedback");
+  assert.equal(viewModel.feedback.title, "Review");
   assert.match(viewModel.feedback.body, /concrete example/);
   assert.deepEqual(
     viewModel.practiceSteps.map((step) => step.title),
@@ -43,18 +43,18 @@ test("learn experience builds a teach-back surface for the selected claim", () =
   );
   assert.deepEqual(
     viewModel.retrievalCards.map((card) => card.title),
-    ["Plain-language recall", "Evidence hook", "Challenge memory"],
+    ["Plain-language recall", "Evidence hook", "Tension"],
   );
   assert.deepEqual(
     viewModel.relatedIdeas.map((idea) => idea.title),
-    ["Source claim", "Evidence to recall", "Challenge memory"],
+    ["Source claim", "Evidence to recall", "Show the tension"],
   );
   assert.deepEqual(viewModel.brainMiniMap, {
     current: "Users retain concepts better when they teach them back",
-    neighbors: ["Map map-1", "Claim claim-1", "Challenge memory"],
+    neighbors: ["Map map-1", "Claim claim-1", "Show the tension"],
   });
   assert.deepEqual(viewModel.switchConcept, {
-    label: "Switch concept",
+    label: "Switch claim",
     disabled: true,
   });
   assert.deepEqual(viewModel.reviewState, {
@@ -81,12 +81,12 @@ test("learn experience keeps a clear no-claim state", () => {
   assert.equal(viewModel.experienceState.id, "placeholder");
   assert.deepEqual(viewModel.concept, {
     title: "No concept selected",
-    explanation: "Choose a claim from Brain or Challenge so Learn can turn it into a teach-back concept.",
+    explanation: "Choose a claim from Brain or Challenge to start.",
   });
   assert.equal(viewModel.selectedClaim, null);
   assert.equal(viewModel.teachBackPrompt, "Select a claim before writing a teach-back.");
-  assert.equal(viewModel.feedback.title, "Penny feedback pending");
-  assert.match(viewModel.feedback.body, /Select a concept/);
+  assert.equal(viewModel.feedback.title, "Review pending");
+  assert.match(viewModel.feedback.body, /Select a claim/);
   assert.equal(viewModel.brainMiniMap.current, "No concept selected");
   assert.equal(viewModel.reviewState.mapLabel, "No map selected");
   assert.equal(viewModel.reviewState.claimLabel, "No claim selected");
@@ -107,8 +107,8 @@ test("learn experience distinguishes loading and error states from projection st
 
   assert.deepEqual(loadingViewModel.experienceState, {
     id: "loading",
-    title: "Loading concept",
-    body: "Penny is reading the current Learn projection.",
+    title: "Loading Learn",
+    body: "Loading the current claim.",
   });
 
   const errorViewModel = buildLearnExperienceViewModel({
@@ -150,7 +150,7 @@ test("learn experience shows feedback state once a teach-back draft exists", () 
   assert.equal(getVisibleLearnState(viewModel.experienceState, "").id, "active_concept");
   assert.deepEqual(getVisibleLearnState(viewModel.experienceState, "A draft explanation"), {
     id: "feedback_shown",
-    title: "Feedback shown",
-    body: "Penny is responding to the current teach-back draft.",
+    title: "Draft ready",
+    body: "Check the example and the edge case.",
   });
 });

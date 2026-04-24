@@ -52,7 +52,7 @@ function formatResultMeta(item: CommandPaletteItem) {
   }
 
   const confidenceLabel = `${item.confidence}% confidence`;
-  return item.subtitle ? `${item.subtitle} - ${confidenceLabel}` : confidenceLabel;
+  return item.subtitle ? `${item.subtitle}. ${confidenceLabel}` : confidenceLabel;
 }
 
 function getNextEnabledIndex(items: CommandPaletteItem[], startIndex: number, direction: 1 | -1) {
@@ -79,7 +79,7 @@ export function CommandPalette({
   isLoading = false,
   onClose,
   onSelectItem,
-  placeholder = "Search your brain…",
+  placeholder = "Search thoughts or claims...",
   query,
   setQuery,
 }: CommandPaletteProps) {
@@ -154,9 +154,12 @@ export function CommandPalette({
     <div className="command-palette" role="presentation">
       <button className="command-palette__scrim" type="button" aria-label="Close search" onClick={onClose} />
       <section className="command-palette__dialog" role="dialog" aria-modal="true" aria-labelledby={`${inputId}-title`}>
-        <h2 className="ui-sr-only" id={`${inputId}-title`}>
-          Search Penny
-        </h2>
+        <div className="command-palette__header">
+          <h2 id={`${inputId}-title`}>Search Penny</h2>
+          <button className="command-palette__close" type="button" onClick={onClose} aria-label="Close search">
+            Close
+          </button>
+        </div>
         <div className="command-palette__search-row">
           <span className="command-palette__search-icon" aria-hidden="true">
             /
@@ -203,8 +206,8 @@ export function CommandPalette({
             ))
           ) : (
             <div className="command-palette__empty" role="status">
-              <strong style={{ color: "var(--penny-ink)", display: "block", marginBottom: 6 }}>No search results</strong>
-              <span>Try a thought, claim, map title, or session keyword.</span>
+              <strong style={{ color: "var(--penny-ink)", display: "block", marginBottom: 6 }}>Nothing found</strong>
+              <span>Try a thought, claim, or map title.</span>
             </div>
           )}
         </div>

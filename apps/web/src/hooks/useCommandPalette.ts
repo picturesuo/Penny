@@ -64,8 +64,8 @@ function createSearchTodoItem(): CommandPaletteItem {
   return {
     id: "todo:global-search-backend",
     type: "session",
-    title: "Search is temporarily unavailable",
-    subtitle: "Showing local workspace commands until backend search responds.",
+    title: "Search is not available",
+    subtitle: "Local commands are still available.",
     confidence: null,
     href: null,
     disabled: true,

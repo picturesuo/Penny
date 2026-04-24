@@ -227,3 +227,17 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 560px) {
+  .heroPanel {
+    min-height: 190px;
+  }
+
+  .teachBackCard textarea {
+    min-height: 150px;
+  }
+
+  .switchButton {
+    width: 100%;
+  }
+}

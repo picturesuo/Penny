@@ -730,6 +730,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
     }
 
     requestInFlightRef.current = true;
+    mutationSeqRef.current += 1;
     return true;
   }, []);
   const finishRequest = useCallback(() => {
@@ -774,6 +775,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       const previousSelectedClaim = view && "selectedClaim" in view && view.selectedClaim?.id === claimId ? view.selectedClaim : null;
       const previousConfidenceBps = previousClaim?.confidenceBps ?? previousSelectedClaim?.confidenceBps ?? null;
 
+      mutationSeqRef.current += 1;
       patchClaimInCurrentView(claimId, {
         confidenceBps: ratingBps,
         updatedAt: new Date().toISOString(),
@@ -893,7 +895,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
     setActionState({
       status: "pending",
-      message: "Opening search result.",
+      message: "Opening result.",
     });
 
     try {
@@ -906,14 +908,14 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       syncWorkspaceSelection(workspaceSelection);
       setActionState({
         status: "success",
-        message: "Search result opened.",
+        message: "Result opened.",
       });
       invalidateProjection();
       window.history.replaceState(null, "", result.href ?? `/workspace?mode=${parsedSelection.mode}`);
     } catch (error) {
       setActionState({
         status: "error",
-        message: error instanceof Error ? error.message : "Failed to open search result.",
+        message: error instanceof Error ? error.message : "Could not open result.",
       });
     } finally {
       finishRequest();
@@ -1041,7 +1043,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
     setActionState({
       status: "pending",
-      message: `Switching to ${toCommandMode(mode)}.`,
+      message: `Opening ${toCommandMode(mode)}.`,
     });
 
     try {
@@ -1054,13 +1056,13 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       syncWorkspaceSelection(selection);
       setActionState({
         status: "success",
-        message: `${toCommandMode(mode)} mode selected.`,
+        message: `${toCommandMode(mode)} opened.`,
       });
       invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
-        message: error instanceof Error ? error.message : "Failed to switch workspace mode.",
+        message: error instanceof Error ? error.message : "Could not switch modes.",
       });
     } finally {
       finishRequest();
@@ -1074,7 +1076,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
     setActionState({
       status: "pending",
-      message: "Updating selected map.",
+      message: "Selecting map.",
     });
 
     try {
@@ -1087,13 +1089,13 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       syncWorkspaceSelection(selection);
       setActionState({
         status: "success",
-        message: "Selected map updated.",
+        message: "Map selected.",
       });
       invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
-        message: error instanceof Error ? error.message : "Failed to select map.",
+        message: error instanceof Error ? error.message : "Could not select map.",
       });
     } finally {
       finishRequest();
@@ -1117,7 +1119,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
     setActionState({
       status: "pending",
-      message: "Updating selected claim.",
+      message: "Selecting claim.",
     });
 
     try {
@@ -1130,13 +1132,13 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       syncWorkspaceSelection(selection);
       setActionState({
         status: "success",
-        message: "Selected claim updated.",
+        message: "Claim selected.",
       });
       invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
-        message: error instanceof Error ? error.message : "Failed to select claim.",
+        message: error instanceof Error ? error.message : "Could not select claim.",
       });
     } finally {
       finishRequest();
@@ -1172,7 +1174,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
     setActionState({
       status: "pending",
-      message: "Creating claim.",
+      message: "Saving claim.",
     });
     setSelectedNodeId(optimisticClaim.id);
     setActiveSessionId(`session-${optimisticClaim.id}`);
@@ -1237,7 +1239,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
       setActionState({
         status: "success",
-        message: "Claim created and selected.",
+        message: "Claim saved.",
       });
       invalidateProjection();
     } catch (error) {
@@ -1272,7 +1274,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       });
       setActionState({
         status: "error",
-        message: error instanceof Error ? error.message : "Failed to create claim.",
+        message: error instanceof Error ? error.message : "Could not save claim.",
       });
     } finally {
       finishRequest();
@@ -1286,7 +1288,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
     setActionState({
       status: "pending",
-      message: "Starting challenge round.",
+      message: "Putting idea under pressure.",
     });
 
     try {
@@ -1297,13 +1299,13 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       setActiveSessionId(`challenge-round-${started.roundId}`);
       setActionState({
         status: "success",
-        message: "Challenge round started.",
+        message: "Pressure test started.",
       });
       invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
-        message: error instanceof Error ? error.message : "Failed to start challenge round.",
+        message: error instanceof Error ? error.message : "Could not start pressure test.",
       });
     } finally {
       finishRequest();
@@ -1317,7 +1319,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
     setActionState({
       status: "pending",
-      message: "Requesting critique.",
+      message: "Finding the tension.",
     });
 
     try {
@@ -1328,13 +1330,13 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       setActiveSessionId(`challenge-round-${roundId}`);
       setActionState({
         status: "success",
-        message: "Critique requested.",
+        message: "Tension requested.",
       });
       invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
-        message: error instanceof Error ? error.message : "Failed to request critique.",
+        message: error instanceof Error ? error.message : "Could not request critique.",
       });
     } finally {
       finishRequest();
@@ -1348,7 +1350,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
 
     setActionState({
       status: "pending",
-      message: "Recording challenge response.",
+      message: "Saving response.",
     });
 
     try {
@@ -1361,13 +1363,13 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
       setActiveSessionId(`challenge-round-${roundId}`);
       setActionState({
         status: "success",
-        message: "Challenge response recorded.",
+        message: "Response saved.",
       });
       invalidateProjection();
     } catch (error) {
       setActionState({
         status: "error",
-        message: error instanceof Error ? error.message : "Failed to record challenge response.",
+        message: error instanceof Error ? error.message : "Could not save response.",
       });
     } finally {
       finishRequest();
@@ -1384,7 +1386,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         isLoading={commandPalette.backendSearchStatus === "loading"}
         onClose={commandPalette.close}
         onSelectItem={commandPalette.selectItem}
-        placeholder="Search claims, maps, sessions, or actions..."
+        placeholder="Search thoughts, claims, or maps..."
         query={commandPalette.query}
         setQuery={commandPalette.setQuery}
       />
@@ -1394,7 +1396,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
           <span className="penny-brand-name">Penny</span>
         </div>
         <button className="penny-command-button" type="button" onClick={commandPalette.open} aria-keyshortcuts="Meta+K Control+K /">
-          <span>Search claims and actions...</span>
+          <span>Search thoughts and claims...</span>
           <kbd>⌘K</kbd>
           <kbd>/</kbd>
         </button>
@@ -1428,7 +1430,7 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
               </span>
             ))
           ) : (
-            <span className="penny-breadcrumb-empty">No workspace selected</span>
+            <span className="penny-breadcrumb-empty">No map selected</span>
           )}
         </div>
         <span className="penny-context-label">Stored mode: {state.shell?.mode ?? "brain"}</span>
@@ -1438,24 +1440,24 @@ export function PennyShell({ initialMode = "brain" }: PennyShellProps) {
         {state.error ? (
           <ErrorState
             actionLabel="Retry"
-            message="Penny could not load this workspace view. Retry the projection, or switch modes if the workspace is still starting up."
+            message="Penny could not load this view. Retry, or switch modes and keep the same context."
             onAction={refreshProjection}
             technicalDetail={state.error}
-            title="Projection unavailable"
+            title="View unavailable"
           />
         ) : null}
         {!state.error && state.isLoading && !state.view ? (
           <ProjectionSkeleton />
         ) : null}
         {!state.error && state.isLoading && state.view ? (
-          <ProjectionNotice title="Updating projection" body="Refreshing the workspace view while preserving the current selection." />
+          <ProjectionNotice title="Updating view" body="Keeping the current selection while the map refreshes." />
         ) : null}
         {!state.error && !state.isLoading && !state.view ? (
           <EmptyState
             actionLabel="Retry"
-            body="The workspace API responded, but no projection was available for the selected mode."
+            body="The workspace responded, but this mode has no view yet."
             onAction={refreshProjection}
-            title="No workspace projection"
+            title="No view yet"
           />
         ) : null}
         {!state.error && state.view ? (
@@ -1628,8 +1630,8 @@ function BrainProjection({
           <h1>{mapTitle}</h1>
           <p>
             {view.mapSummary
-              ? `${view.mapSummary.claimCount} claims loaded from the Brain projection.`
-              : "Create or select a map to populate this projection."}
+              ? `${view.mapSummary.claimCount} claims in this map.`
+              : "Create or select a map to start."}
           </p>
         </section>
 
@@ -1639,7 +1641,7 @@ function BrainProjection({
               <p className="penny-kicker">Graph</p>
               <h2>Claim map</h2>
             </div>
-            <span>{selectedNodeId ? `Inspecting ${selectedNodeId} · Esc clears` : "No node selected"}</span>
+            <span>{selectedNodeId ? "Node selected · Esc clears" : "No node selected"}</span>
           </div>
           <BrainGraphMap graph={graph} selectedNodeId={selectedNodeId} onSelectNode={inspectGraphNode} height={520} />
         </section>
@@ -1670,8 +1672,8 @@ function BrainProjection({
             </div>
           ) : (
             <EmptyState
-              body="This Brain map is ready, but it does not have any projected claims yet. Create a claim below to start the stream."
-              title="No claims in this Brain map"
+              body="Capture one claim to start the map."
+              title="No claims yet"
             />
           )}
         </section>
@@ -1719,7 +1721,7 @@ function BrainProjection({
               <div style={{ marginTop: 14 }}>
                 <ConfidenceRatingControl
                   disabled={isOptimisticClaimId(selectedClaim.id)}
-                  label="Rate confidence"
+                  label="What changed your confidence?"
                   onValueChange={(ratingBps) => onRateClaim(selectedClaim.id, ratingBps)}
                   scale="basis-points"
                   value={selectedClaim.confidenceBps}
@@ -1727,7 +1729,7 @@ function BrainProjection({
               </div>
             </>
           ) : (
-            <p>No claim selected.</p>
+            <p>Select a claim to inspect it.</p>
           )}
         </div>
       </InspectorRail>
@@ -1789,7 +1791,7 @@ function ClaimComposer({
         ref={inputRef}
         id="claim-text"
         name="claim"
-        placeholder="Write one claim Penny should track, for example: Distribution is the durable moat."
+        placeholder="Write one claim Penny should track. Example: Distribution is the durable moat."
         value={text}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
@@ -1804,7 +1806,7 @@ function ClaimComposer({
       />
       <p className="penny-shortcut-hint">Press / from Brain to focus this capture box. Press Cmd+Enter to create the claim.</p>
       <button type="submit" disabled={isLocked || !text.trim()} aria-keyshortcuts="Meta+Enter Control+Enter">
-        {isSubmitting ? "Creating..." : "Create claim"}
+        {isSubmitting ? "Saving..." : "Save claim"}
       </button>
     </form>
   );

@@ -36,8 +36,9 @@ export function ChallengeExperience({
   const responseTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedAction, setSelectedAction] = useState<ChallengeResponsePath>("defend");
   const [response, setResponse] = useState("");
+  const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
   const roundId = model.round?.id ?? null;
-  const isBusy = actionState.status === "pending";
+  const isBusy = actionState.status === "pending" || isSubmittingResponse;
   const isAiResponseLoading =
     model.challengeState.id === "critique_pending" ||
     (actionState.status === "pending" && /critique/i.test(actionState.message ?? ""));
@@ -92,8 +93,14 @@ export function ChallengeExperience({
       return;
     }
 
-    await onRecordResponse(roundId, trimmed, selectedAction);
-    setResponse("");
+    setIsSubmittingResponse(true);
+
+    try {
+      await onRecordResponse(roundId, trimmed, selectedAction);
+      setResponse("");
+    } finally {
+      setIsSubmittingResponse(false);
+    }
   }
 
   function chooseAction(action: ChallengeResponseAction) {
@@ -133,11 +140,11 @@ export function ChallengeExperience({
       </section>
 
       <section className={`penny-panel ${styles.weaknessCard}`}>
-        <p className={styles.kicker}>Key weakness</p>
+        <p className={styles.kicker}>Show the tension</p>
         {isAiResponseLoading ? (
           <span className={styles.aiSkeletonBlock}>
-            <Skeleton height={16} width="86%" label="Loading AI weakness summary" />
-            <Skeleton height={16} width="58%" label="Loading AI weakness detail" />
+            <Skeleton height={16} width="86%" label="Finding tension summary" />
+            <Skeleton height={16} width="58%" label="Finding tension detail" />
           </span>
         ) : (
           <p>{model.keyWeaknessSummary}</p>
@@ -145,7 +152,7 @@ export function ChallengeExperience({
       </section>
 
       <section className={`penny-panel ${styles.stakesCard}`}>
-        <p className={styles.kicker}>What is at stake</p>
+        <p className={styles.kicker}>What changed your confidence?</p>
         <p>{model.whatsAtStake.summary}</p>
         <ul className={styles.signalList}>
           {model.whatsAtStake.items.map((item) => (
@@ -189,7 +196,7 @@ export function ChallengeExperience({
       </section>
 
       <section className={`penny-panel ${styles.cascadeCard}`}>
-        <p className={styles.kicker}>Dependency cascade</p>
+        <p className={styles.kicker}>Find what this depends on</p>
         <p>{model.dependencyCascade.summary}</p>
         <CascadeGroup title="Assumptions" items={model.dependencyCascade.assumptions} />
         <CascadeGroup title="Likely failure modes" items={model.dependencyCascade.likelyFailureModes} />
@@ -210,7 +217,7 @@ export function ChallengeExperience({
             aria-keyshortcuts="s"
             onClick={() => (view.activeClaim ? onStartChallenge(view.activeClaim.id) : undefined)}
           >
-            Start Challenge
+            Put this idea under pressure
           </button>
           <button
             type="button"
@@ -218,7 +225,7 @@ export function ChallengeExperience({
             aria-keyshortcuts="r"
             onClick={() => (roundId ? onRequestCritique(roundId) : undefined)}
           >
-            Request Critique
+            Show the tension
           </button>
         </div>
 
@@ -238,7 +245,7 @@ export function ChallengeExperience({
         </div>
 
         <form ref={responseFormRef} className={styles.responseForm} onSubmit={submitResponse}>
-          <label htmlFor="challenge-response">{selectedActionModel.label} response</label>
+          <label htmlFor="challenge-response">{selectedActionModel.label}</label>
           <textarea
             ref={responseTextareaRef}
             id="challenge-response"
@@ -251,12 +258,12 @@ export function ChallengeExperience({
               }
             }}
             disabled={!model.canRecordResponse || isBusy}
-            placeholder={selectedActionModel.prompt}
+            placeholder={`${selectedActionModel.prompt} Press Cmd/Ctrl+Enter to save.`}
             autoFocus={model.canRecordResponse}
             rows={6}
           />
           <button type="submit" disabled={!model.canRecordResponse || isBusy || !response.trim()} aria-keyshortcuts="Meta+Enter Control+Enter">
-            Record {selectedActionModel.label}
+            {isSubmittingResponse ? "Saving..." : `Save ${selectedActionModel.label}`}
           </button>
         </form>
       </section>
@@ -283,7 +290,7 @@ function CascadeGroup({ title, items }: { title: string; items: string[] }) {
           ))}
         </ul>
       ) : (
-        <p>None returned yet.</p>
+        <p>Nothing found yet.</p>
       )}
     </div>
   );
@@ -291,10 +298,10 @@ function CascadeGroup({ title, items }: { title: string; items: string[] }) {
 
 function AiResponseSkeleton() {
   return (
-    <div className={styles.aiSkeletonBlock} role="status" aria-label="Loading AI response">
-      <Skeleton height={16} width="92%" label="Loading AI response line" />
-      <Skeleton height={16} width="76%" label="Loading AI response line" />
-      <Skeleton height={16} width="64%" label="Loading AI response line" />
+    <div className={styles.aiSkeletonBlock} role="status" aria-label="Finding tension">
+      <Skeleton height={16} width="92%" label="Finding tension line" />
+      <Skeleton height={16} width="76%" label="Finding tension line" />
+      <Skeleton height={16} width="64%" label="Finding tension line" />
     </div>
   );
 }

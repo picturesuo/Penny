@@ -54,26 +54,26 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
       </section>
 
       <section className={`penny-panel ${styles.conceptCard}`}>
-        <p className={styles.kicker}>Concept title</p>
+        <p className={styles.kicker}>Claim to explain</p>
         <h2>{model.concept.title}</h2>
         {model.selectedClaim ? <ConfidenceChip scale="basis-points" value={model.selectedClaim.confidenceBps} /> : null}
       </section>
 
       <section className={`penny-panel ${styles.explanationCard}`}>
-        <p className={styles.kicker}>Concept explanation</p>
+        <p className={styles.kicker}>Plain version</p>
         <p>{model.concept.explanation}</p>
       </section>
 
       <section className={`penny-panel ${styles.teachBackCard}`}>
         <p className={styles.kicker}>Teach-back</p>
         <p>{model.teachBackPrompt}</p>
-        <label htmlFor="learn-teach-back">Your explanation</label>
+        <label htmlFor="learn-teach-back">Your version</label>
         <textarea
           ref={teachBackRef}
           id="learn-teach-back"
           value={teachBack}
           onChange={(event) => setTeachBack(event.target.value)}
-          placeholder="Explain the claim, give an example, then name an edge case."
+          placeholder="State the claim. Give one example. Name the edge case."
           aria-keyshortcuts="t"
           autoFocus
           rows={7}
@@ -81,7 +81,7 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
       </section>
 
       <section className={`penny-panel ${styles.feedbackCard}`}>
-        <p className={styles.kicker}>Penny feedback</p>
+        <p className={styles.kicker}>Review</p>
         <h2>{model.feedback.title}</h2>
         <p>{feedbackForDraft(model.feedback.body, teachBack)}</p>
       </section>
@@ -99,7 +99,7 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
       </section>
 
       <section className={`penny-panel ${styles.miniMapCard}`}>
-        <p className={styles.kicker}>Where this lives in your brain</p>
+        <p className={styles.kicker}>Where this lives</p>
         <div className={styles.miniMap}>
           <div className={styles.mapNode} data-current="true">
             {model.brainMiniMap.current}
@@ -137,7 +137,7 @@ export function LearnExperience({ view }: { view: LearnProjectionView }) {
       </section>
 
       <section className={`penny-panel ${styles.stateDetailsCard}`}>
-        <p className={styles.kicker}>Learning details</p>
+        <p className={styles.kicker}>Details</p>
         <dl className={styles.facts}>
           <div>
             <dt>Status</dt>
@@ -180,8 +180,8 @@ function feedbackForDraft(baseFeedback: string, teachBack: string): string {
   }
 
   if (trimmed.length < 80) {
-    return "Good start. Add a concrete example and the edge case that would make the concept break.";
+    return "Good start. Add one concrete example and the edge case that would break it.";
   }
 
-  return "This teach-back has enough shape for review. Check that it includes the concept, one example, and one edge case.";
+  return "This has enough shape to review. Check the idea, the example, and the edge case.";
 }

@@ -36,9 +36,9 @@ const markerStyle = {
 } as const;
 
 export function ContradictionMarkers({
-  emptyLabel = "No contradiction markers detected.",
+  emptyLabel = "No tension found yet.",
   markers,
-  title = "Contradiction markers",
+  title = "Show the tension",
 }: ContradictionMarkersProps) {
   return (
     <section aria-label={title}>

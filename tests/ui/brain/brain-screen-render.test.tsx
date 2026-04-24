@@ -83,7 +83,7 @@ test("BrainScreen renders the populated Brain state", () => {
   assert.match(html, /Brain/);
   assert.match(html, /Challenge/);
   assert.match(html, /Learn/);
-  assert.match(html, /New Thought/);
+  assert.match(html, /Capture Thought/);
   assert.match(html, /Work sphere/);
   assert.match(html, /Recent sessions/);
   assert.match(html, /Current Brain session/);
@@ -92,17 +92,17 @@ test("BrainScreen renders the populated Brain state", () => {
   assert.match(html, /Claim inspector/);
   assert.match(html, /Key connections/);
   assert.match(html, /Dependencies/);
-  assert.match(html, /Contradiction markers/);
+  assert.match(html, /Tension/);
   assert.match(html, /Recent activity/);
-  assert.match(html, /Dependencies and related claims/);
+  assert.match(html, /Find what this depends on/);
   assert.match(html, /Related claims should stay visible beside the selected claim/);
   assert.match(html, /56% confidence; review against the selected claim/);
-  assert.match(html, /View on Brain Map/);
+  assert.match(html, /Show in Brain/);
   assert.match(html, /Recent thoughts/);
   assert.match(html, /Investor diligence map/);
   assert.match(html, /Penny should make claim history inspectable/);
   assert.match(html, /Confidence mini graph: 74% confidence/);
-  assert.match(html, /Populated Brain state/);
+  assert.match(html, /Brain is ready/);
 });
 
 test("BrainScreen keeps selected claim visible while another mode is active", () => {
@@ -121,7 +121,7 @@ test("BrainScreen keeps selected claim visible while another mode is active", ()
   assert.match(html, /Challenge mode selected with current claim preserved/);
   assert.match(html, /Claim panel/);
   assert.match(html, /Penny should make claim history inspectable/);
-  assert.match(html, /View on Brain Map/);
+  assert.match(html, /Show in Brain/);
 });
 
 test("BrainScreen renders the empty Brain state", () => {
@@ -129,17 +129,17 @@ test("BrainScreen renders the empty Brain state", () => {
 
   const html = renderToStaticMarkup(createElement(BrainScreen, { model, state: "empty" }));
 
-  assert.match(html, /Empty Brain state/);
+  assert.match(html, /Nothing here yet/);
   assert.match(html, /Guided first-run empty state/);
-  assert.match(html, /Start by giving Penny one belief to remember/);
-  assert.match(html, /Penny should help me trace one raw product belief/);
-  assert.match(html, /I think Penny should help me think better, not just store notes/);
-  assert.match(html, /Challenge my current backend architecture/);
-  assert.match(html, /Explain what is blocking this idea from becoming useful/);
+  assert.match(html, /Start with one belief/);
+  assert.match(html, /Penny should help me trace one product belief/);
+  assert.match(html, /I think Penny should sharpen judgment, not just store notes/);
+  assert.match(html, /Put this architecture idea under pressure/);
+  assert.match(html, /Find what this idea depends on/);
   assert.match(html, /Capture the raw thought/);
-  assert.match(html, /Use this prompt/);
+  assert.match(html, /Capture this thought/);
   assert.match(html, /No map selected/);
-  assert.match(html, /Select a thought to inspect it/);
+  assert.match(html, /Select a claim to inspect it/);
 });
 
 test("BrainScreen renders the loading Brain state", () => {
@@ -153,7 +153,7 @@ test("BrainScreen renders the loading Brain state", () => {
     }),
   );
 
-  assert.match(html, /Brain loading state/);
+  assert.match(html, /Loading Brain/);
   assert.match(html, /Loading Brain projection/);
 });
 
@@ -168,6 +168,6 @@ test("BrainScreen renders the error Brain state", () => {
     }),
   );
 
-  assert.match(html, /Brain error state/);
+  assert.match(html, /Brain did not load/);
   assert.match(html, /Projection request failed/);
 });

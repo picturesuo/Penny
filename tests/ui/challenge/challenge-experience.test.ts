@@ -80,7 +80,7 @@ test("challenge experience has useful empty states before critique exists", () =
   assert.equal(viewModel.canStartChallenge, false);
   assert.equal(viewModel.canRequestCritique, false);
   assert.equal(viewModel.canRecordResponse, false);
-  assert.match(viewModel.strongestCounterargument, /Request critique/);
+  assert.match(viewModel.strongestCounterargument, /Put this idea under pressure/);
   assert.match(viewModel.whatsAtStake.summary, /Select a claim/);
   assert.equal(viewModel.critiqueTransparency.status, "not_requested");
 });

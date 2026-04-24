@@ -33,6 +33,7 @@ export function ConfidenceRatingControl({
   const [optimisticValue, setOptimisticValue] = useState(normalizedValue);
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const isReadOnly = !onValueChange && !onChange;
+  const isSaving = status === "saving";
   const resolvedOptions = options ?? (scale === "basis-points" ? defaultBasisPointOptions : defaultPercentOptions);
   const optionItems = resolvedOptions
     .map((option) => ({ normalizedValue: normalizeConfidenceValue(option, scale), option }))
@@ -43,7 +44,7 @@ export function ConfidenceRatingControl({
   }, [normalizedValue]);
 
   async function setConfidence(item: { normalizedValue: number; option: number }) {
-    if (disabled || isReadOnly) {
+    if (disabled || isReadOnly || isSaving) {
       return;
     }
 
@@ -64,7 +65,7 @@ export function ConfidenceRatingControl({
   return (
     <fieldset
       className={cx("confidence-rating-control", className)}
-      aria-busy={status === "saving"}
+      aria-busy={isSaving}
       aria-describedby={`${generatedName}-status`}
       data-state={optimisticValue === null ? "unrated" : "rated"}
       data-status={status}
@@ -78,7 +79,7 @@ export function ConfidenceRatingControl({
             aria-pressed={optimisticValue === item.normalizedValue}
             className="confidence-rating-control__option"
             data-selected={optimisticValue === item.normalizedValue}
-            disabled={disabled || isReadOnly}
+            disabled={disabled || isReadOnly || isSaving}
             key={item.normalizedValue}
             onClick={() => {
               void setConfidence(item);

@@ -1,6 +1,6 @@
 import { and, desc, eq, or } from "drizzle-orm";
-import { NextResponse } from "next/server";
 
+import { apiError, apiOk } from "../../../../../../lib/api/response";
 import { logBackendError } from "../../../../../../lib/backend-error-logging";
 import {
   RequestUserNotAuthenticatedError,
@@ -210,20 +210,20 @@ export async function GET(request: Request, context: RouteContext) {
     });
 
     if (!detail) {
-      return NextResponse.json({ error: "Graph node not found." }, { status: 404 });
+      return apiError("Graph node not found.", 404);
     }
 
-    return NextResponse.json(detail, { status: 200 });
+    return apiOk(detail);
   } catch (error) {
     if (error instanceof RequestUserNotAuthenticatedError) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+      return apiError(error.message, 401);
     }
 
     if (error instanceof GraphNodeDetailValidationError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return apiError(error.message, 400);
     }
 
     logBackendError({ error, request, route: "GET /api/graph/nodes/[id]/detail" });
-    return NextResponse.json({ error: "Failed to build graph node detail." }, { status: 500 });
+    return apiError("Failed to build graph node detail.", 500);
   }
 }

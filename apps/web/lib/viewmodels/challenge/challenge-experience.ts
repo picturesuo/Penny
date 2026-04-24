@@ -98,6 +98,10 @@ function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function readClaimBody(claim: ChallengeClaimView | null | undefined): string {
+  return readString(claim?.body) ?? "Untitled claim";
+}
+
 function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -151,21 +155,21 @@ function buildStakeSummary(input: {
 
   if (items.length > 0) {
     return {
-      summary: "This challenge is most useful if it changes what the team trusts next.",
+      summary: "Use this to notice what changed your confidence.",
       items,
     };
   }
 
   if (input.claim) {
     return {
-      summary: "The claim is selected, but Penny has not generated enough critique detail to name the downstream risk yet.",
-      items: ["Request critique to expose assumptions, failure modes, and follow-up questions."],
+      summary: "The claim is selected. The tension is not visible yet.",
+      items: ["Put this idea under pressure to expose assumptions and failure modes."],
     };
   }
 
   return {
     summary: "Select a claim before judging what is at stake.",
-    items: ["Challenge mode needs a selected claim from the workspace projection."],
+    items: ["Challenge needs one claim from the current map."],
   };
 }
 
@@ -177,10 +181,10 @@ function buildChallengeState(input: {
   if (!input.round) {
     return {
       id: "no_round_yet",
-      title: input.selectedClaim ? "No challenge round yet" : "Select a claim to start",
+      title: input.selectedClaim ? "Ready for pressure" : "Select a claim",
       body: input.selectedClaim
-        ? "Start a round before asking Penny to pressure-test this claim."
-        : "Challenge mode needs a selected claim before it can create a round.",
+        ? "Start a round to put this idea under pressure."
+        : "Challenge needs one selected claim.",
       primaryAction: "start_challenge",
     };
   }
@@ -188,8 +192,8 @@ function buildChallengeState(input: {
   if (input.critiqueStatus === "pending") {
     return {
       id: "critique_pending",
-      title: "Critique pending",
-      body: "Penny has a critique request for this round and is waiting for a generated result.",
+      title: "Looking for tension",
+      body: "Penny is checking the claim against its assumptions.",
       primaryAction: "wait_for_critique",
     };
   }
@@ -197,8 +201,8 @@ function buildChallengeState(input: {
   if (input.critiqueStatus === "ready") {
     return {
       id: "critique_loaded",
-      title: "Critique loaded",
-      body: "The critique is ready. Choose whether to defend, revise, or absorb it into the claim.",
+      title: "Tension found",
+      body: "Decide whether to defend, revise, or absorb it.",
       primaryAction: "respond",
     };
   }
@@ -206,22 +210,23 @@ function buildChallengeState(input: {
   if (input.critiqueStatus === "failed") {
     return {
       id: "critique_failed",
-      title: "Critique failed",
-      body: "The critique request failed. Retry the critique or record a manual response if the round still has enough context.",
+      title: "Could not find the tension",
+      body: "Retry, or record your own response if the round has enough context.",
       primaryAction: "retry_critique",
     };
   }
 
   return {
     id: "round_started",
-    title: "Round started",
-    body: "The round exists, but no critique has been requested yet.",
+    title: "Round ready",
+    body: "Request critique when you want the claim under pressure.",
     primaryAction: "request_critique",
   };
 }
 
 export function buildChallengeExperienceViewModel(view: ChallengeProjectionView): ChallengeExperienceViewModel {
   const selectedClaim = view.activeClaim ?? view.selectedClaim ?? null;
+  const selectedClaimBody = readClaimBody(selectedClaim);
   const payload = getCritiquePayload(view);
   const critique = getCritiqueRecord(payload);
   const metadata = getMetadata(view, payload);
@@ -240,18 +245,18 @@ export function buildChallengeExperienceViewModel(view: ChallengeProjectionView)
   const strongestCounterargument =
     readString(critique?.strongestCounterargument) ??
     critiqueBody ??
-    "Request critique to generate the strongest counterargument for this claim.";
+    "Put this idea under pressure to surface the strongest objection.";
   const keyWeaknessSummary =
     readString(critique?.conciseCritiqueSummary) ??
     readString(critique?.uncertaintyNote) ??
-    "No key weakness has been generated yet.";
+    "No weakness found yet.";
   const cascadeCount = assumptions.length + likelyFailureModes.length + followUpQuestions.length;
 
   return {
     challengeState,
     selectedClaim: selectedClaim
       ? {
-          body: selectedClaim.body,
+          body: selectedClaimBody,
           confidenceLabel: formatConfidence(selectedClaim.confidenceBps),
           confidenceBps: typeof selectedClaim.confidenceBps === "number" ? selectedClaim.confidenceBps : null,
         }
@@ -276,8 +281,8 @@ export function buildChallengeExperienceViewModel(view: ChallengeProjectionView)
     dependencyCascade: {
       summary:
         cascadeCount > 0
-          ? `${cascadeCount} critique signals can cascade into the current claim and its dependencies.`
-          : "No dependency cascade has been inferred from this critique yet.",
+          ? `${cascadeCount} signals show what this claim depends on.`
+          : "No dependencies found from this critique yet.",
       assumptions,
       likelyFailureModes,
       followUpQuestions,

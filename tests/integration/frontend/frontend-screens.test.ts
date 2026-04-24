@@ -47,7 +47,7 @@ test("Brain loads a populated projection into the UI", () => {
   assert.match(html, /Investor memo/);
   assert.match(html, /Distribution is the durable moat/);
   assert.match(html, /74% confidence/);
-  assert.match(html, /View on Brain Map/);
+  assert.match(html, /Show in Brain/);
 });
 
 test("Challenge loads the selected claim into its view model and screen contract", async () => {
@@ -72,8 +72,8 @@ test("Learn loads the selected claim into its view model and screen contract", a
   assert.equal(model.selectedClaim?.body, "Distribution is the durable moat.");
   assert.equal(model.reviewState.claimLabel, "mock-claim-distribution");
   assert.match(source, /Teach-back/);
-  assert.match(source, /Concept title/);
-  assert.match(source, /Learning details/);
+  assert.match(source, /Claim to explain/);
+  assert.match(source, /Where this lives/);
 });
 
 test("graph renders from mock data with selected node and mini-map", () => {
@@ -128,10 +128,11 @@ test("loading, empty, and error states render through the Brain UI state banner"
     }),
   );
 
-  assert.match(emptyHtml, /Empty Brain state/);
-  assert.match(emptyHtml, /No thoughts returned by the Brain projection/);
-  assert.match(loadingHtml, /Brain loading state/);
+  assert.match(emptyHtml, /Nothing here yet/);
+  assert.match(emptyHtml, /Capture one thought to start the map/);
+  assert.match(emptyHtml, /Guided first-run empty state/);
+  assert.match(loadingHtml, /Loading Brain/);
   assert.match(loadingHtml, /Loading Brain projection/);
-  assert.match(errorHtml, /Brain error state/);
+  assert.match(errorHtml, /Brain did not load/);
   assert.match(errorHtml, /Projection request failed/);
 });
