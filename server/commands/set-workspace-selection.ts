@@ -294,7 +294,7 @@ export function validateSetWorkspaceSelectionInput(input: unknown): NormalizedSe
 
 export async function setWorkspaceSelection(
   input: unknown,
-  repository: SetWorkspaceSelectionRepository | SetWorkspaceSelectionDb = getDb(),
+  repository: SetWorkspaceSelectionRepository | SetWorkspaceSelectionDb = getDb() as unknown as SetWorkspaceSelectionDb,
   dependencies: SetWorkspaceSelectionDependencies = {},
 ): Promise<SetWorkspaceSelectionResult> {
   const normalized = validateSetWorkspaceSelectionInput(input);
