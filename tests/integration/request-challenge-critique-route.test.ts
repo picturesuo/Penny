@@ -183,15 +183,24 @@ test("POST /api/commands/challenge/request-critique replays the original result 
     assert.equal(firstPayload.roundId, roundId);
     assert.equal(firstPayload.critiqueStatus, "pending");
 
-    const storedCritiques = await sql`
-      select id
+    const storedCritiques = await sql<
+      {
+        id: string;
+        status: string;
+      }[]
+    >`
+      select id, status
       from challenge_critiques
       where user_id = ${userId}
         and round_id = ${roundId}
     `;
 
-    const storedEvents = await sql`
-      select id
+    const storedEvents = await sql<
+      {
+        aggregate_id: string;
+      }[]
+    >`
+      select aggregate_id
       from moves_events
       where user_id = ${userId}
         and request_id = ${requestId}
@@ -199,7 +208,10 @@ test("POST /api/commands/challenge/request-critique replays the original result 
     `;
 
     assert.equal(storedCritiques.length, 1);
+    assert.equal(storedCritiques[0].id, firstPayload.critiqueId);
+    assert.equal(storedCritiques[0].status, "pending");
     assert.equal(storedEvents.length, 1);
+    assert.equal(storedEvents[0].aggregate_id, firstPayload.critiqueId);
   } finally {
     await sql.end({ timeout: 1 });
   }

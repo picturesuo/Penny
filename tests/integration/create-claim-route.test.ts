@@ -160,15 +160,24 @@ test("POST /api/commands/claims/create replays the original result for the same 
 
     assert.equal(secondPayload.claimId, firstPayload.claimId);
 
-    const storedClaims = await sql`
-      select id
+    const storedClaims = await sql<
+      {
+        id: string;
+        body: string;
+      }[]
+    >`
+      select id, body
       from claims
       where user_id = ${userId}
         and map_id = ${map.mapId}
     `;
 
-    const storedEvents = await sql`
-      select id
+    const storedEvents = await sql<
+      {
+        aggregate_id: string;
+      }[]
+    >`
+      select aggregate_id
       from moves_events
       where user_id = ${userId}
         and request_id = ${requestId}
@@ -176,7 +185,10 @@ test("POST /api/commands/claims/create replays the original result for the same 
     `;
 
     assert.equal(storedClaims.length, 1);
+    assert.equal(storedClaims[0].id, firstPayload.claimId);
+    assert.equal(storedClaims[0].body, "Retried claim body");
     assert.equal(storedEvents.length, 1);
+    assert.equal(storedEvents[0].aggregate_id, firstPayload.claimId);
   } finally {
     await sql.end({ timeout: 1 });
   }
