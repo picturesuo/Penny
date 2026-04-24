@@ -31,6 +31,7 @@ export type BrainThoughtViewModel = {
   id: string;
   title: string;
   body: string;
+  bodyPreview: string;
   confidenceLabel: string;
   confidenceBps: number | null;
   mapId: string | null;
