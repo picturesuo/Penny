@@ -35,6 +35,7 @@
 }
 
 .selectedClaim,
+.stateCard,
 .counterCard,
 .weaknessCard,
 .stakesCard,
@@ -46,6 +47,29 @@
 
 .selectedClaim {
   background: #fffaf0;
+}
+
+.stateCard {
+  background: #fff7ea;
+  box-shadow: inset 4px 0 0 #d87516;
+}
+
+.stateCard[data-state="critique_pending"] {
+  box-shadow: inset 4px 0 0 #d8952e;
+}
+
+.stateCard[data-state="critique_loaded"] {
+  box-shadow: inset 4px 0 0 #7d8f2f;
+}
+
+.stateCard[data-state="critique_failed"] {
+  box-shadow: inset 4px 0 0 #a64129;
+}
+
+.stateCard h2 {
+  margin: 0;
+  color: #3a2a1d;
+  font-size: 1.12rem;
 }
 
 .claimText,

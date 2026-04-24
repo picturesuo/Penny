@@ -44,7 +44,17 @@ export type ChallengeResponseAction = {
   prompt: string;
 };
 
+export type ChallengeExperienceStateId = "no_round_yet" | "round_started" | "critique_pending" | "critique_loaded" | "critique_failed";
+
+export type ChallengeExperienceState = {
+  id: ChallengeExperienceStateId;
+  title: string;
+  body: string;
+  primaryAction: "start_challenge" | "request_critique" | "wait_for_critique" | "respond" | "retry_critique";
+};
+
 export type ChallengeExperienceViewModel = {
+  challengeState: ChallengeExperienceState;
   selectedClaim: {
     body: string;
     confidenceLabel: string;
@@ -158,6 +168,57 @@ function buildStakeSummary(input: {
   };
 }
 
+function buildChallengeState(input: {
+  selectedClaim: ChallengeClaimView | null;
+  round: ChallengeRoundView | null;
+  critiqueStatus: string;
+}): ChallengeExperienceState {
+  if (!input.round) {
+    return {
+      id: "no_round_yet",
+      title: input.selectedClaim ? "No challenge round yet" : "Select a claim to start",
+      body: input.selectedClaim
+        ? "Start a round before asking Penny to pressure-test this claim."
+        : "Challenge mode needs a selected claim before it can create a round.",
+      primaryAction: "start_challenge",
+    };
+  }
+
+  if (input.critiqueStatus === "pending") {
+    return {
+      id: "critique_pending",
+      title: "Critique pending",
+      body: "Penny has a critique request for this round and is waiting for a generated result.",
+      primaryAction: "wait_for_critique",
+    };
+  }
+
+  if (input.critiqueStatus === "ready") {
+    return {
+      id: "critique_loaded",
+      title: "Critique loaded",
+      body: "The critique is ready. Choose whether to defend, revise, or absorb it into the claim.",
+      primaryAction: "respond",
+    };
+  }
+
+  if (input.critiqueStatus === "failed") {
+    return {
+      id: "critique_failed",
+      title: "Critique failed",
+      body: "The critique request failed. Retry the critique or record a manual response if the round still has enough context.",
+      primaryAction: "retry_critique",
+    };
+  }
+
+  return {
+    id: "round_started",
+    title: "Round started",
+    body: "The round exists, but no critique has been requested yet.",
+    primaryAction: "request_critique",
+  };
+}
+
 export function buildChallengeExperienceViewModel(view: ChallengeProjectionView): ChallengeExperienceViewModel {
   const selectedClaim = view.activeClaim ?? view.selectedClaim ?? null;
   const payload = getCritiquePayload(view);
@@ -169,6 +230,11 @@ export function buildChallengeExperienceViewModel(view: ChallengeProjectionView)
   const responseStatus = view.responseState?.status ?? view.responseStatus ?? "not_recorded";
   const critiqueStatus = view.critiqueState?.status ?? view.critiqueStatus;
   const critiqueBody = readString(view.critiqueState?.body);
+  const challengeState = buildChallengeState({
+    selectedClaim,
+    round: view.activeChallengeRound,
+    critiqueStatus,
+  });
   const strongestCounterargument =
     readString(critique?.strongestCounterargument) ??
     critiqueBody ??
@@ -180,6 +246,7 @@ export function buildChallengeExperienceViewModel(view: ChallengeProjectionView)
   const cascadeCount = assumptions.length + likelyFailureModes.length + followUpQuestions.length;
 
   return {
+    challengeState,
     selectedClaim: selectedClaim
       ? {
           body: selectedClaim.body,

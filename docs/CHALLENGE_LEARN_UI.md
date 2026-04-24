@@ -13,6 +13,7 @@ Terminal 3 owns the MVP Challenge and Learn mode experience in:
 
 Challenge mode reads the existing workspace challenge projection and shapes it into:
 
+- explicit state card for no round yet, round started with no critique, critique pending, critique loaded, and critique failed
 - selected claim card
 - strongest counterargument card
 - key weakness summary
@@ -22,6 +23,14 @@ Challenge mode reads the existing workspace challenge projection and shapes it i
 - response actions for `Defend`, `Revise`, and `Absorb`
 
 The mode keeps the stronger amber/orange accent locally in the Challenge component CSS module. Recording a response still uses the existing `POST /api/commands/challenge/respond` route and stores the selected response action as `responsePath`.
+
+Challenge state mapping:
+
+- `no_round_yet`: selected claim may exist, but there is no active round.
+- `round_started`: an active round exists and no critique has been requested.
+- `critique_pending`: a critique request exists and is waiting on generated output.
+- `critique_loaded`: generated critique content is ready for response.
+- `critique_failed`: critique generation failed, so the user can retry or record a manual response.
 
 ## Learn
 

@@ -45,6 +45,7 @@ test("challenge experience surfaces critique cards and dependency cascade", () =
     body: "Penny should challenge claims before users rely on them.",
     confidenceLabel: "64% confidence",
   });
+  assert.equal(viewModel.challengeState.id, "critique_loaded");
   assert.equal(viewModel.strongestCounterargument, "A fast capture loop may matter more than rigorous critique for early use.");
   assert.equal(viewModel.keyWeaknessSummary, "The workflow may slow users down.");
   assert.ok(viewModel.whatsAtStake.items.includes("Users skip Challenge when the prompt feels too heavy."));
@@ -73,10 +74,89 @@ test("challenge experience has useful empty states before critique exists", () =
   });
 
   assert.equal(viewModel.selectedClaim, null);
+  assert.equal(viewModel.challengeState.id, "no_round_yet");
   assert.equal(viewModel.canStartChallenge, false);
   assert.equal(viewModel.canRequestCritique, false);
   assert.equal(viewModel.canRecordResponse, false);
   assert.match(viewModel.strongestCounterargument, /Request critique/);
   assert.match(viewModel.whatsAtStake.summary, /Select a claim/);
   assert.equal(viewModel.critiqueTransparency.status, "not_requested");
+});
+
+test("challenge experience distinguishes all round and critique states", () => {
+  const claim = {
+    id: "claim-1",
+    body: "Penny should keep challenge state visible.",
+    confidenceBps: 5200,
+  };
+  const round = {
+    id: "round-1",
+    status: "started",
+  };
+
+  assert.equal(
+    buildChallengeExperienceViewModel({
+      activeClaim: claim,
+      activeChallengeRound: null,
+      critiqueStatus: "not_requested",
+      critiqueState: {
+        status: "not_requested",
+        critiqueId: null,
+      },
+    }).challengeState.id,
+    "no_round_yet",
+  );
+
+  assert.equal(
+    buildChallengeExperienceViewModel({
+      activeClaim: claim,
+      activeChallengeRound: round,
+      critiqueStatus: "not_requested",
+      critiqueState: {
+        status: "not_requested",
+        critiqueId: null,
+      },
+    }).challengeState.id,
+    "round_started",
+  );
+
+  assert.equal(
+    buildChallengeExperienceViewModel({
+      activeClaim: claim,
+      activeChallengeRound: round,
+      critiqueStatus: "pending",
+      critiqueState: {
+        status: "pending",
+        critiqueId: "critique-1",
+      },
+    }).challengeState.id,
+    "critique_pending",
+  );
+
+  assert.equal(
+    buildChallengeExperienceViewModel({
+      activeClaim: claim,
+      activeChallengeRound: round,
+      critiqueStatus: "ready",
+      critiqueState: {
+        status: "ready",
+        critiqueId: "critique-1",
+        body: "Main challenge: the claim needs sharper evidence.",
+      },
+    }).challengeState.id,
+    "critique_loaded",
+  );
+
+  assert.equal(
+    buildChallengeExperienceViewModel({
+      activeClaim: claim,
+      activeChallengeRound: round,
+      critiqueStatus: "failed",
+      critiqueState: {
+        status: "failed",
+        critiqueId: "critique-1",
+      },
+    }).challengeState.id,
+    "critique_failed",
+  );
 });

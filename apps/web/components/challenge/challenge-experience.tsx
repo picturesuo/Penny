@@ -61,6 +61,12 @@ export function ChallengeExperience({
         <p>{model.strongestCounterargument}</p>
       </section>
 
+      <section className={`penny-panel ${styles.stateCard}`} data-state={model.challengeState.id}>
+        <p className={styles.kicker}>Challenge state</p>
+        <h2>{model.challengeState.title}</h2>
+        <p>{model.challengeState.body}</p>
+      </section>
+
       <section className={`penny-panel ${styles.selectedClaim}`}>
         <p className={styles.kicker}>Selected claim</p>
         {model.selectedClaim ? (
