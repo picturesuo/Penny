@@ -43,6 +43,31 @@ button {
   font: inherit;
 }
 
+button,
+a,
+input,
+textarea {
+  transition:
+    background-color var(--interaction-transition),
+    border-color var(--interaction-transition),
+    box-shadow var(--interaction-transition),
+    color var(--interaction-transition),
+    opacity var(--interaction-transition),
+    transform var(--interaction-transition);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+a:focus-visible,
+button:focus-visible {
+  box-shadow: var(--interaction-focus-shadow);
+}
+
 input,
 textarea {
   font: inherit;
@@ -134,8 +159,13 @@ textarea {
 .app-sidebar__link[data-active="true"],
 .app-sidebar__link:hover,
 .app-sidebar__stack a:hover {
-  background: var(--color-panel-muted);
+  background: var(--interaction-hover-bg);
   color: var(--color-ink);
+}
+
+.app-sidebar__link:focus-visible,
+.app-sidebar__stack a:focus-visible {
+  box-shadow: var(--interaction-focus-shadow);
 }
 
 .app-sidebar__dot {
@@ -278,9 +308,12 @@ textarea {
 
 .top-toolbar__command-button:hover,
 .top-toolbar__command-button:focus-visible {
-  border-color: var(--color-mode-brain);
-  box-shadow: 0 0 0 3px rgba(46, 108, 87, 0.16);
-  outline: 0;
+  border-color: var(--interaction-focus-border);
+  box-shadow: var(--interaction-focus-shadow);
+}
+
+.top-toolbar__command-button:hover {
+  background: var(--interaction-hover-bg);
 }
 
 .top-toolbar__command-button span {
@@ -401,6 +434,12 @@ textarea {
   text-decoration: none;
 }
 
+.ui-button:not(:disabled):hover {
+  border-color: var(--interaction-hover-border);
+  box-shadow: var(--interaction-hover-shadow);
+  transform: translateY(-1px);
+}
+
 .ui-button--sm {
   min-height: 34px;
   padding-inline: var(--space-3);
@@ -418,6 +457,11 @@ textarea {
   color: var(--color-ink);
 }
 
+.ui-button--secondary:not(:disabled):hover,
+.ui-button--ghost:not(:disabled):hover {
+  background: var(--interaction-hover-bg);
+}
+
 .ui-button--ghost {
   border-color: transparent;
   background: transparent;
@@ -432,6 +476,8 @@ textarea {
 .ui-button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+  transform: none;
+  box-shadow: none;
 }
 
 .ui-button__icon {
@@ -703,9 +749,13 @@ textarea {
   color: var(--color-inverse);
 }
 
+.confidence-rating-control__option:not(:disabled):hover {
+  background: var(--interaction-hover-bg);
+  color: var(--color-ink);
+}
+
 .confidence-rating-control__option:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(46, 108, 87, 0.16);
+  box-shadow: var(--interaction-focus-shadow);
 }
 
 .confidence-rating-control__option:disabled {
@@ -731,6 +781,11 @@ textarea {
   color: var(--color-muted);
   cursor: pointer;
   font-weight: 800;
+}
+
+.ui-segmented__tab:hover {
+  background: var(--interaction-hover-bg);
+  color: var(--color-ink);
 }
 
 .ui-segmented__tab[aria-selected="true"] {
@@ -785,8 +840,8 @@ textarea {
 .ui-textarea:focus,
 .ui-button:focus-visible,
 .ui-segmented__tab:focus-visible {
-  border-color: var(--color-mode-brain);
-  box-shadow: 0 0 0 3px rgba(46, 108, 87, 0.16);
+  border-color: var(--interaction-focus-border);
+  box-shadow: var(--interaction-focus-shadow);
 }
 
 .ui-state {
@@ -901,9 +956,12 @@ textarea {
 
 .penny-command-button:hover,
 .penny-command-button:focus-visible {
-  border-color: rgba(47, 107, 85, 0.42);
-  box-shadow: 0 0 0 3px rgba(46, 108, 87, 0.12);
-  outline: 0;
+  border-color: var(--interaction-focus-border);
+  box-shadow: var(--interaction-focus-shadow);
+}
+
+.penny-command-button:hover {
+  background: var(--interaction-hover-bg);
 }
 
 .penny-command-button span {
@@ -945,9 +1003,18 @@ textarea {
   cursor: pointer;
 }
 
+.penny-mode-button:not(:disabled):hover {
+  background: var(--interaction-hover-bg);
+  color: var(--penny-ink);
+}
+
 .penny-mode-button[data-active="true"] {
   background: var(--penny-accent);
   color: var(--color-canvas);
+}
+
+.penny-mode-button:focus-visible {
+  box-shadow: var(--interaction-focus-shadow);
 }
 
 .penny-mode-button:disabled {
@@ -1139,6 +1206,16 @@ textarea {
   box-shadow: inset 4px 0 0 var(--penny-accent);
 }
 
+.penny-claim-button:hover .penny-claim {
+  border-color: var(--interaction-hover-border);
+  background: var(--interaction-hover-bg);
+}
+
+.penny-claim-button:focus-visible {
+  box-shadow: var(--interaction-focus-shadow);
+  outline: none;
+}
+
 .penny-claim {
   padding: 16px;
   border: var(--glass-border);
@@ -1277,6 +1354,19 @@ textarea {
   cursor: pointer;
 }
 
+.penny-action-row button:not(:disabled):hover,
+.penny-claim-form button:not(:disabled):hover {
+  box-shadow: var(--interaction-hover-shadow);
+  transform: translateY(-1px);
+}
+
+.penny-action-row button:focus-visible,
+.penny-claim-form button:focus-visible,
+.penny-claim-form textarea:focus-visible {
+  border-color: var(--interaction-focus-border);
+  box-shadow: var(--interaction-focus-shadow);
+}
+
 .penny-action-row button:last-child {
   background: var(--penny-accent);
 }
@@ -1284,6 +1374,8 @@ textarea {
 .penny-action-row button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+  transform: none;
+  box-shadow: none;
 }
 
 .penny-payload {
@@ -1360,6 +1452,8 @@ textarea {
 .penny-claim-form textarea:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+  transform: none;
+  box-shadow: none;
 }
 
 .command-palette {
@@ -1468,12 +1562,20 @@ textarea {
 
 .command-palette__item[data-active="true"],
 .command-palette__item:hover {
-  background: rgba(255, 253, 247, 0.08);
+  background: var(--interaction-hover-bg);
+}
+
+.command-palette__item:focus-visible {
+  box-shadow: var(--interaction-focus-shadow);
 }
 
 .command-palette__item:disabled {
   cursor: not-allowed;
   opacity: 0.54;
+}
+
+.command-palette__item:disabled:hover {
+  background: transparent;
 }
 
 .command-palette__item-mark {

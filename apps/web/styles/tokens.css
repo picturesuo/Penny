@@ -80,6 +80,14 @@
   --glass-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
   --glass-blur: blur(22px);
 
+  --interaction-hover-bg: rgba(255, 253, 247, 0.1);
+  --interaction-hover-border: rgba(255, 253, 247, 0.28);
+  --interaction-hover-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  --interaction-focus-ring: rgba(105, 185, 154, 0.34);
+  --interaction-focus-border: var(--color-mode-brain);
+  --interaction-focus-shadow: 0 0 0 3px var(--interaction-focus-ring);
+  --interaction-transition: 140ms ease;
+
   --shell-sidebar-width: 280px;
   --shell-inspector-width: 336px;
   --shell-topbar-height: 72px;
