@@ -32,6 +32,22 @@ export const challengeRounds = pgTable("challenge_rounds", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const challengeCritiques = pgTable(
+  "challenge_critiques",
+  {
+    id: uuid("id").primaryKey(),
+    roundId: uuid("round_id").notNull(),
+    mapId: uuid("map_id").notNull(),
+    claimId: uuid("claim_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    status: text("status").notNull(),
+    body: text("body"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("challenge_critiques_round_id_idx").on(table.roundId), index("challenge_critiques_user_id_idx").on(table.userId)],
+);
+
 export const movesEvents = pgTable(
   "moves_events",
   {
