@@ -203,6 +203,34 @@ const styles = {
     padding: 12,
     textDecoration: "none",
   },
+  affordanceButton: {
+    background: "#ffffff",
+    border: "1px solid #d8ded5",
+    borderRadius: 8,
+    color: "inherit",
+    cursor: "pointer",
+    display: "block",
+    padding: 12,
+    textAlign: "left",
+    width: "100%",
+  },
+  affordanceButtonSelected: {
+    borderColor: "#2f6b55",
+    boxShadow: "inset 4px 0 0 #2f6b55",
+  },
+  affordanceTitle: {
+    display: "block",
+    fontWeight: 800,
+    overflowWrap: "anywhere",
+  },
+  affordanceDescription: {
+    color: "#637069",
+    display: "block",
+    fontSize: 13,
+    lineHeight: 1.45,
+    marginTop: 4,
+    overflowWrap: "anywhere",
+  },
   facts: {
     display: "grid",
     gap: 10,
@@ -314,6 +342,14 @@ export function BrainScreen({ model, onSelectThought, state, statusMessage }: Br
         </section>
 
         <aside aria-label="Brain inspector" style={styles.sideRail}>
+          <section aria-labelledby="sphere-session-heading" style={styles.panel}>
+            <p style={styles.eyebrow}>Sphere</p>
+            <h2 id="sphere-session-heading" style={styles.thoughtTitle}>
+              Work sphere
+            </h2>
+            <SphereSessionAffordances model={model} />
+          </section>
+
           <section aria-labelledby="selected-thought-heading" style={styles.panel}>
             <p style={styles.eyebrow}>Selected claim</p>
             <h2 id="selected-thought-heading" style={styles.thoughtTitle}>
@@ -417,6 +453,50 @@ function ThoughtCard({ preview = false, thought }: { preview?: boolean; thought:
         <ConfidenceMiniGraph confidenceBps={thought.confidenceBps} label={thought.confidenceLabel} />
       </div>
     </article>
+  );
+}
+
+function SphereSessionAffordances({ model }: { model: BrainViewModel }) {
+  return (
+    <div style={styles.stack}>
+      <button
+        aria-pressed={model.sphere.workSphere.isSelected}
+        style={{
+          ...styles.affordanceButton,
+          ...(model.sphere.workSphere.isSelected ? styles.affordanceButtonSelected : {}),
+        }}
+        type="button"
+      >
+        <span style={styles.affordanceTitle}>{model.sphere.workSphere.label}</span>
+        <span style={styles.affordanceDescription}>{model.sphere.workSphere.description}</span>
+      </button>
+
+      <section aria-label="Recent sessions">
+        <p style={styles.eyebrow}>Recent sessions</p>
+        {model.sphere.recentSessions.length > 0 ? (
+          <ol style={styles.relatedList}>
+            {model.sphere.recentSessions.map((session) => (
+              <li key={session.id} style={styles.relatedItem}>
+                <button
+                  aria-pressed={session.isSelected}
+                  style={{
+                    ...styles.affordanceButton,
+                    ...(session.isSelected ? styles.affordanceButtonSelected : {}),
+                  }}
+                  type="button"
+                >
+                  <span style={styles.affordanceTitle}>{session.title}</span>
+                  <span style={styles.affordanceDescription}>{session.summary}</span>
+                  <span style={styles.metadata}>Updated {session.updatedAtLabel}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p style={styles.emptyState}>No recent Brain sessions yet.</p>
+        )}
+      </section>
+    </div>
   );
 }
 
