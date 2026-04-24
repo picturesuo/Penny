@@ -8,6 +8,7 @@ import postgres from "postgres";
 
 import { GET } from "../../apps/web/app/api/graph/route";
 import { POST as createGraphEdge } from "../../apps/web/app/api/graph/edges/route";
+import { PATCH as updateGraphEdge } from "../../apps/web/app/api/graph/edges/[id]/route";
 import { GET as getNodeDetail } from "../../apps/web/app/api/graph/nodes/[id]/detail/route";
 
 const PG_PORT = 62000 + Math.floor(Math.random() * 1000);
@@ -666,4 +667,181 @@ test("POST /api/graph/edges validates request body", async () => {
   assert.deepEqual(await response.json(), {
     error: "sourceNodeId must be a UUID.",
   });
+});
+
+test("PATCH /api/graph/edges/:id updates mutable edge fields", async () => {
+  const userId = "00000000-0000-0000-0000-000000008123";
+  const mapId = "00000000-0000-0000-0000-000000008321";
+  const sourceNodeId = "00000000-0000-0000-0000-000000008401";
+  const targetNodeId = "00000000-0000-0000-0000-000000008402";
+  const edgeId = "00000000-0000-0000-0000-000000008501";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into graph_nodes (id, user_id, map_id, kind, label, metadata_json)
+      values
+        (${sourceNodeId}, ${userId}, ${mapId}, ${"thought"}, ${"Patch source"}, ${JSON.stringify({ cluster: "context" })}::jsonb),
+        (${targetNodeId}, ${userId}, ${mapId}, ${"claim"}, ${"Patch target"}, ${JSON.stringify({ cluster: "claim" })}::jsonb)
+    `;
+
+    await sql`
+      insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind, weight_bps, metadata_json)
+      values (
+        ${edgeId},
+        ${userId},
+        ${mapId},
+        ${sourceNodeId},
+        ${targetNodeId},
+        ${"supports"},
+        ${5000},
+        ${JSON.stringify({ label: "supports" })}::jsonb
+      )
+    `;
+
+    const response = await updateGraphEdge(
+      new Request(`http://localhost/api/graph/edges/${edgeId}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          type: "contradicts",
+          weightBps: 8200,
+          metadata: {
+            label: "contradicts",
+            status: "confirmed",
+          },
+        }),
+      }),
+      { params: { id: edgeId } },
+    );
+
+    assert.equal(response.status, 200);
+
+    const payload = (await response.json()) as {
+      edge: {
+        id: string;
+        source: string;
+        target: string;
+        kind: string;
+        label: string;
+        status?: string;
+        strength: number;
+        weightBps: number;
+      };
+    };
+
+    assert.deepEqual(
+      {
+        id: payload.edge.id,
+        source: payload.edge.source,
+        target: payload.edge.target,
+        kind: payload.edge.kind,
+        label: payload.edge.label,
+        status: payload.edge.status,
+        strength: payload.edge.strength,
+        weightBps: payload.edge.weightBps,
+      },
+      {
+        id: edgeId,
+        source: sourceNodeId,
+        target: targetNodeId,
+        kind: "contradicts",
+        label: "contradicts",
+        status: "confirmed",
+        strength: 0.82,
+        weightBps: 8200,
+      },
+    );
+
+    const storedRows = await sql<Array<{ kind: string; weight_bps: number; metadata_json: { status?: string } }>>`
+      select kind, weight_bps, metadata_json
+      from graph_edges
+      where id = ${edgeId}
+    `;
+
+    assert.equal(storedRows[0]?.kind, "contradicts");
+    assert.equal(storedRows[0]?.weight_bps, 8200);
+    assert.equal(storedRows[0]?.metadata_json.status, "confirmed");
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+});
+
+test("PATCH /api/graph/edges/:id rejects invalid ids and cross-user updates", async () => {
+  const userId = "00000000-0000-0000-0000-000000009123";
+  const otherUserId = "00000000-0000-0000-0000-000000009124";
+  const mapId = "00000000-0000-0000-0000-000000009321";
+  const sourceNodeId = "00000000-0000-0000-0000-000000009401";
+  const targetNodeId = "00000000-0000-0000-0000-000000009402";
+  const edgeId = "00000000-0000-0000-0000-000000009501";
+  const sql = postgres(databaseUrl, { prepare: false });
+
+  try {
+    await sql`
+      insert into graph_edges (id, user_id, map_id, source_node_id, target_node_id, kind, weight_bps, metadata_json)
+      values (${edgeId}, ${otherUserId}, ${mapId}, ${sourceNodeId}, ${targetNodeId}, ${"supports"}, ${5000}, ${JSON.stringify({ label: "supports" })}::jsonb)
+    `;
+
+    const notFoundResponse = await updateGraphEdge(
+      new Request(`http://localhost/api/graph/edges/${edgeId}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          weightBps: 6100,
+        }),
+      }),
+      { params: { id: edgeId } },
+    );
+
+    assert.equal(notFoundResponse.status, 404);
+    assert.deepEqual(await notFoundResponse.json(), {
+      error: "Graph edge not found.",
+    });
+
+    const invalidIdResponse = await updateGraphEdge(
+      new Request("http://localhost/api/graph/edges/not-a-uuid", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          weightBps: 6100,
+        }),
+      }),
+      { params: { id: "not-a-uuid" } },
+    );
+
+    assert.equal(invalidIdResponse.status, 400);
+    assert.deepEqual(await invalidIdResponse.json(), {
+      error: "Invalid edge id. Expected a UUID.",
+    });
+
+    const invalidWeightResponse = await updateGraphEdge(
+      new Request(`http://localhost/api/graph/edges/${edgeId}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": userId,
+        },
+        body: JSON.stringify({
+          weightBps: 12000,
+        }),
+      }),
+      { params: { id: edgeId } },
+    );
+
+    assert.equal(invalidWeightResponse.status, 400);
+    assert.deepEqual(await invalidWeightResponse.json(), {
+      error: "weightBps must be an integer between 0 and 10000.",
+    });
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
 });
