@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable(
@@ -42,6 +43,7 @@ export const thoughts = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id").notNull(),
+    sessionId: uuid("session_id"),
     mapId: uuid("map_id"),
     rawText: text("raw_text").notNull(),
     source: text("source"),
@@ -49,7 +51,11 @@ export const thoughts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("thoughts_user_id_idx").on(table.userId), index("thoughts_map_id_idx").on(table.mapId)],
+  (table) => [
+    index("thoughts_user_id_idx").on(table.userId),
+    index("thoughts_session_id_idx").on(table.sessionId),
+    index("thoughts_map_id_idx").on(table.mapId),
+  ],
 );
 
 export const claims = pgTable(
@@ -58,12 +64,17 @@ export const claims = pgTable(
     id: uuid("id").primaryKey(),
     mapId: uuid("map_id").notNull(),
     userId: uuid("user_id").notNull(),
+    thoughtId: uuid("thought_id"),
     body: text("body").notNull(),
     confidenceBps: integer("confidence_bps").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("claims_map_id_idx").on(table.mapId), index("claims_user_id_idx").on(table.userId)],
+  (table) => [
+    index("claims_map_id_idx").on(table.mapId),
+    index("claims_user_id_idx").on(table.userId),
+    index("claims_thought_id_idx").on(table.thoughtId),
+  ],
 );
 
 export const graphNodes = pgTable(
@@ -71,6 +82,7 @@ export const graphNodes = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id").notNull(),
+    sessionId: uuid("session_id"),
     mapId: uuid("map_id").notNull(),
     claimId: uuid("claim_id"),
     thoughtId: uuid("thought_id"),
@@ -82,6 +94,7 @@ export const graphNodes = pgTable(
   },
   (table) => [
     index("graph_nodes_user_id_idx").on(table.userId),
+    index("graph_nodes_session_id_idx").on(table.sessionId),
     index("graph_nodes_map_id_idx").on(table.mapId),
     index("graph_nodes_claim_id_idx").on(table.claimId),
     index("graph_nodes_thought_id_idx").on(table.thoughtId),
@@ -115,13 +128,20 @@ export const confidenceRatings = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id").notNull(),
-    claimId: uuid("claim_id").notNull(),
+    thoughtId: uuid("thought_id"),
+    claimId: uuid("claim_id"),
+    graphNodeId: uuid("graph_node_id"),
     ratingBps: integer("rating_bps").notNull(),
     rationale: text("rationale"),
     source: text("source").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("confidence_ratings_user_id_idx").on(table.userId), index("confidence_ratings_claim_id_idx").on(table.claimId)],
+  (table) => [
+    index("confidence_ratings_user_id_idx").on(table.userId),
+    index("confidence_ratings_thought_id_idx").on(table.thoughtId),
+    index("confidence_ratings_claim_id_idx").on(table.claimId),
+    index("confidence_ratings_graph_node_id_idx").on(table.graphNodeId),
+  ],
 );
 
 export const challengeRounds = pgTable("challenge_rounds", {
@@ -176,6 +196,14 @@ export const activityEvents = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     userId: uuid("user_id").notNull(),
     sessionId: uuid("session_id"),
+    mapId: uuid("map_id"),
+    thoughtId: uuid("thought_id"),
+    claimId: uuid("claim_id"),
+    graphNodeId: uuid("graph_node_id"),
+    graphEdgeId: uuid("graph_edge_id"),
+    confidenceRatingId: uuid("confidence_rating_id"),
+    promptVersionId: uuid("prompt_version_id"),
+    aiJobId: uuid("ai_job_id"),
     aggregateType: text("aggregate_type").notNull(),
     aggregateId: uuid("aggregate_id"),
     type: text("type").notNull(),
@@ -186,6 +214,14 @@ export const activityEvents = pgTable(
   (table) => [
     index("activity_events_user_id_idx").on(table.userId),
     index("activity_events_session_id_idx").on(table.sessionId),
+    index("activity_events_map_id_idx").on(table.mapId),
+    index("activity_events_thought_id_idx").on(table.thoughtId),
+    index("activity_events_claim_id_idx").on(table.claimId),
+    index("activity_events_graph_node_id_idx").on(table.graphNodeId),
+    index("activity_events_graph_edge_id_idx").on(table.graphEdgeId),
+    index("activity_events_confidence_rating_id_idx").on(table.confidenceRatingId),
+    index("activity_events_prompt_version_id_idx").on(table.promptVersionId),
+    index("activity_events_ai_job_id_idx").on(table.aiJobId),
     index("activity_events_aggregate_id_idx").on(table.aggregateId),
     index("activity_events_type_idx").on(table.type),
   ],
@@ -248,6 +284,214 @@ export const aiJobs = pgTable(
     index("ai_jobs_status_idx").on(table.status),
   ],
 );
+
+export const usersRelations = relations(users, ({ many }) => ({
+  sessions: many(sessions),
+  maps: many(maps),
+  thoughts: many(thoughts),
+  claims: many(claims),
+  graphNodes: many(graphNodes),
+  graphEdges: many(graphEdges),
+  confidenceRatings: many(confidenceRatings),
+  activityEvents: many(activityEvents),
+  aiJobs: many(aiJobs),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one, many }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+  thoughts: many(thoughts),
+  graphNodes: many(graphNodes),
+  activityEvents: many(activityEvents),
+}));
+
+export const mapsRelations = relations(maps, ({ one, many }) => ({
+  user: one(users, {
+    fields: [maps.userId],
+    references: [users.id],
+  }),
+  thoughts: many(thoughts),
+  claims: many(claims),
+  graphNodes: many(graphNodes),
+  graphEdges: many(graphEdges),
+  activityEvents: many(activityEvents),
+  workspaceContexts: many(workspaceContexts),
+}));
+
+export const thoughtsRelations = relations(thoughts, ({ one, many }) => ({
+  user: one(users, {
+    fields: [thoughts.userId],
+    references: [users.id],
+  }),
+  session: one(sessions, {
+    fields: [thoughts.sessionId],
+    references: [sessions.id],
+  }),
+  map: one(maps, {
+    fields: [thoughts.mapId],
+    references: [maps.id],
+  }),
+  claims: many(claims),
+  graphNodes: many(graphNodes),
+  confidenceRatings: many(confidenceRatings),
+  activityEvents: many(activityEvents),
+}));
+
+export const claimsRelations = relations(claims, ({ one, many }) => ({
+  user: one(users, {
+    fields: [claims.userId],
+    references: [users.id],
+  }),
+  map: one(maps, {
+    fields: [claims.mapId],
+    references: [maps.id],
+  }),
+  thought: one(thoughts, {
+    fields: [claims.thoughtId],
+    references: [thoughts.id],
+  }),
+  graphNodes: many(graphNodes),
+  confidenceRatings: many(confidenceRatings),
+  activityEvents: many(activityEvents),
+  challengeRounds: many(challengeRounds),
+  challengeCritiques: many(challengeCritiques),
+  workspaceContexts: many(workspaceContexts),
+}));
+
+export const graphNodesRelations = relations(graphNodes, ({ one, many }) => ({
+  user: one(users, {
+    fields: [graphNodes.userId],
+    references: [users.id],
+  }),
+  session: one(sessions, {
+    fields: [graphNodes.sessionId],
+    references: [sessions.id],
+  }),
+  map: one(maps, {
+    fields: [graphNodes.mapId],
+    references: [maps.id],
+  }),
+  thought: one(thoughts, {
+    fields: [graphNodes.thoughtId],
+    references: [thoughts.id],
+  }),
+  claim: one(claims, {
+    fields: [graphNodes.claimId],
+    references: [claims.id],
+  }),
+  outgoingEdges: many(graphEdges, {
+    relationName: "graph_node_outgoing_edges",
+  }),
+  incomingEdges: many(graphEdges, {
+    relationName: "graph_node_incoming_edges",
+  }),
+  confidenceRatings: many(confidenceRatings),
+  activityEvents: many(activityEvents),
+}));
+
+export const graphEdgesRelations = relations(graphEdges, ({ one, many }) => ({
+  user: one(users, {
+    fields: [graphEdges.userId],
+    references: [users.id],
+  }),
+  map: one(maps, {
+    fields: [graphEdges.mapId],
+    references: [maps.id],
+  }),
+  sourceNode: one(graphNodes, {
+    fields: [graphEdges.sourceNodeId],
+    references: [graphNodes.id],
+    relationName: "graph_node_outgoing_edges",
+  }),
+  targetNode: one(graphNodes, {
+    fields: [graphEdges.targetNodeId],
+    references: [graphNodes.id],
+    relationName: "graph_node_incoming_edges",
+  }),
+  activityEvents: many(activityEvents),
+}));
+
+export const confidenceRatingsRelations = relations(confidenceRatings, ({ one, many }) => ({
+  user: one(users, {
+    fields: [confidenceRatings.userId],
+    references: [users.id],
+  }),
+  thought: one(thoughts, {
+    fields: [confidenceRatings.thoughtId],
+    references: [thoughts.id],
+  }),
+  claim: one(claims, {
+    fields: [confidenceRatings.claimId],
+    references: [claims.id],
+  }),
+  graphNode: one(graphNodes, {
+    fields: [confidenceRatings.graphNodeId],
+    references: [graphNodes.id],
+  }),
+  activityEvents: many(activityEvents),
+}));
+
+export const activityEventsRelations = relations(activityEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [activityEvents.userId],
+    references: [users.id],
+  }),
+  session: one(sessions, {
+    fields: [activityEvents.sessionId],
+    references: [sessions.id],
+  }),
+  map: one(maps, {
+    fields: [activityEvents.mapId],
+    references: [maps.id],
+  }),
+  thought: one(thoughts, {
+    fields: [activityEvents.thoughtId],
+    references: [thoughts.id],
+  }),
+  claim: one(claims, {
+    fields: [activityEvents.claimId],
+    references: [claims.id],
+  }),
+  graphNode: one(graphNodes, {
+    fields: [activityEvents.graphNodeId],
+    references: [graphNodes.id],
+  }),
+  graphEdge: one(graphEdges, {
+    fields: [activityEvents.graphEdgeId],
+    references: [graphEdges.id],
+  }),
+  confidenceRating: one(confidenceRatings, {
+    fields: [activityEvents.confidenceRatingId],
+    references: [confidenceRatings.id],
+  }),
+  promptVersion: one(promptVersions, {
+    fields: [activityEvents.promptVersionId],
+    references: [promptVersions.id],
+  }),
+  aiJob: one(aiJobs, {
+    fields: [activityEvents.aiJobId],
+    references: [aiJobs.id],
+  }),
+}));
+
+export const promptVersionsRelations = relations(promptVersions, ({ many }) => ({
+  aiJobs: many(aiJobs),
+  activityEvents: many(activityEvents),
+}));
+
+export const aiJobsRelations = relations(aiJobs, ({ one, many }) => ({
+  user: one(users, {
+    fields: [aiJobs.userId],
+    references: [users.id],
+  }),
+  promptVersion: one(promptVersions, {
+    fields: [aiJobs.promptVersionId],
+    references: [promptVersions.id],
+  }),
+  activityEvents: many(activityEvents),
+}));
 
 export type UserRecord = typeof users.$inferSelect;
 export type NewUserRecord = typeof users.$inferInsert;
