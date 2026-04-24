@@ -5,6 +5,7 @@ import test from "node:test";
 const graphViewPath = new URL("../../apps/web/components/graph/graph-view.tsx", import.meta.url);
 const graphCanvasPath = new URL("../../apps/web/components/graph/graph-canvas.tsx", import.meta.url);
 const graphNodePath = new URL("../../apps/web/components/graph/graph-node.tsx", import.meta.url);
+const mockGraphDataPath = new URL("../../apps/web/components/graph/mock-graph-data.ts", import.meta.url);
 const miniMapPath = new URL("../../apps/web/components/graph/mini-map.tsx", import.meta.url);
 const zoomControlsPath = new URL("../../apps/web/components/graph/zoom-controls.tsx", import.meta.url);
 const graphIndexPath = new URL("../../apps/web/components/graph/index.ts", import.meta.url);
@@ -36,8 +37,19 @@ test("graph primitives are exported as standalone QA targets", async () => {
   assert.match(indexSource, /graph-legend/);
   assert.match(indexSource, /graph-node/);
   assert.match(indexSource, /mini-map/);
+  assert.match(indexSource, /mock-graph-data/);
   assert.match(indexSource, /selected-node-halo/);
   assert.match(indexSource, /zoom-controls/);
+});
+
+test("graph e2e harness has mock data available before live projection wiring", async () => {
+  const source = await readFile(mockGraphDataPath, "utf8");
+
+  assert.match(source, /mockGraph/);
+  assert.match(source, /mockGraphs/);
+  assert.match(source, /mockBrainView/);
+  assert.match(source, /mockChallengeView/);
+  assert.match(source, /mockLearnView/);
 });
 
 test("data e2e harness has mode-aware hook entrypoints to stub in browser tests", async () => {

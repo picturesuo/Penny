@@ -6,5 +6,6 @@ export * from "./graph-legend";
 export * from "./graph-node";
 export * from "./graph-view";
 export * from "./mini-map";
+export * from "./mock-graph-data";
 export * from "./selected-node-halo";
 export * from "./zoom-controls";

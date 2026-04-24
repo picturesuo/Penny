@@ -37,6 +37,17 @@ Adapters are provided for the current projection shapes:
 - `createChallengeGraph(view)` maps selected claim, latest round, critique state, and response state.
 - `createLearnGraph(view)` maps the selected claim into the current Learn placeholder state.
 
+## Mock-First Data
+
+Use `mock-graph-data.ts` before wiring the graph into live workspace projections:
+
+- `mockGraph`: combined graph fixture that exercises map, claim, challenge, critique, event, and learn clusters.
+- `mockGraphs.brain`: Brain graph generated from `mockBrainView`.
+- `mockGraphs.challenge`: Challenge graph generated from `mockChallengeView`.
+- `mockGraphs.learn`: Learn graph generated from `mockLearnView`.
+
+The selected mock node is `mock-claim-distribution`, which gives the canvas a stable selected-state target for screenshot and interaction tests.
+
 ## Graph Primitives
 
 `GraphView` remains the high-level wrapper, but the presentation layer is split into reusable primitives:
