@@ -13,7 +13,7 @@ These routes return backend-shaped workspace views. The frontend should consume 
 | `GET` | `/api/workspace/shell` | `buildShellView` | Current workspace mode, selected map/claim IDs, and breadcrumb items. |
 | `GET` | `/api/workspace/brain` | `buildBrainView` | Brain mode claim list, map summary, selected claim, and current workspace context. |
 | `GET` | `/api/workspace/challenge` | `buildChallengeView` | Active claim, latest challenge round, and current critique state. |
-| `GET` | `/api/workspace/learn` | `buildLearnView` | Learn mode context and selected claim with the current placeholder learn state. |
+| `GET` | `/api/workspace/learn` | `buildLearnView` | Learn mode context, selected claim, and the MVP placeholder status/message. |
 
 ## Write Commands
 
