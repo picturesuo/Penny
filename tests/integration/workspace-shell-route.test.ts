@@ -77,19 +77,32 @@ test("GET /api/workspace/shell returns the current workspace context", async () 
     assert.equal(response.status, 200);
 
     const payload = (await response.json()) as {
-      workspaceContext: {
-        mode: string;
-        mapId: string | null;
-        claimId: string | null;
-      };
+      mode: string;
+      mapId: string | null;
+      claimId: string | null;
+      breadcrumbItems: Array<{
+        kind: string;
+        id: string;
+        label: string;
+      }>;
     };
 
     assert.deepEqual(payload, {
-      workspaceContext: {
-        mode: "challenge",
-        mapId,
-        claimId,
-      },
+      mode: "challenge",
+      mapId,
+      claimId,
+      breadcrumbItems: [
+        {
+          kind: "map",
+          id: mapId,
+          label: "Shell map",
+        },
+        {
+          kind: "claim",
+          id: claimId,
+          label: "Shell claim",
+        },
+      ],
     });
   } finally {
     await sql.end({ timeout: 1 });

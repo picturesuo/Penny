@@ -1,82 +1,164 @@
 import { and, eq } from "drizzle-orm";
+
 import type { DbClient } from "../db/client.ts";
 import { getDb } from "../db/client.ts";
-import { claims, maps, workspaceContexts, type workspaceMode } from "../db/schema.ts";
+import { claims, maps, workspaceContexts, workspaceMode } from "../db/schema.ts";
 
-type WorkspaceMode = typeof workspaceMode.enumValues[number];
+export type WorkspaceMode = (typeof workspaceMode.enumValues)[number];
+
+export type ShellBreadcrumbItem = {
+  kind: "map" | "claim";
+  id: string;
+  label: string;
+};
 
 export type WorkspaceShellView = {
-  workspaceContext: {
-    mode: WorkspaceMode;
-    mapId: string | null;
-    claimId: string | null;
-  };
+  mode: WorkspaceMode;
+  mapId: string | null;
+  claimId: string | null;
+  breadcrumbItems: ShellBreadcrumbItem[];
 };
 
 export type BuildShellViewInput = {
   userId: string;
 };
 
+type WorkspaceContextRow = {
+  mode: string;
+  mapId: string | null;
+  claimId: string | null;
+};
+
+type MapRow = {
+  id: string;
+  title: string;
+};
+
+type ClaimRow = {
+  id: string;
+  body: string;
+};
+
+export type BuildShellViewRepository = {
+  getWorkspaceContext(input: { userId: string }): Promise<WorkspaceContextRow | null>;
+  findOwnedMap(input: { mapId: string; userId: string }): Promise<MapRow | null>;
+  findOwnedClaim(input: { claimId: string; mapId: string; userId: string }): Promise<ClaimRow | null>;
+};
+
 const DEFAULT_WORKSPACE_MODE: WorkspaceMode = "brain";
+const WORKSPACE_MODES = new Set<WorkspaceMode>(workspaceMode.enumValues);
+
+function normalizeMode(value: string): WorkspaceMode {
+  const normalized = value.trim().toLowerCase();
+
+  if (WORKSPACE_MODES.has(normalized as WorkspaceMode)) {
+    return normalized as WorkspaceMode;
+  }
+
+  return DEFAULT_WORKSPACE_MODE;
+}
+
+function createDbRepository(db: DbClient): BuildShellViewRepository {
+  return {
+    async getWorkspaceContext(input) {
+      const rows = await db
+        .select({
+          mode: workspaceContexts.mode,
+          mapId: workspaceContexts.mapId,
+          claimId: workspaceContexts.claimId,
+        })
+        .from(workspaceContexts)
+        .where(eq(workspaceContexts.userId, input.userId))
+        .limit(1);
+
+      return rows[0] ?? null;
+    },
+    async findOwnedMap(input) {
+      const rows = await db
+        .select({
+          id: maps.id,
+          title: maps.title,
+        })
+        .from(maps)
+        .where(and(eq(maps.id, input.mapId), eq(maps.userId, input.userId)))
+        .limit(1);
+
+      return rows[0] ?? null;
+    },
+    async findOwnedClaim(input) {
+      const rows = await db
+        .select({
+          id: claims.id,
+          body: claims.body,
+        })
+        .from(claims)
+        .where(and(eq(claims.id, input.claimId), eq(claims.mapId, input.mapId), eq(claims.userId, input.userId)))
+        .limit(1);
+
+      return rows[0] ?? null;
+    },
+  };
+}
 
 export async function buildShellView(
   input: BuildShellViewInput,
-  db: DbClient = getDb(),
+  repository: BuildShellViewRepository = createDbRepository(getDb()),
 ): Promise<WorkspaceShellView> {
-  const contexts = await db
-    .select({
-      mode: workspaceContexts.mode,
-      mapId: workspaceContexts.mapId,
-      claimId: workspaceContexts.claimId,
-    })
-    .from(workspaceContexts)
-    .where(eq(workspaceContexts.userId, input.userId))
-    .limit(1);
-
-  const context = contexts[0];
+  const context = await repository.getWorkspaceContext({
+    userId: input.userId,
+  });
 
   if (!context) {
     return {
-      workspaceContext: {
-        mode: DEFAULT_WORKSPACE_MODE,
-        mapId: null,
-        claimId: null,
-      },
+      mode: DEFAULT_WORKSPACE_MODE,
+      mapId: null,
+      claimId: null,
+      breadcrumbItems: [],
     };
   }
 
+  const mode = normalizeMode(context.mode);
+  const breadcrumbItems: ShellBreadcrumbItem[] = [];
   let mapId: string | null = null;
   let claimId: string | null = null;
 
   if (context.mapId) {
-    const ownedMaps = await db
-      .select({ id: maps.id })
-      .from(maps)
-      .where(and(eq(maps.id, context.mapId), eq(maps.userId, input.userId)))
-      .limit(1);
+    const map = await repository.findOwnedMap({
+      mapId: context.mapId,
+      userId: input.userId,
+    });
 
-    if (ownedMaps[0]) {
-      mapId = ownedMaps[0].id;
+    if (map) {
+      mapId = map.id;
+      breadcrumbItems.push({
+        kind: "map",
+        id: map.id,
+        label: map.title,
+      });
     }
   }
 
   if (context.claimId && mapId) {
-    const ownedClaims = await db
-      .select({ id: claims.id })
-      .from(claims)
-      .where(and(eq(claims.id, context.claimId), eq(claims.mapId, mapId), eq(claims.userId, input.userId)))
-      .limit(1);
+    const claim = await repository.findOwnedClaim({
+      claimId: context.claimId,
+      mapId,
+      userId: input.userId,
+    });
 
-    if (ownedClaims[0]) {
-      claimId = ownedClaims[0].id;
+    if (claim) {
+      claimId = claim.id;
+      breadcrumbItems.push({
+        kind: "claim",
+        id: claim.id,
+        label: claim.body,
+      });
     }
   }
 
   return {
-    workspaceContext: {
-      mode: context.mode,
-      mapId,
-      claimId,
-    },
+    mode,
+    mapId,
+    claimId,
+    breadcrumbItems,
   };
 }
