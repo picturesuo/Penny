@@ -1,65 +1,99 @@
-import Image from "next/image";
+export const metadata = {
+  title: "Penny v0 MVP",
+  description: "The locked Penny MVP checklist and freeze policy.",
+};
+
+const mvpItems = [
+  "Capture thought",
+  "Extract claims",
+  "Visualize graph",
+  "Inspect node",
+  "Rate confidence",
+  "Search with Cmd+K",
+  "Challenge idea",
+  "Learn blocker",
+];
+
+const guardrails = [
+  "Fix blockers that prevent a locked item from working.",
+  "Fix failing typecheck, build, or MVP verification tests.",
+  "Fix security, ownership, data-loss, or startup issues.",
+  "Update release notes, test docs, or version metadata for v0.",
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen bg-[#f4f7f8] text-[#191b1f]">
+      <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center gap-12 px-6 py-12 sm:px-8 lg:px-12">
+        <div className="grid gap-10 lg:grid-cols-[1fr_380px] lg:items-end">
+          <div className="max-w-3xl">
+            <p className="mb-4 text-sm font-semibold uppercase text-[#48615c]">
+              Frozen for v0
+            </p>
+            <h1 className="text-4xl font-semibold leading-tight text-[#111318]">
+              Penny turns messy founder thinking into traceable product
+              judgment.
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-[#4f5862]">
+              The v0 MVP is locked to one path: capture a thought, extract the
+              claims inside it, inspect the graph, pressure-test the idea, and
+              learn from the blocker without expanding the product surface.
+            </p>
+          </div>
+
+          <aside className="border-l-4 border-[#16745f] bg-white p-6 shadow-sm">
+            <p className="text-sm font-semibold uppercase text-[#16745f]">
+              Release target
+            </p>
+            <p className="mt-3 font-mono text-3xl font-semibold text-[#111318]">
+              v0-mvp
+            </p>
+            <p className="mt-4 text-sm leading-6 text-[#4f5862]">
+              Tag only from a verified commit containing the locked checklist
+              and passing the MVP verification commands.
+            </p>
+          </aside>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {mvpItems.map((item) => (
+            <div
+              key={item}
+              className="flex min-h-28 flex-col justify-between rounded-lg border border-[#d8dde2] bg-white p-5 shadow-sm"
+            >
+              <span
+                aria-hidden="true"
+                className="mb-6 h-4 w-4 border border-[#16745f] bg-[#dff4ec]"
+              />
+              <p className="text-base font-semibold leading-6 text-[#191b1f]">
+                {item}
+              </p>
+            </div>
+          ))}
         </div>
-      </main>
-    </div>
+
+        <section className="grid gap-6 border-t border-[#d8dde2] pt-8 lg:grid-cols-[280px_1fr]">
+          <div>
+            <p className="text-sm font-semibold uppercase text-[#48615c]">
+              Freeze policy
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-[#111318]">
+              No new feature work before v0.
+            </h2>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {guardrails.map((guardrail) => (
+              <p
+                key={guardrail}
+                className="rounded-lg border border-[#d8dde2] bg-white p-4 text-sm leading-6 text-[#4f5862]"
+              >
+                {guardrail}
+              </p>
+            ))}
+          </div>
+        </section>
+      </section>
+    </main>
   );
 }
