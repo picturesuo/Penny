@@ -17,7 +17,6 @@ import { buildLearnExperienceViewModel } from "../../apps/web/lib/viewmodels/lea
 import type { BrainProjectionView } from "../../apps/web/lib/viewmodels/brain/types.ts";
 import type { GraphModel } from "../../apps/web/lib/types/graph.ts";
 
-const modeCardPath = new URL("../../apps/web/src/components/onboarding/ModeCard.tsx", import.meta.url);
 const onboardingPath = new URL("../../apps/web/src/screens/Onboarding.tsx", import.meta.url);
 const pennyShellPath = new URL("../../apps/web/components/penny-shell.tsx", import.meta.url);
 const commandPaletteHookPath = new URL("../../apps/web/src/hooks/useCommandPalette.ts", import.meta.url);
@@ -63,12 +62,12 @@ const createdThoughtClaim = {
   updatedAt: "2026-04-24T12:01:00.000Z",
 };
 
-test("MVP flow: clicking the Brain card opens Brain mode", async () => {
-  const [modeCardSource, onboardingSource] = await Promise.all([readFile(modeCardPath, "utf8"), readFile(onboardingPath, "utf8")]);
+test("MVP flow: the Second Brain terminal entry opens Brain mode", async () => {
+  const onboardingSource = await readFile(onboardingPath, "utf8");
 
-  assert.match(onboardingSource, /title: "Start in Brain"/);
-  assert.match(modeCardSource, /data-mode=\{mode\}/);
-  assert.match(modeCardSource, /href=\{`\/app\?mode=\$\{mode\}`\}/);
+  assert.match(onboardingSource, /label: "Second Brain"/);
+  assert.match(onboardingSource, /href: "\/app\?mode=brain"/);
+  assert.match(onboardingSource, /What are we thinking about today/);
 });
 
 test("MVP flow: thought capture submits and shows the created thought in Brain", async () => {

@@ -52,8 +52,9 @@ test("E2E demo path has a committed route and UI contract for every step", async
   assert.match(appPage, /HomePage/);
   assert.match(appPage, /AppShell|penny-entry/);
   assert.match(brainPage, /BrainRouteScreen/);
-  assert.match(onboarding, /Start in Brain/);
-  assert.match(onboarding, /Capture one thought. See the claim Penny can trace/);
+  assert.match(onboarding, /What are we thinking about today/);
+  assert.match(onboarding, /label: "Second Brain"/);
+  assert.match(onboarding, /placeholder="Ask anything, explore an idea, or tackle a challenge\.\.\."/);
   assert.match(shell, /id: "brain", label: "Brain"/);
   assert.match(shell, /id: "challenge", label: "Challenge"/);
   assert.match(shell, /id: "learn", label: "Learn"/);

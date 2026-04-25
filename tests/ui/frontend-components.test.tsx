@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -13,7 +13,8 @@ import { AppShell } from "../../apps/web/components/layout/AppShell.tsx";
 import { createBrainViewModel } from "../../apps/web/lib/viewmodels/brain/create-brain-view-model.ts";
 import type { BrainProjectionView } from "../../apps/web/lib/viewmodels/brain/types.ts";
 
-const requireWithExtensions = createRequire(import.meta.url);
+const onboardingPath = new URL("../../apps/web/src/screens/Onboarding.tsx", import.meta.url);
+const onboardingStylesPath = new URL("../../apps/web/src/screens/Onboarding.module.css", import.meta.url);
 
 function textContent(html: string) {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -59,19 +60,15 @@ function brainProjection(): BrainProjectionView {
 }
 
 test("onboarding renders the MVP entry modes", async () => {
-  requireWithExtensions.extensions[".css"] = (module) => {
-    const styles = new Proxy({}, { get: (_target, key) => String(key) });
-    module.exports = styles;
-    module.exports.default = styles;
-  };
-  const { Onboarding } = await import("../../apps/web/src/screens/Onboarding.tsx");
-  const html = renderToStaticMarkup(createElement(Onboarding));
-  const text = textContent(html);
+  const [source, styles] = await Promise.all([readFile(onboardingPath, "utf8"), readFile(onboardingStylesPath, "utf8")]);
 
-  assert.match(text, /What do you want to do today\?/);
-  assert.match(text, /Brain/);
-  assert.match(text, /Challenge/);
-  assert.match(text, /Learn/);
+  assert.match(source, /What are we thinking about today/);
+  assert.match(source, /Second Brain/);
+  assert.match(source, /Challenge/);
+  assert.match(source, /Learn/);
+  assert.match(source, /Ask anything, explore an idea, or tackle a challenge/);
+  assert.match(styles, /\.terminal/);
+  assert.match(styles, /\.composer/);
 });
 
 test("app shell renders the mode switcher, workspace, and inspector rail", () => {
