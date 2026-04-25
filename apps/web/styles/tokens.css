@@ -1,12 +1,11 @@
-@import url("https://cdn.jsdelivr.net/gh/aaaakshat/cm-web-fonts@master/font/Sans/cmun-sans.css");
+@import url("https://cdn.jsdelivr.net/gh/aaaakshat/cm-web-fonts@master/font/Serif/cmun-serif.css");
 @import url("https://cdn.jsdelivr.net/gh/aaaakshat/cm-web-fonts@master/font/Typewriter/cmun-typewriter.css");
 
 :root {
   color-scheme: dark;
 
-  --font-sans: "Computer Modern Sans", "CMU Sans Serif", "Latin Modern Sans",
-    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  --font-sans: "Computer Modern Serif", "CMU Serif", "Latin Modern Roman",
+    Georgia, "Times New Roman", serif;
   --font-mono: "Computer Modern Typewriter", "Latin Modern Mono", ui-monospace,
     SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 
