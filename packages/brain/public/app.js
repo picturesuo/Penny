@@ -205,7 +205,7 @@ async function askInlineLearn(body) {
 }
 
 async function saveInlineLearn(body) {
-  const response = await fetch("/brain/learn/inline", {
+  const response = await fetch("/brain/learn/inline/save", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -220,11 +220,11 @@ async function saveInlineLearn(body) {
     const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
     const message = payload?.error?.message
       ? `${payload.error.message}${issues}`
-      : `POST /brain/learn/inline failed with ${response.status}.`;
+      : `POST /brain/learn/inline/save failed with ${response.status}.`;
     throw new Error(message);
   }
 
-  if (!payload?.data?.explanation || !payload.data.saved?.conceptClaim || !payload.data.saved.teachesEdge) {
+  if (!payload?.data?.saved?.conceptClaim || !payload.data.saved.teachesEdge || !payload.data.saved.move) {
     throw new Error("Save concept returned an invalid graph update.");
   }
 
@@ -953,17 +953,17 @@ async function handleSaveInlineLearn() {
   try {
     const payload = await saveInlineLearn({
       term: state.activeLearn.term,
+      explanation: state.activeLearn.explanation,
+      whyItMattersHere: state.activeLearn.whyItMattersHere,
+      example: state.activeLearn.example,
+      relatedConcepts: state.activeLearn.relatedConcepts ?? [],
+      saveSuggestion: state.activeLearn.saveSuggestion,
       currentClaimId: state.activeLearn.currentClaimId,
       sessionId: state.activeLearn.sessionId,
-      localContext: state.activeLearn.localContext ?? currentLearnTarget()?.text ?? state.activeLearn.explanation,
-      save: true,
     });
     applyInlineLearnSave(payload.data.saved);
     state.activeLearn = {
-      ...payload.data,
-      currentClaimId: state.activeLearn.currentClaimId,
-      sessionId: state.activeLearn.sessionId,
-      localContext: state.activeLearn.localContext,
+      ...state.activeLearn,
       saved: true,
     };
     setStatus("Concept saved.");
