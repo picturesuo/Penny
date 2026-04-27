@@ -9,6 +9,7 @@ import { handleChallengeRequest, handleChallengeRespondRequest } from "./challen
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleVerifyRequest } from "./verify-route.ts";
+import { handleSessionWikiRequest } from "./wiki-route.ts";
 
 const port = parsePort(process.env.PORT);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
@@ -70,6 +71,36 @@ const server = createServer(async (incoming, outgoing) => {
       }
 
       await writeWebResponse(outgoing, await handleSessionArtifactRequest(request, decodeURIComponent(sessionId)));
+      return;
+    }
+
+    const sessionWikiMatch = /^\/brain\/session\/([^/]+)\/wiki$/.exec(url.pathname);
+
+    if (sessionWikiMatch) {
+      const sessionId = sessionWikiMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(
+          outgoing,
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "invalid_session_id",
+                message: "Wiki compilation requires a session id.",
+              },
+            }),
+            {
+              status: 400,
+              headers: {
+                "content-type": "application/json; charset=utf-8",
+              },
+            },
+          ),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleSessionWikiRequest(request, decodeURIComponent(sessionId)));
       return;
     }
 
