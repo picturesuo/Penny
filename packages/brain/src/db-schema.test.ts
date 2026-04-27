@@ -43,6 +43,7 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
     "challenges",
     "contradicts",
     "clarifies",
+    "teaches",
   ]);
   assert.deepEqual(claimEdgeStatusEnum.enumValues, ["active", "acknowledged_vulnerability"]);
   assert.ok(moveKindEnum.enumValues.includes("seed_claim_created"));
@@ -55,6 +56,7 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
   assert.ok(moveKindEnum.enumValues.includes("user_defended"));
   assert.ok(moveKindEnum.enumValues.includes("claim_revised"));
   assert.ok(moveKindEnum.enumValues.includes("critique_absorbed"));
+  assert.ok(moveKindEnum.enumValues.includes("learning_triggered"));
   assert.deepEqual(artifactKindEnum.enumValues, ["idea_map", "challenge_brief"]);
 });
 
