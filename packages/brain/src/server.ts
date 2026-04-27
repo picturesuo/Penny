@@ -6,6 +6,7 @@ import { handleArtifactRequest, handleSessionArtifactRequest } from "./artifact-
 import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
+import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 
 const port = parsePort(process.env.PORT);
@@ -106,6 +107,36 @@ const server = createServer(async (incoming, outgoing) => {
         outgoing,
         await handleAssumptionResponseRequest(request, decodeURIComponent(assumptionClaimId)),
       );
+      return;
+    }
+
+    const claimDetailMatch = /^\/brain\/claims\/([^/]+)\/detail$/.exec(url.pathname);
+
+    if (claimDetailMatch) {
+      const claimId = claimDetailMatch[1];
+
+      if (!claimId) {
+        await writeWebResponse(
+          outgoing,
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "invalid_claim_id",
+                message: "Claim detail requires a claim id.",
+              },
+            }),
+            {
+              status: 400,
+              headers: {
+                "content-type": "application/json; charset=utf-8",
+              },
+            },
+          ),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleClaimDetailRequest(request, decodeURIComponent(claimId)));
       return;
     }
 
