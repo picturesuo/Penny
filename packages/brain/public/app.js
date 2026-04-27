@@ -65,7 +65,6 @@ const state = {
 };
 
 renderEmptyState();
-void loadInitialStream();
 
 elements.form?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -437,6 +436,10 @@ function renderCockpit(data) {
   const seedClaim = claims.find((claim) => claim.seedId === "claim.seed") ?? claims[0];
   const targetClaim = claims.find((claim) => claim.id === data.firstChallenge?.targetClaimId);
   const conceptCount = claims.filter((claim) => claim.kind === "concept").length;
+  const assumptionCount = claims.filter((claim) => claim.kind === "assumption").length;
+  const unreviewedAssumptionCount = claims.filter(
+    (claim) => claim.kind === "assumption" && claim.status === "exploratory",
+  ).length;
 
   setText(
     elements.sessionStatus,
@@ -446,10 +449,15 @@ function renderCockpit(data) {
   );
   setText(elements.sourceKind, formatLabel(data.source?.kind ?? "raw_idea"));
   setText(elements.currentClaim, seedClaim?.text ?? data.source?.rawText ?? "What's on your mind?");
-  setText(elements.keyInsight, data.ideaMap?.keyInsight ?? "Penny returned a persisted graph slice.");
+  setText(
+    elements.keyInsight,
+    unreviewedAssumptionCount > 0
+      ? `Penny found ${unreviewedAssumptionCount} assumptions that need your move before the map should feel trusted.`
+      : data.ideaMap?.keyInsight ?? "Penny returned a persisted graph slice.",
+  );
   setText(elements.mapCount, `${claims.length} claims`);
   setText(elements.laterCount, String(paths.length));
-  setText(elements.explorationCount, `${paths.length} paths`);
+  setText(elements.explorationCount, `${assumptionCount} assumptions / ${paths.length} paths`);
   setText(elements.learnCount, String(learnCandidates.length + conceptCount));
 
   renderThoughtMap(claims, edges);
@@ -494,8 +502,10 @@ async function loadInitialStream() {
 }
 
 function setSessionMode(hasSession) {
+  const showAfterLoop = hasSession && coreLoopComplete();
+
   for (const element of elements.postSeedChrome ?? []) {
-    element.hidden = !hasSession;
+    element.hidden = !showAfterLoop;
   }
 
   if (elements.streamSurface) {
@@ -790,15 +800,17 @@ function claimActions(claim) {
   });
   append(controls, inspectButton);
 
-  const verifyButton = document.createElement("button");
-  verifyButton.type = "button";
-  verifyButton.textContent = state.verifyingClaimId === claim.id ? "Checking" : "Verify";
-  verifyButton.disabled = state.verifyingClaimId === claim.id;
-  verifyButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    void handleVerifyClaim(claim);
-  });
-  append(controls, verifyButton);
+  if (coreLoopComplete()) {
+    const verifyButton = document.createElement("button");
+    verifyButton.type = "button";
+    verifyButton.textContent = state.verifyingClaimId === claim.id ? "Checking" : "Verify";
+    verifyButton.disabled = state.verifyingClaimId === claim.id;
+    verifyButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void handleVerifyClaim(claim);
+    });
+    append(controls, verifyButton);
+  }
 
   if (claim.kind === "assumption") {
     const isPending = state.respondingClaimId === claim.id;
@@ -1419,8 +1431,13 @@ function clampPercent(value) {
 
 function renderExplorationRows(paths) {
   replaceChildren(elements.explorationRows);
+  const assumptions = assumptionClaims();
 
-  if (paths.length === 0) {
+  if (assumptions.length > 0) {
+    append(elements.explorationRows, assumptionReviewSection(assumptions));
+  }
+
+  if (paths.length === 0 && assumptions.length === 0) {
     append(elements.explorationRows, textOnly("Exploration paths appear here as structured rows after the first seed."));
     return;
   }
@@ -1445,6 +1462,80 @@ function renderExplorationRows(paths) {
     row.append(number, body);
     append(elements.explorationRows, row);
   });
+}
+
+function assumptionClaims() {
+  return (state.data?.ideaMap?.claims ?? []).filter((claim) => claim.kind === "assumption");
+}
+
+function assumptionReviewSection(assumptions) {
+  const section = document.createElement("section");
+  section.className = "assumption-review";
+
+  const heading = document.createElement("div");
+  heading.className = "section-heading";
+
+  const label = document.createElement("p");
+  label.className = "eyebrow";
+  label.textContent = "Assumption Review";
+
+  const count = document.createElement("span");
+  const unresolved = assumptions.filter((claim) => claim.status === "exploratory").length;
+  count.textContent = `${unresolved} need your move`;
+
+  heading.append(label, count);
+  section.append(heading);
+
+  for (const claim of assumptions) {
+    section.append(assumptionReviewCard(claim));
+  }
+
+  return section;
+}
+
+function assumptionReviewCard(claim) {
+  const card = document.createElement("article");
+  card.className = "list-row assumption-review-row";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = claim.status === "exploratory" ? "Needs Move" : formatLabel(claim.status);
+
+  const text = document.createElement("strong");
+  text.textContent = claim.text;
+
+  const copy = document.createElement("p");
+  copy.textContent = "Confirm it, reject it, or refine the claim before trusting this branch of the map.";
+
+  const controls = document.createElement("div");
+  controls.className = "claim-actions";
+
+  const inspectButton = document.createElement("button");
+  inspectButton.type = "button";
+  inspectButton.textContent = state.loadingClaimDetailId === claim.id ? "Inspecting" : "Inspect";
+  inspectButton.disabled = state.loadingClaimDetailId === claim.id;
+  inspectButton.addEventListener("click", () => {
+    void handleClaimInspect(claim);
+  });
+  controls.append(inspectButton);
+
+  for (const item of [
+    { label: "Confirm", action: "confirm", disabled: claim.status === "committed" },
+    { label: "Reject", action: "reject", disabled: claim.status === "rejected" },
+    { label: "Refine", action: "refine", disabled: false },
+  ]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = state.respondingClaimId === claim.id ? "Saving" : item.label;
+    button.disabled = state.respondingClaimId === claim.id || item.disabled;
+    button.addEventListener("click", () => {
+      void handleAssumptionAction(claim, item.action);
+    });
+    controls.append(button);
+  }
+
+  card.append(tag, text, copy, controls);
+  return card;
 }
 
 function renderLater(paths) {
@@ -2123,6 +2214,10 @@ function latestArtifact(artifacts) {
   }
 
   return artifacts.at(-1);
+}
+
+function coreLoopComplete() {
+  return Boolean(state.activeArtifact ?? latestArtifact(state.data?.artifacts));
 }
 
 function openClaimDrawer() {
