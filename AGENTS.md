@@ -11,8 +11,17 @@ Keep it current.
 - Penny is a controllable thinking instrument enhanced by AI, not a generic chatbot.
 - The MVP loop is seed idea -> assumptions -> thought map -> exploration -> challenge -> Defend/Revise/Absorb -> Learn -> Idea Map + Challenge Brief.
 - Core modes are Brain, Challenge / Verify, and Learn / Makes Cents over the same thinking graph.
-- Core objects are Claim, Edge, Move, Shape, Source, Session, Artifact, and WikiPage.
-- Meaningful changes create Moves; current state is derived from claims, edges, and moves.
+- Claim is the stable identity; ClaimVersion stores content, confidence, status, validity, and current/old state.
+- Move is immutable and append-only; meaningful changes create Moves.
+- BrainRun tracks every AI operation.
+- SourceSpan preserves provenance.
+- Assumptions are claims connected by depends_on edges.
+- Counterarguments are claims connected by contradicts/challenges edges.
+- Learn concepts are claims of kind=concept connected by teaches edges.
+- WikiPage is a compiled view, not source of truth.
+- Backend returns graph slices; frontend does not invent graph edges.
+- Use provider-safe AI schemas plus strict local validation.
+- Current state is derived from claims, claim versions, edges, and moves.
 - Do not build a generic chatbot sidebar or pre-MVP features before the first loop works end to end.
 
 ## Shared Context
