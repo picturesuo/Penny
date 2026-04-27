@@ -142,7 +142,7 @@ async function fetchClaimDetail(claimId) {
     throw new Error(message);
   }
 
-  if (!payload?.data?.claim || !payload.data.currentVersion) {
+  if (!payload?.data?.claim || !payload.data.currentVersion || !Array.isArray(payload.data.versions)) {
     throw new Error("Claim detail returned an invalid graph slice.");
   }
 
@@ -448,9 +448,13 @@ function renderThoughtMap(claims, edges) {
 
 function claimNode(claim, modifier = "") {
   const node = document.createElement("article");
-  node.className = ["map-node", claim.kind, modifier, claim.status ? `status-${claim.status}` : ""]
+  const isSelected = state.activeClaimDetail?.claim?.id === claim.id || state.loadingClaimDetailId === claim.id;
+  node.className = ["map-node", claim.kind, modifier, claim.status ? `status-${claim.status}` : "", isSelected ? "is-selected" : ""]
     .filter(Boolean)
     .join(" ");
+  node.tabIndex = 0;
+  node.setAttribute("role", "button");
+  node.setAttribute("aria-label", `Open detail for ${formatLabel(claim.kind)} claim`);
 
   const meta = document.createElement("span");
   meta.textContent = `${formatLabel(claim.kind)} / ${formatLabel(claim.status)} / ${claim.confidence}%`;
@@ -466,6 +470,20 @@ function claimNode(claim, modifier = "") {
     append(node, actions);
   }
 
+  node.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest("button, input, textarea, a")) {
+      return;
+    }
+
+    void handleClaimInspect(claim);
+  });
+  node.addEventListener("keydown", (event) => {
+    if ((event.key === "Enter" || event.key === " ") && event.target === node) {
+      event.preventDefault();
+      void handleClaimInspect(claim);
+    }
+  });
+
   return node;
 }
 
@@ -477,7 +495,8 @@ function claimActions(claim) {
   inspectButton.type = "button";
   inspectButton.textContent = state.loadingClaimDetailId === claim.id ? "Inspecting" : "Inspect";
   inspectButton.disabled = state.loadingClaimDetailId === claim.id;
-  inspectButton.addEventListener("click", () => {
+  inspectButton.addEventListener("click", (event) => {
+    event.stopPropagation();
     void handleClaimInspect(claim);
   });
   append(controls, inspectButton);
@@ -495,7 +514,8 @@ function claimActions(claim) {
       button.type = "button";
       button.textContent = isPending ? "Saving" : item.label;
       button.disabled = isPending || item.disabled;
-      button.addEventListener("click", () => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
         void handleAssumptionAction(claim, item.action);
       });
       append(controls, button);
@@ -507,7 +527,8 @@ function claimActions(claim) {
     challengeButton.type = "button";
     challengeButton.textContent = state.challengingClaimId === claim.id ? "Challenging" : "Challenge";
     challengeButton.disabled = state.challengingClaimId === claim.id;
-    challengeButton.addEventListener("click", () => {
+    challengeButton.addEventListener("click", (event) => {
+      event.stopPropagation();
       void handleChallengeIssue(claim);
     });
     append(controls, challengeButton);
@@ -518,6 +539,9 @@ function claimActions(claim) {
 
 async function handleClaimInspect(claim) {
   state.loadingClaimDetailId = claim.id;
+  if (state.activeClaimDetail?.claim?.id !== claim.id) {
+    state.activeClaimDetail = null;
+  }
   renderCockpit(state.data);
   openClaimDrawer();
   renderClaimDrawerLoading(claim);
@@ -537,6 +561,20 @@ async function handleClaimInspect(claim) {
   }
 }
 
+async function refreshActiveClaimDetail(claimId) {
+  if (!claimId || state.activeClaimDetail?.claim?.id !== claimId) {
+    return;
+  }
+
+  try {
+    const payload = await fetchClaimDetail(claimId);
+    state.activeClaimDetail = payload.data;
+    renderClaimDrawer(payload.data);
+  } catch (error) {
+    renderClaimDrawerError(error instanceof Error ? error.message : String(error));
+  }
+}
+
 async function handleChallengeIssue(claim) {
   state.challengingClaimId = claim.id;
   renderCockpit(state.data);
@@ -546,6 +584,7 @@ async function handleChallengeIssue(claim) {
   try {
     const payload = await issueChallenge(claim.id);
     applyIssuedChallenge(payload.data);
+    await refreshActiveClaimDetail(claim.id);
     setStatus("Challenge issued.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
@@ -570,6 +609,7 @@ async function handleAssumptionAction(claim, action) {
   try {
     const payload = await respondToAssumption(claim.id, body);
     applyAssumptionResponse(payload.data);
+    await refreshActiveClaimDetail(claim.id);
     setStatus(`${formatLabel(action)} saved.`);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
@@ -834,6 +874,7 @@ async function handleChallengeResponse(challenge, option) {
   try {
     const payload = await respondToChallenge(body);
     applyChallengeResponse(payload.data);
+    await refreshActiveClaimDetail(challenge.targetClaimId);
     setStatus(`${option} saved.`);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
@@ -1077,6 +1118,7 @@ async function handleSaveInlineLearn() {
       sessionId: state.activeLearn.sessionId,
     });
     applyInlineLearnSave(payload.data.saved);
+    await refreshActiveClaimDetail(state.activeLearn.currentClaimId);
     state.activeLearn = {
       ...state.activeLearn,
       saved: true,
@@ -1111,8 +1153,10 @@ async function handleArtifactCreate() {
   setStatus("Generating Challenge Brief.");
 
   try {
+    const activeClaimId = state.activeClaimDetail?.claim?.id;
     const payload = await createArtifact(state.data.session.id);
     applyArtifact(payload.data);
+    await refreshActiveClaimDetail(activeClaimId);
     setStatus("Challenge Brief generated.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
@@ -1217,11 +1261,17 @@ function openClaimDrawer() {
 }
 
 function closeClaimDrawer() {
+  state.activeClaimDetail = null;
+  state.loadingClaimDetailId = null;
   elements.claimDrawer?.classList.remove("open");
   elements.claimDrawer?.setAttribute("aria-hidden", "true");
 
   if (elements.claimDrawerBackdrop) {
     elements.claimDrawerBackdrop.hidden = true;
+  }
+
+  if (state.data) {
+    renderCockpit(state.data);
   }
 }
 
@@ -1235,18 +1285,26 @@ function renderClaimDrawerError(message) {
 }
 
 function renderClaimDrawer(detail) {
+  const versions = detail.versions ?? [detail.currentVersion, ...(detail.oldVersions ?? [])];
+  const chronologicalMoves = [...(detail.moves ?? [])].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+
   setText(elements.claimDrawerTitle, `${formatLabel(detail.claim.kind)} ${shortId(detail.claim.id)}`);
   replaceChildren(
     elements.claimDrawerContent,
     detailSection("Current Version", [versionCard(detail.currentVersion, true)]),
-    detailSection("Old Claim Versions", (detail.oldVersions ?? []).map((version) => versionCard(version, false)), "No prior versions yet."),
+    detailSection(
+      "Old Selves Timeline",
+      versions.map((version) => versionCard(version, version.isCurrent || version.state === "current")),
+      "No ClaimVersions returned for this claim.",
+    ),
     detailSection(
       "Confidence History",
       (detail.confidenceHistory ?? []).map(confidenceRow),
       "No confidence history returned.",
     ),
-    detailSection("Moves Involving Claim", (detail.moves ?? []).map(moveCard), "No moves returned for this claim."),
-    provenanceSection(detail.provenance),
+    detailSection("Moves Chronologically", chronologicalMoves.map(moveCard), "No moves returned for this claim."),
+    sourceSection(detail.provenance),
+    sourceSpansSection(detail.provenance?.spans ?? []),
     detailSection(
       "Connected Claims",
       (detail.connectedClaims ?? []).map(connectedClaimCard),
@@ -1261,6 +1319,11 @@ function renderClaimDrawer(detail) {
       "Learned Concepts",
       (detail.learnedConcepts ?? []).map(learnedConceptCard),
       "No saved Learn concepts attached.",
+    ),
+    detailSection(
+      "Artifact References",
+      (detail.artifactReferences ?? []).map(artifactReferenceCard),
+      "No artifacts reference this claim yet.",
     ),
   );
 }
@@ -1329,13 +1392,14 @@ function moveCard(move) {
   summary.textContent = move.summary;
 
   const detail = document.createElement("small");
-  detail.textContent = movePayloadSummary(move);
+  const payloadSummary = movePayloadSummary(move);
+  detail.textContent = payloadSummary ? `${formatDate(move.createdAt)} / ${payloadSummary}` : formatDate(move.createdAt);
 
   card.append(tag, summary, detail);
   return card;
 }
 
-function provenanceSection(provenance) {
+function sourceSection(provenance) {
   const children = [];
 
   if (provenance?.source) {
@@ -1350,19 +1414,25 @@ function provenanceSection(provenance) {
     children.push(source);
   }
 
-  for (const span of provenance?.spans ?? []) {
+  return detailSection("Source", children, "No source returned for this claim.");
+}
+
+function sourceSpansSection(spans) {
+  const children = [];
+
+  for (const span of spans) {
     const row = document.createElement("article");
     row.className = "detail-card span";
     const tag = document.createElement("span");
     tag.className = "tag";
-    tag.textContent = span.label ?? "Source Span";
+    tag.textContent = `${span.label ?? "Source Span"} / ${span.startOffset}-${span.endOffset}`;
     const text = document.createElement("p");
     text.textContent = span.text || `${span.startOffset}-${span.endOffset}`;
     row.append(tag, text);
     children.push(row);
   }
 
-  return detailSection("Source / Provenance", children, "No source span returned for this claim.");
+  return detailSection("Source Spans", children, "No SourceSpan provenance returned for this claim.");
 }
 
 function connectedClaimCard(connection) {
@@ -1419,6 +1489,27 @@ function learnedConceptCard(concept) {
   return card;
 }
 
+function artifactReferenceCard(artifact) {
+  const card = document.createElement("article");
+  card.className = "detail-card artifact-reference";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = `${formatLabel(artifact.kind)} / ${(artifact.referenceReasons ?? []).map(formatLabel).join(", ") || "Referenced"}`;
+
+  const title = document.createElement("strong");
+  title.textContent = artifact.title;
+
+  const summary = document.createElement("p");
+  summary.textContent = artifact.summary;
+
+  const meta = document.createElement("small");
+  meta.textContent = `${shortId(artifact.id)} / ${formatDate(artifact.createdAt)}`;
+
+  card.append(tag, title, summary, meta);
+  return card;
+}
+
 function movePayloadSummary(move) {
   const payload = move.payload && typeof move.payload === "object" ? move.payload : {};
   const parts = [
@@ -1428,7 +1519,7 @@ function movePayloadSummary(move) {
     stringValue(payload, "currentVersionId") ?? stringValue(payload, "currentClaimVersionId"),
   ].filter(Boolean);
 
-  return parts.length > 0 ? parts.join(" / ") : formatDate(move.createdAt);
+  return parts.length > 0 ? parts.join(" / ") : "";
 }
 
 function currentLearnTarget() {
