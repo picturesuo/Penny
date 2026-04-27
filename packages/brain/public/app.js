@@ -1,6 +1,9 @@
 const $ = (selector) => document.querySelector(selector);
 
 const elements = {
+  artifactBrief: $("#artifactBrief"),
+  artifactCreate: $("#artifactCreate"),
+  artifactStatus: $("#artifactStatus"),
   currentClaim: $("#currentClaim"),
   explorationCount: $("#explorationCount"),
   explorationRows: $("#explorationRows"),
@@ -35,6 +38,8 @@ const state = {
   activeLearn: null,
   learning: false,
   savingLearn: false,
+  artifactCreating: false,
+  activeArtifact: null,
 };
 
 renderEmptyState();
@@ -58,6 +63,7 @@ elements.form?.addEventListener("submit", async (event) => {
     state.data = payload.data;
     state.activeChallenge = null;
     state.activeLearn = null;
+    state.activeArtifact = null;
     renderCockpit(payload.data);
     setStatus("Graph slice persisted.");
     settledRunLabel = runStatusLabel(payload.data?.brainRun);
@@ -67,6 +73,10 @@ elements.form?.addEventListener("submit", async (event) => {
   } finally {
     setLoading(false, settledRunLabel);
   }
+});
+
+elements.artifactCreate?.addEventListener("click", () => {
+  void handleArtifactCreate();
 });
 
 async function seedBrain(rawIdea) {
@@ -231,6 +241,33 @@ async function saveInlineLearn(body) {
   return payload;
 }
 
+async function createArtifact(sessionId) {
+  const response = await fetch("/brain/artifact", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": "dev-user",
+      "x-project-id": "dev-project",
+    },
+    body: JSON.stringify({ sessionId }),
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
+    const message = payload?.error?.message
+      ? `${payload.error.message}${issues}`
+      : `POST /brain/artifact failed with ${response.status}.`;
+    throw new Error(message);
+  }
+
+  if (!payload?.data?.artifact?.payload?.challengeBrief || !payload.data.move) {
+    throw new Error("Artifact compiler returned an invalid session artifact.");
+  }
+
+  return payload;
+}
+
 async function readJsonResponse(response) {
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -258,12 +295,18 @@ function renderEmptyState() {
   setText(elements.laterCount, "0");
   setText(elements.explorationCount, "0 paths");
   setText(elements.learnCount, "0");
+  setText(elements.artifactStatus, "Not compiled");
+  if (elements.artifactCreate) {
+    elements.artifactCreate.disabled = true;
+    elements.artifactCreate.textContent = "Compile Brief";
+  }
   setThinking(false);
   renderThoughtMap([], []);
   renderExplorationRows([]);
   renderLater([]);
   renderQuickSelect([]);
   renderLearn([]);
+  renderArtifact(null);
   renderResponseOptions([]);
 }
 
@@ -296,6 +339,7 @@ function renderCockpit(data) {
   renderQuickSelect(claims);
   renderPennyInsight(state.activeChallenge ?? data.firstChallenge, targetClaim);
   renderLearn(learnCandidates);
+  renderArtifact(state.activeArtifact ?? latestArtifact(data.artifacts));
 }
 
 function renderThoughtMap(claims, edges) {
@@ -982,6 +1026,110 @@ function applyInlineLearnSave(saved) {
   if (Array.isArray(state.data?.moves)) {
     state.data.moves = [...state.data.moves, saved.move];
   }
+}
+
+async function handleArtifactCreate() {
+  if (!state.data?.session?.id) {
+    setStatus("Create a graph before compiling an artifact.", true);
+    return;
+  }
+
+  state.artifactCreating = true;
+  renderCockpit(state.data);
+  setThinking(true, "Compiling");
+  setStatus("Compiling artifact.");
+
+  try {
+    const payload = await createArtifact(state.data.session.id);
+    applyArtifact(payload.data);
+    setStatus("Artifact compiled.");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), true);
+  } finally {
+    state.artifactCreating = false;
+    setThinking(false, state.activeArtifact ? "Brief ready" : "Ready");
+    renderCockpit(state.data);
+  }
+}
+
+function applyArtifact(data) {
+  state.activeArtifact = data.artifact;
+
+  if (Array.isArray(state.data?.artifacts)) {
+    state.data.artifacts = [...state.data.artifacts, data.artifact];
+  }
+
+  if (Array.isArray(state.data?.moves)) {
+    state.data.moves = [...state.data.moves, data.move];
+  }
+}
+
+function renderArtifact(artifact) {
+  replaceChildren(elements.artifactBrief);
+
+  if (elements.artifactCreate) {
+    elements.artifactCreate.disabled = state.artifactCreating || !state.data?.session?.id;
+    elements.artifactCreate.textContent = state.artifactCreating ? "Compiling" : "Compile Brief";
+  }
+
+  if (!artifact) {
+    setText(elements.artifactStatus, state.data?.session?.id ? "Ready" : "Not compiled");
+    append(elements.artifactBrief, textOnly("Compile the current session into an Idea Map + Challenge Brief."));
+    return;
+  }
+
+  const brief = artifact.payload?.challengeBrief;
+  const risks = brief?.unresolvedRisks ?? [];
+  const changes = brief?.whatChanged ?? [];
+  setText(elements.artifactStatus, `${risks.length} risks`);
+
+  const summary = document.createElement("article");
+  summary.className = "artifact-card";
+
+  const title = document.createElement("strong");
+  title.textContent = artifact.title;
+
+  const copy = document.createElement("p");
+  copy.textContent = artifact.summary;
+
+  const next = document.createElement("small");
+  next.textContent = brief?.recommendedNextMove ?? "No next move returned.";
+
+  summary.append(title, copy, next);
+  append(elements.artifactBrief, summary);
+  append(elements.artifactBrief, artifactList("Unresolved Risks", risks.slice(0, 3), (risk) => risk.text));
+  append(elements.artifactBrief, artifactList("What Changed", changes.slice(-4), (change) => change.summary));
+}
+
+function artifactList(label, items, renderText) {
+  const block = document.createElement("article");
+  block.className = "artifact-list";
+
+  const title = document.createElement("span");
+  title.className = "tag";
+  title.textContent = label;
+  block.append(title);
+
+  if (items.length === 0) {
+    append(block, textOnly("None"));
+    return block;
+  }
+
+  for (const item of items) {
+    const row = document.createElement("p");
+    row.textContent = renderText(item);
+    block.append(row);
+  }
+
+  return block;
+}
+
+function latestArtifact(artifacts) {
+  if (!Array.isArray(artifacts) || artifacts.length === 0) {
+    return null;
+  }
+
+  return artifacts.at(-1);
 }
 
 function currentLearnTarget() {
