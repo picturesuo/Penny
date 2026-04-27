@@ -90,6 +90,7 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
   assert.equal(payload.data.session.status, "open");
   assert.equal(payload.data.ideaMap.claims.length, 4);
   assert.equal(payload.data.ideaMap.edges.length, 3);
+  assert.equal(payload.data.ideaMap.edges[0]?.status, "active");
   assert.notEqual(payload.data.ideaMap.claims[0]?.id, "claim.seed");
   assert.match(payload.data.ideaMap.claims[0]?.versionId ?? "", /^[0-9a-f-]{36}$/);
   assert.equal(payload.data.firstChallenge.failureType, "definition_failure");
