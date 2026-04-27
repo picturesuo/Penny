@@ -25,7 +25,7 @@ export function createHeuristicBrainSeedProvider(): BrainSeedProvider {
   return {
     name: "heuristic",
     async generate(input) {
-      return buildHeuristicSeed(input.rawIdea.trim());
+      return buildHeuristicSeed(input);
     },
   };
 }
@@ -83,14 +83,27 @@ export function buildBrainSeedPrompt(input: BrainSeedInput): string {
     "You are Penny, a controllable thinking instrument, not a chatbot.",
     "Turn the user's raw idea into a compact thinking structure.",
     "Extract hidden assumptions, create a small thought map, choose useful exploration directions, and challenge the weakest part.",
+    "Return durable thinking history as claims, edges, moves, and artifacts.",
     "Do not invent citations or external facts. Return only valid JSON matching the requested schema.",
     "",
     `Raw idea: ${input.rawIdea}`,
   ].join("\n");
 }
 
-function buildHeuristicSeed(idea: string): BrainSeedOutput {
+function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
+  const idea = input.rawIdea.trim();
+  const sessionId = input.sessionId ?? "00000000-0000-4000-8000-000000000001";
+
   return {
+    source: {
+      id: "source.raw_idea",
+      rawText: idea,
+    },
+    session: {
+      id: sessionId,
+      sourceId: "source.raw_idea",
+      status: "seeded",
+    },
     seedClaim: {
       id: "claim.seed",
       kind: "belief",
@@ -174,6 +187,82 @@ function buildHeuristicSeed(idea: string): BrainSeedOutput {
       challenge: "Defend why this is the central claim. If it is not, revise the idea into separate claims before building around it.",
       responseOptions: ["Defend", "Revise", "Absorb"],
     },
+    moves: [
+      {
+        id: "move.source.recorded",
+        kind: "source.recorded",
+        summary: "Recorded the user's raw idea as the session source.",
+        claimIds: [],
+        edgeIds: [],
+        artifactIds: [],
+      },
+      {
+        id: "move.claim.created",
+        kind: "claim.created",
+        summary: "Created the seed claim and extracted hidden assumptions as claims.",
+        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2"],
+        edgeIds: [],
+        artifactIds: [],
+      },
+      {
+        id: "move.assumption.extracted",
+        kind: "assumption.extracted",
+        summary: "Marked the riskiest hidden assumptions for pressure-testing.",
+        claimIds: ["claim.assumption.1", "claim.assumption.2"],
+        edgeIds: [],
+        artifactIds: [],
+      },
+      {
+        id: "move.edge.created",
+        kind: "edge.created",
+        summary: "Connected the seed claim to its assumptions in the thought map.",
+        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2"],
+        edgeIds: ["edge.seed.assumption.1", "edge.seed.assumption.2"],
+        artifactIds: [],
+      },
+      {
+        id: "move.exploration.suggested",
+        kind: "exploration.suggested",
+        summary: "Suggested exploration directions that preserve structure over chat.",
+        claimIds: ["claim.seed", "claim.assumption.1"],
+        edgeIds: ["edge.seed.assumption.1"],
+        artifactIds: [],
+      },
+      {
+        id: "move.challenge.created",
+        kind: "challenge.created",
+        summary: "Challenged the weakest part and exposed Defend, Revise, and Absorb response paths.",
+        claimIds: ["claim.assumption.1"],
+        edgeIds: ["edge.seed.assumption.1"],
+        artifactIds: [],
+      },
+      {
+        id: "move.artifact.created",
+        kind: "artifact.created",
+        summary: "Created the Idea Map and Challenge Brief session artifacts.",
+        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2"],
+        edgeIds: ["edge.seed.assumption.1", "edge.seed.assumption.2"],
+        artifactIds: ["artifact.idea_map", "artifact.challenge_brief"],
+      },
+    ],
+    artifacts: [
+      {
+        id: "artifact.idea_map",
+        kind: "idea_map",
+        title: "Idea Map",
+        summary: "A compact map of the seed claim, hidden assumptions, and typed assumption edges.",
+        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2"],
+        edgeIds: ["edge.seed.assumption.1", "edge.seed.assumption.2"],
+      },
+      {
+        id: "artifact.challenge_brief",
+        kind: "challenge_brief",
+        title: "Challenge Brief",
+        summary: "The weakest assumption, the first challenge, and the Defend / Revise / Absorb response options.",
+        claimIds: ["claim.assumption.1"],
+        edgeIds: ["edge.seed.assumption.1"],
+      },
+    ],
   };
 }
 
