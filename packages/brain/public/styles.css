@@ -866,6 +866,27 @@ textarea:focus {
   text-decoration: underline;
 }
 
+.verify-decision-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.verify-decision-actions button {
+  min-height: 32px;
+  border: 1px solid rgba(49, 95, 134, 0.34);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--field);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.verify-decision-actions button:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
 .tag {
   display: inline-flex;
   width: max-content;
