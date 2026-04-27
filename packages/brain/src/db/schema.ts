@@ -29,6 +29,7 @@ export const moveKindEnum = pgEnum("move_kind", [
   "learning_triggered",
   "verify_run",
   "artifact_created",
+  "wiki_page_compiled",
   "source.recorded",
   "claim.created",
   "edge.created",
@@ -227,6 +228,26 @@ export const artifacts = pgTable(
   ],
 );
 
+export const wikiPages = pgTable(
+  "wiki_pages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    slug: text("slug").notNull(),
+    summary: text("summary").notNull(),
+    content: jsonb("content").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("wiki_pages_session_id_idx").on(table.sessionId),
+    index("wiki_pages_slug_idx").on(table.slug),
+    index("wiki_pages_created_at_idx").on(table.createdAt),
+  ],
+);
+
 export const pennySchema = {
   artifacts,
   artifactKindEnum,
@@ -245,4 +266,5 @@ export const pennySchema = {
   sourceKindEnum,
   sourceSpans,
   sources,
+  wikiPages,
 };

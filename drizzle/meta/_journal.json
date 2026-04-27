@@ -64,6 +64,13 @@
       "when": 1777326642744,
       "tag": "0008_ambitious_rockslide",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777327953336,
+      "tag": "0009_aspiring_franklin_richards",
+      "breakpoints": true
     }
   ]
 }

@@ -18,6 +18,7 @@ import {
   sessions,
   sourceSpans,
   sources,
+  wikiPages,
 } from "./db/schema.ts";
 import { createPennyDb, createPennySql } from "./db/client.ts";
 
@@ -31,6 +32,7 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(moves), "moves");
   assert.equal(getTableName(brainRuns), "brain_runs");
   assert.equal(getTableName(artifacts), "artifacts");
+  assert.equal(getTableName(wikiPages), "wiki_pages");
 });
 
 test("Penny schema keeps core enum values narrow for the MVP", () => {
@@ -58,6 +60,7 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
   assert.ok(moveKindEnum.enumValues.includes("critique_absorbed"));
   assert.ok(moveKindEnum.enumValues.includes("learning_triggered"));
   assert.ok(moveKindEnum.enumValues.includes("artifact_created"));
+  assert.ok(moveKindEnum.enumValues.includes("wiki_page_compiled"));
   assert.deepEqual(artifactKindEnum.enumValues, ["idea_map", "challenge_brief", "idea_map_challenge_brief"]);
 });
 
@@ -80,6 +83,7 @@ test("Penny schema has a clean aggregate export surface", () => {
     "sourceKindEnum",
     "sourceSpans",
     "sources",
+    "wikiPages",
   ]);
 });
 
