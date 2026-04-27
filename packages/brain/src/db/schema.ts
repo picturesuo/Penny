@@ -13,6 +13,9 @@ export const claimEdgeKindEnum = pgEnum("claim_edge_kind", [
   "clarifies",
 ]);
 export const moveKindEnum = pgEnum("move_kind", [
+  "seed_claim_created",
+  "assumptions_extracted",
+  "first_challenge_suggested",
   "source.recorded",
   "claim.created",
   "edge.created",

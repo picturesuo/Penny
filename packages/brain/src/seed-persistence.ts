@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { PennyDatabase } from "./db/client.ts";
 import {
-  artifacts,
   brainRuns,
   claimEdges,
   claims,
@@ -11,40 +10,36 @@ import {
   sources,
   sourceSpans,
 } from "./db/schema.ts";
-import type { BrainSeedOutput } from "./seed.ts";
+import type { BrainSeedInput, BrainSeedOutput } from "./seed.ts";
 
-export type BrainSeedRunRecord = {
-  id?: string | undefined;
+export type BrainSeedRunInput = {
   operation: string;
   provider: string;
   model?: string | null;
-  status: string;
   input: unknown;
-  output?: unknown;
-  error?: unknown;
   startedAt?: Date;
-  completedAt?: Date;
 };
 
-export type PersistBrainSeedOptions = {
-  brainRun?: BrainSeedRunRecord | undefined;
+export type BrainSeedPrelude = {
+  session: typeof sessions.$inferSelect;
+  source: typeof sources.$inferSelect;
+  submittedSourceSpan: typeof sourceSpans.$inferSelect;
+  brainRun: typeof brainRuns.$inferSelect;
 };
 
 export type PersistedBrainSeed = {
   session: typeof sessions.$inferSelect;
   source: typeof sources.$inferSelect;
+  submittedSourceSpan: typeof sourceSpans.$inferSelect;
   claims: Array<typeof claims.$inferSelect & { seedId: string }>;
   claimVersions: Array<typeof claimVersions.$inferSelect & { seedId: string }>;
   edges: Array<typeof claimEdges.$inferSelect & { seedId: string }>;
-  sourceSpans: Array<typeof sourceSpans.$inferSelect & { seedId: string }>;
   moves: Array<typeof moves.$inferSelect & { seedId: string }>;
-  artifacts: Array<typeof artifacts.$inferSelect & { seedId: string }>;
-  brainRun: typeof brainRuns.$inferSelect | null;
+  brainRun: typeof brainRuns.$inferSelect;
   idMaps: {
     claimIds: Map<string, string>;
     claimVersionIds: Map<string, string>;
     edgeIds: Map<string, string>;
-    artifactIds: Map<string, string>;
   };
 };
 
@@ -55,23 +50,23 @@ export class BrainSeedPersistenceError extends Error {
   }
 }
 
-export async function persistBrainSeed(
+export async function createBrainSeedPrelude(
   db: PennyDatabase,
-  seed: BrainSeedOutput,
-  options: PersistBrainSeedOptions = {},
-): Promise<PersistedBrainSeed> {
+  input: BrainSeedInput,
+  run: BrainSeedRunInput,
+): Promise<BrainSeedPrelude> {
   return db.transaction(async (tx) => {
     const [session] = await tx
       .insert(sessions)
       .values({
-        id: seed.session.id,
-        status: seed.session.status,
-        title: seed.seedClaim.text.slice(0, 120),
+        id: input.sessionId,
+        status: "open",
+        title: input.rawIdea.slice(0, 120),
       })
       .returning();
 
     if (!session) {
-      throw new BrainSeedPersistenceError("Failed to persist seed session.");
+      throw new BrainSeedPersistenceError("Failed to create seed session.");
     }
 
     const [source] = await tx
@@ -79,39 +74,86 @@ export async function persistBrainSeed(
       .values({
         sessionId: session.id,
         kind: "raw_idea",
-        rawText: seed.source.rawText,
+        rawText: input.rawIdea,
       })
       .returning();
 
     if (!source) {
-      throw new BrainSeedPersistenceError("Failed to persist seed source.");
+      throw new BrainSeedPersistenceError("Failed to create seed source.");
     }
 
+    const [submittedSourceSpan] = await tx
+      .insert(sourceSpans)
+      .values({
+        sourceId: source.id,
+        startOffset: 0,
+        endOffset: input.rawIdea.length,
+        label: "submitted_text",
+      })
+      .returning();
+
+    if (!submittedSourceSpan) {
+      throw new BrainSeedPersistenceError("Failed to create submitted source span.");
+    }
+
+    const [brainRun] = await tx
+      .insert(brainRuns)
+      .values({
+        sessionId: session.id,
+        sourceId: source.id,
+        operation: run.operation,
+        provider: run.provider,
+        model: run.model,
+        status: "running",
+        input: run.input,
+        createdAt: run.startedAt,
+      })
+      .returning();
+
+    if (!brainRun) {
+      throw new BrainSeedPersistenceError("Failed to create brain run.");
+    }
+
+    return {
+      session,
+      source,
+      submittedSourceSpan,
+      brainRun,
+    };
+  });
+}
+
+export async function persistBrainSeed(
+  db: PennyDatabase,
+  prelude: BrainSeedPrelude,
+  seed: BrainSeedOutput,
+): Promise<PersistedBrainSeed> {
+  return db.transaction(async (tx) => {
+    const seedClaims = [seed.seedClaim, ...seed.assumptions];
     const persistedClaimRows = await tx
       .insert(claims)
       .values(
-        seed.thoughtMap.claims.map((claim) => ({
-          sessionId: session.id,
-          sourceId: source.id,
+        seedClaims.map((claim) => ({
+          sessionId: prelude.session.id,
+          sourceId: prelude.source.id,
           kind: claim.kind,
-          // Temporary compatibility mirror. Canonical content lives in claim_versions.
           status: "exploratory" as const,
           text: claim.text,
           confidence: claim.confidence,
         })),
       )
       .returning();
-    const persistedClaims = attachSeedIds(seed.thoughtMap.claims, persistedClaimRows, "claim");
+    const persistedClaims = attachSeedIds(seedClaims, persistedClaimRows, "claim");
     const claimIds = new Map(persistedClaims.map((claim) => [claim.seedId, claim.id]));
 
     const persistedClaimVersions = attachSeedIds(
-      seed.thoughtMap.claims,
+      seedClaims,
       await tx
         .insert(claimVersions)
         .values(
-          seed.thoughtMap.claims.map((claim) => ({
+          seedClaims.map((claim) => ({
             claimId: requireMappedId(claimIds, claim.id, "claimVersion.claimId"),
-            sourceId: source.id,
+            sourceId: prelude.source.id,
             content: claim.text,
             status: "exploratory" as const,
             confidence: claim.confidence,
@@ -123,40 +165,21 @@ export async function persistBrainSeed(
     );
     const claimVersionIds = new Map(persistedClaimVersions.map((version) => [version.seedId, version.id]));
 
-    const persistedSourceSpans = attachSeedIds(
-      seed.thoughtMap.claims,
-      await tx
-        .insert(sourceSpans)
-        .values(
-          seed.thoughtMap.claims.map((claim) => {
-            const span = sourceSpanForClaim(seed.source.rawText, claim.text);
-
-            return {
-              sourceId: source.id,
-              claimId: requireMappedId(claimIds, claim.id, "sourceSpan.claimId"),
-              claimVersionId: requireMappedId(claimVersionIds, claim.id, "sourceSpan.claimVersionId"),
-              startOffset: span.startOffset,
-              endOffset: span.endOffset,
-              label: claim.id === seed.seedClaim.id ? "seed_claim" : "generated_claim",
-            };
-          }),
-        )
-        .returning(),
-      "sourceSpan",
+    const edgeSeeds = seed.thoughtMap.edges.filter(
+      (edge) => edge.kind === "depends_on" && claimIds.has(edge.fromClaimId) && claimIds.has(edge.toClaimId),
     );
-
     const persistedEdges =
-      seed.thoughtMap.edges.length > 0
+      edgeSeeds.length > 0
         ? attachSeedIds(
-            seed.thoughtMap.edges,
+            edgeSeeds,
             await tx
               .insert(claimEdges)
               .values(
-                seed.thoughtMap.edges.map((edge) => ({
-                  sessionId: session.id,
+                edgeSeeds.map((edge) => ({
+                  sessionId: prelude.session.id,
                   fromClaimId: requireMappedId(claimIds, edge.fromClaimId, "edge.fromClaimId"),
                   toClaimId: requireMappedId(claimIds, edge.toClaimId, "edge.toClaimId"),
-                  kind: edge.kind,
+                  kind: "depends_on" as const,
                   label: edge.label,
                 })),
               )
@@ -165,119 +188,121 @@ export async function persistBrainSeed(
           )
         : [];
     const edgeIds = new Map(persistedEdges.map((edge) => [edge.seedId, edge.id]));
-
-    const persistedArtifacts = attachSeedIds(
-      seed.artifacts,
-      await tx
-        .insert(artifacts)
-        .values(
-          seed.artifacts.map((artifact) => ({
-            sessionId: session.id,
-            kind: artifact.kind,
-            title: artifact.title,
-            summary: artifact.summary,
-            payload: {
-              seedArtifactId: artifact.id,
-              seedClaimIds: artifact.claimIds,
-              seedEdgeIds: artifact.edgeIds,
-              claimIds: artifact.claimIds.map((claimId) => requireMappedId(claimIds, claimId, "artifact.claimId")),
-              edgeIds: artifact.edgeIds.map((edgeId) => requireMappedId(edgeIds, edgeId, "artifact.edgeId")),
-              firstChallenge: artifact.kind === "challenge_brief" ? seed.firstChallenge : undefined,
-              explorationPaths: artifact.kind === "idea_map" ? seed.explorationPaths : undefined,
-              learnCandidates:
-                artifact.kind === "idea_map"
-                  ? seed.learnCandidates.map((candidate) => ({
-                      ...candidate,
-                      claimId: requireMappedId(claimIds, candidate.claimId, "learnCandidate.claimId"),
-                      seedClaimId: candidate.claimId,
-                    }))
-                  : undefined,
-              keyInsight: artifact.kind === "idea_map" ? seed.keyInsight : undefined,
-            },
-          })),
-        )
-        .returning(),
-      "artifact",
-    );
-    const artifactIds = new Map(persistedArtifacts.map((artifact) => [artifact.seedId, artifact.id]));
-
+    const requiredMoves = buildRequiredMoves(seed, claimIds, edgeIds);
     const persistedMoves = attachSeedIds(
-      seed.moves,
+      requiredMoves,
       await tx
         .insert(moves)
         .values(
-          seed.moves.map((move) => ({
-            sessionId: session.id,
+          requiredMoves.map((move) => ({
+            sessionId: prelude.session.id,
             kind: move.kind,
             summary: move.summary,
             payload: {
               seedMoveId: move.id,
+              brainRunId: prelude.brainRun.id,
               seedClaimIds: move.claimIds,
               seedEdgeIds: move.edgeIds,
-              seedArtifactIds: move.artifactIds,
               claimIds: move.claimIds.map((claimId) => requireMappedId(claimIds, claimId, "move.claimId")),
               edgeIds: move.edgeIds.map((edgeId) => requireMappedId(edgeIds, edgeId, "move.edgeId")),
-              artifactIds: move.artifactIds.map((artifactId) =>
-                requireMappedId(artifactIds, artifactId, "move.artifactId"),
-              ),
             },
           })),
         )
         .returning(),
       "move",
     );
+    const [brainRun] = await tx
+      .update(brainRuns)
+      .set({
+        status: "succeeded",
+        output: seed,
+        error: null,
+        completedAt: new Date(),
+      })
+      .where(eq(brainRuns.id, prelude.brainRun.id))
+      .returning();
 
-    const brainRun = options.brainRun ? await upsertBrainRun(tx, options.brainRun, session.id, source.id) : null;
+    if (!brainRun) {
+      throw new BrainSeedPersistenceError("Failed to update brain run after seed persistence.");
+    }
 
     return {
-      session,
-      source,
+      session: prelude.session,
+      source: prelude.source,
+      submittedSourceSpan: prelude.submittedSourceSpan,
       claims: persistedClaims,
       claimVersions: persistedClaimVersions,
       edges: persistedEdges,
-      sourceSpans: persistedSourceSpans,
-      artifacts: persistedArtifacts,
       moves: persistedMoves,
       brainRun,
       idMaps: {
         claimIds,
         claimVersionIds,
         edgeIds,
-        artifactIds,
       },
     };
   });
 }
 
-async function upsertBrainRun(
-  tx: Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0],
-  brainRun: BrainSeedRunRecord,
-  sessionId: string,
-  sourceId: string,
-): Promise<typeof brainRuns.$inferSelect | null> {
-  const values = {
-    sessionId,
-    sourceId,
-    operation: brainRun.operation,
-    provider: brainRun.provider,
-    model: brainRun.model,
-    status: brainRun.status,
-    input: brainRun.input,
-    output: brainRun.output,
-    error: brainRun.error,
-    createdAt: brainRun.startedAt,
-    completedAt: brainRun.completedAt,
-  };
+export async function failBrainSeedRun(db: PennyDatabase, prelude: BrainSeedPrelude, error: unknown): Promise<void> {
+  await db
+    .update(brainRuns)
+    .set({
+      status: "failed",
+      error: {
+        name: error instanceof Error ? error.name : "Error",
+        message: formatErrorMessage(error),
+      },
+      completedAt: new Date(),
+    })
+    .where(eq(brainRuns.id, prelude.brainRun.id));
+}
 
-  if (brainRun.id) {
-    const [updated] = await tx.update(brainRuns).set(values).where(eq(brainRuns.id, brainRun.id)).returning();
+type RequiredMove = {
+  id: string;
+  kind: "seed_claim_created" | "assumptions_extracted" | "first_challenge_suggested";
+  summary: string;
+  claimIds: string[];
+  edgeIds: string[];
+};
 
-    if (updated) {
-      return updated;
-    }
-  }
+function buildRequiredMoves(
+  seed: BrainSeedOutput,
+  claimIds: Map<string, string>,
+  edgeIds: Map<string, string>,
+): RequiredMove[] {
+  const assumptionIds = seed.assumptions.map((assumption) => assumption.id).filter((claimId) => claimIds.has(claimId));
+  const dependencyEdgeIds = seed.thoughtMap.edges
+    .map((edge) => edge.id)
+    .filter((edgeId) => edgeIds.has(edgeId));
 
-  return (await tx.insert(brainRuns).values(values).returning())[0] ?? null;
+  return [
+    {
+      id: "move.seed_claim_created",
+      kind: "seed_claim_created",
+      summary: "Created the stable seed claim and its first current version.",
+      claimIds: [seed.seedClaim.id],
+      edgeIds: [],
+    },
+    {
+      id: "move.assumptions_extracted",
+      kind: "assumptions_extracted",
+      summary: "Created assumption claims and current versions from the seed extraction.",
+      claimIds: assumptionIds,
+      edgeIds: dependencyEdgeIds,
+    },
+    {
+      id: "move.first_challenge_suggested",
+      kind: "first_challenge_suggested",
+      summary: "Suggested the first challenge against the weakest load-bearing claim.",
+      claimIds: [seed.firstChallenge.targetClaimId],
+      edgeIds: dependencyEdgeIds.filter((edgeId) => {
+        const edge = seed.thoughtMap.edges.find((candidate) => candidate.id === edgeId);
+
+        return edge?.toClaimId === seed.firstChallenge.targetClaimId;
+      }),
+    },
+  ];
 }
 
 function attachSeedIds<Seed extends { id: string }, Persisted>(
@@ -315,18 +340,10 @@ function requireMappedId(ids: Map<string, string>, seedId: string, label: string
   return persistedId;
 }
 
-function sourceSpanForClaim(rawText: string, claimText: string): { startOffset: number; endOffset: number } {
-  const startOffset = rawText.indexOf(claimText);
-
-  if (startOffset >= 0) {
-    return {
-      startOffset,
-      endOffset: startOffset + claimText.length,
-    };
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
   }
 
-  return {
-    startOffset: 0,
-    endOffset: rawText.length,
-  };
+  return String(error);
 }

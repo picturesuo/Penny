@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { brainRuns } from "./db/schema.ts";
 import {
   BrainSeedProviderError,
   BrainSeedValidationError,
@@ -13,7 +11,14 @@ import {
   type BrainSeedOutput,
   type BrainSeedProvider,
 } from "./seed.ts";
-import { persistBrainSeed, type BrainSeedRunRecord, type PersistedBrainSeed } from "./seed-persistence.ts";
+import {
+  createBrainSeedPrelude,
+  failBrainSeedRun,
+  persistBrainSeed,
+  type BrainSeedPrelude,
+  type BrainSeedRunInput,
+  type PersistedBrainSeed,
+} from "./seed-persistence.ts";
 
 export const BrainSeedRouteRequestSchema = z
   .object({
@@ -39,10 +44,19 @@ export type BrainSeedRouteOptions = {
     input: BrainSeedInput,
     options: { provider?: BrainSeedProvider },
   ) => Promise<BrainSeedOutput>;
+  prepareSeedRun?: (
+    input: BrainSeedInput,
+    options: { db?: PennyDatabase; run: BrainSeedRunInput },
+  ) => Promise<BrainSeedPrelude>;
   persistSeed?: (
     seed: BrainSeedOutput,
-    options: { db?: PennyDatabase; brainRun?: BrainSeedRunRecord },
+    options: { db?: PennyDatabase; prelude: BrainSeedPrelude },
   ) => Promise<PersistedBrainSeed>;
+  failSeedRun?: (
+    prelude: BrainSeedPrelude,
+    error: unknown,
+    options: { db?: PennyDatabase },
+  ) => Promise<void>;
 };
 
 export type BrainSeedUiPayload = ReturnType<typeof buildBrainSeedUiPayload>;
@@ -105,20 +119,29 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
   };
   const provider = options.provider ?? createDefaultBrainSeedProvider();
   const generateSeed = options.generateSeed ?? generateBrainSeed;
+  const db = resolveRouteDb(options);
+  const prepareSeedRun =
+    options.prepareSeedRun ??
+    ((input: BrainSeedInput, prepareOptions: { db?: PennyDatabase; run: BrainSeedRunInput }) =>
+      createBrainSeedPrelude(requireRouteDb(prepareOptions.db), input, prepareOptions.run));
   const persistSeed =
     options.persistSeed ??
-    ((seed: BrainSeedOutput, persistOptions: { db?: PennyDatabase; brainRun?: BrainSeedRunRecord }) =>
-      persistBrainSeed(persistOptions.db ?? createPennyDb(options.databaseUrl), seed, {
-        brainRun: persistOptions.brainRun,
-      }));
+    ((seed: BrainSeedOutput, persistOptions: { db?: PennyDatabase; prelude: BrainSeedPrelude }) =>
+      persistBrainSeed(requireRouteDb(persistOptions.db), persistOptions.prelude, seed));
+  const failSeedRun =
+    options.failSeedRun ??
+    ((prelude: BrainSeedPrelude, error: unknown, failOptions: { db?: PennyDatabase }) =>
+      failBrainSeedRun(requireRouteDb(failOptions.db), prelude, error));
   const startedAt = new Date();
-  let pendingBrainRun = buildPendingBrainSeedRunRecord(seedInput, provider, startedAt);
+  let prelude: BrainSeedPrelude | null = null;
 
   try {
-    pendingBrainRun = await createPendingBrainRun(options, pendingBrainRun);
+    prelude = await prepareSeedRun(seedInput, {
+      ...dbOption(db),
+      run: buildBrainSeedRunInput(seedInput, provider, startedAt),
+    });
     const seed = await generateSeed(seedInput, { provider });
-    const brainRun = buildSucceededBrainSeedRunRecord(pendingBrainRun, seed, new Date());
-    const persisted = await persistSeed(seed, options.db ? { db: options.db, brainRun } : { brainRun });
+    const persisted = await persistSeed(seed, { ...dbOption(db), prelude });
 
     return jsonResponse(
       {
@@ -127,7 +150,9 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
       201,
     );
   } catch (error) {
-    await recordFailedBrainRun(options, buildFailedBrainSeedRunRecord(pendingBrainRun, error));
+    if (prelude) {
+      await failSeedRun(prelude, error, dbOption(db));
+    }
 
     if (error instanceof BrainSeedValidationError) {
       return jsonResponse(
@@ -175,9 +200,6 @@ export function buildBrainSeedUiPayload(
   const claimVersionsBySeedId = new Map(persisted.claimVersions.map((version) => [version.seedId, version]));
   const edgesBySeedId = new Map(persisted.edges.map((edge) => [edge.seedId, edge]));
   const movesBySeedId = new Map(persisted.moves.map((move) => [move.seedId, move]));
-  const artifactsBySeedId = new Map(persisted.artifacts.map((artifact) => [artifact.seedId, artifact]));
-  const ideaMap = seed.artifacts.find((artifact) => artifact.kind === "idea_map");
-  const challengeBrief = seed.artifacts.find((artifact) => artifact.kind === "challenge_brief");
 
   return {
     context,
@@ -192,29 +214,33 @@ export function buildBrainSeedUiPayload(
       kind: persisted.source.kind,
       rawText: persisted.source.rawText,
     },
+    brainRun: {
+      id: persisted.brainRun.id,
+      status: persisted.brainRun.status,
+    },
     ideaMap: {
-      artifactId: ideaMap ? requirePersistedArtifact(artifactsBySeedId, ideaMap.id).id : null,
+      artifactId: null,
       keyInsight: seed.keyInsight,
-      claims: seed.thoughtMap.claims.map((claim) => {
-        const persistedClaim = requirePersistedClaim(claimsBySeedId, claim.id);
-        const persistedVersion = requirePersistedClaimVersion(claimVersionsBySeedId, claim.id);
+      claims: persisted.claims.map((claim) => {
+        const persistedClaim = requirePersistedClaim(claimsBySeedId, claim.seedId);
+        const persistedVersion = requirePersistedClaimVersion(claimVersionsBySeedId, claim.seedId);
 
         return {
           id: persistedClaim.id,
           versionId: persistedVersion.id,
-          seedId: claim.id,
+          seedId: persistedClaim.seedId,
           kind: persistedClaim.kind,
           status: persistedVersion.status,
           text: persistedVersion.content,
           confidence: persistedVersion.confidence,
         };
       }),
-      edges: seed.thoughtMap.edges.map((edge) => {
-        const persistedEdge = requirePersistedEdge(edgesBySeedId, edge.id);
+      edges: persisted.edges.map((edge) => {
+        const persistedEdge = requirePersistedEdge(edgesBySeedId, edge.seedId);
 
         return {
           id: persistedEdge.id,
-          seedId: edge.id,
+          seedId: persistedEdge.seedId,
           fromClaimId: persistedEdge.fromClaimId,
           toClaimId: persistedEdge.toClaimId,
           kind: persistedEdge.kind,
@@ -236,37 +262,19 @@ export function buildBrainSeedUiPayload(
       claimId: requirePersistedClaim(claimsBySeedId, candidate.claimId).id,
       seedClaimId: candidate.claimId,
     })),
-    challengeBrief: challengeBrief
-      ? {
-          artifactId: requirePersistedArtifact(artifactsBySeedId, challengeBrief.id).id,
-          title: challengeBrief.title,
-          summary: challengeBrief.summary,
-        }
-      : null,
-    artifacts: seed.artifacts.map((artifact) => {
-      const persistedArtifact = requirePersistedArtifact(artifactsBySeedId, artifact.id);
-
-      return {
-        id: persistedArtifact.id,
-        seedId: artifact.id,
-        kind: persistedArtifact.kind,
-        title: persistedArtifact.title,
-        summary: persistedArtifact.summary,
-        claimIds: artifact.claimIds.map((claimId) => requirePersistedClaim(claimsBySeedId, claimId).id),
-        edgeIds: artifact.edgeIds.map((edgeId) => requirePersistedEdge(edgesBySeedId, edgeId).id),
-      };
-    }),
-    moves: seed.moves.map((move) => {
-      const persistedMove = requirePersistedMove(movesBySeedId, move.id);
+    challengeBrief: null,
+    artifacts: [],
+    moves: persisted.moves.map((move) => {
+      const persistedMove = requirePersistedMove(movesBySeedId, move.seedId);
 
       return {
         id: persistedMove.id,
-        seedId: move.id,
+        seedId: persistedMove.seedId,
         kind: persistedMove.kind,
         summary: persistedMove.summary,
-        claimIds: move.claimIds.map((claimId) => requirePersistedClaim(claimsBySeedId, claimId).id),
-        edgeIds: move.edgeIds.map((edgeId) => requirePersistedEdge(edgesBySeedId, edgeId).id),
-        artifactIds: move.artifactIds.map((artifactId) => requirePersistedArtifact(artifactsBySeedId, artifactId).id),
+        claimIds: payloadIdArray(persistedMove.payload, "claimIds"),
+        edgeIds: payloadIdArray(persistedMove.payload, "edgeIds"),
+        artifactIds: [],
       };
     }),
   };
@@ -338,125 +346,56 @@ function formatErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function buildPendingBrainSeedRunRecord(
+function buildBrainSeedRunInput(
   input: BrainSeedInput,
   provider: BrainSeedProvider,
   startedAt: Date,
-): BrainSeedRunRecord {
+): BrainSeedRunInput {
   return {
     operation: "brain.seed",
     provider: provider.name,
     model: provider.name === "xai" ? resolveXaiBrainSeedModel() : null,
-    status: "pending",
     input,
     startedAt,
   };
 }
 
-async function createPendingBrainRun(
-  options: BrainSeedRouteOptions,
-  brainRun: BrainSeedRunRecord,
-): Promise<BrainSeedRunRecord> {
-  const db = resolveBrainRunDb(options);
-
-  if (!db) {
-    return brainRun;
-  }
-
-  const [created] = await db
-    .insert(brainRuns)
-    .values({
-      operation: brainRun.operation,
-      provider: brainRun.provider,
-      model: brainRun.model,
-      status: brainRun.status,
-      input: brainRun.input,
-      createdAt: brainRun.startedAt,
-    })
-    .returning();
-
-  return {
-    ...brainRun,
-    id: created?.id,
-  };
-}
-
-function buildSucceededBrainSeedRunRecord(
-  pending: BrainSeedRunRecord,
-  output: BrainSeedOutput,
-  completedAt: Date,
-): BrainSeedRunRecord {
-  return {
-    ...pending,
-    status: "succeeded",
-    output,
-    completedAt,
-  };
-}
-
-function buildFailedBrainSeedRunRecord(
-  pending: BrainSeedRunRecord,
-  error: unknown,
-): BrainSeedRunRecord {
-  return {
-    ...pending,
-    status: "failed",
-    error: {
-      name: error instanceof Error ? error.name : "Error",
-      message: formatErrorMessage(error),
-    },
-    completedAt: new Date(),
-  };
-}
-
-async function recordFailedBrainRun(options: BrainSeedRouteOptions, brainRun: BrainSeedRunRecord): Promise<void> {
-  const db = resolveBrainRunDb(options);
-
-  if (!db) {
-    return;
-  }
-
-  try {
-    const values = {
-      operation: brainRun.operation,
-      provider: brainRun.provider,
-      model: brainRun.model,
-      status: brainRun.status,
-      input: brainRun.input,
-      error: brainRun.error,
-      createdAt: brainRun.startedAt,
-      completedAt: brainRun.completedAt,
-    };
-
-    if (brainRun.id) {
-      await db.update(brainRuns).set(values).where(eq(brainRuns.id, brainRun.id));
-      return;
-    }
-
-    await db.insert(brainRuns).values(values);
-  } catch {
-    // Preserve the original API error; failed run recording is best-effort when no session exists yet.
-  }
-}
-
-function resolveBrainRunDb(options: BrainSeedRouteOptions): PennyDatabase | null {
+function resolveRouteDb(options: BrainSeedRouteOptions): PennyDatabase | undefined {
   if (options.db) {
     return options.db;
   }
 
-  if (options.persistSeed) {
-    return null;
+  if (options.prepareSeedRun && options.persistSeed) {
+    return undefined;
   }
 
-  if (!options.databaseUrl && !process.env.DATABASE_URL?.trim()) {
-    return null;
+  return createPennyDb(options.databaseUrl);
+}
+
+function requireRouteDb(db: PennyDatabase | undefined): PennyDatabase {
+  if (!db) {
+    throw new Error("A Penny database is required for POST /brain/seed persistence.");
   }
 
-  try {
-    return createPennyDb(options.databaseUrl);
-  } catch {
-    return null;
+  return db;
+}
+
+function dbOption(db: PennyDatabase | undefined): { db?: PennyDatabase } {
+  return db ? { db } : {};
+}
+
+function payloadIdArray(payload: unknown, key: "claimIds" | "edgeIds"): string[] {
+  if (!payload || typeof payload !== "object") {
+    return [];
   }
+
+  const items = (payload as Record<string, unknown>)[key];
+
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.filter((value: unknown): value is string => typeof value === "string");
 }
 
 function requirePersistedClaim(claimsBySeedId: Map<string, PersistedBrainSeed["claims"][number]>, seedId: string) {
@@ -490,19 +429,6 @@ function requirePersistedEdge(edgesBySeedId: Map<string, PersistedBrainSeed["edg
   }
 
   return edge;
-}
-
-function requirePersistedArtifact(
-  artifactsBySeedId: Map<string, PersistedBrainSeed["artifacts"][number]>,
-  seedId: string,
-) {
-  const artifact = artifactsBySeedId.get(seedId);
-
-  if (!artifact) {
-    throw new Error(`Missing persisted artifact for seed id ${seedId}.`);
-  }
-
-  return artifact;
 }
 
 function requirePersistedMove(movesBySeedId: Map<string, PersistedBrainSeed["moves"][number]>, seedId: string) {

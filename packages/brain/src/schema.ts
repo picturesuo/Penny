@@ -21,6 +21,9 @@ export const FailureTypeSchema = z.enum([
   "definition_failure",
 ]);
 export const MoveKindSchema = z.enum([
+  "seed_claim_created",
+  "assumptions_extracted",
+  "first_challenge_suggested",
   "source.recorded",
   "claim.created",
   "edge.created",
