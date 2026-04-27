@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const sessionStatusEnum = pgEnum("session_status", ["open", "completed"]);
-export const sourceKindEnum = pgEnum("source_kind", ["raw_idea"]);
+export const sourceKindEnum = pgEnum("source_kind", ["raw_idea", "verification_citation"]);
 export const claimKindEnum = pgEnum("claim_kind", ["belief", "assumption", "question", "concept"]);
 export const claimStatusEnum = pgEnum("claim_status", ["exploratory", "committed", "resolved", "rejected"]);
 export const claimEdgeKindEnum = pgEnum("claim_edge_kind", [
@@ -27,6 +27,7 @@ export const moveKindEnum = pgEnum("move_kind", [
   "claim_revised",
   "critique_absorbed",
   "learning_triggered",
+  "verify_run",
   "artifact_created",
   "source.recorded",
   "claim.created",
