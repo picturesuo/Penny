@@ -6,6 +6,7 @@ import {
   artifacts,
   brainRuns,
   claimEdgeKindEnum,
+  claimEdgeStatusEnum,
   claimEdges,
   claimKindEnum,
   claimStatusEnum,
@@ -35,13 +36,25 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
 test("Penny schema keeps core enum values narrow for the MVP", () => {
   assert.deepEqual(claimKindEnum.enumValues, ["belief", "assumption", "question", "concept"]);
   assert.ok(claimStatusEnum.enumValues.includes("rejected"));
-  assert.deepEqual(claimEdgeKindEnum.enumValues, ["depends_on", "supports", "questions", "challenges", "clarifies"]);
+  assert.deepEqual(claimEdgeKindEnum.enumValues, [
+    "depends_on",
+    "supports",
+    "questions",
+    "challenges",
+    "contradicts",
+    "clarifies",
+  ]);
+  assert.deepEqual(claimEdgeStatusEnum.enumValues, ["active", "acknowledged_vulnerability"]);
   assert.ok(moveKindEnum.enumValues.includes("seed_claim_created"));
   assert.ok(moveKindEnum.enumValues.includes("assumptions_extracted"));
   assert.ok(moveKindEnum.enumValues.includes("first_challenge_suggested"));
   assert.ok(moveKindEnum.enumValues.includes("assumption_confirmed"));
   assert.ok(moveKindEnum.enumValues.includes("assumption_rejected"));
   assert.ok(moveKindEnum.enumValues.includes("assumption_refined"));
+  assert.ok(moveKindEnum.enumValues.includes("challenge_issued"));
+  assert.ok(moveKindEnum.enumValues.includes("user_defended"));
+  assert.ok(moveKindEnum.enumValues.includes("claim_revised"));
+  assert.ok(moveKindEnum.enumValues.includes("critique_absorbed"));
   assert.deepEqual(artifactKindEnum.enumValues, ["idea_map", "challenge_brief"]);
 });
 
@@ -51,6 +64,7 @@ test("Penny schema has a clean aggregate export surface", () => {
     "artifacts",
     "brainRuns",
     "claimEdgeKindEnum",
+    "claimEdgeStatusEnum",
     "claimEdges",
     "claimKindEnum",
     "claimStatusEnum",
