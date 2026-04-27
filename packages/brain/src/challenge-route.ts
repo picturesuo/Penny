@@ -1,8 +1,10 @@
 import { and, desc, eq } from "drizzle-orm";
+import { createXai } from "@ai-sdk/xai";
+import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claimVersions, claims, moves } from "./db/schema.ts";
-import { FailureTypeSchema } from "./schema.ts";
+import { FailureTypeSchema, flattenIssues } from "./schema.ts";
 
 const ChallengeRequestSchema = z
   .object({
@@ -10,7 +12,19 @@ const ChallengeRequestSchema = z
   })
   .strict();
 
-const ChallengeOutputSchema = z
+export const ChallengeProviderSchema = z
+  .object({
+    critique: z.string(),
+    failureType: FailureTypeSchema,
+    strength: z.enum(["weak", "moderate", "strong"]),
+    provenanceTag: z.string(),
+    whyThisCritique: z.string(),
+    whatWouldResolveIt: z.string(),
+    suggestedNextMove: z.string(),
+  })
+  .strict();
+
+export const ChallengeOutputSchema = z
   .object({
     critique: z.string().trim().min(1).max(900),
     failureType: FailureTypeSchema,
@@ -49,7 +63,43 @@ const ChallengeResponseRequestSchema = z.discriminatedUnion("response", [
 
 export type ChallengeRequest = z.infer<typeof ChallengeRequestSchema>;
 export type ChallengeOutput = z.infer<typeof ChallengeOutputSchema>;
+export type ChallengeProviderOutput = z.infer<typeof ChallengeProviderSchema>;
 export type ChallengeResponseRequest = z.infer<typeof ChallengeResponseRequestSchema>;
+
+export type ChallengeGenerationInput = {
+  targetClaimId: string;
+  targetKind: "belief" | "assumption" | "question" | "concept";
+  targetText: string;
+  targetStatus: "exploratory" | "committed" | "resolved" | "rejected";
+  targetConfidence: number;
+};
+
+const challengeOutputSpec = Output.object<ChallengeProviderOutput>({
+  schema: ChallengeProviderSchema,
+  name: "penny_brain_challenge",
+  description: "A targeted Penny challenge against one stable claim.",
+});
+
+export type ChallengeGenerateText = (request: {
+  model: LanguageModel;
+  system: string;
+  prompt: string;
+  output: typeof challengeOutputSpec;
+  maxRetries: number;
+  providerOptions: {
+    xai: {
+      reasoningEffort: "medium";
+      store: false;
+    };
+  };
+}) => Promise<{ output: unknown }>;
+
+export type ChallengeProvider = {
+  name: string;
+  generate(input: ChallengeGenerationInput): Promise<unknown>;
+};
+
+export const defaultXaiBrainChallengeModel = "grok-4.20-reasoning";
 
 export type PersistedChallenge = ChallengeOutput & {
   targetClaim: PersistedClaimSlice;
@@ -180,25 +230,40 @@ export class ChallengeConflictError extends Error {
   }
 }
 
+export class ChallengeGenerationError extends Error {
+  constructor(
+    message: string,
+    readonly issues: string[] = [],
+  ) {
+    super(message);
+    this.name = "ChallengeGenerationError";
+  }
+}
+
+export class ChallengeProviderError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ChallengeProviderError";
+  }
+}
+
 export async function persistChallenge(db: PennyDatabase, input: ChallengeRequest): Promise<PersistedChallenge> {
-  return db.transaction(async (tx) => {
+  const prelude = await db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.targetClaimId);
-    const challenge = buildChallengeOutput(target.version.content);
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
         sessionId: target.claim.sessionId,
         sourceId: target.claim.sourceId,
         operation: "brain.challenge",
-        provider: "heuristic",
-        model: null,
-        status: "succeeded",
+        provider: createDefaultChallengeProvider().name,
+        model: process.env.XAI_API_KEY?.trim() ? resolveXaiBrainChallengeModel() : null,
+        status: "running",
         input: {
           targetClaimId: target.claim.id,
           targetClaimVersionId: target.version.id,
+          targetText: target.version.content,
         },
-        output: challenge,
-        completedAt: new Date(),
       })
       .returning();
 
@@ -206,11 +271,18 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
       throw new ChallengeConflictError("Failed to record challenge BrainRun.");
     }
 
+    return { target, brainRun };
+  });
+
+  try {
+    const challenge = await generateChallengeOutput(challengeGenerationInput(prelude.target));
+
+    return await db.transaction(async (tx) => {
     const [critiqueClaim] = await tx
       .insert(claims)
       .values({
-        sessionId: target.claim.sessionId,
-        sourceId: target.claim.sourceId,
+        sessionId: prelude.target.claim.sessionId,
+        sourceId: prelude.target.claim.sourceId,
         kind: "belief",
         status: "exploratory",
         text: challenge.critique,
@@ -226,7 +298,7 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
       .insert(claimVersions)
       .values({
         claimId: critiqueClaim.id,
-        sourceId: target.claim.sourceId,
+        sourceId: prelude.target.claim.sourceId,
         content: challenge.critique,
         status: "exploratory",
         confidence: critiqueClaim.confidence,
@@ -241,9 +313,9 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
     const [edge] = await tx
       .insert(claimEdges)
       .values({
-        sessionId: target.claim.sessionId,
+        sessionId: prelude.target.claim.sessionId,
         fromClaimId: critiqueClaim.id,
-        toClaimId: target.claim.id,
+        toClaimId: prelude.target.claim.id,
         kind: "challenges",
         status: "active",
         label: challenge.failureType,
@@ -255,36 +327,55 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
     }
 
     const move = await createChallengeMove(tx, {
-      sessionId: target.claim.sessionId,
+      sessionId: prelude.target.claim.sessionId,
       kind: "challenge_issued",
       summary: "Issued a first challenge against the target claim.",
-      claimIds: [target.claim.id, critiqueClaim.id],
+      claimIds: [prelude.target.claim.id, critiqueClaim.id],
       edgeIds: [edge.id],
       payload: {
-        targetClaimId: target.claim.id,
-        targetClaimVersionId: target.version.id,
+        targetClaimId: prelude.target.claim.id,
+        targetClaimVersionId: prelude.target.version.id,
         critiqueClaimId: critiqueClaim.id,
         critiqueClaimVersionId: critiqueVersion.id,
         challengeEdgeId: edge.id,
-        brainRunId: brainRun.id,
+        brainRunId: prelude.brainRun.id,
         failureType: challenge.failureType,
         strength: challenge.strength,
         provenanceTag: challenge.provenanceTag,
       },
     });
 
+    const [completedBrainRun] = await tx
+      .update(brainRuns)
+      .set({
+        status: "succeeded",
+        output: challenge,
+        error: null,
+        completedAt: new Date(),
+      })
+      .where(eq(brainRuns.id, prelude.brainRun.id))
+      .returning();
+
+    if (!completedBrainRun) {
+      throw new ChallengeConflictError("Failed to complete challenge BrainRun.");
+    }
+
     return {
       ...challenge,
-      targetClaim: claimSlice(target.claim, target.version),
+      targetClaim: claimSlice(prelude.target.claim, prelude.target.version),
       critiqueClaim: claimSlice(critiqueClaim, critiqueVersion),
       challengeEdge: edgeSlice(edge),
       move,
       brainRun: {
-        id: brainRun.id,
-        status: brainRun.status,
+        id: completedBrainRun.id,
+        status: completedBrainRun.status,
       },
     };
   });
+  } catch (error) {
+    await markChallengeRunFailed(db, prelude.brainRun.id, error);
+    throw error;
+  }
 }
 
 export async function persistChallengeResponse(
@@ -499,6 +590,132 @@ async function createChallengeMove(
   };
 }
 
+export async function generateChallengeOutput(
+  input: ChallengeGenerationInput,
+  options: { provider?: ChallengeProvider } = {},
+): Promise<ChallengeOutput> {
+  const provider = options.provider ?? createDefaultChallengeProvider();
+  const providerOutput = await provider.generate(input);
+
+  return parseChallengeOutput(providerOutput);
+}
+
+export function parseChallengeOutput(output: unknown): ChallengeOutput {
+  const providerParsed = ChallengeProviderSchema.safeParse(output);
+
+  if (!providerParsed.success) {
+    throw new ChallengeGenerationError(
+      "Challenge provider output failed validation.",
+      flattenIssues(providerParsed.error),
+    );
+  }
+
+  const strictParsed = ChallengeOutputSchema.safeParse(providerParsed.data);
+
+  if (!strictParsed.success) {
+    throw new ChallengeGenerationError("Challenge output failed strict validation.", flattenIssues(strictParsed.error));
+  }
+
+  return strictParsed.data;
+}
+
+export function createDefaultChallengeProvider(
+  env: Record<string, string | undefined> = process.env,
+): ChallengeProvider {
+  if (env.XAI_API_KEY?.trim()) {
+    return createXaiChallengeProvider(env);
+  }
+
+  return createHeuristicChallengeProvider();
+}
+
+export function createHeuristicChallengeProvider(): ChallengeProvider {
+  return {
+    name: "heuristic",
+    async generate(input) {
+      return buildChallengeOutput(input.targetText);
+    },
+  };
+}
+
+export function createXaiChallengeProvider(
+  env: Record<string, string | undefined> = process.env,
+  options: { generateText?: ChallengeGenerateText } = {},
+): ChallengeProvider {
+  return {
+    name: "xai",
+    async generate(input) {
+      const apiKey = env.XAI_API_KEY?.trim();
+
+      if (!apiKey) {
+        throw new ChallengeProviderError("XAI_API_KEY is required for the xAI challenge provider.");
+      }
+
+      const xai = createXai(createXaiSettings(apiKey, env));
+      const callGenerateText = options.generateText ?? generateStructuredChallenge;
+
+      try {
+        const result = await callGenerateText({
+          model: xai.responses(resolveXaiBrainChallengeModel(env)),
+          system: buildChallengeSystemPrompt(),
+          prompt: buildChallengePrompt(input),
+          output: challengeOutputSpec,
+          maxRetries: 1,
+          providerOptions: {
+            xai: {
+              reasoningEffort: "medium",
+              store: false,
+            },
+          },
+        });
+
+        return result.output;
+      } catch (error) {
+        if (error instanceof ChallengeProviderError) {
+          throw error;
+        }
+
+        throw new ChallengeProviderError(`xAI challenge request failed: ${formatErrorMessage(error)}`);
+      }
+    },
+  };
+}
+
+export function resolveXaiBrainChallengeModel(env: Record<string, string | undefined> = process.env): string {
+  return env.XAI_BRAIN_CHALLENGE_MODEL?.trim() || env.XAI_MODEL?.trim() || defaultXaiBrainChallengeModel;
+}
+
+export function buildChallengeSystemPrompt(): string {
+  return [
+    "You are Penny, a controllable thinking instrument enhanced by AI.",
+    "Challenge one stable claim inside Brain. Do not drift into generic advice or chat.",
+    "Attack the weakest load-bearing structure in the target claim.",
+    "Do not invent citations, market facts, or external evidence.",
+    "Return only the structured challenge object.",
+  ].join("\n");
+}
+
+export function buildChallengePrompt(input: ChallengeGenerationInput): string {
+  return [
+    "Create a Penny challenge for the target claim.",
+    "",
+    "Return:",
+    "- critique: a direct challenge the user can Defend, Revise, or Absorb.",
+    "- failureType: weak_evidence, missing_counterargument, shaky_assumption, analogy_break, dependency_risk, unaddressed_precedent, premise_rejection, or definition_failure.",
+    "- strength: weak, moderate, or strong.",
+    "- provenanceTag: a compact internal tag beginning with penny:challenge.",
+    "- whyThisCritique: why this is the load-bearing weakness.",
+    "- whatWouldResolveIt: what would make the critique weaker or resolved.",
+    "- suggestedNextMove: a concise next action.",
+    "",
+    `Target claim id: ${input.targetClaimId}`,
+    `Target kind: ${input.targetKind}`,
+    `Target status: ${input.targetStatus}`,
+    `Target confidence: ${input.targetConfidence}`,
+    `Target text: ${input.targetText}`,
+  ].join("\n");
+}
+
 function buildChallengeOutput(targetText: string): ChallengeOutput {
   const parsed = ChallengeOutputSchema.safeParse({
     critique: `This claim is vulnerable if "${targetText}" depends on a hidden premise the user has not defended yet.`,
@@ -517,6 +734,46 @@ function buildChallengeOutput(targetText: string): ChallengeOutput {
   }
 
   return parsed.data;
+}
+
+function challengeGenerationInput(target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>): ChallengeGenerationInput {
+  return {
+    targetClaimId: target.claim.id,
+    targetKind: target.claim.kind,
+    targetText: target.version.content,
+    targetStatus: target.version.status,
+    targetConfidence: target.version.confidence,
+  };
+}
+
+async function markChallengeRunFailed(db: PennyDatabase, brainRunId: string, error: unknown): Promise<void> {
+  await db
+    .update(brainRuns)
+    .set({
+      status: "failed",
+      error: {
+        name: error instanceof Error ? error.name : "Error",
+        message: formatErrorMessage(error),
+      },
+      completedAt: new Date(),
+    })
+    .where(eq(brainRuns.id, brainRunId));
+}
+
+async function generateStructuredChallenge(request: Parameters<ChallengeGenerateText>[0]): Promise<{ output: unknown }> {
+  const result = await generateText(request);
+
+  return { output: result.output };
+}
+
+function createXaiSettings(apiKey: string, env: Record<string, string | undefined>) {
+  const baseURL = env.XAI_BASE_URL?.trim();
+
+  if (!baseURL) {
+    return { apiKey };
+  }
+
+  return { apiKey, baseURL: baseURL.replace(/\/+$/, "") };
 }
 
 function confidenceForStrength(strength: ChallengeOutput["strength"]): number {
@@ -646,6 +903,31 @@ function challengeErrorResponse(error: unknown): Response {
         },
       },
       409,
+    );
+  }
+
+  if (error instanceof ChallengeGenerationError) {
+    return jsonResponse(
+      {
+        error: {
+          code: "invalid_challenge_output",
+          message: error.message,
+          issues: error.issues,
+        },
+      },
+      502,
+    );
+  }
+
+  if (error instanceof ChallengeProviderError) {
+    return jsonResponse(
+      {
+        error: {
+          code: "challenge_provider_failed",
+          message: error.message,
+        },
+      },
+      502,
     );
   }
 
