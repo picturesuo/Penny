@@ -196,6 +196,7 @@ button {
 
 .compact-surface,
 .learn-surface,
+.verify-surface,
 .insight-surface,
 .exploration-surface,
 .hero-surface {
@@ -707,6 +708,7 @@ textarea:focus {
 
 .learn-surface .stack-list,
 .compact-surface .stack-list,
+.verify-surface .stack-list,
 .artifact-surface .stack-list {
   padding: 13px 14px 14px;
 }
@@ -798,23 +800,58 @@ textarea:focus {
 }
 
 .artifact-card,
-.artifact-list {
+.artifact-list,
+.verify-card,
+.verify-evidence,
+.verify-note {
   display: grid;
   gap: 7px;
   padding: 10px 0;
   border-top: 1px solid var(--line);
 }
 
-.artifact-card:first-child {
+.artifact-card:first-child,
+.verify-card:first-child {
   border-top: 0;
 }
 
 .artifact-card p,
 .artifact-card small,
-.artifact-list p {
+.artifact-list p,
+.verify-card p,
+.verify-card small,
+.verify-evidence p,
+.verify-evidence small,
+.verify-note p {
   margin: 0;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.verify-evidence strong {
+  line-height: 1.25;
+}
+
+.verify-decision {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.verify-decision button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--field);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.verify-decision button:disabled {
+  cursor: default;
+  border-color: rgba(15, 118, 110, 0.42);
+  background: #e5efe8;
 }
 
 .tag {
