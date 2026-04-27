@@ -12,10 +12,12 @@ import {
   defaultXaiInlineLearnModel,
   generateInlineLearnOutput,
   handleInlineLearnRequest,
+  handleInlineLearnSaveRequest,
   parseInlineLearnOutput,
   resolveXaiInlineLearnModel,
   type InlineLearnGenerateText,
   type InlineLearnRequest,
+  type InlineLearnSaveRequest,
 } from "./inline-learn-route.ts";
 
 test("POST /brain/learn/inline validates requests before running Learn", async () => {
@@ -117,6 +119,44 @@ test("POST /brain/learn/inline can save the concept claim, teaches edge, and lea
   };
 
   assert.equal(response.status, 201);
+  assert.equal(payload.data.saved.conceptClaim.kind, "concept");
+  assert.equal(payload.data.saved.teachesEdge.kind, "teaches");
+  assert.equal(payload.data.saved.teachesEdge.toClaimId, currentClaimId);
+  assert.equal(payload.data.saved.move.kind, "learning_triggered");
+  assert.deepEqual(payload.data.saved.move.claimIds, [currentClaimId, uuidAt(301)]);
+  assert.deepEqual(payload.data.saved.move.edgeIds, [uuidAt(401)]);
+});
+
+test("POST /brain/learn/inline/save persists the displayed explanation without generation", async () => {
+  const currentClaimId = uuidAt(101);
+  let inputSeen: InlineLearnSaveRequest | undefined;
+  const response = await handleInlineLearnSaveRequest(
+    request("http://localhost/brain/learn/inline/save", {
+      ...learnOutput("desirable difficulty"),
+      currentClaimId,
+      sessionId: uuidAt(100),
+    }),
+    {
+      async saveInlineLearn(input) {
+        inputSeen = input;
+
+        return savedConcept(input.term, currentClaimId);
+      },
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      saved: {
+        conceptClaim: { kind: string; text: string };
+        teachesEdge: { kind: string; toClaimId: string };
+        move: { kind: string; claimIds: string[]; edgeIds: string[] };
+      };
+    };
+  };
+
+  assert.equal(response.status, 201);
+  assert.equal(inputSeen?.term, "desirable difficulty");
+  assert.equal(inputSeen?.currentClaimId, currentClaimId);
   assert.equal(payload.data.saved.conceptClaim.kind, "concept");
   assert.equal(payload.data.saved.teachesEdge.kind, "teaches");
   assert.equal(payload.data.saved.teachesEdge.toClaimId, currentClaimId);
