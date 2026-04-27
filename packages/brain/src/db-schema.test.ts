@@ -57,7 +57,8 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
   assert.ok(moveKindEnum.enumValues.includes("claim_revised"));
   assert.ok(moveKindEnum.enumValues.includes("critique_absorbed"));
   assert.ok(moveKindEnum.enumValues.includes("learning_triggered"));
-  assert.deepEqual(artifactKindEnum.enumValues, ["idea_map", "challenge_brief"]);
+  assert.ok(moveKindEnum.enumValues.includes("artifact_created"));
+  assert.deepEqual(artifactKindEnum.enumValues, ["idea_map", "challenge_brief", "idea_map_challenge_brief"]);
 });
 
 test("Penny schema has a clean aggregate export surface", () => {
