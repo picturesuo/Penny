@@ -24,11 +24,14 @@ The first loop can include Learn only when confusion appears; it should not beco
 
 ## Core Objects
 
-- Claim: a belief, assumption, question, or concept.
-- Edge: a typed relationship between claims.
-- Move: an immutable thinking event.
+- Claim: stable identity for a belief, assumption, question, counterargument, or concept.
+- ClaimVersion: claim content, confidence, status, validity, and current/old state.
+- ClaimEdge: a typed relationship between claims.
+- Move: an immutable, append-only thinking event.
+- BrainRun: one AI operation against the thinking graph.
 - Shape: an inferred pattern in how the user thinks.
 - Source: the one raw idea entered for the MVP loop. Documents, chats, and web sources are post-MVP source types.
+- SourceSpan: provenance for claim content and AI-derived structure.
 - Session: one bounded thinking loop.
 - Artifact: useful output from a session.
 - WikiPage: a compiled readable view, not source of truth.
@@ -36,9 +39,14 @@ The first loop can include Learn only when confusion appears; it should not beco
 ## Product Rules
 
 - No generic chatbot sidebar.
-- Meaningful changes create Moves.
-- Current state is derived from claims, edges, and moves.
-- AI output must be typed and validated before it can affect product state.
+- Meaningful changes create Moves; Moves are immutable and append-only.
+- Every AI operation creates a BrainRun.
+- Current state is derived from claims, claim versions, edges, and moves.
+- Assumptions are claims connected by depends_on edges.
+- Counterarguments are claims connected by contradicts/challenges edges.
+- Learn concepts are claims of kind=concept connected by teaches edges.
+- Backend returns graph slices; frontend does not invent graph edges.
+- AI output uses provider-safe schemas plus strict local validation before it can affect product state.
 - Keep the MVP narrow until the first loop works end to end.
 
 ## Not Before MVP
