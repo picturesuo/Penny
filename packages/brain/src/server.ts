@@ -4,6 +4,7 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
+import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
 
 const port = parsePort(process.env.PORT);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
@@ -15,6 +16,16 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/seed") {
       await writeWebResponse(outgoing, await handleBrainSeedRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/brain/challenge") {
+      await writeWebResponse(outgoing, await handleChallengeRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/brain/challenge/respond") {
+      await writeWebResponse(outgoing, await handleChallengeRespondRequest(request));
       return;
     }
 
