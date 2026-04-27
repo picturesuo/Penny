@@ -1,37 +1,47 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { createPennyDb } from "./db/client.ts";
+import { readFile } from "node:fs/promises";
+import { extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 
 const port = parsePort(process.env.PORT);
-const db = createPennyDb();
+const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 
 const server = createServer(async (incoming, outgoing) => {
   try {
     const request = await toWebRequest(incoming);
     const url = new URL(request.url);
 
-    if (url.pathname !== "/brain/seed") {
-      await writeWebResponse(
-        outgoing,
-        new Response(
-          JSON.stringify({
-            error: {
-              code: "not_found",
-              message: "Route not found.",
-            },
-          }),
-          {
-            status: 404,
-            headers: {
-              "content-type": "application/json; charset=utf-8",
-            },
-          },
-        ),
-      );
+    if (url.pathname === "/brain/seed") {
+      await writeWebResponse(outgoing, await handleBrainSeedRequest(request));
       return;
     }
 
-    await writeWebResponse(outgoing, await handleBrainSeedRequest(request, { db }));
+    const staticResponse = await readStaticAsset(url.pathname);
+
+    if (staticResponse) {
+      await writeWebResponse(outgoing, staticResponse);
+      return;
+    }
+
+    await writeWebResponse(
+      outgoing,
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "not_found",
+            message: "Route not found.",
+          },
+        }),
+        {
+          status: 404,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        },
+      ),
+    );
+    return;
   } catch (error) {
     await writeWebResponse(
       outgoing,
@@ -54,7 +64,7 @@ const server = createServer(async (incoming, outgoing) => {
 });
 
 server.listen(port, () => {
-  console.log(`Penny API listening on http://localhost:${port}`);
+  console.log(`Penny cockpit listening on http://localhost:${port}`);
 });
 
 function parsePort(value: string | undefined): number {
@@ -119,4 +129,38 @@ async function writeWebResponse(outgoing: ServerResponse, response: Response): P
   });
 
   outgoing.end(Buffer.from(await response.arrayBuffer()));
+}
+
+async function readStaticAsset(pathname: string): Promise<Response | null> {
+  const normalizedPath = pathname === "/" ? "/index.html" : pathname;
+
+  if (normalizedPath.includes("..")) {
+    return null;
+  }
+
+  try {
+    const body = await readFile(join(publicDir, normalizedPath));
+
+    return new Response(body, {
+      status: 200,
+      headers: {
+        "content-type": contentTypeFor(normalizedPath),
+      },
+    });
+  } catch {
+    return null;
+  }
+}
+
+function contentTypeFor(pathname: string): string {
+  switch (extname(pathname)) {
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".js":
+      return "text/javascript; charset=utf-8";
+    case ".html":
+      return "text/html; charset=utf-8";
+    default:
+      return "application/octet-stream";
+  }
 }

@@ -106,6 +106,14 @@ export async function persistBrainSeed(db: PennyDatabase, seed: BrainSeedOutput)
               edgeIds: artifact.edgeIds.map((edgeId) => requireMappedId(edgeIds, edgeId, "artifact.edgeId")),
               firstChallenge: artifact.kind === "challenge_brief" ? seed.firstChallenge : undefined,
               explorationPaths: artifact.kind === "idea_map" ? seed.explorationPaths : undefined,
+              learnCandidates:
+                artifact.kind === "idea_map"
+                  ? seed.learnCandidates.map((candidate) => ({
+                      ...candidate,
+                      claimId: requireMappedId(claimIds, candidate.claimId, "learnCandidate.claimId"),
+                      seedClaimId: candidate.claimId,
+                    }))
+                  : undefined,
               keyInsight: artifact.kind === "idea_map" ? seed.keyInsight : undefined,
             },
           })),

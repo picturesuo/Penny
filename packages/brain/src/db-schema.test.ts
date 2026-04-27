@@ -4,6 +4,7 @@ import { getTableName } from "drizzle-orm";
 import {
   artifactKindEnum,
   artifacts,
+  claimEdgeKindEnum,
   claimEdges,
   claimKindEnum,
   claims,
@@ -25,6 +26,7 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
 
 test("Penny schema keeps core enum values narrow for the MVP", () => {
   assert.deepEqual(claimKindEnum.enumValues, ["belief", "assumption", "question", "concept"]);
+  assert.deepEqual(claimEdgeKindEnum.enumValues, ["depends_on", "supports", "questions", "challenges", "clarifies"]);
   assert.deepEqual(artifactKindEnum.enumValues, ["idea_map", "challenge_brief"]);
 });
 

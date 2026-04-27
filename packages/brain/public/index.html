@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Penny Brain</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="top-nav">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div>
+            <p class="eyebrow">Penny</p>
+            <h1>Brain</h1>
+          </div>
+        </div>
+        <nav aria-label="Modes" class="mode-tabs">
+          <button class="mode-tab active" type="button">Brain</button>
+          <button class="mode-tab" type="button">Challenge</button>
+          <button class="mode-tab" type="button">Makes Cents</button>
+        </nav>
+        <div class="session-strip">
+          <span id="sessionStatus">No session</span>
+          <label class="mock-toggle">
+            <input id="mockMode" type="checkbox" />
+            <span>Mock</span>
+          </label>
+        </div>
+      </header>
+
+      <main class="cockpit" aria-live="polite">
+        <aside class="panel left-panel" aria-label="Thought map">
+          <section class="surface map-surface">
+            <div class="section-heading">
+              <p class="eyebrow">Thought Map</p>
+              <span id="mapCount">0 claims</span>
+            </div>
+            <div id="thoughtMap" class="thought-map empty-state">
+              <p>Enter a raw idea to create the first map.</p>
+            </div>
+          </section>
+
+          <section class="surface compact-surface">
+            <div class="section-heading">
+              <p class="eyebrow">Later</p>
+              <span id="laterCount">0</span>
+            </div>
+            <div id="laterList" class="stack-list">
+              <p class="quiet">Exploration paths will collect here.</p>
+            </div>
+          </section>
+
+          <section class="surface compact-surface">
+            <div class="section-heading">
+              <p class="eyebrow">Quick Select</p>
+            </div>
+            <div id="quickSelect" class="quick-select"></div>
+          </section>
+        </aside>
+
+        <section class="panel center-panel" aria-label="Current exploration">
+          <section class="surface hero-surface">
+            <div class="section-heading">
+              <p class="eyebrow">Current Exploration</p>
+              <span id="sourceKind">Raw idea</span>
+            </div>
+            <h2 id="currentClaim">What is the raw thought?</h2>
+            <p id="keyInsight" class="insight-copy">
+              Penny will turn the idea into claims, assumptions, typed edges, a challenge, and artifacts.
+            </p>
+          </section>
+
+          <section class="surface challenge-surface">
+            <div class="section-heading">
+              <p class="eyebrow">Challenge</p>
+              <span id="failureType">Waiting</span>
+            </div>
+            <h3 id="weakestPart">No challenge yet.</h3>
+            <p id="challengeText" class="challenge-copy">
+              The weakest load-bearing part appears after the first seed.
+            </p>
+            <div id="responseOptions" class="response-options"></div>
+          </section>
+
+          <form id="seedForm" class="command-form">
+            <label for="rawIdea">Command</label>
+            <div class="command-row">
+              <textarea
+                id="rawIdea"
+                name="rawIdea"
+                rows="3"
+                maxlength="4000"
+                placeholder="Penny should reduce cognitive load while students study complex material."
+              ></textarea>
+              <button id="seedSubmit" type="submit">Seed Brain</button>
+            </div>
+            <p id="formStatus" class="form-status">Ready</p>
+          </form>
+        </section>
+
+        <aside class="panel right-panel" aria-label="Penny insight">
+          <section class="surface insight-surface">
+            <div class="section-heading">
+              <p class="eyebrow">Penny Insight</p>
+            </div>
+            <p id="pennyInsight" class="insight-copy">
+              The first useful output should be structure, not a longer answer.
+            </p>
+          </section>
+
+          <section class="surface learn-surface">
+            <div class="section-heading">
+              <p class="eyebrow">Makes Cents</p>
+              <span id="learnCount">0</span>
+            </div>
+            <div id="learnList" class="stack-list">
+              <p class="quiet">Contextual explanations appear when the seed exposes a confusing term.</p>
+            </div>
+          </section>
+
+          <section class="surface compact-surface">
+            <div class="section-heading">
+              <p class="eyebrow">Artifacts</p>
+              <span id="artifactCount">0</span>
+            </div>
+            <div id="artifactList" class="stack-list"></div>
+          </section>
+
+          <section class="surface compact-surface">
+            <div class="section-heading">
+              <p class="eyebrow">Moves</p>
+              <span id="moveCount">0</span>
+            </div>
+            <div id="moveList" class="stack-list"></div>
+          </section>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

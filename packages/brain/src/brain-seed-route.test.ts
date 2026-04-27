@@ -72,11 +72,15 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
   assert.match(generatedInput?.sessionId ?? "", /^[0-9a-f-]{36}$/);
   assert.equal(persistedSeed?.source.rawText, "Penny should turn rough founder strategy into a stress-tested decision brief.");
   assert.equal(payload.data.session.status, "open");
-  assert.equal(payload.data.ideaMap.claims.length, 3);
-  assert.equal(payload.data.ideaMap.edges.length, 2);
+  assert.equal(payload.data.ideaMap.claims.length, 4);
+  assert.equal(payload.data.ideaMap.edges.length, 3);
   assert.notEqual(payload.data.ideaMap.claims[0]?.id, "claim.seed");
+  assert.equal(payload.data.firstChallenge.failureType, "definition_failure");
   assert.deepEqual(payload.data.firstChallenge.responseOptions, ["Defend", "Revise", "Absorb"]);
   assert.match(payload.data.firstChallenge.targetClaimId, /^[0-9a-f-]{36}$/);
+  assert.equal(payload.data.learnCandidates.length, 1);
+  assert.match(payload.data.learnCandidates[0]?.claimId ?? "", /^[0-9a-f-]{36}$/);
+  assert.equal(payload.data.learnCandidates[0]?.seedClaimId, "claim.assumption.1");
   assert.ok(payload.data.artifacts.some((artifact) => artifact.kind === "idea_map"));
   assert.ok(payload.data.artifacts.some((artifact) => artifact.kind === "challenge_brief"));
   assert.ok(payload.data.moves.some((move) => move.kind === "source.recorded"));

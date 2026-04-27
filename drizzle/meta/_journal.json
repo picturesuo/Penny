@@ -8,6 +8,13 @@
       "when": 1777315605541,
       "tag": "0000_daily_doctor_doom",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777319550297,
+      "tag": "0001_heavy_ezekiel",
+      "breakpoints": true
     }
   ]
 }

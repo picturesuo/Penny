@@ -207,10 +207,16 @@ export function buildBrainSeedUiPayload(
     firstChallenge: {
       targetClaimId: requirePersistedClaim(claimsBySeedId, seed.firstChallenge.targetClaimId).id,
       targetSeedClaimId: seed.firstChallenge.targetClaimId,
+      failureType: seed.firstChallenge.failureType,
       weakestPart: seed.firstChallenge.weakestPart,
       challenge: seed.firstChallenge.challenge,
       responseOptions: seed.firstChallenge.responseOptions,
     },
+    learnCandidates: seed.learnCandidates.map((candidate) => ({
+      ...candidate,
+      claimId: requirePersistedClaim(claimsBySeedId, candidate.claimId).id,
+      seedClaimId: candidate.claimId,
+    })),
     challengeBrief: challengeBrief
       ? {
           artifactId: requirePersistedArtifact(artifactsBySeedId, challengeBrief.id).id,

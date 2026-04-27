@@ -8,8 +8,18 @@ export const BrainSeedInputSchema = z
   .strict();
 
 export const ClaimKindSchema = z.enum(["belief", "assumption", "question", "concept"]);
-export const EdgeKindSchema = z.enum(["assumes", "supports", "questions", "challenges", "clarifies"]);
+export const EdgeKindSchema = z.enum(["depends_on", "supports", "questions", "challenges", "clarifies"]);
 export const PressureSchema = z.enum(["low", "medium", "high"]);
+export const FailureTypeSchema = z.enum([
+  "weak_evidence",
+  "missing_counterargument",
+  "shaky_assumption",
+  "analogy_break",
+  "dependency_risk",
+  "unaddressed_precedent",
+  "premise_rejection",
+  "definition_failure",
+]);
 export const MoveKindSchema = z.enum([
   "source.recorded",
   "claim.created",
@@ -67,9 +77,20 @@ export const BrainSeedExplorationPathSchema = z
 export const BrainSeedChallengeSchema = z
   .object({
     targetClaimId: IdSchema,
+    failureType: FailureTypeSchema,
     weakestPart: z.string().trim().min(1).max(500),
     challenge: z.string().trim().min(1).max(900),
     responseOptions: z.tuple([z.literal("Defend"), z.literal("Revise"), z.literal("Absorb")]),
+  })
+  .strict();
+
+export const BrainSeedLearnCandidateSchema = z
+  .object({
+    id: IdSchema,
+    claimId: IdSchema,
+    term: z.string().trim().min(1).max(120),
+    whyItMatters: z.string().trim().min(1).max(500),
+    unblockExplanation: z.string().trim().min(1).max(500),
   })
   .strict();
 
@@ -172,11 +193,23 @@ export const BrainSeedAiOutputSchema = z
     firstChallenge: z
       .object({
         targetClaimId: z.string(),
+        failureType: FailureTypeSchema,
         weakestPart: z.string(),
         challenge: z.string(),
         responseOptions: z.array(z.enum(["Defend", "Revise", "Absorb"])),
       })
       .strict(),
+    learnCandidates: z.array(
+      z
+        .object({
+          id: z.string(),
+          claimId: z.string(),
+          term: z.string(),
+          whyItMatters: z.string(),
+          unblockExplanation: z.string(),
+        })
+        .strict(),
+    ),
     moves: z.array(
       z
         .object({
@@ -209,11 +242,12 @@ export const BrainSeedOutputSchema = z
     source: BrainSeedSourceSchema,
     session: BrainSeedSessionSchema,
     seedClaim: BrainSeedClaimSchema,
-    assumptions: z.array(BrainSeedAssumptionSchema).min(1).max(6),
+    assumptions: z.array(BrainSeedAssumptionSchema).min(3).max(6),
     thoughtMap: BrainSeedThoughtMapSchema,
-    explorationPaths: z.array(BrainSeedExplorationPathSchema).min(1).max(5),
+    explorationPaths: z.array(BrainSeedExplorationPathSchema).min(6).max(8),
     keyInsight: z.string().trim().min(1).max(700),
     firstChallenge: BrainSeedChallengeSchema,
+    learnCandidates: z.array(BrainSeedLearnCandidateSchema).min(1).max(3),
     moves: z.array(BrainSeedMoveSchema).min(1).max(24),
     artifacts: z.array(BrainSeedArtifactSchema).min(2).max(4),
   })
@@ -244,6 +278,10 @@ export const BrainSeedOutputSchema = z
       ["firstChallenge", "targetClaimId"],
       "firstChallenge.targetClaimId",
     );
+
+    for (const [index, candidate] of output.learnCandidates.entries()) {
+      requireReferencedClaim(context, claimIds, candidate.claimId, ["learnCandidates", index, "claimId"], "learnCandidate.claimId");
+    }
 
     for (const [index, edge] of output.thoughtMap.edges.entries()) {
       requireReferencedClaim(context, claimIds, edge.fromClaimId, ["thoughtMap", "edges", index, "fromClaimId"], "edge.fromClaimId");

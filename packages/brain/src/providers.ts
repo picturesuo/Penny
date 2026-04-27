@@ -139,12 +139,14 @@ export function buildBrainSeedPrompt(input: BrainSeedInput): string {
     "- seedClaim.id should be claim.seed.",
     "- Confidence values must be integer percentages from 0 to 100.",
     "- responseOptions must be exactly Defend, Revise, Absorb in that order.",
+    "- firstChallenge.failureType must be one of weak_evidence, missing_counterargument, shaky_assumption, analogy_break, dependency_risk, unaddressed_precedent, premise_rejection, definition_failure.",
+    "- learnCandidates must include contextual terms that could confuse the user inside this idea.",
     "- artifacts must include one idea_map and one challenge_brief.",
     "- moves must include source.recorded, claim.created, edge.created, challenge.created, and artifact.created.",
     "",
     "Quality bar:",
-    "- Hidden assumptions should be specific commitments underneath the user's idea, not generic implementation advice.",
-    "- Exploration paths should help the user decide what to inspect next in Brain.",
+    "- Return at least 3 hidden assumptions specific to the user's raw idea, not generic implementation advice.",
+    "- Return at least 6 exploration paths that help the user decide what to inspect next in Brain.",
     "- The challenge should name the weakest load-bearing assumption and pressure it directly.",
     "- Keep the output compact enough for a first session.",
     "",
@@ -155,6 +157,14 @@ export function buildBrainSeedPrompt(input: BrainSeedInput): string {
 function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
   const idea = input.rawIdea.trim();
   const sessionId = input.sessionId ?? "00000000-0000-4000-8000-000000000001";
+  const focusTerm = extractFocusTerm(idea);
+  const learnTerm = extractLearnTerm(idea);
+  const assumptionOne =
+    `The claim "${idea}" names a real study bottleneck rather than a vague product benefit.`;
+  const assumptionTwo =
+    `The proposed assistant can reduce ${focusTerm} by structuring attention, choices, and next steps instead of adding more material to process.`;
+  const assumptionThree =
+    `Lower ${focusTerm} will improve learning outcomes enough for the user to notice and trust the system.`;
 
   return {
     source: {
@@ -176,18 +186,26 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
       {
         id: "claim.assumption.1",
         kind: "assumption",
-        text: "The user's real bottleneck is weak thinking structure, not just missing information or motivation.",
+        text: assumptionOne,
         confidence: 55,
         pressure: "high",
-        whyItMatters: "If the bottleneck is something else, Penny's map and challenge loop can feel clever without changing the user's work.",
+        whyItMatters: "If the input is only a broad slogan, the map will look useful while hiding the real mechanism.",
       },
       {
         id: "claim.assumption.2",
         kind: "assumption",
-        text: "A visible Idea Map plus Challenge Brief will be more useful than a conversational answer in the first session.",
+        text: assumptionTwo,
         confidence: 50,
+        pressure: "high",
+        whyItMatters: "If the assistant adds more decisions or explanations, it can increase the exact burden it claims to reduce.",
+      },
+      {
+        id: "claim.assumption.3",
+        kind: "assumption",
+        text: assumptionThree,
+        confidence: 48,
         pressure: "medium",
-        whyItMatters: "If the user needs trust, examples, or evidence first, the MVP should not optimize only for fast structure.",
+        whyItMatters: "If reduced load does not change retention, confidence, or study behavior, the product benefit is cosmetic.",
       },
     ],
     thoughtMap: {
@@ -201,14 +219,20 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
         {
           id: "claim.assumption.1",
           kind: "assumption",
-          text: "The user's real bottleneck is weak thinking structure, not just missing information or motivation.",
+          text: assumptionOne,
           confidence: 55,
         },
         {
           id: "claim.assumption.2",
           kind: "assumption",
-          text: "A visible Idea Map plus Challenge Brief will be more useful than a conversational answer in the first session.",
+          text: assumptionTwo,
           confidence: 50,
+        },
+        {
+          id: "claim.assumption.3",
+          kind: "assumption",
+          text: assumptionThree,
+          confidence: 48,
         },
       ],
       edges: [
@@ -216,39 +240,80 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
           id: "edge.seed.assumption.1",
           fromClaimId: "claim.seed",
           toClaimId: "claim.assumption.1",
-          kind: "assumes",
-          label: "depends on structure being the real bottleneck",
+          kind: "depends_on",
+          label: "depends on the raw idea naming a real bottleneck",
         },
         {
           id: "edge.seed.assumption.2",
           fromClaimId: "claim.seed",
           toClaimId: "claim.assumption.2",
-          kind: "assumes",
-          label: "depends on mapped structure beating conversational output",
+          kind: "depends_on",
+          label: `depends on the assistant reducing ${focusTerm}`,
+        },
+        {
+          id: "edge.seed.assumption.3",
+          fromClaimId: "claim.seed",
+          toClaimId: "claim.assumption.3",
+          kind: "depends_on",
+          label: "depends on reduced load improving learning outcomes",
         },
       ],
     },
     explorationPaths: [
       {
-        id: "path.decompose",
-        title: "Name the work the structure improves",
-        prompt: "Where would this idea make a user's next real decision sharper, and where would it merely organize thoughts?",
-        expectedValue: "Separates a real thinking instrument from a nicer note-taking surface.",
+        id: "path.define-load",
+        title: `Define ${focusTerm}`,
+        prompt: `What exactly counts as ${focusTerm} in the user's study session, and how would the user recognize it dropping?`,
+        expectedValue: "Turns a broad benefit into an inspectable claim.",
       },
       {
-        id: "path.counterexample",
-        title: "Find the failure despite engagement",
-        prompt: "Where could a user enjoy the map and challenge but still leave without a usable artifact?",
-        expectedValue: "Surfaces whether first-session structure actually changes the user's work.",
+        id: "path-find-burden",
+        title: "Find the burden source",
+        prompt: "Is the load coming from choosing what to study, holding context in memory, judging confidence, or translating feedback into action?",
+        expectedValue: "Identifies which claim the product has to prove first.",
+      },
+      {
+        id: "path-mechanism",
+        title: "Name the reduction mechanism",
+        prompt: "What does the assistant remove or simplify: options, reminders, explanations, feedback loops, or context switching?",
+        expectedValue: "Prevents the idea from relying on a vague AI improvement claim.",
+      },
+      {
+        id: "path-counterexample",
+        title: "Find the overload counterexample",
+        prompt: "Where could an AI study assistant increase load by producing more suggestions, explanations, or notifications?",
+        expectedValue: "Surfaces the weakest version before building around it.",
+      },
+      {
+        id: "path-measure",
+        title: "Choose the proof signal",
+        prompt: "What observable signal would prove reduced load: faster recall, fewer abandoned sessions, better quiz performance, or lower self-reported effort?",
+        expectedValue: "Connects the claim to a falsifiable outcome.",
+      },
+      {
+        id: "path-alternative",
+        title: "Compare the non-AI alternative",
+        prompt: "Could a checklist, spaced repetition flow, or teacher-created guide reduce the same load with less risk?",
+        expectedValue: "Tests whether AI is necessary for the value proposition.",
       },
     ],
-    keyInsight: "The load-bearing question is whether Penny improves the user's thinking output, not whether it can produce an impressive AI response.",
+    keyInsight: `The load-bearing question is whether the assistant can reduce ${focusTerm} without creating a new layer of work.`,
     firstChallenge: {
       targetClaimId: "claim.assumption.1",
-      weakestPart: "The idea assumes structure is the user's true constraint.",
-      challenge: "Defend why weak structure is the bottleneck. If users already know what they believe but lack evidence, courage, or execution leverage, the first-loop map may not be the right wedge.",
+      failureType: "definition_failure",
+      weakestPart: `The idea does not yet define ${focusTerm} tightly enough to prove reduction.`,
+      challenge: `Defend what ${focusTerm} means here. If the load is really motivation, poor materials, or weak feedback rather than mental effort, revise the seed claim before building the assistant around it.`,
       responseOptions: ["Defend", "Revise", "Absorb"],
     },
+    learnCandidates: [
+      {
+        id: "learn.cognitive-load",
+        claimId: "claim.assumption.1",
+        term: learnTerm,
+        whyItMatters: `The seed idea relies on ${learnTerm} being concrete enough to challenge and measure.`,
+        unblockExplanation: `${capitalize(learnTerm)} is the mental effort needed to process a task. In this idea, Penny should ask what part of studying consumes that effort before assuming AI reduces it.`,
+      },
+    ],
     moves: [
       {
         id: "move.source.recorded",
@@ -262,7 +327,7 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
         id: "move.claim.created",
         kind: "claim.created",
         summary: "Created the seed claim and extracted hidden assumptions as claims.",
-        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2"],
+        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2", "claim.assumption.3"],
         edgeIds: [],
         artifactIds: [],
       },
@@ -270,7 +335,7 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
         id: "move.assumption.extracted",
         kind: "assumption.extracted",
         summary: "Marked the riskiest hidden assumptions for pressure-testing.",
-        claimIds: ["claim.assumption.1", "claim.assumption.2"],
+        claimIds: ["claim.assumption.1", "claim.assumption.2", "claim.assumption.3"],
         edgeIds: [],
         artifactIds: [],
       },
@@ -278,8 +343,8 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
         id: "move.edge.created",
         kind: "edge.created",
         summary: "Connected the seed claim to its assumptions in the thought map.",
-        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2"],
-        edgeIds: ["edge.seed.assumption.1", "edge.seed.assumption.2"],
+        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2", "claim.assumption.3"],
+        edgeIds: ["edge.seed.assumption.1", "edge.seed.assumption.2", "edge.seed.assumption.3"],
         artifactIds: [],
       },
       {
@@ -302,8 +367,8 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
         id: "move.artifact.created",
         kind: "artifact.created",
         summary: "Created the Idea Map and Challenge Brief session artifacts.",
-        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2"],
-        edgeIds: ["edge.seed.assumption.1", "edge.seed.assumption.2"],
+        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2", "claim.assumption.3"],
+        edgeIds: ["edge.seed.assumption.1", "edge.seed.assumption.2", "edge.seed.assumption.3"],
         artifactIds: ["artifact.idea_map", "artifact.challenge_brief"],
       },
     ],
@@ -312,20 +377,42 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
         id: "artifact.idea_map",
         kind: "idea_map",
         title: "Idea Map",
-        summary: "A compact map of the seed claim, the bottleneck assumption, and the first-session artifact assumption.",
-        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2"],
-        edgeIds: ["edge.seed.assumption.1", "edge.seed.assumption.2"],
+        summary: `A compact map of the seed claim, the ${focusTerm} definition risk, the mechanism assumption, and the outcome assumption.`,
+        claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2", "claim.assumption.3"],
+        edgeIds: ["edge.seed.assumption.1", "edge.seed.assumption.2", "edge.seed.assumption.3"],
       },
       {
         id: "artifact.challenge_brief",
         kind: "challenge_brief",
         title: "Challenge Brief",
-        summary: "The load-bearing bottleneck assumption, the first challenge, and the Defend / Revise / Absorb response options.",
+        summary: `A definition-failure challenge against the load-bearing ${focusTerm} assumption plus Defend / Revise / Absorb response options.`,
         claimIds: ["claim.assumption.1"],
         edgeIds: ["edge.seed.assumption.1"],
       },
     ],
   };
+}
+
+function extractFocusTerm(idea: string): string {
+  const reductionMatch = /\breduces?\s+(.+)$/i.exec(idea.trim());
+
+  if (reductionMatch?.[1]?.trim()) {
+    return reductionMatch[1].trim().replace(/[.?!]+$/, "").toLowerCase();
+  }
+
+  return "the user's cognitive load";
+}
+
+function extractLearnTerm(idea: string): string {
+  if (/\bcognitive load\b/i.test(idea)) {
+    return "cognitive load";
+  }
+
+  return extractFocusTerm(idea);
+}
+
+function capitalize(value: string): string {
+  return value ? `${value[0]?.toUpperCase()}${value.slice(1)}` : value;
 }
 
 async function generateStructuredBrainSeed(request: Parameters<BrainSeedGenerateText>[0]): Promise<{ output: unknown }> {

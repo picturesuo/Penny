@@ -41,6 +41,22 @@ const validSeedOutput: BrainSeedOutput = {
       pressure: "high",
       whyItMatters: "If speed is not the main value, the MVP should optimize for depth instead.",
     },
+    {
+      id: "claim.assumption.visible",
+      kind: "assumption",
+      text: "The user can recognize useful thinking structure within the first minute.",
+      confidence: 61,
+      pressure: "medium",
+      whyItMatters: "If usefulness is not visible quickly, the first loop may feel like hidden processing.",
+    },
+    {
+      id: "claim.assumption.challenge",
+      kind: "assumption",
+      text: "A direct weakest-part challenge helps more than another generated answer.",
+      confidence: 58,
+      pressure: "high",
+      whyItMatters: "If the challenge feels arbitrary, Defend / Revise / Absorb will not be trusted.",
+    },
   ],
   thoughtMap: {
     claims: [
@@ -56,14 +72,40 @@ const validSeedOutput: BrainSeedOutput = {
         text: "Fast structure is more valuable than a conversational answer in the first loop.",
         confidence: 67,
       },
+      {
+        id: "claim.assumption.visible",
+        kind: "assumption",
+        text: "The user can recognize useful thinking structure within the first minute.",
+        confidence: 61,
+      },
+      {
+        id: "claim.assumption.challenge",
+        kind: "assumption",
+        text: "A direct weakest-part challenge helps more than another generated answer.",
+        confidence: 58,
+      },
     ],
     edges: [
       {
         id: "edge.seed.speed",
         fromClaimId: "claim.seed",
         toClaimId: "claim.assumption.speed",
-        kind: "assumes",
+        kind: "depends_on",
         label: "depends on speed being the main first-session value",
+      },
+      {
+        id: "edge.seed.visible",
+        fromClaimId: "claim.seed",
+        toClaimId: "claim.assumption.visible",
+        kind: "depends_on",
+        label: "depends on usefulness being visible quickly",
+      },
+      {
+        id: "edge.seed.challenge",
+        fromClaimId: "claim.seed",
+        toClaimId: "claim.assumption.challenge",
+        kind: "depends_on",
+        label: "depends on the challenge being trusted",
       },
     ],
   },
@@ -74,14 +116,55 @@ const validSeedOutput: BrainSeedOutput = {
       prompt: "What structure would make the user feel the idea changed in under a minute?",
       expectedValue: "Keeps the MVP centered on the first loop instead of feature breadth.",
     },
+    {
+      id: "path-first-move",
+      title: "Name the first Move",
+      prompt: "What exact meaningful change happens after the raw idea is entered?",
+      expectedValue: "Keeps durable history attached to the first loop.",
+    },
+    {
+      id: "path-visible-map",
+      title: "Show the map delta",
+      prompt: "Which claim, edge, or challenge should visibly appear first?",
+      expectedValue: "Separates structure from generic chat output.",
+    },
+    {
+      id: "path-weakest-part",
+      title: "Stress the weakest part",
+      prompt: "Which assumption would force a major revision if it failed?",
+      expectedValue: "Keeps Challenge tied to the load-bearing assumption.",
+    },
+    {
+      id: "path-response",
+      title: "Test response choices",
+      prompt: "What would Defend, Revise, or Absorb each preserve as a Move?",
+      expectedValue: "Makes the next user action durable instead of conversational.",
+    },
+    {
+      id: "path-learn",
+      title: "Find the confusing term",
+      prompt: "Which concept needs a short contextual explanation before the user can decide?",
+      expectedValue: "Keeps Learn subordinate to the challenge loop.",
+    },
   ],
   keyInsight: "The first loop should create pressure-tested structure before it creates more conversation.",
   firstChallenge: {
     targetClaimId: "claim.assumption.speed",
+    failureType: "shaky_assumption",
     weakestPart: "The product may need trust more than speed.",
     challenge: "Defend whether speed is enough to feel useful without source-backed verification yet.",
     responseOptions: ["Defend", "Revise", "Absorb"],
   },
+  learnCandidates: [
+    {
+      id: "learn.load-bearing",
+      claimId: "claim.assumption.challenge",
+      term: "load-bearing assumption",
+      whyItMatters: "The challenge is only useful if it targets the assumption that would change the idea most.",
+      unblockExplanation:
+        "A load-bearing assumption is the belief the rest of the idea depends on. If it fails, the idea needs revision rather than polish.",
+    },
+  ],
   moves: [
     {
       id: "move.source.recorded",
@@ -94,17 +177,17 @@ const validSeedOutput: BrainSeedOutput = {
     {
       id: "move.claim.created",
       kind: "claim.created",
-      summary: "Created the seed claim and assumption claim.",
-      claimIds: ["claim.seed", "claim.assumption.speed"],
+      summary: "Created the seed claim and assumption claims.",
+      claimIds: ["claim.seed", "claim.assumption.speed", "claim.assumption.visible", "claim.assumption.challenge"],
       edgeIds: [],
       artifactIds: [],
     },
     {
       id: "move.edge.created",
       kind: "edge.created",
-      summary: "Connected the seed claim to the speed assumption.",
-      claimIds: ["claim.seed", "claim.assumption.speed"],
-      edgeIds: ["edge.seed.speed"],
+      summary: "Connected the seed claim to its assumptions.",
+      claimIds: ["claim.seed", "claim.assumption.speed", "claim.assumption.visible", "claim.assumption.challenge"],
+      edgeIds: ["edge.seed.speed", "edge.seed.visible", "edge.seed.challenge"],
       artifactIds: [],
     },
     {
@@ -119,8 +202,8 @@ const validSeedOutput: BrainSeedOutput = {
       id: "move.artifact.created",
       kind: "artifact.created",
       summary: "Created the session outputs.",
-      claimIds: ["claim.seed", "claim.assumption.speed"],
-      edgeIds: ["edge.seed.speed"],
+      claimIds: ["claim.seed", "claim.assumption.speed", "claim.assumption.visible", "claim.assumption.challenge"],
+      edgeIds: ["edge.seed.speed", "edge.seed.visible", "edge.seed.challenge"],
       artifactIds: ["artifact.idea_map", "artifact.challenge_brief"],
     },
   ],
@@ -129,9 +212,9 @@ const validSeedOutput: BrainSeedOutput = {
       id: "artifact.idea_map",
       kind: "idea_map",
       title: "Idea Map",
-      summary: "Seed claim, hidden speed assumption, and typed dependency edge.",
-      claimIds: ["claim.seed", "claim.assumption.speed"],
-      edgeIds: ["edge.seed.speed"],
+      summary: "Seed claim, hidden assumptions, and typed dependency edges.",
+      claimIds: ["claim.seed", "claim.assumption.speed", "claim.assumption.visible", "claim.assumption.challenge"],
+      edgeIds: ["edge.seed.speed", "edge.seed.visible", "edge.seed.challenge"],
     },
     {
       id: "artifact.challenge_brief",
@@ -161,8 +244,10 @@ test("generateBrainSeed validates provider output into the Wave 3 seed structure
   assert.equal(output.session.status, "open");
   assert.equal(output.seedClaim.confidence, 72);
   assert.equal(output.assumptions[0]?.pressure, "high");
-  assert.equal(output.thoughtMap.edges[0]?.kind, "assumes");
+  assert.equal(output.thoughtMap.edges[0]?.kind, "depends_on");
+  assert.equal(output.firstChallenge.failureType, "shaky_assumption");
   assert.deepEqual(output.firstChallenge.responseOptions, ["Defend", "Revise", "Absorb"]);
+  assert.equal(output.learnCandidates[0]?.claimId, "claim.assumption.challenge");
   assert.deepEqual(
     output.moves.map((move) => move.kind),
     ["source.recorded", "claim.created", "edge.created", "challenge.created", "artifact.created"],
@@ -249,6 +334,25 @@ test("parseBrainSeedOutput rejects moves with dangling artifact references", () 
   );
 });
 
+test("parseBrainSeedOutput rejects learn candidates with dangling claim references", () => {
+  const invalidOutput = {
+    ...validSeedOutput,
+    learnCandidates: validSeedOutput.learnCandidates.map((candidate) => ({
+      ...candidate,
+      claimId: "claim.missing",
+    })),
+  };
+
+  assert.throws(
+    () => parseBrainSeedOutput(invalidOutput),
+    (error) => {
+      assert.ok(error instanceof BrainSeedValidationError);
+      assert.match(error.issues.join("\n"), /learnCandidate\.claimId must reference a thoughtMap claim/);
+      return true;
+    },
+  );
+});
+
 test("parseBrainSeedOutput requires Idea Map and Challenge Brief artifacts", () => {
   const invalidOutput = {
     ...validSeedOutput,
@@ -280,10 +384,12 @@ test("heuristic provider keeps seed extraction usable without live AI credential
   );
 
   assert.equal(output.seedClaim.text, "I think source-backed memory should become a thinking cockpit.");
-  assert.ok(output.assumptions.length >= 1);
+  assert.ok(output.assumptions.length >= 3);
   assert.match(output.assumptions[0]?.text ?? "", /bottleneck|structure/i);
-  assert.match(output.firstChallenge.weakestPart, /structure|assumes/i);
-  assert.ok(output.explorationPaths.length >= 1);
+  assert.equal(output.firstChallenge.failureType, "definition_failure");
+  assert.match(output.firstChallenge.weakestPart, /cognitive load|define/i);
+  assert.ok(output.explorationPaths.length >= 6);
+  assert.equal(output.learnCandidates[0]?.term, "the user's cognitive load");
   assert.deepEqual(output.firstChallenge.responseOptions, ["Defend", "Revise", "Absorb"]);
   assert.ok(output.moves.some((move) => move.kind === "artifact.created"));
   assert.ok(output.artifacts.some((artifact) => artifact.kind === "idea_map"));
