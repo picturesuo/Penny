@@ -3,20 +3,21 @@ import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { brainRuns, claimVersions, claims, moves, sources } from "./db/schema.ts";
+import { brainRuns, claimVersions, claims, moves, sourceSpans, sources } from "./db/schema.ts";
 import { flattenIssues } from "./schema.ts";
 
-const VerifyRequestSchema = z
+export const VerifyRequestSchema = z
   .object({
     claimId: z.string().uuid(),
-    question: z.string().trim().min(1).max(800).optional(),
+    currentClaimText: z.string().trim().min(1).max(4_000),
+    sessionId: z.string().uuid(),
   })
   .strict();
 
-const EvidenceStanceSchema = z.enum(["supports", "contradicts", "mixed", "context"]);
-const EvidenceReliabilitySchema = z.enum(["low", "medium", "high"]);
-const VerifyVerdictSchema = z.enum(["supported", "contradicted", "mixed", "insufficient"]);
-const EvidenceSourceTypeSchema = z.enum(["web", "x", "paper", "official", "other"]);
+const VerifyVerdictSchema = z.enum(["supported", "weakened", "mixed", "not_enough_evidence"]);
+const EvidenceStanceSchema = z.enum(["supports", "weakens", "mixed", "unclear"]);
+
+const NullableProviderStringSchema = z.string().nullable().optional();
 
 export const VerifyProviderSchema = z
   .object({
@@ -26,46 +27,60 @@ export const VerifyProviderSchema = z
       z
         .object({
           title: z.string(),
-          url: z.string(),
-          sourceType: EvidenceSourceTypeSchema,
-          stance: EvidenceStanceSchema,
-          quote: z.string(),
           summary: z.string(),
-          reliability: EvidenceReliabilitySchema,
-          publishedAt: z.string().optional(),
+          stance: EvidenceStanceSchema,
+          sourceName: NullableProviderStringSchema,
+          sourceUrl: NullableProviderStringSchema,
+          citation: NullableProviderStringSchema,
         })
         .strict(),
     ),
-    followUpQuestions: z.array(z.string()),
+    confidenceDeltaSuggestion: z.number(),
+    whatWouldChangeThis: z.string(),
+    nextQuestion: z.string(),
   })
   .strict();
+
+const OptionalTextSchema = (maxLength: number) =>
+  z.preprocess((value) => trimmedNullable(value), z.string().min(1).max(maxLength).nullable().optional());
+
+const OptionalUrlSchema = z.preprocess(
+  (value) => trimmedNullable(value),
+  z.string().url().max(1_000).nullable().optional(),
+);
 
 const EvidenceCardSchema = z
   .object({
     title: z.string().trim().min(1).max(180),
-    url: z.string().trim().url().max(1_000),
-    sourceType: EvidenceSourceTypeSchema,
+    summary: z.string().trim().min(1).max(700),
     stance: EvidenceStanceSchema,
-    quote: z.string().trim().min(1).max(500),
-    summary: z.string().trim().min(1).max(600),
-    reliability: EvidenceReliabilitySchema,
-    publishedAt: z.string().trim().min(1).max(80).optional(),
+    sourceName: OptionalTextSchema(180),
+    sourceUrl: OptionalUrlSchema,
+    citation: OptionalTextSchema(700),
   })
   .strict();
 
 export const VerifyOutputSchema = z
   .object({
     verdict: VerifyVerdictSchema,
-    summary: z.string().trim().min(1).max(800),
-    evidenceCards: z.array(EvidenceCardSchema).max(8),
-    followUpQuestions: z.array(z.string().trim().min(1).max(220)).max(5),
+    summary: z.string().trim().min(1).max(900),
+    evidenceCards: z.array(EvidenceCardSchema).min(1).max(6),
+    confidenceDeltaSuggestion: z.number().int().min(-30).max(30),
+    whatWouldChangeThis: z.string().trim().min(1).max(700),
+    nextQuestion: z.string().trim().min(1).max(300),
   })
   .strict()
   .superRefine((output, context) => {
     const text = [
       output.summary,
-      ...output.followUpQuestions,
-      ...output.evidenceCards.flatMap((card) => [card.title, card.quote, card.summary]),
+      output.whatWouldChangeThis,
+      output.nextQuestion,
+      ...output.evidenceCards.flatMap((card) => [
+        card.title,
+        card.summary,
+        card.sourceName ?? "",
+        card.citation ?? "",
+      ]),
     ]
       .join("\n")
       .toLowerCase();
@@ -87,18 +102,17 @@ export type EvidenceCard = z.infer<typeof EvidenceCardSchema>;
 
 export type VerifyGenerationInput = {
   claimId: string;
-  claimVersionId: string;
-  claimKind: "belief" | "assumption" | "question" | "concept";
-  claimStatus: "exploratory" | "committed" | "resolved" | "rejected";
-  claimConfidence: number;
-  claimText: string;
-  question?: string | undefined;
+  sessionId: string;
+  currentClaimText: string;
+  currentClaimKind: "belief" | "assumption" | "question" | "concept";
+  currentClaimStatus: "exploratory" | "committed" | "resolved" | "rejected";
+  currentClaimConfidence: number;
 };
 
 const verifyOutputSpec = Output.object<VerifyProviderOutput>({
   schema: VerifyProviderSchema,
-  name: "penny_verify_check",
-  description: "A Penny Verify result grounded in citation-backed evidence cards.",
+  name: "penny_verify_run",
+  description: "A Penny Verify result with evidence cards and a pending confidence delta suggestion.",
 });
 
 export type VerifyGenerateText = (request: {
@@ -122,6 +136,12 @@ export type VerifyProvider = {
   generate(input: VerifyGenerationInput): Promise<{ output: unknown; sources?: unknown[] }>;
 };
 
+export type ConfidenceUpdateDecision = {
+  suggestedDelta: number;
+  autoApplied: false;
+  decision: "pending_user_decision";
+};
+
 export type PersistedVerify = VerifyOutput & {
   targetClaim: PersistedClaimSlice;
   move: PersistedMoveSlice;
@@ -129,12 +149,18 @@ export type PersistedVerify = VerifyOutput & {
     id: string;
     status: string;
   };
+  citationSources: PersistedCitationSlice[];
+  confidenceUpdate: ConfidenceUpdateDecision;
 };
 
 export type VerifyRouteOptions = {
   db?: PennyDatabase;
   databaseUrl?: string;
-  verifyClaim?: (input: VerifyRequest, options: { db?: PennyDatabase }) => Promise<PersistedVerify>;
+  provider?: VerifyProvider;
+  verifyClaim?: (
+    input: VerifyRequest,
+    options: { db?: PennyDatabase; provider: VerifyProvider },
+  ) => Promise<PersistedVerify>;
 };
 
 type VerifyPrelude = {
@@ -160,6 +186,22 @@ type PersistedMoveSlice = {
   artifactIds: string[];
 };
 
+type PersistedCitationSlice = {
+  evidenceTitle: string;
+  source: {
+    id: string;
+    kind: "verification_citation";
+    rawText: string;
+  };
+  sourceSpan: {
+    id: string;
+    sourceId: string;
+    claimId: string | null;
+    claimVersionId: string | null;
+    label: string | null;
+  };
+};
+
 export const defaultXaiVerifyModel = "grok-4.20-reasoning";
 
 export async function handleVerifyRequest(
@@ -176,13 +218,15 @@ export async function handleVerifyRequest(
     return parsed.response;
   }
 
+  const provider = options.provider ?? defaultVerifyProvider();
   const db = resolveVerifyDb(options, Boolean(options.verifyClaim));
   const verifyClaim =
     options.verifyClaim ??
-    ((input: VerifyRequest, verifyOptions: { db?: PennyDatabase }) => runVerify(requireVerifyDb(verifyOptions.db), input));
+    ((input: VerifyRequest, verifyOptions: { db?: PennyDatabase; provider: VerifyProvider }) =>
+      runVerify(requireVerifyDb(verifyOptions.db), input, { provider: verifyOptions.provider }));
 
   try {
-    return jsonResponse({ data: await verifyClaim(parsed.data, dbOption(db)) }, 201);
+    return jsonResponse({ data: await verifyClaim(parsed.data, { ...dbOption(db), provider }) }, 201);
   } catch (error) {
     return verifyErrorResponse(error);
   }
@@ -256,8 +300,10 @@ export function parseVerifyOutput(output: unknown, providerSources: unknown[] = 
 
   const strictInput = {
     ...parsed.data,
+    summary: parsed.data.summary.trim(),
     evidenceCards: normalizeEvidenceCards(parsed.data.evidenceCards, providerSources),
-    followUpQuestions: parsed.data.followUpQuestions.map((question) => question.trim()).filter(Boolean),
+    whatWouldChangeThis: parsed.data.whatWouldChangeThis.trim(),
+    nextQuestion: parsed.data.nextQuestion.trim(),
   };
   const strict = VerifyOutputSchema.safeParse(strictInput);
 
@@ -283,10 +329,21 @@ export function createHeuristicVerifyProvider(): VerifyProvider {
     async generate(input) {
       return {
         output: {
-          verdict: "insufficient",
-          summary: `No live citation search is configured for "${clipText(input.claimText, 120)}".`,
-          evidenceCards: [],
-          followUpQuestions: ["Run Verify with xAI search enabled before changing confidence."],
+          verdict: "not_enough_evidence",
+          summary: `No external verification provider is configured for "${clipText(input.currentClaimText, 120)}".`,
+          evidenceCards: [
+            {
+              title: "Current Brain state",
+              summary: "Penny can preserve the claim and record that no citation-backed verification was available.",
+              stance: "unclear",
+              sourceName: "Penny Brain",
+              sourceUrl: null,
+              citation: null,
+            },
+          ],
+          confidenceDeltaSuggestion: 0,
+          whatWouldChangeThis: "Run Verify with citation search enabled or attach reliable sources that directly test the claim.",
+          nextQuestion: `What source would directly test "${clipText(input.currentClaimText, 120)}"?`,
         },
         sources: [],
       };
@@ -365,18 +422,19 @@ export function buildVerifyPrompt(input: VerifyGenerationInput): string {
     "Check this stable Penny claim against external evidence.",
     "",
     "Return:",
-    "- verdict: supported, contradicted, mixed, or insufficient.",
+    "- verdict: supported, weakened, mixed, or not_enough_evidence.",
     "- summary: the shortest useful evidence-grounded reading.",
-    "- evidenceCards: citation cards with title, url, sourceType, stance, quote, summary, reliability, and optional publishedAt.",
-    "- followUpQuestions: questions that would make verification sharper.",
+    "- evidenceCards: 1 to 6 cards with title, summary, stance, sourceName, sourceUrl, and citation when available.",
+    "- confidenceDeltaSuggestion: an integer from -30 to 30. This is only a suggestion.",
+    "- whatWouldChangeThis: what evidence would alter the verdict.",
+    "- nextQuestion: the next focused verification question.",
     "",
+    `Session id: ${input.sessionId}`,
     `Claim id: ${input.claimId}`,
-    `Claim version id: ${input.claimVersionId}`,
-    `Claim kind: ${input.claimKind}`,
-    `Claim status: ${input.claimStatus}`,
-    `Claim confidence: ${input.claimConfidence}`,
-    `Claim text: ${input.claimText}`,
-    input.question ? `User check question: ${input.question}` : "User check question: Verify the claim as stated.",
+    `Current claim kind: ${input.currentClaimKind}`,
+    `Current claim status: ${input.currentClaimStatus}`,
+    `Current claim confidence: ${input.currentClaimConfidence}`,
+    `Current claim text: ${input.currentClaimText}`,
   ].join("\n");
 }
 
@@ -386,20 +444,29 @@ async function createVerifyPrelude(
   provider: VerifyProvider,
 ): Promise<VerifyPrelude> {
   return db.transaction(async (tx) => {
-    const target = await loadClaimWithCurrentVersion(tx, input.claimId);
+    const target = await loadClaimWithCurrentVersion(tx, input.claimId, input.sessionId);
+
+    if (normalizeClaimText(target.version.content) !== normalizeClaimText(input.currentClaimText)) {
+      throw new VerifyConflictError("Verify requires the current ClaimVersion text.");
+    }
+
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
-        sessionId: target.claim.sessionId,
+        sessionId: input.sessionId,
         sourceId: target.claim.sourceId,
-        operation: "brain.verify.check",
+        operation: "verify_run",
         provider: provider.name,
         model: provider.name === "xai" ? resolveXaiVerifyModel() : null,
         status: "running",
         input: {
           claimId: target.claim.id,
           claimVersionId: target.version.id,
-          question: input.question ?? null,
+          sessionId: input.sessionId,
+          currentClaimText: input.currentClaimText,
+          currentClaimKind: target.claim.kind,
+          currentClaimStatus: target.version.status,
+          currentClaimConfidence: target.version.confidence,
           searchEnabled: provider.searchEnabled,
         },
       })
@@ -419,10 +486,12 @@ async function persistVerifyResult(
   prelude: VerifyPrelude,
 ): Promise<PersistedVerify> {
   return db.transaction(async (tx) => {
-    const evidenceCards = await insertCitationSources(tx, prelude.target.claim.sessionId, output.evidenceCards);
+    const citationSources = await insertCitationSources(tx, prelude.target, output.evidenceCards);
+    const confidenceUpdate = confidenceUpdateDecision(output);
     const persistedOutput = {
       ...output,
-      evidenceCards,
+      citationSources,
+      confidenceUpdate,
     };
     const [move] = await tx
       .insert(moves)
@@ -432,12 +501,16 @@ async function persistVerifyResult(
         summary: verifyMoveSummary(output),
         payload: {
           claimIds: [prelude.target.claim.id],
+          edgeIds: [],
           claimId: prelude.target.claim.id,
           claimVersionId: prelude.target.version.id,
           brainRunId: prelude.brainRun.id,
           verdict: output.verdict,
-          evidenceCards,
-          citationSourceIds: evidenceCards.map((card) => card.sourceId),
+          confidenceDeltaSuggestion: output.confidenceDeltaSuggestion,
+          confidenceDecision: confidenceUpdate.decision,
+          autoAppliedConfidence: confidenceUpdate.autoApplied,
+          sourceIds: citationSources.map((citation) => citation.source.id),
+          sourceSpanIds: citationSources.map((citation) => citation.sourceSpan.id),
         },
       })
       .returning();
@@ -473,16 +546,21 @@ async function persistVerifyResult(
   });
 }
 
-async function insertCitationSources(db: PennyDatabase, sessionId: string, evidenceCards: EvidenceCard[]) {
-  const cards = [];
+async function insertCitationSources(
+  db: PennyDatabase,
+  target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
+  evidenceCards: EvidenceCard[],
+): Promise<PersistedCitationSlice[]> {
+  const citations = [];
 
-  for (const card of evidenceCards) {
+  for (const card of evidenceCards.filter(hasCitationProvenance)) {
+    const rawText = citationRawText(card);
     const [source] = await db
       .insert(sources)
       .values({
-        sessionId,
+        sessionId: target.claim.sessionId,
         kind: "verification_citation",
-        rawText: citationRawText(card),
+        rawText,
       })
       .returning();
 
@@ -490,20 +568,51 @@ async function insertCitationSources(db: PennyDatabase, sessionId: string, evide
       throw new VerifyConflictError("Failed to record verification citation source.");
     }
 
-    cards.push({
-      ...card,
-      sourceId: source.id,
+    const [span] = await db
+      .insert(sourceSpans)
+      .values({
+        sourceId: source.id,
+        claimId: target.claim.id,
+        claimVersionId: target.version.id,
+        startOffset: 0,
+        endOffset: rawText.length,
+        label: "verify_evidence",
+      })
+      .returning();
+
+    if (!span) {
+      throw new VerifyConflictError("Failed to record verification citation span.");
+    }
+
+    citations.push({
+      evidenceTitle: card.title,
+      source: {
+        id: source.id,
+        kind: "verification_citation" as const,
+        rawText: source.rawText,
+      },
+      sourceSpan: {
+        id: span.id,
+        sourceId: span.sourceId,
+        claimId: span.claimId,
+        claimVersionId: span.claimVersionId,
+        label: span.label,
+      },
     });
   }
 
-  return cards;
+  return citations;
 }
 
-async function loadClaimWithCurrentVersion(db: PennyDatabase, claimId: string) {
-  const [claim] = await db.select().from(claims).where(eq(claims.id, claimId)).limit(1);
+async function loadClaimWithCurrentVersion(db: PennyDatabase, claimId: string, sessionId: string) {
+  const [claim] = await db
+    .select()
+    .from(claims)
+    .where(and(eq(claims.id, claimId), eq(claims.sessionId, sessionId)))
+    .limit(1);
 
   if (!claim) {
-    throw new VerifyNotFoundError("Claim was not found.");
+    throw new VerifyNotFoundError("Claim was not found in this session.");
   }
 
   const [version] = await db
@@ -534,7 +643,9 @@ async function markVerifyRunFailed(db: PennyDatabase, brainRunId: string, error:
     .where(eq(brainRuns.id, brainRunId));
 }
 
-async function generateStructuredVerify(request: Parameters<VerifyGenerateText>[0]): Promise<{ output: unknown; sources?: unknown[] }> {
+async function generateStructuredVerify(
+  request: Parameters<VerifyGenerateText>[0],
+): Promise<{ output: unknown; sources?: unknown[] }> {
   const result = await generateText(request as Parameters<typeof generateText>[0]);
 
   return {
@@ -549,12 +660,11 @@ function verifyGenerationInput(
 ): VerifyGenerationInput {
   return {
     claimId: target.claim.id,
-    claimVersionId: target.version.id,
-    claimKind: target.claim.kind,
-    claimStatus: target.version.status,
-    claimConfidence: target.version.confidence,
-    claimText: target.version.content,
-    question: input.question,
+    sessionId: input.sessionId,
+    currentClaimText: target.version.content,
+    currentClaimKind: target.claim.kind,
+    currentClaimStatus: target.version.status,
+    currentClaimConfidence: target.version.confidence,
   };
 }
 
@@ -562,20 +672,20 @@ function normalizeEvidenceCards(cards: VerifyProviderOutput["evidenceCards"], pr
   const normalizedCards = cards.map(normalizeEvidenceCard).filter((card): card is EvidenceCard => Boolean(card));
 
   if (normalizedCards.length > 0) {
-    return normalizedCards;
+    return normalizedCards.slice(0, 6);
   }
 
-  return providerSources.map(sourceToEvidenceCard).filter((card): card is EvidenceCard => Boolean(card)).slice(0, 8);
+  return providerSources.map(sourceToEvidenceCard).filter((card): card is EvidenceCard => Boolean(card)).slice(0, 6);
 }
 
 function normalizeEvidenceCard(card: VerifyProviderOutput["evidenceCards"][number]): EvidenceCard | null {
   const parsed = EvidenceCardSchema.safeParse({
     ...card,
     title: card.title.trim(),
-    url: card.url.trim(),
-    quote: card.quote.trim(),
     summary: card.summary.trim(),
-    publishedAt: card.publishedAt?.trim() || undefined,
+    sourceName: trimmedNullable(card.sourceName),
+    sourceUrl: trimmedNullable(card.sourceUrl),
+    citation: trimmedNullable(card.citation),
   });
 
   return parsed.success ? parsed.data : null;
@@ -583,22 +693,24 @@ function normalizeEvidenceCard(card: VerifyProviderOutput["evidenceCards"][numbe
 
 function sourceToEvidenceCard(source: unknown): EvidenceCard | null {
   const record = objectRecord(source);
-  const url = stringRecordValue(record, "url");
+  const url =
+    stringRecordValue(record, "url") ??
+    stringRecordValue(record, "sourceUrl") ??
+    stringRecordValue(record, "uri");
 
   if (!url) {
     return null;
   }
 
-  const title = stringRecordValue(record, "title") ?? url;
+  const title = stringRecordValue(record, "title") ?? stringRecordValue(record, "name") ?? url;
   const snippet = stringRecordValue(record, "snippet") ?? stringRecordValue(record, "description") ?? title;
   const parsed = EvidenceCardSchema.safeParse({
     title,
-    url,
-    sourceType: "web",
-    stance: "context",
-    quote: clipText(snippet, 480),
-    summary: clipText(snippet, 560),
-    reliability: "medium",
+    summary: clipText(snippet, 680),
+    stance: "unclear",
+    sourceName: title,
+    sourceUrl: url,
+    citation: clipText(snippet, 680),
   });
 
   return parsed.success ? parsed.data : null;
@@ -645,15 +757,29 @@ function verifyMoveSummary(output: VerifyOutput): string {
   return `Verified claim as ${output.verdict} with ${cardLabel}.`;
 }
 
+function confidenceUpdateDecision(output: VerifyOutput): ConfidenceUpdateDecision {
+  return {
+    suggestedDelta: output.confidenceDeltaSuggestion,
+    autoApplied: false,
+    decision: "pending_user_decision",
+  };
+}
+
+function hasCitationProvenance(card: EvidenceCard): boolean {
+  return Boolean(card.citation || card.sourceUrl || card.sourceName);
+}
+
 function citationRawText(card: EvidenceCard): string {
   return [
     `Title: ${card.title}`,
-    `URL: ${card.url}`,
+    card.sourceName ? `Source: ${card.sourceName}` : null,
+    card.sourceUrl ? `URL: ${card.sourceUrl}` : null,
     `Stance: ${card.stance}`,
-    `Reliability: ${card.reliability}`,
-    `Quote: ${card.quote}`,
+    card.citation ? `Citation: ${card.citation}` : null,
     `Summary: ${card.summary}`,
-  ].join("\n");
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
 }
 
 function createXaiSettings(apiKey: string, env: Record<string, string | undefined>) {
@@ -828,6 +954,24 @@ function jsonResponse(payload: unknown, status: number, headers: Record<string, 
       ...headers,
     },
   });
+}
+
+function trimmedNullable(value: unknown): string | null | undefined {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+
+  return trimmed ? trimmed : null;
+}
+
+function normalizeClaimText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function formatErrorMessage(error: unknown): string {
