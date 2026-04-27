@@ -8,6 +8,7 @@ import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
+import { handleBrainStreamRequest } from "./stream-route.ts";
 import { handleVerifyRequest } from "./verify-route.ts";
 import { handleSessionWikiRequest } from "./wiki-route.ts";
 
@@ -21,6 +22,11 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/seed") {
       await writeWebResponse(outgoing, await handleBrainSeedRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/brain/stream") {
+      await writeWebResponse(outgoing, await handleBrainStreamRequest(request));
       return;
     }
 
