@@ -23,8 +23,6 @@ test("POST /brain/verify validates requests before running Verify", async () => 
   const response = await handleVerifyRequest(
     request("http://localhost/brain/verify", {
       claimId: "not-a-uuid",
-      currentClaimText: "",
-      sessionId: uuidAt(100),
     }),
     {
       async verifyClaim() {
@@ -38,19 +36,16 @@ test("POST /brain/verify validates requests before running Verify", async () => 
   assert.equal(response.status, 400);
   assert.equal(payload.error.code, "invalid_request");
   assert.match(payload.error.issues.join("\n"), /claimId/);
-  assert.match(payload.error.issues.join("\n"), /currentClaimText/);
   assert.equal(verified, false);
 });
 
-test("POST /brain/verify returns verdict, evidence cards, BrainRun, verify_run move, and pending confidence update", async () => {
+test("POST /brain/verify returns verdict, evidence cards, BrainRun, and verify_run move without confidence mutation", async () => {
   let inputSeen: VerifyRequest | undefined;
   const claimId = uuidAt(101);
-  const sessionId = uuidAt(100);
   const response = await handleVerifyRequest(
     request("http://localhost/brain/verify", {
       claimId,
-      currentClaimText: "Cognitive load is the first bottleneck to test.",
-      sessionId,
+      question: "Is cognitive load usually the first bottleneck?",
     }),
     {
       async verifyClaim(input) {
@@ -62,16 +57,15 @@ test("POST /brain/verify returns verdict, evidence cards, BrainRun, verify_run m
           evidenceCards: [
             {
               title: "Worked examples lower load",
-              summary: "A learning-science citation supports part of the mechanism.",
+              url: "https://example.test/source",
+              sourceType: "web",
               stance: "supports",
-              sourceName: "Learning Science Notes",
-              sourceUrl: "https://example.test/source",
-              citation: "Worked examples can reduce unnecessary cognitive load.",
+              quote: "Worked examples can reduce unnecessary cognitive load.",
+              summary: "A learning-science citation supports part of the mechanism.",
+              reliability: "medium",
             },
           ],
-          confidenceDeltaSuggestion: -5,
-          whatWouldChangeThis: "Direct study-session evidence from target students.",
-          nextQuestion: "Which user behavior would show cognitive load is actually the bottleneck?",
+          followUpQuestions: ["Which user behavior would show cognitive load is actually the bottleneck?"],
           targetClaim: {
             id: claimId,
             versionId: uuidAt(201),
@@ -92,30 +86,6 @@ test("POST /brain/verify returns verdict, evidence cards, BrainRun, verify_run m
             edgeIds: [],
             artifactIds: [],
           },
-          citationSources: [
-            {
-              evidenceCardIndex: 0,
-              source: {
-                id: uuidAt(501),
-                kind: "verification_citation",
-                rawText: "Citation: Worked examples can reduce unnecessary cognitive load.",
-              },
-              sourceSpan: {
-                id: uuidAt(601),
-                sourceId: uuidAt(501),
-                claimId,
-                claimVersionId: uuidAt(201),
-                startOffset: 10,
-                endOffset: 63,
-                label: "verify_evidence",
-              },
-            },
-          ],
-          confidenceUpdate: {
-            suggestedDelta: -5,
-            autoApplied: false,
-            decision: "pending_user_decision",
-          },
         };
       },
     },
@@ -123,29 +93,26 @@ test("POST /brain/verify returns verdict, evidence cards, BrainRun, verify_run m
   const payload = (await response.json()) as {
     data: {
       verdict: string;
-      evidenceCards: unknown[];
-      confidenceDeltaSuggestion: number;
+      evidenceCards: Array<{ url: string; stance: string }>;
+      followUpQuestions: string[];
       targetClaim: { confidence: number };
       brainRun: { status: string };
       move: { kind: string; claimIds: string[] };
-      citationSources: unknown[];
-      confidenceUpdate: { autoApplied: boolean; decision: string };
     };
   };
 
   assert.equal(response.status, 201);
   assert.equal(inputSeen?.claimId, claimId);
-  assert.equal(inputSeen?.sessionId, sessionId);
+  assert.equal(inputSeen?.question, "Is cognitive load usually the first bottleneck?");
   assert.equal(payload.data.verdict, "mixed");
   assert.equal(payload.data.evidenceCards.length, 1);
-  assert.equal(payload.data.confidenceDeltaSuggestion, -5);
+  assert.equal(payload.data.evidenceCards[0]?.url, "https://example.test/source");
+  assert.equal(payload.data.evidenceCards[0]?.stance, "supports");
+  assert.equal(payload.data.followUpQuestions.length, 1);
   assert.equal(payload.data.targetClaim.confidence, 64);
   assert.equal(payload.data.brainRun.status, "succeeded");
   assert.equal(payload.data.move.kind, "verify_run");
   assert.deepEqual(payload.data.move.claimIds, [claimId]);
-  assert.equal(payload.data.citationSources.length, 1);
-  assert.equal(payload.data.confidenceUpdate.autoApplied, false);
-  assert.equal(payload.data.confidenceUpdate.decision, "pending_user_decision");
 });
 
 test("verify route maps not-found, conflict, provider, and generation failures to stable errors", async () => {
@@ -192,13 +159,15 @@ test("verify provider schema stays loose while strict validation enforces local 
     evidenceCards: [
       {
         title: "A source",
-        summary: "Evidence summary.",
+        url: "https://example.test/source",
+        sourceType: "web",
         stance: "supports",
+        quote: "Evidence quote.",
+        summary: "Evidence summary.",
+        reliability: "medium",
       },
     ],
-    confidenceDeltaSuggestion: 80,
-    whatWouldChangeThis: "More direct evidence.",
-    nextQuestion: "What should be checked next?",
+    followUpQuestions: ["What should be checked next?"],
   };
 
   assert.equal(VerifyProviderSchema.safeParse(looseProviderOutput).success, true);
@@ -208,11 +177,11 @@ test("verify provider schema stays loose while strict validation enforces local 
 test("generateVerifyOutput validates heuristic and xAI structured outputs", async () => {
   const input = {
     claimId: uuidAt(101),
-    sessionId: uuidAt(100),
-    currentClaimText: "Cognitive load is the first bottleneck to test.",
-    currentClaimKind: "assumption" as const,
-    currentClaimStatus: "exploratory" as const,
-    currentClaimConfidence: 64,
+    claimVersionId: uuidAt(201),
+    claimText: "Cognitive load is the first bottleneck to test.",
+    claimKind: "assumption" as const,
+    claimStatus: "exploratory" as const,
+    claimConfidence: 64,
   };
   const heuristic = await generateVerifyOutput(input, {
     provider: createHeuristicVerifyProvider(),
@@ -226,31 +195,39 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
         verdict: "supported",
         summary: "A cited source supports the mechanism enough to raise confidence slightly.",
         evidenceCards: [
-          {
-            title: "Worked examples",
-            summary: "The citation supports reducing unnecessary load.",
-            stance: "supports",
-            sourceName: "Learning Science Notes",
-            citation: "Worked examples can reduce unnecessary cognitive load.",
-          },
-        ],
-        confidenceDeltaSuggestion: 8,
-        whatWouldChangeThis: "Contrary evidence from the target user group.",
-        nextQuestion: "Does the target student group benefit from worked examples?",
+            {
+              title: "Worked examples",
+              url: "https://example.test/worked-examples",
+              sourceType: "web",
+              stance: "supports",
+              quote: "Worked examples can reduce unnecessary cognitive load.",
+              summary: "The citation supports reducing unnecessary load.",
+              reliability: "medium",
+            },
+          ],
+        followUpQuestions: ["Does the target student group benefit from worked examples?"],
       },
+      sources: [
+        {
+          sourceType: "url",
+          title: "Worked examples",
+          url: "https://example.test/worked-examples",
+        },
+      ],
     };
   };
   const xai = await generateVerifyOutput(input, {
     provider: createXaiVerifyProvider({ XAI_API_KEY: "test-key" }, { generateText }),
   });
 
-  assert.equal(heuristic.verdict, "not_enough_evidence");
-  assert.equal(heuristic.confidenceDeltaSuggestion, 0);
+  assert.equal(heuristic.verdict, "insufficient");
+  assert.equal(heuristic.evidenceCards.length, 0);
   assert.equal(xai.verdict, "supported");
-  assert.equal(xai.confidenceDeltaSuggestion, 8);
+  assert.equal(xai.evidenceCards[0]?.url, "https://example.test/worked-examples");
   assert.equal(resolveXaiVerifyModel({}), defaultXaiVerifyModel);
   assert.equal(calls.length, 1);
-  assert.match(calls[0]?.prompt ?? "", /Current claim text/);
+  assert.ok(calls[0]?.tools?.web_search);
+  assert.match(calls[0]?.prompt ?? "", /Claim text/);
 });
 
 test("verify output parsing and xAI provider failures are explicit", async () => {
@@ -260,9 +237,7 @@ test("verify output parsing and xAI provider failures are explicit", async () =>
         verdict: "supported",
         summary: "",
         evidenceCards: [],
-        confidenceDeltaSuggestion: 0,
-        whatWouldChangeThis: "More evidence.",
-        nextQuestion: "What next?",
+        followUpQuestions: ["What next?"],
       }),
     (error) => {
       assert.ok(error instanceof VerifyGenerationError);
@@ -274,11 +249,11 @@ test("verify output parsing and xAI provider failures are explicit", async () =>
     () =>
       createXaiVerifyProvider({}).generate({
         claimId: uuidAt(101),
-        sessionId: uuidAt(100),
-        currentClaimText: "Cognitive load is the first bottleneck to test.",
-        currentClaimKind: "assumption",
-        currentClaimStatus: "exploratory",
-        currentClaimConfidence: 64,
+        claimVersionId: uuidAt(201),
+        claimText: "Cognitive load is the first bottleneck to test.",
+        claimKind: "assumption",
+        claimStatus: "exploratory",
+        claimConfidence: 64,
       }),
     (error) => {
       assert.ok(error instanceof VerifyProviderError);
@@ -291,8 +266,6 @@ test("verify output parsing and xAI provider failures are explicit", async () =>
 function validRequest(): Request {
   return request("http://localhost/brain/verify", {
     claimId: uuidAt(101),
-    currentClaimText: "Cognitive load is the first bottleneck to test.",
-    sessionId: uuidAt(100),
   });
 }
 

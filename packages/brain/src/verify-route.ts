@@ -3,85 +3,102 @@ import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { brainRuns, claimVersions, claims, moves, sources, sourceSpans } from "./db/schema.ts";
+import { brainRuns, claimVersions, claims, moves, sources } from "./db/schema.ts";
 import { flattenIssues } from "./schema.ts";
 
-export const VerifyRequestSchema = z
+const VerifyRequestSchema = z
   .object({
     claimId: z.string().uuid(),
-    currentClaimText: z.string().trim().min(1).max(4_000),
-    sessionId: z.string().uuid(),
+    question: z.string().trim().min(1).max(800).optional(),
   })
   .strict();
 
-const EvidenceStanceSchema = z.enum(["supports", "weakens", "mixed", "unclear"]);
-
-export const VerifyProviderEvidenceCardSchema = z
-  .object({
-    title: z.string(),
-    summary: z.string(),
-    stance: EvidenceStanceSchema,
-    sourceName: z.string().nullable().optional(),
-    sourceUrl: z.string().nullable().optional(),
-    citation: z.string().nullable().optional(),
-  })
-  .strict();
+const EvidenceStanceSchema = z.enum(["supports", "contradicts", "mixed", "context"]);
+const EvidenceReliabilitySchema = z.enum(["low", "medium", "high"]);
+const VerifyVerdictSchema = z.enum(["supported", "contradicted", "mixed", "insufficient"]);
+const EvidenceSourceTypeSchema = z.enum(["web", "x", "paper", "official", "other"]);
 
 export const VerifyProviderSchema = z
   .object({
-    verdict: z.enum(["supported", "weakened", "mixed", "not_enough_evidence"]),
+    verdict: VerifyVerdictSchema,
     summary: z.string(),
-    evidenceCards: z.array(VerifyProviderEvidenceCardSchema),
-    confidenceDeltaSuggestion: z.number(),
-    whatWouldChangeThis: z.string(),
-    nextQuestion: z.string(),
+    evidenceCards: z.array(
+      z
+        .object({
+          title: z.string(),
+          url: z.string(),
+          sourceType: EvidenceSourceTypeSchema,
+          stance: EvidenceStanceSchema,
+          quote: z.string(),
+          summary: z.string(),
+          reliability: EvidenceReliabilitySchema,
+          publishedAt: z.string().optional(),
+        })
+        .strict(),
+    ),
+    followUpQuestions: z.array(z.string()),
   })
   .strict();
 
-export const VerifyEvidenceCardSchema = z
+const EvidenceCardSchema = z
   .object({
-    title: z.string().trim().min(1).max(160),
-    summary: z.string().trim().min(1).max(520),
+    title: z.string().trim().min(1).max(180),
+    url: z.string().trim().url().max(1_000),
+    sourceType: EvidenceSourceTypeSchema,
     stance: EvidenceStanceSchema,
-    sourceName: z.string().trim().min(1).max(180).nullable().optional(),
-    sourceUrl: z.string().trim().min(1).max(500).nullable().optional(),
-    citation: z.string().trim().min(1).max(1_000).nullable().optional(),
+    quote: z.string().trim().min(1).max(500),
+    summary: z.string().trim().min(1).max(600),
+    reliability: EvidenceReliabilitySchema,
+    publishedAt: z.string().trim().min(1).max(80).optional(),
   })
   .strict();
 
 export const VerifyOutputSchema = z
   .object({
-    verdict: z.enum(["supported", "weakened", "mixed", "not_enough_evidence"]),
-    summary: z.string().trim().min(1).max(700),
-    evidenceCards: z.array(VerifyEvidenceCardSchema).min(1).max(6),
-    confidenceDeltaSuggestion: z.number().int().min(-30).max(30),
-    whatWouldChangeThis: z.string().trim().min(1).max(520),
-    nextQuestion: z.string().trim().min(1).max(320),
+    verdict: VerifyVerdictSchema,
+    summary: z.string().trim().min(1).max(800),
+    evidenceCards: z.array(EvidenceCardSchema).max(8),
+    followUpQuestions: z.array(z.string().trim().min(1).max(220)).max(5),
   })
-  .strict();
+  .strict()
+  .superRefine((output, context) => {
+    const text = [
+      output.summary,
+      ...output.followUpQuestions,
+      ...output.evidenceCards.flatMap((card) => [card.title, card.quote, card.summary]),
+    ]
+      .join("\n")
+      .toLowerCase();
+
+    for (const phrase of ["as an ai", "consult a professional", "more research is needed", "it depends on many factors"]) {
+      if (text.includes(phrase)) {
+        context.addIssue({
+          code: "custom",
+          message: `verify output contains generic response phrase: ${phrase}`,
+        });
+      }
+    }
+  });
 
 export type VerifyRequest = z.infer<typeof VerifyRequestSchema>;
-export type VerifyProviderOutput = z.infer<typeof VerifyProviderSchema>;
 export type VerifyOutput = z.infer<typeof VerifyOutputSchema>;
+export type VerifyProviderOutput = z.infer<typeof VerifyProviderSchema>;
+export type EvidenceCard = z.infer<typeof EvidenceCardSchema>;
 
 export type VerifyGenerationInput = {
   claimId: string;
-  sessionId: string;
-  currentClaimText: string;
-  currentClaimKind: "belief" | "assumption" | "question" | "concept";
-  currentClaimStatus: "exploratory" | "committed" | "resolved" | "rejected";
-  currentClaimConfidence: number;
-};
-
-export type VerifyProvider = {
-  name: string;
-  generate(input: VerifyGenerationInput): Promise<unknown>;
+  claimVersionId: string;
+  claimKind: "belief" | "assumption" | "question" | "concept";
+  claimStatus: "exploratory" | "committed" | "resolved" | "rejected";
+  claimConfidence: number;
+  claimText: string;
+  question?: string | undefined;
 };
 
 const verifyOutputSpec = Output.object<VerifyProviderOutput>({
   schema: VerifyProviderSchema,
-  name: "penny_verify_claim",
-  description: "A structured Verify pass for one Penny Brain claim. It suggests confidence changes but never applies them.",
+  name: "penny_verify_check",
+  description: "A Penny Verify result grounded in citation-backed evidence cards.",
 });
 
 export type VerifyGenerateText = (request: {
@@ -90,39 +107,39 @@ export type VerifyGenerateText = (request: {
   prompt: string;
   output: typeof verifyOutputSpec;
   maxRetries: number;
+  tools?: Record<string, unknown> | undefined;
   providerOptions: {
     xai: {
       reasoningEffort: "medium";
       store: false;
     };
   };
-}) => Promise<{ output: unknown }>;
+}) => Promise<{ output: unknown; sources?: unknown[] }>;
 
-export const defaultXaiVerifyModel = "grok-4.20-reasoning";
+export type VerifyProvider = {
+  name: string;
+  searchEnabled: boolean;
+  generate(input: VerifyGenerationInput): Promise<{ output: unknown; sources?: unknown[] }>;
+};
 
 export type PersistedVerify = VerifyOutput & {
   targetClaim: PersistedClaimSlice;
+  move: PersistedMoveSlice;
   brainRun: {
     id: string;
     status: string;
-  };
-  move: PersistedMoveSlice;
-  citationSources: PersistedCitationSource[];
-  confidenceUpdate: {
-    suggestedDelta: number;
-    autoApplied: false;
-    decision: "pending_user_decision";
   };
 };
 
 export type VerifyRouteOptions = {
   db?: PennyDatabase;
   databaseUrl?: string;
-  provider?: VerifyProvider;
-  verifyClaim?: (
-    input: VerifyRequest,
-    options: { db?: PennyDatabase; provider: VerifyProvider },
-  ) => Promise<PersistedVerify>;
+  verifyClaim?: (input: VerifyRequest, options: { db?: PennyDatabase }) => Promise<PersistedVerify>;
+};
+
+type VerifyPrelude = {
+  target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>;
+  brainRun: typeof brainRuns.$inferSelect;
 };
 
 type PersistedClaimSlice = {
@@ -143,28 +160,7 @@ type PersistedMoveSlice = {
   artifactIds: string[];
 };
 
-type PersistedCitationSource = {
-  evidenceCardIndex: number;
-  source: {
-    id: string;
-    kind: "verification_citation";
-    rawText: string;
-  };
-  sourceSpan: {
-    id: string;
-    sourceId: string;
-    claimId: string;
-    claimVersionId: string;
-    startOffset: number;
-    endOffset: number;
-    label: string | null;
-  };
-};
-
-type VerifyPrelude = {
-  target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>;
-  brainRun: typeof brainRuns.$inferSelect;
-};
+export const defaultXaiVerifyModel = "grok-4.20-reasoning";
 
 export async function handleVerifyRequest(
   request: Request,
@@ -180,15 +176,13 @@ export async function handleVerifyRequest(
     return parsed.response;
   }
 
-  const provider = options.provider ?? createDefaultVerifyProvider();
   const db = resolveVerifyDb(options, Boolean(options.verifyClaim));
   const verifyClaim =
     options.verifyClaim ??
-    ((input: VerifyRequest, verifyOptions: { db?: PennyDatabase; provider: VerifyProvider }) =>
-      runVerify(requireVerifyDb(verifyOptions.db), input, { provider: verifyOptions.provider }));
+    ((input: VerifyRequest, verifyOptions: { db?: PennyDatabase }) => runVerify(requireVerifyDb(verifyOptions.db), input));
 
   try {
-    return jsonResponse({ data: await verifyClaim(parsed.data, { ...dbOption(db), provider }) }, 201);
+    return jsonResponse({ data: await verifyClaim(parsed.data, dbOption(db)) }, 201);
   } catch (error) {
     return verifyErrorResponse(error);
   }
@@ -208,20 +202,20 @@ export class VerifyConflictError extends Error {
   }
 }
 
-export class VerifyGenerationError extends Error {
-  constructor(
-    message: string,
-    readonly issues: string[] = [],
-  ) {
-    super(message);
-    this.name = "VerifyGenerationError";
-  }
-}
-
 export class VerifyProviderError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "VerifyProviderError";
+  }
+}
+
+export class VerifyGenerationError extends Error {
+  constructor(
+    message: string,
+    readonly issues: string[],
+  ) {
+    super(message);
+    this.name = "VerifyGenerationError";
   }
 }
 
@@ -230,13 +224,13 @@ export async function runVerify(
   input: VerifyRequest,
   options: { provider?: VerifyProvider } = {},
 ): Promise<PersistedVerify> {
-  const provider = options.provider ?? createDefaultVerifyProvider();
+  const provider = options.provider ?? defaultVerifyProvider();
   const prelude = await createVerifyPrelude(db, input, provider);
 
   try {
-    const output = await generateVerifyOutput(verifyGenerationInput(prelude.target), { provider });
+    const output = await generateVerifyOutput(verifyGenerationInput(prelude.target, input), { provider });
 
-    return await persistVerifyOutput(db, prelude, output);
+    return await persistVerifyResult(db, output, prelude);
   } catch (error) {
     await markVerifyRunFailed(db, prelude.brainRun.id, error);
     throw error;
@@ -247,29 +241,34 @@ export async function generateVerifyOutput(
   input: VerifyGenerationInput,
   options: { provider?: VerifyProvider } = {},
 ): Promise<VerifyOutput> {
-  const provider = options.provider ?? createDefaultVerifyProvider();
-  const providerOutput = await provider.generate(input);
+  const provider = options.provider ?? defaultVerifyProvider();
+  const result = await provider.generate(input);
 
-  return parseVerifyOutput(providerOutput);
+  return parseVerifyOutput(result.output, result.sources ?? []);
 }
 
-export function parseVerifyOutput(output: unknown): VerifyOutput {
-  const providerParsed = VerifyProviderSchema.safeParse(output);
+export function parseVerifyOutput(output: unknown, providerSources: unknown[] = []): VerifyOutput {
+  const parsed = VerifyProviderSchema.safeParse(output);
 
-  if (!providerParsed.success) {
-    throw new VerifyGenerationError("Verify provider output failed validation.", flattenIssues(providerParsed.error));
+  if (!parsed.success) {
+    throw new VerifyGenerationError("Verify output failed provider validation.", flattenIssues(parsed.error));
   }
 
-  const strictParsed = VerifyOutputSchema.safeParse(providerParsed.data);
+  const strictInput = {
+    ...parsed.data,
+    evidenceCards: normalizeEvidenceCards(parsed.data.evidenceCards, providerSources),
+    followUpQuestions: parsed.data.followUpQuestions.map((question) => question.trim()).filter(Boolean),
+  };
+  const strict = VerifyOutputSchema.safeParse(strictInput);
 
-  if (!strictParsed.success) {
-    throw new VerifyGenerationError("Verify output failed strict validation.", flattenIssues(strictParsed.error));
+  if (!strict.success) {
+    throw new VerifyGenerationError("Verify output failed strict validation.", flattenIssues(strict.error));
   }
 
-  return strictParsed.data;
+  return strict.data;
 }
 
-export function createDefaultVerifyProvider(env: Record<string, string | undefined> = process.env): VerifyProvider {
+export function defaultVerifyProvider(env: Record<string, string | undefined> = process.env): VerifyProvider {
   if (env.XAI_API_KEY?.trim()) {
     return createXaiVerifyProvider(env);
   }
@@ -280,8 +279,17 @@ export function createDefaultVerifyProvider(env: Record<string, string | undefin
 export function createHeuristicVerifyProvider(): VerifyProvider {
   return {
     name: "heuristic",
+    searchEnabled: false,
     async generate(input) {
-      return buildHeuristicVerifyOutput(input);
+      return {
+        output: {
+          verdict: "insufficient",
+          summary: `No live citation search is configured for "${clipText(input.claimText, 120)}".`,
+          evidenceCards: [],
+          followUpQuestions: ["Run Verify with xAI search enabled before changing confidence."],
+        },
+        sources: [],
+      };
     },
   };
 }
@@ -292,6 +300,7 @@ export function createXaiVerifyProvider(
 ): VerifyProvider {
   return {
     name: "xai",
+    searchEnabled: true,
     async generate(input) {
       const apiKey = env.XAI_API_KEY?.trim();
 
@@ -301,9 +310,13 @@ export function createXaiVerifyProvider(
 
       const xai = createXai(createXaiSettings(apiKey, env));
       const callGenerateText = options.generateText ?? generateStructuredVerify;
+      const webSearchTool =
+        typeof xai.tools.webSearch === "function"
+          ? xai.tools.webSearch({ enableImageUnderstanding: false })
+          : null;
 
       try {
-        const result = await callGenerateText({
+        const request: Parameters<VerifyGenerateText>[0] = {
           model: xai.responses(resolveXaiVerifyModel(env)),
           system: buildVerifySystemPrompt(),
           prompt: buildVerifyPrompt(input),
@@ -315,9 +328,13 @@ export function createXaiVerifyProvider(
               store: false,
             },
           },
-        });
+        };
 
-        return result.output;
+        if (webSearchTool) {
+          request.tools = { web_search: webSearchTool };
+        }
+
+        return await callGenerateText(request);
       } catch (error) {
         if (error instanceof VerifyProviderError) {
           throw error;
@@ -335,33 +352,31 @@ export function resolveXaiVerifyModel(env: Record<string, string | undefined> = 
 
 export function buildVerifySystemPrompt(): string {
   return [
-    "You are Penny Verify, a Check mode inside the Brain graph.",
-    "Verify one current claim without changing it.",
-    "Return structured evidence cards and a confidence delta suggestion only.",
-    "Do not auto-update confidence or claim text.",
-    "Use citations only when you can name the source text or citation precisely.",
+    "You are Penny Check, a verification mode inside Brain.",
+    "Verify the target claim with citation-backed evidence cards.",
+    "Use the available web_search tool when present. Cite only retrieved sources.",
+    "Do not change confidence, rewrite claims, create graph edges, or invent citations.",
     "Return only the structured Verify object.",
   ].join("\n");
 }
 
 export function buildVerifyPrompt(input: VerifyGenerationInput): string {
   return [
-    "Run Verify for this Penny claim.",
+    "Check this stable Penny claim against external evidence.",
     "",
     "Return:",
-    "- verdict: supported, weakened, mixed, or not_enough_evidence.",
-    "- summary: concise reason for the verdict.",
-    "- evidenceCards: short structured cards. Include citation text when available.",
-    "- confidenceDeltaSuggestion: integer from -30 to 30. This will not be applied automatically.",
-    "- whatWouldChangeThis: what evidence would alter the verdict.",
-    "- nextQuestion: the next focused check question.",
+    "- verdict: supported, contradicted, mixed, or insufficient.",
+    "- summary: the shortest useful evidence-grounded reading.",
+    "- evidenceCards: citation cards with title, url, sourceType, stance, quote, summary, reliability, and optional publishedAt.",
+    "- followUpQuestions: questions that would make verification sharper.",
     "",
-    `Session id: ${input.sessionId}`,
     `Claim id: ${input.claimId}`,
-    `Claim kind: ${input.currentClaimKind}`,
-    `Claim status: ${input.currentClaimStatus}`,
-    `Current confidence: ${input.currentClaimConfidence}`,
-    `Current claim text: ${input.currentClaimText}`,
+    `Claim version id: ${input.claimVersionId}`,
+    `Claim kind: ${input.claimKind}`,
+    `Claim status: ${input.claimStatus}`,
+    `Claim confidence: ${input.claimConfidence}`,
+    `Claim text: ${input.claimText}`,
+    input.question ? `User check question: ${input.question}` : "User check question: Verify the claim as stated.",
   ].join("\n");
 }
 
@@ -371,28 +386,21 @@ async function createVerifyPrelude(
   provider: VerifyProvider,
 ): Promise<VerifyPrelude> {
   return db.transaction(async (tx) => {
-    const target = await loadClaimWithCurrentVersion(tx, input.claimId, input.sessionId);
-    const normalizedInputText = compactText(input.currentClaimText);
-    const normalizedCurrentText = compactText(target.version.content);
-
-    if (normalizedInputText !== normalizedCurrentText) {
-      throw new VerifyConflictError("Verify requires the current ClaimVersion text.");
-    }
-
+    const target = await loadClaimWithCurrentVersion(tx, input.claimId);
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
-        sessionId: input.sessionId,
-        sourceId: target.version.sourceId ?? target.claim.sourceId,
-        operation: "verify_run",
+        sessionId: target.claim.sessionId,
+        sourceId: target.claim.sourceId,
+        operation: "brain.verify.check",
         provider: provider.name,
         model: provider.name === "xai" ? resolveXaiVerifyModel() : null,
         status: "running",
         input: {
           claimId: target.claim.id,
-          currentClaimVersionId: target.version.id,
-          currentClaimText: target.version.content,
-          currentConfidence: target.version.confidence,
+          claimVersionId: target.version.id,
+          question: input.question ?? null,
+          searchEnabled: provider.searchEnabled,
         },
       })
       .returning();
@@ -405,56 +413,44 @@ async function createVerifyPrelude(
   });
 }
 
-async function persistVerifyOutput(
+async function persistVerifyResult(
   db: PennyDatabase,
-  prelude: VerifyPrelude,
   output: VerifyOutput,
+  prelude: VerifyPrelude,
 ): Promise<PersistedVerify> {
   return db.transaction(async (tx) => {
-    const citationSources = await insertCitationSources(tx, prelude.target, output);
-    const citationSourceIds = citationSources.map((citation) => citation.source.id);
-    const citationSourceSpanIds = citationSources.map((citation) => citation.sourceSpan.id);
-
+    const evidenceCards = await insertCitationSources(tx, prelude.target.claim.sessionId, output.evidenceCards);
+    const persistedOutput = {
+      ...output,
+      evidenceCards,
+    };
     const [move] = await tx
       .insert(moves)
       .values({
         sessionId: prelude.target.claim.sessionId,
         kind: "verify_run",
-        summary: `Verified claim: ${output.verdict.replaceAll("_", " ")}.`,
+        summary: verifyMoveSummary(output),
         payload: {
+          claimIds: [prelude.target.claim.id],
           claimId: prelude.target.claim.id,
           claimVersionId: prelude.target.version.id,
           brainRunId: prelude.brainRun.id,
           verdict: output.verdict,
-          confidenceDeltaSuggestion: output.confidenceDeltaSuggestion,
-          confidenceDecision: "pending_user_decision",
-          autoAppliedConfidence: false,
-          sourceIds: citationSourceIds,
-          sourceSpanIds: citationSourceSpanIds,
-          claimIds: [prelude.target.claim.id],
-          edgeIds: [],
+          evidenceCards,
+          citationSourceIds: evidenceCards.map((card) => card.sourceId),
         },
       })
       .returning();
 
     if (!move) {
-      throw new VerifyConflictError("Failed to create Verify move.");
+      throw new VerifyConflictError("Failed to record Verify move.");
     }
 
     const [completedBrainRun] = await tx
       .update(brainRuns)
       .set({
         status: "succeeded",
-        output: {
-          ...output,
-          citationSourceIds,
-          citationSourceSpanIds,
-          confidenceUpdate: {
-            suggestedDelta: output.confidenceDeltaSuggestion,
-            autoApplied: false,
-            decision: "pending_user_decision",
-          },
-        },
+        output: persistedOutput,
         error: null,
         completedAt: new Date(),
       })
@@ -466,112 +462,51 @@ async function persistVerifyOutput(
     }
 
     return {
-      ...output,
+      ...persistedOutput,
       targetClaim: claimSlice(prelude.target.claim, prelude.target.version),
+      move: moveSlice(move, prelude.target.claim.id),
       brainRun: {
         id: completedBrainRun.id,
         status: completedBrainRun.status,
-      },
-      move: {
-        id: move.id,
-        kind: "verify_run",
-        summary: move.summary,
-        claimIds: [prelude.target.claim.id],
-        edgeIds: [],
-        artifactIds: [],
-      },
-      citationSources,
-      confidenceUpdate: {
-        suggestedDelta: output.confidenceDeltaSuggestion,
-        autoApplied: false,
-        decision: "pending_user_decision",
       },
     };
   });
 }
 
-type VerifyTransaction = Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
+async function insertCitationSources(db: PennyDatabase, sessionId: string, evidenceCards: EvidenceCard[]) {
+  const cards = [];
 
-async function insertCitationSources(
-  tx: VerifyTransaction,
-  target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
-  output: VerifyOutput,
-): Promise<PersistedCitationSource[]> {
-  const persisted: PersistedCitationSource[] = [];
-
-  for (const [index, card] of output.evidenceCards.entries()) {
-    const citation = card.citation?.trim();
-
-    if (!citation) {
-      continue;
-    }
-
-    const rawText = citationSourceText(card);
-    const citationStartOffset = Math.max(0, rawText.indexOf(citation));
-    const citationEndOffset = citationStartOffset + citation.length;
-    const [source] = await tx
+  for (const card of evidenceCards) {
+    const [source] = await db
       .insert(sources)
       .values({
-        sessionId: target.claim.sessionId,
+        sessionId,
         kind: "verification_citation",
-        rawText,
+        rawText: citationRawText(card),
       })
       .returning();
 
     if (!source) {
-      throw new VerifyConflictError("Failed to create Verify citation source.");
+      throw new VerifyConflictError("Failed to record verification citation source.");
     }
 
-    const [span] = await tx
-      .insert(sourceSpans)
-      .values({
-        sourceId: source.id,
-        claimId: target.claim.id,
-        claimVersionId: target.version.id,
-        startOffset: citationStartOffset,
-        endOffset: citationEndOffset,
-        label: "verify_evidence",
-      })
-      .returning();
-
-    if (!span) {
-      throw new VerifyConflictError("Failed to create Verify citation SourceSpan.");
-    }
-
-    persisted.push({
-      evidenceCardIndex: index,
-      source: {
-        id: source.id,
-        kind: "verification_citation",
-        rawText: source.rawText,
-      },
-      sourceSpan: {
-        id: span.id,
-        sourceId: span.sourceId,
-        claimId: target.claim.id,
-        claimVersionId: target.version.id,
-        startOffset: span.startOffset,
-        endOffset: span.endOffset,
-        label: span.label,
-      },
+    cards.push({
+      ...card,
+      sourceId: source.id,
     });
   }
 
-  return persisted;
+  return cards;
 }
 
-async function loadClaimWithCurrentVersion(tx: VerifyTransaction, claimId: string, sessionId: string) {
-  const [claim] = await tx
-    .select()
-    .from(claims)
-    .where(and(eq(claims.id, claimId), eq(claims.sessionId, sessionId)))
-    .limit(1);
+async function loadClaimWithCurrentVersion(db: PennyDatabase, claimId: string) {
+  const [claim] = await db.select().from(claims).where(eq(claims.id, claimId)).limit(1);
 
   if (!claim) {
-    throw new VerifyNotFoundError("Claim was not found in this session.");
+    throw new VerifyNotFoundError("Claim was not found.");
   }
 
-  const [version] = await tx
+  const [version] = await db
     .select()
     .from(claimVersions)
     .where(and(eq(claimVersions.claimId, claim.id), eq(claimVersions.isCurrent, true)))
@@ -583,68 +518,6 @@ async function loadClaimWithCurrentVersion(tx: VerifyTransaction, claimId: strin
   }
 
   return { claim, version };
-}
-
-function verifyGenerationInput(target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>): VerifyGenerationInput {
-  return {
-    claimId: target.claim.id,
-    sessionId: target.claim.sessionId,
-    currentClaimText: target.version.content,
-    currentClaimKind: target.claim.kind,
-    currentClaimStatus: target.version.status,
-    currentClaimConfidence: target.version.confidence,
-  };
-}
-
-function buildHeuristicVerifyOutput(input: VerifyGenerationInput): VerifyOutput {
-  const claim = compactText(input.currentClaimText);
-  const parsed = VerifyOutputSchema.safeParse({
-    verdict: "not_enough_evidence",
-    summary: `Penny has the current claim text but no external evidence attached yet, so Verify cannot responsibly raise or lower confidence.`,
-    evidenceCards: [
-      {
-        title: "Current Brain state",
-        summary: `The claim "${clipText(claim, 120)}" is available for checking, but no citation-backed evidence has been supplied in this Verify pass.`,
-        stance: "unclear",
-        sourceName: "Penny Brain",
-      },
-    ],
-    confidenceDeltaSuggestion: 0,
-    whatWouldChangeThis: "Citation-backed support, contradiction, or measured user behavior tied directly to the claim.",
-    nextQuestion: "What source or observation would most directly test this claim?",
-  });
-
-  if (!parsed.success) {
-    throw new VerifyConflictError("Generated Verify output failed local validation.");
-  }
-
-  return parsed.data;
-}
-
-function claimSlice(
-  claim: typeof claims.$inferSelect,
-  version: typeof claimVersions.$inferSelect,
-): PersistedClaimSlice {
-  return {
-    id: claim.id,
-    versionId: version.id,
-    kind: claim.kind,
-    status: version.status,
-    text: version.content,
-    confidence: version.confidence,
-  };
-}
-
-function citationSourceText(card: VerifyOutput["evidenceCards"][number]): string {
-  return [
-    `Title: ${card.title}`,
-    card.sourceName ? `Source: ${card.sourceName}` : null,
-    card.sourceUrl ? `URL: ${card.sourceUrl}` : null,
-    card.citation ? `Citation: ${card.citation}` : null,
-    `Summary: ${card.summary}`,
-  ]
-    .filter((line): line is string => Boolean(line))
-    .join("\n");
 }
 
 async function markVerifyRunFailed(db: PennyDatabase, brainRunId: string, error: unknown): Promise<void> {
@@ -661,10 +534,126 @@ async function markVerifyRunFailed(db: PennyDatabase, brainRunId: string, error:
     .where(eq(brainRuns.id, brainRunId));
 }
 
-async function generateStructuredVerify(request: Parameters<VerifyGenerateText>[0]): Promise<{ output: unknown }> {
-  const result = await generateText(request);
+async function generateStructuredVerify(request: Parameters<VerifyGenerateText>[0]): Promise<{ output: unknown; sources?: unknown[] }> {
+  const result = await generateText(request as Parameters<typeof generateText>[0]);
 
-  return { output: result.output };
+  return {
+    output: result.output,
+    sources: result.sources,
+  };
+}
+
+function verifyGenerationInput(
+  target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
+  input: VerifyRequest,
+): VerifyGenerationInput {
+  return {
+    claimId: target.claim.id,
+    claimVersionId: target.version.id,
+    claimKind: target.claim.kind,
+    claimStatus: target.version.status,
+    claimConfidence: target.version.confidence,
+    claimText: target.version.content,
+    question: input.question,
+  };
+}
+
+function normalizeEvidenceCards(cards: VerifyProviderOutput["evidenceCards"], providerSources: unknown[]): EvidenceCard[] {
+  const normalizedCards = cards.map(normalizeEvidenceCard).filter((card): card is EvidenceCard => Boolean(card));
+
+  if (normalizedCards.length > 0) {
+    return normalizedCards;
+  }
+
+  return providerSources.map(sourceToEvidenceCard).filter((card): card is EvidenceCard => Boolean(card)).slice(0, 8);
+}
+
+function normalizeEvidenceCard(card: VerifyProviderOutput["evidenceCards"][number]): EvidenceCard | null {
+  const parsed = EvidenceCardSchema.safeParse({
+    ...card,
+    title: card.title.trim(),
+    url: card.url.trim(),
+    quote: card.quote.trim(),
+    summary: card.summary.trim(),
+    publishedAt: card.publishedAt?.trim() || undefined,
+  });
+
+  return parsed.success ? parsed.data : null;
+}
+
+function sourceToEvidenceCard(source: unknown): EvidenceCard | null {
+  const record = objectRecord(source);
+  const url = stringRecordValue(record, "url");
+
+  if (!url) {
+    return null;
+  }
+
+  const title = stringRecordValue(record, "title") ?? url;
+  const snippet = stringRecordValue(record, "snippet") ?? stringRecordValue(record, "description") ?? title;
+  const parsed = EvidenceCardSchema.safeParse({
+    title,
+    url,
+    sourceType: "web",
+    stance: "context",
+    quote: clipText(snippet, 480),
+    summary: clipText(snippet, 560),
+    reliability: "medium",
+  });
+
+  return parsed.success ? parsed.data : null;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function stringRecordValue(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function claimSlice(
+  claim: typeof claims.$inferSelect,
+  version: typeof claimVersions.$inferSelect,
+): PersistedClaimSlice {
+  return {
+    id: claim.id,
+    versionId: version.id,
+    kind: claim.kind,
+    status: version.status,
+    text: version.content,
+    confidence: version.confidence,
+  };
+}
+
+function moveSlice(move: typeof moves.$inferSelect, claimId: string): PersistedMoveSlice {
+  return {
+    id: move.id,
+    kind: "verify_run",
+    summary: move.summary,
+    claimIds: [claimId],
+    edgeIds: [],
+    artifactIds: [],
+  };
+}
+
+function verifyMoveSummary(output: VerifyOutput): string {
+  const cardLabel = output.evidenceCards.length === 1 ? "1 evidence card" : `${output.evidenceCards.length} evidence cards`;
+
+  return `Verified claim as ${output.verdict} with ${cardLabel}.`;
+}
+
+function citationRawText(card: EvidenceCard): string {
+  return [
+    `Title: ${card.title}`,
+    `URL: ${card.url}`,
+    `Stance: ${card.stance}`,
+    `Reliability: ${card.reliability}`,
+    `Quote: ${card.quote}`,
+    `Summary: ${card.summary}`,
+  ].join("\n");
 }
 
 function createXaiSettings(apiKey: string, env: Record<string, string | undefined>) {
@@ -674,7 +663,7 @@ function createXaiSettings(apiKey: string, env: Record<string, string | undefine
     return { apiKey };
   }
 
-  return { apiKey, baseURL: baseURL.replace(/\/+$/, "") };
+  return { apiKey, baseURL };
 }
 
 async function parseJsonRequest<Schema extends z.ZodType>(
@@ -707,7 +696,7 @@ async function parseJsonRequest<Schema extends z.ZodType>(
         {
           error: {
             code: "invalid_request",
-            message: "Request body failed validation.",
+            message: "Verify request is invalid.",
             issues: flattenIssues(parsed.error),
           },
         },
@@ -723,92 +712,22 @@ async function readJsonBody(request: Request): Promise<{ ok: true; value: unknow
   const text = await request.text();
 
   if (!text.trim()) {
-    return {
-      ok: false,
-      message: "Request body must be JSON.",
-    };
+    return { ok: false, message: "Request body must be JSON." };
   }
 
   try {
-    return {
-      ok: true,
-      value: JSON.parse(text) as unknown,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message: `Request body is not valid JSON: ${formatErrorMessage(error)}`,
-    };
+    return { ok: true, value: JSON.parse(text) };
+  } catch {
+    return { ok: false, message: "Request body must be valid JSON." };
   }
 }
 
-function verifyErrorResponse(error: unknown): Response {
-  if (error instanceof VerifyNotFoundError) {
-    return jsonResponse(
-      {
-        error: {
-          code: "verify_not_found",
-          message: error.message,
-        },
-      },
-      404,
-    );
-  }
-
-  if (error instanceof VerifyConflictError) {
-    return jsonResponse(
-      {
-        error: {
-          code: "verify_conflict",
-          message: error.message,
-        },
-      },
-      409,
-    );
-  }
-
-  if (error instanceof VerifyGenerationError) {
-    return jsonResponse(
-      {
-        error: {
-          code: "invalid_verify_output",
-          message: error.message,
-          issues: error.issues,
-        },
-      },
-      502,
-    );
-  }
-
-  if (error instanceof VerifyProviderError) {
-    return jsonResponse(
-      {
-        error: {
-          code: "verify_provider_failed",
-          message: error.message,
-        },
-      },
-      502,
-    );
-  }
-
-  return jsonResponse(
-    {
-      error: {
-        code: "verify_failed",
-        message: formatErrorMessage(error),
-      },
-    },
-    500,
-  );
-}
-
-function resolveVerifyDb(options: { db?: PennyDatabase; databaseUrl?: string }, hasInjectedVerify: boolean): PennyDatabase | undefined {
+function resolveVerifyDb(options: VerifyRouteOptions, hasInjectedVerifyClaim: boolean): PennyDatabase | undefined {
   if (options.db) {
     return options.db;
   }
 
-  if (hasInjectedVerify) {
+  if (hasInjectedVerifyClaim) {
     return undefined;
   }
 
@@ -840,6 +759,67 @@ function methodNotAllowed(message: string): Response {
   );
 }
 
+function verifyErrorResponse(error: unknown): Response {
+  if (error instanceof VerifyNotFoundError) {
+    return jsonResponse(
+      {
+        error: {
+          code: "verify_not_found",
+          message: error.message,
+        },
+      },
+      404,
+    );
+  }
+
+  if (error instanceof VerifyConflictError) {
+    return jsonResponse(
+      {
+        error: {
+          code: "verify_conflict",
+          message: error.message,
+        },
+      },
+      409,
+    );
+  }
+
+  if (error instanceof VerifyProviderError) {
+    return jsonResponse(
+      {
+        error: {
+          code: "verify_provider_failed",
+          message: error.message,
+        },
+      },
+      502,
+    );
+  }
+
+  if (error instanceof VerifyGenerationError) {
+    return jsonResponse(
+      {
+        error: {
+          code: "invalid_verify_output",
+          message: error.message,
+          issues: error.issues,
+        },
+      },
+      502,
+    );
+  }
+
+  return jsonResponse(
+    {
+      error: {
+        code: "verify_failed",
+        message: formatErrorMessage(error),
+      },
+    },
+    500,
+  );
+}
+
 function jsonResponse(payload: unknown, status: number, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(payload), {
     status,
@@ -850,24 +830,14 @@ function jsonResponse(payload: unknown, status: number, headers: Record<string, 
   });
 }
 
-function compactText(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function clipText(value: string, maxLength: number): string {
-  const compact = compactText(value);
-
-  if (compact.length <= maxLength) {
-    return compact;
-  }
-
-  return `${compact.slice(0, maxLength - 1).trimEnd()}.`;
-}
-
 function formatErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
   }
 
   return String(error);
+}
+
+function clipText(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1).trim()}...` : value;
 }
