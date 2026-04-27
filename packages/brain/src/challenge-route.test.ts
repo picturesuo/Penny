@@ -2,9 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   ChallengeConflictError,
+  ChallengeGenerationError,
   ChallengeNotFoundError,
+  ChallengeProviderError,
+  ChallengeProviderSchema,
+  ChallengeOutputSchema,
+  createHeuristicChallengeProvider,
+  createXaiChallengeProvider,
+  defaultXaiBrainChallengeModel,
+  generateChallengeOutput,
   handleChallengeRequest,
   handleChallengeRespondRequest,
+  parseChallengeOutput,
+  resolveXaiBrainChallengeModel,
+  type ChallengeGenerateText,
   type ChallengeRequest,
   type ChallengeResponseRequest,
 } from "./challenge-route.ts";
@@ -211,6 +222,94 @@ test("challenge routes map not-found and conflict failures to stable error codes
   assert.equal(notFoundPayload.error.code, "challenge_not_found");
   assert.equal(conflict.status, 409);
   assert.equal(conflictPayload.error.code, "challenge_conflict");
+});
+
+test("challenge provider schema stays loose while strict validation enforces local gates", () => {
+  const looseProviderOutput = {
+    critique: "",
+    failureType: "shaky_assumption",
+    strength: "moderate",
+    provenanceTag: "penny:test.challenge",
+    whyThisCritique: "A specific reason.",
+    whatWouldResolveIt: "A specific resolution.",
+    suggestedNextMove: "Defend, Revise, or Absorb.",
+  };
+
+  assert.equal(ChallengeProviderSchema.safeParse(looseProviderOutput).success, true);
+  assert.equal(ChallengeOutputSchema.safeParse(looseProviderOutput).success, false);
+});
+
+test("generateChallengeOutput validates heuristic and xAI structured outputs", async () => {
+  const input = {
+    targetClaimId: uuidAt(101),
+    targetKind: "assumption" as const,
+    targetText: "Cognitive load is the bottleneck.",
+    targetStatus: "exploratory" as const,
+    targetConfidence: 64,
+  };
+  const heuristic = await generateChallengeOutput(input, {
+    provider: createHeuristicChallengeProvider(),
+  });
+  const calls: Parameters<ChallengeGenerateText>[0][] = [];
+  const generateText: ChallengeGenerateText = async (request) => {
+    calls.push(request);
+
+    return {
+      output: {
+        critique: "The claim collapses if motivation is the bottleneck instead.",
+        failureType: "shaky_assumption",
+        strength: "strong",
+        provenanceTag: "penny:challenge.test",
+        whyThisCritique: "It attacks the load-bearing premise.",
+        whatWouldResolveIt: "Evidence that cognitive load is first would resolve it.",
+        suggestedNextMove: "Defend, Revise, or Absorb.",
+      },
+    };
+  };
+  const xai = await generateChallengeOutput(input, {
+    provider: createXaiChallengeProvider({ XAI_API_KEY: "test-key" }, { generateText }),
+  });
+
+  assert.equal(heuristic.strength, "moderate");
+  assert.equal(xai.strength, "strong");
+  assert.equal(resolveXaiBrainChallengeModel({}), defaultXaiBrainChallengeModel);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]?.prompt ?? "", /Target claim id/);
+});
+
+test("challenge output parsing and xAI provider failures are explicit", async () => {
+  assert.throws(
+    () =>
+      parseChallengeOutput({
+        critique: "",
+        failureType: "shaky_assumption",
+        strength: "moderate",
+        provenanceTag: "penny:test.challenge",
+        whyThisCritique: "A reason.",
+        whatWouldResolveIt: "A resolution.",
+        suggestedNextMove: "A move.",
+      }),
+    (error) => {
+      assert.ok(error instanceof ChallengeGenerationError);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      createXaiChallengeProvider({}).generate({
+        targetClaimId: uuidAt(101),
+        targetKind: "assumption",
+        targetText: "Cognitive load is the bottleneck.",
+        targetStatus: "exploratory",
+        targetConfidence: 64,
+      }),
+    (error) => {
+      assert.ok(error instanceof ChallengeProviderError);
+      assert.match(error.message, /XAI_API_KEY/);
+      return true;
+    },
+  );
 });
 
 function request(url: string, body: unknown): Request {
