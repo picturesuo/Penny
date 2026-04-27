@@ -28,6 +28,7 @@ const elements = {
 
 const state = {
   data: null,
+  respondingClaimId: null,
 };
 
 renderEmptyState();
@@ -82,6 +83,33 @@ async function seedBrain(rawIdea) {
 
   if (!payload?.data?.ideaMap) {
     throw new Error("POST /brain/seed returned an invalid graph slice.");
+  }
+
+  return payload;
+}
+
+async function respondToAssumption(claimId, body) {
+  const response = await fetch(`/brain/assumptions/${encodeURIComponent(claimId)}/respond`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": "dev-user",
+      "x-project-id": "dev-project",
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
+    const message = payload?.error?.message
+      ? `${payload.error.message}${issues}`
+      : `POST /brain/assumptions/${claimId}/respond failed with ${response.status}.`;
+    throw new Error(message);
+  }
+
+  if (!payload?.data?.claim || !payload.data.move) {
+    throw new Error("Assumption response returned an invalid graph update.");
   }
 
   return payload;
@@ -216,16 +244,114 @@ function renderThoughtMap(claims, edges) {
 
 function claimNode(claim, modifier = "") {
   const node = document.createElement("article");
-  node.className = ["map-node", claim.kind, modifier].filter(Boolean).join(" ");
+  node.className = ["map-node", claim.kind, modifier, claim.status ? `status-${claim.status}` : ""]
+    .filter(Boolean)
+    .join(" ");
 
   const meta = document.createElement("span");
-  meta.textContent = `${formatLabel(claim.kind)} / ${claim.confidence}%`;
+  meta.textContent = `${formatLabel(claim.kind)} / ${formatLabel(claim.status)} / ${claim.confidence}%`;
 
   const text = document.createElement("strong");
   text.textContent = claim.text;
 
   node.append(meta, text);
+
+  if (claim.kind === "assumption") {
+    append(node, assumptionActions(claim));
+  }
+
   return node;
+}
+
+function assumptionActions(claim) {
+  const controls = document.createElement("div");
+  controls.className = "assumption-actions";
+
+  const isPending = state.respondingClaimId === claim.id;
+  const actions = [
+    { label: "Confirm", action: "confirm", disabled: claim.status === "committed" },
+    { label: "Reject", action: "reject", disabled: claim.status === "rejected" },
+    { label: "Refine", action: "refine", disabled: false },
+  ];
+
+  for (const item of actions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = isPending ? "Saving" : item.label;
+    button.disabled = isPending || item.disabled;
+    button.addEventListener("click", () => {
+      void handleAssumptionAction(claim, item.action);
+    });
+    append(controls, button);
+  }
+
+  return controls;
+}
+
+async function handleAssumptionAction(claim, action) {
+  const body = assumptionActionBody(claim, action);
+
+  if (!body) {
+    return;
+  }
+
+  state.respondingClaimId = claim.id;
+  renderCockpit(state.data);
+  setStatus(`Saving ${formatLabel(action).toLowerCase()} response.`);
+
+  try {
+    const payload = await respondToAssumption(claim.id, body);
+    applyAssumptionResponse(payload.data);
+    setStatus(`${formatLabel(action)} saved.`);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), true);
+  } finally {
+    state.respondingClaimId = null;
+    renderCockpit(state.data);
+  }
+}
+
+function assumptionActionBody(claim, action) {
+  if (action !== "refine") {
+    return { action };
+  }
+
+  const refinedText = window.prompt("Refine assumption", claim.text)?.trim();
+
+  if (refinedText === undefined) {
+    return null;
+  }
+
+  if (!refinedText) {
+    setStatus("Refined assumption text cannot be empty.", true);
+    return null;
+  }
+
+  return {
+    action,
+    refinedText,
+  };
+}
+
+function applyAssumptionResponse(data) {
+  const claims = state.data?.ideaMap?.claims;
+
+  if (!Array.isArray(claims)) {
+    return;
+  }
+
+  const index = claims.findIndex((claim) => claim.id === data.claim.id);
+
+  if (index >= 0) {
+    claims[index] = {
+      ...claims[index],
+      ...data.claim,
+    };
+  }
+
+  if (Array.isArray(state.data.moves)) {
+    state.data.moves = [...state.data.moves, data.move];
+  }
 }
 
 function edgeConnector(edge) {

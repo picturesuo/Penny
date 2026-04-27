@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 
 const port = parsePort(process.env.PORT);
@@ -14,6 +15,39 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/seed") {
       await writeWebResponse(outgoing, await handleBrainSeedRequest(request));
+      return;
+    }
+
+    const assumptionResponseMatch = /^\/brain\/assumptions\/([^/]+)\/respond$/.exec(url.pathname);
+
+    if (assumptionResponseMatch) {
+      const assumptionClaimId = assumptionResponseMatch[1];
+
+      if (!assumptionClaimId) {
+        await writeWebResponse(
+          outgoing,
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "invalid_claim_id",
+                message: "Assumption response requires a claim id.",
+              },
+            }),
+            {
+              status: 400,
+              headers: {
+                "content-type": "application/json; charset=utf-8",
+              },
+            },
+          ),
+        );
+        return;
+      }
+
+      await writeWebResponse(
+        outgoing,
+        await handleAssumptionResponseRequest(request, decodeURIComponent(assumptionClaimId)),
+      );
       return;
     }
 
