@@ -32,6 +32,9 @@ const state = {
   challengingClaimId: null,
   respondingChallengeId: null,
   activeChallenge: null,
+  activeLearn: null,
+  learning: false,
+  savingLearn: false,
 };
 
 renderEmptyState();
@@ -53,6 +56,8 @@ elements.form?.addEventListener("submit", async (event) => {
   try {
     const payload = await seedBrain(rawIdea);
     state.data = payload.data;
+    state.activeChallenge = null;
+    state.activeLearn = null;
     renderCockpit(payload.data);
     setStatus("Graph slice persisted.");
     settledRunLabel = runStatusLabel(payload.data?.brainRun);
@@ -172,6 +177,60 @@ async function respondToChallenge(body) {
   return payload;
 }
 
+async function askInlineLearn(body) {
+  const response = await fetch("/brain/learn/inline", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": "dev-user",
+      "x-project-id": "dev-project",
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
+    const message = payload?.error?.message
+      ? `${payload.error.message}${issues}`
+      : `POST /brain/learn/inline failed with ${response.status}.`;
+    throw new Error(message);
+  }
+
+  if (!payload?.data?.explanation || !payload.data.brainRun) {
+    throw new Error("Makes Cents returned an invalid explanation.");
+  }
+
+  return payload;
+}
+
+async function saveInlineLearn(body) {
+  const response = await fetch("/brain/learn/inline", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": "dev-user",
+      "x-project-id": "dev-project",
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
+    const message = payload?.error?.message
+      ? `${payload.error.message}${issues}`
+      : `POST /brain/learn/inline failed with ${response.status}.`;
+    throw new Error(message);
+  }
+
+  if (!payload?.data?.explanation || !payload.data.saved?.conceptClaim || !payload.data.saved.teachesEdge) {
+    throw new Error("Save concept returned an invalid graph update.");
+  }
+
+  return payload;
+}
+
 async function readJsonResponse(response) {
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -215,6 +274,7 @@ function renderCockpit(data) {
   const learnCandidates = data.learnCandidates ?? [];
   const seedClaim = claims.find((claim) => claim.seedId === "claim.seed") ?? claims[0];
   const targetClaim = claims.find((claim) => claim.id === data.firstChallenge?.targetClaimId);
+  const conceptCount = claims.filter((claim) => claim.kind === "concept").length;
 
   setText(
     elements.sessionStatus,
@@ -228,7 +288,7 @@ function renderCockpit(data) {
   setText(elements.mapCount, `${claims.length} claims`);
   setText(elements.laterCount, String(paths.length));
   setText(elements.explorationCount, `${paths.length} paths`);
-  setText(elements.learnCount, String(learnCandidates.length));
+  setText(elements.learnCount, String(learnCandidates.length + conceptCount));
 
   renderThoughtMap(claims, edges);
   renderExplorationRows(paths);
@@ -719,11 +779,217 @@ function challengeResponseBody(challenge, option) {
 }
 
 function renderLearn(candidates) {
-  renderList(
-    elements.learnList,
-    candidates,
-    (candidate) => listRow(candidate.term, candidate.unblockExplanation, candidate.whyItMatters),
-    "Makes Cents concepts appear when the graph exposes a confusing term.",
+  replaceChildren(elements.learnList);
+  append(elements.learnList, learnAskForm(candidates));
+
+  if (state.activeLearn) {
+    append(elements.learnList, learnResultCard(state.activeLearn));
+  }
+
+  const savedConcepts = state.data?.ideaMap?.claims?.filter((claim) => claim.kind === "concept") ?? [];
+  const rows = [
+    ...candidates.map((candidate) => ({
+      label: candidate.term,
+      title: candidate.unblockExplanation,
+      body: candidate.whyItMatters,
+      term: candidate.term,
+    })),
+    ...savedConcepts.map((claim) => ({
+      label: "Saved",
+      title: claim.text,
+      body: "Concept claim connected to the current graph.",
+      term: claim.text.split(":")[0],
+    })),
+  ];
+
+  if (rows.length === 0 && !state.activeLearn) {
+    append(elements.learnList, textOnly("Ask Makes Cents about a confusing term in the current graph."));
+    return;
+  }
+
+  for (const row of rows) {
+    const element = listRow(row.label, row.title, row.body);
+    element.addEventListener("click", () => {
+      const input = element.querySelector("[data-learn-term]");
+
+      if (input instanceof HTMLElement) {
+        input.click();
+      }
+    });
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "inline-link";
+    button.dataset.learnTerm = row.term;
+    button.textContent = "Ask";
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void handleInlineLearn(row.term);
+    });
+    element.append(button);
+    append(elements.learnList, element);
+  }
+}
+
+function learnAskForm(candidates) {
+  const form = document.createElement("form");
+  form.className = "learn-form";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.name = "term";
+  input.placeholder = candidates[0]?.term ?? "Concept or term";
+  input.value = state.activeLearn?.term ?? "";
+
+  const button = document.createElement("button");
+  button.type = "submit";
+  button.textContent = state.learning ? "Asking" : "Ask";
+  button.disabled = state.learning;
+
+  form.append(input, button);
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void handleInlineLearn(input.value.trim());
+  });
+
+  return form;
+}
+
+function learnResultCard(learn) {
+  const card = document.createElement("article");
+  card.className = "learn-result";
+
+  const title = document.createElement("strong");
+  title.textContent = learn.term;
+
+  const explanation = document.createElement("p");
+  explanation.textContent = learn.explanation;
+
+  const why = document.createElement("p");
+  why.textContent = learn.whyItMattersHere;
+
+  const example = document.createElement("small");
+  example.textContent = learn.example;
+
+  const related = document.createElement("div");
+  related.className = "related-concepts";
+
+  for (const concept of learn.relatedConcepts ?? []) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.textContent = concept;
+    chip.addEventListener("click", () => {
+      void handleInlineLearn(concept);
+    });
+    related.append(chip);
+  }
+
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "save-concept";
+  save.title = learn.saveSuggestion ?? "Save concept";
+  save.textContent = learn.saved ? "Saved" : state.savingLearn ? "Saving" : "Save concept";
+  save.disabled = Boolean(learn.saved || state.savingLearn);
+  save.addEventListener("click", () => {
+    void handleSaveInlineLearn();
+  });
+
+  card.append(title, explanation, why, example, related, save);
+  return card;
+}
+
+async function handleInlineLearn(term) {
+  const target = currentLearnTarget();
+
+  if (!state.data?.session?.id || !target) {
+    setStatus("Create a graph before asking Makes Cents.", true);
+    return;
+  }
+
+  if (!term) {
+    setStatus("Enter a concept or term for Makes Cents.", true);
+    return;
+  }
+
+  state.learning = true;
+  renderCockpit(state.data);
+  setThinking(true, "Learning");
+  setStatus("Asking Makes Cents.");
+
+  try {
+    const payload = await askInlineLearn({
+      term,
+      currentClaimId: target.id,
+      sessionId: state.data.session.id,
+      localContext: target.text,
+    });
+    state.activeLearn = {
+      ...payload.data,
+      currentClaimId: target.id,
+      sessionId: state.data.session.id,
+      localContext: target.text,
+      saved: false,
+    };
+    setStatus("Makes Cents explanation ready.");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), true);
+  } finally {
+    state.learning = false;
+    setThinking(false, state.activeLearn ? "Learn ready" : "Ready");
+    renderCockpit(state.data);
+  }
+}
+
+async function handleSaveInlineLearn() {
+  if (!state.activeLearn) {
+    setStatus("Ask Makes Cents before saving a concept.", true);
+    return;
+  }
+
+  state.savingLearn = true;
+  renderCockpit(state.data);
+  setStatus("Saving concept.");
+
+  try {
+    const payload = await saveInlineLearn({
+      term: state.activeLearn.term,
+      currentClaimId: state.activeLearn.currentClaimId,
+      sessionId: state.activeLearn.sessionId,
+      localContext: state.activeLearn.localContext ?? currentLearnTarget()?.text ?? state.activeLearn.explanation,
+      save: true,
+    });
+    applyInlineLearnSave(payload.data.saved);
+    state.activeLearn = {
+      ...payload.data,
+      currentClaimId: state.activeLearn.currentClaimId,
+      sessionId: state.activeLearn.sessionId,
+      localContext: state.activeLearn.localContext,
+      saved: true,
+    };
+    setStatus("Concept saved.");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), true);
+  } finally {
+    state.savingLearn = false;
+    renderCockpit(state.data);
+  }
+}
+
+function applyInlineLearnSave(saved) {
+  upsertClaim(saved.conceptClaim);
+  upsertEdge(saved.teachesEdge);
+
+  if (Array.isArray(state.data?.moves)) {
+    state.data.moves = [...state.data.moves, saved.move];
+  }
+}
+
+function currentLearnTarget() {
+  return (
+    findClaimById(state.activeChallenge?.targetClaimId) ??
+    findClaimById(state.data?.firstChallenge?.targetClaimId) ??
+    state.data?.ideaMap?.claims?.find((claim) => claim.seedId === "claim.seed") ??
+    state.data?.ideaMap?.claims?.[0]
   );
 }
 
