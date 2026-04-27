@@ -10,8 +10,10 @@ export const claimEdgeKindEnum = pgEnum("claim_edge_kind", [
   "supports",
   "questions",
   "challenges",
+  "contradicts",
   "clarifies",
 ]);
+export const claimEdgeStatusEnum = pgEnum("claim_edge_status", ["active", "acknowledged_vulnerability"]);
 export const moveKindEnum = pgEnum("move_kind", [
   "seed_claim_created",
   "assumptions_extracted",
@@ -19,6 +21,10 @@ export const moveKindEnum = pgEnum("move_kind", [
   "assumption_confirmed",
   "assumption_rejected",
   "assumption_refined",
+  "challenge_issued",
+  "user_defended",
+  "claim_revised",
+  "critique_absorbed",
   "source.recorded",
   "claim.created",
   "edge.created",
@@ -120,6 +126,7 @@ export const claimEdges = pgTable(
       .notNull()
       .references(() => claims.id, { onDelete: "cascade" }),
     kind: claimEdgeKindEnum("kind").notNull(),
+    status: claimEdgeStatusEnum("status").notNull().default("active"),
     label: text("label"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -221,6 +228,7 @@ export const pennySchema = {
   artifactKindEnum,
   brainRuns,
   claimEdgeKindEnum,
+  claimEdgeStatusEnum,
   claimEdges,
   claimKindEnum,
   claims,
