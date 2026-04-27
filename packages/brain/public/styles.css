@@ -526,7 +526,8 @@ textarea:focus {
 }
 
 .learn-surface .stack-list,
-.compact-surface .stack-list {
+.compact-surface .stack-list,
+.artifact-surface .stack-list {
   padding: 13px 14px 14px;
 }
 
@@ -595,6 +596,45 @@ textarea:focus {
 .save-concept:disabled {
   cursor: default;
   opacity: 0.58;
+}
+
+.artifact-actions {
+  padding: 0 14px 14px;
+}
+
+.artifact-actions button {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(49, 95, 134, 0.34);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--field);
+  font-weight: 900;
+}
+
+.artifact-actions button:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+.artifact-card,
+.artifact-list {
+  display: grid;
+  gap: 7px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.artifact-card:first-child {
+  border-top: 0;
+}
+
+.artifact-card p,
+.artifact-card small,
+.artifact-list p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .tag {
