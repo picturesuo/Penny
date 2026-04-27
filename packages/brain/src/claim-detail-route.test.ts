@@ -19,6 +19,7 @@ const currentVersionId = uuidAt(303);
 const dependsOnEdgeId = uuidAt(401);
 const challengeEdgeId = uuidAt(402);
 const teachesEdgeId = uuidAt(403);
+const artifactId = uuidAt(701);
 
 test("GET /brain/claims/:claimId/detail validates claim ids before persistence", async () => {
   let loaded = false;
@@ -87,6 +88,8 @@ test("GET /brain/claims/:claimId/detail returns old selves, move history, proven
   assert.equal(payload.data.activeChallenges[0]?.critiqueClaim?.id, critiqueClaimId);
   assert.equal(payload.data.learnedConcepts[0]?.conceptClaim.id, conceptClaimId);
   assert.equal(payload.data.learnedConcepts[0]?.edge.id, teachesEdgeId);
+  assert.equal(payload.data.artifactReferences[0]?.id, artifactId);
+  assert.deepEqual(payload.data.artifactReferences[0]?.referenceReasons, ["claim", "claim_version", "edge"]);
 });
 
 test("claim detail route maps not-found and conflict failures to stable errors", async () => {
@@ -203,6 +206,23 @@ function sampleState(): ClaimDetailState {
         endOffset: 5,
         label: "submitted_text",
         createdAt: dateAt(3),
+      },
+    ],
+    artifacts: [
+      {
+        id: artifactId,
+        sessionId,
+        kind: "idea_map_challenge_brief",
+        title: "Idea Map + Challenge Brief",
+        summary: "Compiled brief for the current session.",
+        payload: {
+          generatedBy: {
+            claimIds: [assumptionClaimId],
+            claimVersionIds: [currentVersionId],
+            edgeIds: [challengeEdgeId],
+          },
+        },
+        createdAt: dateAt(10),
       },
     ],
   };

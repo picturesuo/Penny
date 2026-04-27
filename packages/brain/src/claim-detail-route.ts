@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { claimEdges, claims, claimVersions, moves, sources, sourceSpans } from "./db/schema.ts";
+import { artifacts, claimEdges, claims, claimVersions, moves, sources, sourceSpans } from "./db/schema.ts";
 
 const ClaimDetailPathSchema = z.string().uuid();
 
@@ -11,6 +11,7 @@ type EdgeRow = typeof claimEdges.$inferSelect;
 type MoveRow = typeof moves.$inferSelect;
 type SourceRow = typeof sources.$inferSelect;
 type SourceSpanRow = typeof sourceSpans.$inferSelect;
+type ArtifactRow = typeof artifacts.$inferSelect;
 
 export type ClaimDetailState = {
   claim: ClaimRow;
@@ -21,6 +22,7 @@ export type ClaimDetailState = {
   moves: MoveRow[];
   sources: SourceRow[];
   sourceSpans: SourceSpanRow[];
+  artifacts: ArtifactRow[];
 };
 
 export type ClaimDetailPayload = ReturnType<typeof buildClaimDetailFromState>;
@@ -125,6 +127,11 @@ export async function loadClaimDetail(db: PennyDatabase, claimId: string): Promi
       ? await db.select().from(sources).where(inArray(sources.id, sourceIds)).orderBy(asc(sources.createdAt))
       : [];
   const moveRows = await db.select().from(moves).where(eq(moves.sessionId, claim.sessionId)).orderBy(asc(moves.createdAt));
+  const artifactRows = await db
+    .select()
+    .from(artifacts)
+    .where(eq(artifacts.sessionId, claim.sessionId))
+    .orderBy(asc(artifacts.createdAt));
 
   return buildClaimDetailFromState({
     claim,
@@ -135,6 +142,7 @@ export async function loadClaimDetail(db: PennyDatabase, claimId: string): Promi
     moves: moveRows,
     sources: sourceRows,
     sourceSpans: spanRows,
+    artifacts: artifactRows,
   });
 }
 
@@ -161,6 +169,9 @@ export function buildClaimDetailFromState(state: ClaimDetailState) {
   const moveSlices = state.moves
     .filter((move) => moveInvolvesClaim(move, state.claim.id, connectedEdgeIds, versionIds))
     .map(moveSlice);
+  const artifactReferences = state.artifacts
+    .filter((artifact) => artifactInvolvesClaim(artifact, state.claim.id, connectedEdgeIds, versionIds))
+    .map((artifact) => artifactReferenceSlice(artifact, state.claim.id, connectedEdgeIds, versionIds));
   const challengeEdges = state.edges.filter((edge) => edge.kind === "challenges" || edge.kind === "contradicts");
   const teachesEdges = state.edges.filter((edge) => edge.kind === "teaches");
 
@@ -182,6 +193,7 @@ export function buildClaimDetailFromState(state: ClaimDetailState) {
       sources: state.sources.map(sourceSlice),
       spans: sourceSpanSlices,
     },
+    artifactReferences,
     connectedClaims: state.edges
       .map((edge) => {
         const connectedClaimId = edge.fromClaimId === state.claim.id ? edge.toClaimId : edge.fromClaimId;
@@ -325,6 +337,22 @@ function sourceSpanSlice(span: SourceSpanRow, source: SourceRow | undefined) {
   };
 }
 
+function artifactReferenceSlice(
+  artifact: ArtifactRow,
+  claimId: string,
+  connectedEdgeIds: Set<string>,
+  claimVersionIds: Set<string>,
+) {
+  return {
+    id: artifact.id,
+    kind: artifact.kind,
+    title: artifact.title,
+    summary: artifact.summary,
+    referenceReasons: artifactReferenceReasons(artifact.payload, claimId, connectedEdgeIds, claimVersionIds),
+    createdAt: artifact.createdAt.toISOString(),
+  };
+}
+
 function currentVersionsByClaimId(versionRows: ClaimVersionRow[]): Map<string, ClaimVersionRow> {
   const versionsByClaimId = new Map<string, ClaimVersionRow>();
 
@@ -362,6 +390,39 @@ function moveInvolvesClaim(
   }
 
   return false;
+}
+
+function artifactInvolvesClaim(
+  artifact: ArtifactRow,
+  claimId: string,
+  connectedEdgeIds: Set<string>,
+  claimVersionIds: Set<string>,
+): boolean {
+  return artifactReferenceReasons(artifact.payload, claimId, connectedEdgeIds, claimVersionIds).length > 0;
+}
+
+function artifactReferenceReasons(
+  payload: unknown,
+  claimId: string,
+  connectedEdgeIds: Set<string>,
+  claimVersionIds: Set<string>,
+): string[] {
+  const payloadValues = payloadStringValues(payload);
+  const reasons: string[] = [];
+
+  if (payloadValues.has(claimId)) {
+    reasons.push("claim");
+  }
+
+  if ([...claimVersionIds].some((versionId) => payloadValues.has(versionId))) {
+    reasons.push("claim_version");
+  }
+
+  if ([...connectedEdgeIds].some((edgeId) => payloadValues.has(edgeId))) {
+    reasons.push("edge");
+  }
+
+  return uniqueStrings(reasons);
 }
 
 function responseStateForChallenge(movesForClaim: ReturnType<typeof moveSlice>[], edgeId: string): string {
