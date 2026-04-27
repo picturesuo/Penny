@@ -12,6 +12,7 @@ Build Penny in small waves. Each wave should preserve the rule that meaningful c
 
 - Keep concise product context in `docs/penny-mvp.md`.
 - Lock the seed output contract for raw idea, assumptions, thought map, exploration paths, first challenge, Moves, and artifacts.
+- The seed contract must not create durable state unless it can produce the required Move plan or explicit pending-Move boundary.
 - Keep AI output typed and validated with Zod.
 
 ## Wave 2: Persistence
