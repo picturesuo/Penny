@@ -12,6 +12,7 @@ export const claimEdgeKindEnum = pgEnum("claim_edge_kind", [
   "challenges",
   "contradicts",
   "clarifies",
+  "teaches",
 ]);
 export const claimEdgeStatusEnum = pgEnum("claim_edge_status", ["active", "acknowledged_vulnerability"]);
 export const moveKindEnum = pgEnum("move_kind", [
@@ -25,6 +26,7 @@ export const moveKindEnum = pgEnum("move_kind", [
   "user_defended",
   "claim_revised",
   "critique_absorbed",
+  "learning_triggered",
   "source.recorded",
   "claim.created",
   "edge.created",
