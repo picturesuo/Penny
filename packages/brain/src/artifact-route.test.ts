@@ -8,6 +8,7 @@ import {
   createHeuristicArtifactProvider,
   generateArtifactOutput,
   handleArtifactRequest,
+  handleSessionArtifactRequest,
   parseArtifactOutput,
   type ArtifactOutput,
   type ArtifactRequest,
@@ -93,6 +94,59 @@ test("POST /brain/artifact returns the persisted artifact row and artifact_creat
   assert.equal(payload.data.artifact.payload.learnedConcepts.length, 1);
   assert.equal(payload.data.move.kind, "artifact_created");
   assert.deepEqual(payload.data.move.artifactIds, [uuidAt(900)]);
+});
+
+test("POST /brain/session/:sessionId/artifact uses the path session id", async () => {
+  let inputSeen: { sessionId: string; kind: string } | undefined;
+  const sessionId = uuidAt(100);
+  const context = sampleContext(sessionId);
+  const output = await generateArtifactOutput({ ...context, requestedKind: "challenge_brief" }, {
+    provider: createHeuristicArtifactProvider(),
+  });
+  const response = await handleSessionArtifactRequest(
+    request(`http://localhost/brain/session/${sessionId}/artifact`, { kind: "challenge_brief" }),
+    sessionId,
+    {
+      async compileArtifact(input) {
+        inputSeen = input;
+
+        return {
+          artifact: {
+            id: uuidAt(900),
+            kind: "idea_map_challenge_brief",
+            title: "Idea Map + Challenge Brief",
+            summary: output.summary,
+            createdAt: now(),
+            payload: buildCompiledArtifactPayload(context, output, uuidAt(800)),
+          },
+          move: {
+            id: uuidAt(901),
+            kind: "artifact_created",
+            summary: "Generated a Challenge Brief artifact from persisted Brain state.",
+            claimIds: [uuidAt(201), uuidAt(202), uuidAt(203), uuidAt(204)],
+            edgeIds: [uuidAt(401), uuidAt(402), uuidAt(403)],
+            artifactIds: [uuidAt(900)],
+          },
+          brainRun: {
+            id: uuidAt(800),
+            status: "succeeded",
+          },
+        };
+      },
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      artifact: { kind: string };
+      brainRun: { status: string };
+    };
+  };
+
+  assert.equal(response.status, 201);
+  assert.equal(inputSeen?.sessionId, sessionId);
+  assert.equal(inputSeen?.kind, "challenge_brief");
+  assert.equal(payload.data.artifact.kind, "idea_map_challenge_brief");
+  assert.equal(payload.data.brainRun.status, "succeeded");
 });
 
 test("artifact compiler output is grounded in session state and rejects generic prose", async () => {
