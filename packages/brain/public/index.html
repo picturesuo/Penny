@@ -15,10 +15,10 @@
         </div>
         <nav aria-label="Brain cockpit" class="mode-tabs">
           <button class="mode-tab active" type="button">Brain</button>
-          <button class="mode-tab" type="button">Cents</button>
-          <button class="mode-tab" type="button">Check</button>
-          <button class="mode-tab icon-tab" type="button" aria-label="Search">Search</button>
-          <button class="mode-tab icon-tab" type="button" aria-label="Settings">Settings</button>
+          <button class="mode-tab" type="button" data-after-seed hidden>Cents</button>
+          <button class="mode-tab" type="button" data-after-seed hidden>Check</button>
+          <button class="mode-tab icon-tab" type="button" aria-label="Search" data-after-seed hidden>Search</button>
+          <button class="mode-tab icon-tab" type="button" aria-label="Settings" data-after-seed hidden>Settings</button>
         </nav>
         <div class="session-strip">
           <span id="sessionStatus">No session</span>
@@ -57,7 +57,7 @@
         </aside>
 
         <section class="panel center-panel" aria-label="Current exploration">
-          <section id="streamSurface" class="surface stream-surface">
+          <section id="streamSurface" class="surface stream-surface" hidden>
             <div class="section-heading">
               <p class="eyebrow">Stream</p>
               <span id="streamStatus">Loading</span>
@@ -120,7 +120,7 @@
             <div id="responseOptions" class="response-options"></div>
           </section>
 
-          <section class="surface verify-surface">
+          <section class="surface verify-surface" data-after-seed hidden>
             <div class="section-heading">
               <p class="eyebrow">Check</p>
               <span id="verifyStatus">Not run</span>
@@ -130,7 +130,7 @@
             </div>
           </section>
 
-          <section class="surface learn-surface">
+          <section class="surface learn-surface" data-after-seed hidden>
             <div class="section-heading">
               <p class="eyebrow">Makes Cents</p>
               <span id="learnCount">0</span>
@@ -140,7 +140,7 @@
             </div>
           </section>
 
-          <section class="surface artifact-surface">
+          <section class="surface artifact-surface" data-after-seed hidden>
             <div class="section-heading">
               <p class="eyebrow">Artifact</p>
               <span id="artifactStatus">Not compiled</span>

@@ -248,11 +248,47 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
   });
 
   assert.equal(heuristic.term, "scope");
-  assert.match(heuristic.explanation, /tested/);
+  assert.match(heuristic.explanation, /boundary/);
+  assert.doesNotMatch(heuristic.explanation, /piece of meaning/i);
   assert.equal(xai.example, "Novice users may need a different test than expert users.");
   assert.equal(resolveXaiInlineLearnModel({}), defaultXaiInlineLearnModel);
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.prompt ?? "", /Local context/);
+});
+
+test("heuristic Inline Learn teaches supported concepts instead of generic meta-definitions", async () => {
+  const cognitiveLoad = await generateInlineLearnOutput(
+    {
+      term: "cognitive load",
+      currentClaimId: uuidAt(101),
+      sessionId: uuidAt(100),
+      localContext: "AI study assistant reduces cognitive load.",
+      currentClaimText: "AI study assistant reduces cognitive load for students studying complex material.",
+      currentClaimKind: "assumption",
+    },
+    {
+      provider: createHeuristicInlineLearnProvider(),
+    },
+  );
+  const networkEffects = await generateInlineLearnOutput(
+    {
+      term: "network effects",
+      currentClaimId: uuidAt(102),
+      sessionId: uuidAt(100),
+      localContext: "A study network gets better as more students add explanations.",
+      currentClaimText: "Penny has network effects if each saved explanation helps future students.",
+      currentClaimKind: "belief",
+    },
+    {
+      provider: createHeuristicInlineLearnProvider(),
+    },
+  );
+
+  assert.match(cognitiveLoad.explanation, /mental effort/i);
+  assert.match(cognitiveLoad.whyItMattersHere, /AI study assistant/);
+  assert.doesNotMatch(cognitiveLoad.explanation, /piece of meaning|needs to be clear/i);
+  assert.match(networkEffects.explanation, /additional user/i);
+  assert.match(networkEffects.whyItMattersHere, /participation|compounds/i);
 });
 
 test("inline Learn output parsing and xAI provider failures are explicit", async () => {
@@ -285,6 +321,28 @@ test("inline Learn output parsing and xAI provider failures are explicit", async
     (error) => {
       assert.ok(error instanceof InlineLearnProviderError);
       assert.match(error.message, /XAI_API_KEY/);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      generateInlineLearnOutput(
+        {
+          term: "unknown term",
+          currentClaimId: uuidAt(101),
+          sessionId: uuidAt(100),
+          localContext: "The claim uses an unsupported term.",
+          currentClaimText: "The claim uses an unsupported term.",
+          currentClaimKind: "assumption",
+        },
+        {
+          provider: createHeuristicInlineLearnProvider(),
+        },
+      ),
+    (error) => {
+      assert.ok(error instanceof InlineLearnProviderError);
+      assert.match(error.message, /cannot safely teach/);
       return true;
     },
   );

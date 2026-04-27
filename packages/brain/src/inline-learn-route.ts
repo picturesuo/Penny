@@ -658,13 +658,21 @@ function buildHeuristicInlineLearnOutput(input: InlineLearnGenerationInput): Inl
   const term = input.term.trim();
   const context = compactText(input.localContext || input.currentClaimText);
   const claim = compactText(input.currentClaimText);
+  const concept = heuristicConceptFor(term);
+
+  if (!concept) {
+    throw new InlineLearnProviderError(
+      `Inline Learn fallback cannot safely teach "${term}" without xAI. Add XAI_API_KEY or save a supported concept.`,
+    );
+  }
+
   const parsed = InlineLearnOutputSchema.safeParse({
     term,
-    explanation: `${term} is the piece of meaning in this claim that needs to be clear before the idea can be tested.`,
-    whyItMattersHere: `Here it affects how to read "${clipText(claim, 96)}" and which assumption or challenge should carry the pressure.`,
-    example: `If "${clipText(context, 86)}" changes meaning when ${term} changes, save the term as a concept.`,
-    relatedConcepts: relatedConceptsFor(term, context),
-    saveSuggestion: `Save ${term} if you expect to reuse this meaning while reviewing the map or challenge brief.`,
+    explanation: concept.explanation,
+    whyItMattersHere: conceptWhyItMatters(term, concept.pressure, claim),
+    example: conceptExample(term, concept.example, context),
+    relatedConcepts: relatedConceptsFor(term, context, concept.relatedConcepts),
+    saveSuggestion: `Save ${term} if this definition will keep shaping assumptions, challenges, or the final brief.`,
   });
 
   if (!parsed.success) {
@@ -674,13 +682,71 @@ function buildHeuristicInlineLearnOutput(input: InlineLearnGenerationInput): Inl
   return parsed.data;
 }
 
-function relatedConceptsFor(term: string, context: string): string[] {
+type HeuristicConcept = {
+  explanation: string;
+  pressure: string;
+  example: string;
+  relatedConcepts: string[];
+};
+
+const heuristicConcepts: Record<string, HeuristicConcept> = {
+  "cognitive load": {
+    explanation: "Cognitive load is the mental effort needed to hold information, choose what matters, and use it while doing a task.",
+    pressure: "the claim must show Penny removes effort from studying instead of adding another thing to manage",
+    example: "A study assistant lowers cognitive load when it turns scattered notes into the next useful step without hiding the hard concept.",
+    relatedConcepts: ["working memory", "attention", "task complexity", "friction"],
+  },
+  "network effects": {
+    explanation: "Network effects happen when each additional user can make the product more useful for other users.",
+    pressure: "the claim must show value compounds through participation, not just that more users would be nice",
+    example: "A tool has network effects if one student's saved explanation helps later students understand or improve the same idea.",
+    relatedConcepts: ["supply growth", "demand loops", "marketplaces", "switching costs"],
+  },
+  "working memory": {
+    explanation: "Working memory is the limited capacity people use to hold and manipulate information in the moment.",
+    pressure: "the claim must account for what the user can keep in mind while using the product",
+    example: "A study flow helps working memory when it keeps only the current step, key fact, and next action in view.",
+    relatedConcepts: ["attention", "cognitive load", "chunking", "task complexity"],
+  },
+  scope: {
+    explanation: "Scope is the boundary around where a claim applies and where it stops applying.",
+    pressure: "the claim becomes testable only when the affected users, situation, and limits are explicit",
+    example: "A study assistant may reduce load for novice users in dense material, while doing little for experts reviewing simple facts.",
+    relatedConcepts: ["boundary", "audience", "use case", "assumption"],
+  },
+  "desirable difficulty": {
+    explanation: "Desirable difficulty is effort that makes learning stronger because it forces useful retrieval or discrimination.",
+    pressure: "the claim must distinguish productive effort from avoidable friction",
+    example: "A quiz can add desirable difficulty if it makes a student retrieve a concept, but not if it merely buries the answer.",
+    relatedConcepts: ["retrieval practice", "friction", "learning transfer", "cognitive load"],
+  },
+};
+
+function heuristicConceptFor(term: string): HeuristicConcept | null {
+  const normalized = normalizeConceptTerm(term);
+
+  return heuristicConcepts[normalized] ?? null;
+}
+
+function normalizeConceptTerm(term: string): string {
+  return term.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+
+function conceptWhyItMatters(term: string, pressure: string, claim: string): string {
+  return `In "${clipText(claim, 92)}", ${term} matters because ${pressure}.`;
+}
+
+function conceptExample(term: string, example: string, context: string): string {
+  return `${example} In this map, test that against "${clipText(context, 72)}".`;
+}
+
+function relatedConceptsFor(term: string, context: string, preferredConcepts: string[]): string[] {
   const normalizedTerm = term.toLowerCase();
   const contextWords = context
     .match(/[A-Za-z][A-Za-z-]{4,}/g)
     ?.map((word) => word.toLowerCase())
     .filter((word) => word !== normalizedTerm && !normalizedTerm.includes(word)) ?? [];
-  const concepts = [...contextWords, "assumption", "evidence", "scope"];
+  const concepts = [...preferredConcepts, ...contextWords, "assumption", "evidence", "scope"];
 
   return [...new Set(concepts)].slice(0, 5);
 }

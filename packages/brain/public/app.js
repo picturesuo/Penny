@@ -23,6 +23,7 @@ const elements = {
   learnList: $("#learnList"),
   mapCount: $("#mapCount"),
   pennyInsight: $("#pennyInsight"),
+  postSeedChrome: document.querySelectorAll("[data-after-seed]"),
   quickSelect: $("#quickSelect"),
   rawIdea: $("#rawIdea"),
   responseOptions: $("#responseOptions"),
@@ -493,8 +494,12 @@ async function loadInitialStream() {
 }
 
 function setSessionMode(hasSession) {
+  for (const element of elements.postSeedChrome ?? []) {
+    element.hidden = !hasSession;
+  }
+
   if (elements.streamSurface) {
-    elements.streamSurface.hidden = hasSession;
+    elements.streamSurface.hidden = true;
   }
 
   if (elements.heroSurface) {

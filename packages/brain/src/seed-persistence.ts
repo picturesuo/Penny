@@ -164,6 +164,29 @@ export async function persistBrainSeed(
       "claimVersion",
     );
     const claimVersionIds = new Map(persistedClaimVersions.map((version) => [version.seedId, version.id]));
+    const persistedClaimSourceSpans = await tx
+      .insert(sourceSpans)
+      .values(
+        seedClaims.map((claim) => {
+          const range = sourceSpanRangeForClaim(prelude.source.rawText, claim.text);
+
+          return {
+            sourceId: prelude.source.id,
+            claimId: requireMappedId(claimIds, claim.id, "sourceSpan.claimId"),
+            claimVersionId: requireMappedId(claimVersionIds, claim.id, "sourceSpan.claimVersionId"),
+            startOffset: range.startOffset,
+            endOffset: range.endOffset,
+            label: sourceSpanLabelForClaim(claim.kind),
+          };
+        }),
+      )
+      .returning();
+
+    if (persistedClaimSourceSpans.length !== seedClaims.length) {
+      throw new BrainSeedPersistenceError(
+        `Failed to persist all claim SourceSpan rows: expected ${seedClaims.length}, received ${persistedClaimSourceSpans.length}.`,
+      );
+    }
 
     const edgeSeeds = seed.thoughtMap.edges.filter(
       (edge) => edge.kind === "depends_on" && claimIds.has(edge.fromClaimId) && claimIds.has(edge.toClaimId),
@@ -338,6 +361,26 @@ function requireMappedId(ids: Map<string, string>, seedId: string, label: string
   }
 
   return persistedId;
+}
+
+function sourceSpanRangeForClaim(sourceText: string, claimText: string): { startOffset: number; endOffset: number } {
+  const startOffset = sourceText.indexOf(claimText);
+
+  if (startOffset >= 0) {
+    return {
+      startOffset,
+      endOffset: startOffset + claimText.length,
+    };
+  }
+
+  return {
+    startOffset: 0,
+    endOffset: sourceText.length,
+  };
+}
+
+function sourceSpanLabelForClaim(kind: BrainSeedOutput["thoughtMap"]["claims"][number]["kind"]): string {
+  return kind === "assumption" ? "extracted_assumption" : "seed_claim";
 }
 
 function formatErrorMessage(error: unknown): string {
