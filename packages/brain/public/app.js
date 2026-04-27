@@ -30,6 +30,8 @@ const elements = {
   sourceKind: $("#sourceKind"),
   thoughtMap: $("#thoughtMap"),
   thinkingIndicator: $("#thinkingIndicator"),
+  verifyResult: $("#verifyResult"),
+  verifyStatus: $("#verifyStatus"),
   weakestPart: $("#insightTarget") ?? $("#weakestPart"),
   challengeText: $("#insightChallenge") ?? $("#challengeText"),
 };
@@ -45,6 +47,9 @@ const state = {
   savingLearn: false,
   artifactCreating: false,
   activeArtifact: null,
+  activeVerify: null,
+  verifyingClaimId: null,
+  verifyDecision: null,
   activeClaimDetail: null,
   loadingClaimDetailId: null,
 };
@@ -71,6 +76,8 @@ elements.form?.addEventListener("submit", async (event) => {
     state.activeChallenge = null;
     state.activeLearn = null;
     state.activeArtifact = null;
+    state.activeVerify = null;
+    state.verifyDecision = null;
     state.activeClaimDetail = null;
     closeClaimDrawer();
     renderCockpit(payload.data);
@@ -311,6 +318,33 @@ async function createArtifact(sessionId) {
   return payload;
 }
 
+async function runVerify(body) {
+  const response = await fetch("/brain/verify", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": "dev-user",
+      "x-project-id": "dev-project",
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
+    const message = payload?.error?.message
+      ? `${payload.error.message}${issues}`
+      : `POST /brain/verify failed with ${response.status}.`;
+    throw new Error(message);
+  }
+
+  if (!payload?.data?.verdict || !Array.isArray(payload.data.evidenceCards) || !payload.data.move) {
+    throw new Error("Verify returned an invalid graph update.");
+  }
+
+  return payload;
+}
+
 async function readJsonResponse(response) {
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -339,6 +373,7 @@ function renderEmptyState() {
   setText(elements.explorationCount, "0 paths");
   setText(elements.learnCount, "0");
   setText(elements.artifactStatus, "Not compiled");
+  setText(elements.verifyStatus, "Not run");
   if (elements.artifactCreate) {
     elements.artifactCreate.disabled = true;
     elements.artifactCreate.textContent = "Generate Challenge Brief";
@@ -350,6 +385,7 @@ function renderEmptyState() {
   renderQuickSelect([]);
   renderLearn([]);
   renderArtifact(null);
+  renderVerify(null);
   renderResponseOptions([]);
 }
 
@@ -382,6 +418,7 @@ function renderCockpit(data) {
   renderQuickSelect(claims);
   renderPennyInsight(state.activeChallenge ?? data.firstChallenge, targetClaim);
   renderLearn(learnCandidates);
+  renderVerify(state.activeVerify);
   renderArtifact(state.activeArtifact ?? latestArtifact(data.artifacts));
 }
 
@@ -510,6 +547,16 @@ function claimActions(claim) {
   });
   append(controls, inspectButton);
 
+  const verifyButton = document.createElement("button");
+  verifyButton.type = "button";
+  verifyButton.textContent = state.verifyingClaimId === claim.id ? "Checking" : "Verify";
+  verifyButton.disabled = state.verifyingClaimId === claim.id;
+  verifyButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void handleVerifyClaim(claim);
+  });
+  append(controls, verifyButton);
+
   if (claim.kind === "assumption") {
     const isPending = state.respondingClaimId === claim.id;
     const actions = [
@@ -544,6 +591,36 @@ function claimActions(claim) {
   }
 
   return controls;
+}
+
+async function handleVerifyClaim(claim) {
+  if (!state.data?.session?.id) {
+    setStatus("Create a graph before running Verify.", true);
+    return;
+  }
+
+  state.verifyingClaimId = claim.id;
+  state.verifyDecision = null;
+  renderCockpit(state.data);
+  setThinking(true, "Verifying");
+  setStatus("Running Verify.");
+
+  try {
+    const payload = await runVerify({
+      claimId: claim.id,
+      currentClaimText: claim.text,
+      sessionId: state.data.session.id,
+    });
+    applyVerify(payload.data);
+    await refreshActiveClaimDetail(claim.id);
+    setStatus("Verify complete. Confidence unchanged.");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), true);
+  } finally {
+    state.verifyingClaimId = null;
+    setThinking(false, state.activeVerify ? "Verify ready" : "Ready");
+    renderCockpit(state.data);
+  }
 }
 
 async function handleClaimInspect(claim) {
@@ -1515,6 +1592,123 @@ function applyArtifact(data) {
   }
 }
 
+function applyVerify(data) {
+  state.activeVerify = data;
+  state.verifyDecision = null;
+
+  if (Array.isArray(state.data?.moves)) {
+    state.data.moves = [...state.data.moves, data.move];
+  }
+
+  if (data.brainRun) {
+    state.data.brainRun = data.brainRun;
+  }
+}
+
+function renderVerify(verify) {
+  replaceChildren(elements.verifyResult);
+
+  if (!verify) {
+    setText(elements.verifyStatus, state.data?.session?.id ? "Ready" : "Not run");
+    append(elements.verifyResult, textOnly("Verify a claim from the map without changing confidence."));
+    return;
+  }
+
+  const cards = verify.evidenceCards ?? [];
+  setText(elements.verifyStatus, `${formatLabel(verify.verdict)} / ${signedDelta(verify.confidenceDeltaSuggestion)}`);
+
+  const summary = document.createElement("article");
+  summary.className = "verify-card";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = formatLabel(verify.verdict);
+
+  const copy = document.createElement("p");
+  copy.textContent = verify.summary;
+
+  const delta = document.createElement("small");
+  delta.textContent = `Suggested confidence delta ${signedDelta(verify.confidenceDeltaSuggestion)}. Current confidence was not changed.`;
+
+  summary.append(tag, copy, delta, confidenceDecisionControls());
+  append(elements.verifyResult, summary);
+
+  for (const card of cards.slice(0, 4)) {
+    append(elements.verifyResult, evidenceCard(card));
+  }
+
+  append(elements.verifyResult, verifyNote("What Would Change This", verify.whatWouldChangeThis));
+  append(elements.verifyResult, verifyNote("Next Question", verify.nextQuestion));
+}
+
+function confidenceDecisionControls() {
+  const row = document.createElement("div");
+  row.className = "verify-decision";
+
+  const accept = document.createElement("button");
+  accept.type = "button";
+  accept.textContent = state.verifyDecision === "accepted" ? "Accepted" : "Accept";
+  accept.disabled = state.verifyDecision === "accepted";
+  accept.addEventListener("click", () => {
+    state.verifyDecision = "accepted";
+    renderVerify(state.activeVerify);
+    setStatus("Confidence suggestion accepted locally. Confidence unchanged.");
+  });
+
+  const reject = document.createElement("button");
+  reject.type = "button";
+  reject.textContent = state.verifyDecision === "rejected" ? "Rejected" : "Reject";
+  reject.disabled = state.verifyDecision === "rejected";
+  reject.addEventListener("click", () => {
+    state.verifyDecision = "rejected";
+    renderVerify(state.activeVerify);
+    setStatus("Confidence suggestion rejected. Confidence unchanged.");
+  });
+
+  row.append(accept, reject);
+  return row;
+}
+
+function evidenceCard(card) {
+  const block = document.createElement("article");
+  block.className = "verify-evidence";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = formatLabel(card.stance);
+
+  const title = document.createElement("strong");
+  title.textContent = card.title;
+
+  const summary = document.createElement("p");
+  summary.textContent = card.summary;
+
+  block.append(tag, title, summary);
+
+  if (card.sourceName || card.sourceUrl || card.citation) {
+    const citation = document.createElement("small");
+    citation.textContent = [card.sourceName, card.sourceUrl, card.citation].filter(Boolean).join(" / ");
+    block.append(citation);
+  }
+
+  return block;
+}
+
+function verifyNote(label, value) {
+  const block = document.createElement("article");
+  block.className = "verify-note";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = label;
+
+  const copy = document.createElement("p");
+  copy.textContent = value;
+
+  block.append(tag, copy);
+  return block;
+}
+
 function renderArtifact(artifact) {
   replaceChildren(elements.artifactBrief);
 
@@ -1955,6 +2149,12 @@ function formatLabel(value) {
 
 function shortId(value) {
   return String(value ?? "").slice(0, 8);
+}
+
+function signedDelta(value) {
+  const number = Number(value) || 0;
+
+  return number > 0 ? `+${number}` : String(number);
 }
 
 function formatDate(value) {
