@@ -48,6 +48,7 @@ const state = {
   artifactCreating: false,
   activeArtifact: null,
   activeVerify: null,
+  verifyDecision: null,
   verifyingClaimId: null,
   activeClaimDetail: null,
   loadingClaimDetailId: null,
@@ -76,6 +77,7 @@ elements.form?.addEventListener("submit", async (event) => {
     state.activeLearn = null;
     state.activeArtifact = null;
     state.activeVerify = null;
+    state.verifyDecision = null;
     state.activeClaimDetail = null;
     closeClaimDrawer();
     renderCockpit(payload.data);
@@ -1591,6 +1593,7 @@ function applyArtifact(data) {
 
 function applyVerify(data) {
   state.activeVerify = data;
+  state.verifyDecision = data.confidenceUpdate?.decision ?? "pending_user_decision";
 
   if (Array.isArray(state.data?.moves)) {
     state.data.moves = [...state.data.moves, data.move];
@@ -1606,13 +1609,13 @@ function renderVerify(verify) {
 
   if (!verify) {
     setText(elements.verifyStatus, state.data?.session?.id ? "Ready" : "Not run");
-    append(elements.verifyResult, textOnly("Run Check on a claim to return citation evidence cards."));
+    append(elements.verifyResult, textOnly("Run Check on a claim to return evidence cards and a confidence suggestion."));
     return;
   }
 
   const cards = verify.evidenceCards ?? [];
   const target = verify.targetClaim ?? findClaimById(verify.move?.claimIds?.[0]);
-  setText(elements.verifyStatus, `${formatLabel(verify.verdict)} / ${cards.length} cards`);
+  setText(elements.verifyStatus, `${formatLabel(verify.verdict)} / ${signedDelta(verify.confidenceDeltaSuggestion)} pts`);
 
   const summary = document.createElement("article");
   summary.className = "verify-card";
@@ -1634,6 +1637,7 @@ function renderVerify(verify) {
 
   summary.append(tag, copy, meta);
   append(elements.verifyResult, summary);
+  append(elements.verifyResult, confidenceDecisionPanel(verify, target));
 
   if (cards.length === 0) {
     append(elements.verifyResult, textOnly("No external citations were returned for this run."));
@@ -1689,7 +1693,7 @@ function verifyNotes(verify) {
 
   const tag = document.createElement("span");
   tag.className = "tag";
-  tag.textContent = "Follow Up";
+  tag.textContent = "Next";
 
   block.append(tag);
 
@@ -1715,6 +1719,62 @@ function verifyNotes(verify) {
   }
 
   return block;
+}
+
+function confidenceDecisionPanel(verify, target) {
+  const block = document.createElement("article");
+  block.className = "verify-note verify-decision";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = "Confidence";
+
+  const delta = Number(verify.confidenceDeltaSuggestion ?? verify.confidenceUpdate?.suggestedDelta ?? 0) || 0;
+  const copy = document.createElement("p");
+  copy.textContent =
+    typeof target?.confidence === "number"
+      ? `${target.confidence}% ${signedDelta(delta)} -> ${clampPercent(target.confidence + delta)}%`
+      : `${signedDelta(delta)} point suggestion`;
+
+  const status = document.createElement("small");
+  status.textContent = `Decision: ${formatLabel(state.verifyDecision ?? "pending_user_decision")}`;
+
+  const actions = document.createElement("div");
+  actions.className = "verify-decision-actions";
+
+  for (const [decision, label] of [
+    ["accepted", "Accept"],
+    ["rejected", "Reject"],
+  ]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = state.verifyDecision === decision ? formatLabel(decision) : label;
+    button.disabled = state.verifyDecision === "accepted" || state.verifyDecision === "rejected";
+    button.addEventListener("click", () => handleVerifyConfidenceDecision(decision));
+    actions.append(button);
+  }
+
+  block.append(tag, copy, status, actions);
+
+  return block;
+}
+
+function handleVerifyConfidenceDecision(decision) {
+  if (!state.activeVerify) {
+    return;
+  }
+
+  state.verifyDecision = decision;
+  state.activeVerify = {
+    ...state.activeVerify,
+    confidenceUpdate: {
+      ...(state.activeVerify.confidenceUpdate ?? {}),
+      decision,
+      autoApplied: false,
+    },
+  };
+  setStatus(`Confidence suggestion ${decision}.`);
+  renderCockpit(state.data);
 }
 
 function renderArtifact(artifact) {
