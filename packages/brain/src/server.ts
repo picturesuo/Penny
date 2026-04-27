@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { handleArtifactRequest } from "./artifact-route.ts";
 import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
@@ -27,6 +28,11 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/challenge/respond") {
       await writeWebResponse(outgoing, await handleChallengeRespondRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/brain/artifact") {
+      await writeWebResponse(outgoing, await handleArtifactRequest(request));
       return;
     }
 
