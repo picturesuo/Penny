@@ -1714,7 +1714,8 @@ function renderArtifact(artifact) {
   const brief = artifact.payload?.challengeBrief;
   const risks = brief?.unresolvedRisks ?? [];
   const changes = brief?.whatChanged ?? [];
-  setText(elements.artifactStatus, `${risks.length} risks`);
+  const shapes = artifact.payload?.shapes ?? [];
+  setText(elements.artifactStatus, `${risks.length} risks / ${shapes.length} shapes`);
 
   const summary = document.createElement("article");
   summary.className = "artifact-card";
@@ -1730,8 +1731,44 @@ function renderArtifact(artifact) {
 
   summary.append(title, copy, next);
   append(elements.artifactBrief, summary);
+  append(elements.artifactBrief, shapeList("Tentative Shapes", shapes));
   append(elements.artifactBrief, artifactList("Unresolved Risks", risks.slice(0, 3), (risk) => risk.text));
   append(elements.artifactBrief, artifactList("What Changed", changes.slice(-4), (change) => change.summary));
+}
+
+function shapeList(label, shapes) {
+  const block = document.createElement("article");
+  block.className = "artifact-list shape-list";
+
+  const title = document.createElement("span");
+  title.className = "tag";
+  title.textContent = label;
+  block.append(title);
+
+  if (!Array.isArray(shapes) || shapes.length === 0) {
+    append(block, textOnly("None"));
+    return block;
+  }
+
+  for (const shape of shapes) {
+    const row = document.createElement("div");
+    row.className = "shape-row";
+
+    const name = document.createElement("strong");
+    name.textContent = `${shape.label ?? "Shape"} / ${shape.confidence ?? 0}% / ${formatLabel(shape.status ?? "tentative")}`;
+
+    const description = document.createElement("p");
+    description.textContent = shape.description ?? "No shape description returned.";
+
+    const support = document.createElement("small");
+    const moveIds = Array.isArray(shape.supportingMoveIds) ? shape.supportingMoveIds.map(shortId) : [];
+    support.textContent = moveIds.length > 0 ? `Moves ${moveIds.join(", ")}` : "No supporting moves returned.";
+
+    row.append(name, description, support);
+    block.append(row);
+  }
+
+  return block;
 }
 
 function artifactList(label, items, renderText) {
