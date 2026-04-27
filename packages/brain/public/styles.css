@@ -199,6 +199,7 @@ button {
 .verify-surface,
 .insight-surface,
 .exploration-surface,
+.stream-surface,
 .hero-surface {
   overflow: hidden;
 }
@@ -506,6 +507,7 @@ button {
 .map-edge p,
 .list-row p,
 .exploration-row p,
+.stream-card p,
 .quiet,
 .insight-copy,
 .challenge-copy {
@@ -516,7 +518,8 @@ button {
 
 .stack-list,
 .quick-select,
-.exploration-rows {
+.exploration-rows,
+.stream-body {
   display: grid;
   gap: 8px;
   padding: 13px 14px 14px;
@@ -537,7 +540,8 @@ button {
 }
 
 .list-row,
-.exploration-row {
+.exploration-row,
+.stream-card {
   display: grid;
   gap: 5px;
   padding: 10px 0;
@@ -545,13 +549,38 @@ button {
 }
 
 .list-row:first-child,
-.exploration-row:first-child {
+.exploration-row:first-child,
+.stream-card:first-child {
   border-top: 0;
 }
 
 .list-row strong,
-.exploration-row strong {
+.exploration-row strong,
+.stream-card strong {
   line-height: 1.25;
+}
+
+.stream-surface {
+  min-height: 468px;
+}
+
+.stream-body {
+  gap: 14px;
+}
+
+.stream-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.stream-section + .stream-section {
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.stream-card {
+  min-width: 0;
 }
 
 .hero-surface {
