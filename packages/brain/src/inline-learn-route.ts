@@ -38,7 +38,13 @@ export const InlineLearnOutputSchema = z
   })
   .strict();
 
+export const InlineLearnSaveRequestSchema = InlineLearnOutputSchema.extend({
+  currentClaimId: z.string().uuid(),
+  sessionId: z.string().uuid(),
+}).strict();
+
 export type InlineLearnRequest = z.infer<typeof InlineLearnRequestSchema>;
+export type InlineLearnSaveRequest = z.infer<typeof InlineLearnSaveRequestSchema>;
 export type InlineLearnProviderOutput = z.infer<typeof InlineLearnProviderSchema>;
 export type InlineLearnOutput = z.infer<typeof InlineLearnOutputSchema>;
 
@@ -100,6 +106,15 @@ export type InlineLearnRouteOptions = {
   ) => Promise<PersistedInlineLearn>;
 };
 
+export type InlineLearnSaveRouteOptions = {
+  db?: PennyDatabase;
+  databaseUrl?: string;
+  saveInlineLearn?: (
+    input: InlineLearnSaveRequest,
+    options: { db?: PennyDatabase },
+  ) => Promise<NonNullable<PersistedInlineLearn["saved"]>>;
+};
+
 type PersistedClaimSlice = {
   id: string;
   versionId: string;
@@ -155,6 +170,33 @@ export async function handleInlineLearnRequest(
 
   try {
     return jsonResponse({ data: await learnInline(parsed.data, { ...dbOption(db), provider }) }, parsed.data.save ? 201 : 200);
+  } catch (error) {
+    return inlineLearnErrorResponse(error);
+  }
+}
+
+export async function handleInlineLearnSaveRequest(
+  request: Request,
+  options: InlineLearnSaveRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /brain/learn/inline/save requires the POST method.");
+  }
+
+  const parsed = await parseJsonRequest(request, InlineLearnSaveRequestSchema);
+
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const db = resolveInlineLearnDb(options, Boolean(options.saveInlineLearn));
+  const saveInlineLearn =
+    options.saveInlineLearn ??
+    ((input: InlineLearnSaveRequest, saveOptions: { db?: PennyDatabase }) =>
+      persistInlineLearnConcept(requireInlineLearnDb(saveOptions.db), input));
+
+  try {
+    return jsonResponse({ data: { saved: await saveInlineLearn(parsed.data, dbOption(db)) } }, 201);
   } catch (error) {
     return inlineLearnErrorResponse(error);
   }
@@ -403,77 +445,7 @@ async function persistSavedInlineLearn(
   saved: NonNullable<PersistedInlineLearn["saved"]>;
 }> {
   return db.transaction(async (tx) => {
-    const [conceptClaim] = await tx
-      .insert(claims)
-      .values({
-        sessionId: input.sessionId,
-        sourceId: prelude.target.claim.sourceId,
-        kind: "concept",
-        status: "exploratory",
-        text: output.term,
-        confidence: 70,
-      })
-      .returning();
-
-    if (!conceptClaim) {
-      throw new InlineLearnConflictError("Failed to create inline concept claim.");
-    }
-
-    const [conceptVersion] = await tx
-      .insert(claimVersions)
-      .values({
-        claimId: conceptClaim.id,
-        sourceId: prelude.target.claim.sourceId,
-        content: conceptVersionContent(output),
-        status: "exploratory",
-        confidence: conceptClaim.confidence,
-        isCurrent: true,
-      })
-      .returning();
-
-    if (!conceptVersion) {
-      throw new InlineLearnConflictError("Failed to create inline concept ClaimVersion.");
-    }
-
-    const [teachesEdge] = await tx
-      .insert(claimEdges)
-      .values({
-        sessionId: input.sessionId,
-        fromClaimId: conceptClaim.id,
-        toClaimId: prelude.target.claim.id,
-        kind: "teaches",
-        status: "active",
-        label: output.term,
-      })
-      .returning();
-
-    if (!teachesEdge) {
-      throw new InlineLearnConflictError("Failed to create inline teaches edge.");
-    }
-
-    const [move] = await tx
-      .insert(moves)
-      .values({
-        sessionId: input.sessionId,
-        kind: "learning_triggered",
-        summary: "Saved an inline Learn concept inside Brain.",
-        payload: {
-          term: output.term,
-          currentClaimId: prelude.target.claim.id,
-          currentClaimVersionId: prelude.target.version.id,
-          conceptClaimId: conceptClaim.id,
-          conceptClaimVersionId: conceptVersion.id,
-          teachesEdgeId: teachesEdge.id,
-          brainRunId: prelude.brainRun.id,
-          claimIds: [prelude.target.claim.id, conceptClaim.id],
-          edgeIds: [teachesEdge.id],
-        },
-      })
-      .returning();
-
-    if (!move) {
-      throw new InlineLearnConflictError("Failed to create inline Learn move.");
-    }
+    const saved = await insertInlineLearnConcept(tx, input, output, prelude.target, prelude.brainRun.id);
 
     const [completedBrainRun] = await tx
       .update(brainRuns)
@@ -495,23 +467,116 @@ async function persistSavedInlineLearn(
         id: completedBrainRun.id,
         status: completedBrainRun.status,
       },
-      saved: {
-        conceptClaim: conceptClaimSlice(conceptClaim, conceptVersion),
-        teachesEdge: teachesEdgeSlice(teachesEdge),
-        move: {
-          id: move.id,
-          kind: "learning_triggered",
-          summary: move.summary,
-          claimIds: [prelude.target.claim.id, conceptClaim.id],
-          edgeIds: [teachesEdge.id],
-          artifactIds: [],
-        },
-      },
+      saved,
     };
   });
 }
 
+export async function persistInlineLearnConcept(
+  db: PennyDatabase,
+  input: InlineLearnSaveRequest,
+): Promise<NonNullable<PersistedInlineLearn["saved"]>> {
+  return db.transaction(async (tx) => {
+    const target = await loadClaimWithCurrentVersion(tx, input.currentClaimId, input.sessionId);
+
+    return insertInlineLearnConcept(tx, input, input, target);
+  });
+}
+
 type InlineLearnTransaction = Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
+
+async function insertInlineLearnConcept(
+  tx: InlineLearnTransaction,
+  input: Pick<InlineLearnSaveRequest, "currentClaimId" | "sessionId">,
+  output: InlineLearnOutput,
+  target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
+  brainRunId?: string,
+): Promise<NonNullable<PersistedInlineLearn["saved"]>> {
+  const [conceptClaim] = await tx
+    .insert(claims)
+    .values({
+      sessionId: input.sessionId,
+      sourceId: target.claim.sourceId,
+      kind: "concept",
+      status: "exploratory",
+      text: output.term,
+      confidence: 70,
+    })
+    .returning();
+
+  if (!conceptClaim) {
+    throw new InlineLearnConflictError("Failed to create inline concept claim.");
+  }
+
+  const [conceptVersion] = await tx
+    .insert(claimVersions)
+    .values({
+      claimId: conceptClaim.id,
+      sourceId: target.claim.sourceId,
+      content: conceptVersionContent(output),
+      status: "exploratory",
+      confidence: conceptClaim.confidence,
+      isCurrent: true,
+    })
+    .returning();
+
+  if (!conceptVersion) {
+    throw new InlineLearnConflictError("Failed to create inline concept ClaimVersion.");
+  }
+
+  const [teachesEdge] = await tx
+    .insert(claimEdges)
+    .values({
+      sessionId: input.sessionId,
+      fromClaimId: conceptClaim.id,
+      toClaimId: target.claim.id,
+      kind: "teaches",
+      status: "active",
+      label: output.term,
+    })
+    .returning();
+
+  if (!teachesEdge) {
+    throw new InlineLearnConflictError("Failed to create inline teaches edge.");
+  }
+
+  const [move] = await tx
+    .insert(moves)
+    .values({
+      sessionId: input.sessionId,
+      kind: "learning_triggered",
+      summary: "Saved an inline Learn concept inside Brain.",
+      payload: {
+        term: output.term,
+        currentClaimId: target.claim.id,
+        currentClaimVersionId: target.version.id,
+        conceptClaimId: conceptClaim.id,
+        conceptClaimVersionId: conceptVersion.id,
+        teachesEdgeId: teachesEdge.id,
+        ...(brainRunId ? { brainRunId } : {}),
+        claimIds: [target.claim.id, conceptClaim.id],
+        edgeIds: [teachesEdge.id],
+      },
+    })
+    .returning();
+
+  if (!move) {
+    throw new InlineLearnConflictError("Failed to create inline Learn move.");
+  }
+
+  return {
+    conceptClaim: conceptClaimSlice(conceptClaim, conceptVersion),
+    teachesEdge: teachesEdgeSlice(teachesEdge),
+    move: {
+      id: move.id,
+      kind: "learning_triggered",
+      summary: move.summary,
+      claimIds: [target.claim.id, conceptClaim.id],
+      edgeIds: [teachesEdge.id],
+      artifactIds: [],
+    },
+  };
+}
 
 async function loadClaimWithCurrentVersion(tx: InlineLearnTransaction, claimId: string, sessionId: string) {
   const [claim] = await tx
