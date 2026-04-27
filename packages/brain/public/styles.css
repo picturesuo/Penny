@@ -312,6 +312,10 @@ button {
   border-left-color: var(--clay);
 }
 
+.map-edge.teaches {
+  border-left-color: var(--teal);
+}
+
 .map-edge span {
   color: var(--ink);
   font-weight: 900;
@@ -524,6 +528,73 @@ textarea:focus {
 .learn-surface .stack-list,
 .compact-surface .stack-list {
   padding: 13px 14px 14px;
+}
+
+.learn-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.learn-form input {
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: var(--field);
+}
+
+.learn-form button,
+.inline-link,
+.save-concept,
+.related-concepts button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--field);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.learn-result {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f8fbf8;
+}
+
+.learn-result p,
+.learn-result small {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.related-concepts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inline-link {
+  width: max-content;
+  padding: 0 10px;
+}
+
+.save-concept {
+  justify-self: start;
+  padding: 0 12px;
+  border-color: rgba(15, 118, 110, 0.36);
+}
+
+.save-concept:disabled {
+  cursor: default;
+  opacity: 0.58;
 }
 
 .tag {
