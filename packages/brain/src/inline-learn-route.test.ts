@@ -57,12 +57,7 @@ test("POST /brain/learn/inline returns a contextual explanation without saved gr
         inputSeen = input;
 
         return {
-          term: input.term,
-          explanation: "Cognitive load is the mental effort needed to hold and use information in the moment.",
-          whyItMattersHere: "The claim only works if the proposed structure reduces effort instead of adding friction.",
-          example: "A study assistant can reduce load by making the next step obvious.",
-          relatedConcepts: ["working memory", "attention", "assumption"],
-          saveSuggestion: "Save this if it will help interpret the map later.",
+          ...learnOutput("cognitive load"),
           brainRun: {
             id: uuidAt(201),
             status: "succeeded",
@@ -101,35 +96,12 @@ test("POST /brain/learn/inline can save the concept claim, teaches edge, and lea
     {
       async learnInline(input) {
         return {
-          term: input.term,
-          explanation: "Working memory is the limited space for holding information while using it.",
-          whyItMattersHere: "The product claim depends on reducing what the user must hold at once.",
-          example: "Showing one next action can reduce working memory demand.",
-          relatedConcepts: ["attention", "cognitive load"],
-          saveSuggestion: "Save this concept because it teaches the current assumption.",
+          ...learnOutput(input.term),
           brainRun: {
             id: uuidAt(201),
             status: "succeeded",
           },
-          saved: {
-            conceptClaim: claim(uuidAt(301), uuidAt(302), "working memory: Working memory is limited."),
-            teachesEdge: {
-              id: uuidAt(401),
-              fromClaimId: uuidAt(301),
-              toClaimId: currentClaimId,
-              kind: "teaches",
-              status: "active",
-              label: "working memory",
-            },
-            move: {
-              id: uuidAt(501),
-              kind: "learning_triggered",
-              summary: "Saved an inline Learn concept inside Brain.",
-              claimIds: [currentClaimId, uuidAt(301)],
-              edgeIds: [uuidAt(401)],
-              artifactIds: [],
-            },
-          },
+          saved: savedConcept(input.term, currentClaimId),
         };
       },
     },
@@ -297,6 +269,28 @@ function request(url: string, body: unknown): Request {
   });
 }
 
+function savedConcept(term: string, currentClaimId: string) {
+  return {
+    conceptClaim: claim(uuidAt(301), uuidAt(302), `${term}: ${term} is contextual.`),
+    teachesEdge: {
+      id: uuidAt(401),
+      fromClaimId: uuidAt(301),
+      toClaimId: currentClaimId,
+      kind: "teaches" as const,
+      status: "active" as const,
+      label: term,
+    },
+    move: {
+      id: uuidAt(501),
+      kind: "learning_triggered" as const,
+      summary: "Saved an inline Learn concept inside Brain.",
+      claimIds: [currentClaimId, uuidAt(301)],
+      edgeIds: [uuidAt(401)],
+      artifactIds: [],
+    },
+  };
+}
+
 function claim(id: string, versionId: string, text: string) {
   return {
     id,
@@ -305,6 +299,17 @@ function claim(id: string, versionId: string, text: string) {
     status: "exploratory" as const,
     text,
     confidence: 70,
+  };
+}
+
+function learnOutput(term: string) {
+  return {
+    term,
+    explanation: `${term} is the mental effort or boundary the current claim needs to make clear.`,
+    whyItMattersHere: "It decides whether the product is reducing effort or just adding another surface.",
+    example: "A study flow lowers load if it removes choices instead of adding explanations.",
+    relatedConcepts: ["working memory", "attention", "scope"],
+    saveSuggestion: `Save ${term} when the map keeps using it as a load-bearing concept.`,
   };
 }
 
