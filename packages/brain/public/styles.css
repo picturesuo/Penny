@@ -271,14 +271,14 @@ button {
   text-transform: uppercase;
 }
 
-.assumption-actions {
+.claim-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
   gap: 6px;
   margin-top: 4px;
 }
 
-.assumption-actions button {
+.claim-actions button {
   min-height: 30px;
   padding: 0 6px;
   border: 1px solid var(--line);
@@ -289,7 +289,7 @@ button {
   font-weight: 900;
 }
 
-.assumption-actions button:disabled {
+.claim-actions button:disabled {
   cursor: default;
   opacity: 0.58;
 }
@@ -306,6 +306,10 @@ button {
 
 .map-edge.depends_on {
   border-left-color: var(--amber);
+}
+
+.map-edge.challenges {
+  border-left-color: var(--clay);
 }
 
 .map-edge span {
