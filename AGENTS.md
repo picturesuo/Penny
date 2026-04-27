@@ -7,6 +7,14 @@ Read it at the start of each session.
 Follow it unless the user explicitly overrides it.
 Keep it current.
 
+## Penny Product Truth
+- Penny is a controllable thinking instrument enhanced by AI, not a generic chatbot.
+- The MVP loop is seed idea -> assumptions -> thought map -> exploration -> challenge -> Defend/Revise/Absorb -> Learn -> Idea Map + Challenge Brief.
+- Core modes are Brain, Challenge / Verify, and Learn / Makes Cents over the same thinking graph.
+- Core objects are Claim, Edge, Move, Shape, Source, Session, Artifact, and WikiPage.
+- Meaningful changes create Moves; current state is derived from claims, edges, and moves.
+- Do not build a generic chatbot sidebar or pre-MVP features before the first loop works end to end.
+
 ## Shared Context
 - If a shared context file exists, use it as the durable task artifact for the current task.
 - Update only the sections or artifact IDs owned by your role.
