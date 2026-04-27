@@ -20,19 +20,6 @@ export const FailureTypeSchema = z.enum([
   "premise_rejection",
   "definition_failure",
 ]);
-export const MoveKindSchema = z.enum([
-  "seed_claim_created",
-  "assumptions_extracted",
-  "first_challenge_suggested",
-  "source.recorded",
-  "claim.created",
-  "edge.created",
-  "assumption.extracted",
-  "exploration.suggested",
-  "challenge.created",
-  "artifact.created",
-]);
-export const ArtifactKindSchema = z.enum(["idea_map", "challenge_brief"]);
 
 const IdSchema = z.string().trim().min(1).max(80);
 
@@ -112,28 +99,6 @@ export const BrainSeedSessionSchema = z
   })
   .strict();
 
-export const BrainSeedMoveSchema = z
-  .object({
-    id: IdSchema,
-    kind: MoveKindSchema,
-    summary: z.string().trim().min(1).max(500),
-    claimIds: z.array(IdSchema).max(12),
-    edgeIds: z.array(IdSchema).max(20),
-    artifactIds: z.array(IdSchema).max(4),
-  })
-  .strict();
-
-export const BrainSeedArtifactSchema = z
-  .object({
-    id: IdSchema,
-    kind: ArtifactKindSchema,
-    title: z.string().trim().min(1).max(120),
-    summary: z.string().trim().min(1).max(900),
-    claimIds: z.array(IdSchema).min(1).max(12),
-    edgeIds: z.array(IdSchema).max(20),
-  })
-  .strict();
-
 const SeedProviderClaimSchema = z.object({
   id: z.string(),
   kind: ClaimKindSchema,
@@ -199,26 +164,6 @@ export const SeedProviderSchema = z.object({
       unblockExplanation: z.string(),
     }),
   ),
-  moves: z.array(
-    z.object({
-      id: z.string(),
-      kind: MoveKindSchema,
-      summary: z.string(),
-      claimIds: z.array(z.string()),
-      edgeIds: z.array(z.string()),
-      artifactIds: z.array(z.string()),
-    }),
-  ),
-  artifacts: z.array(
-    z.object({
-      id: z.string(),
-      kind: ArtifactKindSchema,
-      title: z.string(),
-      summary: z.string(),
-      claimIds: z.array(z.string()),
-      edgeIds: z.array(z.string()),
-    }),
-  ),
 });
 
 export const SeedStrictSchema = z
@@ -232,14 +177,10 @@ export const SeedStrictSchema = z
     keyInsight: z.string().trim().min(1).max(700),
     firstChallenge: BrainSeedChallengeSchema,
     learnCandidates: z.array(BrainSeedLearnCandidateSchema).min(1).max(3),
-    moves: z.array(BrainSeedMoveSchema).min(1).max(24),
-    artifacts: z.array(BrainSeedArtifactSchema).min(2).max(4),
   })
   .strict()
   .superRefine((output, context) => {
     const claimIds = new Set(output.thoughtMap.claims.map((claim) => claim.id));
-    const edgeIds = new Set(output.thoughtMap.edges.map((edge) => edge.id));
-    const artifactIds = new Set(output.artifacts.map((artifact) => artifact.id));
 
     rejectGenericSeedOutput(context, output);
 
@@ -273,38 +214,6 @@ export const SeedStrictSchema = z
       requireReferencedClaim(context, claimIds, edge.fromClaimId, ["thoughtMap", "edges", index, "fromClaimId"], "edge.fromClaimId");
       requireReferencedClaim(context, claimIds, edge.toClaimId, ["thoughtMap", "edges", index, "toClaimId"], "edge.toClaimId");
     }
-
-    for (const [artifactIndex, artifact] of output.artifacts.entries()) {
-      for (const [claimIndex, claimId] of artifact.claimIds.entries()) {
-        requireReferencedClaim(context, claimIds, claimId, ["artifacts", artifactIndex, "claimIds", claimIndex], "artifact.claimId");
-      }
-
-      for (const [edgeIndex, edgeId] of artifact.edgeIds.entries()) {
-        requireReferencedEdge(context, edgeIds, edgeId, ["artifacts", artifactIndex, "edgeIds", edgeIndex], "artifact.edgeId");
-      }
-    }
-
-    for (const [moveIndex, move] of output.moves.entries()) {
-      for (const [claimIndex, claimId] of move.claimIds.entries()) {
-        requireReferencedClaim(context, claimIds, claimId, ["moves", moveIndex, "claimIds", claimIndex], "move.claimId");
-      }
-
-      for (const [edgeIndex, edgeId] of move.edgeIds.entries()) {
-        requireReferencedEdge(context, edgeIds, edgeId, ["moves", moveIndex, "edgeIds", edgeIndex], "move.edgeId");
-      }
-
-      for (const [artifactIndex, artifactId] of move.artifactIds.entries()) {
-        requireReferencedArtifact(context, artifactIds, artifactId, ["moves", moveIndex, "artifactIds", artifactIndex], "move.artifactId");
-      }
-    }
-
-    requireArtifactKind(context, output.artifacts, "idea_map");
-    requireArtifactKind(context, output.artifacts, "challenge_brief");
-    requireMoveKind(context, output.moves, "source.recorded");
-    requireMoveKind(context, output.moves, "claim.created");
-    requireMoveKind(context, output.moves, "edge.created");
-    requireMoveKind(context, output.moves, "challenge.created");
-    requireMoveKind(context, output.moves, "artifact.created");
   });
 
 export const BrainSeedAiOutputSchema = SeedProviderSchema;
@@ -379,14 +288,6 @@ function rejectGenericSeedOutput(context: z.RefinementCtx, output: z.infer<typeo
     );
   }
 
-  for (const [index, move] of output.moves.entries()) {
-    requireNonGenericText(context, move.summary, ["moves", index, "summary"], "move.summary");
-  }
-
-  for (const [index, artifact] of output.artifacts.entries()) {
-    requireNonGenericText(context, artifact.title, ["artifacts", index, "title"], "artifact.title");
-    requireNonGenericText(context, artifact.summary, ["artifacts", index, "summary"], "artifact.summary");
-  }
 }
 
 function requireNonGenericText(
@@ -431,73 +332,5 @@ function requireReferencedClaim(
     code: "custom",
     message: `${label} must reference a thoughtMap claim`,
     path,
-  });
-}
-
-function requireReferencedEdge(
-  context: z.RefinementCtx,
-  edgeIds: Set<string>,
-  edgeId: string,
-  path: Array<string | number>,
-  label: string,
-) {
-  if (edgeIds.has(edgeId)) {
-    return;
-  }
-
-  context.addIssue({
-    code: "custom",
-    message: `${label} must reference a thoughtMap edge`,
-    path,
-  });
-}
-
-function requireReferencedArtifact(
-  context: z.RefinementCtx,
-  artifactIds: Set<string>,
-  artifactId: string,
-  path: Array<string | number>,
-  label: string,
-) {
-  if (artifactIds.has(artifactId)) {
-    return;
-  }
-
-  context.addIssue({
-    code: "custom",
-    message: `${label} must reference an artifact`,
-    path,
-  });
-}
-
-function requireArtifactKind(
-  context: z.RefinementCtx,
-  artifacts: Array<z.infer<typeof BrainSeedArtifactSchema>>,
-  kind: z.infer<typeof ArtifactKindSchema>,
-) {
-  if (artifacts.some((artifact) => artifact.kind === kind)) {
-    return;
-  }
-
-  context.addIssue({
-    code: "custom",
-    message: `artifacts must include ${kind}`,
-    path: ["artifacts"],
-  });
-}
-
-function requireMoveKind(
-  context: z.RefinementCtx,
-  moves: Array<z.infer<typeof BrainSeedMoveSchema>>,
-  kind: z.infer<typeof MoveKindSchema>,
-) {
-  if (moves.some((move) => move.kind === kind)) {
-    return;
-  }
-
-  context.addIssue({
-    code: "custom",
-    message: `moves must include ${kind}`,
-    path: ["moves"],
   });
 }
