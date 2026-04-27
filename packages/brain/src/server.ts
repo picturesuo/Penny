@@ -77,6 +77,36 @@ const server = createServer(async (incoming, outgoing) => {
       return;
     }
 
+    const claimDetailMatch = /^\/brain\/claims\/([^/]+)\/detail$/.exec(url.pathname);
+
+    if (claimDetailMatch) {
+      const claimId = claimDetailMatch[1];
+
+      if (!claimId) {
+        await writeWebResponse(
+          outgoing,
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "invalid_claim_id",
+                message: "Claim detail requires a claim id.",
+              },
+            }),
+            {
+              status: 400,
+              headers: {
+                "content-type": "application/json; charset=utf-8",
+              },
+            },
+          ),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleClaimDetailRequest(request, decodeURIComponent(claimId)));
+      return;
+    }
+
     const assumptionResponseMatch = /^\/brain\/assumptions\/([^/]+)\/respond$/.exec(url.pathname);
 
     if (assumptionResponseMatch) {
@@ -107,36 +137,6 @@ const server = createServer(async (incoming, outgoing) => {
         outgoing,
         await handleAssumptionResponseRequest(request, decodeURIComponent(assumptionClaimId)),
       );
-      return;
-    }
-
-    const claimDetailMatch = /^\/brain\/claims\/([^/]+)\/detail$/.exec(url.pathname);
-
-    if (claimDetailMatch) {
-      const claimId = claimDetailMatch[1];
-
-      if (!claimId) {
-        await writeWebResponse(
-          outgoing,
-          new Response(
-            JSON.stringify({
-              error: {
-                code: "invalid_claim_id",
-                message: "Claim detail requires a claim id.",
-              },
-            }),
-            {
-              status: 400,
-              headers: {
-                "content-type": "application/json; charset=utf-8",
-              },
-            },
-          ),
-        );
-        return;
-      }
-
-      await writeWebResponse(outgoing, await handleClaimDetailRequest(request, decodeURIComponent(claimId)));
       return;
     }
 
