@@ -27,6 +27,7 @@ export const moveKindEnum = pgEnum("move_kind", [
   "claim_revised",
   "critique_absorbed",
   "learning_triggered",
+  "artifact_created",
   "source.recorded",
   "claim.created",
   "edge.created",
@@ -38,7 +39,7 @@ export const moveKindEnum = pgEnum("move_kind", [
   "challenge.response.revised",
   "challenge.response.absorbed",
 ]);
-export const artifactKindEnum = pgEnum("artifact_kind", ["idea_map", "challenge_brief"]);
+export const artifactKindEnum = pgEnum("artifact_kind", ["idea_map", "challenge_brief", "idea_map_challenge_brief"]);
 
 export const sessions = pgTable(
   "sessions",
