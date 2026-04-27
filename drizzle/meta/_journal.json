@@ -50,6 +50,13 @@
       "when": 1777323532171,
       "tag": "0006_lethal_shaman",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777324408910,
+      "tag": "0007_nervous_satana",
+      "breakpoints": true
     }
   ]
 }
