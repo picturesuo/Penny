@@ -460,8 +460,8 @@ function applyIssuedChallenge(data) {
     critiqueClaimId: data.critiqueClaim.id,
     failureType: data.failureType,
     strength: data.strength,
-    weakestPart: data.critique,
-    challenge: `${data.whyThisCritique} ${data.whatWouldResolveIt}`,
+    weakestPart: data.whyThisCritique,
+    challenge: data.critique,
     responseOptions: ["Defend", "Revise", "Absorb"],
     provenanceTag: data.provenanceTag,
     suggestedNextMove: data.suggestedNextMove,
@@ -671,7 +671,7 @@ async function handleChallengeResponse(challenge, option) {
 function challengeResponseBody(challenge, option) {
   const action = option.toLowerCase();
   const body = {
-    action,
+    response: action,
     challengeEdgeId: challenge.challengeEdgeId,
   };
 
