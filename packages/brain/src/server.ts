@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { handleArtifactRequest } from "./artifact-route.ts";
+import { handleArtifactRequest, handleSessionArtifactRequest } from "./artifact-route.ts";
 import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
@@ -33,6 +33,36 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/artifact") {
       await writeWebResponse(outgoing, await handleArtifactRequest(request));
+      return;
+    }
+
+    const sessionArtifactMatch = /^\/brain\/session\/([^/]+)\/artifact$/.exec(url.pathname);
+
+    if (sessionArtifactMatch) {
+      const sessionId = sessionArtifactMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(
+          outgoing,
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "invalid_session_id",
+                message: "Artifact generation requires a session id.",
+              },
+            }),
+            {
+              status: 400,
+              headers: {
+                "content-type": "application/json; charset=utf-8",
+              },
+            },
+          ),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleSessionArtifactRequest(request, decodeURIComponent(sessionId)));
       return;
     }
 
