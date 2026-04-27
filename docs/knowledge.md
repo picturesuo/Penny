@@ -21,6 +21,18 @@
 - Durable project fact: request rate limiting should be centralized in a shared server helper so server actions and route handlers cannot bypass the same abuse guard.
 - Durable project fact: export has an open JSON, Markdown, and CSV schema with a portability guarantee for user-owned data.
 
+## Current Penny MVP Contract
+- Source: user instruction on 2026-04-27.
+- Penny is a controllable thinking instrument enhanced by AI, not a generic AI chat app.
+- First MVP loop: user enters one raw idea; Penny extracts hidden assumptions; Penny creates a thought map; Penny shows useful exploration directions; Penny challenges the weakest part; the user can Defend, Revise, or Absorb; Penny stores this as durable thinking history; the user leaves with an Idea Map and Challenge Brief.
+- Core modes: Brain is the user's spatial, accumulating thinking graph; Challenge / Verify stress-tests claims and exposes weak assumptions; Learn / Makes Cents explains concepts in context at the moment of confusion.
+- Core objects: Claim is a belief, assumption, question, or concept; Edge is a typed relationship between claims; Move is an immutable thinking event; Shape is an inferred pattern in how the user thinks; Source is raw input; Session is a bounded thinking loop; Artifact is useful output from the session; WikiPage is a compiled readable view, not the source of truth.
+- Product rules: no generic chatbot sidebar; chat input is secondary; the structure is the product; do not silently mutate truth; meaningful changes create Moves; current state is derived from claims, edges, and moves.
+- MVP scope rules: keep blast radius small; keep files reasonably small; prefer typed, validated AI outputs; prefer Postgres first; do not add a graph database, imports, browser extension, MCP, or social features before the MVP loop works.
+- AI provider rule: use xAI as the default AI provider. Use Claude only when explicitly useful for deeper critique or compilation.
+- Engineering rules: inspect the repo before coding; use the existing package manager and stack when possible; avoid unnecessary dependencies; before coding, list files to touch; after coding, provide how to test; quote exact errors; do not claim success unless commands pass or unverified work is clearly labeled.
+- This current MVP contract supersedes any older, broader, or more generic product framing when choosing the next implementation slice.
+
 ## Supermemory Understanding
 - Last updated: 2026-04-27.
 
