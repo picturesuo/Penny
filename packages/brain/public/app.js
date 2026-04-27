@@ -60,6 +60,7 @@ const state = {
   stream: null,
   streamLoading: false,
   streamError: null,
+  streamFallback: false,
 };
 
 renderEmptyState();
@@ -463,14 +464,25 @@ function renderCockpit(data) {
 async function loadInitialStream() {
   state.streamLoading = true;
   state.streamError = null;
+  state.streamFallback = false;
   renderStream();
 
   try {
     const payload = await fetchBrainStream();
     state.stream = payload.data;
     state.streamError = null;
+    state.streamFallback = false;
   } catch (error) {
-    state.streamError = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (isDatabaseUnavailable(message)) {
+      state.stream = firstSessionStream();
+      state.streamError = null;
+      state.streamFallback = true;
+    } else {
+      state.streamError = message;
+      state.streamFallback = false;
+    }
   } finally {
     state.streamLoading = false;
 
@@ -523,7 +535,7 @@ function renderStream() {
 
   const activeCount = stream.activeSessions?.length ?? 0;
   const riskCount = stream.unresolvedRisks?.length ?? 0;
-  setText(elements.streamStatus, `${activeCount} active / ${riskCount} risks`);
+  setText(elements.streamStatus, state.streamFallback ? "First session" : `${activeCount} active / ${riskCount} risks`);
 
   append(
     elements.streamBody,
@@ -585,6 +597,28 @@ function renderStream() {
       "No recent moves.",
     ),
   );
+}
+
+function firstSessionStream() {
+  return {
+    activeSessions: [],
+    openChallenges: [],
+    unresolvedRisks: [],
+    recentMoves: [],
+    claimsNeedingAttention: [],
+    suggestedNextMoves: [
+      {
+        sessionId: null,
+        kind: "start_session",
+        label: "Start with one raw idea",
+        description: "Create the first Brain session so Penny has claims, moves, and edges to work from.",
+      },
+    ],
+  };
+}
+
+function isDatabaseUnavailable(message) {
+  return /\bDATABASE_URL\b|database is required|database client/i.test(String(message ?? ""));
 }
 
 function streamSection(label, items, renderItem, emptyText) {
