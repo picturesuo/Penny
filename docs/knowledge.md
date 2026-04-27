@@ -281,6 +281,18 @@
 - Favor concrete product mechanics over vague AI language.
 - Use the project's vocabulary: Brain, Challenge / Verify, Learn / Makes Cents, Claim, Edge, Move, Shape, Source, Session, Artifact, WikiPage, Sphere, lens, precedent corpus, assumption extraction, defend/revise/absorb, quiet keystone, synthesis gates, Idea Map, Challenge Brief, and old selves.
 
+### Critic MVP Checklist
+- Verdict must be `Accept` or `Reject`; reject if the wave makes Penny feel like generic chat, a pretty note app, a memory wrapper, a graph toy, or fake reasoning.
+- Product fit: does the change strengthen the first loop from raw idea to assumptions, thought map, exploration directions, weakest-part challenge, Defend/Revise/Absorb, durable history, Idea Map, and Challenge Brief?
+- Epistemic integrity: are claims, assumptions, confidence, critique provenance, uncertainty, and user overrides explicit rather than silently rewritten?
+- Data model correctness: are current views derived from Claims, Edges, and Moves, with Artifacts and WikiPages treated as compiled outputs rather than truth?
+- Move capture: does every meaningful user/system state change create or require a Move, especially challenge responses, revisions, confidence changes, and accepted risks?
+- Small blast radius: is the change path-limited, typed, validated, and free of premature graph DB, import surface, browser extension, MCP, social, or generic assistant scope?
+- UI distinctiveness: does the interface foreground structure, map, challenge, and artifacts instead of a chatbot sidebar or decorative graph-only experience?
+- Testability: can the wave be verified with focused tests or static checks that prove schema validation, move creation, first-session value, and failure behavior?
+- First-session value: can a new user leave the first session with a useful Idea Map plus Challenge Brief, not just a promise of future memory?
+- Required review output: list top 3 issues, required fixes before the next wave, nice-to-haves to defer, and wrapper risk from 1 to 10.
+
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.
 - Label each note by source when useful: `user`, `repo`, or `external`.
