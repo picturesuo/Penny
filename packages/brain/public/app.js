@@ -29,6 +29,9 @@ const elements = {
 const state = {
   data: null,
   respondingClaimId: null,
+  challengingClaimId: null,
+  respondingChallengeId: null,
+  activeChallenge: null,
 };
 
 renderEmptyState();
@@ -115,6 +118,60 @@ async function respondToAssumption(claimId, body) {
   return payload;
 }
 
+async function issueChallenge(claimId) {
+  const response = await fetch("/brain/challenge", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": "dev-user",
+      "x-project-id": "dev-project",
+    },
+    body: JSON.stringify({ targetClaimId: claimId }),
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
+    const message = payload?.error?.message
+      ? `${payload.error.message}${issues}`
+      : `POST /brain/challenge failed with ${response.status}.`;
+    throw new Error(message);
+  }
+
+  if (!payload?.data?.critiqueClaim || !payload.data.challengeEdge || !payload.data.move) {
+    throw new Error("Challenge response returned an invalid graph update.");
+  }
+
+  return payload;
+}
+
+async function respondToChallenge(body) {
+  const response = await fetch("/brain/challenge/respond", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-user-id": "dev-user",
+      "x-project-id": "dev-project",
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
+    const message = payload?.error?.message
+      ? `${payload.error.message}${issues}`
+      : `POST /brain/challenge/respond failed with ${response.status}.`;
+    throw new Error(message);
+  }
+
+  if (!payload?.data?.response || !payload.data.move) {
+    throw new Error("Challenge response action returned an invalid graph update.");
+  }
+
+  return payload;
+}
+
 async function readJsonResponse(response) {
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -177,7 +234,7 @@ function renderCockpit(data) {
   renderExplorationRows(paths);
   renderLater(paths);
   renderQuickSelect(claims);
-  renderPennyInsight(data.firstChallenge, targetClaim);
+  renderPennyInsight(state.activeChallenge ?? data.firstChallenge, targetClaim);
   renderLearn(learnCandidates);
 }
 
@@ -256,36 +313,72 @@ function claimNode(claim, modifier = "") {
 
   node.append(meta, text);
 
-  if (claim.kind === "assumption") {
-    append(node, assumptionActions(claim));
+  const actions = claimActions(claim);
+
+  if (actions) {
+    append(node, actions);
   }
 
   return node;
 }
 
-function assumptionActions(claim) {
-  const controls = document.createElement("div");
-  controls.className = "assumption-actions";
-
-  const isPending = state.respondingClaimId === claim.id;
-  const actions = [
-    { label: "Confirm", action: "confirm", disabled: claim.status === "committed" },
-    { label: "Reject", action: "reject", disabled: claim.status === "rejected" },
-    { label: "Refine", action: "refine", disabled: false },
-  ];
-
-  for (const item of actions) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = isPending ? "Saving" : item.label;
-    button.disabled = isPending || item.disabled;
-    button.addEventListener("click", () => {
-      void handleAssumptionAction(claim, item.action);
-    });
-    append(controls, button);
+function claimActions(claim) {
+  if (!["belief", "assumption"].includes(claim.kind)) {
+    return null;
   }
 
+  const controls = document.createElement("div");
+  controls.className = "claim-actions";
+
+  if (claim.kind === "assumption") {
+    const isPending = state.respondingClaimId === claim.id;
+    const actions = [
+      { label: "Confirm", action: "confirm", disabled: claim.status === "committed" },
+      { label: "Reject", action: "reject", disabled: claim.status === "rejected" },
+      { label: "Refine", action: "refine", disabled: false },
+    ];
+
+    for (const item of actions) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = isPending ? "Saving" : item.label;
+      button.disabled = isPending || item.disabled;
+      button.addEventListener("click", () => {
+        void handleAssumptionAction(claim, item.action);
+      });
+      append(controls, button);
+    }
+  }
+
+  const challengeButton = document.createElement("button");
+  challengeButton.type = "button";
+  challengeButton.textContent = state.challengingClaimId === claim.id ? "Challenging" : "Challenge";
+  challengeButton.disabled = state.challengingClaimId === claim.id;
+  challengeButton.addEventListener("click", () => {
+    void handleChallengeIssue(claim);
+  });
+  append(controls, challengeButton);
+
   return controls;
+}
+
+async function handleChallengeIssue(claim) {
+  state.challengingClaimId = claim.id;
+  renderCockpit(state.data);
+  setThinking(true, "Challenging");
+  setStatus("Issuing challenge.");
+
+  try {
+    const payload = await issueChallenge(claim.id);
+    applyIssuedChallenge(payload.data);
+    setStatus("Challenge issued.");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), true);
+  } finally {
+    state.challengingClaimId = null;
+    setThinking(false, state.activeChallenge ? "Challenge ready" : "Ready");
+    renderCockpit(state.data);
+  }
 }
 
 async function handleAssumptionAction(claim, action) {
@@ -352,6 +445,96 @@ function applyAssumptionResponse(data) {
   if (Array.isArray(state.data.moves)) {
     state.data.moves = [...state.data.moves, data.move];
   }
+}
+
+function applyIssuedChallenge(data) {
+  if (!state.data?.ideaMap) {
+    return;
+  }
+
+  upsertClaim(data.critiqueClaim);
+  upsertEdge(data.challengeEdge);
+  state.activeChallenge = {
+    targetClaimId: data.targetClaim.id,
+    challengeEdgeId: data.challengeEdge.id,
+    critiqueClaimId: data.critiqueClaim.id,
+    failureType: data.failureType,
+    strength: data.strength,
+    weakestPart: data.critique,
+    challenge: `${data.whyThisCritique} ${data.whatWouldResolveIt}`,
+    responseOptions: ["Defend", "Revise", "Absorb"],
+    provenanceTag: data.provenanceTag,
+    suggestedNextMove: data.suggestedNextMove,
+    status: "issued",
+  };
+
+  if (Array.isArray(state.data.moves)) {
+    state.data.moves = [...state.data.moves, data.move];
+  }
+
+  if (data.brainRun) {
+    state.data.brainRun = data.brainRun;
+  }
+}
+
+function applyChallengeResponse(data) {
+  if (data.targetClaim) {
+    upsertClaim(data.targetClaim);
+  }
+
+  upsertEdge(data.challengeEdge);
+
+  if (state.activeChallenge?.challengeEdgeId === data.challengeEdge.id) {
+    state.activeChallenge = {
+      ...state.activeChallenge,
+      status: data.challengeEdge.status,
+      lastResponse: data.response,
+    };
+  }
+
+  if (Array.isArray(state.data?.moves)) {
+    state.data.moves = [...state.data.moves, data.move];
+  }
+}
+
+function upsertClaim(claim) {
+  const claims = state.data?.ideaMap?.claims;
+
+  if (!Array.isArray(claims)) {
+    return;
+  }
+
+  const index = claims.findIndex((existing) => existing.id === claim.id);
+
+  if (index >= 0) {
+    claims[index] = {
+      ...claims[index],
+      ...claim,
+    };
+    return;
+  }
+
+  claims.push(claim);
+}
+
+function upsertEdge(edge) {
+  const edges = state.data?.ideaMap?.edges;
+
+  if (!Array.isArray(edges)) {
+    return;
+  }
+
+  const index = edges.findIndex((existing) => existing.id === edge.id);
+
+  if (index >= 0) {
+    edges[index] = {
+      ...edges[index],
+      ...edge,
+    };
+    return;
+  }
+
+  edges.push(edge);
 }
 
 function edgeConnector(edge) {
@@ -430,25 +613,109 @@ function renderQuickSelect(claims) {
 }
 
 function renderPennyInsight(challenge, targetClaim) {
-  setText(elements.pennyInsight, targetClaim?.text ?? challenge?.weakestPart ?? "The first challenge will appear here.");
-  setText(elements.failureType, formatLabel(challenge?.failureType ?? "waiting"));
+  const challengeTarget = targetClaim ?? findClaimById(challenge?.targetClaimId);
+  const strength = challenge?.strength ? ` / ${formatLabel(challenge.strength)}` : "";
+
+  setText(elements.pennyInsight, challengeTarget?.text ?? challenge?.weakestPart ?? "The first challenge will appear here.");
+  setText(elements.failureType, `${formatLabel(challenge?.failureType ?? "waiting")}${strength}`);
   setText(elements.weakestPart, challenge?.weakestPart ?? "No challenge yet.");
   setText(elements.challengeText, challenge?.challenge ?? "Submit one idea to reveal the weakest load-bearing part.");
-  renderResponseOptions(challenge?.responseOptions ?? []);
+  renderResponseOptions(challenge);
 }
 
-function renderResponseOptions(options) {
+function renderResponseOptions(challenge) {
   replaceChildren(elements.responseOptions);
+
+  const options = challenge?.responseOptions ?? [];
 
   for (const option of options) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = option;
+    button.disabled = state.respondingChallengeId === challenge?.challengeEdgeId;
     button.addEventListener("click", () => {
-      setStatus(`${option} selected.`);
+      void handleChallengeResponse(challenge, option);
     });
     append(elements.responseOptions, button);
   }
+}
+
+async function handleChallengeResponse(challenge, option) {
+  if (!challenge?.challengeEdgeId) {
+    setStatus("Issue a persisted challenge before responding.");
+    return;
+  }
+
+  const body = challengeResponseBody(challenge, option);
+
+  if (!body) {
+    return;
+  }
+
+  state.respondingChallengeId = challenge.challengeEdgeId;
+  renderCockpit(state.data);
+  setStatus(`Saving ${option.toLowerCase()} response.`);
+
+  try {
+    const payload = await respondToChallenge(body);
+    applyChallengeResponse(payload.data);
+    setStatus(`${option} saved.`);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : String(error), true);
+  } finally {
+    state.respondingChallengeId = null;
+    renderCockpit(state.data);
+  }
+}
+
+function challengeResponseBody(challenge, option) {
+  const action = option.toLowerCase();
+  const body = {
+    action,
+    challengeEdgeId: challenge.challengeEdgeId,
+  };
+
+  if (action === "defend") {
+    const reasoning = window.prompt("Defend this claim", "")?.trim();
+
+    if (!reasoning) {
+      setStatus("Defend needs reasoning.", true);
+      return null;
+    }
+
+    return {
+      ...body,
+      reasoning,
+    };
+  }
+
+  if (action !== "revise") {
+    const reasoning = window.prompt("Absorb note", "")?.trim();
+
+    return reasoning
+      ? {
+          ...body,
+          reasoning,
+        }
+      : body;
+  }
+
+  const targetClaim = findClaimById(challenge.targetClaimId);
+  const revisedText = window.prompt("Revise challenged claim", targetClaim?.text ?? "")?.trim();
+
+  if (revisedText === undefined) {
+    return null;
+  }
+
+  if (!revisedText) {
+    setStatus("Revised claim text cannot be empty.", true);
+    return null;
+  }
+
+  return {
+    ...body,
+    revisedText,
+  };
 }
 
 function renderLearn(candidates) {
@@ -537,6 +804,10 @@ function replaceChildren(element, ...children) {
 
 function append(element, child) {
   element?.append(child);
+}
+
+function findClaimById(claimId) {
+  return state.data?.ideaMap?.claims?.find((claim) => claim.id === claimId);
 }
 
 function formatLabel(value) {
