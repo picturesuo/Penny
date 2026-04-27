@@ -241,6 +241,7 @@ function createPersistedSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): 
     fromClaimId: requireMappedId(claimIds, edge.fromClaimId),
     toClaimId: requireMappedId(claimIds, edge.toClaimId),
     kind: edge.kind,
+    status: "active" as const,
     label: edge.label,
     createdAt: now,
   }));
