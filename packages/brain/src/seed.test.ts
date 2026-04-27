@@ -167,66 +167,6 @@ const validSeedOutput: BrainSeedOutput = {
         "A load-bearing assumption is the belief the rest of the idea depends on. If it fails, the idea needs revision rather than polish.",
     },
   ],
-  moves: [
-    {
-      id: "move.source.recorded",
-      kind: "source.recorded",
-      summary: "Recorded the raw idea as the source.",
-      claimIds: [],
-      edgeIds: [],
-      artifactIds: [],
-    },
-    {
-      id: "move.claim.created",
-      kind: "claim.created",
-      summary: "Created the seed claim and assumption claims.",
-      claimIds: ["claim.seed", "claim.assumption.speed", "claim.assumption.visible", "claim.assumption.challenge"],
-      edgeIds: [],
-      artifactIds: [],
-    },
-    {
-      id: "move.edge.created",
-      kind: "edge.created",
-      summary: "Connected the seed claim to its assumptions.",
-      claimIds: ["claim.seed", "claim.assumption.speed", "claim.assumption.visible", "claim.assumption.challenge"],
-      edgeIds: ["edge.seed.speed", "edge.seed.visible", "edge.seed.challenge"],
-      artifactIds: [],
-    },
-    {
-      id: "move.challenge.created",
-      kind: "challenge.created",
-      summary: "Challenged whether speed is the weakest part.",
-      claimIds: ["claim.assumption.speed"],
-      edgeIds: ["edge.seed.speed"],
-      artifactIds: [],
-    },
-    {
-      id: "move.artifact.created",
-      kind: "artifact.created",
-      summary: "Created the session outputs.",
-      claimIds: ["claim.seed", "claim.assumption.speed", "claim.assumption.visible", "claim.assumption.challenge"],
-      edgeIds: ["edge.seed.speed", "edge.seed.visible", "edge.seed.challenge"],
-      artifactIds: ["artifact.idea_map", "artifact.challenge_brief"],
-    },
-  ],
-  artifacts: [
-    {
-      id: "artifact.idea_map",
-      kind: "idea_map",
-      title: "Idea Map",
-      summary: "Seed claim, hidden assumptions, and typed dependency edges.",
-      claimIds: ["claim.seed", "claim.assumption.speed", "claim.assumption.visible", "claim.assumption.challenge"],
-      edgeIds: ["edge.seed.speed", "edge.seed.visible", "edge.seed.challenge"],
-    },
-    {
-      id: "artifact.challenge_brief",
-      kind: "challenge_brief",
-      title: "Challenge Brief",
-      summary: "The first challenge and Defend / Revise / Absorb response paths.",
-      claimIds: ["claim.assumption.speed"],
-      edgeIds: ["edge.seed.speed"],
-    },
-  ],
 };
 
 test("generateBrainSeed validates provider output into the Wave 3 seed structure", async () => {
@@ -250,14 +190,8 @@ test("generateBrainSeed validates provider output into the Wave 3 seed structure
   assert.equal(output.firstChallenge.failureType, "shaky_assumption");
   assert.deepEqual(output.firstChallenge.responseOptions, ["Defend", "Revise", "Absorb"]);
   assert.equal(output.learnCandidates[0]?.claimId, "claim.assumption.challenge");
-  assert.deepEqual(
-    output.moves.map((move) => move.kind),
-    ["source.recorded", "claim.created", "edge.created", "challenge.created", "artifact.created"],
-  );
-  assert.deepEqual(
-    output.artifacts.map((artifact) => artifact.kind),
-    ["idea_map", "challenge_brief"],
-  );
+  assert.equal("moves" in output, false);
+  assert.equal("artifacts" in output, false);
 });
 
 test("prompt keeps Penny on structural seed extraction", () => {
@@ -273,6 +207,8 @@ test("prompt keeps Penny on structural seed extraction", () => {
   assert.match(system, /Avoid generic startup, product, productivity, or AI-app platitudes/);
   assert.match(prompt, /confidence values must be integer percentages/i);
   assert.match(prompt, /Defend, Revise, Absorb/);
+  assert.match(prompt, /Do not return moves/);
+  assert.match(prompt, /Do not return artifacts/);
   assert.match(prompt, /00000000-0000-4000-8000-000000000123/);
 });
 
@@ -376,27 +312,34 @@ test("parseBrainSeedOutput rejects maps with dangling challenge references", () 
   );
 });
 
-test("parseBrainSeedOutput rejects moves with dangling artifact references", () => {
+test("parseBrainSeedOutput strips seed-time moves and artifacts from provider extras", () => {
   const invalidOutput = {
     ...validSeedOutput,
-    moves: validSeedOutput.moves.map((move) =>
-      move.id === "move.artifact.created"
-        ? {
-            ...move,
-            artifactIds: ["artifact.missing"],
-          }
-        : move,
-    ),
+    moves: [
+      {
+        id: "move.model-authored",
+        kind: "artifact.created",
+        summary: "A model-authored move should not survive seed parsing.",
+        claimIds: ["claim.seed"],
+        edgeIds: [],
+        artifactIds: ["artifact.model-authored"],
+      },
+    ],
+    artifacts: [
+      {
+        id: "artifact.model-authored",
+        kind: "challenge_brief",
+        title: "Model-authored artifact",
+        summary: "Seed artifacts should be compiled later from persisted state.",
+        claimIds: ["claim.seed"],
+        edgeIds: [],
+      },
+    ],
   };
+  const output = parseBrainSeedOutput(invalidOutput);
 
-  assert.throws(
-    () => parseBrainSeedOutput(invalidOutput),
-    (error) => {
-      assert.ok(error instanceof BrainSeedValidationError);
-      assert.match(error.issues.join("\n"), /move\.artifactId must reference an artifact/);
-      return true;
-    },
-  );
+  assert.equal("moves" in output, false);
+  assert.equal("artifacts" in output, false);
 });
 
 test("parseBrainSeedOutput rejects learn candidates with dangling claim references", () => {
@@ -418,28 +361,10 @@ test("parseBrainSeedOutput rejects learn candidates with dangling claim referenc
   );
 });
 
-test("parseBrainSeedOutput requires Idea Map and Challenge Brief artifacts", () => {
-  const invalidOutput = {
-    ...validSeedOutput,
-    artifacts: validSeedOutput.artifacts.filter((artifact) => artifact.kind !== "challenge_brief"),
-    moves: validSeedOutput.moves.map((move) =>
-      move.id === "move.artifact.created"
-        ? {
-            ...move,
-            artifactIds: ["artifact.idea_map"],
-          }
-        : move,
-    ),
-  };
+test("parseBrainSeedOutput does not require seed-time artifacts", () => {
+  const output = parseBrainSeedOutput(validSeedOutput);
 
-  assert.throws(
-    () => parseBrainSeedOutput(invalidOutput),
-    (error) => {
-      assert.ok(error instanceof BrainSeedValidationError);
-      assert.match(error.issues.join("\n"), /artifacts must include challenge_brief/);
-      return true;
-    },
-  );
+  assert.equal("artifacts" in output, false);
 });
 
 test("heuristic provider keeps seed extraction usable without live AI credentials", async () => {
@@ -456,9 +381,8 @@ test("heuristic provider keeps seed extraction usable without live AI credential
   assert.ok(output.explorationPaths.length >= 6);
   assert.equal(output.learnCandidates[0]?.term, "the user's cognitive load");
   assert.deepEqual(output.firstChallenge.responseOptions, ["Defend", "Revise", "Absorb"]);
-  assert.ok(output.moves.some((move) => move.kind === "artifact.created"));
-  assert.ok(output.artifacts.some((artifact) => artifact.kind === "idea_map"));
-  assert.ok(output.artifacts.some((artifact) => artifact.kind === "challenge_brief"));
+  assert.equal("moves" in output, false);
+  assert.equal("artifacts" in output, false);
 });
 
 test("xAI provider uses AI SDK structured output with the default model", async () => {
