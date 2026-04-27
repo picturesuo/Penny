@@ -44,16 +44,19 @@ elements.form?.addEventListener("submit", async (event) => {
   }
 
   setLoading(true);
+  let settledRunLabel = null;
 
   try {
     const payload = await seedBrain(rawIdea);
     state.data = payload.data;
     renderCockpit(payload.data);
     setStatus("Graph slice persisted.");
+    settledRunLabel = runStatusLabel(payload.data?.brainRun);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
+    settledRunLabel = "Seed failed";
   } finally {
-    setLoading(false);
+    setLoading(false, settledRunLabel);
   }
 });
 
@@ -67,14 +70,35 @@ async function seedBrain(rawIdea) {
     },
     body: JSON.stringify({ rawIdea }),
   });
-  const payload = await response.json();
+  const payload = await readJsonResponse(response);
 
   if (!response.ok) {
-    const message = payload?.error?.message ?? `POST /brain/seed failed with ${response.status}.`;
+    const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
+    const message = payload?.error?.message
+      ? `${payload.error.message}${issues}`
+      : `POST /brain/seed failed with ${response.status}.`;
     throw new Error(message);
   }
 
+  if (!payload?.data?.ideaMap) {
+    throw new Error("POST /brain/seed returned an invalid graph slice.");
+  }
+
   return payload;
+}
+
+async function readJsonResponse(response) {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 function renderEmptyState() {
@@ -107,7 +131,12 @@ function renderCockpit(data) {
   const seedClaim = claims.find((claim) => claim.seedId === "claim.seed") ?? claims[0];
   const targetClaim = claims.find((claim) => claim.id === data.firstChallenge?.targetClaimId);
 
-  setText(elements.sessionStatus, data.session ? `Session ${shortId(data.session.id)} ${data.session.status}` : "No session");
+  setText(
+    elements.sessionStatus,
+    data.session
+      ? `Session ${shortId(data.session.id)} ${formatLabel(data.session.status)} / ${runStatusLabel(data.brainRun)}`
+      : "No session",
+  );
   setText(elements.sourceKind, formatLabel(data.source?.kind ?? "raw_idea"));
   setText(elements.currentClaim, seedClaim?.text ?? data.source?.rawText ?? "What's on your mind?");
   setText(elements.keyInsight, data.ideaMap?.keyInsight ?? "Penny returned a persisted graph slice.");
@@ -343,19 +372,26 @@ function textOnly(value) {
   return paragraph;
 }
 
-function setLoading(isLoading) {
+function setLoading(isLoading, settledRunLabel = null) {
   if (elements.seedSubmit) {
     elements.seedSubmit.disabled = isLoading;
     elements.seedSubmit.textContent = isLoading ? "Thinking" : "Explore";
   }
 
-  setThinking(isLoading);
-  setStatus(isLoading ? "Penny is thinking." : elements.formStatus?.textContent ?? "Ready");
+  setThinking(isLoading, settledRunLabel);
+
+  if (isLoading) {
+    setStatus("Penny is thinking.");
+  }
 }
 
-function setThinking(isThinking) {
+function setThinking(isThinking, label = null) {
   document.body.classList.toggle("is-thinking", isThinking);
-  setText(elements.thinkingIndicator, isThinking ? "Penny is thinking" : "Ready");
+  setText(elements.thinkingIndicator, label ?? (isThinking ? "Penny is thinking" : "Ready"));
+}
+
+function runStatusLabel(brainRun) {
+  return brainRun?.status ? `Run ${formatLabel(brainRun.status)}` : "Ready";
 }
 
 function setStatus(message, isError = false) {
