@@ -20,6 +20,7 @@ Penny is a controllable thinking instrument enhanced by AI, not a generic chatbo
 - Learn / Makes Cents: explains concepts in context at the moment of confusion.
 
 Challenge and Learn are modes inside Brain, not separate products or sidebars.
+The first loop can include Learn only when confusion appears; it should not become a separate Learn app or delay the core challenge loop.
 
 ## Core Objects
 
@@ -27,7 +28,7 @@ Challenge and Learn are modes inside Brain, not separate products or sidebars.
 - Edge: a typed relationship between claims.
 - Move: an immutable thinking event.
 - Shape: an inferred pattern in how the user thinks.
-- Source: raw input such as a seed idea, document, chat, or web source.
+- Source: the one raw idea entered for the MVP loop. Documents, chats, and web sources are post-MVP source types.
 - Session: one bounded thinking loop.
 - Artifact: useful output from a session.
 - WikiPage: a compiled readable view, not source of truth.
