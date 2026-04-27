@@ -44,8 +44,13 @@ export { BrainSeedOutputSchema, BrainSeedValidationError } from "./schema.ts";
 export {
   BrainSeedProviderError,
   buildBrainSeedPrompt,
+  buildBrainSeedSystemPrompt,
+  createAiSdkXaiBrainSeedProvider,
   createDefaultBrainSeedProvider,
   createHeuristicBrainSeedProvider,
   createXaiBrainSeedProvider,
+  defaultXaiBrainSeedModel,
+  resolveXaiBrainSeedModel,
+  type BrainSeedGenerateText,
   type BrainSeedProvider,
 } from "./providers.ts";

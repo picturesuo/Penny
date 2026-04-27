@@ -1,5 +1,32 @@
-import type { BrainSeedInput, BrainSeedOutput } from "./schema.ts";
-import { brainSeedJsonSchema } from "./json-schema.ts";
+import { createXai } from "@ai-sdk/xai";
+import { generateText, Output, type LanguageModel } from "ai";
+import { BrainSeedAiOutputSchema, type BrainSeedAiOutput, type BrainSeedInput, type BrainSeedOutput } from "./schema.ts";
+
+export const defaultXaiBrainSeedModel = "grok-4.20-reasoning";
+
+const brainSeedOutputSpec = Output.object<BrainSeedAiOutput>({
+  schema: BrainSeedAiOutputSchema,
+  name: "penny_brain_seed",
+  description: "Penny's first-loop seed extraction with claims, edges, moves, and artifacts.",
+});
+
+export type BrainSeedGenerateText = (request: {
+  model: LanguageModel;
+  system: string;
+  prompt: string;
+  output: typeof brainSeedOutputSpec;
+  maxRetries: number;
+  providerOptions: {
+    xai: {
+      reasoningEffort: "medium";
+      store: false;
+    };
+  };
+}) => Promise<{ output: unknown }>;
+
+export type XaiBrainSeedProviderOptions = {
+  generateText?: BrainSeedGenerateText;
+};
 
 export type BrainSeedProvider = {
   name: string;
@@ -30,7 +57,17 @@ export function createHeuristicBrainSeedProvider(): BrainSeedProvider {
   };
 }
 
-export function createXaiBrainSeedProvider(env: Record<string, string | undefined> = process.env): BrainSeedProvider {
+export function createXaiBrainSeedProvider(
+  env: Record<string, string | undefined> = process.env,
+  options: XaiBrainSeedProviderOptions = {},
+): BrainSeedProvider {
+  return createAiSdkXaiBrainSeedProvider(env, options);
+}
+
+export function createAiSdkXaiBrainSeedProvider(
+  env: Record<string, string | undefined> = process.env,
+  options: XaiBrainSeedProviderOptions = {},
+): BrainSeedProvider {
   return {
     name: "xai",
     async generate(input) {
@@ -40,51 +77,76 @@ export function createXaiBrainSeedProvider(env: Record<string, string | undefine
         throw new BrainSeedProviderError("XAI_API_KEY is required for the xAI brain seed provider.");
       }
 
-      const model = env.XAI_BRAIN_SEED_MODEL?.trim() || env.XAI_MODEL?.trim();
+      const xai = createXai(createXaiSettings(apiKey, env));
+      const callGenerateText = options.generateText ?? generateStructuredBrainSeed;
 
-      if (!model) {
-        throw new BrainSeedProviderError("XAI_BRAIN_SEED_MODEL or XAI_MODEL is required for the xAI brain seed provider.");
-      }
-
-      const response = await fetch(`${resolveXaiBaseUrl(env)}/responses`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          input: buildBrainSeedPrompt(input),
-          temperature: 0.2,
-          text: {
-            format: {
-              type: "json_schema",
-              name: "penny_brain_seed",
-              schema: brainSeedJsonSchema,
-              strict: true,
+      try {
+        const result = await callGenerateText({
+          model: xai.responses(resolveXaiBrainSeedModel(env)),
+          system: buildBrainSeedSystemPrompt(),
+          prompt: buildBrainSeedPrompt(input),
+          output: brainSeedOutputSpec,
+          maxRetries: 1,
+          providerOptions: {
+            xai: {
+              reasoningEffort: "medium",
+              store: false,
             },
           },
-        }),
-      });
+        });
 
-      const payload = await readJsonResponse(response);
+        return result.output;
+      } catch (error) {
+        if (error instanceof BrainSeedProviderError) {
+          throw error;
+        }
 
-      if (!response.ok) {
-        throw new BrainSeedProviderError(`xAI brain seed request failed with status ${response.status}: ${readProviderError(payload)}`);
+        throw new BrainSeedProviderError(`xAI brain seed request failed: ${formatUnknownError(error)}`);
       }
-
-      return JSON.parse(extractXaiOutputText(payload));
     },
   };
 }
 
-export function buildBrainSeedPrompt(input: BrainSeedInput): string {
+export function resolveXaiBrainSeedModel(env: Record<string, string | undefined> = process.env): string {
+  return env.XAI_BRAIN_SEED_MODEL?.trim() || env.XAI_MODEL?.trim() || defaultXaiBrainSeedModel;
+}
+
+export function buildBrainSeedSystemPrompt(): string {
   return [
-    "You are Penny, a controllable thinking instrument, not a chatbot.",
-    "Turn the user's raw idea into a compact thinking structure.",
-    "Extract hidden assumptions, create a small thought map, choose useful exploration directions, and challenge the weakest part.",
-    "Return durable thinking history as claims, edges, moves, and artifacts.",
-    "Do not invent citations or external facts. Return only valid JSON matching the requested schema.",
+    "You are Penny, a controllable thinking instrument enhanced by AI.",
+    "You are on the user's team, but you push them when their structure is weak.",
+    "Extract hidden assumptions from the raw idea. Do not provide generic advice.",
+    "Build a compact thought map from Claims and typed Edges.",
+    "The first challenge must attack the load-bearing structure: the assumption whose failure would make the idea collapse or need major revision.",
+    "Avoid generic startup, product, productivity, or AI-app platitudes.",
+    "Do not invent citations, market facts, or external evidence.",
+    "Return only the structured seed extraction.",
+  ].join("\n");
+}
+
+export function buildBrainSeedPrompt(input: BrainSeedInput): string {
+  const sessionId = resolveSeedSessionId(input);
+
+  return [
+    "Create Penny's first-loop seed extraction for this raw idea.",
+    "",
+    "Required IDs and values:",
+    "- source.id must be source.raw_idea.",
+    `- source.rawText must exactly equal: ${JSON.stringify(input.rawIdea.trim())}.`,
+    `- session.id must be ${sessionId}.`,
+    "- session.sourceId must be source.raw_idea.",
+    "- session.status must be open.",
+    "- seedClaim.id should be claim.seed.",
+    "- Confidence values must be integer percentages from 0 to 100.",
+    "- responseOptions must be exactly Defend, Revise, Absorb in that order.",
+    "- artifacts must include one idea_map and one challenge_brief.",
+    "- moves must include source.recorded, claim.created, edge.created, challenge.created, and artifact.created.",
+    "",
+    "Quality bar:",
+    "- Hidden assumptions should be specific commitments underneath the user's idea, not generic implementation advice.",
+    "- Exploration paths should help the user decide what to inspect next in Brain.",
+    "- The challenge should name the weakest load-bearing assumption and pressure it directly.",
+    "- Keep the output compact enough for a first session.",
     "",
     `Raw idea: ${input.rawIdea}`,
   ].join("\n");
@@ -102,30 +164,30 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
     session: {
       id: sessionId,
       sourceId: "source.raw_idea",
-      status: "seeded",
+      status: "open",
     },
     seedClaim: {
       id: "claim.seed",
       kind: "belief",
       text: idea,
-      confidence: 0.62,
+      confidence: 62,
     },
     assumptions: [
       {
         id: "claim.assumption.1",
         kind: "assumption",
-        text: "The raw idea contains one central claim worth pressure-testing now.",
-        confidence: 0.55,
+        text: "The user's real bottleneck is weak thinking structure, not just missing information or motivation.",
+        confidence: 55,
         pressure: "high",
-        whyItMatters: "If the idea is actually several claims, the first map can hide the weakest dependency.",
+        whyItMatters: "If the bottleneck is something else, Penny's map and challenge loop can feel clever without changing the user's work.",
       },
       {
         id: "claim.assumption.2",
         kind: "assumption",
-        text: "The user can act on a sharper version of this idea within the current session.",
-        confidence: 0.5,
+        text: "A visible Idea Map plus Challenge Brief will be more useful than a conversational answer in the first session.",
+        confidence: 50,
         pressure: "medium",
-        whyItMatters: "Penny should create useful next thinking moves, not just summarize the input.",
+        whyItMatters: "If the user needs trust, examples, or evidence first, the MVP should not optimize only for fast structure.",
       },
     ],
     thoughtMap: {
@@ -134,19 +196,19 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
           id: "claim.seed",
           kind: "belief",
           text: idea,
-          confidence: 0.62,
+          confidence: 62,
         },
         {
           id: "claim.assumption.1",
           kind: "assumption",
-          text: "The raw idea contains one central claim worth pressure-testing now.",
-          confidence: 0.55,
+          text: "The user's real bottleneck is weak thinking structure, not just missing information or motivation.",
+          confidence: 55,
         },
         {
           id: "claim.assumption.2",
           kind: "assumption",
-          text: "The user can act on a sharper version of this idea within the current session.",
-          confidence: 0.5,
+          text: "A visible Idea Map plus Challenge Brief will be more useful than a conversational answer in the first session.",
+          confidence: 50,
         },
       ],
       edges: [
@@ -155,36 +217,36 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
           fromClaimId: "claim.seed",
           toClaimId: "claim.assumption.1",
           kind: "assumes",
-          label: "depends on this being the central pressure point",
+          label: "depends on structure being the real bottleneck",
         },
         {
           id: "edge.seed.assumption.2",
           fromClaimId: "claim.seed",
           toClaimId: "claim.assumption.2",
           kind: "assumes",
-          label: "depends on there being an actionable next move",
+          label: "depends on mapped structure beating conversational output",
         },
       ],
     },
     explorationPaths: [
       {
         id: "path.decompose",
-        title: "Separate the claim from the bet",
-        prompt: "What would need to be true for this idea to work, and which part is still only a guess?",
-        expectedValue: "Turns a broad thought into claims that can be defended, revised, or absorbed.",
+        title: "Name the work the structure improves",
+        prompt: "Where would this idea make a user's next real decision sharper, and where would it merely organize thoughts?",
+        expectedValue: "Separates a real thinking instrument from a nicer note-taking surface.",
       },
       {
         id: "path.counterexample",
-        title: "Find the counterexample",
-        prompt: "Where would this idea fail even if the user is smart, motivated, and well resourced?",
-        expectedValue: "Surfaces the weakest assumption before it becomes hidden product debt.",
+        title: "Find the failure despite engagement",
+        prompt: "Where could a user enjoy the map and challenge but still leave without a usable artifact?",
+        expectedValue: "Surfaces whether first-session structure actually changes the user's work.",
       },
     ],
-    keyInsight: "The fastest useful move is to expose the assumption that carries the most risk, not to expand the idea.",
+    keyInsight: "The load-bearing question is whether Penny improves the user's thinking output, not whether it can produce an impressive AI response.",
     firstChallenge: {
       targetClaimId: "claim.assumption.1",
-      weakestPart: "The input may be compressing multiple beliefs into one statement.",
-      challenge: "Defend why this is the central claim. If it is not, revise the idea into separate claims before building around it.",
+      weakestPart: "The idea assumes structure is the user's true constraint.",
+      challenge: "Defend why weak structure is the bottleneck. If users already know what they believe but lack evidence, courage, or execution leverage, the first-loop map may not be the right wedge.",
       responseOptions: ["Defend", "Revise", "Absorb"],
     },
     moves: [
@@ -250,7 +312,7 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
         id: "artifact.idea_map",
         kind: "idea_map",
         title: "Idea Map",
-        summary: "A compact map of the seed claim, hidden assumptions, and typed assumption edges.",
+        summary: "A compact map of the seed claim, the bottleneck assumption, and the first-session artifact assumption.",
         claimIds: ["claim.seed", "claim.assumption.1", "claim.assumption.2"],
         edgeIds: ["edge.seed.assumption.1", "edge.seed.assumption.2"],
       },
@@ -258,7 +320,7 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
         id: "artifact.challenge_brief",
         kind: "challenge_brief",
         title: "Challenge Brief",
-        summary: "The weakest assumption, the first challenge, and the Defend / Revise / Absorb response options.",
+        summary: "The load-bearing bottleneck assumption, the first challenge, and the Defend / Revise / Absorb response options.",
         claimIds: ["claim.assumption.1"],
         edgeIds: ["edge.seed.assumption.1"],
       },
@@ -266,61 +328,30 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
   };
 }
 
-async function readJsonResponse(response: Response): Promise<Record<string, unknown>> {
-  const text = await response.text();
+async function generateStructuredBrainSeed(request: Parameters<BrainSeedGenerateText>[0]): Promise<{ output: unknown }> {
+  const result = await generateText(request);
 
-  if (!text.trim()) {
-    return {};
-  }
-
-  const parsed: unknown = JSON.parse(text);
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new BrainSeedProviderError("xAI returned a non-object JSON response.");
-  }
-
-  return parsed as Record<string, unknown>;
+  return { output: result.output };
 }
 
-function extractXaiOutputText(payload: Record<string, unknown>): string {
-  const output = Array.isArray(payload.output) ? payload.output : [];
-
-  for (const item of output) {
-    if (!item || typeof item !== "object" || (item as { type?: unknown }).type !== "message") {
-      continue;
-    }
-
-    const rawContent = (item as { content?: unknown }).content;
-    const content = Array.isArray(rawContent) ? rawContent : [];
-
-    for (const block of content) {
-      if (block && typeof block === "object" && (block as { type?: unknown }).type === "output_text") {
-        const text = (block as { text?: unknown }).text;
-
-        if (typeof text === "string" && text.trim()) {
-          return text;
-        }
-      }
-    }
-  }
-
-  throw new BrainSeedProviderError("xAI response did not contain output_text.");
+function resolveSeedSessionId(input: BrainSeedInput): string {
+  return input.sessionId ?? "00000000-0000-4000-8000-000000000001";
 }
 
-function readProviderError(payload: Record<string, unknown>): string {
-  const error = payload.error;
+function createXaiSettings(apiKey: string, env: Record<string, string | undefined>) {
+  const baseURL = env.XAI_BASE_URL?.trim();
 
-  if (error && typeof error === "object" && !Array.isArray(error)) {
-    const message = (error as { message?: unknown }).message;
-
-    if (typeof message === "string" && message.trim()) {
-      return message;
-    }
+  if (!baseURL) {
+    return { apiKey };
   }
 
-  return JSON.stringify(payload);
+  return { apiKey, baseURL: baseURL.replace(/\/+$/, "") };
 }
 
-function resolveXaiBaseUrl(env: Record<string, string | undefined>): string {
-  return (env.XAI_BASE_URL?.trim() || "https://api.x.ai/v1").replace(/\/+$/, "");
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return String(error);
 }

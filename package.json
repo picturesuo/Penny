@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/xai": "^3.0.83",
+    "ai": "^6.0.168",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9",
     "zod": "^4.1.12"

@@ -28,7 +28,7 @@ export const BrainSeedClaimSchema = z
     id: IdSchema,
     kind: ClaimKindSchema,
     text: z.string().trim().min(1).max(700),
-    confidence: z.number().min(0).max(1),
+    confidence: z.number().int().min(0).max(100),
   })
   .strict();
 
@@ -84,7 +84,7 @@ export const BrainSeedSessionSchema = z
   .object({
     id: z.string().uuid(),
     sourceId: IdSchema,
-    status: z.literal("seeded"),
+    status: z.literal("open"),
   })
   .strict();
 
@@ -107,6 +107,100 @@ export const BrainSeedArtifactSchema = z
     summary: z.string().trim().min(1).max(900),
     claimIds: z.array(IdSchema).min(1).max(12),
     edgeIds: z.array(IdSchema).max(20),
+  })
+  .strict();
+
+const BrainSeedAiClaimSchema = z
+  .object({
+    id: z.string(),
+    kind: ClaimKindSchema,
+    text: z.string(),
+    confidence: z.number(),
+  })
+  .strict();
+
+const BrainSeedAiAssumptionSchema = BrainSeedAiClaimSchema.extend({
+  kind: z.literal("assumption"),
+  pressure: PressureSchema,
+  whyItMatters: z.string(),
+}).strict();
+
+const BrainSeedAiEdgeSchema = z
+  .object({
+    id: z.string(),
+    fromClaimId: z.string(),
+    toClaimId: z.string(),
+    kind: EdgeKindSchema,
+    label: z.string(),
+  })
+  .strict();
+
+export const BrainSeedAiOutputSchema = z
+  .object({
+    source: z
+      .object({
+        id: z.string(),
+        rawText: z.string(),
+      })
+      .strict(),
+    session: z
+      .object({
+        id: z.string(),
+        sourceId: z.string(),
+        status: z.literal("open"),
+      })
+      .strict(),
+    seedClaim: BrainSeedAiClaimSchema,
+    assumptions: z.array(BrainSeedAiAssumptionSchema),
+    thoughtMap: z
+      .object({
+        claims: z.array(BrainSeedAiClaimSchema),
+        edges: z.array(BrainSeedAiEdgeSchema),
+      })
+      .strict(),
+    explorationPaths: z.array(
+      z
+        .object({
+          id: z.string(),
+          title: z.string(),
+          prompt: z.string(),
+          expectedValue: z.string(),
+        })
+        .strict(),
+    ),
+    keyInsight: z.string(),
+    firstChallenge: z
+      .object({
+        targetClaimId: z.string(),
+        weakestPart: z.string(),
+        challenge: z.string(),
+        responseOptions: z.array(z.enum(["Defend", "Revise", "Absorb"])),
+      })
+      .strict(),
+    moves: z.array(
+      z
+        .object({
+          id: z.string(),
+          kind: MoveKindSchema,
+          summary: z.string(),
+          claimIds: z.array(z.string()),
+          edgeIds: z.array(z.string()),
+          artifactIds: z.array(z.string()),
+        })
+        .strict(),
+    ),
+    artifacts: z.array(
+      z
+        .object({
+          id: z.string(),
+          kind: ArtifactKindSchema,
+          title: z.string(),
+          summary: z.string(),
+          claimIds: z.array(z.string()),
+          edgeIds: z.array(z.string()),
+        })
+        .strict(),
+    ),
   })
   .strict();
 
@@ -190,6 +284,7 @@ export const BrainSeedOutputSchema = z
   });
 
 export type BrainSeedInput = z.infer<typeof BrainSeedInputSchema>;
+export type BrainSeedAiOutput = z.infer<typeof BrainSeedAiOutputSchema>;
 export type BrainSeedOutput = z.infer<typeof BrainSeedOutputSchema>;
 
 export class BrainSeedValidationError extends Error {

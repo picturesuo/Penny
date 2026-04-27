@@ -8,9 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@ai-sdk/xai':
+        specifier: ^3.0.83
+        version: 3.0.83(zod@4.3.6)
+      ai:
+        specifier: ^6.0.168
+        version: 6.0.168(zod@4.3.6)
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(postgres@3.4.9)
+        version: 0.45.2(@opentelemetry/api@1.9.0)(postgres@3.4.9)
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
@@ -32,6 +38,34 @@ importers:
         version: 5.9.3
 
 packages:
+
+  '@ai-sdk/gateway@3.0.104':
+    resolution: {integrity: sha512-ZKX5n74io8VIRlhIMSLWVlvT3sXC8Z7cZ9GHuWBWZDVi96+62AIsWuLGvMfcBA1STYuSoDrp6rIziZmvrTq0TA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai-compatible@2.0.41':
+    resolution: {integrity: sha512-kNAGINk71AlOXx10Dq/PXw4t/9XjdK8uxfpVElRwtSFMdeSiLVt58p9TPx4/FJD+hxZuVhvxYj9r42osxWq79g==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@4.0.23':
+    resolution: {integrity: sha512-z8GlDaCmRSDlqkMF2f4/RFgWxdarvIbyuk+m6WXT1LYgsnGiXRJGTD2Z1+SDl3LqtFuRtGX1aghYvQLoHL/9pg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider@3.0.8':
+    resolution: {integrity: sha512-oGMAgGoQdBXbZqNG0Ze56CHjDZ1IDYOwGYxYjO5KLSlz5HiNQ9udIXsPZ61VWaHGZ5XW/jyjmr6t2xz2jGVwbQ==}
+    engines: {node: '>=18'}
+
+  '@ai-sdk/xai@3.0.83':
+    resolution: {integrity: sha512-SuQz68BZGeuZjrSUJAzku97IlhdiNJJBsvG/Tvm3K2tuxkBS7TJq0fH4/AzAM7w2H2jxVUgboP7kRR6IfpRxcg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
@@ -488,8 +522,25 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@opentelemetry/api@1.9.0':
+    resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
+    engines: {node: '>=8.0.0'}
+
+  '@standard-schema/spec@1.1.0':
+    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
   '@types/node@24.12.2':
     resolution: {integrity: sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g==}
+
+  '@vercel/oidc@3.2.0':
+    resolution: {integrity: sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug==}
+    engines: {node: '>= 20'}
+
+  ai@6.0.168:
+    resolution: {integrity: sha512-2HqCJuO+1V2aV7vfYs5LFEUfxbkGX+5oa54q/gCCTL7KLTdbxcCu5D7TdLA5kwsrs3Szgjah9q6D9tpjHM3hUQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   buffer-from@1.1.2:
     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
@@ -605,6 +656,10 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
+  eventsource-parser@3.0.8:
+    resolution: {integrity: sha512-70QWGkr4snxr0OXLRWsFLeRBIRPuQOvt4s8QYjmUlmlkyTZkRqS7EDVRZtzU3TiyDbXSzaOeF0XUKy8PchzukQ==}
+    engines: {node: '>=18.0.0'}
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -612,6 +667,9 @@ packages:
 
   get-tsconfig@4.14.0:
     resolution: {integrity: sha512-yTb+8DXzDREzgvYmh6s9vHsSVCHeC0G3PI5bEXNBHtmshPnO+S5O7qgLEOn0I5QvMy6kpZN8K1NKGyilLb93wA==}
+
+  json-schema@0.4.0:
+    resolution: {integrity: sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA==}
 
   postgres@3.4.9:
     resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
@@ -644,6 +702,37 @@ packages:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
 snapshots:
+
+  '@ai-sdk/gateway@3.0.104(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
+      '@vercel/oidc': 3.2.0
+      zod: 4.3.6
+
+  '@ai-sdk/openai-compatible@2.0.41(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
+      zod: 4.3.6
+
+  '@ai-sdk/provider-utils@4.0.23(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.8
+      '@standard-schema/spec': 1.1.0
+      eventsource-parser: 3.0.8
+      zod: 4.3.6
+
+  '@ai-sdk/provider@3.0.8':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/xai@3.0.83(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/openai-compatible': 2.0.41(zod@4.3.6)
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
+      zod: 4.3.6
 
   '@drizzle-team/brocli@0.10.2': {}
 
@@ -879,9 +968,23 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
+  '@opentelemetry/api@1.9.0': {}
+
+  '@standard-schema/spec@1.1.0': {}
+
   '@types/node@24.12.2':
     dependencies:
       undici-types: 7.16.0
+
+  '@vercel/oidc@3.2.0': {}
+
+  ai@6.0.168(zod@4.3.6):
+    dependencies:
+      '@ai-sdk/gateway': 3.0.104(zod@4.3.6)
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
+      '@opentelemetry/api': 1.9.0
+      zod: 4.3.6
 
   buffer-from@1.1.2: {}
 
@@ -892,8 +995,9 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.21.0
 
-  drizzle-orm@0.45.2(postgres@3.4.9):
+  drizzle-orm@0.45.2(@opentelemetry/api@1.9.0)(postgres@3.4.9):
     optionalDependencies:
+      '@opentelemetry/api': 1.9.0
       postgres: 3.4.9
 
   esbuild@0.18.20:
@@ -979,12 +1083,16 @@ snapshots:
       '@esbuild/win32-ia32': 0.27.7
       '@esbuild/win32-x64': 0.27.7
 
+  eventsource-parser@3.0.8: {}
+
   fsevents@2.3.3:
     optional: true
 
   get-tsconfig@4.14.0:
     dependencies:
       resolve-pkg-maps: 1.0.0
+
+  json-schema@0.4.0: {}
 
   postgres@3.4.9: {}
 

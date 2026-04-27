@@ -3,11 +3,16 @@ import test from "node:test";
 import {
   BrainSeedProviderError,
   BrainSeedValidationError,
+  buildBrainSeedPrompt,
+  buildBrainSeedSystemPrompt,
   createHeuristicBrainSeedProvider,
   createXaiBrainSeedProvider,
+  defaultXaiBrainSeedModel,
   generateBrainSeed,
   parseBrainSeedOutput,
+  resolveXaiBrainSeedModel,
   type BrainSeedOutput,
+  type BrainSeedGenerateText,
   type BrainSeedProvider,
 } from "./seed.ts";
 
@@ -19,20 +24,20 @@ const validSeedOutput: BrainSeedOutput = {
   session: {
     id: "00000000-0000-4000-8000-000000000001",
     sourceId: "source.raw_idea",
-    status: "seeded",
+    status: "open",
   },
   seedClaim: {
     id: "claim.seed",
     kind: "belief",
     text: "Penny should make the first 60 seconds of thinking visibly useful.",
-    confidence: 0.72,
+    confidence: 72,
   },
   assumptions: [
     {
       id: "claim.assumption.speed",
       kind: "assumption",
       text: "Fast structure is more valuable than a conversational answer in the first loop.",
-      confidence: 0.67,
+      confidence: 67,
       pressure: "high",
       whyItMatters: "If speed is not the main value, the MVP should optimize for depth instead.",
     },
@@ -43,13 +48,13 @@ const validSeedOutput: BrainSeedOutput = {
         id: "claim.seed",
         kind: "belief",
         text: "Penny should make the first 60 seconds of thinking visibly useful.",
-        confidence: 0.72,
+        confidence: 72,
       },
       {
         id: "claim.assumption.speed",
         kind: "assumption",
         text: "Fast structure is more valuable than a conversational answer in the first loop.",
-        confidence: 0.67,
+        confidence: 67,
       },
     ],
     edges: [
@@ -139,7 +144,7 @@ const validSeedOutput: BrainSeedOutput = {
   ],
 };
 
-test("generateBrainSeed validates provider output into the Wave 1 structure", async () => {
+test("generateBrainSeed validates provider output into the Wave 3 seed structure", async () => {
   const provider: BrainSeedProvider = {
     name: "test",
     async generate() {
@@ -153,6 +158,8 @@ test("generateBrainSeed validates provider output into the Wave 1 structure", as
   );
 
   assert.equal(output.seedClaim.kind, "belief");
+  assert.equal(output.session.status, "open");
+  assert.equal(output.seedClaim.confidence, 72);
   assert.equal(output.assumptions[0]?.pressure, "high");
   assert.equal(output.thoughtMap.edges[0]?.kind, "assumes");
   assert.deepEqual(output.firstChallenge.responseOptions, ["Defend", "Revise", "Absorb"]);
@@ -164,6 +171,22 @@ test("generateBrainSeed validates provider output into the Wave 1 structure", as
     output.artifacts.map((artifact) => artifact.kind),
     ["idea_map", "challenge_brief"],
   );
+});
+
+test("prompt keeps Penny on structural seed extraction", () => {
+  const system = buildBrainSeedSystemPrompt();
+  const prompt = buildBrainSeedPrompt({
+    rawIdea: "Build a second brain that challenges the user's weakest assumption.",
+    sessionId: "00000000-0000-4000-8000-000000000123",
+  });
+
+  assert.match(system, /on the user's team/);
+  assert.match(system, /Extract hidden assumptions/);
+  assert.match(system, /load-bearing structure/);
+  assert.match(system, /Avoid generic startup, product, productivity, or AI-app platitudes/);
+  assert.match(prompt, /confidence values must be integer percentages/i);
+  assert.match(prompt, /Defend, Revise, Absorb/);
+  assert.match(prompt, /00000000-0000-4000-8000-000000000123/);
 });
 
 test("generateBrainSeed rejects generic free-form provider text", async () => {
@@ -250,7 +273,7 @@ test("parseBrainSeedOutput requires Idea Map and Challenge Brief artifacts", () 
   );
 });
 
-test("heuristic provider keeps Wave 1 usable without live AI credentials", async () => {
+test("heuristic provider keeps seed extraction usable without live AI credentials", async () => {
   const output = await generateBrainSeed(
     { rawIdea: "I think source-backed memory should become a thinking cockpit." },
     { provider: createHeuristicBrainSeedProvider() },
@@ -258,6 +281,8 @@ test("heuristic provider keeps Wave 1 usable without live AI credentials", async
 
   assert.equal(output.seedClaim.text, "I think source-backed memory should become a thinking cockpit.");
   assert.ok(output.assumptions.length >= 1);
+  assert.match(output.assumptions[0]?.text ?? "", /bottleneck|structure/i);
+  assert.match(output.firstChallenge.weakestPart, /structure|assumes/i);
   assert.ok(output.explorationPaths.length >= 1);
   assert.deepEqual(output.firstChallenge.responseOptions, ["Defend", "Revise", "Absorb"]);
   assert.ok(output.moves.some((move) => move.kind === "artifact.created"));
@@ -265,14 +290,41 @@ test("heuristic provider keeps Wave 1 usable without live AI credentials", async
   assert.ok(output.artifacts.some((artifact) => artifact.kind === "challenge_brief"));
 });
 
-test("xAI provider requires an explicit model for live calls", async () => {
-  const provider = createXaiBrainSeedProvider({ XAI_API_KEY: "test-key" });
+test("xAI provider uses AI SDK structured output with the default model", async () => {
+  const calls: Parameters<BrainSeedGenerateText>[0][] = [];
+  const generateText: BrainSeedGenerateText = async (request) => {
+    calls.push(request);
+
+    return { output: validSeedOutput };
+  };
+
+  const provider = createXaiBrainSeedProvider({ XAI_API_KEY: "test-key" }, { generateText });
+  const output = await generateBrainSeed(
+    { rawIdea: "Penny should make the first 60 seconds of thinking visibly useful." },
+    { provider },
+  );
+
+  assert.equal(output.seedClaim.text, "Penny should make the first 60 seconds of thinking visibly useful.");
+  assert.equal(resolveXaiBrainSeedModel({}), defaultXaiBrainSeedModel);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]?.system ?? "", /hidden assumptions/i);
+  assert.match(calls[0]?.prompt ?? "", /load-bearing assumption/i);
+  assert.equal(calls[0]?.providerOptions.xai.reasoningEffort, "medium");
+});
+
+test("xAI provider lets env override the default seed model", () => {
+  assert.equal(resolveXaiBrainSeedModel({ XAI_MODEL: "custom-general-model" }), "custom-general-model");
+  assert.equal(resolveXaiBrainSeedModel({ XAI_BRAIN_SEED_MODEL: "custom-seed-model" }), "custom-seed-model");
+});
+
+test("xAI provider requires an API key for live calls", async () => {
+  const provider = createXaiBrainSeedProvider({});
 
   await assert.rejects(
     () => provider.generate({ rawIdea: "Map this idea before challenging it." }),
     (error) => {
       assert.ok(error instanceof BrainSeedProviderError);
-      assert.equal(error.message, "XAI_BRAIN_SEED_MODEL or XAI_MODEL is required for the xAI brain seed provider.");
+      assert.equal(error.message, "XAI_API_KEY is required for the xAI brain seed provider.");
       return true;
     },
   );
