@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const sessionStatusEnum = pgEnum("session_status", ["open", "completed"]);
 export const sourceKindEnum = pgEnum("source_kind", ["raw_idea"]);
@@ -78,6 +78,28 @@ export const claims = pgTable(
   ],
 );
 
+export const claimVersions = pgTable(
+  "claim_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    sourceId: uuid("source_id").references(() => sources.id, { onDelete: "set null" }),
+    content: text("content").notNull(),
+    status: claimStatusEnum("status").notNull().default("exploratory"),
+    confidence: integer("confidence").notNull().default(60),
+    isCurrent: boolean("is_current").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("claim_versions_claim_id_idx").on(table.claimId),
+    index("claim_versions_source_id_idx").on(table.sourceId),
+    index("claim_versions_current_idx").on(table.claimId, table.isCurrent),
+    check("claim_versions_confidence_range", sql`${table.confidence} >= 0 AND ${table.confidence} <= 100`),
+  ],
+);
+
 export const claimEdges = pgTable(
   "claim_edges",
   {
@@ -103,6 +125,29 @@ export const claimEdges = pgTable(
   ],
 );
 
+export const sourceSpans = pgTable(
+  "source_spans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    claimId: uuid("claim_id").references(() => claims.id, { onDelete: "cascade" }),
+    claimVersionId: uuid("claim_version_id").references(() => claimVersions.id, { onDelete: "cascade" }),
+    startOffset: integer("start_offset").notNull(),
+    endOffset: integer("end_offset").notNull(),
+    label: text("label"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("source_spans_source_id_idx").on(table.sourceId),
+    index("source_spans_claim_id_idx").on(table.claimId),
+    index("source_spans_claim_version_id_idx").on(table.claimVersionId),
+    check("source_spans_start_offset_range", sql`${table.startOffset} >= 0`),
+    check("source_spans_end_offset_range", sql`${table.endOffset} >= ${table.startOffset}`),
+  ],
+);
+
 export const moves = pgTable(
   "moves",
   {
@@ -119,6 +164,30 @@ export const moves = pgTable(
     index("moves_session_id_idx").on(table.sessionId),
     index("moves_kind_idx").on(table.kind),
     index("moves_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const brainRuns = pgTable(
+  "brain_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
+    sourceId: uuid("source_id").references(() => sources.id, { onDelete: "set null" }),
+    operation: text("operation").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model"),
+    status: text("status").notNull(),
+    input: jsonb("input").notNull().default({}),
+    output: jsonb("output"),
+    error: jsonb("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("brain_runs_session_id_idx").on(table.sessionId),
+    index("brain_runs_source_id_idx").on(table.sourceId),
+    index("brain_runs_operation_idx").on(table.operation),
+    index("brain_runs_status_idx").on(table.status),
   ],
 );
 
@@ -144,15 +213,18 @@ export const artifacts = pgTable(
 export const pennySchema = {
   artifacts,
   artifactKindEnum,
+  brainRuns,
   claimEdgeKindEnum,
   claimEdges,
   claimKindEnum,
   claims,
   claimStatusEnum,
+  claimVersions,
   moveKindEnum,
   moves,
   sessionStatusEnum,
   sessions,
   sourceKindEnum,
+  sourceSpans,
   sources,
 };

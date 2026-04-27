@@ -5,7 +5,7 @@ import {
   type BrainSeedUiPayload,
 } from "./brain-seed-route.ts";
 import { createHeuristicBrainSeedProvider, generateBrainSeed, type BrainSeedInput, type BrainSeedOutput } from "./seed.ts";
-import type { PersistedBrainSeed } from "./seed-persistence.ts";
+import type { BrainSeedRunRecord, PersistedBrainSeed } from "./seed-persistence.ts";
 
 test("POST /brain/seed rejects invalid request bodies before AI or DB work", async () => {
   let generated = false;
@@ -41,6 +41,7 @@ test("POST /brain/seed rejects invalid request bodies before AI or DB work", asy
 test("POST /brain/seed persists the seed and returns a UI-ready payload", async () => {
   let generatedInput: BrainSeedInput | undefined;
   let persistedSeed: BrainSeedOutput | undefined;
+  let persistedBrainRun: BrainSeedRunRecord | undefined;
   const response = await handleBrainSeedRequest(
     new Request("http://localhost/brain/seed", {
       method: "POST",
@@ -54,13 +55,15 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
       }),
     }),
     {
+      provider: createHeuristicBrainSeedProvider(),
       async generateSeed(input) {
         generatedInput = input;
         return generateBrainSeed(input, { provider: createHeuristicBrainSeedProvider() });
       },
-      async persistSeed(seed) {
+      async persistSeed(seed, options) {
         persistedSeed = seed;
-        return createPersistedSeed(seed);
+        persistedBrainRun = options.brainRun;
+        return createPersistedSeed(seed, options.brainRun);
       },
     },
   );
@@ -75,6 +78,7 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
   assert.equal(payload.data.ideaMap.claims.length, 4);
   assert.equal(payload.data.ideaMap.edges.length, 3);
   assert.notEqual(payload.data.ideaMap.claims[0]?.id, "claim.seed");
+  assert.match(payload.data.ideaMap.claims[0]?.versionId ?? "", /^[0-9a-f-]{36}$/);
   assert.equal(payload.data.firstChallenge.failureType, "definition_failure");
   assert.deepEqual(payload.data.firstChallenge.responseOptions, ["Defend", "Revise", "Absorb"]);
   assert.match(payload.data.firstChallenge.targetClaimId, /^[0-9a-f-]{36}$/);
@@ -85,6 +89,9 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
   assert.ok(payload.data.artifacts.some((artifact) => artifact.kind === "challenge_brief"));
   assert.ok(payload.data.moves.some((move) => move.kind === "source.recorded"));
   assert.ok(payload.data.moves.some((move) => move.kind === "artifact.created"));
+  assert.equal(persistedBrainRun?.operation, "brain.seed");
+  assert.equal(persistedBrainRun?.provider, "heuristic");
+  assert.equal(persistedBrainRun?.status, "succeeded");
 });
 
 test("POST /brain/seed rejects non-POST methods", async () => {
@@ -96,7 +103,7 @@ test("POST /brain/seed rejects non-POST methods", async () => {
   assert.equal(payload.error.code, "method_not_allowed");
 });
 
-function createPersistedSeed(seed: BrainSeedOutput): PersistedBrainSeed {
+function createPersistedSeed(seed: BrainSeedOutput, brainRun?: BrainSeedRunRecord): PersistedBrainSeed {
   const now = new Date("2026-04-27T00:00:00.000Z");
   const sessionId = seed.session.id;
   const sourceId = uuidAt(101);
@@ -113,6 +120,29 @@ function createPersistedSeed(seed: BrainSeedOutput): PersistedBrainSeed {
     updatedAt: now,
   }));
   const claimIds = new Map(claims.map((claim) => [claim.seedId, claim.id]));
+  const claimVersions = seed.thoughtMap.claims.map((claim, index) => ({
+    id: uuidAt(251 + index),
+    seedId: claim.id,
+    claimId: requireMappedId(claimIds, claim.id),
+    sourceId,
+    content: claim.text,
+    status: "exploratory" as const,
+    confidence: claim.confidence,
+    isCurrent: true,
+    createdAt: now,
+  }));
+  const claimVersionIds = new Map(claimVersions.map((version) => [version.seedId, version.id]));
+  const sourceSpans = seed.thoughtMap.claims.map((claim, index) => ({
+    id: uuidAt(351 + index),
+    seedId: claim.id,
+    sourceId,
+    claimId: requireMappedId(claimIds, claim.id),
+    claimVersionId: requireMappedId(claimVersionIds, claim.id),
+    startOffset: 0,
+    endOffset: seed.source.rawText.length,
+    label: claim.id === seed.seedClaim.id ? "seed_claim" : "generated_claim",
+    createdAt: now,
+  }));
   const edges = seed.thoughtMap.edges.map((edge, index) => ({
     id: uuidAt(301 + index),
     seedId: edge.id,
@@ -161,11 +191,30 @@ function createPersistedSeed(seed: BrainSeedOutput): PersistedBrainSeed {
       createdAt: now,
     },
     claims,
+    claimVersions,
     edges,
+    sourceSpans,
     artifacts: persistedArtifacts,
     moves: persistedMoves,
+    brainRun: brainRun
+      ? {
+          id: uuidAt(701),
+          sessionId,
+          sourceId,
+          operation: brainRun.operation,
+          provider: brainRun.provider,
+          model: brainRun.model ?? null,
+          status: brainRun.status,
+          input: brainRun.input,
+          output: brainRun.output ?? null,
+          error: brainRun.error ?? null,
+          createdAt: brainRun.startedAt ?? now,
+          completedAt: brainRun.completedAt ?? now,
+        }
+      : null,
     idMaps: {
       claimIds,
+      claimVersionIds,
       edgeIds,
       artifactIds,
     },

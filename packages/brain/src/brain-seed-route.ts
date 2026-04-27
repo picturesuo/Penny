@@ -1,15 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
+import { brainRuns } from "./db/schema.ts";
 import {
   BrainSeedProviderError,
   BrainSeedValidationError,
+  createDefaultBrainSeedProvider,
   generateBrainSeed,
+  resolveXaiBrainSeedModel,
   type BrainSeedInput,
   type BrainSeedOutput,
   type BrainSeedProvider,
 } from "./seed.ts";
-import { persistBrainSeed, type PersistedBrainSeed } from "./seed-persistence.ts";
+import { persistBrainSeed, type BrainSeedRunRecord, type PersistedBrainSeed } from "./seed-persistence.ts";
 
 export const BrainSeedRouteRequestSchema = z
   .object({
@@ -35,7 +38,10 @@ export type BrainSeedRouteOptions = {
     input: BrainSeedInput,
     options: { provider?: BrainSeedProvider },
   ) => Promise<BrainSeedOutput>;
-  persistSeed?: (seed: BrainSeedOutput, options: { db?: PennyDatabase }) => Promise<PersistedBrainSeed>;
+  persistSeed?: (
+    seed: BrainSeedOutput,
+    options: { db?: PennyDatabase; brainRun?: BrainSeedRunRecord },
+  ) => Promise<PersistedBrainSeed>;
 };
 
 export type BrainSeedUiPayload = ReturnType<typeof buildBrainSeedUiPayload>;
@@ -96,15 +102,20 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
     rawIdea: routeInput.rawIdea,
     sessionId: routeInput.sessionId ?? randomUUID(),
   };
+  const provider = options.provider ?? createDefaultBrainSeedProvider();
   const generateSeed = options.generateSeed ?? generateBrainSeed;
   const persistSeed =
     options.persistSeed ??
-    ((seed: BrainSeedOutput, persistOptions: { db?: PennyDatabase }) =>
-      persistBrainSeed(persistOptions.db ?? createPennyDb(options.databaseUrl), seed));
+    ((seed: BrainSeedOutput, persistOptions: { db?: PennyDatabase; brainRun?: BrainSeedRunRecord }) =>
+      persistBrainSeed(persistOptions.db ?? createPennyDb(options.databaseUrl), seed, {
+        brainRun: persistOptions.brainRun,
+      }));
+  const startedAt = new Date();
 
   try {
-    const seed = await generateSeed(seedInput, options.provider ? { provider: options.provider } : {});
-    const persisted = await persistSeed(seed, options.db ? { db: options.db } : {});
+    const seed = await generateSeed(seedInput, { provider });
+    const brainRun = buildBrainSeedRunRecord(seedInput, seed, provider, startedAt, new Date());
+    const persisted = await persistSeed(seed, options.db ? { db: options.db, brainRun } : { brainRun });
 
     return jsonResponse(
       {
@@ -113,6 +124,8 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
       201,
     );
   } catch (error) {
+    await recordFailedBrainRun(options, buildFailedBrainSeedRunRecord(seedInput, provider, startedAt, error));
+
     if (error instanceof BrainSeedValidationError) {
       return jsonResponse(
         {
@@ -156,6 +169,7 @@ export function buildBrainSeedUiPayload(
   context: BrainSeedRouteContext,
 ) {
   const claimsBySeedId = new Map(persisted.claims.map((claim) => [claim.seedId, claim]));
+  const claimVersionsBySeedId = new Map(persisted.claimVersions.map((version) => [version.seedId, version]));
   const edgesBySeedId = new Map(persisted.edges.map((edge) => [edge.seedId, edge]));
   const movesBySeedId = new Map(persisted.moves.map((move) => [move.seedId, move]));
   const artifactsBySeedId = new Map(persisted.artifacts.map((artifact) => [artifact.seedId, artifact]));
@@ -180,14 +194,16 @@ export function buildBrainSeedUiPayload(
       keyInsight: seed.keyInsight,
       claims: seed.thoughtMap.claims.map((claim) => {
         const persistedClaim = requirePersistedClaim(claimsBySeedId, claim.id);
+        const persistedVersion = requirePersistedClaimVersion(claimVersionsBySeedId, claim.id);
 
         return {
           id: persistedClaim.id,
+          versionId: persistedVersion.id,
           seedId: claim.id,
           kind: persistedClaim.kind,
-          status: persistedClaim.status,
-          text: persistedClaim.text,
-          confidence: persistedClaim.confidence,
+          status: persistedVersion.status,
+          text: persistedVersion.content,
+          confidence: persistedVersion.confidence,
         };
       }),
       edges: seed.thoughtMap.edges.map((edge) => {
@@ -319,6 +335,89 @@ function formatErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function buildBrainSeedRunRecord(
+  input: BrainSeedInput,
+  output: BrainSeedOutput,
+  provider: BrainSeedProvider,
+  startedAt: Date,
+  completedAt: Date,
+): BrainSeedRunRecord {
+  return {
+    operation: "brain.seed",
+    provider: provider.name,
+    model: provider.name === "xai" ? resolveXaiBrainSeedModel() : null,
+    status: "succeeded",
+    input,
+    output,
+    startedAt,
+    completedAt,
+  };
+}
+
+function buildFailedBrainSeedRunRecord(
+  input: BrainSeedInput,
+  provider: BrainSeedProvider,
+  startedAt: Date,
+  error: unknown,
+): BrainSeedRunRecord {
+  return {
+    operation: "brain.seed",
+    provider: provider.name,
+    model: provider.name === "xai" ? resolveXaiBrainSeedModel() : null,
+    status: "failed",
+    input,
+    error: {
+      name: error instanceof Error ? error.name : "Error",
+      message: formatErrorMessage(error),
+    },
+    startedAt,
+    completedAt: new Date(),
+  };
+}
+
+async function recordFailedBrainRun(options: BrainSeedRouteOptions, brainRun: BrainSeedRunRecord): Promise<void> {
+  const db = resolveBrainRunDb(options);
+
+  if (!db) {
+    return;
+  }
+
+  try {
+    await db.insert(brainRuns).values({
+      operation: brainRun.operation,
+      provider: brainRun.provider,
+      model: brainRun.model,
+      status: brainRun.status,
+      input: brainRun.input,
+      error: brainRun.error,
+      createdAt: brainRun.startedAt,
+      completedAt: brainRun.completedAt,
+    });
+  } catch {
+    // Preserve the original API error; failed run recording is best-effort when no session exists yet.
+  }
+}
+
+function resolveBrainRunDb(options: BrainSeedRouteOptions): PennyDatabase | null {
+  if (options.db) {
+    return options.db;
+  }
+
+  if (options.persistSeed) {
+    return null;
+  }
+
+  if (!options.databaseUrl && !process.env.DATABASE_URL?.trim()) {
+    return null;
+  }
+
+  try {
+    return createPennyDb(options.databaseUrl);
+  } catch {
+    return null;
+  }
+}
+
 function requirePersistedClaim(claimsBySeedId: Map<string, PersistedBrainSeed["claims"][number]>, seedId: string) {
   const claim = claimsBySeedId.get(seedId);
 
@@ -327,6 +426,19 @@ function requirePersistedClaim(claimsBySeedId: Map<string, PersistedBrainSeed["c
   }
 
   return claim;
+}
+
+function requirePersistedClaimVersion(
+  claimVersionsBySeedId: Map<string, PersistedBrainSeed["claimVersions"][number]>,
+  seedId: string,
+) {
+  const claimVersion = claimVersionsBySeedId.get(seedId);
+
+  if (!claimVersion) {
+    throw new Error(`Missing persisted claim version for seed id ${seedId}.`);
+  }
+
+  return claimVersion;
 }
 
 function requirePersistedEdge(edgesBySeedId: Map<string, PersistedBrainSeed["edges"][number]>, seedId: string) {

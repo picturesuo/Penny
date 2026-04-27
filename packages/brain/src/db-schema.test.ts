@@ -4,13 +4,16 @@ import { getTableName } from "drizzle-orm";
 import {
   artifactKindEnum,
   artifacts,
+  brainRuns,
   claimEdgeKindEnum,
   claimEdges,
   claimKindEnum,
   claims,
+  claimVersions,
   moves,
   pennySchema,
   sessions,
+  sourceSpans,
   sources,
 } from "./db/schema.ts";
 import { createPennyDb, createPennySql } from "./db/client.ts";
@@ -19,8 +22,11 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(sessions), "sessions");
   assert.equal(getTableName(sources), "sources");
   assert.equal(getTableName(claims), "claims");
+  assert.equal(getTableName(claimVersions), "claim_versions");
   assert.equal(getTableName(claimEdges), "claim_edges");
+  assert.equal(getTableName(sourceSpans), "source_spans");
   assert.equal(getTableName(moves), "moves");
+  assert.equal(getTableName(brainRuns), "brain_runs");
   assert.equal(getTableName(artifacts), "artifacts");
 });
 
@@ -34,16 +40,19 @@ test("Penny schema has a clean aggregate export surface", () => {
   assert.deepEqual(Object.keys(pennySchema).sort(), [
     "artifactKindEnum",
     "artifacts",
+    "brainRuns",
     "claimEdgeKindEnum",
     "claimEdges",
     "claimKindEnum",
     "claimStatusEnum",
+    "claimVersions",
     "claims",
     "moveKindEnum",
     "moves",
     "sessionStatusEnum",
     "sessions",
     "sourceKindEnum",
+    "sourceSpans",
     "sources",
   ]);
 });
