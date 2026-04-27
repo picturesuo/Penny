@@ -254,6 +254,16 @@ button {
   opacity: 0.86;
 }
 
+.map-node[role="button"] {
+  cursor: pointer;
+}
+
+.map-node.is-selected,
+.map-node:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.42);
+  outline-offset: 2px;
+}
+
 .map-node + .map-node,
 .map-edge + .map-node {
   margin-top: 10px;
@@ -755,6 +765,10 @@ textarea:focus {
 .detail-card.concept,
 .detail-card.span {
   border-left-color: var(--teal);
+}
+
+.detail-card.artifact-reference {
+  border-left-color: var(--blue);
 }
 
 .detail-card p,
