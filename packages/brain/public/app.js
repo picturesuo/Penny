@@ -605,6 +605,8 @@ async function handleVerifyClaim(claim) {
   try {
     const payload = await runVerify({
       claimId: claim.id,
+      sessionId: state.data.session.id,
+      currentClaimText: claim.text,
     });
     applyVerify(payload.data);
     await refreshActiveClaimDetail(claim.id);
@@ -1623,9 +1625,12 @@ function renderVerify(verify) {
   copy.textContent = verify.summary;
 
   const meta = document.createElement("small");
+  const confidenceNote = verify.confidenceUpdate?.autoApplied
+    ? "confidence changed"
+    : `confidence unchanged${Number.isFinite(verify.confidenceDeltaSuggestion) ? ` / suggested ${signedDelta(verify.confidenceDeltaSuggestion)}` : ""}`;
   meta.textContent = target
-    ? `${formatLabel(target.kind)} / ${formatLabel(target.status)} / ${target.confidence}% confidence`
-    : "Confidence unchanged";
+    ? `${formatLabel(target.kind)} / ${formatLabel(target.status)} / ${target.confidence}% / ${confidenceNote}`
+    : formatLabel(confidenceNote);
 
   summary.append(tag, copy, meta);
   append(elements.verifyResult, summary);
@@ -1638,7 +1643,7 @@ function renderVerify(verify) {
     append(elements.verifyResult, evidenceCard(card));
   }
 
-  append(elements.verifyResult, followUpQuestions(verify.followUpQuestions ?? []));
+  append(elements.verifyResult, verifyNotes(verify));
 }
 
 function evidenceCard(card) {
@@ -1647,7 +1652,9 @@ function evidenceCard(card) {
 
   const tag = document.createElement("span");
   tag.className = "tag";
-  tag.textContent = `${formatLabel(card.stance)} / ${formatLabel(card.reliability)}`;
+  tag.textContent = [formatLabel(card.stance), card.reliability ? formatLabel(card.reliability) : card.sourceName]
+    .filter(Boolean)
+    .join(" / ");
 
   const title = document.createElement("strong");
   title.textContent = card.title;
@@ -1657,23 +1664,26 @@ function evidenceCard(card) {
 
   const quote = document.createElement("p");
   quote.className = "verify-quote";
-  quote.textContent = card.quote;
+  quote.textContent = card.quote ?? card.citation ?? "No citation excerpt returned.";
 
   block.append(tag, title, summary, quote);
 
-  if (card.url) {
+  const sourceUrl = card.url ?? card.sourceUrl;
+
+  if (sourceUrl) {
     const citation = document.createElement("a");
-    citation.href = card.url;
+    citation.href = sourceUrl;
     citation.target = "_blank";
     citation.rel = "noreferrer";
-    citation.textContent = [formatLabel(card.sourceType), card.publishedAt].filter(Boolean).join(" / ") || card.url;
+    citation.textContent =
+      [formatLabel(card.sourceType), card.publishedAt, card.sourceName].filter(Boolean).join(" / ") || sourceUrl;
     block.append(citation);
   }
 
   return block;
 }
 
-function followUpQuestions(questions) {
+function verifyNotes(verify) {
   const block = document.createElement("article");
   block.className = "verify-note";
 
@@ -1683,15 +1693,25 @@ function followUpQuestions(questions) {
 
   block.append(tag);
 
+  const questions = [
+    ...(Array.isArray(verify.followUpQuestions) ? verify.followUpQuestions : []),
+    verify.nextQuestion,
+  ].filter(Boolean);
+
   if (questions.length === 0) {
     append(block, textOnly("No follow-up questions returned."));
-    return block;
+  } else {
+    for (const question of questions) {
+      const copy = document.createElement("p");
+      copy.textContent = question;
+      block.append(copy);
+    }
   }
 
-  for (const question of questions) {
-    const copy = document.createElement("p");
-    copy.textContent = question;
-    block.append(copy);
+  if (verify.whatWouldChangeThis) {
+    const change = document.createElement("small");
+    change.textContent = `Would change: ${verify.whatWouldChangeThis}`;
+    block.append(change);
   }
 
   return block;
@@ -2189,6 +2209,16 @@ function formatDate(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function signedDelta(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number === 0) {
+    return "0";
+  }
+
+  return number > 0 ? `+${number}` : String(number);
 }
 
 function stringValue(source, key) {
