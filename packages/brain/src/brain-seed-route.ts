@@ -244,6 +244,7 @@ export function buildBrainSeedUiPayload(
           fromClaimId: persistedEdge.fromClaimId,
           toClaimId: persistedEdge.toClaimId,
           kind: persistedEdge.kind,
+          status: persistedEdge.status,
           label: persistedEdge.label,
         };
       }),
