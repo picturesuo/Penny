@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
-import { handleInlineLearnRequest } from "./inline-learn-route.ts";
+import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 
 const port = parsePort(process.env.PORT);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
@@ -32,6 +32,11 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/learn/inline") {
       await writeWebResponse(outgoing, await handleInlineLearnRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/brain/learn/inline/save") {
+      await writeWebResponse(outgoing, await handleInlineLearnSaveRequest(request));
       return;
     }
 
