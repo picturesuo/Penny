@@ -1,7 +1,8 @@
 import {
   BrainSeedInputSchema,
-  BrainSeedOutputSchema,
   BrainSeedValidationError,
+  SeedProviderSchema,
+  SeedStrictSchema,
   flattenIssues,
   type BrainSeedInput,
   type BrainSeedOutput,
@@ -30,17 +31,23 @@ export function parseBrainSeedInput(input: unknown): BrainSeedInput {
 }
 
 export function parseBrainSeedOutput(output: unknown): BrainSeedOutput {
-  const parsed = BrainSeedOutputSchema.safeParse(output);
+  const providerParsed = SeedProviderSchema.safeParse(output);
 
-  if (!parsed.success) {
-    throw new BrainSeedValidationError("Brain seed output failed validation.", flattenIssues(parsed.error));
+  if (!providerParsed.success) {
+    throw new BrainSeedValidationError("Brain seed provider output failed validation.", flattenIssues(providerParsed.error));
   }
 
-  return parsed.data;
+  const strictParsed = SeedStrictSchema.safeParse(providerParsed.data);
+
+  if (!strictParsed.success) {
+    throw new BrainSeedValidationError("Brain seed output failed strict validation.", flattenIssues(strictParsed.error));
+  }
+
+  return strictParsed.data;
 }
 
 export type { BrainSeedInput, BrainSeedOutput } from "./schema.ts";
-export { BrainSeedOutputSchema, BrainSeedValidationError } from "./schema.ts";
+export { BrainSeedOutputSchema, BrainSeedValidationError, SeedProviderSchema, SeedStrictSchema } from "./schema.ts";
 export {
   BrainSeedProviderError,
   buildBrainSeedPrompt,

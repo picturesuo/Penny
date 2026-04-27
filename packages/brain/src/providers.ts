@@ -1,11 +1,11 @@
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
-import { BrainSeedAiOutputSchema, type BrainSeedAiOutput, type BrainSeedInput, type BrainSeedOutput } from "./schema.ts";
+import { SeedProviderSchema, type BrainSeedInput, type BrainSeedOutput, type SeedProviderOutput } from "./schema.ts";
 
 export const defaultXaiBrainSeedModel = "grok-4.20-reasoning";
 
-const brainSeedOutputSpec = Output.object<BrainSeedAiOutput>({
-  schema: BrainSeedAiOutputSchema,
+const brainSeedOutputSpec = Output.object<SeedProviderOutput>({
+  schema: SeedProviderSchema,
   name: "penny_brain_seed",
   description: "Penny's first-loop seed extraction with claims, edges, moves, and artifacts.",
 });

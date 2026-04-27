@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns } from "./db/schema.ts";
@@ -111,10 +112,12 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
         brainRun: persistOptions.brainRun,
       }));
   const startedAt = new Date();
+  let pendingBrainRun = buildPendingBrainSeedRunRecord(seedInput, provider, startedAt);
 
   try {
+    pendingBrainRun = await createPendingBrainRun(options, pendingBrainRun);
     const seed = await generateSeed(seedInput, { provider });
-    const brainRun = buildBrainSeedRunRecord(seedInput, seed, provider, startedAt, new Date());
+    const brainRun = buildSucceededBrainSeedRunRecord(pendingBrainRun, seed, new Date());
     const persisted = await persistSeed(seed, options.db ? { db: options.db, brainRun } : { brainRun });
 
     return jsonResponse(
@@ -124,7 +127,7 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
       201,
     );
   } catch (error) {
-    await recordFailedBrainRun(options, buildFailedBrainSeedRunRecord(seedInput, provider, startedAt, error));
+    await recordFailedBrainRun(options, buildFailedBrainSeedRunRecord(pendingBrainRun, error));
 
     if (error instanceof BrainSeedValidationError) {
       return jsonResponse(
@@ -335,42 +338,73 @@ function formatErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function buildBrainSeedRunRecord(
+function buildPendingBrainSeedRunRecord(
   input: BrainSeedInput,
-  output: BrainSeedOutput,
   provider: BrainSeedProvider,
   startedAt: Date,
-  completedAt: Date,
 ): BrainSeedRunRecord {
   return {
     operation: "brain.seed",
     provider: provider.name,
     model: provider.name === "xai" ? resolveXaiBrainSeedModel() : null,
-    status: "succeeded",
+    status: "pending",
     input,
-    output,
     startedAt,
+  };
+}
+
+async function createPendingBrainRun(
+  options: BrainSeedRouteOptions,
+  brainRun: BrainSeedRunRecord,
+): Promise<BrainSeedRunRecord> {
+  const db = resolveBrainRunDb(options);
+
+  if (!db) {
+    return brainRun;
+  }
+
+  const [created] = await db
+    .insert(brainRuns)
+    .values({
+      operation: brainRun.operation,
+      provider: brainRun.provider,
+      model: brainRun.model,
+      status: brainRun.status,
+      input: brainRun.input,
+      createdAt: brainRun.startedAt,
+    })
+    .returning();
+
+  return {
+    ...brainRun,
+    id: created?.id,
+  };
+}
+
+function buildSucceededBrainSeedRunRecord(
+  pending: BrainSeedRunRecord,
+  output: BrainSeedOutput,
+  completedAt: Date,
+): BrainSeedRunRecord {
+  return {
+    ...pending,
+    status: "succeeded",
+    output,
     completedAt,
   };
 }
 
 function buildFailedBrainSeedRunRecord(
-  input: BrainSeedInput,
-  provider: BrainSeedProvider,
-  startedAt: Date,
+  pending: BrainSeedRunRecord,
   error: unknown,
 ): BrainSeedRunRecord {
   return {
-    operation: "brain.seed",
-    provider: provider.name,
-    model: provider.name === "xai" ? resolveXaiBrainSeedModel() : null,
+    ...pending,
     status: "failed",
-    input,
     error: {
       name: error instanceof Error ? error.name : "Error",
       message: formatErrorMessage(error),
     },
-    startedAt,
     completedAt: new Date(),
   };
 }
@@ -383,7 +417,7 @@ async function recordFailedBrainRun(options: BrainSeedRouteOptions, brainRun: Br
   }
 
   try {
-    await db.insert(brainRuns).values({
+    const values = {
       operation: brainRun.operation,
       provider: brainRun.provider,
       model: brainRun.model,
@@ -392,7 +426,14 @@ async function recordFailedBrainRun(options: BrainSeedRouteOptions, brainRun: Br
       error: brainRun.error,
       createdAt: brainRun.startedAt,
       completedAt: brainRun.completedAt,
-    });
+    };
+
+    if (brainRun.id) {
+      await db.update(brainRuns).set(values).where(eq(brainRuns.id, brainRun.id));
+      return;
+    }
+
+    await db.insert(brainRuns).values(values);
   } catch {
     // Preserve the original API error; failed run recording is best-effort when no session exists yet.
   }

@@ -11,6 +11,8 @@ import {
   generateBrainSeed,
   parseBrainSeedOutput,
   resolveXaiBrainSeedModel,
+  SeedProviderSchema,
+  SeedStrictSchema,
   type BrainSeedOutput,
   type BrainSeedGenerateText,
   type BrainSeedProvider,
@@ -287,6 +289,69 @@ test("generateBrainSeed rejects generic free-form provider text", async () => {
     (error) => {
       assert.ok(error instanceof BrainSeedValidationError);
       assert.match(error.issues.join("\n"), /expected object/);
+      return true;
+    },
+  );
+});
+
+test("SeedProviderSchema stays loose while SeedStrictSchema enforces local quality gates", () => {
+  const looseProviderOutput = {
+    ...validSeedOutput,
+    seedClaim: {
+      ...validSeedOutput.seedClaim,
+      text: "",
+      confidence: 120,
+    },
+    assumptions: validSeedOutput.assumptions.slice(0, 2),
+    explorationPaths: validSeedOutput.explorationPaths.slice(0, 5),
+  };
+
+  assert.equal(SeedProviderSchema.safeParse(looseProviderOutput).success, true);
+
+  const strict = SeedStrictSchema.safeParse(looseProviderOutput);
+  assert.equal(strict.success, false);
+
+  if (!strict.success) {
+    const issues = strict.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n");
+    assert.match(issues, /seedClaim\.text/);
+    assert.match(issues, /seedClaim\.confidence/);
+    assert.match(issues, /assumptions/);
+    assert.match(issues, /explorationPaths/);
+  }
+});
+
+test("parseBrainSeedOutput requires failureType on the first challenge", () => {
+  const invalidOutput = {
+    ...validSeedOutput,
+    firstChallenge: {
+      targetClaimId: validSeedOutput.firstChallenge.targetClaimId,
+      weakestPart: validSeedOutput.firstChallenge.weakestPart,
+      challenge: validSeedOutput.firstChallenge.challenge,
+      responseOptions: validSeedOutput.firstChallenge.responseOptions,
+    },
+  };
+
+  assert.throws(
+    () => parseBrainSeedOutput(invalidOutput),
+    (error) => {
+      assert.ok(error instanceof BrainSeedValidationError);
+      assert.match(error.issues.join("\n"), /firstChallenge\.failureType/);
+      return true;
+    },
+  );
+});
+
+test("parseBrainSeedOutput rejects generic structured provider responses", () => {
+  const invalidOutput = {
+    ...validSeedOutput,
+    keyInsight: "Here is a chatty answer about your idea.",
+  };
+
+  assert.throws(
+    () => parseBrainSeedOutput(invalidOutput),
+    (error) => {
+      assert.ok(error instanceof BrainSeedValidationError);
+      assert.match(error.issues.join("\n"), /keyInsight must be specific structured seed content/);
       return true;
     },
   );

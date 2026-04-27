@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import type { PennyDatabase } from "./db/client.ts";
 import {
   artifacts,
@@ -13,6 +14,7 @@ import {
 import type { BrainSeedOutput } from "./seed.ts";
 
 export type BrainSeedRunRecord = {
+  id?: string | undefined;
   operation: string;
   provider: string;
   model?: string | null;
@@ -225,24 +227,7 @@ export async function persistBrainSeed(
       "move",
     );
 
-    const brainRun = options.brainRun
-      ? ((await tx
-          .insert(brainRuns)
-          .values({
-            sessionId: session.id,
-            sourceId: source.id,
-            operation: options.brainRun.operation,
-            provider: options.brainRun.provider,
-            model: options.brainRun.model,
-            status: options.brainRun.status,
-            input: options.brainRun.input,
-            output: options.brainRun.output,
-            error: options.brainRun.error,
-            createdAt: options.brainRun.startedAt,
-            completedAt: options.brainRun.completedAt,
-          })
-          .returning())[0] ?? null)
-      : null;
+    const brainRun = options.brainRun ? await upsertBrainRun(tx, options.brainRun, session.id, source.id) : null;
 
     return {
       session,
@@ -262,6 +247,37 @@ export async function persistBrainSeed(
       },
     };
   });
+}
+
+async function upsertBrainRun(
+  tx: Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0],
+  brainRun: BrainSeedRunRecord,
+  sessionId: string,
+  sourceId: string,
+): Promise<typeof brainRuns.$inferSelect | null> {
+  const values = {
+    sessionId,
+    sourceId,
+    operation: brainRun.operation,
+    provider: brainRun.provider,
+    model: brainRun.model,
+    status: brainRun.status,
+    input: brainRun.input,
+    output: brainRun.output,
+    error: brainRun.error,
+    createdAt: brainRun.startedAt,
+    completedAt: brainRun.completedAt,
+  };
+
+  if (brainRun.id) {
+    const [updated] = await tx.update(brainRuns).set(values).where(eq(brainRuns.id, brainRun.id)).returning();
+
+    if (updated) {
+      return updated;
+    }
+  }
+
+  return (await tx.insert(brainRuns).values(values).returning())[0] ?? null;
 }
 
 function attachSeedIds<Seed extends { id: string }, Persisted>(

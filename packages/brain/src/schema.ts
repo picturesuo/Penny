@@ -131,113 +131,94 @@ export const BrainSeedArtifactSchema = z
   })
   .strict();
 
-const BrainSeedAiClaimSchema = z
-  .object({
-    id: z.string(),
-    kind: ClaimKindSchema,
-    text: z.string(),
-    confidence: z.number(),
-  })
-  .strict();
+const SeedProviderClaimSchema = z.object({
+  id: z.string(),
+  kind: ClaimKindSchema,
+  text: z.string(),
+  confidence: z.number(),
+});
 
-const BrainSeedAiAssumptionSchema = BrainSeedAiClaimSchema.extend({
-  kind: z.literal("assumption"),
+const SeedProviderAssumptionSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["assumption"]),
+  text: z.string(),
+  confidence: z.number(),
   pressure: PressureSchema,
   whyItMatters: z.string(),
-}).strict();
+});
 
-const BrainSeedAiEdgeSchema = z
-  .object({
+const SeedProviderEdgeSchema = z.object({
+  id: z.string(),
+  fromClaimId: z.string(),
+  toClaimId: z.string(),
+  kind: EdgeKindSchema,
+  label: z.string(),
+});
+
+export const SeedProviderSchema = z.object({
+  source: z.object({
     id: z.string(),
-    fromClaimId: z.string(),
-    toClaimId: z.string(),
-    kind: EdgeKindSchema,
-    label: z.string(),
-  })
-  .strict();
+    rawText: z.string(),
+  }),
+  session: z.object({
+    id: z.string(),
+    sourceId: z.string(),
+    status: z.enum(["open"]),
+  }),
+  seedClaim: SeedProviderClaimSchema,
+  assumptions: z.array(SeedProviderAssumptionSchema),
+  thoughtMap: z.object({
+    claims: z.array(SeedProviderClaimSchema),
+    edges: z.array(SeedProviderEdgeSchema),
+  }),
+  explorationPaths: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      prompt: z.string(),
+      expectedValue: z.string(),
+    }),
+  ),
+  keyInsight: z.string(),
+  firstChallenge: z.object({
+    targetClaimId: z.string(),
+    failureType: FailureTypeSchema,
+    weakestPart: z.string(),
+    challenge: z.string(),
+    responseOptions: z.array(z.enum(["Defend", "Revise", "Absorb"])),
+  }),
+  learnCandidates: z.array(
+    z.object({
+      id: z.string(),
+      claimId: z.string(),
+      term: z.string(),
+      whyItMatters: z.string(),
+      unblockExplanation: z.string(),
+    }),
+  ),
+  moves: z.array(
+    z.object({
+      id: z.string(),
+      kind: MoveKindSchema,
+      summary: z.string(),
+      claimIds: z.array(z.string()),
+      edgeIds: z.array(z.string()),
+      artifactIds: z.array(z.string()),
+    }),
+  ),
+  artifacts: z.array(
+    z.object({
+      id: z.string(),
+      kind: ArtifactKindSchema,
+      title: z.string(),
+      summary: z.string(),
+      claimIds: z.array(z.string()),
+      edgeIds: z.array(z.string()),
+    }),
+  ),
+});
 
-export const BrainSeedAiOutputSchema = z
-  .object({
-    source: z
-      .object({
-        id: z.string(),
-        rawText: z.string(),
-      })
-      .strict(),
-    session: z
-      .object({
-        id: z.string(),
-        sourceId: z.string(),
-        status: z.literal("open"),
-      })
-      .strict(),
-    seedClaim: BrainSeedAiClaimSchema,
-    assumptions: z.array(BrainSeedAiAssumptionSchema),
-    thoughtMap: z
-      .object({
-        claims: z.array(BrainSeedAiClaimSchema),
-        edges: z.array(BrainSeedAiEdgeSchema),
-      })
-      .strict(),
-    explorationPaths: z.array(
-      z
-        .object({
-          id: z.string(),
-          title: z.string(),
-          prompt: z.string(),
-          expectedValue: z.string(),
-        })
-        .strict(),
-    ),
-    keyInsight: z.string(),
-    firstChallenge: z
-      .object({
-        targetClaimId: z.string(),
-        failureType: FailureTypeSchema,
-        weakestPart: z.string(),
-        challenge: z.string(),
-        responseOptions: z.array(z.enum(["Defend", "Revise", "Absorb"])),
-      })
-      .strict(),
-    learnCandidates: z.array(
-      z
-        .object({
-          id: z.string(),
-          claimId: z.string(),
-          term: z.string(),
-          whyItMatters: z.string(),
-          unblockExplanation: z.string(),
-        })
-        .strict(),
-    ),
-    moves: z.array(
-      z
-        .object({
-          id: z.string(),
-          kind: MoveKindSchema,
-          summary: z.string(),
-          claimIds: z.array(z.string()),
-          edgeIds: z.array(z.string()),
-          artifactIds: z.array(z.string()),
-        })
-        .strict(),
-    ),
-    artifacts: z.array(
-      z
-        .object({
-          id: z.string(),
-          kind: ArtifactKindSchema,
-          title: z.string(),
-          summary: z.string(),
-          claimIds: z.array(z.string()),
-          edgeIds: z.array(z.string()),
-        })
-        .strict(),
-    ),
-  })
-  .strict();
-
-export const BrainSeedOutputSchema = z
+export const SeedStrictSchema = z
   .object({
     source: BrainSeedSourceSchema,
     session: BrainSeedSessionSchema,
@@ -256,6 +237,8 @@ export const BrainSeedOutputSchema = z
     const claimIds = new Set(output.thoughtMap.claims.map((claim) => claim.id));
     const edgeIds = new Set(output.thoughtMap.edges.map((edge) => edge.id));
     const artifactIds = new Set(output.artifacts.map((artifact) => artifact.id));
+
+    rejectGenericSeedOutput(context, output);
 
     if (output.session.sourceId !== output.source.id) {
       context.addIssue({
@@ -321,9 +304,14 @@ export const BrainSeedOutputSchema = z
     requireMoveKind(context, output.moves, "artifact.created");
   });
 
+export const BrainSeedAiOutputSchema = SeedProviderSchema;
+export const BrainSeedOutputSchema = SeedStrictSchema;
+
 export type BrainSeedInput = z.infer<typeof BrainSeedInputSchema>;
-export type BrainSeedAiOutput = z.infer<typeof BrainSeedAiOutputSchema>;
-export type BrainSeedOutput = z.infer<typeof BrainSeedOutputSchema>;
+export type SeedProviderOutput = z.infer<typeof SeedProviderSchema>;
+export type SeedStrictOutput = z.infer<typeof SeedStrictSchema>;
+export type BrainSeedAiOutput = SeedProviderOutput;
+export type BrainSeedOutput = SeedStrictOutput;
 
 export class BrainSeedValidationError extends Error {
   readonly issues: string[];
@@ -339,6 +327,89 @@ export function flattenIssues(error: z.ZodError): string[] {
   return error.issues.map((issue) => {
     const path = issue.path.length ? `${issue.path.join(".")}: ` : "";
     return `${path}${issue.message}`;
+  });
+}
+
+function rejectGenericSeedOutput(context: z.RefinementCtx, output: z.infer<typeof SeedStrictSchema>) {
+  requireNonGenericText(context, output.seedClaim.text, ["seedClaim", "text"], "seedClaim.text");
+  requireNonGenericText(context, output.keyInsight, ["keyInsight"], "keyInsight");
+  requireNonGenericText(context, output.firstChallenge.weakestPart, ["firstChallenge", "weakestPart"], "firstChallenge.weakestPart");
+  requireNonGenericText(context, output.firstChallenge.challenge, ["firstChallenge", "challenge"], "firstChallenge.challenge");
+
+  for (const [index, assumption] of output.assumptions.entries()) {
+    requireNonGenericText(context, assumption.text, ["assumptions", index, "text"], "assumption.text");
+    requireNonGenericText(context, assumption.whyItMatters, ["assumptions", index, "whyItMatters"], "assumption.whyItMatters");
+  }
+
+  for (const [index, claim] of output.thoughtMap.claims.entries()) {
+    requireNonGenericText(context, claim.text, ["thoughtMap", "claims", index, "text"], "thoughtMap.claim.text");
+  }
+
+  for (const [index, edge] of output.thoughtMap.edges.entries()) {
+    requireNonGenericText(context, edge.label, ["thoughtMap", "edges", index, "label"], "edge.label");
+  }
+
+  for (const [index, path] of output.explorationPaths.entries()) {
+    requireNonGenericText(context, path.title, ["explorationPaths", index, "title"], "explorationPath.title");
+    requireNonGenericText(context, path.prompt, ["explorationPaths", index, "prompt"], "explorationPath.prompt");
+    requireNonGenericText(
+      context,
+      path.expectedValue,
+      ["explorationPaths", index, "expectedValue"],
+      "explorationPath.expectedValue",
+    );
+  }
+
+  for (const [index, candidate] of output.learnCandidates.entries()) {
+    requireNonGenericText(context, candidate.term, ["learnCandidates", index, "term"], "learnCandidate.term");
+    requireNonGenericText(
+      context,
+      candidate.whyItMatters,
+      ["learnCandidates", index, "whyItMatters"],
+      "learnCandidate.whyItMatters",
+    );
+    requireNonGenericText(
+      context,
+      candidate.unblockExplanation,
+      ["learnCandidates", index, "unblockExplanation"],
+      "learnCandidate.unblockExplanation",
+    );
+  }
+
+  for (const [index, move] of output.moves.entries()) {
+    requireNonGenericText(context, move.summary, ["moves", index, "summary"], "move.summary");
+  }
+
+  for (const [index, artifact] of output.artifacts.entries()) {
+    requireNonGenericText(context, artifact.title, ["artifacts", index, "title"], "artifact.title");
+    requireNonGenericText(context, artifact.summary, ["artifacts", index, "summary"], "artifact.summary");
+  }
+}
+
+function requireNonGenericText(
+  context: z.RefinementCtx,
+  value: string,
+  path: Array<string | number>,
+  label: string,
+) {
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, " ");
+  const genericPatterns = [
+    /\bas an ai\b/,
+    /\bi can help\b/,
+    /\bgeneric (advice|answer|response)\b/,
+    /\bhere is a chatty answer\b/,
+    /\byour idea is interesting\b/,
+    /\bit depends on many factors\b/,
+  ];
+
+  if (!genericPatterns.some((pattern) => pattern.test(normalized))) {
+    return;
+  }
+
+  context.addIssue({
+    code: "custom",
+    message: `${label} must be specific structured seed content, not a generic response`,
+    path,
   });
 }
 
