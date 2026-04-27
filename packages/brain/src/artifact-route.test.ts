@@ -9,6 +9,7 @@ import {
   generateArtifactOutput,
   handleArtifactRequest,
   handleSessionArtifactRequest,
+  inferShapesFromMoves,
   parseArtifactOutput,
   type ArtifactOutput,
   type ArtifactRequest,
@@ -77,6 +78,7 @@ test("POST /brain/artifact returns the persisted artifact row and artifact_creat
           ideaMap: { claims: unknown[]; claimVersions: unknown[]; edges: unknown[] };
           challengeBrief: { unresolvedRisks: unknown[]; whatChanged: unknown[]; recommendedNextMove: string };
           learnedConcepts: unknown[];
+          shapes: unknown[];
         };
       };
       move: { kind: string; artifactIds: string[] };
@@ -92,6 +94,7 @@ test("POST /brain/artifact returns the persisted artifact row and artifact_creat
   assert.match(payload.data.artifact.payload.challengeBrief.recommendedNextMove, /Defend, Revise, or Absorb/);
   assert.equal(payload.data.artifact.payload.challengeBrief.whatChanged.length, 4);
   assert.equal(payload.data.artifact.payload.learnedConcepts.length, 1);
+  assert.equal(payload.data.artifact.payload.shapes.length, 3);
   assert.equal(payload.data.move.kind, "artifact_created");
   assert.deepEqual(payload.data.move.artifactIds, [uuidAt(900)]);
 });
@@ -163,6 +166,12 @@ test("artifact compiler output is grounded in session state and rejects generic 
   assert.deepEqual(payload.learnedConcepts[0]?.teachesClaimIds, [uuidAt(202)]);
   assert.ok(payload.challengeBrief.whatChanged.some((change) => change.kind === "assumption_refined"));
   assert.match(payload.challengeBrief.unresolvedRisks[0]?.reason ?? "", /Active challenge/);
+  assert.deepEqual(
+    payload.shapes.map((shape) => shape.status),
+    ["tentative", "tentative", "tentative"],
+  );
+  assert.ok(payload.shapes.some((shape) => shape.label === "Assumption review loop"));
+  assert.ok(payload.shapes.some((shape) => shape.supportingMoveIds.includes("00000000-0000-4000-8000-000000000502")));
   assert.doesNotMatch(output.summary, /AI can help|generic|as an AI/i);
 
   assert.throws(
@@ -199,6 +208,34 @@ test("artifact route maps not-found and conflict failures to stable errors", asy
   assert.equal(notFoundPayload.error.code, "artifact_not_found");
   assert.equal(conflict.status, 409);
   assert.equal(conflictPayload.error.code, "artifact_conflict");
+});
+
+test("shape inference derives tentative patterns from recent moves only", () => {
+  const olderMove = shapeMove(uuidAt(501), "assumption_refined");
+  const recentMoves = [
+    shapeMove(uuidAt(502), "seed_claim_created"),
+    shapeMove(uuidAt(503), "assumptions_extracted"),
+    shapeMove(uuidAt(504), "first_challenge_suggested"),
+    shapeMove(uuidAt(505), "challenge_issued"),
+    shapeMove(uuidAt(506), "claim_revised"),
+    shapeMove(uuidAt(507), "verify_run"),
+    shapeMove(uuidAt(508), "verify_run"),
+    shapeMove(uuidAt(509), "verify_run"),
+    shapeMove(uuidAt(510), "source.recorded"),
+    shapeMove(uuidAt(511), "source.recorded"),
+    shapeMove(uuidAt(512), "source.recorded"),
+    shapeMove(uuidAt(513), "source.recorded"),
+  ];
+  const shapes = inferShapesFromMoves([olderMove, ...recentMoves]);
+
+  assert.deepEqual(
+    shapes.map((shape) => shape.status),
+    ["tentative", "tentative", "tentative"],
+  );
+  assert.ok(shapes.every((shape) => shape.confidence >= 0 && shape.confidence <= 88));
+  assert.ok(shapes.some((shape) => shape.label === "Challenge response loop"));
+  assert.ok(shapes.some((shape) => shape.label === "Evidence checking"));
+  assert.ok(shapes.every((shape) => !shape.supportingMoveIds.includes(olderMove.moveId)));
 });
 
 function sampleContext(sessionId = uuidAt(100)): SessionArtifactContext {
@@ -335,6 +372,15 @@ function move(
       edgeIds,
       ...extraPayload,
     },
+    createdAt: now(),
+  };
+}
+
+function shapeMove(id: string, kind: string) {
+  return {
+    moveId: id,
+    kind,
+    summary: `Recorded ${kind}.`,
     createdAt: now(),
   };
 }
