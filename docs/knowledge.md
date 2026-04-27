@@ -5,6 +5,8 @@
 - Use `/Users/bensuo/.codex/penny-shared-context.md` as the durable task artifact when it exists. Keep current-task state there, not in this file.
 - Keep repo-visible changes small, path-limited, committed on `main`, and pushed to `origin/main` immediately after each coherent change.
 - Challenge weak assumptions, ambiguous scope, and missing tradeoffs instead of accepting prompts or stale context at face value.
+- Inspect the repo before coding, list files to be touched before coding, and use the existing package manager and stack where possible.
+- Do not introduce unnecessary dependencies. After coding, provide how to test, quote exact errors, and do not claim success unless commands pass or unverified work is clearly labeled.
 
 ## Project Facts
 - Project name: Penny.
@@ -37,6 +39,7 @@
 - Last updated: 2026-04-27.
 
 ### Product Identity
+- Penny is not a generic AI chat app. Penny is a controllable thinking instrument enhanced by AI.
 - This project is about Penny / Supermemory: a pressure-tested second brain for people who need to turn half-formed thinking into rigorous, usable work.
 - Penny captures how a user thinks, stress-tests that thinking against evidence and precedent, teaches concepts at the moment of confusion, and turns repeated interaction into self-knowledge about the user's cognitive patterns.
 - Penny is not a note-taking app, chatbot, wiki, journaling tool, or general productivity system. It is a thinking instrument: a workbench where the user arrives with raw thought and leaves with something structurally sound.
@@ -52,18 +55,30 @@
 - Every meaningful Penny session must produce self-knowledge: updated shapes about how the user thinks, surfaced back to them in a way they can confirm, reject, or refine.
 - If a completed session lacks a result, learning, or self-knowledge, something in the product flow failed.
 
+### First MVP Loop
+- User enters one raw idea.
+- Penny extracts hidden assumptions.
+- Penny creates a thought map.
+- Penny shows useful exploration directions.
+- Penny challenges the weakest part.
+- User can Defend, Revise, or Absorb.
+- Penny stores this as durable thinking history.
+- User leaves with an Idea Map and Challenge Brief.
+
 ### Core Architecture
 - Penny has one architectural noun and two specialized verbs.
 - Brain is the product: the user's spatial, accumulating graph of claims, concepts, questions, moves, shapes, and spheres.
-- Challenge is what the user does inside Brain when they focus on a claim or cluster and turn on stress-testing.
-- Learn is what the user invokes anywhere in Brain when they hit confusion and need a concept explained in context.
+- Challenge / Verify is what the user does inside Brain when they focus on a claim or cluster and turn on stress-testing.
+- Learn / Makes Cents is what the user invokes anywhere in Brain when they hit confusion and need a concept explained in context.
 - Challenge and Learn are not separate products or destinations. They are modes of interaction with the same graph.
 
-### Four Object Types
-- Every piece of information in Penny should reduce to one of four object types: Claim, Move, Shape, or Sphere. Everything else is a view, index, derivation, or artifact built on top.
+### Core Object Model
+- Penny's conceptual reasoning primitives are Claim, Move, Shape, and Sphere.
+- The MVP implementation vocabulary also includes Edge, Source, Session, Artifact, and WikiPage.
+- Everything else should be a view, index, derivation, or compiled artifact built on top of these objects.
 
 #### Claim
-- A claim is something the user believes, is considering, is defining, or is confused about. Claims are graph nodes.
+- A claim is a belief, assumption, question, or concept: something the user believes, is considering, is defining, or is confused about. Claims are graph nodes.
 - Claims include content, type, status, provenance, user-assigned confidence, system-assigned confidence, optional resolution date, stakes tags, relationships, and sphere assignment.
 - Claim type is one of claim, concept, or question.
 - Claim status is exploratory, committed, or resolved.
@@ -92,6 +107,26 @@
 - Spheres exist because users will be more honest and prolific when sensitive personal claims are not mixed with startup strategy claims by default.
 - Cross-sphere connections should be available on pull, such as "have I thought about this before?", but should not be pushed constantly.
 - Learning concepts are the exception: they live in the Learning sphere but can be referenced from any other sphere.
+
+#### Edge
+- An edge is a typed relationship between claims.
+- Edges carry structure such as supports, contradicts, depends-on, and refines. They are part of the source of current state rather than decorative graph lines.
+
+#### Source
+- A source is raw input, including the user's initial idea and any later material the user brings into the thinking loop.
+- Sources are not polished truth. They are evidence and provenance for claims, moves, and artifacts.
+
+#### Session
+- A session is a bounded thinking loop with a start, work phase, end, and usable output.
+- Sessions group moves, sources, artifacts, and shape updates so thinking history remains durable.
+
+#### Artifact
+- An artifact is the useful output from a session, such as an Idea Map, Challenge Brief, founder brief, essay spine, decision memo, or design review.
+- Artifacts are outputs derived from claims, edges, and moves, not the canonical source of truth.
+
+#### WikiPage
+- A WikiPage is a compiled readable view.
+- WikiPages are not source of truth; they should be regenerated or reconciled from claims, edges, and moves.
 
 ### Closed Loop
 - The product must keep tightening this loop: user input -> challenge -> response -> memory -> updated critique -> better synthesis.
@@ -227,20 +262,35 @@
 - Choose strong typography, a committed palette, meaningful motion, and visual depth.
 - The interface should feel like a serious thinking instrument, not a productivity dashboard.
 
+### MVP Product Rules
+- No generic chatbot sidebar.
+- The chat input is secondary. The structure is the product.
+- Do not silently mutate truth.
+- Meaningful changes create Moves.
+- Current state is derived from claims, edges, and moves.
+- Keep blast radius small; no giant rewrites.
+- Keep files reasonably small.
+- Prefer typed, validated AI outputs.
+- Use xAI as the default AI provider.
+- Use Claude only when explicitly useful for deeper critique or compilation.
+- Prefer Postgres first.
+- Do not add a graph database, product import flows, browser extension, MCP surface, or social features before the MVP loop works.
+
 ### Deliberate Exclusions
 - Do not add points, badges, streaks, feeds, comments, likes, chatbot sidebar as the primary interaction, main-flow templates that replace emergent structure, engagement-driven notifications, AI-generated final prose as the default output, infinite scroll, or always-on Penny unless the product thesis changes.
 
 ### Project Reasoning Checklist
-- Ask what Claim, Move, Shape, or Sphere a feature creates or updates.
+- Ask what Claim, Edge, Move, Shape, Source, Session, Artifact, WikiPage, or Sphere a feature creates or updates.
 - Ask which part of the closed loop the feature strengthens.
 - Ask what artifact the user leaves with.
 - Ask whether the feature creates immediate value, compounding value, or both.
 - Ask whether the feature improves structural rigor rather than generic convenience.
 - Ask whether the feature preserves narrow positioning.
 - Ask whether the feature respects bounded deep-work sessions.
+- Ask whether the feature directly supports the first MVP loop before expanding scope.
 - Ask whether a generic chatbot could copy the feature without the user's history. If yes, the feature is not core enough.
 - Favor concrete product mechanics over vague AI language.
-- Use the project's vocabulary: Brain, Challenge, Learn, Claim, Move, Shape, Sphere, lens, precedent corpus, assumption extraction, defend/revise/absorb, quiet keystone, synthesis gates, and old selves.
+- Use the project's vocabulary: Brain, Challenge / Verify, Learn / Makes Cents, Claim, Edge, Move, Shape, Source, Session, Artifact, WikiPage, Sphere, lens, precedent corpus, assumption extraction, defend/revise/absorb, quiet keystone, synthesis gates, Idea Map, Challenge Brief, and old selves.
 
 ## Retrieval Hints
 - Search this file, the shared context file, and nearby repo docs with `rg` before broader search.
