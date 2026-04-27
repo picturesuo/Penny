@@ -4,7 +4,7 @@ import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp
 export const sessionStatusEnum = pgEnum("session_status", ["open", "completed"]);
 export const sourceKindEnum = pgEnum("source_kind", ["raw_idea"]);
 export const claimKindEnum = pgEnum("claim_kind", ["belief", "assumption", "question", "concept"]);
-export const claimStatusEnum = pgEnum("claim_status", ["exploratory", "committed", "resolved"]);
+export const claimStatusEnum = pgEnum("claim_status", ["exploratory", "committed", "resolved", "rejected"]);
 export const claimEdgeKindEnum = pgEnum("claim_edge_kind", [
   "depends_on",
   "supports",
@@ -16,6 +16,9 @@ export const moveKindEnum = pgEnum("move_kind", [
   "seed_claim_created",
   "assumptions_extracted",
   "first_challenge_suggested",
+  "assumption_confirmed",
+  "assumption_rejected",
+  "assumption_refined",
   "source.recorded",
   "claim.created",
   "edge.created",
