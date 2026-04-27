@@ -1,0 +1,313 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  InlineLearnConflictError,
+  InlineLearnGenerationError,
+  InlineLearnNotFoundError,
+  InlineLearnOutputSchema,
+  InlineLearnProviderError,
+  InlineLearnProviderSchema,
+  createHeuristicInlineLearnProvider,
+  createXaiInlineLearnProvider,
+  defaultXaiInlineLearnModel,
+  generateInlineLearnOutput,
+  handleInlineLearnRequest,
+  parseInlineLearnOutput,
+  resolveXaiInlineLearnModel,
+  type InlineLearnGenerateText,
+  type InlineLearnRequest,
+} from "./inline-learn-route.ts";
+
+test("POST /brain/learn/inline validates requests before running Learn", async () => {
+  let learned = false;
+  const response = await handleInlineLearnRequest(
+    request("http://localhost/brain/learn/inline", {
+      term: "",
+      currentClaimId: "not-a-uuid",
+      sessionId: uuidAt(100),
+      localContext: "The current assumption depends on cognitive load.",
+    }),
+    {
+      async learnInline() {
+        learned = true;
+        throw new Error("learnInline should not run");
+      },
+    },
+  );
+  const payload = (await response.json()) as { error: { code: string; issues: string[] } };
+
+  assert.equal(response.status, 400);
+  assert.equal(payload.error.code, "invalid_request");
+  assert.match(payload.error.issues.join("\n"), /term/);
+  assert.match(payload.error.issues.join("\n"), /currentClaimId/);
+  assert.equal(learned, false);
+});
+
+test("POST /brain/learn/inline returns a contextual explanation without saved graph rows by default", async () => {
+  let inputSeen: InlineLearnRequest | undefined;
+  const response = await handleInlineLearnRequest(
+    request("http://localhost/brain/learn/inline", {
+      term: "cognitive load",
+      currentClaimId: uuidAt(101),
+      sessionId: uuidAt(100),
+      localContext: "The assumption says reduced cognitive load improves study behavior.",
+    }),
+    {
+      async learnInline(input) {
+        inputSeen = input;
+
+        return {
+          term: input.term,
+          explanation: "Cognitive load is the mental effort needed to hold and use information in the moment.",
+          whyItMattersHere: "The claim only works if the proposed structure reduces effort instead of adding friction.",
+          example: "A study assistant can reduce load by making the next step obvious.",
+          relatedConcepts: ["working memory", "attention", "assumption"],
+          saveSuggestion: "Save this if it will help interpret the map later.",
+          brainRun: {
+            id: uuidAt(201),
+            status: "succeeded",
+          },
+        };
+      },
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      term: string;
+      explanation: string;
+      saved?: unknown;
+      brainRun: { status: string };
+    };
+  };
+
+  assert.equal(response.status, 200);
+  assert.equal(inputSeen?.save, false);
+  assert.equal(payload.data.term, "cognitive load");
+  assert.match(payload.data.explanation, /mental effort/);
+  assert.equal(payload.data.saved, undefined);
+  assert.equal(payload.data.brainRun.status, "succeeded");
+});
+
+test("POST /brain/learn/inline can save the concept claim, teaches edge, and learning_triggered move", async () => {
+  const currentClaimId = uuidAt(101);
+  const response = await handleInlineLearnRequest(
+    request("http://localhost/brain/learn/inline", {
+      term: "working memory",
+      currentClaimId,
+      sessionId: uuidAt(100),
+      localContext: "This assumption depends on the user's ability to keep steps in mind.",
+      save: true,
+    }),
+    {
+      async learnInline(input) {
+        return {
+          term: input.term,
+          explanation: "Working memory is the limited space for holding information while using it.",
+          whyItMattersHere: "The product claim depends on reducing what the user must hold at once.",
+          example: "Showing one next action can reduce working memory demand.",
+          relatedConcepts: ["attention", "cognitive load"],
+          saveSuggestion: "Save this concept because it teaches the current assumption.",
+          brainRun: {
+            id: uuidAt(201),
+            status: "succeeded",
+          },
+          saved: {
+            conceptClaim: claim(uuidAt(301), uuidAt(302), "working memory: Working memory is limited."),
+            teachesEdge: {
+              id: uuidAt(401),
+              fromClaimId: uuidAt(301),
+              toClaimId: currentClaimId,
+              kind: "teaches",
+              status: "active",
+              label: "working memory",
+            },
+            move: {
+              id: uuidAt(501),
+              kind: "learning_triggered",
+              summary: "Saved an inline Learn concept inside Brain.",
+              claimIds: [currentClaimId, uuidAt(301)],
+              edgeIds: [uuidAt(401)],
+              artifactIds: [],
+            },
+          },
+        };
+      },
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      saved: {
+        conceptClaim: { kind: string; text: string };
+        teachesEdge: { kind: string; toClaimId: string };
+        move: { kind: string; claimIds: string[]; edgeIds: string[] };
+      };
+    };
+  };
+
+  assert.equal(response.status, 201);
+  assert.equal(payload.data.saved.conceptClaim.kind, "concept");
+  assert.equal(payload.data.saved.teachesEdge.kind, "teaches");
+  assert.equal(payload.data.saved.teachesEdge.toClaimId, currentClaimId);
+  assert.equal(payload.data.saved.move.kind, "learning_triggered");
+  assert.deepEqual(payload.data.saved.move.claimIds, [currentClaimId, uuidAt(301)]);
+  assert.deepEqual(payload.data.saved.move.edgeIds, [uuidAt(401)]);
+});
+
+test("inline Learn maps route failures to stable errors", async () => {
+  const notFound = await handleInlineLearnRequest(validRequest(), {
+    async learnInline() {
+      throw new InlineLearnNotFoundError("Current claim was not found in this session.");
+    },
+  });
+  const conflict = await handleInlineLearnRequest(validRequest(), {
+    async learnInline() {
+      throw new InlineLearnConflictError("Current claim has no current ClaimVersion.");
+    },
+  });
+  const providerFailure = await handleInlineLearnRequest(validRequest(), {
+    async learnInline() {
+      throw new InlineLearnProviderError("xAI Inline Learn request failed.");
+    },
+  });
+  const generationFailure = await handleInlineLearnRequest(validRequest(), {
+    async learnInline() {
+      throw new InlineLearnGenerationError("Inline Learn output failed strict validation.", ["explanation too long"]);
+    },
+  });
+  const notFoundPayload = (await notFound.json()) as { error: { code: string } };
+  const conflictPayload = (await conflict.json()) as { error: { code: string } };
+  const providerPayload = (await providerFailure.json()) as { error: { code: string } };
+  const generationPayload = (await generationFailure.json()) as { error: { code: string; issues: string[] } };
+
+  assert.equal(notFound.status, 404);
+  assert.equal(notFoundPayload.error.code, "inline_learn_not_found");
+  assert.equal(conflict.status, 409);
+  assert.equal(conflictPayload.error.code, "inline_learn_conflict");
+  assert.equal(providerFailure.status, 502);
+  assert.equal(providerPayload.error.code, "inline_learn_provider_failed");
+  assert.equal(generationFailure.status, 502);
+  assert.equal(generationPayload.error.code, "invalid_inline_learn_output");
+  assert.deepEqual(generationPayload.error.issues, ["explanation too long"]);
+});
+
+test("inline Learn provider schema stays loose while strict validation enforces local gates", () => {
+  const looseProviderOutput = {
+    term: "scope",
+    explanation: "",
+    whyItMattersHere: "It decides how broad the current claim is.",
+    example: "Scope can change a broad claim into a testable one.",
+    relatedConcepts: ["assumption"],
+    saveSuggestion: "Save if this concept will be reused.",
+  };
+
+  assert.equal(InlineLearnProviderSchema.safeParse(looseProviderOutput).success, true);
+  assert.equal(InlineLearnOutputSchema.safeParse(looseProviderOutput).success, false);
+});
+
+test("generateInlineLearnOutput validates heuristic and xAI structured outputs", async () => {
+  const input = {
+    term: "scope",
+    currentClaimId: uuidAt(101),
+    sessionId: uuidAt(100),
+    localContext: "The claim may only apply to novice users.",
+    currentClaimText: "The assistant improves learning outcomes for novice users.",
+    currentClaimKind: "assumption" as const,
+  };
+  const heuristic = await generateInlineLearnOutput(input, {
+    provider: createHeuristicInlineLearnProvider(),
+  });
+  const calls: Parameters<InlineLearnGenerateText>[0][] = [];
+  const generateText: InlineLearnGenerateText = async (request) => {
+    calls.push(request);
+
+    return {
+      output: {
+        term: "scope",
+        explanation: "Scope is the boundary around where the claim applies.",
+        whyItMattersHere: "It keeps the claim from pretending to apply to every learner.",
+        example: "Novice users may need a different test than expert users.",
+        relatedConcepts: ["boundary", "audience"],
+        saveSuggestion: "Save this if the map keeps changing target users.",
+      },
+    };
+  };
+  const xai = await generateInlineLearnOutput(input, {
+    provider: createXaiInlineLearnProvider({ XAI_API_KEY: "test-key" }, { generateText }),
+  });
+
+  assert.equal(heuristic.term, "scope");
+  assert.match(heuristic.explanation, /tested/);
+  assert.equal(xai.example, "Novice users may need a different test than expert users.");
+  assert.equal(resolveXaiInlineLearnModel({}), defaultXaiInlineLearnModel);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]?.prompt ?? "", /Local context/);
+});
+
+test("inline Learn output parsing and xAI provider failures are explicit", async () => {
+  assert.throws(
+    () =>
+      parseInlineLearnOutput({
+        term: "scope",
+        explanation: "",
+        whyItMattersHere: "It matters here.",
+        example: "An example.",
+        relatedConcepts: ["boundary"],
+        saveSuggestion: "Save if useful.",
+      }),
+    (error) => {
+      assert.ok(error instanceof InlineLearnGenerationError);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      createXaiInlineLearnProvider({}).generate({
+        term: "scope",
+        currentClaimId: uuidAt(101),
+        sessionId: uuidAt(100),
+        localContext: "The claim may only apply to novice users.",
+        currentClaimText: "The assistant improves learning outcomes for novice users.",
+        currentClaimKind: "assumption",
+      }),
+    (error) => {
+      assert.ok(error instanceof InlineLearnProviderError);
+      assert.match(error.message, /XAI_API_KEY/);
+      return true;
+    },
+  );
+});
+
+function validRequest(): Request {
+  return request("http://localhost/brain/learn/inline", {
+    term: "scope",
+    currentClaimId: uuidAt(101),
+    sessionId: uuidAt(100),
+    localContext: "The claim may only apply to novice users.",
+  });
+}
+
+function request(url: string, body: unknown): Request {
+  return new Request(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function claim(id: string, versionId: string, text: string) {
+  return {
+    id,
+    versionId,
+    kind: "concept" as const,
+    status: "exploratory" as const,
+    text,
+    confidence: 70,
+  };
+}
+
+function uuidAt(value: number): string {
+  return `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
+}
