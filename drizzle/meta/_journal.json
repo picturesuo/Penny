@@ -43,6 +43,13 @@
       "when": 1777322425096,
       "tag": "0005_regular_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777323532171,
+      "tag": "0006_lethal_shaman",
+      "breakpoints": true
     }
   ]
 }
