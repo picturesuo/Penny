@@ -15,6 +15,7 @@ const elements = {
   failureType: $("#insightFailureType") ?? $("#failureType"),
   form: $("#seedForm"),
   formStatus: $("#formStatus"),
+  heroSurface: $(".hero-surface"),
   keyInsight: $("#keyInsight"),
   laterCount: $("#laterCount"),
   laterList: $("#laterList"),
@@ -28,8 +29,12 @@ const elements = {
   seedSubmit: $("#seedSubmit"),
   sessionStatus: $("#sessionStatus"),
   sourceKind: $("#sourceKind"),
+  streamBody: $("#streamBody"),
+  streamStatus: $("#streamStatus"),
+  streamSurface: $("#streamSurface"),
   thoughtMap: $("#thoughtMap"),
   thinkingIndicator: $("#thinkingIndicator"),
+  explorationSurface: $(".exploration-surface"),
   verifyResult: $("#verifyResult"),
   verifyStatus: $("#verifyStatus"),
   weakestPart: $("#insightTarget") ?? $("#weakestPart"),
@@ -52,9 +57,13 @@ const state = {
   verifyingClaimId: null,
   activeClaimDetail: null,
   loadingClaimDetailId: null,
+  stream: null,
+  streamLoading: false,
+  streamError: null,
 };
 
 renderEmptyState();
+void loadInitialStream();
 
 elements.form?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -345,6 +354,32 @@ async function runVerify(body) {
   return payload;
 }
 
+async function fetchBrainStream() {
+  const response = await fetch("/brain/stream", {
+    method: "GET",
+    headers: {
+      "x-user-id": "dev-user",
+      "x-project-id": "dev-project",
+    },
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const message = payload?.error?.message ?? `GET /brain/stream failed with ${response.status}.`;
+    throw new Error(message);
+  }
+
+  if (
+    !payload?.data ||
+    !Array.isArray(payload.data.activeSessions) ||
+    !Array.isArray(payload.data.suggestedNextMoves)
+  ) {
+    throw new Error("Stream returned an invalid working surface.");
+  }
+
+  return payload;
+}
+
 async function readJsonResponse(response) {
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -360,6 +395,7 @@ async function readJsonResponse(response) {
 }
 
 function renderEmptyState() {
+  setSessionMode(false);
   setText(elements.sessionStatus, "No session");
   setText(elements.sourceKind, "Raw idea");
   setText(elements.currentClaim, "What's on your mind?");
@@ -387,9 +423,11 @@ function renderEmptyState() {
   renderArtifact(null);
   renderVerify(null);
   renderResponseOptions([]);
+  renderStream();
 }
 
 function renderCockpit(data) {
+  setSessionMode(true);
   const claims = data.ideaMap?.claims ?? [];
   const edges = data.ideaMap?.edges ?? [];
   const paths = data.explorationPaths ?? [];
@@ -420,6 +458,172 @@ function renderCockpit(data) {
   renderLearn(learnCandidates);
   renderVerify(state.activeVerify);
   renderArtifact(state.activeArtifact ?? latestArtifact(data.artifacts));
+}
+
+async function loadInitialStream() {
+  state.streamLoading = true;
+  state.streamError = null;
+  renderStream();
+
+  try {
+    const payload = await fetchBrainStream();
+    state.stream = payload.data;
+    state.streamError = null;
+  } catch (error) {
+    state.streamError = error instanceof Error ? error.message : String(error);
+  } finally {
+    state.streamLoading = false;
+
+    if (!state.data) {
+      renderStream();
+    }
+  }
+}
+
+function setSessionMode(hasSession) {
+  if (elements.streamSurface) {
+    elements.streamSurface.hidden = hasSession;
+  }
+
+  if (elements.heroSurface) {
+    elements.heroSurface.hidden = !hasSession;
+  }
+
+  if (elements.explorationSurface) {
+    elements.explorationSurface.hidden = !hasSession;
+  }
+}
+
+function renderStream() {
+  if (!elements.streamBody) {
+    return;
+  }
+
+  replaceChildren(elements.streamBody);
+
+  if (state.streamLoading && !state.stream) {
+    setText(elements.streamStatus, "Loading");
+    append(elements.streamBody, textOnly("Loading today's stream."));
+    return;
+  }
+
+  if (state.streamError && !state.stream) {
+    setText(elements.streamStatus, "Unavailable");
+    append(elements.streamBody, textOnly(state.streamError));
+    return;
+  }
+
+  const stream = state.stream;
+
+  if (!stream) {
+    setText(elements.streamStatus, "Ready");
+    append(elements.streamBody, textOnly("No stream data loaded."));
+    return;
+  }
+
+  const activeCount = stream.activeSessions?.length ?? 0;
+  const riskCount = stream.unresolvedRisks?.length ?? 0;
+  setText(elements.streamStatus, `${activeCount} active / ${riskCount} risks`);
+
+  append(
+    elements.streamBody,
+    streamSection(
+      "Suggested Next Moves",
+      stream.suggestedNextMoves ?? [],
+      (move) => streamCard(formatLabel(move.kind), move.label, move.description),
+      "No suggested moves.",
+    ),
+  );
+  append(
+    elements.streamBody,
+    streamSection(
+      "Active Sessions",
+      stream.activeSessions ?? [],
+      (session) =>
+        streamCard(
+          `${session.claimCount} claims / ${session.moveCount} moves`,
+          session.title ?? shortId(session.id),
+          `${session.openChallengeCount} open challenges / ${session.unresolvedRiskCount} unresolved risks`,
+        ),
+      "No active sessions.",
+    ),
+  );
+  append(
+    elements.streamBody,
+    streamSection(
+      "Open Challenges",
+      stream.openChallenges ?? [],
+      (challenge) =>
+        streamCard(
+          formatLabel(challenge.failureType ?? "challenge"),
+          challenge.targetClaim?.text ?? "Unknown target",
+          challenge.critiqueClaim?.text ?? "No critique text returned.",
+        ),
+      "No open challenges.",
+    ),
+  );
+  append(
+    elements.streamBody,
+    streamSection(
+      "Claims Needing Attention",
+      stream.claimsNeedingAttention ?? [],
+      (entry) =>
+        streamCard(
+          `${formatLabel(entry.claim.kind)} / ${entry.claim.confidence}%`,
+          entry.claim.text,
+          entry.reason,
+        ),
+      "No claims need attention.",
+    ),
+  );
+  append(
+    elements.streamBody,
+    streamSection(
+      "Recent Moves",
+      stream.recentMoves ?? [],
+      (move) => streamCard(formatLabel(move.kind), move.summary, formatDate(move.createdAt)),
+      "No recent moves.",
+    ),
+  );
+}
+
+function streamSection(label, items, renderItem, emptyText) {
+  const section = document.createElement("section");
+  section.className = "stream-section";
+
+  const title = document.createElement("span");
+  title.className = "tag";
+  title.textContent = label;
+  section.append(title);
+
+  if (!Array.isArray(items) || items.length === 0) {
+    append(section, textOnly(emptyText));
+    return section;
+  }
+
+  for (const item of items.slice(0, 5)) {
+    section.append(renderItem(item));
+  }
+
+  return section;
+}
+
+function streamCard(label, title, body) {
+  const card = document.createElement("article");
+  card.className = "stream-card";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = label;
+
+  const strong = document.createElement("strong");
+  strong.textContent = title;
+
+  const copy = document.createElement("p");
+  copy.textContent = body;
+
+  card.append(tag, strong, copy);
+  return card;
 }
 
 function renderThoughtMap(claims, edges) {
