@@ -4,6 +4,11 @@ const elements = {
   artifactBrief: $("#artifactBrief"),
   artifactCreate: $("#artifactCreate"),
   artifactStatus: $("#artifactStatus"),
+  claimDrawer: $("#claimDrawer"),
+  claimDrawerBackdrop: $("#claimDrawerBackdrop"),
+  claimDrawerClose: $("#claimDrawerClose"),
+  claimDrawerContent: $("#claimDrawerContent"),
+  claimDrawerTitle: $("#claimDrawerTitle"),
   currentClaim: $("#currentClaim"),
   explorationCount: $("#explorationCount"),
   explorationRows: $("#explorationRows"),
@@ -40,6 +45,8 @@ const state = {
   savingLearn: false,
   artifactCreating: false,
   activeArtifact: null,
+  activeClaimDetail: null,
+  loadingClaimDetailId: null,
 };
 
 renderEmptyState();
@@ -64,6 +71,8 @@ elements.form?.addEventListener("submit", async (event) => {
     state.activeChallenge = null;
     state.activeLearn = null;
     state.activeArtifact = null;
+    state.activeClaimDetail = null;
+    closeClaimDrawer();
     renderCockpit(payload.data);
     setStatus("Graph slice persisted.");
     settledRunLabel = runStatusLabel(payload.data?.brainRun);
@@ -77,6 +86,15 @@ elements.form?.addEventListener("submit", async (event) => {
 
 elements.artifactCreate?.addEventListener("click", () => {
   void handleArtifactCreate();
+});
+
+elements.claimDrawerClose?.addEventListener("click", closeClaimDrawer);
+elements.claimDrawerBackdrop?.addEventListener("click", closeClaimDrawer);
+
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && elements.claimDrawer?.classList.contains("open")) {
+    closeClaimDrawer();
+  }
 });
 
 async function seedBrain(rawIdea) {
@@ -101,6 +119,31 @@ async function seedBrain(rawIdea) {
 
   if (!payload?.data?.ideaMap) {
     throw new Error("POST /brain/seed returned an invalid graph slice.");
+  }
+
+  return payload;
+}
+
+async function fetchClaimDetail(claimId) {
+  const response = await fetch(`/brain/claims/${encodeURIComponent(claimId)}/detail`, {
+    method: "GET",
+    headers: {
+      "x-user-id": "dev-user",
+      "x-project-id": "dev-project",
+    },
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
+    const message = payload?.error?.message
+      ? `${payload.error.message}${issues}`
+      : `GET /brain/claims/${claimId}/detail failed with ${response.status}.`;
+    throw new Error(message);
+  }
+
+  if (!payload?.data?.claim || !payload.data.currentVersion) {
+    throw new Error("Claim detail returned an invalid graph slice.");
   }
 
   return payload;
@@ -427,12 +470,17 @@ function claimNode(claim, modifier = "") {
 }
 
 function claimActions(claim) {
-  if (!["belief", "assumption"].includes(claim.kind)) {
-    return null;
-  }
-
   const controls = document.createElement("div");
   controls.className = "claim-actions";
+
+  const inspectButton = document.createElement("button");
+  inspectButton.type = "button";
+  inspectButton.textContent = state.loadingClaimDetailId === claim.id ? "Inspecting" : "Inspect";
+  inspectButton.disabled = state.loadingClaimDetailId === claim.id;
+  inspectButton.addEventListener("click", () => {
+    void handleClaimInspect(claim);
+  });
+  append(controls, inspectButton);
 
   if (claim.kind === "assumption") {
     const isPending = state.respondingClaimId === claim.id;
@@ -454,16 +502,39 @@ function claimActions(claim) {
     }
   }
 
-  const challengeButton = document.createElement("button");
-  challengeButton.type = "button";
-  challengeButton.textContent = state.challengingClaimId === claim.id ? "Challenging" : "Challenge";
-  challengeButton.disabled = state.challengingClaimId === claim.id;
-  challengeButton.addEventListener("click", () => {
-    void handleChallengeIssue(claim);
-  });
-  append(controls, challengeButton);
+  if (["belief", "assumption"].includes(claim.kind)) {
+    const challengeButton = document.createElement("button");
+    challengeButton.type = "button";
+    challengeButton.textContent = state.challengingClaimId === claim.id ? "Challenging" : "Challenge";
+    challengeButton.disabled = state.challengingClaimId === claim.id;
+    challengeButton.addEventListener("click", () => {
+      void handleChallengeIssue(claim);
+    });
+    append(controls, challengeButton);
+  }
 
   return controls;
+}
+
+async function handleClaimInspect(claim) {
+  state.loadingClaimDetailId = claim.id;
+  renderCockpit(state.data);
+  openClaimDrawer();
+  renderClaimDrawerLoading(claim);
+  setStatus("Loading claim memory.");
+
+  try {
+    const payload = await fetchClaimDetail(claim.id);
+    state.activeClaimDetail = payload.data;
+    renderClaimDrawer(payload.data);
+    setStatus("Claim memory loaded.");
+  } catch (error) {
+    renderClaimDrawerError(error instanceof Error ? error.message : String(error));
+    setStatus(error instanceof Error ? error.message : String(error), true);
+  } finally {
+    state.loadingClaimDetailId = null;
+    renderCockpit(state.data);
+  }
 }
 
 async function handleChallengeIssue(claim) {
@@ -1136,6 +1207,230 @@ function latestArtifact(artifacts) {
   return artifacts.at(-1);
 }
 
+function openClaimDrawer() {
+  elements.claimDrawer?.classList.add("open");
+  elements.claimDrawer?.setAttribute("aria-hidden", "false");
+
+  if (elements.claimDrawerBackdrop) {
+    elements.claimDrawerBackdrop.hidden = false;
+  }
+}
+
+function closeClaimDrawer() {
+  elements.claimDrawer?.classList.remove("open");
+  elements.claimDrawer?.setAttribute("aria-hidden", "true");
+
+  if (elements.claimDrawerBackdrop) {
+    elements.claimDrawerBackdrop.hidden = true;
+  }
+}
+
+function renderClaimDrawerLoading(claim) {
+  setText(elements.claimDrawerTitle, formatLabel(claim.kind));
+  replaceChildren(elements.claimDrawerContent, textOnly("Loading claim memory."));
+}
+
+function renderClaimDrawerError(message) {
+  replaceChildren(elements.claimDrawerContent, textOnly(message));
+}
+
+function renderClaimDrawer(detail) {
+  setText(elements.claimDrawerTitle, `${formatLabel(detail.claim.kind)} ${shortId(detail.claim.id)}`);
+  replaceChildren(
+    elements.claimDrawerContent,
+    detailSection("Current Version", [versionCard(detail.currentVersion, true)]),
+    detailSection("Old Claim Versions", (detail.oldVersions ?? []).map((version) => versionCard(version, false)), "No prior versions yet."),
+    detailSection(
+      "Confidence History",
+      (detail.confidenceHistory ?? []).map(confidenceRow),
+      "No confidence history returned.",
+    ),
+    detailSection("Moves Involving Claim", (detail.moves ?? []).map(moveCard), "No moves returned for this claim."),
+    provenanceSection(detail.provenance),
+    detailSection(
+      "Connected Claims",
+      (detail.connectedClaims ?? []).map(connectedClaimCard),
+      "No connected claims returned.",
+    ),
+    detailSection(
+      "Active Challenges",
+      (detail.activeChallenges ?? []).map(activeChallengeCard),
+      "No active challenges attached.",
+    ),
+    detailSection(
+      "Learned Concepts",
+      (detail.learnedConcepts ?? []).map(learnedConceptCard),
+      "No saved Learn concepts attached.",
+    ),
+  );
+}
+
+function detailSection(label, children, emptyText = "None") {
+  const section = document.createElement("section");
+  section.className = "detail-section";
+
+  const title = document.createElement("h3");
+  title.textContent = label;
+  section.append(title);
+
+  if (children.length === 0) {
+    append(section, textOnly(emptyText));
+    return section;
+  }
+
+  for (const child of children) {
+    append(section, child);
+  }
+
+  return section;
+}
+
+function versionCard(version, isCurrent) {
+  const card = document.createElement("article");
+  card.className = ["detail-card", isCurrent ? "current" : "old"].join(" ");
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = `${isCurrent ? "Current" : "Old"} / ${formatLabel(version.status)} / ${version.confidence}%`;
+
+  const text = document.createElement("p");
+  text.textContent = version.content;
+
+  const meta = document.createElement("small");
+  meta.textContent = `${shortId(version.id)} / ${formatDate(version.createdAt)}`;
+
+  card.append(tag, text, meta);
+  return card;
+}
+
+function confidenceRow(entry) {
+  const row = document.createElement("article");
+  row.className = "confidence-row";
+
+  const bar = document.createElement("span");
+  bar.style.width = `${Math.max(0, Math.min(100, Number(entry.confidence) || 0))}%`;
+
+  const text = document.createElement("p");
+  text.textContent = `${entry.confidence}% / ${formatLabel(entry.state)} / ${formatLabel(entry.status)}`;
+
+  row.append(bar, text);
+  return row;
+}
+
+function moveCard(move) {
+  const card = document.createElement("article");
+  card.className = "detail-card move";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = formatLabel(move.kind);
+
+  const summary = document.createElement("p");
+  summary.textContent = move.summary;
+
+  const detail = document.createElement("small");
+  detail.textContent = movePayloadSummary(move);
+
+  card.append(tag, summary, detail);
+  return card;
+}
+
+function provenanceSection(provenance) {
+  const children = [];
+
+  if (provenance?.source) {
+    const source = document.createElement("article");
+    source.className = "detail-card provenance";
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = formatLabel(provenance.source.kind);
+    const text = document.createElement("p");
+    text.textContent = provenance.source.rawText;
+    source.append(tag, text);
+    children.push(source);
+  }
+
+  for (const span of provenance?.spans ?? []) {
+    const row = document.createElement("article");
+    row.className = "detail-card span";
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = span.label ?? "Source Span";
+    const text = document.createElement("p");
+    text.textContent = span.text || `${span.startOffset}-${span.endOffset}`;
+    row.append(tag, text);
+    children.push(row);
+  }
+
+  return detailSection("Source / Provenance", children, "No source span returned for this claim.");
+}
+
+function connectedClaimCard(connection) {
+  const card = document.createElement("article");
+  card.className = "detail-card connection";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = `${formatLabel(connection.edge.kind)} / ${formatLabel(connection.direction)}`;
+
+  const text = document.createElement("p");
+  text.textContent = connection.claim.text;
+
+  const meta = document.createElement("small");
+  meta.textContent = `${formatLabel(connection.claim.kind)} / ${formatLabel(connection.edge.status)}`;
+
+  card.append(tag, text, meta);
+  return card;
+}
+
+function activeChallengeCard(challenge) {
+  const card = document.createElement("article");
+  card.className = "detail-card challenge";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = `${formatLabel(challenge.edge.kind)} / ${formatLabel(challenge.edge.status)}`;
+
+  const critique = document.createElement("p");
+  critique.textContent = challenge.critiqueClaim?.text ?? "Critique claim not returned.";
+
+  const meta = document.createElement("small");
+  meta.textContent = `${formatLabel(challenge.responseState)} / ${formatLabel(challenge.edge.label ?? "unlabeled")}`;
+
+  card.append(tag, critique, meta);
+  return card;
+}
+
+function learnedConceptCard(concept) {
+  const card = document.createElement("article");
+  card.className = "detail-card concept";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = formatLabel(concept.edge.kind);
+
+  const text = document.createElement("p");
+  text.textContent = concept.conceptClaim.text;
+
+  const meta = document.createElement("small");
+  meta.textContent = `Teaches ${shortId(concept.attachedClaim.id)}`;
+
+  card.append(tag, text, meta);
+  return card;
+}
+
+function movePayloadSummary(move) {
+  const payload = move.payload && typeof move.payload === "object" ? move.payload : {};
+  const parts = [
+    stringValue(payload, "response"),
+    stringValue(payload, "reasoning"),
+    stringValue(payload, "previousVersionId") ?? stringValue(payload, "previousClaimVersionId"),
+    stringValue(payload, "currentVersionId") ?? stringValue(payload, "currentClaimVersionId"),
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(" / ") : formatDate(move.createdAt);
+}
+
 function currentLearnTarget() {
   return (
     findClaimById(state.activeChallenge?.targetClaimId) ??
@@ -1237,4 +1532,25 @@ function formatLabel(value) {
 
 function shortId(value) {
   return String(value ?? "").slice(0, 8);
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value ?? "");
+  }
+
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function stringValue(source, key) {
+  const value = source?.[key];
+
+  return typeof value === "string" && value.trim() ? value : null;
 }
