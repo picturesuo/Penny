@@ -448,10 +448,19 @@ function renderThoughtMap(claims, edges) {
 
 function claimNode(claim, modifier = "") {
   const node = document.createElement("article");
+  const health = claimHealth(claim);
   const isSelected = state.activeClaimDetail?.claim?.id === claim.id || state.loadingClaimDetailId === claim.id;
-  node.className = ["map-node", claim.kind, modifier, claim.status ? `status-${claim.status}` : "", isSelected ? "is-selected" : ""]
+  node.className = [
+    "map-node",
+    claim.kind,
+    modifier,
+    claim.status ? `status-${claim.status}` : "",
+    isSelected ? "is-selected" : "",
+    ...health.classes,
+  ]
     .filter(Boolean)
     .join(" ");
+  node.style.setProperty("--claim-confidence", `${health.confidence}%`);
   node.tabIndex = 0;
   node.setAttribute("role", "button");
   node.setAttribute("aria-label", `Open detail for ${formatLabel(claim.kind)} claim`);
@@ -462,7 +471,7 @@ function claimNode(claim, modifier = "") {
   const text = document.createElement("strong");
   text.textContent = claim.text;
 
-  node.append(meta, text);
+  node.append(meta, text, confidenceMeter(health.confidence), healthBadges(health.badges));
 
   const actions = claimActions(claim);
 
@@ -754,7 +763,8 @@ function upsertEdge(edge) {
 
 function edgeConnector(edge) {
   const row = document.createElement("div");
-  row.className = `map-edge ${edge.kind}`;
+  const health = edgeHealth(edge);
+  row.className = ["map-edge", edge.kind, edge.status ? `status-${edge.status}` : "", ...health.classes].filter(Boolean).join(" ");
 
   const kind = document.createElement("span");
   kind.textContent = formatLabel(edge.kind);
@@ -762,8 +772,330 @@ function edgeConnector(edge) {
   const label = document.createElement("p");
   label.textContent = edge.label;
 
-  row.append(kind, label);
+  row.append(kind, label, healthBadges(health.badges, "edge-health"));
   return row;
+}
+
+function claimHealth(claim) {
+  const edges = graphEdges();
+  const relatedEdges = edges.filter((edge) => edge.fromClaimId === claim.id || edge.toClaimId === claim.id);
+  const relatedEdgeIds = relatedEdges.map((edge) => edge.id);
+  const challengeState = challengeStateForClaim(claim, relatedEdges);
+  const recency = recencyForIds([claim.id], relatedEdgeIds);
+  const risk = unresolvedRiskForClaim(claim.id, relatedEdgeIds, challengeState);
+  const refined = moveHistory().some((move) => move.kind === "assumption_refined" && moveIncludes(move, claim.id, relatedEdgeIds));
+  const confidence = clampPercent(claim.confidence);
+  const confidenceTier = confidenceTierFor(confidence);
+  const classes = [
+    `kind-${claim.kind}`,
+    `health-status-${claim.status}`,
+    `confidence-${confidenceTier}`,
+    `recency-${recency.state}`,
+    challengeState ? `challenge-${challengeState.state}` : "",
+    refined ? "is-refined" : "",
+    risk ? "has-unresolved-risk" : "",
+  ].filter(Boolean);
+  const badges = [
+    healthBadge(`kind-${claim.kind}`, formatLabel(claim.kind)),
+    healthBadge(`status-${claim.status}`, formatLabel(claim.status)),
+    healthBadge(`confidence-${confidenceTier}`, `${confidence}%`),
+    healthBadge(`recency-${recency.state}`, recency.label),
+  ];
+
+  if (challengeState) {
+    badges.push(healthBadge(`challenge-${challengeState.state}`, challengeState.label));
+  }
+
+  if (refined) {
+    badges.push(healthBadge("refined", "Refined"));
+  }
+
+  if (risk) {
+    badges.push(healthBadge(`risk-${risk.kind}`, risk.label));
+  }
+
+  return {
+    confidence,
+    classes,
+    badges,
+  };
+}
+
+function edgeHealth(edge) {
+  const responseState = isChallengeEdge(edge) ? challengeResponseState(edge.id) : null;
+  const recency = recencyForIds([edge.fromClaimId, edge.toClaimId], [edge.id]);
+  const risk = unresolvedRiskForEdge(edge);
+  const classes = [
+    `edge-status-${edge.status}`,
+    `recency-${recency.state}`,
+    responseState ? `challenge-${responseState.state}` : "",
+    risk ? "has-unresolved-risk" : "",
+  ].filter(Boolean);
+  const badges = [
+    healthBadge(`status-${edge.status}`, formatLabel(edge.status)),
+    healthBadge(`recency-${recency.state}`, recency.label),
+  ];
+
+  if (responseState) {
+    badges.push(healthBadge(`challenge-${responseState.state}`, responseState.label));
+  }
+
+  if (risk) {
+    badges.push(healthBadge(`risk-${risk.kind}`, risk.label));
+  }
+
+  return {
+    classes,
+    badges,
+  };
+}
+
+function confidenceMeter(confidence) {
+  const meter = document.createElement("span");
+  meter.className = "claim-confidence-meter";
+  meter.setAttribute("aria-label", `${confidence}% confidence`);
+
+  const fill = document.createElement("span");
+  fill.style.width = `${confidence}%`;
+  meter.append(fill);
+
+  return meter;
+}
+
+function healthBadges(badges, className = "claim-health") {
+  const row = document.createElement("div");
+  row.className = className;
+
+  for (const badge of badges) {
+    const element = document.createElement("span");
+    element.className = ["health-badge", badge.kind].join(" ");
+    element.textContent = badge.label;
+    row.append(element);
+  }
+
+  return row;
+}
+
+function healthBadge(kind, label) {
+  return { kind, label };
+}
+
+function graphEdges() {
+  return Array.isArray(state.data?.ideaMap?.edges) ? state.data.ideaMap.edges : [];
+}
+
+function moveHistory() {
+  return Array.isArray(state.data?.moves) ? state.data.moves : [];
+}
+
+function challengeStateForClaim(claim, relatedEdges) {
+  const targetEdges = relatedEdges.filter((edge) => isChallengeEdge(edge) && edge.toClaimId === claim.id);
+  const sourceEdge = relatedEdges.find((edge) => isChallengeEdge(edge) && edge.fromClaimId === claim.id);
+
+  if (targetEdges.length > 0) {
+    const edge = targetEdges.find((candidate) => candidate.status === "active") ?? targetEdges[0];
+    const responseState = challengeResponseState(edge.id);
+
+    if (responseState) {
+      return responseState;
+    }
+
+    if (edge.status === "acknowledged_vulnerability") {
+      return {
+        state: "acknowledged",
+        label: "Acknowledged",
+      };
+    }
+
+    return {
+      state: "active",
+      label: "Active Challenge",
+    };
+  }
+
+  if (state.activeChallenge?.targetClaimId === claim.id) {
+    return {
+      state: state.activeChallenge.status === "acknowledged_vulnerability" ? "acknowledged" : "active",
+      label: state.activeChallenge.status === "acknowledged_vulnerability" ? "Acknowledged" : "Active Challenge",
+    };
+  }
+
+  if (state.data?.firstChallenge?.targetClaimId === claim.id) {
+    return {
+      state: "suggested",
+      label: "Weakest",
+    };
+  }
+
+  if (sourceEdge) {
+    return {
+      state: "source",
+      label: "Critique",
+    };
+  }
+
+  return null;
+}
+
+function challengeResponseState(edgeId) {
+  const responseMove = [...moveHistory()]
+    .reverse()
+    .find(
+      (move) =>
+        Array.isArray(move.edgeIds) &&
+        move.edgeIds.includes(edgeId) &&
+        ["user_defended", "claim_revised", "critique_absorbed"].includes(move.kind),
+    );
+
+  if (responseMove?.kind === "user_defended") {
+    return {
+      state: "defended",
+      label: "Defended",
+    };
+  }
+
+  if (responseMove?.kind === "claim_revised") {
+    return {
+      state: "revised",
+      label: "Revised",
+    };
+  }
+
+  if (responseMove?.kind === "critique_absorbed") {
+    return {
+      state: "acknowledged",
+      label: "Acknowledged",
+    };
+  }
+
+  return null;
+}
+
+function unresolvedRiskForClaim(claimId, edgeIds, challengeState) {
+  const artifactRisk = latestUnresolvedRisks().find((risk) => risk.claimId === claimId || edgeIds.includes(risk.edgeId));
+
+  if (artifactRisk) {
+    return {
+      kind: artifactRisk.kind ?? "artifact",
+      label: "Risk",
+    };
+  }
+
+  if (challengeState?.state === "active") {
+    return {
+      kind: "challenge",
+      label: "Risk",
+    };
+  }
+
+  return null;
+}
+
+function unresolvedRiskForEdge(edge) {
+  const artifactRisk = latestUnresolvedRisks().find((risk) => risk.edgeId === edge.id);
+
+  if (artifactRisk) {
+    return {
+      kind: artifactRisk.kind ?? "artifact",
+      label: "Risk",
+    };
+  }
+
+  if (isChallengeEdge(edge) && edge.status === "active") {
+    return {
+      kind: "challenge",
+      label: "Risk",
+    };
+  }
+
+  return null;
+}
+
+function latestUnresolvedRisks() {
+  const artifact = state.activeArtifact ?? latestArtifact(state.data?.artifacts);
+  const risks = artifact?.payload?.challengeBrief?.unresolvedRisks;
+
+  return Array.isArray(risks) ? risks : [];
+}
+
+function recencyForIds(claimIds, edgeIds) {
+  const moves = moveHistory();
+  const latestIndex = latestMoveIndex(claimIds, edgeIds);
+
+  if (latestIndex < 0) {
+    return {
+      state: "quiet",
+      label: "Quiet",
+    };
+  }
+
+  const distance = moves.length - 1 - latestIndex;
+
+  if (distance <= 1) {
+    return {
+      state: "fresh",
+      label: "Fresh",
+    };
+  }
+
+  if (distance <= 3) {
+    return {
+      state: "recent",
+      label: "Recent",
+    };
+  }
+
+  return {
+    state: "settled",
+    label: "Settled",
+  };
+}
+
+function latestMoveIndex(claimIds, edgeIds) {
+  const moves = moveHistory();
+
+  for (let index = moves.length - 1; index >= 0; index -= 1) {
+    if (moveIncludes(moves[index], claimIds, edgeIds)) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function moveIncludes(move, claimIds, edgeIds) {
+  const claimIdList = Array.isArray(claimIds) ? claimIds : [claimIds];
+  const edgeIdList = Array.isArray(edgeIds) ? edgeIds : [edgeIds];
+  const moveClaimIds = Array.isArray(move?.claimIds) ? move.claimIds : [];
+  const moveEdgeIds = Array.isArray(move?.edgeIds) ? move.edgeIds : [];
+
+  return claimIdList.some((claimId) => moveClaimIds.includes(claimId)) || edgeIdList.some((edgeId) => moveEdgeIds.includes(edgeId));
+}
+
+function isChallengeEdge(edge) {
+  return edge?.kind === "challenges" || edge?.kind === "contradicts";
+}
+
+function confidenceTierFor(confidence) {
+  if (confidence >= 75) {
+    return "high";
+  }
+
+  if (confidence >= 50) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+function clampPercent(value) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
 function renderExplorationRows(paths) {
