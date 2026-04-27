@@ -818,6 +818,7 @@ textarea:focus {
 .artifact-card p,
 .artifact-card small,
 .artifact-list p,
+.artifact-list small,
 .verify-card p,
 .verify-card small,
 .verify-evidence p,
@@ -829,6 +830,21 @@ textarea:focus {
 }
 
 .verify-evidence strong {
+  line-height: 1.25;
+}
+
+.shape-list {
+  gap: 9px;
+}
+
+.shape-row {
+  display: grid;
+  gap: 4px;
+  padding-left: 9px;
+  border-left: 3px solid rgba(49, 95, 134, 0.22);
+}
+
+.shape-row strong {
   line-height: 1.25;
 }
 
