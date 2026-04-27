@@ -8,6 +8,7 @@ import {
   claimEdgeKindEnum,
   claimEdges,
   claimKindEnum,
+  claimStatusEnum,
   claims,
   moveKindEnum,
   claimVersions,
@@ -33,10 +34,14 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
 
 test("Penny schema keeps core enum values narrow for the MVP", () => {
   assert.deepEqual(claimKindEnum.enumValues, ["belief", "assumption", "question", "concept"]);
+  assert.ok(claimStatusEnum.enumValues.includes("rejected"));
   assert.deepEqual(claimEdgeKindEnum.enumValues, ["depends_on", "supports", "questions", "challenges", "clarifies"]);
   assert.ok(moveKindEnum.enumValues.includes("seed_claim_created"));
   assert.ok(moveKindEnum.enumValues.includes("assumptions_extracted"));
   assert.ok(moveKindEnum.enumValues.includes("first_challenge_suggested"));
+  assert.ok(moveKindEnum.enumValues.includes("assumption_confirmed"));
+  assert.ok(moveKindEnum.enumValues.includes("assumption_rejected"));
+  assert.ok(moveKindEnum.enumValues.includes("assumption_refined"));
   assert.deepEqual(artifactKindEnum.enumValues, ["idea_map", "challenge_brief"]);
 });
 
