@@ -821,7 +821,7 @@ textarea:focus {
 .verify-card p,
 .verify-card small,
 .verify-evidence p,
-.verify-evidence small,
+.verify-evidence a,
 .verify-note p {
   margin: 0;
   color: var(--muted);
@@ -832,26 +832,22 @@ textarea:focus {
   line-height: 1.25;
 }
 
-.verify-decision {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+.verify-quote {
+  padding-left: 9px;
+  border-left: 3px solid rgba(15, 118, 110, 0.22);
 }
 
-.verify-decision button {
-  min-height: 32px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--ink);
-  background: var(--field);
+.verify-evidence a {
+  width: max-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-size: 0.78rem;
   font-weight: 900;
+  text-decoration: none;
 }
 
-.verify-decision button:disabled {
-  cursor: default;
-  border-color: rgba(15, 118, 110, 0.42);
-  background: #e5efe8;
+.verify-evidence a:hover {
+  text-decoration: underline;
 }
 
 .tag {
