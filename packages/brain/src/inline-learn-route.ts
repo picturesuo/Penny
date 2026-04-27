@@ -424,7 +424,7 @@ async function persistSavedInlineLearn(
       .values({
         claimId: conceptClaim.id,
         sourceId: prelude.target.claim.sourceId,
-        content: `${output.term}: ${output.explanation}`,
+        content: conceptVersionContent(output),
         status: "exploratory",
         confidence: conceptClaim.confidence,
         isCurrent: true,
@@ -651,6 +651,15 @@ function teachesEdgeSlice(edge: typeof claimEdges.$inferSelect): PersistedTeache
     status: edge.status,
     label: edge.label,
   };
+}
+
+function conceptVersionContent(output: InlineLearnOutput): string {
+  return [
+    `${output.term}: ${output.explanation}`,
+    `Why it matters here: ${output.whyItMattersHere}`,
+    `Example: ${output.example}`,
+    `Related concepts: ${output.relatedConcepts.join(", ")}`,
+  ].join("\n");
 }
 
 async function generateStructuredInlineLearn(request: Parameters<InlineLearnGenerateText>[0]): Promise<{ output: unknown }> {
