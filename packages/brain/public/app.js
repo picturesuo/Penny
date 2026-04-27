@@ -242,14 +242,14 @@ async function saveInlineLearn(body) {
 }
 
 async function createArtifact(sessionId) {
-  const response = await fetch("/brain/artifact", {
+  const response = await fetch(`/brain/session/${encodeURIComponent(sessionId)}/artifact`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-user-id": "dev-user",
       "x-project-id": "dev-project",
     },
-    body: JSON.stringify({ sessionId }),
+    body: JSON.stringify({ kind: "challenge_brief" }),
   });
   const payload = await readJsonResponse(response);
 
@@ -257,7 +257,7 @@ async function createArtifact(sessionId) {
     const issues = Array.isArray(payload?.error?.issues) ? ` ${payload.error.issues.join(" ")}` : "";
     const message = payload?.error?.message
       ? `${payload.error.message}${issues}`
-      : `POST /brain/artifact failed with ${response.status}.`;
+      : `POST /brain/session/${sessionId}/artifact failed with ${response.status}.`;
     throw new Error(message);
   }
 
@@ -298,7 +298,7 @@ function renderEmptyState() {
   setText(elements.artifactStatus, "Not compiled");
   if (elements.artifactCreate) {
     elements.artifactCreate.disabled = true;
-    elements.artifactCreate.textContent = "Compile Brief";
+    elements.artifactCreate.textContent = "Generate Challenge Brief";
   }
   setThinking(false);
   renderThoughtMap([], []);
@@ -1030,19 +1030,19 @@ function applyInlineLearnSave(saved) {
 
 async function handleArtifactCreate() {
   if (!state.data?.session?.id) {
-    setStatus("Create a graph before compiling an artifact.", true);
+    setStatus("Create a graph before generating a Challenge Brief.", true);
     return;
   }
 
   state.artifactCreating = true;
   renderCockpit(state.data);
-  setThinking(true, "Compiling");
-  setStatus("Compiling artifact.");
+  setThinking(true, "Generating brief");
+  setStatus("Generating Challenge Brief.");
 
   try {
     const payload = await createArtifact(state.data.session.id);
     applyArtifact(payload.data);
-    setStatus("Artifact compiled.");
+    setStatus("Challenge Brief generated.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
   } finally {
@@ -1062,6 +1062,10 @@ function applyArtifact(data) {
   if (Array.isArray(state.data?.moves)) {
     state.data.moves = [...state.data.moves, data.move];
   }
+
+  if (data.brainRun) {
+    state.data.brainRun = data.brainRun;
+  }
 }
 
 function renderArtifact(artifact) {
@@ -1069,12 +1073,12 @@ function renderArtifact(artifact) {
 
   if (elements.artifactCreate) {
     elements.artifactCreate.disabled = state.artifactCreating || !state.data?.session?.id;
-    elements.artifactCreate.textContent = state.artifactCreating ? "Compiling" : "Compile Brief";
+    elements.artifactCreate.textContent = state.artifactCreating ? "Generating" : "Generate Challenge Brief";
   }
 
   if (!artifact) {
     setText(elements.artifactStatus, state.data?.session?.id ? "Ready" : "Not compiled");
-    append(elements.artifactBrief, textOnly("Compile the current session into an Idea Map + Challenge Brief."));
+    append(elements.artifactBrief, textOnly("Generate the current session's Challenge Brief from persisted Brain state."));
     return;
   }
 
