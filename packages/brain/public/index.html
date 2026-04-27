@@ -9,24 +9,20 @@
   <body>
     <div class="app-shell">
       <header class="top-nav">
-        <div class="brand-lockup">
-          <div class="brand-mark" aria-hidden="true"></div>
-          <div>
-            <p class="eyebrow">Penny</p>
-            <h1>Brain</h1>
-          </div>
+        <div class="brand-lockup" aria-label="Penny">
+          <div class="brand-mark" aria-hidden="true">P</div>
+          <strong>Penny</strong>
         </div>
-        <nav aria-label="Modes" class="mode-tabs">
+        <nav aria-label="Brain cockpit" class="mode-tabs">
           <button class="mode-tab active" type="button">Brain</button>
-          <button class="mode-tab" type="button">Challenge</button>
-          <button class="mode-tab" type="button">Makes Cents</button>
+          <button class="mode-tab" type="button">Cents</button>
+          <button class="mode-tab" type="button">Check</button>
+          <button class="mode-tab icon-tab" type="button" aria-label="Search">Search</button>
+          <button class="mode-tab icon-tab" type="button" aria-label="Settings">Settings</button>
         </nav>
         <div class="session-strip">
           <span id="sessionStatus">No session</span>
-          <label class="mock-toggle">
-            <input id="mockMode" type="checkbox" />
-            <span>Mock</span>
-          </label>
+          <span id="thinkingIndicator" class="thinking-indicator">Ready</span>
         </div>
       </header>
 
@@ -38,7 +34,7 @@
               <span id="mapCount">0 claims</span>
             </div>
             <div id="thoughtMap" class="thought-map empty-state">
-              <p>Enter a raw idea to create the first map.</p>
+              <p>What's on your mind?</p>
             </div>
           </section>
 
@@ -66,26 +62,24 @@
               <p class="eyebrow">Current Exploration</p>
               <span id="sourceKind">Raw idea</span>
             </div>
-            <h2 id="currentClaim">What is the raw thought?</h2>
+            <h2 id="currentClaim">What's on your mind?</h2>
             <p id="keyInsight" class="insight-copy">
-              Penny will turn the idea into claims, assumptions, typed edges, a challenge, and artifacts.
+              Enter one raw idea. Penny will extract assumptions, return typed graph edges, and surface the first challenge.
             </p>
           </section>
 
-          <section class="surface challenge-surface">
+          <section class="surface exploration-surface">
             <div class="section-heading">
-              <p class="eyebrow">Challenge</p>
-              <span id="failureType">Waiting</span>
+              <p class="eyebrow">Exploration Rows</p>
+              <span id="explorationCount">0 paths</span>
             </div>
-            <h3 id="weakestPart">No challenge yet.</h3>
-            <p id="challengeText" class="challenge-copy">
-              The weakest load-bearing part appears after the first seed.
-            </p>
-            <div id="responseOptions" class="response-options"></div>
+            <div id="explorationRows" class="exploration-rows">
+              <p class="quiet">Exploration paths appear here as structured rows after the first seed.</p>
+            </div>
           </section>
 
           <form id="seedForm" class="command-form">
-            <label for="rawIdea">Command</label>
+            <label for="rawIdea">What's on your mind?</label>
             <div class="command-row">
               <textarea
                 id="rawIdea"
@@ -94,7 +88,7 @@
                 maxlength="4000"
                 placeholder="Penny should reduce cognitive load while students study complex material."
               ></textarea>
-              <button id="seedSubmit" type="submit">Seed Brain</button>
+              <button id="seedSubmit" type="submit">Explore</button>
             </div>
             <p id="formStatus" class="form-status">Ready</p>
           </form>
@@ -104,10 +98,16 @@
           <section class="surface insight-surface">
             <div class="section-heading">
               <p class="eyebrow">Penny Insight</p>
+              <span id="insightFailureType">Waiting</span>
             </div>
             <p id="pennyInsight" class="insight-copy">
-              The first useful output should be structure, not a longer answer.
+              The first challenge will appear here after Penny has a graph slice to inspect.
             </p>
+            <h3 id="insightTarget">No challenge yet.</h3>
+            <p id="insightChallenge" class="challenge-copy">
+              Submit one idea to reveal the weakest load-bearing part.
+            </p>
+            <div id="responseOptions" class="response-options"></div>
           </section>
 
           <section class="surface learn-surface">
@@ -118,22 +118,6 @@
             <div id="learnList" class="stack-list">
               <p class="quiet">Contextual explanations appear when the seed exposes a confusing term.</p>
             </div>
-          </section>
-
-          <section class="surface compact-surface">
-            <div class="section-heading">
-              <p class="eyebrow">Artifacts</p>
-              <span id="artifactCount">0</span>
-            </div>
-            <div id="artifactList" class="stack-list"></div>
-          </section>
-
-          <section class="surface compact-surface">
-            <div class="section-heading">
-              <p class="eyebrow">Moves</p>
-              <span id="moveCount">0</span>
-            </div>
-            <div id="moveList" class="stack-list"></div>
           </section>
         </aside>
       </main>
