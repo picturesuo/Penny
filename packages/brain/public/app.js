@@ -2261,6 +2261,7 @@ async function handleInlineLearn(term) {
       localContext: target.text,
       saved: false,
     };
+    await refreshSessionMoves();
     setStatus("Makes Cents explanation ready.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
