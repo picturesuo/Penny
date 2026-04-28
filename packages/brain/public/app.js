@@ -436,7 +436,7 @@ function renderEmptyState() {
   setText(elements.keyInsight, "Enter one raw idea. Penny will extract assumptions, return typed graph edges, and surface the first challenge.");
   setText(elements.pennyInsight, "The first challenge will appear here after Penny has a graph slice to inspect.");
   setText(elements.failureType, "Waiting");
-  setText(elements.weakestPart, "No challenge yet.");
+  setText(elements.weakestPart, "Weakest assumption will appear here.");
   setText(elements.challengeText, "Submit one idea to reveal the weakest load-bearing part.");
   setText(elements.mapCount, "0 claims");
   setText(elements.movesCount, "0 moves");
@@ -1935,19 +1935,28 @@ function moveAffectedLabel(move) {
 function renderPennyInsight(challenge, targetClaim) {
   const challengeTarget = targetClaim ?? findClaimById(challenge?.targetClaimId);
   const strength = challenge?.strength ? ` / ${formatLabel(challenge.strength)}` : "";
+  const isChallengeSuggestion = Boolean(challenge?.targetClaimId && !challenge?.challengeEdgeId);
 
   setText(elements.pennyInsight, challengeTarget?.text ?? challenge?.weakestPart ?? "The first challenge will appear here.");
   setText(elements.failureType, `${formatLabel(challenge?.failureType ?? "waiting")}${strength}`);
-  setText(elements.weakestPart, challenge?.weakestPart ?? "No challenge yet.");
+  setText(
+    elements.weakestPart,
+    isChallengeSuggestion ? "Weakest assumption detected -> Challenge this?" : challenge?.weakestPart ?? "Weakest assumption will appear here.",
+  );
   setText(elements.challengeText, challenge?.challenge ?? "Submit one idea to reveal the weakest load-bearing part.");
-  renderInsightActions(challenge);
+  renderInsightActions(challenge, challengeTarget);
 }
 
-function renderInsightActions(challenge) {
+function renderInsightActions(challenge, challengeTarget = null) {
   replaceChildren(elements.responseOptions);
 
   append(elements.responseOptions, insightExamples());
   append(elements.responseOptions, relatedConceptChips());
+
+  if (challenge?.targetClaimId && !challenge?.challengeEdgeId) {
+    append(elements.responseOptions, challengeTrigger(challengeTarget));
+    return;
+  }
 
   const options = challenge?.responseOptions ?? [];
 
@@ -1974,6 +1983,24 @@ function renderInsightActions(challenge) {
 
 function renderResponseOptions(challenge) {
   renderInsightActions(challenge);
+}
+
+function challengeTrigger(claim) {
+  const controls = document.createElement("div");
+  controls.className = "decision-options challenge-trigger";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = claim && state.challengingClaimId === claim.id ? "Challenging" : "Challenge this";
+  button.disabled = !claim || state.challengingClaimId === claim?.id;
+  button.addEventListener("click", () => {
+    if (claim) {
+      void handleChallengeIssue(claim);
+    }
+  });
+
+  controls.append(button);
+  return controls;
 }
 
 function insightExamples() {
