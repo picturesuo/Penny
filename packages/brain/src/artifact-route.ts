@@ -225,7 +225,6 @@ export type ArtifactGenerateText = (request: {
   maxRetries: number;
   providerOptions: {
     xai: {
-      reasoningEffort: "medium";
       store: false;
     };
   };
@@ -656,7 +655,6 @@ export function createXaiArtifactProvider(
           maxRetries: 1,
           providerOptions: {
             xai: {
-              reasoningEffort: "medium",
               store: false,
             },
           },

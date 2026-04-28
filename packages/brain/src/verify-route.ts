@@ -124,7 +124,6 @@ export type VerifyGenerateText = (request: {
   tools?: Record<string, unknown> | undefined;
   providerOptions: {
     xai: {
-      reasoningEffort: "medium";
       store: false;
     };
   };
@@ -381,7 +380,6 @@ export function createXaiVerifyProvider(
           maxRetries: 1,
           providerOptions: {
             xai: {
-              reasoningEffort: "medium",
               store: false,
             },
           },

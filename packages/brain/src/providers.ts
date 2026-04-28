@@ -18,7 +18,6 @@ export type BrainSeedGenerateText = (request: {
   maxRetries: number;
   providerOptions: {
     xai: {
-      reasoningEffort: "medium";
       store: false;
     };
   };
@@ -89,7 +88,6 @@ export function createAiSdkXaiBrainSeedProvider(
           maxRetries: 1,
           providerOptions: {
             xai: {
-              reasoningEffort: "medium",
               store: false,
             },
           },

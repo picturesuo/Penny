@@ -76,7 +76,6 @@ export type InlineLearnGenerateText = (request: {
   maxRetries: number;
   providerOptions: {
     xai: {
-      reasoningEffort: "low";
       store: false;
     };
   };
@@ -345,7 +344,6 @@ export function createXaiInlineLearnProvider(
           maxRetries: 1,
           providerOptions: {
             xai: {
-              reasoningEffort: "low",
               store: false,
             },
           },

@@ -404,7 +404,8 @@ test("xAI provider uses AI SDK structured output with the default model", async 
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.system ?? "", /hidden assumptions/i);
   assert.match(calls[0]?.prompt ?? "", /load-bearing assumption/i);
-  assert.equal(calls[0]?.providerOptions.xai.reasoningEffort, "medium");
+  assert.equal(calls[0]?.providerOptions.xai.store, false);
+  assert.equal("reasoningEffort" in (calls[0]?.providerOptions.xai ?? {}), false);
 });
 
 test("xAI provider lets env override the default seed model", () => {

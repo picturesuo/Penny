@@ -88,7 +88,6 @@ export type ChallengeGenerateText = (request: {
   maxRetries: number;
   providerOptions: {
     xai: {
-      reasoningEffort: "medium";
       store: false;
     };
   };
@@ -663,7 +662,6 @@ export function createXaiChallengeProvider(
           maxRetries: 1,
           providerOptions: {
             xai: {
-              reasoningEffort: "medium",
               store: false,
             },
           },
