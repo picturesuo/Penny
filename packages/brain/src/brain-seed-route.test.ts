@@ -103,7 +103,7 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
   assert.deepEqual(payload.data.artifacts, []);
   assert.deepEqual(
     payload.data.moves.map((move) => move.kind),
-    ["seed_claim_created", "assumptions_extracted", "first_challenge_suggested"],
+    ["source.recorded", "seed_claim_created", "assumptions_extracted", "first_challenge_suggested"],
   );
   assert.equal(preparedRun?.operation, "brain.seed");
   assert.equal(preparedRun?.provider, "heuristic");
@@ -249,11 +249,22 @@ function createPersistedSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): 
   const edgeIds = new Map(edges.map((edge) => [edge.seedId, edge.id]));
   const moveSeeds = [
     {
+      id: "move.source_recorded",
+      kind: "source.recorded" as const,
+      summary: "Submitted the raw seed idea as the session source.",
+      claimIds: [],
+      edgeIds: [],
+      sourceIds: [sourceId],
+      sourceSpanIds: [prelude.submittedSourceSpan.id],
+    },
+    {
       id: "move.seed_claim_created",
       kind: "seed_claim_created" as const,
       summary: "Created the stable seed claim and its first current version.",
       claimIds: [requireMappedId(claimIds, seed.seedClaim.id)],
       edgeIds: [],
+      sourceIds: [],
+      sourceSpanIds: [],
     },
     {
       id: "move.assumptions_extracted",
@@ -261,6 +272,8 @@ function createPersistedSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): 
       summary: "Created assumption claims and current versions from the seed extraction.",
       claimIds: seed.assumptions.map((assumption) => requireMappedId(claimIds, assumption.id)),
       edgeIds: Array.from(edgeIds.values()),
+      sourceIds: [],
+      sourceSpanIds: [],
     },
     {
       id: "move.first_challenge_suggested",
@@ -268,6 +281,8 @@ function createPersistedSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): 
       summary: "Suggested the first challenge against the weakest load-bearing claim.",
       claimIds: [requireMappedId(claimIds, seed.firstChallenge.targetClaimId)],
       edgeIds: [],
+      sourceIds: [],
+      sourceSpanIds: [],
     },
   ];
   const persistedMoves = moveSeeds.map((move, index) => ({
@@ -279,6 +294,8 @@ function createPersistedSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): 
     payload: {
       claimIds: move.claimIds,
       edgeIds: move.edgeIds,
+      sourceIds: move.sourceIds,
+      sourceSpanIds: move.sourceSpanIds,
     },
     createdAt: now,
   }));
