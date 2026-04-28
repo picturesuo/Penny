@@ -269,6 +269,7 @@ button:disabled {
 .compact-surface,
 .learn-surface,
 .verify-surface,
+.history-surface,
 .insight-surface,
 .artifact-surface,
 .exploration-surface,
@@ -755,7 +756,8 @@ button:disabled {
 .stack-list,
 .quick-select,
 .exploration-rows,
-.stream-body {
+.stream-body,
+.move-timeline {
   display: grid;
   gap: 8px;
   padding: 14px 18px 18px;
@@ -1229,9 +1231,116 @@ textarea:focus,
 
 .learn-surface .stack-list,
 .compact-surface .stack-list,
+.history-surface .move-timeline,
 .verify-surface .stack-list,
 .artifact-surface .stack-list {
   padding: 14px 18px 18px;
+}
+
+.history-surface {
+  max-height: 340px;
+}
+
+.move-timeline {
+  position: relative;
+  overflow: auto;
+}
+
+.move-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 0 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.move-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.move-item::before {
+  content: "";
+  position: absolute;
+  top: 17px;
+  bottom: -1px;
+  left: 7px;
+  width: 1px;
+  background: var(--line);
+}
+
+.move-item:last-child::before {
+  display: none;
+}
+
+.move-dot {
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 3px solid var(--panel);
+  border-radius: 999px;
+  background: var(--navy);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.move-item.actor-user .move-dot {
+  background: var(--teal);
+}
+
+.move-item.actor-penny .move-dot {
+  background: var(--blue);
+}
+
+.move-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.move-copy strong {
+  overflow: hidden;
+  color: var(--navy);
+  font-size: 0.82rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-copy p,
+.move-copy small {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.38;
+}
+
+.move-copy p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.78rem;
+}
+
+.move-copy small {
+  overflow: hidden;
+  font-size: 0.72rem;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-item:focus-visible {
+  outline: 2px solid rgba(49, 95, 134, 0.35);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 .learn-form {
