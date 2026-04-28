@@ -416,9 +416,9 @@ function claimSlice(claim: ClaimRow, version: ClaimVersionRow | undefined) {
     id: claim.id,
     versionId: version?.id ?? null,
     kind: claim.kind,
-    status: version?.status ?? claim.status,
-    text: version?.content ?? claim.text,
-    confidence: version?.confidence ?? claim.confidence,
+    status: version?.status ?? "exploratory",
+    text: version?.content ?? "",
+    confidence: version?.confidence ?? 0,
   };
 }
 
