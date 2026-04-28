@@ -8,6 +8,7 @@ import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
+import { handleSessionMovesRequest } from "./session-moves-route.ts";
 import { handleBrainStreamRequest } from "./stream-route.ts";
 import { handleVerifyRequest } from "./verify-route.ts";
 import { handleSessionWikiRequest } from "./wiki-route.ts";
@@ -107,6 +108,36 @@ const server = createServer(async (incoming, outgoing) => {
       }
 
       await writeWebResponse(outgoing, await handleSessionWikiRequest(request, decodeURIComponent(sessionId)));
+      return;
+    }
+
+    const sessionMovesMatch = /^\/brain\/session\/([^/]+)\/moves$/.exec(url.pathname);
+
+    if (sessionMovesMatch) {
+      const sessionId = sessionMovesMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(
+          outgoing,
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "invalid_session_id",
+                message: "Session moves require a session id.",
+              },
+            }),
+            {
+              status: 400,
+              headers: {
+                "content-type": "application/json; charset=utf-8",
+              },
+            },
+          ),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleSessionMovesRequest(request, decodeURIComponent(sessionId)));
       return;
     }
 
