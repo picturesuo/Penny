@@ -22,6 +22,8 @@ const elements = {
   learnCount: $("#learnCount"),
   learnList: $("#learnList"),
   mapCount: $("#mapCount"),
+  movesCount: $("#movesCount"),
+  movesList: $("#movesList"),
   pennyInsight: $("#pennyInsight"),
   postSeedChrome: document.querySelectorAll("[data-after-seed]"),
   quickSelect: $("#quickSelect"),
@@ -57,7 +59,11 @@ const state = {
   verifyDecision: null,
   verifyingClaimId: null,
   activeClaimDetail: null,
+  activeMoveDetail: null,
   loadingClaimDetailId: null,
+  sessionMoves: null,
+  sessionMovesLoading: false,
+  sessionMovesError: null,
   stream: null,
   streamLoading: false,
   streamError: null,
@@ -90,8 +96,12 @@ elements.form?.addEventListener("submit", async (event) => {
     state.activeVerify = null;
     state.verifyDecision = null;
     state.activeClaimDetail = null;
+    state.activeMoveDetail = null;
+    state.sessionMoves = null;
+    state.sessionMovesError = null;
     closeClaimDrawer();
     renderCockpit(payload.data);
+    void refreshSessionMoves(payload.data?.session?.id);
     setStatus("Graph slice persisted.");
     settledRunLabel = runStatusLabel(payload.data?.brainRun);
   } catch (error) {
@@ -356,6 +366,28 @@ async function runVerify(body) {
   return payload;
 }
 
+async function fetchSessionMoves(sessionId) {
+  const response = await fetch(`/brain/session/${encodeURIComponent(sessionId)}/moves`, {
+    method: "GET",
+    headers: {
+      "x-user-id": "dev-user",
+      "x-project-id": "dev-project",
+    },
+  });
+  const payload = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const message = payload?.error?.message ?? `GET /brain/session/${sessionId}/moves failed with ${response.status}.`;
+    throw new Error(message);
+  }
+
+  if (!payload?.data || !Array.isArray(payload.data.moves)) {
+    throw new Error("Session moves returned an invalid thinking history.");
+  }
+
+  return payload;
+}
+
 async function fetchBrainStream() {
   const response = await fetch("/brain/stream", {
     method: "GET",
@@ -407,6 +439,7 @@ function renderEmptyState() {
   setText(elements.weakestPart, "No challenge yet.");
   setText(elements.challengeText, "Submit one idea to reveal the weakest load-bearing part.");
   setText(elements.mapCount, "0 claims");
+  setText(elements.movesCount, "0 moves");
   setText(elements.laterCount, "0");
   setText(elements.explorationCount, "0 paths");
   setText(elements.learnCount, "0");
@@ -424,6 +457,7 @@ function renderEmptyState() {
   renderLearn([]);
   renderArtifact(null);
   renderVerify(null);
+  renderThinkingHistory();
   renderResponseOptions([]);
   renderStream();
 }
@@ -469,6 +503,40 @@ function renderCockpit(data) {
   renderLearn(learnCandidates);
   renderVerify(state.activeVerify);
   renderArtifact(state.activeArtifact ?? latestArtifact(data.artifacts));
+  renderThinkingHistory();
+}
+
+async function refreshSessionMoves(sessionId = state.data?.session?.id) {
+  if (!sessionId) {
+    state.sessionMoves = null;
+    state.sessionMovesError = null;
+    renderThinkingHistory();
+    return;
+  }
+
+  state.sessionMovesLoading = true;
+  state.sessionMovesError = null;
+  renderThinkingHistory();
+
+  try {
+    const payload = await fetchSessionMoves(sessionId);
+    state.sessionMoves = payload.data;
+    state.sessionMovesError = null;
+
+    if (state.activeMoveDetail?.id) {
+      const refreshedMove = payload.data.moves.find((move) => move.id === state.activeMoveDetail.id);
+
+      if (refreshedMove) {
+        state.activeMoveDetail = refreshedMove;
+        renderMoveDrawer(refreshedMove);
+      }
+    }
+  } catch (error) {
+    state.sessionMovesError = error instanceof Error ? error.message : String(error);
+  } finally {
+    state.sessionMovesLoading = false;
+    renderThinkingHistory();
+  }
 }
 
 async function loadInitialStream() {
@@ -991,6 +1059,7 @@ async function handleVerifyClaim(claim) {
     });
     applyVerify(payload.data);
     await refreshActiveClaimDetail(claim.id);
+    await refreshSessionMoves();
     setStatus("Verify complete.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
@@ -1003,6 +1072,7 @@ async function handleVerifyClaim(claim) {
 
 async function handleClaimInspect(claim) {
   state.loadingClaimDetailId = claim.id;
+  state.activeMoveDetail = null;
   if (state.activeClaimDetail?.claim?.id !== claim.id) {
     state.activeClaimDetail = null;
   }
@@ -1049,6 +1119,7 @@ async function handleChallengeIssue(claim) {
     const payload = await issueChallenge(claim.id);
     applyIssuedChallenge(payload.data);
     await refreshActiveClaimDetail(claim.id);
+    await refreshSessionMoves();
     setStatus("Challenge issued.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
@@ -1074,6 +1145,7 @@ async function handleAssumptionAction(claim, action) {
     const payload = await respondToAssumption(claim.id, body);
     applyAssumptionResponse(payload.data);
     await refreshActiveClaimDetail(claim.id);
+    await refreshSessionMoves();
     setStatus(`${formatLabel(action)} saved.`);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
@@ -1769,6 +1841,97 @@ function quickSelectGuide() {
   return guide;
 }
 
+function renderThinkingHistory() {
+  replaceChildren(elements.movesList);
+
+  if (!elements.movesList) {
+    return;
+  }
+
+  if (!state.data?.session?.id) {
+    setText(elements.movesCount, "0 moves");
+    append(elements.movesList, textOnly("Moves from this session appear here."));
+    return;
+  }
+
+  if (state.sessionMovesLoading && !state.sessionMoves) {
+    setText(elements.movesCount, "Loading");
+    append(elements.movesList, textOnly("Loading thinking history from DB."));
+    return;
+  }
+
+  if (state.sessionMovesError && !state.sessionMoves) {
+    setText(elements.movesCount, "Unavailable");
+    append(elements.movesList, textOnly(state.sessionMovesError));
+    return;
+  }
+
+  const moves = state.sessionMoves?.moves ?? [];
+  setText(elements.movesCount, `${moves.length} ${moves.length === 1 ? "move" : "moves"}`);
+
+  if (moves.length === 0) {
+    append(elements.movesList, textOnly("No persisted moves returned for this session."));
+    return;
+  }
+
+  for (const move of moves) {
+    append(elements.movesList, moveTimelineItem(move));
+  }
+}
+
+function moveTimelineItem(move) {
+  const item = document.createElement("button");
+  item.type = "button";
+  item.className = ["move-item", `actor-${String(move.actor ?? "Penny").toLowerCase()}`].join(" ");
+
+  const dot = document.createElement("span");
+  dot.className = "move-dot";
+  dot.setAttribute("aria-hidden", "true");
+
+  const copy = document.createElement("span");
+  copy.className = "move-copy";
+
+  const title = document.createElement("strong");
+  title.textContent = `${formatLabel(move.type)} / ${move.actor ?? "Penny"}`;
+
+  const summary = document.createElement("p");
+  summary.textContent = move.summary;
+
+  const meta = document.createElement("small");
+  const affected = moveAffectedLabel(move);
+  meta.textContent = [formatDate(move.createdAt), affected].filter(Boolean).join(" / ");
+
+  copy.append(title, summary, meta);
+  item.append(dot, copy);
+  item.addEventListener("click", () => {
+    openMoveDrawer(move);
+  });
+
+  return item;
+}
+
+function moveAffectedLabel(move) {
+  const claim = move.affectedClaim ?? move.details?.relatedClaim;
+
+  if (claim?.text) {
+    return `${formatLabel(claim.kind)} ${shortId(claim.id)}`;
+  }
+
+  if (move.affectedEdge?.id) {
+    return `${formatLabel(move.affectedEdge.kind)} ${shortId(move.affectedEdge.id)}`;
+  }
+
+  if (move.details?.source?.id) {
+    return `${formatLabel(move.details.source.kind)} ${shortId(move.details.source.id)}`;
+  }
+
+  if (move.details?.brainRun?.id) {
+    return `${formatLabel(move.details.brainRun.operation)} ${shortId(move.details.brainRun.id)}`;
+  }
+
+  return "";
+}
+
 function renderPennyInsight(challenge, targetClaim) {
   const challengeTarget = targetClaim ?? findClaimById(challenge?.targetClaimId);
   const strength = challenge?.strength ? ` / ${formatLabel(challenge.strength)}` : "";
@@ -1886,6 +2049,7 @@ async function handleChallengeResponse(challenge, option) {
     const payload = await respondToChallenge(body);
     applyChallengeResponse(payload.data);
     await refreshActiveClaimDetail(challenge.targetClaimId);
+    await refreshSessionMoves();
     setStatus(`${option} saved.`);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
@@ -2130,6 +2294,7 @@ async function handleSaveInlineLearn() {
     });
     applyInlineLearnSave(payload.data.saved);
     await refreshActiveClaimDetail(state.activeLearn.currentClaimId);
+    await refreshSessionMoves();
     state.activeLearn = {
       ...state.activeLearn,
       saved: true,
@@ -2168,6 +2333,7 @@ async function handleArtifactCreate() {
     const payload = await createArtifact(state.data.session.id);
     applyArtifact(payload.data);
     await refreshActiveClaimDetail(activeClaimId);
+    await refreshSessionMoves();
     setStatus("Challenge Brief generated.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error), true);
@@ -2489,6 +2655,15 @@ function coreLoopComplete() {
   return Boolean(state.activeArtifact ?? latestArtifact(state.data?.artifacts));
 }
 
+function openMoveDrawer(move) {
+  state.activeMoveDetail = move;
+  state.activeClaimDetail = null;
+  setText(elements.claimDrawerTitle, `${formatLabel(move.type)} ${shortId(move.id)}`);
+  openClaimDrawer();
+  renderMoveDrawer(move);
+  renderCockpit(state.data);
+}
+
 function openClaimDrawer() {
   elements.claimDrawer?.classList.add("open");
   elements.claimDrawer?.setAttribute("aria-hidden", "false");
@@ -2500,6 +2675,7 @@ function openClaimDrawer() {
 
 function closeClaimDrawer() {
   state.activeClaimDetail = null;
+  state.activeMoveDetail = null;
   state.loadingClaimDetailId = null;
   elements.claimDrawer?.classList.remove("open");
   elements.claimDrawer?.setAttribute("aria-hidden", "true");
@@ -2564,6 +2740,157 @@ function renderClaimDrawer(detail) {
       "No artifacts reference this claim yet.",
     ),
   );
+}
+
+function renderMoveDrawer(move) {
+  const details = move.details ?? {};
+  const affected = move.affected ?? {};
+  const affectedVersions = affected.versions ?? [];
+  const affectedEdges = affected.edges ?? [];
+  const affectedClaims = affected.claims ?? [];
+
+  setText(elements.claimDrawerTitle, `${formatLabel(move.type)} ${shortId(move.id)}`);
+  replaceChildren(
+    elements.claimDrawerContent,
+    detailSection("What Changed", [moveWhatChangedCard(move)]),
+    detailSection(
+      "Old Version",
+      details.oldVersion ? [versionCard(details.oldVersion, false)] : [],
+      "No old version was attached to this move.",
+    ),
+    detailSection(
+      "New Version",
+      details.newVersion ? [versionCard(details.newVersion, details.newVersion.isCurrent || details.newVersion.state === "current")] : [],
+      "No new version was attached to this move.",
+    ),
+    detailSection(
+      "Related Claim",
+      [details.relatedClaim, ...affectedClaims].filter(Boolean).slice(0, 3).map(moveClaimCard),
+      "No related claim was attached to this move.",
+    ),
+    detailSection(
+      "Affected Versions",
+      affectedVersions.map((version) => versionCard(version, version.isCurrent || version.state === "current")),
+      "No affected versions returned.",
+    ),
+    detailSection(
+      "Affected Edges",
+      [move.affectedEdge, ...affectedEdges].filter(Boolean).slice(0, 3).map(moveEdgeCard),
+      "No affected edges returned.",
+    ),
+    detailSection("Source", details.source ? [moveSourceCard(details.source, details.sourceSpan)] : [], "No source was attached."),
+    detailSection("BrainRun", details.brainRun ? [brainRunCard(details.brainRun)] : [], "No BrainRun was attached."),
+    detailSection("Payload Preview", [payloadPreviewCard(move.payloadPreview)], "No payload preview returned."),
+  );
+}
+
+function moveWhatChangedCard(move) {
+  const card = document.createElement("article");
+  card.className = "detail-card move";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = `${formatLabel(move.type)} / ${move.actor ?? "Penny"}`;
+
+  const summary = document.createElement("p");
+  summary.textContent = move.details?.whatChanged ?? move.summary;
+
+  const meta = document.createElement("small");
+  meta.textContent = `${formatDate(move.createdAt)} / ${shortId(move.id)}`;
+
+  card.append(tag, summary, meta);
+  return card;
+}
+
+function moveClaimCard(claim) {
+  const card = document.createElement("article");
+  card.className = "detail-card connection";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = `${formatLabel(claim.kind)} / ${formatLabel(claim.status)} / ${claim.confidence}%`;
+
+  const text = document.createElement("p");
+  text.textContent = claim.text;
+
+  const meta = document.createElement("small");
+  meta.textContent = `${shortId(claim.id)}${claim.versionId ? ` / version ${shortId(claim.versionId)}` : ""}`;
+
+  card.append(tag, text, meta);
+  return card;
+}
+
+function moveEdgeCard(edge) {
+  const card = document.createElement("article");
+  card.className = "detail-card connection";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = `${formatLabel(edge.kind)} / ${formatLabel(edge.status)}`;
+
+  const text = document.createElement("p");
+  text.textContent = edge.label ?? `${shortId(edge.fromClaimId)} -> ${shortId(edge.toClaimId)}`;
+
+  const meta = document.createElement("small");
+  meta.textContent = `${shortId(edge.id)} / ${formatDate(edge.createdAt)}`;
+
+  card.append(tag, text, meta);
+  return card;
+}
+
+function moveSourceCard(source, sourceSpan) {
+  const card = document.createElement("article");
+  card.className = "detail-card provenance";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = sourceSpan
+    ? `${formatLabel(source.kind)} / ${sourceSpan.label ?? "Source Span"}`
+    : formatLabel(source.kind);
+
+  const text = document.createElement("p");
+  text.textContent = source.rawText;
+
+  const meta = document.createElement("small");
+  meta.textContent = sourceSpan
+    ? `${shortId(source.id)} / span ${shortId(sourceSpan.id)} / ${sourceSpan.startOffset}-${sourceSpan.endOffset}`
+    : `${shortId(source.id)} / ${formatDate(source.createdAt)}`;
+
+  card.append(tag, text, meta);
+  return card;
+}
+
+function brainRunCard(run) {
+  const card = document.createElement("article");
+  card.className = "detail-card move";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = `${formatLabel(run.operation)} / ${formatLabel(run.status)}`;
+
+  const summary = document.createElement("p");
+  summary.textContent = [run.provider, run.model].filter(Boolean).join(" / ") || "No provider metadata returned.";
+
+  const meta = document.createElement("small");
+  meta.textContent = `${shortId(run.id)} / ${formatDate(run.createdAt)}${run.completedAt ? ` / completed ${formatDate(run.completedAt)}` : ""}`;
+
+  card.append(tag, summary, meta);
+  return card;
+}
+
+function payloadPreviewCard(preview) {
+  const card = document.createElement("article");
+  card.className = "detail-card move";
+
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = "Payload";
+
+  const text = document.createElement("p");
+  text.textContent = payloadPreviewText(preview);
+
+  card.append(tag, text);
+  return card;
 }
 
 function detailSection(label, children, emptyText = "None") {
@@ -2758,6 +3085,20 @@ function movePayloadSummary(move) {
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join(" / ") : "";
+}
+
+function payloadPreviewText(preview) {
+  if (!preview || typeof preview !== "object") {
+    return "No payload preview returned.";
+  }
+
+  const parts = Object.entries(preview).map(([key, value]) => {
+    const displayValue = Array.isArray(value) ? value.join(", ") : String(value);
+
+    return `${formatLabel(key)}: ${displayValue}`;
+  });
+
+  return parts.length > 0 ? parts.join(" / ") : "No payload preview returned.";
 }
 
 function currentLearnTarget() {
