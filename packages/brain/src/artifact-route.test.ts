@@ -15,6 +15,7 @@ import {
   type ArtifactRequest,
   type SessionArtifactContext,
 } from "./artifact-route.ts";
+import { BrainRunGuardError } from "./brain-run-guard.ts";
 
 test("POST /brain/artifact validates the session request before compilation", async () => {
   let compiled = false;
@@ -41,6 +42,7 @@ test("POST /brain/artifact returns the persisted artifact row and artifact_creat
   const context = sampleContext(sessionId);
   const output = await generateArtifactOutput({ ...context, requestedKind: "challenge_brief" }, {
     provider: createHeuristicArtifactProvider(),
+    brainRunId: uuidAt(800),
   });
   const response = await handleArtifactRequest(request("http://localhost/brain/artifact", { sessionId }), {
     async compileArtifact(input) {
@@ -105,6 +107,7 @@ test("POST /brain/session/:sessionId/artifact uses the path session id", async (
   const context = sampleContext(sessionId);
   const output = await generateArtifactOutput({ ...context, requestedKind: "challenge_brief" }, {
     provider: createHeuristicArtifactProvider(),
+    brainRunId: uuidAt(800),
   });
   const response = await handleSessionArtifactRequest(
     request(`http://localhost/brain/session/${sessionId}/artifact`, { kind: "challenge_brief" }),
@@ -156,6 +159,7 @@ test("artifact compiler output is grounded in session state and rejects generic 
   const context = sampleContext();
   const output = await generateArtifactOutput({ ...context, requestedKind: "challenge_brief" }, {
     provider: createHeuristicArtifactProvider(),
+    brainRunId: uuidAt(800),
   });
   const payload = buildCompiledArtifactPayload(context, output, uuidAt(800));
 
@@ -185,6 +189,21 @@ test("artifact compiler output is grounded in session state and rejects generic 
       ),
     (error) => {
       assert.ok(error instanceof ArtifactGenerationError);
+      return true;
+    },
+  );
+});
+
+test("generateArtifactOutput requires a recorded BrainRun id", async () => {
+  await assert.rejects(
+    () =>
+      generateArtifactOutput(
+        { ...sampleContext(), requestedKind: "challenge_brief" },
+        { provider: createHeuristicArtifactProvider() },
+      ),
+    (error) => {
+      assert.ok(error instanceof BrainRunGuardError);
+      assert.match(error.message, /brain\.artifact\.challenge_brief/);
       return true;
     },
   );
@@ -326,7 +345,6 @@ function claim(
     confidence,
     sourceId: uuidAt(150),
     createdAt: now(),
-    updatedAt: now(),
   };
 }
 
@@ -335,6 +353,8 @@ function version(id: string, claimId: string, content: string, confidence: numbe
     id,
     claimId,
     sourceId: uuidAt(150),
+    brainRunId: uuidAt(800),
+    moveId: null,
     content,
     status: "exploratory" as const,
     confidence,

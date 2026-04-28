@@ -160,24 +160,22 @@ function claim(
   confidence: number,
 ) {
   return {
-    id,
-    sessionId,
-    sourceId: null,
-    kind,
-    status: "exploratory" as const,
-    text,
-    confidence,
-    createdAt: at(2),
-    updatedAt: at(2),
-  };
+	    id,
+	    sessionId,
+	    sourceId: null,
+	    kind,
+	    createdAt: at(2),
+	  };
 }
 
 function version(id: string, claimId: string, content: string, confidence: number) {
   return {
-    id,
-    claimId,
-    sourceId: null,
-    content,
+	    id,
+	    claimId,
+	    sourceId: null,
+	    brainRunId: uuidAt(701),
+	    moveId: null,
+	    content,
     status: "exploratory" as const,
     confidence,
     isCurrent: true,

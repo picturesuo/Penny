@@ -19,6 +19,7 @@ import {
   type InlineLearnRequest,
   type InlineLearnSaveRequest,
 } from "./inline-learn-route.ts";
+import { BrainRunGuardError } from "./brain-run-guard.ts";
 
 test("POST /brain/learn/inline validates requests before running Learn", async () => {
   let learned = false;
@@ -227,6 +228,7 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
   };
   const heuristic = await generateInlineLearnOutput(input, {
     provider: createHeuristicInlineLearnProvider(),
+    brainRunId: uuidAt(701),
   });
   const calls: Parameters<InlineLearnGenerateText>[0][] = [];
   const generateText: InlineLearnGenerateText = async (request) => {
@@ -245,6 +247,7 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
   };
   const xai = await generateInlineLearnOutput(input, {
     provider: createXaiInlineLearnProvider({ XAI_API_KEY: "test-key" }, { generateText }),
+    brainRunId: uuidAt(702),
   });
 
   assert.equal(heuristic.term, "scope");
@@ -254,6 +257,28 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
   assert.equal(resolveXaiInlineLearnModel({}), defaultXaiInlineLearnModel);
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.prompt ?? "", /Local context/);
+});
+
+test("generateInlineLearnOutput requires a recorded BrainRun id", async () => {
+  await assert.rejects(
+    () =>
+      generateInlineLearnOutput(
+        {
+          term: "scope",
+          currentClaimId: uuidAt(101),
+          sessionId: uuidAt(100),
+          localContext: "The claim may only apply to novice users.",
+          currentClaimText: "The assistant improves learning outcomes for novice users.",
+          currentClaimKind: "assumption",
+        },
+        { provider: createHeuristicInlineLearnProvider() },
+      ),
+    (error) => {
+      assert.ok(error instanceof BrainRunGuardError);
+      assert.match(error.message, /brain\.learn\.inline/);
+      return true;
+    },
+  );
 });
 
 test("heuristic Inline Learn teaches supported concepts instead of generic meta-definitions", async () => {
@@ -268,6 +293,7 @@ test("heuristic Inline Learn teaches supported concepts instead of generic meta-
     },
     {
       provider: createHeuristicInlineLearnProvider(),
+      brainRunId: uuidAt(703),
     },
   );
   const networkEffects = await generateInlineLearnOutput(
@@ -281,6 +307,7 @@ test("heuristic Inline Learn teaches supported concepts instead of generic meta-
     },
     {
       provider: createHeuristicInlineLearnProvider(),
+      brainRunId: uuidAt(704),
     },
   );
 
@@ -338,6 +365,7 @@ test("inline Learn output parsing and xAI provider failures are explicit", async
         },
         {
           provider: createHeuristicInlineLearnProvider(),
+          brainRunId: uuidAt(705),
         },
       ),
     (error) => {

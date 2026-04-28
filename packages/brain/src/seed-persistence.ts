@@ -137,9 +137,6 @@ export async function persistBrainSeed(
           sessionId: prelude.session.id,
           sourceId: prelude.source.id,
           kind: claim.kind,
-          status: "exploratory" as const,
-          text: claim.text,
-          confidence: claim.confidence,
         })),
       )
       .returning();
@@ -154,6 +151,7 @@ export async function persistBrainSeed(
           seedClaims.map((claim) => ({
             claimId: requireMappedId(claimIds, claim.id, "claimVersion.claimId"),
             sourceId: prelude.source.id,
+            brainRunId: prelude.brainRun.id,
             content: claim.text,
             status: "exploratory" as const,
             confidence: claim.confidence,
@@ -232,6 +230,9 @@ export async function persistBrainSeed(
               seedClaimIds: move.claimIds,
               seedEdgeIds: move.edgeIds,
               claimIds: move.claimIds.map((claimId) => requireMappedId(claimIds, claimId, "move.claimId")),
+              claimVersionIds: move.claimIds.map((claimId) =>
+                requireMappedId(claimVersionIds, claimId, "move.claimVersionId"),
+              ),
               edgeIds: move.edgeIds.map((edgeId) => requireMappedId(edgeIds, edgeId, "move.edgeId")),
             },
           })),

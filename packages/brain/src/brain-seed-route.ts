@@ -42,7 +42,7 @@ export type BrainSeedRouteOptions = {
   provider?: BrainSeedProvider;
   generateSeed?: (
     input: BrainSeedInput,
-    options: { provider?: BrainSeedProvider },
+    options: { provider?: BrainSeedProvider; brainRunId: string },
   ) => Promise<BrainSeedOutput>;
   prepareSeedRun?: (
     input: BrainSeedInput,
@@ -140,7 +140,7 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
       ...dbOption(db),
       run: buildBrainSeedRunInput(seedInput, provider, startedAt),
     });
-    const seed = await generateSeed(seedInput, { provider });
+    const seed = await generateSeed(seedInput, { provider, brainRunId: prelude.brainRun.id });
     const persisted = await persistSeed(seed, { ...dbOption(db), prelude });
 
     return jsonResponse(

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
@@ -212,6 +213,36 @@ export async function persistAssumptionResponse(
     }
 
     const next = nextVersionState(currentVersion, response);
+    const versionId = randomUUID();
+    const moveId = randomUUID();
+    const moveKind = moveKindFor(response.action);
+    const summary = summaryFor(response.action);
+
+    const [move] = await tx
+      .insert(moves)
+      .values({
+        id: moveId,
+        sessionId: claim.sessionId,
+        kind: moveKind,
+        summary,
+        payload: {
+          action: response.action,
+          claimId: claim.id,
+          previousVersionId: currentVersion.id,
+          currentVersionId: versionId,
+          previousStatus: currentVersion.status,
+          currentStatus: next.status,
+          refined: response.action === "refine",
+          claimIds: [claim.id],
+          claimVersionIds: [currentVersion.id, versionId],
+          edgeIds: [],
+        },
+      })
+      .returning();
+
+    if (!move) {
+      throw new AssumptionResponseConflictError("Failed to create assumption response move.");
+    }
 
     await tx
       .update(claimVersions)
@@ -221,8 +252,10 @@ export async function persistAssumptionResponse(
     const [version] = await tx
       .insert(claimVersions)
       .values({
+        id: versionId,
         claimId: claim.id,
         sourceId: currentVersion.sourceId ?? claim.sourceId,
+        moveId: move.id,
         content: next.content,
         status: next.status,
         confidence: next.confidence,
@@ -232,30 +265,6 @@ export async function persistAssumptionResponse(
 
     if (!version) {
       throw new AssumptionResponseConflictError("Failed to create assumption response version.");
-    }
-
-    const moveKind = moveKindFor(response.action);
-    const summary = summaryFor(response.action);
-    const [move] = await tx
-      .insert(moves)
-      .values({
-        sessionId: claim.sessionId,
-        kind: moveKind,
-        summary,
-        payload: {
-          action: response.action,
-          claimId: claim.id,
-          previousVersionId: currentVersion.id,
-          currentVersionId: version.id,
-          previousStatus: currentVersion.status,
-          currentStatus: version.status,
-          refined: response.action === "refine",
-        },
-      })
-      .returning();
-
-    if (!move) {
-      throw new AssumptionResponseConflictError("Failed to create assumption response move.");
     }
 
     return {

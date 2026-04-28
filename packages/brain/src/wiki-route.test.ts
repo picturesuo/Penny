@@ -207,16 +207,12 @@ function claim(
   confidence: number,
 ) {
   return {
-    id,
-    sessionId: uuidAt(100),
-    sourceId,
-    kind,
-    status: "exploratory" as const,
-    text,
-    confidence,
-    createdAt: now(),
-    updatedAt: now(),
-  };
+	    id,
+	    sessionId: uuidAt(100),
+	    sourceId,
+	    kind,
+	    createdAt: now(),
+	  };
 }
 
 function version(
@@ -228,10 +224,12 @@ function version(
   isCurrent: boolean,
 ) {
   return {
-    id,
-    claimId,
-    sourceId,
-    content,
+	    id,
+	    claimId,
+	    sourceId,
+	    brainRunId: uuidAt(701),
+	    moveId: null,
+	    content,
     status: "exploratory" as const,
     confidence,
     isCurrent,

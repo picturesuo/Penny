@@ -248,15 +248,22 @@ export function compileWikiPage(state: WikiCompileState, input: WikiRouteInput):
   const currentVersions = currentVersionsByClaimId(state.claimVersions);
   const claimItems = state.claims.map((claim) => {
     const currentVersion = currentVersions.get(claim.id);
-    const spanIds = sourceSpanIdsForClaim(state.sourceSpans, claim.id, currentVersion?.id);
+
+    if (!currentVersion) {
+      throw new WikiConflictError(`Claim ${claim.id} has no current ClaimVersion.`);
+    }
+
+    const spanIds = sourceSpanIdsForClaim(state.sourceSpans, claim.id, currentVersion.id);
 
     return {
       claimId: claim.id,
       kind: claim.kind,
-      status: currentVersion?.status ?? claim.status,
-      confidence: currentVersion?.confidence ?? claim.confidence,
-      currentVersionId: currentVersion?.id ?? null,
-      text: currentVersion?.content ?? claim.text,
+      status: currentVersion.status,
+      confidence: currentVersion.confidence,
+      currentVersionId: currentVersion.id,
+      text: currentVersion.content,
+      brainRunId: currentVersion.brainRunId,
+      moveId: currentVersion.moveId,
       sourceSpanIds: spanIds,
     };
   });

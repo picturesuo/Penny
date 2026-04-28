@@ -17,6 +17,7 @@ import {
   type VerifyGenerateText,
   type VerifyRequest,
 } from "./verify-route.ts";
+import { BrainRunGuardError } from "./brain-run-guard.ts";
 
 test("POST /brain/verify validates requests before running Verify", async () => {
   let verified = false;
@@ -218,6 +219,7 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
   };
   const heuristic = await generateVerifyOutput(input, {
     provider: createHeuristicVerifyProvider(),
+    brainRunId: uuidAt(701),
   });
   const calls: Parameters<VerifyGenerateText>[0][] = [];
   const generateText: VerifyGenerateText = async (request) => {
@@ -252,6 +254,7 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
   };
   const xai = await generateVerifyOutput(input, {
     provider: createXaiVerifyProvider({ XAI_API_KEY: "test-key" }, { generateText }),
+    brainRunId: uuidAt(702),
   });
 
   assert.equal(heuristic.verdict, "not_enough_evidence");
@@ -263,6 +266,28 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
   assert.equal(calls.length, 1);
   assert.ok(calls[0]?.tools?.web_search);
   assert.match(calls[0]?.prompt ?? "", /Current claim text/);
+});
+
+test("generateVerifyOutput requires a recorded BrainRun id", async () => {
+  await assert.rejects(
+    () =>
+      generateVerifyOutput(
+        {
+          claimId: uuidAt(101),
+          sessionId: uuidAt(100),
+          currentClaimText: "Cognitive load is the first bottleneck to test.",
+          currentClaimKind: "assumption",
+          currentClaimStatus: "exploratory",
+          currentClaimConfidence: 64,
+        },
+        { provider: createHeuristicVerifyProvider() },
+      ),
+    (error) => {
+      assert.ok(error instanceof BrainRunGuardError);
+      assert.match(error.message, /verify_run/);
+      return true;
+    },
+  );
 });
 
 test("verify output parsing can fall back to provider source cards", () => {

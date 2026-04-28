@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claimVersions, claims, moves } from "./db/schema.ts";
+import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 import { flattenIssues } from "./schema.ts";
 
 export const InlineLearnRequestSchema = z
@@ -241,7 +243,10 @@ export async function runInlineLearn(
   const prelude = await createInlineLearnPrelude(db, input, provider);
 
   try {
-    const output = await generateInlineLearnOutput(learnGenerationInput(prelude.target, input), { provider });
+    const output = await generateInlineLearnOutput(learnGenerationInput(prelude.target, input), {
+      provider,
+      brainRunId: prelude.brainRun.id,
+    });
 
     if (input.save) {
       const saved = await persistSavedInlineLearn(db, input, output, prelude);
@@ -270,8 +275,10 @@ export async function runInlineLearn(
 
 export async function generateInlineLearnOutput(
   input: InlineLearnGenerationInput,
-  options: { provider?: InlineLearnProvider } = {},
+  options: { provider?: InlineLearnProvider } & BrainRunGuardOptions = {},
 ): Promise<InlineLearnOutput> {
+  requireRecordedBrainRun("brain.learn.inline", options);
+
   const provider = options.provider ?? createDefaultInlineLearnProvider();
   const providerOutput = await provider.generate(input);
 
@@ -490,15 +497,18 @@ async function insertInlineLearnConcept(
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
   brainRunId?: string,
 ): Promise<NonNullable<PersistedInlineLearn["saved"]>> {
+  const conceptClaimId = randomUUID();
+  const conceptVersionId = randomUUID();
+  const teachesEdgeId = randomUUID();
+  const moveId = randomUUID();
+  const conceptConfidence = 70;
   const [conceptClaim] = await tx
     .insert(claims)
     .values({
+      id: conceptClaimId,
       sessionId: input.sessionId,
       sourceId: target.claim.sourceId,
       kind: "concept",
-      status: "exploratory",
-      text: output.term,
-      confidence: 70,
     })
     .returning();
 
@@ -506,25 +516,10 @@ async function insertInlineLearnConcept(
     throw new InlineLearnConflictError("Failed to create inline concept claim.");
   }
 
-  const [conceptVersion] = await tx
-    .insert(claimVersions)
-    .values({
-      claimId: conceptClaim.id,
-      sourceId: target.claim.sourceId,
-      content: conceptVersionContent(output),
-      status: "exploratory",
-      confidence: conceptClaim.confidence,
-      isCurrent: true,
-    })
-    .returning();
-
-  if (!conceptVersion) {
-    throw new InlineLearnConflictError("Failed to create inline concept ClaimVersion.");
-  }
-
   const [teachesEdge] = await tx
     .insert(claimEdges)
     .values({
+      id: teachesEdgeId,
       sessionId: input.sessionId,
       fromClaimId: conceptClaim.id,
       toClaimId: target.claim.id,
@@ -541,6 +536,7 @@ async function insertInlineLearnConcept(
   const [move] = await tx
     .insert(moves)
     .values({
+      id: moveId,
       sessionId: input.sessionId,
       kind: "learning_triggered",
       summary: "Saved an inline Learn concept inside Brain.",
@@ -549,10 +545,11 @@ async function insertInlineLearnConcept(
         currentClaimId: target.claim.id,
         currentClaimVersionId: target.version.id,
         conceptClaimId: conceptClaim.id,
-        conceptClaimVersionId: conceptVersion.id,
+        conceptClaimVersionId: conceptVersionId,
         teachesEdgeId: teachesEdge.id,
         ...(brainRunId ? { brainRunId } : {}),
         claimIds: [target.claim.id, conceptClaim.id],
+        claimVersionIds: [target.version.id, conceptVersionId],
         edgeIds: [teachesEdge.id],
       },
     })
@@ -560,6 +557,25 @@ async function insertInlineLearnConcept(
 
   if (!move) {
     throw new InlineLearnConflictError("Failed to create inline Learn move.");
+  }
+
+  const [conceptVersion] = await tx
+    .insert(claimVersions)
+    .values({
+      id: conceptVersionId,
+      claimId: conceptClaim.id,
+      sourceId: target.claim.sourceId,
+      brainRunId: brainRunId ?? null,
+      moveId: move.id,
+      content: conceptVersionContent(output),
+      status: "exploratory",
+      confidence: conceptConfidence,
+      isCurrent: true,
+    })
+    .returning();
+
+  if (!conceptVersion) {
+    throw new InlineLearnConflictError("Failed to create inline concept ClaimVersion.");
   }
 
   return {

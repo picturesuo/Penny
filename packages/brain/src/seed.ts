@@ -8,11 +8,14 @@ import {
   type BrainSeedOutput,
 } from "./schema.ts";
 import { createDefaultBrainSeedProvider, type BrainSeedProvider } from "./providers.ts";
+import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 
 export async function generateBrainSeed(
   input: unknown,
-  options: { provider?: BrainSeedProvider } = {},
+  options: { provider?: BrainSeedProvider } & BrainRunGuardOptions = {},
 ): Promise<BrainSeedOutput> {
+  requireRecordedBrainRun("brain.seed", options);
+
   const normalizedInput = parseBrainSeedInput(input);
   const provider = options.provider ?? createDefaultBrainSeedProvider();
   const rawOutput = await provider.generate(normalizedInput);

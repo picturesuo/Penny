@@ -187,7 +187,11 @@ export async function loadBrainStream(db: PennyDatabase): Promise<BrainStream> {
 
 export function buildBrainStream(state: StreamState): BrainStream {
   const currentVersions = currentVersionsByClaimId(state.claimVersions);
-  const claimSlices = state.claims.map((claim) => claimSlice(claim, currentVersions.get(claim.id)));
+  const claimSlices = state.claims.flatMap((claim) => {
+    const currentVersion = currentVersions.get(claim.id);
+
+    return currentVersion ? [claimSlice(claim, currentVersion)] : [];
+  });
   const claimsById = new Map(claimSlices.map((claim) => [claim.id, claim]));
   const movesBySessionId = groupBy(state.moves, (move) => move.sessionId);
   const claimsBySessionId = groupBy(claimSlices, (claim) => claim.sessionId);
@@ -288,15 +292,15 @@ export function buildBrainStream(state: StreamState): BrainStream {
   };
 }
 
-function claimSlice(claim: ClaimRow, version: ClaimVersionRow | undefined): StreamClaim {
+function claimSlice(claim: ClaimRow, version: ClaimVersionRow): StreamClaim {
   return {
     id: claim.id,
     sessionId: claim.sessionId,
     kind: claim.kind,
-    status: version?.status ?? claim.status,
-    text: version?.content ?? claim.text,
-    confidence: version?.confidence ?? claim.confidence,
-    versionId: version?.id ?? null,
+    status: version.status,
+    text: version.content,
+    confidence: version.confidence,
+    versionId: version.id,
   };
 }
 

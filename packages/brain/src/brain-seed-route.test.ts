@@ -67,9 +67,12 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
         preparedRun = options.run;
         return createPersistedPrelude(input, options.run);
       },
-      async generateSeed(input) {
+      async generateSeed(input, options) {
         generatedInput = input;
-        return generateBrainSeed(input, { provider: createHeuristicBrainSeedProvider() });
+        return generateBrainSeed(input, {
+          provider: createHeuristicBrainSeedProvider(),
+          brainRunId: options.brainRunId,
+        });
       },
       async persistSeed(seed, options) {
         persistedSeed = seed;
@@ -213,22 +216,20 @@ function createPersistedSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): 
   const claims = seed.thoughtMap.claims.map((claim, index) => ({
     id: uuidAt(201 + index),
     seedId: claim.id,
-    sessionId,
-    sourceId,
-    kind: claim.kind,
-    status: "exploratory" as const,
-    text: claim.text,
-    confidence: claim.confidence,
-    createdAt: now,
-    updatedAt: now,
-  }));
+	    sessionId,
+	    sourceId,
+	    kind: claim.kind,
+	    createdAt: now,
+	  }));
   const claimIds = new Map(claims.map((claim) => [claim.seedId, claim.id]));
   const claimVersions = seed.thoughtMap.claims.map((claim, index) => ({
     id: uuidAt(251 + index),
     seedId: claim.id,
-    claimId: requireMappedId(claimIds, claim.id),
-    sourceId,
-    content: claim.text,
+	    claimId: requireMappedId(claimIds, claim.id),
+	    sourceId,
+	    brainRunId: prelude.brainRun.id,
+	    moveId: null,
+	    content: claim.text,
     status: "exploratory" as const,
     confidence: claim.confidence,
     isCurrent: true,

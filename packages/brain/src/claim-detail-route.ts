@@ -158,7 +158,11 @@ export function buildClaimDetailFromState(state: ClaimDetailState) {
 
   const connectedVersionsByClaimId = currentVersionsByClaimId(state.connectedVersions);
   const connectedClaimsById = new Map(
-    state.connectedClaims.map((claim) => [claim.id, claimSlice(claim, connectedVersionsByClaimId.get(claim.id))]),
+    state.connectedClaims.flatMap((claim) => {
+      const version = connectedVersionsByClaimId.get(claim.id);
+
+      return version ? [[claim.id, claimSlice(claim, version)] as const] : [];
+    }),
   );
   const sourceRowsById = new Map(state.sources.map((source) => [source.id, source]));
   const sourceSpanSlices = state.sourceSpans.map((span) => sourceSpanSlice(span, sourceRowsById.get(span.sourceId)));
@@ -259,18 +263,18 @@ async function loadClaimSourceSpans(
     .orderBy(asc(sourceSpans.createdAt));
 }
 
-function claimSlice(claim: ClaimRow, version: ClaimVersionRow | undefined) {
+function claimSlice(claim: ClaimRow, version: ClaimVersionRow) {
   return {
     id: claim.id,
-    versionId: version?.id ?? null,
+    versionId: version.id,
     sessionId: claim.sessionId,
-    sourceId: version?.sourceId ?? claim.sourceId,
+    sourceId: version.sourceId ?? claim.sourceId,
     kind: claim.kind,
-    status: version?.status ?? claim.status,
-    text: version?.content ?? claim.text,
-    confidence: version?.confidence ?? claim.confidence,
+    status: version.status,
+    text: version.content,
+    confidence: version.confidence,
     createdAt: claim.createdAt.toISOString(),
-    updatedAt: claim.updatedAt.toISOString(),
+    updatedAt: version.createdAt.toISOString(),
   };
 }
 
@@ -279,6 +283,8 @@ function claimVersionSlice(version: ClaimVersionRow) {
     id: version.id,
     claimId: version.claimId,
     sourceId: version.sourceId,
+    brainRunId: version.brainRunId,
+    moveId: version.moveId,
     content: version.content,
     status: version.status,
     confidence: version.confidence,

@@ -4,6 +4,7 @@ import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { artifacts, brainRuns, claimEdges, claimVersions, claims, moves, sessions, sources } from "./db/schema.ts";
+import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 import { flattenIssues } from "./schema.ts";
 
 export const ArtifactRouteRequestSchema = z
@@ -170,12 +171,13 @@ export type SessionArtifactContext = {
     confidence: number;
     sourceId: string | null;
     createdAt: string;
-    updatedAt: string;
   }>;
   claimVersions: Array<{
     id: string;
     claimId: string;
     sourceId: string | null;
+    brainRunId: string | null;
+    moveId: string | null;
     content: string;
     status: "exploratory" | "committed" | "resolved" | "rejected";
     confidence: number;
@@ -333,6 +335,8 @@ type CompiledClaimVersion = {
   id: string;
   claimId: string;
   sourceId: string | null;
+  brainRunId: string | null;
+  moveId: string | null;
   content: string;
   status: ClaimVersionRow["status"];
   confidence: number;
@@ -545,7 +549,7 @@ export async function persistSessionArtifact(
         ...prelude.context,
         requestedKind: input.kind,
       },
-      { provider },
+      { provider, brainRunId: prelude.brainRun.id },
     );
 
     return await persistArtifactOutput(db, prelude, output);
@@ -557,8 +561,10 @@ export async function persistSessionArtifact(
 
 export async function generateArtifactOutput(
   input: ArtifactGenerationInput,
-  options: { provider?: ArtifactProvider } = {},
+  options: { provider?: ArtifactProvider } & BrainRunGuardOptions = {},
 ): Promise<ArtifactOutput> {
+  requireRecordedBrainRun("brain.artifact.challenge_brief", options);
+
   const provider = options.provider ?? createDefaultArtifactProvider();
   const providerOutput = await provider.generate(input);
 
@@ -868,7 +874,6 @@ async function loadSessionArtifactContext(
       confidence: version.confidence,
       sourceId: version.sourceId ?? claim.sourceId,
       createdAt: claim.createdAt.toISOString(),
-      updatedAt: claim.updatedAt.toISOString(),
     };
   });
 
@@ -902,6 +907,8 @@ async function loadSessionArtifactContext(
       id: version.id,
       claimId: version.claimId,
       sourceId: version.sourceId,
+      brainRunId: version.brainRunId,
+      moveId: version.moveId,
       content: version.content,
       status: version.status,
       confidence: version.confidence,
@@ -963,7 +970,7 @@ export function buildArtifactDraft(state: SessionArtifactState): ArtifactDraft {
     .filter((claim) => claim.kind === "concept")
     .map((claim) => compiledLearnedConcept(claim, currentVersions, teachesEdges))
     .filter((concept): concept is CompiledLearnedConcept => Boolean(concept));
-  const unresolvedRisks = buildUnresolvedRisks(state.claims, state.edges, challenges, textByClaimId);
+  const unresolvedRisks = buildUnresolvedRisks(claimSnapshots, state.edges, challenges, textByClaimId);
   const whatChanged = state.moves.map(compiledStateChange);
   const recommendedNextMove = recommendNextMove(unresolvedRisks, claimSnapshots, learnedConcepts);
   const shapes = inferShapesFromMoves(whatChanged);
@@ -1008,6 +1015,8 @@ function compiledClaimVersion(version: ClaimVersionRow): CompiledClaimVersion {
     id: version.id,
     claimId: version.claimId,
     sourceId: version.sourceId,
+    brainRunId: version.brainRunId,
+    moveId: version.moveId,
     content: version.content,
     status: version.status,
     confidence: version.confidence,
@@ -1117,7 +1126,7 @@ function compiledLearnedConcept(
   return {
     claimId: claim.id,
     versionId: version.id,
-    term: claim.text,
+    term: conceptTerm(conceptEdges[0]?.label, version.content),
     explanation: version.content,
     teachesClaimIds,
     edgeIds: conceptEdges.map((edge) => edge.id),
@@ -1125,7 +1134,7 @@ function compiledLearnedConcept(
 }
 
 function buildUnresolvedRisks(
-  sessionClaims: ClaimRow[],
+  sessionClaims: CompiledClaim[],
   edges: EdgeRow[],
   challenges: CompiledChallenge[],
   textByClaimId: Map<string, string>,
@@ -1504,13 +1513,24 @@ function compiledLearnedConcepts(context: SessionArtifactContext): CompiledLearn
       return {
         claimId: claim.id,
         versionId: version.id,
-        term: claim.text,
+        term: conceptTerm(conceptEdges[0]?.label, version.content),
         explanation: version.content,
         teachesClaimIds: conceptEdges.map((edge) => (edge.fromClaimId === claim.id ? edge.toClaimId : edge.fromClaimId)),
         edgeIds: conceptEdges.map((edge) => edge.id),
       };
     })
     .filter((concept): concept is CompiledLearnedConcept => Boolean(concept));
+}
+
+function conceptTerm(edgeLabel: string | null | undefined, content: string): string {
+  if (edgeLabel?.trim()) {
+    return edgeLabel.trim();
+  }
+
+  const firstLine = content.split("\n")[0]?.trim() ?? content.trim();
+  const [term] = firstLine.split(":");
+
+  return term?.trim() || "Concept";
 }
 
 function compiledRisks(context: SessionArtifactContext, challenges: CompiledChallenge[]): CompiledRisk[] {

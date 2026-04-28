@@ -19,6 +19,7 @@ import {
   type ChallengeRequest,
   type ChallengeResponseRequest,
 } from "./challenge-route.ts";
+import { BrainRunGuardError } from "./brain-run-guard.ts";
 
 test("POST /brain/challenge validates the target claim request before persistence", async () => {
   let issued = false;
@@ -249,6 +250,7 @@ test("generateChallengeOutput validates heuristic and xAI structured outputs", a
   };
   const heuristic = await generateChallengeOutput(input, {
     provider: createHeuristicChallengeProvider(),
+    brainRunId: uuidAt(701),
   });
   const calls: Parameters<ChallengeGenerateText>[0][] = [];
   const generateText: ChallengeGenerateText = async (request) => {
@@ -268,6 +270,7 @@ test("generateChallengeOutput validates heuristic and xAI structured outputs", a
   };
   const xai = await generateChallengeOutput(input, {
     provider: createXaiChallengeProvider({ XAI_API_KEY: "test-key" }, { generateText }),
+    brainRunId: uuidAt(702),
   });
 
   assert.equal(heuristic.strength, "moderate");
@@ -275,6 +278,27 @@ test("generateChallengeOutput validates heuristic and xAI structured outputs", a
   assert.equal(resolveXaiBrainChallengeModel({}), defaultXaiBrainChallengeModel);
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.prompt ?? "", /Target claim id/);
+});
+
+test("generateChallengeOutput requires a recorded BrainRun id", async () => {
+  await assert.rejects(
+    () =>
+      generateChallengeOutput(
+        {
+          targetClaimId: uuidAt(101),
+          targetKind: "assumption",
+          targetText: "Cognitive load is the bottleneck.",
+          targetStatus: "exploratory",
+          targetConfidence: 64,
+        },
+        { provider: createHeuristicChallengeProvider() },
+      ),
+    (error) => {
+      assert.ok(error instanceof BrainRunGuardError);
+      assert.match(error.message, /brain\.challenge/);
+      return true;
+    },
+  );
 });
 
 test("challenge output parsing and xAI provider failures are explicit", async () => {

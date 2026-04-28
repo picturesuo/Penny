@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const sessionStatusEnum = pgEnum("session_status", ["open", "completed"]);
 export const sourceKindEnum = pgEnum("source_kind", ["raw_idea", "verification_citation"]);
@@ -81,17 +81,12 @@ export const claims = pgTable(
       .references(() => sessions.id, { onDelete: "cascade" }),
     sourceId: uuid("source_id").references(() => sources.id, { onDelete: "set null" }),
     kind: claimKindEnum("kind").notNull(),
-    status: claimStatusEnum("status").notNull().default("exploratory"),
-    text: text("text").notNull(),
-    confidence: integer("confidence").notNull().default(60),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("claims_session_id_idx").on(table.sessionId),
     index("claims_source_id_idx").on(table.sourceId),
     index("claims_kind_idx").on(table.kind),
-    check("claims_confidence_range", sql`${table.confidence} >= 0 AND ${table.confidence} <= 100`),
   ],
 );
 
@@ -103,6 +98,8 @@ export const claimVersions = pgTable(
       .notNull()
       .references(() => claims.id, { onDelete: "cascade" }),
     sourceId: uuid("source_id").references(() => sources.id, { onDelete: "set null" }),
+    brainRunId: uuid("brain_run_id").references(() => brainRuns.id, { onDelete: "set null" }),
+    moveId: uuid("move_id").references(() => moves.id),
     content: text("content").notNull(),
     status: claimStatusEnum("status").notNull().default("exploratory"),
     confidence: integer("confidence").notNull().default(60),
@@ -112,8 +109,15 @@ export const claimVersions = pgTable(
   (table) => [
     index("claim_versions_claim_id_idx").on(table.claimId),
     index("claim_versions_source_id_idx").on(table.sourceId),
+    index("claim_versions_brain_run_id_idx").on(table.brainRunId),
+    index("claim_versions_move_id_idx").on(table.moveId),
     index("claim_versions_current_idx").on(table.claimId, table.isCurrent),
+    uniqueIndex("claim_versions_one_current_idx").on(table.claimId).where(sql`${table.isCurrent} = true`),
     check("claim_versions_confidence_range", sql`${table.confidence} >= 0 AND ${table.confidence} <= 100`),
+    check(
+      "claim_versions_provenance_present",
+      sql`${table.sourceId} IS NOT NULL OR ${table.brainRunId} IS NOT NULL OR ${table.moveId} IS NOT NULL`,
+    ),
   ],
 );
 

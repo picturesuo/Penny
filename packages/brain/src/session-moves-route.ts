@@ -221,7 +221,11 @@ export function buildSessionMovesTimeline(state: SessionMovesState) {
   const versionsById = new Map(state.claimVersions.map((version) => [version.id, version]));
   const currentVersionsByClaimId = currentVersionMap(state.claimVersions);
   const claimsById = new Map(
-    state.claims.map((claim) => [claim.id, claimSlice(claim, currentVersionsByClaimId.get(claim.id))]),
+    state.claims.flatMap((claim) => {
+      const version = currentVersionsByClaimId.get(claim.id);
+
+      return version ? [[claim.id, claimSlice(claim, version)] as const] : [];
+    }),
   );
   const rawClaimsById = new Map(state.claims.map((claim) => [claim.id, claim]));
   const edgesById = new Map(state.edges.map((edge) => [edge.id, edge]));
@@ -411,14 +415,14 @@ function payloadPreview(payload: unknown): Record<string, unknown> {
   return preview;
 }
 
-function claimSlice(claim: ClaimRow, version: ClaimVersionRow | undefined) {
+function claimSlice(claim: ClaimRow, version: ClaimVersionRow) {
   return {
     id: claim.id,
-    versionId: version?.id ?? null,
+    versionId: version.id,
     kind: claim.kind,
-    status: version?.status ?? "exploratory",
-    text: version?.content ?? "",
-    confidence: version?.confidence ?? 0,
+    status: version.status,
+    text: version.content,
+    confidence: version.confidence,
   };
 }
 
@@ -427,6 +431,8 @@ function versionSlice(version: ClaimVersionRow) {
     id: version.id,
     claimId: version.claimId,
     sourceId: version.sourceId,
+    brainRunId: version.brainRunId,
+    moveId: version.moveId,
     content: version.content,
     status: version.status,
     confidence: version.confidence,
@@ -491,7 +497,7 @@ function currentVersionMap(versions: ClaimVersionRow[]): Map<string, ClaimVersio
   const map = new Map<string, ClaimVersionRow>();
 
   for (const version of versions) {
-    if (version.isCurrent || !map.has(version.claimId)) {
+    if (version.isCurrent) {
       map.set(version.claimId, version);
     }
   }

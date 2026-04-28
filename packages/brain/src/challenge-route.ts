@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claimVersions, claims, moves } from "./db/schema.ts";
+import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 import { FailureTypeSchema, flattenIssues } from "./schema.ts";
 
 const ChallengeRequestSchema = z
@@ -274,103 +276,104 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
   });
 
   try {
-    const challenge = await generateChallengeOutput(challengeGenerationInput(prelude.target));
-
-    return await db.transaction(async (tx) => {
-    const [critiqueClaim] = await tx
-      .insert(claims)
-      .values({
-        sessionId: prelude.target.claim.sessionId,
-        sourceId: prelude.target.claim.sourceId,
-        kind: "belief",
-        status: "exploratory",
-        text: challenge.critique,
-        confidence: confidenceForStrength(challenge.strength),
-      })
-      .returning();
-
-    if (!critiqueClaim) {
-      throw new ChallengeConflictError("Failed to create critique claim.");
-    }
-
-    const [critiqueVersion] = await tx
-      .insert(claimVersions)
-      .values({
-        claimId: critiqueClaim.id,
-        sourceId: prelude.target.claim.sourceId,
-        content: challenge.critique,
-        status: "exploratory",
-        confidence: critiqueClaim.confidence,
-        isCurrent: true,
-      })
-      .returning();
-
-    if (!critiqueVersion) {
-      throw new ChallengeConflictError("Failed to create critique ClaimVersion.");
-    }
-
-    const [edge] = await tx
-      .insert(claimEdges)
-      .values({
-        sessionId: prelude.target.claim.sessionId,
-        fromClaimId: critiqueClaim.id,
-        toClaimId: prelude.target.claim.id,
-        kind: "challenges",
-        status: "active",
-        label: challenge.failureType,
-      })
-      .returning();
-
-    if (!edge) {
-      throw new ChallengeConflictError("Failed to create challenge edge.");
-    }
-
-    const move = await createChallengeMove(tx, {
-      sessionId: prelude.target.claim.sessionId,
-      kind: "challenge_issued",
-      summary: "Issued a first challenge against the target claim.",
-      claimIds: [prelude.target.claim.id, critiqueClaim.id],
-      edgeIds: [edge.id],
-      payload: {
-        targetClaimId: prelude.target.claim.id,
-        targetClaimVersionId: prelude.target.version.id,
-        critiqueClaimId: critiqueClaim.id,
-        critiqueClaimVersionId: critiqueVersion.id,
-        challengeEdgeId: edge.id,
-        brainRunId: prelude.brainRun.id,
-        failureType: challenge.failureType,
-        strength: challenge.strength,
-        provenanceTag: challenge.provenanceTag,
-      },
+    const challenge = await generateChallengeOutput(challengeGenerationInput(prelude.target), {
+      brainRunId: prelude.brainRun.id,
     });
 
-    const [completedBrainRun] = await tx
-      .update(brainRuns)
-      .set({
-        status: "succeeded",
-        output: challenge,
-        error: null,
-        completedAt: new Date(),
-      })
-      .where(eq(brainRuns.id, prelude.brainRun.id))
-      .returning();
+    return await db.transaction(async (tx) => {
+      const critiqueConfidence = confidenceForStrength(challenge.strength);
+      const [critiqueClaim] = await tx
+        .insert(claims)
+        .values({
+          sessionId: prelude.target.claim.sessionId,
+          sourceId: prelude.target.claim.sourceId,
+          kind: "belief",
+        })
+        .returning();
 
-    if (!completedBrainRun) {
-      throw new ChallengeConflictError("Failed to complete challenge BrainRun.");
-    }
+      if (!critiqueClaim) {
+        throw new ChallengeConflictError("Failed to create critique claim.");
+      }
 
-    return {
-      ...challenge,
-      targetClaim: claimSlice(prelude.target.claim, prelude.target.version),
-      critiqueClaim: claimSlice(critiqueClaim, critiqueVersion),
-      challengeEdge: edgeSlice(edge),
-      move,
-      brainRun: {
-        id: completedBrainRun.id,
-        status: completedBrainRun.status,
-      },
-    };
-  });
+      const [critiqueVersion] = await tx
+        .insert(claimVersions)
+        .values({
+          claimId: critiqueClaim.id,
+          sourceId: prelude.target.claim.sourceId,
+          brainRunId: prelude.brainRun.id,
+          content: challenge.critique,
+          status: "exploratory",
+          confidence: critiqueConfidence,
+          isCurrent: true,
+        })
+        .returning();
+
+      if (!critiqueVersion) {
+        throw new ChallengeConflictError("Failed to create critique ClaimVersion.");
+      }
+
+      const [edge] = await tx
+        .insert(claimEdges)
+        .values({
+          sessionId: prelude.target.claim.sessionId,
+          fromClaimId: critiqueClaim.id,
+          toClaimId: prelude.target.claim.id,
+          kind: "challenges",
+          status: "active",
+          label: challenge.failureType,
+        })
+        .returning();
+
+      if (!edge) {
+        throw new ChallengeConflictError("Failed to create challenge edge.");
+      }
+
+      const move = await createChallengeMove(tx, {
+        sessionId: prelude.target.claim.sessionId,
+        kind: "challenge_issued",
+        summary: "Issued a first challenge against the target claim.",
+        claimIds: [prelude.target.claim.id, critiqueClaim.id],
+        edgeIds: [edge.id],
+        payload: {
+          targetClaimId: prelude.target.claim.id,
+          targetClaimVersionId: prelude.target.version.id,
+          critiqueClaimId: critiqueClaim.id,
+          critiqueClaimVersionId: critiqueVersion.id,
+          challengeEdgeId: edge.id,
+          brainRunId: prelude.brainRun.id,
+          failureType: challenge.failureType,
+          strength: challenge.strength,
+          provenanceTag: challenge.provenanceTag,
+        },
+      });
+
+      const [completedBrainRun] = await tx
+        .update(brainRuns)
+        .set({
+          status: "succeeded",
+          output: challenge,
+          error: null,
+          completedAt: new Date(),
+        })
+        .where(eq(brainRuns.id, prelude.brainRun.id))
+        .returning();
+
+      if (!completedBrainRun) {
+        throw new ChallengeConflictError("Failed to complete challenge BrainRun.");
+      }
+
+      return {
+        ...challenge,
+        targetClaim: claimSlice(prelude.target.claim, prelude.target.version),
+        critiqueClaim: claimSlice(critiqueClaim, critiqueVersion),
+        challengeEdge: edgeSlice(edge),
+        move,
+        brainRun: {
+          id: completedBrainRun.id,
+          status: completedBrainRun.status,
+        },
+      };
+    });
   } catch (error) {
     await markChallengeRunFailed(db, prelude.brainRun.id, error);
     throw error;
@@ -426,6 +429,27 @@ export async function persistChallengeResponse(
     }
 
     if (response.response === "revise") {
+      const versionId = randomUUID();
+      const moveId = randomUUID();
+      const move = await createChallengeMove(tx, {
+        id: moveId,
+        sessionId: target.claim.sessionId,
+        kind: "claim_revised",
+        summary: "User revised the target claim in response to the critique.",
+        claimIds: [target.claim.id, critiqueClaim.id],
+        edgeIds: [edge.id],
+        payload: {
+          response: response.response,
+          reasoning: response.reasoning ?? null,
+          targetClaimId: target.claim.id,
+          previousClaimVersionId: target.version.id,
+          currentClaimVersionId: versionId,
+          critiqueClaimId: critiqueClaim.id,
+          challengeEdgeId: edge.id,
+          claimVersionIds: [target.version.id, versionId],
+        },
+      });
+
       await tx
         .update(claimVersions)
         .set({ isCurrent: false })
@@ -434,8 +458,10 @@ export async function persistChallengeResponse(
       const [newVersion] = await tx
         .insert(claimVersions)
         .values({
+          id: versionId,
           claimId: target.claim.id,
           sourceId: target.version.sourceId ?? target.claim.sourceId,
+          moveId: move.id,
           content: response.revisedText,
           status: "exploratory",
           confidence: target.version.confidence,
@@ -447,41 +473,9 @@ export async function persistChallengeResponse(
         throw new ChallengeConflictError("Failed to create revised ClaimVersion.");
       }
 
-      const [updatedClaim] = await tx
-        .update(claims)
-        .set({
-          text: newVersion.content,
-          confidence: newVersion.confidence,
-          status: newVersion.status,
-          updatedAt: new Date(),
-        })
-        .where(eq(claims.id, target.claim.id))
-        .returning();
-
-      if (!updatedClaim) {
-        throw new ChallengeConflictError("Failed to update revised target claim.");
-      }
-
-      const move = await createChallengeMove(tx, {
-        sessionId: target.claim.sessionId,
-        kind: "claim_revised",
-        summary: "User revised the target claim in response to the critique.",
-        claimIds: [target.claim.id, critiqueClaim.id],
-        edgeIds: [edge.id],
-        payload: {
-          response: response.response,
-          reasoning: response.reasoning ?? null,
-          targetClaimId: target.claim.id,
-          previousClaimVersionId: target.version.id,
-          currentClaimVersionId: newVersion.id,
-          critiqueClaimId: critiqueClaim.id,
-          challengeEdgeId: edge.id,
-        },
-      });
-
       return {
         response: response.response,
-        targetClaim: claimSlice(updatedClaim, newVersion),
+        targetClaim: claimSlice(target.claim, newVersion),
         critiqueClaimId: critiqueClaim.id,
         challengeEdge: edgeSlice(edge),
         move,
@@ -553,6 +547,7 @@ async function loadClaimWithCurrentVersion(tx: ChallengeTransaction, claimId: st
 async function createChallengeMove(
   tx: ChallengeTransaction,
   input: {
+    id?: string;
     sessionId: string;
     kind: PersistedMoveSlice["kind"];
     summary: string;
@@ -564,6 +559,7 @@ async function createChallengeMove(
   const [move] = await tx
     .insert(moves)
     .values({
+      id: input.id,
       sessionId: input.sessionId,
       kind: input.kind,
       summary: input.summary,
@@ -591,8 +587,10 @@ async function createChallengeMove(
 
 export async function generateChallengeOutput(
   input: ChallengeGenerationInput,
-  options: { provider?: ChallengeProvider } = {},
+  options: { provider?: ChallengeProvider } & BrainRunGuardOptions = {},
 ): Promise<ChallengeOutput> {
+  requireRecordedBrainRun("brain.challenge", options);
+
   const provider = options.provider ?? createDefaultChallengeProvider();
   const providerOutput = await provider.generate(input);
 

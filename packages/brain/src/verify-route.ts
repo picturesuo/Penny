@@ -4,6 +4,7 @@ import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimVersions, claims, moves, sourceSpans, sources } from "./db/schema.ts";
+import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 import { flattenIssues } from "./schema.ts";
 
 export const VerifyRequestSchema = z
@@ -271,7 +272,10 @@ export async function runVerify(
   const prelude = await createVerifyPrelude(db, input, provider);
 
   try {
-    const output = await generateVerifyOutput(verifyGenerationInput(prelude.target, input), { provider });
+    const output = await generateVerifyOutput(verifyGenerationInput(prelude.target, input), {
+      provider,
+      brainRunId: prelude.brainRun.id,
+    });
 
     return await persistVerifyResult(db, output, prelude);
   } catch (error) {
@@ -282,8 +286,10 @@ export async function runVerify(
 
 export async function generateVerifyOutput(
   input: VerifyGenerationInput,
-  options: { provider?: VerifyProvider } = {},
+  options: { provider?: VerifyProvider } & BrainRunGuardOptions = {},
 ): Promise<VerifyOutput> {
+  requireRecordedBrainRun("verify_run", options);
+
   const provider = options.provider ?? defaultVerifyProvider();
   const result = await provider.generate(input);
 

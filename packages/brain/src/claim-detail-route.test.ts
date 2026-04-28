@@ -241,15 +241,11 @@ function claim(
 ): ClaimDetailState["claim"] {
   return {
     id,
-    sessionId,
-    sourceId,
-    kind,
-    status: "exploratory",
-    text,
-    confidence,
-    createdAt: dateAt(createdAt),
-    updatedAt: dateAt(createdAt + 1),
-  };
+	    sessionId,
+	    sourceId,
+	    kind,
+	    createdAt: dateAt(createdAt),
+	  };
 }
 
 function version(
@@ -261,10 +257,12 @@ function version(
   createdAt: number,
 ): ClaimDetailState["versions"][number] {
   return {
-    id,
-    claimId,
-    sourceId,
-    content,
+	    id,
+	    claimId,
+	    sourceId,
+	    brainRunId: uuidAt(701),
+	    moveId: null,
+	    content,
     status: "exploratory",
     confidence,
     isCurrent,
