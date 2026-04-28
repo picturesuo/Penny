@@ -254,7 +254,7 @@ export async function runInlineLearn(
       };
     }
 
-    const completedBrainRun = await completeInlineLearnRun(db, prelude.brainRun.id, output);
+    const completedBrainRun = await completeInlineLearnRun(db, prelude, output);
 
     return {
       ...output,
@@ -619,25 +619,49 @@ function learnGenerationInput(
 
 async function completeInlineLearnRun(
   db: PennyDatabase,
-  brainRunId: string,
+  prelude: InlineLearnPrelude,
   output: InlineLearnOutput,
 ): Promise<typeof brainRuns.$inferSelect> {
-  const [completedBrainRun] = await db
-    .update(brainRuns)
-    .set({
-      status: "succeeded",
-      output,
-      error: null,
-      completedAt: new Date(),
-    })
-    .where(eq(brainRuns.id, brainRunId))
-    .returning();
+  return db.transaction(async (tx) => {
+    const [move] = await tx
+      .insert(moves)
+      .values({
+        sessionId: prelude.target.claim.sessionId,
+        kind: "learning_triggered",
+        summary: "Asked Makes Cents inline for a concept explanation.",
+        payload: {
+          term: output.term,
+          currentClaimId: prelude.target.claim.id,
+          currentClaimVersionId: prelude.target.version.id,
+          brainRunId: prelude.brainRun.id,
+          saved: false,
+          claimIds: [prelude.target.claim.id],
+          edgeIds: [],
+        },
+      })
+      .returning();
 
-  if (!completedBrainRun) {
-    throw new InlineLearnConflictError("Failed to complete Inline Learn BrainRun.");
-  }
+    if (!move) {
+      throw new InlineLearnConflictError("Failed to record Inline Learn move.");
+    }
 
-  return completedBrainRun;
+    const [completedBrainRun] = await tx
+      .update(brainRuns)
+      .set({
+        status: "succeeded",
+        output,
+        error: null,
+        completedAt: new Date(),
+      })
+      .where(eq(brainRuns.id, prelude.brainRun.id))
+      .returning();
+
+    if (!completedBrainRun) {
+      throw new InlineLearnConflictError("Failed to complete Inline Learn BrainRun.");
+    }
+
+    return completedBrainRun;
+  });
 }
 
 async function markInlineLearnRunFailed(db: PennyDatabase, brainRunId: string, error: unknown): Promise<void> {
