@@ -1224,6 +1224,16 @@ textarea:focus,
   border-color: rgba(165, 63, 43, 0.34);
 }
 
+.challenge-trigger {
+  grid-template-columns: 1fr;
+}
+
+.challenge-trigger button {
+  min-height: 38px;
+  border-color: rgba(15, 118, 110, 0.42);
+  background: #edf7f4;
+}
+
 .learn-surface {
   display: grid;
   gap: 0;
