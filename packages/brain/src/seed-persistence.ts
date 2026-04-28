@@ -211,7 +211,10 @@ export async function persistBrainSeed(
           )
         : [];
     const edgeIds = new Map(persistedEdges.map((edge) => [edge.seedId, edge.id]));
-    const requiredMoves = buildRequiredMoves(seed, claimIds, edgeIds);
+    const requiredMoves = buildRequiredMoves(seed, claimIds, edgeIds, {
+      sourceId: prelude.source.id,
+      submittedSourceSpanId: prelude.submittedSourceSpan.id,
+    });
     const persistedMoves = attachSeedIds(
       requiredMoves,
       await tx
@@ -224,6 +227,8 @@ export async function persistBrainSeed(
             payload: {
               seedMoveId: move.id,
               brainRunId: prelude.brainRun.id,
+              sourceIds: move.sourceIds ?? [],
+              sourceSpanIds: move.sourceSpanIds ?? [],
               seedClaimIds: move.claimIds,
               seedEdgeIds: move.edgeIds,
               claimIds: move.claimIds.map((claimId) => requireMappedId(claimIds, claimId, "move.claimId")),
@@ -283,16 +288,19 @@ export async function failBrainSeedRun(db: PennyDatabase, prelude: BrainSeedPrel
 
 type RequiredMove = {
   id: string;
-  kind: "seed_claim_created" | "assumptions_extracted" | "first_challenge_suggested";
+  kind: "source.recorded" | "seed_claim_created" | "assumptions_extracted" | "first_challenge_suggested";
   summary: string;
   claimIds: string[];
   edgeIds: string[];
+  sourceIds?: string[];
+  sourceSpanIds?: string[];
 };
 
 function buildRequiredMoves(
   seed: BrainSeedOutput,
   claimIds: Map<string, string>,
   edgeIds: Map<string, string>,
+  provenance: { sourceId: string; submittedSourceSpanId: string },
 ): RequiredMove[] {
   const assumptionIds = seed.assumptions.map((assumption) => assumption.id).filter((claimId) => claimIds.has(claimId));
   const dependencyEdgeIds = seed.thoughtMap.edges
@@ -300,6 +308,15 @@ function buildRequiredMoves(
     .filter((edgeId) => edgeIds.has(edgeId));
 
   return [
+    {
+      id: "move.source_recorded",
+      kind: "source.recorded",
+      summary: "Submitted the raw seed idea as the session source.",
+      claimIds: [],
+      edgeIds: [],
+      sourceIds: [provenance.sourceId],
+      sourceSpanIds: [provenance.submittedSourceSpanId],
+    },
     {
       id: "move.seed_claim_created",
       kind: "seed_claim_created",
