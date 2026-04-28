@@ -197,6 +197,7 @@ button {
 .compact-surface,
 .learn-surface,
 .verify-surface,
+.history-surface,
 .insight-surface,
 .exploration-surface,
 .stream-surface,
@@ -519,7 +520,8 @@ button {
 .stack-list,
 .quick-select,
 .exploration-rows,
-.stream-body {
+.stream-body,
+.move-timeline {
   display: grid;
   gap: 8px;
   padding: 13px 14px 14px;
@@ -737,9 +739,96 @@ textarea:focus {
 
 .learn-surface .stack-list,
 .compact-surface .stack-list,
+.history-surface .move-timeline,
 .verify-surface .stack-list,
 .artifact-surface .stack-list {
   padding: 13px 14px 14px;
+}
+
+.move-timeline {
+  position: relative;
+}
+
+.move-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 9px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 0 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.move-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.move-item::before {
+  content: "";
+  position: absolute;
+  top: 17px;
+  bottom: -8px;
+  left: 7px;
+  width: 2px;
+  background: var(--line);
+}
+
+.move-item:last-child::before {
+  display: none;
+}
+
+.move-dot {
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  border: 2px solid var(--panel);
+  border-radius: 999px;
+  background: var(--blue);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.move-item.actor-user .move-dot {
+  background: var(--teal);
+}
+
+.move-item.actor-penny .move-dot {
+  background: var(--blue);
+}
+
+.move-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.move-copy strong {
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.move-copy p,
+.move-copy small {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.38;
+}
+
+.move-copy small {
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.move-item:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.42);
+  outline-offset: 2px;
+  border-radius: 7px;
 }
 
 .learn-form {
