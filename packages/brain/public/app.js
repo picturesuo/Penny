@@ -64,6 +64,7 @@ const state = {
   streamFallback: false,
 };
 
+elements.rawIdea?.setAttribute("placeholder", "Capture a thought, idea, or question...");
 renderEmptyState();
 
 elements.form?.addEventListener("submit", async (event) => {
@@ -502,7 +503,7 @@ async function loadInitialStream() {
 }
 
 function setSessionMode(hasSession) {
-  const showAfterLoop = hasSession && coreLoopComplete();
+  const showAfterLoop = hasSession;
 
   for (const element of elements.postSeedChrome ?? []) {
     element.hidden = !showAfterLoop;
@@ -680,7 +681,7 @@ function renderThoughtMap(claims, edges) {
 
   if (claims.length === 0) {
     elements.thoughtMap?.classList.add("empty-state");
-    append(elements.thoughtMap, textOnly("What's on your mind?"));
+    append(elements.thoughtMap, emptyMapPrompt());
     return;
   }
 
@@ -688,52 +689,175 @@ function renderThoughtMap(claims, edges) {
 
   const claimsById = new Map(claims.map((claim) => [claim.id, claim]));
   const seedClaim = claims.find((claim) => claim.seedId === "claim.seed") ?? claims[0];
-  const renderedClaimIds = new Set();
+  const returnedEdges = edges.filter((edge) => claimsById.has(edge.fromClaimId) && claimsById.has(edge.toClaimId));
+  const map = document.createElement("div");
+  map.className = "thought-map-canvas";
 
   if (seedClaim) {
-    append(elements.thoughtMap, claimNode(seedClaim, "root"));
-    renderedClaimIds.add(seedClaim.id);
+    map.append(mapRootNode(seedClaim));
   }
 
-  const returnedEdges = edges.filter((edge) => claimsById.has(edge.fromClaimId) && claimsById.has(edge.toClaimId));
-  const seedEdges = seedClaim
-    ? returnedEdges.filter((edge) => edge.fromClaimId === seedClaim.id)
-    : returnedEdges;
-  const remainingEdges = returnedEdges.filter((edge) => !seedEdges.includes(edge));
+  const branches = document.createElement("div");
+  branches.className = "map-branches";
+  const groups = mapDisplayGroups(claims, returnedEdges, seedClaim);
 
-  for (const edge of seedEdges) {
-    const toClaim = claimsById.get(edge.toClaimId);
+  for (const group of groups) {
+    branches.append(mapBranchGroup(group));
+  }
 
-    append(elements.thoughtMap, edgeConnector(edge));
+  if (groups.length === 0) {
+    const empty = document.createElement("article");
+    empty.className = "map-branch-group empty-branch";
+    append(empty, textOnly("Penny will attach assumptions, challenges, and concepts here."));
+    branches.append(empty);
+  }
 
-    if (toClaim && !renderedClaimIds.has(toClaim.id)) {
-      append(elements.thoughtMap, claimNode(toClaim));
-      renderedClaimIds.add(toClaim.id);
+  map.append(branches);
+  append(elements.thoughtMap, map);
+}
+
+function emptyMapPrompt() {
+  const prompt = document.createElement("div");
+  prompt.className = "empty-map-prompt";
+
+  const title = document.createElement("strong");
+  title.textContent = "Start with one seed idea";
+
+  const copy = document.createElement("p");
+  copy.textContent = "Penny will turn it into claims, assumptions, and challenge paths.";
+
+  prompt.append(title, copy);
+  return prompt;
+}
+
+function mapRootNode(claim) {
+  const node = document.createElement("article");
+  node.className = "map-root-node";
+  node.tabIndex = 0;
+  node.setAttribute("role", "button");
+  node.setAttribute("aria-label", "Open seed claim detail");
+
+  const title = document.createElement("strong");
+  title.textContent = claim.text;
+
+  const meta = document.createElement("span");
+  meta.textContent = "Seed idea";
+
+  node.append(title, meta);
+  node.addEventListener("click", () => {
+    void handleClaimInspect(claim);
+  });
+  node.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void handleClaimInspect(claim);
+    }
+  });
+
+  return node;
+}
+
+function mapDisplayGroups(claims, edges, seedClaim) {
+  const seedId = seedClaim?.id;
+  const edgeByClaimId = new Map();
+
+  for (const edge of edges) {
+    if (!edgeByClaimId.has(edge.toClaimId)) {
+      edgeByClaimId.set(edge.toClaimId, edge);
     }
   }
 
-  for (const edge of remainingEdges) {
-    const fromClaim = claimsById.get(edge.fromClaimId);
-    const toClaim = claimsById.get(edge.toClaimId);
+  const buckets = [
+    { key: "assumption", label: "Assumptions", icon: "A", claims: [] },
+    { key: "belief", label: "Beliefs", icon: "B", claims: [] },
+    { key: "question", label: "Questions", icon: "?", claims: [] },
+    { key: "challenge", label: "Challenges", icon: "!", claims: [] },
+    { key: "concept", label: "Concepts", icon: "C", claims: [] },
+    { key: "other", label: "Other claims", icon: "#", claims: [] },
+  ];
+  const bucketByKey = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+  const sortedClaims = [...claims]
+    .filter((claim) => claim.id !== seedId)
+    .sort((left, right) => {
+      const leftEdge = edgeByClaimId.get(left.id);
+      const rightEdge = edgeByClaimId.get(right.id);
+      const leftDirect = leftEdge?.fromClaimId === seedId ? 0 : 1;
+      const rightDirect = rightEdge?.fromClaimId === seedId ? 0 : 1;
 
-    if (fromClaim && !renderedClaimIds.has(fromClaim.id)) {
-      append(elements.thoughtMap, claimNode(fromClaim));
-      renderedClaimIds.add(fromClaim.id);
-    }
+      return leftDirect - rightDirect || String(left.kind).localeCompare(String(right.kind));
+    });
 
-    append(elements.thoughtMap, edgeConnector(edge));
-
-    if (toClaim && !renderedClaimIds.has(toClaim.id)) {
-      append(elements.thoughtMap, claimNode(toClaim));
-      renderedClaimIds.add(toClaim.id);
-    }
+  for (const claim of sortedClaims) {
+    const edge = edgeByClaimId.get(claim.id);
+    const key = isChallengeEdge(edge) || claim.kind === "critique" ? "challenge" : bucketByKey.has(claim.kind) ? claim.kind : "other";
+    bucketByKey.get(key).claims.push({
+      claim,
+      edge,
+    });
   }
 
-  for (const claim of claims) {
-    if (!renderedClaimIds.has(claim.id)) {
-      append(elements.thoughtMap, claimNode(claim, "unconnected"));
-    }
+  return buckets.filter((bucket) => bucket.claims.length > 0);
+}
+
+function mapBranchGroup(group) {
+  const section = document.createElement("section");
+  section.className = ["map-branch-group", `map-group-${group.key}`].join(" ");
+
+  const header = document.createElement("div");
+  header.className = "map-branch-header";
+
+  const icon = document.createElement("span");
+  icon.className = "map-branch-icon";
+  icon.textContent = group.icon;
+
+  const label = document.createElement("strong");
+  label.textContent = group.label;
+
+  const count = document.createElement("span");
+  count.className = "map-branch-count";
+  count.textContent = String(group.claims.length);
+
+  header.append(icon, label, count);
+  section.append(header);
+
+  const leaves = document.createElement("div");
+  leaves.className = "map-leaves";
+
+  for (const entry of group.claims.slice(0, 5)) {
+    leaves.append(mapLeaf(entry.claim, entry.edge));
   }
+
+  if (group.claims.length > 5) {
+    const more = document.createElement("p");
+    more.className = "map-more";
+    more.textContent = `${group.claims.length - 5} more`;
+    leaves.append(more);
+  }
+
+  section.append(leaves);
+  return section;
+}
+
+function mapLeaf(claim, edge) {
+  const leaf = document.createElement("button");
+  const health = claimHealth(claim);
+  leaf.type = "button";
+  leaf.className = ["map-leaf", `status-${claim.status}`, `confidence-${confidenceTierFor(health.confidence)}`].join(" ");
+  leaf.title = [edge?.label, `${health.confidence}% confidence`].filter(Boolean).join(" / ");
+
+  const text = document.createElement("span");
+  text.textContent = claim.text;
+
+  const status = document.createElement("span");
+  status.className = "map-leaf-status";
+  status.setAttribute("aria-label", `${formatLabel(claim.status)} at ${health.confidence}% confidence`);
+
+  leaf.append(text, status);
+  leaf.addEventListener("click", () => {
+    void handleClaimInspect(claim);
+  });
+
+  return leaf;
 }
 
 function claimNode(claim, modifier = "") {
@@ -1433,33 +1557,62 @@ function renderExplorationRows(paths) {
   replaceChildren(elements.explorationRows);
   const assumptions = assumptionClaims();
 
-  if (assumptions.length > 0) {
-    append(elements.explorationRows, assumptionReviewSection(assumptions));
-  }
-
   if (paths.length === 0 && assumptions.length === 0) {
     append(elements.explorationRows, textOnly("Exploration paths appear here as structured rows after the first seed."));
     return;
   }
 
-  paths.forEach((path, index) => {
+  const rows = paths.length > 0
+    ? paths.map((path) => ({
+        title: path.title,
+        bullets: [path.prompt, path.expectedValue].filter(Boolean),
+        path,
+      }))
+    : assumptions.map((claim) => ({
+        title: claim.text,
+        bullets: [`${formatLabel(claim.status)} assumption`, `${claim.confidence}% confidence`],
+        claim,
+      }));
+
+  rows.slice(0, 10).forEach((rowData, index) => {
     const row = document.createElement("article");
     row.className = "exploration-row";
 
     const number = document.createElement("span");
     number.className = "path-number";
-    number.textContent = String(index + 1).padStart(2, "0");
+    number.textContent = String(index + 1);
 
     const body = document.createElement("div");
+    body.className = "exploration-row-body";
     const title = document.createElement("strong");
-    title.textContent = path.title;
-    const prompt = document.createElement("p");
-    prompt.textContent = path.prompt;
-    const value = document.createElement("small");
-    value.textContent = path.expectedValue;
+    title.textContent = rowData.title;
 
-    body.append(title, prompt, value);
-    row.append(number, body);
+    const bullets = document.createElement("ul");
+    bullets.className = "exploration-points";
+
+    for (const bullet of rowData.bullets.slice(0, 2)) {
+      const item = document.createElement("li");
+      item.textContent = bullet;
+      bullets.append(item);
+    }
+
+    body.append(title, bullets);
+
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "exploration-action";
+    action.textContent = "Explore";
+    action.addEventListener("click", () => {
+      if (rowData.claim) {
+        void handleClaimInspect(rowData.claim);
+        return;
+      }
+
+      setText(elements.keyInsight, rowData.path?.prompt ?? rowData.title);
+      setStatus(`Selected ${rowData.title}.`);
+    });
+
+    row.append(number, body, action);
     append(elements.explorationRows, row);
   });
 }
@@ -1539,27 +1692,45 @@ function assumptionReviewCard(claim) {
 }
 
 function renderLater(paths) {
-  renderList(
-    elements.laterList,
-    paths.slice(0, 4),
-    (path) => listRow(path.title, path.prompt, path.expectedValue),
-    "Exploration paths will collect here.",
-  );
+  replaceChildren(elements.laterList);
+
+  const items = paths.slice(0, 6);
+
+  if (items.length === 0) {
+    append(elements.laterList, textOnly("Exploration paths will collect here."));
+    return;
+  }
+
+  for (const path of items) {
+    const label = document.createElement("label");
+    label.className = "later-item";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+
+    const text = document.createElement("span");
+    text.textContent = path.title;
+
+    label.append(checkbox, text);
+    append(elements.laterList, label);
+  }
 }
 
 function renderQuickSelect(claims) {
   replaceChildren(elements.quickSelect);
 
   if (claims.length === 0) {
-    append(elements.quickSelect, textOnly("No claims yet."));
+    append(elements.quickSelect, quickSelectGuide());
     return;
   }
 
-  for (const claim of claims.slice(0, 6)) {
+  append(elements.quickSelect, quickSelectGuide());
+
+  for (const [index, claim] of claims.slice(0, 5).entries()) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "quick-chip";
-    button.textContent = formatLabel(claim.kind);
+    button.textContent = `${index + 1}${formatLabel(claim.kind)[0] ?? ""}`;
     button.title = claim.text;
     button.addEventListener("click", () => {
       setText(elements.currentClaim, claim.text);
@@ -1567,6 +1738,35 @@ function renderQuickSelect(claims) {
     });
     append(elements.quickSelect, button);
   }
+}
+
+function quickSelectGuide() {
+  const guide = document.createElement("div");
+  guide.className = "quick-guide";
+
+  for (const [label, value] of [
+    ["Number", "#"],
+    ["Action", "A"],
+  ]) {
+    const tile = document.createElement("div");
+    tile.className = "quick-tile";
+
+    const name = document.createElement("span");
+    name.textContent = label;
+
+    const key = document.createElement("strong");
+    key.textContent = value;
+
+    tile.append(name, key);
+    guide.append(tile);
+  }
+
+  const legend = document.createElement("p");
+  legend.className = "quick-legend";
+  legend.textContent = "A Explore  B Go deeper  C Challenge  D Compare  E Save";
+  guide.append(legend);
+
+  return guide;
 }
 
 function renderPennyInsight(challenge, targetClaim) {
@@ -1577,13 +1777,23 @@ function renderPennyInsight(challenge, targetClaim) {
   setText(elements.failureType, `${formatLabel(challenge?.failureType ?? "waiting")}${strength}`);
   setText(elements.weakestPart, challenge?.weakestPart ?? "No challenge yet.");
   setText(elements.challengeText, challenge?.challenge ?? "Submit one idea to reveal the weakest load-bearing part.");
-  renderResponseOptions(challenge);
+  renderInsightActions(challenge);
 }
 
-function renderResponseOptions(challenge) {
+function renderInsightActions(challenge) {
   replaceChildren(elements.responseOptions);
 
+  append(elements.responseOptions, insightExamples());
+  append(elements.responseOptions, relatedConceptChips());
+
   const options = challenge?.responseOptions ?? [];
+
+  if (options.length === 0) {
+    return;
+  }
+
+  const decisions = document.createElement("div");
+  decisions.className = "decision-options";
 
   for (const option of options) {
     const button = document.createElement("button");
@@ -1593,8 +1803,67 @@ function renderResponseOptions(challenge) {
     button.addEventListener("click", () => {
       void handleChallengeResponse(challenge, option);
     });
-    append(elements.responseOptions, button);
+    decisions.append(button);
   }
+
+  append(elements.responseOptions, decisions);
+}
+
+function renderResponseOptions(challenge) {
+  renderInsightActions(challenge);
+}
+
+function insightExamples() {
+  const block = document.createElement("section");
+  block.className = "insight-block insight-examples";
+
+  const heading = document.createElement("h4");
+  heading.textContent = "Examples";
+
+  const list = document.createElement("ul");
+  const examples = (state.data?.explorationPaths ?? [])
+    .slice(0, 3)
+    .map((path) => path.title)
+    .filter(Boolean);
+
+  for (const example of examples.length > 0 ? examples : ["Pressure test the strongest upside", "Name the biggest hidden risk", "Find the next concrete move"]) {
+    const item = document.createElement("li");
+    item.textContent = example;
+    list.append(item);
+  }
+
+  block.append(heading, list);
+  return block;
+}
+
+function relatedConceptChips() {
+  const block = document.createElement("section");
+  block.className = "insight-block related-concept-block";
+
+  const heading = document.createElement("h4");
+  heading.textContent = "Related concepts";
+
+  const chips = document.createElement("div");
+  chips.className = "related-concepts";
+  const terms = [
+    ...(state.activeLearn?.relatedConcepts ?? []),
+    ...(state.data?.learnCandidates ?? []).map((candidate) => candidate.term),
+  ]
+    .filter(Boolean)
+    .slice(0, 5);
+
+  for (const term of terms.length > 0 ? terms : ["Assumptions", "Tradeoffs", "Weak signals"]) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.textContent = term;
+    chip.addEventListener("click", () => {
+      void handleInlineLearn(term);
+    });
+    chips.append(chip);
+  }
+
+  block.append(heading, chips);
+  return block;
 }
 
 async function handleChallengeResponse(challenge, option) {
