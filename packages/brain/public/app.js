@@ -433,11 +433,11 @@ function renderEmptyState() {
   setText(elements.sessionStatus, "No session");
   setText(elements.sourceKind, "Raw idea");
   setText(elements.currentClaim, "What's on your mind?");
-  setText(elements.keyInsight, "Enter one raw idea. Penny will extract assumptions, return typed graph edges, and surface the first challenge.");
-  setText(elements.pennyInsight, "The first challenge will appear here after Penny has a graph slice to inspect.");
-  setText(elements.failureType, "Waiting");
-  setText(elements.weakestPart, "Weakest assumption will appear here.");
-  setText(elements.challengeText, "Submit one idea to reveal the weakest load-bearing part.");
+  setText(elements.keyInsight, "Start with the claim you want to think through. Penny will separate the idea from the assumptions it depends on.");
+  setText(elements.pennyInsight, "A good first pass is to name what must be true for the seed idea to survive contact with reality.");
+  setText(elements.failureType, "Ready");
+  setText(elements.weakestPart, "Weakest assumption");
+  setText(elements.challengeText, "Once the map exists, Penny will highlight the assumption carrying the most risk and ask for your next move.");
   setText(elements.mapCount, "0 claims");
   setText(elements.movesCount, "0 moves");
   setText(elements.laterCount, "0");
@@ -885,7 +885,11 @@ function mapBranchGroup(group) {
   count.className = "map-branch-count";
   count.textContent = String(group.claims.length);
 
-  header.append(icon, label, count);
+  const direction = document.createElement("span");
+  direction.className = "map-branch-direction";
+  direction.textContent = groupDirectionLabel(group.key);
+
+  header.append(icon, label, direction, count);
   section.append(header);
 
   const leaves = document.createElement("div");
@@ -906,12 +910,40 @@ function mapBranchGroup(group) {
   return section;
 }
 
+function groupDirectionLabel(key) {
+  if (key === "assumption") {
+    return "Seed depends on";
+  }
+
+  if (key === "challenge") {
+    return "Pushes against";
+  }
+
+  if (key === "concept") {
+    return "Teaches";
+  }
+
+  return "Branches to";
+}
+
 function mapLeaf(claim, edge) {
   const leaf = document.createElement("button");
   const health = claimHealth(claim);
+  const weakest = weakestAssumption();
   leaf.type = "button";
-  leaf.className = ["map-leaf", `status-${claim.status}`, `confidence-${confidenceTierFor(health.confidence)}`].join(" ");
+  leaf.className = [
+    "map-leaf",
+    `status-${claim.status}`,
+    `confidence-${confidenceTierFor(health.confidence)}`,
+    weakest?.id === claim.id ? "is-weakest" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   leaf.title = [edge?.label, `${health.confidence}% confidence`].filter(Boolean).join(" / ");
+
+  const relation = document.createElement("span");
+  relation.className = "map-leaf-relation";
+  relation.textContent = edgeDirectionLabel(edge);
 
   const text = document.createElement("span");
   text.textContent = claim.text;
@@ -920,12 +952,32 @@ function mapLeaf(claim, edge) {
   status.className = "map-leaf-status";
   status.setAttribute("aria-label", `${formatLabel(claim.status)} at ${health.confidence}% confidence`);
 
-  leaf.append(text, status);
+  leaf.append(relation, text, status);
   leaf.addEventListener("click", () => {
     void handleClaimInspect(claim);
   });
 
   return leaf;
+}
+
+function edgeDirectionLabel(edge) {
+  if (!edge) {
+    return "Seed ->";
+  }
+
+  if (edge.kind === "depends_on") {
+    return "Depends on ->";
+  }
+
+  if (isChallengeEdge(edge)) {
+    return "Challenges ->";
+  }
+
+  if (edge.kind === "teaches") {
+    return "Teaches ->";
+  }
+
+  return `${formatLabel(edge.kind)} ->`;
 }
 
 function claimNode(claim, modifier = "") {
@@ -1634,21 +1686,35 @@ function renderExplorationRows(paths) {
     return;
   }
 
-  const rows = paths.length > 0
-    ? paths.map((path) => ({
-        title: path.title,
-        bullets: [path.prompt, path.expectedValue].filter(Boolean),
-        path,
-      }))
-    : assumptions.map((claim) => ({
-        title: claim.text,
-        bullets: [`${formatLabel(claim.status)} assumption`, `${claim.confidence}% confidence`],
-        claim,
-      }));
+  const weakest = weakestAssumption();
+  const rows = [
+    ...paths.map((path) => ({
+      type: "path",
+      title: path.title,
+      bullets: [path.prompt, path.expectedValue].filter(Boolean),
+      path,
+    })),
+    ...assumptions.map((claim) => ({
+      type: "assumption",
+      title: claim.text,
+      bullets: [`${formatLabel(claim.status)} assumption`, `${claim.confidence}% confidence`],
+      claim,
+      isWeakest: weakest?.id === claim.id,
+    })),
+  ];
 
-  rows.slice(0, 10).forEach((rowData, index) => {
+  rows.slice(0, 12).forEach((rowData, index) => {
     const row = document.createElement("article");
-    row.className = "exploration-row";
+    row.className = [
+      "exploration-row",
+      rowData.type === "assumption" ? "assumption-row" : "path-row",
+      rowData.isWeakest ? "is-weakest" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-label", rowData.type === "assumption" ? `Review assumption ${rowData.title}` : `Explore ${rowData.title}`);
 
     const number = document.createElement("span");
     number.className = "path-number";
@@ -1658,6 +1724,13 @@ function renderExplorationRows(paths) {
     body.className = "exploration-row-body";
     const title = document.createElement("strong");
     title.textContent = rowData.title;
+
+    if (rowData.isWeakest) {
+      const marker = document.createElement("span");
+      marker.className = "weakest-marker";
+      marker.textContent = "Weakest";
+      body.append(marker);
+    }
 
     const bullets = document.createElement("ul");
     bullets.className = "exploration-points";
@@ -1670,11 +1743,8 @@ function renderExplorationRows(paths) {
 
     body.append(title, bullets);
 
-    const action = document.createElement("button");
-    action.type = "button";
-    action.className = "exploration-action";
-    action.textContent = "Explore";
-    action.addEventListener("click", () => {
+    const action = rowData.claim ? assumptionRowActions(rowData.claim) : explorationRowAction(rowData);
+    const activate = () => {
       if (rowData.claim) {
         void handleClaimInspect(rowData.claim);
         return;
@@ -1682,6 +1752,20 @@ function renderExplorationRows(paths) {
 
       setText(elements.keyInsight, rowData.path?.prompt ?? rowData.title);
       setStatus(`Selected ${rowData.title}.`);
+    };
+
+    row.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("button, input, textarea, a")) {
+        return;
+      }
+
+      activate();
+    });
+    row.addEventListener("keydown", (event) => {
+      if ((event.key === "Enter" || event.key === " ") && event.target === row) {
+        event.preventDefault();
+        activate();
+      }
     });
 
     row.append(number, body, action);
@@ -1689,8 +1773,65 @@ function renderExplorationRows(paths) {
   });
 }
 
+function explorationRowAction(rowData) {
+  const action = document.createElement("button");
+  action.type = "button";
+  action.className = "exploration-action";
+  action.textContent = "Explore";
+  action.addEventListener("click", () => {
+    setText(elements.keyInsight, rowData.path?.prompt ?? rowData.title);
+    setStatus(`Selected ${rowData.title}.`);
+  });
+
+  return action;
+}
+
+function assumptionRowActions(claim) {
+  const controls = document.createElement("div");
+  controls.className = "assumption-actions";
+
+  for (const item of [
+    { label: "Confirm", action: "confirm", disabled: claim.status === "committed" },
+    { label: "Reject", action: "reject", disabled: claim.status === "rejected" },
+    { label: "Refine", action: "refine", disabled: false },
+  ]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = state.respondingClaimId === claim.id ? "Saving" : item.label;
+    button.disabled = state.respondingClaimId === claim.id || item.disabled;
+    button.addEventListener("click", () => {
+      void handleAssumptionAction(claim, item.action);
+    });
+    controls.append(button);
+  }
+
+  return controls;
+}
+
 function assumptionClaims() {
   return (state.data?.ideaMap?.claims ?? []).filter((claim) => claim.kind === "assumption");
+}
+
+function weakestAssumption() {
+  const assumptions = assumptionClaims();
+
+  if (assumptions.length === 0) {
+    return null;
+  }
+
+  const challengeTargetId = state.activeChallenge?.targetClaimId ?? state.data?.firstChallenge?.targetClaimId;
+  const challengedAssumption = assumptions.find((claim) => claim.id === challengeTargetId);
+
+  if (challengedAssumption) {
+    return challengedAssumption;
+  }
+
+  return [...assumptions].sort((left, right) => {
+    const leftOpen = left.status === "exploratory" ? 0 : 1;
+    const rightOpen = right.status === "exploratory" ? 0 : 1;
+
+    return leftOpen - rightOpen || Number(left.confidence ?? 100) - Number(right.confidence ?? 100);
+  })[0];
 }
 
 function assumptionReviewSection(assumptions) {
@@ -1933,17 +2074,27 @@ function moveAffectedLabel(move) {
 }
 
 function renderPennyInsight(challenge, targetClaim) {
-  const challengeTarget = targetClaim ?? findClaimById(challenge?.targetClaimId);
+  const weakest = weakestAssumption();
+  const challengeTarget = targetClaim ?? findClaimById(challenge?.targetClaimId) ?? weakest;
   const strength = challenge?.strength ? ` / ${formatLabel(challenge.strength)}` : "";
   const isChallengeSuggestion = Boolean(challenge?.targetClaimId && !challenge?.challengeEdgeId);
 
-  setText(elements.pennyInsight, challengeTarget?.text ?? challenge?.weakestPart ?? "The first challenge will appear here.");
+  setText(
+    elements.pennyInsight,
+    challengeTarget?.text ?? challenge?.weakestPart ?? "Penny is waiting for a seed idea to turn into claims and dependencies.",
+  );
   setText(elements.failureType, `${formatLabel(challenge?.failureType ?? "waiting")}${strength}`);
   setText(
     elements.weakestPart,
-    isChallengeSuggestion ? "Weakest assumption detected -> Challenge this?" : challenge?.weakestPart ?? "Weakest assumption will appear here.",
+    isChallengeSuggestion ? "Weakest assumption detected -> Challenge this?" : challenge?.weakestPart ?? (weakest ? "Weakest assumption" : "What to watch"),
   );
-  setText(elements.challengeText, challenge?.challenge ?? "Submit one idea to reveal the weakest load-bearing part.");
+  setText(
+    elements.challengeText,
+    challenge?.challenge ??
+      (weakest
+        ? `${weakest.text} is the assumption to settle first because the current idea leans on it.`
+        : "The right panel stays active: it will keep pointing at the load-bearing assumption as soon as one exists."),
+  );
   renderInsightActions(challenge, challengeTarget);
 }
 
