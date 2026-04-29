@@ -72,6 +72,12 @@ test("frontend brain client uses session-scoped Autopilot command routes", async
     assert.equal(calls[5]?.url, `/api/sessions/${sessionId}/focus/manual`);
     assert.equal(calls[5]?.method, "POST");
     assert.deepEqual(calls[5]?.body, { claimId, previousSuggestionMoveId });
+
+    for (const call of calls) {
+      assert.equal(call.headers["content-type"], "application/json");
+      assert.equal(call.headers["x-user-id"], undefined);
+      assert.equal(call.headers["x-project-id"], undefined);
+    }
   } finally {
     restoreFetch();
   }
@@ -105,6 +111,7 @@ test("frontend brain client normalizes cockpit Autopilot state for the existing 
 type FetchCall = {
   url: string;
   method: string;
+  headers: Record<string, string>;
   body: unknown;
 };
 
@@ -114,10 +121,11 @@ function mockFetch(calls: FetchCall[], responses: Response[]): () => void {
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const method = init?.method ?? "GET";
+    const headers = headersRecord(init?.headers);
     const body = typeof init?.body === "string" && init.body.trim() ? JSON.parse(init.body) : null;
     const response = responses.shift();
 
-    calls.push({ url, method, body });
+    calls.push({ url, method, headers, body });
 
     if (!response) {
       return new Response(JSON.stringify({ error: { message: "Unexpected fetch call." } }), {
@@ -132,6 +140,16 @@ function mockFetch(calls: FetchCall[], responses: Response[]): () => void {
   return () => {
     globalThis.fetch = originalFetch;
   };
+}
+
+function headersRecord(headers: HeadersInit | undefined): Record<string, string> {
+  const record: Record<string, string> = {};
+
+  new Headers(headers).forEach((value, key) => {
+    record[key] = value;
+  });
+
+  return record;
 }
 
 function jsonResponse(data: unknown): Response {
