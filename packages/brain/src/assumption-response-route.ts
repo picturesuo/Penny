@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
+import { afterMoveEffectsInTransaction } from "./after-move-effects.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { claimVersions, claims } from "./db/schema.ts";
 import { createMove } from "./move-payloads.ts";
@@ -266,6 +267,8 @@ export async function persistAssumptionResponse(
     if (!version) {
       throw new AssumptionResponseConflictError("Failed to create assumption response version.");
     }
+
+    await afterMoveEffectsInTransaction(tx, { sessionId: claim.sessionId, moveId: move.id });
 
     return {
       claim: {
