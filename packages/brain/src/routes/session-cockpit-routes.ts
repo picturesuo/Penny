@@ -916,10 +916,9 @@ function selectEdgesForStep(
 
     return touchesClaim && (!matchesChallenge || edge.kind === "challenges" || edge.kind === "contradicts");
   });
-  const edgeIds = uniqueStrings([
-    ...(context.activeEdgeId ? [context.activeEdgeId] : []),
-    ...edges.map((edge) => edge.id),
-  ]);
+  const edgeIds = uniqueStrings(edges.map((edge) => edge.id)).sort(
+    (left, right) => Number(right === context.activeEdgeId) - Number(left === context.activeEdgeId),
+  );
 
   return edgeIds.slice(0, 6);
 }
