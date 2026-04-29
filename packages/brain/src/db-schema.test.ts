@@ -48,6 +48,15 @@ test("ClaimVersion schema tracks validity windows", () => {
   assert.equal(claimVersions.supersededByVersionId.name, "superseded_by_version_id");
 });
 
+test("Penny core tables persist user and workspace scope", () => {
+  for (const table of [sessions, sources, claims, claimEdges, moves, derivedEffects, shapes, brainRuns, artifacts, wikiPages]) {
+    assert.equal(table.userId.name, "user_id");
+    assert.equal(table.workspaceId.name, "workspace_id");
+    assert.equal(table.projectId.name, "project_id");
+    assert.equal(table.sphereId.name, "sphere_id");
+  }
+});
+
 test("Penny schema keeps core enum values narrow for the MVP", () => {
   assert.deepEqual(claimKindEnum.enumValues, ["belief", "assumption", "question", "concept"]);
   assert.ok(claimStatusEnum.enumValues.includes("rejected"));

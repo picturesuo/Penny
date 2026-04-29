@@ -14,6 +14,15 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
+function scopeColumns() {
+  return {
+    userId: text("user_id"),
+    workspaceId: text("workspace_id"),
+    projectId: text("project_id"),
+    sphereId: text("sphere_id"),
+  };
+}
+
 export const sessionStatusEnum = pgEnum("session_status", ["open", "completed"]);
 export const sourceKindEnum = pgEnum("source_kind", ["raw_idea", "verification_citation"]);
 export const claimKindEnum = pgEnum("claim_kind", ["belief", "assumption", "question", "concept"]);
@@ -76,6 +85,7 @@ export const sessions = pgTable(
   "sessions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
     status: sessionStatusEnum("status").notNull().default("open"),
     title: text("title"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -83,6 +93,7 @@ export const sessions = pgTable(
   },
   (table) => [
     index("sessions_status_idx").on(table.status),
+    index("sessions_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
     index("sessions_created_at_idx").on(table.createdAt),
   ],
 );
@@ -91,6 +102,7 @@ export const sources = pgTable(
   "sources",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
     sessionId: uuid("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
@@ -98,13 +110,17 @@ export const sources = pgTable(
     rawText: text("raw_text").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("sources_session_id_idx").on(table.sessionId)],
+  (table) => [
+    index("sources_session_id_idx").on(table.sessionId),
+    index("sources_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+  ],
 );
 
 export const claims = pgTable(
   "claims",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
     sessionId: uuid("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
@@ -114,6 +130,7 @@ export const claims = pgTable(
   },
   (table) => [
     index("claims_session_id_idx").on(table.sessionId),
+    index("claims_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
     index("claims_source_id_idx").on(table.sourceId),
     index("claims_kind_idx").on(table.kind),
   ],
@@ -169,6 +186,7 @@ export const claimEdges = pgTable(
   "claim_edges",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
     sessionId: uuid("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
@@ -185,6 +203,7 @@ export const claimEdges = pgTable(
   },
   (table) => [
     index("claim_edges_session_id_idx").on(table.sessionId),
+    index("claim_edges_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
     index("claim_edges_from_claim_id_idx").on(table.fromClaimId),
     index("claim_edges_to_claim_id_idx").on(table.toClaimId),
     check("claim_edges_no_self_edge", sql`${table.fromClaimId} <> ${table.toClaimId}`),
@@ -218,6 +237,7 @@ export const moves = pgTable(
   "moves",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
     sessionId: uuid("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
@@ -228,6 +248,7 @@ export const moves = pgTable(
   },
   (table) => [
     index("moves_session_id_idx").on(table.sessionId),
+    index("moves_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
     index("moves_kind_idx").on(table.kind),
     index("moves_created_at_idx").on(table.createdAt),
   ],
@@ -237,6 +258,7 @@ export const derivedEffects = pgTable(
   "derived_effects",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
     sessionId: uuid("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
@@ -254,6 +276,7 @@ export const derivedEffects = pgTable(
   },
   (table) => [
     index("derived_effects_session_id_idx").on(table.sessionId),
+    index("derived_effects_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
     index("derived_effects_source_move_id_idx").on(table.sourceMoveId),
     index("derived_effects_kind_idx").on(table.kind),
     index("derived_effects_status_idx").on(table.status),
@@ -266,6 +289,7 @@ export const shapes = pgTable(
   "shapes",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
     sessionId: uuid("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
@@ -285,6 +309,7 @@ export const shapes = pgTable(
   },
   (table) => [
     index("shapes_session_id_idx").on(table.sessionId),
+    index("shapes_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
     index("shapes_source_move_id_idx").on(table.sourceMoveId),
     index("shapes_key_idx").on(table.key),
     index("shapes_status_idx").on(table.status),
@@ -298,6 +323,7 @@ export const brainRuns = pgTable(
   "brain_runs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
     sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
     sourceId: uuid("source_id").references(() => sources.id, { onDelete: "set null" }),
     operation: text("operation").notNull(),
@@ -312,6 +338,7 @@ export const brainRuns = pgTable(
   },
   (table) => [
     index("brain_runs_session_id_idx").on(table.sessionId),
+    index("brain_runs_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
     index("brain_runs_source_id_idx").on(table.sourceId),
     index("brain_runs_operation_idx").on(table.operation),
     index("brain_runs_status_idx").on(table.status),
@@ -322,6 +349,7 @@ export const artifacts = pgTable(
   "artifacts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
     sessionId: uuid("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
@@ -333,6 +361,7 @@ export const artifacts = pgTable(
   },
   (table) => [
     index("artifacts_session_id_idx").on(table.sessionId),
+    index("artifacts_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
     index("artifacts_kind_idx").on(table.kind),
   ],
 );
@@ -341,6 +370,7 @@ export const wikiPages = pgTable(
   "wiki_pages",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
     sessionId: uuid("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
@@ -352,6 +382,7 @@ export const wikiPages = pgTable(
   },
   (table) => [
     index("wiki_pages_session_id_idx").on(table.sessionId),
+    index("wiki_pages_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
     index("wiki_pages_slug_idx").on(table.slug),
     index("wiki_pages_created_at_idx").on(table.createdAt),
   ],

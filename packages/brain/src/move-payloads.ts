@@ -7,6 +7,7 @@ import {
   moveKindEnum,
   moves,
 } from "./db/schema.ts";
+import { scopeValues, type BrainScopeInput } from "./scope.ts";
 
 const UuidSchema = z.string().uuid();
 const UuidArraySchema = z.array(UuidSchema);
@@ -336,6 +337,7 @@ export type CreatedMove<K extends MoveKind = MoveKind> = Omit<typeof moves.$infe
 export type CreateMoveInput<K extends MoveKind> = {
   id?: string;
   sessionId: string;
+  scope?: BrainScopeInput;
   summary: string;
   payload: MovePayload<K>;
 };
@@ -381,6 +383,7 @@ export async function createMove<K extends MoveKind>(
     .values({
       id,
       sessionId,
+      ...scopeValues(input.scope),
       kind,
       summary,
       payload,
