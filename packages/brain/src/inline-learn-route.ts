@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claimVersions, claims } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
+import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
 import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 
@@ -58,6 +59,7 @@ export type InlineLearnGenerationInput = {
   localContext: string;
   currentClaimText: string;
   currentClaimKind: "belief" | "assumption" | "question" | "concept";
+  lensSnapshot?: LensSnapshot;
 };
 
 export type InlineLearnProvider = {
@@ -147,6 +149,7 @@ type PersistedMoveSlice = {
 type InlineLearnPrelude = {
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>;
   brainRun: typeof brainRuns.$inferSelect;
+  lensSnapshot: LensSnapshot;
 };
 
 export async function handleInlineLearnRequest(
@@ -244,7 +247,7 @@ export async function runInlineLearn(
   const prelude = await createInlineLearnPrelude(db, input, provider);
 
   try {
-    const output = await generateInlineLearnOutput(learnGenerationInput(prelude.target, input), {
+    const output = await generateInlineLearnOutput(learnGenerationInput(prelude.target, input, prelude.lensSnapshot), {
       provider,
       brainRunId: prelude.brainRun.id,
     });
@@ -396,11 +399,17 @@ export function buildInlineLearnPrompt(input: InlineLearnGenerationInput): strin
     "- relatedConcepts: up to five short concept names.",
     "- saveSuggestion: when the user should save this as a concept claim.",
     "",
+    "Lens rules:",
+    "- Use confirmed shapes to choose framing and examples that fit this user's history.",
+    "- Treat candidate shapes as tentative and do not label the user with them.",
+    "- If the lens suggests concept grounding or evidence checking patterns, make the explanation more operational.",
+    "",
     `Term: ${input.term}`,
     `Current claim id: ${input.currentClaimId}`,
     `Current claim kind: ${input.currentClaimKind}`,
     `Current claim: ${input.currentClaimText}`,
     `Local context: ${input.localContext}`,
+    `Lens snapshot JSON: ${formatLensSnapshot(input.lensSnapshot)}`,
   ].join("\n");
 }
 
@@ -411,6 +420,7 @@ async function createInlineLearnPrelude(
 ): Promise<InlineLearnPrelude> {
   return db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.currentClaimId, input.sessionId);
+    const lensSnapshot = await loadLensSnapshot(tx, input.sessionId);
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
@@ -426,6 +436,7 @@ async function createInlineLearnPrelude(
           currentClaimVersionId: target.version.id,
           localContext: input.localContext,
           save: input.save,
+          lensSnapshot,
         },
       })
       .returning();
@@ -434,7 +445,7 @@ async function createInlineLearnPrelude(
       throw new InlineLearnConflictError("Failed to record Inline Learn BrainRun.");
     }
 
-    return { target, brainRun };
+    return { target, brainRun, lensSnapshot };
   });
 }
 
@@ -613,6 +624,7 @@ async function loadClaimWithCurrentVersion(tx: InlineLearnTransaction, claimId: 
 function learnGenerationInput(
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
   input: InlineLearnRequest,
+  lensSnapshot: LensSnapshot,
 ): InlineLearnGenerationInput {
   return {
     term: input.term,
@@ -621,6 +633,7 @@ function learnGenerationInput(
     localContext: input.localContext,
     currentClaimText: target.version.content,
     currentClaimKind: target.claim.kind,
+    lensSnapshot,
   };
 }
 
