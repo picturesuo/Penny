@@ -240,15 +240,6 @@ export async function persistAssumptionResponse(
       },
     });
 
-    await tx
-      .update(claimVersions)
-      .set({
-        isCurrent: false,
-        validUntil: validFrom,
-        supersededByVersionId: versionId,
-      })
-      .where(and(eq(claimVersions.claimId, claim.id), eq(claimVersions.isCurrent, true)));
-
     const [version] = await tx
       .insert(claimVersions)
       .values({
@@ -259,7 +250,7 @@ export async function persistAssumptionResponse(
         content: next.content,
         status: next.status,
         confidence: next.confidence,
-        isCurrent: true,
+        isCurrent: false,
         validFrom,
       })
       .returning();
@@ -268,16 +259,42 @@ export async function persistAssumptionResponse(
       throw new AssumptionResponseConflictError("Failed to create assumption response version.");
     }
 
+    await tx
+      .update(claimVersions)
+      .set({
+        isCurrent: false,
+        validUntil: validFrom,
+        supersededByVersionId: versionId,
+      })
+      .where(and(eq(claimVersions.claimId, claim.id), eq(claimVersions.isCurrent, true)));
+
+    const [markedCurrentResponseVersion] = await tx
+      .update(claimVersions)
+      .set({
+        isCurrent: true,
+      })
+      .where(eq(claimVersions.id, version.id))
+      .returning();
+
+    if (!markedCurrentResponseVersion) {
+      throw new AssumptionResponseConflictError("Failed to mark assumption response version current.");
+    }
+
     await afterMoveEffectsInTransaction(tx, { sessionId: claim.sessionId, moveId: move.id });
+
+    const currentResponseVersion = {
+      ...version,
+      isCurrent: true,
+    };
 
     return {
       claim: {
         id: claim.id,
-        versionId: version.id,
+        versionId: currentResponseVersion.id,
         kind: "assumption",
-        status: version.status,
-        text: version.content,
-        confidence: version.confidence,
+        status: currentResponseVersion.status,
+        text: currentResponseVersion.content,
+        confidence: currentResponseVersion.confidence,
       },
       move: {
         id: move.id,

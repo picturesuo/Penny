@@ -575,15 +575,6 @@ async function persistChallengeRoundResponse(
       },
     });
 
-    await tx
-      .update(claimVersions)
-      .set({
-        isCurrent: false,
-        validUntil: validFrom,
-        supersededByVersionId: versionId,
-      })
-      .where(and(eq(claimVersions.claimId, target.claim.id), eq(claimVersions.isCurrent, true)));
-
     const [newVersion] = await tx
       .insert(claimVersions)
       .values({
@@ -594,7 +585,7 @@ async function persistChallengeRoundResponse(
         content: input.revisedText,
         status: "exploratory",
         confidence: target.version.confidence,
-        isCurrent: true,
+        isCurrent: false,
         validFrom,
       })
       .returning();
@@ -603,9 +594,33 @@ async function persistChallengeRoundResponse(
       throw new ChallengeRoundConflictError("Failed to create revised ClaimVersion.");
     }
 
+    await tx
+      .update(claimVersions)
+      .set({
+        isCurrent: false,
+        validUntil: validFrom,
+        supersededByVersionId: versionId,
+      })
+      .where(and(eq(claimVersions.claimId, target.claim.id), eq(claimVersions.isCurrent, true)));
+
+    const [markedCurrentVersion] = await tx
+      .update(claimVersions)
+      .set({
+        isCurrent: true,
+      })
+      .where(eq(claimVersions.id, newVersion.id))
+      .returning();
+
+    if (!markedCurrentVersion) {
+      throw new ChallengeRoundConflictError("Failed to mark revised ClaimVersion current.");
+    }
+
     return {
       move,
-      currentVersion: newVersion,
+      currentVersion: {
+        ...newVersion,
+        isCurrent: true,
+      },
       previousVersionId: target.version.id,
       edge: challengeEdge,
     };

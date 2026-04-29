@@ -70,6 +70,9 @@ test("ChallengeRoundService revise preserves old version and creates a new curre
     reasoning: "The original claim was too broad.",
   });
   const oldVersionUpdate = calls.update.find((call) => call.table === claimVersions);
+  const currentVersionUpdate = calls.update.find(
+    (call) => call.table === claimVersions && call.set.isCurrent === true,
+  );
   const newVersionInsert = calls.insert.find((call) => call.table === claimVersions);
 
   assert.equal(result.move.kind, "claim_revised");
@@ -82,8 +85,9 @@ test("ChallengeRoundService revise preserves old version and creates a new curre
   assert.ok(oldVersionUpdate?.set.validUntil instanceof Date);
   assert.equal(oldVersionUpdate?.set.supersededByVersionId, result.receipt.currentClaimVersionId);
   assert.equal(newVersionInsert?.values.content, revisedText);
-  assert.equal(newVersionInsert?.values.isCurrent, true);
+  assert.equal(newVersionInsert?.values.isCurrent, false);
   assert.equal(newVersionInsert?.values.id, result.receipt.currentClaimVersionId);
+  assert.equal(currentVersionUpdate?.set.isCurrent, true);
 });
 
 test("ChallengeRoundService rejects already-responded challenges before writing", async () => {
@@ -190,27 +194,7 @@ async function respondWith(input: ChallengeResponseWithoutId) {
             (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(603) }),
             (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(604) }),
           ],
-    updateRows:
-      input.response === "absorb"
-        ? [
-            edgeRow({ status: "acknowledged_vulnerability" }),
-            challengeRoundRow({
-              status: "responded",
-              response: input.response,
-              responseMoveId: uuidAt(603),
-              focusCompletedMoveId: uuidAt(604),
-              respondedAt: dateAt(20),
-            }),
-          ]
-        : [
-            challengeRoundRow({
-              status: "responded",
-              response: input.response,
-              responseMoveId: uuidAt(603),
-              focusCompletedMoveId: uuidAt(604),
-              respondedAt: dateAt(20),
-            }),
-          ],
+    updateRows: updateRowsForResponse(input.response),
   });
   const service = new ChallengeRoundService(db);
   const result = await service.respondToChallenge({ ...input, challengeId: uuidAt(901) } as RespondToChallengeInput);
@@ -221,6 +205,26 @@ async function respondWith(input: ChallengeResponseWithoutId) {
 }
 
 type InsertRow = unknown | ((values: Record<string, unknown>) => unknown);
+
+function updateRowsForResponse(response: "defend" | "revise" | "absorb"): unknown[] {
+  const respondedRound = challengeRoundRow({
+    status: "responded",
+    response,
+    responseMoveId: uuidAt(603),
+    focusCompletedMoveId: uuidAt(604),
+    respondedAt: dateAt(20),
+  });
+
+  if (response === "absorb") {
+    return [edgeRow({ status: "acknowledged_vulnerability" }), respondedRound];
+  }
+
+  if (response === "revise") {
+    return [{ id: uuidAt(999) }, respondedRound];
+  }
+
+  return [respondedRound];
+}
 
 function fakeChallengeDb(options: {
   selectRows?: unknown[][];

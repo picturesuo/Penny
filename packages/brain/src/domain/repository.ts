@@ -321,15 +321,6 @@ export class DrizzleBrainRepository implements BrainRepository {
         },
       });
 
-      await tx
-        .update(claimVersions)
-        .set({
-          isCurrent: false,
-          validUntil: validFrom,
-          supersededByVersionId: versionId,
-        })
-        .where(and(eq(claimVersions.claimId, current.claim.id), eq(claimVersions.isCurrent, true)));
-
       const [newVersion] = await tx
         .insert(claimVersions)
         .values({
@@ -340,7 +331,7 @@ export class DrizzleBrainRepository implements BrainRepository {
           content: input.revisedText,
           status: "exploratory",
           confidence: current.version.confidence,
-          isCurrent: true,
+          isCurrent: false,
           validFrom,
         })
         .returning();
@@ -349,10 +340,34 @@ export class DrizzleBrainRepository implements BrainRepository {
         throw new BrainRepositoryConflictError("Failed to create revised ClaimVersion.");
       }
 
+      await tx
+        .update(claimVersions)
+        .set({
+          isCurrent: false,
+          validUntil: validFrom,
+          supersededByVersionId: versionId,
+        })
+        .where(and(eq(claimVersions.claimId, current.claim.id), eq(claimVersions.isCurrent, true)));
+
+      const [markedCurrentVersion] = await tx
+        .update(claimVersions)
+        .set({
+          isCurrent: true,
+        })
+        .where(eq(claimVersions.id, newVersion.id))
+        .returning();
+
+      if (!markedCurrentVersion) {
+        throw new BrainRepositoryConflictError("Failed to mark revised ClaimVersion current.");
+      }
+
       return {
         claim: current.claim,
         previousVersion: current.version,
-        currentVersion: newVersion,
+        currentVersion: {
+          ...newVersion,
+          isCurrent: true,
+        },
         move,
       };
     });
