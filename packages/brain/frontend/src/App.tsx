@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createChallengeBrief,
   fetchSessionCockpit,
@@ -39,6 +39,9 @@ type ChallengeResponseDraft =
       reasoning?: string;
     };
 
+const ACTIVE_SESSION_KEY = "penny.activeSessionId";
+const SESSION_QUERY_PARAM = "sessionId";
+
 export function App() {
   const [data, setData] = useState<BrainData | null>(null);
   const [moves, setMoves] = useState<BrainMove[]>([]);
@@ -63,6 +66,59 @@ export function App() {
     ? `Session ${shortId(data.session.id)} ${formatLabel(data.session.status)}`
     : "No session";
 
+  useEffect(() => {
+    const sessionId = activeSessionId();
+
+    if (!sessionId) {
+      return;
+    }
+
+    const restoreSessionId = sessionId;
+    let cancelled = false;
+
+    async function restoreSession() {
+      setIsThinking(true);
+      setStatus("Restoring session");
+
+      try {
+        const cockpit = await fetchSessionCockpit(restoreSessionId);
+
+        if (cancelled) {
+          return;
+        }
+
+        const cockpitData = cockpit.data;
+        setData(mergeCockpitData(cockpitData, null));
+        setAutopilot(cockpitData.autopilot);
+        setMoves(cockpitData.moves);
+        setLatestArtifact(cockpitData.latestArtifact ?? null);
+        setFocusedClaimId(
+          cockpitData.autopilot.focusState?.focusedClaimId ??
+            cockpitData.autopilot.suggestion?.targetClaimId ??
+            cockpitData.ideaMap.claims[0]?.id ??
+            null,
+        );
+        rememberActiveSession(cockpitData.session.id);
+        setStatus("Cockpit refreshed");
+      } catch (error) {
+        if (!cancelled) {
+          forgetActiveSession();
+          setStatus(error instanceof Error ? error.message : String(error));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsThinking(false);
+        }
+      }
+    }
+
+    void restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function handleSeed(rawIdea: string) {
     setIsThinking(true);
     setStatus("Thinking");
@@ -76,6 +132,7 @@ export function App() {
       setStatus("Graph slice persisted");
 
       if (payload.data.session?.id) {
+        rememberActiveSession(payload.data.session.id);
         await tickAutopilot(payload.data.session.id);
         const cockpit = await refreshCockpit(payload.data.session.id, payload.data);
         setFocusedClaimId(
@@ -233,6 +290,7 @@ export function App() {
     setAutopilot(cockpitData.autopilot);
     setMoves(cockpitData.moves);
     setLatestArtifact(cockpitData.latestArtifact ?? null);
+    rememberActiveSession(cockpitData.session.id);
 
     return cockpitData;
   }
@@ -302,4 +360,38 @@ function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null
 
 function responseLabel(response: ChallengeResponseKind): string {
   return response.charAt(0).toUpperCase() + response.slice(1);
+}
+
+function activeSessionId(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const urlSessionId = new URLSearchParams(window.location.search).get(SESSION_QUERY_PARAM);
+
+  if (urlSessionId) {
+    return urlSessionId;
+  }
+
+  return window.localStorage.getItem(ACTIVE_SESSION_KEY);
+}
+
+function rememberActiveSession(sessionId: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(ACTIVE_SESSION_KEY, sessionId);
+
+  const url = new URL(window.location.href);
+  url.searchParams.set(SESSION_QUERY_PARAM, sessionId);
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function forgetActiveSession(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(ACTIVE_SESSION_KEY);
 }
