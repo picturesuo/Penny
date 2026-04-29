@@ -19,6 +19,8 @@ import {
   moves,
   pennySchema,
   sessions,
+  shapeStatusEnum,
+  shapes,
   sourceSpans,
   sources,
   wikiPages,
@@ -34,6 +36,7 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(sourceSpans), "source_spans");
   assert.equal(getTableName(moves), "moves");
   assert.equal(getTableName(derivedEffects), "derived_effects");
+  assert.equal(getTableName(shapes), "shapes");
   assert.equal(getTableName(brainRuns), "brain_runs");
   assert.equal(getTableName(artifacts), "artifacts");
   assert.equal(getTableName(wikiPages), "wiki_pages");
@@ -60,6 +63,7 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
     "next_move_recommendation",
   ]);
   assert.deepEqual(derivedEffectStatusEnum.enumValues, ["pending_review", "accepted", "rejected", "superseded"]);
+  assert.deepEqual(shapeStatusEnum.enumValues, ["candidate", "confirmed", "rejected", "superseded"]);
   assert.ok(moveKindEnum.enumValues.includes("seed_claim_created"));
   assert.ok(moveKindEnum.enumValues.includes("assumptions_extracted"));
   assert.ok(moveKindEnum.enumValues.includes("first_challenge_suggested"));
@@ -95,6 +99,8 @@ test("Penny schema has a clean aggregate export surface", () => {
     "moves",
     "sessionStatusEnum",
     "sessions",
+    "shapeStatusEnum",
+    "shapes",
     "sourceKindEnum",
     "sourceSpans",
     "sources",
