@@ -3,10 +3,20 @@ import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { artifacts, brainRuns, claimEdges, claimVersions, claims, moves, sessions, sources } from "./db/schema.ts";
+import { artifacts, brainRuns, claimEdges, claimVersions, claims, moves, sessions, shapes as shapeRows, sources } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
+import {
+  compiledShapesFromRows,
+  inferredShapeSlices,
+  persistInferredShapes,
+  type CompiledShape,
+  type PersistedShape,
+} from "./shapes.ts";
+
+export { inferShapesFromMoves } from "./shapes.ts";
+export type { CompiledShape } from "./shapes.ts";
 
 export const ArtifactRouteRequestSchema = z
   .object({
@@ -141,6 +151,7 @@ type ClaimRow = typeof claims.$inferSelect;
 type ClaimVersionRow = typeof claimVersions.$inferSelect;
 type EdgeRow = typeof claimEdges.$inferSelect;
 type MoveRow = typeof moves.$inferSelect;
+type ShapeRow = typeof shapeRows.$inferSelect;
 
 export type SessionArtifactState = {
   session: typeof sessions.$inferSelect;
@@ -148,6 +159,7 @@ export type SessionArtifactState = {
   claimVersions: ClaimVersionRow[];
   edges: EdgeRow[];
   moves: MoveRow[];
+  shapes?: ShapeRow[];
 };
 
 export type SessionArtifactContext = {
@@ -208,6 +220,7 @@ export type SessionArtifactContext = {
     summary: string;
     createdAt: string;
   }>;
+  shapes?: CompiledShape[];
 };
 
 export type ArtifactGenerationInput = SessionArtifactContext & {
@@ -391,14 +404,6 @@ type CompiledLearnedConcept = {
   explanation: string;
   teachesClaimIds: string[];
   edgeIds: string[];
-};
-
-export type CompiledShape = {
-  label: string;
-  description: string;
-  confidence: number;
-  supportingMoveIds: string[];
-  status: "tentative";
 };
 
 type PersistedArtifactMove = {
@@ -749,7 +754,12 @@ async function persistArtifactOutput(
   return db.transaction(async (tx) => {
     const claimIds = referencedClaimIds(output);
     const edgeIds = referencedEdgeIds(output);
-    const payload = artifactPayload(output, prelude, claimIds, edgeIds);
+    const persistedShapes = await persistInferredShapes(tx, {
+      sessionId: prelude.context.session.id,
+      moves: prelude.context.moves.map(compiledChange),
+    });
+    const context = withPersistedShapes(prelude.context, persistedShapes);
+    const payload = artifactPayload(output, { ...prelude, context }, claimIds, edgeIds);
     const [artifact] = await tx
       .insert(artifacts)
       .values({
@@ -881,6 +891,11 @@ async function loadSessionArtifactContext(
     .from(artifacts)
     .where(eq(artifacts.sessionId, sessionId))
     .orderBy(asc(artifacts.createdAt));
+  const persistedShapeRows = await tx
+    .select()
+    .from(shapeRows)
+    .where(eq(shapeRows.sessionId, sessionId))
+    .orderBy(asc(shapeRows.createdAt));
 
   return {
     session: {
@@ -931,6 +946,7 @@ async function loadSessionArtifactContext(
       summary: artifact.summary,
       createdAt: artifact.createdAt.toISOString(),
     })),
+    shapes: compiledShapesFromRows(persistedShapeRows),
   };
 }
 
@@ -966,7 +982,7 @@ export function buildArtifactDraft(state: SessionArtifactState): ArtifactDraft {
   const unresolvedRisks = buildUnresolvedRisks(claimSnapshots, state.edges, challenges, textByClaimId, state.moves);
   const whatChanged = state.moves.map(compiledStateChange);
   const recommendedNextMove = recommendNextMove(unresolvedRisks, claimSnapshots, learnedConcepts);
-  const shapes = inferShapesFromMoves(whatChanged);
+  const shapes = state.shapes?.length ? compiledShapesFromRows(state.shapes) : inferredShapeSlices(whatChanged);
   const payload: CompiledArtifactPayload = {
     sessionId: state.session.id,
     generatedFrom: {
@@ -1369,7 +1385,7 @@ function compiledArtifactPayload(
   const whatChanged = context.moves.map(compiledChange);
   const recommendedNextMove = recommendedMove(output, unresolvedRisks);
   const learnedConcepts = compiledLearnedConcepts(context);
-  const shapes = inferShapesFromMoves(whatChanged);
+  const shapes = context.shapes?.length ? context.shapes : inferredShapeSlices(whatChanged);
 
   return {
     sessionId: context.session.id,
@@ -1404,6 +1420,13 @@ function compiledArtifactPayload(
       moveIds: context.moves.map((move) => move.id),
       existingArtifactIds: context.artifacts.map((artifact) => artifact.id),
     },
+  };
+}
+
+function withPersistedShapes(context: SessionArtifactContext, persistedShapes: PersistedShape[]): SessionArtifactContext {
+  return {
+    ...context,
+    shapes: compiledShapesFromRows(persistedShapes),
   };
 }
 
@@ -1598,153 +1621,6 @@ function challengeResponseMoveForEdge(
 
     return stringArrayPayloadValue(move.payload, "edgeIds").includes(edgeId) || stringPayloadValue(move.payload, "challengeEdgeId") === edgeId;
   });
-}
-
-type ShapeMove = Pick<CompiledChange, "moveId" | "kind" | "summary" | "createdAt">;
-
-export function inferShapesFromMoves(moves: ShapeMove[]): CompiledShape[] {
-  const recentMoves = moves
-    .filter((move) => move.moveId && move.kind)
-    .slice(-12);
-
-  if (recentMoves.length === 0) {
-    return [];
-  }
-
-  const candidates = [
-    inferInitialDecompositionShape(recentMoves),
-    inferAssumptionReviewShape(recentMoves),
-    inferChallengeResponseShape(recentMoves),
-    inferConceptGroundingShape(recentMoves),
-    inferEvidenceCheckingShape(recentMoves),
-    inferArtifactCompilationShape(recentMoves),
-  ].filter((shape): shape is CompiledShape => Boolean(shape));
-
-  return candidates.sort(shapeSort).slice(0, 3);
-}
-
-function inferInitialDecompositionShape(moves: ShapeMove[]): CompiledShape | null {
-  const supporting = moves.filter((move) =>
-    ["seed_claim_created", "assumptions_extracted", "first_challenge_suggested"].includes(move.kind),
-  );
-
-  if (supporting.length < 2) {
-    return null;
-  }
-
-  const kinds = new Set(supporting.map((move) => move.kind));
-  const confidence = boundedConfidence(52 + supporting.length * 7 + (kinds.size >= 3 ? 8 : 0));
-
-  return {
-    label: "Initial decomposition",
-    description: "Recent moves split the raw idea into a seed, load-bearing assumptions, and a first challenge.",
-    confidence,
-    supportingMoveIds: moveIds(supporting),
-    status: "tentative",
-  };
-}
-
-function inferAssumptionReviewShape(moves: ShapeMove[]): CompiledShape | null {
-  const supporting = moves.filter((move) =>
-    ["assumption_confirmed", "assumption_rejected", "assumption_refined"].includes(move.kind),
-  );
-
-  if (supporting.length === 0) {
-    return null;
-  }
-
-  const kinds = new Set(supporting.map((move) => move.kind));
-  const confidence = boundedConfidence(54 + supporting.length * 8 + (kinds.size > 1 ? 6 : 0));
-
-  return {
-    label: "Assumption review loop",
-    description: "Recent moves are improving the idea by confirming, rejecting, or refining load-bearing assumptions.",
-    confidence,
-    supportingMoveIds: moveIds(supporting),
-    status: "tentative",
-  };
-}
-
-function inferChallengeResponseShape(moves: ShapeMove[]): CompiledShape | null {
-  const supporting = moves.filter((move) =>
-    ["challenge_issued", "user_defended", "claim_revised", "critique_absorbed"].includes(move.kind),
-  );
-
-  if (supporting.length === 0) {
-    return null;
-  }
-
-  const hasChallenge = supporting.some((move) => move.kind === "challenge_issued");
-  const hasResponse = supporting.some((move) => ["user_defended", "claim_revised", "critique_absorbed"].includes(move.kind));
-  const confidence = boundedConfidence(52 + supporting.length * 8 + (hasChallenge && hasResponse ? 10 : 0));
-
-  return {
-    label: "Challenge response loop",
-    description: "Recent moves are pressure-testing claims through challenge and explicit response.",
-    confidence,
-    supportingMoveIds: moveIds(supporting),
-    status: "tentative",
-  };
-}
-
-function inferConceptGroundingShape(moves: ShapeMove[]): CompiledShape | null {
-  const supporting = moves.filter((move) => move.kind === "learning_triggered");
-
-  if (supporting.length === 0) {
-    return null;
-  }
-
-  return {
-    label: "Concept grounding",
-    description: "Recent moves use Makes Cents to clarify a concept before continuing the map.",
-    confidence: boundedConfidence(50 + supporting.length * 10),
-    supportingMoveIds: moveIds(supporting),
-    status: "tentative",
-  };
-}
-
-function inferEvidenceCheckingShape(moves: ShapeMove[]): CompiledShape | null {
-  const supporting = moves.filter((move) => move.kind === "verify_run");
-
-  if (supporting.length === 0) {
-    return null;
-  }
-
-  return {
-    label: "Evidence checking",
-    description: "Recent moves are checking claims against evidence without changing confidence automatically.",
-    confidence: boundedConfidence(52 + supporting.length * 9),
-    supportingMoveIds: moveIds(supporting),
-    status: "tentative",
-  };
-}
-
-function inferArtifactCompilationShape(moves: ShapeMove[]): CompiledShape | null {
-  const supporting = moves.filter((move) => move.kind === "artifact_created");
-
-  if (supporting.length === 0) {
-    return null;
-  }
-
-  return {
-    label: "Artifact compilation",
-    description: "Recent moves are turning recorded thinking history into a session-end brief.",
-    confidence: boundedConfidence(50 + supporting.length * 8),
-    supportingMoveIds: moveIds(supporting),
-    status: "tentative",
-  };
-}
-
-function shapeSort(left: CompiledShape, right: CompiledShape): number {
-  return right.confidence - left.confidence || right.supportingMoveIds.length - left.supportingMoveIds.length;
-}
-
-function moveIds(moves: ShapeMove[]): string[] {
-  return [...new Set(moves.map((move) => move.moveId))];
-}
-
-function boundedConfidence(value: number): number {
-  return Math.max(0, Math.min(88, Math.round(value)));
 }
 
 function recommendedMove(output: ArtifactOutput, risks: CompiledRisk[]): string {

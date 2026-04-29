@@ -172,7 +172,7 @@ test("artifact compiler output is grounded in session state and rejects generic 
   assert.match(payload.challengeBrief.unresolvedRisks[0]?.reason ?? "", /Active challenge/);
   assert.deepEqual(
     payload.shapes.map((shape) => shape.status),
-    ["tentative", "tentative", "tentative"],
+    ["candidate", "candidate", "candidate"],
   );
   assert.ok(payload.shapes.some((shape) => shape.label === "Assumption review loop"));
   assert.ok(payload.shapes.some((shape) => shape.supportingMoveIds.includes("00000000-0000-4000-8000-000000000502")));
@@ -260,7 +260,7 @@ test("artifact route maps not-found and conflict failures to stable errors", asy
   assert.equal(conflictPayload.error.code, "artifact_conflict");
 });
 
-test("shape inference derives tentative patterns from recent moves only", () => {
+test("shape inference derives candidate patterns from recent moves only", () => {
   const olderMove = shapeMove(uuidAt(501), "assumption_refined");
   const recentMoves = [
     shapeMove(uuidAt(502), "seed_claim_created"),
@@ -280,7 +280,7 @@ test("shape inference derives tentative patterns from recent moves only", () => 
 
   assert.deepEqual(
     shapes.map((shape) => shape.status),
-    ["tentative", "tentative", "tentative"],
+    ["candidate", "candidate", "candidate"],
   );
   assert.ok(shapes.every((shape) => shape.confidence >= 0 && shape.confidence <= 88));
   assert.ok(shapes.some((shape) => shape.label === "Challenge response loop"));
