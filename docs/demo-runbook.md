@@ -52,13 +52,15 @@ Expected server log:
 Penny cockpit listening on http://localhost:3000
 ```
 
-## 4. Smoke Command
+## 4. Smoke Commands
 
-Non-mutating guard smoke:
+Full mutating Thinking Mode smoke:
 
 ```bash
 BASE_URL=http://localhost:3000 ./scripts/smoke-thinking-mode.sh
 ```
+
+This script creates a seed session, recomputes next moves, starts focus, records manual focus, issues challenges, records Defend / Revise / Absorb responses, and generates a Challenge Brief. Run it against disposable local data or an isolated smoke database.
 
 Optional mutating API smoke after seeding:
 
@@ -95,10 +97,19 @@ curl -sS -X POST "$BASE_URL/api/brains/$DEMO_BRAIN_ID/focus/manual" \
 Open:
 
 ```text
-http://localhost:3000
+http://localhost:3000?sessionId=$DEMO_SESSION_ID
 ```
 
 Use the API-served app on port 3000 for the demo. `pnpm dev:frontend` serves Vite on port 5173 and proxies `/api`, `/brain`, and `/autopilot` to the API server on port 3000 by default.
+
+Visible demo path:
+
+- Seed the idea in the app or open the seeded `sessionId` URL above.
+- Use the next thinking action to start the selected candidate.
+- Issue the challenge from the right rail.
+- Choose Defend, Revise, or Absorb and save the response.
+- Create the Challenge Brief.
+- The app renders the Challenge Brief title, summary, and all compiled sections in the right rail. Treat any post-brief next move as an Autopilot suggestion only when the app visibly shows one.
 
 ## 6. Expected API Outputs
 
