@@ -1,3 +1,5 @@
+import { PennyMark } from "./PennyMark";
+
 interface HeaderProps {
   sessionLabel: string;
   thinkingLabel: string;
@@ -10,7 +12,7 @@ export function Header({ sessionLabel, thinkingLabel }: HeaderProps) {
     <header className="newspaper-header">
       <div className="masthead">
         <div className="brand" aria-label="Penny">
-          <span className="brand-mark" aria-hidden="true" />
+          <PennyMark />
           <span className="brand-name">
             <span className="sr-only">P</span>ENNY
           </span>
