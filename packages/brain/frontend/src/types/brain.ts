@@ -68,7 +68,7 @@ export interface BrainData {
 
 export interface BrainMove {
   id: string;
-  type: string;
+  type?: string;
   kind?: string;
   actor?: string;
   summary: string;
@@ -76,6 +76,8 @@ export interface BrainMove {
 }
 
 export interface AutopilotSuggestion {
+  id?: string;
+  candidateId: string;
   action: string;
   mode: string;
   label: string;
@@ -97,13 +99,15 @@ export interface AutopilotTickData {
   sessionId: string;
   suggestion: AutopilotSuggestion | null;
   candidates?: AutopilotSuggestion[];
+  selectedCandidate?: AutopilotSuggestion | null;
+  focusState?: FocusState;
   move?: {
     id: string;
     kind: string;
     summary: string;
-    claimIds: string[];
-    edgeIds: string[];
-    artifactIds: string[];
+    claimIds?: string[];
+    edgeIds?: string[];
+    artifactIds?: string[];
   } | null;
   pause?: {
     paused: boolean;
@@ -120,17 +124,19 @@ export interface AutopilotTickResponse {
 export interface ManualNodeSelectionResponse {
   data: {
     status: "paused";
+    brainId?: string;
     sessionId: string;
+    focusState?: FocusState;
     focusClaim: BrainClaim;
     move: {
       id: string;
       kind: "manual_node_selected";
       summary: string;
-      claimIds: string[];
-      edgeIds: string[];
-      artifactIds: string[];
+      claimIds?: string[];
+      edgeIds?: string[];
+      artifactIds?: string[];
     };
-    pause: {
+    pause?: {
       paused: true;
       manualMoveId: string;
       focusedClaimId: string;
@@ -147,4 +153,93 @@ export interface SessionMovesResponse {
   data: {
     moves: BrainMove[];
   };
+}
+
+export interface FocusState {
+  sessionId: string;
+  mode: string;
+  focusedClaimId: string | null;
+  focusedEdgeId: string | null;
+  source: string;
+  suggestionMoveId: string | null;
+  manualMoveId: string | null;
+  paused: boolean;
+  reason: string | null;
+  updatedAt: string | null;
+}
+
+export interface ThinkingModeCandidate {
+  id: string;
+  candidateId: string;
+  action: string;
+  mode: string;
+  targetClaimId: string | null;
+  targetEdgeId: string | null;
+  score: number;
+  reason: string;
+  reasonCodes?: string[];
+  selected?: boolean;
+}
+
+export interface ThinkingModeStateData {
+  status: "ready" | "paused" | "empty" | string;
+  brainId?: string;
+  sessionId: string;
+  focusState: FocusState;
+  candidates: ThinkingModeCandidate[];
+  selectedCandidate: ThinkingModeCandidate | null;
+  move?: {
+    id: string;
+    kind: string;
+    summary: string;
+    payload?: Record<string, unknown>;
+    createdAt?: string;
+  } | null;
+  persistedMoveIds?: string[];
+}
+
+export interface StartNextMoveResponse {
+  data: {
+    status: "started";
+    brainId?: string;
+    sessionId: string;
+    focusState: FocusState;
+    selectedCandidate: ThinkingModeCandidate;
+    move: {
+      id: string;
+      kind: "autopilot_focus_started";
+      summary: string;
+      payload?: Record<string, unknown>;
+      createdAt?: string;
+    };
+  };
+}
+
+export interface SessionCockpitData {
+  session: BrainSession;
+  ideaMap: {
+    claims: BrainClaim[];
+    edges: BrainEdge[];
+    keyInsight?: string | null;
+  };
+  moves: BrainMove[];
+  autopilot: AutopilotTickData;
+  activeChallenge: (ChallengeSuggestion & {
+    id: string;
+    critique?: string;
+    targetClaim?: BrainClaim | null;
+    critiqueClaim?: BrainClaim | null;
+  }) | null;
+  latestArtifact?: {
+    id: string;
+    kind: string;
+    title: string;
+    summary: string;
+    payload?: Record<string, unknown>;
+    createdAt?: string;
+  } | null;
+}
+
+export interface SessionCockpitResponse {
+  data: SessionCockpitData;
 }

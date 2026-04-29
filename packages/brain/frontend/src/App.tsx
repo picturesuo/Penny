@@ -1,12 +1,18 @@
 import { useMemo, useState } from "react";
-import { fetchSessionMoves, seedBrain, selectAutopilotNode, tickAutopilot } from "./api/brainClient";
+import {
+  fetchSessionCockpit,
+  seedBrain,
+  selectAutopilotNode,
+  startAutopilotCandidate,
+  tickAutopilot,
+} from "./api/brainClient";
 import { Composer } from "./components/Composer";
 import { CurrentExploration } from "./components/CurrentExploration";
 import { Header } from "./components/Header";
 import { InsightRail } from "./components/InsightRail";
 import { LeftRail } from "./components/LeftRail";
 import { formatLabel, shortId } from "./lib/format";
-import type { AutopilotTickData, BrainData, BrainMove } from "./types/brain";
+import type { AutopilotTickData, BrainData, BrainMove, SessionCockpitData } from "./types/brain";
 
 export function App() {
   const [data, setData] = useState<BrainData | null>(null);
@@ -41,16 +47,16 @@ export function App() {
       setStatus("Graph slice persisted");
 
       if (payload.data.session?.id) {
-        const autopilotPayload = await tickAutopilot(payload.data.session.id);
-        setAutopilot(autopilotPayload.data);
+        await tickAutopilot(payload.data.session.id);
+        const cockpit = await refreshCockpit(payload.data.session.id, payload.data);
         setFocusedClaimId(
-          autopilotPayload.data.suggestion?.targetClaimId ??
+          cockpit.autopilot.focusState?.focusedClaimId ??
+            cockpit.autopilot.suggestion?.targetClaimId ??
             payload.data.firstChallenge?.targetClaimId ??
             payload.data.ideaMap?.claims?.[0]?.id ??
             null,
         );
-        const movePayload = await fetchSessionMoves(payload.data.session.id);
-        setMoves(movePayload.data.moves);
+        setStatus("Cockpit refreshed");
       }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -59,46 +65,69 @@ export function App() {
     }
   }
 
-  function handleGoThere() {
-    const targetClaimId = autopilot?.suggestion?.goThere?.targetClaimId ?? autopilot?.suggestion?.targetClaimId ?? null;
-
-    if (targetClaimId) {
-      setFocusedClaimId(targetClaimId);
-      setStatus("Autopilot focus selected");
+  async function handleGoThere() {
+    if (!data?.session?.id) {
+      setStatus("Autopilot needs a session first");
       return;
     }
 
-    setStatus("Autopilot has no claim target");
+    const candidateId = autopilot?.suggestion?.candidateId ?? autopilot?.selectedCandidate?.candidateId ?? null;
+    const targetClaimId = autopilot?.suggestion?.goThere?.targetClaimId ?? autopilot?.suggestion?.targetClaimId ?? null;
+
+    if (!candidateId) {
+      setStatus("Autopilot has no candidate to start");
+      return;
+    }
+
+    setIsThinking(true);
+    setStatus("Starting Autopilot focus");
+
+    try {
+      await startAutopilotCandidate(data.session.id, candidateId);
+      const cockpit = await refreshCockpit(data.session.id);
+      setFocusedClaimId(cockpit.autopilot.focusState?.focusedClaimId ?? targetClaimId);
+      setStatus("Autopilot focus started");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsThinking(false);
+    }
   }
 
   async function handleManualClaimSelect(claimId: string) {
-    setFocusedClaimId(claimId);
-
     if (!data?.session?.id) {
+      setFocusedClaimId(claimId);
       return;
     }
 
+    setIsThinking(true);
+    setStatus("Saving manual focus");
+
     try {
-      const selection = await selectAutopilotNode({
+      await selectAutopilotNode({
         sessionId: data.session.id,
         claimId,
         previousSuggestionMoveId: autopilot?.move?.id ?? null,
       });
-      setAutopilot({
-        status: selection.data.status,
-        sessionId: selection.data.sessionId,
-        suggestion: null,
-        candidates: [],
-        move: selection.data.move,
-        pause: selection.data.pause,
-      });
+      const cockpit = await refreshCockpit(data.session.id);
+      setFocusedClaimId(cockpit.autopilot.focusState?.focusedClaimId ?? claimId);
       setStatus("Manual selection saved");
-
-      const movePayload = await fetchSessionMoves(data.session.id);
-      setMoves(movePayload.data.moves);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsThinking(false);
     }
+  }
+
+  async function refreshCockpit(sessionId: string, fallbackData: BrainData | null = data): Promise<SessionCockpitData> {
+    const cockpit = await fetchSessionCockpit(sessionId);
+    const cockpitData = cockpit.data;
+
+    setData(mergeCockpitData(cockpitData, fallbackData));
+    setAutopilot(cockpitData.autopilot);
+    setMoves(cockpitData.moves);
+
+    return cockpitData;
   }
 
   return (
@@ -135,4 +164,21 @@ export function App() {
       </div>
     </div>
   );
+}
+
+function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null): BrainData {
+  const keyInsight = cockpit.ideaMap.keyInsight ?? current?.ideaMap?.keyInsight ?? null;
+  const firstChallenge = cockpit.activeChallenge ?? current?.firstChallenge ?? null;
+
+  return {
+    ...(current ?? {}),
+    session: cockpit.session,
+    ideaMap: {
+      ...(current?.ideaMap ?? {}),
+      claims: cockpit.ideaMap.claims,
+      edges: cockpit.ideaMap.edges,
+      ...(typeof keyInsight === "string" && keyInsight ? { keyInsight } : {}),
+    },
+    ...(firstChallenge ? { firstChallenge } : {}),
+  };
 }
