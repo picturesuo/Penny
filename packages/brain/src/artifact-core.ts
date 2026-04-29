@@ -2,6 +2,7 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
+import { afterMoveEffectsInTransaction } from "./after-move-effects.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { artifacts, brainRuns, claimEdges, claimVersions, claims, moves, sessions, shapes as shapeRows, sources } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
@@ -834,6 +835,8 @@ async function persistArtifactOutput(
     if (!completedBrainRun) {
       throw new ArtifactConflictError("Failed to complete artifact BrainRun.");
     }
+
+    await afterMoveEffectsInTransaction(tx, { sessionId: prelude.context.session.id, moveId: move.id });
 
     return {
       artifact: {
