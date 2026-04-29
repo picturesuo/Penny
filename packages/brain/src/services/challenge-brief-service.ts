@@ -734,7 +734,6 @@ function whatChanged(
 
 function openRisks(state: ChallengeBriefState, critiqueClaimIds: Set<EntityId>): ChallengeBriefSectionPayload["openRisks"] {
   const risks: ChallengeBriefSectionPayload["openRisks"] = [];
-  const claimsById = new Map(state.claims.map((claim) => [claim.id, claim]));
 
   for (const round of state.challengeRounds) {
     if (round.status === "open" || round.response === "absorb") {
