@@ -1,6 +1,6 @@
 # Challenge Brief Critique
 
-Status: `BACKEND ARTIFACT PASS; VISIBLE OUTPUT BLOCKED`
+Status: `BACKEND ARTIFACT PASS; VISIBLE OUTPUT PASS WITH COPY RISK`
 Date: 2026-04-29  
 Artifact ID: `CHALLENGE-BRIEF-CRITIQUE`
 
@@ -30,9 +30,9 @@ Scope: reviewed current `origin/main` for whether the session produces usable ou
 
 Criterion judgments:
 
-- `FAIL` `CHALLENGE-BRIEF-CRITIQUE-C6`: the backend session can produce a structured Challenge Brief artifact, but the visible product still does not produce a usable founder-facing output. `POST /api/sessions/:sessionId/challenge-brief` returns an 11-section payload, creates a `challenge_brief` artifact, and records `artifact_created`. The React surface only displays `latestArtifact.title` and `latestArtifact.summary`, and the frontend type leaves `brief` as `unknown`, so the user cannot scan original idea, pressure point, response, before/after change, open risks, or move timeline inside the app. API JSON is not a usable session output for the demo bar.
-- `PASS WITH PROVENANCE GAP` `CHALLENGE-BRIEF-CRITIQUE-C7`: the Challenge Brief is a compiled view, not canonical truth. Generation loads persisted session, source, claim, ClaimVersion, edge, Move, ChallengeRound, FocusState, selected candidate, and artifact rows; inserts an artifact row; records an `artifact_created` Move; and focused tests assert the generation path does not insert or update Claim or ClaimVersion rows. The remaining gap is provenance depth: the Challenge Brief refs include `sourceIds` but not `sourceSpanIds`, while the broader contract names source spans as part of artifact provenance.
-- `FAIL` `CHALLENGE-BRIEF-CRITIQUE-C8`: the demo path is API-honest but not product-honest end to end. The isolated smoke proves seed -> graph/state reads -> tick -> focus -> manual focus -> challenge issue -> Defend/Revise/Absorb -> graph reads -> Challenge Brief creation. However, the demo/runbook story implies the founder sees a compact Challenge Brief and a concrete post-brief next move in the product. Current UI renders only the artifact title/summary, the runbook's "non-mutating guard smoke" label points at a mutating full smoke, and the optional runbook commands stop before challenge response/brief creation. The actual API path exists; the visible demo claim is still overstated.
+- `PASS` `CHALLENGE-BRIEF-CRITIQUE-C6`: the visible product now renders a usable Challenge Brief output. `POST /api/sessions/:sessionId/challenge-brief` returns the 11-section `challenge_brief` payload, the frontend type models that payload, and `InsightRail` renders original idea, current claim, assumptions, pressure point, challenge, response, what changed, open risks, recommended next move, and move timeline instead of only title/summary.
+- `PASS` `CHALLENGE-BRIEF-CRITIQUE-C7`: the Challenge Brief is a compiled view, not canonical truth. Generation loads persisted session, source, source span, claim, ClaimVersion, edge, Move, ChallengeRound, FocusState, selected candidate, and artifact rows; inserts an artifact row; records an `artifact_created` Move; includes `sourceSpanIds` in refs; and focused tests assert the generation path does not insert or update Claim or ClaimVersion rows.
+- `PASS WITH BROWSER GAP` `CHALLENGE-BRIEF-CRITIQUE-C8`: the demo path is now API-honest and product-honest at source/test level. The runbook labels the full smoke as mutating, the isolated smoke proves seed -> graph/state reads -> tick -> focus -> manual focus -> challenge issue -> Defend/Revise/Absorb -> graph reads -> Challenge Brief creation, and the React surface renders the structured brief sections. A browser-level walkthrough of the rendered brief remains unverified.
 
 Verification after re-review:
 
@@ -43,9 +43,9 @@ Verification after re-review:
 
 Current findings:
 
-- `CHALLENGE-BRIEF-CRITIQUE-CF6`: visible output is the blocker. The next implementation slice should render the `brief.sections` payload in a compact panel instead of only showing artifact title and summary.
-- `CHALLENGE-BRIEF-CRITIQUE-CF7`: compiled-view invariant holds. Do not fix the visible-output gap by copying artifact text into claims or treating artifacts as graph truth.
-- `CHALLENGE-BRIEF-CRITIQUE-CF8`: demo honesty needs a cleanup pass. The runbook should either point to the full smoke honestly as mutating or split a real guard smoke from the mutating demo smoke, and the scripted demo should not claim a readable product artifact until the UI renders it.
+- `CHALLENGE-BRIEF-CRITIQUE-CF6`: resolved. The frontend renders `brief.sections` in a compact panel instead of only showing artifact title and summary.
+- `CHALLENGE-BRIEF-CRITIQUE-CF7`: resolved for provenance refs and still passing for the compiled-view invariant. Do not copy artifact text into claims or treat artifacts as graph truth.
+- `CHALLENGE-BRIEF-CRITIQUE-CF8`: resolved at source/API-smoke level. The remaining proof gap is a browser-level walkthrough of the rendered brief.
 
 ## Original Criterion Judgments (Historical)
 
@@ -57,21 +57,15 @@ Current findings:
 | 4. Is it short enough for demo? | NOT VERIFIED | `CHALLENGE-BRIEF-CRITIQUE-C4` |
 | 5. Does it make next move obvious? | FAIL | `CHALLENGE-BRIEF-CRITIQUE-C5` |
 
-Overall: `BLOCKED FOR DEMO`. The backend can persist a Challenge Brief, but the artifact is not yet reliably founder-usable in the actual demo path.
+Overall: historical `BLOCKED FOR DEMO`; current re-review above supersedes this after the frontend section renderer, source-span refs, and runbook cleanup landed.
 
-## Findings
+## Historical Findings
 
-### `CHALLENGE-BRIEF-CRITIQUE-F1`: no founder-facing Challenge Brief surface
+### `CHALLENGE-BRIEF-CRITIQUE-F1`: founder-facing Challenge Brief surface
 
 Maps to: `CHALLENGE-BRIEF-CRITIQUE-C1`
 
-The new route creates and returns a structured artifact through `POST /api/sessions/:sessionId/challenge-brief`, and the route tests cover status, section count, artifact kind, and `artifact_created`. That is necessary backend work.
-
-The current frontend does not call or render that route. `packages/brain/frontend/src/api/brainClient.ts` exposes seed, session moves, Autopilot tick, and manual node selection, but no Challenge Brief command. `packages/brain/frontend/src/components/CurrentExploration.tsx` renders the Autopilot suggestion card and exploration rows only. A repo search found no frontend `challenge-brief` or `Challenge Brief` rendering surface.
-
-Impact: in the demo, the founder cannot naturally leave the session with a readable Challenge Brief. Showing the raw JSON response would make Penny look like an API wrapper rather than a finished thinking instrument.
-
-Required before demo: add a thin frontend command and artifact panel that renders the 11 sections as a compact receipt, hiding backend IDs by default while keeping them available for audit/debug.
+Resolved in the current implementation. The frontend calls `POST /api/sessions/:sessionId/challenge-brief`, stores the returned artifact, types the `challenge_brief` payload, and renders the structured sections in `InsightRail`.
 
 ### `CHALLENGE-BRIEF-CRITIQUE-F2`: Revise does not show a readable before/after
 
@@ -107,15 +101,11 @@ Impact: the backend shape is likely manageable for the seeded YC fixture, but de
 
 Required before demo: add a fixture-based rendering/word-count check or snapshot against the YC demo seed, and clamp or collapse long fields in the UI.
 
-### `CHALLENGE-BRIEF-CRITIQUE-F5`: source spans are omitted from the new brief payload
+### `CHALLENGE-BRIEF-CRITIQUE-F5`: source spans in the brief payload
 
 Maps to: `CHALLENGE-BRIEF-CRITIQUE-C1`
 
-The Thinking Mode spec and Challenge Brief spec both name source spans as part of the source of truth. The new service loads `sources`, claims, versions, edges, moves, challenge rounds, FocusState, candidates, and artifacts, but it does not load `source_spans` or include `sourceSpanIds` in refs.
-
-Impact: the brief is derived from backend rows, but its provenance is weaker than the contract says. This matters if the demo needs to prove claims came from the original seed text rather than Penny inventing them.
-
-Required before demo only if provenance is shown: load source spans and include `sourceSpanIds` in refs or per-section provenance.
+Resolved in the current implementation. The service loads source spans into the compiled state and includes `sourceSpanIds` in the Challenge Brief refs.
 
 ## Positive Findings
 
@@ -142,6 +132,6 @@ Risk remains: fallback copy such as "No challenge issued yet" or "No unresolved 
 
 ## Status
 
-`BLOCKED FOR DEMO`
+`VISIBLE OUTPUT PASS WITH COPY RISK`
 
-The backend persistence path can proceed as a foundation, but the demo should not depend on this artifact until the frontend renders it, Revise shows before/after text, and the post-artifact next move cannot recommend creating the same brief again.
+The backend persistence path and visible section renderer can support the demo. Remaining risk is copy polish, especially before/after wording for Revise and browser-level proof of rendered scanability.
