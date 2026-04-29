@@ -8,7 +8,15 @@ export const BrainSeedInputSchema = z
   .strict();
 
 export const ClaimKindSchema = z.enum(["belief", "assumption", "question", "concept"]);
-export const EdgeKindSchema = z.enum(["depends_on", "supports", "questions", "challenges", "clarifies"]);
+export const EdgeKindSchema = z.enum([
+  "depends_on",
+  "supports",
+  "questions",
+  "challenges",
+  "contradicts",
+  "clarifies",
+  "teaches",
+]);
 export const PressureSchema = z.enum(["low", "medium", "high"]);
 export const FailureTypeSchema = z.enum([
   "weak_evidence",
