@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimVersions, claims, moves, sourceSpans, sources } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
+import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
 import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 
@@ -109,6 +110,7 @@ export type VerifyGenerationInput = {
   currentClaimKind: "belief" | "assumption" | "question" | "concept";
   currentClaimStatus: "exploratory" | "committed" | "resolved" | "rejected";
   currentClaimConfidence: number;
+  lensSnapshot?: LensSnapshot;
 };
 
 const verifyOutputSpec = Output.object<VerifyProviderOutput>({
@@ -167,6 +169,7 @@ export type VerifyRouteOptions = {
 type VerifyPrelude = {
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>;
   brainRun: typeof brainRuns.$inferSelect;
+  lensSnapshot: LensSnapshot;
 };
 
 type PersistedClaimSlice = {
@@ -273,7 +276,7 @@ export async function runVerify(
   const prelude = await createVerifyPrelude(db, input, provider);
 
   try {
-    const output = await generateVerifyOutput(verifyGenerationInput(prelude.target, input), {
+    const output = await generateVerifyOutput(verifyGenerationInput(prelude.target, input, prelude.lensSnapshot), {
       provider,
       brainRunId: prelude.brainRun.id,
     });
@@ -434,12 +437,18 @@ export function buildVerifyPrompt(input: VerifyGenerationInput): string {
     "- whatWouldChangeThis: what evidence would alter the verdict.",
     "- nextQuestion: the next focused verification question.",
     "",
+    "Lens rules:",
+    "- Use shapes only to choose what evidence to look for and what follow-up question to ask.",
+    "- Do not let shapes bias the verdict; evidence must drive support, weakening, or uncertainty.",
+    "- Candidate shapes are tentative and must not be stated as facts about the user.",
+    "",
     `Session id: ${input.sessionId}`,
     `Claim id: ${input.claimId}`,
     `Current claim kind: ${input.currentClaimKind}`,
     `Current claim status: ${input.currentClaimStatus}`,
     `Current claim confidence: ${input.currentClaimConfidence}`,
     `Current claim text: ${input.currentClaimText}`,
+    `Lens snapshot JSON: ${formatLensSnapshot(input.lensSnapshot)}`,
   ].join("\n");
 }
 
@@ -450,6 +459,7 @@ async function createVerifyPrelude(
 ): Promise<VerifyPrelude> {
   return db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.claimId, input.sessionId);
+    const lensSnapshot = await loadLensSnapshot(tx, input.sessionId);
 
     if (normalizeClaimText(target.version.content) !== normalizeClaimText(input.currentClaimText)) {
       throw new VerifyConflictError("Verify requires the current ClaimVersion text.");
@@ -473,6 +483,7 @@ async function createVerifyPrelude(
           currentClaimStatus: target.version.status,
           currentClaimConfidence: target.version.confidence,
           searchEnabled: provider.searchEnabled,
+          lensSnapshot,
         },
       })
       .returning();
@@ -481,7 +492,7 @@ async function createVerifyPrelude(
       throw new VerifyConflictError("Failed to record Verify BrainRun.");
     }
 
-    return { target, brainRun };
+    return { target, brainRun, lensSnapshot };
   });
 }
 
@@ -654,6 +665,7 @@ async function generateStructuredVerify(
 function verifyGenerationInput(
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
   input: VerifyRequest,
+  lensSnapshot: LensSnapshot,
 ): VerifyGenerationInput {
   return {
     claimId: target.claim.id,
@@ -662,6 +674,7 @@ function verifyGenerationInput(
     currentClaimKind: target.claim.kind,
     currentClaimStatus: target.version.status,
     currentClaimConfidence: target.version.confidence,
+    lensSnapshot,
   };
 }
 
