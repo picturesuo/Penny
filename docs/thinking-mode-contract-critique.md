@@ -6,6 +6,24 @@ Review date: 2026-04-29
 
 This update keeps the original Wave 1 contract review below as historical context. The current judgment is based on the implemented Thinking Mode backend path, the still-active frontend/demo path, the contract docs, the YC fixture, and focused verification commands.
 
+## Contract-Only Re-Check
+
+Status: `PASS WITH SCOPE GUARD`
+Artifact ID: `THINKING-MODE-CONTRACT-CRITIQUE`
+Review date: 2026-04-29
+Scope: contract artifacts only: Autopilot spec, move taxonomy, demo script, YC fixture contract states, and this critique file.
+
+Criterion judgments:
+
+- `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C1`: the contract does not authorize the frontend to invent canonical state. It says backend graph rows are canonical, the frontend renders returned graph/focus/candidate/challenge/artifact slices, and frontend state may only cache display state.
+- `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C2`: accepted focus is Move-backed in the contract. "Go there" records `autopilot_focus_started`; the demo script lists that backend receipt; the fixture includes an `acceptedFocus.move` with candidate/action/target refs and `FocusState.source = "autopilot_started"`.
+- `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C3`: manual focus is Move-backed in the contract. Manual selection records `manual_node_selected`, pauses Autopilot, carries `pauseAutopilot: true`, and the fixture includes paused `manual_selection` FocusState with `manualMoveId` and a prior ranking Move link.
+- `PASS WITH SCOPE RISK` `THINKING-MODE-CONTRACT-CRITIQUE-C4`: the contract is acceptable as an umbrella first-loop contract, but it is too broad if treated as one implementation ticket. The next implementation should stay narrow: visible frontend accepted focus and manual focus must call the new Thinking Mode command routes and refresh move history.
+
+Finding:
+
+- `THINKING-MODE-CONTRACT-CRITIQUE-CF1`: No contract-level blocker remains for state ownership or Move-backed focus. The remaining blocker is execution scope: do not expand into Challenge Brief, Learn, MCP, generic chat, or broad UI redesign while fixing the frontend focus contract.
+
 ## Current Verification Summary
 
 Criterion judgments for `THINKING-MODE-CONTRACT-CRITIQUE`:
