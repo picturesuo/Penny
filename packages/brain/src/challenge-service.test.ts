@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { PennyDatabase } from "./db/client.ts";
-import { brainRuns, challengeRounds, claimEdges, claims, claimVersions, derivedEffects, moves, shapes } from "./db/schema.ts";
+import { challengeRounds, claimVersions, derivedEffects, moves, shapes } from "./db/schema.ts";
 import { rankNextMoveCandidates } from "./domain/engine.ts";
 import type { PennyYcDemoGraphFixture } from "./domain/types.ts";
 import {
