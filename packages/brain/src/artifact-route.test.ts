@@ -12,7 +12,6 @@ import {
   handleSessionArtifactRequest,
   inferShapesFromMoves,
   parseArtifactOutput,
-  type ArtifactOutput,
   type ArtifactRequest,
   type SessionArtifactContext,
 } from "./artifact-route.ts";
