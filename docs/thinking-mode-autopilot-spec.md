@@ -24,7 +24,7 @@ Penny is not a chatbot, note app, wiki, or generic AI wrapper. The backend owns 
 ## 2. Backend Invariants
 
 - INV1: GET requests must not mutate state.
-- INV2: `POST /autopilot/tick` recomputes next-move suggestions and persists the tick result as Moves.
+- INV2: the POST-only Autopilot tick command recomputes next-move suggestions and persists the ranking audit as a Move.
 - INV3: Autopilot may suggest focus, but it must not silently mutate claim text, confidence, edge truth, or artifact truth.
 - INV4: Claim text changes only through `claim_revised`.
 - INV5: Confidence changes are suggestions until explicitly accepted through the confidence acceptance path.
@@ -67,7 +67,7 @@ Required fields:
 
 - `candidateId`: stable deterministic ID for this scoring pass.
 - `sessionId`: session being ranked.
-- `action`: one of the supported next-move actions, such as `respond_to_challenge`, `review_assumption`, `challenge_claim`, `verify_confidence`, `revisit_absorbed_risk`, `create_challenge_brief`, or `explore_claim`.
+- `action`: one of the supported next-move actions: `resume_open_challenge`, `challenge`, `verify`, `learn`, or `clarify`.
 - `mode`: `brain`, `challenge`, `verify`, `learn`, or `artifact`.
 - `targetClaimId`: claim to focus, when applicable.
 - `targetEdgeId`: edge to focus, when applicable.
@@ -77,7 +77,7 @@ Required fields:
 - `why`: concise user-facing explanation.
 - `evidence`: claim, edge, move, and artifact IDs that justify the candidate.
 - `blockedBy`: unmet prerequisites, if any.
-- `wouldCreateMoveKind`: move kind created if the user accepts or completes this candidate.
+- `wouldCreateMoveKinds`: move kinds created if the user accepts or completes this candidate.
 
 Rules:
 
@@ -85,7 +85,7 @@ Rules:
 - NMC2: Candidate ordering must be stable for the same input snapshot.
 - NMC3: Candidates may reference existing canonical IDs only.
 - NMC4: Candidates explain priority without claiming that truth changed.
-- NMC5: Exposed candidates are persisted as `autopilot_candidate_generated` moves or as entries inside a persisted `next_move_recomputed` move payload.
+- NMC5: Exposed candidates are persisted as `next_move_candidates` rows and embedded candidate records inside the persisted `next_move_recomputed` move payload.
 
 ## 5. AutopilotTick Semantics
 
@@ -109,9 +109,9 @@ Write behavior:
 
 - AT1: A tick is POST-only.
 - AT2: A tick loads canonical session, claim, current claim version, edge, move, and artifact state.
-- AT3: A tick persists `next_move_recomputed`.
-- AT4: A tick persists the selected suggestion as `autopilot_focus_suggested`.
-- AT5: A tick may persist materialized candidate rows as `autopilot_candidate_generated` when individual candidate auditability is required.
+- AT3: A tick persists `next_move_recomputed` with `candidateIds`, selected candidate refs, and embedded candidate records sufficient to audit the ranking.
+- AT4: A tick materializes `next_move_candidates` rows and marks the selected candidate.
+- AT5: A tick updates `FocusState` to `source: "autopilot_suggestion"` without creating a separate suggestion Move; accepting the suggestion is the later command that records `autopilot_focus_started`.
 - AT6: If Autopilot is paused and `resume` is false, the tick returns pause state without changing focus or truth.
 - AT7: If Autopilot is paused and `resume` is true, the tick may recompute suggestions and record the new suggestion moves.
 - AT8: Tick persistence must be idempotent by command key.
