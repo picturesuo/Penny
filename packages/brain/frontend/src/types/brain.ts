@@ -152,12 +152,6 @@ export interface SeedBrainResponse {
   data: BrainData;
 }
 
-export interface SessionMovesResponse {
-  data: {
-    moves: BrainMove[];
-  };
-}
-
 export interface FocusState {
   sessionId: string;
   mode: string;
