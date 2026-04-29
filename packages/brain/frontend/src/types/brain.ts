@@ -62,6 +62,7 @@ export interface BrainData {
     edges?: BrainEdge[];
     keyInsight?: string;
   };
+  workStructure?: WorkStructure;
   source?: {
     kind?: string;
     rawText?: string;
@@ -428,6 +429,39 @@ export interface ChallengeBriefResponse {
   };
 }
 
+export type WorkStructureType = "essay" | "startup" | "research" | "decision" | "general";
+export type WorkStructureStepStatus = "not_started" | "active" | "resolved" | "stale";
+
+export interface WorkStructureChoice {
+  id: string;
+  label: string;
+  description: string;
+  claimIds: string[];
+  edgeIds: string[];
+}
+
+export interface WorkStructureStep {
+  id: string;
+  title: string;
+  purpose: string;
+  rank: number;
+  fragility: number;
+  importance: number;
+  status: WorkStructureStepStatus;
+  claimIds: string[];
+  edgeIds: string[];
+  whyNow: string;
+  detailChoices: WorkStructureChoice[];
+}
+
+export interface WorkStructure {
+  structureType: WorkStructureType;
+  label: string;
+  description: string;
+  activeStepId: string | null;
+  steps: WorkStructureStep[];
+}
+
 export interface SessionCockpitData {
   session: BrainSession;
   ideaMap: {
@@ -435,6 +469,7 @@ export interface SessionCockpitData {
     edges: BrainEdge[];
     keyInsight?: string | null;
   };
+  workStructure?: WorkStructure | null;
   moves: BrainMove[];
   autopilot: AutopilotTickData;
   activeChallenge: (ChallengeSuggestion & {
