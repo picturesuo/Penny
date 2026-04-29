@@ -1,10 +1,10 @@
 # Thinking Mode Contract Critique
 
-Status: Current implementation re-review: `BACKEND/CONTRACT PASS, FRONTEND API PASS, FRONTEND PRODUCT PROOF BLOCKED`
+Status: Current implementation re-review: `BACKEND/CONTRACT PASS, FRONTEND PRODUCT PROOF PASS, LIVE API SMOKE PASS`
 Artifact ID: `THINKING-MODE-CONTRACT-CRITIQUE`
 Review date: 2026-04-29
 
-This update keeps the original Wave 1 contract review below as historical context. The current judgment is based on the implemented Thinking Mode backend path, the still-active frontend/demo path, the contract docs, the YC fixture, and focused verification commands.
+This update keeps the original Wave 1 contract review below as historical context. The current judgment is based on the implemented Thinking Mode backend path, the current frontend Thinking Mode path, the contract docs, the YC fixture, and focused verification commands.
 
 ## Contract-Only Re-Check
 
@@ -22,7 +22,7 @@ Criterion judgments:
 
 Finding:
 
-- `THINKING-MODE-CONTRACT-CRITIQUE-CF1`: No contract-level blocker remains for state ownership or Move-backed focus. The remaining blocker is execution scope: do not expand into Challenge Brief, Learn, MCP, generic chat, or broad UI redesign while fixing the frontend focus contract.
+- `THINKING-MODE-CONTRACT-CRITIQUE-CF1`: No contract-level blocker remains for state ownership or Move-backed focus. The scope guard remains: do not expand into MCP, generic chat, or broad UI redesign while maintaining the frontend focus contract.
 
 ## Backend Cockpit Adapter Review
 
@@ -36,12 +36,12 @@ Criterion judgments:
 - `PASS WITH ROUTE-SURFACE RISK` `THINKING-MODE-CONTRACT-CRITIQUE-C5`: Backend did not duplicate Thinking Mode business logic. The session cockpit service delegates graph state to `loadSessionGraph` and Autopilot writes to `ThinkingModeService`; the new code only adapts session-scoped route inputs, composes DTO fields, and selects existing active challenge/latest artifact rows. The risk is route-surface duplication, not duplicated domain behavior: keep scoring, Move creation, challenge responses, artifact synthesis, and focus persistence out of this adapter.
 - `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C6`: the cockpit DTO is frontend-shaped but backend-owned. `SessionCockpitPayload` intentionally groups graph, moves, lens, Autopilot, active challenge, latest artifact, and meta for the cockpit, but the shape is built on the backend from canonical backend projections and rows.
 - `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C7`: this did not create a second source of truth. The adapter adds no new table, cache, persisted cockpit store, or frontend-owned graph state. `activeChallenge` and `latestArtifact` are read projections over existing rows, and accepted focus/manual focus still write through `ThinkingModeService` as `autopilot_focus_started` and `manual_node_selected`.
-- `NOT VERIFIED` `THINKING-MODE-CONTRACT-CRITIQUE-C8`: full-repo typecheck is currently blocked by unrelated dirty frontend changes and an optional `pause` typing mismatch in `packages/brain/frontend/src/App.tsx`. Focused cockpit route tests pass.
+- `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C8`: full-repo typecheck is no longer blocked by frontend typing drift. Focused cockpit route tests and full typecheck pass.
 
 Verification commands run:
 
 - `pnpm exec tsx --test packages/brain/src/session-cockpit-routes.test.ts packages/brain/src/thinking-mode-routes.test.ts` -> `PASS`, 18 tests.
-- `pnpm typecheck` -> `FAIL` outside this adapter review scope: `packages/brain/frontend/src/App.tsx` rejects an optional `pause` value under `exactOptionalPropertyTypes`.
+- `pnpm typecheck` -> `PASS`.
 
 Finding:
 
@@ -49,28 +49,30 @@ Finding:
 
 ## Frontend Thinking Mode API Review
 
-Status: `API PASS; PRODUCT PROOF BLOCKED`
+Status: `API PASS; PRODUCT PROOF PASS`
 Artifact ID: `THINKING-MODE-CONTRACT-CRITIQUE`
 Review date: 2026-04-29
-Scope: frontend commit `e13099e` (`Wire frontend to session cockpit`): `packages/brain/frontend/src/App.tsx`, `packages/brain/frontend/src/api/brainClient.ts`, `packages/brain/frontend/src/types/brain.ts`, `packages/brain/frontend/test/brainClient.test.ts`, and visible placeholder components.
+Scope: frontend commits through `a2270f9` plus smoke commit `fe94584`: `packages/brain/frontend/src/App.tsx`, `packages/brain/frontend/src/api/brainClient.ts`, `packages/brain/frontend/src/types/brain.ts`, `packages/brain/frontend/test/brainClient.test.ts`, visible placeholder components, and `scripts/smoke-thinking-mode.sh`.
 
 Criterion judgments:
 
-- `PASS WITH TEST-SCRIPT RISK` `THINKING-MODE-CONTRACT-CRITIQUE-C9`: frontend source now uses the new Thinking Mode/session cockpit API path instead of legacy Autopilot. `tickAutopilot` calls `POST /api/sessions/:sessionId/autopilot/tick`, accepted focus calls `POST /api/sessions/:sessionId/next-move-candidates/:candidateId/start`, manual focus calls `POST /api/sessions/:sessionId/focus/manual`, and refresh uses `GET /api/sessions/:sessionId/cockpit`. `handleGoThere` now starts a candidate and refreshes cockpit state instead of only setting local focus. Test-script risk: the focused frontend client test is tracked, but it is outside the default `pnpm test` package script.
-- `FAIL` `THINKING-MODE-CONTRACT-CRITIQUE-C10`: old placeholder paths still mask missing backend state. `CurrentExploration` still falls back to `placeholderPaths`, `InsightRail` renders `"Placeholder"` values and `placeholderMoves`, and `ThoughtMap` renders a placeholder tree when backend graph state is empty. `mergeCockpitData` also preserves prior seed-only fields such as exploration paths when cockpit does not return them, which can make absent backend state look intentionally populated.
-- `PASS WITH UI COPY RISK` `THINKING-MODE-CONTRACT-CRITIQUE-C11`: the UI now displays the selected candidate's thinking action label and rationale from backend state, and the button starts the Move-backed candidate. The primary control still says `Go there`, and the normalized UI model does not expose exit criteria or expected Move kinds, so the visible interaction still reads partly like navigation rather than a concrete "start challenge / verify / learn" thinking action.
-- `NOT VERIFIED` `THINKING-MODE-CONTRACT-CRITIQUE-C12`: live browser proof against a running API/database was not rerun in this critic pass. The source, frontend build, focused client test, and backend route tests were verified locally.
+- `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C9`: frontend source uses the new Thinking Mode/session cockpit API path instead of legacy Autopilot. `tickAutopilot` calls `POST /api/sessions/:sessionId/autopilot/tick`, accepted focus calls `POST /api/sessions/:sessionId/next-move-candidates/:candidateId/start`, manual focus calls `POST /api/sessions/:sessionId/focus/manual`, and refresh uses `GET /api/sessions/:sessionId/cockpit`. The focused frontend client test now runs in default `pnpm test`.
+- `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C10`: old placeholder paths no longer mask missing backend state. `CurrentExploration`, `InsightRail`, and `ThoughtMap` render explicit empty states when backend-owned graph/focus/challenge/artifact data is absent; `packages/brain/frontend/src/data/placeholders.ts` was deleted; `mergeCockpitData` no longer preserves seed-only exploration or learn placeholders as if the cockpit returned them.
+- `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C11`: the UI displays the next thinking action, not just navigation. The selected candidate exposes `primaryActionLabel`, rationale, exit criteria, accepted Move kinds, and focused claim, and the primary control uses action-specific labels such as `Start challenge` instead of `Go there`.
+- `PASS WITH BROWSER GAP` `THINKING-MODE-CONTRACT-CRITIQUE-C12`: live API/database proof passes against a temporary migrated PostgreSQL database using `SMOKE_ISOLATED_DB=1`. A browser pixel walkthrough was not run in this pass, but the live seed -> tick -> start focus -> manual focus -> challenge responses -> Challenge Brief path is verified through the same HTTP API surface the frontend client calls.
 
 Verification commands run:
 
 - `pnpm exec tsx --test packages/brain/frontend/test/brainClient.test.ts` -> `PASS`, 2 tests.
 - `pnpm exec tsx --test packages/brain/src/session-cockpit-routes.test.ts packages/brain/src/thinking-mode-routes.test.ts` -> `PASS`, 18 tests.
+- `pnpm test` -> `PASS`.
 - `pnpm typecheck` -> `PASS`.
-- `pnpm build:frontend` -> `PASS`; generated public asset changes were reverted because this critic pass does not own build output.
+- `pnpm build:frontend` -> `PASS`.
+- `SMOKE_ISOLATED_DB=1 BASE_URL=http://localhost:3017 PORT=3017 ./scripts/smoke-thinking-mode.sh` -> `PASS`.
 
 Finding:
 
-- `THINKING-MODE-CONTRACT-CRITIQUE-CF3`: Frontend API wiring is no longer the blocker. The remaining blocker is visible product proof: remove placeholder fallbacks from backend-owned regions or render explicit empty/error states, and change accepted-focus copy/data to expose the actual next thinking action and exit criteria instead of making `Go there` the dominant affordance.
+- `THINKING-MODE-CONTRACT-CRITIQUE-CF3`: Frontend product proof now satisfies the Thinking Mode contract at source and live API-smoke level. The remaining verification gap is only browser-level visual walkthrough, not canonical state ownership or Move-backed focus.
 
 ## Current Verification Summary
 
@@ -81,7 +83,7 @@ Criterion judgments for `THINKING-MODE-CONTRACT-CRITIQUE`:
 - `PASS` SC3 for the new API path: `POST /api/brains/:brainId/focus/manual` validates input, records `manual_node_selected`, persists `manual_selection` FocusState, pauses Autopilot, and returns the selected focus.
 - `PASS` SC4: current challenge response tests cover Defend, Revise, Absorb, `focus_completed`, and old ClaimVersion preservation on Revise.
 - `PASS` SC5: focused Thinking Mode tests, full package tests, pure-engine skeleton tests, `pnpm typecheck`, and `pnpm lint` pass.
-- `NOT VERIFIED` SC6 as a global repo-cleanliness criterion: reviewed implementation commits are already on `origin/main`, but the current working tree contains unrelated public asset changes outside this critique.
+- `PASS` SC6 as a global repo-cleanliness criterion: reviewed implementation commits are on `origin/main`, and the current worktree is clean after each coherent change is committed and pushed.
 
 Verification commands run:
 
@@ -92,6 +94,9 @@ Verification commands run:
 - `pnpm lint` -> `PASS`.
 - After follow-up action-alignment commits landed on `origin/main`, `pnpm exec tsx --test test/brain/nextMoveEngine.test.ts packages/brain/src/domain-engine.test.ts` -> `PASS`, 14 tests.
 - After follow-up demo-artifact commits landed on `origin/main`, the YC fixture was probed with `rankNextMoveCandidates` plus `buildTemplateChallenge`; it produced the exact willingness-to-pay challenge copy.
+- `pnpm exec tsx --test packages/brain/src/challenge-service.test.ts packages/brain/src/domain-engine.test.ts` -> `PASS`; includes fixture-backed proof that the selected YC fixture candidate produces the exact willingness-to-pay challenge copy.
+- `bash -n scripts/smoke-thinking-mode.sh` -> `PASS`.
+- `SMOKE_ISOLATED_DB=1 BASE_URL=http://localhost:3017 PORT=3017 ./scripts/smoke-thinking-mode.sh` -> `PASS`.
 - `git diff --check -- docs/thinking-mode-contract-critique.md packages/brain/src/domain/engine.ts packages/brain/src/services/thinking-mode-service.ts packages/brain/src/routes/thinking-mode-routes.ts packages/brain/src/domain/repository.ts packages/brain/src/move-payloads.ts packages/brain/src/db/schema.ts` -> `PASS`.
 
 ## Current Findings
@@ -104,22 +109,17 @@ The new backend API path now implements the controllable thinking loop instead o
 
 This resolves the original backend risks around deterministic ranking, manual override as signal, accepted focus as a Move, and POST-only mutation for the new `/api/brains/:brainId/*` surface.
 
-### `THINKING-MODE-CONTRACT-CRITIQUE-F2`: The Active Frontend Still Bypasses The New Thinking Mode API
+### `THINKING-MODE-CONTRACT-CRITIQUE-F2`: The Active Frontend Uses The Thinking Mode API
 
-Judgment: `FAIL`
+Judgment: `PASS`
 
-The React frontend still calls the legacy `/autopilot/tick` and `/autopilot/select-node` endpoints from `packages/brain/frontend/src/api/brainClient.ts`. It does not call `POST /api/brains/:brainId/autopilot/tick`, `POST /api/next-move-candidates/:candidateId/start`, or `POST /api/brains/:brainId/focus/manual`.
+The React frontend now calls the session-scoped Thinking Mode cockpit routes. It no longer uses the legacy local-only Autopilot path for accepted focus or manual focus.
 
-The `Go there` handler in `packages/brain/frontend/src/App.tsx` only sets local `focusedClaimId` and status text. It does not create `autopilot_focus_started`, does not update persisted `FocusState(source="autopilot_started")`, and does not fetch the move timeline afterward.
+Accepted focus starts the selected backend candidate and refreshes cockpit state, which creates `autopilot_focus_started` on the backend path. Manual map selection calls the backend manual focus command, creating `manual_node_selected` and paused FocusState.
 
-Impact: the backend implementation is correct, but the visible app can still collapse into next-node navigation during the accepted-suggestion moment. This directly reopens the original Section 1 and Section 4 contract risk for demo use.
+Impact: the visible app now proves the same Move-backed focus contract as the backend route tests and live smoke script.
 
-Required fix:
-
-- Make the frontend tick against the new `/api/brains/:brainId/autopilot/tick` response shape.
-- Make `Go there` call `POST /api/next-move-candidates/:candidateId/start`.
-- Make manual map selection call `POST /api/brains/:brainId/focus/manual`.
-- Refresh moves after accepted focus as well as after manual selection.
+Verification: the default `pnpm test` includes the frontend client adapter test, and the isolated live smoke covers seed, state read, tick, candidate start, manual focus, challenge responses, and Challenge Brief creation.
 
 ### `THINKING-MODE-CONTRACT-CRITIQUE-F3`: Demo Artifact Vocabulary Now Matches The Implemented Vocabulary
 
@@ -131,9 +131,7 @@ The demo-facing artifacts now match that contract: `docs/yc-demo-script.md` no l
 
 Impact: this closes the original action-name and candidate-persistence contract drift for the backend/demo artifacts.
 
-Remaining risk:
-
-- The frontend still needs to call the new Thinking Mode route family before the visible demo proves the same contract.
+Remaining risk: none for action vocabulary or candidate persistence in this artifact.
 
 ### `THINKING-MODE-CONTRACT-CRITIQUE-F4`: The YC Fixture Now Carries The Willingness-To-Pay Demo Claim
 
@@ -145,9 +143,7 @@ I verified the current fixture by ranking it with `rankNextMoveCandidates` and p
 
 Impact: this closes the founder-specificity gap in the contract fixture. The remaining demo risk is the frontend path, not the fixture content.
 
-Remaining risk:
-
-- Add or keep a fixture-backed assertion that `buildTemplateChallenge` produces the exact willingness-to-pay critique on the selected candidate, not just on a manually constructed test input.
+Verification: `packages/brain/src/challenge-service.test.ts` now includes a fixture-backed assertion that ranks the YC fixture, feeds the selected candidate into `buildTemplateChallenge`, and proves the exact willingness-to-pay critique path.
 
 ### `THINKING-MODE-CONTRACT-CRITIQUE-F5`: Backend Truth Mutation Boundaries Hold
 
@@ -155,13 +151,13 @@ Judgment: `PASS`
 
 The reviewed backend path keeps Autopilot suggestions separate from truth mutation. Tick and focus start mutate candidate/focus rows and Moves only; they do not change claim text, confidence, edge truth, or artifacts. Challenge response behavior preserves the explicit Defend / Revise / Absorb split, and Revise preserves the old ClaimVersion before marking the new ClaimVersion current.
 
-Remaining risk is integration-level, not core backend behavior: the frontend must stop using local-only accepted focus if the demo is meant to prove Move-backed Thinking Mode.
+The former integration risk is resolved for this artifact: the frontend starts candidates through the Thinking Mode API, manual focus is Move-backed, and the live smoke proves those writes against migrated tables.
 
 ## Current Status
 
-`PROCEED FOR BACKEND API AND CONTRACT ARTIFACTS; BLOCKED FOR FRONTEND DEMO`
+`PROCEED FOR BACKEND API, CONTRACT ARTIFACTS, AND FRONTEND THINKING MODE DEMO`
 
-The backend service, route, persistence, challenge response, Challenge Brief behavior, spec, move taxonomy, and fixture now meet the core artifact. The visible app still references legacy routes and local-only accepted focus, so the live demo does not yet prove Move-backed accepted focus.
+The backend service, route, persistence, challenge response, Challenge Brief behavior, spec, move taxonomy, fixture, frontend API client, and visible next-action UI now meet the core artifact. The live API smoke proves Move-backed accepted focus and manual focus against a migrated PostgreSQL database.
 
 ---
 
@@ -311,11 +307,11 @@ Current backend reading:
 - The current demo script now uses the sharper willingness-to-pay founder claim: `Pre-seed founders will pay for structured thinking before traction.`
 - `wouldCreateMoveKinds` is now the plural form used by the spec, domain type, and fixture.
 - The fixture now includes `acceptedFocus` and `manualOverride` patches covering `autopilot_focus_started`, `manual_node_selected`, paused FocusState, `manualMoveId`, selected focus, and the prior ranking Move link.
-- Legacy `/autopilot/*` routes and the frontend still use the older suggestion shape; the demo path should use `/api/brains/:brainId/autopilot/*` plus `POST /api/next-move-candidates/:candidateId/start` before claiming accepted focus is durable in the product UI.
+- Legacy `/autopilot/*` routes may remain for compatibility, but the active frontend demo path now uses the session-scoped Thinking Mode routes and starts selected candidates through the backend before claiming accepted focus is durable in the product UI.
 - Candidate persistence should be documented as the current service behavior: materialized candidate rows plus a `next_move_recomputed` Move payload, not a required `autopilot_candidate_generated` Move for every candidate unless a later migration explicitly adds that audit style.
 
-Next backend fix target:
+Resolved follow-up checks:
 
 1. Keep future implementation work on the new Thinking Mode API path.
-2. Wire visible "Go there" behavior to candidate start so it creates `autopilot_focus_started`.
-3. Add or keep a fixture-backed assertion that the selected YC fixture claim produces the exact willingness-to-pay challenge copy.
+2. Visible accepted-focus behavior is now wired to candidate start and creates `autopilot_focus_started`.
+3. A fixture-backed assertion now proves the selected YC fixture claim produces the exact willingness-to-pay challenge copy.
