@@ -7,10 +7,12 @@ import {
   VerifyOutputSchema,
   VerifyProviderError,
   VerifyProviderSchema,
+  buildConfidenceCascadePlan,
   createHeuristicVerifyProvider,
   createXaiVerifyProvider,
   defaultXaiVerifyModel,
   generateVerifyOutput,
+  handleVerifyConfidenceRequest,
   handleVerifyRequest,
   parseVerifyOutput,
   resolveXaiVerifyModel,
@@ -155,6 +157,140 @@ test("POST /brain/verify returns verdict, evidence cards, BrainRun, and verify_r
     autoApplied: false,
     decision: "pending_user_decision",
   });
+});
+
+test("POST /brain/verify/confidence validates requests before deciding confidence", async () => {
+  let decided = false;
+  const response = await handleVerifyConfidenceRequest(
+    request("http://localhost/brain/verify/confidence", {
+      verifyMoveId: "not-a-uuid",
+      decision: "accept",
+    }),
+    {
+      async decideConfidence() {
+        decided = true;
+        throw new Error("decideConfidence should not run");
+      },
+    },
+  );
+  const payload = (await response.json()) as { error: { code: string; issues: string[] } };
+
+  assert.equal(response.status, 400);
+  assert.equal(payload.error.code, "invalid_request");
+  assert.match(payload.error.issues.join("\n"), /verifyMoveId/);
+  assert.equal(decided, false);
+});
+
+test("POST /brain/verify/confidence returns accepted confidence cascade decisions", async () => {
+  const verifyMoveId = uuidAt(401);
+  const claimId = uuidAt(101);
+  const dependentClaimId = uuidAt(102);
+  const response = await handleVerifyConfidenceRequest(
+    request("http://localhost/brain/verify/confidence", {
+      verifyMoveId,
+      decision: "accept",
+      reason: "The citation directly tests the premise.",
+    }),
+    {
+      async decideConfidence(input) {
+        assert.equal(input.verifyMoveId, verifyMoveId);
+        assert.equal(input.decision, "accept");
+        assert.match(input.reason ?? "", /citation/);
+
+        return {
+          decision: "accept",
+          targetClaim: {
+            id: claimId,
+            versionId: uuidAt(202),
+            kind: "assumption",
+            status: "exploratory",
+            text: "Cognitive load is the first bottleneck to test.",
+            confidence: 72,
+          },
+          move: {
+            id: uuidAt(402),
+            kind: "confidence_update_accepted",
+            summary: "Accepted Verify confidence suggestion.",
+            claimIds: [claimId, dependentClaimId],
+            edgeIds: [uuidAt(601)],
+            artifactIds: [],
+          },
+          confidenceUpdate: {
+            verifyMoveId,
+            suggestedDelta: 8,
+            accepted: true,
+            previousConfidence: 64,
+            currentConfidence: 72,
+            appliedDelta: 8,
+            cascade: [
+              {
+                claimId: dependentClaimId,
+                viaEdgeId: uuidAt(601),
+                depth: 1,
+                previousVersionId: uuidAt(211),
+                currentVersionId: uuidAt(212),
+                previousConfidence: 55,
+                currentConfidence: 59,
+                appliedDelta: 4,
+              },
+            ],
+          },
+        };
+      },
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      decision: string;
+      move: { kind: string; claimIds: string[]; edgeIds: string[] };
+      confidenceUpdate: { accepted: boolean; appliedDelta: number; cascade: Array<{ appliedDelta: number; depth: number }> };
+      targetClaim: { confidence: number };
+    };
+  };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.decision, "accept");
+  assert.equal(payload.data.move.kind, "confidence_update_accepted");
+  assert.deepEqual(payload.data.move.claimIds, [claimId, dependentClaimId]);
+  assert.deepEqual(payload.data.move.edgeIds, [uuidAt(601)]);
+  assert.equal(payload.data.confidenceUpdate.accepted, true);
+  assert.equal(payload.data.confidenceUpdate.appliedDelta, 8);
+  assert.equal(payload.data.confidenceUpdate.cascade[0]?.depth, 1);
+  assert.equal(payload.data.confidenceUpdate.cascade[0]?.appliedDelta, 4);
+  assert.equal(payload.data.targetClaim.confidence, 72);
+});
+
+test("confidence cascade follows active depends_on edges with attenuation", () => {
+  const rootClaimId = uuidAt(101);
+  const directDependentClaimId = uuidAt(102);
+  const secondOrderDependentClaimId = uuidAt(103);
+  const inactiveDependentClaimId = uuidAt(104);
+  const plan = buildConfidenceCascadePlan({
+    changedClaimId: rootClaimId,
+    delta: -20,
+    edges: [
+      edge(uuidAt(601), directDependentClaimId, rootClaimId, "depends_on", "active", 1),
+      edge(uuidAt(602), secondOrderDependentClaimId, directDependentClaimId, "depends_on", "active", 2),
+      edge(uuidAt(603), inactiveDependentClaimId, rootClaimId, "depends_on", "acknowledged_vulnerability", 3),
+      edge(uuidAt(604), uuidAt(105), rootClaimId, "supports", "active", 4),
+      edge(uuidAt(605), rootClaimId, secondOrderDependentClaimId, "depends_on", "active", 5),
+    ],
+  });
+
+  assert.deepEqual(plan, [
+    {
+      claimId: directDependentClaimId,
+      viaEdgeId: uuidAt(601),
+      depth: 1,
+      appliedDelta: -10,
+    },
+    {
+      claimId: secondOrderDependentClaimId,
+      viaEdgeId: uuidAt(602),
+      depth: 2,
+      appliedDelta: -5,
+    },
+  ]);
 });
 
 test("verify route maps not-found, conflict, provider, and generation failures to stable errors", async () => {
@@ -372,6 +508,24 @@ function request(url: string, body: unknown): Request {
 
 function uuidAt(value: number): string {
   return `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
+}
+
+function edge(
+  id: string,
+  fromClaimId: string,
+  toClaimId: string,
+  kind: "depends_on" | "supports",
+  status: "active" | "acknowledged_vulnerability",
+  timestamp: number,
+) {
+  return {
+    id,
+    fromClaimId,
+    toClaimId,
+    kind,
+    status,
+    createdAt: new Date(timestamp),
+  };
 }
 
 function lensSnapshot() {
