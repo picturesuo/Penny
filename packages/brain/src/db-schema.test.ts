@@ -5,6 +5,8 @@ import {
   artifactKindEnum,
   artifacts,
   brainRuns,
+  commandIdempotencyKeys,
+  commandIdempotencyStatusEnum,
   claimEdgeKindEnum,
   claimEdgeStatusEnum,
   claimEdges,
@@ -40,6 +42,7 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(brainRuns), "brain_runs");
   assert.equal(getTableName(artifacts), "artifacts");
   assert.equal(getTableName(wikiPages), "wiki_pages");
+  assert.equal(getTableName(commandIdempotencyKeys), "command_idempotency_keys");
 });
 
 test("ClaimVersion schema tracks validity windows", () => {
@@ -49,7 +52,19 @@ test("ClaimVersion schema tracks validity windows", () => {
 });
 
 test("Penny core tables persist user and workspace scope", () => {
-  for (const table of [sessions, sources, claims, claimEdges, moves, derivedEffects, shapes, brainRuns, artifacts, wikiPages]) {
+  for (const table of [
+    sessions,
+    sources,
+    claims,
+    claimEdges,
+    moves,
+    derivedEffects,
+    shapes,
+    brainRuns,
+    artifacts,
+    wikiPages,
+    commandIdempotencyKeys,
+  ]) {
     assert.equal(table.userId.name, "user_id");
     assert.equal(table.workspaceId.name, "workspace_id");
     assert.equal(table.projectId.name, "project_id");
@@ -79,6 +94,7 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
   ]);
   assert.deepEqual(derivedEffectStatusEnum.enumValues, ["pending_review", "accepted", "rejected", "superseded"]);
   assert.deepEqual(shapeStatusEnum.enumValues, ["candidate", "confirmed", "rejected", "superseded"]);
+  assert.deepEqual(commandIdempotencyStatusEnum.enumValues, ["running", "succeeded", "failed"]);
   assert.ok(moveKindEnum.enumValues.includes("seed_claim_created"));
   assert.ok(moveKindEnum.enumValues.includes("assumptions_extracted"));
   assert.ok(moveKindEnum.enumValues.includes("first_challenge_suggested"));
@@ -102,6 +118,8 @@ test("Penny schema has a clean aggregate export surface", () => {
     "artifactKindEnum",
     "artifacts",
     "brainRuns",
+    "commandIdempotencyKeys",
+    "commandIdempotencyStatusEnum",
     "claimEdgeKindEnum",
     "claimEdgeStatusEnum",
     "claimEdges",
