@@ -39,8 +39,8 @@ function PathwayRow({ row }: { row: PathRow }) {
       <span className="path-index">#</span>
       <strong>{row.title}</strong>
       <ul>
-        {row.reasoning.map((item) => (
-          <li key={item}>{item}</li>
+        {row.reasoning.map((item, index) => (
+          <li key={`${row.id}-reason-${index}`}>{item}</li>
         ))}
       </ul>
       <button type="button" aria-label={`Explore ${row.title}`}>
