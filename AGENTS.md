@@ -12,6 +12,7 @@ Keep it current.
 - The MVP loop is seed idea -> assumptions -> thought map -> exploration -> challenge -> Defend/Revise/Absorb -> Learn -> Idea Map + Challenge Brief.
 - Core modes are Brain, Challenge / Verify, and Learn / Makes Cents over the same thinking graph.
 - Claim is the stable identity; ClaimVersion stores content, confidence, status, validity, and current/old state.
+- Heavily depended-on claims are foundations; age them with review or decay after time passes.
 - Move is immutable and append-only; meaningful changes create Moves.
 - BrainRun tracks every AI operation.
 - SourceSpan preserves provenance.
