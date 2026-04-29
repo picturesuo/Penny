@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { artifacts, brainRuns, claimEdges, claimVersions, claims, moves, sessions, shapes as shapeRows, sources } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
+import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
 import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 import {
@@ -225,6 +226,7 @@ export type SessionArtifactContext = {
 
 export type ArtifactGenerationInput = SessionArtifactContext & {
   requestedKind: "challenge_brief";
+  lensSnapshot?: LensSnapshot;
 };
 
 const artifactOutputSpec = Output.object<ArtifactProviderOutput>({
@@ -418,6 +420,7 @@ type PersistedArtifactMove = {
 type ArtifactPrelude = {
   context: SessionArtifactContext;
   brainRun: typeof brainRuns.$inferSelect;
+  lensSnapshot: LensSnapshot;
 };
 
 export async function handleSessionArtifactRequest(
@@ -554,6 +557,7 @@ export async function persistSessionArtifact(
       {
         ...prelude.context,
         requestedKind: input.kind,
+        lensSnapshot: prelude.lensSnapshot,
       },
       { provider, brainRunId: prelude.brainRun.id },
     );
@@ -708,8 +712,11 @@ export function buildArtifactPrompt(input: ArtifactGenerationInput): string {
     "- Treat moves as immutable history, but do not infer events that are not present.",
     "- Make the brief useful for leaving with an Idea Map plus Challenge Brief.",
     "- claimRefs and edgeRefs must reference ids from the JSON context.",
+    "- Use lensSnapshot.shapes to make synthesis reflect durable user-history patterns.",
+    "- Treat candidate shapes as tentative and confirmed shapes as stronger priors.",
     "",
     `Requested artifact kind: ${input.requestedKind}`,
+    `Lens snapshot JSON: ${formatLensSnapshot(input.lensSnapshot)}`,
     "Session context JSON:",
     JSON.stringify(input, null, 2),
   ].join("\n");
@@ -722,6 +729,7 @@ async function createArtifactPrelude(
 ): Promise<ArtifactPrelude> {
   return db.transaction(async (tx) => {
     const context = await loadSessionArtifactContext(tx, input.sessionId);
+    const lensSnapshot = await loadLensSnapshot(tx, input.sessionId);
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
@@ -734,6 +742,7 @@ async function createArtifactPrelude(
         input: {
           requestedKind: input.kind,
           context,
+          lensSnapshot,
         },
       })
       .returning();
@@ -742,7 +751,7 @@ async function createArtifactPrelude(
       throw new ArtifactConflictError("Failed to record artifact BrainRun.");
     }
 
-    return { context, brainRun };
+    return { context, brainRun, lensSnapshot };
   });
 }
 
