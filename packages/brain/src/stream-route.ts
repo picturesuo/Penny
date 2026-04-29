@@ -27,6 +27,9 @@ type StreamClaim = {
   text: string;
   confidence: number;
   versionId: string | null;
+  validFrom: string | null;
+  validUntil: string | null;
+  supersededByVersionId: string | null;
 };
 
 type StreamSession = {
@@ -301,6 +304,9 @@ function claimSlice(claim: ClaimRow, version: ClaimVersionRow): StreamClaim {
     text: version.content,
     confidence: version.confidence,
     versionId: version.id,
+    validFrom: version.validFrom.toISOString(),
+    validUntil: version.validUntil?.toISOString() ?? null,
+    supersededByVersionId: version.supersededByVersionId,
   };
 }
 

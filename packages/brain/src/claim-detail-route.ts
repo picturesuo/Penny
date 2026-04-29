@@ -189,6 +189,9 @@ export function buildClaimDetailFromState(state: ClaimDetailState) {
       confidence: version.confidence,
       status: version.status,
       state: version.isCurrent ? "current" : "old",
+      validFrom: version.validFrom.toISOString(),
+      validUntil: version.validUntil?.toISOString() ?? null,
+      supersededByVersionId: version.supersededByVersionId,
       createdAt: version.createdAt.toISOString(),
     })),
     moves: moveSlices,
@@ -290,6 +293,9 @@ function claimVersionSlice(version: ClaimVersionRow) {
     confidence: version.confidence,
     state: version.isCurrent ? "current" : "old",
     isCurrent: version.isCurrent,
+    validFrom: version.validFrom.toISOString(),
+    validUntil: version.validUntil?.toISOString() ?? null,
+    supersededByVersionId: version.supersededByVersionId,
     createdAt: version.createdAt.toISOString(),
   };
 }

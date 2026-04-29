@@ -257,6 +257,9 @@ export function compileWikiPage(state: WikiCompileState, input: WikiRouteInput):
       text: currentVersion.content,
       brainRunId: currentVersion.brainRunId,
       moveId: currentVersion.moveId,
+      validFrom: currentVersion.validFrom.toISOString(),
+      validUntil: currentVersion.validUntil?.toISOString() ?? null,
+      supersededByVersionId: currentVersion.supersededByVersionId,
       sourceSpanIds: spanIds,
     };
   });

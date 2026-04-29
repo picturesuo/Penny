@@ -443,6 +443,9 @@ function versionSlice(version: ClaimVersionRow) {
     confidence: version.confidence,
     state: version.isCurrent ? "current" : "old",
     isCurrent: version.isCurrent,
+    validFrom: version.validFrom.toISOString(),
+    validUntil: version.validUntil?.toISOString() ?? null,
+    supersededByVersionId: version.supersededByVersionId,
     createdAt: version.createdAt.toISOString(),
   };
 }

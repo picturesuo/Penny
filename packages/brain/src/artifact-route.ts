@@ -196,6 +196,9 @@ export type SessionArtifactContext = {
     status: "exploratory" | "committed" | "resolved" | "rejected";
     confidence: number;
     isCurrent: boolean;
+    validFrom: string;
+    validUntil: string | null;
+    supersededByVersionId: string | null;
     createdAt: string;
   }>;
   edges: Array<{
@@ -343,6 +346,9 @@ type CompiledClaim = {
     confidence: number;
     status: ClaimVersionRow["status"];
     isCurrent: boolean;
+    validFrom: string;
+    validUntil: string | null;
+    supersededByVersionId: string | null;
     createdAt: string;
   }>;
 };
@@ -357,6 +363,9 @@ type CompiledClaimVersion = {
   status: ClaimVersionRow["status"];
   confidence: number;
   isCurrent: boolean;
+  validFrom: string;
+  validUntil: string | null;
+  supersededByVersionId: string | null;
   createdAt: string;
 };
 
@@ -930,6 +939,9 @@ async function loadSessionArtifactContext(
       status: version.status,
       confidence: version.confidence,
       isCurrent: version.isCurrent,
+      validFrom: version.validFrom.toISOString(),
+      validUntil: version.validUntil?.toISOString() ?? null,
+      supersededByVersionId: version.supersededByVersionId,
       createdAt: version.createdAt.toISOString(),
     })),
     edges: edgeRows.map((edge) => ({
@@ -1039,6 +1051,9 @@ function compiledClaimVersion(version: ClaimVersionRow): CompiledClaimVersion {
     status: version.status,
     confidence: version.confidence,
     isCurrent: version.isCurrent,
+    validFrom: version.validFrom.toISOString(),
+    validUntil: version.validUntil?.toISOString() ?? null,
+    supersededByVersionId: version.supersededByVersionId,
     createdAt: version.createdAt.toISOString(),
   };
 }
@@ -1089,6 +1104,9 @@ function compiledClaim(
       confidence: version.confidence,
       status: version.status,
       isCurrent: version.isCurrent,
+      validFrom: version.validFrom.toISOString(),
+      validUntil: version.validUntil?.toISOString() ?? null,
+      supersededByVersionId: version.supersededByVersionId,
       createdAt: version.createdAt.toISOString(),
     })),
   };
@@ -1477,6 +1495,9 @@ function compiledClaims(context: SessionArtifactContext): CompiledClaim[] {
       confidence: version.confidence,
       status: version.status,
       isCurrent: version.isCurrent,
+      validFrom: version.validFrom,
+      validUntil: version.validUntil,
+      supersededByVersionId: version.supersededByVersionId,
       createdAt: version.createdAt,
     })),
   }));
