@@ -1,6 +1,6 @@
 # Thinking Mode Contract Critique
 
-Status: Current implementation re-review: `BACKEND PASS, FRONTEND/CONTRACT ALIGNMENT BLOCKED`
+Status: Current implementation re-review: `BACKEND/CONTRACT PASS, FRONTEND DEMO BLOCKED`
 Artifact ID: `THINKING-MODE-CONTRACT-CRITIQUE`
 Review date: 2026-04-29
 
@@ -14,7 +14,7 @@ Criterion judgments for `THINKING-MODE-CONTRACT-CRITIQUE`:
 - `PASS` SC2 for the new API path: `POST /api/brains/:brainId/autopilot/tick` validates input, rejects non-POST methods, loads canonical graph state, persists next-move candidates, records `next_move_recomputed`, updates suggestion FocusState, and does not mutate claim text or confidence.
 - `PASS` SC3 for the new API path: `POST /api/brains/:brainId/focus/manual` validates input, records `manual_node_selected`, persists `manual_selection` FocusState, pauses Autopilot, and returns the selected focus.
 - `PASS` SC4: current challenge response tests cover Defend, Revise, Absorb, `focus_completed`, and old ClaimVersion preservation on Revise.
-- `PASS` SC5: focused Thinking Mode tests, full package tests, `pnpm typecheck`, and `pnpm lint` pass.
+- `PASS` SC5: focused Thinking Mode tests, full package tests, pure-engine skeleton tests, `pnpm typecheck`, and `pnpm lint` pass.
 - `NOT VERIFIED` SC6 as a global repo-cleanliness criterion: reviewed implementation commits are already on `origin/main`, but the current working tree contains unrelated public asset changes outside this critique.
 
 Verification commands run:
@@ -24,6 +24,8 @@ Verification commands run:
 - `pnpm test` -> `PASS`, 161 tests.
 - `pnpm typecheck` -> `PASS`.
 - `pnpm lint` -> `PASS`.
+- After follow-up action-alignment commits landed on `origin/main`, `pnpm exec tsx --test test/brain/nextMoveEngine.test.ts packages/brain/src/domain-engine.test.ts` -> `PASS`, 14 tests.
+- After follow-up demo-artifact commits landed on `origin/main`, the YC fixture was probed with `rankNextMoveCandidates` plus `buildTemplateChallenge`; it produced the exact willingness-to-pay challenge copy.
 - `git diff --check -- docs/thinking-mode-contract-critique.md packages/brain/src/domain/engine.ts packages/brain/src/services/thinking-mode-service.ts packages/brain/src/routes/thinking-mode-routes.ts packages/brain/src/domain/repository.ts packages/brain/src/move-payloads.ts packages/brain/src/db/schema.ts` -> `PASS`.
 
 ## Current Findings
@@ -53,37 +55,33 @@ Required fix:
 - Make manual map selection call `POST /api/brains/:brainId/focus/manual`.
 - Refresh moves after accepted focus as well as after manual selection.
 
-### `THINKING-MODE-CONTRACT-CRITIQUE-F3`: Contract Artifacts Still Disagree With The Implemented Vocabulary
+### `THINKING-MODE-CONTRACT-CRITIQUE-F3`: Demo Artifact Vocabulary Now Matches The Implemented Vocabulary
 
-Judgment: `FAIL`
+Judgment: `PASS`
 
-The implementation standardized the active backend on `resume_open_challenge`, `challenge`, `verify`, `clarify`, and `learn`. The Wave 1 contract and fixture still use older action names such as `respond_to_challenge`, `challenge_claim`, and `verify_confidence`, and `docs/thinking-mode-autopilot-spec.md` still documents `wouldCreateMoveKind` singular while the fixture and historical domain type use `wouldCreateMoveKinds`.
+The implementation, Autopilot spec, move taxonomy, domain types, and pure engine are now aligned on the active action set: `resume_open_challenge`, `challenge`, `verify`, `clarify`, and `learn`. Candidate auditability is also now documented as `next_move_candidates` rows plus embedded candidate summaries in `next_move_recomputed`.
 
-Candidate auditability is also still split across artifacts. The implemented new backend uses `next_move_candidates` rows plus embedded candidate summaries in `next_move_recomputed`. `docs/move-taxonomy.md` still presents `autopilot_candidate_generated` and `autopilot_focus_suggested` as required first-loop Moves, while the current Drizzle `move_kind` enum does not include `autopilot_candidate_generated` and the new backend does not create `autopilot_focus_suggested`.
+The demo-facing artifacts now match that contract: `docs/yc-demo-script.md` no longer narrates `autopilot_candidate_generated` or `autopilot_focus_suggested`, and `test/fixtures/penny-yc-demo-graph.json` now uses current candidate actions plus a `next_move_recomputed` ranking-audit payload.
 
-Impact: the backend has a coherent persistence model, but the contract docs and fixture can mislead the next implementer into adding obsolete move kinds or testing against the wrong action names.
+Impact: this closes the original action-name and candidate-persistence contract drift for the backend/demo artifacts.
 
-Required fix:
+Remaining risk:
 
-- Update `docs/thinking-mode-autopilot-spec.md`, `docs/move-taxonomy.md`, `docs/yc-demo-script.md`, `packages/brain/src/domain/types.ts`, and `test/fixtures/penny-yc-demo-graph.json` to match the implemented action vocabulary and persistence model.
-- Either remove `autopilot_candidate_generated` / `autopilot_focus_suggested` from required current-path moves, or explicitly document them as legacy/contract aliases that are not emitted by the new Thinking Mode API.
-- Use one field name for downstream effects: prefer `acceptedMoveKinds` or `wouldCreateMoveKinds`, but do not keep both contract languages.
+- The frontend still needs to call the new Thinking Mode route family before the visible demo proves the same contract.
 
-### `THINKING-MODE-CONTRACT-CRITIQUE-F4`: The YC Fixture Still Misses The Willingness-To-Pay Demo Claim
+### `THINKING-MODE-CONTRACT-CRITIQUE-F4`: The YC Fixture Now Carries The Willingness-To-Pay Demo Claim
 
-Judgment: `FAIL`
+Judgment: `PASS`
 
-The demo script says the pressure point is `Pre-seed founders will pay for structured thinking before traction.` The actual YC fixture target claim is still `Founders will use structured thinking guidance during ambiguous company decisions.`
+The demo script says the pressure point is `Pre-seed founders will pay for structured thinking before traction.` The YC fixture now uses that claim as the selected target.
 
-I verified the current fixture-driven path by ranking the fixture with `rankNextMoveCandidates` and passing the selected target into `buildTemplateChallenge`. The selected candidate is sensible, but the challenge falls back to the generic load-bearing assumption template rather than the sharper willingness-to-pay critique.
+I verified the current fixture by ranking it with `rankNextMoveCandidates` and passing the selected target into `buildTemplateChallenge`; it produces the exact sharper willingness-to-pay critique.
 
-Impact: backend mechanics pass, but the demo artifact is less founder-specific than the script promises. The first challenge can sound like generic adoption risk instead of the sharper paid-founder-moment risk.
+Impact: this closes the founder-specificity gap in the contract fixture. The remaining demo risk is the frontend path, not the fixture content.
 
-Required fix:
+Remaining risk:
 
-- Replace or add the fixture claim with the willingness-to-pay wording used by the demo script.
-- Keep the expected top candidate pointed at that claim.
-- Add a fixture-backed assertion that `buildTemplateChallenge` produces the exact willingness-to-pay critique on the selected candidate, not just on a manually constructed test input.
+- Add or keep a fixture-backed assertion that `buildTemplateChallenge` produces the exact willingness-to-pay critique on the selected candidate, not just on a manually constructed test input.
 
 ### `THINKING-MODE-CONTRACT-CRITIQUE-F5`: Backend Truth Mutation Boundaries Hold
 
@@ -95,13 +93,13 @@ Remaining risk is integration-level, not core backend behavior: the frontend mus
 
 ## Current Status
 
-`PROCEED FOR BACKEND API; BLOCKED FOR FRONTEND DEMO AND CONTRACT ALIGNMENT`
+`PROCEED FOR BACKEND API AND CONTRACT ARTIFACTS; BLOCKED FOR FRONTEND DEMO`
 
-The backend service, route, persistence, challenge response, and Challenge Brief behavior now meet the core artifact. The visible app and Wave 1 contract artifacts do not yet prove the same contract because they still reference legacy routes, stale move names, and a weaker founder fixture.
+The backend service, route, persistence, challenge response, Challenge Brief behavior, spec, move taxonomy, and fixture now meet the core artifact. The visible app still references legacy routes and local-only accepted focus, so the live demo does not yet prove Move-backed accepted focus.
 
 ---
 
-Status: Wave 1 delayed CRITIC review  
+Status: Resolved after DEBUGGER contract alignment  
 Date: 2026-04-29  
 Scope: contracts and fixture only; no implementation review
 
@@ -207,7 +205,7 @@ Risk to watch later:
 
 - `FocusState.mode` includes `learn` and `verify`, and the repo already has wiki/verify surfaces elsewhere. Those are not bloat in this contract by themselves, but Wave 1 should not expand them beyond what the founder Thinking Mode demo needs.
 
-## Blocking Issues
+## Original Blocking Issues
 
 1. Candidate persistence is ambiguous across spec, taxonomy, demo, and fixture.
 2. The fixture does not prove manual override as signal.
@@ -215,7 +213,7 @@ Risk to watch later:
 4. The founder fixture and skeleton disagree on whether the primary market risk is adoption/usage or willingness to pay.
 5. Accepted Autopilot focus is contractually meaningful, but the fixture does not include `autopilot_focus_started`.
 
-## Required Contract Fixes Before Wave 1 Implementation
+## Original Required Contract Fixes Before Wave 1 Implementation
 
 1. Align action names across spec, domain types, fixture, and skeleton tests.
 2. Align candidate persistence into either dedicated candidate Moves or embedded persisted candidate records.
@@ -223,7 +221,17 @@ Risk to watch later:
 4. Make the founder market-risk claim match the test language.
 5. Keep MCP, broad product surfaces, and generic chat out of the contract.
 
-BLOCKED
+## DEBUGGER Resolution
+
+Status: `RESOLVED` on 2026-04-29.
+
+- Candidate persistence is now one rule: the Thinking Mode tick persists `next_move_candidates` rows and embeds auditable candidate records in the `next_move_recomputed` Move payload.
+- The contract no longer requires `autopilot_candidate_generated` or `autopilot_focus_suggested` as Thinking Mode Moves; accepted focus is recorded by `autopilot_focus_started`.
+- Action names now align on the active Thinking Mode vocabulary: `resume_open_challenge`, `challenge`, `verify`, `learn`, and `clarify`.
+- The YC fixture now centers the low-confidence founder market assumption on willingness to pay before traction, not generic adoption.
+- The fixture now includes accepted-focus and manual-override patches with `autopilot_focus_started`, `manual_node_selected`, `pauseAutopilot: true`, `manualMoveId`, selected focus, and a link to the prior ranking Move.
+
+RESOLVED
 
 ## 2026-04-29 Backend Addendum
 
