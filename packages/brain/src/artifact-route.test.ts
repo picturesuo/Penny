@@ -194,6 +194,37 @@ test("artifact compiler output is grounded in session state and rejects generic 
   );
 });
 
+test("artifact risks treat defended and revised active challenges as answered", async () => {
+  for (const responseMove of [
+    move(uuidAt(505), "user_defended", "User defended the target claim against the critique.", [uuidAt(202), uuidAt(203)], [
+      uuidAt(402),
+    ], {
+      challengeEdgeId: uuidAt(402),
+    }),
+    move(uuidAt(506), "claim_revised", "User revised the target claim in response to the critique.", [uuidAt(202), uuidAt(203)], [
+      uuidAt(402),
+    ], {
+      challengeEdgeId: uuidAt(402),
+      claimVersionIds: [uuidAt(303), uuidAt(306)],
+    }),
+  ]) {
+    const context = {
+      ...sampleContext(),
+      moves: [...sampleContext().moves, responseMove],
+    };
+    const output = await generateArtifactOutput({ ...context, requestedKind: "challenge_brief" }, {
+      provider: createHeuristicArtifactProvider(),
+      brainRunId: uuidAt(800),
+    });
+    const payload = buildCompiledArtifactPayload(context, output, uuidAt(800));
+
+    assert.equal(payload.challengeBrief.challenges[0]?.status, "active");
+    assert.ok(
+      payload.challengeBrief.unresolvedRisks.every((risk) => risk.edgeId !== uuidAt(402) || risk.kind !== "challenge"),
+    );
+  }
+});
+
 test("generateArtifactOutput requires a recorded BrainRun id", async () => {
   await assert.rejects(
     () =>
