@@ -355,7 +355,6 @@ function learnCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
 
 function materializeCandidate(candidate: CandidateDraft, graphHash: string, rank: number): NextMoveCandidate {
   const fingerprint = stableHash({
-    graphHash,
     action: candidate.action,
     targetClaimId: candidate.targetClaimId,
     targetEdgeId: candidate.targetEdgeId,
