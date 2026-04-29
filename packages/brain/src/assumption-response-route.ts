@@ -218,6 +218,7 @@ export async function persistAssumptionResponse(
     const moveId = randomUUID();
     const moveKind = moveKindFor(response.action);
     const summary = summaryFor(response.action);
+    const validFrom = new Date();
 
     const move = await createMove(tx, moveKind, {
       id: moveId,
@@ -239,7 +240,11 @@ export async function persistAssumptionResponse(
 
     await tx
       .update(claimVersions)
-      .set({ isCurrent: false })
+      .set({
+        isCurrent: false,
+        validUntil: validFrom,
+        supersededByVersionId: versionId,
+      })
       .where(and(eq(claimVersions.claimId, claim.id), eq(claimVersions.isCurrent, true)));
 
     const [version] = await tx
@@ -253,6 +258,7 @@ export async function persistAssumptionResponse(
         status: next.status,
         confidence: next.confidence,
         isCurrent: true,
+        validFrom,
       })
       .returning();
 

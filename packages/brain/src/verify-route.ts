@@ -995,9 +995,15 @@ async function applyConfidenceMutation(
     return mutation.previousVersion;
   }
 
+  const validFrom = new Date();
+
   await db
     .update(claimVersions)
-    .set({ isCurrent: false })
+    .set({
+      isCurrent: false,
+      validUntil: validFrom,
+      supersededByVersionId: mutation.currentVersionId,
+    })
     .where(and(eq(claimVersions.claimId, mutation.claim.id), eq(claimVersions.isCurrent, true)));
 
   const [version] = await db
@@ -1012,6 +1018,7 @@ async function applyConfidenceMutation(
       status: mutation.previousVersion.status,
       confidence: mutation.currentConfidence,
       isCurrent: true,
+      validFrom,
     })
     .returning();
 

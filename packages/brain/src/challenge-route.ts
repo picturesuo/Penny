@@ -448,6 +448,7 @@ export async function persistChallengeResponse(
     if (response.response === "revise") {
       const versionId = randomUUID();
       const moveId = randomUUID();
+      const validFrom = new Date();
       const move = await createMove(tx, "claim_revised", {
         id: moveId,
         sessionId: target.claim.sessionId,
@@ -468,7 +469,11 @@ export async function persistChallengeResponse(
 
       await tx
         .update(claimVersions)
-        .set({ isCurrent: false })
+        .set({
+          isCurrent: false,
+          validUntil: validFrom,
+          supersededByVersionId: versionId,
+        })
         .where(and(eq(claimVersions.claimId, target.claim.id), eq(claimVersions.isCurrent, true)));
 
       const [newVersion] = await tx
@@ -482,6 +487,7 @@ export async function persistChallengeResponse(
           status: "exploratory",
           confidence: target.version.confidence,
           isCurrent: true,
+          validFrom,
         })
         .returning();
 
