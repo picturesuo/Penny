@@ -1,0 +1,431 @@
+{
+  "schemaVersion": "penny-yc-demo-graph.v1",
+  "seed": "I'm building Penny, a thinking autopilot for founders.",
+  "session": {
+    "id": "00000000-0000-4000-8000-000000000101",
+    "status": "open",
+    "title": "Thinking autopilot for founders",
+    "createdAt": "2026-04-29T14:00:00.000Z",
+    "endedAt": null
+  },
+  "focusState": {
+    "sessionId": "00000000-0000-4000-8000-000000000101",
+    "mode": "challenge",
+    "focusedClaimId": "00000000-0000-4000-8000-000000000202",
+    "focusedEdgeId": "00000000-0000-4000-8000-000000000302",
+    "source": "autopilot_suggestion",
+    "suggestionMoveId": "00000000-0000-4000-8000-000000000505",
+    "manualMoveId": null,
+    "paused": false,
+    "reason": "The market-behavior assumption is low-confidence and load-bearing for the root claim.",
+    "updatedAt": "2026-04-29T14:00:08.000Z"
+  },
+  "claims": [
+    {
+      "id": "00000000-0000-4000-8000-000000000201",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "belief",
+      "currentVersionId": "00000000-0000-4000-8000-000000000701",
+      "text": "Penny is a thinking autopilot for founders.",
+      "confidence": 72,
+      "status": "exploratory",
+      "createdAt": "2026-04-29T14:00:01.000Z",
+      "tags": ["seed"],
+      "versions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000701",
+          "claimId": "00000000-0000-4000-8000-000000000201",
+          "text": "Penny is a thinking autopilot for founders.",
+          "confidence": 72,
+          "status": "exploratory",
+          "isCurrent": true,
+          "validFrom": "2026-04-29T14:00:01.000Z",
+          "validUntil": null,
+          "supersededByVersionId": null
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000202",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "assumption",
+      "currentVersionId": "00000000-0000-4000-8000-000000000702",
+      "text": "Founders will use structured thinking guidance during ambiguous company decisions.",
+      "confidence": 42,
+      "status": "exploratory",
+      "createdAt": "2026-04-29T14:00:02.000Z",
+      "tags": ["low_confidence_market_assumption", "load_bearing"],
+      "versions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000702",
+          "claimId": "00000000-0000-4000-8000-000000000202",
+          "text": "Founders will use structured thinking guidance during ambiguous company decisions.",
+          "confidence": 42,
+          "status": "exploratory",
+          "isCurrent": true,
+          "validFrom": "2026-04-29T14:00:02.000Z",
+          "validUntil": null,
+          "supersededByVersionId": null
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000203",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "assumption",
+      "currentVersionId": "00000000-0000-4000-8000-000000000703",
+      "text": "Founders need control over AI-guided reasoning rather than a generic chatbot transcript.",
+      "confidence": 64,
+      "status": "exploratory",
+      "createdAt": "2026-04-29T14:00:03.000Z",
+      "tags": ["control"],
+      "versions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000703",
+          "claimId": "00000000-0000-4000-8000-000000000203",
+          "text": "Founders need control over AI-guided reasoning rather than a generic chatbot transcript.",
+          "confidence": 64,
+          "status": "exploratory",
+          "isCurrent": true,
+          "validFrom": "2026-04-29T14:00:03.000Z",
+          "validUntil": null,
+          "supersededByVersionId": null
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000204",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "assumption",
+      "currentVersionId": "00000000-0000-4000-8000-000000000704",
+      "text": "Preserving assumptions, challenges, and revisions makes founder decisions better over time.",
+      "confidence": 68,
+      "status": "exploratory",
+      "createdAt": "2026-04-29T14:00:04.000Z",
+      "tags": ["history"],
+      "versions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000704",
+          "claimId": "00000000-0000-4000-8000-000000000204",
+          "text": "Preserving assumptions, challenges, and revisions makes founder decisions better over time.",
+          "confidence": 68,
+          "status": "exploratory",
+          "isCurrent": true,
+          "validFrom": "2026-04-29T14:00:04.000Z",
+          "validUntil": null,
+          "supersededByVersionId": null
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000205",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "belief",
+      "currentVersionId": "00000000-0000-4000-8000-000000000705",
+      "text": "Penny will be more useful than generic AI chat for founders.",
+      "confidence": 92,
+      "status": "exploratory",
+      "createdAt": "2026-04-29T14:00:05.000Z",
+      "tags": ["high_confidence_unsupported_claim"],
+      "versions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000705",
+          "claimId": "00000000-0000-4000-8000-000000000205",
+          "text": "Penny will be more useful than generic AI chat for founders.",
+          "confidence": 92,
+          "status": "exploratory",
+          "isCurrent": true,
+          "validFrom": "2026-04-29T14:00:05.000Z",
+          "validUntil": null,
+          "supersededByVersionId": null
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000206",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "question",
+      "currentVersionId": "00000000-0000-4000-8000-000000000706",
+      "text": "Which founder workflow creates the first urgent use case?",
+      "confidence": 55,
+      "status": "exploratory",
+      "createdAt": "2026-04-29T14:00:06.000Z",
+      "tags": ["open_question"],
+      "versions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000706",
+          "claimId": "00000000-0000-4000-8000-000000000206",
+          "text": "Which founder workflow creates the first urgent use case?",
+          "confidence": 55,
+          "status": "exploratory",
+          "isCurrent": true,
+          "validFrom": "2026-04-29T14:00:06.000Z",
+          "validUntil": null,
+          "supersededByVersionId": null
+        }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000207",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "concept",
+      "currentVersionId": "00000000-0000-4000-8000-000000000707",
+      "text": "A controllable AI thinking instrument is a system where AI proposes moves over explicit user-owned reasoning state.",
+      "confidence": 80,
+      "status": "committed",
+      "createdAt": "2026-04-29T14:00:07.000Z",
+      "tags": ["concept"],
+      "versions": [
+        {
+          "id": "00000000-0000-4000-8000-000000000707",
+          "claimId": "00000000-0000-4000-8000-000000000207",
+          "text": "A controllable AI thinking instrument is a system where AI proposes moves over explicit user-owned reasoning state.",
+          "confidence": 80,
+          "status": "committed",
+          "isCurrent": true,
+          "validFrom": "2026-04-29T14:00:07.000Z",
+          "validUntil": null,
+          "supersededByVersionId": null
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "00000000-0000-4000-8000-000000000301",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "fromClaimId": "00000000-0000-4000-8000-000000000201",
+      "toClaimId": "00000000-0000-4000-8000-000000000203",
+      "kind": "depends_on",
+      "status": "active",
+      "label": "requires controllability to matter",
+      "createdAt": "2026-04-29T14:00:07.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000302",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "fromClaimId": "00000000-0000-4000-8000-000000000201",
+      "toClaimId": "00000000-0000-4000-8000-000000000202",
+      "kind": "depends_on",
+      "status": "active",
+      "label": "requires founder adoption",
+      "createdAt": "2026-04-29T14:00:07.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000303",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "fromClaimId": "00000000-0000-4000-8000-000000000201",
+      "toClaimId": "00000000-0000-4000-8000-000000000204",
+      "kind": "depends_on",
+      "status": "active",
+      "label": "requires compounding history",
+      "createdAt": "2026-04-29T14:00:07.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000304",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "fromClaimId": "00000000-0000-4000-8000-000000000205",
+      "toClaimId": "00000000-0000-4000-8000-000000000202",
+      "kind": "depends_on",
+      "status": "active",
+      "label": "usefulness depends on founder adoption",
+      "createdAt": "2026-04-29T14:00:07.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000305",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "fromClaimId": "00000000-0000-4000-8000-000000000205",
+      "toClaimId": "00000000-0000-4000-8000-000000000203",
+      "kind": "depends_on",
+      "status": "active",
+      "label": "usefulness depends on control gap",
+      "createdAt": "2026-04-29T14:00:07.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000306",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "fromClaimId": "00000000-0000-4000-8000-000000000206",
+      "toClaimId": "00000000-0000-4000-8000-000000000202",
+      "kind": "questions",
+      "status": "active",
+      "label": "narrows adoption wedge",
+      "createdAt": "2026-04-29T14:00:07.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000307",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "fromClaimId": "00000000-0000-4000-8000-000000000207",
+      "toClaimId": "00000000-0000-4000-8000-000000000201",
+      "kind": "clarifies",
+      "status": "active",
+      "label": "defines thinking autopilot",
+      "createdAt": "2026-04-29T14:00:07.000Z"
+    }
+  ],
+  "moves": [
+    {
+      "id": "00000000-0000-4000-8000-000000000501",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "source_recorded",
+      "summary": "Recorded the founder autopilot seed idea.",
+      "payload": {
+        "sourceId": "00000000-0000-4000-8000-000000000601",
+        "sourceKind": "raw_idea",
+        "rawTextHash": "yc-demo-seed-v1"
+      },
+      "createdAt": "2026-04-29T14:00:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000502",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "seed_claim_created",
+      "summary": "Created the root claim from the seed idea.",
+      "payload": {
+        "sourceId": "00000000-0000-4000-8000-000000000601",
+        "claimIds": ["00000000-0000-4000-8000-000000000201"],
+        "claimVersionIds": ["00000000-0000-4000-8000-000000000701"],
+        "edgeIds": [],
+        "seedText": "I'm building Penny, a thinking autopilot for founders."
+      },
+      "createdAt": "2026-04-29T14:00:01.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000503",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "assumptions_extracted",
+      "summary": "Extracted assumptions and connected the demo thought map.",
+      "payload": {
+        "sourceId": "00000000-0000-4000-8000-000000000601",
+        "brainRunId": "00000000-0000-4000-8000-000000000801",
+        "claimIds": [
+          "00000000-0000-4000-8000-000000000202",
+          "00000000-0000-4000-8000-000000000203",
+          "00000000-0000-4000-8000-000000000204",
+          "00000000-0000-4000-8000-000000000205",
+          "00000000-0000-4000-8000-000000000206",
+          "00000000-0000-4000-8000-000000000207"
+        ],
+        "claimVersionIds": [
+          "00000000-0000-4000-8000-000000000702",
+          "00000000-0000-4000-8000-000000000703",
+          "00000000-0000-4000-8000-000000000704",
+          "00000000-0000-4000-8000-000000000705",
+          "00000000-0000-4000-8000-000000000706",
+          "00000000-0000-4000-8000-000000000707"
+        ],
+        "edgeIds": [
+          "00000000-0000-4000-8000-000000000301",
+          "00000000-0000-4000-8000-000000000302",
+          "00000000-0000-4000-8000-000000000303",
+          "00000000-0000-4000-8000-000000000304",
+          "00000000-0000-4000-8000-000000000305",
+          "00000000-0000-4000-8000-000000000306",
+          "00000000-0000-4000-8000-000000000307"
+        ],
+        "assumptionCount": 3
+      },
+      "createdAt": "2026-04-29T14:00:07.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000504",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "next_move_recomputed",
+      "summary": "Recomputed next moves after seed extraction.",
+      "payload": {
+        "triggerMoveId": "00000000-0000-4000-8000-000000000503",
+        "rankingVersion": "thinking-mode-v1",
+        "candidateCount": 2,
+        "selectedCandidateId": "00000000-0000-4000-8000-000000000901",
+        "candidateIds": [
+          "00000000-0000-4000-8000-000000000901",
+          "00000000-0000-4000-8000-000000000902"
+        ],
+        "paused": false
+      },
+      "createdAt": "2026-04-29T14:00:08.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000505",
+      "sessionId": "00000000-0000-4000-8000-000000000101",
+      "kind": "autopilot_focus_suggested",
+      "summary": "Suggested focusing the low-confidence market assumption.",
+      "payload": {
+        "suggestionId": "00000000-0000-4000-8000-000000000505",
+        "selectedCandidateId": "00000000-0000-4000-8000-000000000901",
+        "mode": "challenge",
+        "targetClaimId": "00000000-0000-4000-8000-000000000202",
+        "targetEdgeId": "00000000-0000-4000-8000-000000000302",
+        "score": 930,
+        "why": "This is the lowest-confidence market assumption and two high-level claims depend on it.",
+        "reasonCodes": ["low_confidence", "market_assumption", "load_bearing"],
+        "candidateIds": [
+          "00000000-0000-4000-8000-000000000901",
+          "00000000-0000-4000-8000-000000000902"
+        ],
+        "goThere": {
+          "label": "Go there",
+          "targetClaimId": "00000000-0000-4000-8000-000000000202",
+          "targetEdgeId": "00000000-0000-4000-8000-000000000302",
+          "mode": "challenge"
+        }
+      },
+      "createdAt": "2026-04-29T14:00:08.000Z"
+    }
+  ],
+  "artifacts": [],
+  "expectedAutopilot": {
+    "primaryCandidateId": "00000000-0000-4000-8000-000000000901",
+    "lowConfidenceMarketAssumptionId": "00000000-0000-4000-8000-000000000202",
+    "highConfidenceUnsupportedClaimId": "00000000-0000-4000-8000-000000000205",
+    "conceptClaimId": "00000000-0000-4000-8000-000000000207",
+    "candidates": [
+      {
+        "candidateId": "00000000-0000-4000-8000-000000000901",
+        "sessionId": "00000000-0000-4000-8000-000000000101",
+        "action": "challenge_claim",
+        "mode": "challenge",
+        "targetClaimId": "00000000-0000-4000-8000-000000000202",
+        "targetEdgeId": "00000000-0000-4000-8000-000000000302",
+        "score": 930,
+        "rank": 1,
+        "reasonCodes": ["low_confidence", "market_assumption", "load_bearing"],
+        "why": "Challenge the founder-adoption assumption first because it is low-confidence and carries the root claim plus the generic-chat comparison.",
+        "evidence": {
+          "claimIds": [
+            "00000000-0000-4000-8000-000000000201",
+            "00000000-0000-4000-8000-000000000202",
+            "00000000-0000-4000-8000-000000000205"
+          ],
+          "edgeIds": [
+            "00000000-0000-4000-8000-000000000302",
+            "00000000-0000-4000-8000-000000000304"
+          ],
+          "moveIds": ["00000000-0000-4000-8000-000000000503"],
+          "artifactIds": []
+        },
+        "blockedBy": [],
+        "wouldCreateMoveKinds": ["challenge_issued"]
+      },
+      {
+        "candidateId": "00000000-0000-4000-8000-000000000902",
+        "sessionId": "00000000-0000-4000-8000-000000000101",
+        "action": "verify_confidence",
+        "mode": "verify",
+        "targetClaimId": "00000000-0000-4000-8000-000000000205",
+        "targetEdgeId": null,
+        "score": 760,
+        "rank": 2,
+        "reasonCodes": ["high_confidence", "unsupported_claim"],
+        "why": "The generic-chat comparison is very confident but has no supporting evidence yet.",
+        "evidence": {
+          "claimIds": ["00000000-0000-4000-8000-000000000205"],
+          "edgeIds": [],
+          "moveIds": ["00000000-0000-4000-8000-000000000503"],
+          "artifactIds": []
+        },
+        "blockedBy": [],
+        "wouldCreateMoveKinds": ["next_move_recomputed"]
+      }
+    ]
+  }
+}
