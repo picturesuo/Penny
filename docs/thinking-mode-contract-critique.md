@@ -1,5 +1,106 @@
 # Thinking Mode Contract Critique
 
+Status: Current implementation re-review: `BACKEND PASS, FRONTEND/CONTRACT ALIGNMENT BLOCKED`
+Artifact ID: `THINKING-MODE-CONTRACT-CRITIQUE`
+Review date: 2026-04-29
+
+This update keeps the original Wave 1 contract review below as historical context. The current judgment is based on the implemented Thinking Mode backend path, the still-active frontend/demo path, the contract docs, the YC fixture, and focused verification commands.
+
+## Current Verification Summary
+
+Criterion judgments for `THINKING-MODE-CONTRACT-CRITIQUE`:
+
+- `PASS` SC1: the active backend scorer in `packages/brain/src/domain/engine.ts` is deterministic, database-free, provider-free, and returns ranked candidates with rationale, exit criteria, score breakdown, stable fingerprint, and graph hash.
+- `PASS` SC2 for the new API path: `POST /api/brains/:brainId/autopilot/tick` validates input, rejects non-POST methods, loads canonical graph state, persists next-move candidates, records `next_move_recomputed`, updates suggestion FocusState, and does not mutate claim text or confidence.
+- `PASS` SC3 for the new API path: `POST /api/brains/:brainId/focus/manual` validates input, records `manual_node_selected`, persists `manual_selection` FocusState, pauses Autopilot, and returns the selected focus.
+- `PASS` SC4: current challenge response tests cover Defend, Revise, Absorb, `focus_completed`, and old ClaimVersion preservation on Revise.
+- `PASS` SC5: focused Thinking Mode tests, full package tests, `pnpm typecheck`, and `pnpm lint` pass.
+- `NOT VERIFIED` SC6 as a global repo-cleanliness criterion: reviewed implementation commits are already on `origin/main`, but the current working tree contains unrelated public asset changes outside this critique.
+
+Verification commands run:
+
+- `pnpm exec tsx --test packages/brain/src/domain-engine.test.ts packages/brain/src/thinking-mode-service.test.ts packages/brain/src/thinking-mode-routes.test.ts packages/brain/src/challenge-service.test.ts packages/brain/src/challenge-brief-service.test.ts packages/brain/src/domain-repository.test.ts packages/brain/src/db-schema.test.ts` -> `PASS`, 43 tests.
+- `pnpm exec tsx --test packages/brain/src/autopilot-core.test.ts packages/brain/src/autopilot-route.test.ts test/brain/nextMoveEngine.test.ts test/brain/thinkingModeService.test.ts test/brain/challengeRespond.test.ts` -> `PASS`, but 8 files in `test/brain/*` remain TODO skeleton checks and should not be treated as implementation proof.
+- `pnpm test` -> `PASS`, 161 tests.
+- `pnpm typecheck` -> `PASS`.
+- `pnpm lint` -> `PASS`.
+- `git diff --check -- docs/thinking-mode-contract-critique.md packages/brain/src/domain/engine.ts packages/brain/src/services/thinking-mode-service.ts packages/brain/src/routes/thinking-mode-routes.ts packages/brain/src/domain/repository.ts packages/brain/src/move-payloads.ts packages/brain/src/db/schema.ts` -> `PASS`.
+
+## Current Findings
+
+### `THINKING-MODE-CONTRACT-CRITIQUE-F1`: New Backend Path Satisfies The Core Loop
+
+Judgment: `PASS`
+
+The new backend API path now implements the controllable thinking loop instead of merely recommending a graph node. `ThinkingModeService.tick` ranks from a persisted graph snapshot, upserts durable `next_move_candidates`, selects a candidate, records `next_move_recomputed`, and stores `FocusState(source="autopilot_suggestion")`. `ThinkingModeService.startCandidate` records `autopilot_focus_started`, and `ThinkingModeService.manualFocus` records `manual_node_selected` with `pauseAutopilot: true` and persisted manual FocusState.
+
+This resolves the original backend risks around deterministic ranking, manual override as signal, accepted focus as a Move, and POST-only mutation for the new `/api/brains/:brainId/*` surface.
+
+### `THINKING-MODE-CONTRACT-CRITIQUE-F2`: The Active Frontend Still Bypasses The New Thinking Mode API
+
+Judgment: `FAIL`
+
+The React frontend still calls the legacy `/autopilot/tick` and `/autopilot/select-node` endpoints from `packages/brain/frontend/src/api/brainClient.ts`. It does not call `POST /api/brains/:brainId/autopilot/tick`, `POST /api/next-move-candidates/:candidateId/start`, or `POST /api/brains/:brainId/focus/manual`.
+
+The `Go there` handler in `packages/brain/frontend/src/App.tsx` only sets local `focusedClaimId` and status text. It does not create `autopilot_focus_started`, does not update persisted `FocusState(source="autopilot_started")`, and does not fetch the move timeline afterward.
+
+Impact: the backend implementation is correct, but the visible app can still collapse into next-node navigation during the accepted-suggestion moment. This directly reopens the original Section 1 and Section 4 contract risk for demo use.
+
+Required fix:
+
+- Make the frontend tick against the new `/api/brains/:brainId/autopilot/tick` response shape.
+- Make `Go there` call `POST /api/next-move-candidates/:candidateId/start`.
+- Make manual map selection call `POST /api/brains/:brainId/focus/manual`.
+- Refresh moves after accepted focus as well as after manual selection.
+
+### `THINKING-MODE-CONTRACT-CRITIQUE-F3`: Contract Artifacts Still Disagree With The Implemented Vocabulary
+
+Judgment: `FAIL`
+
+The implementation standardized the active backend on `resume_open_challenge`, `challenge`, `verify`, `clarify`, and `learn`. The Wave 1 contract and fixture still use older action names such as `respond_to_challenge`, `challenge_claim`, and `verify_confidence`, and `docs/thinking-mode-autopilot-spec.md` still documents `wouldCreateMoveKind` singular while the fixture and historical domain type use `wouldCreateMoveKinds`.
+
+Candidate auditability is also still split across artifacts. The implemented new backend uses `next_move_candidates` rows plus embedded candidate summaries in `next_move_recomputed`. `docs/move-taxonomy.md` still presents `autopilot_candidate_generated` and `autopilot_focus_suggested` as required first-loop Moves, while the current Drizzle `move_kind` enum does not include `autopilot_candidate_generated` and the new backend does not create `autopilot_focus_suggested`.
+
+Impact: the backend has a coherent persistence model, but the contract docs and fixture can mislead the next implementer into adding obsolete move kinds or testing against the wrong action names.
+
+Required fix:
+
+- Update `docs/thinking-mode-autopilot-spec.md`, `docs/move-taxonomy.md`, `docs/yc-demo-script.md`, `packages/brain/src/domain/types.ts`, and `test/fixtures/penny-yc-demo-graph.json` to match the implemented action vocabulary and persistence model.
+- Either remove `autopilot_candidate_generated` / `autopilot_focus_suggested` from required current-path moves, or explicitly document them as legacy/contract aliases that are not emitted by the new Thinking Mode API.
+- Use one field name for downstream effects: prefer `acceptedMoveKinds` or `wouldCreateMoveKinds`, but do not keep both contract languages.
+
+### `THINKING-MODE-CONTRACT-CRITIQUE-F4`: The YC Fixture Still Misses The Willingness-To-Pay Demo Claim
+
+Judgment: `FAIL`
+
+The demo script says the pressure point is `Pre-seed founders will pay for structured thinking before traction.` The actual YC fixture target claim is still `Founders will use structured thinking guidance during ambiguous company decisions.`
+
+I verified the current fixture-driven path by ranking the fixture with `rankNextMoveCandidates` and passing the selected target into `buildTemplateChallenge`. The selected candidate is sensible, but the challenge falls back to the generic load-bearing assumption template rather than the sharper willingness-to-pay critique.
+
+Impact: backend mechanics pass, but the demo artifact is less founder-specific than the script promises. The first challenge can sound like generic adoption risk instead of the sharper paid-founder-moment risk.
+
+Required fix:
+
+- Replace or add the fixture claim with the willingness-to-pay wording used by the demo script.
+- Keep the expected top candidate pointed at that claim.
+- Add a fixture-backed assertion that `buildTemplateChallenge` produces the exact willingness-to-pay critique on the selected candidate, not just on a manually constructed test input.
+
+### `THINKING-MODE-CONTRACT-CRITIQUE-F5`: Backend Truth Mutation Boundaries Hold
+
+Judgment: `PASS`
+
+The reviewed backend path keeps Autopilot suggestions separate from truth mutation. Tick and focus start mutate candidate/focus rows and Moves only; they do not change claim text, confidence, edge truth, or artifacts. Challenge response behavior preserves the explicit Defend / Revise / Absorb split, and Revise preserves the old ClaimVersion before marking the new ClaimVersion current.
+
+Remaining risk is integration-level, not core backend behavior: the frontend must stop using local-only accepted focus if the demo is meant to prove Move-backed Thinking Mode.
+
+## Current Status
+
+`PROCEED FOR BACKEND API; BLOCKED FOR FRONTEND DEMO AND CONTRACT ALIGNMENT`
+
+The backend service, route, persistence, challenge response, and Challenge Brief behavior now meet the core artifact. The visible app and Wave 1 contract artifacts do not yet prove the same contract because they still reference legacy routes, stale move names, and a weaker founder fixture.
+
+---
+
 Status: Wave 1 delayed CRITIC review  
 Date: 2026-04-29  
 Scope: contracts and fixture only; no implementation review
