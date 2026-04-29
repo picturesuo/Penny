@@ -7,6 +7,7 @@ import { handleAssumptionResponseRequest } from "./assumption-response-route.ts"
 import { handleAutopilotTickRequest, handleManualNodeSelectedRequest } from "./autopilot-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
+import { handleChallengeBriefRequest } from "./routes/challenge-brief-routes.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleSessionGraphRequest } from "./session-graph-route.ts";
@@ -169,6 +170,23 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/artifact") {
       await writeWebResponse(outgoing, await handleArtifactRequest(request));
+      return;
+    }
+
+    const apiChallengeBriefMatch = /^\/api\/sessions\/([^/]+)\/challenge-brief$/.exec(url.pathname);
+
+    if (apiChallengeBriefMatch) {
+      const sessionId = apiChallengeBriefMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(
+          outgoing,
+          invalidPathResponse("invalid_session_id", "Challenge Brief generation requires a session id."),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleChallengeBriefRequest(request, decodeURIComponent(sessionId)));
       return;
     }
 
