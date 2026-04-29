@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
+import { afterMoveEffectsInTransaction } from "./after-move-effects.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claimVersions, claims } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
@@ -587,6 +588,8 @@ async function insertInlineLearnConcept(
     throw new InlineLearnConflictError("Failed to create inline concept ClaimVersion.");
   }
 
+  await afterMoveEffectsInTransaction(tx, { sessionId: input.sessionId, moveId: move.id });
+
   return {
     conceptClaim: conceptClaimSlice(conceptClaim, conceptVersion),
     teachesEdge: teachesEdgeSlice(teachesEdge),
@@ -648,7 +651,7 @@ async function completeInlineLearnRun(
   output: InlineLearnOutput,
 ): Promise<typeof brainRuns.$inferSelect> {
   return db.transaction(async (tx) => {
-    await createMove(tx, "learning_triggered", {
+    const move = await createMove(tx, "learning_triggered", {
       sessionId: prelude.target.claim.sessionId,
       scope: prelude.target.claim,
       summary: "Asked Makes Cents inline for a concept explanation.",
@@ -677,6 +680,8 @@ async function completeInlineLearnRun(
     if (!completedBrainRun) {
       throw new InlineLearnConflictError("Failed to complete Inline Learn BrainRun.");
     }
+
+    await afterMoveEffectsInTransaction(tx, { sessionId: prelude.target.claim.sessionId, moveId: move.id });
 
     return completedBrainRun;
   });
