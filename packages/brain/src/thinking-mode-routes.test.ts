@@ -34,6 +34,76 @@ test("GET /api/brains/:brainId/autopilot/state is read-only", async () => {
   assert.deepEqual(calls, ["getState"]);
 });
 
+test("GET /api/brains/:brainId/autopilot/state covers invalid, empty, and seeded session states", async () => {
+  const brainId = uuidAt(900);
+  const emptySessionId = uuidAt(101);
+  const seededSessionId = uuidAt(102);
+  const invalidSessionId = uuidAt(999);
+  const calls: string[] = [];
+  const service = routeService(calls, {
+    async getState(requestBrainId, requestSessionId) {
+      calls.push(`getState:${requestSessionId}`);
+      assert.equal(requestBrainId, brainId);
+
+      if (requestSessionId === invalidSessionId) {
+        throw new ThinkingModeNotFoundError("Session was not found.");
+      }
+
+      if (requestSessionId === seededSessionId) {
+        const candidate = candidateDto(seededSessionId);
+
+        return {
+          status: "ready",
+          brainId: requestBrainId,
+          sessionId: requestSessionId,
+          focusState: focusState(requestSessionId, "autopilot_suggestion", false),
+          candidates: [candidate],
+          selectedCandidate: candidate,
+        };
+      }
+
+      return stateResponse(requestBrainId, requestSessionId);
+    },
+  });
+
+  const empty = await handleThinkingModeStateRequest(
+    new Request(`http://localhost/api/brains/${brainId}/autopilot/state?sessionId=${emptySessionId}`),
+    brainId,
+    { service },
+  );
+  const seeded = await handleThinkingModeStateRequest(
+    new Request(`http://localhost/api/brains/${brainId}/autopilot/state?sessionId=${seededSessionId}`),
+    brainId,
+    { service },
+  );
+  const invalid = await handleThinkingModeStateRequest(
+    new Request(`http://localhost/api/brains/${brainId}/autopilot/state?sessionId=${invalidSessionId}`),
+    brainId,
+    { service },
+  );
+  const emptyPayload = (await empty.json()) as SmokeStatePayload;
+  const seededPayload = (await seeded.json()) as SmokeStatePayload;
+  const invalidPayload = (await invalid.json()) as { error: { code: string; message: string } };
+
+  assert.equal(empty.status, 200);
+  assert.equal(emptyPayload.data.status, "empty");
+  assert.equal(emptyPayload.data.focusState.source, "none");
+  assert.equal(emptyPayload.data.candidates.length, 0);
+  assert.equal(seeded.status, 200);
+  assert.equal(seededPayload.data.status, "ready");
+  assert.equal(seededPayload.data.focusState.source, "autopilot_suggestion");
+  assert.equal(seededPayload.data.candidates[0]?.candidateId, "next_candidate");
+  assert.equal(seededPayload.data.selectedCandidate?.selected, true);
+  assert.equal(invalid.status, 404);
+  assert.equal(invalidPayload.error.code, "thinking_mode_not_found");
+  assert.match(invalidPayload.error.message, /not found/i);
+  assert.deepEqual(calls, [
+    `getState:${emptySessionId}`,
+    `getState:${seededSessionId}`,
+    `getState:${invalidSessionId}`,
+  ]);
+});
+
 test("GET state rejects non-GET before service calls", async () => {
   const calls: string[] = [];
   const response = await handleThinkingModeStateRequest(
