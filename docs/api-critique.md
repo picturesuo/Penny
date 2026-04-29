@@ -3,7 +3,7 @@
 Artifact ID: `API-CRITIQUE`
 Date: 2026-04-29
 Role: CRITIC
-Status: `BLOCKED FOR FRONTEND/SMOKE ALIGNMENT`
+Status: `RESOLVED FOR FRONTEND/SMOKE ALIGNMENT`
 
 ## Scope
 
@@ -22,7 +22,28 @@ Reviewed API output, route wiring, frontend consumption, and the smoke script fo
 - `packages/brain/src/thinking-mode-routes.test.ts`
 - `scripts/smoke-thinking-mode.sh`
 
-## Findings
+## Current Resolution
+
+The original findings below are preserved as the state of the API/frontend/smoke review when this critique was written. Current `origin/main` resolves the active frontend and smoke blockers for this artifact.
+
+Criterion judgments for `API-CRITIQUE`:
+
+- `PASS` F1: the frontend now adapts session-scoped Thinking Mode responses into the existing UI shape, including `selectedCandidate.reason`, action labels, exit criteria, and accepted Move kinds.
+- `PASS` F4: the active demo path uses the session-scoped Thinking Mode routes for tick, accepted focus, manual focus, and cockpit refresh; legacy `/autopilot/*` routes remain compatibility-only risk, not active product proof.
+- `PASS` F5: the smoke script now covers `GET /api/brains/:brainId/autopilot/state` and verifies repeated GETs do not append Moves.
+- `PASS` F6: `scripts/smoke-thinking-mode.sh` now runs the full Thinking Mode happy path, including seed, state read, tick, candidate start, manual focus, challenge issue/respond, and Challenge Brief creation.
+- `PASS WITH CLEANUP WATCH` F7: DTO richness remains justified; future cleanup should keep demos and docs off legacy route surfaces.
+
+Verification after resolution:
+
+- `pnpm test` -> `PASS`, 171 tests.
+- `pnpm typecheck` -> `PASS`.
+- `pnpm lint` -> `PASS`.
+- `pnpm build:frontend` -> `PASS`.
+- `bash -n scripts/smoke-thinking-mode.sh` -> `PASS`.
+- `SMOKE_ISOLATED_DB=1 BASE_URL=http://localhost:3017 PORT=3017 ./scripts/smoke-thinking-mode.sh` -> `PASS`.
+
+## Original Findings (Historical)
 
 ### `API-CRITIQUE-F1`: frontend cannot render the new Thinking Mode response without an adapter
 
@@ -197,7 +218,7 @@ Evidence:
 
 The cleanup risk is not the richness of the new DTO. It is duplicate product surfaces: legacy `/autopilot/*` output, new `/api/brains/:brainId/autopilot/*` output, and frontend types bound to the older shape. That duplication is the only overbuilt part I found.
 
-## Criteria Judgment
+## Original Criteria Judgment (Historical)
 
 1. Can frontend render everything from responses?
    `FAIL` for `API-CRITIQUE`: the new API has the necessary Thinking Mode fields, but the current frontend consumes the legacy `suggestion.why` shape and is not wired to the new route. The new Autopilot state response also assumes the graph slice is available elsewhere for target claim text.
@@ -217,14 +238,16 @@ The cleanup risk is not the richness of the new DTO. It is duplicate product sur
 6. Is anything overbuilt?
    `PASS WITH CLEANUP RISK` for `API-CRITIQUE`: the DTO richness is necessary for a controllable thinking instrument; the duplicated legacy/new route surfaces are the bloat.
 
-## Verification
+## Original Verification (Historical)
 
 - `PASS`: `pnpm exec tsx --test packages/brain/src/thinking-mode-service.test.ts packages/brain/src/thinking-mode-routes.test.ts`
 - `PASS`: `pnpm typecheck`
 - `PASS`: `bash -n scripts/smoke-thinking-mode.sh`
 - `NOT VERIFIED`: runtime smoke against a live API server and database-backed happy path. The existing script intentionally does not run the new Thinking Mode happy path.
 
-## Debugger Guidance
+## Resolved Debugger Guidance
+
+Current status: items 1-4 are resolved on `origin/main`. Item 5 remains a cleanup watch: legacy routes should stay off demo/product-proof paths unless explicitly documented as compatibility-only.
 
 1. Wire the frontend to the new Thinking Mode routes or add an explicit adapter from `selectedCandidate.reason` to the current card shape before using this in a demo.
 2. Make "Go there" call `POST /api/next-move-candidates/:candidateId/start` so accepted Autopilot focus creates `autopilot_focus_started`.
