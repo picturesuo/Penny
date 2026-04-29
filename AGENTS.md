@@ -14,6 +14,7 @@ Keep it current.
 - Claim is the stable identity; ClaimVersion stores content, confidence, status, validity, and current/old state.
 - Heavily depended-on claims are foundations; age them with review or decay after time passes.
 - Move is immutable and append-only; meaningful changes create Moves.
+- Add session and weekly reflection Moves; sessions should end with result, learning, and self-knowledge.
 - BrainRun tracks every AI operation.
 - SourceSpan preserves provenance.
 - Assumptions are claims connected by depends_on edges.
