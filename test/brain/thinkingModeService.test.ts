@@ -16,10 +16,11 @@ test.todo("POST /autopilot/tick creates candidate", () => {
    * Arrange a persisted Thinking Mode session with claims, assumptions, and
    * edges created from a raw idea.
    *
-   * POST `/autopilot/tick`.
+   * POST the Thinking Mode Autopilot tick command.
    *
-   * Assert an `autopilot_suggested` Move is created, the returned candidate has
-   * a target and rationale, and no claim text or confidence changes.
+   * Assert a `next_move_recomputed` Move is created, candidate rows are
+   * persisted with target and rationale, and no claim text or confidence
+   * changes.
    */
 });
 
