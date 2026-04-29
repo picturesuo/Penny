@@ -4,7 +4,7 @@ import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { brainRuns, claimEdges, claimVersions, claims } from "./db/schema.ts";
+import { brainRuns, claimEdges, claimVersions, claims, derivedEffects } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 import { afterMoveEffects, type PersistedDerivedEffect } from "./after-move-effects.ts";
 import { createMove, type CreatedMove } from "./move-payloads.ts";
@@ -76,6 +76,17 @@ export type ChallengeGenerationInput = {
   targetText: string;
   targetStatus: "exploratory" | "committed" | "resolved" | "rejected";
   targetConfidence: number;
+  lensSnapshot?: ChallengeLensSnapshot;
+};
+
+type ChallengeLensSnapshot = {
+  pendingEffects: Array<{
+    id: string;
+    kind: PersistedDerivedEffect["kind"];
+    title: string;
+    summary: string;
+    payload: unknown;
+  }>;
 };
 
 const challengeOutputSpec = Output.object<ChallengeProviderOutput>({
@@ -265,6 +276,7 @@ export class ChallengeProviderError extends Error {
 export async function persistChallenge(db: PennyDatabase, input: ChallengeRequest): Promise<PersistedChallenge> {
   const prelude = await db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.targetClaimId);
+    const lensSnapshot = await loadChallengeLensSnapshot(tx, target.claim.sessionId);
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
@@ -278,6 +290,7 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
           targetClaimId: target.claim.id,
           targetClaimVersionId: target.version.id,
           targetText: target.version.content,
+          lensSnapshot,
         },
       })
       .returning();
@@ -286,11 +299,11 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
       throw new ChallengeConflictError("Failed to record challenge BrainRun.");
     }
 
-    return { target, brainRun };
+    return { target, brainRun, lensSnapshot };
   });
 
   try {
-    const challenge = await generateChallengeOutput(challengeGenerationInput(prelude.target), {
+    const challenge = await generateChallengeOutput(challengeGenerationInput(prelude.target, prelude.lensSnapshot), {
       brainRunId: prelude.brainRun.id,
     });
 
@@ -564,6 +577,25 @@ async function loadClaimWithCurrentVersion(tx: ChallengeTransaction, claimId: st
   return { claim, version };
 }
 
+async function loadChallengeLensSnapshot(tx: ChallengeTransaction, sessionId: string): Promise<ChallengeLensSnapshot> {
+  const pendingEffects = await tx
+    .select()
+    .from(derivedEffects)
+    .where(and(eq(derivedEffects.sessionId, sessionId), eq(derivedEffects.status, "pending_review")))
+    .orderBy(desc(derivedEffects.createdAt))
+    .limit(6);
+
+  return {
+    pendingEffects: pendingEffects.map((effect) => ({
+      id: effect.id,
+      kind: effect.kind,
+      title: effect.title,
+      summary: effect.summary,
+      payload: effect.payload,
+    })),
+  };
+}
+
 function challengeMoveSlice(move: CreatedMove<PersistedMoveSlice["kind"]>): PersistedMoveSlice {
   return {
     id: move.id,
@@ -712,6 +744,9 @@ export function buildChallengePrompt(input: ChallengeGenerationInput): string {
     `Target status: ${input.targetStatus}`,
     `Target confidence: ${input.targetConfidence}`,
     `Target text: ${input.targetText}`,
+    input.lensSnapshot?.pendingEffects.length
+      ? `Lens snapshot JSON: ${JSON.stringify(input.lensSnapshot, null, 2)}`
+      : "Lens snapshot JSON: {\"pendingEffects\":[]}",
   ].join("\n");
 }
 
@@ -735,13 +770,17 @@ function buildChallengeOutput(targetText: string): ChallengeOutput {
   return parsed.data;
 }
 
-function challengeGenerationInput(target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>): ChallengeGenerationInput {
+function challengeGenerationInput(
+  target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
+  lensSnapshot: ChallengeLensSnapshot,
+): ChallengeGenerationInput {
   return {
     targetClaimId: target.claim.id,
     targetKind: target.claim.kind,
     targetText: target.version.content,
     targetStatus: target.version.status,
     targetConfidence: target.version.confidence,
+    lensSnapshot,
   };
 }
 
