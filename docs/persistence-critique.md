@@ -23,7 +23,6 @@ Reviewed persistence-related implementation and tests in the current workspace:
 - `packages/brain/src/thinking-mode-routes.test.ts`
 - `packages/brain/src/autopilot-core.ts`
 - `packages/brain/src/move-payloads.ts`
-- `test/brain/thinkingModeService.test.ts`
 - `docs/thinking-mode-autopilot-spec.md`
 - `docs/move-taxonomy.md`
 
@@ -178,7 +177,7 @@ Impact: current focused verification supports proceeding. The remaining gaps are
    `PASS` for `PERSISTENCE-CRITIQUE`. Canonical graph state remains in backend rows, and the new service/API route uses backend-owned focus/candidate rows.
 
 2. Are GET routes/read methods mutation-free?  
-   `PASS WITH DB TEST GAP` for `PERSISTENCE-CRITIQUE`. Repository read tests assert no insert/update calls, GET graph/moves routes are read-oriented, `GET /autopilot/tick` rejects before persistence, and the new state route has route-level tests. The DB-backed all-GET mutation-count test is still TODO in `test/brain/thinkingModeService.test.ts`.
+   `PASS WITH DB TEST GAP` for `PERSISTENCE-CRITIQUE`. Repository read tests assert no insert/update calls, GET graph/moves routes are read-oriented, `GET /autopilot/tick` rejects before persistence, and the new state route has route-level tests. The deleted TODO-only skeleton is no longer counted as verification; the remaining gap is a future DB-backed all-GET mutation-count test.
 
 3. Are duplicates prevented?  
    `PASS WITH GAPS` for `PERSISTENCE-CRITIQUE`. Candidate/focus uniqueness exists, and command idempotency exists when keys are supplied. Optional idempotency and non-unique selected-candidate state remain gaps.
