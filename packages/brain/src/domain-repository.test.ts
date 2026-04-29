@@ -67,10 +67,10 @@ test("upsertNextMoveCandidates dedupes by sessionId and fingerprint while preser
 
   assert.ok(persisted);
   assert.equal(persisted.fingerprint, candidate.fingerprint);
-  assert.deepEqual(
-    insert?.onConflict?.target.map((column: { name: string }) => column.name),
-    [nextMoveCandidates.sessionId.name, nextMoveCandidates.fingerprint.name],
-  );
+  assert.deepEqual(targetNames(insert?.onConflict?.target), [
+    nextMoveCandidates.sessionId.name,
+    nextMoveCandidates.fingerprint.name,
+  ]);
   assert.equal(insert?.values.reason, candidate.reason);
   assert.deepEqual(insert?.values.scoreBreakdown, candidate.scoreBreakdown);
   assert.equal(insert?.values.graphHash, candidate.graphHash);
@@ -108,7 +108,20 @@ test("upsertFocusState creates and updates the same session focus state", async 
   });
   const { db, calls } = fakeRepositoryDb({
     selectRows: [[sessionRow()], [sessionRow()]],
-    insertRows: [focusStateRow(initialFocus), focusStateRow(updatedFocus)],
+    insertRows: [
+      focusStateRow({
+        source: "autopilot_suggestion",
+        focusedClaimId: uuidAt(201),
+        reason: "Autopilot suggested the market assumption.",
+      }),
+      focusStateRow({
+        source: "manual_selection",
+        focusedClaimId: uuidAt(202),
+        manualMoveId: uuidAt(512),
+        paused: true,
+        reason: "User manually selected a different node.",
+      }),
+    ],
   });
   const repository = createBrainRepository(db);
   const created = await repository.upsertFocusState(initialFocus);
@@ -180,7 +193,14 @@ test("starting focus does not mutate claim text or confidence", async () => {
   });
   const { db, calls } = fakeRepositoryDb({
     selectRows: [[sessionRow()]],
-    insertRows: [focusStateRow(startFocus)],
+    insertRows: [
+      focusStateRow({
+        source: "autopilot_started",
+        focusedClaimId: uuidAt(201),
+        suggestionMoveId: uuidAt(511),
+        reason: "User clicked Go there.",
+      }),
+    ],
   });
   const repository = createBrainRepository(db);
   const focused = await repository.upsertFocusState(startFocus);
@@ -207,7 +227,7 @@ function fakeRepositoryDb(options: {
     insert: Array<{
       table: unknown;
       values: Record<string, unknown>;
-      onConflict: { target: Array<{ name: string }> } | null;
+      onConflict: { target: unknown } | null;
     }>;
     update: Array<{ table: unknown; set: Record<string, unknown> }>;
   } = {
@@ -225,7 +245,7 @@ function fakeRepositoryDb(options: {
       const call: {
         table: unknown;
         values: Record<string, unknown>;
-        onConflict: { target: Array<{ name: string }> } | null;
+        onConflict: { target: unknown } | null;
       } = { table, values: {}, onConflict: null };
       calls.insert.push(call);
 
@@ -234,7 +254,7 @@ function fakeRepositoryDb(options: {
           call.values = values;
 
           return {
-            onConflictDoUpdate(onConflict: { target: Array<{ name: string }> }) {
+            onConflictDoUpdate(onConflict: { target: unknown }) {
               call.onConflict = onConflict;
 
               return {
