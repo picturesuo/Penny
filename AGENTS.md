@@ -20,6 +20,7 @@ Keep it current.
 - Assumptions are claims connected by depends_on edges.
 - Counterarguments are claims connected by contradicts/challenges edges.
 - Learn concepts are claims of kind=concept connected by teaches edges.
+- Edges must not connect claims across invalid sessions unless explicitly marked cross-session or cross-sphere.
 - WikiPage is a compiled view, not source of truth.
 - Backend returns graph slices; frontend does not invent graph edges.
 - Use provider-safe AI schemas plus strict local validation.
