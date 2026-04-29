@@ -10,6 +10,7 @@ Keep it current.
 ## Penny Product Truth
 - Penny is a controllable thinking instrument enhanced by AI, not a generic chatbot.
 - The MVP loop is seed idea -> assumptions -> thought map -> exploration -> challenge -> Defend/Revise/Absorb -> Learn -> Idea Map + Challenge Brief.
+- Maintain an internal Penny benchmark for seed fidelity, assumptions, challenge quality, response handling, artifact usefulness, and history-sensitive critique.
 - Core modes are Brain, Challenge / Verify, and Learn / Makes Cents over the same thinking graph.
 - Claim is the stable identity; ClaimVersion stores content, confidence, status, validity, and current/old state.
 - Heavily depended-on claims are foundations; age them with review or decay after time passes.
