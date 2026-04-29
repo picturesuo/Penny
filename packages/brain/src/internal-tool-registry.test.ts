@@ -540,6 +540,7 @@ function challengeBriefPayload(sessionId: string): ChallengeBriefResponse["brief
     },
     refs: {
       sourceIds: [uuidAt(151)],
+      sourceSpanIds: [uuidAt(152)],
       claimIds: [uuidAt(201), uuidAt(202)],
       claimVersionIds: [uuidAt(301), uuidAt(302), uuidAt(303)],
       edgeIds: [uuidAt(401)],
