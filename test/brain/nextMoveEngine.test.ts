@@ -21,7 +21,7 @@ test("founder willingness-to-pay assumption ranks first or top 2", () => {
   const founderMarketCandidate = candidateForClaim(ranking.candidates, graph.expectedAutopilot.lowConfidenceMarketAssumptionId);
 
   assert.ok(founderMarketCandidate, "expected a candidate for the founder market assumption");
-  assert.equal(founderMarketCandidate.action, "challenge_claim");
+  assert.equal(founderMarketCandidate.action, "challenge");
   assert.ok(founderMarketCandidate.rank <= 2);
   assert.match(founderMarketCandidate.reason, /load-bearing assumption/i);
 });
