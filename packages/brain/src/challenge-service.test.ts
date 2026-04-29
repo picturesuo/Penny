@@ -1,7 +1,108 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTemplateChallenge } from "./services/challenge-service.ts";
+import type { PennyDatabase } from "./db/client.ts";
+import { brainRuns, challengeRounds, claimEdges, claims, claimVersions, moves } from "./db/schema.ts";
+import {
+  buildTemplateChallenge,
+  ChallengeRoundConflictError,
+  ChallengeRoundService,
+  type RespondToChallengeInput,
+} from "./services/challenge-service.ts";
 import { parseMovePayload } from "./move-payloads.ts";
+
+test("ChallengeRoundService issueChallengeFromCandidate creates an explainable challenge_issued round", async () => {
+  const { db, calls } = fakeChallengeDb({
+    selectRows: [[candidateRow()], [claimRow()], [claimVersionRow()]],
+    insertRows: [
+      brainRunRow,
+      (values: Record<string, unknown>) => claimRow({ id: uuidAt(203), kind: values.kind }),
+      (values: Record<string, unknown>) => claimVersionRow({ id: uuidAt(703), claimId: uuidAt(203), ...values }),
+      (values: Record<string, unknown>) => edgeRow({ id: uuidAt(302), ...values }),
+      (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(602) }),
+      (values: Record<string, unknown>) => challengeRoundRow({ id: uuidAt(901), ...values }),
+    ],
+  });
+  const service = new ChallengeRoundService(db);
+  const result = await service.issueChallengeFromCandidate({
+    brainId: uuidAt(900),
+    sessionId: uuidAt(101),
+    candidateId: "next_candidate",
+  });
+
+  assert.equal(result.status, "issued");
+  assert.equal(result.move.kind, "challenge_issued");
+  assert.equal(result.challengeRound.status, "open");
+  assert.equal(result.failureType, "shaky_assumption");
+  assert.equal(result.strength, "strong");
+  assert.match(result.whyThis, /willingness to pay before traction/);
+  assert.equal(result.challengeRound.failureType, result.failureType);
+  assert.equal(result.challengeRound.strength, result.strength);
+  assert.equal(result.challengeRound.whyThis, result.whyThis);
+  assert.equal(calls.insert.some((call) => call.table === moves && call.values.kind === "challenge_issued"), true);
+  assert.equal(calls.insert.some((call) => call.table === challengeRounds), true);
+});
+
+test("ChallengeRoundService defend and absorb create response moves and complete focus", async () => {
+  const defend = await respondWith({ response: "defend", reasoning: "The critique ignores urgent founder moments." });
+  const absorb = await respondWith({ response: "absorb", reasoning: "This should remain a live market risk." });
+
+  assert.equal(defend.result.move.kind, "user_defended");
+  assert.equal(defend.result.focusCompletedMove.kind, "focus_completed");
+  assert.equal(defend.result.challengeRound.response, "defend");
+  assert.equal(defend.result.receipt.currentClaimVersionId, uuidAt(702));
+  assert.equal(defend.calls.insert.some((call) => call.table === moves && call.values.kind === "user_defended"), true);
+  assert.equal(defend.calls.insert.some((call) => call.table === moves && call.values.kind === "focus_completed"), true);
+  assert.equal(absorb.result.move.kind, "critique_absorbed");
+  assert.equal(absorb.result.focusCompletedMove.kind, "focus_completed");
+  assert.equal(absorb.result.challengeRound.response, "absorb");
+  assert.equal(absorb.result.challengeEdge.status, "acknowledged_vulnerability");
+  assert.equal(absorb.result.receipt.unresolvedRisk, true);
+  assert.equal(absorb.calls.insert.some((call) => call.table === moves && call.values.kind === "critique_absorbed"), true);
+  assert.equal(absorb.calls.insert.some((call) => call.table === moves && call.values.kind === "focus_completed"), true);
+});
+
+test("ChallengeRoundService revise preserves old version and creates a new current version", async () => {
+  const revisedText =
+    "Pre-seed founders will pay when Penny creates an immediate fundraising or decision artifact.";
+  const { result, calls } = await respondWith({
+    response: "revise",
+    revisedText,
+    reasoning: "The original claim was too broad.",
+  });
+  const oldVersionUpdate = calls.update.find((call) => call.table === claimVersions);
+  const newVersionInsert = calls.insert.find((call) => call.table === claimVersions);
+
+  assert.equal(result.move.kind, "claim_revised");
+  assert.equal(result.focusCompletedMove.kind, "focus_completed");
+  assert.equal(result.receipt.previousClaimVersionId, uuidAt(702));
+  assert.notEqual(result.receipt.currentClaimVersionId, uuidAt(702));
+  assert.equal(result.receipt.claimTextChanged, true);
+  assert.equal(result.targetClaim.text, revisedText);
+  assert.equal(oldVersionUpdate?.set.isCurrent, false);
+  assert.ok(oldVersionUpdate?.set.validUntil instanceof Date);
+  assert.equal(oldVersionUpdate?.set.supersededByVersionId, result.receipt.currentClaimVersionId);
+  assert.equal(newVersionInsert?.values.content, revisedText);
+  assert.equal(newVersionInsert?.values.isCurrent, true);
+  assert.equal(newVersionInsert?.values.id, result.receipt.currentClaimVersionId);
+});
+
+test("ChallengeRoundService rejects already-responded challenges before writing", async () => {
+  const { db, calls } = fakeChallengeDb({
+    selectRows: [[challengeRoundRow({ status: "responded", response: "defend", respondedAt: dateAt(20) })]],
+  });
+  const service = new ChallengeRoundService(db);
+
+  await assert.rejects(
+    service.respondToChallenge({
+      challengeId: uuidAt(901),
+      response: "defend",
+      reasoning: "A second answer should not be accepted.",
+    }),
+    ChallengeRoundConflictError,
+  );
+  assert.equal(calls.insert.length, 0);
+  assert.equal(calls.update.length, 0);
+});
 
 test("buildTemplateChallenge returns the exact demo challenge when the target claim matches the spec", () => {
   const challenge = buildTemplateChallenge({
@@ -68,6 +169,326 @@ test("focus_completed payload validates the Wave 5 challenge response receipt", 
   assert.equal(payload.outcome, "revise");
   assert.equal(payload.focusSource, "challenge_response");
 });
+
+type ChallengeResponseWithoutId =
+  | Omit<Extract<RespondToChallengeInput, { response: "defend" }>, "challengeId">
+  | Omit<Extract<RespondToChallengeInput, { response: "revise" }>, "challengeId">
+  | Omit<Extract<RespondToChallengeInput, { response: "absorb" }>, "challengeId">;
+
+async function respondWith(input: ChallengeResponseWithoutId) {
+  const edgeStatus = input.response === "absorb" ? "acknowledged_vulnerability" : "active";
+  const { db, calls } = fakeChallengeDb({
+    selectRows: [[challengeRoundRow()], [claimRow()], [claimVersionRow()], [claimRow({ id: uuidAt(203), kind: "belief" })], [edgeRow()]],
+    insertRows:
+      input.response === "revise"
+        ? [
+            (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(603) }),
+            (values: Record<string, unknown>) => claimVersionRow({ ...values }),
+            (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(604) }),
+          ]
+        : [
+            (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(603) }),
+            (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(604) }),
+          ],
+    updateRows:
+      input.response === "absorb"
+        ? [
+            edgeRow({ status: "acknowledged_vulnerability" }),
+            challengeRoundRow({
+              status: "responded",
+              response: input.response,
+              responseMoveId: uuidAt(603),
+              focusCompletedMoveId: uuidAt(604),
+              respondedAt: dateAt(20),
+            }),
+          ]
+        : [
+            challengeRoundRow({
+              status: "responded",
+              response: input.response,
+              responseMoveId: uuidAt(603),
+              focusCompletedMoveId: uuidAt(604),
+              respondedAt: dateAt(20),
+            }),
+          ],
+  });
+  const service = new ChallengeRoundService(db);
+  const result = await service.respondToChallenge({ ...input, challengeId: uuidAt(901) } as RespondToChallengeInput);
+
+  assert.equal(result.challengeEdge.status, edgeStatus);
+
+  return { result, calls };
+}
+
+type InsertRow = unknown | ((values: Record<string, unknown>) => unknown);
+
+function fakeChallengeDb(options: {
+  selectRows?: unknown[][];
+  insertRows?: InsertRow[];
+  updateRows?: unknown[];
+}) {
+  const selectRows = [...(options.selectRows ?? [])];
+  const insertRows = [...(options.insertRows ?? [])];
+  const updateRows = [...(options.updateRows ?? [])];
+  const calls: {
+    select: number;
+    insert: Array<{ table: unknown; values: Record<string, unknown> }>;
+    update: Array<{ table: unknown; set: Record<string, unknown> }>;
+  } = {
+    select: 0,
+    insert: [],
+    update: [],
+  };
+  const tx = {
+    select() {
+      calls.select += 1;
+
+      return query(selectRows.shift() ?? []);
+    },
+    insert(table: unknown) {
+      const call = { table, values: {} };
+      calls.insert.push(call);
+
+      return {
+        values(values: Record<string, unknown>) {
+          call.values = values;
+
+          return {
+            returning() {
+              return Promise.resolve([resolveInsertedRow(insertRows.shift(), values)]);
+            },
+          };
+        },
+      };
+    },
+    update(table: unknown) {
+      const call = { table, set: {} };
+      calls.update.push(call);
+
+      return {
+        set(set: Record<string, unknown>) {
+          call.set = set;
+
+          return {
+            where() {
+              return queryWithReturning(() => updateRows.shift());
+            },
+          };
+        },
+      };
+    },
+  };
+  const db = {
+    transaction<T>(run: (transaction: typeof tx) => Promise<T> | T): Promise<T> {
+      return Promise.resolve(run(tx));
+    },
+  } as unknown as PennyDatabase;
+
+  return { db, calls };
+}
+
+function resolveInsertedRow(row: InsertRow | undefined, values: Record<string, unknown>) {
+  return typeof row === "function" ? row(values) : row;
+}
+
+function query(rows: unknown[]) {
+  const chain = {
+    from() {
+      return chain;
+    },
+    where() {
+      return chain;
+    },
+    orderBy() {
+      return chain;
+    },
+    limit() {
+      return chain;
+    },
+    then<TResult1 = unknown[], TResult2 = never>(
+      onfulfilled?: ((value: unknown[]) => TResult1 | PromiseLike<TResult1>) | null,
+      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ) {
+      return Promise.resolve(rows).then(onfulfilled, onrejected);
+    },
+  };
+
+  return chain;
+}
+
+function queryWithReturning(row: () => unknown) {
+  const chain = {
+    returning() {
+      return Promise.resolve([row()]);
+    },
+    then<TResult1 = unknown[], TResult2 = never>(
+      onfulfilled?: ((value: unknown[]) => TResult1 | PromiseLike<TResult1>) | null,
+      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    ) {
+      return Promise.resolve([]).then(onfulfilled, onrejected);
+    },
+  };
+
+  return chain;
+}
+
+function candidateRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(801),
+    sessionId: uuidAt(101),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    candidateId: "next_candidate",
+    fingerprint: "fingerprint_123",
+    graphHash: "graph_hash",
+    action: "challenge",
+    mode: "challenge",
+    targetClaimId: uuidAt(202),
+    targetEdgeId: uuidAt(302),
+    score: 930,
+    rank: 1,
+    reason: "The founder wedge depends on willingness to pay before traction.",
+    reasonCodes: ["load_bearing"],
+    exitCriteria: { label: "Issue challenge.", acceptedMoveKinds: ["challenge_issued"] },
+    scoreBreakdown: { leverage: 300 },
+    provenance: { claimIds: [uuidAt(202)], edgeIds: [], moveIds: [], artifactIds: [] },
+    selected: true,
+    selectedAt: dateAt(9),
+    createdAt: dateAt(8),
+    updatedAt: dateAt(9),
+    ...overrides,
+  };
+}
+
+function brainRunRow(values: Record<string, unknown> = {}) {
+  return {
+    id: uuidAt(950),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    sourceId: uuidAt(601),
+    operation: "brain.challenge",
+    provider: "penny-template",
+    model: "challenge-v0",
+    status: "succeeded",
+    input: {},
+    output: {},
+    error: null,
+    createdAt: dateAt(10),
+    completedAt: dateAt(10),
+    ...values,
+  };
+}
+
+function claimRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(202),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    sourceId: uuidAt(601),
+    kind: "assumption",
+    createdAt: dateAt(2),
+    ...overrides,
+  };
+}
+
+function claimVersionRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(702),
+    claimId: uuidAt(202),
+    sourceId: uuidAt(601),
+    brainRunId: null,
+    moveId: null,
+    content: "Pre-seed founders will pay for structured thinking before traction.",
+    status: "exploratory",
+    confidence: 42,
+    isCurrent: true,
+    validFrom: dateAt(2),
+    validUntil: null,
+    supersededByVersionId: null,
+    createdAt: dateAt(2),
+    ...overrides,
+  };
+}
+
+function edgeRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(302),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    fromClaimId: uuidAt(203),
+    toClaimId: uuidAt(202),
+    kind: "challenges",
+    status: "active",
+    label: "shaky_assumption",
+    createdAt: dateAt(10),
+    ...overrides,
+  };
+}
+
+function challengeRoundRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(901),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    nextMoveCandidateId: uuidAt(801),
+    candidateId: "next_candidate",
+    candidateFingerprint: "fingerprint_123",
+    status: "open",
+    response: null,
+    targetClaimId: uuidAt(202),
+    targetClaimVersionId: uuidAt(702),
+    critiqueClaimId: uuidAt(203),
+    critiqueClaimVersionId: uuidAt(703),
+    challengeEdgeId: uuidAt(302),
+    brainRunId: uuidAt(950),
+    challengeMoveId: uuidAt(602),
+    responseMoveId: null,
+    focusCompletedMoveId: null,
+    failureType: "shaky_assumption",
+    strength: "strong",
+    critique: "The risky assumption is willingness to pay before traction.",
+    whyThis: "This is load-bearing because the wedge depends on willingness to pay before traction.",
+    whatWouldResolveIt: "Name the urgent paid moment and artifact.",
+    createdAt: dateAt(10),
+    respondedAt: null,
+    updatedAt: dateAt(10),
+    ...overrides,
+  };
+}
+
+function moveRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(603),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    kind: "user_defended",
+    summary: "Created move.",
+    payload: {},
+    createdAt: dateAt(11),
+    ...overrides,
+  };
+}
+
+function dateAt(seconds: number): Date {
+  return new Date(`2026-04-29T00:00:${seconds.toString().padStart(2, "0")}.000Z`);
+}
 
 function uuidAt(value: number): string {
   return `00000000-0000-4000-8000-${value.toString().padStart(12, "0")}`;
