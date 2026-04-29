@@ -4,8 +4,7 @@ export const thinkingMoveKinds = [
   "source_recorded",
   "seed_claim_created",
   "assumptions_extracted",
-  "autopilot_candidate_generated",
-  "autopilot_focus_suggested",
+  "next_move_recomputed",
   "autopilot_focus_started",
   "manual_node_selected",
   "challenge_issued",
@@ -13,7 +12,10 @@ export const thinkingMoveKinds = [
   "claim_revised",
   "critique_absorbed",
   "focus_completed",
-  "next_move_recomputed",
+  "learning_triggered",
+  "verify_run",
+  "confidence_update_accepted",
+  "confidence_update_rejected",
   "artifact_created",
 ] as const;
 
@@ -51,13 +53,11 @@ export type FocusSource =
   | "none";
 
 export type NextMoveAction =
-  | "respond_to_challenge"
-  | "review_assumption"
-  | "challenge_claim"
-  | "verify_confidence"
-  | "revisit_absorbed_risk"
-  | "create_challenge_brief"
-  | "explore_claim";
+  | "resume_open_challenge"
+  | "learn"
+  | "clarify"
+  | "verify"
+  | "challenge";
 
 export type ChallengeResponseKind = "defend" | "revise" | "absorb";
 export type ArtifactKind = "idea_map" | "challenge_brief" | "idea_map_challenge_brief";
