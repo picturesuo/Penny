@@ -216,6 +216,7 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
     currentClaimKind: "assumption" as const,
     currentClaimStatus: "exploratory" as const,
     currentClaimConfidence: 64,
+    lensSnapshot: lensSnapshot(),
   };
   const heuristic = await generateVerifyOutput(input, {
     provider: createHeuristicVerifyProvider(),
@@ -266,6 +267,8 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
   assert.equal(calls.length, 1);
   assert.ok(calls[0]?.tools?.web_search);
   assert.match(calls[0]?.prompt ?? "", /Current claim text/);
+  assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
+  assert.match(calls[0]?.prompt ?? "", /evidence_checking/);
 });
 
 test("generateVerifyOutput requires a recorded BrainRun id", async () => {
@@ -369,4 +372,21 @@ function request(url: string, body: unknown): Request {
 
 function uuidAt(value: number): string {
   return `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
+}
+
+function lensSnapshot() {
+  return {
+    shapes: [
+      {
+        id: uuidAt(901),
+        key: "evidence_checking",
+        label: "Evidence checking",
+        description: "Recent moves are checking claims against evidence without changing confidence automatically.",
+        confidence: 79,
+        status: "confirmed" as const,
+        supportingMoveIds: [uuidAt(501)],
+      },
+    ],
+    pendingEffects: [],
+  };
 }
