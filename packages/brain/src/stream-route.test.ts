@@ -99,9 +99,9 @@ function sampleState(): StreamState {
       },
     ],
     claims: [
-      claim(seedClaimId, sessionId, "belief", "Penny should reduce cognitive load.", 62),
-      claim(assumptionClaimId, sessionId, "assumption", "Students will use guided study flow.", 48),
-      claim(critiqueClaimId, sessionId, "belief", "The flow may hide the hard concept.", 74),
+      claim(seedClaimId, sessionId, "belief"),
+      claim(assumptionClaimId, sessionId, "assumption"),
+      claim(critiqueClaimId, sessionId, "belief"),
     ],
     claimVersions: [
       version(uuidAt(301), seedClaimId, "Penny should reduce cognitive load.", 62),
@@ -156,8 +156,6 @@ function claim(
   id: string,
   sessionId: string,
   kind: "belief" | "assumption" | "question" | "concept",
-  text: string,
-  confidence: number,
 ) {
   return {
 	    id,
