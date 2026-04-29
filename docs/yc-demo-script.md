@@ -84,8 +84,8 @@ On screen:
 Backend receipt:
 
 - `next_move_recomputed`
-- `autopilot_candidate_generated`
-- `autopilot_focus_suggested`
+- persisted `next_move_candidates`
+- `FocusState.source = "autopilot_suggestion"`
 
 ### 0:35-0:45 - Penny explains why
 
@@ -98,6 +98,11 @@ On screen:
 - why chosen
 - reason codes: `shaky_assumption`, `load_bearing`, `market_risk`
 - target claim and edge refs available for audit
+- founder clicks "Go there" to start the suggested challenge focus
+
+Backend receipt:
+
+- `autopilot_focus_started`
 
 ### 0:45-1:00 - Penny challenges it
 
