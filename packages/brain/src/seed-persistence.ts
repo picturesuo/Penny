@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { afterMoveEffectsInTransaction } from "./after-move-effects.ts";
 import type { PennyDatabase } from "./db/client.ts";
 import {
   brainRuns,
@@ -222,26 +223,27 @@ export async function persistBrainSeed(
     const persistedMoveRows = [];
 
     for (const move of requiredMoves) {
-      persistedMoveRows.push(
-        await createMove(tx, move.kind, {
-          sessionId: prelude.session.id,
-          scope: prelude.session,
-          summary: move.summary,
-          payload: {
-            seedMoveId: move.id,
-            brainRunId: prelude.brainRun.id,
-            sourceIds: move.sourceIds ?? [],
-            sourceSpanIds: move.sourceSpanIds ?? [],
-            seedClaimIds: move.claimIds,
-            seedEdgeIds: move.edgeIds,
-            claimIds: move.claimIds.map((claimId) => requireMappedId(claimIds, claimId, "move.claimId")),
-            claimVersionIds: move.claimIds.map((claimId) =>
-              requireMappedId(claimVersionIds, claimId, "move.claimVersionId"),
-            ),
-            edgeIds: move.edgeIds.map((edgeId) => requireMappedId(edgeIds, edgeId, "move.edgeId")),
-          },
-        }),
-      );
+      const persistedMove = await createMove(tx, move.kind, {
+        sessionId: prelude.session.id,
+        scope: prelude.session,
+        summary: move.summary,
+        payload: {
+          seedMoveId: move.id,
+          brainRunId: prelude.brainRun.id,
+          sourceIds: move.sourceIds ?? [],
+          sourceSpanIds: move.sourceSpanIds ?? [],
+          seedClaimIds: move.claimIds,
+          seedEdgeIds: move.edgeIds,
+          claimIds: move.claimIds.map((claimId) => requireMappedId(claimIds, claimId, "move.claimId")),
+          claimVersionIds: move.claimIds.map((claimId) =>
+            requireMappedId(claimVersionIds, claimId, "move.claimVersionId"),
+          ),
+          edgeIds: move.edgeIds.map((edgeId) => requireMappedId(edgeIds, edgeId, "move.edgeId")),
+        },
+      });
+
+      await afterMoveEffectsInTransaction(tx, { sessionId: prelude.session.id, moveId: persistedMove.id });
+      persistedMoveRows.push(persistedMove);
     }
 
     const persistedMoves = attachSeedIds(requiredMoves, persistedMoveRows, "move");
