@@ -3,7 +3,7 @@
 Artifact ID: `CHALLENGE-LOOP-CRITIQUE`
 Date: 2026-04-29
 Role: CRITIC
-Status: `BLOCKED FOR LOOP CLOSURE`
+Status: `BACKEND COMMAND CHAIN PASS; FRONTEND LOOP BLOCKED`
 
 ## Scope
 
@@ -25,7 +25,31 @@ Reviewed the actual challenge loop in the current workspace:
 - `docs/challenge-loop-spec.md`
 - `docs/yc-demo-script.md`
 
-## Findings
+## Current Re-Review
+
+Date: 2026-04-29
+Artifact ID: `CHALLENGE-LOOP-CRITIQUE`
+Scope: current `origin/main` after the Thinking Mode frontend/smoke fixes, focused tests, live isolated smoke, and source inspection of the ChallengeRound service, session cockpit DTO, frontend client, and visible frontend components.
+
+Criterion judgments:
+
+- `FAIL` `CHALLENGE-LOOP-CRITIQUE-C8`: the loop does not actually close in the visible product surface. The backend command chain can close the persisted path when a caller explicitly chains seed, tick, accepted focus, challenge issue, challenge response, and Challenge Brief creation. However, `POST /api/challenges/:challengeId/respond` returns the response receipt and `focus_completed` only; it does not return a recomputed next move. The route suite proves an explicit follow-up tick can create `next_move_recomputed`, but that is a second command. The frontend has no challenge issue/respond/brief controls, so the user-facing loop still stops before Defend / Revise / Absorb.
+- `PASS WITH SHAPE-SIGNAL GAP` `CHALLENGE-LOOP-CRITIQUE-C9`: user responses become durable backend signal. Defend creates `user_defended`, Revise creates `claim_revised` plus a new current ClaimVersion while preserving the old one, Absorb creates `critique_absorbed` and marks the challenge edge `acknowledged_vulnerability`, and every response creates `focus_completed` and updates the ChallengeRound. Challenge Brief compilation can read those moves and versions. The gap is that the new `ChallengeRoundService.respondToChallenge` path still does not run after-move effects, so Defend / Revise / Absorb are not yet materialized as derived shape signals in that path.
+- `FAIL` `CHALLENGE-LOOP-CRITIQUE-C10`: frontend does not have enough receipt state for the response loop. The backend response DTO has useful receipt fields, but the frontend client exposes no `issueChallengeFromCandidate`, `respondToChallenge`, or `createChallengeBrief` functions; frontend types do not model `receipt`, `focusCompletedMove`, or response-specific before/after state; `InsightRail` renders static challenge copy and history summaries only; and `latestArtifact` is normalized into cockpit data but not rendered in the visible UI.
+- `NOT VERIFIED` `CHALLENGE-LOOP-CRITIQUE-C11`: browser-level proof of the full visible loop is not verified. This checkout has no browser E2E runner installed; current proof is focused tests plus live HTTP/API smoke.
+
+Verification after re-review:
+
+- `pnpm exec tsx --test packages/brain/src/challenge-service.test.ts packages/brain/src/thinking-mode-routes.test.ts packages/brain/src/challenge-brief-service.test.ts packages/brain/frontend/test/brainClient.test.ts` -> `PASS`, 26 tests.
+- `SMOKE_ISOLATED_DB=1 BASE_URL=http://localhost:3017 PORT=3017 ./scripts/smoke-thinking-mode.sh` -> `PASS`; session `fa8cf86d-e015-4758-ab44-5e570a23412c`.
+
+Current findings:
+
+- `CHALLENGE-LOOP-CRITIQUE-CF8`: backend persistence is strong enough to support loop closure, but the product loop is still caller-orchestrated rather than closed by the visible app.
+- `CHALLENGE-LOOP-CRITIQUE-CF9`: durable response signal exists as Moves, ClaimVersions, ChallengeRound state, and acknowledged challenge edges; derived shape signal is still missing from the new ChallengeRound path.
+- `CHALLENGE-LOOP-CRITIQUE-CF10`: frontend receipt state is the blocker for a real demo. The next implementation slice should add typed frontend methods and UI state for challenge issue, Defend / Revise / Absorb, response receipt, refreshed cockpit, and Challenge Brief display before claiming the loop closes in product.
+
+## Original Findings (Historical)
 
 ### `CHALLENGE-LOOP-CRITIQUE-F1`: exact demo challenge is strong, but it is keyed to a claim the current fixture does not contain
 
