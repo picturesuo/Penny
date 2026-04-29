@@ -1,6 +1,6 @@
 # Challenge Brief Critique
 
-Status: Wave 6 CRITIC  
+Status: `BACKEND ARTIFACT PASS; VISIBLE OUTPUT BLOCKED`
 Date: 2026-04-29  
 Artifact ID: `CHALLENGE-BRIEF-CRITIQUE`
 
@@ -16,9 +16,38 @@ Reviewed the V0 Challenge Brief contract, backend service, route, tests, demo sc
 - `packages/brain/src/challenge-brief-service.test.ts`
 - `packages/brain/src/challenge-brief-routes.test.ts`
 - `packages/brain/frontend/src/api/brainClient.ts`
+- `packages/brain/frontend/src/App.tsx`
+- `packages/brain/frontend/src/components/InsightRail.tsx`
 - `packages/brain/frontend/src/components/CurrentExploration.tsx`
+- `scripts/smoke-thinking-mode.sh`
+- `docs/demo-runbook.md`
 
-## Criterion Judgments
+## Current Re-Review
+
+Date: 2026-04-29
+Artifact ID: `CHALLENGE-BRIEF-CRITIQUE`
+Scope: reviewed current `origin/main` for whether the session produces usable output, whether the artifact remains a compiled view instead of canonical truth, and whether the demo path is honest end to end.
+
+Criterion judgments:
+
+- `FAIL` `CHALLENGE-BRIEF-CRITIQUE-C6`: the backend session can produce a structured Challenge Brief artifact, but the visible product still does not produce a usable founder-facing output. `POST /api/sessions/:sessionId/challenge-brief` returns an 11-section payload, creates a `challenge_brief` artifact, and records `artifact_created`. The React surface only displays `latestArtifact.title` and `latestArtifact.summary`, and the frontend type leaves `brief` as `unknown`, so the user cannot scan original idea, pressure point, response, before/after change, open risks, or move timeline inside the app. API JSON is not a usable session output for the demo bar.
+- `PASS WITH PROVENANCE GAP` `CHALLENGE-BRIEF-CRITIQUE-C7`: the Challenge Brief is a compiled view, not canonical truth. Generation loads persisted session, source, claim, ClaimVersion, edge, Move, ChallengeRound, FocusState, selected candidate, and artifact rows; inserts an artifact row; records an `artifact_created` Move; and focused tests assert the generation path does not insert or update Claim or ClaimVersion rows. The remaining gap is provenance depth: the Challenge Brief refs include `sourceIds` but not `sourceSpanIds`, while the broader contract names source spans as part of artifact provenance.
+- `FAIL` `CHALLENGE-BRIEF-CRITIQUE-C8`: the demo path is API-honest but not product-honest end to end. The isolated smoke proves seed -> graph/state reads -> tick -> focus -> manual focus -> challenge issue -> Defend/Revise/Absorb -> graph reads -> Challenge Brief creation. However, the demo/runbook story implies the founder sees a compact Challenge Brief and a concrete post-brief next move in the product. Current UI renders only the artifact title/summary, the runbook's "non-mutating guard smoke" label points at a mutating full smoke, and the optional runbook commands stop before challenge response/brief creation. The actual API path exists; the visible demo claim is still overstated.
+
+Verification after re-review:
+
+- `pnpm exec tsx --test packages/brain/src/challenge-brief-service.test.ts packages/brain/src/challenge-brief-routes.test.ts packages/brain/frontend/test/brainClient.test.ts packages/brain/src/session-cockpit-routes.test.ts` -> `PASS`, 15 tests.
+- `pnpm typecheck` -> `PASS`.
+- `SMOKE_ISOLATED_DB=1 BASE_URL=http://127.0.0.1:3019 PORT=3019 ./scripts/smoke-thinking-mode.sh` -> `PASS`; session `ab570e7f-bc0c-43fd-b2c6-028385cc77be`.
+- Post-smoke listener checks on ports `55439` and `3019` -> `PASS`, no listeners remained.
+
+Current findings:
+
+- `CHALLENGE-BRIEF-CRITIQUE-CF6`: visible output is the blocker. The next implementation slice should render the `brief.sections` payload in a compact panel instead of only showing artifact title and summary.
+- `CHALLENGE-BRIEF-CRITIQUE-CF7`: compiled-view invariant holds. Do not fix the visible-output gap by copying artifact text into claims or treating artifacts as graph truth.
+- `CHALLENGE-BRIEF-CRITIQUE-CF8`: demo honesty needs a cleanup pass. The runbook should either point to the full smoke honestly as mutating or split a real guard smoke from the mutating demo smoke, and the scripted demo should not claim a readable product artifact until the UI renders it.
+
+## Original Criterion Judgments (Historical)
 
 | Criterion | Judgment | Artifact mapping |
 | --- | --- | --- |
