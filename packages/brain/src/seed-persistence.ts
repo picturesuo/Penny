@@ -10,6 +10,7 @@ import {
   sources,
   sourceSpans,
 } from "./db/schema.ts";
+import { createMove } from "./move-payloads.ts";
 import type { BrainSeedInput, BrainSeedOutput } from "./seed.ts";
 
 export type BrainSeedRunInput = {
@@ -211,33 +212,31 @@ export async function persistBrainSeed(
       sourceId: prelude.source.id,
       submittedSourceSpanId: prelude.submittedSourceSpan.id,
     });
-    const persistedMoves = attachSeedIds(
-      requiredMoves,
-      await tx
-        .insert(moves)
-        .values(
-          requiredMoves.map((move) => ({
-            sessionId: prelude.session.id,
-            kind: move.kind,
-            summary: move.summary,
-            payload: {
-              seedMoveId: move.id,
-              brainRunId: prelude.brainRun.id,
-              sourceIds: move.sourceIds ?? [],
-              sourceSpanIds: move.sourceSpanIds ?? [],
-              seedClaimIds: move.claimIds,
-              seedEdgeIds: move.edgeIds,
-              claimIds: move.claimIds.map((claimId) => requireMappedId(claimIds, claimId, "move.claimId")),
-              claimVersionIds: move.claimIds.map((claimId) =>
-                requireMappedId(claimVersionIds, claimId, "move.claimVersionId"),
-              ),
-              edgeIds: move.edgeIds.map((edgeId) => requireMappedId(edgeIds, edgeId, "move.edgeId")),
-            },
-          })),
-        )
-        .returning(),
-      "move",
-    );
+    const persistedMoveRows = [];
+
+    for (const move of requiredMoves) {
+      persistedMoveRows.push(
+        await createMove(tx, move.kind, {
+          sessionId: prelude.session.id,
+          summary: move.summary,
+          payload: {
+            seedMoveId: move.id,
+            brainRunId: prelude.brainRun.id,
+            sourceIds: move.sourceIds ?? [],
+            sourceSpanIds: move.sourceSpanIds ?? [],
+            seedClaimIds: move.claimIds,
+            seedEdgeIds: move.edgeIds,
+            claimIds: move.claimIds.map((claimId) => requireMappedId(claimIds, claimId, "move.claimId")),
+            claimVersionIds: move.claimIds.map((claimId) =>
+              requireMappedId(claimVersionIds, claimId, "move.claimVersionId"),
+            ),
+            edgeIds: move.edgeIds.map((edgeId) => requireMappedId(edgeIds, edgeId, "move.edgeId")),
+          },
+        }),
+      );
+    }
+
+    const persistedMoves = attachSeedIds(requiredMoves, persistedMoveRows, "move");
     const [brainRun] = await tx
       .update(brainRuns)
       .set({
