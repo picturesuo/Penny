@@ -10,6 +10,7 @@ import {
   claimEdges,
   claims,
   claimVersions,
+  moves,
   nextMoveCandidates,
 } from "../db/schema.ts";
 import { createMove, type CreatedMove } from "../move-payloads.ts";
@@ -216,6 +217,12 @@ export class ChallengeRoundService {
 
       if (target.claim.sessionId !== input.sessionId) {
         throw new ChallengeRoundConflictError("Candidate target claim does not belong to the requested session.");
+      }
+
+      const existingRound = await loadOpenChallengeRoundForCandidate(tx, input.sessionId, candidate);
+
+      if (existingRound) {
+        return loadIssueChallengeResponse(tx, input, existingRound, target);
       }
 
       const challenge = buildTemplateChallenge({
@@ -534,6 +541,72 @@ async function loadCandidate(tx: ChallengeTransaction, sessionId: EntityId, cand
   }
 
   return candidate;
+}
+
+async function loadOpenChallengeRoundForCandidate(
+  tx: ChallengeTransaction,
+  sessionId: EntityId,
+  candidate: CandidateRow,
+): Promise<ChallengeRoundRow | null> {
+  const [round] = await tx
+    .select()
+    .from(challengeRounds)
+    .where(
+      and(
+        eq(challengeRounds.sessionId, sessionId),
+        eq(challengeRounds.nextMoveCandidateId, candidate.id),
+        eq(challengeRounds.status, "open"),
+      ),
+    )
+    .orderBy(desc(challengeRounds.createdAt))
+    .limit(1);
+
+  return round ?? null;
+}
+
+async function loadIssueChallengeResponse(
+  tx: ChallengeTransaction,
+  input: IssueChallengeFromCandidateInput,
+  round: ChallengeRoundRow,
+  target: { claim: ClaimRow; version: ClaimVersionRow },
+): Promise<IssueChallengeResponse> {
+  const [critiqueClaim] = await tx.select().from(claims).where(eq(claims.id, round.critiqueClaimId)).limit(1);
+  const [critiqueVersion] = await tx
+    .select()
+    .from(claimVersions)
+    .where(eq(claimVersions.id, round.critiqueClaimVersionId))
+    .limit(1);
+  const [edge] = await tx.select().from(claimEdges).where(eq(claimEdges.id, round.challengeEdgeId)).limit(1);
+  const [move] = await tx.select().from(moves).where(eq(moves.id, round.challengeMoveId)).limit(1);
+  const [brainRun] = await tx.select().from(brainRuns).where(eq(brainRuns.id, round.brainRunId)).limit(1);
+
+  if (!critiqueClaim || !critiqueVersion || !edge || !move || !brainRun) {
+    throw new ChallengeRoundConflictError("Open ChallengeRound is missing persisted issue records.");
+  }
+
+  const challengeEdge = normalizeChallengeEdge(edge);
+
+  return {
+    status: "issued",
+    brainId: input.brainId,
+    sessionId: input.sessionId,
+    challengeRound: roundDto(round),
+    targetClaim: claimDto(target.claim, target.version),
+    critiqueClaim: claimDto(critiqueClaim, critiqueVersion),
+    challengeEdge: edgeDto(challengeEdge),
+    critique: round.critique,
+    failureType: round.failureType,
+    strength: round.strength,
+    whyThis: round.whyThis,
+    whatWouldResolveIt: round.whatWouldResolveIt,
+    suggestedNextMove:
+      "Choose Defend if the critique is overweighted, Revise if the claim should change, or Absorb if this should remain a live risk.",
+    move: moveDto(move as CreatedMove<"challenge_issued">),
+    brainRun: {
+      id: brainRun.id,
+      status: "succeeded",
+    },
+  };
 }
 
 async function loadClaimWithCurrentVersion(

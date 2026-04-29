@@ -45,6 +45,37 @@ test("ChallengeRoundService issueChallengeFromCandidate creates an explainable c
   assert.equal(calls.insert.some((call) => call.table === challengeRounds), true);
 });
 
+test("ChallengeRoundService reuses an open challenge for the same candidate", async () => {
+  const { db, calls } = fakeChallengeDb({
+    selectRows: [
+      [candidateRow()],
+      [claimRow()],
+      [claimVersionRow()],
+      [challengeRoundRow()],
+      [claimRow({ id: uuidAt(203), kind: "belief" })],
+      [claimVersionRow({ id: uuidAt(703), claimId: uuidAt(203), brainRunId: uuidAt(950) })],
+      [edgeRow()],
+      [moveRow({ id: uuidAt(602), kind: "challenge_issued" })],
+      [brainRunRow()],
+    ],
+  });
+  const service = new ChallengeRoundService(db);
+  const result = await service.issueChallengeFromCandidate({
+    brainId: uuidAt(900),
+    sessionId: uuidAt(101),
+    candidateId: "next_candidate",
+  });
+
+  assert.equal(result.status, "issued");
+  assert.equal(result.challengeRound.id, uuidAt(901));
+  assert.equal(result.challengeRound.status, "open");
+  assert.equal(result.move.id, uuidAt(602));
+  assert.equal(result.move.kind, "challenge_issued");
+  assert.equal(result.brainRun.id, uuidAt(950));
+  assert.equal(calls.insert.length, 0);
+  assert.equal(calls.update.length, 0);
+});
+
 test("ChallengeRoundService defend and absorb create response moves and complete focus", async () => {
   const defend = await respondWith({ response: "defend", reasoning: "The critique ignores urgent founder moments." });
   const absorb = await respondWith({ response: "absorb", reasoning: "This should remain a live market risk." });
