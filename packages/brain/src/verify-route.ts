@@ -3,6 +3,16 @@ import { and, desc, eq } from "drizzle-orm";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
+import {
+  CommandIdempotencyRequestFields,
+  commandRequestHash,
+  commandScopeFromHeaders,
+  createDbCommandIdempotencyStore,
+  resolveCommandIdempotencyKey,
+  runIdempotentCommand,
+  stripCommandIdempotencyFields,
+  type CommandIdempotencyStore,
+} from "./command-idempotency.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claimVersions, claims, moves, sourceSpans, sources } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
@@ -16,6 +26,7 @@ export const VerifyRequestSchema = z
     claimId: z.string().uuid(),
     currentClaimText: z.string().trim().min(1).max(4_000),
     sessionId: z.string().uuid(),
+    ...CommandIdempotencyRequestFields,
   })
   .strict();
 
@@ -24,6 +35,7 @@ export const VerifyConfidenceDecisionRequestSchema = z
     verifyMoveId: z.string().uuid(),
     decision: z.enum(["accept", "reject"]),
     reason: z.string().trim().min(1).max(2_000).optional(),
+    ...CommandIdempotencyRequestFields,
   })
   .strict();
 
@@ -108,8 +120,13 @@ export const VerifyOutputSchema = z
     }
   });
 
-export type VerifyRequest = z.infer<typeof VerifyRequestSchema>;
-export type VerifyConfidenceDecisionRequest = z.infer<typeof VerifyConfidenceDecisionRequestSchema>;
+type CommandIdempotencyFieldName = "idempotencyKey" | "commandId" | "customId";
+type WithoutCommandIdempotencyFields<T> = T extends unknown ? Omit<T, CommandIdempotencyFieldName> : never;
+
+export type VerifyRequest = WithoutCommandIdempotencyFields<z.infer<typeof VerifyRequestSchema>>;
+export type VerifyConfidenceDecisionRequest = WithoutCommandIdempotencyFields<
+  z.infer<typeof VerifyConfidenceDecisionRequestSchema>
+>;
 export type VerifyOutput = z.infer<typeof VerifyOutputSchema>;
 export type VerifyProviderOutput = z.infer<typeof VerifyProviderSchema>;
 export type EvidenceCard = z.infer<typeof EvidenceCardSchema>;
@@ -213,6 +230,7 @@ export type VerifyRouteOptions = {
     input: VerifyRequest,
     options: { db?: PennyDatabase; provider: VerifyProvider },
   ) => Promise<PersistedVerify>;
+  idempotencyStore?: CommandIdempotencyStore;
 };
 
 export type VerifyConfidenceRouteOptions = {
@@ -222,6 +240,7 @@ export type VerifyConfidenceRouteOptions = {
     input: VerifyConfidenceDecisionRequest,
     options: { db?: PennyDatabase },
   ) => Promise<PersistedVerifyConfidenceDecision>;
+  idempotencyStore?: CommandIdempotencyStore;
 };
 
 type VerifyPrelude = {
@@ -291,18 +310,35 @@ export async function handleVerifyRequest(
     return parsed.response;
   }
 
+  const keyResult = resolveCommandIdempotencyKey(request, parsed.data);
+
+  if (!keyResult.ok) {
+    return keyResult.response;
+  }
+
+  const commandInput = stripCommandIdempotencyFields(parsed.data) as VerifyRequest;
   const provider = options.provider ?? defaultVerifyProvider();
   const db = resolveVerifyDb(options, Boolean(options.verifyClaim));
   const verifyClaim =
     options.verifyClaim ??
     ((input: VerifyRequest, verifyOptions: { db?: PennyDatabase; provider: VerifyProvider }) =>
       runVerify(requireVerifyDb(verifyOptions.db), input, { provider: verifyOptions.provider }));
+  const idempotencyStore = options.idempotencyStore ?? (db ? createDbCommandIdempotencyStore(db) : undefined);
 
-  try {
-    return jsonResponse({ data: await verifyClaim(parsed.data, { ...dbOption(db), provider }) }, 201);
-  } catch (error) {
-    return verifyErrorResponse(error);
-  }
+  return runIdempotentCommand({
+    route: "POST /brain/verify",
+    key: keyResult.key,
+    requestHash: commandRequestHash("POST /brain/verify", commandInput),
+    scope: commandScopeFromHeaders(request),
+    store: idempotencyStore,
+    execute: async () => {
+      try {
+        return jsonResponse({ data: await verifyClaim(commandInput, { ...dbOption(db), provider }) }, 201);
+      } catch (error) {
+        return verifyErrorResponse(error);
+      }
+    },
+  });
 }
 
 export async function handleVerifyConfidenceRequest(
@@ -319,17 +355,34 @@ export async function handleVerifyConfidenceRequest(
     return parsed.response;
   }
 
+  const keyResult = resolveCommandIdempotencyKey(request, parsed.data);
+
+  if (!keyResult.ok) {
+    return keyResult.response;
+  }
+
+  const commandInput = stripCommandIdempotencyFields(parsed.data) as VerifyConfidenceDecisionRequest;
   const db = resolveVerifyConfidenceDb(options, Boolean(options.decideConfidence));
   const decideConfidence =
     options.decideConfidence ??
     ((input: VerifyConfidenceDecisionRequest, decisionOptions: { db?: PennyDatabase }) =>
       decideVerifyConfidence(requireVerifyConfidenceDb(decisionOptions.db), input));
+  const idempotencyStore = options.idempotencyStore ?? (db ? createDbCommandIdempotencyStore(db) : undefined);
 
-  try {
-    return jsonResponse({ data: await decideConfidence(parsed.data, dbOption(db)) }, 200);
-  } catch (error) {
-    return verifyErrorResponse(error);
-  }
+  return runIdempotentCommand({
+    route: "POST /brain/verify/confidence",
+    key: keyResult.key,
+    requestHash: commandRequestHash("POST /brain/verify/confidence", commandInput),
+    scope: commandScopeFromHeaders(request),
+    store: idempotencyStore,
+    execute: async () => {
+      try {
+        return jsonResponse({ data: await decideConfidence(commandInput, dbOption(db)) }, 200);
+      } catch (error) {
+        return verifyErrorResponse(error);
+      }
+    },
+  });
 }
 
 export class VerifyNotFoundError extends Error {
