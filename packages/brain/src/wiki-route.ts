@@ -1,5 +1,6 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { afterMoveEffectsInTransaction } from "./after-move-effects.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import {
   artifacts,
@@ -213,6 +214,8 @@ export async function persistSessionWiki(db: PennyDatabase, input: WikiRouteInpu
         editPolicy: draft.content.editPolicy,
       },
     });
+
+    await afterMoveEffectsInTransaction(tx, { sessionId: state.session.id, moveId: move.id });
 
     return {
       wikiPage: {
