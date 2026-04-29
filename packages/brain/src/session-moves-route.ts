@@ -312,11 +312,11 @@ function moveRefs(payload: unknown): MoveRefs {
   ]);
 
   return {
-    claimIds: uniqueStrings([
-      ...stringArrayValues(record, ["claimIds", "seedClaimIds"]),
+    claimIds: uuidStrings([
+      ...stringArrayValues(record, ["claimIds"]),
       ...stringValues(record, ["claimId", "targetClaimId", "critiqueClaimId", "currentClaimId", "conceptClaimId"]),
     ]),
-    versionIds: uniqueStrings([
+    versionIds: uuidStrings([
       ...stringArrayValues(record, ["claimVersionIds"]),
       ...stringValues(record, [
         "versionId",
@@ -330,16 +330,16 @@ function moveRefs(payload: unknown): MoveRefs {
         "currentClaimVersionId",
       ]),
     ]),
-    edgeIds: uniqueStrings([
-      ...stringArrayValues(record, ["edgeIds", "seedEdgeIds"]),
+    edgeIds: uuidStrings([
+      ...stringArrayValues(record, ["edgeIds"]),
       ...stringValues(record, ["edgeId", "challengeEdgeId", "teachesEdgeId"]),
     ]),
-    sourceIds: uniqueStrings([...stringArrayValues(record, ["sourceIds"]), ...stringValues(record, ["sourceId"])]),
-    sourceSpanIds: uniqueStrings([
+    sourceIds: uuidStrings([...stringArrayValues(record, ["sourceIds"]), ...stringValues(record, ["sourceId"])]),
+    sourceSpanIds: uuidStrings([
       ...stringArrayValues(record, ["sourceSpanIds"]),
       ...stringValues(record, ["sourceSpanId", "submittedSourceSpanId"]),
     ]),
-    brainRunId: firstString(record, ["brainRunId"]),
+    brainRunId: firstUuidString(record, ["brainRunId"]),
     oldVersionId,
     newVersionId,
   };
@@ -564,6 +564,12 @@ function firstString(record: Record<string, unknown>, keys: string[]): string | 
   return null;
 }
 
+function firstUuidString(record: Record<string, unknown>, keys: string[]): string | null {
+  const value = firstString(record, keys);
+
+  return value && isUuid(value) ? value : null;
+}
+
 function stringValues(record: Record<string, unknown>, keys: string[]): string[] {
   return keys.map((key) => record[key]).filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
 }
@@ -578,6 +584,14 @@ function stringArray(value: unknown): string[] {
 
 function uniqueStrings(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value)))];
+}
+
+function uuidStrings(values: Array<string | null | undefined>): string[] {
+  return uniqueStrings(values).filter(isUuid);
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function uniqueRowsById<Row extends { id: string }>(rows: Row[]): Row[] {
