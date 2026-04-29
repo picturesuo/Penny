@@ -4,6 +4,8 @@ import { getTableName } from "drizzle-orm";
 import {
   artifactKindEnum,
   artifacts,
+  brainRunOperationEnum,
+  brainRunStatusEnum,
   brainRuns,
   commandIdempotencyKeys,
   commandIdempotencyStatusEnum,
@@ -94,6 +96,14 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
   ]);
   assert.deepEqual(derivedEffectStatusEnum.enumValues, ["pending_review", "accepted", "rejected", "superseded"]);
   assert.deepEqual(shapeStatusEnum.enumValues, ["candidate", "confirmed", "rejected", "superseded"]);
+  assert.deepEqual(brainRunOperationEnum.enumValues, [
+    "brain.seed",
+    "brain.challenge",
+    "brain.learn.inline",
+    "brain.artifact.challenge_brief",
+    "verify_run",
+  ]);
+  assert.deepEqual(brainRunStatusEnum.enumValues, ["running", "succeeded", "failed"]);
   assert.deepEqual(commandIdempotencyStatusEnum.enumValues, ["running", "succeeded", "failed"]);
   assert.ok(moveKindEnum.enumValues.includes("seed_claim_created"));
   assert.ok(moveKindEnum.enumValues.includes("assumptions_extracted"));
@@ -117,6 +127,8 @@ test("Penny schema has a clean aggregate export surface", () => {
   assert.deepEqual(Object.keys(pennySchema).sort(), [
     "artifactKindEnum",
     "artifacts",
+    "brainRunOperationEnum",
+    "brainRunStatusEnum",
     "brainRuns",
     "claimEdgeKindEnum",
     "claimEdgeStatusEnum",
