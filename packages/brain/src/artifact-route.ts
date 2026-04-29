@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { artifacts, brainRuns, claimEdges, claimVersions, claims, moves, sessions, sources } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
+import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 
 export const ArtifactRouteRequestSchema = z
@@ -764,27 +765,19 @@ async function persistArtifactOutput(
       throw new ArtifactConflictError("Failed to create session artifact.");
     }
 
-    const [move] = await tx
-      .insert(moves)
-      .values({
-        sessionId: prelude.context.session.id,
-        kind: "artifact_created",
-        summary: "Generated a Challenge Brief artifact from persisted Brain state.",
-        payload: {
-          artifactId: artifact.id,
-          artifactKind: artifact.kind,
-          brainRunId: prelude.brainRun.id,
-          claimIds,
-          edgeIds,
-          claimVersionIds: prelude.context.claimVersions.map((version) => version.id),
-          artifactIds: [artifact.id],
-        },
-      })
-      .returning();
-
-    if (!move) {
-      throw new ArtifactConflictError("Failed to create artifact move.");
-    }
+    const move = await createMove(tx, "artifact_created", {
+      sessionId: prelude.context.session.id,
+      summary: "Generated a Challenge Brief artifact from persisted Brain state.",
+      payload: {
+        artifactId: artifact.id,
+        artifactKind: artifact.kind,
+        brainRunId: prelude.brainRun.id,
+        claimIds,
+        edgeIds,
+        claimVersionIds: prelude.context.claimVersions.map((version) => version.id),
+        artifactIds: [artifact.id],
+      },
+    });
 
     const [completedBrainRun] = await tx
       .update(brainRuns)
