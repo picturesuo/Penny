@@ -3,6 +3,16 @@ import { and, desc, eq } from "drizzle-orm";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
+import {
+  CommandIdempotencyRequestFields,
+  commandRequestHash,
+  commandScopeFromHeaders,
+  createDbCommandIdempotencyStore,
+  resolveCommandIdempotencyKey,
+  runIdempotentCommand,
+  stripCommandIdempotencyFields,
+  type CommandIdempotencyStore,
+} from "./command-idempotency.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claimVersions, claims } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
@@ -15,6 +25,7 @@ import { scopeValues } from "./scope.ts";
 const ChallengeRequestSchema = z
   .object({
     targetClaimId: z.string().uuid(),
+    ...CommandIdempotencyRequestFields,
   })
   .strict();
 
@@ -48,6 +59,7 @@ const ChallengeResponseRequestSchema = z.discriminatedUnion("response", [
       challengeEdgeId: z.string().uuid(),
       response: z.literal("defend"),
       reasoning: z.string().trim().min(1).max(2_000),
+      ...CommandIdempotencyRequestFields,
     })
     .strict(),
   z
@@ -56,6 +68,7 @@ const ChallengeResponseRequestSchema = z.discriminatedUnion("response", [
       response: z.literal("revise"),
       revisedText: z.string().trim().min(1).max(4_000),
       reasoning: z.string().trim().min(1).max(2_000).optional(),
+      ...CommandIdempotencyRequestFields,
     })
     .strict(),
   z
@@ -63,14 +76,18 @@ const ChallengeResponseRequestSchema = z.discriminatedUnion("response", [
       challengeEdgeId: z.string().uuid(),
       response: z.literal("absorb"),
       reasoning: z.string().trim().min(1).max(2_000).optional(),
+      ...CommandIdempotencyRequestFields,
     })
     .strict(),
 ]);
 
-export type ChallengeRequest = z.infer<typeof ChallengeRequestSchema>;
+type CommandIdempotencyFieldName = "idempotencyKey" | "commandId" | "customId";
+type WithoutCommandIdempotencyFields<T> = T extends unknown ? Omit<T, CommandIdempotencyFieldName> : never;
+
+export type ChallengeRequest = WithoutCommandIdempotencyFields<z.infer<typeof ChallengeRequestSchema>>;
 export type ChallengeOutput = z.infer<typeof ChallengeOutputSchema>;
 export type ChallengeProviderOutput = z.infer<typeof ChallengeProviderSchema>;
-export type ChallengeResponseRequest = z.infer<typeof ChallengeResponseRequestSchema>;
+export type ChallengeResponseRequest = WithoutCommandIdempotencyFields<z.infer<typeof ChallengeResponseRequestSchema>>;
 
 export type ChallengeGenerationInput = {
   targetClaimId: string;
@@ -131,6 +148,7 @@ export type ChallengeRouteOptions = {
   db?: PennyDatabase;
   databaseUrl?: string;
   issueChallenge?: (input: ChallengeRequest, options: { db?: PennyDatabase }) => Promise<PersistedChallenge>;
+  idempotencyStore?: CommandIdempotencyStore;
 };
 
 export type ChallengeRespondRouteOptions = {
@@ -140,6 +158,7 @@ export type ChallengeRespondRouteOptions = {
     response: ChallengeResponseRequest,
     options: { db?: PennyDatabase },
   ) => Promise<PersistedChallengeResponse>;
+  idempotencyStore?: CommandIdempotencyStore;
 };
 
 type PersistedClaimSlice = {
@@ -194,17 +213,34 @@ export async function handleChallengeRequest(
     return parsed.response;
   }
 
+  const keyResult = resolveCommandIdempotencyKey(request, parsed.data);
+
+  if (!keyResult.ok) {
+    return keyResult.response;
+  }
+
+  const commandInput = stripCommandIdempotencyFields(parsed.data) as ChallengeRequest;
   const db = resolveChallengeDb(options, Boolean(options.issueChallenge));
   const issueChallenge =
     options.issueChallenge ??
     ((input: ChallengeRequest, issueOptions: { db?: PennyDatabase }) =>
       persistChallenge(requireChallengeDb(issueOptions.db), input));
+  const idempotencyStore = options.idempotencyStore ?? (db ? createDbCommandIdempotencyStore(db) : undefined);
 
-  try {
-    return jsonResponse({ data: await issueChallenge(parsed.data, dbOption(db)) }, 201);
-  } catch (error) {
-    return challengeErrorResponse(error);
-  }
+  return runIdempotentCommand({
+    route: "POST /brain/challenge",
+    key: keyResult.key,
+    requestHash: commandRequestHash("POST /brain/challenge", commandInput),
+    scope: commandScopeFromHeaders(request),
+    store: idempotencyStore,
+    execute: async () => {
+      try {
+        return jsonResponse({ data: await issueChallenge(commandInput, dbOption(db)) }, 201);
+      } catch (error) {
+        return challengeErrorResponse(error);
+      }
+    },
+  });
 }
 
 export async function handleChallengeRespondRequest(
@@ -221,17 +257,34 @@ export async function handleChallengeRespondRequest(
     return parsed.response;
   }
 
+  const keyResult = resolveCommandIdempotencyKey(request, parsed.data);
+
+  if (!keyResult.ok) {
+    return keyResult.response;
+  }
+
+  const commandInput = stripCommandIdempotencyFields(parsed.data) as ChallengeResponseRequest;
   const db = resolveChallengeDb(options, Boolean(options.persistResponse));
   const persistResponse =
     options.persistResponse ??
     ((response: ChallengeResponseRequest, responseOptions: { db?: PennyDatabase }) =>
       persistChallengeResponse(requireChallengeDb(responseOptions.db), response));
+  const idempotencyStore = options.idempotencyStore ?? (db ? createDbCommandIdempotencyStore(db) : undefined);
 
-  try {
-    return jsonResponse({ data: await persistResponse(parsed.data, dbOption(db)) }, 200);
-  } catch (error) {
-    return challengeErrorResponse(error);
-  }
+  return runIdempotentCommand({
+    route: "POST /brain/challenge/respond",
+    key: keyResult.key,
+    requestHash: commandRequestHash("POST /brain/challenge/respond", commandInput),
+    scope: commandScopeFromHeaders(request),
+    store: idempotencyStore,
+    execute: async () => {
+      try {
+        return jsonResponse({ data: await persistResponse(commandInput, dbOption(db)) }, 200);
+      } catch (error) {
+        return challengeErrorResponse(error);
+      }
+    },
+  });
 }
 
 export class ChallengeNotFoundError extends Error {
