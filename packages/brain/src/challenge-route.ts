@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claimVersions, claims } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
+import { afterMoveEffects, type PersistedDerivedEffect } from "./after-move-effects.ts";
 import { createMove, type CreatedMove } from "./move-payloads.ts";
 import { FailureTypeSchema, flattenIssues } from "./schema.ts";
 
@@ -120,6 +121,7 @@ export type PersistedChallengeResponse = {
   critiqueClaimId: string;
   challengeEdge: PersistedChallengeEdge;
   move: PersistedMoveSlice;
+  derivedEffects?: PersistedDerivedEffectSlice[];
 };
 
 export type ChallengeRouteOptions = {
@@ -162,6 +164,17 @@ type PersistedMoveSlice = {
   claimIds: string[];
   edgeIds: string[];
   artifactIds: string[];
+};
+
+type PersistedDerivedEffectSlice = {
+  id: string;
+  kind: PersistedDerivedEffect["kind"];
+  status: PersistedDerivedEffect["status"];
+  version: number;
+  title: string;
+  summary: string;
+  payload: unknown;
+  createdAt: string;
 };
 
 export async function handleChallengeRequest(
@@ -384,7 +397,7 @@ export async function persistChallengeResponse(
   db: PennyDatabase,
   response: ChallengeResponseRequest,
 ): Promise<PersistedChallengeResponse> {
-  return db.transaction(async (tx) => {
+  const persisted = await db.transaction(async (tx): Promise<PersistedChallengeResponse & { sessionId: string }> => {
     const [edge] = await tx.select().from(claimEdges).where(eq(claimEdges.id, response.challengeEdgeId)).limit(1);
 
     if (!edge) {
@@ -419,6 +432,7 @@ export async function persistChallengeResponse(
       });
 
       return {
+        sessionId: target.claim.sessionId,
         response: response.response,
         targetClaim: claimSlice(target.claim, target.version),
         critiqueClaimId: critiqueClaim.id,
@@ -472,6 +486,7 @@ export async function persistChallengeResponse(
       }
 
       return {
+        sessionId: target.claim.sessionId,
         response: response.response,
         targetClaim: claimSlice(target.claim, newVersion),
         critiqueClaimId: critiqueClaim.id,
@@ -509,6 +524,7 @@ export async function persistChallengeResponse(
     });
 
     return {
+      sessionId: target.claim.sessionId,
       response: response.response,
       targetClaim: claimSlice(target.claim, target.version),
       critiqueClaimId: critiqueClaim.id,
@@ -516,6 +532,13 @@ export async function persistChallengeResponse(
       move: challengeMoveSlice(move),
     };
   });
+  const { sessionId, ...responsePayload } = persisted;
+  const derived = await afterMoveEffects(db, { sessionId, moveId: responsePayload.move.id });
+
+  return {
+    ...responsePayload,
+    derivedEffects: derived.effects.map(derivedEffectSlice),
+  };
 }
 
 type ChallengeTransaction = Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
@@ -549,6 +572,19 @@ function challengeMoveSlice(move: CreatedMove<PersistedMoveSlice["kind"]>): Pers
     claimIds: move.payload.claimIds,
     edgeIds: move.payload.edgeIds,
     artifactIds: [],
+  };
+}
+
+function derivedEffectSlice(effect: PersistedDerivedEffect): PersistedDerivedEffectSlice {
+  return {
+    id: effect.id,
+    kind: effect.kind,
+    status: effect.status,
+    version: effect.version,
+    title: effect.title,
+    summary: effect.summary,
+    payload: effect.payload,
+    createdAt: effect.createdAt.toISOString(),
   };
 }
 
