@@ -1,7 +1,11 @@
+import { timingSafeEqual } from "node:crypto";
+import { existsSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { handleArtifactRequest, handleSessionArtifactRequest } from "./artifact-route.ts";
 import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
 import { handleAutopilotTickRequest, handleManualNodeSelectedRequest } from "./autopilot-route.ts";
@@ -9,6 +13,8 @@ import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
 import { handleChallengeBriefRequest } from "./routes/challenge-brief-routes.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
+import { createPennySql } from "./db/client.ts";
+import * as schema from "./db/schema.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleSessionGraphRequest } from "./session-graph-route.ts";
 import { handleSessionMovesRequest } from "./session-moves-route.ts";
@@ -32,13 +38,54 @@ import {
 import { handleVerifyConfidenceRequest, handleVerifyRequest } from "./verify-route.ts";
 import { handleSessionWikiRequest } from "./wiki-route.ts";
 
+type AuthMode = "dev" | "token";
+
+type ServerScope = {
+  userId: string;
+  workspaceId: string;
+  projectId: string;
+  sphereId: string;
+};
+
+type ApiAuthResult = {
+  identityKey: string;
+  mode: AuthMode;
+  scope: ServerScope;
+};
+
+type ApiGuardResult = {
+  request: Request;
+  headers: Headers;
+  response?: Response;
+};
+
+type RateLimitResult = {
+  allowed: boolean;
+  headers: Headers;
+  retryAfterSeconds?: number;
+};
+
+loadPennyEnv();
+
 const port = parsePort(process.env.PORT);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
+const migrationsDir = fileURLToPath(new URL("../../../drizzle", import.meta.url));
+const apiRateLimiter = createApiRateLimiter();
 
 const server = createServer(async (incoming, outgoing) => {
   try {
-    const request = await toWebRequest(incoming);
+    let request = await toWebRequest(incoming);
     const url = new URL(request.url);
+    const guard = guardApiRequest(request, url);
+
+    applyResponseHeaders(outgoing, guard.headers);
+
+    if (guard.response) {
+      await writeWebResponse(outgoing, guard.response);
+      return;
+    }
+
+    request = guard.request;
 
     if (url.pathname === "/brain/seed") {
       await writeWebResponse(outgoing, await handleBrainSeedRequest(request));
@@ -559,9 +606,15 @@ const server = createServer(async (incoming, outgoing) => {
   }
 });
 
-server.listen(port, () => {
-  console.log(`Penny cockpit listening on http://localhost:${port}`);
-});
+try {
+  await prepareDatabase();
+  server.listen(port, () => {
+    console.log(`Penny cockpit listening on http://localhost:${port}`);
+  });
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+}
 
 function parsePort(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "3000", 10);
@@ -571,6 +624,421 @@ function parsePort(value: string | undefined): number {
   }
 
   return 3000;
+}
+
+function guardApiRequest(request: Request, url: URL): ApiGuardResult {
+  const cors = corsHeadersForRequest(request);
+
+  if (!cors.allowed) {
+    return {
+      request,
+      headers: cors.headers,
+      response: jsonErrorResponse(403, "cors_origin_not_allowed", "This origin is not allowed for Penny API requests."),
+    };
+  }
+
+  if (!isApiPath(url.pathname)) {
+    return {
+      request,
+      headers: cors.headers,
+    };
+  }
+
+  if (request.method === "OPTIONS") {
+    return {
+      request,
+      headers: preflightHeaders(cors.headers),
+      response: new Response(null, { status: 204 }),
+    };
+  }
+
+  const auth = authenticateApiRequest(request);
+
+  if (!auth.ok) {
+    return {
+      request,
+      headers: cors.headers,
+      response: auth.response,
+    };
+  }
+
+  const rateLimit = apiRateLimiter.check(auth.value);
+  mergeHeaders(cors.headers, rateLimit.headers);
+
+  if (!rateLimit.allowed) {
+    return {
+      request,
+      headers: cors.headers,
+      response: jsonErrorResponse(429, "rate_limited", "Too many Penny API requests. Try again shortly.", {
+        "retry-after": String(rateLimit.retryAfterSeconds ?? 60),
+      }),
+    };
+  }
+
+  return {
+    request: requestWithServerScope(request, auth.value.scope),
+    headers: cors.headers,
+  };
+}
+
+function authenticateApiRequest(request: Request): { ok: true; value: ApiAuthResult } | { ok: false; response: Response } {
+  const mode = resolveAuthMode();
+
+  if (mode === "token") {
+    const expectedToken = process.env.PENNY_API_TOKEN?.trim();
+
+    if (!expectedToken) {
+      return {
+        ok: false,
+        response: jsonErrorResponse(
+          500,
+          "auth_not_configured",
+          "PENNY_API_TOKEN is required when Penny token auth is enabled.",
+        ),
+      };
+    }
+
+    const presentedToken = requestBearerToken(request) ?? request.headers.get("x-penny-api-key")?.trim();
+
+    if (!presentedToken || !safeTokenEquals(presentedToken, expectedToken)) {
+      return {
+        ok: false,
+        response: jsonErrorResponse(401, "unauthorized", "A valid Penny API token is required.", {
+          "www-authenticate": 'Bearer realm="penny"',
+        }),
+      };
+    }
+  }
+
+  const scope = scopeForRequest(request, mode);
+
+  return {
+    ok: true,
+    value: {
+      identityKey: `${mode}:${scope.userId}`,
+      mode,
+      scope,
+    },
+  };
+}
+
+function requestWithServerScope(request: Request, scope: ServerScope): Request {
+  const headers = new Headers(request.headers);
+
+  headers.set("x-user-id", scope.userId);
+  headers.set("x-penny-user-id", scope.userId);
+  headers.set("x-workspace-id", scope.workspaceId);
+  headers.set("x-penny-workspace-id", scope.workspaceId);
+  headers.set("x-project-id", scope.projectId);
+  headers.set("x-penny-project-id", scope.projectId);
+  headers.set("x-sphere-id", scope.sphereId);
+  headers.set("x-penny-sphere-id", scope.sphereId);
+
+  return new Request(request, { headers });
+}
+
+function resolveAuthMode(): AuthMode {
+  const configured = process.env.PENNY_AUTH_MODE?.trim().toLowerCase();
+
+  if (configured === "token" || configured === "strict") {
+    return "token";
+  }
+
+  if (configured === "dev") {
+    return "dev";
+  }
+
+  return process.env.NODE_ENV === "production" || !!process.env.PENNY_API_TOKEN?.trim() ? "token" : "dev";
+}
+
+function scopeForRequest(request: Request, mode: AuthMode): ServerScope {
+  const trustHeaders = mode === "dev" || readEnvFlag("PENNY_TRUST_AUTH_HEADERS", false);
+
+  return {
+    userId: scopeValue(
+      trustHeaders ? firstPresentHeader(request, ["x-user-id", "x-penny-user-id"]) : undefined,
+      ["PENNY_AUTH_USER_ID", "PENNY_USER_ID", "PENNY_DEFAULT_USER_ID", "PENNY_SEED_USER_ID"],
+      mode === "dev" ? "dev-user" : "api-user",
+    ),
+    workspaceId: scopeValue(
+      trustHeaders ? firstPresentHeader(request, ["x-workspace-id", "x-penny-workspace-id"]) : undefined,
+      ["PENNY_AUTH_WORKSPACE_ID", "PENNY_WORKSPACE_ID", "PENNY_DEFAULT_WORKSPACE_ID"],
+      mode === "dev" ? "dev-workspace" : "api-workspace",
+    ),
+    projectId: scopeValue(
+      trustHeaders ? firstPresentHeader(request, ["x-project-id", "x-penny-project-id"]) : undefined,
+      ["PENNY_AUTH_PROJECT_ID", "PENNY_PROJECT_ID", "PENNY_DEFAULT_PROJECT_ID"],
+      mode === "dev" ? "dev-project" : "api-project",
+    ),
+    sphereId: scopeValue(
+      trustHeaders ? firstPresentHeader(request, ["x-sphere-id", "x-penny-sphere-id"]) : undefined,
+      ["PENNY_AUTH_SPHERE_ID", "PENNY_SPHERE_ID", "PENNY_DEFAULT_SPHERE_ID"],
+      mode === "dev" ? "dev-sphere" : "api-sphere",
+    ),
+  };
+}
+
+function scopeValue(headerValue: string | undefined, envNames: string[], fallback: string): string {
+  if (headerValue?.trim()) {
+    return headerValue.trim();
+  }
+
+  for (const envName of envNames) {
+    const value = process.env[envName]?.trim();
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return fallback;
+}
+
+function requestBearerToken(request: Request): string | undefined {
+  const authorization = request.headers.get("authorization")?.trim();
+
+  if (!authorization) {
+    return undefined;
+  }
+
+  const [scheme, ...rest] = authorization.split(/\s+/);
+
+  if (scheme?.toLowerCase() !== "bearer") {
+    return undefined;
+  }
+
+  const token = rest.join(" ").trim();
+  return token || undefined;
+}
+
+function safeTokenEquals(presentedToken: string, expectedToken: string): boolean {
+  const presented = Buffer.from(presentedToken);
+  const expected = Buffer.from(expectedToken);
+
+  if (presented.length !== expected.length) {
+    return false;
+  }
+
+  return timingSafeEqual(presented, expected);
+}
+
+function firstPresentHeader(request: Request, names: string[]): string | undefined {
+  for (const name of names) {
+    const value = request.headers.get(name)?.trim();
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function corsHeadersForRequest(request: Request): { allowed: boolean; headers: Headers } {
+  const headers = new Headers();
+  const origin = request.headers.get("origin")?.trim();
+
+  if (!origin) {
+    return { allowed: true, headers };
+  }
+
+  const allowedOrigins = allowedCorsOrigins();
+
+  if (!isAllowedCorsOrigin(origin, allowedOrigins)) {
+    return { allowed: false, headers };
+  }
+
+  headers.set("vary", "Origin");
+  headers.set("access-control-allow-origin", allowedOrigins.includes("*") ? "*" : origin);
+
+  if (!allowedOrigins.includes("*")) {
+    headers.set("access-control-allow-credentials", "true");
+  }
+
+  return { allowed: true, headers };
+}
+
+function allowedCorsOrigins(): string[] {
+  const configured = process.env.PENNY_CORS_ORIGINS?.trim();
+
+  if (configured) {
+    return configured
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return ["http://localhost:5173", "http://127.0.0.1:5173"];
+  }
+
+  return [];
+}
+
+function isAllowedCorsOrigin(origin: string, allowedOrigins: string[]): boolean {
+  return allowedOrigins.includes("*") || allowedOrigins.includes(origin);
+}
+
+function preflightHeaders(headers: Headers): Headers {
+  const nextHeaders = new Headers(headers);
+
+  nextHeaders.set("access-control-allow-methods", "GET,HEAD,POST,OPTIONS");
+  nextHeaders.set(
+    "access-control-allow-headers",
+    [
+      "authorization",
+      "content-type",
+      "idempotency-key",
+      "x-penny-api-key",
+      "x-user-id",
+      "x-penny-user-id",
+      "x-workspace-id",
+      "x-penny-workspace-id",
+      "x-project-id",
+      "x-penny-project-id",
+      "x-sphere-id",
+      "x-penny-sphere-id",
+    ].join(", "),
+  );
+  nextHeaders.set("access-control-max-age", "600");
+
+  return nextHeaders;
+}
+
+function createApiRateLimiter(): { check: (auth: ApiAuthResult) => RateLimitResult } {
+  const buckets = new Map<string, { count: number; resetAt: number }>();
+
+  return {
+    check(auth: ApiAuthResult): RateLimitResult {
+      const max = parsePositiveInteger(process.env.PENNY_RATE_LIMIT_MAX, 120);
+
+      if (max <= 0) {
+        return { allowed: true, headers: new Headers() };
+      }
+
+      const windowMs = parsePositiveInteger(process.env.PENNY_RATE_LIMIT_WINDOW_MS, 60_000);
+      const now = Date.now();
+      const key = auth.identityKey;
+      const existing = buckets.get(key);
+      const bucket = existing && existing.resetAt > now ? existing : { count: 0, resetAt: now + windowMs };
+
+      bucket.count += 1;
+      buckets.set(key, bucket);
+      pruneRateLimitBuckets(buckets, now);
+
+      const remaining = Math.max(0, max - bucket.count);
+      const resetSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+      const headers = new Headers({
+        "ratelimit-limit": String(max),
+        "ratelimit-remaining": String(remaining),
+        "ratelimit-reset": String(resetSeconds),
+      });
+
+      if (bucket.count > max) {
+        return {
+          allowed: false,
+          headers,
+          retryAfterSeconds: resetSeconds,
+        };
+      }
+
+      return { allowed: true, headers };
+    },
+  };
+}
+
+function pruneRateLimitBuckets(buckets: Map<string, { count: number; resetAt: number }>, now: number): void {
+  if (buckets.size < 1_000) {
+    return;
+  }
+
+  for (const [key, bucket] of buckets) {
+    if (bucket.resetAt <= now) {
+      buckets.delete(key);
+    }
+  }
+}
+
+function parsePositiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+
+  if (Number.isInteger(parsed) && parsed >= 0) {
+    return parsed;
+  }
+
+  return fallback;
+}
+
+async function prepareDatabase(): Promise<void> {
+  if (readEnvFlag("PENNY_SKIP_DATABASE_PREP", false)) {
+    return;
+  }
+
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+
+  if (!databaseUrl) {
+    throw new Error(
+      "DATABASE_URL is required to start the Penny API. Add it to .env.local or export it before running pnpm dev:api.",
+    );
+  }
+
+  if (!readEnvFlag("PENNY_AUTO_MIGRATE", process.env.NODE_ENV !== "production")) {
+    return;
+  }
+
+  const sql = createPennySql(databaseUrl);
+
+  try {
+    await migrate(drizzle(sql, { schema }), { migrationsFolder: migrationsDir });
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+}
+
+function loadPennyEnv(): void {
+  const loadEnvFile = (process as NodeJS.Process & { loadEnvFile?: (path: string) => void }).loadEnvFile;
+
+  if (!loadEnvFile) {
+    return;
+  }
+
+  for (const path of ["../../../.env.local", "../../../.env"]) {
+    const absolutePath = fileURLToPath(new URL(path, import.meta.url));
+
+    if (existsSync(absolutePath)) {
+      loadEnvFile(absolutePath);
+    }
+  }
+}
+
+function readEnvFlag(name: string, fallback: boolean): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+
+  if (!value) {
+    return fallback;
+  }
+
+  if (["1", "true", "yes", "on"].includes(value)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(value)) {
+    return false;
+  }
+
+  return fallback;
+}
+
+function mergeHeaders(target: Headers, source: Headers): void {
+  source.forEach((value, key) => {
+    target.set(key, value);
+  });
+}
+
+function applyResponseHeaders(outgoing: ServerResponse, headers: Headers): void {
+  headers.forEach((value, key) => {
+    outgoing.setHeader(key, value);
+  });
 }
 
 async function toWebRequest(incoming: IncomingMessage): Promise<Request> {
@@ -587,6 +1055,12 @@ async function toWebRequest(incoming: IncomingMessage): Promise<Request> {
     if (value !== undefined) {
       headers.set(name, value);
     }
+  }
+
+  const remoteAddress = incoming.socket.remoteAddress?.trim();
+
+  if (remoteAddress) {
+    headers.set("x-penny-client-ip", remoteAddress);
   }
 
   const body = await readBody(incoming);
@@ -746,6 +1220,10 @@ function contentTypeFor(pathname: string): string {
 }
 
 function invalidPathResponse(code: string, message: string): Response {
+  return jsonErrorResponse(400, code, message);
+}
+
+function jsonErrorResponse(status: number, code: string, message: string, headers: Record<string, string> = {}): Response {
   return new Response(
     JSON.stringify({
       error: {
@@ -754,9 +1232,10 @@ function invalidPathResponse(code: string, message: string): Response {
       },
     }),
     {
-      status: 400,
+      status,
       headers: {
         "content-type": "application/json; charset=utf-8",
+        ...headers,
       },
     },
   );
