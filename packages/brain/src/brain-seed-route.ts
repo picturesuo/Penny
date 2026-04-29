@@ -1,5 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import {
+  CommandIdempotencyRequestFields,
+  commandRequestHash,
+  createDbCommandIdempotencyStore,
+  resolveCommandIdempotencyKey,
+  runIdempotentCommand,
+  stripCommandIdempotencyFields,
+  type CommandIdempotencyStore,
+} from "./command-idempotency.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import {
   BrainSeedProviderError,
@@ -29,10 +38,14 @@ export const BrainSeedRouteRequestSchema = z
     workspaceId: z.string().trim().min(1).max(120).optional(),
     projectId: z.string().trim().min(1).max(120).optional(),
     sphereId: z.string().trim().min(1).max(120).optional(),
+    ...CommandIdempotencyRequestFields,
   })
   .strict();
 
-export type BrainSeedRouteRequest = z.infer<typeof BrainSeedRouteRequestSchema>;
+export type BrainSeedRouteRequest = Omit<
+  z.infer<typeof BrainSeedRouteRequestSchema>,
+  "idempotencyKey" | "commandId" | "customId"
+>;
 
 export type BrainSeedRouteContext = {
   userId: string;
@@ -62,6 +75,7 @@ export type BrainSeedRouteOptions = {
     error: unknown,
     options: { db?: PennyDatabase },
   ) => Promise<void>;
+  idempotencyStore?: CommandIdempotencyStore;
 };
 
 export type BrainSeedUiPayload = ReturnType<typeof buildBrainSeedUiPayload>;
@@ -116,7 +130,13 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
     );
   }
 
-  const routeInput = parsed.data;
+  const keyResult = resolveCommandIdempotencyKey(request, parsed.data);
+
+  if (!keyResult.ok) {
+    return keyResult.response;
+  }
+
+  const routeInput = stripCommandIdempotencyFields(parsed.data) as BrainSeedRouteRequest;
   const context = resolveDevContext(request, routeInput);
   const seedInput: BrainSeedInput = {
     rawIdea: routeInput.rawIdea,
@@ -137,63 +157,74 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
     options.failSeedRun ??
     ((prelude: BrainSeedPrelude, error: unknown, failOptions: { db?: PennyDatabase }) =>
       failBrainSeedRun(requireRouteDb(failOptions.db), prelude, error));
-  const startedAt = new Date();
-  let prelude: BrainSeedPrelude | null = null;
+  const idempotencyStore = options.idempotencyStore ?? (db ? createDbCommandIdempotencyStore(db) : undefined);
 
-  try {
-    prelude = await prepareSeedRun(seedInput, {
-      ...dbOption(db),
-      run: buildBrainSeedRunInput(seedInput, provider, startedAt, context),
-    });
-    const seed = await generateSeed(seedInput, { provider, brainRunId: prelude.brainRun.id });
-    const persisted = await persistSeed(seed, { ...dbOption(db), prelude });
+  return runIdempotentCommand({
+    route: "POST /brain/seed",
+    key: keyResult.key,
+    requestHash: commandRequestHash("POST /brain/seed", routeInput),
+    scope: context,
+    store: idempotencyStore,
+    execute: async () => {
+      const startedAt = new Date();
+      let prelude: BrainSeedPrelude | null = null;
 
-    return jsonResponse(
-      {
-        data: buildBrainSeedUiPayload(seed, persisted, context),
-      },
-      201,
-    );
-  } catch (error) {
-    if (prelude) {
-      await failSeedRun(prelude, error, dbOption(db));
-    }
+      try {
+        prelude = await prepareSeedRun(seedInput, {
+          ...dbOption(db),
+          run: buildBrainSeedRunInput(seedInput, provider, startedAt, context),
+        });
+        const seed = await generateSeed(seedInput, { provider, brainRunId: prelude.brainRun.id });
+        const persisted = await persistSeed(seed, { ...dbOption(db), prelude });
 
-    if (error instanceof BrainSeedValidationError) {
-      return jsonResponse(
-        {
-          error: {
-            code: "invalid_seed_output",
-            message: error.message,
-            issues: error.issues,
+        return jsonResponse(
+          {
+            data: buildBrainSeedUiPayload(seed, persisted, context),
           },
-        },
-        502,
-      );
-    }
+          201,
+        );
+      } catch (error) {
+        if (prelude) {
+          await failSeedRun(prelude, error, dbOption(db));
+        }
 
-    if (error instanceof BrainSeedProviderError) {
-      return jsonResponse(
-        {
-          error: {
-            code: "seed_provider_failed",
-            message: error.message,
+        if (error instanceof BrainSeedValidationError) {
+          return jsonResponse(
+            {
+              error: {
+                code: "invalid_seed_output",
+                message: error.message,
+                issues: error.issues,
+              },
+            },
+            502,
+          );
+        }
+
+        if (error instanceof BrainSeedProviderError) {
+          return jsonResponse(
+            {
+              error: {
+                code: "seed_provider_failed",
+                message: error.message,
+              },
+            },
+            502,
+          );
+        }
+
+        return jsonResponse(
+          {
+            error: {
+              code: "brain_seed_failed",
+              message: formatErrorMessage(error),
+            },
           },
-        },
-        502,
-      );
-    }
-
-    return jsonResponse(
-      {
-        error: {
-          code: "brain_seed_failed",
-          message: formatErrorMessage(error),
-        },
-      },
-      500,
-    );
-  }
+          500,
+        );
+      }
+    },
+  });
 }
 
 export function buildBrainSeedUiPayload(
