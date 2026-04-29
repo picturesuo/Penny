@@ -2,6 +2,15 @@ import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "../db/client.ts";
 import { createBrainRepository, BrainRepositoryConflictError, BrainRepositoryNotFoundError } from "../domain/repository.ts";
 import {
+  ChallengeRoundConflictError,
+  ChallengeRoundNotFoundError,
+  ChallengeRoundService,
+  type IssueChallengeFromCandidateInput,
+  type IssueChallengeResponse,
+  type RespondToChallengeInput,
+  type RespondToChallengeResponse,
+} from "../services/challenge-service.ts";
+import {
   ThinkingModeConflictError,
   ThinkingModeNotFoundError,
   ThinkingModeService,
@@ -40,6 +49,35 @@ const ManualFocusRequestSchema = z
   })
   .strict();
 
+const IssueChallengeFromCandidateRequestSchema = z
+  .object({
+    brainId: UuidSchema,
+    sessionId: UuidSchema,
+  })
+  .strict();
+
+const ChallengeRespondRequestSchema = z.discriminatedUnion("response", [
+  z
+    .object({
+      response: z.literal("defend"),
+      reasoning: z.string().trim().min(1).max(2_000),
+    })
+    .strict(),
+  z
+    .object({
+      response: z.literal("revise"),
+      revisedText: z.string().trim().min(1).max(4_000),
+      reasoning: z.string().trim().min(1).max(2_000).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      response: z.literal("absorb"),
+      reasoning: z.string().trim().min(1).max(2_000).optional(),
+    })
+    .strict(),
+]);
+
 const CandidateIdSchema = z.string().trim().min(1).max(200);
 
 export type ThinkingModeRouteService = {
@@ -49,8 +87,19 @@ export type ThinkingModeRouteService = {
   manualFocus(input: ManualFocusInput): Promise<ManualFocusResponse>;
 };
 
+export type ChallengeRoundRouteService = {
+  issueChallengeFromCandidate(input: IssueChallengeFromCandidateInput): Promise<IssueChallengeResponse>;
+  respondToChallenge(input: RespondToChallengeInput): Promise<RespondToChallengeResponse>;
+};
+
 export type ThinkingModeRouteOptions = {
   service?: ThinkingModeRouteService;
+  db?: PennyDatabase;
+  databaseUrl?: string;
+};
+
+export type ChallengeRoundRouteOptions = {
+  service?: ChallengeRoundRouteService;
   db?: PennyDatabase;
   databaseUrl?: string;
 };
@@ -208,6 +257,79 @@ export async function handleManualFocusRequest(
   }
 }
 
+export async function handleIssueChallengeFromCandidateRequest(
+  request: Request,
+  candidateId: string,
+  options: ChallengeRoundRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed(
+      "POST /api/next-move-candidates/:candidateId/challenge requires the POST method.",
+      "POST",
+    );
+  }
+
+  const candidateIdResult = CandidateIdSchema.safeParse(candidateId);
+
+  if (!candidateIdResult.success) {
+    return invalidRequest("Invalid candidateId.", ["candidateId path parameter is required."]);
+  }
+
+  const parsed = await parseJsonRequest(request, IssueChallengeFromCandidateRequestSchema);
+
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  try {
+    const service = resolveChallengeRoundService(options);
+
+    return jsonResponse(
+      {
+        data: await service.issueChallengeFromCandidate({
+          brainId: parsed.data.brainId,
+          sessionId: parsed.data.sessionId,
+          candidateId: candidateIdResult.data,
+        }),
+      },
+      201,
+    );
+  } catch (error) {
+    return challengeRoundErrorResponse(error);
+  }
+}
+
+export async function handleChallengeRoundRespondRequest(
+  request: Request,
+  challengeId: string,
+  options: ChallengeRoundRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/challenges/:challengeId/respond requires the POST method.", "POST");
+  }
+
+  const challengeIdResult = UuidSchema.safeParse(challengeId);
+
+  if (!challengeIdResult.success) {
+    return invalidRequest("Invalid challengeId.", ["challengeId path parameter must be a UUID."]);
+  }
+
+  const parsed = await parseJsonRequest(request, ChallengeRespondRequestSchema);
+
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  try {
+    const service = resolveChallengeRoundService(options);
+    const input = challengeRespondInput(challengeIdResult.data, parsed.data);
+
+    return jsonResponse({ data: await service.respondToChallenge(input) }, 200);
+  } catch (error) {
+    return challengeRoundErrorResponse(error);
+  }
+}
+
 async function parseJsonRequest<Schema extends z.ZodType>(
   request: Request,
   schema: Schema,
@@ -266,6 +388,43 @@ function resolveService(options: ThinkingModeRouteOptions): ThinkingModeRouteSer
   return new ThinkingModeService(createBrainRepository(db));
 }
 
+function resolveChallengeRoundService(options: ChallengeRoundRouteOptions): ChallengeRoundRouteService {
+  if (options.service) {
+    return options.service;
+  }
+
+  const db = options.db ?? createPennyDb(options.databaseUrl);
+
+  return new ChallengeRoundService(db);
+}
+
+function challengeRespondInput(
+  challengeId: string,
+  body: z.infer<typeof ChallengeRespondRequestSchema>,
+): RespondToChallengeInput {
+  switch (body.response) {
+    case "defend":
+      return {
+        challengeId,
+        response: "defend",
+        reasoning: body.reasoning,
+      };
+    case "revise":
+      return {
+        challengeId,
+        response: "revise",
+        revisedText: body.revisedText,
+        reasoning: body.reasoning ?? null,
+      };
+    case "absorb":
+      return {
+        challengeId,
+        response: "absorb",
+        reasoning: body.reasoning ?? null,
+      };
+  }
+}
+
 function thinkingModeErrorResponse(error: unknown): Response {
   if (error instanceof ThinkingModeNotFoundError || error instanceof BrainRepositoryNotFoundError) {
     return jsonResponse(
@@ -295,6 +454,42 @@ function thinkingModeErrorResponse(error: unknown): Response {
     {
       error: {
         code: "thinking_mode_error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    },
+    500,
+  );
+}
+
+function challengeRoundErrorResponse(error: unknown): Response {
+  if (error instanceof ChallengeRoundNotFoundError || error instanceof BrainRepositoryNotFoundError) {
+    return jsonResponse(
+      {
+        error: {
+          code: "challenge_round_not_found",
+          message: error.message,
+        },
+      },
+      404,
+    );
+  }
+
+  if (error instanceof ChallengeRoundConflictError || error instanceof BrainRepositoryConflictError) {
+    return jsonResponse(
+      {
+        error: {
+          code: "challenge_round_conflict",
+          message: error.message,
+        },
+      },
+      409,
+    );
+  }
+
+  return jsonResponse(
+    {
+      error: {
+        code: "challenge_round_error",
         message: error instanceof Error ? error.message : String(error),
       },
     },

@@ -248,6 +248,21 @@ const ManualNodeSelectedPayloadSchema = z
   })
   .strict();
 
+const FocusCompletedPayloadSchema = z
+  .object({
+    focusSource: z.literal("challenge_response"),
+    completedByMoveId: UuidSchema,
+    completedByMoveKind: z.enum(["user_defended", "claim_revised", "critique_absorbed"]),
+    challengeRoundId: UuidSchema,
+    targetClaimId: UuidSchema,
+    targetEdgeId: UuidSchema,
+    outcome: z.enum(["defend", "revise", "absorb"]),
+    claimIds: UuidArraySchema,
+    edgeIds: UuidArraySchema,
+    artifactIds: UuidArraySchema,
+  })
+  .strict();
+
 const VerifyRunPayloadSchema = z
   .object({
     claimIds: UuidArraySchema,
@@ -429,6 +444,7 @@ export const MovePayloadSchemas = {
   autopilot_suggested: AutopilotSuggestedPayloadSchema,
   autopilot_focus_started: AutopilotFocusStartedPayloadSchema,
   manual_node_selected: ManualNodeSelectedPayloadSchema,
+  focus_completed: FocusCompletedPayloadSchema,
   verify_run: VerifyRunPayloadSchema,
   confidence_update_accepted: ConfidenceUpdateAcceptedPayloadSchema,
   confidence_update_rejected: ConfidenceUpdateRejectedPayloadSchema,

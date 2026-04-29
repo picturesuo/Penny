@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { PennyDatabase } from "../db/client.ts";
 import {
   artifacts,
+  challengeRounds,
   claimEdges,
   claims,
   claimVersions,
@@ -76,18 +77,8 @@ export type RevisedClaim = {
   move: CreatedMove<"claim_revised">;
 };
 
-export type ChallengeRoundPersistenceStub = {
-  status: "deferred_to_wave_5";
-  canonicalState: "claim_edges_and_moves";
-  note: string;
-};
-
-export const challengeRoundPersistenceStub: ChallengeRoundPersistenceStub = {
-  status: "deferred_to_wave_5",
-  canonicalState: "claim_edges_and_moves",
-  note: "ChallengeRound stays deferred while challenge state is still represented by challenge edges and response moves.",
-};
-
+export type ChallengeRoundPersistenceModel = typeof challengeRounds;
+export const challengeRoundPersistenceModel: ChallengeRoundPersistenceModel = challengeRounds;
 export type ExistingArtifactModel = typeof artifacts;
 export const artifactPersistenceModel: ExistingArtifactModel = artifacts;
 

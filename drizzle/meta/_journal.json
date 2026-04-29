@@ -148,6 +148,13 @@
       "when": 1777443672380,
       "tag": "0020_freezing_baron_strucker",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1777484586875,
+      "tag": "0021_faithful_onslaught",
+      "breakpoints": true
     }
   ]
 }

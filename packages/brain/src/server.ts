@@ -13,6 +13,8 @@ import { handleSessionGraphRequest } from "./session-graph-route.ts";
 import { handleSessionMovesRequest } from "./session-moves-route.ts";
 import { handleBrainStreamRequest } from "./stream-route.ts";
 import {
+  handleChallengeRoundRespondRequest,
+  handleIssueChallengeFromCandidateRequest,
   handleManualFocusRequest,
   handleStartNextMoveCandidateRequest,
   handleThinkingModeStateRequest,
@@ -89,6 +91,26 @@ const server = createServer(async (incoming, outgoing) => {
       return;
     }
 
+    const challengeNextMoveCandidateMatch = /^\/api\/next-move-candidates\/([^/]+)\/challenge$/.exec(url.pathname);
+
+    if (challengeNextMoveCandidateMatch) {
+      const candidateId = challengeNextMoveCandidateMatch[1];
+
+      if (!candidateId) {
+        await writeWebResponse(
+          outgoing,
+          invalidPathResponse("invalid_candidate_id", "Issuing a challenge requires a candidate id."),
+        );
+        return;
+      }
+
+      await writeWebResponse(
+        outgoing,
+        await handleIssueChallengeFromCandidateRequest(request, decodeURIComponent(candidateId)),
+      );
+      return;
+    }
+
     const manualFocusMatch = /^\/api\/brains\/([^/]+)\/focus\/manual$/.exec(url.pathname);
 
     if (manualFocusMatch) {
@@ -100,6 +122,23 @@ const server = createServer(async (incoming, outgoing) => {
       }
 
       await writeWebResponse(outgoing, await handleManualFocusRequest(request, decodeURIComponent(brainId)));
+      return;
+    }
+
+    const challengeRoundRespondMatch = /^\/api\/challenges\/([^/]+)\/respond$/.exec(url.pathname);
+
+    if (challengeRoundRespondMatch) {
+      const challengeId = challengeRoundRespondMatch[1];
+
+      if (!challengeId) {
+        await writeWebResponse(
+          outgoing,
+          invalidPathResponse("invalid_challenge_id", "Challenge response requires a challenge id."),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleChallengeRoundRespondRequest(request, decodeURIComponent(challengeId)));
       return;
     }
 

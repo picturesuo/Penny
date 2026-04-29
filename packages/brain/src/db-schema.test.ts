@@ -9,6 +9,11 @@ import {
   brainRuns,
   commandIdempotencyKeys,
   commandIdempotencyStatusEnum,
+  challengeFailureTypeEnum,
+  challengeRoundResponseEnum,
+  challengeRoundStatusEnum,
+  challengeRounds,
+  challengeStrengthEnum,
   claimEdgeKindEnum,
   claimEdgeStatusEnum,
   claimEdges,
@@ -47,6 +52,7 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(derivedEffects), "derived_effects");
   assert.equal(getTableName(focusStates), "focus_states");
   assert.equal(getTableName(nextMoveCandidates), "next_move_candidates");
+  assert.equal(getTableName(challengeRounds), "challenge_rounds");
   assert.equal(getTableName(shapes), "shapes");
   assert.equal(getTableName(brainRuns), "brain_runs");
   assert.equal(getTableName(artifacts), "artifacts");
@@ -70,6 +76,7 @@ test("Penny core tables persist user and workspace scope", () => {
     derivedEffects,
     focusStates,
     nextMoveCandidates,
+    challengeRounds,
     shapes,
     brainRuns,
     artifacts,
@@ -114,6 +121,19 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
     "none",
   ]);
   assert.deepEqual(nextMoveActionEnum.enumValues, ["resume_open_challenge", "learn", "clarify", "verify", "challenge"]);
+  assert.deepEqual(challengeFailureTypeEnum.enumValues, [
+    "weak_evidence",
+    "missing_counterargument",
+    "shaky_assumption",
+    "analogy_break",
+    "dependency_risk",
+    "unaddressed_precedent",
+    "premise_rejection",
+    "definition_failure",
+  ]);
+  assert.deepEqual(challengeStrengthEnum.enumValues, ["weak", "moderate", "strong"]);
+  assert.deepEqual(challengeRoundStatusEnum.enumValues, ["open", "responded"]);
+  assert.deepEqual(challengeRoundResponseEnum.enumValues, ["defend", "revise", "absorb"]);
   assert.deepEqual(brainRunOperationEnum.enumValues, [
     "brain.seed",
     "brain.challenge",
@@ -138,6 +158,7 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
   assert.ok(moveKindEnum.enumValues.includes("autopilot_suggested"));
   assert.ok(moveKindEnum.enumValues.includes("autopilot_focus_started"));
   assert.ok(moveKindEnum.enumValues.includes("manual_node_selected"));
+  assert.ok(moveKindEnum.enumValues.includes("focus_completed"));
   assert.ok(moveKindEnum.enumValues.includes("confidence_update_accepted"));
   assert.ok(moveKindEnum.enumValues.includes("confidence_update_rejected"));
   assert.ok(moveKindEnum.enumValues.includes("artifact_created"));
@@ -152,6 +173,11 @@ test("Penny schema has a clean aggregate export surface", () => {
     "brainRunOperationEnum",
     "brainRunStatusEnum",
     "brainRuns",
+    "challengeFailureTypeEnum",
+    "challengeRoundResponseEnum",
+    "challengeRoundStatusEnum",
+    "challengeRounds",
+    "challengeStrengthEnum",
     "claimEdgeKindEnum",
     "claimEdgeStatusEnum",
     "claimEdges",

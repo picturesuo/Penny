@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  handleChallengeRoundRespondRequest,
+  handleIssueChallengeFromCandidateRequest,
   handleManualFocusRequest,
   handleStartNextMoveCandidateRequest,
   handleThinkingModeStateRequest,
   handleThinkingModeTickRequest,
+  type ChallengeRoundRouteService,
   type ThinkingModeRouteService,
 } from "./routes/thinking-mode-routes.ts";
 import type {
@@ -13,6 +16,8 @@ import type {
   ThinkingModeTickInput,
 } from "./services/thinking-mode-service.ts";
 import { ThinkingModeNotFoundError } from "./services/thinking-mode-service.ts";
+import type { IssueChallengeFromCandidateInput, RespondToChallengeInput } from "./services/challenge-service.ts";
+import { ChallengeRoundConflictError, ChallengeRoundNotFoundError } from "./services/challenge-service.ts";
 
 test("GET /api/brains/:brainId/autopilot/state is read-only", async () => {
   const calls: string[] = [];
@@ -137,6 +142,98 @@ test("POST /api/brains/:brainId/focus/manual creates manual pause response", asy
   assert.equal(payload.data.focusState.source, "manual_selection");
   assert.equal(payload.data.focusState.paused, true);
   assert.equal(payload.data.move.kind, "manual_node_selected");
+});
+
+test("POST /api/next-move-candidates/:candidateId/challenge issues a ChallengeRound", async () => {
+  const issued: IssueChallengeFromCandidateInput[] = [];
+  const response = await handleIssueChallengeFromCandidateRequest(
+    requestWithBody(`http://localhost/api/next-move-candidates/${encodeURIComponent("next_candidate")}/challenge`, {
+      brainId: uuidAt(900),
+      sessionId: uuidAt(101),
+    }),
+    "next_candidate",
+    {
+      service: challengeRouteService({
+        async issueChallengeFromCandidate(input) {
+          issued.push(input);
+          return challengeIssueResponse(input.brainId, input.sessionId);
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      status: string;
+      challengeRound: { status: string };
+      failureType: string;
+      strength: string;
+      whyThis: string;
+      move: { kind: string };
+    };
+  };
+
+  assert.equal(response.status, 201);
+  assert.equal(issued[0]?.candidateId, "next_candidate");
+  assert.equal(issued[0]?.brainId, uuidAt(900));
+  assert.equal(payload.data.status, "issued");
+  assert.equal(payload.data.challengeRound.status, "open");
+  assert.equal(payload.data.failureType, "shaky_assumption");
+  assert.equal(payload.data.strength, "strong");
+  assert.match(payload.data.whyThis, /willingness to pay/);
+  assert.equal(payload.data.move.kind, "challenge_issued");
+});
+
+test("POST /api/challenges/:challengeId/respond supports Defend Revise Absorb and completes focus", async () => {
+  const responses: RespondToChallengeInput[] = [];
+  const service = challengeRouteService({
+    async respondToChallenge(input) {
+      responses.push(input);
+      return challengeRespondResponse(input);
+    },
+  });
+
+  const defend = await handleChallengeRoundRespondRequest(
+    requestWithBody(`http://localhost/api/challenges/${uuidAt(901)}/respond`, {
+      response: "defend",
+      reasoning: "The critique ignores paid urgent founder moments.",
+    }),
+    uuidAt(901),
+    { service },
+  );
+  const revise = await handleChallengeRoundRespondRequest(
+    requestWithBody(`http://localhost/api/challenges/${uuidAt(902)}/respond`, {
+      response: "revise",
+      revisedText: "Pre-seed founders will pay when Penny produces a fundraising or decision artifact immediately.",
+      reasoning: "The broader claim was too loose.",
+    }),
+    uuidAt(902),
+    { service },
+  );
+  const absorb = await handleChallengeRoundRespondRequest(
+    requestWithBody(`http://localhost/api/challenges/${uuidAt(903)}/respond`, {
+      response: "absorb",
+      reasoning: "This remains a live market risk.",
+    }),
+    uuidAt(903),
+    { service },
+  );
+  const defendPayload = (await defend.json()) as ChallengeRespondPayload;
+  const revisePayload = (await revise.json()) as ChallengeRespondPayload;
+  const absorbPayload = (await absorb.json()) as ChallengeRespondPayload;
+
+  assert.equal(defend.status, 200);
+  assert.equal(revise.status, 200);
+  assert.equal(absorb.status, 200);
+  assert.equal(responses[0]?.response, "defend");
+  assert.equal(responses[1]?.response, "revise");
+  assert.equal(responses[2]?.response, "absorb");
+  assert.equal(defendPayload.data.move.kind, "user_defended");
+  assert.equal(revisePayload.data.move.kind, "claim_revised");
+  assert.equal(absorbPayload.data.move.kind, "critique_absorbed");
+  assert.equal(defendPayload.data.focusCompletedMove.kind, "focus_completed");
+  assert.equal(revisePayload.data.receipt.claimTextChanged, true);
+  assert.equal(revisePayload.data.receipt.previousClaimVersionId, uuidAt(702));
+  assert.equal(absorbPayload.data.receipt.unresolvedRisk, true);
 });
 
 test("Thinking Mode route smoke flow drives Autopilot state through manual override", async () => {
@@ -296,6 +393,65 @@ test("thinking mode routes return clear validation and domain errors", async () 
   assert.match(notFoundPayload.error.message, /not found/);
 });
 
+test("challenge round routes return clear validation and domain errors", async () => {
+  const invalidIssue = await handleIssueChallengeFromCandidateRequest(
+    requestWithBody(`http://localhost/api/next-move-candidates/${encodeURIComponent("next_candidate")}/challenge`, {
+      sessionId: uuidAt(101),
+    }),
+    "next_candidate",
+    { service: challengeRouteService() },
+  );
+  const invalidChallengeId = await handleChallengeRoundRespondRequest(
+    requestWithBody("http://localhost/api/challenges/not-a-uuid/respond", {
+      response: "defend",
+      reasoning: "Enough context exists.",
+    }),
+    "not-a-uuid",
+    { service: challengeRouteService() },
+  );
+  const notFound = await handleChallengeRoundRespondRequest(
+    requestWithBody(`http://localhost/api/challenges/${uuidAt(901)}/respond`, {
+      response: "defend",
+      reasoning: "Enough context exists.",
+    }),
+    uuidAt(901),
+    {
+      service: challengeRouteService({
+        async respondToChallenge() {
+          throw new ChallengeRoundNotFoundError("ChallengeRound was not found.");
+        },
+      }),
+    },
+  );
+  const conflict = await handleChallengeRoundRespondRequest(
+    requestWithBody(`http://localhost/api/challenges/${uuidAt(902)}/respond`, {
+      response: "absorb",
+    }),
+    uuidAt(902),
+    {
+      service: challengeRouteService({
+        async respondToChallenge() {
+          throw new ChallengeRoundConflictError("ChallengeRound has already been responded to.");
+        },
+      }),
+    },
+  );
+  const invalidIssuePayload = (await invalidIssue.json()) as { error: { code: string; issues: string[] } };
+  const invalidChallengeIdPayload = (await invalidChallengeId.json()) as { error: { code: string; issues: string[] } };
+  const notFoundPayload = (await notFound.json()) as { error: { code: string; message: string } };
+  const conflictPayload = (await conflict.json()) as { error: { code: string; message: string } };
+
+  assert.equal(invalidIssue.status, 400);
+  assert.equal(invalidIssuePayload.error.code, "invalid_request");
+  assert.match(invalidIssuePayload.error.issues.join("\n"), /brainId/);
+  assert.equal(invalidChallengeId.status, 400);
+  assert.match(invalidChallengeIdPayload.error.issues.join("\n"), /challengeId/);
+  assert.equal(notFound.status, 404);
+  assert.equal(notFoundPayload.error.code, "challenge_round_not_found");
+  assert.equal(conflict.status, 409);
+  assert.equal(conflictPayload.error.code, "challenge_round_conflict");
+});
+
 type SmokeStatePayload = {
   data: {
     status: string;
@@ -320,6 +476,149 @@ type SmokeStartPayload = {
 };
 
 type SmokeManualPayload = SmokeStartPayload;
+
+type ChallengeRespondPayload = {
+  data: {
+    move: { kind: string };
+    focusCompletedMove: { kind: string };
+    receipt: {
+      claimTextChanged: boolean;
+      previousClaimVersionId: string | null;
+      unresolvedRisk: boolean;
+    };
+  };
+};
+
+function challengeRouteService(overrides: Partial<ChallengeRoundRouteService> = {}): ChallengeRoundRouteService {
+  return {
+    async issueChallengeFromCandidate(input) {
+      return challengeIssueResponse(input.brainId, input.sessionId);
+    },
+    async respondToChallenge(input) {
+      return challengeRespondResponse(input);
+    },
+    ...overrides,
+  };
+}
+
+function challengeIssueResponse(brainId: string, sessionId: string) {
+  return {
+    status: "issued" as const,
+    brainId,
+    sessionId,
+    challengeRound: challengeRoundDto(sessionId, "open" as const),
+    targetClaim: challengeClaimDto(uuidAt(202), uuidAt(702), "Pre-seed founders will pay for structured thinking before traction."),
+    critiqueClaim: challengeClaimDto(uuidAt(203), uuidAt(703), "Pre-seed founders may admire the product but defer payment."),
+    challengeEdge: challengeEdgeDto("active" as const),
+    critique: "The risky assumption is willingness to pay before traction.",
+    failureType: "shaky_assumption" as const,
+    strength: "strong" as const,
+    whyThis: "This is load-bearing because the wedge depends on willingness to pay before traction.",
+    whatWouldResolveIt: "Name the urgent paid moment and artifact.",
+    suggestedNextMove: "Defend, Revise, or Absorb.",
+    move: challengeMoveDto("challenge_issued"),
+    brainRun: {
+      id: uuidAt(950),
+      status: "succeeded" as const,
+    },
+  };
+}
+
+function challengeRespondResponse(input: RespondToChallengeInput) {
+  const kind =
+    input.response === "defend"
+      ? ("user_defended" as const)
+      : input.response === "revise"
+        ? ("claim_revised" as const)
+        : ("critique_absorbed" as const);
+  const currentVersionId = input.response === "revise" ? uuidAt(704) : uuidAt(702);
+
+  return {
+    status: "responded" as const,
+    challengeRound: {
+      ...challengeRoundDto(uuidAt(101), "responded" as const),
+      id: input.challengeId,
+      response: input.response,
+      responseMoveId: uuidAt(603),
+      focusCompletedMoveId: uuidAt(604),
+      respondedAt: "2026-04-29T00:00:12.000Z",
+    },
+    response: input.response,
+    targetClaim: challengeClaimDto(uuidAt(202), currentVersionId, "Pre-seed founders will pay for a concrete urgent artifact."),
+    critiqueClaimId: uuidAt(203),
+    challengeEdge: challengeEdgeDto(input.response === "absorb" ? "acknowledged_vulnerability" : "active"),
+    move: challengeMoveDto(kind),
+    focusCompletedMove: challengeMoveDto("focus_completed"),
+    receipt: {
+      response: input.response,
+      moveKind: kind,
+      targetClaimId: uuidAt(202),
+      challengeEdgeId: uuidAt(302),
+      previousClaimVersionId: input.response === "revise" ? uuidAt(702) : null,
+      currentClaimVersionId: currentVersionId,
+      claimTextChanged: input.response === "revise",
+      unresolvedRisk: input.response === "absorb",
+    },
+  };
+}
+
+function challengeRoundDto(sessionId: string, status: "open" | "responded") {
+  return {
+    id: uuidAt(901),
+    sessionId,
+    status,
+    response: null,
+    targetClaimId: uuidAt(202),
+    targetClaimVersionId: uuidAt(702),
+    critiqueClaimId: uuidAt(203),
+    critiqueClaimVersionId: uuidAt(703),
+    challengeEdgeId: uuidAt(302),
+    brainRunId: uuidAt(950),
+    challengeMoveId: uuidAt(602),
+    responseMoveId: null,
+    focusCompletedMoveId: null,
+    failureType: "shaky_assumption" as const,
+    strength: "strong" as const,
+    critique: "The risky assumption is willingness to pay before traction.",
+    whyThis: "The market wedge depends on this claim.",
+    whatWouldResolveIt: "Name the urgent paid moment and artifact.",
+    createdAt: "2026-04-29T00:00:10.000Z",
+    respondedAt: null,
+    updatedAt: "2026-04-29T00:00:10.000Z",
+  };
+}
+
+function challengeClaimDto(id: string, versionId: string, text: string) {
+  return {
+    id,
+    versionId,
+    kind: "assumption" as const,
+    status: "exploratory" as const,
+    text,
+    confidence: 42,
+  };
+}
+
+function challengeEdgeDto(status: "active" | "acknowledged_vulnerability") {
+  return {
+    id: uuidAt(302),
+    fromClaimId: uuidAt(203),
+    toClaimId: uuidAt(202),
+    kind: "challenges" as const,
+    status,
+    label: "shaky_assumption",
+  };
+}
+
+function challengeMoveDto(kind: "challenge_issued" | "user_defended" | "claim_revised" | "critique_absorbed" | "focus_completed") {
+  return {
+    id: kind === "focus_completed" ? uuidAt(604) : uuidAt(603),
+    kind,
+    summary: `Created ${kind}.`,
+    payload: {},
+    createdAt: "2026-04-29T00:00:11.000Z",
+  };
+}
 
 function smokeRouteService(brainId: string, sessionId: string): ThinkingModeRouteService & { moves: ReturnType<typeof moveDto>[] } {
   const moves: ReturnType<typeof moveDto>[] = [];

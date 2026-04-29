@@ -66,6 +66,19 @@ export const nextMoveActionEnum = pgEnum("next_move_action", [
   "verify",
   "challenge",
 ]);
+export const challengeFailureTypeEnum = pgEnum("challenge_failure_type", [
+  "weak_evidence",
+  "missing_counterargument",
+  "shaky_assumption",
+  "analogy_break",
+  "dependency_risk",
+  "unaddressed_precedent",
+  "premise_rejection",
+  "definition_failure",
+]);
+export const challengeStrengthEnum = pgEnum("challenge_strength", ["weak", "moderate", "strong"]);
+export const challengeRoundStatusEnum = pgEnum("challenge_round_status", ["open", "responded"]);
+export const challengeRoundResponseEnum = pgEnum("challenge_round_response", ["defend", "revise", "absorb"]);
 export const brainRunOperationEnum = pgEnum("brain_run_operation", [
   "brain.seed",
   "brain.challenge",
@@ -95,6 +108,7 @@ export const moveKindEnum = pgEnum("move_kind", [
   "autopilot_suggested",
   "autopilot_focus_started",
   "manual_node_selected",
+  "focus_completed",
   "verify_run",
   "confidence_update_accepted",
   "confidence_update_rejected",
@@ -389,6 +403,72 @@ export const derivedEffects = pgTable(
   ],
 );
 
+export const challengeRounds = pgTable(
+  "challenge_rounds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    nextMoveCandidateId: uuid("next_move_candidate_id").references(() => nextMoveCandidates.id, {
+      onDelete: "set null",
+    }),
+    candidateId: text("candidate_id"),
+    candidateFingerprint: text("candidate_fingerprint"),
+    status: challengeRoundStatusEnum("status").notNull().default("open"),
+    response: challengeRoundResponseEnum("response"),
+    targetClaimId: uuid("target_claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    targetClaimVersionId: uuid("target_claim_version_id")
+      .notNull()
+      .references(() => claimVersions.id, { onDelete: "cascade" }),
+    critiqueClaimId: uuid("critique_claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    critiqueClaimVersionId: uuid("critique_claim_version_id")
+      .notNull()
+      .references(() => claimVersions.id, { onDelete: "cascade" }),
+    challengeEdgeId: uuid("challenge_edge_id")
+      .notNull()
+      .references(() => claimEdges.id, { onDelete: "cascade" }),
+    brainRunId: uuid("brain_run_id")
+      .notNull()
+      .references(() => brainRuns.id, { onDelete: "cascade" }),
+    challengeMoveId: uuid("challenge_move_id")
+      .notNull()
+      .references(() => moves.id, { onDelete: "cascade" }),
+    responseMoveId: uuid("response_move_id").references(() => moves.id, { onDelete: "set null" }),
+    focusCompletedMoveId: uuid("focus_completed_move_id").references(() => moves.id, { onDelete: "set null" }),
+    failureType: challengeFailureTypeEnum("failure_type").notNull(),
+    strength: challengeStrengthEnum("strength").notNull(),
+    critique: text("critique").notNull(),
+    whyThis: text("why_this").notNull(),
+    whatWouldResolveIt: text("what_would_resolve_it").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("challenge_rounds_session_id_idx").on(table.sessionId),
+    index("challenge_rounds_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("challenge_rounds_next_move_candidate_id_idx").on(table.nextMoveCandidateId),
+    index("challenge_rounds_target_claim_id_idx").on(table.targetClaimId),
+    index("challenge_rounds_challenge_edge_id_idx").on(table.challengeEdgeId),
+    index("challenge_rounds_status_idx").on(table.status),
+    index("challenge_rounds_response_move_id_idx").on(table.responseMoveId),
+    index("challenge_rounds_focus_completed_move_id_idx").on(table.focusCompletedMoveId),
+    check(
+      "challenge_rounds_response_requires_timestamp",
+      sql`(${table.status} = 'open' AND ${table.respondedAt} IS NULL AND ${table.response} IS NULL) OR (${table.status} = 'responded' AND ${table.respondedAt} IS NOT NULL AND ${table.response} IS NOT NULL)`,
+    ),
+    check("challenge_rounds_critique_present", sql`length(trim(${table.critique})) > 0`),
+    check("challenge_rounds_why_this_present", sql`length(trim(${table.whyThis})) > 0`),
+    check("challenge_rounds_resolution_present", sql`length(trim(${table.whatWouldResolveIt})) > 0`),
+  ],
+);
+
 export const shapes = pgTable(
   "shapes",
   {
@@ -524,6 +604,11 @@ export const pennySchema = {
   brainRunOperationEnum,
   brainRunStatusEnum,
   brainRuns,
+  challengeFailureTypeEnum,
+  challengeRoundResponseEnum,
+  challengeRoundStatusEnum,
+  challengeRounds,
+  challengeStrengthEnum,
   commandIdempotencyKeys,
   commandIdempotencyStatusEnum,
   claimEdgeKindEnum,
