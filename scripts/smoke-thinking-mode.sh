@@ -4,6 +4,10 @@ set -euo pipefail
 base_url="${BASE_URL:-http://localhost:3000}"
 tmp_dir="$(mktemp -d)"
 server_pid=""
+postgres_dir=""
+postgres_port="${SMOKE_DB_PORT:-55439}"
+postgres_db="${SMOKE_DB_NAME:-penny_smoke}"
+isolated_db="${SMOKE_ISOLATED_DB:-0}"
 smoke_id="smoke-$(date +%s)-$$"
 checker="$tmp_dir/check-smoke.cjs"
 response_file=""
@@ -12,6 +16,10 @@ cleanup() {
   if [[ -n "$server_pid" ]]; then
     kill "$server_pid" >/dev/null 2>&1 || true
     wait "$server_pid" >/dev/null 2>&1 || true
+  fi
+
+  if [[ -n "$postgres_dir" ]]; then
+    pg_ctl -D "$postgres_dir" -m fast -w stop >/dev/null 2>&1 || true
   fi
 
   rm -rf "$tmp_dir"
@@ -35,6 +43,53 @@ load_local_env() {
     source ".env.local"
     set +a
   fi
+}
+
+choose_postgres_port() {
+  local start_port="${SMOKE_DB_PORT:-55439}"
+
+  if [[ ! "$start_port" =~ ^[0-9]+$ ]]; then
+    echo "SMOKE_DB_PORT must be a numeric port." >&2
+    exit 1
+  fi
+
+  postgres_port="$start_port"
+
+  if ! command -v lsof >/dev/null 2>&1; then
+    return
+  fi
+
+  local candidate
+  for ((candidate = start_port; candidate < start_port + 50; candidate += 1)); do
+    if ! lsof -nP -iTCP:"$candidate" -sTCP:LISTEN >/dev/null 2>&1; then
+      postgres_port="$candidate"
+      return
+    fi
+  done
+
+  echo "No available PostgreSQL smoke port found from $start_port to $((start_port + 49))." >&2
+  exit 1
+}
+
+start_isolated_db() {
+  require_command initdb
+  require_command pg_ctl
+  require_command createdb
+  require_command psql
+
+  choose_postgres_port
+  postgres_dir="$tmp_dir/postgres"
+
+  echo "Starting isolated PostgreSQL smoke database at localhost:$postgres_port"
+  initdb -D "$postgres_dir" -A trust >"$tmp_dir/initdb.log" 2>&1
+  pg_ctl -D "$postgres_dir" -o "-p $postgres_port" -w start >"$tmp_dir/postgres.log" 2>&1
+  createdb -h localhost -p "$postgres_port" "$postgres_db"
+
+  for migration in drizzle/*.sql; do
+    psql -h localhost -p "$postgres_port" -d "$postgres_db" -v ON_ERROR_STOP=1 -f "$migration" >>"$tmp_dir/migrations.log" 2>&1
+  done
+
+  export DATABASE_URL="postgresql://localhost:$postgres_port/$postgres_db"
 }
 
 server_port() {
@@ -69,15 +124,25 @@ wait_for_server() {
 
 start_server_if_needed() {
   if server_ready; then
+    if [[ "$isolated_db" == "1" ]]; then
+      echo "SMOKE_ISOLATED_DB=1 requires BASE_URL to point at an unused port." >&2
+      exit 1
+    fi
+
     echo "Using existing Penny dev server at $base_url"
     return
   fi
 
-  load_local_env
+  if [[ "$isolated_db" == "1" ]]; then
+    start_isolated_db
+  else
+    load_local_env
+  fi
 
   if [[ -z "${DATABASE_URL:-}" ]]; then
     echo "DATABASE_URL is required to start the Penny API for the full smoke test." >&2
     echo "Export it or add it to .env.local, then run: pnpm db:migrate" >&2
+    echo "Or run with SMOKE_ISOLATED_DB=1 to use a temporary migrated PostgreSQL database." >&2
     exit 1
   fi
 
