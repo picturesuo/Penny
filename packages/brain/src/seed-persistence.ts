@@ -10,13 +10,14 @@ import {
   sessions,
   sources,
   sourceSpans,
+  type BrainRunOperation,
 } from "./db/schema.ts";
 import { createMove } from "./move-payloads.ts";
 import { scopeValues, type BrainScopeInput } from "./scope.ts";
 import type { BrainSeedInput, BrainSeedOutput } from "./seed.ts";
 
 export type BrainSeedRunInput = {
-  operation: string;
+  operation: BrainRunOperation;
   provider: string;
   model?: string | null;
   input: unknown;

@@ -51,6 +51,14 @@ export const derivedEffectStatusEnum = pgEnum("derived_effect_status", [
   "superseded",
 ]);
 export const shapeStatusEnum = pgEnum("shape_status", ["candidate", "confirmed", "rejected", "superseded"]);
+export const brainRunOperationEnum = pgEnum("brain_run_operation", [
+  "brain.seed",
+  "brain.challenge",
+  "brain.learn.inline",
+  "brain.artifact.challenge_brief",
+  "verify_run",
+]);
+export const brainRunStatusEnum = pgEnum("brain_run_status", ["running", "succeeded", "failed"]);
 export const commandIdempotencyStatusEnum = pgEnum("command_idempotency_status", [
   "running",
   "succeeded",
@@ -331,10 +339,10 @@ export const brainRuns = pgTable(
     ...scopeColumns(),
     sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
     sourceId: uuid("source_id").references(() => sources.id, { onDelete: "set null" }),
-    operation: text("operation").notNull(),
+    operation: brainRunOperationEnum("operation").notNull(),
     provider: text("provider").notNull(),
     model: text("model"),
-    status: text("status").notNull(),
+    status: brainRunStatusEnum("status").notNull(),
     input: jsonb("input").notNull().default({}),
     output: jsonb("output"),
     error: jsonb("error"),
@@ -422,6 +430,8 @@ export const commandIdempotencyKeys = pgTable(
 export const pennySchema = {
   artifacts,
   artifactKindEnum,
+  brainRunOperationEnum,
+  brainRunStatusEnum,
   brainRuns,
   commandIdempotencyKeys,
   commandIdempotencyStatusEnum,
@@ -446,3 +456,6 @@ export const pennySchema = {
   sources,
   wikiPages,
 };
+
+export type BrainRunOperation = (typeof brainRunOperationEnum.enumValues)[number];
+export type BrainRunStatus = (typeof brainRunStatusEnum.enumValues)[number];
