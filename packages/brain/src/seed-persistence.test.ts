@@ -59,6 +59,9 @@ test("persistBrainSeed persists every valid thought-map claim and edge kind", as
   assert.ok(persisted.claims.every((claim) => claim.projectId === "project-1"));
   assert.ok(persisted.edges.every((edge) => edge.sphereId === "sphere-1"));
   assert.ok(persisted.moves.every((move) => move.userId === "user-1"));
+  assert.ok((recording.inserted.shapes ?? []).some((row) => row.key === "initial_decomposition"));
+  assert.ok((recording.inserted.derived_effects ?? []).some((row) => row.kind === "unresolved_risk"));
+  assert.ok((recording.inserted.derived_effects ?? []).some((row) => row.kind === "next_move_recommendation"));
 
   const sourceSpanRows = recording.inserted.source_spans ?? [];
   assert.deepEqual(
