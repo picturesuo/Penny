@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { brainRuns, claimEdges, claims, claimVersions, moves, sourceSpans } from "./db/schema.ts";
+import {
+  artifacts,
+  brainRuns,
+  claimEdges,
+  claims,
+  claimVersions,
+  derivedEffects,
+  moves,
+  shapes,
+  sourceSpans,
+} from "./db/schema.ts";
 import type { PennyDatabase } from "./db/client.ts";
 import type { BrainSeedInput, BrainSeedOutput } from "./seed.ts";
 import { persistBrainSeed, type BrainSeedPrelude, type BrainSeedRunInput } from "./seed-persistence.ts";
@@ -239,7 +249,16 @@ const graphRichSeed: BrainSeedOutput = {
 };
 
 type InsertRow = Record<string, unknown>;
-type TableKey = "claims" | "claim_versions" | "source_spans" | "claim_edges" | "moves" | "brain_runs";
+type TableKey =
+  | "claims"
+  | "claim_versions"
+  | "source_spans"
+  | "claim_edges"
+  | "moves"
+  | "brain_runs"
+  | "shapes"
+  | "derived_effects"
+  | "artifacts";
 
 function createRecordingSeedDb(prelude: BrainSeedPrelude) {
   const now = new Date("2026-04-27T00:00:00.000Z");
@@ -250,6 +269,9 @@ function createRecordingSeedDb(prelude: BrainSeedPrelude) {
     claim_edges: 0,
     moves: 0,
     brain_runs: 0,
+    shapes: 0,
+    derived_effects: 0,
+    artifacts: 0,
   };
   const inserted: Partial<Record<TableKey, InsertRow[]>> = {};
   const db = {
@@ -260,6 +282,29 @@ function createRecordingSeedDb(prelude: BrainSeedPrelude) {
 
   function createRecordingTx() {
     return {
+      select() {
+        return {
+          from(table: unknown) {
+            const rows = tableRows(table);
+
+            return {
+              where() {
+                return {
+                  limit(count: number) {
+                    return Promise.resolve(rows.slice(0, count));
+                  },
+                  orderBy() {
+                    return Promise.resolve(rows);
+                  },
+                };
+              },
+              orderBy() {
+                return Promise.resolve(rows);
+              },
+            };
+          },
+        };
+      },
       insert(table: unknown) {
         const key = tableKey(table);
 
@@ -306,6 +351,16 @@ function createRecordingSeedDb(prelude: BrainSeedPrelude) {
     };
   }
 
+  function tableRows(table: unknown): InsertRow[] {
+    if (table === artifacts) {
+      return [];
+    }
+
+    const key = tableKey(table);
+
+    return inserted[key] ?? [];
+  }
+
   function persistedInsertRow(key: TableKey, row: InsertRow): InsertRow {
     const persisted = {
       ...row,
@@ -325,6 +380,21 @@ function createRecordingSeedDb(prelude: BrainSeedPrelude) {
       return {
         ...persisted,
         status: "active",
+      };
+    }
+
+    if (key === "derived_effects") {
+      return {
+        ...persisted,
+        status: "pending_review",
+        reviewedAt: null,
+      };
+    }
+
+    if (key === "shapes") {
+      return {
+        ...persisted,
+        reviewedAt: null,
       };
     }
 
@@ -359,6 +429,18 @@ function tableKey(table: unknown): TableKey {
     return "brain_runs";
   }
 
+  if (table === shapes) {
+    return "shapes";
+  }
+
+  if (table === derivedEffects) {
+    return "derived_effects";
+  }
+
+  if (table === artifacts) {
+    return "artifacts";
+  }
+
   throw new Error("Unexpected table.");
 }
 
@@ -376,6 +458,12 @@ function tableOffset(key: TableKey): number {
       return 600;
     case "brain_runs":
       return 700;
+    case "shapes":
+      return 800;
+    case "derived_effects":
+      return 900;
+    case "artifacts":
+      return 1000;
   }
 }
 
