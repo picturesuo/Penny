@@ -11,6 +11,9 @@ import {
   claimKindEnum,
   claimStatusEnum,
   claims,
+  derivedEffectKindEnum,
+  derivedEffectStatusEnum,
+  derivedEffects,
   moveKindEnum,
   claimVersions,
   moves,
@@ -30,6 +33,7 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(claimEdges), "claim_edges");
   assert.equal(getTableName(sourceSpans), "source_spans");
   assert.equal(getTableName(moves), "moves");
+  assert.equal(getTableName(derivedEffects), "derived_effects");
   assert.equal(getTableName(brainRuns), "brain_runs");
   assert.equal(getTableName(artifacts), "artifacts");
   assert.equal(getTableName(wikiPages), "wiki_pages");
@@ -48,6 +52,14 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
     "teaches",
   ]);
   assert.deepEqual(claimEdgeStatusEnum.enumValues, ["active", "acknowledged_vulnerability"]);
+  assert.deepEqual(derivedEffectKindEnum.enumValues, [
+    "shape_candidate",
+    "confidence_cascade",
+    "unresolved_risk",
+    "stale_artifact",
+    "next_move_recommendation",
+  ]);
+  assert.deepEqual(derivedEffectStatusEnum.enumValues, ["pending_review", "accepted", "rejected", "superseded"]);
   assert.ok(moveKindEnum.enumValues.includes("seed_claim_created"));
   assert.ok(moveKindEnum.enumValues.includes("assumptions_extracted"));
   assert.ok(moveKindEnum.enumValues.includes("first_challenge_suggested"));
@@ -76,6 +88,9 @@ test("Penny schema has a clean aggregate export surface", () => {
     "claimStatusEnum",
     "claimVersions",
     "claims",
+    "derivedEffectKindEnum",
+    "derivedEffectStatusEnum",
+    "derivedEffects",
     "moveKindEnum",
     "moves",
     "sessionStatusEnum",
