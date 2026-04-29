@@ -260,6 +260,7 @@ interface RawSessionCockpitData {
     edges?: SessionCockpitData["ideaMap"]["edges"];
     keyInsight?: string | null;
   };
+  workStructure?: SessionCockpitData["workStructure"];
   moves?: BrainMove[];
   autopilot: ThinkingModeStateData;
   activeChallenge?: {
@@ -287,6 +288,7 @@ function normalizeCockpitData(data: RawSessionCockpitData): SessionCockpitData {
       edges: data.ideaMap.edges ?? [],
       ...(data.ideaMap.keyInsight !== undefined ? { keyInsight: data.ideaMap.keyInsight } : {}),
     },
+    workStructure: data.workStructure ?? null,
     moves: (data.moves ?? []).map(normalizeMove),
     autopilot: normalizeAutopilotState(data.autopilot),
     activeChallenge,
