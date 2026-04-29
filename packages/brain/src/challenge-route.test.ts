@@ -20,6 +20,7 @@ import {
   type ChallengeResponseRequest,
 } from "./challenge-route.ts";
 import { BrainRunGuardError } from "./brain-run-guard.ts";
+import { createMemoryCommandIdempotencyStore } from "./command-idempotency.ts";
 
 test("POST /brain/challenge validates the target claim request before persistence", async () => {
   let issued = false;
@@ -106,6 +107,38 @@ test("POST /brain/challenge returns a critique claim, challenge edge, BrainRun, 
   assert.equal(payload.data.challengeEdge.toClaimId, targetClaimId);
   assert.equal(payload.data.move.kind, "challenge_issued");
   assert.equal(payload.data.brainRun.status, "succeeded");
+});
+
+test("POST /brain/challenge replays an idempotent command without issuing twice", async () => {
+  const idempotencyStore = createMemoryCommandIdempotencyStore();
+  const targetClaimId = uuidAt(101);
+  let issued = 0;
+  const first = await handleChallengeRequest(idempotentChallengeRequest(targetClaimId), {
+    idempotencyStore,
+    async issueChallenge(input) {
+      issued += 1;
+
+      return issuedChallenge(input.targetClaimId);
+    },
+  });
+  const second = await handleChallengeRequest(idempotentChallengeRequest(targetClaimId), {
+    idempotencyStore,
+    async issueChallenge(input) {
+      issued += 1;
+
+      return issuedChallenge(input.targetClaimId);
+    },
+  });
+  const firstPayload = (await first.json()) as { data: ReturnType<typeof issuedChallenge> };
+  const secondPayload = (await second.json()) as { data: ReturnType<typeof issuedChallenge> };
+
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  assert.equal(first.headers.get("x-penny-idempotency"), "created");
+  assert.equal(second.headers.get("x-penny-idempotency"), "replayed");
+  assert.equal(issued, 1);
+  assert.equal(secondPayload.data.move.id, firstPayload.data.move.id);
+  assert.deepEqual(secondPayload.data.challengeEdge, firstPayload.data.challengeEdge);
 });
 
 test("POST /brain/challenge/respond validates response-specific content", async () => {
@@ -347,6 +380,53 @@ function request(url: string, body: unknown): Request {
     },
     body: JSON.stringify(body),
   });
+}
+
+function idempotentChallengeRequest(targetClaimId: string): Request {
+  return new Request("http://localhost/brain/challenge", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": "challenge-command-1",
+      "x-user-id": "dev-user-1",
+      "x-project-id": "dev-project-1",
+    },
+    body: JSON.stringify({ targetClaimId }),
+  });
+}
+
+function issuedChallenge(targetClaimId: string) {
+  return {
+    critique: "The claim collapses if the learner's bottleneck is motivation rather than cognitive load.",
+    failureType: "shaky_assumption" as const,
+    strength: "moderate" as const,
+    provenanceTag: "penny:test.challenge",
+    whyThisCritique: "It attacks the dependency that makes the target claim useful.",
+    whatWouldResolveIt: "Evidence that cognitive load is the binding constraint would resolve it.",
+    suggestedNextMove: "Defend, Revise, or Absorb.",
+    targetClaim: claim(targetClaimId, uuidAt(201), "assumption", "Cognitive load is the bottleneck."),
+    critiqueClaim: claim(uuidAt(301), uuidAt(302), "belief", "Motivation may be the bottleneck."),
+    challengeEdge: {
+      id: uuidAt(401),
+      fromClaimId: uuidAt(301),
+      toClaimId: targetClaimId,
+      kind: "challenges" as const,
+      status: "active" as const,
+      label: "shaky_assumption",
+    },
+    move: {
+      id: uuidAt(501),
+      kind: "challenge_issued" as const,
+      summary: "Issued a first challenge against the target claim.",
+      claimIds: [targetClaimId, uuidAt(301)],
+      edgeIds: [uuidAt(401)],
+      artifactIds: [],
+    },
+    brainRun: {
+      id: uuidAt(601),
+      status: "succeeded",
+    },
+  };
 }
 
 function claim(
