@@ -12,6 +12,13 @@ import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleSessionGraphRequest } from "./session-graph-route.ts";
 import { handleSessionMovesRequest } from "./session-moves-route.ts";
+import {
+  handleSessionAutopilotStateRequest,
+  handleSessionAutopilotTickRequest,
+  handleSessionCockpitRequest,
+  handleSessionManualFocusRequest,
+  handleSessionStartNextMoveCandidateRequest,
+} from "./routes/session-cockpit-routes.ts";
 import { handleBrainStreamRequest } from "./stream-route.ts";
 import {
   handleChallengeRoundRespondRequest,
@@ -170,6 +177,101 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/artifact") {
       await writeWebResponse(outgoing, await handleArtifactRequest(request));
+      return;
+    }
+
+    const sessionCockpitMatch = /^\/api\/sessions\/([^/]+)\/cockpit$/.exec(url.pathname);
+
+    if (sessionCockpitMatch) {
+      const sessionId = sessionCockpitMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(
+          outgoing,
+          invalidPathResponse("invalid_session_id", "Session cockpit requires a session id."),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleSessionCockpitRequest(request, decodeURIComponent(sessionId)));
+      return;
+    }
+
+    const sessionAutopilotStateMatch = /^\/api\/sessions\/([^/]+)\/autopilot\/state$/.exec(url.pathname);
+
+    if (sessionAutopilotStateMatch) {
+      const sessionId = sessionAutopilotStateMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(
+          outgoing,
+          invalidPathResponse("invalid_session_id", "Session Autopilot state requires a session id."),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleSessionAutopilotStateRequest(request, decodeURIComponent(sessionId)));
+      return;
+    }
+
+    const sessionAutopilotTickMatch = /^\/api\/sessions\/([^/]+)\/autopilot\/tick$/.exec(url.pathname);
+
+    if (sessionAutopilotTickMatch) {
+      const sessionId = sessionAutopilotTickMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(
+          outgoing,
+          invalidPathResponse("invalid_session_id", "Session Autopilot tick requires a session id."),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleSessionAutopilotTickRequest(request, decodeURIComponent(sessionId)));
+      return;
+    }
+
+    const sessionStartNextMoveMatch = /^\/api\/sessions\/([^/]+)\/next-move-candidates\/([^/]+)\/start$/.exec(
+      url.pathname,
+    );
+
+    if (sessionStartNextMoveMatch) {
+      const sessionId = sessionStartNextMoveMatch[1];
+      const candidateId = sessionStartNextMoveMatch[2];
+
+      if (!sessionId || !candidateId) {
+        await writeWebResponse(
+          outgoing,
+          invalidPathResponse("invalid_candidate_id", "Starting a session next move requires session and candidate ids."),
+        );
+        return;
+      }
+
+      await writeWebResponse(
+        outgoing,
+        await handleSessionStartNextMoveCandidateRequest(
+          request,
+          decodeURIComponent(sessionId),
+          decodeURIComponent(candidateId),
+        ),
+      );
+      return;
+    }
+
+    const sessionManualFocusMatch = /^\/api\/sessions\/([^/]+)\/focus\/manual$/.exec(url.pathname);
+
+    if (sessionManualFocusMatch) {
+      const sessionId = sessionManualFocusMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(
+          outgoing,
+          invalidPathResponse("invalid_session_id", "Session manual focus requires a session id."),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleSessionManualFocusRequest(request, decodeURIComponent(sessionId)));
       return;
     }
 
