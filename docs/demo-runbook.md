@@ -98,7 +98,7 @@ Open:
 http://localhost:3000
 ```
 
-Use the API-served app on port 3000 for the demo. `pnpm dev:frontend` serves Vite on port 5173, but its current proxy covers `/brain` only, not `/api` or `/autopilot`.
+Use the API-served app on port 3000 for the demo. `pnpm dev:frontend` serves Vite on port 5173 and proxies `/api`, `/brain`, and `/autopilot` to the API server on port 3000 by default.
 
 ## 6. Expected API Outputs
 
@@ -156,7 +156,7 @@ Use the API-served app on port 3000 for the demo. `pnpm dev:frontend` serves Vit
 - Port `3000` already in use: stop the old process or run `PORT=3001 pnpm dev:api` and set `BASE_URL=http://localhost:3001`.
 - Seed returns provider/network errors: unset `XAI_API_KEY` for the deterministic heuristic demo, or verify the xAI key/model if intentionally using live AI.
 - `GET /brain/seed` or `GET /autopilot/tick` returns `405`: this is expected; these mutation surfaces are POST-only.
-- Vite app on `5173` cannot call Autopilot APIs: use `http://localhost:3000` for the demo, or add Vite proxy coverage for `/api` and `/autopilot` in a later frontend pass.
+- Vite app on `5173` cannot call Autopilot APIs: verify `pnpm dev:api` is running on port `3000`, or set `PENNY_API_ORIGIN` before `pnpm dev:frontend` if the API uses another port.
 - `thinking_mode_not_found`: the `DEMO_SESSION_ID` was not exported from the seed response or the database was reset after seeding.
 - `invalid_request`: check that UUID values are valid and request bodies have `content-type: application/json`.
 
