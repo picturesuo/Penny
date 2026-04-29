@@ -53,15 +53,15 @@ export type CommandIdempotencyInput = {
   route: string;
   key: string | null;
   requestHash: string;
-  scope?: BrainScopeInput;
-  store?: CommandIdempotencyStore;
+  scope?: BrainScopeInput | undefined;
+  store?: CommandIdempotencyStore | undefined;
   execute: () => Promise<Response>;
 };
 
 type CommandIdempotencyBody = {
-  idempotencyKey?: string;
-  commandId?: string;
-  customId?: string;
+  idempotencyKey?: string | undefined;
+  commandId?: string | undefined;
+  customId?: string | undefined;
 };
 
 const commandKeyHeaders = ["idempotency-key", "x-idempotency-key", "x-penny-idempotency-key"];
