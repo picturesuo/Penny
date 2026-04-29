@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimVersions, claims, moves, sourceSpans, sources } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
+import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 
 export const VerifyRequestSchema = z
@@ -497,31 +498,23 @@ async function persistVerifyResult(
       citationSources,
       confidenceUpdate,
     };
-    const [move] = await tx
-      .insert(moves)
-      .values({
-        sessionId: prelude.target.claim.sessionId,
-        kind: "verify_run",
-        summary: verifyMoveSummary(output),
-        payload: {
-          claimIds: [prelude.target.claim.id],
-          edgeIds: [],
-          claimId: prelude.target.claim.id,
-          claimVersionId: prelude.target.version.id,
-          brainRunId: prelude.brainRun.id,
-          verdict: output.verdict,
-          confidenceDeltaSuggestion: output.confidenceDeltaSuggestion,
-          confidenceDecision: confidenceUpdate.decision,
-          autoAppliedConfidence: confidenceUpdate.autoApplied,
-          sourceIds: citationSources.map((citation) => citation.source.id),
-          sourceSpanIds: citationSources.map((citation) => citation.sourceSpan.id),
-        },
-      })
-      .returning();
-
-    if (!move) {
-      throw new VerifyConflictError("Failed to record Verify move.");
-    }
+    const move = await createMove(tx, "verify_run", {
+      sessionId: prelude.target.claim.sessionId,
+      summary: verifyMoveSummary(output),
+      payload: {
+        claimIds: [prelude.target.claim.id],
+        edgeIds: [],
+        claimId: prelude.target.claim.id,
+        claimVersionId: prelude.target.version.id,
+        brainRunId: prelude.brainRun.id,
+        verdict: output.verdict,
+        confidenceDeltaSuggestion: output.confidenceDeltaSuggestion,
+        confidenceDecision: confidenceUpdate.decision,
+        autoAppliedConfidence: confidenceUpdate.autoApplied,
+        sourceIds: citationSources.map((citation) => citation.source.id),
+        sourceSpanIds: citationSources.map((citation) => citation.sourceSpan.id),
+      },
+    });
 
     const [completedBrainRun] = await tx
       .update(brainRuns)
