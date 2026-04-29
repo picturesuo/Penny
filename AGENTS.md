@@ -24,6 +24,7 @@ Keep it current.
 - Current state is derived from claims, claim versions, edges, and moves.
 - Search stays Penny-native until the MVP loop is undeniable: add lexical and graph search over Penny rows first.
 - Keep Supermemory-like semantic memory/search post-MVP; add embeddings later, after lexical/graph search proves insufficient.
+- Add a precedent corpus later, structured by failure type; Penny's moat is reusable precedents, not generic web search.
 - Do not jump to broad document ingestion before the seed -> challenge/verify -> learn -> artifact loop works end to end.
 - Do not build a generic chatbot sidebar or pre-MVP features before the first loop works end to end.
 
