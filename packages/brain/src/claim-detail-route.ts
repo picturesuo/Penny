@@ -2,16 +2,17 @@ import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { artifacts, claimEdges, claims, claimVersions, moves, sources, sourceSpans } from "./db/schema.ts";
+import { scopeValues, type OptionalBrainScope } from "./scope.ts";
 
 const ClaimDetailPathSchema = z.string().uuid();
 
-type ClaimRow = typeof claims.$inferSelect;
+type ClaimRow = OptionalBrainScope<typeof claims.$inferSelect>;
 type ClaimVersionRow = typeof claimVersions.$inferSelect;
-type EdgeRow = typeof claimEdges.$inferSelect;
-type MoveRow = typeof moves.$inferSelect;
-type SourceRow = typeof sources.$inferSelect;
+type EdgeRow = OptionalBrainScope<typeof claimEdges.$inferSelect>;
+type MoveRow = OptionalBrainScope<typeof moves.$inferSelect>;
+type SourceRow = OptionalBrainScope<typeof sources.$inferSelect>;
 type SourceSpanRow = typeof sourceSpans.$inferSelect;
-type ArtifactRow = typeof artifacts.$inferSelect;
+type ArtifactRow = OptionalBrainScope<typeof artifacts.$inferSelect>;
 
 export type ClaimDetailState = {
   claim: ClaimRow;
@@ -269,6 +270,7 @@ async function loadClaimSourceSpans(
 function claimSlice(claim: ClaimRow, version: ClaimVersionRow) {
   return {
     id: claim.id,
+    scope: scopeValues(claim),
     versionId: version.id,
     sessionId: claim.sessionId,
     sourceId: version.sourceId ?? claim.sourceId,

@@ -1,13 +1,14 @@
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { artifacts, claimEdges, claims, claimVersions, moves, sessions } from "./db/schema.ts";
+import { scopeValues, type BrainScope, type OptionalBrainScope } from "./scope.ts";
 
-type SessionRow = typeof sessions.$inferSelect;
-type ClaimRow = typeof claims.$inferSelect;
+type SessionRow = OptionalBrainScope<typeof sessions.$inferSelect>;
+type ClaimRow = OptionalBrainScope<typeof claims.$inferSelect>;
 type ClaimVersionRow = typeof claimVersions.$inferSelect;
-type EdgeRow = typeof claimEdges.$inferSelect;
-type MoveRow = typeof moves.$inferSelect;
-type ArtifactRow = typeof artifacts.$inferSelect;
+type EdgeRow = OptionalBrainScope<typeof claimEdges.$inferSelect>;
+type MoveRow = OptionalBrainScope<typeof moves.$inferSelect>;
+type ArtifactRow = OptionalBrainScope<typeof artifacts.$inferSelect>;
 
 export type StreamState = {
   activeSessions: SessionRow[];
@@ -21,6 +22,7 @@ export type StreamState = {
 
 type StreamClaim = {
   id: string;
+  scope: BrainScope;
   sessionId: string;
   kind: ClaimRow["kind"];
   status: ClaimVersionRow["status"];
@@ -34,6 +36,7 @@ type StreamClaim = {
 
 type StreamSession = {
   id: string;
+  scope: BrainScope;
   title: string | null;
   status: SessionRow["status"];
   createdAt: string;
@@ -68,6 +71,7 @@ type StreamRisk = {
 
 type StreamMove = {
   id: string;
+  scope: BrainScope;
   sessionId: string;
   kind: MoveRow["kind"];
   summary: string;
@@ -272,6 +276,7 @@ export function buildBrainStream(state: StreamState): BrainStream {
 
     return {
       id: session.id,
+      scope: scopeValues(session),
       title: session.title,
       status: session.status,
       createdAt: session.createdAt.toISOString(),
@@ -298,6 +303,7 @@ export function buildBrainStream(state: StreamState): BrainStream {
 function claimSlice(claim: ClaimRow, version: ClaimVersionRow): StreamClaim {
   return {
     id: claim.id,
+    scope: scopeValues(claim),
     sessionId: claim.sessionId,
     kind: claim.kind,
     status: version.status,
@@ -313,6 +319,7 @@ function claimSlice(claim: ClaimRow, version: ClaimVersionRow): StreamClaim {
 function moveSlice(move: MoveRow) {
   return {
     id: move.id,
+    scope: scopeValues(move),
     sessionId: move.sessionId,
     kind: move.kind,
     summary: move.summary,

@@ -2,16 +2,17 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claims, claimVersions, moves, sessions, sources, sourceSpans } from "./db/schema.ts";
+import { scopeValues, type OptionalBrainScope } from "./scope.ts";
 
 const SessionMovesPathSchema = z.string().uuid();
 
-type SessionRow = typeof sessions.$inferSelect;
-type MoveRow = typeof moves.$inferSelect;
-type ClaimRow = typeof claims.$inferSelect;
+type SessionRow = OptionalBrainScope<typeof sessions.$inferSelect>;
+type MoveRow = OptionalBrainScope<typeof moves.$inferSelect>;
+type ClaimRow = OptionalBrainScope<typeof claims.$inferSelect>;
 type ClaimVersionRow = typeof claimVersions.$inferSelect;
-type EdgeRow = typeof claimEdges.$inferSelect;
-type BrainRunRow = typeof brainRuns.$inferSelect;
-type SourceRow = typeof sources.$inferSelect;
+type EdgeRow = OptionalBrainScope<typeof claimEdges.$inferSelect>;
+type BrainRunRow = OptionalBrainScope<typeof brainRuns.$inferSelect>;
+type SourceRow = OptionalBrainScope<typeof sources.$inferSelect>;
 type SourceSpanRow = typeof sourceSpans.$inferSelect;
 
 export type SessionMovesState = {
@@ -236,6 +237,7 @@ export function buildSessionMovesTimeline(state: SessionMovesState) {
   return {
     session: {
       id: state.session.id,
+      ...scopeValues(state.session),
       status: state.session.status,
       title: state.session.title,
       createdAt: state.session.createdAt.toISOString(),
@@ -423,6 +425,7 @@ function payloadPreview(payload: unknown): Record<string, unknown> {
 function claimSlice(claim: ClaimRow, version: ClaimVersionRow) {
   return {
     id: claim.id,
+    ...scopeValues(claim),
     versionId: version.id,
     kind: claim.kind,
     status: version.status,
@@ -453,6 +456,7 @@ function versionSlice(version: ClaimVersionRow) {
 function edgeSlice(edge: EdgeRow) {
   return {
     id: edge.id,
+    ...scopeValues(edge),
     fromClaimId: edge.fromClaimId,
     toClaimId: edge.toClaimId,
     kind: edge.kind,
@@ -465,6 +469,7 @@ function edgeSlice(edge: EdgeRow) {
 function sourceSlice(source: SourceRow) {
   return {
     id: source.id,
+    ...scopeValues(source),
     sessionId: source.sessionId,
     kind: source.kind,
     rawText: source.rawText,
@@ -488,6 +493,7 @@ function sourceSpanSlice(span: SourceSpanRow) {
 function brainRunSlice(run: BrainRunRow) {
   return {
     id: run.id,
+    ...scopeValues(run),
     operation: run.operation,
     provider: run.provider,
     model: run.model,
