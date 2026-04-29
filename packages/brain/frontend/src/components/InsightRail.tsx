@@ -1,5 +1,4 @@
 import type { BrainClaim, BrainMove, ChallengeSuggestion, LearnCandidate } from "../types/brain";
-import { placeholderMoves } from "../data/placeholders";
 import { formatLabel } from "../lib/format";
 
 interface InsightRailProps {
@@ -11,11 +10,8 @@ interface InsightRailProps {
 
 export function InsightRail({ challenge, claims, learnCandidates, moves }: InsightRailProps) {
   const target = claims.find((claim) => claim.id === challenge?.targetClaimId);
-  const importantInsight = target?.text ?? challenge?.weakestPart ?? "Placeholder";
-  const whyItMatters =
-    challenge?.challenge ??
-    learnCandidates[0]?.whyItMatters ??
-    "Placeholder";
+  const importantInsight = target?.text ?? challenge?.weakestPart ?? "No active challenge";
+  const whyItMatters = challenge?.challenge ?? learnCandidates[0]?.whyItMatters ?? "No challenge rationale";
 
   return (
     <aside className="insight-rail" aria-label="Makes Cents">
@@ -23,17 +19,17 @@ export function InsightRail({ challenge, claims, learnCandidates, moves }: Insig
         <h2 className="section-label">MAKE CENTS</h2>
         <RailBlock title="MOST IMPORTANT INSIGHT">{importantInsight}</RailBlock>
         <RailBlock title="WHY IT MATTERS">{whyItMatters}</RailBlock>
-        <RailBlock title="EXAMPLES">{learnCandidates[0]?.unblockExplanation ?? "Placeholder"}</RailBlock>
+        <RailBlock title="EXAMPLES">{learnCandidates[0]?.unblockExplanation ?? "No example returned"}</RailBlock>
         <RailBlock title="RELATED CONCEPTS">
           {learnCandidates.length > 0
             ? learnCandidates
                 .slice(0, 3)
                 .map((candidate) => candidate.term)
                 .join(", ")
-            : "Placeholder"}
+            : "No related concepts"}
         </RailBlock>
       </section>
-      <ThinkingHistory moves={moves.length > 0 ? moves : placeholderMoves} />
+      <ThinkingHistory moves={moves} />
     </aside>
   );
 }
@@ -52,12 +48,19 @@ function ThinkingHistory({ moves }: { moves: BrainMove[] }) {
     <section className="thinking-history">
       <h2 className="section-label">THINKING HISTORY</h2>
       <div className="history-list">
-        {moves.slice(0, 6).map((move) => (
-          <article key={move.id}>
-            <span>{move.summary || formatLabel(move.type)}</span>
-            <time>{move.createdAt ? formatHistoryTime(move.createdAt) : "Time"}</time>
+        {moves.length > 0 ? (
+          moves.slice(0, 6).map((move) => (
+            <article key={move.id}>
+              <span>{move.summary || formatLabel(move.type)}</span>
+              <time>{move.createdAt ? formatHistoryTime(move.createdAt) : "Time"}</time>
+            </article>
+          ))
+        ) : (
+          <article>
+            <span>No moves recorded</span>
+            <time>-</time>
           </article>
-        ))}
+        )}
       </div>
       <button type="button" className="history-link">
         View full history <span aria-hidden="true">-&gt;</span>

@@ -1,5 +1,4 @@
 import type { BrainClaim } from "../types/brain";
-import { placeholderProblems } from "../data/placeholders";
 
 interface ThoughtMapProps {
   claims: BrainClaim[];
@@ -14,16 +13,16 @@ export function ThoughtMap({ claims, focusedClaimId, suggestedClaimId, onClaimSe
 
   return (
     <div className="thought-map-tree">
-      {visibleClaims.length > 0 ? (
+      {seedClaim ? (
         <RuntimeTree
-          seedText={seedClaim?.text ?? "Sentence Title"}
+          seedText={seedClaim.text}
           claims={visibleClaims}
           focusedClaimId={focusedClaimId}
           suggestedClaimId={suggestedClaimId}
           onClaimSelect={onClaimSelect}
         />
       ) : (
-        <PlaceholderTree />
+        <EmptyTree />
       )}
     </div>
   );
@@ -67,17 +66,11 @@ function RuntimeTree({
   );
 }
 
-function PlaceholderTree() {
+function EmptyTree() {
   return (
-    <div className="tree-line">
-      {placeholderProblems.map((problem, index) => (
-        <div key={`${problem.title}-${index}`} className="tree-group">
-          <strong>{problem.title}</strong>
-          {problem.children.map((child, childIndex) => (
-            <span key={`${child}-${childIndex}`}>{child}</span>
-          ))}
-        </div>
-      ))}
+    <div className="tree-empty">
+      <strong>No graph state</strong>
+      <span>Awaiting session claims.</span>
     </div>
   );
 }

@@ -72,7 +72,7 @@ export function App() {
     }
 
     const candidateId = autopilot?.suggestion?.candidateId ?? autopilot?.selectedCandidate?.candidateId ?? null;
-    const targetClaimId = autopilot?.suggestion?.goThere?.targetClaimId ?? autopilot?.suggestion?.targetClaimId ?? null;
+    const targetClaimId = autopilot?.suggestion?.targetClaimId ?? null;
 
     if (!candidateId) {
       setStatus("Autopilot has no candidate to start");
@@ -171,14 +171,16 @@ function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null
   const firstChallenge = cockpit.activeChallenge ?? current?.firstChallenge ?? null;
 
   return {
-    ...(current ?? {}),
+    ...(current?.source ? { source: current.source } : {}),
+    ...(current?.brainRun ? { brainRun: current.brainRun } : {}),
     session: cockpit.session,
     ideaMap: {
-      ...(current?.ideaMap ?? {}),
       claims: cockpit.ideaMap.claims,
       edges: cockpit.ideaMap.edges,
       ...(typeof keyInsight === "string" && keyInsight ? { keyInsight } : {}),
     },
+    explorationPaths: [],
+    learnCandidates: [],
     ...(firstChallenge ? { firstChallenge } : {}),
   };
 }

@@ -252,6 +252,17 @@
     font-weight: 400;
   }
 
+  .tree-empty {
+    display: grid;
+    gap: 5px;
+    color: rgb(17 17 17 / 0.68);
+  }
+
+  .tree-empty strong,
+  .tree-empty span {
+    overflow-wrap: anywhere;
+  }
+
   .left-bottom-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -343,7 +354,8 @@
 
   .autopilot-card strong,
   .autopilot-card p,
-  .autopilot-card em {
+  .autopilot-card em,
+  .autopilot-card small {
     display: block;
     margin: 0;
     overflow-wrap: anywhere;
@@ -355,10 +367,17 @@
   }
 
   .autopilot-card p,
-  .autopilot-card em {
+  .autopilot-card em,
+  .autopilot-card small {
     margin-top: 4px;
     font-size: 12px;
     line-height: 1.18;
+  }
+
+  .autopilot-card small {
+    color: rgb(17 17 17 / 0.7);
+    font-size: 11px;
+    text-transform: uppercase;
   }
 
   .autopilot-card em {
@@ -414,6 +433,23 @@
     font-size: 12px;
     line-height: 1;
     white-space: nowrap;
+  }
+
+  .pathway-empty {
+    display: grid;
+    gap: 5px;
+    min-height: 58px;
+    border-bottom: 1px solid #c7c7c7;
+    padding: 12px 16px;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 12px;
+    line-height: 1.18;
+  }
+
+  .pathway-empty strong,
+  .pathway-empty p {
+    margin: 0;
+    overflow-wrap: anywhere;
   }
 
   .composer {

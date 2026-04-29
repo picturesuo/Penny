@@ -1,5 +1,4 @@
 import type { AutopilotSuggestion, BrainClaim, ExplorationPath } from "../types/brain";
-import { placeholderPaths } from "../data/placeholders";
 
 interface CurrentExplorationProps {
   title: string;
@@ -38,20 +37,22 @@ export function CurrentExploration({
       {autopilotSuggestion ? (
         <article className="autopilot-card">
           <div>
-            <span>AUTOPILOT</span>
+            <span>NEXT THINKING ACTION</span>
             <strong>{autopilotSuggestion.label}</strong>
             <p>{autopilotSuggestion.why}</p>
+            <p>{autopilotSuggestion.exitCriteria.label}</p>
+            {autopilotSuggestion.exitCriteria.acceptedMoveKinds.length > 0 ? (
+              <small>{autopilotSuggestion.exitCriteria.acceptedMoveKinds.map(formatMoveKind).join(", ")}</small>
+            ) : null}
             {focusedClaim ? <em>{focusedClaim.text}</em> : null}
           </div>
           <button type="button" onClick={onGoThere}>
-            Go there <span aria-hidden="true">-&gt;</span>
+            {autopilotSuggestion.primaryActionLabel} <span aria-hidden="true">-&gt;</span>
           </button>
         </article>
       ) : null}
       <div className="pathway-list" aria-label="Exploration pathways">
-        {rows.map((row) => (
-          <PathwayRow key={row.id} row={row} />
-        ))}
+        {rows.length > 0 ? rows.map((row) => <PathwayRow key={row.id} row={row} />) : <EmptyPathways />}
       </div>
     </section>
   );
@@ -92,11 +93,18 @@ function buildRows(claims: BrainClaim[], paths: ExplorationPath[]): PathRow[] {
       reasoning: [`${claim.confidence ?? 60}% confidence`, claim.status],
     }));
 
-  return assumptionRows.length > 0
-    ? assumptionRows
-    : placeholderPaths.map((path, index) => ({
-        id: `placeholder-${index}`,
-        title: path.title,
-        reasoning: [path.prompt ?? "Reasoning", path.expectedValue ?? "Reasoning"],
-      }));
+  return assumptionRows;
+}
+
+function EmptyPathways() {
+  return (
+    <article className="pathway-empty">
+      <strong>No current pathways</strong>
+      <p>Awaiting session state.</p>
+    </article>
+  );
+}
+
+function formatMoveKind(value: string): string {
+  return value.replaceAll("_", " ");
 }

@@ -227,23 +227,24 @@ function normalizeAutopilotState(data: ThinkingModeStateData): AutopilotTickData
 }
 
 function candidateToSuggestion(candidate: ThinkingModeCandidate): AutopilotSuggestion {
+  const exitCriteria = candidate.exitCriteria ?? {
+    label: "Complete the selected thinking action.",
+    acceptedMoveKinds: [],
+  };
+
   return {
     id: candidate.id,
     candidateId: candidate.candidateId,
     action: candidate.action,
     mode: candidate.mode,
     label: titleize(candidate.action),
+    primaryActionLabel: primaryActionLabel(candidate.action),
     targetClaimId: candidate.targetClaimId,
     targetEdgeId: candidate.targetEdgeId,
     score: candidate.score,
     why: candidate.reason,
     ...(candidate.reasonCodes ? { reasonCodes: candidate.reasonCodes } : {}),
-    goThere: {
-      label: "Go there",
-      targetClaimId: candidate.targetClaimId,
-      targetEdgeId: candidate.targetEdgeId,
-      mode: candidate.mode,
-    },
+    exitCriteria,
   };
 }
 
@@ -276,4 +277,21 @@ function titleize(value: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function primaryActionLabel(action: string): string {
+  switch (action) {
+    case "challenge":
+      return "Start challenge";
+    case "verify":
+      return "Start verification";
+    case "learn":
+      return "Start learn";
+    case "clarify":
+      return "Clarify claim";
+    case "resume_open_challenge":
+      return "Resume challenge";
+    default:
+      return `Start ${titleize(action).toLowerCase()}`;
+  }
 }

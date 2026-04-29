@@ -25,6 +25,8 @@ test("frontend brain client uses session-scoped Autopilot command routes", async
 
     assert.equal(tick.data.suggestion?.candidateId, "next_candidate");
     assert.equal(tick.data.suggestion?.why, "Challenge the paid founder workflow assumption.");
+    assert.equal(tick.data.suggestion?.primaryActionLabel, "Start challenge");
+    assert.deepEqual(tick.data.suggestion?.exitCriteria.acceptedMoveKinds, ["challenge_issued"]);
     assert.equal(started.data.move.kind, "autopilot_focus_started");
     assert.equal(manual.data.move.kind, "manual_node_selected");
     assert.equal(calls[0]?.url, `/api/sessions/${sessionId}/autopilot/tick`);
@@ -55,7 +57,9 @@ test("frontend brain client normalizes cockpit Autopilot state for the existing 
     assert.equal(cockpit.data.moves[0]?.type, "challenge_issued");
     assert.equal(cockpit.data.autopilot.suggestion?.candidateId, "next_candidate");
     assert.equal(cockpit.data.autopilot.suggestion?.label, "Challenge");
+    assert.equal(cockpit.data.autopilot.suggestion?.primaryActionLabel, "Start challenge");
     assert.equal(cockpit.data.autopilot.suggestion?.why, "Challenge the paid founder workflow assumption.");
+    assert.equal(cockpit.data.autopilot.suggestion?.exitCriteria.label, "Issue a challenge.");
     assert.equal(cockpit.data.activeChallenge?.targetClaimId, uuidAt(201));
     assert.equal(cockpit.data.activeChallenge?.challenge, "Admiration is not paid urgency.");
     assert.equal(cockpit.data.latestArtifact?.title, "Challenge Brief");
@@ -243,6 +247,10 @@ function candidate(sessionId: string) {
     score: 920,
     reason: "Challenge the paid founder workflow assumption.",
     reasonCodes: ["load_bearing"],
+    exitCriteria: {
+      label: "Issue a challenge.",
+      acceptedMoveKinds: ["challenge_issued"],
+    },
     selected: true,
   };
 }
