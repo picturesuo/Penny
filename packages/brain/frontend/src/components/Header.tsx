@@ -1,0 +1,48 @@
+interface HeaderProps {
+  sessionLabel: string;
+  thinkingLabel: string;
+}
+
+const navItems = ["Brain", "Cents", "Check", "Search", "Settings"];
+
+export function Header({ sessionLabel, thinkingLabel }: HeaderProps) {
+  return (
+    <header className="newspaper-header">
+      <div className="masthead">
+        <div className="brand" aria-label="Penny">
+          <span className="brand-mark" aria-hidden="true" />
+          <span className="brand-name">
+            <span className="sr-only">P</span>ENNY
+          </span>
+        </div>
+
+        <nav className="nav-tabs" aria-label="Penny modes">
+          {navItems.map((item) => (
+            <button key={item} className="nav-tab" type="button">
+              {item}
+            </button>
+          ))}
+        </nav>
+
+        <div className="edition-block" aria-label={`${sessionLabel}. ${thinkingLabel}`}>
+          <div className="edition-rules" aria-hidden="true">
+            <span className="is-dark" />
+            <span className="is-dark" />
+            <span />
+            <span />
+            <span />
+          </div>
+          <p>Monday, October 20, 2007</p>
+          <p>Edition 1.0</p>
+          <p className="sr-only">{sessionLabel}</p>
+          <p className="sr-only">{thinkingLabel}</p>
+        </div>
+      </div>
+
+      <div className="strapline">
+        <span>FOR YOUR THOUGHTS</span>
+        <span>IDEATION INSTRUMENT FOR BETTER DECISIONS</span>
+      </div>
+    </header>
+  );
+}
