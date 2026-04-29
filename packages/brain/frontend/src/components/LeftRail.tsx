@@ -1,24 +1,39 @@
-import type { BrainClaim } from "../types/brain";
+import type { BrainClaim, WorkStructure, WorkStructureStep } from "../types/brain";
 import { Section } from "./Section";
 import { ThoughtMap } from "./ThoughtMap";
 
 interface LeftRailProps {
   claims: BrainClaim[];
+  workStructure?: WorkStructure | null;
   savedPaths: string[];
   focusedClaimId: string | null;
+  focusedWorkStructureStepId?: string | null;
   suggestedClaimId: string | null;
   onClaimSelect: (claimId: string) => void;
+  onWorkStructureSelect?: (step: WorkStructureStep) => void;
 }
 
-export function LeftRail({ claims, savedPaths, focusedClaimId, suggestedClaimId, onClaimSelect }: LeftRailProps) {
+export function LeftRail({
+  claims,
+  workStructure,
+  savedPaths,
+  focusedClaimId,
+  focusedWorkStructureStepId,
+  suggestedClaimId,
+  onClaimSelect,
+  onWorkStructureSelect,
+}: LeftRailProps) {
   return (
     <aside className="left-rail" aria-label="Thought map">
       <Section title="THOUGHT MAP" className="thought-map-section">
         <ThoughtMap
           claims={claims}
+          workStructure={workStructure ?? null}
           focusedClaimId={focusedClaimId}
+          focusedWorkStructureStepId={focusedWorkStructureStepId ?? null}
           suggestedClaimId={suggestedClaimId}
           onClaimSelect={onClaimSelect}
+          onWorkStructureSelect={onWorkStructureSelect ?? noopWorkStructureSelect}
         />
       </Section>
       <div className="left-bottom-grid">
@@ -45,3 +60,5 @@ export function LeftRail({ claims, savedPaths, focusedClaimId, suggestedClaimId,
     </aside>
   );
 }
+
+function noopWorkStructureSelect() {}
