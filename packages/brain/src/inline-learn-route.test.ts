@@ -225,6 +225,7 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
     localContext: "The claim may only apply to novice users.",
     currentClaimText: "The assistant improves learning outcomes for novice users.",
     currentClaimKind: "assumption" as const,
+    lensSnapshot: lensSnapshot(),
   };
   const heuristic = await generateInlineLearnOutput(input, {
     provider: createHeuristicInlineLearnProvider(),
@@ -257,6 +258,8 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
   assert.equal(resolveXaiInlineLearnModel({}), defaultXaiInlineLearnModel);
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.prompt ?? "", /Local context/);
+  assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
+  assert.match(calls[0]?.prompt ?? "", /concept_grounding/);
 });
 
 test("generateInlineLearnOutput requires a recorded BrainRun id", async () => {
@@ -441,4 +444,21 @@ function learnOutput(term: string) {
 
 function uuidAt(value: number): string {
   return `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
+}
+
+function lensSnapshot() {
+  return {
+    shapes: [
+      {
+        id: uuidAt(901),
+        key: "concept_grounding",
+        label: "Concept grounding",
+        description: "Recent moves use Makes Cents to clarify a concept before continuing the map.",
+        confidence: 70,
+        status: "confirmed" as const,
+        supportingMoveIds: [uuidAt(501)],
+      },
+    ],
+    pendingEffects: [],
+  };
 }
