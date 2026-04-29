@@ -77,6 +77,44 @@ test("buildGraphHash and ranking are stable when graph arrays are reordered", ()
   );
 });
 
+test("candidate fingerprint stays stable when only a recompute move is appended", () => {
+  const graph = loadFixture();
+  const first = rankNextMoveCandidates(graph, 1)[0];
+
+  assert.ok(first);
+
+  const recomputed: ThinkingGraphSnapshot = {
+    ...graph,
+    moves: [
+      ...graph.moves,
+      {
+        id: "00000000-0000-4000-8000-000000000777",
+        sessionId: graph.session.id,
+        kind: "next_move_recomputed",
+        summary: "Recomputed next moves and selected challenge.",
+        payload: {
+          graphHash: first.graphHash,
+          selectedCandidateId: first.candidateId,
+          selectedFingerprint: first.fingerprint,
+          claimIds: [first.targetClaimId],
+          edgeIds: first.targetEdgeId ? [first.targetEdgeId] : [],
+          artifactIds: [],
+        },
+        createdAt: "2026-04-29T14:00:10.000Z",
+      },
+    ],
+  };
+  const second = rankNextMoveCandidates(recomputed, 1)[0];
+
+  assert.ok(second);
+  assert.notEqual(second.graphHash, first.graphHash);
+  assert.equal(second.action, first.action);
+  assert.equal(second.targetClaimId, first.targetClaimId);
+  assert.equal(second.targetEdgeId, first.targetEdgeId);
+  assert.equal(second.fingerprint, first.fingerprint);
+  assert.equal(second.candidateId, first.candidateId);
+});
+
 function loadFixture(): PennyYcDemoGraphFixture {
   return JSON.parse(readFileSync(new URL("../../../test/fixtures/penny-yc-demo-graph.json", import.meta.url), "utf8")) as PennyYcDemoGraphFixture;
 }
