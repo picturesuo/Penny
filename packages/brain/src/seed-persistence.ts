@@ -129,7 +129,7 @@ export async function persistBrainSeed(
   seed: BrainSeedOutput,
 ): Promise<PersistedBrainSeed> {
   return db.transaction(async (tx) => {
-    const seedClaims = [seed.seedClaim, ...seed.assumptions];
+    const seedClaims = seed.thoughtMap.claims;
     const persistedClaimRows = await tx
       .insert(claims)
       .values(
@@ -186,9 +186,7 @@ export async function persistBrainSeed(
       );
     }
 
-    const edgeSeeds = seed.thoughtMap.edges.filter(
-      (edge) => edge.kind === "depends_on" && claimIds.has(edge.fromClaimId) && claimIds.has(edge.toClaimId),
-    );
+    const edgeSeeds = seed.thoughtMap.edges;
     const persistedEdges =
       edgeSeeds.length > 0
         ? attachSeedIds(
@@ -200,7 +198,7 @@ export async function persistBrainSeed(
                   sessionId: prelude.session.id,
                   fromClaimId: requireMappedId(claimIds, edge.fromClaimId, "edge.fromClaimId"),
                   toClaimId: requireMappedId(claimIds, edge.toClaimId, "edge.toClaimId"),
-                  kind: "depends_on" as const,
+                  kind: edge.kind,
                   label: edge.label,
                 })),
               )
@@ -305,6 +303,7 @@ function buildRequiredMoves(
 ): RequiredMove[] {
   const assumptionIds = seed.assumptions.map((assumption) => assumption.id).filter((claimId) => claimIds.has(claimId));
   const dependencyEdgeIds = seed.thoughtMap.edges
+    .filter((edge) => edge.kind === "depends_on")
     .map((edge) => edge.id)
     .filter((edgeId) => edgeIds.has(edgeId));
 
@@ -398,7 +397,16 @@ function sourceSpanRangeForClaim(sourceText: string, claimText: string): { start
 }
 
 function sourceSpanLabelForClaim(kind: BrainSeedOutput["thoughtMap"]["claims"][number]["kind"]): string {
-  return kind === "assumption" ? "extracted_assumption" : "seed_claim";
+  switch (kind) {
+    case "assumption":
+      return "extracted_assumption";
+    case "question":
+      return "seed_question";
+    case "concept":
+      return "seed_concept";
+    case "belief":
+      return "seed_claim";
+  }
 }
 
 function formatErrorMessage(error: unknown): string {
