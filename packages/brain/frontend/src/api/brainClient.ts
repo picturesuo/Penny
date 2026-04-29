@@ -12,7 +12,6 @@ import type {
   SeedBrainResponse,
   SessionCockpitData,
   SessionCockpitResponse,
-  SessionMovesResponse,
   StartNextMoveResponse,
   ThinkingModeCandidate,
   ThinkingModeStateData,
@@ -38,21 +37,6 @@ export async function seedBrain(rawIdea: string): Promise<SeedBrainResponse> {
   }
 
   return payload as SeedBrainResponse;
-}
-
-export async function fetchSessionMoves(sessionId: string): Promise<SessionMovesResponse> {
-  const response = await fetch(`/brain/session/${encodeURIComponent(sessionId)}/moves`, {
-    method: "GET",
-    headers,
-  });
-
-  const payload = await readJson(response);
-
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, `GET /brain/session/${sessionId}/moves failed with ${response.status}.`));
-  }
-
-  return payload as SessionMovesResponse;
 }
 
 export async function tickAutopilot(sessionId: string, resume = false): Promise<AutopilotTickResponse> {
