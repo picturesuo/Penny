@@ -9,13 +9,13 @@ Canonical Thinking Mode move names use snake_case. Existing legacy dotted names 
 
 ## Required Move Kinds
 
+The current Thinking Mode service records candidate ranking through `next_move_recomputed` plus persisted `next_move_candidates` rows. It does not require a Move per generated candidate or a separate Move for exposing the selected suggestion.
+
 | Move kind | Actor | Meaning | Truth mutation |
 | --- | --- | --- | --- |
 | `source_recorded` | user/backend | Raw user input was recorded as a source. | Creates source provenance only. |
 | `seed_claim_created` | backend | The seed idea produced the stable root claim or primary claim set. | Creates claim identity and initial claim versions. |
 | `assumptions_extracted` | backend/AI | Penny extracted assumptions from the seed and connected them to the graph. | Creates assumption claims, claim versions, and dependency edges after validation. |
-| `autopilot_candidate_generated` | backend | The scorer produced one candidate next move for the current graph snapshot. | None. Candidate only. |
-| `autopilot_focus_suggested` | backend | Autopilot selected the highest-leverage candidate and exposed it as the suggested focus. | None. Suggestion only. |
 | `autopilot_focus_started` | user | The user clicked "Go there" on an Autopilot suggestion. | Updates focus/navigation state only. |
 | `manual_node_selected` | user | The user selected another graph node instead of following Autopilot. | Updates focus/navigation state only and pauses Autopilot. |
 | `challenge_issued` | backend/AI | Penny issued a challenge against a target claim. | Creates critique claim and challenge/contradiction edge after validation. |
@@ -52,34 +52,6 @@ Canonical Thinking Mode move names use snake_case. Existing legacy dotted names 
 - `claimVersionIds`
 - `edgeIds`
 - `assumptionCount`
-
-### `autopilot_candidate_generated`
-
-- `candidateId`
-- `sessionId`
-- `action`
-- `mode`
-- `targetClaimId`
-- `targetEdgeId`
-- `score`
-- `rank`
-- `reasonCodes`
-- `why`
-- `evidence`
-
-### `autopilot_focus_suggested`
-
-- `suggestionId`
-- `selectedCandidateId`
-- `sessionId`
-- `mode`
-- `targetClaimId`
-- `targetEdgeId`
-- `score`
-- `why`
-- `reasonCodes`
-- `candidateMoveIds` or embedded candidate score list
-- `goThere`
 
 ### `autopilot_focus_started`
 
@@ -156,9 +128,12 @@ Canonical Thinking Mode move names use snake_case. Existing legacy dotted names 
 - `sessionId`
 - `triggerMoveId`
 - `rankingVersion`
+- `graphHash`
 - `candidateCount`
 - `selectedCandidateId`
 - `candidateIds`
+- `candidateFingerprints`
+- `candidates`: embedded ranking records with `candidateId`, `fingerprint`, `action`, `mode`, `targetClaimId`, `targetEdgeId`, `score`, `rank`, `reason`, `reasonCodes`, and `graphHash`
 - `paused`
 
 ### `artifact_created`
@@ -177,18 +152,16 @@ Canonical Thinking Mode move names use snake_case. Existing legacy dotted names 
 2. `seed_claim_created`
 3. `assumptions_extracted`
 4. `next_move_recomputed`
-5. `autopilot_candidate_generated`
-6. `autopilot_focus_suggested`
-7. `autopilot_focus_started` or `manual_node_selected`
-8. `challenge_issued`
-9. `user_defended`, `claim_revised`, or `critique_absorbed`
-10. `focus_completed`
-11. `next_move_recomputed`
-12. `artifact_created`
+5. `autopilot_focus_started` or `manual_node_selected`
+6. `challenge_issued`
+7. `user_defended`, `claim_revised`, or `critique_absorbed`
+8. `focus_completed`
+9. `next_move_recomputed`
+10. `artifact_created`
 
 ## Compatibility Notes
 
 - Current backend rows may still contain `source.recorded`; contract-facing code should map that to `source_recorded`.
-- Current backend rows may still contain `autopilot_suggested`; contract-facing code should map that to `autopilot_focus_suggested` until the schema is migrated.
+- Legacy `/autopilot/*` rows may still contain `autopilot_suggested`; treat that as a compact suggestion audit for the legacy surface, not as a required Thinking Mode move.
 - Current backend challenge response compatibility names such as `challenge.response.revised` should map to `claim_revised`.
 - New Thinking Mode work should not introduce additional dotted move names.
