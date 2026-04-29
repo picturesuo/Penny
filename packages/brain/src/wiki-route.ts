@@ -12,6 +12,7 @@ import {
   sourceSpans,
   wikiPages,
 } from "./db/schema.ts";
+import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 
 export const WikiRouteRequestSchema = z
@@ -194,28 +195,20 @@ export async function persistSessionWiki(db: PennyDatabase, input: WikiRouteInpu
       throw new WikiConflictError("Failed to persist WikiPage.");
     }
 
-    const [move] = await tx
-      .insert(moves)
-      .values({
-        sessionId: state.session.id,
-        kind: "wiki_page_compiled",
-        summary: `Compiled WikiPage "${draft.title}" from persisted Brain state.`,
-        payload: {
-          wikiPageId: wikiPage.id,
-          claimIds: draft.content.generatedFrom.claimIds,
-          claimVersionIds: draft.content.generatedFrom.claimVersionIds,
-          edgeIds: draft.content.generatedFrom.edgeIds,
-          sourceMoveIds: draft.content.generatedFrom.moveIds,
-          artifactIds: draft.content.generatedFrom.artifactIds,
-          sourceSpanIds: draft.content.generatedFrom.sourceSpanIds,
-          editPolicy: draft.content.editPolicy,
-        },
-      })
-      .returning();
-
-    if (!move) {
-      throw new WikiConflictError("Failed to record WikiPage compilation move.");
-    }
+    const move = await createMove(tx, "wiki_page_compiled", {
+      sessionId: state.session.id,
+      summary: `Compiled WikiPage "${draft.title}" from persisted Brain state.`,
+      payload: {
+        wikiPageId: wikiPage.id,
+        claimIds: draft.content.generatedFrom.claimIds,
+        claimVersionIds: draft.content.generatedFrom.claimVersionIds,
+        edgeIds: draft.content.generatedFrom.edgeIds,
+        sourceMoveIds: draft.content.generatedFrom.moveIds,
+        artifactIds: draft.content.generatedFrom.artifactIds,
+        sourceSpanIds: draft.content.generatedFrom.sourceSpanIds,
+        editPolicy: draft.content.editPolicy,
+      },
+    });
 
     return {
       wikiPage: {
