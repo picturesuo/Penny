@@ -3,17 +3,9 @@ import test from "node:test";
 import type { PennyDatabase } from "./db/client.ts";
 import {
   artifacts,
-  brainRuns,
-  challengeRounds,
-  claimEdges,
   claims,
   claimVersions,
-  focusStates,
   moves,
-  nextMoveCandidates,
-  sessions,
-  sourceSpans,
-  sources,
 } from "./db/schema.ts";
 import {
   ChallengeBriefConflictError,
