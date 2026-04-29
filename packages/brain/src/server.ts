@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleArtifactRequest, handleSessionArtifactRequest } from "./artifact-route.ts";
@@ -485,7 +485,7 @@ const server = createServer(async (incoming, outgoing) => {
       return;
     }
 
-    const staticResponse = await readStaticAsset(url.pathname);
+    const staticResponse = await readStaticAsset(url.pathname, request.method);
 
     if (staticResponse) {
       await writeWebResponse(outgoing, staticResponse);
@@ -599,20 +599,44 @@ async function writeWebResponse(outgoing: ServerResponse, response: Response): P
   outgoing.end(Buffer.from(await response.arrayBuffer()));
 }
 
-async function readStaticAsset(pathname: string): Promise<Response | null> {
-  const normalizedPath = pathname === "/" ? "/index.html" : pathname;
+async function readStaticAsset(pathname: string, method: string): Promise<Response | null> {
+  if (method !== "GET" && method !== "HEAD") {
+    return null;
+  }
 
-  if (normalizedPath.includes("..")) {
+  const directAsset = await readStaticFile(pathname === "/" ? "/index.html" : pathname);
+
+  if (directAsset) {
+    return directAsset;
+  }
+
+  if (!shouldServeFrontendFallback(pathname)) {
+    return null;
+  }
+
+  return readStaticFile("/index.html");
+}
+
+async function readStaticFile(pathname: string): Promise<Response | null> {
+  const staticPath = safeStaticPath(pathname);
+
+  if (!staticPath) {
     return null;
   }
 
   try {
-    const body = await readFile(join(publicDir, normalizedPath));
+    const file = await stat(staticPath);
+
+    if (!file.isFile()) {
+      return null;
+    }
+
+    const body = await readFile(staticPath);
 
     return new Response(body, {
       status: 200,
       headers: {
-        "content-type": contentTypeFor(normalizedPath),
+        "content-type": contentTypeFor(pathname),
       },
     });
   } catch {
@@ -620,14 +644,74 @@ async function readStaticAsset(pathname: string): Promise<Response | null> {
   }
 }
 
+function safeStaticPath(pathname: string): string | null {
+  let decodedPath: string;
+
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+
+  const relativePath = decodedPath.replace(/^\/+/, "");
+
+  if (!relativePath || relativePath.split(/[\\/]/).includes("..")) {
+    return null;
+  }
+
+  return join(publicDir, relativePath);
+}
+
+function shouldServeFrontendFallback(pathname: string): boolean {
+  if (isApiPath(pathname)) {
+    return false;
+  }
+
+  return extname(pathname) === "";
+}
+
+function isApiPath(pathname: string): boolean {
+  return (
+    pathname === "/api" ||
+    pathname.startsWith("/api/") ||
+    pathname === "/brain" ||
+    pathname.startsWith("/brain/") ||
+    pathname === "/autopilot" ||
+    pathname.startsWith("/autopilot/")
+  );
+}
+
 function contentTypeFor(pathname: string): string {
-  switch (extname(pathname)) {
+  switch (extname(pathname).toLowerCase()) {
     case ".css":
       return "text/css; charset=utf-8";
     case ".js":
       return "text/javascript; charset=utf-8";
     case ".html":
       return "text/html; charset=utf-8";
+    case ".json":
+      return "application/json; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".gif":
+      return "image/gif";
+    case ".webp":
+      return "image/webp";
+    case ".ico":
+      return "image/x-icon";
+    case ".map":
+      return "application/json; charset=utf-8";
+    case ".txt":
+      return "text/plain; charset=utf-8";
+    case ".woff":
+      return "font/woff";
+    case ".woff2":
+      return "font/woff2";
     default:
       return "application/octet-stream";
   }
