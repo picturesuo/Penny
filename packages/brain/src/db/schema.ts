@@ -28,6 +28,7 @@ export const derivedEffectStatusEnum = pgEnum("derived_effect_status", [
   "rejected",
   "superseded",
 ]);
+export const shapeStatusEnum = pgEnum("shape_status", ["candidate", "confirmed", "rejected", "superseded"]);
 export const moveKindEnum = pgEnum("move_kind", [
   "seed_claim_created",
   "assumptions_extracted",
@@ -231,6 +232,38 @@ export const derivedEffects = pgTable(
   ],
 );
 
+export const shapes = pgTable(
+  "shapes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    sourceMoveId: uuid("source_move_id")
+      .notNull()
+      .references(() => moves.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    status: shapeStatusEnum("status").notNull().default("candidate"),
+    version: integer("version").notNull().default(1),
+    label: text("label").notNull(),
+    description: text("description").notNull(),
+    confidence: integer("confidence").notNull().default(50),
+    supportingMoveIds: jsonb("supporting_move_ids").$type<string[]>().notNull().default([]),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("shapes_session_id_idx").on(table.sessionId),
+    index("shapes_source_move_id_idx").on(table.sourceMoveId),
+    index("shapes_key_idx").on(table.key),
+    index("shapes_status_idx").on(table.status),
+    index("shapes_created_at_idx").on(table.createdAt),
+    check("shapes_confidence_range", sql`${table.confidence} >= 0 AND ${table.confidence} <= 100`),
+    check("shapes_version_positive", sql`${table.version} > 0`),
+  ],
+);
+
 export const brainRuns = pgTable(
   "brain_runs",
   {
@@ -312,6 +345,8 @@ export const pennySchema = {
   moves,
   sessionStatusEnum,
   sessions,
+  shapeStatusEnum,
+  shapes,
   sourceKindEnum,
   sourceSpans,
   sources,
