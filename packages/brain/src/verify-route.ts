@@ -1,12 +1,13 @@
+import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { brainRuns, claimVersions, claims, moves, sourceSpans, sources } from "./db/schema.ts";
+import { brainRuns, claimEdges, claimVersions, claims, moves, sourceSpans, sources } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
-import { createMove } from "./move-payloads.ts";
+import { createMove, parseMovePayload } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 
 export const VerifyRequestSchema = z
@@ -14,6 +15,14 @@ export const VerifyRequestSchema = z
     claimId: z.string().uuid(),
     currentClaimText: z.string().trim().min(1).max(4_000),
     sessionId: z.string().uuid(),
+  })
+  .strict();
+
+export const VerifyConfidenceDecisionRequestSchema = z
+  .object({
+    verifyMoveId: z.string().uuid(),
+    decision: z.enum(["accept", "reject"]),
+    reason: z.string().trim().min(1).max(2_000).optional(),
   })
   .strict();
 
@@ -99,6 +108,7 @@ export const VerifyOutputSchema = z
   });
 
 export type VerifyRequest = z.infer<typeof VerifyRequestSchema>;
+export type VerifyConfidenceDecisionRequest = z.infer<typeof VerifyConfidenceDecisionRequestSchema>;
 export type VerifyOutput = z.infer<typeof VerifyOutputSchema>;
 export type VerifyProviderOutput = z.infer<typeof VerifyProviderSchema>;
 export type EvidenceCard = z.infer<typeof EvidenceCardSchema>;
@@ -156,6 +166,44 @@ export type PersistedVerify = VerifyOutput & {
   confidenceUpdate: ConfidenceUpdateDecision;
 };
 
+export type ConfidenceCascadeApplied = {
+  claimId: string;
+  viaEdgeId: string;
+  depth: number;
+  previousVersionId: string;
+  currentVersionId: string;
+  previousConfidence: number;
+  currentConfidence: number;
+  appliedDelta: number;
+};
+
+export type ConfidenceCascadeEdge = Pick<
+  typeof claimEdges.$inferSelect,
+  "id" | "fromClaimId" | "toClaimId" | "kind" | "status" | "createdAt"
+>;
+
+export type ConfidenceCascadePlanStep = {
+  claimId: string;
+  viaEdgeId: string;
+  depth: number;
+  appliedDelta: number;
+};
+
+export type PersistedVerifyConfidenceDecision = {
+  decision: VerifyConfidenceDecisionRequest["decision"];
+  targetClaim: PersistedClaimSlice;
+  move: PersistedConfidenceDecisionMoveSlice;
+  confidenceUpdate: {
+    verifyMoveId: string;
+    suggestedDelta: number;
+    accepted: boolean;
+    previousConfidence: number;
+    currentConfidence: number;
+    appliedDelta: number;
+    cascade: ConfidenceCascadeApplied[];
+  };
+};
+
 export type VerifyRouteOptions = {
   db?: PennyDatabase;
   databaseUrl?: string;
@@ -166,11 +214,22 @@ export type VerifyRouteOptions = {
   ) => Promise<PersistedVerify>;
 };
 
+export type VerifyConfidenceRouteOptions = {
+  db?: PennyDatabase;
+  databaseUrl?: string;
+  decideConfidence?: (
+    input: VerifyConfidenceDecisionRequest,
+    options: { db?: PennyDatabase },
+  ) => Promise<PersistedVerifyConfidenceDecision>;
+};
+
 type VerifyPrelude = {
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>;
   brainRun: typeof brainRuns.$inferSelect;
   lensSnapshot: LensSnapshot;
 };
+
+type VerifyTransaction = Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
 
 type PersistedClaimSlice = {
   id: string;
@@ -184,6 +243,15 @@ type PersistedClaimSlice = {
 type PersistedMoveSlice = {
   id: string;
   kind: "verify_run";
+  summary: string;
+  claimIds: string[];
+  edgeIds: string[];
+  artifactIds: string[];
+};
+
+type PersistedConfidenceDecisionMoveSlice = {
+  id: string;
+  kind: "confidence_update_accepted" | "confidence_update_rejected";
   summary: string;
   claimIds: string[];
   edgeIds: string[];
@@ -231,6 +299,33 @@ export async function handleVerifyRequest(
 
   try {
     return jsonResponse({ data: await verifyClaim(parsed.data, { ...dbOption(db), provider }) }, 201);
+  } catch (error) {
+    return verifyErrorResponse(error);
+  }
+}
+
+export async function handleVerifyConfidenceRequest(
+  request: Request,
+  options: VerifyConfidenceRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /brain/verify/confidence requires the POST method.");
+  }
+
+  const parsed = await parseJsonRequest(request, VerifyConfidenceDecisionRequestSchema);
+
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const db = resolveVerifyConfidenceDb(options, Boolean(options.decideConfidence));
+  const decideConfidence =
+    options.decideConfidence ??
+    ((input: VerifyConfidenceDecisionRequest, decisionOptions: { db?: PennyDatabase }) =>
+      decideVerifyConfidence(requireVerifyConfidenceDb(decisionOptions.db), input));
+
+  try {
+    return jsonResponse({ data: await decideConfidence(parsed.data, dbOption(db)) }, 200);
   } catch (error) {
     return verifyErrorResponse(error);
   }
@@ -286,6 +381,146 @@ export async function runVerify(
     await markVerifyRunFailed(db, prelude.brainRun.id, error);
     throw error;
   }
+}
+
+export async function decideVerifyConfidence(
+  db: PennyDatabase,
+  input: VerifyConfidenceDecisionRequest,
+): Promise<PersistedVerifyConfidenceDecision> {
+  return db.transaction(async (tx) => {
+    const [verifyMove] = await tx.select().from(moves).where(eq(moves.id, input.verifyMoveId)).limit(1);
+
+    if (!verifyMove) {
+      throw new VerifyNotFoundError("Verify move was not found.");
+    }
+
+    if (verifyMove.kind !== "verify_run") {
+      throw new VerifyConflictError("Confidence decisions can only target verify_run moves.");
+    }
+
+    const verifyPayload = parseMovePayload("verify_run", verifyMove.payload);
+    if (verifyPayload.autoAppliedConfidence) {
+      throw new VerifyConflictError("Verify confidence suggestion has already been applied automatically.");
+    }
+
+    await assertPendingConfidenceDecision(tx, verifyMove.sessionId, verifyMove.id);
+
+    const target = await loadClaimWithCurrentVersion(tx, verifyPayload.claimId, verifyMove.sessionId);
+
+    if (input.decision === "reject") {
+      const move = await createMove(tx, "confidence_update_rejected", {
+        sessionId: verifyMove.sessionId,
+        summary: "Rejected a Verify confidence suggestion.",
+        payload: {
+          decision: "reject",
+          verifyMoveId: verifyMove.id,
+          claimId: verifyPayload.claimId,
+          claimVersionId: verifyPayload.claimVersionId,
+          brainRunId: verifyPayload.brainRunId,
+          confidenceDeltaSuggestion: verifyPayload.confidenceDeltaSuggestion,
+          ...(input.reason ? { reason: input.reason } : {}),
+          claimIds: [verifyPayload.claimId],
+          claimVersionIds: [verifyPayload.claimVersionId],
+          edgeIds: [],
+        },
+      });
+
+      return {
+        decision: "reject",
+        targetClaim: claimSlice(target.claim, target.version),
+        move: confidenceDecisionMoveSlice(move, [verifyPayload.claimId], []),
+        confidenceUpdate: {
+          verifyMoveId: verifyMove.id,
+          suggestedDelta: verifyPayload.confidenceDeltaSuggestion,
+          accepted: false,
+          previousConfidence: target.version.confidence,
+          currentConfidence: target.version.confidence,
+          appliedDelta: 0,
+          cascade: [],
+        },
+      };
+    }
+
+    if (target.version.id !== verifyPayload.claimVersionId) {
+      throw new VerifyConflictError("Verify confidence suggestion is stale for the current ClaimVersion.");
+    }
+
+    const targetMutation = confidenceMutation(target, verifyPayload.confidenceDeltaSuggestion);
+    const edges = await tx
+      .select()
+      .from(claimEdges)
+      .where(and(eq(claimEdges.sessionId, verifyMove.sessionId), eq(claimEdges.kind, "depends_on")));
+    const cascadePlan = buildConfidenceCascadePlan({
+      changedClaimId: target.claim.id,
+      delta: targetMutation.appliedDelta,
+      edges,
+    });
+    const cascadeMutations: Array<ReturnType<typeof confidenceMutation> & { viaEdgeId: string; depth: number }> = [];
+
+    for (const step of cascadePlan) {
+      const dependent = await loadClaimWithCurrentVersion(tx, step.claimId, verifyMove.sessionId);
+      const mutation = confidenceMutation(dependent, step.appliedDelta);
+
+      if (mutation.appliedDelta !== 0) {
+        cascadeMutations.push({
+          ...mutation,
+          viaEdgeId: step.viaEdgeId,
+          depth: step.depth,
+        });
+      }
+    }
+
+    const cascade = cascadeMutations.map(cascadeApplied);
+    const claimIds = uniqueStrings([target.claim.id, ...cascade.map((entry) => entry.claimId)]);
+    const claimVersionIds = uniqueStrings([
+      targetMutation.previousVersionId,
+      targetMutation.currentVersionId,
+      ...cascade.flatMap((entry) => [entry.previousVersionId, entry.currentVersionId]),
+    ]);
+    const edgeIds = uniqueStrings(cascade.map((entry) => entry.viaEdgeId));
+    const move = await createMove(tx, "confidence_update_accepted", {
+      sessionId: verifyMove.sessionId,
+      summary: acceptedConfidenceSummary(targetMutation.appliedDelta, cascade.length),
+      payload: {
+        decision: "accept",
+        verifyMoveId: verifyMove.id,
+        claimId: verifyPayload.claimId,
+        previousVersionId: targetMutation.previousVersionId,
+        currentVersionId: targetMutation.currentVersionId,
+        brainRunId: verifyPayload.brainRunId,
+        confidenceDeltaSuggestion: verifyPayload.confidenceDeltaSuggestion,
+        previousConfidence: targetMutation.previousConfidence,
+        currentConfidence: targetMutation.currentConfidence,
+        appliedDelta: targetMutation.appliedDelta,
+        cascade,
+        ...(input.reason ? { reason: input.reason } : {}),
+        claimIds,
+        claimVersionIds,
+        edgeIds,
+      },
+    });
+
+    const currentTargetVersion = await applyConfidenceMutation(tx, targetMutation, move.id);
+
+    for (const mutation of cascadeMutations) {
+      await applyConfidenceMutation(tx, mutation, move.id);
+    }
+
+    return {
+      decision: "accept",
+      targetClaim: claimSlice(target.claim, currentTargetVersion),
+      move: confidenceDecisionMoveSlice(move, claimIds, edgeIds),
+      confidenceUpdate: {
+        verifyMoveId: verifyMove.id,
+        suggestedDelta: verifyPayload.confidenceDeltaSuggestion,
+        accepted: true,
+        previousConfidence: targetMutation.previousConfidence,
+        currentConfidence: targetMutation.currentConfidence,
+        appliedDelta: targetMutation.appliedDelta,
+        cascade,
+      },
+    };
+  });
 }
 
 export async function generateVerifyOutput(
@@ -637,6 +872,164 @@ async function loadClaimWithCurrentVersion(db: PennyDatabase, claimId: string, s
   return { claim, version };
 }
 
+async function assertPendingConfidenceDecision(
+  db: VerifyTransaction,
+  sessionId: string,
+  verifyMoveId: string,
+): Promise<void> {
+  const sessionMoves = await db.select().from(moves).where(eq(moves.sessionId, sessionId));
+  const existingDecision = sessionMoves.find((move) => confidenceDecisionMoveTargets(move, verifyMoveId));
+
+  if (existingDecision) {
+    throw new VerifyConflictError("Verify confidence suggestion has already been accepted or rejected.");
+  }
+}
+
+export function buildConfidenceCascadePlan(input: {
+  changedClaimId: string;
+  delta: number;
+  edges: ConfidenceCascadeEdge[];
+}): ConfidenceCascadePlanStep[] {
+  if (input.delta === 0) {
+    return [];
+  }
+
+  const dependentsByDependency = new Map<string, ConfidenceCascadeEdge[]>();
+
+  for (const edge of [...input.edges].sort(edgeOrder)) {
+    if (edge.kind !== "depends_on" || edge.status !== "active") {
+      continue;
+    }
+
+    const existing = dependentsByDependency.get(edge.toClaimId) ?? [];
+    existing.push(edge);
+    dependentsByDependency.set(edge.toClaimId, existing);
+  }
+
+  const queue: Array<{ claimId: string; depth: number }> = [{ claimId: input.changedClaimId, depth: 0 }];
+  const visited = new Set<string>([input.changedClaimId]);
+  const plan: ConfidenceCascadePlanStep[] = [];
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+
+    if (!current) {
+      continue;
+    }
+
+    const dependentEdges = dependentsByDependency.get(current.claimId) ?? [];
+
+    for (const edge of dependentEdges) {
+      if (visited.has(edge.fromClaimId)) {
+        continue;
+      }
+
+      const depth = current.depth + 1;
+      const appliedDelta = propagatedConfidenceDelta(input.delta, depth);
+
+      visited.add(edge.fromClaimId);
+
+      if (appliedDelta === 0) {
+        continue;
+      }
+
+      plan.push({
+        claimId: edge.fromClaimId,
+        viaEdgeId: edge.id,
+        depth,
+        appliedDelta,
+      });
+      queue.push({ claimId: edge.fromClaimId, depth });
+    }
+  }
+
+  return plan;
+}
+
+function edgeOrder(left: ConfidenceCascadeEdge, right: ConfidenceCascadeEdge): number {
+  return left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id);
+}
+
+function propagatedConfidenceDelta(delta: number, depth: number): number {
+  const magnitude = Math.round(Math.abs(delta) / 2 ** depth);
+
+  return delta < 0 ? -magnitude : magnitude;
+}
+
+function confidenceMutation(target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>, delta: number) {
+  const currentConfidence = boundedConfidence(target.version.confidence + delta);
+  const appliedDelta = currentConfidence - target.version.confidence;
+
+  return {
+    claim: target.claim,
+    previousVersion: target.version,
+    previousVersionId: target.version.id,
+    currentVersionId: appliedDelta === 0 ? target.version.id : randomUUID(),
+    previousConfidence: target.version.confidence,
+    currentConfidence,
+    appliedDelta,
+  };
+}
+
+function cascadeApplied(
+  mutation: ReturnType<typeof confidenceMutation> & { viaEdgeId: string; depth: number },
+): ConfidenceCascadeApplied {
+  return {
+    claimId: mutation.claim.id,
+    viaEdgeId: mutation.viaEdgeId,
+    depth: mutation.depth,
+    previousVersionId: mutation.previousVersionId,
+    currentVersionId: mutation.currentVersionId,
+    previousConfidence: mutation.previousConfidence,
+    currentConfidence: mutation.currentConfidence,
+    appliedDelta: mutation.appliedDelta,
+  };
+}
+
+async function applyConfidenceMutation(
+  db: VerifyTransaction,
+  mutation: ReturnType<typeof confidenceMutation>,
+  moveId: string,
+): Promise<typeof claimVersions.$inferSelect> {
+  if (mutation.appliedDelta === 0) {
+    return mutation.previousVersion;
+  }
+
+  await db
+    .update(claimVersions)
+    .set({ isCurrent: false })
+    .where(and(eq(claimVersions.claimId, mutation.claim.id), eq(claimVersions.isCurrent, true)));
+
+  const [version] = await db
+    .insert(claimVersions)
+    .values({
+      id: mutation.currentVersionId,
+      claimId: mutation.claim.id,
+      sourceId: mutation.previousVersion.sourceId ?? mutation.claim.sourceId,
+      brainRunId: mutation.previousVersion.brainRunId,
+      moveId,
+      content: mutation.previousVersion.content,
+      status: mutation.previousVersion.status,
+      confidence: mutation.currentConfidence,
+      isCurrent: true,
+    })
+    .returning();
+
+  if (!version) {
+    throw new VerifyConflictError("Failed to apply confidence update.");
+  }
+
+  return version;
+}
+
+function confidenceDecisionMoveTargets(move: typeof moves.$inferSelect, verifyMoveId: string): boolean {
+  if (!["confidence_update_accepted", "confidence_update_rejected"].includes(move.kind)) {
+    return false;
+  }
+
+  return objectRecord(move.payload).verifyMoveId === verifyMoveId;
+}
+
 async function markVerifyRunFailed(db: PennyDatabase, brainRunId: string, error: unknown): Promise<void> {
   await db
     .update(brainRuns)
@@ -736,6 +1129,14 @@ function stringRecordValue(record: Record<string, unknown>, key: string): string
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function boundedConfidence(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
 function claimSlice(
   claim: typeof claims.$inferSelect,
   version: typeof claimVersions.$inferSelect,
@@ -761,10 +1162,35 @@ function moveSlice(move: typeof moves.$inferSelect, claimId: string): PersistedM
   };
 }
 
+function confidenceDecisionMoveSlice(
+  move: typeof moves.$inferSelect,
+  claimIds: string[],
+  edgeIds: string[],
+): PersistedConfidenceDecisionMoveSlice {
+  return {
+    id: move.id,
+    kind: move.kind as PersistedConfidenceDecisionMoveSlice["kind"],
+    summary: move.summary,
+    claimIds,
+    edgeIds,
+    artifactIds: [],
+  };
+}
+
 function verifyMoveSummary(output: VerifyOutput): string {
   const cardLabel = output.evidenceCards.length === 1 ? "1 evidence card" : `${output.evidenceCards.length} evidence cards`;
 
   return `Verified claim as ${output.verdict} with ${cardLabel}.`;
+}
+
+function acceptedConfidenceSummary(appliedDelta: number, cascadeCount: number): string {
+  const direction = appliedDelta > 0 ? "raised" : appliedDelta < 0 ? "lowered" : "kept";
+  const cascadeSummary =
+    cascadeCount === 0
+      ? "without dependent confidence changes"
+      : `and cascaded to ${cascadeCount} dependent claim${cascadeCount === 1 ? "" : "s"}`;
+
+  return `Accepted Verify confidence suggestion, ${direction} target confidence ${cascadeSummary}.`;
 }
 
 function confidenceUpdateDecision(output: VerifyOutput): ConfidenceUpdateDecision {
@@ -870,9 +1296,32 @@ function resolveVerifyDb(options: VerifyRouteOptions, hasInjectedVerifyClaim: bo
   return createPennyDb(options.databaseUrl);
 }
 
+function resolveVerifyConfidenceDb(
+  options: VerifyConfidenceRouteOptions,
+  hasInjectedDecision: boolean,
+): PennyDatabase | undefined {
+  if (options.db) {
+    return options.db;
+  }
+
+  if (hasInjectedDecision) {
+    return undefined;
+  }
+
+  return createPennyDb(options.databaseUrl);
+}
+
 function requireVerifyDb(db: PennyDatabase | undefined): PennyDatabase {
   if (!db) {
     throw new Error("A Penny database is required for POST /brain/verify.");
+  }
+
+  return db;
+}
+
+function requireVerifyConfidenceDb(db: PennyDatabase | undefined): PennyDatabase {
+  if (!db) {
+    throw new Error("A Penny database is required for POST /brain/verify/confidence.");
   }
 
   return db;
