@@ -4,8 +4,9 @@ import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { brainRuns, claimEdges, claimVersions, claims, moves } from "./db/schema.ts";
+import { brainRuns, claimEdges, claimVersions, claims } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
+import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 
 export const InlineLearnRequestSchema = z
@@ -533,31 +534,23 @@ async function insertInlineLearnConcept(
     throw new InlineLearnConflictError("Failed to create inline teaches edge.");
   }
 
-  const [move] = await tx
-    .insert(moves)
-    .values({
-      id: moveId,
-      sessionId: input.sessionId,
-      kind: "learning_triggered",
-      summary: "Saved an inline Learn concept inside Brain.",
-      payload: {
-        term: output.term,
-        currentClaimId: target.claim.id,
-        currentClaimVersionId: target.version.id,
-        conceptClaimId: conceptClaim.id,
-        conceptClaimVersionId: conceptVersionId,
-        teachesEdgeId: teachesEdge.id,
-        ...(brainRunId ? { brainRunId } : {}),
-        claimIds: [target.claim.id, conceptClaim.id],
-        claimVersionIds: [target.version.id, conceptVersionId],
-        edgeIds: [teachesEdge.id],
-      },
-    })
-    .returning();
-
-  if (!move) {
-    throw new InlineLearnConflictError("Failed to create inline Learn move.");
-  }
+  const move = await createMove(tx, "learning_triggered", {
+    id: moveId,
+    sessionId: input.sessionId,
+    summary: "Saved an inline Learn concept inside Brain.",
+    payload: {
+      term: output.term,
+      currentClaimId: target.claim.id,
+      currentClaimVersionId: target.version.id,
+      conceptClaimId: conceptClaim.id,
+      conceptClaimVersionId: conceptVersionId,
+      teachesEdgeId: teachesEdge.id,
+      ...(brainRunId ? { brainRunId } : {}),
+      claimIds: [target.claim.id, conceptClaim.id],
+      claimVersionIds: [target.version.id, conceptVersionId],
+      edgeIds: [teachesEdge.id],
+    },
+  });
 
   const [conceptVersion] = await tx
     .insert(claimVersions)
@@ -637,27 +630,19 @@ async function completeInlineLearnRun(
   output: InlineLearnOutput,
 ): Promise<typeof brainRuns.$inferSelect> {
   return db.transaction(async (tx) => {
-    const [move] = await tx
-      .insert(moves)
-      .values({
-        sessionId: prelude.target.claim.sessionId,
-        kind: "learning_triggered",
-        summary: "Asked Makes Cents inline for a concept explanation.",
-        payload: {
-          term: output.term,
-          currentClaimId: prelude.target.claim.id,
-          currentClaimVersionId: prelude.target.version.id,
-          brainRunId: prelude.brainRun.id,
-          saved: false,
-          claimIds: [prelude.target.claim.id],
-          edgeIds: [],
-        },
-      })
-      .returning();
-
-    if (!move) {
-      throw new InlineLearnConflictError("Failed to record Inline Learn move.");
-    }
+    await createMove(tx, "learning_triggered", {
+      sessionId: prelude.target.claim.sessionId,
+      summary: "Asked Makes Cents inline for a concept explanation.",
+      payload: {
+        term: output.term,
+        currentClaimId: prelude.target.claim.id,
+        currentClaimVersionId: prelude.target.version.id,
+        brainRunId: prelude.brainRun.id,
+        saved: false,
+        claimIds: [prelude.target.claim.id],
+        edgeIds: [],
+      },
+    });
 
     const [completedBrainRun] = await tx
       .update(brainRuns)
