@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { PennyDatabase } from "./db/client.ts";
 import { brainRuns, challengeRounds, claimEdges, claims, claimVersions, moves } from "./db/schema.ts";
+import { rankNextMoveCandidates } from "./domain/engine.ts";
+import type { PennyYcDemoGraphFixture } from "./domain/types.ts";
 import {
   buildTemplateChallenge,
   ChallengeRoundConflictError,
@@ -125,6 +128,39 @@ test("buildTemplateChallenge returns the exact demo challenge when the target cl
   assert.match(challenge.whyThis, /willingness to pay before traction/);
   assert.match(challenge.whatWouldResolveIt, /urgent pre-seed moment/);
   assert.equal(challenge.provenanceTag, "penny:template.challenge.v0");
+});
+
+test("buildTemplateChallenge returns the exact demo challenge for the selected YC fixture candidate", () => {
+  const graph = loadYcDemoFixture();
+  const candidate = rankNextMoveCandidates(graph, 1)[0];
+
+  assert.ok(candidate);
+  assert.equal(candidate.targetClaimId, graph.expectedAutopilot.lowConfidenceMarketAssumptionId);
+
+  const targetClaim = graph.claims.find((claim) => claim.id === candidate.targetClaimId);
+  const targetVersion = targetClaim?.versions?.find(
+    (version) => version.id === targetClaim.currentVersionId && version.isCurrent,
+  );
+
+  assert.ok(targetClaim);
+  assert.ok(targetVersion);
+
+  const challenge = buildTemplateChallenge({
+    targetClaimId: targetClaim.id,
+    targetKind: targetClaim.kind,
+    targetText: targetVersion.text,
+    targetConfidence: targetVersion.confidence,
+    candidateAction: candidate.action,
+    candidateReason: candidate.reason,
+    candidateScore: candidate.score,
+    scoreBreakdown: candidate.scoreBreakdown,
+  });
+
+  assert.equal(challenge.failureType, "shaky_assumption");
+  assert.equal(challenge.strength, "strong");
+  assert.match(challenge.critique, /budget and attention usually go to building, selling, fundraising, or finding customers/);
+  assert.match(challenge.whyThis, /willingness to pay before traction/);
+  assert.match(challenge.whatWouldResolveIt, /urgent pre-seed moment/);
 });
 
 test("buildTemplateChallenge infers explainable V0 challenge types from candidate action", () => {
@@ -488,6 +524,12 @@ function moveRow(overrides: Partial<Record<string, unknown>> = {}) {
     createdAt: dateAt(11),
     ...overrides,
   };
+}
+
+function loadYcDemoFixture(): PennyYcDemoGraphFixture {
+  return JSON.parse(
+    readFileSync(new URL("../../../test/fixtures/penny-yc-demo-graph.json", import.meta.url), "utf8"),
+  ) as PennyYcDemoGraphFixture;
 }
 
 function dateAt(seconds: number): Date {
