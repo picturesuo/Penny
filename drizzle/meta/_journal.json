@@ -120,6 +120,13 @@
       "when": 1777436305196,
       "tag": "0016_high_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1777437945408,
+      "tag": "0017_heavy_songbird",
+      "breakpoints": true
     }
   ]
 }
