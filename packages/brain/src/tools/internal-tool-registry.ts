@@ -330,6 +330,19 @@ const ChallengeMoveOutputSchema = z
   })
   .passthrough();
 
+const ChallengeDerivedEffectOutputSchema = z
+  .object({
+    id: UuidSchema,
+    kind: z.string(),
+    status: z.string(),
+    version: z.number(),
+    title: z.string(),
+    summary: z.string(),
+    payload: z.unknown(),
+    createdAt: z.string(),
+  })
+  .passthrough();
+
 const IssueChallengeOutputSchema = z
   .object({
     status: z.literal("issued"),
@@ -365,6 +378,7 @@ const RespondToChallengeOutputSchema = z
     challengeEdge: ChallengeEdgeOutputSchema,
     move: ChallengeMoveOutputSchema,
     focusCompletedMove: ChallengeMoveOutputSchema,
+    derivedEffects: z.array(ChallengeDerivedEffectOutputSchema),
     receipt: z
       .object({
         response: ChallengeResponseSchema,
@@ -375,6 +389,22 @@ const RespondToChallengeOutputSchema = z
         currentClaimVersionId: UuidSchema,
         claimTextChanged: z.boolean(),
         unresolvedRisk: z.boolean(),
+      })
+      .passthrough(),
+    nextMove: z
+      .object({
+        status: z.literal("client_tick_required"),
+        requiredCommand: z.literal("tick_autopilot"),
+        sessionId: UuidSchema,
+        method: z.literal("POST"),
+        endpoint: z.string(),
+        body: z
+          .object({
+            resume: z.literal(true),
+          })
+          .passthrough(),
+        reason: z.string(),
+        expectedMoveKind: z.literal("next_move_recomputed"),
       })
       .passthrough(),
   })

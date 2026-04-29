@@ -360,6 +360,7 @@ function respondToChallengeResponse(
     challengeEdge: challengeEdge(),
     move: challengeMove(moveKind),
     focusCompletedMove: challengeMove("focus_completed"),
+    derivedEffects: [],
     receipt: {
       response,
       moveKind,
@@ -369,6 +370,19 @@ function respondToChallengeResponse(
       currentClaimVersionId: uuidAt(303),
       claimTextChanged: response === "revise",
       unresolvedRisk: response === "absorb",
+    },
+    nextMove: {
+      status: "client_tick_required",
+      requiredCommand: "tick_autopilot",
+      sessionId: uuidAt(101),
+      method: "POST",
+      endpoint: `/api/sessions/${uuidAt(101)}/autopilot/tick`,
+      body: {
+        resume: true,
+      },
+      reason:
+        "Challenge response completed focus; call tick to recompute backend-owned next-move candidates before rendering the next suggestion.",
+      expectedMoveKind: "next_move_recomputed",
     },
   };
 }

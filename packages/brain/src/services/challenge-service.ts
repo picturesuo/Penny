@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, or, sql, type SQL } from "drizzle-orm";
+import { afterMoveEffectsInTransaction, type PersistedDerivedEffect } from "../after-move-effects.ts";
 import type { PennyDatabase } from "../db/client.ts";
 import {
   brainRuns,
@@ -103,6 +104,17 @@ export type ChallengeMoveDto = {
   createdAt: string;
 };
 
+export type ChallengeDerivedEffectDto = {
+  id: EntityId;
+  kind: PersistedDerivedEffect["kind"];
+  status: PersistedDerivedEffect["status"];
+  version: number;
+  title: string;
+  summary: string;
+  payload: unknown;
+  createdAt: string;
+};
+
 export type IssueChallengeResponse = {
   status: "issued";
   brainId: EntityId;
@@ -153,6 +165,19 @@ export type ChallengeResponseReceipt = {
   unresolvedRisk: boolean;
 };
 
+export type ChallengeNextMoveDirective = {
+  status: "client_tick_required";
+  requiredCommand: "tick_autopilot";
+  sessionId: EntityId;
+  method: "POST";
+  endpoint: string;
+  body: {
+    resume: true;
+  };
+  reason: string;
+  expectedMoveKind: "next_move_recomputed";
+};
+
 export type RespondToChallengeResponse = {
   status: "responded";
   challengeRound: ChallengeRoundDto;
@@ -162,7 +187,9 @@ export type RespondToChallengeResponse = {
   challengeEdge: ChallengeEdgeDto;
   move: ChallengeMoveDto;
   focusCompletedMove: ChallengeMoveDto;
+  derivedEffects: ChallengeDerivedEffectDto[];
   receipt: ChallengeResponseReceipt;
+  nextMove: ChallengeNextMoveDirective;
 };
 
 export class ChallengeRoundNotFoundError extends Error {
@@ -377,6 +404,10 @@ export class ChallengeRoundService {
       }
 
       const responseResult = await persistChallengeRoundResponse(tx, input, target, critiqueClaim, edge);
+      const derived = await afterMoveEffectsInTransaction(tx, {
+        sessionId: target.claim.sessionId,
+        moveId: responseResult.move.id,
+      });
       const focusCompletedMove = await createMove(tx, "focus_completed", {
         sessionId: target.claim.sessionId,
         scope: target.claim,
@@ -421,6 +452,7 @@ export class ChallengeRoundService {
         challengeEdge: edgeDto(responseResult.edge),
         move: moveDto(responseResult.move),
         focusCompletedMove: moveDto(focusCompletedMove),
+        derivedEffects: derived.effects.map(derivedEffectDto),
         receipt: {
           response: input.response,
           moveKind: responseResult.move.kind,
@@ -431,9 +463,26 @@ export class ChallengeRoundService {
           claimTextChanged: input.response === "revise",
           unresolvedRisk: input.response === "absorb",
         },
+        nextMove: clientTickRequired(target.claim.sessionId),
       };
     });
   }
+}
+
+function clientTickRequired(sessionId: EntityId): ChallengeNextMoveDirective {
+  return {
+    status: "client_tick_required",
+    requiredCommand: "tick_autopilot",
+    sessionId,
+    method: "POST",
+    endpoint: `/api/sessions/${sessionId}/autopilot/tick`,
+    body: {
+      resume: true,
+    },
+    reason:
+      "Challenge response completed focus; call tick to recompute backend-owned next-move candidates before rendering the next suggestion.",
+    expectedMoveKind: "next_move_recomputed",
+  };
 }
 
 export function buildTemplateChallenge(input: ChallengeTemplateInput): TemplateChallenge {
@@ -831,6 +880,19 @@ function moveDto(move: CreatedMove<ChallengeResponseMoveKind | "challenge_issued
     summary: move.summary,
     payload: move.payload,
     createdAt: move.createdAt.toISOString(),
+  };
+}
+
+function derivedEffectDto(effect: PersistedDerivedEffect): ChallengeDerivedEffectDto {
+  return {
+    id: effect.id,
+    kind: effect.kind,
+    status: effect.status,
+    version: effect.version,
+    title: effect.title,
+    summary: effect.summary,
+    payload: effect.payload,
+    createdAt: effect.createdAt.toISOString(),
   };
 }
 

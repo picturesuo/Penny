@@ -336,6 +336,12 @@ switch (command) {
     assert.equal(response.receipt.response, responseKind);
     assert.equal(response.receipt.claimTextChanged, responseKind === "revise");
     assert.equal(response.receipt.unresolvedRisk, responseKind === "absorb");
+    assert.equal(response.nextMove.status, "client_tick_required");
+    assert.equal(response.nextMove.requiredCommand, "tick_autopilot");
+    assert.equal(response.nextMove.method, "POST");
+    assert.equal(response.nextMove.body.resume, true);
+    assert.equal(response.nextMove.expectedMoveKind, "next_move_recomputed");
+    assert.match(response.nextMove.endpoint, /^\/api\/sessions\/[0-9a-f-]{36}\/autopilot\/tick$/);
     break;
   }
   case "brief": {

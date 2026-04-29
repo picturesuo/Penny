@@ -304,6 +304,9 @@ test("POST /api/challenges/:challengeId/respond supports Defend Revise Absorb an
   assert.equal(revisePayload.data.receipt.claimTextChanged, true);
   assert.equal(revisePayload.data.receipt.previousClaimVersionId, uuidAt(702));
   assert.equal(absorbPayload.data.receipt.unresolvedRisk, true);
+  assert.equal(absorbPayload.data.nextMove.status, "client_tick_required");
+  assert.equal(absorbPayload.data.nextMove.endpoint, `/api/sessions/${uuidAt(101)}/autopilot/tick`);
+  assert.deepEqual(absorbPayload.data.nextMove.body, { resume: true });
 });
 
 test("POST tick recomputes a next move after ChallengeRound response", async () => {
@@ -342,6 +345,7 @@ test("POST tick recomputes a next move after ChallengeRound response", async () 
 
   assert.equal(response.status, 200);
   assert.equal(responsePayload.data.focusCompletedMove.kind, "focus_completed");
+  assert.equal(responsePayload.data.nextMove.requiredCommand, "tick_autopilot");
   assert.equal(tick.status, 201);
   assert.equal(tickPayload.data.move.kind, "next_move_recomputed");
   assert.equal(tickPayload.data.selectedCandidate?.selected, true);
@@ -619,6 +623,12 @@ type ChallengeRespondPayload = {
       previousClaimVersionId: string | null;
       unresolvedRisk: boolean;
     };
+    nextMove: {
+      status: string;
+      requiredCommand: string;
+      endpoint: string;
+      body: Record<string, unknown>;
+    };
   };
 };
 
@@ -682,6 +692,7 @@ function challengeRespondResponse(input: RespondToChallengeInput) {
     challengeEdge: challengeEdgeDto(input.response === "absorb" ? "acknowledged_vulnerability" : "active"),
     move: challengeMoveDto(kind),
     focusCompletedMove: challengeMoveDto("focus_completed"),
+    derivedEffects: [],
     receipt: {
       response: input.response,
       moveKind: kind,
@@ -691,6 +702,19 @@ function challengeRespondResponse(input: RespondToChallengeInput) {
       currentClaimVersionId: currentVersionId,
       claimTextChanged: input.response === "revise",
       unresolvedRisk: input.response === "absorb",
+    },
+    nextMove: {
+      status: "client_tick_required" as const,
+      requiredCommand: "tick_autopilot" as const,
+      sessionId: uuidAt(101),
+      method: "POST" as const,
+      endpoint: `/api/sessions/${uuidAt(101)}/autopilot/tick`,
+      body: {
+        resume: true as const,
+      },
+      reason:
+        "Challenge response completed focus; call tick to recompute backend-owned next-move candidates before rendering the next suggestion.",
+      expectedMoveKind: "next_move_recomputed" as const,
     },
   };
 }

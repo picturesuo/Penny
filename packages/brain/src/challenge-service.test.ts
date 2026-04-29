@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { PennyDatabase } from "./db/client.ts";
-import { brainRuns, challengeRounds, claimEdges, claims, claimVersions, moves } from "./db/schema.ts";
+import { brainRuns, challengeRounds, claimEdges, claims, claimVersions, derivedEffects, moves, shapes } from "./db/schema.ts";
 import { rankNextMoveCandidates } from "./domain/engine.ts";
 import type { PennyYcDemoGraphFixture } from "./domain/types.ts";
 import {
@@ -41,7 +41,7 @@ test("ChallengeRoundService issueChallengeFromCandidate creates an explainable c
   assert.equal(result.challengeRound.failureType, result.failureType);
   assert.equal(result.challengeRound.strength, result.strength);
   assert.equal(result.challengeRound.whyThis, result.whyThis);
-  assert.equal(calls.insert.some((call) => call.table === moves && call.values.kind === "challenge_issued"), true);
+  assert.equal(calls.insert.some((call) => call.table === moves && insertValue(call).kind === "challenge_issued"), true);
   assert.equal(calls.insert.some((call) => call.table === challengeRounds), true);
 });
 
@@ -53,15 +53,23 @@ test("ChallengeRoundService defend and absorb create response moves and complete
   assert.equal(defend.result.focusCompletedMove.kind, "focus_completed");
   assert.equal(defend.result.challengeRound.response, "defend");
   assert.equal(defend.result.receipt.currentClaimVersionId, uuidAt(702));
-  assert.equal(defend.calls.insert.some((call) => call.table === moves && call.values.kind === "user_defended"), true);
-  assert.equal(defend.calls.insert.some((call) => call.table === moves && call.values.kind === "focus_completed"), true);
+  assert.equal(defend.result.nextMove.status, "client_tick_required");
+  assert.equal(defend.result.nextMove.endpoint, `/api/sessions/${uuidAt(101)}/autopilot/tick`);
+  assert.deepEqual(defend.result.nextMove.body, { resume: true });
+  assert.equal(defend.result.nextMove.expectedMoveKind, "next_move_recomputed");
+  assert.equal(defend.result.derivedEffects.some((effect) => effect.kind === "shape_candidate"), true);
+  assert.equal(defend.calls.insert.some((call) => call.table === moves && insertValue(call).kind === "user_defended"), true);
+  assert.equal(defend.calls.insert.some((call) => call.table === shapes), true);
+  assert.equal(defend.calls.insert.some((call) => call.table === derivedEffects), true);
+  assert.equal(defend.calls.insert.some((call) => call.table === moves && insertValue(call).kind === "focus_completed"), true);
   assert.equal(absorb.result.move.kind, "critique_absorbed");
   assert.equal(absorb.result.focusCompletedMove.kind, "focus_completed");
   assert.equal(absorb.result.challengeRound.response, "absorb");
   assert.equal(absorb.result.challengeEdge.status, "acknowledged_vulnerability");
   assert.equal(absorb.result.receipt.unresolvedRisk, true);
-  assert.equal(absorb.calls.insert.some((call) => call.table === moves && call.values.kind === "critique_absorbed"), true);
-  assert.equal(absorb.calls.insert.some((call) => call.table === moves && call.values.kind === "focus_completed"), true);
+  assert.equal(absorb.result.derivedEffects.some((effect) => effect.kind === "shape_candidate"), true);
+  assert.equal(absorb.calls.insert.some((call) => call.table === moves && insertValue(call).kind === "critique_absorbed"), true);
+  assert.equal(absorb.calls.insert.some((call) => call.table === moves && insertValue(call).kind === "focus_completed"), true);
 });
 
 test("ChallengeRoundService revise preserves old version and creates a new current version", async () => {
@@ -83,13 +91,15 @@ test("ChallengeRoundService revise preserves old version and creates a new curre
   assert.equal(result.receipt.previousClaimVersionId, uuidAt(702));
   assert.notEqual(result.receipt.currentClaimVersionId, uuidAt(702));
   assert.equal(result.receipt.claimTextChanged, true);
+  assert.equal(result.nextMove.requiredCommand, "tick_autopilot");
+  assert.equal(result.derivedEffects.some((effect) => effect.kind === "shape_candidate"), true);
   assert.equal(result.targetClaim.text, revisedText);
   assert.equal(oldVersionUpdate?.set.isCurrent, false);
   assert.ok(oldVersionUpdate?.set.validUntil instanceof Date);
   assert.equal(oldVersionUpdate?.set.supersededByVersionId, result.receipt.currentClaimVersionId);
-  assert.equal(newVersionInsert?.values.content, revisedText);
-  assert.equal(newVersionInsert?.values.isCurrent, false);
-  assert.equal(newVersionInsert?.values.id, result.receipt.currentClaimVersionId);
+  assert.equal(newVersionInsert ? insertValue(newVersionInsert).content : null, revisedText);
+  assert.equal(newVersionInsert ? insertValue(newVersionInsert).isCurrent : null, false);
+  assert.equal(newVersionInsert ? insertValue(newVersionInsert).id : null, result.receipt.currentClaimVersionId);
   assert.equal(currentVersionUpdate?.set.isCurrent, true);
 });
 
@@ -218,18 +228,36 @@ type ChallengeResponseWithoutId =
 async function respondWith(input: ChallengeResponseWithoutId) {
   const edgeStatus = input.response === "absorb" ? "acknowledged_vulnerability" : "active";
   const { db, calls } = fakeChallengeDb({
-    selectRows: [[challengeRoundRow()], [claimRow()], [claimVersionRow()], [claimRow({ id: uuidAt(203), kind: "belief" })], [edgeRow()]],
     insertRows:
       input.response === "revise"
         ? [
             (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(603) }),
             (values: Record<string, unknown>) => claimVersionRow({ ...values }),
+            (values: Record<string, unknown>) => shapeRow(values),
+            (values: Record<string, unknown> | Record<string, unknown>[]) => derivedEffectRows(values),
             (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(604) }),
           ]
         : [
             (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(603) }),
+            (values: Record<string, unknown>) => shapeRow(values),
+            (values: Record<string, unknown> | Record<string, unknown>[]) => derivedEffectRows(values),
             (values: Record<string, unknown>) => moveRow({ ...values, id: uuidAt(604) }),
           ],
+    selectRows: [
+      [challengeRoundRow()],
+      [claimRow()],
+      [claimVersionRow()],
+      [claimRow({ id: uuidAt(203), kind: "belief" })],
+      [edgeRow()],
+      [moveRow({ id: uuidAt(603), kind: responseMoveKind(input.response) })],
+      [claimRow(), claimRow({ id: uuidAt(203), kind: "belief" })],
+      [claimVersionRow()],
+      [edgeRow({ status: edgeStatus })],
+      [moveRow({ id: uuidAt(603), kind: responseMoveKind(input.response) })],
+      [],
+      [],
+      [],
+    ],
     updateRows: updateRowsForResponse(input.response),
   });
   const service = new ChallengeRoundService(db);
@@ -240,7 +268,8 @@ async function respondWith(input: ChallengeResponseWithoutId) {
   return { result, calls };
 }
 
-type InsertRow = unknown | ((values: Record<string, unknown>) => unknown);
+type InsertValues = Record<string, unknown> | Record<string, unknown>[];
+type InsertRow = unknown | ((values: InsertValues) => unknown);
 
 function updateRowsForResponse(response: "defend" | "revise" | "absorb"): unknown[] {
   const respondedRound = challengeRoundRow({
@@ -272,7 +301,7 @@ function fakeChallengeDb(options: {
   const updateRows = [...(options.updateRows ?? [])];
   const calls: {
     select: number;
-    insert: Array<{ table: unknown; values: Record<string, unknown> }>;
+    insert: Array<{ table: unknown; values: InsertValues }>;
     update: Array<{ table: unknown; set: Record<string, unknown> }>;
   } = {
     select: 0,
@@ -286,16 +315,16 @@ function fakeChallengeDb(options: {
       return query(selectRows.shift() ?? []);
     },
     insert(table: unknown) {
-      const call = { table, values: {} };
+      const call: { table: unknown; values: InsertValues } = { table, values: {} };
       calls.insert.push(call);
 
       return {
-        values(values: Record<string, unknown>) {
+        values(values: InsertValues) {
           call.values = values;
 
           return {
             returning() {
-              return Promise.resolve([resolveInsertedRow(insertRows.shift(), values)]);
+              return Promise.resolve(resolveInsertedRows(insertRows.shift(), values));
             },
           };
         },
@@ -327,8 +356,30 @@ function fakeChallengeDb(options: {
   return { db, calls };
 }
 
-function resolveInsertedRow(row: InsertRow | undefined, values: Record<string, unknown>) {
+function insertValue(call: { values: InsertValues }): Record<string, unknown> {
+  return Array.isArray(call.values) ? (call.values[0] ?? {}) : call.values;
+}
+
+function resolveInsertedRows(row: InsertRow | undefined, values: InsertValues): unknown[] {
+  const resolved = resolveInsertedRow(row, values);
+
+  if (resolved === undefined) {
+    return [];
+  }
+
+  return Array.isArray(resolved) ? resolved : [resolved];
+}
+
+function resolveInsertedRow(row: InsertRow | undefined, values: InsertValues) {
   return typeof row === "function" ? row(values) : row;
+}
+
+function responseMoveKind(response: "defend" | "revise" | "absorb") {
+  if (response === "defend") {
+    return "user_defended";
+  }
+
+  return response === "revise" ? "claim_revised" : "critique_absorbed";
 }
 
 function query(rows: unknown[]) {
@@ -524,6 +575,53 @@ function moveRow(overrides: Partial<Record<string, unknown>> = {}) {
     createdAt: dateAt(11),
     ...overrides,
   };
+}
+
+function shapeRow(values: InsertValues) {
+  const record = Array.isArray(values) ? (values[0] ?? {}) : values;
+
+  return {
+    id: uuidAt(1001),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    sourceMoveId: uuidAt(603),
+    key: "challenge_response_loop",
+    status: "candidate",
+    version: 1,
+    label: "Challenge response loop",
+    description: "Recent moves are pressure-testing claims through challenge and explicit response.",
+    confidence: 60,
+    supportingMoveIds: [uuidAt(603)],
+    payload: {},
+    createdAt: dateAt(12),
+    reviewedAt: null,
+    ...record,
+  };
+}
+
+function derivedEffectRows(values: InsertValues) {
+  const rows = Array.isArray(values) ? values : [values];
+
+  return rows.map((row, index) => ({
+    id: uuidAt(1101 + index),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    sourceMoveId: uuidAt(603),
+    kind: row.kind ?? "shape_candidate",
+    status: "pending_review",
+    version: row.version ?? index + 1,
+    title: row.title ?? "Derived effect",
+    summary: row.summary ?? "Derived after-move effect.",
+    payload: row.payload ?? {},
+    createdAt: dateAt(13 + index),
+    reviewedAt: null,
+  }));
 }
 
 function loadYcDemoFixture(): PennyYcDemoGraphFixture {
