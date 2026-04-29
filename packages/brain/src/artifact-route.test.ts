@@ -5,6 +5,7 @@ import {
   ArtifactGenerationError,
   ArtifactNotFoundError,
   buildCompiledArtifactPayload,
+  buildArtifactPrompt,
   createHeuristicArtifactProvider,
   generateArtifactOutput,
   handleArtifactRequest,
@@ -192,6 +193,18 @@ test("artifact compiler output is grounded in session state and rejects generic 
       return true;
     },
   );
+});
+
+test("artifact prompt receives a lensSnapshot with durable shapes", () => {
+  const prompt = buildArtifactPrompt({
+    ...sampleContext(),
+    requestedKind: "challenge_brief",
+    lensSnapshot: lensSnapshot(),
+  });
+
+  assert.match(prompt, /Lens snapshot JSON/);
+  assert.match(prompt, /assumption_review_loop/);
+  assert.match(prompt, /Session context JSON/);
 });
 
 test("artifact risks treat defended and revised active challenges as answered", async () => {
@@ -442,4 +455,21 @@ function now(): string {
 
 function uuidAt(value: number): string {
   return `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
+}
+
+function lensSnapshot() {
+  return {
+    shapes: [
+      {
+        id: uuidAt(901),
+        key: "assumption_review_loop",
+        label: "Assumption review loop",
+        description: "Recent moves are improving the idea by confirming, rejecting, or refining load-bearing assumptions.",
+        confidence: 74,
+        status: "confirmed" as const,
+        supportingMoveIds: [uuidAt(502)],
+      },
+    ],
+    pendingEffects: [],
+  };
 }
