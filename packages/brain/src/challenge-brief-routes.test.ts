@@ -168,6 +168,7 @@ function response(sessionId: string): ChallengeBriefResponse {
         },
         refs: {
           sourceIds: [uuidAt(150)],
+          sourceSpanIds: [uuidAt(151)],
           claimIds: [uuidAt(201)],
           claimVersionIds: [uuidAt(301)],
           edgeIds: [],
