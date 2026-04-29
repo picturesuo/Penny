@@ -17,12 +17,9 @@ import type {
 } from "./services/challenge-service.ts";
 import type { ChallengeBriefResponse } from "./services/challenge-brief-service.ts";
 import type {
-  ManualFocusResponse,
-  StartNextMoveResponse,
   ThinkingModeCandidateDto,
   ThinkingModeMoveDto,
   ThinkingModeStateResponse,
-  ThinkingModeTickResponse,
 } from "./services/thinking-mode-service.ts";
 import type { FocusState } from "./domain/types.ts";
 
