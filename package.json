@@ -5,23 +5,33 @@
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
+    "build:frontend": "vite build --config packages/brain/frontend/vite.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "dev:frontend": "vite --host 0.0.0.0 --config packages/brain/frontend/vite.config.ts",
     "dev:api": "tsx packages/brain/src/server.ts",
     "test": "tsx --test packages/brain/src/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p packages/brain/frontend/tsconfig.json"
   },
   "dependencies": {
     "@ai-sdk/xai": "^3.0.83",
     "ai": "^6.0.168",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
     "@types/node": "^24.9.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
     "drizzle-kit": "^0.31.10",
+    "tailwindcss": "^4.2.4",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^8.0.10"
   }
 }
