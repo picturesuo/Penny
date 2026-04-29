@@ -3,8 +3,12 @@ import type {
   AutopilotTickData,
   BrainClaim,
   AutopilotTickResponse,
+  ChallengeBriefResponse,
+  ChallengeResponseKind,
   BrainMove,
+  IssueChallengeResponse,
   ManualNodeSelectionResponse,
+  RespondToChallengeResponse,
   SeedBrainResponse,
   SessionCockpitData,
   SessionCockpitResponse,
@@ -93,6 +97,85 @@ export async function startAutopilotCandidate(sessionId: string, candidateId: st
   return payload as StartNextMoveResponse;
 }
 
+export async function issueChallengeFromCandidate(
+  sessionId: string,
+  candidateId: string,
+): Promise<IssueChallengeResponse> {
+  const response = await fetch(`/api/next-move-candidates/${encodeURIComponent(candidateId)}/challenge`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      brainId: sessionId,
+      sessionId,
+    }),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(
+      errorMessage(
+        payload,
+        `POST /api/next-move-candidates/${candidateId}/challenge failed with ${response.status}.`,
+      ),
+    );
+  }
+
+  return payload as IssueChallengeResponse;
+}
+
+export async function respondToChallenge(input: {
+  challengeId: string;
+  response: ChallengeResponseKind;
+  reasoning?: string;
+  revisedText?: string;
+}): Promise<RespondToChallengeResponse> {
+  const body =
+    input.response === "revise"
+      ? {
+          response: input.response,
+          revisedText: input.revisedText,
+          ...(input.reasoning ? { reasoning: input.reasoning } : {}),
+        }
+      : {
+          response: input.response,
+          ...(input.reasoning ? { reasoning: input.reasoning } : {}),
+        };
+  const response = await fetch(`/api/challenges/${encodeURIComponent(input.challengeId)}/respond`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(
+      errorMessage(payload, `POST /api/challenges/${input.challengeId}/respond failed with ${response.status}.`),
+    );
+  }
+
+  return payload as RespondToChallengeResponse;
+}
+
+export async function createChallengeBrief(sessionId: string): Promise<ChallengeBriefResponse> {
+  const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/challenge-brief`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({}),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(
+      errorMessage(payload, `POST /api/sessions/${sessionId}/challenge-brief failed with ${response.status}.`),
+    );
+  }
+
+  return payload as ChallengeBriefResponse;
+}
+
 export async function selectAutopilotNode(input: {
   sessionId: string;
   claimId: string;
@@ -168,10 +251,13 @@ interface RawSessionCockpitData {
   autopilot: ThinkingModeStateData;
   activeChallenge?: {
     id: string;
+    status?: string;
+    response?: ChallengeResponseKind | null;
     targetClaimId?: string;
     critique?: string;
     failureType?: string;
     strength?: string;
+    whatWouldResolveIt?: string;
     targetClaim?: BrainClaim | null;
     critiqueClaim?: BrainClaim | null;
   } | null;
@@ -260,6 +346,9 @@ function normalizeActiveChallenge(
     ...(challenge.targetClaim?.text !== undefined ? { weakestPart: challenge.targetClaim.text } : {}),
     ...(challenge.failureType !== undefined ? { failureType: challenge.failureType } : {}),
     ...(challenge.strength !== undefined ? { strength: challenge.strength } : {}),
+    ...(challenge.status !== undefined ? { status: challenge.status } : {}),
+    ...(challenge.response !== undefined ? { response: challenge.response } : {}),
+    ...(challenge.whatWouldResolveIt !== undefined ? { whatWouldResolveIt: challenge.whatWouldResolveIt } : {}),
     ...(challenge.critique !== undefined ? { challenge: challenge.critique, critique: challenge.critique } : {}),
   };
 }

@@ -31,12 +31,19 @@ export interface LearnCandidate {
 }
 
 export interface ChallengeSuggestion {
+  id?: string;
+  status?: "open" | "responded" | string;
+  response?: ChallengeResponseKind | null;
   targetClaimId?: string;
   weakestPart?: string;
   failureType?: string;
   strength?: string;
   challenge?: string;
+  critique?: string;
+  whatWouldResolveIt?: string;
   responseOptions?: string[];
+  targetClaim?: BrainClaim | null;
+  critiqueClaim?: BrainClaim | null;
 }
 
 export interface BrainSession {
@@ -214,6 +221,131 @@ export interface StartNextMoveResponse {
       payload?: Record<string, unknown>;
       createdAt?: string;
     };
+  };
+}
+
+export type ChallengeResponseKind = "defend" | "revise" | "absorb";
+export type ChallengeResponseMoveKind = "user_defended" | "claim_revised" | "critique_absorbed";
+
+export interface ChallengeRound {
+  id: string;
+  sessionId: string;
+  status: "open" | "responded" | string;
+  response: ChallengeResponseKind | null;
+  targetClaimId: string;
+  targetClaimVersionId: string;
+  critiqueClaimId: string;
+  critiqueClaimVersionId: string;
+  challengeEdgeId: string;
+  challengeMoveId: string;
+  responseMoveId: string | null;
+  focusCompletedMoveId: string | null;
+  failureType: string;
+  strength: string;
+  critique: string;
+  whyThis: string;
+  whatWouldResolveIt: string;
+  createdAt: string;
+  respondedAt: string | null;
+  updatedAt: string;
+}
+
+export interface ChallengeMove {
+  id: string;
+  kind: ChallengeResponseMoveKind | "challenge_issued" | "focus_completed";
+  summary: string;
+  payload?: Record<string, unknown>;
+  createdAt?: string;
+}
+
+export interface ChallengeDerivedEffect {
+  id: string;
+  kind: string;
+  status: string;
+  version: number;
+  title: string;
+  summary: string;
+  payload?: unknown;
+  createdAt: string;
+}
+
+export interface ChallengeResponseReceipt {
+  response: ChallengeResponseKind;
+  moveKind: ChallengeResponseMoveKind;
+  targetClaimId: string;
+  challengeEdgeId: string;
+  previousClaimVersionId: string | null;
+  currentClaimVersionId: string;
+  claimTextChanged: boolean;
+  unresolvedRisk: boolean;
+}
+
+export interface ChallengeNextMoveDirective {
+  status: "client_tick_required";
+  requiredCommand: "tick_autopilot";
+  sessionId: string;
+  method: "POST";
+  endpoint: string;
+  body: {
+    resume: true;
+  };
+  reason: string;
+  expectedMoveKind: "next_move_recomputed";
+}
+
+export interface IssueChallengeResponse {
+  data: {
+    status: "issued";
+    brainId: string;
+    sessionId: string;
+    challengeRound: ChallengeRound;
+    targetClaim: BrainClaim;
+    critiqueClaim: BrainClaim;
+    critique: string;
+    failureType: string;
+    strength: string;
+    whyThis: string;
+    whatWouldResolveIt: string;
+    suggestedNextMove: string;
+    move: ChallengeMove;
+  };
+}
+
+export interface RespondToChallengeResponse {
+  data: {
+    status: "responded";
+    challengeRound: ChallengeRound;
+    response: ChallengeResponseKind;
+    targetClaim: BrainClaim;
+    critiqueClaimId: string;
+    move: ChallengeMove;
+    focusCompletedMove: ChallengeMove;
+    derivedEffects: ChallengeDerivedEffect[];
+    receipt: ChallengeResponseReceipt;
+    nextMove: ChallengeNextMoveDirective;
+  };
+}
+
+export interface ChallengeBriefResponse {
+  data: {
+    status: "created";
+    artifact: {
+      id: string;
+      sessionId: string;
+      kind: string;
+      title: string;
+      summary: string;
+      payload?: Record<string, unknown>;
+      createdAt?: string;
+    };
+    move: {
+      id: string;
+      kind: "artifact_created";
+      summary: string;
+      payload?: Record<string, unknown>;
+      createdAt?: string;
+    };
+    brief?: unknown;
   };
 }
 
