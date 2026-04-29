@@ -1,6 +1,6 @@
 # Thinking Mode Contract Critique
 
-Status: Current implementation re-review: `BACKEND/CONTRACT PASS, FRONTEND DEMO BLOCKED`
+Status: Current implementation re-review: `BACKEND/CONTRACT PASS, FRONTEND API PASS, FRONTEND PRODUCT PROOF BLOCKED`
 Artifact ID: `THINKING-MODE-CONTRACT-CRITIQUE`
 Review date: 2026-04-29
 
@@ -46,6 +46,31 @@ Verification commands run:
 Finding:
 
 - `THINKING-MODE-CONTRACT-CRITIQUE-CF2`: No backend cockpit blocker found. The guard is architectural: keep `buildSessionCockpitPayload`, `loadActiveChallenge`, and `loadLatestArtifact` as read-only DTO composition helpers, and do not let the session-scoped aliases become a parallel Thinking Mode implementation.
+
+## Frontend Thinking Mode API Review
+
+Status: `API PASS; PRODUCT PROOF BLOCKED`
+Artifact ID: `THINKING-MODE-CONTRACT-CRITIQUE`
+Review date: 2026-04-29
+Scope: frontend commit `e13099e` (`Wire frontend to session cockpit`): `packages/brain/frontend/src/App.tsx`, `packages/brain/frontend/src/api/brainClient.ts`, `packages/brain/frontend/src/types/brain.ts`, `packages/brain/frontend/test/brainClient.test.ts`, and visible placeholder components.
+
+Criterion judgments:
+
+- `PASS WITH TEST-SCRIPT RISK` `THINKING-MODE-CONTRACT-CRITIQUE-C9`: frontend source now uses the new Thinking Mode/session cockpit API path instead of legacy Autopilot. `tickAutopilot` calls `POST /api/sessions/:sessionId/autopilot/tick`, accepted focus calls `POST /api/sessions/:sessionId/next-move-candidates/:candidateId/start`, manual focus calls `POST /api/sessions/:sessionId/focus/manual`, and refresh uses `GET /api/sessions/:sessionId/cockpit`. `handleGoThere` now starts a candidate and refreshes cockpit state instead of only setting local focus. Test-script risk: the focused frontend client test is tracked, but it is outside the default `pnpm test` package script.
+- `FAIL` `THINKING-MODE-CONTRACT-CRITIQUE-C10`: old placeholder paths still mask missing backend state. `CurrentExploration` still falls back to `placeholderPaths`, `InsightRail` renders `"Placeholder"` values and `placeholderMoves`, and `ThoughtMap` renders a placeholder tree when backend graph state is empty. `mergeCockpitData` also preserves prior seed-only fields such as exploration paths when cockpit does not return them, which can make absent backend state look intentionally populated.
+- `PASS WITH UI COPY RISK` `THINKING-MODE-CONTRACT-CRITIQUE-C11`: the UI now displays the selected candidate's thinking action label and rationale from backend state, and the button starts the Move-backed candidate. The primary control still says `Go there`, and the normalized UI model does not expose exit criteria or expected Move kinds, so the visible interaction still reads partly like navigation rather than a concrete "start challenge / verify / learn" thinking action.
+- `NOT VERIFIED` `THINKING-MODE-CONTRACT-CRITIQUE-C12`: live browser proof against a running API/database was not rerun in this critic pass. The source, frontend build, focused client test, and backend route tests were verified locally.
+
+Verification commands run:
+
+- `pnpm exec tsx --test packages/brain/frontend/test/brainClient.test.ts` -> `PASS`, 2 tests.
+- `pnpm exec tsx --test packages/brain/src/session-cockpit-routes.test.ts packages/brain/src/thinking-mode-routes.test.ts` -> `PASS`, 18 tests.
+- `pnpm typecheck` -> `PASS`.
+- `pnpm build:frontend` -> `PASS`; generated public asset changes were reverted because this critic pass does not own build output.
+
+Finding:
+
+- `THINKING-MODE-CONTRACT-CRITIQUE-CF3`: Frontend API wiring is no longer the blocker. The remaining blocker is visible product proof: remove placeholder fallbacks from backend-owned regions or render explicit empty/error states, and change accepted-focus copy/data to expose the actual next thinking action and exit criteria instead of making `Go there` the dominant affordance.
 
 ## Current Verification Summary
 
