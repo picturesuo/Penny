@@ -51,6 +51,11 @@ export const derivedEffectStatusEnum = pgEnum("derived_effect_status", [
   "superseded",
 ]);
 export const shapeStatusEnum = pgEnum("shape_status", ["candidate", "confirmed", "rejected", "superseded"]);
+export const commandIdempotencyStatusEnum = pgEnum("command_idempotency_status", [
+  "running",
+  "succeeded",
+  "failed",
+]);
 export const moveKindEnum = pgEnum("move_kind", [
   "seed_claim_created",
   "assumptions_extracted",
@@ -388,10 +393,38 @@ export const wikiPages = pgTable(
   ],
 );
 
+export const commandIdempotencyKeys = pgTable(
+  "command_idempotency_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    route: text("route").notNull(),
+    key: text("key").notNull(),
+    scopeHash: text("scope_hash").notNull(),
+    requestHash: text("request_hash").notNull(),
+    status: commandIdempotencyStatusEnum("status").notNull().default("running"),
+    responseStatus: integer("response_status"),
+    responseBody: jsonb("response_body"),
+    error: jsonb("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("command_idempotency_route_scope_key_idx").on(table.route, table.scopeHash, table.key),
+    index("command_idempotency_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("command_idempotency_route_status_idx").on(table.route, table.status),
+    index("command_idempotency_created_at_idx").on(table.createdAt),
+    check("command_idempotency_key_present", sql`length(trim(${table.key})) > 0`),
+    check("command_idempotency_route_present", sql`length(trim(${table.route})) > 0`),
+  ],
+);
+
 export const pennySchema = {
   artifacts,
   artifactKindEnum,
   brainRuns,
+  commandIdempotencyKeys,
+  commandIdempotencyStatusEnum,
   claimEdgeKindEnum,
   claimEdgeStatusEnum,
   claimEdges,
