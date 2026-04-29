@@ -179,6 +179,9 @@ function version(id: string, claimId: string, content: string, confidence: numbe
     status: "exploratory" as const,
     confidence,
     isCurrent: true,
+    validFrom: at(3),
+    validUntil: null,
+    supersededByVersionId: null,
     createdAt: at(3),
   };
 }

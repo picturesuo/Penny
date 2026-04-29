@@ -403,6 +403,9 @@ function version(id: string, claimId: string, content: string, confidence: numbe
     status: "exploratory" as const,
     confidence,
     isCurrent,
+    validFrom: now(),
+    validUntil: isCurrent ? null : now(),
+    supersededByVersionId: null,
     createdAt: now(),
   };
 }

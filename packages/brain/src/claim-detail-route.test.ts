@@ -61,11 +61,14 @@ test("GET /brain/claims/:claimId/detail returns old selves, move history, proven
   assert.equal(payload.data.oldVersions.length, 1);
   assert.equal(payload.data.oldVersions[0]?.id, oldVersionId);
   assert.equal(payload.data.oldVersions[0]?.state, "old");
+  assert.equal(payload.data.currentVersion.validUntil, null);
+  assert.equal(payload.data.oldVersions[0]?.validUntil, "2026-04-27T00:00:03.000Z");
+  assert.equal(payload.data.oldVersions[0]?.supersededByVersionId, currentVersionId);
   assert.deepEqual(
-    payload.data.confidenceHistory.map((entry) => [entry.versionId, entry.confidence, entry.state]),
+    payload.data.confidenceHistory.map((entry) => [entry.versionId, entry.confidence, entry.state, entry.validUntil]),
     [
-      [oldVersionId, 45, "old"],
-      [currentVersionId, 60, "current"],
+      [oldVersionId, 45, "old", "2026-04-27T00:00:03.000Z"],
+      [currentVersionId, 60, "current", null],
     ],
   );
   assert.deepEqual(
@@ -266,6 +269,9 @@ function version(
     status: "exploratory",
     confidence,
     isCurrent,
+    validFrom: dateAt(createdAt),
+    validUntil: isCurrent ? null : dateAt(createdAt + 1),
+    supersededByVersionId: isCurrent ? null : currentVersionId,
     createdAt: dateAt(createdAt),
   };
 }

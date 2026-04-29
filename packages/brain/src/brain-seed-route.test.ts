@@ -233,6 +233,9 @@ function createPersistedSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): 
     status: "exploratory" as const,
     confidence: claim.confidence,
     isCurrent: true,
+    validFrom: now,
+    validUntil: null,
+    supersededByVersionId: null,
     createdAt: now,
   }));
   const claimVersionIds = new Map(claimVersions.map((version) => [version.seedId, version.id]));

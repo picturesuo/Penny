@@ -179,6 +179,9 @@ function version(input: {
     status: input.status ?? "exploratory",
     confidence: input.confidence,
     isCurrent: true,
+    validFrom: new Date("2026-04-29T08:05:00.000Z"),
+    validUntil: null,
+    supersededByVersionId: null,
     createdAt: new Date("2026-04-29T08:05:00.000Z"),
   };
 }

@@ -68,7 +68,9 @@ test("session moves timeline enriches moves without inventing rows", () => {
   assert.equal(refined?.actor, "User");
   assert.equal(refined?.affectedClaim?.id, uuidAt(201));
   assert.equal(refined?.details.oldVersion?.content, "Students will tolerate a complex map.");
+  assert.equal(refined?.details.oldVersion?.supersededByVersionId, uuidAt(302));
   assert.equal(refined?.details.newVersion?.content, "Students need a low-friction map before deeper critique.");
+  assert.equal(refined?.details.newVersion?.validUntil, null);
   assert.equal(refined?.payloadPreview.currentVersionId, uuidAt(302).slice(0, 8));
 
   assert.equal(challenge?.actor, "Penny");
@@ -158,6 +160,9 @@ function sessionMovesState(sessionId: string): SessionMovesState {
         status: "exploratory",
         confidence: 54,
         isCurrent: false,
+        validFrom: dateAt(2),
+        validUntil: dateAt(3),
+        supersededByVersionId: currentVersionId,
         createdAt: dateAt(2),
       },
       {
@@ -170,6 +175,9 @@ function sessionMovesState(sessionId: string): SessionMovesState {
         status: "exploratory",
         confidence: 66,
         isCurrent: true,
+        validFrom: dateAt(3),
+        validUntil: null,
+        supersededByVersionId: null,
         createdAt: dateAt(3),
       },
       {
@@ -182,6 +190,9 @@ function sessionMovesState(sessionId: string): SessionMovesState {
         status: "exploratory",
         confidence: 72,
         isCurrent: true,
+        validFrom: dateAt(4),
+        validUntil: null,
+        supersededByVersionId: null,
         createdAt: dateAt(4),
       },
     ],
