@@ -11,7 +11,7 @@
     "dev:frontend": "vite --host 0.0.0.0 --config packages/brain/frontend/vite.config.ts",
     "dev:api": "tsx packages/brain/src/server.ts",
     "lint": "tsc --noEmit --pretty false && tsc --noEmit --pretty false -p packages/brain/frontend/tsconfig.json",
-    "test": "tsx --test packages/brain/src/*.test.ts",
+    "test": "tsx --test packages/brain/src/*.test.ts packages/brain/frontend/test/*.test.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p packages/brain/frontend/tsconfig.json"
   },
   "dependencies": {
