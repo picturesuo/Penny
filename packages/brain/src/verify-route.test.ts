@@ -20,6 +20,7 @@ import {
   type VerifyRequest,
 } from "./verify-route.ts";
 import { BrainRunGuardError } from "./brain-run-guard.ts";
+import { createMemoryCommandIdempotencyStore } from "./command-idempotency.ts";
 
 test("POST /brain/verify validates requests before running Verify", async () => {
   let verified = false;
@@ -159,6 +160,41 @@ test("POST /brain/verify returns verdict, evidence cards, BrainRun, and verify_r
   });
 });
 
+test("POST /brain/verify replays an idempotent command without verifying twice", async () => {
+  const idempotencyStore = createMemoryCommandIdempotencyStore();
+  const claimId = uuidAt(101);
+  const sessionId = uuidAt(100);
+  let verified = 0;
+  const first = await handleVerifyRequest(idempotentVerifyRequest(claimId, sessionId), {
+    idempotencyStore,
+    provider: createHeuristicVerifyProvider(),
+    async verifyClaim(input) {
+      verified += 1;
+
+      return verifiedResult(input.claimId);
+    },
+  });
+  const second = await handleVerifyRequest(idempotentVerifyRequest(claimId, sessionId), {
+    idempotencyStore,
+    provider: createHeuristicVerifyProvider(),
+    async verifyClaim(input) {
+      verified += 1;
+
+      return verifiedResult(input.claimId);
+    },
+  });
+  const firstPayload = (await first.json()) as { data: ReturnType<typeof verifiedResult> };
+  const secondPayload = (await second.json()) as { data: ReturnType<typeof verifiedResult> };
+
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  assert.equal(first.headers.get("x-penny-idempotency"), "created");
+  assert.equal(second.headers.get("x-penny-idempotency"), "replayed");
+  assert.equal(verified, 1);
+  assert.equal(secondPayload.data.move.id, firstPayload.data.move.id);
+  assert.deepEqual(secondPayload.data.confidenceUpdate, firstPayload.data.confidenceUpdate);
+});
+
 test("POST /brain/verify/confidence validates requests before deciding confidence", async () => {
   let decided = false;
   const response = await handleVerifyConfidenceRequest(
@@ -179,6 +215,38 @@ test("POST /brain/verify/confidence validates requests before deciding confidenc
   assert.equal(payload.error.code, "invalid_request");
   assert.match(payload.error.issues.join("\n"), /verifyMoveId/);
   assert.equal(decided, false);
+});
+
+test("POST /brain/verify/confidence replays an idempotent decision without applying twice", async () => {
+  const idempotencyStore = createMemoryCommandIdempotencyStore();
+  const verifyMoveId = uuidAt(401);
+  let decided = 0;
+  const first = await handleVerifyConfidenceRequest(idempotentConfidenceRequest(verifyMoveId), {
+    idempotencyStore,
+    async decideConfidence(input) {
+      decided += 1;
+
+      return confidenceDecisionResult(input.verifyMoveId);
+    },
+  });
+  const second = await handleVerifyConfidenceRequest(idempotentConfidenceRequest(verifyMoveId), {
+    idempotencyStore,
+    async decideConfidence(input) {
+      decided += 1;
+
+      return confidenceDecisionResult(input.verifyMoveId);
+    },
+  });
+  const firstPayload = (await first.json()) as { data: ReturnType<typeof confidenceDecisionResult> };
+  const secondPayload = (await second.json()) as { data: ReturnType<typeof confidenceDecisionResult> };
+
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(first.headers.get("x-penny-idempotency"), "created");
+  assert.equal(second.headers.get("x-penny-idempotency"), "replayed");
+  assert.equal(decided, 1);
+  assert.equal(secondPayload.data.move.id, firstPayload.data.move.id);
+  assert.deepEqual(secondPayload.data.confidenceUpdate, firstPayload.data.confidenceUpdate);
 });
 
 test("POST /brain/verify/confidence returns accepted confidence cascade decisions", async () => {
@@ -504,6 +572,117 @@ function request(url: string, body: unknown): Request {
     },
     body: JSON.stringify(body),
   });
+}
+
+function idempotentVerifyRequest(claimId: string, sessionId: string): Request {
+  return new Request("http://localhost/brain/verify", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": "verify-command-1",
+      "x-user-id": "dev-user-1",
+      "x-project-id": "dev-project-1",
+    },
+    body: JSON.stringify({
+      claimId,
+      currentClaimText: "Cognitive load is the first bottleneck to test.",
+      sessionId,
+    }),
+  });
+}
+
+function idempotentConfidenceRequest(verifyMoveId: string): Request {
+  return new Request("http://localhost/brain/verify/confidence", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": "verify-confidence-command-1",
+      "x-user-id": "dev-user-1",
+      "x-project-id": "dev-project-1",
+    },
+    body: JSON.stringify({
+      verifyMoveId,
+      decision: "accept",
+      reason: "The citation directly tests the premise.",
+    }),
+  });
+}
+
+function verifiedResult(claimId: string) {
+  return {
+    verdict: "mixed" as const,
+    summary: "One source supports the mechanism, but the session has no direct product evidence yet.",
+    evidenceCards: [
+      {
+        title: "Worked examples lower load",
+        summary: "A learning-science citation supports part of the mechanism.",
+        stance: "supports" as const,
+        sourceName: "Example Journal",
+        sourceUrl: "https://example.test/source",
+        citation: "Worked examples can reduce unnecessary cognitive load.",
+      },
+    ],
+    confidenceDeltaSuggestion: -5,
+    whatWouldChangeThis: "Direct user evidence that cognitive load is or is not the first bottleneck.",
+    nextQuestion: "Which user behavior would show cognitive load is actually the bottleneck?",
+    targetClaim: {
+      id: claimId,
+      versionId: uuidAt(201),
+      kind: "assumption" as const,
+      status: "exploratory" as const,
+      text: "Cognitive load is the first bottleneck to test.",
+      confidence: 64,
+    },
+    brainRun: {
+      id: uuidAt(301),
+      status: "succeeded",
+    },
+    move: {
+      id: uuidAt(401),
+      kind: "verify_run" as const,
+      summary: "Verified claim: mixed.",
+      claimIds: [claimId],
+      edgeIds: [],
+      artifactIds: [],
+    },
+    citationSources: [],
+    confidenceUpdate: {
+      suggestedDelta: -5,
+      autoApplied: false as const,
+      decision: "pending_user_decision" as const,
+    },
+  };
+}
+
+function confidenceDecisionResult(verifyMoveId: string) {
+  return {
+    decision: "accept" as const,
+    targetClaim: {
+      id: uuidAt(101),
+      versionId: uuidAt(202),
+      kind: "assumption" as const,
+      status: "exploratory" as const,
+      text: "Cognitive load is the first bottleneck to test.",
+      confidence: 72,
+    },
+    move: {
+      id: uuidAt(402),
+      kind: "confidence_update_accepted" as const,
+      summary: "Accepted Verify confidence suggestion.",
+      claimIds: [uuidAt(101)],
+      edgeIds: [],
+      artifactIds: [],
+    },
+    confidenceUpdate: {
+      verifyMoveId,
+      suggestedDelta: 8,
+      accepted: true,
+      previousConfidence: 64,
+      currentConfidence: 72,
+      appliedDelta: 8,
+      cascade: [],
+    },
+  };
 }
 
 function uuidAt(value: number): string {
