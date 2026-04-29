@@ -12,6 +12,12 @@ import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline
 import { handleSessionGraphRequest } from "./session-graph-route.ts";
 import { handleSessionMovesRequest } from "./session-moves-route.ts";
 import { handleBrainStreamRequest } from "./stream-route.ts";
+import {
+  handleManualFocusRequest,
+  handleStartNextMoveCandidateRequest,
+  handleThinkingModeStateRequest,
+  handleThinkingModeTickRequest,
+} from "./routes/thinking-mode-routes.ts";
 import { handleVerifyConfidenceRequest, handleVerifyRequest } from "./verify-route.ts";
 import { handleSessionWikiRequest } from "./wiki-route.ts";
 
@@ -35,6 +41,65 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/autopilot/select-node") {
       await writeWebResponse(outgoing, await handleManualNodeSelectedRequest(request));
+      return;
+    }
+
+    const thinkingModeStateMatch = /^\/api\/brains\/([^/]+)\/autopilot\/state$/.exec(url.pathname);
+
+    if (thinkingModeStateMatch) {
+      const brainId = thinkingModeStateMatch[1];
+
+      if (!brainId) {
+        await writeWebResponse(outgoing, invalidPathResponse("invalid_brain_id", "Autopilot state requires a brain id."));
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleThinkingModeStateRequest(request, decodeURIComponent(brainId)));
+      return;
+    }
+
+    const thinkingModeTickMatch = /^\/api\/brains\/([^/]+)\/autopilot\/tick$/.exec(url.pathname);
+
+    if (thinkingModeTickMatch) {
+      const brainId = thinkingModeTickMatch[1];
+
+      if (!brainId) {
+        await writeWebResponse(outgoing, invalidPathResponse("invalid_brain_id", "Autopilot tick requires a brain id."));
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleThinkingModeTickRequest(request, decodeURIComponent(brainId)));
+      return;
+    }
+
+    const startNextMoveCandidateMatch = /^\/api\/next-move-candidates\/([^/]+)\/start$/.exec(url.pathname);
+
+    if (startNextMoveCandidateMatch) {
+      const candidateId = startNextMoveCandidateMatch[1];
+
+      if (!candidateId) {
+        await writeWebResponse(
+          outgoing,
+          invalidPathResponse("invalid_candidate_id", "Starting a next move requires a candidate id."),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleStartNextMoveCandidateRequest(request, decodeURIComponent(candidateId)));
+      return;
+    }
+
+    const manualFocusMatch = /^\/api\/brains\/([^/]+)\/focus\/manual$/.exec(url.pathname);
+
+    if (manualFocusMatch) {
+      const brainId = manualFocusMatch[1];
+
+      if (!brainId) {
+        await writeWebResponse(outgoing, invalidPathResponse("invalid_brain_id", "Manual focus requires a brain id."));
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleManualFocusRequest(request, decodeURIComponent(brainId)));
       return;
     }
 
@@ -407,4 +472,21 @@ function contentTypeFor(pathname: string): string {
     default:
       return "application/octet-stream";
   }
+}
+
+function invalidPathResponse(code: string, message: string): Response {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code,
+        message,
+      },
+    }),
+    {
+      status: 400,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+      },
+    },
+  );
 }
