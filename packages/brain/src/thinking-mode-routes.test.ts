@@ -139,11 +139,123 @@ test("POST /api/brains/:brainId/focus/manual creates manual pause response", asy
   assert.equal(payload.data.move.kind, "manual_node_selected");
 });
 
+test("Thinking Mode route smoke flow drives Autopilot state through manual override", async () => {
+  const brainId = uuidAt(900);
+  const sessionId = uuidAt(101);
+  const claimId = uuidAt(202);
+  const service = smokeRouteService(brainId, sessionId);
+
+  const initialState = await handleThinkingModeStateRequest(
+    new Request(`http://localhost/api/brains/${brainId}/autopilot/state?sessionId=${sessionId}`),
+    brainId,
+    { service },
+  );
+  const initialPayload = (await initialState.json()) as SmokeStatePayload;
+
+  assert.equal(initialState.status, 200);
+  assert.equal(initialPayload.data.status, "empty");
+  assert.equal(initialPayload.data.focusState.source, "none");
+  assert.equal(initialPayload.data.candidates.length, 0);
+
+  const tick = await handleThinkingModeTickRequest(
+    requestWithBody(`http://localhost/api/brains/${brainId}/autopilot/tick`, { sessionId, limit: 3 }),
+    brainId,
+    { service },
+  );
+  const tickPayload = (await tick.json()) as SmokeTickPayload;
+  const selectedCandidateId = tickPayload.data.selectedCandidate?.candidateId;
+
+  assert.equal(tick.status, 201);
+  assert.equal(tickPayload.data.status, "ready");
+  assert.ok(selectedCandidateId);
+  assert.equal(tickPayload.data.selectedCandidate?.selected, true);
+  assert.equal(tickPayload.data.focusState.source, "autopilot_suggestion");
+
+  const started = await handleStartNextMoveCandidateRequest(
+    requestWithBody(`http://localhost/api/next-move-candidates/${encodeURIComponent(selectedCandidateId)}/start`, {
+      brainId,
+      sessionId,
+    }),
+    selectedCandidateId,
+    { service },
+  );
+  const startedPayload = (await started.json()) as SmokeStartPayload;
+
+  assert.equal(started.status, 201);
+  assert.equal(startedPayload.data.status, "started");
+  assert.equal(startedPayload.data.focusState.source, "autopilot_started");
+  assert.equal(startedPayload.data.focusState.paused, false);
+  assert.equal(startedPayload.data.move.kind, "autopilot_focus_started");
+
+  const startedState = await handleThinkingModeStateRequest(
+    new Request(`http://localhost/api/brains/${brainId}/autopilot/state?sessionId=${sessionId}`),
+    brainId,
+    { service },
+  );
+  const startedStatePayload = (await startedState.json()) as SmokeStatePayload;
+
+  assert.equal(startedStatePayload.data.focusState.source, "autopilot_started");
+  assert.equal(startedStatePayload.data.focusState.paused, false);
+
+  const manual = await handleManualFocusRequest(
+    requestWithBody(`http://localhost/api/brains/${brainId}/focus/manual`, {
+      sessionId,
+      claimId,
+      reason: "Inspect the founder willingness-to-pay assumption first.",
+    }),
+    brainId,
+    { service },
+  );
+  const manualPayload = (await manual.json()) as SmokeManualPayload;
+
+  assert.equal(manual.status, 201);
+  assert.equal(manualPayload.data.status, "paused");
+  assert.equal(manualPayload.data.focusState.source, "manual_selection");
+  assert.equal(manualPayload.data.focusState.paused, true);
+  assert.equal(manualPayload.data.move.kind, "manual_node_selected");
+  assert.equal(manualPayload.data.move.payload.pauseAutopilot, true);
+
+  const manualState = await handleThinkingModeStateRequest(
+    new Request(`http://localhost/api/brains/${brainId}/autopilot/state?sessionId=${sessionId}`),
+    brainId,
+    { service },
+  );
+  const manualStatePayload = (await manualState.json()) as SmokeStatePayload;
+
+  assert.equal(manualStatePayload.data.status, "paused");
+  assert.equal(manualStatePayload.data.focusState.source, "manual_selection");
+  assert.equal(manualStatePayload.data.focusState.paused, true);
+  assert.equal(service.moves.some((move) => move.kind === "manual_node_selected"), true);
+});
+
 test("thinking mode routes return clear validation and domain errors", async () => {
   const invalid = await handleThinkingModeTickRequest(
     requestWithBody(`http://localhost/api/brains/${uuidAt(900)}/autopilot/tick`, { sessionId: "not-a-uuid" }),
     uuidAt(900),
     { service: routeService([]) },
+  );
+  const missingSession = await handleThinkingModeStateRequest(
+    new Request(`http://localhost/api/brains/${uuidAt(900)}/autopilot/state`),
+    uuidAt(900),
+    { service: routeService([]) },
+  );
+  const invalidCandidateCalls: string[] = [];
+  const invalidCandidate = await handleStartNextMoveCandidateRequest(
+    requestWithBody(`http://localhost/api/next-move-candidates/%20/start`, {
+      brainId: uuidAt(900),
+      sessionId: uuidAt(101),
+    }),
+    " ",
+    { service: routeService(invalidCandidateCalls) },
+  );
+  const invalidClaimCalls: string[] = [];
+  const invalidClaim = await handleManualFocusRequest(
+    requestWithBody(`http://localhost/api/brains/${uuidAt(900)}/focus/manual`, {
+      sessionId: uuidAt(101),
+      claimId: "not-a-uuid",
+    }),
+    uuidAt(900),
+    { service: routeService(invalidClaimCalls) },
   );
   const notFound = await handleStartNextMoveCandidateRequest(
     requestWithBody(`http://localhost/api/next-move-candidates/missing/start`, {
@@ -160,15 +272,163 @@ test("thinking mode routes return clear validation and domain errors", async () 
     },
   );
   const invalidPayload = (await invalid.json()) as { error: { code: string; issues: string[] } };
+  const missingSessionPayload = (await missingSession.json()) as { error: { code: string; issues: string[] } };
+  const invalidCandidatePayload = (await invalidCandidate.json()) as { error: { code: string; issues: string[] } };
+  const invalidClaimPayload = (await invalidClaim.json()) as { error: { code: string; issues: string[] } };
   const notFoundPayload = (await notFound.json()) as { error: { code: string; message: string } };
 
   assert.equal(invalid.status, 400);
   assert.equal(invalidPayload.error.code, "invalid_request");
   assert.match(invalidPayload.error.issues.join("\n"), /sessionId/);
+  assert.equal(missingSession.status, 400);
+  assert.equal(missingSessionPayload.error.code, "invalid_request");
+  assert.match(missingSessionPayload.error.issues.join("\n"), /sessionId/);
+  assert.equal(invalidCandidate.status, 400);
+  assert.equal(invalidCandidatePayload.error.code, "invalid_request");
+  assert.match(invalidCandidatePayload.error.issues.join("\n"), /candidateId/);
+  assert.deepEqual(invalidCandidateCalls, []);
+  assert.equal(invalidClaim.status, 400);
+  assert.equal(invalidClaimPayload.error.code, "invalid_request");
+  assert.match(invalidClaimPayload.error.issues.join("\n"), /claimId/);
+  assert.deepEqual(invalidClaimCalls, []);
   assert.equal(notFound.status, 404);
   assert.equal(notFoundPayload.error.code, "thinking_mode_not_found");
   assert.match(notFoundPayload.error.message, /not found/);
 });
+
+type SmokeStatePayload = {
+  data: {
+    status: string;
+    focusState: { source: string; paused: boolean };
+    candidates: Array<{ candidateId: string }>;
+    selectedCandidate: { candidateId: string; selected: boolean } | null;
+  };
+};
+
+type SmokeTickPayload = {
+  data: SmokeStatePayload["data"] & {
+    move: { kind: string };
+  };
+};
+
+type SmokeStartPayload = {
+  data: {
+    status: string;
+    focusState: { source: string; paused: boolean };
+    move: { kind: string; payload: Record<string, unknown> };
+  };
+};
+
+type SmokeManualPayload = SmokeStartPayload;
+
+function smokeRouteService(brainId: string, sessionId: string): ThinkingModeRouteService & { moves: ReturnType<typeof moveDto>[] } {
+  const moves: ReturnType<typeof moveDto>[] = [];
+  let currentFocusState = focusState(sessionId, "none", false);
+  let candidates: ReturnType<typeof candidateDto>[] = [];
+  let selectedCandidate: ReturnType<typeof candidateDto> | null = null;
+
+  return {
+    moves,
+    async getState(requestBrainId, requestSessionId) {
+      assert.equal(requestBrainId, brainId);
+      assert.equal(requestSessionId, sessionId);
+
+      return {
+        status: currentFocusState.paused ? "paused" : candidates.length > 0 ? "ready" : "empty",
+        brainId,
+        sessionId,
+        focusState: currentFocusState,
+        candidates,
+        selectedCandidate,
+      };
+    },
+    async tick(input) {
+      assert.equal(input.brainId, brainId);
+      assert.equal(input.sessionId, sessionId);
+      assert.equal(input.limit, 3);
+      selectedCandidate = candidateDto(sessionId);
+      candidates = [selectedCandidate];
+      currentFocusState = focusState(sessionId, "autopilot_suggestion", false);
+
+      const move = moveDto(sessionId, "next_move_recomputed", {
+        selectedCandidateId: selectedCandidate.candidateId,
+      });
+      moves.push(move);
+
+      return {
+        status: "ready",
+        brainId,
+        sessionId,
+        focusState: currentFocusState,
+        candidates,
+        selectedCandidate,
+        graphHash: selectedCandidate.graphHash,
+        persistedMoveIds: [move.id],
+        move,
+      };
+    },
+    async startCandidate(input) {
+      assert.equal(input.brainId, brainId);
+      assert.equal(input.sessionId, sessionId);
+
+      const candidate = candidates.find(
+        (item) => item.id === input.candidateId || item.candidateId === input.candidateId || item.fingerprint === input.candidateId,
+      );
+
+      if (!candidate) {
+        throw new ThinkingModeNotFoundError("Next move candidate was not found for this session.");
+      }
+
+      selectedCandidate = candidate;
+      currentFocusState = focusState(sessionId, "autopilot_started", false);
+
+      const move = moveDto(sessionId, "autopilot_focus_started", {
+        candidateId: candidate.candidateId,
+        targetClaimId: candidate.targetClaimId,
+      });
+      moves.push(move);
+
+      return {
+        status: "started",
+        brainId,
+        sessionId,
+        focusState: currentFocusState,
+        selectedCandidate: candidate,
+        move,
+      };
+    },
+    async manualFocus(input) {
+      assert.equal(input.brainId, brainId);
+      assert.equal(input.sessionId, sessionId);
+      assert.equal(input.claimId, uuidAt(202));
+
+      currentFocusState = focusState(sessionId, "manual_selection", true);
+
+      const move = moveDto(sessionId, "manual_node_selected", {
+        claimId: input.claimId,
+        pauseAutopilot: true,
+        reason: input.reason ?? null,
+      });
+      moves.push(move);
+
+      return {
+        status: "paused",
+        brainId,
+        sessionId,
+        focusState: currentFocusState,
+        focusClaim: {
+          id: input.claimId,
+          versionId: uuidAt(702),
+          kind: "assumption",
+          status: "exploratory",
+          text: "Founders will use structured thinking guidance.",
+          confidence: 42,
+        },
+        move,
+      };
+    },
+  };
+}
 
 function routeService(calls: string[], overrides: Partial<ThinkingModeRouteService> = {}): ThinkingModeRouteService {
   return {
@@ -310,13 +570,13 @@ function focusState(sessionId: string, source: "none" | "autopilot_suggestion" |
   };
 }
 
-function moveDto(sessionId: string, kind: string) {
+function moveDto(sessionId: string, kind: string, payload: Record<string, unknown> = {}) {
   return {
     id: uuidAt(601),
     sessionId,
     kind,
     summary: `Created ${kind}.`,
-    payload: {},
+    payload,
     createdAt: "2026-04-29T00:00:10.000Z",
   };
 }
