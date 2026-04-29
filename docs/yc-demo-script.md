@@ -1,193 +1,183 @@
-# YC Demo Script: Thinking Mode Autopilot
+# 90-Second Demo Script
 
-Status: Wave 1 backend contract  
+Status: Wave 8 THINKER final demo script
 Date: 2026-04-29
 
-## Demo Goal
+## Positioning
 
-Show that Penny is a controllable AI thinking instrument for founders, not a chatbot. The demo should make backend-owned thinking state visible: claims, assumptions, dependency edges, ranked next moves, challenge response history, and a Challenge Brief artifact.
+One-sentence company description:
 
-## Golden Seed
+> Penny is a controllable AI thinking instrument that turns a messy idea into claims, assumptions, challenges, revisions, and a short Challenge Brief.
 
-> I'm building Penny, a thinking autopilot for founders.
+Why now:
 
-## Setup
+> AI made generation cheap, but serious builders now need control over reasoning, assumptions, and decision history. Chat is good at producing text; Penny is built for inspecting and improving the structure underneath the text.
 
-- Start from a clean new session.
-- Use the golden seed exactly.
-- Use the YC demo graph fixture as the expected deterministic structure for tests and seeded demos.
-- Keep the frontend in cockpit mode: graph, active focus, candidates, challenge, and artifact. Do not present this as a chat conversation.
+Target wedge:
 
-## Demo Flow
+> Early founders making high-stakes strategy, product, fundraising, or market bets before they have enough traction to know which assumptions are true.
 
-### 1. Enter the raw idea
+What compounds over time:
 
-Action: paste the golden seed.
+> Penny compounds through Moves: extracted assumptions, challenge outcomes, claim revisions, absorbed risks, confidence changes, artifacts, and recurring thinking patterns that make future critique sharper.
 
-Backend evidence:
+## Demo Setup
+
+Use a clean session. The founder enters a messy idea, not a polished prompt:
+
+> I think pre-seed founders will pay for a structured thinking autopilot before traction because founder decisions are messy and ChatGPT loses the thread. Penny should map the idea, find weak assumptions, challenge them, and leave me with something I can actually use.
+
+## 90-Second Script
+
+### 0:00-0:10 - Founder enters messy idea
+
+Narration:
+
+> A founder starts with an unpolished idea. Penny does not answer with a wall of advice. It turns the idea into thinking state.
+
+On screen:
+
+- messy seed idea submitted
+- new session opens
+- source and seed claim appear
+
+Backend receipt:
 
 - `source_recorded`
 - `seed_claim_created`
+
+### 0:10-0:22 - Penny extracts assumptions
+
+Narration:
+
+> Penny extracts the claims and assumptions inside the idea. These are not notes. They are graph nodes with confidence and dependency edges.
+
+On screen:
+
+- primary claim
+- key assumptions
+- dependency edges
+- confidence values
+
+Expected assumptions:
+
+- pre-seed founders feel enough pain to pay before traction
+- structured thinking is more useful than generic AI chat for this job
+- the product can produce a concrete founder artifact fast enough to matter
+
+Backend receipt:
+
 - `assumptions_extracted`
 
-Narration:
-
-- Penny does not answer the idea like a chatbot.
-- Penny turns the idea into claims, assumptions, and dependencies that can be inspected and challenged.
-
-### 2. Show the thought map
-
-Expected visible structure:
-
-- root claim: Penny is a thinking autopilot for founders
-- assumptions about founder demand, controllability, willingness to use structured thinking, and usefulness versus generic AI tools
-- one concept node: controllable AI thinking instrument
-- dependency edges showing which claims rely on which assumptions
+### 0:22-0:35 - Autopilot highlights load-bearing weakness
 
 Narration:
 
-- The graph is not decorative.
-- The backend owns the graph slice; the frontend renders it.
-- Assumptions are first-class claims connected by dependency edges.
+> Autopilot picks the next highest-leverage thinking move. It highlights the willingness-to-pay assumption because the rest of the idea depends on it.
 
-### 3. Autopilot ranks the next move
+On screen:
 
-Action: trigger `POST /autopilot/tick`.
+- selected pressure point: `Pre-seed founders will pay for structured thinking before traction.`
+- graph highlight on the dependency path
+- suggested next move
 
-Backend evidence:
+Backend receipt:
 
 - `next_move_recomputed`
 - `autopilot_candidate_generated`
 - `autopilot_focus_suggested`
 
-Expected suggestion:
-
-- Focus the low-confidence market assumption: founders will use structured thinking guidance during ambiguous company decisions.
+### 0:35-0:45 - Penny explains why
 
 Narration:
 
-- Penny chooses the next move because this assumption is low-confidence and load-bearing.
-- The explanation must be visible before the user acts.
-- Autopilot suggests focus; it does not silently change truth.
+> Penny explains the choice before doing anything. The issue is not whether founders have messy thinking. The issue is whether they will pay for structured thinking before traction.
 
-### 4. Click "Go there"
+On screen:
 
-Action: accept the suggested focus.
+- why chosen
+- reason codes: `shaky_assumption`, `load_bearing`, `market_risk`
+- target claim and edge refs available for audit
 
-Backend evidence:
-
-- `autopilot_focus_started`
+### 0:45-1:00 - Penny challenges it
 
 Narration:
 
-- The user remains in control.
-- "Go there" starts the suggested focus; it does not revise claims or confidence.
+> Now Penny issues the challenge. It is specific, pressure-tested, and answerable.
 
-### 5. Issue the challenge
+Challenge copy:
 
-Action: challenge the focused assumption.
+> The risky assumption is not that founders have messy thinking. They do. The risk is that pre-seed founders will pay for structured thinking before traction, when their budget and attention usually go to building, selling, fundraising, or finding customers. If Penny does not create an immediate artifact that helps with one of those urgent jobs, "better thinking" may be admired but deferred.
 
-Backend evidence:
+On screen:
+
+- failure type: `shaky_assumption`
+- strength: `strong`
+- response options: Defend, Revise, Absorb
+
+Backend receipt:
 
 - `challenge_issued`
 
-Expected challenge:
-
-- Founders may say they want better thinking, but under pressure they may default to speed, advisors, or generic AI chat instead of a structured map.
+### 1:00-1:15 - Founder revises
 
 Narration:
 
-- Penny challenges the weakest load-bearing part of the idea.
-- The challenge is attached to the graph as a critique claim and challenge edge.
+> The founder chooses Revise. Penny does not overwrite history. It preserves the old version and makes the narrower claim current.
 
-### 6. Demonstrate manual override
+Founder revision:
 
-Action: select the high-confidence unsupported claim instead of following the current Autopilot suggestion.
+> Pre-seed founders will pay for structured thinking when it produces an immediate fundraising, positioning, or product-decision artifact they can use that week.
 
-Backend evidence:
+On screen:
 
-- `manual_node_selected`
+- old claim version
+- new claim version
+- revision reason
 
-Expected result:
-
-- Focus moves to the selected claim.
-- Autopilot is paused.
-- The override becomes history Penny can learn from later.
-
-Narration:
-
-- Manual control is not an escape hatch outside the system.
-- The override itself becomes a Move.
-
-### 7. Respond with Revise
-
-Action: revise the unsupported claim into a narrower claim.
-
-Example revision:
-
-> Penny can be more useful than generic AI chat for founders when the task requires preserving assumptions, challenges, and decision history across a thinking session.
-
-Backend evidence:
+Backend receipt:
 
 - `claim_revised`
 - previous ClaimVersion preserved
 - new current ClaimVersion created
 
-Narration:
-
-- The old claim does not disappear.
-- Penny keeps the history of how the founder's thinking changed.
-
-### 8. Recompute the next move
-
-Action: trigger `POST /autopilot/tick` again after the challenge response.
-
-Backend evidence:
-
-- `next_move_recomputed`
-- `autopilot_candidate_generated`
-- `autopilot_focus_suggested`
-
-Expected suggestion:
-
-- Create the Challenge Brief if the loop has enough structure and at least one challenge response.
+### 1:15-1:28 - Penny produces Challenge Brief
 
 Narration:
 
-- Penny notices the loop has reached an artifact boundary.
-- It recommends synthesis rather than infinite engagement.
+> Penny turns the loop into a short thinking receipt: original idea, current claim, assumptions, pressure point, challenge, response, what changed, open risks, and the move timeline.
 
-### 9. Create the Challenge Brief
+On screen:
 
-Action: accept artifact creation.
+- compact Challenge Brief
+- before/after claim change
+- open risk: prove the urgent paid founder moment
 
-Backend evidence:
+Backend receipt:
 
 - `artifact_created`
 
-Expected brief sections:
-
-- original idea
-- claim map summary
-- load-bearing assumptions
-- weakest challenge
-- user response
-- revised claim history
-- unresolved risk
-- recommended next move
+### 1:28-1:30 - Penny suggests next move
 
 Narration:
 
-- The artifact is derived from the graph and moves.
-- The user leaves with a concrete founder brief, not a chat transcript.
+> Penny does not end with generic advice. It gives the next thinking move: test the revised paid-use case against one real founder workflow.
+
+On screen:
+
+- recommended next move
+- target claim or edge
+- expected completion move
+
+## Close
+
+> That is Penny: not a chatbot that generates more text, but a controllable thinking instrument where every meaningful step becomes durable thinking state.
 
 ## Success Bar
 
-- The demo shows a graph before it shows prose.
-- Every visible state change has a backend move.
-- The suggested focus has a reason.
-- Manual override pauses Autopilot.
+- The first visible value is structure, not prose.
+- The pressure point is load-bearing and founder-specific.
+- Penny explains why before challenging.
 - Revise preserves the old claim version.
-- The Challenge Brief is created from canonical state.
-- No GET request changes backend state.
-- No frontend-only state is presented as canonical thinking history.
+- The Challenge Brief is short enough to scan.
+- The final next move is concrete and non-generic.
