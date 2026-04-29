@@ -76,6 +76,8 @@ export const moveKindEnum = pgEnum("move_kind", [
   "claim_revised",
   "critique_absorbed",
   "learning_triggered",
+  "autopilot_suggested",
+  "manual_node_selected",
   "verify_run",
   "confidence_update_accepted",
   "confidence_update_rejected",

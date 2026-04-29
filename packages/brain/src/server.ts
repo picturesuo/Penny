@@ -4,6 +4,7 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleArtifactRequest, handleSessionArtifactRequest } from "./artifact-route.ts";
 import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
+import { handleAutopilotTickRequest, handleManualNodeSelectedRequest } from "./autopilot-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
@@ -24,6 +25,16 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/seed") {
       await writeWebResponse(outgoing, await handleBrainSeedRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/autopilot/tick") {
+      await writeWebResponse(outgoing, await handleAutopilotTickRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/autopilot/select-node") {
+      await writeWebResponse(outgoing, await handleManualNodeSelectedRequest(request));
       return;
     }
 

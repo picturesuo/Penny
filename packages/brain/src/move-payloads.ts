@@ -31,6 +31,18 @@ const FailureTypeSchema = z.enum([
 ]);
 const ChallengeStrengthSchema = z.enum(["weak", "moderate", "strong"]);
 const EditPolicySchema = z.literal("compiled_view_only");
+const AutopilotActionSchema = z.enum([
+  "respond_to_challenge",
+  "review_assumption",
+  "challenge_claim",
+  "verify_confidence",
+  "create_challenge_brief",
+  "revisit_absorbed_risk",
+  "explore_claim",
+]);
+const AutopilotModeSchema = z.enum(["brain", "challenge", "verify", "artifact"]);
+const AutopilotReasonCodeSchema = z.string().trim().min(1).max(120);
+const AutopilotScoreSchema = z.number().int().min(0).max(2_000);
 
 const SeedPersistencePayloadSchema = z
   .object({
@@ -132,6 +144,55 @@ const LearningTriggeredPayloadSchema = z
     claimIds: UuidArraySchema,
     claimVersionIds: UuidArraySchema.optional(),
     edgeIds: UuidArraySchema,
+  })
+  .strict();
+
+const AutopilotCandidateScoreSchema = z
+  .object({
+    action: AutopilotActionSchema,
+    mode: AutopilotModeSchema,
+    targetClaimId: UuidSchema.nullable(),
+    targetEdgeId: UuidSchema.nullable(),
+    score: AutopilotScoreSchema,
+    reasonCodes: z.array(AutopilotReasonCodeSchema).min(1).max(12),
+  })
+  .strict();
+
+const AutopilotSuggestedPayloadSchema = z
+  .object({
+    suggestionId: UuidSchema,
+    action: AutopilotActionSchema,
+    mode: AutopilotModeSchema,
+    label: z.string().trim().min(1).max(120),
+    targetClaimId: UuidSchema.nullable(),
+    targetEdgeId: UuidSchema.nullable(),
+    score: AutopilotScoreSchema,
+    why: z.string().trim().min(1).max(900),
+    reasonCodes: z.array(AutopilotReasonCodeSchema).min(1).max(12),
+    candidateScores: z.array(AutopilotCandidateScoreSchema).min(1).max(12),
+    goThere: z
+      .object({
+        label: z.literal("Go there"),
+        targetClaimId: UuidSchema.nullable(),
+        targetEdgeId: UuidSchema.nullable(),
+        mode: AutopilotModeSchema,
+      })
+      .strict(),
+    claimIds: UuidArraySchema,
+    edgeIds: UuidArraySchema,
+    artifactIds: UuidArraySchema,
+  })
+  .strict();
+
+const ManualNodeSelectedPayloadSchema = z
+  .object({
+    claimId: UuidSchema,
+    previousSuggestionMoveId: UuidSchema.nullable(),
+    reason: z.string().trim().min(1).max(1_000).nullable(),
+    pauseAutopilot: z.literal(true),
+    claimIds: UuidArraySchema,
+    edgeIds: UuidArraySchema,
+    artifactIds: UuidArraySchema,
   })
   .strict();
 
@@ -312,6 +373,8 @@ export const MovePayloadSchemas = {
   claim_revised: ClaimRevisedPayloadSchema,
   critique_absorbed: CritiqueAbsorbedPayloadSchema,
   learning_triggered: LearningTriggeredPayloadSchema,
+  autopilot_suggested: AutopilotSuggestedPayloadSchema,
+  manual_node_selected: ManualNodeSelectedPayloadSchema,
   verify_run: VerifyRunPayloadSchema,
   confidence_update_accepted: ConfidenceUpdateAcceptedPayloadSchema,
   confidence_update_rejected: ConfidenceUpdateRejectedPayloadSchema,
