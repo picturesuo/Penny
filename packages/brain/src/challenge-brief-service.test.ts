@@ -12,6 +12,7 @@ import {
   moves,
   nextMoveCandidates,
   sessions,
+  sourceSpans,
   sources,
 } from "./db/schema.ts";
 import {
@@ -50,6 +51,7 @@ test("compileChallengeBriefDraft builds all V0 sections from persisted Thinking 
   assert.ok(sections.moveTimelineSummary.some((move) => move.kind === "focus_completed"));
   assert.deepEqual(draft.payload.inputs.challengeRoundIds, [uuidAt(901)]);
   assert.equal(draft.payload.inputs.latestSelectedCandidate?.candidateId, "verify-founder-wtp");
+  assert.deepEqual(draft.payload.refs.sourceSpanIds, [uuidAt(151), uuidAt(152)]);
   assert.ok(draft.payload.refs.claimVersionIds.includes(uuidAt(303)));
   assert.equal(JSON.stringify(state), before);
 });
@@ -110,6 +112,7 @@ test("generateChallengeBrief persists a Challenge Brief after Revise without mut
   assert.ok(sections.openRisks.some((risk) => risk.kind === "assumption" && risk.claimId === uuidAt(202)));
   assert.equal(sections.recommendedNextMove.action, "verify");
   assert.equal(sections.recommendedNextMove.expectedCompletionMove, "verify_run");
+  assert.deepEqual(result.brief.refs.sourceSpanIds, [uuidAt(151), uuidAt(152)]);
 
   const artifactInsert = calls.insert.find((call) => call.table === artifacts);
   assert.ok(artifactInsert);
@@ -145,6 +148,22 @@ function sampleState(): ChallengeBriefState {
         id: uuidAt(150),
         kind: "raw_idea",
         rawText: "I'm building Penny, a thinking autopilot for founders.",
+        createdAt: now(1),
+      },
+    ],
+    sourceSpans: [
+      {
+        id: uuidAt(151),
+        sourceId: uuidAt(150),
+        claimId: uuidAt(201),
+        claimVersionId: uuidAt(302),
+        createdAt: now(1),
+      },
+      {
+        id: uuidAt(152),
+        sourceId: uuidAt(150),
+        claimId: uuidAt(202),
+        claimVersionId: uuidAt(304),
         createdAt: now(1),
       },
     ],
@@ -322,6 +341,7 @@ function fakeChallengeBriefDb(state: ChallengeBriefState) {
   const selectRows = [
     [sessionRow(state.session)],
     state.sources.map(sourceRow),
+    state.sourceSpans.map(sourceSpanRow),
     state.claims.map(claimRow),
     state.claims.flatMap((claimForState) => claimForState.versions.map(versionRow)),
     state.edges.map(edgeRow),
@@ -477,6 +497,19 @@ function sourceRow(sourceForState: ChallengeBriefState["sources"][number]) {
     kind: sourceForState.kind,
     rawText: sourceForState.rawText,
     createdAt: new Date(sourceForState.createdAt),
+  };
+}
+
+function sourceSpanRow(spanForState: ChallengeBriefState["sourceSpans"][number]) {
+  return {
+    id: spanForState.id,
+    sourceId: spanForState.sourceId,
+    claimId: spanForState.claimId,
+    claimVersionId: spanForState.claimVersionId,
+    startOffset: 0,
+    endOffset: 12,
+    label: "submitted_text",
+    createdAt: new Date(spanForState.createdAt),
   };
 }
 
