@@ -17,16 +17,45 @@ import type {
   ThinkingModeStateData,
 } from "../types/brain";
 
-const headers = {
+const jsonHeaders = {
   "content-type": "application/json",
-  "x-user-id": "dev-user",
-  "x-project-id": "dev-project",
 };
+
+function requestHeaders(): HeadersInit {
+  const headers: Record<string, string> = { ...jsonHeaders };
+  const token = runtimeEnv("VITE_PENNY_API_TOKEN");
+
+  if (token) {
+    headers.authorization = `Bearer ${token}`;
+  }
+
+  addOptionalHeader(headers, "x-user-id", "VITE_PENNY_USER_ID");
+  addOptionalHeader(headers, "x-workspace-id", "VITE_PENNY_WORKSPACE_ID");
+  addOptionalHeader(headers, "x-project-id", "VITE_PENNY_PROJECT_ID");
+  addOptionalHeader(headers, "x-sphere-id", "VITE_PENNY_SPHERE_ID");
+
+  return headers;
+}
+
+function addOptionalHeader(headers: Record<string, string>, headerName: string, envName: string): void {
+  const value = runtimeEnv(envName);
+
+  if (value) {
+    headers[headerName] = value;
+  }
+}
+
+function runtimeEnv(name: string): string | undefined {
+  const env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env;
+  const value = env?.[name];
+
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
 
 export async function seedBrain(rawIdea: string): Promise<SeedBrainResponse> {
   const response = await fetch("/brain/seed", {
     method: "POST",
-    headers,
+    headers: requestHeaders(),
     body: JSON.stringify({ rawIdea }),
   });
 
@@ -42,7 +71,7 @@ export async function seedBrain(rawIdea: string): Promise<SeedBrainResponse> {
 export async function tickAutopilot(sessionId: string, resume = false): Promise<AutopilotTickResponse> {
   const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/autopilot/tick`, {
     method: "POST",
-    headers,
+    headers: requestHeaders(),
     body: JSON.stringify({ resume }),
   });
 
@@ -62,7 +91,7 @@ export async function startAutopilotCandidate(sessionId: string, candidateId: st
     `/api/sessions/${encodeURIComponent(sessionId)}/next-move-candidates/${encodeURIComponent(candidateId)}/start`,
     {
       method: "POST",
-      headers,
+      headers: requestHeaders(),
       body: JSON.stringify({}),
     },
   );
@@ -89,7 +118,7 @@ export async function issueChallengeFromCandidate(
     `/api/sessions/${encodeURIComponent(sessionId)}/next-move-candidates/${encodeURIComponent(candidateId)}/challenge`,
     {
       method: "POST",
-      headers,
+      headers: requestHeaders(),
       body: JSON.stringify({}),
     },
   );
@@ -127,7 +156,7 @@ export async function respondToChallenge(input: {
         };
   const response = await fetch(`/api/challenges/${encodeURIComponent(input.challengeId)}/respond`, {
     method: "POST",
-    headers,
+    headers: requestHeaders(),
     body: JSON.stringify(body),
   });
 
@@ -145,7 +174,7 @@ export async function respondToChallenge(input: {
 export async function createChallengeBrief(sessionId: string): Promise<ChallengeBriefResponse> {
   const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/challenge-brief`, {
     method: "POST",
-    headers,
+    headers: requestHeaders(),
     body: JSON.stringify({}),
   });
 
@@ -167,7 +196,7 @@ export async function selectAutopilotNode(input: {
 }): Promise<ManualNodeSelectionResponse> {
   const response = await fetch(`/api/sessions/${encodeURIComponent(input.sessionId)}/focus/manual`, {
     method: "POST",
-    headers,
+    headers: requestHeaders(),
     body: JSON.stringify({
       claimId: input.claimId,
       ...(input.previousSuggestionMoveId ? { previousSuggestionMoveId: input.previousSuggestionMoveId } : {}),
@@ -186,7 +215,7 @@ export async function selectAutopilotNode(input: {
 export async function fetchSessionCockpit(sessionId: string): Promise<SessionCockpitResponse> {
   const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/cockpit`, {
     method: "GET",
-    headers,
+    headers: requestHeaders(),
   });
 
   const payload = await readJson(response);
