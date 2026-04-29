@@ -22,6 +22,7 @@ import type {
   ChallengeResponseKind,
   RespondToChallengeResponse,
   SessionCockpitData,
+  WorkStructureStep,
 } from "./types/brain";
 
 type ChallengeResponseDraft =
@@ -49,10 +50,12 @@ export function App() {
   const [challengeResponse, setChallengeResponse] = useState<RespondToChallengeResponse["data"] | null>(null);
   const [latestArtifact, setLatestArtifact] = useState<SessionCockpitData["latestArtifact"]>(null);
   const [focusedClaimId, setFocusedClaimId] = useState<string | null>(null);
+  const [focusedWorkStructureStepId, setFocusedWorkStructureStepId] = useState<string | null>(null);
   const [status, setStatus] = useState("Ready");
   const [isThinking, setIsThinking] = useState(false);
 
   const claims = useMemo(() => data?.ideaMap?.claims ?? [], [data]);
+  const workStructure = data?.workStructure ?? null;
   const seedClaim = claims.find((claim) => claim.seedId === "claim.seed") ?? claims[0];
   const suggestedClaimId = autopilot?.suggestion?.targetClaimId ?? null;
   const focusedClaim =
@@ -92,6 +95,7 @@ export function App() {
         setAutopilot(cockpitData.autopilot);
         setMoves(cockpitData.moves);
         setLatestArtifact(cockpitData.latestArtifact ?? null);
+        setFocusedWorkStructureStepId(cockpitData.workStructure?.activeStepId ?? null);
         setFocusedClaimId(
           cockpitData.autopilot.focusState?.focusedClaimId ??
             cockpitData.autopilot.suggestion?.targetClaimId ??
@@ -128,6 +132,7 @@ export function App() {
       setData(payload.data);
       setChallengeResponse(null);
       setLatestArtifact(null);
+      setFocusedWorkStructureStepId(payload.data.workStructure?.activeStepId ?? null);
       setFocusedClaimId(payload.data.firstChallenge?.targetClaimId ?? payload.data.ideaMap?.claims?.[0]?.id ?? null);
       setStatus("Graph slice persisted");
 
@@ -264,6 +269,8 @@ export function App() {
   }
 
   async function handleManualClaimSelect(claimId: string) {
+    setFocusedWorkStructureStepId(workStructure?.steps.find((step) => step.claimIds.includes(claimId))?.id ?? null);
+
     if (!data?.session?.id) {
       setFocusedClaimId(claimId);
       return;
@@ -288,6 +295,19 @@ export function App() {
     }
   }
 
+  async function handleWorkStructureSelect(step: WorkStructureStep) {
+    setFocusedWorkStructureStepId(step.id);
+
+    const claimId = step.claimIds[0] ?? null;
+
+    if (!claimId) {
+      setStatus(`${step.title} selected`);
+      return;
+    }
+
+    await handleManualClaimSelect(claimId);
+  }
+
   async function refreshCockpit(sessionId: string, fallbackData: BrainData | null = data): Promise<SessionCockpitData> {
     const cockpit = await fetchSessionCockpit(sessionId);
     const cockpitData = cockpit.data;
@@ -296,6 +316,7 @@ export function App() {
     setAutopilot(cockpitData.autopilot);
     setMoves(cockpitData.moves);
     setLatestArtifact(cockpitData.latestArtifact ?? null);
+    setFocusedWorkStructureStepId(cockpitData.workStructure?.activeStepId ?? null);
     rememberActiveSession(cockpitData.session.id);
 
     return cockpitData;
@@ -308,10 +329,13 @@ export function App() {
         <main className="cockpit-grid">
           <LeftRail
             claims={claims}
+            workStructure={workStructure}
             savedPaths={(data?.explorationPaths ?? []).map((path) => path.title)}
             focusedClaimId={focusedClaimId}
+            focusedWorkStructureStepId={focusedWorkStructureStepId}
             suggestedClaimId={suggestedClaimId}
             onClaimSelect={handleManualClaimSelect}
+            onWorkStructureSelect={handleWorkStructureSelect}
           />
           <div className="center-stage">
             <CurrentExploration
@@ -348,11 +372,13 @@ function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null
   const keyInsight = cockpit.ideaMap.keyInsight ?? current?.ideaMap?.keyInsight ?? null;
   const fallbackChallenge = current?.firstChallenge && !current.firstChallenge.id ? current.firstChallenge : null;
   const firstChallenge = cockpit.activeChallenge ?? fallbackChallenge;
+  const workStructure = cockpit.workStructure ?? current?.workStructure ?? null;
 
   return {
     ...(current?.source ? { source: current.source } : {}),
     ...(current?.brainRun ? { brainRun: current.brainRun } : {}),
     session: cockpit.session,
+    ...(workStructure ? { workStructure } : {}),
     ideaMap: {
       claims: cockpit.ideaMap.claims,
       edges: cockpit.ideaMap.edges,
