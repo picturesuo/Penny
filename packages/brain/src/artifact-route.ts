@@ -970,7 +970,7 @@ export function buildArtifactDraft(state: SessionArtifactState): ArtifactDraft {
     .filter((claim) => claim.kind === "concept")
     .map((claim) => compiledLearnedConcept(claim, currentVersions, teachesEdges))
     .filter((concept): concept is CompiledLearnedConcept => Boolean(concept));
-  const unresolvedRisks = buildUnresolvedRisks(claimSnapshots, state.edges, challenges, textByClaimId);
+  const unresolvedRisks = buildUnresolvedRisks(claimSnapshots, state.edges, challenges, textByClaimId, state.moves);
   const whatChanged = state.moves.map(compiledStateChange);
   const recommendedNextMove = recommendNextMove(unresolvedRisks, claimSnapshots, learnedConcepts);
   const shapes = inferShapesFromMoves(whatChanged);
@@ -1138,9 +1138,14 @@ function buildUnresolvedRisks(
   edges: EdgeRow[],
   challenges: CompiledChallenge[],
   textByClaimId: Map<string, string>,
+  moveRows: ChallengeResponseMoveCandidate[],
 ): CompiledRisk[] {
   const challengeRisks = challenges
-    .filter((challenge) => challenge.status === "active" || challenge.status === "acknowledged_vulnerability")
+    .filter(
+      (challenge) =>
+        challenge.status === "acknowledged_vulnerability" ||
+        (challenge.status === "active" && !challengeResponseMoveForEdge(moveRows, challenge.edgeId)),
+    )
     .map((challenge) => ({
       kind: "challenge" as const,
       claimId: challenge.targetClaimId,
@@ -1536,7 +1541,11 @@ function conceptTerm(edgeLabel: string | null | undefined, content: string): str
 function compiledRisks(context: SessionArtifactContext, challenges: CompiledChallenge[]): CompiledRisk[] {
   const claimsById = new Map(context.claims.map((claim) => [claim.id, claim]));
   const challengeRisks = challenges
-    .filter((challenge) => challenge.status === "active" || challenge.status === "acknowledged_vulnerability")
+    .filter(
+      (challenge) =>
+        challenge.status === "acknowledged_vulnerability" ||
+        (challenge.status === "active" && !challengeResponseMoveForEdge(context.moves, challenge.edgeId)),
+    )
     .map((challenge) => ({
       kind: "challenge" as const,
       claimId: challenge.targetClaimId,
@@ -1578,6 +1587,24 @@ function compiledChange(move: SessionArtifactContext["moves"][number]): Compiled
     edgeIds: stringArrayPayloadValue(move.payload, "edgeIds"),
     createdAt: move.createdAt,
   };
+}
+
+type ChallengeResponseMoveCandidate = {
+  kind: string;
+  payload: unknown;
+};
+
+function challengeResponseMoveForEdge(
+  moveRows: ChallengeResponseMoveCandidate[],
+  edgeId: string,
+): ChallengeResponseMoveCandidate | undefined {
+  return moveRows.find((move) => {
+    if (!["user_defended", "claim_revised", "critique_absorbed"].includes(move.kind)) {
+      return false;
+    }
+
+    return stringArrayPayloadValue(move.payload, "edgeIds").includes(edgeId) || stringPayloadValue(move.payload, "challengeEdgeId") === edgeId;
+  });
 }
 
 type ShapeMove = Pick<CompiledChange, "moveId" | "kind" | "summary" | "createdAt">;
