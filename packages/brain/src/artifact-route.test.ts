@@ -314,6 +314,10 @@ function sampleContext(sessionId = uuidAt(100)): SessionArtifactContext {
   return {
     session: {
       id: sessionId,
+      userId: "dev-user-1",
+      workspaceId: "dev-workspace-1",
+      projectId: "dev-project-1",
+      sphereId: "dev-sphere-1",
       status: "open",
       title: "Penny should reduce cognitive load while students study complex material.",
       createdAt: now(),
@@ -321,6 +325,10 @@ function sampleContext(sessionId = uuidAt(100)): SessionArtifactContext {
     sources: [
       {
         id: sourceId,
+        userId: "dev-user-1",
+        workspaceId: "dev-workspace-1",
+        projectId: "dev-project-1",
+        sphereId: "dev-sphere-1",
         kind: "raw_idea",
         rawText: "Penny should reduce cognitive load while students study complex material.",
         createdAt: now(),

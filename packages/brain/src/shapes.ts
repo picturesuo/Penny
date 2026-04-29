@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { PennyDatabase } from "./db/client.ts";
 import { shapeStatusEnum, shapes } from "./db/schema.ts";
+import { scopeValues, type BrainScopeInput } from "./scope.ts";
 
 export type ShapeStatus = (typeof shapeStatusEnum.enumValues)[number];
 export type PersistedShape = typeof shapes.$inferSelect;
@@ -68,7 +69,7 @@ export class ShapeValidationError extends Error {
 
 export async function persistInferredShapes(
   tx: ShapeTransaction,
-  input: { sessionId: string; moves: ShapeMove[] },
+  input: { sessionId: string; scope?: BrainScopeInput; moves: ShapeMove[] },
 ): Promise<PersistedShape[]> {
   const inferred = inferShapesFromMoves(input.moves);
   const existingRows = await tx
@@ -88,6 +89,7 @@ export async function persistInferredShapes(
     const [inserted] = await tx
       .insert(shapes)
       .values({
+        ...scopeValues(input.scope),
         sessionId: input.sessionId,
         sourceMoveId,
         key: shape.key,

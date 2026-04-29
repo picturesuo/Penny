@@ -100,6 +100,10 @@ function shapeMove(moveId: string, kind: string) {
 function shapeRow(overrides: Partial<PersistedShape> = {}): PersistedShape {
   return {
     id: uuidAt(700),
+    userId: null,
+    workspaceId: null,
+    projectId: null,
+    sphereId: null,
     sessionId: uuidAt(100),
     sourceMoveId: uuidAt(501),
     key: "challenge_response_loop",

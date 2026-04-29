@@ -9,6 +9,7 @@ import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-
 import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
 import { createMove, parseMovePayload } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
+import { scopeValues } from "./scope.ts";
 
 export const VerifyRequestSchema = z
   .object({
@@ -410,6 +411,7 @@ export async function decideVerifyConfidence(
     if (input.decision === "reject") {
       const move = await createMove(tx, "confidence_update_rejected", {
         sessionId: verifyMove.sessionId,
+        scope: target.claim,
         summary: "Rejected a Verify confidence suggestion.",
         payload: {
           decision: "reject",
@@ -480,6 +482,7 @@ export async function decideVerifyConfidence(
     const edgeIds = uniqueStrings(cascade.map((entry) => entry.viaEdgeId));
     const move = await createMove(tx, "confidence_update_accepted", {
       sessionId: verifyMove.sessionId,
+      scope: target.claim,
       summary: acceptedConfidenceSummary(targetMutation.appliedDelta, cascade.length),
       payload: {
         decision: "accept",
@@ -703,6 +706,7 @@ async function createVerifyPrelude(
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
+        ...scopeValues(target.claim),
         sessionId: input.sessionId,
         sourceId: target.claim.sourceId,
         operation: "verify_run",
@@ -746,6 +750,7 @@ async function persistVerifyResult(
     };
     const move = await createMove(tx, "verify_run", {
       sessionId: prelude.target.claim.sessionId,
+      scope: prelude.target.claim,
       summary: verifyMoveSummary(output),
       payload: {
         claimIds: [prelude.target.claim.id],
@@ -801,6 +806,7 @@ async function insertCitationSources(
     const [source] = await db
       .insert(sources)
       .values({
+        ...scopeValues(target.claim),
         sessionId: target.claim.sessionId,
         kind: "verification_citation",
         rawText,

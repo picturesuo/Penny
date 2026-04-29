@@ -223,6 +223,7 @@ export async function persistAssumptionResponse(
     const move = await createMove(tx, moveKind, {
       id: moveId,
       sessionId: claim.sessionId,
+      scope: claim,
       summary,
       payload: {
         action: response.action,

@@ -9,6 +9,7 @@ import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-
 import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
 import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
+import { scopeValues } from "./scope.ts";
 
 export const InlineLearnRequestSchema = z
   .object({
@@ -424,6 +425,7 @@ async function createInlineLearnPrelude(
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
+        ...scopeValues(target.claim),
         sessionId: input.sessionId,
         sourceId: target.claim.sourceId,
         operation: "brain.learn.inline",
@@ -518,6 +520,7 @@ async function insertInlineLearnConcept(
     .insert(claims)
     .values({
       id: conceptClaimId,
+      ...scopeValues(target.claim),
       sessionId: input.sessionId,
       sourceId: target.claim.sourceId,
       kind: "concept",
@@ -532,6 +535,7 @@ async function insertInlineLearnConcept(
     .insert(claimEdges)
     .values({
       id: teachesEdgeId,
+      ...scopeValues(target.claim),
       sessionId: input.sessionId,
       fromClaimId: conceptClaim.id,
       toClaimId: target.claim.id,
@@ -548,6 +552,7 @@ async function insertInlineLearnConcept(
   const move = await createMove(tx, "learning_triggered", {
     id: moveId,
     sessionId: input.sessionId,
+    scope: target.claim,
     summary: "Saved an inline Learn concept inside Brain.",
     payload: {
       term: output.term,
@@ -645,6 +650,7 @@ async function completeInlineLearnRun(
   return db.transaction(async (tx) => {
     await createMove(tx, "learning_triggered", {
       sessionId: prelude.target.claim.sessionId,
+      scope: prelude.target.claim,
       summary: "Asked Makes Cents inline for a concept explanation.",
       payload: {
         term: output.term,

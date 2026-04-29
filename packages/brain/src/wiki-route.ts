@@ -14,6 +14,7 @@ import {
 } from "./db/schema.ts";
 import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
+import { scopeValues, type BrainScope, type OptionalBrainScope } from "./scope.ts";
 
 export const WikiRouteRequestSchema = z
   .object({
@@ -31,12 +32,12 @@ export const WikiRouteRequestSchema = z
 export type WikiRouteRequest = z.infer<typeof WikiRouteRequestSchema>;
 export type WikiRouteInput = WikiRouteRequest & { sessionId: string };
 
-type SessionRow = typeof sessions.$inferSelect;
-type ClaimRow = typeof claims.$inferSelect;
+type SessionRow = OptionalBrainScope<typeof sessions.$inferSelect>;
+type ClaimRow = OptionalBrainScope<typeof claims.$inferSelect>;
 type ClaimVersionRow = typeof claimVersions.$inferSelect;
-type EdgeRow = typeof claimEdges.$inferSelect;
-type MoveRow = typeof moves.$inferSelect;
-type ArtifactRow = typeof artifacts.$inferSelect;
+type EdgeRow = OptionalBrainScope<typeof claimEdges.$inferSelect>;
+type MoveRow = OptionalBrainScope<typeof moves.$inferSelect>;
+type ArtifactRow = OptionalBrainScope<typeof artifacts.$inferSelect>;
 type SourceSpanRow = typeof sourceSpans.$inferSelect;
 
 export type WikiCompileState = {
@@ -55,6 +56,7 @@ export type CompiledWikiContent = {
   editPolicy: "compiled_view_only";
   generatedFrom: {
     sessionId: string;
+    scope: BrainScope;
     claimIds: string[];
     claimVersionIds: string[];
     edgeIds: string[];
@@ -183,6 +185,7 @@ export async function persistSessionWiki(db: PennyDatabase, input: WikiRouteInpu
     const [wikiPage] = await tx
       .insert(wikiPages)
       .values({
+        ...scopeValues(state.session),
         sessionId: state.session.id,
         title: draft.title,
         slug: draft.slug,
@@ -197,6 +200,7 @@ export async function persistSessionWiki(db: PennyDatabase, input: WikiRouteInpu
 
     const move = await createMove(tx, "wiki_page_compiled", {
       sessionId: state.session.id,
+      scope: state.session,
       summary: `Compiled WikiPage "${draft.title}" from persisted Brain state.`,
       payload: {
         wikiPageId: wikiPage.id,
@@ -302,6 +306,7 @@ export function compileWikiPage(state: WikiCompileState, input: WikiRouteInput):
     editPolicy: "compiled_view_only",
     generatedFrom: {
       sessionId: state.session.id,
+      scope: scopeValues(state.session),
       claimIds: state.claims.map((claim) => claim.id),
       claimVersionIds: state.claimVersions.map((version) => version.id),
       edgeIds: state.edges.map((edge) => edge.id),

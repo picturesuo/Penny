@@ -8,6 +8,7 @@ import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-
 import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
 import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
+import { scopeValues } from "./scope.ts";
 import {
   compiledShapesFromRows,
   inferredShapeSlices,
@@ -166,12 +167,20 @@ export type SessionArtifactState = {
 export type SessionArtifactContext = {
   session: {
     id: string;
+    userId: string | null;
+    workspaceId: string | null;
+    projectId: string | null;
+    sphereId: string | null;
     status: string;
     title: string | null;
     createdAt: string;
   };
   sources: Array<{
     id: string;
+    userId: string | null;
+    workspaceId: string | null;
+    projectId: string | null;
+    sphereId: string | null;
     kind: string;
     rawText: string;
     createdAt: string;
@@ -742,6 +751,7 @@ async function createArtifactPrelude(
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
+        ...scopeValues(context.session),
         sessionId: input.sessionId,
         sourceId: context.sources[0]?.id ?? null,
         operation: "brain.artifact.challenge_brief",
@@ -774,6 +784,7 @@ async function persistArtifactOutput(
     const edgeIds = referencedEdgeIds(output);
     const persistedShapes = await persistInferredShapes(tx, {
       sessionId: prelude.context.session.id,
+      scope: prelude.context.session,
       moves: prelude.context.moves.map(compiledChange),
     });
     const context = withPersistedShapes(prelude.context, persistedShapes);
@@ -781,6 +792,7 @@ async function persistArtifactOutput(
     const [artifact] = await tx
       .insert(artifacts)
       .values({
+        ...scopeValues(prelude.context.session),
         sessionId: prelude.context.session.id,
         kind: "idea_map_challenge_brief",
         title: artifactTitle(output.title),
@@ -795,6 +807,7 @@ async function persistArtifactOutput(
 
     const move = await createMove(tx, "artifact_created", {
       sessionId: prelude.context.session.id,
+      scope: prelude.context.session,
       summary: "Generated a Challenge Brief artifact from persisted Brain state.",
       payload: {
         artifactId: artifact.id,
@@ -918,12 +931,14 @@ async function loadSessionArtifactContext(
   return {
     session: {
       id: session.id,
+      ...scopeValues(session),
       status: session.status,
       title: session.title,
       createdAt: session.createdAt.toISOString(),
     },
     sources: sourceRows.map((source) => ({
       id: source.id,
+      ...scopeValues(source),
       kind: source.kind,
       rawText: source.rawText,
       createdAt: source.createdAt.toISOString(),

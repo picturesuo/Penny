@@ -2,12 +2,13 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { PennyDatabase } from "./db/client.ts";
 import { artifacts, claimEdges, claims, claimVersions, derivedEffectKindEnum, derivedEffects, moves } from "./db/schema.ts";
+import { scopeValues, type OptionalBrainScope } from "./scope.ts";
 
-type MoveRow = typeof moves.$inferSelect;
-type ClaimRow = typeof claims.$inferSelect;
+type MoveRow = OptionalBrainScope<typeof moves.$inferSelect>;
+type ClaimRow = OptionalBrainScope<typeof claims.$inferSelect>;
 type ClaimVersionRow = typeof claimVersions.$inferSelect;
-type EdgeRow = typeof claimEdges.$inferSelect;
-type ArtifactRow = typeof artifacts.$inferSelect;
+type EdgeRow = OptionalBrainScope<typeof claimEdges.$inferSelect>;
+type ArtifactRow = OptionalBrainScope<typeof artifacts.$inferSelect>;
 type DerivedEffectKind = (typeof derivedEffectKindEnum.enumValues)[number];
 
 export type AfterMoveEffectsInput = {
@@ -79,6 +80,7 @@ export async function afterMoveEffects(
             .insert(derivedEffects)
             .values(
               drafts.map((draft) => ({
+                ...scopeValues(state.sourceMove),
                 sessionId: input.sessionId,
                 sourceMoveId: input.moveId,
                 kind: draft.kind,

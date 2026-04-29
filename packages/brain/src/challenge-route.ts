@@ -10,6 +10,7 @@ import { afterMoveEffects, type PersistedDerivedEffect } from "./after-move-effe
 import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
 import { createMove, type CreatedMove } from "./move-payloads.ts";
 import { FailureTypeSchema, flattenIssues } from "./schema.ts";
+import { scopeValues } from "./scope.ts";
 
 const ChallengeRequestSchema = z
   .object({
@@ -271,6 +272,7 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
+        ...scopeValues(target.claim),
         sessionId: target.claim.sessionId,
         sourceId: target.claim.sourceId,
         operation: "brain.challenge",
@@ -303,6 +305,7 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
       const [critiqueClaim] = await tx
         .insert(claims)
         .values({
+          ...scopeValues(prelude.target.claim),
           sessionId: prelude.target.claim.sessionId,
           sourceId: prelude.target.claim.sourceId,
           kind: "belief",
@@ -333,6 +336,7 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
       const [edge] = await tx
         .insert(claimEdges)
         .values({
+          ...scopeValues(prelude.target.claim),
           sessionId: prelude.target.claim.sessionId,
           fromClaimId: critiqueClaim.id,
           toClaimId: prelude.target.claim.id,
@@ -348,6 +352,7 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
 
       const move = await createMove(tx, "challenge_issued", {
         sessionId: prelude.target.claim.sessionId,
+        scope: prelude.target.claim,
         summary: "Issued a first challenge against the target claim.",
         payload: {
           targetClaimId: prelude.target.claim.id,
@@ -422,6 +427,7 @@ export async function persistChallengeResponse(
     if (response.response === "defend") {
       const move = await createMove(tx, "user_defended", {
         sessionId: target.claim.sessionId,
+        scope: target.claim,
         summary: "User defended the target claim against the critique.",
         payload: {
           response: response.response,
@@ -452,6 +458,7 @@ export async function persistChallengeResponse(
       const move = await createMove(tx, "claim_revised", {
         id: moveId,
         sessionId: target.claim.sessionId,
+        scope: target.claim,
         summary: "User revised the target claim in response to the critique.",
         payload: {
           response: response.response,
@@ -519,6 +526,7 @@ export async function persistChallengeResponse(
 
     const move = await createMove(tx, "critique_absorbed", {
       sessionId: target.claim.sessionId,
+      scope: target.claim,
       summary: "User absorbed the critique as an acknowledged vulnerability.",
       payload: {
         response: response.response,
