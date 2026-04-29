@@ -1,0 +1,2 @@
+ALTER TYPE "public"."move_kind" ADD VALUE 'next_move_recomputed' BEFORE 'autopilot_suggested';--> statement-breakpoint
+ALTER TYPE "public"."move_kind" ADD VALUE 'autopilot_focus_started' BEFORE 'manual_node_selected';

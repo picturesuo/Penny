@@ -43,6 +43,10 @@ const AutopilotActionSchema = z.enum([
 const AutopilotModeSchema = z.enum(["brain", "challenge", "verify", "artifact"]);
 const AutopilotReasonCodeSchema = z.string().trim().min(1).max(120);
 const AutopilotScoreSchema = z.number().int().min(0).max(2_000);
+const ThinkingModeSchema = z.enum(["brain", "challenge", "verify", "learn", "artifact"]);
+const NextMoveEngineActionSchema = z.enum(["resume_open_challenge", "learn", "clarify", "verify", "challenge"]);
+const NextMoveFingerprintSchema = z.string().trim().min(1).max(160);
+const GraphHashSchema = z.string().trim().min(1).max(160);
 
 const SeedPersistencePayloadSchema = z
   .object({
@@ -147,6 +151,37 @@ const LearningTriggeredPayloadSchema = z
   })
   .strict();
 
+const NextMoveCandidateSummarySchema = z
+  .object({
+    candidateId: z.string().trim().min(1).max(160),
+    fingerprint: NextMoveFingerprintSchema,
+    action: NextMoveEngineActionSchema,
+    mode: ThinkingModeSchema,
+    targetClaimId: UuidSchema,
+    targetEdgeId: UuidSchema.nullable(),
+    score: z.number().int().min(0).max(5_000),
+    rank: z.number().int().min(1).max(100),
+    reason: z.string().trim().min(1).max(1_200),
+    reasonCodes: z.array(AutopilotReasonCodeSchema).min(1).max(16),
+    graphHash: GraphHashSchema,
+  })
+  .strict();
+
+const NextMoveRecomputedPayloadSchema = z
+  .object({
+    graphHash: GraphHashSchema,
+    candidateCount: z.number().int().min(0).max(100),
+    selectedCandidateId: z.string().trim().min(1).max(160).nullable(),
+    selectedFingerprint: NextMoveFingerprintSchema.nullable(),
+    candidateIds: z.array(z.string().trim().min(1).max(160)).max(100),
+    candidateFingerprints: z.array(NextMoveFingerprintSchema).max(100),
+    candidates: z.array(NextMoveCandidateSummarySchema).max(12),
+    claimIds: UuidArraySchema,
+    edgeIds: UuidArraySchema,
+    artifactIds: UuidArraySchema,
+  })
+  .strict();
+
 const AutopilotCandidateScoreSchema = z
   .object({
     action: AutopilotActionSchema,
@@ -178,6 +213,23 @@ const AutopilotSuggestedPayloadSchema = z
         mode: AutopilotModeSchema,
       })
       .strict(),
+    claimIds: UuidArraySchema,
+    edgeIds: UuidArraySchema,
+    artifactIds: UuidArraySchema,
+  })
+  .strict();
+
+const AutopilotFocusStartedPayloadSchema = z
+  .object({
+    candidateId: z.string().trim().min(1).max(160),
+    candidateFingerprint: NextMoveFingerprintSchema,
+    action: NextMoveEngineActionSchema,
+    mode: ThinkingModeSchema,
+    targetClaimId: UuidSchema,
+    targetEdgeId: UuidSchema.nullable(),
+    graphHash: GraphHashSchema,
+    reason: z.string().trim().min(1).max(1_200),
+    score: z.number().int().min(0).max(5_000),
     claimIds: UuidArraySchema,
     edgeIds: UuidArraySchema,
     artifactIds: UuidArraySchema,
@@ -373,7 +425,9 @@ export const MovePayloadSchemas = {
   claim_revised: ClaimRevisedPayloadSchema,
   critique_absorbed: CritiqueAbsorbedPayloadSchema,
   learning_triggered: LearningTriggeredPayloadSchema,
+  next_move_recomputed: NextMoveRecomputedPayloadSchema,
   autopilot_suggested: AutopilotSuggestedPayloadSchema,
+  autopilot_focus_started: AutopilotFocusStartedPayloadSchema,
   manual_node_selected: ManualNodeSelectedPayloadSchema,
   verify_run: VerifyRunPayloadSchema,
   confidence_update_accepted: ConfidenceUpdateAcceptedPayloadSchema,
