@@ -4,6 +4,7 @@ import { brainRuns, claimEdges, claims, claimVersions, moves, sourceSpans } from
 import type { PennyDatabase } from "./db/client.ts";
 import type { BrainSeedInput, BrainSeedOutput } from "./seed.ts";
 import { persistBrainSeed, type BrainSeedPrelude, type BrainSeedRunInput } from "./seed-persistence.ts";
+import { scopeValues } from "./scope.ts";
 
 test("persistBrainSeed persists every valid thought-map claim and edge kind", async () => {
   const input: BrainSeedInput = {
@@ -14,6 +15,12 @@ test("persistBrainSeed persists every valid thought-map claim and edge kind", as
     operation: "brain.seed",
     provider: "test",
     input,
+    scope: {
+      userId: "user-1",
+      workspaceId: "workspace-1",
+      projectId: "project-1",
+      sphereId: "sphere-1",
+    },
     startedAt: new Date("2026-04-27T00:00:00.000Z"),
   });
   const recording = createRecordingSeedDb(prelude);
@@ -37,6 +44,11 @@ test("persistBrainSeed persists every valid thought-map claim and edge kind", as
   );
   assert.ok(persisted.idMaps.claimIds.get(graphRichSeed.firstChallenge.targetClaimId));
   assert.ok(persisted.idMaps.claimIds.get(graphRichSeed.learnCandidates[0]?.claimId ?? ""));
+  assert.equal(persisted.session.userId, "user-1");
+  assert.equal(persisted.source.workspaceId, "workspace-1");
+  assert.ok(persisted.claims.every((claim) => claim.projectId === "project-1"));
+  assert.ok(persisted.edges.every((edge) => edge.sphereId === "sphere-1"));
+  assert.ok(persisted.moves.every((move) => move.userId === "user-1"));
 
   const sourceSpanRows = recording.inserted.source_spans ?? [];
   assert.deepEqual(
@@ -372,10 +384,12 @@ function createPersistedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): 
   const sessionId = input.sessionId ?? uuidAt(100);
   const sourceId = uuidAt(101);
   const brainRunId = uuidAt(701);
+  const scope = scopeValues(run.scope);
 
   return {
     session: {
       id: sessionId,
+      ...scope,
       status: "open",
       title: input.rawIdea,
       createdAt: now,
@@ -383,6 +397,7 @@ function createPersistedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): 
     },
     source: {
       id: sourceId,
+      ...scope,
       sessionId,
       kind: "raw_idea",
       rawText: input.rawIdea,
@@ -400,6 +415,7 @@ function createPersistedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): 
     },
     brainRun: {
       id: brainRunId,
+      ...scope,
       sessionId,
       sourceId,
       operation: run.operation,

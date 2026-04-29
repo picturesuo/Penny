@@ -12,6 +12,7 @@ import {
   type BrainSeedOutput,
 } from "./seed.ts";
 import type { BrainSeedPrelude, BrainSeedRunInput, PersistedBrainSeed } from "./seed-persistence.ts";
+import { scopeValues } from "./scope.ts";
 
 test("POST /brain/seed rejects invalid request bodies before AI or DB work", async () => {
   let generated = false;
@@ -55,7 +56,9 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
       headers: {
         "content-type": "application/json",
         "x-user-id": "dev-user-1",
+        "x-workspace-id": "dev-workspace-1",
         "x-project-id": "dev-project-1",
+        "x-sphere-id": "dev-sphere-1",
       },
       body: JSON.stringify({
         rawIdea: "Penny should turn rough founder strategy into a stress-tested decision brief.",
@@ -87,7 +90,12 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
 
   assert.equal(response.status, 201);
   assert.equal(payload.data.context.userId, "dev-user-1");
+  assert.equal(payload.data.context.workspaceId, "dev-workspace-1");
   assert.equal(payload.data.context.projectId, "dev-project-1");
+  assert.equal(payload.data.context.sphereId, "dev-sphere-1");
+  assert.equal(payload.data.session.userId, "dev-user-1");
+  assert.equal(payload.data.source.workspaceId, "dev-workspace-1");
+  assert.equal(payload.data.brainRun.sphereId, "dev-sphere-1");
   assert.match(generatedInput?.sessionId ?? "", /^[0-9a-f-]{36}$/);
   assert.equal(persistedSeed?.source.rawText, "Penny should turn rough founder strategy into a stress-tested decision brief.");
   assert.equal(payload.data.session.status, "open");
@@ -166,10 +174,12 @@ function createPersistedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): 
   const sessionId = input.sessionId ?? uuidAt(100);
   const sourceId = uuidAt(101);
   const brainRunId = uuidAt(701);
+  const scope = scopeValues(run.scope);
 
   return {
     session: {
       id: sessionId,
+      ...scope,
       status: "open",
       title: input.rawIdea,
       createdAt: now,
@@ -177,6 +187,7 @@ function createPersistedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): 
     },
     source: {
       id: sourceId,
+      ...scope,
       sessionId,
       kind: "raw_idea",
       rawText: input.rawIdea,
@@ -194,6 +205,7 @@ function createPersistedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): 
     },
     brainRun: {
       id: brainRunId,
+      ...scope,
       sessionId,
       sourceId,
       operation: run.operation,
@@ -213,9 +225,11 @@ function createPersistedSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): 
   const now = new Date("2026-04-27T00:00:00.000Z");
   const sessionId = prelude.session.id;
   const sourceId = prelude.source.id;
+  const scope = scopeValues(prelude.session);
   const claims = seed.thoughtMap.claims.map((claim, index) => ({
     id: uuidAt(201 + index),
     seedId: claim.id,
+    ...scope,
 	    sessionId,
 	    sourceId,
 	    kind: claim.kind,
@@ -242,6 +256,7 @@ function createPersistedSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): 
   const edges = seed.thoughtMap.edges.map((edge, index) => ({
     id: uuidAt(301 + index),
     seedId: edge.id,
+    ...scope,
     sessionId,
     fromClaimId: requireMappedId(claimIds, edge.fromClaimId),
     toClaimId: requireMappedId(claimIds, edge.toClaimId),
@@ -292,6 +307,7 @@ function createPersistedSeed(seed: BrainSeedOutput, prelude: BrainSeedPrelude): 
   const persistedMoves = moveSeeds.map((move, index) => ({
     id: uuidAt(501 + index),
     seedId: move.id,
+    ...scope,
     sessionId,
     kind: move.kind,
     summary: move.summary,

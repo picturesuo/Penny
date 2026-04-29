@@ -11,6 +11,7 @@ import {
   sourceSpans,
 } from "./db/schema.ts";
 import { createMove } from "./move-payloads.ts";
+import { scopeValues, type BrainScopeInput } from "./scope.ts";
 import type { BrainSeedInput, BrainSeedOutput } from "./seed.ts";
 
 export type BrainSeedRunInput = {
@@ -18,6 +19,7 @@ export type BrainSeedRunInput = {
   provider: string;
   model?: string | null;
   input: unknown;
+  scope?: BrainScopeInput;
   startedAt?: Date;
 };
 
@@ -61,6 +63,7 @@ export async function createBrainSeedPrelude(
       .insert(sessions)
       .values({
         id: input.sessionId,
+        ...scopeValues(run.scope),
         status: "open",
         title: input.rawIdea.slice(0, 120),
       })
@@ -73,6 +76,7 @@ export async function createBrainSeedPrelude(
     const [source] = await tx
       .insert(sources)
       .values({
+        ...scopeValues(session),
         sessionId: session.id,
         kind: "raw_idea",
         rawText: input.rawIdea,
@@ -100,6 +104,7 @@ export async function createBrainSeedPrelude(
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
+        ...scopeValues(session),
         sessionId: session.id,
         sourceId: source.id,
         operation: run.operation,
@@ -135,6 +140,7 @@ export async function persistBrainSeed(
       .insert(claims)
       .values(
         seedClaims.map((claim) => ({
+          ...scopeValues(prelude.session),
           sessionId: prelude.session.id,
           sourceId: prelude.source.id,
           kind: claim.kind,
@@ -196,6 +202,7 @@ export async function persistBrainSeed(
               .insert(claimEdges)
               .values(
                 edgeSeeds.map((edge) => ({
+                  ...scopeValues(prelude.session),
                   sessionId: prelude.session.id,
                   fromClaimId: requireMappedId(claimIds, edge.fromClaimId, "edge.fromClaimId"),
                   toClaimId: requireMappedId(claimIds, edge.toClaimId, "edge.toClaimId"),
@@ -218,6 +225,7 @@ export async function persistBrainSeed(
       persistedMoveRows.push(
         await createMove(tx, move.kind, {
           sessionId: prelude.session.id,
+          scope: prelude.session,
           summary: move.summary,
           payload: {
             seedMoveId: move.id,

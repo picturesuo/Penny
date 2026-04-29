@@ -19,13 +19,16 @@ import {
   type BrainSeedRunInput,
   type PersistedBrainSeed,
 } from "./seed-persistence.ts";
+import { scopeValues } from "./scope.ts";
 
 export const BrainSeedRouteRequestSchema = z
   .object({
     rawIdea: z.string().trim().min(1).max(4_000),
     sessionId: z.string().uuid().optional(),
     userId: z.string().trim().min(1).max(120).optional(),
+    workspaceId: z.string().trim().min(1).max(120).optional(),
     projectId: z.string().trim().min(1).max(120).optional(),
+    sphereId: z.string().trim().min(1).max(120).optional(),
   })
   .strict();
 
@@ -33,7 +36,9 @@ export type BrainSeedRouteRequest = z.infer<typeof BrainSeedRouteRequestSchema>;
 
 export type BrainSeedRouteContext = {
   userId: string;
+  workspaceId: string;
   projectId: string;
+  sphereId: string;
 };
 
 export type BrainSeedRouteOptions = {
@@ -138,7 +143,7 @@ export async function handleBrainSeedRequest(request: Request, options: BrainSee
   try {
     prelude = await prepareSeedRun(seedInput, {
       ...dbOption(db),
-      run: buildBrainSeedRunInput(seedInput, provider, startedAt),
+      run: buildBrainSeedRunInput(seedInput, provider, startedAt, context),
     });
     const seed = await generateSeed(seedInput, { provider, brainRunId: prelude.brainRun.id });
     const persisted = await persistSeed(seed, { ...dbOption(db), prelude });
@@ -206,16 +211,19 @@ export function buildBrainSeedUiPayload(
     session: {
       id: persisted.session.id,
       status: persisted.session.status,
+      ...scopeValues(persisted.session),
       sourceId: persisted.source.id,
       createdAt: persisted.session.createdAt.toISOString(),
     },
     source: {
       id: persisted.source.id,
       kind: persisted.source.kind,
+      ...scopeValues(persisted.source),
       rawText: persisted.source.rawText,
     },
     brainRun: {
       id: persisted.brainRun.id,
+      ...scopeValues(persisted.brainRun),
       status: persisted.brainRun.status,
     },
     ideaMap: {
@@ -310,10 +318,18 @@ function resolveDevContext(request: Request, body: BrainSeedRouteRequest): Brain
       firstPresentHeader(request, ["x-user-id", "x-penny-user-id"]) ??
       body.userId ??
       "dev-user",
+    workspaceId:
+      firstPresentHeader(request, ["x-workspace-id", "x-penny-workspace-id"]) ??
+      body.workspaceId ??
+      "dev-workspace",
     projectId:
       firstPresentHeader(request, ["x-project-id", "x-penny-project-id"]) ??
       body.projectId ??
       "dev-project",
+    sphereId:
+      firstPresentHeader(request, ["x-sphere-id", "x-penny-sphere-id"]) ??
+      body.sphereId ??
+      "dev-sphere",
   };
 }
 
@@ -351,12 +367,17 @@ function buildBrainSeedRunInput(
   input: BrainSeedInput,
   provider: BrainSeedProvider,
   startedAt: Date,
+  context: BrainSeedRouteContext,
 ): BrainSeedRunInput {
   return {
     operation: "brain.seed",
     provider: provider.name,
     model: provider.name === "xai" ? resolveXaiBrainSeedModel() : null,
-    input,
+    input: {
+      ...input,
+      scope: context,
+    },
+    scope: context,
     startedAt,
   };
 }
