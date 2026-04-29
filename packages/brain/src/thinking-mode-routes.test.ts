@@ -236,6 +236,48 @@ test("POST /api/challenges/:challengeId/respond supports Defend Revise Absorb an
   assert.equal(absorbPayload.data.receipt.unresolvedRisk, true);
 });
 
+test("POST tick recomputes a next move after ChallengeRound response", async () => {
+  const events: string[] = [];
+  const challengeService = challengeRouteService({
+    async respondToChallenge(input) {
+      events.push(`respond:${input.response}`);
+      return challengeRespondResponse(input);
+    },
+  });
+  const thinkingService = routeService([], {
+    async tick(input) {
+      events.push("tick");
+      return tickResponse(input.brainId, input.sessionId);
+    },
+  });
+  const response = await handleChallengeRoundRespondRequest(
+    requestWithBody(`http://localhost/api/challenges/${uuidAt(901)}/respond`, {
+      response: "absorb",
+      reasoning: "Keep the willingness-to-pay objection open for the next move.",
+    }),
+    uuidAt(901),
+    { service: challengeService },
+  );
+  const responsePayload = (await response.json()) as ChallengeRespondPayload;
+  const tick = await handleThinkingModeTickRequest(
+    requestWithBody(`http://localhost/api/brains/${uuidAt(900)}/autopilot/tick`, {
+      sessionId: uuidAt(101),
+      resume: true,
+      limit: 2,
+    }),
+    uuidAt(900),
+    { service: thinkingService },
+  );
+  const tickPayload = (await tick.json()) as SmokeTickPayload;
+
+  assert.equal(response.status, 200);
+  assert.equal(responsePayload.data.focusCompletedMove.kind, "focus_completed");
+  assert.equal(tick.status, 201);
+  assert.equal(tickPayload.data.move.kind, "next_move_recomputed");
+  assert.equal(tickPayload.data.selectedCandidate?.selected, true);
+  assert.deepEqual(events, ["respond:absorb", "tick"]);
+});
+
 test("Thinking Mode route smoke flow drives Autopilot state through manual override", async () => {
   const brainId = uuidAt(900);
   const sessionId = uuidAt(101);
@@ -394,6 +436,22 @@ test("thinking mode routes return clear validation and domain errors", async () 
 });
 
 test("challenge round routes return clear validation and domain errors", async () => {
+  const invalidReviseCalls: string[] = [];
+  const invalidRevise = await handleChallengeRoundRespondRequest(
+    requestWithBody(`http://localhost/api/challenges/${uuidAt(901)}/respond`, {
+      response: "revise",
+      reasoning: "This should not be enough without revised text.",
+    }),
+    uuidAt(901),
+    {
+      service: challengeRouteService({
+        async respondToChallenge(input) {
+          invalidReviseCalls.push(input.response);
+          return challengeRespondResponse(input);
+        },
+      }),
+    },
+  );
   const invalidIssue = await handleIssueChallengeFromCandidateRequest(
     requestWithBody(`http://localhost/api/next-move-candidates/${encodeURIComponent("next_candidate")}/challenge`, {
       sessionId: uuidAt(101),
@@ -437,10 +495,15 @@ test("challenge round routes return clear validation and domain errors", async (
     },
   );
   const invalidIssuePayload = (await invalidIssue.json()) as { error: { code: string; issues: string[] } };
+  const invalidRevisePayload = (await invalidRevise.json()) as { error: { code: string; issues: string[] } };
   const invalidChallengeIdPayload = (await invalidChallengeId.json()) as { error: { code: string; issues: string[] } };
   const notFoundPayload = (await notFound.json()) as { error: { code: string; message: string } };
   const conflictPayload = (await conflict.json()) as { error: { code: string; message: string } };
 
+  assert.equal(invalidRevise.status, 400);
+  assert.equal(invalidRevisePayload.error.code, "invalid_request");
+  assert.match(invalidRevisePayload.error.issues.join("\n"), /revisedText/);
+  assert.deepEqual(invalidReviseCalls, []);
   assert.equal(invalidIssue.status, 400);
   assert.equal(invalidIssuePayload.error.code, "invalid_request");
   assert.match(invalidIssuePayload.error.issues.join("\n"), /brainId/);
