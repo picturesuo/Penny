@@ -326,18 +326,103 @@ export interface RespondToChallengeResponse {
   };
 }
 
+export interface ChallengeBriefSections {
+  originalSeedIdea: {
+    text: string;
+    sourceId: string | null;
+  };
+  currentPrimaryClaim: {
+    claimId: string;
+    claimVersionId: string;
+    text: string;
+    confidence: number;
+  };
+  keyAssumptions: Array<{
+    claimId: string;
+    claimVersionId: string;
+    text: string;
+    confidence: number;
+    markers: string[];
+  }>;
+  selectedPressurePoint: {
+    targetClaimId: string;
+    targetClaimVersionId: string;
+    targetEdgeId: string | null;
+    failureType: string | null;
+    text: string;
+  };
+  whyPennyChoseIt: string[];
+  challengeIssued: {
+    text: string;
+    strength: string | null;
+    whatWouldResolveIt: string | null;
+    challengeMoveId: string | null;
+    challengeRoundId: string | null;
+  };
+  userResponse: {
+    text: string;
+    response: "Defend" | "Revise" | "Absorb" | null;
+    reasoning: string | null;
+    moveId: string | null;
+  };
+  whatChanged: Array<{
+    text: string;
+    previousClaimVersionId: string | null;
+    currentClaimVersionId: string | null;
+    moveId: string | null;
+  }>;
+  openRisks: Array<{
+    kind: "challenge" | "assumption" | "unsupported_claim" | "none";
+    text: string;
+    claimId: string | null;
+    edgeId: string | null;
+    reason: string;
+  }>;
+  recommendedNextMove: {
+    action: string;
+    targetClaimId: string | null;
+    targetEdgeId: string | null;
+    why: string;
+    expectedCompletionMove: string | null;
+  };
+  moveTimelineSummary: Array<{
+    moveId: string;
+    kind: string;
+    summary: string;
+    createdAt: string;
+  }>;
+}
+
+export interface ChallengeBriefPayload {
+  kind: "challenge_brief";
+  title: "Challenge Brief";
+  sessionId: string;
+  sections: ChallengeBriefSections;
+  refs?: {
+    sourceIds?: string[];
+    sourceSpanIds?: string[];
+    claimIds?: string[];
+    claimVersionIds?: string[];
+    edgeIds?: string[];
+    moveIds?: string[];
+    artifactIds?: string[];
+  };
+}
+
+export interface ChallengeBriefArtifact {
+  id: string;
+  sessionId?: string;
+  kind: string;
+  title: string;
+  summary: string;
+  payload?: ChallengeBriefPayload | Record<string, unknown>;
+  createdAt?: string;
+}
+
 export interface ChallengeBriefResponse {
   data: {
     status: "created";
-    artifact: {
-      id: string;
-      sessionId: string;
-      kind: string;
-      title: string;
-      summary: string;
-      payload?: Record<string, unknown>;
-      createdAt?: string;
-    };
+    artifact: ChallengeBriefArtifact & { sessionId: string };
     move: {
       id: string;
       kind: "artifact_created";
@@ -364,14 +449,7 @@ export interface SessionCockpitData {
     targetClaim?: BrainClaim | null;
     critiqueClaim?: BrainClaim | null;
   }) | null;
-  latestArtifact?: {
-    id: string;
-    kind: string;
-    title: string;
-    summary: string;
-    payload?: Record<string, unknown>;
-    createdAt?: string;
-  } | null;
+  latestArtifact?: ChallengeBriefArtifact | null;
 }
 
 export interface SessionCockpitResponse {
