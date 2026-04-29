@@ -78,6 +78,13 @@
       "when": 1777335636982,
       "tag": "0010_fantastic_korg",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777432707784,
+      "tag": "0011_mighty_arachne",
+      "breakpoints": true
     }
   ]
 }
