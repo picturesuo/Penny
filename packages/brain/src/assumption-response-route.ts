@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { claimVersions, claims, moves } from "./db/schema.ts";
+import { claimVersions, claims } from "./db/schema.ts";
+import { createMove } from "./move-payloads.ts";
 
 const AssumptionResponsePathSchema = z.string().uuid();
 
@@ -218,31 +219,23 @@ export async function persistAssumptionResponse(
     const moveKind = moveKindFor(response.action);
     const summary = summaryFor(response.action);
 
-    const [move] = await tx
-      .insert(moves)
-      .values({
-        id: moveId,
-        sessionId: claim.sessionId,
-        kind: moveKind,
-        summary,
-        payload: {
-          action: response.action,
-          claimId: claim.id,
-          previousVersionId: currentVersion.id,
-          currentVersionId: versionId,
-          previousStatus: currentVersion.status,
-          currentStatus: next.status,
-          refined: response.action === "refine",
-          claimIds: [claim.id],
-          claimVersionIds: [currentVersion.id, versionId],
-          edgeIds: [],
-        },
-      })
-      .returning();
-
-    if (!move) {
-      throw new AssumptionResponseConflictError("Failed to create assumption response move.");
-    }
+    const move = await createMove(tx, moveKind, {
+      id: moveId,
+      sessionId: claim.sessionId,
+      summary,
+      payload: {
+        action: response.action,
+        claimId: claim.id,
+        previousVersionId: currentVersion.id,
+        currentVersionId: versionId,
+        previousStatus: currentVersion.status,
+        currentStatus: next.status,
+        refined: response.action === "refine",
+        claimIds: [claim.id],
+        claimVersionIds: [currentVersion.id, versionId],
+        edgeIds: [],
+      },
+    });
 
     await tx
       .update(claimVersions)
