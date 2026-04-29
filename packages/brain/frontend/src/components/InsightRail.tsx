@@ -3,6 +3,8 @@ import type {
   AutopilotSuggestion,
   BrainClaim,
   BrainMove,
+  ChallengeBriefPayload,
+  ChallengeBriefSections,
   ChallengeResponseKind,
   ChallengeSuggestion,
   LearnCandidate,
@@ -156,7 +158,27 @@ function ChallengeLoop({
           Create brief
         </button>
       </div>
+      <ChallengeBriefPreview artifact={latestArtifact} />
     </section>
+  );
+}
+
+function ChallengeBriefPreview({ artifact }: { artifact: SessionCockpitData["latestArtifact"] | null }) {
+  const sections = challengeBriefSections(artifact?.payload);
+
+  if (!sections) {
+    return null;
+  }
+
+  return (
+    <div className="challenge-brief-sections" aria-label="Challenge Brief sections">
+      {briefSectionRows(sections).map((row) => (
+        <article key={row.title}>
+          <h3>{row.title}</h3>
+          <p>{row.text}</p>
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -262,6 +284,102 @@ function ChallengeReceipt({ response }: { response: RespondToChallengeResponse["
       <span>{response.derivedEffects.length > 0 ? response.derivedEffects.map((effect) => effect.title).join(", ") : "no shape effect"}</span>
     </article>
   );
+}
+
+function challengeBriefSections(payload: unknown): ChallengeBriefSections | null {
+  if (!isChallengeBriefPayload(payload)) {
+    return null;
+  }
+
+  return payload.sections;
+}
+
+function isChallengeBriefPayload(payload: unknown): payload is ChallengeBriefPayload {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      "kind" in payload &&
+      payload.kind === "challenge_brief" &&
+      "sections" in payload &&
+      payload.sections &&
+      typeof payload.sections === "object",
+  );
+}
+
+function briefSectionRows(sections: ChallengeBriefSections): Array<{ title: string; text: string }> {
+  return [
+    { title: "Original Idea", text: sections.originalSeedIdea.text },
+    {
+      title: "Current Claim",
+      text: `${sections.currentPrimaryClaim.text} (${sections.currentPrimaryClaim.confidence}% confidence)`,
+    },
+    {
+      title: "Key Assumptions",
+      text: listText(
+        sections.keyAssumptions.map((assumption) => `${assumption.text} (${assumption.confidence}% confidence)`),
+        "No key assumptions recorded.",
+      ),
+    },
+    {
+      title: "Pressure Point",
+      text: compactText([sections.selectedPressurePoint.failureType, sections.selectedPressurePoint.text]),
+    },
+    {
+      title: "Why Penny Chose It",
+      text: listText(sections.whyPennyChoseIt, "No selection rationale recorded."),
+    },
+    {
+      title: "Challenge",
+      text: compactText([sections.challengeIssued.strength, sections.challengeIssued.text, sections.challengeIssued.whatWouldResolveIt]),
+    },
+    {
+      title: "Response",
+      text: compactText([sections.userResponse.response, sections.userResponse.text, sections.userResponse.reasoning]),
+    },
+    {
+      title: "What Changed",
+      text: listText(
+        sections.whatChanged.map((change) => change.text),
+        "No claim text changed.",
+      ),
+    },
+    {
+      title: "Open Risks",
+      text: listText(
+        sections.openRisks.map((risk) => compactText([risk.kind, risk.text, risk.reason])),
+        "No open risks recorded.",
+      ),
+    },
+    {
+      title: "Recommended Next Move",
+      text: compactText([
+        formatLabel(sections.recommendedNextMove.action),
+        sections.recommendedNextMove.why,
+        sections.recommendedNextMove.expectedCompletionMove
+          ? `Completes with ${formatLabel(sections.recommendedNextMove.expectedCompletionMove)}`
+          : null,
+      ]),
+    },
+    {
+      title: "Move Timeline",
+      text: listText(
+        sections.moveTimelineSummary.map((move) => `${formatLabel(move.kind)}: ${move.summary}`),
+        "No move timeline recorded.",
+      ),
+    },
+  ];
+}
+
+function listText(values: string[], emptyText: string): string {
+  const cleaned = values.map((value) => value.trim()).filter(Boolean);
+  return cleaned.length > 0 ? cleaned.join(" / ") : emptyText;
+}
+
+function compactText(values: Array<string | null | undefined>): string {
+  return values
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean)
+    .join(": ");
 }
 
 function formatResponse(response: ChallengeResponseKind): string {
