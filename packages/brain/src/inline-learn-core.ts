@@ -717,7 +717,7 @@ function buildHeuristicInlineLearnOutput(input: InlineLearnGenerationInput): Inl
     term,
     explanation: concept.explanation,
     whyItMattersHere: conceptWhyItMatters(term, concept.pressure, claim),
-    example: conceptExample(term, concept.example, context),
+    example: conceptExample(concept.example, context),
     relatedConcepts: relatedConceptsFor(term, context, concept.relatedConcepts),
     saveSuggestion: `Save ${term} if this definition will keep shaping assumptions, challenges, or the final brief.`,
   });
@@ -783,7 +783,7 @@ function conceptWhyItMatters(term: string, pressure: string, claim: string): str
   return `In "${clipText(claim, 92)}", ${term} matters because ${pressure}.`;
 }
 
-function conceptExample(term: string, example: string, context: string): string {
+function conceptExample(example: string, context: string): string {
   return `${example} In this map, test that against "${clipText(context, 72)}".`;
 }
 
