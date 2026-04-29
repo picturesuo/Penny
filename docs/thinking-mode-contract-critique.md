@@ -123,3 +123,24 @@ Risk to watch later:
 5. Keep MCP, broad product surfaces, and generic chat out of the contract.
 
 BLOCKED
+
+## 2026-04-29 Backend Addendum
+
+Classification: `tiny`
+
+This file is a historical Wave 1 contract critique. Keep the original `BLOCKED` judgment as the state of the reviewed contract set at the time, but do not treat it as the only current implementation gate.
+
+Current backend reading:
+
+- The new Thinking Mode service path now has durable candidate recomputation through `next_move_recomputed`, candidate rows, paused `FocusState`, `manual_node_selected`, and accepted focus via `autopilot_focus_started`.
+- The current demo script now uses the sharper willingness-to-pay founder claim: `Pre-seed founders will pay for structured thinking before traction.`
+- `wouldCreateMoveKinds` is the plural form used by the domain type and fixture; any future contract edit should make the spec match that plural name.
+- The fixture still does not include named post-suggestion states for `focus_started` or `manual_override`, so it remains insufficient as the full end-to-end demo proof.
+- Legacy `/autopilot/*` routes and the frontend still use the older suggestion shape; the demo path should use `/api/brains/:brainId/autopilot/*` plus `POST /api/next-move-candidates/:candidateId/start` before claiming accepted focus is durable in the product UI.
+- Candidate persistence should be documented as the current service behavior: materialized candidate rows plus a `next_move_recomputed` Move payload, not a required `autopilot_candidate_generated` Move for every candidate unless a later migration explicitly adds that audit style.
+
+Next backend fix target:
+
+1. Keep future implementation work on the new Thinking Mode API path.
+2. Wire visible "Go there" behavior to candidate start so it creates `autopilot_focus_started`.
+3. Add fixture or test coverage for accepted focus and manual override state transitions before using this critique as a closed contract.
