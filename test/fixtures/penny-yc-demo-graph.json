@@ -14,10 +14,10 @@
     "focusedClaimId": "00000000-0000-4000-8000-000000000202",
     "focusedEdgeId": "00000000-0000-4000-8000-000000000302",
     "source": "autopilot_suggestion",
-    "suggestionMoveId": "00000000-0000-4000-8000-000000000505",
+    "suggestionMoveId": "00000000-0000-4000-8000-000000000504",
     "manualMoveId": null,
     "paused": false,
-    "reason": "The market-behavior assumption is low-confidence and load-bearing for the root claim.",
+    "reason": "The willingness-to-pay assumption is low-confidence and load-bearing for the root claim.",
     "updatedAt": "2026-04-29T14:00:08.000Z"
   },
   "claims": [
@@ -50,16 +50,16 @@
       "sessionId": "00000000-0000-4000-8000-000000000101",
       "kind": "assumption",
       "currentVersionId": "00000000-0000-4000-8000-000000000702",
-      "text": "Founders will use structured thinking guidance during ambiguous company decisions.",
+      "text": "Pre-seed founders will pay for structured thinking before traction.",
       "confidence": 42,
       "status": "exploratory",
       "createdAt": "2026-04-29T14:00:02.000Z",
-      "tags": ["low_confidence_market_assumption", "load_bearing"],
+      "tags": ["low_confidence_market_assumption", "willingness_to_pay", "load_bearing"],
       "versions": [
         {
           "id": "00000000-0000-4000-8000-000000000702",
           "claimId": "00000000-0000-4000-8000-000000000202",
-          "text": "Founders will use structured thinking guidance during ambiguous company decisions.",
+          "text": "Pre-seed founders will pay for structured thinking before traction.",
           "confidence": 42,
           "status": "exploratory",
           "isCurrent": true,
@@ -208,7 +208,7 @@
       "toClaimId": "00000000-0000-4000-8000-000000000202",
       "kind": "depends_on",
       "status": "active",
-      "label": "requires founder adoption",
+      "label": "requires founder willingness to pay",
       "createdAt": "2026-04-29T14:00:07.000Z"
     },
     {
@@ -228,7 +228,7 @@
       "toClaimId": "00000000-0000-4000-8000-000000000202",
       "kind": "depends_on",
       "status": "active",
-      "label": "usefulness depends on founder adoption",
+      "label": "usefulness depends on founder willingness to pay",
       "createdAt": "2026-04-29T14:00:07.000Z"
     },
     {
@@ -248,7 +248,7 @@
       "toClaimId": "00000000-0000-4000-8000-000000000202",
       "kind": "questions",
       "status": "active",
-      "label": "narrows adoption wedge",
+      "label": "narrows paid founder wedge",
       "createdAt": "2026-04-29T14:00:07.000Z"
     },
     {
@@ -334,40 +334,43 @@
       "payload": {
         "triggerMoveId": "00000000-0000-4000-8000-000000000503",
         "rankingVersion": "thinking-mode-v1",
+        "graphHash": "yc-demo-graph-v1",
         "candidateCount": 2,
         "selectedCandidateId": "00000000-0000-4000-8000-000000000901",
         "candidateIds": [
           "00000000-0000-4000-8000-000000000901",
           "00000000-0000-4000-8000-000000000902"
         ],
-        "paused": false
-      },
-      "createdAt": "2026-04-29T14:00:08.000Z"
-    },
-    {
-      "id": "00000000-0000-4000-8000-000000000505",
-      "sessionId": "00000000-0000-4000-8000-000000000101",
-      "kind": "autopilot_focus_suggested",
-      "summary": "Suggested focusing the low-confidence market assumption.",
-      "payload": {
-        "suggestionId": "00000000-0000-4000-8000-000000000505",
-        "selectedCandidateId": "00000000-0000-4000-8000-000000000901",
-        "mode": "challenge",
-        "targetClaimId": "00000000-0000-4000-8000-000000000202",
-        "targetEdgeId": "00000000-0000-4000-8000-000000000302",
-        "score": 930,
-        "why": "This is the lowest-confidence market assumption and two high-level claims depend on it.",
-        "reasonCodes": ["low_confidence", "market_assumption", "load_bearing"],
-        "candidateIds": [
-          "00000000-0000-4000-8000-000000000901",
-          "00000000-0000-4000-8000-000000000902"
+        "candidateFingerprints": ["yc-demo-fingerprint-901", "yc-demo-fingerprint-902"],
+        "candidates": [
+          {
+            "candidateId": "00000000-0000-4000-8000-000000000901",
+            "fingerprint": "yc-demo-fingerprint-901",
+            "action": "challenge",
+            "mode": "challenge",
+            "targetClaimId": "00000000-0000-4000-8000-000000000202",
+            "targetEdgeId": "00000000-0000-4000-8000-000000000302",
+            "score": 930,
+            "rank": 1,
+            "reason": "Challenge the founder willingness-to-pay assumption first because it is low-confidence and carries the root claim plus the generic-chat comparison.",
+            "reasonCodes": ["low_confidence", "market_assumption", "load_bearing"],
+            "graphHash": "yc-demo-graph-v1"
+          },
+          {
+            "candidateId": "00000000-0000-4000-8000-000000000902",
+            "fingerprint": "yc-demo-fingerprint-902",
+            "action": "verify",
+            "mode": "verify",
+            "targetClaimId": "00000000-0000-4000-8000-000000000205",
+            "targetEdgeId": null,
+            "score": 760,
+            "rank": 2,
+            "reason": "The generic-chat comparison is very confident but has no supporting evidence yet.",
+            "reasonCodes": ["high_confidence", "unsupported_claim"],
+            "graphHash": "yc-demo-graph-v1"
+          }
         ],
-        "goThere": {
-          "label": "Go there",
-          "targetClaimId": "00000000-0000-4000-8000-000000000202",
-          "targetEdgeId": "00000000-0000-4000-8000-000000000302",
-          "mode": "challenge"
-        }
+        "paused": false
       },
       "createdAt": "2026-04-29T14:00:08.000Z"
     }
@@ -382,14 +385,14 @@
       {
         "candidateId": "00000000-0000-4000-8000-000000000901",
         "sessionId": "00000000-0000-4000-8000-000000000101",
-        "action": "challenge_claim",
+        "action": "challenge",
         "mode": "challenge",
         "targetClaimId": "00000000-0000-4000-8000-000000000202",
         "targetEdgeId": "00000000-0000-4000-8000-000000000302",
         "score": 930,
         "rank": 1,
         "reasonCodes": ["low_confidence", "market_assumption", "load_bearing"],
-        "why": "Challenge the founder-adoption assumption first because it is low-confidence and carries the root claim plus the generic-chat comparison.",
+        "why": "Challenge the founder willingness-to-pay assumption first because it is low-confidence and carries the root claim plus the generic-chat comparison.",
         "evidence": {
           "claimIds": [
             "00000000-0000-4000-8000-000000000201",
@@ -409,7 +412,7 @@
       {
         "candidateId": "00000000-0000-4000-8000-000000000902",
         "sessionId": "00000000-0000-4000-8000-000000000101",
-        "action": "verify_confidence",
+        "action": "verify",
         "mode": "verify",
         "targetClaimId": "00000000-0000-4000-8000-000000000205",
         "targetEdgeId": null,
@@ -424,8 +427,83 @@
           "artifactIds": []
         },
         "blockedBy": [],
-        "wouldCreateMoveKinds": ["next_move_recomputed"]
+        "wouldCreateMoveKinds": ["verify_run"]
       }
-    ]
+    ],
+    "acceptedFocus": {
+      "move": {
+        "id": "00000000-0000-4000-8000-000000000505",
+        "sessionId": "00000000-0000-4000-8000-000000000101",
+        "kind": "autopilot_focus_started",
+        "summary": "Started Autopilot focus on the willingness-to-pay challenge.",
+        "payload": {
+          "candidateId": "00000000-0000-4000-8000-000000000901",
+          "candidateFingerprint": "yc-demo-fingerprint-901",
+          "action": "challenge",
+          "mode": "challenge",
+          "targetClaimId": "00000000-0000-4000-8000-000000000202",
+          "targetEdgeId": "00000000-0000-4000-8000-000000000302",
+          "graphHash": "yc-demo-graph-v1",
+          "reason": "Challenge the founder willingness-to-pay assumption first because it is low-confidence and carries the root claim plus the generic-chat comparison.",
+          "score": 930,
+          "claimIds": [
+            "00000000-0000-4000-8000-000000000201",
+            "00000000-0000-4000-8000-000000000202",
+            "00000000-0000-4000-8000-000000000205"
+          ],
+          "edgeIds": [
+            "00000000-0000-4000-8000-000000000302",
+            "00000000-0000-4000-8000-000000000304"
+          ],
+          "artifactIds": []
+        },
+        "createdAt": "2026-04-29T14:00:09.000Z"
+      },
+      "focusState": {
+        "sessionId": "00000000-0000-4000-8000-000000000101",
+        "mode": "challenge",
+        "focusedClaimId": "00000000-0000-4000-8000-000000000202",
+        "focusedEdgeId": "00000000-0000-4000-8000-000000000302",
+        "source": "autopilot_started",
+        "suggestionMoveId": "00000000-0000-4000-8000-000000000505",
+        "manualMoveId": null,
+        "paused": false,
+        "reason": "Challenge the founder willingness-to-pay assumption first because it is low-confidence and carries the root claim plus the generic-chat comparison.",
+        "updatedAt": "2026-04-29T14:00:09.000Z"
+      }
+    },
+    "manualOverride": {
+      "move": {
+        "id": "00000000-0000-4000-8000-000000000506",
+        "sessionId": "00000000-0000-4000-8000-000000000101",
+        "kind": "manual_node_selected",
+        "summary": "User manually selected the controllability assumption and paused Autopilot.",
+        "payload": {
+          "claimId": "00000000-0000-4000-8000-000000000203",
+          "previousSuggestionMoveId": "00000000-0000-4000-8000-000000000504",
+          "reason": "Inspect the control gap before challenging willingness to pay.",
+          "pauseAutopilot": true,
+          "claimIds": ["00000000-0000-4000-8000-000000000203"],
+          "edgeIds": [
+            "00000000-0000-4000-8000-000000000301",
+            "00000000-0000-4000-8000-000000000305"
+          ],
+          "artifactIds": []
+        },
+        "createdAt": "2026-04-29T14:00:09.000Z"
+      },
+      "focusState": {
+        "sessionId": "00000000-0000-4000-8000-000000000101",
+        "mode": "brain",
+        "focusedClaimId": "00000000-0000-4000-8000-000000000203",
+        "focusedEdgeId": "00000000-0000-4000-8000-000000000301",
+        "source": "manual_selection",
+        "suggestionMoveId": "00000000-0000-4000-8000-000000000504",
+        "manualMoveId": "00000000-0000-4000-8000-000000000506",
+        "paused": true,
+        "reason": "Inspect the control gap before challenging willingness to pay.",
+        "updatedAt": "2026-04-29T14:00:09.000Z"
+      }
+    }
   }
 }
