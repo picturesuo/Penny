@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
+const apiTarget = process.env.PENNY_API_ORIGIN ?? "http://localhost:3000";
 
 export default defineConfig({
   root: rootDir,
@@ -16,7 +17,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/brain": "http://localhost:3000",
+      "/api": apiTarget,
+      "/brain": apiTarget,
+      "/autopilot": apiTarget,
     },
   },
 });
