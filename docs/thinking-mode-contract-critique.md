@@ -82,14 +82,14 @@ Criterion judgments for `THINKING-MODE-CONTRACT-CRITIQUE`:
 - `PASS` SC2 for the new API path: `POST /api/brains/:brainId/autopilot/tick` validates input, rejects non-POST methods, loads canonical graph state, persists next-move candidates, records `next_move_recomputed`, updates suggestion FocusState, and does not mutate claim text or confidence.
 - `PASS` SC3 for the new API path: `POST /api/brains/:brainId/focus/manual` validates input, records `manual_node_selected`, persists `manual_selection` FocusState, pauses Autopilot, and returns the selected focus.
 - `PASS` SC4: current challenge response tests cover Defend, Revise, Absorb, `focus_completed`, and old ClaimVersion preservation on Revise.
-- `PASS` SC5: focused Thinking Mode tests, full package tests, pure-engine skeleton tests, `pnpm typecheck`, and `pnpm lint` pass.
+- `PASS` SC5: focused Thinking Mode tests, full package tests, the real pure-engine `test/brain/nextMoveEngine.test.ts` suite, `pnpm typecheck`, and `pnpm lint` pass.
 - `PASS` SC6 as a global repo-cleanliness criterion: reviewed implementation commits are on `origin/main`, and the current worktree is clean after each coherent change is committed and pushed.
 
 Verification commands run:
 
 - `pnpm exec tsx --test packages/brain/src/domain-engine.test.ts packages/brain/src/thinking-mode-service.test.ts packages/brain/src/thinking-mode-routes.test.ts packages/brain/src/challenge-service.test.ts packages/brain/src/challenge-brief-service.test.ts packages/brain/src/domain-repository.test.ts packages/brain/src/db-schema.test.ts` -> `PASS`, 43 tests.
-- `pnpm exec tsx --test packages/brain/src/autopilot-core.test.ts packages/brain/src/autopilot-route.test.ts test/brain/nextMoveEngine.test.ts test/brain/thinkingModeService.test.ts test/brain/challengeRespond.test.ts` -> `PASS`, but 8 files in `test/brain/*` remain TODO skeleton checks and should not be treated as implementation proof.
-- `pnpm test` -> `PASS`, 161 tests.
+- `pnpm exec tsx --test packages/brain/src/autopilot-core.test.ts packages/brain/src/autopilot-route.test.ts test/brain/nextMoveEngine.test.ts` -> `PASS`; TODO-only `test/brain` skeleton suites were later deleted.
+- `pnpm test` -> `PASS`, 183 tests, including `test/brain/nextMoveEngine.test.ts`.
 - `pnpm typecheck` -> `PASS`.
 - `pnpm lint` -> `PASS`.
 - After follow-up action-alignment commits landed on `origin/main`, `pnpm exec tsx --test test/brain/nextMoveEngine.test.ts packages/brain/src/domain-engine.test.ts` -> `PASS`, 14 tests.
@@ -173,8 +173,7 @@ Reviewed:
 - `packages/brain/src/domain/types.ts`
 - `test/fixtures/penny-yc-demo-graph.json`
 - `test/brain/nextMoveEngine.test.ts`
-- `test/brain/thinkingModeService.test.ts`
-- `test/brain/challengeRespond.test.ts`
+- Historical TODO skeleton suites were later deleted; active coverage now lives in package service/route tests.
 
 ## 1. Does The Plan Build Thinking Mode, Not Next-Node Navigation?
 
@@ -241,7 +240,7 @@ Required tightening before implementation:
 - Choose one candidate persistence rule:
   - individual `autopilot_candidate_generated` Moves, or
   - full embedded candidate records inside `next_move_recomputed`.
-- Make the demo script, move taxonomy, domain type, fixture, and skeleton tests agree.
+- Make the demo script, move taxonomy, domain type, fixture, and active tests agree.
 - Use `wouldCreateMoveKinds` everywhere if multiple downstream Moves are allowed.
 
 ## 5. Is The Demo Specific To Founders?
@@ -250,11 +249,11 @@ Judgment: `PASS WITH MARKET-SPECIFICITY GAP`
 
 The demo is founder-specific in seed, claim text, assumptions, and narrative. The fixture includes founder adoption, generic AI chat comparison, ambiguous company decisions, and founder workflow as claims or labels. That is enough to avoid a generic productivity demo.
 
-The gap is that the skeleton test says "willingness-to-pay assumption," but the fixture's primary market assumption is usage/adoption, not willingness to pay. For a YC demo, this difference matters. A founder adoption claim can still sound like generic engagement; willingness to pay or urgent founder workflow would make the demo sharper.
+The historical gap was that the pure-engine test said "willingness-to-pay assumption," while the fixture's primary market assumption was usage/adoption, not willingness to pay. For a YC demo, this difference mattered. A founder adoption claim can still sound like generic engagement; willingness to pay or urgent founder workflow makes the demo sharper.
 
 Required tightening before implementation:
 
-- Either rename the skeleton test away from willingness-to-pay, or add a fixture claim about founders paying for structured thinking during high-stakes decisions.
+- Keep the active test and fixture aligned around founders paying for structured thinking during high-stakes decisions.
 - Prefer one founder wedge: fundraising memo, pivot decision, cofounder conflict, hiring bet, or board update. "Ambiguous company decisions" is directionally right but still broad.
 
 ## 6. Is There Unnecessary MCP/Product Bloat?
@@ -272,12 +271,12 @@ Risk to watch later:
 1. Candidate persistence is ambiguous across spec, taxonomy, demo, and fixture.
 2. The fixture does not prove manual override as signal.
 3. The action vocabulary is inconsistent: `test/brain/nextMoveEngine.test.ts` expects `resume_open_challenge`, while `packages/brain/src/domain/types.ts` and the spec use `respond_to_challenge`.
-4. The founder fixture and skeleton disagree on whether the primary market risk is adoption/usage or willingness to pay.
+4. Historical: the founder fixture and early test language disagreed on whether the primary market risk was adoption/usage or willingness to pay.
 5. Accepted Autopilot focus is contractually meaningful, but the fixture does not include `autopilot_focus_started`.
 
 ## Original Required Contract Fixes Before Wave 1 Implementation
 
-1. Align action names across spec, domain types, fixture, and skeleton tests.
+1. Align action names across spec, domain types, fixture, and active tests.
 2. Align candidate persistence into either dedicated candidate Moves or embedded persisted candidate records.
 3. Add fixture coverage for accepted focus and manual override, or split fixtures into named states: `initial_suggestion`, `focus_started`, `manual_override`, `challenge_response`, and `brief_ready`.
 4. Make the founder market-risk claim match the test language.
