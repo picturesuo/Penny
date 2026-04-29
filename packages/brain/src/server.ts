@@ -8,6 +8,7 @@ import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
+import { handleSessionGraphRequest } from "./session-graph-route.ts";
 import { handleSessionMovesRequest } from "./session-moves-route.ts";
 import { handleBrainStreamRequest } from "./stream-route.ts";
 import { handleVerifyConfidenceRequest, handleVerifyRequest } from "./verify-route.ts";
@@ -143,6 +144,36 @@ const server = createServer(async (incoming, outgoing) => {
       }
 
       await writeWebResponse(outgoing, await handleSessionMovesRequest(request, decodeURIComponent(sessionId)));
+      return;
+    }
+
+    const sessionGraphMatch = /^\/brain\/session\/([^/]+)\/graph$/.exec(url.pathname);
+
+    if (sessionGraphMatch) {
+      const sessionId = sessionGraphMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(
+          outgoing,
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "invalid_session_id",
+                message: "Session graph requires a session id.",
+              },
+            }),
+            {
+              status: 400,
+              headers: {
+                "content-type": "application/json; charset=utf-8",
+              },
+            },
+          ),
+        );
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleSessionGraphRequest(request, decodeURIComponent(sessionId)));
       return;
     }
 
