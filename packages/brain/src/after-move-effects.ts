@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { PennyDatabase } from "./db/client.ts";
 import { artifacts, claimEdges, claims, claimVersions, derivedEffectKindEnum, derivedEffects, moves } from "./db/schema.ts";
 import { scopeValues, type OptionalBrainScope } from "./scope.ts";
+import { persistInferredShapes, type PersistedShape } from "./shapes.ts";
 
 type MoveRow = OptionalBrainScope<typeof moves.$inferSelect>;
 type ClaimRow = OptionalBrainScope<typeof claims.$inferSelect>;
@@ -38,7 +39,10 @@ export type PersistedDerivedEffect = typeof derivedEffects.$inferSelect;
 export type AfterMoveEffectsResult = {
   sourceMoveId: string;
   effects: PersistedDerivedEffect[];
+  shapes: PersistedShape[];
 };
+
+type AfterMoveEffectsTransaction = Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
 
 const DerivedEffectDraftSchema = z
   .object({
@@ -70,34 +74,50 @@ export async function afterMoveEffects(
   db: PennyDatabase,
   input: AfterMoveEffectsInput,
 ): Promise<AfterMoveEffectsResult> {
-  return db.transaction(async (tx) => {
-    const state = await loadAfterMoveEffectsState(tx, input);
-    const drafts = deriveAfterMoveEffects(state);
-    const versionByKind = nextVersionsByKind(state.existingEffects);
-    const insertedEffects =
-      drafts.length > 0
-        ? await tx
-            .insert(derivedEffects)
-            .values(
-              drafts.map((draft) => ({
-                ...scopeValues(state.sourceMove),
-                sessionId: input.sessionId,
-                sourceMoveId: input.moveId,
-                kind: draft.kind,
-                version: versionByKind.get(draft.kind) ?? 1,
-                title: draft.title,
-                summary: draft.summary,
-                payload: draft.payload,
-              })),
-            )
-            .returning()
-        : [];
+  return db.transaction(async (tx) => afterMoveEffectsInTransaction(tx, input));
+}
 
-    return {
-      sourceMoveId: input.moveId,
-      effects: insertedEffects,
-    };
+export async function afterMoveEffectsInTransaction(
+  tx: AfterMoveEffectsTransaction,
+  input: AfterMoveEffectsInput,
+): Promise<AfterMoveEffectsResult> {
+  const state = await loadAfterMoveEffectsState(tx, input);
+  const shapes = await persistInferredShapes(tx, {
+    sessionId: input.sessionId,
+    scope: state.sourceMove,
+    moves: state.moves.map((move) => ({
+      moveId: move.id,
+      kind: move.kind,
+      summary: move.summary,
+      createdAt: move.createdAt.toISOString(),
+    })),
   });
+  const drafts = withoutExistingEffectKinds(deriveAfterMoveEffects(state), state.existingEffects);
+  const versionByKind = nextVersionsByKind(state.existingEffects);
+  const insertedEffects =
+    drafts.length > 0
+      ? await tx
+          .insert(derivedEffects)
+          .values(
+            drafts.map((draft) => ({
+              ...scopeValues(state.sourceMove),
+              sessionId: input.sessionId,
+              sourceMoveId: input.moveId,
+              kind: draft.kind,
+              version: versionByKind.get(draft.kind) ?? 1,
+              title: draft.title,
+              summary: draft.summary,
+              payload: draft.payload,
+            })),
+          )
+          .returning()
+      : [];
+
+  return {
+    sourceMoveId: input.moveId,
+    effects: insertedEffects,
+    shapes,
+  };
 }
 
 export function deriveAfterMoveEffects(state: AfterMoveEffectsState): DerivedEffectDraft[] {
@@ -120,7 +140,7 @@ export function deriveAfterMoveEffects(state: AfterMoveEffectsState): DerivedEff
 }
 
 async function loadAfterMoveEffectsState(
-  db: Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0],
+  db: AfterMoveEffectsTransaction,
   input: AfterMoveEffectsInput,
 ): Promise<AfterMoveEffectsState> {
   const [sourceMove] = await db
@@ -406,6 +426,15 @@ function nextVersionsByKind(existingEffects: Array<typeof derivedEffects.$inferS
   }
 
   return versions;
+}
+
+function withoutExistingEffectKinds(
+  drafts: DerivedEffectDraft[],
+  existingEffects: Array<typeof derivedEffects.$inferSelect>,
+): DerivedEffectDraft[] {
+  const existingKinds = new Set(existingEffects.map((effect) => effect.kind));
+
+  return drafts.filter((draft) => !existingKinds.has(draft.kind));
 }
 
 function shapeSignalForMove(move: MoveRow): { label: string; signal: string; summary: string; reviewQuestion: string } | null {
