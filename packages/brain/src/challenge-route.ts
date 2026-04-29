@@ -4,8 +4,9 @@ import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { brainRuns, claimEdges, claimVersions, claims, moves } from "./db/schema.ts";
+import { brainRuns, claimEdges, claimVersions, claims } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
+import { createMove, type CreatedMove } from "./move-payloads.ts";
 import { FailureTypeSchema, flattenIssues } from "./schema.ts";
 
 const ChallengeRequestSchema = z
@@ -328,12 +329,9 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
         throw new ChallengeConflictError("Failed to create challenge edge.");
       }
 
-      const move = await createChallengeMove(tx, {
+      const move = await createMove(tx, "challenge_issued", {
         sessionId: prelude.target.claim.sessionId,
-        kind: "challenge_issued",
         summary: "Issued a first challenge against the target claim.",
-        claimIds: [prelude.target.claim.id, critiqueClaim.id],
-        edgeIds: [edge.id],
         payload: {
           targetClaimId: prelude.target.claim.id,
           targetClaimVersionId: prelude.target.version.id,
@@ -344,6 +342,8 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
           failureType: challenge.failureType,
           strength: challenge.strength,
           provenanceTag: challenge.provenanceTag,
+          claimIds: [prelude.target.claim.id, critiqueClaim.id],
+          edgeIds: [edge.id],
         },
       });
 
@@ -367,7 +367,7 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
         targetClaim: claimSlice(prelude.target.claim, prelude.target.version),
         critiqueClaim: claimSlice(critiqueClaim, critiqueVersion),
         challengeEdge: edgeSlice(edge),
-        move,
+        move: challengeMoveSlice(move),
         brainRun: {
           id: completedBrainRun.id,
           status: completedBrainRun.status,
@@ -403,12 +403,9 @@ export async function persistChallengeResponse(
     }
 
     if (response.response === "defend") {
-      const move = await createChallengeMove(tx, {
+      const move = await createMove(tx, "user_defended", {
         sessionId: target.claim.sessionId,
-        kind: "user_defended",
         summary: "User defended the target claim against the critique.",
-        claimIds: [target.claim.id, critiqueClaim.id],
-        edgeIds: [edge.id],
         payload: {
           response: response.response,
           reasoning: response.reasoning,
@@ -416,6 +413,8 @@ export async function persistChallengeResponse(
           targetClaimVersionId: target.version.id,
           critiqueClaimId: critiqueClaim.id,
           challengeEdgeId: edge.id,
+          claimIds: [target.claim.id, critiqueClaim.id],
+          edgeIds: [edge.id],
         },
       });
 
@@ -424,20 +423,17 @@ export async function persistChallengeResponse(
         targetClaim: claimSlice(target.claim, target.version),
         critiqueClaimId: critiqueClaim.id,
         challengeEdge: edgeSlice(edge),
-        move,
+        move: challengeMoveSlice(move),
       };
     }
 
     if (response.response === "revise") {
       const versionId = randomUUID();
       const moveId = randomUUID();
-      const move = await createChallengeMove(tx, {
+      const move = await createMove(tx, "claim_revised", {
         id: moveId,
         sessionId: target.claim.sessionId,
-        kind: "claim_revised",
         summary: "User revised the target claim in response to the critique.",
-        claimIds: [target.claim.id, critiqueClaim.id],
-        edgeIds: [edge.id],
         payload: {
           response: response.response,
           reasoning: response.reasoning ?? null,
@@ -447,6 +443,8 @@ export async function persistChallengeResponse(
           critiqueClaimId: critiqueClaim.id,
           challengeEdgeId: edge.id,
           claimVersionIds: [target.version.id, versionId],
+          claimIds: [target.claim.id, critiqueClaim.id],
+          edgeIds: [edge.id],
         },
       });
 
@@ -478,7 +476,7 @@ export async function persistChallengeResponse(
         targetClaim: claimSlice(target.claim, newVersion),
         critiqueClaimId: critiqueClaim.id,
         challengeEdge: edgeSlice(edge),
-        move,
+        move: challengeMoveSlice(move),
       };
     }
 
@@ -494,12 +492,9 @@ export async function persistChallengeResponse(
       throw new ChallengeConflictError("Failed to acknowledge challenge edge.");
     }
 
-    const move = await createChallengeMove(tx, {
+    const move = await createMove(tx, "critique_absorbed", {
       sessionId: target.claim.sessionId,
-      kind: "critique_absorbed",
       summary: "User absorbed the critique as an acknowledged vulnerability.",
-      claimIds: [target.claim.id, critiqueClaim.id],
-      edgeIds: [acknowledgedEdge.id],
       payload: {
         response: response.response,
         reasoning: response.reasoning ?? null,
@@ -508,6 +503,8 @@ export async function persistChallengeResponse(
         critiqueClaimId: critiqueClaim.id,
         challengeEdgeId: acknowledgedEdge.id,
         edgeStatus: acknowledgedEdge.status,
+        claimIds: [target.claim.id, critiqueClaim.id],
+        edgeIds: [acknowledgedEdge.id],
       },
     });
 
@@ -516,7 +513,7 @@ export async function persistChallengeResponse(
       targetClaim: claimSlice(target.claim, target.version),
       critiqueClaimId: critiqueClaim.id,
       challengeEdge: edgeSlice(acknowledgedEdge),
-      move,
+      move: challengeMoveSlice(move),
     };
   });
 }
@@ -544,43 +541,13 @@ async function loadClaimWithCurrentVersion(tx: ChallengeTransaction, claimId: st
   return { claim, version };
 }
 
-async function createChallengeMove(
-  tx: ChallengeTransaction,
-  input: {
-    id?: string;
-    sessionId: string;
-    kind: PersistedMoveSlice["kind"];
-    summary: string;
-    claimIds: string[];
-    edgeIds: string[];
-    payload: Record<string, unknown>;
-  },
-): Promise<PersistedMoveSlice> {
-  const [move] = await tx
-    .insert(moves)
-    .values({
-      id: input.id,
-      sessionId: input.sessionId,
-      kind: input.kind,
-      summary: input.summary,
-      payload: {
-        ...input.payload,
-        claimIds: input.claimIds,
-        edgeIds: input.edgeIds,
-      },
-    })
-    .returning();
-
-  if (!move) {
-    throw new ChallengeConflictError("Failed to create challenge move.");
-  }
-
+function challengeMoveSlice(move: CreatedMove<PersistedMoveSlice["kind"]>): PersistedMoveSlice {
   return {
     id: move.id,
-    kind: move.kind as PersistedMoveSlice["kind"],
+    kind: move.kind,
     summary: move.summary,
-    claimIds: input.claimIds,
-    edgeIds: input.edgeIds,
+    claimIds: move.payload.claimIds,
+    edgeIds: move.payload.edgeIds,
     artifactIds: [],
   };
 }
