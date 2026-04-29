@@ -24,6 +24,7 @@ Keep it current.
 - WikiPage is a compiled view, not source of truth.
 - Backend returns graph slices; frontend does not invent graph edges.
 - Use provider-safe AI schemas plus strict local validation.
+- Add real auth and rate limiting before any public pitch or demo; the current backend is dev-shaped.
 - Current state is derived from claims, claim versions, edges, and moves.
 - Search stays Penny-native until the MVP loop is undeniable: add lexical and graph search over Penny rows first.
 - Keep Supermemory-like semantic memory/search post-MVP; add embeddings later, after lexical/graph search proves insufficient.
