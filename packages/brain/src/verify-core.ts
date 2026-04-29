@@ -13,6 +13,7 @@ import {
   stripCommandIdempotencyFields,
   type CommandIdempotencyStore,
 } from "./command-idempotency.ts";
+import { afterMoveEffectsInTransaction } from "./after-move-effects.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claimVersions, claims, moves, sourceSpans, sources } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
@@ -479,6 +480,7 @@ export async function decideVerifyConfidence(
           edgeIds: [],
         },
       });
+      await afterMoveEffectsInTransaction(tx, { sessionId: verifyMove.sessionId, moveId: move.id });
 
       return {
         decision: "reject",
@@ -561,6 +563,8 @@ export async function decideVerifyConfidence(
     for (const mutation of cascadeMutations) {
       await applyConfidenceMutation(tx, mutation, move.id);
     }
+
+    await afterMoveEffectsInTransaction(tx, { sessionId: verifyMove.sessionId, moveId: move.id });
 
     return {
       decision: "accept",
@@ -834,6 +838,8 @@ async function persistVerifyResult(
     if (!completedBrainRun) {
       throw new VerifyConflictError("Failed to complete Verify BrainRun.");
     }
+
+    await afterMoveEffectsInTransaction(tx, { sessionId: prelude.target.claim.sessionId, moveId: move.id });
 
     return {
       ...persistedOutput,
