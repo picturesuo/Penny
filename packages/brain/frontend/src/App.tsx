@@ -186,10 +186,16 @@ export function App() {
       return;
     }
 
-    const candidateId = autopilot?.suggestion?.candidateId ?? autopilot?.selectedCandidate?.candidateId ?? null;
+    const candidate = autopilot?.suggestion ?? autopilot?.selectedCandidate ?? null;
+    const candidateId = candidate?.candidateId ?? null;
 
     if (!candidateId) {
       setStatus("No selected candidate to challenge");
+      return;
+    }
+
+    if (candidate?.action !== "challenge") {
+      setStatus(`${candidate?.label ?? "Selected action"} is not a challenge candidate`);
       return;
     }
 

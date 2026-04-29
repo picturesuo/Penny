@@ -135,6 +135,8 @@ function ChallengeLoop({
   onRespondChallenge: InsightRailProps["onRespondChallenge"];
   onCreateChallengeBrief: () => Promise<void>;
 }) {
+  const canIssueChallenge = suggestion?.action === "challenge" && Boolean(suggestion.candidateId);
+
   return (
     <section className="challenge-loop" aria-label="Challenge loop">
       <h2 className="section-label">CHALLENGE LOOP</h2>
@@ -143,8 +145,8 @@ function ChallengeLoop({
       ) : (
         <div className="challenge-action-row">
           <span>{suggestion?.primaryActionLabel ?? "No selected action"}</span>
-          <button type="button" disabled={disabled || !suggestion?.candidateId} onClick={onIssueChallenge}>
-            Issue challenge
+          <button type="button" disabled={disabled || !canIssueChallenge} onClick={onIssueChallenge}>
+            {suggestion?.action === "challenge" ? "Issue challenge" : "Not a challenge"}
           </button>
         </div>
       )}
