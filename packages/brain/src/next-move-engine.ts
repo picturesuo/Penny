@@ -3,12 +3,10 @@ import type { CandidateEvidence, EntityId, ThinkingEdge, ThinkingGraphSnapshot, 
 
 export type PureNextMoveAction =
   | "resume_open_challenge"
-  | "challenge_claim"
-  | "review_assumption"
-  | "verify"
   | "learn"
-  | "create_challenge_brief"
-  | "explore_claim";
+  | "clarify"
+  | "verify"
+  | "challenge";
 
 export type ScoreBreakdown = {
   base: number;
@@ -183,7 +181,7 @@ function assumptionCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
 
       return {
         sessionId: graph.session.id,
-        action: "challenge_claim",
+        action: "challenge",
         mode: "challenge",
         targetClaimId: claim.id,
         targetEdgeId: firstConnectedEdgeId(graph.edges, claim.id),
@@ -282,7 +280,7 @@ function fallbackExploreCandidates(graph: ThinkingGraphSnapshot): CandidateDraft
 
       return {
         sessionId: graph.session.id,
-        action: "explore_claim",
+        action: "clarify",
         mode: "brain",
         targetClaimId: claim.id,
         targetEdgeId: null,
@@ -329,18 +327,14 @@ function actionPriority(action: PureNextMoveAction): number {
   switch (action) {
     case "resume_open_challenge":
       return 1;
-    case "challenge_claim":
+    case "challenge":
       return 2;
     case "verify":
       return 3;
     case "learn":
       return 4;
-    case "review_assumption":
+    case "clarify":
       return 5;
-    case "create_challenge_brief":
-      return 6;
-    case "explore_claim":
-      return 7;
   }
 }
 
