@@ -8,6 +8,13 @@ interface HeaderProps {
 const navItems = ["Brain", "Cents", "Check", "Search", "Settings"];
 
 export function Header({ sessionLabel, thinkingLabel }: HeaderProps) {
+  const editionDate = new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date());
+
   return (
     <header className="newspaper-header">
       <div className="masthead">
@@ -34,7 +41,7 @@ export function Header({ sessionLabel, thinkingLabel }: HeaderProps) {
             <span />
             <span />
           </div>
-          <p>Monday, October 20, 2007</p>
+          <p>{editionDate}</p>
           <p>Edition 1.0</p>
           <p className="sr-only">{sessionLabel}</p>
           <p className="sr-only">{thinkingLabel}</p>
