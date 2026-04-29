@@ -11,6 +11,7 @@ import {
   moves,
   nextMoveCandidates,
   sessions,
+  sourceSpans,
   sources,
 } from "../db/schema.ts";
 import { createMove } from "../move-payloads.ts";
@@ -28,6 +29,7 @@ type ChallengeRoundRow = typeof challengeRounds.$inferSelect;
 type FocusStateRow = typeof focusStates.$inferSelect;
 type CandidateRow = typeof nextMoveCandidates.$inferSelect;
 type ArtifactRow = typeof artifacts.$inferSelect;
+type SourceSpanRow = typeof sourceSpans.$inferSelect;
 
 export type ChallengeBriefSectionPayload = {
   originalSeedIdea: {
@@ -103,6 +105,7 @@ export type ChallengeBriefPayload = {
   sections: ChallengeBriefSectionPayload;
   refs: {
     sourceIds: EntityId[];
+    sourceSpanIds: EntityId[];
     claimIds: EntityId[];
     claimVersionIds: EntityId[];
     edgeIds: EntityId[];
@@ -159,6 +162,7 @@ export type ChallengeBriefResponse = {
 export type ChallengeBriefState = {
   session: BriefSession;
   sources: BriefSource[];
+  sourceSpans: BriefSourceSpan[];
   claims: BriefClaim[];
   edges: BriefEdge[];
   moves: BriefMove[];
@@ -183,6 +187,14 @@ type BriefSource = {
   id: EntityId;
   kind: string;
   rawText: string;
+  createdAt: string;
+};
+
+type BriefSourceSpan = {
+  id: EntityId;
+  sourceId: EntityId;
+  claimId: EntityId | null;
+  claimVersionId: EntityId | null;
   createdAt: string;
 };
 
@@ -492,6 +504,14 @@ async function loadChallengeBriefState(
   }
 
   const sourceRows = await tx.select().from(sources).where(eq(sources.sessionId, sessionId)).orderBy(asc(sources.createdAt));
+  const sourceSpanRows =
+    sourceRows.length > 0
+      ? await tx
+          .select()
+          .from(sourceSpans)
+          .where(inArray(sourceSpans.sourceId, sourceRows.map((source) => source.id)))
+          .orderBy(asc(sourceSpans.createdAt))
+      : [];
   const claimRows = await tx.select().from(claims).where(eq(claims.sessionId, sessionId)).orderBy(asc(claims.createdAt));
 
   if (claimRows.length === 0) {
@@ -530,6 +550,7 @@ async function loadChallengeBriefState(
   return {
     session: sessionDto(session),
     sources: sourceRows.map(sourceDto),
+    sourceSpans: sourceSpanRows.map(sourceSpanDto),
     claims: claimDtos(claimRows, versionRows),
     edges: edgeRows.map(edgeDto),
     moves: moveRows.map(moveDto),
@@ -846,6 +867,7 @@ function moveTimelineSummary(movesForSession: BriefMove[]): ChallengeBriefSectio
 function refsFor(state: ChallengeBriefState): ChallengeBriefPayload["refs"] {
   return {
     sourceIds: state.sources.map((source) => source.id),
+    sourceSpanIds: state.sourceSpans.map((span) => span.id),
     claimIds: state.claims.map((claim) => claim.id),
     claimVersionIds: state.claims.flatMap((claim) => claim.versions.map((version) => version.id)),
     edgeIds: state.edges.map((edge) => edge.id),
@@ -944,6 +966,16 @@ function sourceDto(source: SourceRow): BriefSource {
     kind: source.kind,
     rawText: source.rawText,
     createdAt: source.createdAt.toISOString(),
+  };
+}
+
+function sourceSpanDto(span: SourceSpanRow): BriefSourceSpan {
+  return {
+    id: span.id,
+    sourceId: span.sourceId,
+    claimId: span.claimId,
+    claimVersionId: span.claimVersionId,
+    createdAt: span.createdAt.toISOString(),
   };
 }
 
