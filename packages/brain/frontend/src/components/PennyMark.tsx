@@ -1,6 +1,6 @@
 export function PennyMark() {
   return (
-    <svg className="brand-mark" viewBox="20 18 48 64" aria-hidden="true" focusable="false">
+    <svg className="brand-mark" viewBox="22.6667 22.871 43.9097 54.6666" aria-hidden="true" focusable="false">
       <svg x="22.6667" y="22.871" width="43.9097" height="8.8172" viewBox="0 0 51.6688 16.5763" preserveAspectRatio="none">
         <path
           d="M43.3805 1.94012C46.8865 1.94012 49.729 4.78184 49.7292 8.28777C49.7292 11.7939 46.8867 14.6364 43.3805 14.6364H8.28777C4.78184 14.6362 1.94012 11.7938 1.94012 8.28777C1.94033 4.78197 4.78197 1.94033 8.28777 1.94012H43.3805Z"

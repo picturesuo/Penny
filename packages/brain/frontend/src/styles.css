@@ -66,9 +66,10 @@
 
   .brand-mark {
     display: block;
-    width: 48px;
+    width: 44px;
     height: 55px;
     flex: 0 0 auto;
+    margin-left: 4.67px;
     color: #111111;
     overflow: visible;
   }
