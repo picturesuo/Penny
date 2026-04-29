@@ -24,6 +24,29 @@ Finding:
 
 - `THINKING-MODE-CONTRACT-CRITIQUE-CF1`: No contract-level blocker remains for state ownership or Move-backed focus. The remaining blocker is execution scope: do not expand into Challenge Brief, Learn, MCP, generic chat, or broad UI redesign while fixing the frontend focus contract.
 
+## Backend Cockpit Adapter Review
+
+Status: `PASS WITH ADAPTER SCOPE GUARD`
+Artifact ID: `THINKING-MODE-CONTRACT-CRITIQUE`
+Review date: 2026-04-29
+Scope: `packages/brain/src/routes/session-cockpit-routes.ts`, `packages/brain/src/server.ts`, and `packages/brain/src/session-cockpit-routes.test.ts`.
+
+Criterion judgments:
+
+- `PASS WITH ROUTE-SURFACE RISK` `THINKING-MODE-CONTRACT-CRITIQUE-C5`: Backend did not duplicate Thinking Mode business logic. The session cockpit service delegates graph state to `loadSessionGraph` and Autopilot writes to `ThinkingModeService`; the new code only adapts session-scoped route inputs, composes DTO fields, and selects existing active challenge/latest artifact rows. The risk is route-surface duplication, not duplicated domain behavior: keep scoring, Move creation, challenge responses, artifact synthesis, and focus persistence out of this adapter.
+- `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C6`: the cockpit DTO is frontend-shaped but backend-owned. `SessionCockpitPayload` intentionally groups graph, moves, lens, Autopilot, active challenge, latest artifact, and meta for the cockpit, but the shape is built on the backend from canonical backend projections and rows.
+- `PASS` `THINKING-MODE-CONTRACT-CRITIQUE-C7`: this did not create a second source of truth. The adapter adds no new table, cache, persisted cockpit store, or frontend-owned graph state. `activeChallenge` and `latestArtifact` are read projections over existing rows, and accepted focus/manual focus still write through `ThinkingModeService` as `autopilot_focus_started` and `manual_node_selected`.
+- `NOT VERIFIED` `THINKING-MODE-CONTRACT-CRITIQUE-C8`: full-repo typecheck is currently blocked by unrelated dirty frontend changes and an optional `pause` typing mismatch in `packages/brain/frontend/src/App.tsx`. Focused cockpit route tests pass.
+
+Verification commands run:
+
+- `pnpm exec tsx --test packages/brain/src/session-cockpit-routes.test.ts packages/brain/src/thinking-mode-routes.test.ts` -> `PASS`, 18 tests.
+- `pnpm typecheck` -> `FAIL` outside this adapter review scope: `packages/brain/frontend/src/App.tsx` rejects an optional `pause` value under `exactOptionalPropertyTypes`.
+
+Finding:
+
+- `THINKING-MODE-CONTRACT-CRITIQUE-CF2`: No backend cockpit blocker found. The guard is architectural: keep `buildSessionCockpitPayload`, `loadActiveChallenge`, and `loadLatestArtifact` as read-only DTO composition helpers, and do not let the session-scoped aliases become a parallel Thinking Mode implementation.
+
 ## Current Verification Summary
 
 Criterion judgments for `THINKING-MODE-CONTRACT-CRITIQUE`:
