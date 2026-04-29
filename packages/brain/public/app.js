@@ -1044,7 +1044,7 @@ function claimActions(claim) {
   });
   append(controls, inspectButton);
 
-  if (coreLoopComplete()) {
+  if (canVerifyClaim(claim)) {
     const verifyButton = document.createElement("button");
     verifyButton.type = "button";
     verifyButton.textContent = state.verifyingClaimId === claim.id ? "Checking" : "Verify";
@@ -2830,8 +2830,8 @@ function latestArtifact(artifacts) {
   return artifacts.at(-1);
 }
 
-function coreLoopComplete() {
-  return Boolean(state.activeArtifact ?? latestArtifact(state.data?.artifacts));
+function canVerifyClaim(claim) {
+  return Boolean(state.data?.session?.id && claim?.id && claim?.text);
 }
 
 function openMoveDrawer(move) {
