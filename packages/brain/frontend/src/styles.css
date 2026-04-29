@@ -531,6 +531,106 @@
     padding: 18px 18px 12px 0;
   }
 
+  .challenge-loop {
+    border-top: 1px solid #c0c0c0;
+    padding: 18px 18px 18px 0;
+  }
+
+  .challenge-action-row,
+  .challenge-brief-row,
+  .challenge-receipt {
+    display: grid;
+    gap: 8px;
+    margin-top: 16px;
+    font-size: 12px;
+    line-height: 1.12;
+  }
+
+  .challenge-action-row,
+  .challenge-brief-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .challenge-action-row span,
+  .challenge-brief-row span,
+  .challenge-brief-row strong,
+  .challenge-receipt span,
+  .challenge-receipt strong {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .challenge-response-form {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .challenge-mode-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border: 1px solid #111111;
+  }
+
+  .challenge-mode-row button,
+  .challenge-response-form > button,
+  .challenge-action-row button,
+  .challenge-brief-row button {
+    border: 1px solid #111111;
+    padding: 7px 8px;
+    background: #ffffff;
+    color: #111111;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .challenge-mode-row button {
+    border: 0;
+    border-right: 1px solid #111111;
+  }
+
+  .challenge-mode-row button:last-child {
+    border-right: 0;
+  }
+
+  .challenge-mode-row button[aria-pressed="true"],
+  .challenge-response-form > button,
+  .challenge-action-row button,
+  .challenge-brief-row button {
+    background: #111111;
+    color: #ffffff;
+  }
+
+  .challenge-mode-row button:disabled,
+  .challenge-response-form > button:disabled,
+  .challenge-action-row button:disabled,
+  .challenge-brief-row button:disabled {
+    opacity: 0.38;
+  }
+
+  .challenge-response-form label {
+    display: grid;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .challenge-response-form textarea {
+    min-height: 66px;
+    width: 100%;
+    resize: vertical;
+    border: 1px solid #cfcfcf;
+    border-radius: 0;
+    padding: 8px;
+    background: #ffffff;
+    color: #111111;
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.18;
+  }
+
   .history-list {
     display: grid;
     gap: 17px;
