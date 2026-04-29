@@ -51,6 +51,21 @@ export const derivedEffectStatusEnum = pgEnum("derived_effect_status", [
   "superseded",
 ]);
 export const shapeStatusEnum = pgEnum("shape_status", ["candidate", "confirmed", "rejected", "superseded"]);
+export const focusModeEnum = pgEnum("focus_mode", ["brain", "challenge", "verify", "learn", "artifact"]);
+export const focusSourceEnum = pgEnum("focus_source", [
+  "autopilot_suggestion",
+  "autopilot_started",
+  "manual_selection",
+  "challenge_response",
+  "none",
+]);
+export const nextMoveActionEnum = pgEnum("next_move_action", [
+  "resume_open_challenge",
+  "learn",
+  "clarify",
+  "verify",
+  "challenge",
+]);
 export const brainRunOperationEnum = pgEnum("brain_run_operation", [
   "brain.seed",
   "brain.challenge",
@@ -269,6 +284,78 @@ export const moves = pgTable(
   ],
 );
 
+export const focusStates = pgTable(
+  "focus_states",
+  {
+    sessionId: uuid("session_id")
+      .primaryKey()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    mode: focusModeEnum("mode").notNull().default("brain"),
+    focusedClaimId: uuid("focused_claim_id").references(() => claims.id, { onDelete: "set null" }),
+    focusedEdgeId: uuid("focused_edge_id").references(() => claimEdges.id, { onDelete: "set null" }),
+    source: focusSourceEnum("source").notNull().default("none"),
+    suggestionMoveId: uuid("suggestion_move_id").references(() => moves.id, { onDelete: "set null" }),
+    manualMoveId: uuid("manual_move_id").references(() => moves.id, { onDelete: "set null" }),
+    paused: boolean("paused").notNull().default(false),
+    reason: text("reason"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("focus_states_focused_claim_id_idx").on(table.focusedClaimId),
+    index("focus_states_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("focus_states_focused_edge_id_idx").on(table.focusedEdgeId),
+    index("focus_states_suggestion_move_id_idx").on(table.suggestionMoveId),
+    index("focus_states_manual_move_id_idx").on(table.manualMoveId),
+    index("focus_states_paused_idx").on(table.paused),
+  ],
+);
+
+export const nextMoveCandidates = pgTable(
+  "next_move_candidates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    candidateId: text("candidate_id").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    graphHash: text("graph_hash").notNull(),
+    action: nextMoveActionEnum("action").notNull(),
+    mode: focusModeEnum("mode").notNull(),
+    targetClaimId: uuid("target_claim_id")
+      .notNull()
+      .references(() => claims.id, { onDelete: "cascade" }),
+    targetEdgeId: uuid("target_edge_id").references(() => claimEdges.id, { onDelete: "set null" }),
+    score: integer("score").notNull(),
+    rank: integer("rank").notNull(),
+    reason: text("reason").notNull(),
+    reasonCodes: jsonb("reason_codes").$type<string[]>().notNull().default([]),
+    exitCriteria: jsonb("exit_criteria").notNull().default({}),
+    scoreBreakdown: jsonb("score_breakdown").notNull().default({}),
+    provenance: jsonb("provenance").notNull().default({}),
+    selected: boolean("selected").notNull().default(false),
+    selectedAt: timestamp("selected_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("next_move_candidates_session_fingerprint_idx").on(table.sessionId, table.fingerprint),
+    uniqueIndex("next_move_candidates_session_candidate_id_idx").on(table.sessionId, table.candidateId),
+    index("next_move_candidates_session_id_idx").on(table.sessionId),
+    index("next_move_candidates_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("next_move_candidates_target_claim_id_idx").on(table.targetClaimId),
+    index("next_move_candidates_target_edge_id_idx").on(table.targetEdgeId),
+    index("next_move_candidates_graph_hash_idx").on(table.graphHash),
+    index("next_move_candidates_selected_idx").on(table.sessionId, table.selected),
+    check("next_move_candidates_score_nonnegative", sql`${table.score} >= 0`),
+    check("next_move_candidates_rank_positive", sql`${table.rank} > 0`),
+    check("next_move_candidates_fingerprint_present", sql`length(trim(${table.fingerprint})) > 0`),
+    check("next_move_candidates_graph_hash_present", sql`length(trim(${table.graphHash})) > 0`),
+  ],
+);
+
 export const derivedEffects = pgTable(
   "derived_effects",
   {
@@ -447,8 +534,13 @@ export const pennySchema = {
   derivedEffectKindEnum,
   derivedEffectStatusEnum,
   derivedEffects,
+  focusModeEnum,
+  focusSourceEnum,
+  focusStates,
   moveKindEnum,
   moves,
+  nextMoveActionEnum,
+  nextMoveCandidates,
   sessionStatusEnum,
   sessions,
   shapeStatusEnum,

@@ -18,7 +18,12 @@ import {
   derivedEffectKindEnum,
   derivedEffectStatusEnum,
   derivedEffects,
+  focusModeEnum,
+  focusSourceEnum,
+  focusStates,
   moveKindEnum,
+  nextMoveActionEnum,
+  nextMoveCandidates,
   claimVersions,
   moves,
   pennySchema,
@@ -40,6 +45,8 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(sourceSpans), "source_spans");
   assert.equal(getTableName(moves), "moves");
   assert.equal(getTableName(derivedEffects), "derived_effects");
+  assert.equal(getTableName(focusStates), "focus_states");
+  assert.equal(getTableName(nextMoveCandidates), "next_move_candidates");
   assert.equal(getTableName(shapes), "shapes");
   assert.equal(getTableName(brainRuns), "brain_runs");
   assert.equal(getTableName(artifacts), "artifacts");
@@ -61,6 +68,8 @@ test("Penny core tables persist user and workspace scope", () => {
     claimEdges,
     moves,
     derivedEffects,
+    focusStates,
+    nextMoveCandidates,
     shapes,
     brainRuns,
     artifacts,
@@ -96,6 +105,15 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
   ]);
   assert.deepEqual(derivedEffectStatusEnum.enumValues, ["pending_review", "accepted", "rejected", "superseded"]);
   assert.deepEqual(shapeStatusEnum.enumValues, ["candidate", "confirmed", "rejected", "superseded"]);
+  assert.deepEqual(focusModeEnum.enumValues, ["brain", "challenge", "verify", "learn", "artifact"]);
+  assert.deepEqual(focusSourceEnum.enumValues, [
+    "autopilot_suggestion",
+    "autopilot_started",
+    "manual_selection",
+    "challenge_response",
+    "none",
+  ]);
+  assert.deepEqual(nextMoveActionEnum.enumValues, ["resume_open_challenge", "learn", "clarify", "verify", "challenge"]);
   assert.deepEqual(brainRunOperationEnum.enumValues, [
     "brain.seed",
     "brain.challenge",
@@ -144,8 +162,13 @@ test("Penny schema has a clean aggregate export surface", () => {
     "derivedEffectKindEnum",
     "derivedEffectStatusEnum",
     "derivedEffects",
+    "focusModeEnum",
+    "focusSourceEnum",
+    "focusStates",
     "moveKindEnum",
     "moves",
+    "nextMoveActionEnum",
+    "nextMoveCandidates",
     "sessionStatusEnum",
     "sessions",
     "shapeStatusEnum",
