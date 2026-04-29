@@ -505,6 +505,7 @@ const materialChangeKinds = new Set([
   "critique_absorbed",
   "learning_triggered",
   "verify_run",
+  "confidence_update_accepted",
 ]);
 
 function challengeResponseMove(moveRows: MoveRow[], edgeId: string): MoveRow | undefined {

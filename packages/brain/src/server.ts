@@ -10,7 +10,7 @@ import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleSessionMovesRequest } from "./session-moves-route.ts";
 import { handleBrainStreamRequest } from "./stream-route.ts";
-import { handleVerifyRequest } from "./verify-route.ts";
+import { handleVerifyConfidenceRequest, handleVerifyRequest } from "./verify-route.ts";
 import { handleSessionWikiRequest } from "./wiki-route.ts";
 
 const port = parsePort(process.env.PORT);
@@ -43,6 +43,11 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/verify") {
       await writeWebResponse(outgoing, await handleVerifyRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/brain/verify/confidence") {
+      await writeWebResponse(outgoing, await handleVerifyConfidenceRequest(request));
       return;
     }
 

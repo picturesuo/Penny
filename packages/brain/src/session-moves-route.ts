@@ -350,6 +350,8 @@ function actorForMove(kind: string): "User" | "Penny" {
       "assumption_confirmed",
       "assumption_rejected",
       "assumption_refined",
+      "confidence_update_accepted",
+      "confidence_update_rejected",
       "user_defended",
       "claim_revised",
       "critique_absorbed",
@@ -371,11 +373,13 @@ function payloadPreview(payload: unknown): Record<string, unknown> {
 
   for (const key of [
     "action",
+    "decision",
     "response",
     "verdict",
     "failureType",
     "strength",
     "confidenceDeltaSuggestion",
+    "appliedDelta",
     "edgeStatus",
   ]) {
     if (typeof record[key] === "string" || typeof record[key] === "number" || typeof record[key] === "boolean") {
@@ -394,6 +398,7 @@ function payloadPreview(payload: unknown): Record<string, unknown> {
     "brainRunId",
     "sourceId",
     "sourceSpanId",
+    "verifyMoveId",
     "previousVersionId",
     "currentVersionId",
     "previousClaimVersionId",
