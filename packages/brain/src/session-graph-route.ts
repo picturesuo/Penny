@@ -12,7 +12,7 @@ import {
   sources,
   sourceSpans,
 } from "./db/schema.ts";
-import { scopeValues, type BrainScope, type OptionalBrainScope } from "./scope.ts";
+import { scopeValues, type OptionalBrainScope } from "./scope.ts";
 import { compiledShapesFromRows } from "./shapes.ts";
 
 const SessionGraphPathSchema = z.string().uuid();
