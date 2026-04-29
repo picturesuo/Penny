@@ -4,6 +4,7 @@ import {
   handleChallengeRoundRespondRequest,
   handleIssueChallengeFromCandidateRequest,
   handleManualFocusRequest,
+  handleSessionIssueChallengeFromCandidateRequest,
   handleStartNextMoveCandidateRequest,
   handleThinkingModeStateRequest,
   handleThinkingModeTickRequest,
@@ -250,6 +251,42 @@ test("POST /api/next-move-candidates/:candidateId/challenge issues a ChallengeRo
   assert.equal(payload.data.failureType, "shaky_assumption");
   assert.equal(payload.data.strength, "strong");
   assert.match(payload.data.whyThis, /willingness to pay/);
+  assert.equal(payload.data.move.kind, "challenge_issued");
+});
+
+test("POST /api/sessions/:sessionId/next-move-candidates/:candidateId/challenge issues without body ids", async () => {
+  const issued: IssueChallengeFromCandidateInput[] = [];
+  const response = await handleSessionIssueChallengeFromCandidateRequest(
+    requestWithBody(`http://localhost/api/sessions/${uuidAt(101)}/next-move-candidates/next_candidate/challenge`, {}),
+    uuidAt(101),
+    "next_candidate",
+    {
+      service: challengeRouteService({
+        async issueChallengeFromCandidate(input) {
+          issued.push(input);
+          return challengeIssueResponse(input.brainId, input.sessionId);
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      status: string;
+      brainId: string;
+      sessionId: string;
+      challengeRound: { status: string };
+      move: { kind: string };
+    };
+  };
+
+  assert.equal(response.status, 201);
+  assert.equal(issued[0]?.brainId, uuidAt(101));
+  assert.equal(issued[0]?.sessionId, uuidAt(101));
+  assert.equal(issued[0]?.candidateId, "next_candidate");
+  assert.equal(payload.data.status, "issued");
+  assert.equal(payload.data.brainId, uuidAt(101));
+  assert.equal(payload.data.sessionId, uuidAt(101));
+  assert.equal(payload.data.challengeRound.status, "open");
   assert.equal(payload.data.move.kind, "challenge_issued");
 });
 
@@ -541,6 +578,14 @@ test("challenge round routes return clear validation and domain errors", async (
     "not-a-uuid",
     { service: challengeRouteService() },
   );
+  const duplicateSessionAlias = await handleSessionIssueChallengeFromCandidateRequest(
+    requestWithBody(`http://localhost/api/sessions/${uuidAt(101)}/next-move-candidates/next_candidate/challenge`, {
+      sessionId: uuidAt(101),
+    }),
+    uuidAt(101),
+    "next_candidate",
+    { service: challengeRouteService() },
+  );
   const notFound = await handleChallengeRoundRespondRequest(
     requestWithBody(`http://localhost/api/challenges/${uuidAt(901)}/respond`, {
       response: "defend",
@@ -571,6 +616,9 @@ test("challenge round routes return clear validation and domain errors", async (
   const invalidIssuePayload = (await invalidIssue.json()) as { error: { code: string; issues: string[] } };
   const invalidRevisePayload = (await invalidRevise.json()) as { error: { code: string; issues: string[] } };
   const invalidChallengeIdPayload = (await invalidChallengeId.json()) as { error: { code: string; issues: string[] } };
+  const duplicateSessionAliasPayload = (await duplicateSessionAlias.json()) as {
+    error: { code: string; issues: string[] };
+  };
   const notFoundPayload = (await notFound.json()) as { error: { code: string; message: string } };
   const conflictPayload = (await conflict.json()) as { error: { code: string; message: string } };
 
@@ -581,6 +629,9 @@ test("challenge round routes return clear validation and domain errors", async (
   assert.equal(invalidIssue.status, 400);
   assert.equal(invalidIssuePayload.error.code, "invalid_request");
   assert.match(invalidIssuePayload.error.issues.join("\n"), /brainId/);
+  assert.equal(duplicateSessionAlias.status, 400);
+  assert.equal(duplicateSessionAliasPayload.error.code, "invalid_request");
+  assert.match(duplicateSessionAliasPayload.error.issues.join("\n"), /Unrecognized key/);
   assert.equal(invalidChallengeId.status, 400);
   assert.match(invalidChallengeIdPayload.error.issues.join("\n"), /challengeId/);
   assert.equal(notFound.status, 404);

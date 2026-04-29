@@ -24,6 +24,7 @@ import {
   handleChallengeRoundRespondRequest,
   handleIssueChallengeFromCandidateRequest,
   handleManualFocusRequest,
+  handleSessionIssueChallengeFromCandidateRequest,
   handleStartNextMoveCandidateRequest,
   handleThinkingModeStateRequest,
   handleThinkingModeTickRequest,
@@ -250,6 +251,33 @@ const server = createServer(async (incoming, outgoing) => {
       await writeWebResponse(
         outgoing,
         await handleSessionStartNextMoveCandidateRequest(
+          request,
+          decodeURIComponent(sessionId),
+          decodeURIComponent(candidateId),
+        ),
+      );
+      return;
+    }
+
+    const sessionChallengeNextMoveMatch = /^\/api\/sessions\/([^/]+)\/next-move-candidates\/([^/]+)\/challenge$/.exec(
+      url.pathname,
+    );
+
+    if (sessionChallengeNextMoveMatch) {
+      const sessionId = sessionChallengeNextMoveMatch[1];
+      const candidateId = sessionChallengeNextMoveMatch[2];
+
+      if (!sessionId || !candidateId) {
+        await writeWebResponse(
+          outgoing,
+          invalidPathResponse("invalid_candidate_id", "Issuing a session challenge requires session and candidate ids."),
+        );
+        return;
+      }
+
+      await writeWebResponse(
+        outgoing,
+        await handleSessionIssueChallengeFromCandidateRequest(
           request,
           decodeURIComponent(sessionId),
           decodeURIComponent(candidateId),

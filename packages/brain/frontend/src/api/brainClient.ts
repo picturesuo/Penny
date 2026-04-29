@@ -101,14 +101,14 @@ export async function issueChallengeFromCandidate(
   sessionId: string,
   candidateId: string,
 ): Promise<IssueChallengeResponse> {
-  const response = await fetch(`/api/next-move-candidates/${encodeURIComponent(candidateId)}/challenge`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      brainId: sessionId,
-      sessionId,
-    }),
-  });
+  const response = await fetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/next-move-candidates/${encodeURIComponent(candidateId)}/challenge`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({}),
+    },
+  );
 
   const payload = await readJson(response);
 
@@ -116,7 +116,7 @@ export async function issueChallengeFromCandidate(
     throw new Error(
       errorMessage(
         payload,
-        `POST /api/next-move-candidates/${candidateId}/challenge failed with ${response.status}.`,
+        `POST /api/sessions/${sessionId}/next-move-candidates/${candidateId}/challenge failed with ${response.status}.`,
       ),
     );
   }

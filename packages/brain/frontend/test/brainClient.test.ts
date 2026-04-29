@@ -56,9 +56,9 @@ test("frontend brain client uses session-scoped Autopilot command routes", async
     assert.equal(calls[1]?.url, `/api/sessions/${sessionId}/next-move-candidates/next_candidate/start`);
     assert.equal(calls[1]?.method, "POST");
     assert.deepEqual(calls[1]?.body, {});
-    assert.equal(calls[2]?.url, "/api/next-move-candidates/next_candidate/challenge");
+    assert.equal(calls[2]?.url, `/api/sessions/${sessionId}/next-move-candidates/next_candidate/challenge`);
     assert.equal(calls[2]?.method, "POST");
-    assert.deepEqual(calls[2]?.body, { brainId: sessionId, sessionId });
+    assert.deepEqual(calls[2]?.body, {});
     assert.equal(calls[3]?.url, `/api/challenges/${uuidAt(701)}/respond`);
     assert.equal(calls[3]?.method, "POST");
     assert.deepEqual(calls[3]?.body, {

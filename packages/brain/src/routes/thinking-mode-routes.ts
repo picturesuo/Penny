@@ -55,6 +55,7 @@ const IssueChallengeFromCandidateRequestSchema = z
     sessionId: UuidSchema,
   })
   .strict();
+const SessionIssueChallengeFromCandidateRequestSchema = z.object({}).strict();
 
 const ChallengeRespondRequestSchema = z.discriminatedUnion("response", [
   z
@@ -289,6 +290,54 @@ export async function handleIssueChallengeFromCandidateRequest(
         data: await service.issueChallengeFromCandidate({
           brainId: parsed.data.brainId,
           sessionId: parsed.data.sessionId,
+          candidateId: candidateIdResult.data,
+        }),
+      },
+      201,
+    );
+  } catch (error) {
+    return challengeRoundErrorResponse(error);
+  }
+}
+
+export async function handleSessionIssueChallengeFromCandidateRequest(
+  request: Request,
+  sessionId: string,
+  candidateId: string,
+  options: ChallengeRoundRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed(
+      "POST /api/sessions/:sessionId/next-move-candidates/:candidateId/challenge requires the POST method.",
+      "POST",
+    );
+  }
+
+  const sessionIdResult = UuidSchema.safeParse(sessionId);
+  const candidateIdResult = CandidateIdSchema.safeParse(candidateId);
+
+  if (!sessionIdResult.success) {
+    return invalidRequest("Invalid sessionId.", ["sessionId path parameter must be a UUID."]);
+  }
+
+  if (!candidateIdResult.success) {
+    return invalidRequest("Invalid candidateId.", ["candidateId path parameter is required."]);
+  }
+
+  const parsed = await parseJsonRequest(request, SessionIssueChallengeFromCandidateRequestSchema);
+
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  try {
+    const service = resolveChallengeRoundService(options);
+
+    return jsonResponse(
+      {
+        data: await service.issueChallengeFromCandidate({
+          brainId: sessionIdResult.data,
+          sessionId: sessionIdResult.data,
           candidateId: candidateIdResult.data,
         }),
       },
