@@ -22,6 +22,9 @@ Keep it current.
 - Backend returns graph slices; frontend does not invent graph edges.
 - Use provider-safe AI schemas plus strict local validation.
 - Current state is derived from claims, claim versions, edges, and moves.
+- Search stays Penny-native until the MVP loop is undeniable: add lexical and graph search over Penny rows first.
+- Keep Supermemory-like semantic memory/search post-MVP; add embeddings later, after lexical/graph search proves insufficient.
+- Do not jump to broad document ingestion before the seed -> challenge/verify -> learn -> artifact loop works end to end.
 - Do not build a generic chatbot sidebar or pre-MVP features before the first loop works end to end.
 
 ## Shared Context
