@@ -75,6 +75,8 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
   assert.ok(moveKindEnum.enumValues.includes("claim_revised"));
   assert.ok(moveKindEnum.enumValues.includes("critique_absorbed"));
   assert.ok(moveKindEnum.enumValues.includes("learning_triggered"));
+  assert.ok(moveKindEnum.enumValues.includes("confidence_update_accepted"));
+  assert.ok(moveKindEnum.enumValues.includes("confidence_update_rejected"));
   assert.ok(moveKindEnum.enumValues.includes("artifact_created"));
   assert.ok(moveKindEnum.enumValues.includes("wiki_page_compiled"));
   assert.deepEqual(artifactKindEnum.enumValues, ["idea_map", "challenge_brief", "idea_map_challenge_brief"]);

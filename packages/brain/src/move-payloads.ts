@@ -15,6 +15,9 @@ const MoveSummarySchema = z.string().trim().min(1).max(500);
 const ClaimStatusSchema = z.enum(claimStatusEnum.enumValues);
 const ChallengeEdgeStatusSchema = z.enum(claimEdgeStatusEnum.enumValues);
 const ArtifactKindSchema = z.enum(artifactKindEnum.enumValues);
+const ConfidenceDeltaSchema = z.number().int().min(-100).max(100);
+const ConfidencePercentSchema = z.number().int().min(0).max(100);
+const DecisionReasonSchema = z.string().trim().min(1).max(2_000);
 const FailureTypeSchema = z.enum([
   "weak_evidence",
   "missing_counterargument",
@@ -139,11 +142,59 @@ const VerifyRunPayloadSchema = z
     claimVersionId: UuidSchema,
     brainRunId: UuidSchema,
     verdict: z.enum(["supported", "weakened", "mixed", "not_enough_evidence"]),
-    confidenceDeltaSuggestion: z.number().int().min(-100).max(100),
+    confidenceDeltaSuggestion: ConfidenceDeltaSchema,
     confidenceDecision: z.literal("pending_user_decision"),
     autoAppliedConfidence: z.boolean(),
     sourceIds: UuidArraySchema,
     sourceSpanIds: UuidArraySchema,
+  })
+  .strict();
+
+const ConfidenceCascadeAppliedSchema = z
+  .object({
+    claimId: UuidSchema,
+    viaEdgeId: UuidSchema,
+    depth: z.number().int().min(1).max(100),
+    previousVersionId: UuidSchema,
+    currentVersionId: UuidSchema,
+    previousConfidence: ConfidencePercentSchema,
+    currentConfidence: ConfidencePercentSchema,
+    appliedDelta: ConfidenceDeltaSchema,
+  })
+  .strict();
+
+const ConfidenceUpdateAcceptedPayloadSchema = z
+  .object({
+    decision: z.literal("accept"),
+    verifyMoveId: UuidSchema,
+    claimId: UuidSchema,
+    previousVersionId: UuidSchema,
+    currentVersionId: UuidSchema,
+    brainRunId: UuidSchema,
+    confidenceDeltaSuggestion: ConfidenceDeltaSchema,
+    previousConfidence: ConfidencePercentSchema,
+    currentConfidence: ConfidencePercentSchema,
+    appliedDelta: ConfidenceDeltaSchema,
+    cascade: z.array(ConfidenceCascadeAppliedSchema),
+    reason: DecisionReasonSchema.optional(),
+    claimIds: UuidArraySchema,
+    claimVersionIds: UuidArraySchema,
+    edgeIds: UuidArraySchema,
+  })
+  .strict();
+
+const ConfidenceUpdateRejectedPayloadSchema = z
+  .object({
+    decision: z.literal("reject"),
+    verifyMoveId: UuidSchema,
+    claimId: UuidSchema,
+    claimVersionId: UuidSchema,
+    brainRunId: UuidSchema,
+    confidenceDeltaSuggestion: ConfidenceDeltaSchema,
+    reason: DecisionReasonSchema.optional(),
+    claimIds: UuidArraySchema,
+    claimVersionIds: UuidArraySchema,
+    edgeIds: UuidArraySchema,
   })
   .strict();
 
@@ -261,6 +312,8 @@ export const MovePayloadSchemas = {
   critique_absorbed: CritiqueAbsorbedPayloadSchema,
   learning_triggered: LearningTriggeredPayloadSchema,
   verify_run: VerifyRunPayloadSchema,
+  confidence_update_accepted: ConfidenceUpdateAcceptedPayloadSchema,
+  confidence_update_rejected: ConfidenceUpdateRejectedPayloadSchema,
   artifact_created: ArtifactCreatedPayloadSchema,
   wiki_page_compiled: WikiPageCompiledPayloadSchema,
   "claim.created": LegacyClaimCreatedPayloadSchema,

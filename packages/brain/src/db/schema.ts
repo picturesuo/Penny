@@ -42,6 +42,8 @@ export const moveKindEnum = pgEnum("move_kind", [
   "critique_absorbed",
   "learning_triggered",
   "verify_run",
+  "confidence_update_accepted",
+  "confidence_update_rejected",
   "artifact_created",
   "wiki_page_compiled",
   "source.recorded",

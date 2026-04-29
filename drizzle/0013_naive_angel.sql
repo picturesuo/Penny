@@ -1,0 +1,2 @@
+ALTER TYPE "public"."move_kind" ADD VALUE 'confidence_update_accepted' BEFORE 'artifact_created';--> statement-breakpoint
+ALTER TYPE "public"."move_kind" ADD VALUE 'confidence_update_rejected' BEFORE 'artifact_created';
