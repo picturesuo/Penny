@@ -4,6 +4,7 @@ import {
   handleBrainSeedRequest,
   type BrainSeedUiPayload,
 } from "./brain-seed-route.ts";
+import { createMemoryCommandIdempotencyStore } from "./command-idempotency.ts";
 import {
   BrainSeedValidationError,
   createHeuristicBrainSeedProvider,
@@ -121,6 +122,44 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
   assert.equal(failedRun, false);
 });
 
+test("POST /brain/seed replays an idempotent command without regenerating", async () => {
+  const idempotencyStore = createMemoryCommandIdempotencyStore();
+  let generated = 0;
+  const options = {
+    provider: createHeuristicBrainSeedProvider(),
+    idempotencyStore,
+    async prepareSeedRun(input: BrainSeedInput, prepareOptions: { run: BrainSeedRunInput }) {
+      return createPersistedPrelude(input, prepareOptions.run);
+    },
+    async generateSeed(input: BrainSeedInput, generateOptions: { brainRunId: string }) {
+      generated += 1;
+
+      return generateBrainSeed(input, {
+        provider: createHeuristicBrainSeedProvider(),
+        brainRunId: generateOptions.brainRunId,
+      });
+    },
+    async persistSeed(seed: BrainSeedOutput, persistOptions: { prelude: BrainSeedPrelude }) {
+      return createPersistedSeed(seed, persistOptions.prelude);
+    },
+    async failSeedRun() {
+      throw new Error("failSeedRun should not run");
+    },
+  };
+  const first = await handleBrainSeedRequest(idempotentSeedRequest(), options);
+  const second = await handleBrainSeedRequest(idempotentSeedRequest(), options);
+  const firstPayload = (await first.json()) as { data: BrainSeedUiPayload };
+  const secondPayload = (await second.json()) as { data: BrainSeedUiPayload };
+
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  assert.equal(first.headers.get("x-penny-idempotency"), "created");
+  assert.equal(second.headers.get("x-penny-idempotency"), "replayed");
+  assert.equal(generated, 1);
+  assert.equal(secondPayload.data.session.id, firstPayload.data.session.id);
+  assert.deepEqual(secondPayload.data.ideaMap.claims, firstPayload.data.ideaMap.claims);
+});
+
 test("POST /brain/seed rejects non-POST methods", async () => {
   const response = await handleBrainSeedRequest(new Request("http://localhost/brain/seed"));
   const payload = (await response.json()) as { error: { code: string } };
@@ -129,6 +168,21 @@ test("POST /brain/seed rejects non-POST methods", async () => {
   assert.equal(response.headers.get("allow"), "POST");
   assert.equal(payload.error.code, "method_not_allowed");
 });
+
+function idempotentSeedRequest(): Request {
+  return new Request("http://localhost/brain/seed", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "idempotency-key": "seed-command-1",
+      "x-user-id": "dev-user-1",
+      "x-project-id": "dev-project-1",
+    },
+    body: JSON.stringify({
+      rawIdea: "Penny should turn rough founder strategy into a stress-tested decision brief.",
+    }),
+  });
+}
 
 test("POST /brain/seed marks the BrainRun failed without persisting claims when extraction validation fails", async () => {
   let persisted = false;
