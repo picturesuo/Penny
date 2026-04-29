@@ -628,19 +628,20 @@ function parsePort(value: string | undefined): number {
 
 function guardApiRequest(request: Request, url: URL): ApiGuardResult {
   const cors = corsHeadersForRequest(request);
+  const apiPath = isApiPath(url.pathname);
+
+  if (!apiPath) {
+    return {
+      request,
+      headers: cors.allowed ? cors.headers : new Headers(),
+    };
+  }
 
   if (!cors.allowed) {
     return {
       request,
       headers: cors.headers,
       response: jsonErrorResponse(403, "cors_origin_not_allowed", "This origin is not allowed for Penny API requests."),
-    };
-  }
-
-  if (!isApiPath(url.pathname)) {
-    return {
-      request,
-      headers: cors.headers,
     };
   }
 
