@@ -1,0 +1,236 @@
+export const goldenDemoSeed = "I'm building Penny, a thinking autopilot for founders." as const;
+
+export const thinkingMoveKinds = [
+  "source_recorded",
+  "seed_claim_created",
+  "assumptions_extracted",
+  "autopilot_candidate_generated",
+  "autopilot_focus_suggested",
+  "autopilot_focus_started",
+  "manual_node_selected",
+  "challenge_issued",
+  "user_defended",
+  "claim_revised",
+  "critique_absorbed",
+  "focus_completed",
+  "next_move_recomputed",
+  "artifact_created",
+] as const;
+
+export type ThinkingMoveKind = (typeof thinkingMoveKinds)[number];
+
+export type LegacyMoveKind =
+  | "source.recorded"
+  | "autopilot_suggested"
+  | "challenge.response.defended"
+  | "challenge.response.revised"
+  | "challenge.response.absorbed";
+
+export type IsoTimestamp = string;
+export type EntityId = string;
+export type Confidence = number;
+
+export type ClaimKind = "belief" | "assumption" | "question" | "concept";
+export type ClaimStatus = "exploratory" | "committed" | "resolved" | "rejected";
+export type EdgeKind =
+  | "depends_on"
+  | "supports"
+  | "questions"
+  | "challenges"
+  | "contradicts"
+  | "clarifies"
+  | "teaches";
+export type EdgeStatus = "active" | "acknowledged_vulnerability";
+export type ThinkingMode = "brain" | "challenge" | "verify" | "learn" | "artifact";
+
+export type FocusSource =
+  | "autopilot_suggestion"
+  | "autopilot_started"
+  | "manual_selection"
+  | "challenge_response"
+  | "none";
+
+export type NextMoveAction =
+  | "respond_to_challenge"
+  | "review_assumption"
+  | "challenge_claim"
+  | "verify_confidence"
+  | "revisit_absorbed_risk"
+  | "create_challenge_brief"
+  | "explore_claim";
+
+export type ChallengeResponseKind = "defend" | "revise" | "absorb";
+export type ArtifactKind = "idea_map" | "challenge_brief" | "idea_map_challenge_brief";
+
+export type ClaimVersionSnapshot = {
+  id: EntityId;
+  claimId: EntityId;
+  text: string;
+  confidence: Confidence;
+  status: ClaimStatus;
+  isCurrent: boolean;
+  validFrom: IsoTimestamp;
+  validUntil: IsoTimestamp | null;
+  supersededByVersionId: EntityId | null;
+};
+
+export type ThinkingClaim = {
+  id: EntityId;
+  sessionId: EntityId;
+  kind: ClaimKind;
+  currentVersionId: EntityId;
+  text: string;
+  confidence: Confidence;
+  status: ClaimStatus;
+  createdAt: IsoTimestamp;
+  versions?: ReadonlyArray<ClaimVersionSnapshot>;
+  tags?: ReadonlyArray<string>;
+};
+
+export type ThinkingEdge = {
+  id: EntityId;
+  sessionId: EntityId;
+  fromClaimId: EntityId;
+  toClaimId: EntityId;
+  kind: EdgeKind;
+  status: EdgeStatus;
+  label: string | null;
+  createdAt: IsoTimestamp;
+};
+
+export type ThinkingMove = {
+  id: EntityId;
+  sessionId: EntityId;
+  kind: ThinkingMoveKind | LegacyMoveKind;
+  summary: string;
+  payload: Record<string, unknown>;
+  createdAt: IsoTimestamp;
+};
+
+export type FocusState = {
+  sessionId: EntityId;
+  mode: ThinkingMode;
+  focusedClaimId: EntityId | null;
+  focusedEdgeId: EntityId | null;
+  source: FocusSource;
+  suggestionMoveId: EntityId | null;
+  manualMoveId: EntityId | null;
+  paused: boolean;
+  reason: string | null;
+  updatedAt: IsoTimestamp | null;
+};
+
+export type CandidateEvidence = {
+  claimIds: ReadonlyArray<EntityId>;
+  edgeIds: ReadonlyArray<EntityId>;
+  moveIds: ReadonlyArray<EntityId>;
+  artifactIds: ReadonlyArray<EntityId>;
+};
+
+export type NextMoveCandidate = {
+  candidateId: EntityId;
+  sessionId: EntityId;
+  action: NextMoveAction;
+  mode: ThinkingMode;
+  targetClaimId: EntityId | null;
+  targetEdgeId: EntityId | null;
+  score: number;
+  rank: number;
+  reasonCodes: ReadonlyArray<string>;
+  why: string;
+  evidence: CandidateEvidence;
+  blockedBy: ReadonlyArray<string>;
+  wouldCreateMoveKinds: ReadonlyArray<ThinkingMoveKind>;
+};
+
+export type AutopilotTickRequest = {
+  sessionId: EntityId;
+  resume?: boolean;
+  idempotencyKey?: string;
+};
+
+export type AutopilotTickResult = {
+  status: "ready" | "paused" | "empty";
+  sessionId: EntityId;
+  focusState: FocusState;
+  candidates: ReadonlyArray<NextMoveCandidate>;
+  selectedCandidate: NextMoveCandidate | null;
+  persistedMoveIds: ReadonlyArray<EntityId>;
+};
+
+export type ManualNodeSelectionCommand = {
+  sessionId: EntityId;
+  claimId: EntityId;
+  previousSuggestionMoveId: EntityId | null;
+  reason: string | null;
+  idempotencyKey?: string;
+};
+
+export type ChallengeResponseCommand =
+  | {
+      response: "defend";
+      challengeEdgeId: EntityId;
+      reasoning: string;
+      idempotencyKey?: string;
+    }
+  | {
+      response: "revise";
+      challengeEdgeId: EntityId;
+      revisedText: string;
+      reasoning: string | null;
+      idempotencyKey?: string;
+    }
+  | {
+      response: "absorb";
+      challengeEdgeId: EntityId;
+      reasoning: string | null;
+      idempotencyKey?: string;
+    };
+
+export type ChallengeBriefArtifact = {
+  id: EntityId;
+  sessionId: EntityId;
+  kind: "challenge_brief";
+  title: string;
+  claimIds: ReadonlyArray<EntityId>;
+  claimVersionIds: ReadonlyArray<EntityId>;
+  edgeIds: ReadonlyArray<EntityId>;
+  moveIds: ReadonlyArray<EntityId>;
+  createdAt: IsoTimestamp;
+  sections: {
+    seedSummary: string;
+    claimMapSummary: string;
+    loadBearingAssumptions: ReadonlyArray<string>;
+    challengeOutcome: string;
+    unresolvedRisks: ReadonlyArray<string>;
+    recommendedNextMove: string | null;
+  };
+};
+
+export type ThinkingSessionSnapshot = {
+  id: EntityId;
+  status: "open" | "completed";
+  title: string | null;
+  createdAt: IsoTimestamp;
+  endedAt: IsoTimestamp | null;
+};
+
+export type ThinkingGraphSnapshot = {
+  session: ThinkingSessionSnapshot;
+  focusState: FocusState;
+  claims: ReadonlyArray<ThinkingClaim>;
+  edges: ReadonlyArray<ThinkingEdge>;
+  moves: ReadonlyArray<ThinkingMove>;
+  artifacts: ReadonlyArray<ChallengeBriefArtifact>;
+};
+
+export type PennyYcDemoGraphFixture = ThinkingGraphSnapshot & {
+  schemaVersion: "penny-yc-demo-graph.v1";
+  seed: typeof goldenDemoSeed;
+  expectedAutopilot: {
+    primaryCandidateId: EntityId;
+    lowConfidenceMarketAssumptionId: EntityId;
+    highConfidenceUnsupportedClaimId: EntityId;
+    conceptClaimId: EntityId;
+  };
+};
