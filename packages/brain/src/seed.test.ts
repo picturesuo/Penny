@@ -195,6 +195,49 @@ test("generateBrainSeed validates provider output into the Wave 3 seed structure
   assert.equal("artifacts" in output, false);
 });
 
+test("parseBrainSeedOutput accepts counterargument and Learn graph edge kinds", () => {
+  const output = parseBrainSeedOutput({
+    ...validSeedOutput,
+    thoughtMap: {
+      claims: [
+        ...validSeedOutput.thoughtMap.claims,
+        {
+          id: "claim.counterargument.trust",
+          kind: "belief",
+          text: "A visible first minute may still fail if the user needs provenance before trusting the structure.",
+          confidence: 54,
+        },
+        {
+          id: "claim.concept.load-bearing",
+          kind: "concept",
+          text: "A load-bearing assumption is the premise that would force a major revision if it failed.",
+          confidence: 76,
+        },
+      ],
+      edges: [
+        ...validSeedOutput.thoughtMap.edges,
+        {
+          id: "edge.counterargument.seed",
+          fromClaimId: "claim.counterargument.trust",
+          toClaimId: "claim.seed",
+          kind: "contradicts",
+          label: "contradicts usefulness without provenance",
+        },
+        {
+          id: "edge.concept.assumption",
+          fromClaimId: "claim.concept.load-bearing",
+          toClaimId: "claim.assumption.challenge",
+          kind: "teaches",
+          label: "teaches the challenged assumption concept",
+        },
+      ],
+    },
+  });
+
+  assert.ok(output.thoughtMap.edges.some((edge) => edge.kind === "contradicts"));
+  assert.ok(output.thoughtMap.edges.some((edge) => edge.kind === "teaches"));
+});
+
 test("generateBrainSeed requires a recorded BrainRun id before provider generation", async () => {
   let called = false;
   const provider: BrainSeedProvider = {
