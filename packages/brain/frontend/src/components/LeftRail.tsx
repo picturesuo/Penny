@@ -5,13 +5,21 @@ import { ThoughtMap } from "./ThoughtMap";
 interface LeftRailProps {
   claims: BrainClaim[];
   savedPaths: string[];
+  focusedClaimId: string | null;
+  suggestedClaimId: string | null;
+  onClaimSelect: (claimId: string) => void;
 }
 
-export function LeftRail({ claims, savedPaths }: LeftRailProps) {
+export function LeftRail({ claims, savedPaths, focusedClaimId, suggestedClaimId, onClaimSelect }: LeftRailProps) {
   return (
     <aside className="left-rail" aria-label="Thought map">
       <Section title="THOUGHT MAP" className="thought-map-section">
-        <ThoughtMap claims={claims} />
+        <ThoughtMap
+          claims={claims}
+          focusedClaimId={focusedClaimId}
+          suggestedClaimId={suggestedClaimId}
+          onClaimSelect={onClaimSelect}
+        />
       </Section>
       <div className="left-bottom-grid">
         <Section title="LATER" className="later-section">

@@ -1,4 +1,4 @@
-import type { SeedBrainResponse, SessionMovesResponse } from "../types/brain";
+import type { AutopilotTickResponse, ManualNodeSelectionResponse, SeedBrainResponse, SessionMovesResponse } from "../types/brain";
 
 const headers = {
   "content-type": "application/json",
@@ -35,6 +35,46 @@ export async function fetchSessionMoves(sessionId: string): Promise<SessionMoves
   }
 
   return payload as SessionMovesResponse;
+}
+
+export async function tickAutopilot(sessionId: string, resume = false): Promise<AutopilotTickResponse> {
+  const response = await fetch("/autopilot/tick", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ sessionId, resume }),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /autopilot/tick failed with ${response.status}.`));
+  }
+
+  return payload as AutopilotTickResponse;
+}
+
+export async function selectAutopilotNode(input: {
+  sessionId: string;
+  claimId: string;
+  previousSuggestionMoveId?: string | null;
+}): Promise<ManualNodeSelectionResponse> {
+  const response = await fetch("/autopilot/select-node", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      sessionId: input.sessionId,
+      claimId: input.claimId,
+      ...(input.previousSuggestionMoveId ? { previousSuggestionMoveId: input.previousSuggestionMoveId } : {}),
+    }),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /autopilot/select-node failed with ${response.status}.`));
+  }
+
+  return payload as ManualNodeSelectionResponse;
 }
 
 async function readJson(response: Response): Promise<unknown> {

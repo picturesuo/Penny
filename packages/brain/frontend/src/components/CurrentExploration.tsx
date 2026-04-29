@@ -1,4 +1,4 @@
-import type { BrainClaim, ExplorationPath } from "../types/brain";
+import type { AutopilotSuggestion, BrainClaim, ExplorationPath } from "../types/brain";
 import { placeholderPaths } from "../data/placeholders";
 
 interface CurrentExplorationProps {
@@ -6,6 +6,9 @@ interface CurrentExplorationProps {
   subtitle: string;
   claims: BrainClaim[];
   paths: ExplorationPath[];
+  autopilotSuggestion: AutopilotSuggestion | null;
+  focusedClaim: BrainClaim | null;
+  onGoThere: () => void;
 }
 
 interface PathRow {
@@ -14,7 +17,15 @@ interface PathRow {
   reasoning: string[];
 }
 
-export function CurrentExploration({ title, subtitle, claims, paths }: CurrentExplorationProps) {
+export function CurrentExploration({
+  title,
+  subtitle,
+  claims,
+  paths,
+  autopilotSuggestion,
+  focusedClaim,
+  onGoThere,
+}: CurrentExplorationProps) {
   const rows = buildRows(claims, paths);
 
   return (
@@ -24,6 +35,19 @@ export function CurrentExploration({ title, subtitle, claims, paths }: CurrentEx
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
+      {autopilotSuggestion ? (
+        <article className="autopilot-card">
+          <div>
+            <span>AUTOPILOT</span>
+            <strong>{autopilotSuggestion.label}</strong>
+            <p>{autopilotSuggestion.why}</p>
+            {focusedClaim ? <em>{focusedClaim.text}</em> : null}
+          </div>
+          <button type="button" onClick={onGoThere}>
+            Go there <span aria-hidden="true">-&gt;</span>
+          </button>
+        </article>
+      ) : null}
       <div className="pathway-list" aria-label="Exploration pathways">
         {rows.map((row) => (
           <PathwayRow key={row.id} row={row} />

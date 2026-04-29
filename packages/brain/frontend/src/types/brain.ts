@@ -69,9 +69,74 @@ export interface BrainData {
 export interface BrainMove {
   id: string;
   type: string;
+  kind?: string;
   actor?: string;
   summary: string;
   createdAt?: string;
+}
+
+export interface AutopilotSuggestion {
+  action: string;
+  mode: string;
+  label: string;
+  targetClaimId: string | null;
+  targetEdgeId: string | null;
+  score: number;
+  why: string;
+  reasonCodes?: string[];
+  goThere?: {
+    label: "Go there";
+    targetClaimId: string | null;
+    targetEdgeId: string | null;
+    mode: string;
+  };
+}
+
+export interface AutopilotTickData {
+  status: "ready" | "paused" | "empty" | string;
+  sessionId: string;
+  suggestion: AutopilotSuggestion | null;
+  candidates?: AutopilotSuggestion[];
+  move?: {
+    id: string;
+    kind: string;
+    summary: string;
+    claimIds: string[];
+    edgeIds: string[];
+    artifactIds: string[];
+  } | null;
+  pause?: {
+    paused: boolean;
+    manualMoveId: string | null;
+    focusedClaimId: string | null;
+    pausedAt: string | null;
+  };
+}
+
+export interface AutopilotTickResponse {
+  data: AutopilotTickData;
+}
+
+export interface ManualNodeSelectionResponse {
+  data: {
+    status: "paused";
+    sessionId: string;
+    focusClaim: BrainClaim;
+    move: {
+      id: string;
+      kind: "manual_node_selected";
+      summary: string;
+      claimIds: string[];
+      edgeIds: string[];
+      artifactIds: string[];
+    };
+    pause: {
+      paused: true;
+      manualMoveId: string;
+      focusedClaimId: string;
+      pausedAt: string;
+    };
+  };
 }
 
 export interface SeedBrainResponse {

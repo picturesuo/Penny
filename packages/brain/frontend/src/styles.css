@@ -222,6 +222,24 @@
     gap: 3px;
   }
 
+  .tree-branch {
+    width: 100%;
+    border: 0;
+    border-left: 2px solid transparent;
+    padding: 0 0 0 8px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+  }
+
+  .tree-branch.is-suggested {
+    border-left-color: #111111;
+  }
+
+  .tree-branch.is-focused {
+    background: #f2f2f2;
+  }
+
   .tree-group strong,
   .tree-branch strong {
     font-weight: 700;
@@ -303,6 +321,59 @@
   .pathway-list {
     display: grid;
     border-top: 1px solid #c7c7c7;
+  }
+
+  .autopilot-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    border-top: 1px solid #111111;
+    border-bottom: 1px solid #111111;
+    padding: 11px 0 12px;
+  }
+
+  .autopilot-card span {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .autopilot-card strong,
+  .autopilot-card p,
+  .autopilot-card em {
+    display: block;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .autopilot-card strong {
+    font-size: 16px;
+    line-height: 1.05;
+  }
+
+  .autopilot-card p,
+  .autopilot-card em {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.18;
+  }
+
+  .autopilot-card em {
+    color: rgb(17 17 17 / 0.62);
+    font-style: normal;
+  }
+
+  .autopilot-card button {
+    border: 1px solid #111111;
+    padding: 8px 10px;
+    background: #111111;
+    color: #ffffff;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   .pathway-row {
@@ -563,6 +634,14 @@
     grid-template-columns: 42px minmax(0, 1fr);
     gap: 0;
     padding-right: 0;
+  }
+
+  .autopilot-card {
+    grid-template-columns: 1fr;
+  }
+
+  .autopilot-card button {
+    justify-self: start;
   }
 
   .pathway-row ul,
