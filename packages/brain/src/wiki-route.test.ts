@@ -151,8 +151,8 @@ function sampleState(sessionId = uuidAt(100)): WikiCompileState {
       endedAt: null,
     },
     claims: [
-      claim(seedClaimId, sourceId, "belief", "Penny should reduce cognitive load.", 62),
-      claim(assumptionClaimId, sourceId, "assumption", "Students will use guided study flow.", 50),
+      claim(seedClaimId, sourceId, "belief"),
+      claim(assumptionClaimId, sourceId, "assumption"),
     ],
     claimVersions: [
       version(uuidAt(301), seedClaimId, sourceId, "Penny should reduce cognitive load.", 62, true),
@@ -203,8 +203,6 @@ function claim(
   id: string,
   sourceId: string,
   kind: "belief" | "assumption" | "question" | "concept",
-  text: string,
-  confidence: number,
 ) {
   return {
 	    id,
