@@ -125,13 +125,7 @@ test("claim detail route maps not-found and conflict failures to stable errors",
 
 function sampleState(): ClaimDetailState {
   return {
-    claim: claim(
-      assumptionClaimId,
-      "assumption",
-      "Students will use a guided study flow when material is complex.",
-      60,
-      2,
-    ),
+    claim: claim(assumptionClaimId, "assumption", 2),
     versions: [
       version(oldVersionId, assumptionClaimId, "Students will use guided study flow.", 45, false, 2),
       version(currentVersionId, assumptionClaimId, "Students will use a guided study flow when material is complex.", 60, true, 3),
@@ -142,9 +136,9 @@ function sampleState(): ClaimDetailState {
       edge(teachesEdgeId, conceptClaimId, assumptionClaimId, "teaches", "cognitive load", "active", 8),
     ],
     connectedClaims: [
-      claim(seedClaimId, "belief", "Penny should reduce cognitive load while students study complex material.", 62, 1),
-      claim(critiqueClaimId, "belief", "The flow may hide the actual hard concept instead of clarifying it.", 82, 5),
-      claim(conceptClaimId, "concept", "cognitive load", 70, 8),
+      claim(seedClaimId, "belief", 1),
+      claim(critiqueClaimId, "belief", 5),
+      claim(conceptClaimId, "concept", 8),
     ],
     connectedVersions: [
       version(uuidAt(301), seedClaimId, "Penny should reduce cognitive load while students study complex material.", 62, true, 1),
@@ -238,8 +232,6 @@ function getRequest(url: string): Request {
 function claim(
   id: string,
   kind: ClaimDetailState["claim"]["kind"],
-  text: string,
-  confidence: number,
   createdAt: number,
 ): ClaimDetailState["claim"] {
   return {
