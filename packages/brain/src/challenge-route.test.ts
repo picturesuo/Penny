@@ -247,6 +247,7 @@ test("generateChallengeOutput validates heuristic and xAI structured outputs", a
     targetText: "Cognitive load is the bottleneck.",
     targetStatus: "exploratory" as const,
     targetConfidence: 64,
+    lensSnapshot: lensSnapshot(),
   };
   const heuristic = await generateChallengeOutput(input, {
     provider: createHeuristicChallengeProvider(),
@@ -278,6 +279,8 @@ test("generateChallengeOutput validates heuristic and xAI structured outputs", a
   assert.equal(resolveXaiBrainChallengeModel({}), defaultXaiBrainChallengeModel);
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.prompt ?? "", /Target claim id/);
+  assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
+  assert.match(calls[0]?.prompt ?? "", /concept_grounding/);
 });
 
 test("generateChallengeOutput requires a recorded BrainRun id", async () => {
@@ -375,4 +378,21 @@ function moveKindFor(response: string): "user_defended" | "claim_revised" | "cri
 
 function uuidAt(value: number): string {
   return `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
+}
+
+function lensSnapshot() {
+  return {
+    shapes: [
+      {
+        id: uuidAt(901),
+        key: "concept_grounding",
+        label: "Concept grounding",
+        description: "Recent moves use Makes Cents to clarify a concept before continuing the map.",
+        confidence: 70,
+        status: "confirmed" as const,
+        supportingMoveIds: [uuidAt(501)],
+      },
+    ],
+    pendingEffects: [],
+  };
 }
