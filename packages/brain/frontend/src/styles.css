@@ -567,6 +567,37 @@
     margin-top: 16px;
   }
 
+  .challenge-brief-sections {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+    padding-right: 18px;
+  }
+
+  .challenge-brief-sections article {
+    border-top: 1px solid #d6d6d6;
+    padding-top: 8px;
+  }
+
+  .challenge-brief-sections h3,
+  .challenge-brief-sections p {
+    overflow-wrap: anywhere;
+    margin: 0;
+  }
+
+  .challenge-brief-sections h3 {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .challenge-brief-sections p {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.16;
+  }
+
   .challenge-mode-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
