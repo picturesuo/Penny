@@ -42,6 +42,12 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(wikiPages), "wiki_pages");
 });
 
+test("ClaimVersion schema tracks validity windows", () => {
+  assert.equal(claimVersions.validFrom.name, "valid_from");
+  assert.equal(claimVersions.validUntil.name, "valid_until");
+  assert.equal(claimVersions.supersededByVersionId.name, "superseded_by_version_id");
+});
+
 test("Penny schema keeps core enum values narrow for the MVP", () => {
   assert.deepEqual(claimKindEnum.enumValues, ["belief", "assumption", "question", "concept"]);
   assert.ok(claimStatusEnum.enumValues.includes("rejected"));

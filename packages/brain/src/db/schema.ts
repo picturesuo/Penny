@@ -1,5 +1,18 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  type AnyPgColumn,
+} from "drizzle-orm/pg-core";
 
 export const sessionStatusEnum = pgEnum("session_status", ["open", "completed"]);
 export const sourceKindEnum = pgEnum("source_kind", ["raw_idea", "verification_citation"]);
@@ -120,6 +133,11 @@ export const claimVersions = pgTable(
     status: claimStatusEnum("status").notNull().default("exploratory"),
     confidence: integer("confidence").notNull().default(60),
     isCurrent: boolean("is_current").notNull().default(true),
+    validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+    validUntil: timestamp("valid_until", { withTimezone: true }),
+    supersededByVersionId: uuid("superseded_by_version_id").references((): AnyPgColumn => claimVersions.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -128,8 +146,18 @@ export const claimVersions = pgTable(
     index("claim_versions_brain_run_id_idx").on(table.brainRunId),
     index("claim_versions_move_id_idx").on(table.moveId),
     index("claim_versions_current_idx").on(table.claimId, table.isCurrent),
+    index("claim_versions_validity_idx").on(table.claimId, table.validFrom, table.validUntil),
+    index("claim_versions_superseded_by_idx").on(table.supersededByVersionId),
     uniqueIndex("claim_versions_one_current_idx").on(table.claimId).where(sql`${table.isCurrent} = true`),
     check("claim_versions_confidence_range", sql`${table.confidence} >= 0 AND ${table.confidence} <= 100`),
+    check(
+      "claim_versions_validity_range",
+      sql`${table.validUntil} IS NULL OR ${table.validUntil} >= ${table.validFrom}`,
+    ),
+    check(
+      "claim_versions_current_open_validity",
+      sql`(${table.isCurrent} = true AND ${table.validUntil} IS NULL AND ${table.supersededByVersionId} IS NULL) OR (${table.isCurrent} = false)`,
+    ),
     check(
       "claim_versions_provenance_present",
       sql`${table.sourceId} IS NOT NULL OR ${table.brainRunId} IS NOT NULL OR ${table.moveId} IS NOT NULL`,
