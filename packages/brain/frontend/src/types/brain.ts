@@ -81,17 +81,13 @@ export interface AutopilotSuggestion {
   action: string;
   mode: string;
   label: string;
+  primaryActionLabel: string;
   targetClaimId: string | null;
   targetEdgeId: string | null;
   score: number;
   why: string;
   reasonCodes?: string[];
-  goThere?: {
-    label: "Go there";
-    targetClaimId: string | null;
-    targetEdgeId: string | null;
-    mode: string;
-  };
+  exitCriteria: NextMoveExitCriteria;
 }
 
 export interface AutopilotTickData {
@@ -168,6 +164,11 @@ export interface FocusState {
   updatedAt: string | null;
 }
 
+export interface NextMoveExitCriteria {
+  label: string;
+  acceptedMoveKinds: string[];
+}
+
 export interface ThinkingModeCandidate {
   id: string;
   candidateId: string;
@@ -178,6 +179,7 @@ export interface ThinkingModeCandidate {
   score: number;
   reason: string;
   reasonCodes?: string[];
+  exitCriteria?: NextMoveExitCriteria;
   selected?: boolean;
 }
 
