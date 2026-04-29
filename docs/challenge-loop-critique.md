@@ -3,7 +3,7 @@
 Artifact ID: `CHALLENGE-LOOP-CRITIQUE`
 Date: 2026-04-29
 Role: CRITIC
-Status: `BACKEND COMMAND CHAIN PASS; FRONTEND LOOP BLOCKED`
+Status: `LOOP CLOSURE PASS WITH BROWSER GAP`
 
 ## Scope
 
@@ -29,25 +29,30 @@ Reviewed the actual challenge loop in the current workspace:
 
 Date: 2026-04-29
 Artifact ID: `CHALLENGE-LOOP-CRITIQUE`
-Scope: current `origin/main` after the Thinking Mode frontend/smoke fixes, focused tests, live isolated smoke, and source inspection of the ChallengeRound service, session cockpit DTO, frontend client, and visible frontend components.
+Scope: current `origin/main` after the ChallengeRound response-contract fixes, visible frontend loop controls, focused tests, full test/lint/build verification, live isolated smoke, and source inspection of the ChallengeRound service, session cockpit DTO, frontend client, and visible frontend components.
 
 Criterion judgments:
 
-- `FAIL` `CHALLENGE-LOOP-CRITIQUE-C8`: the loop does not actually close in the visible product surface. The backend command chain can close the persisted path when a caller explicitly chains seed, tick, accepted focus, challenge issue, challenge response, and Challenge Brief creation. However, `POST /api/challenges/:challengeId/respond` returns the response receipt and `focus_completed` only; it does not return a recomputed next move. The route suite proves an explicit follow-up tick can create `next_move_recomputed`, but that is a second command. The frontend has no challenge issue/respond/brief controls, so the user-facing loop still stops before Defend / Revise / Absorb.
-- `PASS WITH SHAPE-SIGNAL GAP` `CHALLENGE-LOOP-CRITIQUE-C9`: user responses become durable backend signal. Defend creates `user_defended`, Revise creates `claim_revised` plus a new current ClaimVersion while preserving the old one, Absorb creates `critique_absorbed` and marks the challenge edge `acknowledged_vulnerability`, and every response creates `focus_completed` and updates the ChallengeRound. Challenge Brief compilation can read those moves and versions. The gap is that the new `ChallengeRoundService.respondToChallenge` path still does not run after-move effects, so Defend / Revise / Absorb are not yet materialized as derived shape signals in that path.
-- `FAIL` `CHALLENGE-LOOP-CRITIQUE-C10`: frontend does not have enough receipt state for the response loop. The backend response DTO has useful receipt fields, but the frontend client exposes no `issueChallengeFromCandidate`, `respondToChallenge`, or `createChallengeBrief` functions; frontend types do not model `receipt`, `focusCompletedMove`, or response-specific before/after state; `InsightRail` renders static challenge copy and history summaries only; and `latestArtifact` is normalized into cockpit data but not rendered in the visible UI.
+- `PASS WITH BROWSER GAP` `CHALLENGE-LOOP-CRITIQUE-C8`: the loop now closes through backend-owned state and visible frontend controls. The backend can persist seed -> tick -> accepted focus -> challenge issue -> challenge response -> Challenge Brief. The frontend now exposes issue, Defend / Revise / Absorb, receipt, next directive, cockpit refresh, and Challenge Brief controls. `respondToChallenge` returns a backend directive for the next move, and the frontend follows the `client_tick_required` directive with a session-scoped Thinking Mode tick instead of inventing the next state locally. Browser interaction is still not visually walked through.
+- `PASS` `CHALLENGE-LOOP-CRITIQUE-C9`: user responses become durable backend signal and now run after-move effects in the ChallengeRound response path. Defend creates `user_defended`, Revise creates `claim_revised` plus a new current ClaimVersion while preserving the old one, Absorb creates `critique_absorbed` and marks the challenge edge `acknowledged_vulnerability`, every response creates `focus_completed` and updates the ChallengeRound, and the response DTO returns derived effects that the frontend renders as receipt state. Challenge Brief compilation can read those moves and versions.
+- `PASS` `CHALLENGE-LOOP-CRITIQUE-C10`: frontend has enough receipt state for the response loop. The frontend client exposes `issueChallengeFromCandidate`, `respondToChallenge`, and `createChallengeBrief`; frontend types model response receipts, focus completion, before/after versions, derived effects, and next-move directives; `InsightRail` renders challenge issue/respond/brief controls plus receipt details; and `latestArtifact` is displayed in the visible UI.
 - `NOT VERIFIED` `CHALLENGE-LOOP-CRITIQUE-C11`: browser-level proof of the full visible loop is not verified. This checkout has no browser E2E runner installed; current proof is focused tests plus live HTTP/API smoke.
 
 Verification after re-review:
 
-- `pnpm exec tsx --test packages/brain/src/challenge-service.test.ts packages/brain/src/thinking-mode-routes.test.ts packages/brain/src/challenge-brief-service.test.ts packages/brain/frontend/test/brainClient.test.ts` -> `PASS`, 26 tests.
-- `SMOKE_ISOLATED_DB=1 BASE_URL=http://localhost:3017 PORT=3017 ./scripts/smoke-thinking-mode.sh` -> `PASS`; session `fa8cf86d-e015-4758-ab44-5e570a23412c`.
+- `pnpm exec tsx --test packages/brain/frontend/test/brainClient.test.ts packages/brain/src/challenge-service.test.ts packages/brain/src/thinking-mode-routes.test.ts` -> `PASS`, 22 tests.
+- `pnpm typecheck` -> `PASS`.
+- `pnpm build:frontend` -> `PASS`.
+- `pnpm test` -> `PASS`, 171 tests.
+- `pnpm lint` -> `PASS`.
+- `SMOKE_ISOLATED_DB=1 BASE_URL=http://localhost:3017 PORT=3017 ./scripts/smoke-thinking-mode.sh` -> `PASS`; session `72e62f84-eaaa-4d7e-911e-79fc3507b908`.
 
 Current findings:
 
-- `CHALLENGE-LOOP-CRITIQUE-CF8`: backend persistence is strong enough to support loop closure, but the product loop is still caller-orchestrated rather than closed by the visible app.
-- `CHALLENGE-LOOP-CRITIQUE-CF9`: durable response signal exists as Moves, ClaimVersions, ChallengeRound state, and acknowledged challenge edges; derived shape signal is still missing from the new ChallengeRound path.
-- `CHALLENGE-LOOP-CRITIQUE-CF10`: frontend receipt state is the blocker for a real demo. The next implementation slice should add typed frontend methods and UI state for challenge issue, Defend / Revise / Absorb, response receipt, refreshed cockpit, and Challenge Brief display before claiming the loop closes in product.
+- `CHALLENGE-LOOP-CRITIQUE-CF8`: resolved. The product loop is no longer stopped before Defend / Revise / Absorb; the visible app can issue a challenge, capture the user response, follow the backend next directive, refresh backend-owned cockpit state, and create/display the Challenge Brief.
+- `CHALLENGE-LOOP-CRITIQUE-CF9`: resolved. Durable response signal now includes Moves, ClaimVersions, ChallengeRound state, acknowledged challenge edges, `focus_completed`, and returned derived effects from the ChallengeRound response path.
+- `CHALLENGE-LOOP-CRITIQUE-CF10`: resolved. Frontend receipt state now includes the full typed response data needed to show response move, focus completion, before/after version IDs, unresolved-risk state, derived effects, and latest Challenge Brief.
+- `CHALLENGE-LOOP-CRITIQUE-CF11`: remaining gap. Browser-level proof is still unverified; current confidence comes from source inspection, typed frontend tests, full tests, build/lint, and live HTTP smoke.
 
 ## Original Findings (Historical)
 
