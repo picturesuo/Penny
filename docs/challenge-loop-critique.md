@@ -79,7 +79,7 @@ Impact: the underlying target is correct; the V0 copy needs one more step of gra
 
 ### `CHALLENGE-LOOP-CRITIQUE-F3`: Revise preserves old selves
 
-`PASS BY CODE INSPECTION; DB BEHAVIOR NOT DIRECTLY TESTED`
+`PASS WITH REAL-DB GAP`
 
 The new ChallengeRound response path preserves the stable Claim identity and old ClaimVersion. On Revise, it creates a `claim_revised` Move, marks the previous current version `isCurrent: false`, sets `validUntil`, records `supersededByVersionId`, and inserts a new current ClaimVersion with the revised text.
 
@@ -97,15 +97,17 @@ Evidence:
 - `packages/brain/src/services/challenge-service.ts:594` stores the revised text.
 - `packages/brain/src/services/challenge-service.ts:597` marks the new version current.
 
-The gap is test depth. The focused route test uses a route-service double, and `challenge-service.test.ts` tests template generation and payload validation, not a real `ChallengeRoundService.respondToChallenge` transaction over persisted rows.
+The remaining gap is test depth. Current tests now exercise `ChallengeRoundService.respondToChallenge` through a fake Drizzle transaction and verify the old-version update plus new-version insert. That is enough to catch the intended persistence calls, but it is not a live Postgres integration test over migrated tables.
 
 Evidence:
 
 - `packages/brain/src/thinking-mode-routes.test.ts:186` tests Defend/Revise/Absorb at route level through a service double.
-- `packages/brain/src/challenge-service.test.ts:6` tests template generation.
-- `packages/brain/src/challenge-service.test.ts:53` tests only `focus_completed` payload validation.
+- `packages/brain/src/challenge-service.test.ts:64` tests Revise through `ChallengeRoundService`.
+- `packages/brain/src/challenge-service.test.ts:81` verifies the old version is marked not current.
+- `packages/brain/src/challenge-service.test.ts:83` verifies the old version points to the new current version.
+- `packages/brain/src/challenge-service.test.ts:84` verifies the new version contains the revised text.
 
-Impact: Revise implementation looks correct, but a DB-backed service test should prove the old-selves invariant end to end.
+Impact: Revise implementation is now service-tested, but not proven against a real migrated database.
 
 ### `CHALLENGE-LOOP-CRITIQUE-F4`: Absorb is meaningfully different from ignoring
 
@@ -156,11 +158,11 @@ Evidence:
 
 Impact: Defend is durable signal data, but the new Thinking Mode path does not yet feed the shape/derived-effect pipeline that would make future critique visibly adapt.
 
-### `CHALLENGE-LOOP-CRITIQUE-F6`: next move does not recompute after a ChallengeRound response
+### `CHALLENGE-LOOP-CRITIQUE-F6`: next move recomputes only when the client explicitly ticks again
 
-`FAIL`
+`FAIL AUTOMATICALLY; PASS FOR EXPLICIT TICK`
 
-The new response path completes the challenge focus, but it does not call the Thinking Mode scorer, does not persist new `next_move_candidates`, and does not create `next_move_recomputed`. The response output contains the response Move, `focus_completed`, and receipt, but no recomputed candidate list or selected next move.
+The new response path completes the challenge focus, but it does not itself call the Thinking Mode scorer, persist new `next_move_candidates`, or create `next_move_recomputed`. The response output contains the response Move, `focus_completed`, and receipt, but no recomputed candidate list or selected next move.
 
 Evidence:
 
@@ -173,16 +175,20 @@ Evidence:
 - `packages/brain/src/services/challenge-service.ts:156` defines `RespondToChallengeResponse` with no recomputed next-move fields.
 - `packages/brain/src/routes/thinking-mode-routes.ts:327` returns `service.respondToChallenge(input)` directly.
 
-The separate tick route can recompute when explicitly called, and the graph snapshot includes moves and current claim versions, so a manual `POST /api/brains/:brainId/autopilot/tick` after the response can work. But the actual ChallengeRound response does not close the loop by itself, and the focused tests do not assert that it does.
+The separate tick route can recompute when explicitly called, and the graph snapshot includes moves and current claim versions. Current tests now assert the explicit sequence: respond to the challenge, then call tick, then receive `next_move_recomputed`. That proves the two-command path, but the actual ChallengeRound response still does not close the loop by itself.
 
 Evidence:
 
 - `packages/brain/src/routes/thinking-mode-routes.ts:138` handles the separate tick route.
+- `packages/brain/src/thinking-mode-routes.test.ts:239` tests explicit tick after a ChallengeRound response.
+- `packages/brain/src/thinking-mode-routes.test.ts:262` calls the tick route after the response route.
+- `packages/brain/src/thinking-mode-routes.test.ts:276` asserts `next_move_recomputed`.
+- `packages/brain/src/thinking-mode-routes.test.ts:278` confirms the operations are two separate events.
 - `packages/brain/src/domain/repository.ts:380` loads graph snapshots from current claims, versions, edges, moves, artifacts, and FocusState.
 - `packages/brain/src/domain/engine.ts:112` ranks candidates from a graph snapshot.
 - `docs/yc-demo-script.md:141` says the demo should trigger tick again after the challenge response.
 
-Impact: this is the biggest product gap. Penny records the user's response, but it does not immediately show that the thinking state changed and that Autopilot selected the next highest-leverage move. Without that visible recomputation, the loop feels like form submission plus history rather than a thinking instrument.
+Impact: this remains a loop-closure risk. Penny can recompute after the response, but only if the caller chains the tick. Without that visible follow-up in the product surface, the loop feels like form submission plus history rather than a thinking instrument.
 
 ### `CHALLENGE-LOOP-CRITIQUE-F7`: the current frontend does not expose the actual Defend/Revise/Absorb loop
 
@@ -208,7 +214,7 @@ Impact: backend critique may be reviewable through tests and direct API calls, b
    `PASS WITH COPY RISK` for `CHALLENGE-LOOP-CRITIQUE`. The engine and selected candidate target a low-confidence load-bearing assumption; fallback challenge copy does not always explain the downstream business consequence sharply.
 
 3. Does Revise preserve old selves?
-   `PASS BY CODE INSPECTION; NOT DB-VERIFIED` for `CHALLENGE-LOOP-CRITIQUE`. The transaction preserves previous ClaimVersion state and creates a new current version; no DB-backed ChallengeRound response test proves it end to end.
+   `PASS WITH REAL-DB GAP` for `CHALLENGE-LOOP-CRITIQUE`. The transaction preserves previous ClaimVersion state and creates a new current version, and a fake-transaction service test now covers the intended writes; no live Postgres test proves it end to end.
 
 4. Is Absorb different from ignoring?
    `PASS` for `CHALLENGE-LOOP-CRITIQUE`. Absorb creates `critique_absorbed`, marks the edge `acknowledged_vulnerability`, returns an unresolved-risk receipt, and feeds artifact unresolved-risk logic.
@@ -217,19 +223,20 @@ Impact: backend critique may be reviewable through tests and direct API calls, b
    `PASS AS MOVE SIGNAL; FAIL AS SHAPE SIGNAL` for `CHALLENGE-LOOP-CRITIQUE`. Defend persists user reasoning as `user_defended`, but the new ChallengeRound path does not run after-move effects, so the shape signal is not materialized there.
 
 6. Does next move recompute after response?
-   `FAIL` for `CHALLENGE-LOOP-CRITIQUE`. Response creates `focus_completed`, but does not recompute/persist next-move candidates or return the next suggestion.
+   `FAIL AUTOMATICALLY; PASS FOR EXPLICIT TICK` for `CHALLENGE-LOOP-CRITIQUE`. Response creates `focus_completed` but does not return the next suggestion; an explicit tick after response does recompute and persist `next_move_recomputed`.
 
 ## Verification
 
 - `PASS`: `pnpm exec tsx --test packages/brain/src/challenge-service.test.ts packages/brain/src/thinking-mode-routes.test.ts packages/brain/src/challenge-route.test.ts packages/brain/src/domain-engine.test.ts`
-- `PASS`: `pnpm typecheck`
+- `FAIL`: `pnpm typecheck` currently fails on unrelated untracked `packages/brain/src/services/challenge-brief-service.ts` with `TS2322: Type 'BriefClaim | undefined' is not assignable to type 'BriefClaim'.`
 - `PASS`: runtime snapshot of `rankNextMoveCandidates` plus `buildTemplateChallenge` on `test/fixtures/penny-yc-demo-graph.json` showed the actual fixture uses the generic fallback challenge for claim `00000000-0000-4000-8000-000000000202`.
-- `NOT VERIFIED`: DB-backed `ChallengeRoundService.issueChallengeFromCandidate` and `respondToChallenge` transactions. Current focused tests cover route doubles and pure template behavior, not full persistence.
+- `PASS`: service-level fake-transaction coverage for `ChallengeRoundService.issueChallengeFromCandidate`, Defend, Revise, Absorb, and already-responded conflict handling.
+- `NOT VERIFIED`: live Postgres/migrated-table execution of the ChallengeRound service transactions.
 
 ## Debugger Guidance
 
 1. Align the YC fixture with the exact demo challenge or make the template specialize the actual fixture claim about founders using structured thinking during ambiguous company decisions.
-2. Add DB-backed service tests for Issue, Defend, Revise, Absorb, old ClaimVersion preservation, absorbed edge status, and duplicate response conflicts.
+2. Upgrade the fake-transaction service tests to a real Postgres integration smoke for Issue, Defend, Revise, Absorb, old ClaimVersion preservation, absorbed edge status, and duplicate response conflicts.
 3. In the new ChallengeRound response path, run the same after-move effects used by the legacy challenge path so Defend/Revise/Absorb become shape and derived-effect signals.
 4. After `focus_completed`, recompute Thinking Mode candidates or return an explicit instruction that the client must call tick; the stronger product behavior is to persist and return the new next move in the response transaction or an immediately chained command.
 5. Add frontend controls for Defend, Revise, and Absorb only after the backend response path returns enough state to render the receipt and next suggestion.
