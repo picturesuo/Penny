@@ -26,7 +26,6 @@ export type BrainDocumentClaim = {
   kind: ClaimRow["kind"];
   status: ClaimVersionRow["status"];
   text: string;
-  confidence: number;
   versionId: string;
   createdAt: string;
 };
@@ -39,7 +38,6 @@ export type BrainDocumentSummary = {
   status: SessionRow["status"];
   originalIdea: string | null;
   mainClaim: BrainDocumentClaim | null;
-  confidence: number | null;
   strongestOptions: BrainDocumentClaim[];
   rejectedOptions: BrainDocumentClaim[];
   todoLaterIdeas: string[];
@@ -74,7 +72,6 @@ export type BrainDocumentGraphNode = {
   type: "document" | "claim" | "risk" | "concept";
   label: string;
   sessionId: string;
-  confidence: number | null;
   status: string;
 };
 
@@ -254,7 +251,6 @@ function documentSummary(
     status: session.status,
     originalIdea,
     mainClaim,
-    confidence: mainClaim?.confidence ?? null,
     strongestOptions: strongestOptions(state.claims, mainClaim?.id ?? null),
     rejectedOptions: rejectedOptions(state.claims),
     todoLaterIdeas: todoLaterIdeas(state.claims, state.edges),
@@ -296,7 +292,6 @@ function claimSlice(claim: ClaimRow, version: ClaimVersionRow): BrainDocumentCla
     kind: claim.kind,
     status: version.status,
     text: version.content,
-    confidence: version.confidence,
     versionId: version.id,
     createdAt: claim.createdAt.toISOString(),
   };
@@ -320,10 +315,9 @@ function strongestOptions(
       (claim) =>
         claim.id !== mainClaimId &&
         claim.status !== "rejected" &&
-        claim.kind !== "concept" &&
-        claim.confidence >= 50,
+        claim.kind !== "concept",
     )
-    .sort((left, right) => right.confidence - left.confidence)
+    .sort(compareClaimsForDisplay)
     .slice(0, 5)
     .map(stripSessionId);
 }
@@ -331,7 +325,7 @@ function strongestOptions(
 function rejectedOptions(claimsForSession: Array<BrainDocumentClaim & { sessionId: string }>): BrainDocumentClaim[] {
   return claimsForSession
     .filter((claim) => claim.status === "rejected")
-    .sort((left, right) => right.confidence - left.confidence)
+    .sort(compareClaimsForDisplay)
     .slice(0, 5)
     .map(stripSessionId);
 }
@@ -341,15 +335,15 @@ function todoLaterIdeas(
   edgesForSession: EdgeRow[],
 ): string[] {
   const challengedClaimIds = new Set(edgesForSession.filter((edge) => edge.kind === "challenges").map((edge) => edge.toClaimId));
-  const lowConfidenceAssumptions = claimsForSession
+  const openAssumptions = claimsForSession
     .filter((claim) => claim.kind === "assumption" && claim.status === "exploratory")
-    .sort((left, right) => left.confidence - right.confidence)
+    .sort(compareClaimsForDisplay)
     .map((claim) => `Revisit: ${claim.text}`);
   const openChallenges = claimsForSession
     .filter((claim) => challengedClaimIds.has(claim.id))
     .map((claim) => `Resolve challenge around: ${claim.text}`);
 
-  return uniqueStrings([...openChallenges, ...lowConfidenceAssumptions]).slice(0, 5);
+  return uniqueStrings([...openChallenges, ...openAssumptions]).slice(0, 5);
 }
 
 function finalRecommendations(
@@ -386,11 +380,49 @@ function nextActions(
     return [`Send to Check: ${target?.text ?? "open challenge"}`];
   }
 
-  const weakestAssumption = claimsForSession
+  const nextAssumption = claimsForSession
     .filter((claim) => claim.kind === "assumption")
-    .sort((left, right) => left.confidence - right.confidence)[0];
+    .sort(compareClaimsForDisplay)[0];
 
-  return weakestAssumption ? [`Verify assumption: ${weakestAssumption.text}`] : [];
+  return nextAssumption ? [`Verify assumption: ${nextAssumption.text}`] : [];
+}
+
+function compareClaimsForDisplay(left: BrainDocumentClaim, right: BrainDocumentClaim): number {
+  return (
+    statusRank(left.status) - statusRank(right.status) ||
+    kindRank(left.kind) - kindRank(right.kind) ||
+    Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+    left.text.localeCompare(right.text)
+  );
+}
+
+function statusRank(status: ClaimVersionRow["status"]): number {
+  switch (status) {
+    case "committed":
+    case "resolved":
+      return 0;
+    case "exploratory":
+      return 1;
+    case "rejected":
+      return 3;
+    default:
+      return 2;
+  }
+}
+
+function kindRank(kind: ClaimRow["kind"]): number {
+  switch (kind) {
+    case "belief":
+      return 0;
+    case "assumption":
+      return 1;
+    case "question":
+      return 2;
+    case "concept":
+      return 3;
+    default:
+      return 4;
+  }
 }
 
 function documentGraph(documents: BrainDocumentSummary[]): BrainDocumentsPayload["graph"] {
@@ -404,7 +436,6 @@ function documentGraph(documents: BrainDocumentSummary[]): BrainDocumentsPayload
       type: "document",
       label: document.title,
       sessionId: document.sessionId,
-      confidence: document.confidence,
       status: document.status,
     });
 
@@ -415,7 +446,6 @@ function documentGraph(documents: BrainDocumentSummary[]): BrainDocumentsPayload
         type: document.mainClaim.kind === "concept" ? "concept" : "claim",
         label: document.mainClaim.text,
         sessionId: document.sessionId,
-        confidence: document.mainClaim.confidence,
         status: document.mainClaim.status,
       });
       edges.push({
@@ -435,7 +465,6 @@ function documentGraph(documents: BrainDocumentSummary[]): BrainDocumentsPayload
         type: option.kind === "concept" ? "concept" : "claim",
         label: option.text,
         sessionId: document.sessionId,
-        confidence: option.confidence,
         status: option.status,
       });
       edges.push({

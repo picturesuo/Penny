@@ -55,10 +55,9 @@ test("buildBrainDocuments creates a document log with rundown sections and a gra
   assert.equal(payload.documents[0]?.sessionId, sessionId);
   assert.equal(payload.documents[0]?.originalIdea, "Pre-seed founders will pay for structured thinking.");
   assert.equal(payload.documents[0]?.mainClaim?.text, "Founders pay during urgent strategy moments.");
-  assert.equal(payload.documents[0]?.confidence, 72);
   assert.deepEqual(
     payload.documents[0]?.strongestOptions.map((claim) => claim.text),
-    ["The urgent moment is fundraising or strategy review."],
+    ["The urgent moment is fundraising or strategy review.", "Founders will pay before traction without urgency."],
   );
   assert.deepEqual(
     payload.documents[0]?.rejectedOptions.map((claim) => claim.text),
