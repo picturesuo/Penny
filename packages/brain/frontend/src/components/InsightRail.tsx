@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type ClipboardEvent, type DragEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import type {
   AutopilotSuggestion,
   BrainClaim,
@@ -256,6 +256,7 @@ type ScreenshotCapture = {
   width: number;
   height: number;
   capturedAt: string;
+  name: string;
 };
 
 function MakesCentsPanel({
@@ -276,6 +277,8 @@ function MakesCentsPanel({
   const [prompt, setPrompt] = useState("");
   const [answer, setAnswer] = useState<InlineLearnOutput | null>(null);
   const [lastQuestion, setLastQuestion] = useState<string | null>(null);
+  const [screenshots, setScreenshots] = useState<ScreenshotCapture[]>([]);
+  const [isDraggingScreenshot, setIsDraggingScreenshot] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const canAsk = Boolean(sessionId && targetClaim && prompt.trim()) && !disabled && !isRunning;
@@ -291,7 +294,7 @@ function MakesCentsPanel({
       }
 
       event.preventDefault();
-      inputRef.current?.focus();
+      focusQuestionInput(inputRef.current);
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -325,7 +328,7 @@ function MakesCentsPanel({
         term: question.slice(0, 120),
         currentClaimId: targetClaim.id,
         sessionId,
-        localContext: makesCentsContext(claims, challenge, learnCandidates),
+        localContext: makesCentsContext(claims, challenge, learnCandidates, screenshots),
       });
 
       setAnswer(output.data);
@@ -337,8 +340,51 @@ function MakesCentsPanel({
     }
   }
 
+  async function handleScreenshotDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setIsDraggingScreenshot(false);
+    await addScreenshotFiles(event.dataTransfer.files);
+    focusQuestionInput(inputRef.current);
+  }
+
+  function handleScreenshotDragOver(event: DragEvent<HTMLElement>) {
+    if (hasImageFiles(event.dataTransfer.items)) {
+      event.preventDefault();
+      setIsDraggingScreenshot(true);
+    }
+  }
+
+  function handleScreenshotDragLeave(event: DragEvent<HTMLElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsDraggingScreenshot(false);
+    }
+  }
+
+  async function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
+    if (hasImageFiles(event.clipboardData.items)) {
+      await addScreenshotFiles(event.clipboardData.files);
+    }
+  }
+
+  async function addScreenshotFiles(files: FileList) {
+    const imageFiles = [...files].filter((file) => file.type.startsWith("image/"));
+
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    const captures = await Promise.all(imageFiles.slice(0, 4).map(readScreenshotFile));
+    setScreenshots((current) => [...current, ...captures].slice(-4));
+  }
+
   return (
-    <section className="makes-cents-panel" aria-label="Makes Cents">
+    <section
+      className={`makes-cents-panel${isDraggingScreenshot ? " is-dragging-screenshot" : ""}`}
+      aria-label="Makes Cents"
+      onDrop={handleScreenshotDrop}
+      onDragOver={handleScreenshotDragOver}
+      onDragLeave={handleScreenshotDragLeave}
+    >
       <div className="rail-section-head">
         <h2>MAKES CENTS</h2>
         <span>{isRunning ? "Thinking" : "Open"}</span>
@@ -348,6 +394,7 @@ function MakesCentsPanel({
           session-level Q&A active. Ask about any claim, challenge, assumption, or unclear term in the middle panel.
         </TerminalLine>
         {targetClaim ? <TerminalLine label="focus">{truncateWords(targetClaim.text, 22)}</TerminalLine> : null}
+        {screenshots.length > 0 ? <ScreenshotStrip screenshots={screenshots} /> : null}
         {lastQuestion ? <TerminalLine label="you">{lastQuestion}</TerminalLine> : null}
         {answer ? (
           <>
@@ -369,12 +416,26 @@ function MakesCentsPanel({
           disabled={disabled || isRunning}
           placeholder="ask about this session..."
           onChange={(event) => setPrompt(event.target.value)}
+          onPaste={handlePaste}
         />
         <button type="submit" disabled={!canAsk} aria-label="Ask Makes Cents">
           Run
         </button>
       </form>
     </section>
+  );
+}
+
+function ScreenshotStrip({ screenshots }: { screenshots: ScreenshotCapture[] }) {
+  return (
+    <div className="terminal-screenshot-strip" aria-label="Attached screenshots">
+      <span>image</span>
+      <div>
+        {screenshots.map((screenshot) => (
+          <img key={screenshot.capturedAt} src={screenshot.dataUrl} alt={screenshot.name} title={screenshot.name} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -417,6 +478,56 @@ function editableContextTarget(target: EventTarget | null): boolean {
 
 function textEntryTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest("input, textarea, [contenteditable='true']"));
+}
+
+function focusQuestionInput(input: HTMLInputElement | null): void {
+  input?.focus();
+  input?.scrollIntoView({ block: "nearest" });
+}
+
+function hasImageFiles(items: DataTransferItemList): boolean {
+  return [...items].some((item) => item.kind === "file" && item.type.startsWith("image/"));
+}
+
+async function readScreenshotFile(file: File): Promise<ScreenshotCapture> {
+  const dataUrl = await readFileAsDataUrl(file);
+  const dimensions = await imageDimensions(dataUrl);
+
+  return {
+    dataUrl,
+    width: dimensions.width,
+    height: dimensions.height,
+    capturedAt: new Date().toISOString(),
+    name: file.name || "screenshot",
+  };
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      resolve(String(reader.result ?? ""));
+    };
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("Failed to read screenshot."));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function imageDimensions(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const image = new Image();
+
+    image.onload = () => {
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.onerror = () => {
+      resolve({ width: 0, height: 0 });
+    };
+    image.src = src;
+  });
 }
 
 function errorAnswer(term: string, error: unknown): InlineLearnOutput {
@@ -503,6 +614,7 @@ async function captureStreamFrame(stream: MediaStream): Promise<ScreenshotCaptur
       width,
       height,
       capturedAt: new Date().toISOString(),
+      name: "screen capture",
     };
   } finally {
     stream.getTracks().forEach((track) => track.stop());
@@ -544,6 +656,7 @@ function makesCentsContext(
   claims: BrainClaim[],
   challenge: ChallengeSuggestion | undefined,
   learnCandidates: LearnCandidate[],
+  screenshots: ScreenshotCapture[],
 ): string {
   const claimLines = claims
     .slice(0, 8)
@@ -554,8 +667,18 @@ function makesCentsContext(
     .map((candidate) => `- ${candidate.term}: ${truncateWords(candidate.whyItMatters, 18)}`)
     .join("\n");
   const challengeLine = challenge?.challenge ? `Challenge: ${truncateWords(challenge.challenge, 32)}` : "";
+  const screenshotLines = screenshots
+    .map((screenshot) => `- ${screenshot.name}: ${screenshot.width}x${screenshot.height} at ${screenshot.capturedAt}`)
+    .join("\n");
 
-  return [claimLines ? `Claims:\n${claimLines}` : "", challengeLine, conceptLines ? `Concepts:\n${conceptLines}` : ""]
+  return [
+    claimLines ? `Claims:\n${claimLines}` : "",
+    challengeLine,
+    conceptLines ? `Concepts:\n${conceptLines}` : "",
+    screenshotLines
+      ? `Attached screenshots:\n${screenshotLines}\nUse the user's question and any visible description they provide; do not invent unseen image details.`
+      : "",
+  ]
     .filter(Boolean)
     .join("\n\n")
     .slice(0, 2_000);
