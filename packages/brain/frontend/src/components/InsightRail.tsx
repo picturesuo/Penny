@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import type {
   AutopilotSuggestion,
   BrainClaim,
@@ -277,9 +277,29 @@ function MakesCentsPanel({
   const [answer, setAnswer] = useState<InlineLearnOutput | null>(null);
   const [lastQuestion, setLastQuestion] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [status, setStatus] = useState("session terminal ready");
+  const inputRef = useRef<HTMLInputElement>(null);
   const canAsk = Boolean(sessionId && targetClaim && prompt.trim()) && !disabled && !isRunning;
-  const canEnter = Boolean(sessionId && targetClaim && answer) && !disabled && !isRunning;
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (disabled || event.metaKey || event.ctrlKey || event.altKey || event.key.toLowerCase() !== "q") {
+        return;
+      }
+
+      if (textEntryTarget(event.target)) {
+        return;
+      }
+
+      event.preventDefault();
+      inputRef.current?.focus();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [disabled]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -294,13 +314,11 @@ function MakesCentsPanel({
     }
 
     if (!sessionId || !targetClaim) {
-      setStatus("Open a session before asking Makes Cents.");
       return;
     }
 
     setIsRunning(true);
     setLastQuestion(question);
-    setStatus("running session query");
 
     try {
       const output = await createInlineLearn({
@@ -312,31 +330,8 @@ function MakesCentsPanel({
 
       setAnswer(output.data);
       setPrompt("");
-      setStatus("answer ready");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsRunning(false);
-    }
-  }
-
-  async function handleEnterThis() {
-    if (!sessionId || !targetClaim || !answer) {
-      return;
-    }
-
-    setIsRunning(true);
-    setStatus("entering answer");
-
-    try {
-      await saveInlineLearn({
-        ...answer,
-        currentClaimId: targetClaim.id,
-        sessionId,
-      });
-      setStatus("entered as learn");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      setAnswer(errorAnswer(question, error));
     } finally {
       setIsRunning(false);
     }
@@ -369,6 +364,7 @@ function MakesCentsPanel({
       <form className="makes-cents-form" onSubmit={handleSubmit}>
         <span aria-hidden="true">&gt;</span>
         <input
+          ref={inputRef}
           value={prompt}
           disabled={disabled || isRunning}
           placeholder="ask about this session..."
@@ -378,23 +374,6 @@ function MakesCentsPanel({
           Run
         </button>
       </form>
-      <div className="makes-cents-actions">
-        <button type="button" disabled={disabled || isRunning} onClick={() => askMakesCents("Give me an example")}>
-          Give me an example
-        </button>
-        <button type="button" disabled={disabled || isRunning} onClick={() => askMakesCents("Explain simpler")}>
-          Explain simpler
-        </button>
-        <button type="button" disabled={disabled || isRunning} onClick={() => askMakesCents("What if this is wrong?")}>
-          What if?
-        </button>
-      </div>
-      <div className="makes-cents-enter-row">
-        <span>{truncateWords(status, 8)}</span>
-        <button type="button" disabled={!canEnter} onClick={handleEnterThis}>
-          Enter this
-        </button>
-      </div>
     </section>
   );
 }
@@ -434,6 +413,23 @@ function normalizeTerm(value: string): string {
 
 function editableContextTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && Boolean(target.closest("input, textarea, button, a, [contenteditable='true']"));
+}
+
+function textEntryTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && Boolean(target.closest("input, textarea, [contenteditable='true']"));
+}
+
+function errorAnswer(term: string, error: unknown): InlineLearnOutput {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return {
+    term: truncateWords(term, 8),
+    explanation: message,
+    whyItMattersHere: "The session question could not be answered yet.",
+    example: "Try again after the session is available.",
+    relatedConcepts: [],
+    saveSuggestion: "Do not save this error response.",
+  };
 }
 
 function termFromContextMenu(event: MouseEvent): string | null {
