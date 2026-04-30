@@ -50,6 +50,8 @@ test("buildSessionCockpitPayload composes graph, moves, autopilot, active challe
   assert.equal(payload.graph.nodes[0]?.claimId, uuidAt(201));
   assert.equal(payload.moves[0]?.kind, "challenge_issued");
   assert.equal(payload.autopilot.selectedCandidate?.candidateId, "next_candidate");
+  assert.deepEqual(payload.modeContract.validModes, ["Learn", "Check", "Brain"]);
+  assert.equal(payload.modeContract.activeMode, "Check");
   assert.equal(payload.activeChallenge?.id, uuidAt(701));
   assert.equal(payload.activeChallenge?.targetClaim?.id, uuidAt(201));
   assert.equal(payload.activeChallenge?.critiqueClaim?.id, uuidAt(202));
@@ -413,6 +415,7 @@ function autopilotState(sessionId: string) {
     brainId: sessionId,
     sessionId,
     focusState: focusState(sessionId, "autopilot_suggestion", false),
+    modeContract: modeContract("Check"),
     candidates: [candidate],
     selectedCandidate: candidate,
   };
@@ -433,6 +436,7 @@ function startResponse(sessionId: string, candidateId: string) {
     brainId: sessionId,
     sessionId,
     focusState: focusState(sessionId, "autopilot_started", false),
+    modeContract: modeContract("Check"),
     selectedCandidate: {
       ...candidateDto(sessionId),
       candidateId,
@@ -447,6 +451,7 @@ function manualResponse(sessionId: string, claimId: string) {
     brainId: sessionId,
     sessionId,
     focusState: focusState(sessionId, "manual_selection", true),
+    modeContract: modeContract("Brain"),
     focusClaim: {
       id: claimId,
       versionId: uuidAt(401),
@@ -470,6 +475,7 @@ function candidateDto(sessionId: string) {
     targetEdgeId: uuidAt(301),
     action: "challenge" as const,
     mode: "challenge" as const,
+    mvpMode: "Check" as const,
     score: 920,
     reason: "Challenge the paid founder workflow assumption.",
     reasonCodes: ["load_bearing"],
@@ -500,6 +506,13 @@ function candidateDto(sessionId: string) {
     },
     selected: true,
     selectedAt: "2026-04-29T00:00:09.000Z",
+  };
+}
+
+function modeContract(activeMode: "Learn" | "Check" | "Brain") {
+  return {
+    validModes: ["Learn", "Check", "Brain"] as const,
+    activeMode,
   };
 }
 
