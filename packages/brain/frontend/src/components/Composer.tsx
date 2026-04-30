@@ -47,10 +47,13 @@ export function Composer({ disabled, status, onSubmit, storageKey = DEFAULT_STOR
           value={rawIdea}
           onChange={(event) => setRawIdea(event.target.value)}
           disabled={disabled}
+          placeholder="Capture a thought, idea, or question..."
           aria-describedby="composerStatus"
         />
         <button type="submit" disabled={disabled || rawIdea.trim().length === 0} aria-label="Submit thought">
-          <span />
+          <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+            <path d="M5 4.5 20 12 5 19.5l3.2-6.4L14 12l-5.8-1.1L5 4.5Z" />
+          </svg>
         </button>
       </div>
       <p id="composerStatus" className="sr-only">
