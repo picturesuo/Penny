@@ -56,6 +56,10 @@ export function App() {
 
   const claims = useMemo(() => data?.ideaMap?.claims ?? [], [data]);
   const workStructure = data?.workStructure ?? null;
+  const activeWorkStructureStep =
+    workStructure?.steps.find((step) => step.id === focusedWorkStructureStepId) ??
+    workStructure?.steps.find((step) => step.id === workStructure.activeStepId) ??
+    null;
   const seedClaim = claims.find((claim) => claim.seedId === "claim.seed") ?? claims[0];
   const suggestedClaimId = autopilot?.suggestion?.targetClaimId ?? null;
   const focusedClaim =
@@ -345,6 +349,7 @@ export function App() {
               paths={data?.explorationPaths ?? []}
               autopilotSuggestion={autopilot?.suggestion ?? null}
               focusedClaim={focusedClaim}
+              activeWorkStructureStep={activeWorkStructureStep}
               onGoThere={handleGoThere}
             />
             <Composer disabled={isThinking} status={status} onSubmit={handleSeed} />
