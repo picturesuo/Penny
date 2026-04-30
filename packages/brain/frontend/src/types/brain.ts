@@ -145,6 +145,28 @@ export interface BrainHierarchySpace {
   folders: BrainHierarchyFolder[];
 }
 
+export interface BrainQuickNote {
+  id: string;
+  sessionId: string;
+  text: string;
+  meta: string;
+  kind: "next_action" | "open_question" | "recent_move" | string;
+}
+
+export interface BrainResearchItem {
+  id: string;
+  sessionId: string;
+  kind: "source" | "research_lead" | "positive_example" | "failure_example" | "artifact" | string;
+  title: string;
+  subtitle: string | null;
+}
+
+export interface BrainSidebarData {
+  quickNotes: BrainQuickNote[];
+  folders: BrainHierarchyFolder[];
+  research: BrainResearchItem[];
+}
+
 export interface BrainDocumentGraphNode {
   id: string;
   type: "document" | "claim" | "risk" | "concept" | string;
@@ -166,6 +188,7 @@ export interface BrainDocumentsData {
   sourceOfTruth: "sessions_sources_claims_claim_versions_edges_moves_artifacts" | string;
   documents: BrainDocumentSummary[];
   hierarchy: BrainHierarchySpace[];
+  sidebar: BrainSidebarData;
   graph: {
     nodes: BrainDocumentGraphNode[];
     edges: BrainDocumentGraphEdge[];
