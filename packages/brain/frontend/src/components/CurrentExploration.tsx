@@ -1,4 +1,5 @@
 import type { AutopilotSuggestion, BrainClaim, ExplorationPath, WorkStructureStep } from "../types/brain";
+import { truncateWords } from "../lib/text";
 
 interface CurrentExplorationProps {
   title: string;
@@ -33,21 +34,21 @@ export function CurrentExploration({
     <section className="current-exploration">
       <h2 className="section-label">CURRENT EXPLORATION</h2>
       <div className="exploration-headline">
-        <h1>{title}</h1>
-        <p>{subtitle}</p>
+        <h1 title={title}>{truncateWords(title, 12)}</h1>
+        <p title={subtitle}>{truncateWords(subtitle, 3)}</p>
       </div>
       {activeWorkStructureStep ? <WorkStructureStepDetail step={activeWorkStructureStep} focusedClaim={focusedClaim} /> : null}
       {autopilotSuggestion ? (
         <article className="autopilot-card">
           <div>
             <span>NEXT THINKING ACTION</span>
-            <strong>{autopilotSuggestion.label}</strong>
-            <p>{autopilotSuggestion.why}</p>
-            <p>{autopilotSuggestion.exitCriteria.label}</p>
+            <strong title={autopilotSuggestion.label}>{truncateWords(autopilotSuggestion.label, 4)}</strong>
+            <p title={autopilotSuggestion.why}>{truncateWords(autopilotSuggestion.why, 18)}</p>
+            <p title={autopilotSuggestion.exitCriteria.label}>{truncateWords(autopilotSuggestion.exitCriteria.label, 16)}</p>
             {autopilotSuggestion.exitCriteria.acceptedMoveKinds.length > 0 ? (
-              <small>{autopilotSuggestion.exitCriteria.acceptedMoveKinds.map(formatMoveKind).join(", ")}</small>
+              <small>{truncateWords(autopilotSuggestion.exitCriteria.acceptedMoveKinds.map(formatMoveKind).join(", "), 6)}</small>
             ) : null}
-            {focusedClaim ? <em>{focusedClaim.text}</em> : null}
+            {focusedClaim ? <em title={focusedClaim.text}>{truncateWords(focusedClaim.text, 16)}</em> : null}
           </div>
           <button type="button" onClick={onGoThere}>
             {autopilotSuggestion.primaryActionLabel} <span aria-hidden="true">-&gt;</span>
@@ -72,12 +73,12 @@ function WorkStructureStepDetail({
     <article className="work-step-detail">
       <div className="work-step-detail-head">
         <span>#{step.rank}</span>
-        <strong>{step.title}</strong>
+        <strong title={step.title}>{truncateWords(step.title, 8)}</strong>
         <small>{formatStatus(step.status)}</small>
       </div>
-      <p>{step.purpose}</p>
-      <p>{step.whyNow}</p>
-      {focusedClaim ? <em>{focusedClaim.text}</em> : null}
+      <p title={step.purpose}>{truncateWords(step.purpose, 18)}</p>
+      <p title={step.whyNow}>{truncateWords(step.whyNow, 18)}</p>
+      {focusedClaim ? <em title={focusedClaim.text}>{truncateWords(focusedClaim.text, 16)}</em> : null}
       <div className="work-step-metrics" aria-label="Work step ranking">
         <span>Fragility {step.fragility}</span>
         <span>Importance {step.importance}</span>
@@ -85,8 +86,8 @@ function WorkStructureStepDetail({
       <div className="work-step-choices" aria-label="Work step choices">
         {step.detailChoices.map((choice) => (
           <article key={choice.id}>
-            <strong>{choice.label}</strong>
-            <span>{choice.description}</span>
+            <strong title={choice.label}>{truncateWords(choice.label, 4)}</strong>
+            <span title={choice.description}>{truncateWords(choice.description, 10)}</span>
           </article>
         ))}
       </div>
@@ -98,10 +99,12 @@ function PathwayRow({ row }: { row: PathRow }) {
   return (
     <article className="pathway-row">
       <span className="path-index">#</span>
-      <strong>{row.title}</strong>
+      <strong title={row.title}>{truncateWords(row.title, 8)}</strong>
       <ul>
         {row.reasoning.map((item, index) => (
-          <li key={`${row.id}-reason-${index}`}>{item}</li>
+          <li key={`${row.id}-reason-${index}`} title={item}>
+            {truncateWords(item, 4)}
+          </li>
         ))}
       </ul>
       <button type="button" aria-label={`Explore ${row.title}`}>
