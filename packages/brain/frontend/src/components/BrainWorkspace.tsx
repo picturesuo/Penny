@@ -9,6 +9,8 @@ import type {
   BrainDocumentsData,
   BrainDocumentSummary,
   BrainEdge,
+  BrainGraphPath,
+  BrainGraphPathNode,
   BrainResearchItem,
   BrainSidebarData,
   BrainMove,
@@ -50,6 +52,11 @@ interface GraphPoint {
   y: number;
 }
 
+interface GraphCardPoint extends GraphPoint {
+  width: number;
+  height: number;
+}
+
 interface BrainHierarchySidebarProps {
   sidebar: BrainSidebarData | null;
   selectedSessionId: string | null;
@@ -76,6 +83,7 @@ export function BrainWorkspace({
 }: BrainWorkspaceProps) {
   const claims = selectedDocument ? data?.ideaMap?.claims ?? [] : [];
   const edges = selectedDocument ? data?.ideaMap?.edges ?? [] : [];
+  const graphPath = selectedDocument ? data?.graphPath ?? null : null;
   const focusedClaim = claims.find((claim) => claim.id === focusedClaimId) ?? null;
   const [claimDetail, setClaimDetail] = useState<ClaimDetailData | null>(null);
   const [claimDetailStatus, setClaimDetailStatus] = useState<ClaimDetailStatus>("idle");
@@ -153,6 +161,7 @@ export function BrainWorkspace({
           <aside className="brain-graph-quarter" aria-label="Brain graph and context">
             <ConnectedGraphBoard
               title="Graph Path"
+              graphPath={graphPath}
               claims={claims}
               edges={edges}
               focusedClaimId={focusedClaimId}
@@ -648,6 +657,7 @@ function DocumentHeader({
 
 function ConnectedGraphBoard({
   title,
+  graphPath,
   claims,
   edges,
   focusedClaimId,
@@ -655,67 +665,86 @@ function ConnectedGraphBoard({
   onClaimSelect,
 }: {
   title: string;
+  graphPath: BrainGraphPath | null;
   claims: BrainClaim[];
   edges: BrainEdge[];
   focusedClaimId: string | null;
   suggestedClaimId: string | null;
   onClaimSelect: (claimId: string) => void;
 }) {
-  const positions = useMemo(() => claimPositions(claims), [claims]);
+  const path = useMemo(
+    () => graphPath && graphPath.nodes.length > 0 ? graphPath : fallbackGraphPath(claims, edges, focusedClaimId, suggestedClaimId),
+    [claims, edges, focusedClaimId, graphPath, suggestedClaimId],
+  );
+  const positions = useMemo(() => graphPathPositions(path.nodes), [path.nodes]);
   const positionMap = new Map(positions.map((point) => [point.id, point]));
+  const graphHeight = Math.max(360, 132 + path.meta.maxDepth * 116);
 
   return (
     <section className="graph-board" aria-label={title}>
       <div className="graph-board-head">
         <h2>{title}</h2>
+        <span>{path.meta.nodeCount} steps</span>
       </div>
-      {claims.length > 0 ? (
-        <svg viewBox="0 0 1000 420" role="img" aria-label="Connected thought graph">
+      {path.nodes.length > 0 ? (
+        <svg viewBox={`0 0 680 ${graphHeight}`} role="img" aria-label="Connected thought graph path">
           <g className="graph-edge-layer">
-            {edges.map((edge) => {
-              const source = positionMap.get(edge.fromClaimId);
-              const target = positionMap.get(edge.toClaimId);
+            {path.edges.map((edge) => {
+              const source = positionMap.get(edge.fromNodeId);
+              const target = positionMap.get(edge.toNodeId);
 
               if (!source || !target) {
                 return null;
               }
 
-              return <path key={edge.id} className={`graph-edge graph-edge-${edge.kind}`} d={edgePath(source, target)} />;
+              return <path key={edge.id} className={`graph-edge graph-edge-${edge.kind}`} d={graphCardEdgePath(source, target)} />;
             })}
           </g>
           <g className="graph-node-layer">
-            {claims.map((claim) => {
-              const point = positionMap.get(claim.id);
+            {path.nodes.map((node) => {
+              const point = positionMap.get(node.id);
 
               if (!point) {
                 return null;
               }
 
-              const isFocused = claim.id === focusedClaimId;
-              const isSuggested = claim.id === suggestedClaimId;
+              const lines = graphNodeLines(node.label);
 
               return (
-                <g key={claim.id} className={`graph-node is-${claim.kind}${isFocused ? " is-focused" : ""}${isSuggested ? " is-suggested" : ""}`}>
-                  <circle
-                    cx={point.x}
-                    cy={point.y}
-                    r={isFocused ? 24 : 18}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Focus ${claim.text}`}
-                    onClick={() => onClaimSelect(claim.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        onClaimSelect(claim.id);
-                      }
-                    }}
+                <g
+                  key={node.id}
+                  className={`graph-node-card is-${node.role}${node.selected ? " is-focused" : ""}${node.suggested ? " is-suggested" : ""}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${node.label}`}
+                  onClick={() => onClaimSelect(node.claimId)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onClaimSelect(node.claimId);
+                    }
+                  }}
+                >
+                  <rect
+                    x={point.x - point.width / 2}
+                    y={point.y - point.height / 2}
+                    width={point.width}
+                    height={point.height}
+                    rx="10"
                   />
-                  <text x={point.x + 31} y={point.y - 4}>
-                    {truncateWords(claim.text, 5)}
+                  <circle className="graph-node-dot" cx={point.x - point.width / 2 + 18} cy={point.y - 19} r="6" />
+                  <text className="graph-node-role" x={point.x - point.width / 2 + 33} y={point.y - 14}>
+                    {formatLabel(node.role)}
                   </text>
-                  <text className="graph-node-meta" x={point.x + 31} y={point.y + 16}>
-                    {formatLabel(claim.kind)}
+                  <text className="graph-node-menu" x={point.x + point.width / 2 - 18} y={point.y - 13}>
+                    ...
+                  </text>
+                  <text className="graph-node-title" x={point.x - point.width / 2 + 18} y={point.y + 7}>
+                    {lines.map((line, index) => (
+                      <tspan key={`${node.id}-${index}`} x={point.x - point.width / 2 + 18} dy={index === 0 ? 0 : 22}>
+                        {line}
+                      </tspan>
+                    ))}
                   </text>
                 </g>
               );
@@ -1015,6 +1044,116 @@ function sentenceFromConnections(connections: ClaimDetailConnection[], emptyLabe
   }
 
   return texts.slice(0, 4).join(" ");
+}
+
+function fallbackGraphPath(
+  claims: BrainClaim[],
+  edges: BrainEdge[],
+  focusedClaimId: string | null,
+  suggestedClaimId: string | null,
+): BrainGraphPath {
+  const nodes: BrainGraphPathNode[] = claims.map((claim, index) => ({
+    id: `claim:${claim.id}`,
+    claimId: claim.id,
+    label: claim.text,
+    role: index === 0 ? "main_claim" : claim.kind,
+    kind: claim.kind,
+    status: claim.status,
+    confidence: claim.confidence ?? 60,
+    depth: index,
+    lane: 0,
+    rank: index + 1,
+    moveCount: 0,
+    edgeIds: edges.filter((edge) => edge.fromClaimId === claim.id || edge.toClaimId === claim.id).map((edge) => edge.id),
+    selected: claim.id === focusedClaimId,
+    suggested: claim.id === suggestedClaimId,
+  }));
+  const nodeIds = new Set(nodes.map((node) => node.claimId));
+
+  return {
+    layout: "top_down",
+    generatedFrom: "claims_edges_moves",
+    focusClaimId: focusedClaimId,
+    nodes,
+    edges: edges
+      .filter((edge) => nodeIds.has(edge.fromClaimId) && nodeIds.has(edge.toClaimId))
+      .map((edge) => ({
+        id: `edge:${edge.id}`,
+        edgeId: edge.id,
+        fromNodeId: `claim:${edge.fromClaimId}`,
+        toNodeId: `claim:${edge.toClaimId}`,
+        kind: edge.kind,
+        status: edge.status ?? "active",
+        label: edge.label ?? null,
+      })),
+    meta: {
+      nodeCount: nodes.length,
+      edgeCount: edges.length,
+      maxDepth: Math.max(0, nodes.length - 1),
+    },
+  };
+}
+
+function graphPathPositions(nodes: BrainGraphPathNode[]): GraphCardPoint[] {
+  const width = 216;
+  const height = 76;
+  const centerX = 340;
+  const topY = 72;
+  const rowGap = 116;
+  const laneGap = 240;
+
+  return nodes.map((node) => ({
+    id: node.id,
+    x: centerX + node.lane * laneGap,
+    y: topY + node.depth * rowGap,
+    width,
+    height,
+  }));
+}
+
+function graphCardEdgePath(source: GraphCardPoint, target: GraphCardPoint): string {
+  const sourceY = source.y + source.height / 2;
+  const targetY = target.y - target.height / 2;
+  const midY = sourceY + Math.max(28, (targetY - sourceY) / 2);
+
+  return `M ${source.x} ${sourceY} C ${source.x} ${midY}, ${target.x} ${midY}, ${target.x} ${targetY}`;
+}
+
+function graphNodeLines(label: string): string[] {
+  const words = label.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const next = current ? `${current} ${word}` : word;
+
+    if (next.length > 24 && current) {
+      lines.push(current);
+      current = word;
+
+      if (lines.length === 2) {
+        break;
+      }
+    } else {
+      current = next;
+    }
+  }
+
+  if (current && lines.length < 2) {
+    lines.push(current);
+  }
+
+  if (lines.length === 0) {
+    return ["Untitled"];
+  }
+
+  if (words.join(" ").length > lines.join(" ").length) {
+    const lastIndex = lines.length - 1;
+    const lastLine = lines[lastIndex] ?? "";
+    lines[lastIndex] = `${lastLine.replace(/[.,;:]$/, "")}...`;
+  }
+
+  return lines;
 }
 
 function claimPositions(claims: BrainClaim[]): GraphPoint[] {
