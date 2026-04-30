@@ -14,6 +14,7 @@ import {
   sessions,
   sources,
 } from "./db/schema.ts";
+import { LearnSessionOutputSchema, learnRecentInputFromSessionOutput } from "./learn-session-output.ts";
 import { scopeValues, type BrainScope, type OptionalBrainScope } from "./scope.ts";
 
 const UuidSchema = z.string().uuid();
@@ -48,14 +49,15 @@ const RecentBodySchema = z
     content: z.string().trim().min(1).max(50_000).optional(),
     sessionId: UuidSchema.nullable().optional(),
     payload: JsonObjectSchema.optional(),
+    learnOutput: LearnSessionOutputSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
-    if (!textValue(value.rawIdea ?? value.content)) {
+    if (!value.learnOutput && !textValue(value.rawIdea ?? value.content)) {
       context.addIssue({
         code: "custom",
         path: ["rawIdea"],
-        message: "A recent item requires rawIdea or content.",
+        message: "A recent item requires rawIdea, content, or learnOutput.",
       });
     }
   });
@@ -249,7 +251,7 @@ export async function handleBrainRecentsRequest(
     }
 
     try {
-      return jsonResponse({ data: await service.createRecent({ scope, ...parsed.data }) }, 201);
+      return jsonResponse({ data: await service.createRecent(createRecentInputFromBody(scope, parsed.data)) }, 201);
     } catch (error) {
       return routeErrorResponse(error, "brain_recent_save_failed");
     }
@@ -633,6 +635,36 @@ export class BrainObjectsConflictError extends Error {
     super(message);
     this.name = "BrainObjectsConflictError";
   }
+}
+
+function createRecentInputFromBody(scope: BrainScope, body: z.infer<typeof RecentBodySchema>): CreateBrainRecentInput {
+  if (!body.learnOutput) {
+    return {
+      scope,
+      rawIdea: body.rawIdea,
+      kind: body.kind,
+      title: body.title,
+      summary: body.summary,
+      content: body.content,
+      sessionId: body.sessionId,
+      payload: body.payload,
+    };
+  }
+
+  const learnRecent = learnRecentInputFromSessionOutput(body.learnOutput);
+
+  return {
+    scope,
+    kind: body.kind ?? learnRecent.kind,
+    title: body.title ?? learnRecent.title,
+    summary: body.summary ?? learnRecent.summary,
+    content: body.content ?? body.rawIdea ?? learnRecent.content,
+    sessionId: body.sessionId ?? learnRecent.sessionId,
+    payload: {
+      ...learnRecent.payload,
+      ...asRecord(body.payload),
+    },
+  };
 }
 
 function resolveService(options: BrainObjectsRouteOptions): BrainObjectsRouteService {
