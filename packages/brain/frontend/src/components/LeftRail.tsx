@@ -25,7 +25,6 @@ import { Section } from "./Section";
 interface LeftRailProps {
   claims: BrainClaim[];
   workStructure?: WorkStructure | null;
-  savedPaths: string[];
   focusedClaimId: string | null;
   focusedWorkStructureStepId?: string | null;
   suggestedClaimId: string | null;

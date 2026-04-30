@@ -84,7 +84,6 @@ export function CheckWorkspace({
       <LeftRail
         claims={claims}
         workStructure={workStructure}
-        savedPaths={(data?.explorationPaths ?? []).map((path) => path.title)}
         focusedClaimId={focusedClaimId}
         focusedWorkStructureStepId={focusedWorkStructureStepId}
         suggestedClaimId={suggestedClaimId}
