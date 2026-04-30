@@ -84,9 +84,46 @@ export type BrainDocumentGraphEdge = {
   sessionId: string;
 };
 
+export type BrainDocumentFileKind = "source" | "claim" | "artifact" | "moves";
+
+export type BrainDocumentFile = {
+  id: string;
+  sessionId: string;
+  kind: BrainDocumentFileKind;
+  title: string;
+  subtitle: string | null;
+};
+
+export type BrainHierarchyDocument = {
+  id: string;
+  sessionId: string;
+  title: string;
+  status: SessionRow["status"];
+  updatedAt: string;
+  fileCount: number;
+  files: BrainDocumentFile[];
+};
+
+export type BrainHierarchyFolder = {
+  id: string;
+  label: string;
+  kind: "project" | "status" | "inbox";
+  documentCount: number;
+  documents: BrainHierarchyDocument[];
+};
+
+export type BrainHierarchySpace = {
+  id: string;
+  label: string;
+  kind: "sphere" | "workspace" | "default";
+  documentCount: number;
+  folders: BrainHierarchyFolder[];
+};
+
 export type BrainDocumentsPayload = {
   sourceOfTruth: "sessions_sources_claims_claim_versions_edges_moves_artifacts";
   documents: BrainDocumentSummary[];
+  hierarchy: BrainHierarchySpace[];
   graph: {
     nodes: BrainDocumentGraphNode[];
     edges: BrainDocumentGraphEdge[];
@@ -209,6 +246,7 @@ export function buildBrainDocuments(state: BrainDocumentsState): BrainDocumentsP
   return {
     sourceOfTruth: "sessions_sources_claims_claim_versions_edges_moves_artifacts",
     documents,
+    hierarchy: documentHierarchy(documents),
     graph: documentGraph(documents),
     meta: {
       documentCount: documents.length,
@@ -482,6 +520,216 @@ function documentGraph(documents: BrainDocumentSummary[]): BrainDocumentsPayload
     nodes: uniqueBy(nodes, (node) => node.id),
     edges: uniqueBy(edges, (edge) => edge.id),
   };
+}
+
+function documentHierarchy(documents: BrainDocumentSummary[]): BrainHierarchySpace[] {
+  const spaces = new Map<
+    string,
+    {
+      id: string;
+      label: string;
+      kind: BrainHierarchySpace["kind"];
+      folders: Map<
+        string,
+        {
+          id: string;
+          label: string;
+          kind: BrainHierarchyFolder["kind"];
+          documents: BrainHierarchyDocument[];
+        }
+      >;
+    }
+  >();
+
+  for (const document of documents) {
+    const space = hierarchySpace(document);
+    const folder = hierarchyFolder(document);
+    const existingSpace =
+      spaces.get(space.id) ??
+      {
+        ...space,
+        folders: new Map(),
+      };
+    const existingFolder =
+      existingSpace.folders.get(folder.id) ??
+      {
+        ...folder,
+        documents: [],
+      };
+    const files = documentFiles(document);
+
+    existingFolder.documents.push({
+      id: document.id,
+      sessionId: document.sessionId,
+      title: document.title,
+      status: document.status,
+      updatedAt: document.updatedAt,
+      fileCount: files.length,
+      files,
+    });
+    existingSpace.folders.set(existingFolder.id, existingFolder);
+    spaces.set(existingSpace.id, existingSpace);
+  }
+
+  return Array.from(spaces.values())
+    .map((space) => {
+      const folders = Array.from(space.folders.values())
+        .map((folder) => ({
+          ...folder,
+          documentCount: folder.documents.length,
+          documents: folder.documents.sort(compareHierarchyDocuments),
+        }))
+        .sort(compareHierarchyFolders);
+
+      return {
+        id: space.id,
+        label: space.label,
+        kind: space.kind,
+        documentCount: folders.reduce((count, folder) => count + folder.documentCount, 0),
+        folders,
+      };
+    })
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function hierarchySpace(document: BrainDocumentSummary): Pick<BrainHierarchySpace, "id" | "label" | "kind"> {
+  if (document.scope.sphereId) {
+    return {
+      id: `sphere:${document.scope.sphereId}`,
+      label: labelFromScopeId(document.scope.sphereId, "Space"),
+      kind: "sphere",
+    };
+  }
+
+  if (document.scope.workspaceId) {
+    return {
+      id: `workspace:${document.scope.workspaceId}`,
+      label: labelFromScopeId(document.scope.workspaceId, "Workspace"),
+      kind: "workspace",
+    };
+  }
+
+  return {
+    id: "space:brain",
+    label: "Brain",
+    kind: "default",
+  };
+}
+
+function hierarchyFolder(document: BrainDocumentSummary): Pick<BrainHierarchyFolder, "id" | "label" | "kind"> {
+  if (document.scope.projectId) {
+    return {
+      id: `project:${document.scope.projectId}`,
+      label: labelFromScopeId(document.scope.projectId, "Project"),
+      kind: "project",
+    };
+  }
+
+  return {
+    id: `status:${document.status}`,
+    label: `${formatLooseLabel(document.status)} Docs`,
+    kind: document.status ? "status" : "inbox",
+  };
+}
+
+function documentFiles(document: BrainDocumentSummary): BrainDocumentFile[] {
+  const files: BrainDocumentFile[] = [];
+
+  if (document.originalIdea) {
+    files.push({
+      id: `source:${document.sessionId}:raw-idea`,
+      sessionId: document.sessionId,
+      kind: "source",
+      title: "Original idea",
+      subtitle: document.originalIdea,
+    });
+  }
+
+  if (document.mainClaim) {
+    files.push({
+      id: `claim:${document.mainClaim.id}`,
+      sessionId: document.sessionId,
+      kind: "claim",
+      title: "Main claim",
+      subtitle: document.mainClaim.text,
+    });
+  }
+
+  for (const claim of document.strongestOptions.slice(0, 3)) {
+    files.push({
+      id: `claim:${claim.id}`,
+      sessionId: document.sessionId,
+      kind: "claim",
+      title: formatLooseLabel(claim.kind),
+      subtitle: claim.text,
+    });
+  }
+
+  if (document.latestArtifact) {
+    files.push({
+      id: `artifact:${document.latestArtifact.id}`,
+      sessionId: document.sessionId,
+      kind: "artifact",
+      title: document.latestArtifact.title,
+      subtitle: document.latestArtifact.summary,
+    });
+  }
+
+  if (document.lastMove) {
+    files.push({
+      id: `moves:${document.sessionId}`,
+      sessionId: document.sessionId,
+      kind: "moves",
+      title: "Move history",
+      subtitle: `${document.counts.moves} moves, latest ${formatLooseLabel(document.lastMove.kind)}`,
+    });
+  }
+
+  return uniqueBy(files, (file) => file.id);
+}
+
+function compareHierarchyDocuments(left: BrainHierarchyDocument, right: BrainHierarchyDocument): number {
+  return Date.parse(right.updatedAt) - Date.parse(left.updatedAt) || left.title.localeCompare(right.title);
+}
+
+function compareHierarchyFolders(left: BrainHierarchyFolder, right: BrainHierarchyFolder): number {
+  return (
+    folderKindRank(left.kind) - folderKindRank(right.kind) ||
+    right.documentCount - left.documentCount ||
+    left.label.localeCompare(right.label)
+  );
+}
+
+function folderKindRank(kind: BrainHierarchyFolder["kind"]): number {
+  switch (kind) {
+    case "project":
+      return 0;
+    case "status":
+      return 1;
+    case "inbox":
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+function labelFromScopeId(value: string, fallback: string): string {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return fallback;
+  }
+
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(trimmed)) {
+    return `${fallback} ${trimmed.slice(0, 8)}`;
+  }
+
+  return trimmed
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function challengeBriefRecommendedNextMove(payload: Record<string, unknown>): string | null {
