@@ -162,6 +162,13 @@
       "when": 1777591648254,
       "tag": "0022_add_save_to_brain_action",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1777592285143,
+      "tag": "0023_same_frog_thor",
+      "breakpoints": true
     }
   ]
 }

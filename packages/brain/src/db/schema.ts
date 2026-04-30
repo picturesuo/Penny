@@ -145,6 +145,76 @@ export const sessions = pgTable(
   ],
 );
 
+export const brainRecents = pgTable(
+  "brain_recents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
+    kind: text("kind").notNull().default("raw_idea"),
+    title: text("title").notNull(),
+    summary: text("summary"),
+    body: text("body").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_recents_session_id_idx").on(table.sessionId),
+    index("brain_recents_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_recents_kind_idx").on(table.kind),
+    index("brain_recents_updated_at_idx").on(table.updatedAt),
+    check("brain_recents_kind_present", sql`length(trim(${table.kind})) > 0`),
+    check("brain_recents_title_present", sql`length(trim(${table.title})) > 0`),
+    check("brain_recents_body_present", sql`length(trim(${table.body})) > 0`),
+  ],
+);
+
+export const brainObjects = pgTable(
+  "brain_objects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
+    sourceRecentId: uuid("source_recent_id").references(() => brainRecents.id, { onDelete: "set null" }),
+    objectType: text("object_type").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary"),
+    body: text("body").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_objects_session_id_idx").on(table.sessionId),
+    index("brain_objects_source_recent_id_idx").on(table.sourceRecentId),
+    index("brain_objects_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_objects_type_idx").on(table.objectType),
+    index("brain_objects_updated_at_idx").on(table.updatedAt),
+    check("brain_objects_type_present", sql`length(trim(${table.objectType})) > 0`),
+    check("brain_objects_title_present", sql`length(trim(${table.title})) > 0`),
+  ],
+);
+
+export const sessionNotes = pgTable(
+  "session_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    content: text("content").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("session_notes_session_id_idx").on(table.sessionId),
+    index("session_notes_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("session_notes_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
 export const sources = pgTable(
   "sources",
   {
@@ -602,6 +672,8 @@ export const commandIdempotencyKeys = pgTable(
 export const pennySchema = {
   artifacts,
   artifactKindEnum,
+  brainObjects,
+  brainRecents,
   brainRunOperationEnum,
   brainRunStatusEnum,
   brainRuns,
@@ -629,6 +701,7 @@ export const pennySchema = {
   moves,
   nextMoveActionEnum,
   nextMoveCandidates,
+  sessionNotes,
   sessionStatusEnum,
   sessions,
   shapeStatusEnum,

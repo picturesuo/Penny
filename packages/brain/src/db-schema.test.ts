@@ -4,6 +4,8 @@ import { getTableName } from "drizzle-orm";
 import {
   artifactKindEnum,
   artifacts,
+  brainObjects,
+  brainRecents,
   brainRunOperationEnum,
   brainRunStatusEnum,
   brainRuns,
@@ -32,6 +34,7 @@ import {
   claimVersions,
   moves,
   pennySchema,
+  sessionNotes,
   sessions,
   shapeStatusEnum,
   shapes,
@@ -52,6 +55,9 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(derivedEffects), "derived_effects");
   assert.equal(getTableName(focusStates), "focus_states");
   assert.equal(getTableName(nextMoveCandidates), "next_move_candidates");
+  assert.equal(getTableName(brainObjects), "brain_objects");
+  assert.equal(getTableName(brainRecents), "brain_recents");
+  assert.equal(getTableName(sessionNotes), "session_notes");
   assert.equal(getTableName(challengeRounds), "challenge_rounds");
   assert.equal(getTableName(shapes), "shapes");
   assert.equal(getTableName(brainRuns), "brain_runs");
@@ -76,6 +82,9 @@ test("Penny core tables persist user and workspace scope", () => {
     derivedEffects,
     focusStates,
     nextMoveCandidates,
+    brainObjects,
+    brainRecents,
+    sessionNotes,
     challengeRounds,
     shapes,
     brainRuns,
@@ -177,6 +186,8 @@ test("Penny schema has a clean aggregate export surface", () => {
   assert.deepEqual(Object.keys(pennySchema).sort(), [
     "artifactKindEnum",
     "artifacts",
+    "brainObjects",
+    "brainRecents",
     "brainRunOperationEnum",
     "brainRunStatusEnum",
     "brainRuns",
@@ -204,6 +215,7 @@ test("Penny schema has a clean aggregate export surface", () => {
     "moves",
     "nextMoveActionEnum",
     "nextMoveCandidates",
+    "sessionNotes",
     "sessionStatusEnum",
     "sessions",
     "shapeStatusEnum",
