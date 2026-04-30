@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { BrainClaim, WorkStructure, WorkStructureStep, WorkStructureType } from "../types/brain";
 import { truncateWords } from "../lib/text";
 
@@ -28,21 +28,26 @@ export function ThoughtMap({
     () => (renderedWorkStructure ? buildThoughtMapTree(renderedWorkStructure, claims, seedClaim) : null),
     [claims, renderedWorkStructure, seedClaim],
   );
-  const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(() => new Set());
+  const [manualFocusNodeId, setManualFocusNodeId] = useState<string | null>(null);
 
   function handleToggle(nodeId: string) {
-    setCollapsedNodeIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-
-      return next;
-    });
+    setManualFocusNodeId((current) => (current === nodeId ? null : nodeId));
   }
+
+  useEffect(() => {
+    setManualFocusNodeId(null);
+  }, [focusedClaimId, focusedWorkStructureStepId, renderedWorkStructure?.activeStepId, suggestedClaimId]);
+
+  const manualFocusNodeIsValid = useMemo(
+    () => Boolean(tree && manualFocusNodeId && findThoughtMapNode(tree, (node) => node.id === manualFocusNodeId)),
+    [manualFocusNodeId, tree],
+  );
+
+  useEffect(() => {
+    if (manualFocusNodeId && !manualFocusNodeIsValid) {
+      setManualFocusNodeId(null);
+    }
+  }, [manualFocusNodeId, manualFocusNodeIsValid]);
 
   return (
     <div className="thought-map-tree">
@@ -50,7 +55,7 @@ export function ThoughtMap({
         <WorkStructureTree
           workStructure={renderedWorkStructure}
           tree={tree}
-          collapsedNodeIds={collapsedNodeIds}
+          manualFocusNodeId={manualFocusNodeIsValid ? manualFocusNodeId : null}
           focusedClaimId={focusedClaimId}
           focusedWorkStructureStepId={focusedWorkStructureStepId ?? null}
           suggestedClaimId={suggestedClaimId}
@@ -70,7 +75,7 @@ function noopWorkStructureSelect() {}
 function WorkStructureTree({
   workStructure,
   tree,
-  collapsedNodeIds,
+  manualFocusNodeId,
   focusedClaimId,
   focusedWorkStructureStepId,
   suggestedClaimId,
@@ -80,7 +85,7 @@ function WorkStructureTree({
 }: {
   workStructure: WorkStructure;
   tree: ThoughtMapNode;
-  collapsedNodeIds: Set<string>;
+  manualFocusNodeId: string | null;
   focusedClaimId: string | null;
   focusedWorkStructureStepId: string | null;
   suggestedClaimId: string | null;
@@ -88,13 +93,27 @@ function WorkStructureTree({
   onToggle: (nodeId: string) => void;
   onWorkStructureSelect: (step: WorkStructureStep) => void;
 }) {
+  const focusNodeId = useMemo(
+    () =>
+      manualFocusNodeId ??
+      resolveThoughtMapFocusNodeId(tree, {
+        activeStepId: workStructure.activeStepId,
+        focusedClaimId,
+        focusedWorkStructureStepId,
+        suggestedClaimId,
+      }),
+    [focusedClaimId, focusedWorkStructureStepId, manualFocusNodeId, suggestedClaimId, tree, workStructure.activeStepId],
+  );
+  const focusState = useMemo(() => thoughtMapFocusState(tree, focusNodeId), [focusNodeId, tree]);
+
   return (
     <div className="work-structure-tree" role="tree" aria-label={workStructure.label}>
       <ThoughtMapTreeNode
         node={tree}
         depth={0}
         activeStepId={workStructure.activeStepId}
-        collapsedNodeIds={collapsedNodeIds}
+        expandedNodeIds={focusState.expandedNodeIds}
+        focusPathNodeIds={focusState.focusPathNodeIds}
         focusedClaimId={focusedClaimId}
         focusedWorkStructureStepId={focusedWorkStructureStepId}
         suggestedClaimId={suggestedClaimId}
@@ -110,7 +129,8 @@ function ThoughtMapTreeNode({
   node,
   depth,
   activeStepId,
-  collapsedNodeIds,
+  expandedNodeIds,
+  focusPathNodeIds,
   focusedClaimId,
   focusedWorkStructureStepId,
   suggestedClaimId,
@@ -121,7 +141,8 @@ function ThoughtMapTreeNode({
   node: ThoughtMapNode;
   depth: number;
   activeStepId: string | null;
-  collapsedNodeIds: Set<string>;
+  expandedNodeIds: Set<string>;
+  focusPathNodeIds: Set<string>;
   focusedClaimId: string | null;
   focusedWorkStructureStepId: string | null;
   suggestedClaimId: string | null;
@@ -130,7 +151,8 @@ function ThoughtMapTreeNode({
   onWorkStructureSelect: (step: WorkStructureStep) => void;
 }) {
   const hasChildren = node.children.length > 0;
-  const isCollapsed = hasChildren && collapsedNodeIds.has(node.id);
+  const isCollapsed = hasChildren && !expandedNodeIds.has(node.id);
+  const isInFocusPath = focusPathNodeIds.has(node.id);
   const isFocused =
     node.step?.id === focusedWorkStructureStepId ||
     node.step?.id === activeStepId ||
@@ -161,7 +183,7 @@ function ThoughtMapTreeNode({
     <div
       className={`thought-node thought-node-${node.kind}${isFocused ? " is-focused" : ""}${isSuggested ? " is-suggested" : ""}${
         isCollapsed ? " is-collapsed" : ""
-      }`}
+      }${isInFocusPath ? " is-focus-path" : " is-context"}`}
       role="treeitem"
       aria-expanded={hasChildren ? !isCollapsed : undefined}
       style={{ "--thought-depth": depth } as CSSProperties}
@@ -171,7 +193,7 @@ function ThoughtMapTreeNode({
           <button
             type="button"
             className="thought-node-toggle"
-            aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${node.label}`}
+            aria-label={`${isCollapsed ? "Open" : "Focus"} ${node.label}`}
             onClick={() => onToggle(node.id)}
           >
             <span aria-hidden="true" />
@@ -194,7 +216,8 @@ function ThoughtMapTreeNode({
               node={child}
               depth={depth + 1}
               activeStepId={activeStepId}
-              collapsedNodeIds={collapsedNodeIds}
+              expandedNodeIds={expandedNodeIds}
+              focusPathNodeIds={focusPathNodeIds}
               focusedClaimId={focusedClaimId}
               focusedWorkStructureStepId={focusedWorkStructureStepId}
               suggestedClaimId={suggestedClaimId}
@@ -225,6 +248,109 @@ type WorkStructureTreePath = {
   order: number;
   path: string[];
 };
+
+type ThoughtMapFocusInput = {
+  activeStepId: string | null;
+  focusedClaimId: string | null;
+  focusedWorkStructureStepId: string | null;
+  suggestedClaimId: string | null;
+};
+
+type ThoughtMapFocusState = {
+  expandedNodeIds: Set<string>;
+  focusPathNodeIds: Set<string>;
+};
+
+function resolveThoughtMapFocusNodeId(tree: ThoughtMapNode, input: ThoughtMapFocusInput): string {
+  const focusedStepNode = input.focusedWorkStructureStepId
+    ? findThoughtMapNode(tree, (node) => node.step?.id === input.focusedWorkStructureStepId)
+    : null;
+
+  if (focusedStepNode) {
+    return focusedStepNode.id;
+  }
+
+  const focusedClaimStepNode = input.focusedClaimId
+    ? findThoughtMapNode(tree, (node) => Boolean(node.step?.claimIds.includes(input.focusedClaimId as string)))
+    : null;
+
+  if (focusedClaimStepNode) {
+    return focusedClaimStepNode.id;
+  }
+
+  const suggestedClaimStepNode = input.suggestedClaimId
+    ? findThoughtMapNode(tree, (node) => Boolean(node.step?.claimIds.includes(input.suggestedClaimId as string)))
+    : null;
+
+  if (suggestedClaimStepNode) {
+    return suggestedClaimStepNode.id;
+  }
+
+  const activeStepNode = input.activeStepId
+    ? findThoughtMapNode(tree, (node) => node.step?.id === input.activeStepId)
+    : null;
+
+  if (activeStepNode) {
+    return activeStepNode.id;
+  }
+
+  return (
+    findThoughtMapNode(tree, (node) => node.step?.status === "active")?.id ??
+    findThoughtMapNode(tree, (node) => node.kind === "step")?.id ??
+    tree.children[0]?.id ??
+    tree.id
+  );
+}
+
+function thoughtMapFocusState(tree: ThoughtMapNode, focusNodeId: string): ThoughtMapFocusState {
+  const path = thoughtMapPathToNode(tree, focusNodeId) ?? [tree.id];
+  const focusPathNodeIds = new Set(path);
+  const expandedNodeIds = new Set(path);
+
+  expandedNodeIds.add(tree.id);
+
+  return {
+    expandedNodeIds,
+    focusPathNodeIds,
+  };
+}
+
+function thoughtMapPathToNode(node: ThoughtMapNode, targetNodeId: string, path: string[] = []): string[] | null {
+  const nextPath = [...path, node.id];
+
+  if (node.id === targetNodeId) {
+    return nextPath;
+  }
+
+  for (const child of node.children) {
+    const childPath = thoughtMapPathToNode(child, targetNodeId, nextPath);
+
+    if (childPath) {
+      return childPath;
+    }
+  }
+
+  return null;
+}
+
+function findThoughtMapNode(
+  node: ThoughtMapNode,
+  predicate: (node: ThoughtMapNode) => boolean,
+): ThoughtMapNode | null {
+  if (predicate(node)) {
+    return node;
+  }
+
+  for (const child of node.children) {
+    const match = findThoughtMapNode(child, predicate);
+
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
 
 function buildThoughtMapTree(workStructure: WorkStructure, claims: BrainClaim[], seedClaim: BrainClaim | undefined): ThoughtMapNode {
   const root: ThoughtMapNode = {
