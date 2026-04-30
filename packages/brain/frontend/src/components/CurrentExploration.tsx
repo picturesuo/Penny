@@ -21,7 +21,7 @@ interface PathRow {
   tweaks: string[];
 }
 
-const maxIdeaRows = 9;
+const maxIdeaRows = 10;
 
 export function CurrentExploration({
   title,
@@ -404,6 +404,10 @@ function pathTweaks(values: Array<string | undefined>): string[] {
 }
 
 function shortcutIndex(key: string): number | null {
+  if (key === "0") {
+    return 9;
+  }
+
   if (/^[1-9]$/.test(key)) {
     return Number(key) - 1;
   }
@@ -412,6 +416,10 @@ function shortcutIndex(key: string): number | null {
 }
 
 function shortcutLabel(index: number): string {
+  if (index === 9) {
+    return "0";
+  }
+
   return String(index + 1);
 }
 
