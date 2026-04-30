@@ -209,112 +209,230 @@
 
   .thought-map-section {
     max-height: calc(100vh - 355px);
-    overflow: hidden;
+    overflow: auto;
     padding: 22px 20px 18px;
+    scrollbar-width: none;
+  }
+
+  .thought-map-section::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 
   .thought-map-tree {
-    margin-top: 24px;
-    padding-left: 16px;
+    margin-top: 18px;
+    padding-left: 0;
     font-size: 12px;
-    line-height: 1.18;
+    line-height: 1.12;
   }
 
-  .tree-line {
+  .work-structure-tree {
     position: relative;
     display: grid;
-    gap: 7px;
-    padding-left: 18px;
+    gap: 1px;
+    min-width: 0;
   }
 
-  .tree-line::before {
+  .thought-node {
+    --thought-indent: 15px;
+    position: relative;
+    min-width: 0;
+  }
+
+  .thought-node:not(.thought-node-root)::before {
     content: "";
     position: absolute;
-    top: 14px;
-    bottom: 0;
-    left: 4px;
-    width: 1px;
-    background: #111111;
+    top: -2px;
+    bottom: -2px;
+    left: calc((var(--thought-depth) * var(--thought-indent)) + 4px);
+    border-left: 1px solid #c8c8c8;
+    pointer-events: none;
   }
 
-  .tree-group,
-  .tree-branch {
+  .thought-node-row {
+    position: relative;
     display: grid;
-    gap: 3px;
+    grid-template-columns: 12px 18px minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 27px;
+    padding-left: calc(var(--thought-depth) * var(--thought-indent));
+    column-gap: 6px;
   }
 
-  .tree-branch {
-    width: 100%;
+  .thought-node:not(.thought-node-root) > .thought-node-row::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: calc((var(--thought-depth) * var(--thought-indent)) + 4px);
+    width: 10px;
+    border-top: 1px solid #c8c8c8;
+    pointer-events: none;
+  }
+
+  .thought-node-toggle,
+  .thought-node-label {
     border: 0;
-    border-left: 2px solid transparent;
-    padding: 0 0 0 8px;
     background: transparent;
     color: inherit;
+  }
+
+  .thought-node-toggle,
+  .thought-node-toggle-spacer {
+    display: grid;
+    place-items: center;
+    width: 12px;
+    height: 18px;
+    padding: 0;
+  }
+
+  .thought-node-toggle span {
+    display: block;
+    width: 0;
+    height: 0;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 5px solid #111111;
+    transform: rotate(90deg);
+    transform-origin: 50% 50%;
+  }
+
+  .thought-node.is-collapsed > .thought-node-row .thought-node-toggle span {
+    transform: rotate(0deg);
+  }
+
+  .thought-node-glyph {
+    position: relative;
+    display: block;
+    width: 18px;
+    height: 18px;
+  }
+
+  .thought-node-glyph.is-root::before {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border: 1.5px solid #111111;
+    transform: rotate(45deg);
+  }
+
+  .thought-node-glyph.is-folder::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 6px;
+    width: 13px;
+    height: 9px;
+    border: 1.3px solid #111111;
+    border-radius: 2px;
+    background: #ffffff;
+  }
+
+  .thought-node-glyph.is-folder::after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 4px;
+    width: 6px;
+    height: 4px;
+    border: 1.3px solid #111111;
+    border-bottom: 0;
+    border-radius: 2px 2px 0 0;
+    background: #ffffff;
+  }
+
+  .thought-node-glyph.is-step::before,
+  .thought-node-glyph.is-choice::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 3px;
+    width: 10px;
+    height: 12px;
+    border: 1.2px solid #111111;
+    border-radius: 1px;
+    background: #ffffff;
+  }
+
+  .thought-node-glyph.is-choice::before {
+    border-style: dashed;
+  }
+
+  .thought-node-glyph.is-claim::before {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 7px;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: #9f9f9f;
+  }
+
+  .thought-node-label {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: 3px 4px 3px 0;
+    overflow: hidden;
     text-align: left;
   }
 
-  .tree-branch.is-suggested {
-    border-left-color: #111111;
-  }
-
-  .tree-branch.is-focused {
-    background: #f2f2f2;
-  }
-
-  .work-structure-tree .tree-group {
-    gap: 7px;
-  }
-
-  .work-structure-step {
-    min-height: 70px;
-    border-left-width: 3px;
-    padding: 6px 0 7px 9px;
-  }
-
-  .work-structure-step.is-active,
-  .work-structure-step.is-stale {
-    border-left-color: #111111;
-  }
-
-  .work-structure-step.is-resolved {
-    color: rgb(17 17 17 / 0.58);
-  }
-
-  .tree-group strong,
-  .tree-branch strong {
+  .thought-node-label strong,
+  .thought-node-label small {
+    display: block;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .thought-node-label strong {
+    font-size: 12px;
     font-weight: 700;
   }
 
-  .tree-group span,
-  .tree-branch span {
-    display: block;
-    min-width: 0;
-    padding-left: 28px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .thought-node-root > .thought-node-row .thought-node-label strong {
+    font-size: 13px;
+  }
+
+  .thought-node-label small {
+    color: rgb(17 17 17 / 0.62);
+    font-size: 10px;
     font-weight: 400;
   }
 
-  .tree-branch small,
-  .tree-branch em {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: rgb(17 17 17 / 0.62);
-    font-size: 10px;
-    font-style: normal;
+  .thought-node-count {
+    display: grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    border: 1px solid #d4d4d4;
+    border-radius: 5px;
+    color: rgb(17 17 17 / 0.72);
+    background: #fbfbfb;
+    font-size: 11px;
     line-height: 1;
   }
 
-  .tree-branch em {
-    padding-left: 28px;
+  .thought-node-label:hover,
+  .thought-node-toggle:hover,
+  .thought-node.is-focused > .thought-node-row .thought-node-label {
+    background: #f2f2f2;
+  }
+
+  .thought-node.is-suggested > .thought-node-row .thought-node-glyph::before {
+    border-color: #111111;
+    background: #eeeeee;
+  }
+
+  .thought-node.is-suggested.thought-node-claim > .thought-node-row .thought-node-glyph::before {
+    background: #111111;
+  }
+
+  .thought-node-children {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
   }
 
   .tree-empty {
