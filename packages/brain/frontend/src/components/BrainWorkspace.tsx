@@ -11,6 +11,7 @@ import type {
   BrainEdge,
   BrainGraphPath,
   BrainGraphPathNode,
+  BrainRecentIdea,
   BrainResearchItem,
   BrainSidebarData,
   BrainMove,
@@ -21,7 +22,7 @@ import type {
   SessionCockpitData,
   WorkStructure,
 } from "../types/brain";
-import { fetchClaimDetail } from "../api/brainClient";
+import { fetchClaimDetail, fetchSessionNote, saveSessionNote } from "../api/brainClient";
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
 import { Composer } from "./Composer";
@@ -38,6 +39,7 @@ interface BrainWorkspaceProps {
   focusedClaimId: string | null;
   status: string;
   isThinking: boolean;
+  recents?: BrainRecentIdea[];
   onSelectDocument: (sessionId: string) => void;
   onBackToLibrary: () => void;
   onNewThought: () => void;
@@ -60,6 +62,7 @@ interface GraphCardPoint extends GraphPoint {
 interface BrainHierarchySidebarProps {
   sidebar: BrainSidebarData | null;
   selectedSessionId: string | null;
+  recents?: BrainRecentIdea[];
   onSelectDocument: (sessionId: string) => void;
   onNewThought: () => void;
 }
@@ -74,6 +77,7 @@ export function BrainWorkspace({
   focusedClaimId,
   status,
   isThinking,
+  recents = [],
   onSelectDocument,
   onBackToLibrary,
   onNewThought,
@@ -126,6 +130,7 @@ export function BrainWorkspace({
       <BrainHierarchySidebar
         sidebar={documentsData?.sidebar ?? null}
         selectedSessionId={selectedDocument?.sessionId ?? null}
+        recents={recents}
         onSelectDocument={onSelectDocument}
         onNewThought={onNewThought}
       />
@@ -397,7 +402,13 @@ function StitchedReference({
   );
 }
 
-function BrainHierarchySidebar({ sidebar, selectedSessionId, onSelectDocument, onNewThought }: BrainHierarchySidebarProps) {
+function BrainHierarchySidebar({
+  sidebar,
+  selectedSessionId,
+  recents = [],
+  onSelectDocument,
+  onNewThought,
+}: BrainHierarchySidebarProps) {
   const folders = sidebar?.folders ?? [];
   const quickNotes = sidebar?.quickNotes ?? [];
   const research = sidebar?.research ?? [];
@@ -443,6 +454,24 @@ function BrainHierarchySidebar({ sidebar, selectedSessionId, onSelectDocument, o
           </div>
         ) : (
           <p className="brain-sidebar-muted">No quick notes yet.</p>
+        )}
+      </section>
+      <section className="brain-sidebar-section" aria-label="Recents pile">
+        <div className="brain-sidebar-section-head">
+          <Lightbulb size={15} aria-hidden="true" />
+          <strong>Recents</strong>
+        </div>
+        {recents.length > 0 ? (
+          <div className="brain-quick-list">
+            {recents.slice(0, 5).map((recent) => (
+              <article key={recent.id} className="brain-quick-note">
+                <span title={recent.rawIdea}>{truncateWords(recent.rawIdea, 9)}</span>
+                <small>{formatDate(recent.updatedAt ?? recent.createdAt)}</small>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="brain-sidebar-muted">No kept ideas yet.</p>
         )}
       </section>
       <section className="brain-sidebar-section" aria-label="Folders">
@@ -930,34 +959,69 @@ function ChallengeBriefRundown({ payload }: { payload: ChallengeBriefPayload }) 
 }
 
 function WorkingNotes({ sessionId, title }: { sessionId: string; title: string }) {
-  const storageKey = `penny.docNotes.${sessionId}`;
   const [notes, setNotes] = useState("");
+  const [savedNotes, setSavedNotes] = useState("");
+  const [status, setStatus] = useState("Loading notes");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
+    let cancelled = false;
+
+    setStatus("Loading notes");
+    fetchSessionNote(sessionId)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+
+        const content = response.data.note?.content ?? "";
+        setNotes(content);
+        setSavedNotes(content);
+        setStatus(response.data.note ? "Notes loaded" : "No notes saved");
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setStatus(error instanceof Error ? error.message : String(error));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  async function handleSave() {
+    setIsSaving(true);
+    setStatus("Saving notes");
+
+    try {
+      const response = await saveSessionNote({ sessionId, content: notes });
+      const content = response.data.note?.content ?? notes;
+      setNotes(content);
+      setSavedNotes(content);
+      setStatus("Notes saved");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsSaving(false);
     }
-
-    setNotes(window.localStorage.getItem(storageKey) ?? "");
-  }, [storageKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(storageKey, notes);
-  }, [notes, storageKey]);
+  }
 
   return (
     <section className="working-notes" aria-label="Working notes">
-      <h2>Notes</h2>
+      <div className="working-notes-head">
+        <h2>Notes</h2>
+        <span>{status}</span>
+      </div>
       <textarea
         value={notes}
         aria-label={`Notes for ${title}`}
         placeholder="Capture a thought, note an unresolved issue, or write what should change next."
         onChange={(event) => setNotes(event.target.value)}
       />
+      <button type="button" className="text-command" disabled={isSaving || notes === savedNotes} onClick={handleSave}>
+        Save notes
+      </button>
     </section>
   );
 }
