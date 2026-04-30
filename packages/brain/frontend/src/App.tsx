@@ -120,21 +120,29 @@ export function App() {
       setStatus("Graph slice persisted");
 
       if (payload.data.session?.id) {
-        rememberActiveSession(payload.data.session.id);
-        setSelectedDocumentId(payload.data.session.id);
-        await tickAutopilot(payload.data.session.id);
-        const cockpit = await refreshCockpit(payload.data.session.id, payload.data);
-        setFocusedClaimId(
-          cockpit.autopilot.focusState?.focusedClaimId ??
-            cockpit.autopilot.suggestion?.targetClaimId ??
-            payload.data.firstChallenge?.targetClaimId ??
-            payload.data.ideaMap?.claims?.[0]?.id ??
-            null,
-        );
-        await refreshDocuments(payload.data.session.id);
+        const sessionId = payload.data.session.id;
+        rememberActiveSession(sessionId);
+        setSelectedDocumentId(sessionId);
+        await refreshDocuments(sessionId);
         setStatus("Doc created");
+
+        try {
+          await tickAutopilot(sessionId);
+          const cockpit = await refreshCockpit(sessionId, payload.data);
+          setFocusedClaimId(
+            cockpit.autopilot.focusState?.focusedClaimId ??
+              cockpit.autopilot.suggestion?.targetClaimId ??
+              payload.data.firstChallenge?.targetClaimId ??
+              payload.data.ideaMap?.claims?.[0]?.id ??
+              null,
+          );
+          await refreshDocuments(sessionId);
+        } catch (followUpError) {
+          setStatus(`Doc saved; ${formatErrorMessage(followUpError)}`);
+        }
       }
     } catch (error) {
+      await refreshDocumentsAfterSeedFailure();
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
       setIsThinking(false);
@@ -390,6 +398,14 @@ export function App() {
     }
   }
 
+  async function refreshDocumentsAfterSeedFailure(): Promise<void> {
+    try {
+      await refreshDocuments(null);
+    } catch {
+      // Keep the seed error visible when the fallback document refresh also fails.
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white text-[#111]">
       <div className="mx-auto min-h-[calc(100vh-5px)] max-w-[1440px] border-t-[5px] border-black bg-white">
@@ -474,6 +490,10 @@ function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null
 
 function responseLabel(response: ChallengeResponseKind): string {
   return response.charAt(0).toUpperCase() + response.slice(1);
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function activeSessionId(): string | null {
