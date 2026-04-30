@@ -30,6 +30,12 @@ test("buildSessionCockpitPayload composes graph, moves, autopilot, active challe
   assert.equal(payload.session.id, sessionId);
   assert.equal(payload.sourceOfTruth, "claims_claim_versions_edges_moves_sources_source_spans");
   assert.equal(payload.ideaMap.claims[0]?.id, uuidAt(201));
+  assert.equal(payload.workStructure.structureType, "startup");
+  assert.equal(payload.workStructure.activeStepId, "challenge");
+  assert.equal(payload.workStructure.steps[0]?.id, "challenge");
+  assert.equal(payload.workStructure.steps[0]?.rank, 1);
+  assert.deepEqual(payload.workStructure.steps[0]?.claimIds.includes(uuidAt(201)), true);
+  assert.deepEqual(payload.workStructure.steps[0]?.edgeIds.includes(uuidAt(301)), true);
   assert.equal(payload.graph.nodes[0]?.claimId, uuidAt(201));
   assert.equal(payload.moves[0]?.kind, "challenge_issued");
   assert.equal(payload.autopilot.selectedCandidate?.candidateId, "next_candidate");
