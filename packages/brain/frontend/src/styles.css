@@ -640,9 +640,9 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     line-clamp: 2;
-    font-size: clamp(30px, 3.6vw, 44px);
+    font-size: clamp(24px, 2.8vw, 34px);
     font-weight: 700;
-    line-height: 1.02;
+    line-height: 1.05;
   }
 
   .decision-card {
