@@ -316,7 +316,13 @@ function strongestOptions(
   mainClaimId: string | null,
 ): BrainDocumentClaim[] {
   return claimsForSession
-    .filter((claim) => claim.id !== mainClaimId && claim.status !== "rejected" && claim.kind !== "concept")
+    .filter(
+      (claim) =>
+        claim.id !== mainClaimId &&
+        claim.status !== "rejected" &&
+        claim.kind !== "concept" &&
+        claim.confidence >= 50,
+    )
     .sort((left, right) => right.confidence - left.confidence)
     .slice(0, 5)
     .map(stripSessionId);
