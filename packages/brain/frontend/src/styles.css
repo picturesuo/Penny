@@ -171,7 +171,7 @@
 
   .cockpit-grid {
     display: grid;
-    grid-template-columns: minmax(260px, 356px) minmax(500px, 1fr) minmax(300px, 370px);
+    grid-template-columns: minmax(230px, 300px) minmax(420px, 0.9fr) minmax(390px, 480px);
     min-height: calc(100vh - 68px);
     max-height: calc(100vh - 68px);
     overflow: hidden;
@@ -1790,6 +1790,7 @@
 
   .memory-graph-preview,
   .graph-board,
+  .focused-graph-detail,
   .document-rundown,
   .working-notes,
   .brain-doc-aside,
@@ -2083,6 +2084,170 @@
     font-size: 14px;
     line-height: 1;
     text-transform: uppercase;
+  }
+
+  .focused-graph-detail {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding: 18px 20px 20px;
+  }
+
+  .focused-detail-head,
+  .focused-detail-meta,
+  .focused-detail-actions {
+    display: flex;
+    align-items: start;
+  }
+
+  .focused-detail-head {
+    justify-content: space-between;
+    gap: 18px;
+    border-bottom: 1px solid #d8d8d8;
+    padding-bottom: 14px;
+  }
+
+  .focused-detail-head h2 {
+    max-width: 760px;
+    margin: 7px 0 0;
+    overflow-wrap: anywhere;
+    font-size: clamp(22px, 2.1vw, 30px);
+    font-weight: 700;
+    line-height: 1.06;
+  }
+
+  .focused-detail-actions {
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .stitch-toggle {
+    border: 1px solid #111111;
+    border-radius: 6px;
+    padding: 8px 10px;
+    background: #ffffff;
+    color: #111111;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .stitch-toggle.is-active {
+    background: #111111;
+    color: #ffffff;
+  }
+
+  .focused-detail-meta {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .focused-detail-meta span {
+    border: 1px solid #d2d2d2;
+    border-radius: 999px;
+    padding: 6px 8px;
+    background: #fbf8ef;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .focused-detail-note {
+    margin: 0;
+    color: rgb(17 17 17 / 0.64);
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .focused-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 22px;
+  }
+
+  .detail-list {
+    min-width: 0;
+    border-top: 1px solid #d8d8d8;
+    padding: 16px 0 2px;
+  }
+
+  .detail-list h3,
+  .stitched-reference h3 {
+    margin: 0 0 10px;
+    color: rgb(17 17 17 / 0.7);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .detail-list ul {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .detail-list li {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    border-left: 3px solid #cfc6b7;
+    padding-left: 10px;
+  }
+
+  .detail-list span,
+  .detail-list small {
+    color: rgb(17 17 17 / 0.6);
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .detail-list span {
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .detail-list strong {
+    overflow-wrap: anywhere;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.28;
+  }
+
+  .detail-list p {
+    margin: 0;
+    color: rgb(17 17 17 / 0.62);
+    font-size: 14px;
+    line-height: 1.32;
+  }
+
+  .stitched-reference {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    border-top: 1px solid #d8d8d8;
+  }
+
+  .stitched-reference section {
+    min-width: 0;
+    border-right: 1px solid #d8d8d8;
+    padding: 16px 14px 2px 0;
+  }
+
+  .stitched-reference section + section {
+    padding-left: 14px;
+  }
+
+  .stitched-reference section:last-child {
+    border-right: 0;
+  }
+
+  .stitched-reference p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+    line-height: 1.32;
   }
 
   .document-rundown {
@@ -2413,6 +2578,28 @@
   .document-log-row {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .focused-detail-head,
+  .focused-detail-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .focused-detail-grid,
+  .stitched-reference {
+    grid-template-columns: 1fr;
+  }
+
+  .stitched-reference section,
+  .stitched-reference section + section {
+    border-right: 0;
+    border-bottom: 1px solid #d8d8d8;
+    padding: 14px 0;
+  }
+
+  .stitched-reference section:last-child {
+    border-bottom: 0;
   }
 
   .check-brain-doc-row {
