@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import type { AutopilotSuggestion, BrainClaim, ExplorationPath, WorkStructureStep } from "../types/brain";
 import { truncateWords } from "../lib/text";
 
@@ -16,6 +17,8 @@ interface PathRow {
   id: string;
   title: string;
   reasoning: string[];
+  summary: string;
+  tweaks: string[];
 }
 
 export function CurrentExploration({
@@ -28,7 +31,46 @@ export function CurrentExploration({
   activeWorkStructureStep,
   onGoThere,
 }: CurrentExplorationProps) {
-  const rows = buildRows(claims, paths);
+  const rows = useMemo(() => buildRows(claims, paths), [claims, paths]);
+  const [selectedPathIndex, setSelectedPathIndex] = useState<number | null>(null);
+  const selectedPath = selectedPathIndex === null ? null : rows[selectedPathIndex] ?? null;
+
+  useEffect(() => {
+    if (selectedPathIndex !== null && selectedPathIndex >= rows.length) {
+      setSelectedPathIndex(rows.length > 0 ? rows.length - 1 : null);
+    }
+  }, [rows.length, selectedPathIndex]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+      const targetElement = target instanceof HTMLElement ? target : null;
+
+      if (
+        targetElement &&
+        (targetElement.tagName === "INPUT" ||
+          targetElement.tagName === "TEXTAREA" ||
+          targetElement.isContentEditable)
+      ) {
+        return;
+      }
+
+      const index = shortcutIndex(event.key);
+
+      if (index === null || index >= rows.length) {
+        return;
+      }
+
+      event.preventDefault();
+      setSelectedPathIndex(index);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [rows.length]);
 
   return (
     <section className="current-exploration">
@@ -56,8 +98,21 @@ export function CurrentExploration({
         </article>
       ) : null}
       <div className="pathway-list" aria-label="Exploration pathways">
-        {rows.length > 0 ? rows.map((row) => <PathwayRow key={row.id} row={row} />) : <EmptyPathways />}
+        {rows.length > 0 ? (
+          rows.map((row, index) => (
+            <PathwayRow
+              key={row.id}
+              row={row}
+              index={index}
+              selected={index === selectedPathIndex}
+              onSelect={() => setSelectedPathIndex(index)}
+            />
+          ))
+        ) : (
+          <EmptyPathways />
+        )}
       </div>
+      {selectedPath ? <PathPreview row={selectedPath} index={selectedPathIndex ?? 0} /> : <PathPreviewEmpty />}
     </section>
   );
 }
@@ -95,10 +150,24 @@ function WorkStructureStepDetail({
   );
 }
 
-function PathwayRow({ row }: { row: PathRow }) {
+function PathwayRow({
+  row,
+  index,
+  selected,
+  onSelect,
+}: {
+  row: PathRow;
+  index: number;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const shortcut = shortcutLabel(index);
+
   return (
-    <article className="pathway-row">
-      <span className="path-index">#</span>
+    <article className={`pathway-row${selected ? " is-selected" : ""}`}>
+      <button type="button" className="path-index" aria-label={`Preview choice ${shortcut}`} onClick={onSelect}>
+        {shortcut}
+      </button>
       <strong title={row.title}>{truncateWords(row.title, 8)}</strong>
       <ul>
         {row.reasoning.map((item, index) => (
@@ -107,32 +176,98 @@ function PathwayRow({ row }: { row: PathRow }) {
           </li>
         ))}
       </ul>
-      <button type="button" aria-label={`Explore ${row.title}`}>
-        Explore <span aria-hidden="true">-&gt;</span>
+      <button type="button" className="path-explore-button" aria-label={`Preview ${row.title}`} onClick={onSelect}>
+        Preview <span aria-hidden="true">-&gt;</span>
       </button>
+    </article>
+  );
+}
+
+function PathPreview({ row, index }: { row: PathRow; index: number }) {
+  return (
+    <article className="path-preview" aria-label="Selected exploration preview">
+      <div>
+        <span>Choice {shortcutLabel(index)}</span>
+        <strong title={row.title}>{truncateWords(row.title, 10)}</strong>
+      </div>
+      <p title={row.summary}>{truncateWords(row.summary, 22)}</p>
+      <ul aria-label="Tweakable aspects">
+        {row.tweaks.slice(0, 3).map((tweak) => (
+          <li key={tweak}>{truncateWords(tweak, 5)}</li>
+        ))}
+      </ul>
+    </article>
+  );
+}
+
+function PathPreviewEmpty() {
+  return (
+    <article className="path-preview is-empty" aria-label="Exploration preview">
+      <span>Press 1-9 or 0</span>
+      <p>Preview a path outcome, then decide which parts to tweak before exploring.</p>
     </article>
   );
 }
 
 function buildRows(claims: BrainClaim[], paths: ExplorationPath[]): PathRow[] {
   if (paths.length > 0) {
-    return paths.slice(0, 8).map((path, index) => ({
+    return paths.slice(0, 10).map((path, index) => ({
       id: `${path.title}-${index}`,
       title: path.title,
       reasoning: [path.prompt ?? "Reasoning", path.expectedValue ?? "Reasoning"].filter(Boolean),
+      summary: pathSummary(path.title, [path.prompt, path.expectedValue]),
+      tweaks: pathTweaks([path.prompt, path.expectedValue]),
     }));
   }
 
   const assumptionRows = claims
     .filter((claim) => claim.kind === "assumption")
-    .slice(0, 8)
+    .slice(0, 10)
     .map((claim) => ({
       id: claim.id,
       title: claim.text,
       reasoning: [`${claim.confidence ?? 60}% confidence`, claim.status],
+      summary: `Choosing this path tests how "${truncateWords(claim.text, 12)}" changes the rest of the thinking pack.`,
+      tweaks: [`${claim.confidence ?? 60}% confidence`, claim.status, claim.kind],
     }));
 
   return assumptionRows;
+}
+
+function pathSummary(title: string, values: Array<string | undefined>): string {
+  const detail = values.find((value) => value?.trim())?.trim();
+
+  if (!detail) {
+    return `Choosing this path previews how "${truncateWords(title, 12)}" changes the rest of the pack.`;
+  }
+
+  return `Choosing this path previews ${truncateWords(detail, 18)} against the rest of the pack.`;
+}
+
+function pathTweaks(values: Array<string | undefined>): string[] {
+  const cleaned = values.map((value) => value?.trim()).filter((value): value is string => Boolean(value));
+
+  if (cleaned.length === 0) {
+    return ["Scope", "Evidence", "Risk"];
+  }
+
+  return cleaned;
+}
+
+function shortcutIndex(key: string): number | null {
+  if (key === "0") {
+    return 9;
+  }
+
+  if (/^[1-9]$/.test(key)) {
+    return Number(key) - 1;
+  }
+
+  return null;
+}
+
+function shortcutLabel(index: number): string {
+  return index === 9 ? "0" : String(index + 1);
 }
 
 function EmptyPathways() {
