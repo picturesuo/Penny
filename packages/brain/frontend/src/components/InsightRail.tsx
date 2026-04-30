@@ -71,16 +71,6 @@ export function InsightRail({
         learnCandidates={learnCandidates}
         disabled={disabled}
       />
-      <ChallengeLoop
-        challenge={challenge}
-        suggestion={autopilotSuggestion}
-        response={challengeResponse}
-        latestArtifact={latestArtifact}
-        disabled={disabled}
-        onIssueChallenge={onIssueChallenge}
-        onRespondChallenge={onRespondChallenge}
-        onCreateChallengeBrief={onCreateChallengeBrief}
-      />
     </aside>
   );
 }
