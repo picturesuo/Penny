@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { PennyDatabase } from "../db/client.ts";
 import {
   artifacts,
+  brainRecents,
   challengeRounds,
   claimEdges,
   claims,
@@ -18,6 +19,12 @@ import {
   type CreateMoveInput,
   type MoveKind,
 } from "../move-payloads.ts";
+import {
+  learnRecentInputFromSessionOutput,
+  learnSessionSaveCandidateFromRecent,
+  type LearnSessionOutput,
+  type LearnSessionSaveCandidate,
+} from "../learn-session-output.ts";
 import { scopeValues } from "../scope.ts";
 import type {
   ChallengeBriefArtifact,
@@ -75,6 +82,11 @@ export type RevisedClaim = {
   previousVersion: typeof claimVersions.$inferSelect;
   currentVersion: typeof claimVersions.$inferSelect;
   move: CreatedMove<"claim_revised">;
+};
+
+export type PersistedLearnSessionRecent = {
+  recent: typeof brainRecents.$inferSelect;
+  saveCandidate: LearnSessionSaveCandidate;
 };
 
 export type ChallengeRoundPersistenceModel = typeof challengeRounds;
@@ -376,6 +388,37 @@ export class DrizzleBrainRepository implements BrainRepository {
 
 export function createBrainRepository(db: PennyDatabase): BrainRepository {
   return new DrizzleBrainRepository(db);
+}
+
+export async function recordLearnSessionOutput(
+  db: PennyDatabase,
+  output: LearnSessionOutput,
+): Promise<PersistedLearnSessionRecent> {
+  return db.transaction(async (tx) => {
+    const session = await requireSession(tx, output.sessionId);
+    const recentInput = learnRecentInputFromSessionOutput(output);
+    const [recent] = await tx
+      .insert(brainRecents)
+      .values({
+        ...scopeValues(session),
+        sessionId: session.id,
+        kind: recentInput.kind,
+        title: recentInput.title,
+        summary: recentInput.summary,
+        body: recentInput.content,
+        payload: recentInput.payload,
+      })
+      .returning();
+
+    if (!recent) {
+      throw new BrainRepositoryConflictError("Failed to record Learn session recent.");
+    }
+
+    return {
+      recent,
+      saveCandidate: learnSessionSaveCandidateFromRecent(recent),
+    };
+  });
 }
 
 export class BrainRepositoryNotFoundError extends Error {
