@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PennyDatabase } from "./db/client.ts";
-import { claimVersions, focusStates, moves, nextMoveCandidates } from "./db/schema.ts";
-import { createBrainRepository } from "./domain/repository.ts";
+import { brainRecents, claimVersions, focusStates, moves, nextMoveCandidates } from "./db/schema.ts";
+import { createBrainRepository, recordLearnSessionOutput } from "./domain/repository.ts";
 import type { NextMoveCandidate } from "./domain/engine.ts";
 import type { FocusState } from "./domain/types.ts";
 
@@ -182,6 +182,49 @@ test("createMove appends an immutable move", async () => {
   assert.equal(calls.insert[0]?.table, moves);
   assert.equal(calls.insert[0]?.values.kind, "manual_node_selected");
   assert.equal(calls.update.length, 0);
+});
+
+test("recordLearnSessionOutput stores a save-ready Learn recent in the session scope", async () => {
+  const { db, calls } = fakeRepositoryDb({
+    selectRows: [[sessionRow()]],
+    insertRows: [brainRecentRow()],
+  });
+  const output = await recordLearnSessionOutput(db, {
+    sessionId: uuidAt(101),
+    title: "Learn: cognitive load",
+    summary: "The concept changes the local claim pressure.",
+    content: "Cognitive load matters because the claim depends on reducing user effort.",
+    term: "cognitive load",
+    candidateBrainObjects: [
+      {
+        objectType: "learn_output",
+        title: "Learn: cognitive load",
+        content: "Cognitive load matters because the claim depends on reducing user effort.",
+        source: "learn",
+        refs: {
+          sessionId: uuidAt(101),
+          currentClaimId: uuidAt(201),
+          term: "cognitive load",
+        },
+      },
+    ],
+  });
+  const insert = calls.insert[0];
+  const payload = insert?.values.payload as Record<string, unknown> | undefined;
+
+  assert.equal(calls.select, 1);
+  assert.equal(insert?.table, brainRecents);
+  assert.equal(insert?.values.sessionId, uuidAt(101));
+  assert.equal(insert?.values.userId, "test-user");
+  assert.equal(insert?.values.kind, "learn_output");
+  assert.equal(insert?.values.title, "Learn: cognitive load");
+  assert.equal(payload?.source, "learn");
+  assert.equal(Array.isArray(payload?.candidateBrainObjects), true);
+  assert.equal(output.recent.id, uuidAt(950));
+  assert.equal(output.saveCandidate.recentId, uuidAt(950));
+  assert.equal(output.saveCandidate.sessionId, uuidAt(101));
+  assert.equal(output.saveCandidate.objectType, "learn_output");
+  assert.equal(output.saveCandidate.content, "Cognitive load matters because the claim depends on reducing user effort.");
 });
 
 test("starting focus does not mutate claim text or confidence", async () => {
@@ -561,6 +604,28 @@ function artifactRow(overrides: Partial<Record<string, unknown>> = {}) {
       },
     },
     createdAt: new Date("2026-04-29T00:00:04.000Z"),
+    ...overrides,
+  };
+}
+
+function brainRecentRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(950),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    kind: "learn_output",
+    title: "Learn: cognitive load",
+    summary: "The concept changes the local claim pressure.",
+    body: "Cognitive load matters because the claim depends on reducing user effort.",
+    payload: {
+      source: "learn",
+      candidateBrainObjects: [],
+    },
+    createdAt: new Date("2026-04-29T00:00:05.000Z"),
+    updatedAt: new Date("2026-04-29T00:00:05.000Z"),
     ...overrides,
   };
 }
