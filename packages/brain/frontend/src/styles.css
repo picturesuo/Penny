@@ -192,7 +192,7 @@
     border-right: 1px solid #9e9e9e;
     display: grid;
     align-content: start;
-    overflow: hidden;
+    overflow: auto;
     padding: 21px 16px 18px 23px;
   }
 
@@ -650,12 +650,8 @@
   .exploration-headline h1 {
     margin: 0;
     max-width: 100%;
-    overflow: hidden;
     overflow-wrap: anywhere;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    line-clamp: 2;
+    display: block;
     font-size: clamp(30px, 3vw, 34px);
     font-weight: 700;
     line-height: 1.08;
@@ -663,11 +659,8 @@
 
   .exploration-headline p {
     margin: 6px 0 9px;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    line-clamp: 2;
+    display: block;
+    overflow-wrap: anywhere;
     font-size: 20px;
     line-height: 1.1;
   }
@@ -770,8 +763,9 @@
 
   .pathway-list {
     display: grid;
-    max-height: clamp(288px, calc(100vh - 480px), 460px);
-    overflow: hidden;
+    grid-template-rows: repeat(9, minmax(48px, auto));
+    max-height: none;
+    overflow: visible;
     border-top: 1px solid #c7c7c7;
   }
 
@@ -847,13 +841,14 @@
 
   .pathway-row {
     display: grid;
-    grid-template-columns: 42px minmax(150px, 0.46fr) minmax(150px, 0.54fr) 82px;
+    grid-template-columns: 42px minmax(160px, 0.42fr) minmax(220px, 0.58fr) 82px;
     column-gap: 12px;
     align-items: center;
-    height: 46px;
+    min-height: 48px;
     border-bottom: 1px solid #c7c7c7;
+    padding: 5px 0;
     font-size: 12px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .pathway-row.is-selected {
@@ -878,11 +873,8 @@
 
   .pathway-row strong {
     min-width: 0;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    line-clamp: 2;
+    display: block;
+    overflow-wrap: anywhere;
     font-size: 13px;
     font-weight: 700;
     line-height: 1.08;
@@ -890,18 +882,16 @@
 
   .pathway-row ul {
     margin: 0;
-    padding-left: 14px;
-    overflow: hidden;
+    padding: 0;
+    overflow: visible;
     font-size: 11px;
     line-height: 1.2;
+    list-style: none;
   }
 
   .pathway-row li {
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    line-clamp: 1;
+    display: block;
+    overflow-wrap: anywhere;
   }
 
   .path-explore-button {
@@ -921,12 +911,12 @@
     display: grid;
     grid-template-columns: minmax(140px, 0.4fr) minmax(0, 1fr);
     gap: 10px 14px;
-    min-height: 82px;
+    min-height: 70px;
     border-bottom: 1px solid #c7c7c7;
     padding: 9px 0 10px 42px;
     font-size: 12px;
     line-height: 1.16;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .path-preview div,
@@ -953,21 +943,16 @@
   .path-preview strong,
   .path-preview p,
   .path-preview li {
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
+    display: block;
+    overflow-wrap: anywhere;
   }
 
   .path-preview strong {
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
     font-size: 13px;
     line-height: 1.08;
   }
 
   .path-preview p {
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
     align-self: start;
   }
 
@@ -980,11 +965,9 @@
   }
 
   .path-preview li {
-    max-width: 31%;
+    max-width: 100%;
     border: 1px solid #cfcfcf;
     padding: 4px 7px;
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
     color: rgb(17 17 17 / 0.68);
     line-height: 1;
   }
@@ -2085,7 +2068,7 @@
     grid-template-columns: 42px minmax(0, 1fr);
     gap: 0;
     padding-right: 0;
-    height: 76px;
+    min-height: 76px;
   }
 
   .autopilot-card {
