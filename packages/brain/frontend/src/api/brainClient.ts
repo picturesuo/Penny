@@ -7,6 +7,9 @@ import type {
   ChallengeBriefResponse,
   ChallengeResponseKind,
   BrainMove,
+  InlineLearnOutput,
+  InlineLearnResponse,
+  InlineLearnSaveResponse,
   IssueChallengeResponse,
   ManualNodeSelectionResponse,
   RespondToChallengeResponse,
@@ -203,6 +206,47 @@ export async function createChallengeBrief(sessionId: string): Promise<Challenge
   }
 
   return payload as ChallengeBriefResponse;
+}
+
+export async function createInlineLearn(input: {
+  term: string;
+  currentClaimId: string;
+  sessionId: string;
+  localContext: string;
+  save?: boolean;
+}): Promise<InlineLearnResponse> {
+  const response = await fetch("/brain/learn/inline", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /brain/learn/inline failed with ${response.status}.`));
+  }
+
+  return payload as InlineLearnResponse;
+}
+
+export async function saveInlineLearn(input: InlineLearnOutput & {
+  currentClaimId: string;
+  sessionId: string;
+}): Promise<InlineLearnSaveResponse> {
+  const response = await fetch("/brain/learn/inline/save", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /brain/learn/inline/save failed with ${response.status}.`));
+  }
+
+  return payload as InlineLearnSaveResponse;
 }
 
 export async function selectAutopilotNode(input: {
