@@ -244,6 +244,38 @@ export interface BrainDocumentsResponse {
   data: BrainDocumentsData;
 }
 
+export interface BrainRecentIdea {
+  id: string;
+  rawIdea: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface BrainRecentsResponse {
+  data: {
+    recents: BrainRecentIdea[];
+  };
+}
+
+export interface KeepBrainRecentIdeaResponse {
+  data: {
+    recent: BrainRecentIdea;
+    recents?: BrainRecentIdea[];
+  };
+}
+
+export interface BrainSessionNote {
+  sessionId: string;
+  content: string;
+  updatedAt: string;
+}
+
+export interface BrainSessionNoteResponse {
+  data: {
+    note: BrainSessionNote | null;
+  };
+}
+
 export interface BrainData {
   ideaMap?: {
     claims?: BrainClaim[];

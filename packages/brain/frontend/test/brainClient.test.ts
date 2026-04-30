@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createChallengeBrief,
+  fetchBrainRecents,
   fetchClaimDetail,
   fetchSessionCockpit,
+  fetchSessionNote,
+  keepBrainRecentIdea,
   issueChallengeFromCandidate,
   respondToChallenge,
+  saveSessionNote,
   selectAutopilotNode,
   startAutopilotCandidate,
   tickAutopilot,
@@ -97,6 +101,68 @@ test("frontend brain client fetches Brain claim detail from the graph detail rou
     assert.equal(detail.data.claim.id, claimId);
     assert.equal(detail.data.connectedClaims[0]?.edge.kind, "supports");
     assert.equal(detail.data.moves[0]?.payload?.reasoning, "The source note makes the support explicit.");
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("frontend brain client uses persisted recents and notes routes", async () => {
+  const sessionId = uuidAt(101);
+  const recentId = uuidAt(901);
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse({
+      recents: [
+        {
+          id: recentId,
+          rawIdea: "A raw founder strategy idea.",
+          createdAt: "2026-04-30T00:00:00.000Z",
+        },
+      ],
+    }),
+    jsonResponse({
+      recent: {
+        id: recentId,
+        rawIdea: "A raw founder strategy idea.",
+        createdAt: "2026-04-30T00:00:00.000Z",
+      },
+    }),
+    jsonResponse({
+      note: {
+        sessionId,
+        content: "The key risk is willingness to pay.",
+        updatedAt: "2026-04-30T00:00:01.000Z",
+      },
+    }),
+    jsonResponse({
+      note: {
+        sessionId,
+        content: "Preserve the founder workflow risk.",
+        updatedAt: "2026-04-30T00:00:02.000Z",
+      },
+    }),
+  ]);
+
+  try {
+    const recents = await fetchBrainRecents();
+    const kept = await keepBrainRecentIdea("A raw founder strategy idea.");
+    const note = await fetchSessionNote(sessionId);
+    const savedNote = await saveSessionNote({ sessionId, content: "Preserve the founder workflow risk." });
+
+    assert.equal(recents.data.recents[0]?.id, recentId);
+    assert.equal(kept.data.recent.rawIdea, "A raw founder strategy idea.");
+    assert.equal(note.data.note?.content, "The key risk is willingness to pay.");
+    assert.equal(savedNote.data.note?.content, "Preserve the founder workflow risk.");
+    assert.equal(calls[0]?.url, "/api/brain/recents");
+    assert.equal(calls[0]?.method, "GET");
+    assert.equal(calls[1]?.url, "/api/brain/recents");
+    assert.equal(calls[1]?.method, "POST");
+    assert.deepEqual(calls[1]?.body, { rawIdea: "A raw founder strategy idea." });
+    assert.equal(calls[2]?.url, `/api/sessions/${sessionId}/notes`);
+    assert.equal(calls[2]?.method, "GET");
+    assert.equal(calls[3]?.url, `/api/sessions/${sessionId}/notes`);
+    assert.equal(calls[3]?.method, "PUT");
+    assert.deepEqual(calls[3]?.body, { content: "Preserve the founder workflow risk." });
   } finally {
     restoreFetch();
   }

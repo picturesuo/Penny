@@ -3,6 +3,8 @@ import type {
   AutopilotTickData,
   BrainClaim,
   BrainDocumentsResponse,
+  BrainRecentsResponse,
+  BrainSessionNoteResponse,
   AutopilotTickResponse,
   ChallengeBriefResponse,
   ChallengeResponseKind,
@@ -12,6 +14,7 @@ import type {
   InlineLearnResponse,
   InlineLearnSaveResponse,
   IssueChallengeResponse,
+  KeepBrainRecentIdeaResponse,
   ManualNodeSelectionResponse,
   RespondToChallengeResponse,
   SeedBrainResponse,
@@ -86,6 +89,68 @@ export async function fetchBrainDocuments(): Promise<BrainDocumentsResponse> {
   }
 
   return payload as BrainDocumentsResponse;
+}
+
+export async function fetchBrainRecents(): Promise<BrainRecentsResponse> {
+  const response = await fetch("/api/brain/recents", {
+    method: "GET",
+    headers: requestHeaders(),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /api/brain/recents failed with ${response.status}.`));
+  }
+
+  return payload as BrainRecentsResponse;
+}
+
+export async function keepBrainRecentIdea(rawIdea: string): Promise<KeepBrainRecentIdeaResponse> {
+  const response = await fetch("/api/brain/recents", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify({ rawIdea }),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/brain/recents failed with ${response.status}.`));
+  }
+
+  return payload as KeepBrainRecentIdeaResponse;
+}
+
+export async function fetchSessionNote(sessionId: string): Promise<BrainSessionNoteResponse> {
+  const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/notes`, {
+    method: "GET",
+    headers: requestHeaders(),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /api/sessions/${sessionId}/notes failed with ${response.status}.`));
+  }
+
+  return payload as BrainSessionNoteResponse;
+}
+
+export async function saveSessionNote(input: { sessionId: string; content: string }): Promise<BrainSessionNoteResponse> {
+  const response = await fetch(`/api/sessions/${encodeURIComponent(input.sessionId)}/notes`, {
+    method: "PUT",
+    headers: requestHeaders(),
+    body: JSON.stringify({ content: input.content }),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `PUT /api/sessions/${input.sessionId}/notes failed with ${response.status}.`));
+  }
+
+  return payload as BrainSessionNoteResponse;
 }
 
 export async function fetchClaimDetail(claimId: string): Promise<ClaimDetailResponse> {
