@@ -1,4 +1,5 @@
 import type { BrainClaim, WorkStructure, WorkStructureStep } from "../types/brain";
+import { truncateWords } from "../lib/text";
 
 interface ThoughtMapProps {
   claims: BrainClaim[];
@@ -65,8 +66,8 @@ function WorkStructureTree({
   return (
     <div className="tree-line work-structure-tree">
       <div className="tree-group">
-        <strong>{workStructure.label}</strong>
-        <span>{workStructure.description}</span>
+        <strong title={workStructure.label}>{truncateWords(workStructure.label, 10)}</strong>
+        <span title={workStructure.description}>{truncateWords(workStructure.description, 12)}</span>
         {workStructure.steps.map((step) => {
           const isFocused =
             step.id === focusedWorkStructureStepId ||
@@ -84,9 +85,9 @@ function WorkStructureTree({
               onClick={() => onWorkStructureSelect(step)}
             >
               <small>#{step.rank} / fragile {step.fragility}</small>
-              <strong>{step.title}</strong>
-              <span>{step.purpose}</span>
-              <em>{step.whyNow}</em>
+              <strong title={step.title}>{truncateWords(step.title, 6)}</strong>
+              <span title={step.purpose}>{truncateWords(step.purpose, 9)}</span>
+              <em title={step.whyNow}>{truncateWords(step.whyNow, 9)}</em>
             </button>
           );
         })}
@@ -111,7 +112,7 @@ function RuntimeTree({
   return (
     <div className="tree-line">
       <div className="tree-group">
-        <strong>{seedText}</strong>
+        <strong title={seedText}>{truncateWords(seedText, 12)}</strong>
         {claims.map((claim) => {
           const isFocused = claim.id === focusedClaimId;
           const isSuggested = claim.id === suggestedClaimId;
@@ -124,7 +125,7 @@ function RuntimeTree({
               onClick={() => onClaimSelect(claim.id)}
             >
               <strong>{claim.kind === "assumption" ? "problem" : claim.kind}</strong>
-              <span>{claim.text}</span>
+              <span title={claim.text}>{truncateWords(claim.text, 8)}</span>
             </button>
           );
         })}
