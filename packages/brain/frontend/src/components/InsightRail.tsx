@@ -63,6 +63,14 @@ export function InsightRail({
         example={example}
         relatedConcepts={relatedConcepts}
       />
+      <MakesCentsPanel
+        sessionId={sessionId ?? null}
+        targetClaim={target}
+        claims={claims}
+        challenge={challenge}
+        learnCandidates={learnCandidates}
+        disabled={disabled}
+      />
       <ChallengeLoop
         challenge={challenge}
         suggestion={autopilotSuggestion}
@@ -72,14 +80,6 @@ export function InsightRail({
         onIssueChallenge={onIssueChallenge}
         onRespondChallenge={onRespondChallenge}
         onCreateChallengeBrief={onCreateChallengeBrief}
-      />
-      <MakesCentsPanel
-        sessionId={sessionId ?? null}
-        targetClaim={target}
-        claims={claims}
-        challenge={challenge}
-        learnCandidates={learnCandidates}
-        disabled={disabled}
       />
     </aside>
   );
@@ -147,8 +147,9 @@ function MakesCentsPanel({
 }) {
   const [prompt, setPrompt] = useState("");
   const [answer, setAnswer] = useState<InlineLearnOutput | null>(null);
+  const [lastQuestion, setLastQuestion] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [status, setStatus] = useState("Ask about this session.");
+  const [status, setStatus] = useState("session terminal ready");
   const canAsk = Boolean(sessionId && targetClaim && prompt.trim()) && !disabled && !isRunning;
   const canEnter = Boolean(sessionId && targetClaim && answer) && !disabled && !isRunning;
 
@@ -170,7 +171,8 @@ function MakesCentsPanel({
     }
 
     setIsRunning(true);
-    setStatus("Thinking across the session");
+    setLastQuestion(question);
+    setStatus("running session query");
 
     try {
       const output = await createInlineLearn({
@@ -182,7 +184,7 @@ function MakesCentsPanel({
 
       setAnswer(output.data);
       setPrompt("");
-      setStatus("Ready to enter");
+      setStatus("answer ready");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
@@ -196,7 +198,7 @@ function MakesCentsPanel({
     }
 
     setIsRunning(true);
-    setStatus("Entering into the graph");
+    setStatus("entering answer");
 
     try {
       await saveInlineLearn({
@@ -204,7 +206,7 @@ function MakesCentsPanel({
         currentClaimId: targetClaim.id,
         sessionId,
       });
-      setStatus("Entered as Learn");
+      setStatus("entered as learn");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
@@ -218,26 +220,34 @@ function MakesCentsPanel({
         <h2>MAKES CENTS</h2>
         <span>{isRunning ? "Thinking" : "Open"}</span>
       </div>
-      <article className="makes-cents-answer">
+      <div className="makes-cents-terminal" role="log" aria-live="polite">
+        <TerminalLine label="system">
+          session-level Q&A active. Ask about any claim, challenge, assumption, or unclear term in the middle panel.
+        </TerminalLine>
+        {targetClaim ? <TerminalLine label="focus">{truncateWords(targetClaim.text, 22)}</TerminalLine> : null}
+        {lastQuestion ? <TerminalLine label="you">{lastQuestion}</TerminalLine> : null}
         {answer ? (
           <>
-            <strong title={answer.term}>{truncateWords(answer.term, 9)}</strong>
-            <p title={answer.explanation}>{truncateWords(answer.explanation, 28)}</p>
-            <p title={answer.whyItMattersHere}>{truncateWords(answer.whyItMattersHere, 20)}</p>
+            <TerminalLine label="penny">{answer.explanation}</TerminalLine>
+            <TerminalLine label="why">{answer.whyItMattersHere}</TerminalLine>
+            <TerminalLine label="example">{answer.example}</TerminalLine>
           </>
         ) : (
-          <p>Ask Makes Cents when something in the session needs a clearer explanation.</p>
+          <TerminalLine label="penny">
+            Type a question or run a quick command. Answers can be entered into the graph when they are useful.
+          </TerminalLine>
         )}
-      </article>
+      </div>
       <form className="makes-cents-form" onSubmit={handleSubmit}>
+        <span aria-hidden="true">&gt;</span>
         <input
           value={prompt}
           disabled={disabled || isRunning}
-          placeholder="Ask Makes Cents anything..."
+          placeholder="ask about this session..."
           onChange={(event) => setPrompt(event.target.value)}
         />
         <button type="submit" disabled={!canAsk} aria-label="Ask Makes Cents">
-          <span aria-hidden="true">-&gt;</span>
+          Run
         </button>
       </form>
       <div className="makes-cents-actions">
@@ -258,6 +268,15 @@ function MakesCentsPanel({
         </button>
       </div>
     </section>
+  );
+}
+
+function TerminalLine({ label, children }: { label: string; children: string }) {
+  return (
+    <p className="terminal-line">
+      <span>{label}</span>
+      <strong title={children}>{truncateWords(children, 34)}</strong>
+    </p>
   );
 }
 
