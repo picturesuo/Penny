@@ -1,10 +1,7 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import type {
   AutopilotSuggestion,
   BrainClaim,
-  ChallengeBriefPayload,
-  ChallengeBriefSections,
-  ChallengeResponseKind,
   ChallengeSuggestion,
   InlineLearnOutput,
   LearnCandidate,
@@ -12,7 +9,6 @@ import type {
   SessionCockpitData,
 } from "../types/brain";
 import { createInlineLearn, saveInlineLearn } from "../api/brainClient";
-import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
 
 interface InsightRailProps {
@@ -50,20 +46,17 @@ export function InsightRail({
 }: InsightRailProps) {
   const seedClaim = claims.find((claim) => claim.seedId === "claim.seed") ?? claims[0] ?? null;
   const target = claims.find((claim) => claim.id === challenge?.targetClaimId) ?? seedClaim;
-  const importantInsight = target?.text ?? challenge?.weakestPart ?? "No active challenge";
-  const whyItMatters = challenge?.challenge ?? learnCandidates[0]?.whyItMatters ?? "No challenge rationale";
-  const example = learnCandidates[0]?.unblockExplanation ?? challenge?.whatWouldResolveIt ?? "No example returned";
-  const relatedConcepts = learnCandidates.map((candidate) => candidate.term).slice(0, 5);
-
   return (
     <aside className="insight-rail" aria-label="Penny side rail">
-      <PennyInsight
-        keyInsight={importantInsight}
-        whyItMatters={whyItMatters}
-        example={example}
-        relatedConcepts={relatedConcepts}
-      />
       <MakesCentsPanel
+        sessionId={sessionId ?? null}
+        targetClaim={target}
+        claims={claims}
+        challenge={challenge}
+        learnCandidates={learnCandidates}
+        disabled={disabled}
+      />
+      <PennyInsight
         sessionId={sessionId ?? null}
         targetClaim={target}
         claims={claims}
@@ -76,37 +69,175 @@ export function InsightRail({
 }
 
 function PennyInsight({
-  keyInsight,
-  whyItMatters,
-  example,
-  relatedConcepts,
+  sessionId,
+  targetClaim,
+  claims,
+  challenge,
+  learnCandidates,
+  disabled,
 }: {
-  keyInsight: string;
-  whyItMatters: string;
-  example: string;
-  relatedConcepts: string[];
+  sessionId: string | null;
+  targetClaim: BrainClaim | null;
+  claims: BrainClaim[];
+  challenge: ChallengeSuggestion | undefined;
+  learnCandidates: LearnCandidate[];
+  disabled: boolean;
 }) {
+  const [definition, setDefinition] = useState<InlineLearnOutput | null>(null);
+  const [screenshot, setScreenshot] = useState<ScreenshotCapture | null>(null);
+  const [status, setStatus] = useState("ready");
+  const [isRunning, setIsRunning] = useState(false);
+  const starterConcepts = uniqueStrings([
+    ...learnCandidates.map((candidate) => candidate.term),
+    ...claims.filter((claim) => claim.kind === "concept").map((claim) => claim.text),
+    ...(challenge?.failureType ? [challenge.failureType] : []),
+  ]).slice(0, 5);
+  const relatedConcepts = definition?.relatedConcepts.length ? definition.relatedConcepts : starterConcepts;
+
+  const defineTerm = useCallback(
+    async (rawTerm: string, source: "chip" | "right_click" | "manual") => {
+      const term = normalizeTerm(rawTerm);
+
+      if (!term) {
+        return;
+      }
+
+      if (!sessionId || !targetClaim) {
+        setStatus("open a session");
+        return;
+      }
+
+      setIsRunning(true);
+      setStatus(source === "right_click" ? "defining selection" : "defining term");
+
+      try {
+        const output = await createInlineLearn({
+          term,
+          currentClaimId: targetClaim.id,
+          sessionId,
+          localContext: pennyInsightContext(claims, challenge, learnCandidates, screenshot),
+        });
+
+        setDefinition(output.data);
+        setStatus("definition ready");
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : String(error));
+      } finally {
+        setIsRunning(false);
+      }
+    },
+    [challenge, claims, learnCandidates, screenshot, sessionId, targetClaim],
+  );
+
+  useEffect(() => {
+    function handleContextMenu(event: MouseEvent) {
+      if (disabled || isRunning || editableContextTarget(event.target)) {
+        return;
+      }
+
+      const term = termFromContextMenu(event);
+
+      if (!term) {
+        return;
+      }
+
+      event.preventDefault();
+      void defineTerm(term, "right_click");
+    }
+
+    document.addEventListener("contextmenu", handleContextMenu);
+
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, [defineTerm, disabled, isRunning]);
+
+  async function handleScreenshot() {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setStatus("screenshot unavailable");
+      return;
+    }
+
+    setIsRunning(true);
+    setStatus("capturing screen");
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const capture = await captureStreamFrame(stream);
+      setScreenshot(capture);
+      setStatus("screenshot captured");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
+  async function handleSaveDefinition() {
+    if (!sessionId || !targetClaim || !definition) {
+      return;
+    }
+
+    setIsRunning(true);
+    setStatus("saving definition");
+
+    try {
+      await saveInlineLearn({
+        ...definition,
+        currentClaimId: targetClaim.id,
+        sessionId,
+      });
+      setStatus("definition saved");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
   return (
     <section className="penny-insight">
       <div className="rail-section-head">
         <h2>PENNY INSIGHT</h2>
-        <button type="button" aria-label="Save insight">
-          <span />
-        </button>
+        <span>{isRunning ? "Working" : status}</span>
       </div>
-      <InsightBlock title="KEY INSIGHT">{keyInsight}</InsightBlock>
-      <InsightBlock title="WHY IT MATTERS">{whyItMatters}</InsightBlock>
-      <InsightBlock title="EXAMPLES">{example}</InsightBlock>
-      <article className="insight-block">
-        <h3>RELATED CONCEPTS</h3>
+      {definition ? (
+        <>
+          <InsightBlock title={definition.term}>{definition.explanation}</InsightBlock>
+          <InsightBlock title="WHY HERE">{definition.whyItMattersHere}</InsightBlock>
+          <InsightBlock title="EXAMPLE">{definition.example}</InsightBlock>
+        </>
+      ) : (
+        <InsightBlock title="TERM">{targetClaim?.text ?? "Select a term"}</InsightBlock>
+      )}
+      {screenshot ? (
+        <figure className="insight-screenshot">
+          <img src={screenshot.dataUrl} alt="Captured screen reference" />
+          <figcaption>{screenshot.width}x{screenshot.height}</figcaption>
+        </figure>
+      ) : null}
+      <article className="insight-block insight-concepts">
+        <h3>RELATED</h3>
         <div className="concept-chip-list">
           {relatedConcepts.length > 0 ? (
-            relatedConcepts.map((concept) => <span key={concept}>{truncateWords(concept, 3)}</span>)
+            relatedConcepts.map((concept) => (
+              <button key={concept} type="button" disabled={disabled || isRunning} onClick={() => defineTerm(concept, "chip")}>
+                {truncateWords(concept, 3)}
+              </button>
+            ))
           ) : (
             <span>No related concepts</span>
           )}
         </div>
       </article>
+      <div className="penny-insight-actions">
+        <button type="button" disabled={disabled || isRunning} onClick={handleScreenshot}>
+          Screenshot
+        </button>
+        <button type="button" disabled={disabled || isRunning || !definition} onClick={handleSaveDefinition}>
+          Save
+        </button>
+      </div>
     </section>
   );
 }
@@ -119,6 +250,13 @@ function InsightBlock({ title, children }: { title: string; children: string }) 
     </article>
   );
 }
+
+type ScreenshotCapture = {
+  dataUrl: string;
+  width: number;
+  height: number;
+  capturedAt: string;
+};
 
 function MakesCentsPanel({
   sessionId,
@@ -270,284 +408,140 @@ function TerminalLine({ label, children }: { label: string; children: string }) 
   );
 }
 
-function ChallengeLoop({
-  challenge,
-  suggestion,
-  response,
-  latestArtifact,
-  disabled,
-  onIssueChallenge,
-  onRespondChallenge,
-  onCreateChallengeBrief,
-}: {
-  challenge: ChallengeSuggestion | undefined;
-  suggestion: AutopilotSuggestion | null;
-  response: RespondToChallengeResponse["data"] | null;
-  latestArtifact: SessionCockpitData["latestArtifact"] | null;
-  disabled: boolean;
-  onIssueChallenge: () => Promise<void>;
-  onRespondChallenge: InsightRailProps["onRespondChallenge"];
-  onCreateChallengeBrief: () => Promise<void>;
-}) {
-  const canIssueChallenge = suggestion?.action === "challenge" && Boolean(suggestion.candidateId);
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
 
-  return (
-    <section className="challenge-loop" aria-label="Challenge loop">
-      <h2 className="section-label">CHALLENGE LOOP</h2>
-      {challenge?.id ? (
-        <ChallengeResponseForm challenge={challenge} disabled={disabled} onRespondChallenge={onRespondChallenge} />
-      ) : (
-        <div className="challenge-action-row">
-          <span title={suggestion?.primaryActionLabel ?? "No selected action"}>
-            {truncateWords(suggestion?.primaryActionLabel ?? "No selected action", 5)}
-          </span>
-          <button type="button" disabled={disabled || !canIssueChallenge} onClick={onIssueChallenge}>
-            {suggestion?.action === "challenge" ? "Issue challenge" : "Not a challenge"}
-          </button>
-        </div>
-      )}
-      {response ? <ChallengeReceipt response={response} /> : null}
-      <div className="challenge-brief-row">
-        <div>
-          <strong title={latestArtifact?.title ?? "Challenge Brief"}>
-            {truncateWords(latestArtifact?.title ?? "Challenge Brief", 6)}
-          </strong>
-          <span title={latestArtifact?.summary ?? "No brief yet"}>
-            {truncateWords(latestArtifact?.summary ?? "No brief yet", 10)}
-          </span>
-        </div>
-        <button type="button" disabled={disabled || !response} onClick={onCreateChallengeBrief}>
-          Create brief
-        </button>
-      </div>
-      <ChallengeBriefPreview artifact={latestArtifact} />
-    </section>
-  );
-}
+  for (const value of values) {
+    const normalized = normalizeTerm(value);
 
-function ChallengeBriefPreview({ artifact }: { artifact: SessionCockpitData["latestArtifact"] | null }) {
-  const sections = challengeBriefSections(artifact?.payload);
-
-  if (!sections) {
-    return null;
+    if (normalized && !seen.has(normalized.toLowerCase())) {
+      seen.add(normalized.toLowerCase());
+      unique.push(normalized);
+    }
   }
 
-  return (
-    <div className="challenge-brief-sections" aria-label="Challenge Brief sections">
-      {briefSectionRows(sections).map((row) => (
-        <article key={row.title}>
-          <h3>{row.title}</h3>
-          <p title={row.text}>{truncateWords(row.text, 12)}</p>
-        </article>
-      ))}
-    </div>
-  );
+  return unique;
 }
 
-function ChallengeResponseForm({
-  challenge,
-  disabled,
-  onRespondChallenge,
-}: {
-  challenge: ChallengeSuggestion;
-  disabled: boolean;
-  onRespondChallenge: InsightRailProps["onRespondChallenge"];
-}) {
-  const [response, setResponse] = useState<ChallengeResponseKind>("defend");
-  const [reasoning, setReasoning] = useState("");
-  const [revisedText, setRevisedText] = useState(challenge.targetClaim?.text ?? challenge.weakestPart ?? "");
-  const challengeId = challenge.id;
+function normalizeTerm(value: string): string {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/^[^\w'"]+|[^\w'"]+$/g, "")
+    .trim()
+    .slice(0, 120);
+}
 
-  useEffect(() => {
-    setReasoning("");
-    setRevisedText(challenge.targetClaim?.text ?? challenge.weakestPart ?? "");
-    setResponse("defend");
-  }, [challenge.id, challenge.targetClaim?.text, challenge.weakestPart]);
+function editableContextTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && Boolean(target.closest("input, textarea, button, a, [contenteditable='true']"));
+}
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+function termFromContextMenu(event: MouseEvent): string | null {
+  const selected = normalizeTerm(window.getSelection()?.toString() ?? "");
 
-    if (!challengeId) {
-      return;
-    }
-
-    if (response === "defend") {
-      if (!reasoning.trim()) {
-        return;
-      }
-
-      await onRespondChallenge(challengeId, { response, reasoning: reasoning.trim() });
-      return;
-    }
-
-    if (response === "revise") {
-      if (!revisedText.trim()) {
-        return;
-      }
-
-      await onRespondChallenge(challengeId, {
-        response,
-        revisedText: revisedText.trim(),
-        ...(reasoning.trim() ? { reasoning: reasoning.trim() } : {}),
-      });
-      return;
-    }
-
-    await onRespondChallenge(challengeId, {
-      response,
-      ...(reasoning.trim() ? { reasoning: reasoning.trim() } : {}),
-    });
+  if (selected) {
+    return selected;
   }
 
-  return (
-    <form className="challenge-response-form" onSubmit={handleSubmit}>
-      <div className="challenge-mode-row" role="group" aria-label="Challenge response">
-        {(["defend", "revise", "absorb"] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={response === option}
-            disabled={disabled}
-            onClick={() => setResponse(option)}
-          >
-            {formatResponse(option)}
-          </button>
-        ))}
-      </div>
-      {response === "revise" ? (
-        <label>
-          <span>Revision</span>
-          <textarea value={revisedText} disabled={disabled} onChange={(event) => setRevisedText(event.target.value)} />
-        </label>
-      ) : null}
-      <label>
-        <span>{response === "defend" ? "Reasoning" : "Note"}</span>
-        <textarea value={reasoning} disabled={disabled} onChange={(event) => setReasoning(event.target.value)} />
-      </label>
-      <button
-        type="submit"
-        disabled={disabled || (response === "defend" && !reasoning.trim()) || (response === "revise" && !revisedText.trim())}
-      >
-        Save {formatResponse(response)}
-      </button>
-    </form>
-  );
+  return termAtPoint(event.clientX, event.clientY);
 }
 
-function ChallengeReceipt({ response }: { response: RespondToChallengeResponse["data"] }) {
-  const receipt = response.receipt;
+function termAtPoint(x: number, y: number): string | null {
+  const caretDocument = document as Document & {
+    caretPositionFromPoint?: (left: number, top: number) => { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?: (left: number, top: number) => Range | null;
+  };
+  const position = caretDocument.caretPositionFromPoint?.(x, y);
 
-  return (
-    <article className="challenge-receipt">
-      <strong>{formatLabel(response.move.kind)}</strong>
-      <span>focus completed</span>
-      <span>{receipt.claimTextChanged ? `old ${shortId(receipt.previousClaimVersionId ?? "")}` : "claim unchanged"}</span>
-      <span>{receipt.unresolvedRisk ? "risk carried forward" : `current ${shortId(receipt.currentClaimVersionId)}`}</span>
-      <span title={response.derivedEffects.length > 0 ? response.derivedEffects.map((effect) => effect.title).join(", ") : "no shape effect"}>
-        {truncateWords(response.derivedEffects.length > 0 ? response.derivedEffects.map((effect) => effect.title).join(", ") : "no shape effect", 8)}
-      </span>
-    </article>
-  );
-}
-
-function challengeBriefSections(payload: unknown): ChallengeBriefSections | null {
-  if (!isChallengeBriefPayload(payload)) {
-    return null;
+  if (position?.offsetNode.nodeType === Node.TEXT_NODE) {
+    return wordAtOffset(position.offsetNode.textContent ?? "", position.offset);
   }
 
-  return payload.sections;
+  const range = caretDocument.caretRangeFromPoint?.(x, y);
+
+  if (range?.startContainer.nodeType === Node.TEXT_NODE) {
+    return wordAtOffset(range.startContainer.textContent ?? "", range.startOffset);
+  }
+
+  return null;
 }
 
-function isChallengeBriefPayload(payload: unknown): payload is ChallengeBriefPayload {
-  return Boolean(
-    payload &&
-      typeof payload === "object" &&
-      "kind" in payload &&
-      payload.kind === "challenge_brief" &&
-      "sections" in payload &&
-      payload.sections &&
-      typeof payload.sections === "object",
-  );
+function wordAtOffset(text: string, offset: number): string | null {
+  const matches = text.matchAll(/[A-Za-z0-9][A-Za-z0-9'/-]*/g);
+
+  for (const match of matches) {
+    const word = match[0];
+    const index = match.index ?? 0;
+
+    if (offset >= index && offset <= index + word.length) {
+      return normalizeTerm(word);
+    }
+  }
+
+  return null;
 }
 
-function briefSectionRows(sections: ChallengeBriefSections): Array<{ title: string; text: string }> {
+async function captureStreamFrame(stream: MediaStream): Promise<ScreenshotCapture> {
+  const video = document.createElement("video");
+
+  try {
+    video.srcObject = stream;
+    video.muted = true;
+    await video.play();
+
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("Could not capture screenshot.");
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    context.drawImage(video, 0, 0, width, height);
+
+    return {
+      dataUrl: canvas.toDataURL("image/jpeg", 0.72),
+      width,
+      height,
+      capturedAt: new Date().toISOString(),
+    };
+  } finally {
+    stream.getTracks().forEach((track) => track.stop());
+    video.srcObject = null;
+  }
+}
+
+function pennyInsightContext(
+  claims: BrainClaim[],
+  challenge: ChallengeSuggestion | undefined,
+  learnCandidates: LearnCandidate[],
+  screenshot: ScreenshotCapture | null,
+): string {
+  const claimLines = claims
+    .slice(0, 6)
+    .map((claim) => `- ${claim.kind}: ${truncateWords(claim.text, 14)}`)
+    .join("\n");
+  const conceptLines = learnCandidates
+    .slice(0, 5)
+    .map((candidate) => `- ${candidate.term}: ${truncateWords(candidate.unblockExplanation, 14)}`)
+    .join("\n");
+  const challengeLine = challenge?.challenge ? `Challenge context: ${truncateWords(challenge.challenge, 24)}` : "";
+  const screenshotLine = screenshot
+    ? `Screenshot captured: ${screenshot.width}x${screenshot.height} at ${screenshot.capturedAt}. Use only text/session context unless the user describes the screenshot.`
+    : "";
+
   return [
-    { title: "Original Idea", text: sections.originalSeedIdea.text },
-    {
-      title: "Current Claim",
-      text: `${sections.currentPrimaryClaim.text} (${sections.currentPrimaryClaim.confidence}% confidence)`,
-    },
-    {
-      title: "Key Assumptions",
-      text: listText(
-        sections.keyAssumptions.map((assumption) => `${assumption.text} (${assumption.confidence}% confidence)`),
-        "No key assumptions recorded.",
-      ),
-    },
-    {
-      title: "Pressure Point",
-      text: compactText([sections.selectedPressurePoint.failureType, sections.selectedPressurePoint.text]),
-    },
-    {
-      title: "Why Penny Chose It",
-      text: listText(sections.whyPennyChoseIt, "No selection rationale recorded."),
-    },
-    {
-      title: "Challenge",
-      text: compactText([sections.challengeIssued.strength, sections.challengeIssued.text, sections.challengeIssued.whatWouldResolveIt]),
-    },
-    {
-      title: "Response",
-      text: compactText([sections.userResponse.response, sections.userResponse.text, sections.userResponse.reasoning]),
-    },
-    {
-      title: "What Changed",
-      text: listText(
-        sections.whatChanged.map((change) => change.text),
-        "No claim text changed.",
-      ),
-    },
-    {
-      title: "Open Risks",
-      text: listText(
-        sections.openRisks.map((risk) => compactText([risk.kind, risk.text, risk.reason])),
-        "No open risks recorded.",
-      ),
-    },
-    {
-      title: "Recommended Next Move",
-      text: compactText([
-        formatLabel(sections.recommendedNextMove.action),
-        sections.recommendedNextMove.why,
-        sections.recommendedNextMove.expectedCompletionMove
-          ? `Completes with ${formatLabel(sections.recommendedNextMove.expectedCompletionMove)}`
-          : null,
-      ]),
-    },
-    {
-      title: "Move Timeline",
-      text: listText(
-        sections.moveTimelineSummary.map((move) => `${formatLabel(move.kind)}: ${move.summary}`),
-        "No move timeline recorded.",
-      ),
-    },
-  ];
-}
-
-function listText(values: string[], emptyText: string): string {
-  const cleaned = values.map((value) => value.trim()).filter(Boolean);
-  return cleaned.length > 0 ? cleaned.join(" / ") : emptyText;
-}
-
-function compactText(values: Array<string | null | undefined>): string {
-  return values
-    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    claimLines ? `Claims:\n${claimLines}` : "",
+    challengeLine,
+    conceptLines ? `Nearby concepts:\n${conceptLines}` : "",
+    screenshotLine,
+  ]
     .filter(Boolean)
-    .join(": ");
-}
-
-function formatResponse(response: ChallengeResponseKind): string {
-  return response.charAt(0).toUpperCase() + response.slice(1);
+    .join("\n\n")
+    .slice(0, 2_000);
 }
 
 function makesCentsContext(
