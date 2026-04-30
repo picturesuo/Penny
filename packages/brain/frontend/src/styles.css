@@ -493,6 +493,112 @@
     min-width: 0;
   }
 
+  .check-brain-memory {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    margin-top: 13px;
+  }
+
+  .check-brain-memory-head {
+    display: grid;
+    gap: 8px;
+    border-bottom: 1px solid #c7c7c7;
+    padding-bottom: 13px;
+  }
+
+  .check-brain-memory-head span {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .check-brain-memory-head h1 {
+    margin: 0;
+    font-size: clamp(30px, 3vw, 34px);
+    font-weight: 700;
+    line-height: 1.08;
+  }
+
+  .check-brain-doc-list {
+    display: grid;
+    max-height: 330px;
+    overflow: hidden;
+    border-top: 1px solid #111111;
+  }
+
+  .check-brain-doc-row {
+    display: grid;
+    grid-template-columns: 82px minmax(0, 1fr) 78px;
+    gap: 14px;
+    align-items: center;
+    min-height: 64px;
+    border: 0;
+    border-bottom: 1px solid #d0d0d0;
+    padding: 9px 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+  }
+
+  .check-brain-doc-row:hover {
+    background: #f4f4f4;
+  }
+
+  .check-brain-doc-row > span {
+    min-width: 0;
+  }
+
+  .check-brain-doc-kind {
+    color: rgb(17 17 17 / 0.64);
+    font-size: 11px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .check-brain-doc-row strong,
+  .check-brain-doc-row small {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .check-brain-doc-row strong {
+    font-size: 16px;
+    line-height: 1.05;
+  }
+
+  .check-brain-doc-row small {
+    margin-top: 5px;
+    color: rgb(17 17 17 / 0.64);
+    font-size: 11px;
+    line-height: 1.1;
+  }
+
+  .check-brain-doc-meta {
+    justify-self: end;
+    text-align: right;
+  }
+
+  .check-brain-empty {
+    display: grid;
+    gap: 5px;
+    min-height: 110px;
+    border-bottom: 1px solid #d0d0d0;
+    padding: 18px 0;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 12px;
+    line-height: 1.14;
+  }
+
+  .check-brain-empty strong,
+  .check-brain-empty span {
+    overflow-wrap: anywhere;
+  }
+
   .exploration-headline {
     margin-top: 13px;
   }
@@ -1710,7 +1816,13 @@
     gap: 8px;
   }
 
+  .check-brain-doc-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
   .doc-kind,
+  .check-brain-doc-meta,
   .doc-log-meta,
   .document-log-row time {
     justify-self: start;
