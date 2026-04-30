@@ -1,4 +1,5 @@
-import type { BrainClaim, WorkStructure, WorkStructureStep } from "../types/brain";
+import { useMemo, useState, type CSSProperties } from "react";
+import type { BrainClaim, WorkStructure, WorkStructureStep, WorkStructureType } from "../types/brain";
 import { truncateWords } from "../lib/text";
 
 interface ThoughtMapProps {
@@ -17,20 +18,44 @@ export function ThoughtMap({
   focusedClaimId,
   focusedWorkStructureStepId,
   suggestedClaimId,
+  onClaimSelect,
   onWorkStructureSelect,
 }: ThoughtMapProps) {
   const seedClaim = claims.find((claim) => claim.seedId === "claim.seed") ?? claims[0];
   const renderedWorkStructure =
     workStructure?.steps.length ? workStructure : seedClaim ? fallbackWorkStructure(seedClaim.text, claims, suggestedClaimId) : null;
+  const tree = useMemo(
+    () => (renderedWorkStructure ? buildThoughtMapTree(renderedWorkStructure, claims, seedClaim) : null),
+    [claims, renderedWorkStructure, seedClaim],
+  );
+  const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(() => new Set());
+
+  function handleToggle(nodeId: string) {
+    setCollapsedNodeIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+
+      return next;
+    });
+  }
 
   return (
     <div className="thought-map-tree">
-      {renderedWorkStructure ? (
+      {renderedWorkStructure && tree ? (
         <WorkStructureTree
           workStructure={renderedWorkStructure}
+          tree={tree}
+          collapsedNodeIds={collapsedNodeIds}
           focusedClaimId={focusedClaimId}
           focusedWorkStructureStepId={focusedWorkStructureStepId ?? null}
           suggestedClaimId={suggestedClaimId}
+          onClaimSelect={onClaimSelect}
+          onToggle={handleToggle}
           onWorkStructureSelect={onWorkStructureSelect ?? noopWorkStructureSelect}
         />
       ) : (
@@ -44,48 +69,392 @@ function noopWorkStructureSelect() {}
 
 function WorkStructureTree({
   workStructure,
+  tree,
+  collapsedNodeIds,
   focusedClaimId,
   focusedWorkStructureStepId,
   suggestedClaimId,
+  onClaimSelect,
+  onToggle,
   onWorkStructureSelect,
 }: {
   workStructure: WorkStructure;
+  tree: ThoughtMapNode;
+  collapsedNodeIds: Set<string>;
   focusedClaimId: string | null;
   focusedWorkStructureStepId: string | null;
   suggestedClaimId: string | null;
+  onClaimSelect: (claimId: string) => void;
+  onToggle: (nodeId: string) => void;
   onWorkStructureSelect: (step: WorkStructureStep) => void;
 }) {
   return (
-    <div className="tree-line work-structure-tree">
-      <div className="tree-group">
-        <strong title={workStructure.label}>{truncateWords(workStructure.label, 10)}</strong>
-        <span title={workStructure.description}>{truncateWords(workStructure.description, 12)}</span>
-        {workStructure.steps.map((step) => {
-          const isFocused =
-            step.id === focusedWorkStructureStepId ||
-            step.id === workStructure.activeStepId ||
-            Boolean(focusedClaimId && step.claimIds.includes(focusedClaimId));
-          const isSuggested = Boolean(suggestedClaimId && step.claimIds.includes(suggestedClaimId));
-
-          return (
-            <button
-              key={step.id}
-              type="button"
-              className={`tree-branch work-structure-step is-${step.status}${isFocused ? " is-focused" : ""}${
-                isSuggested ? " is-suggested" : ""
-              }`}
-              onClick={() => onWorkStructureSelect(step)}
-            >
-              <small>#{step.rank} / fragile {step.fragility}</small>
-              <strong title={step.title}>{truncateWords(step.title, 6)}</strong>
-              <span title={step.purpose}>{truncateWords(step.purpose, 9)}</span>
-              <em title={step.whyNow}>{truncateWords(step.whyNow, 9)}</em>
-            </button>
-          );
-        })}
-      </div>
+    <div className="work-structure-tree" role="tree" aria-label={workStructure.label}>
+      <ThoughtMapTreeNode
+        node={tree}
+        depth={0}
+        activeStepId={workStructure.activeStepId}
+        collapsedNodeIds={collapsedNodeIds}
+        focusedClaimId={focusedClaimId}
+        focusedWorkStructureStepId={focusedWorkStructureStepId}
+        suggestedClaimId={suggestedClaimId}
+        onClaimSelect={onClaimSelect}
+        onToggle={onToggle}
+        onWorkStructureSelect={onWorkStructureSelect}
+      />
     </div>
   );
+}
+
+function ThoughtMapTreeNode({
+  node,
+  depth,
+  activeStepId,
+  collapsedNodeIds,
+  focusedClaimId,
+  focusedWorkStructureStepId,
+  suggestedClaimId,
+  onClaimSelect,
+  onToggle,
+  onWorkStructureSelect,
+}: {
+  node: ThoughtMapNode;
+  depth: number;
+  activeStepId: string | null;
+  collapsedNodeIds: Set<string>;
+  focusedClaimId: string | null;
+  focusedWorkStructureStepId: string | null;
+  suggestedClaimId: string | null;
+  onClaimSelect: (claimId: string) => void;
+  onToggle: (nodeId: string) => void;
+  onWorkStructureSelect: (step: WorkStructureStep) => void;
+}) {
+  const hasChildren = node.children.length > 0;
+  const isCollapsed = hasChildren && collapsedNodeIds.has(node.id);
+  const isFocused =
+    node.step?.id === focusedWorkStructureStepId ||
+    node.step?.id === activeStepId ||
+    node.claimId === focusedClaimId ||
+    Boolean(focusedClaimId && node.step?.claimIds.includes(focusedClaimId));
+  const isSuggested =
+    node.claimId === suggestedClaimId || Boolean(suggestedClaimId && node.step?.claimIds.includes(suggestedClaimId));
+  const metadata = thoughtMapNodeMetadata(node);
+  const label = truncateWords(node.label, depth <= 1 ? 9 : 7);
+
+  function handlePrimaryAction() {
+    if (node.step) {
+      onWorkStructureSelect(node.step);
+      return;
+    }
+
+    if (node.claimId) {
+      onClaimSelect(node.claimId);
+      return;
+    }
+
+    if (hasChildren) {
+      onToggle(node.id);
+    }
+  }
+
+  return (
+    <div
+      className={`thought-node thought-node-${node.kind}${isFocused ? " is-focused" : ""}${isSuggested ? " is-suggested" : ""}${
+        isCollapsed ? " is-collapsed" : ""
+      }`}
+      role="treeitem"
+      aria-expanded={hasChildren ? !isCollapsed : undefined}
+      style={{ "--thought-depth": depth } as CSSProperties}
+    >
+      <div className="thought-node-row">
+        {hasChildren ? (
+          <button
+            type="button"
+            className="thought-node-toggle"
+            aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${node.label}`}
+            onClick={() => onToggle(node.id)}
+          >
+            <span aria-hidden="true" />
+          </button>
+        ) : (
+          <span className="thought-node-toggle-spacer" aria-hidden="true" />
+        )}
+        <span className={`thought-node-glyph is-${node.kind}`} aria-hidden="true" />
+        <button type="button" className="thought-node-label" title={node.description ?? node.label} onClick={handlePrimaryAction}>
+          <strong>{label}</strong>
+          {metadata ? <small>{metadata}</small> : null}
+        </button>
+        {hasChildren && node.kind !== "root" ? <span className="thought-node-count">{node.children.length}</span> : null}
+      </div>
+      {hasChildren && !isCollapsed ? (
+        <div className="thought-node-children" role="group">
+          {node.children.map((child) => (
+            <ThoughtMapTreeNode
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              activeStepId={activeStepId}
+              collapsedNodeIds={collapsedNodeIds}
+              focusedClaimId={focusedClaimId}
+              focusedWorkStructureStepId={focusedWorkStructureStepId}
+              suggestedClaimId={suggestedClaimId}
+              onClaimSelect={onClaimSelect}
+              onToggle={onToggle}
+              onWorkStructureSelect={onWorkStructureSelect}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type ThoughtMapNodeKind = "root" | "folder" | "step" | "choice" | "claim";
+
+type ThoughtMapNode = {
+  id: string;
+  kind: ThoughtMapNodeKind;
+  label: string;
+  description?: string;
+  children: ThoughtMapNode[];
+  step?: WorkStructureStep;
+  claimId?: string;
+};
+
+type WorkStructureTreePath = {
+  order: number;
+  path: string[];
+};
+
+function buildThoughtMapTree(workStructure: WorkStructure, claims: BrainClaim[], seedClaim: BrainClaim | undefined): ThoughtMapNode {
+  const root: ThoughtMapNode = {
+    id: "thought-root",
+    kind: "root",
+    label: seedClaim?.text ?? workStructure.label,
+    description: workStructure.description,
+    children: [],
+  };
+  const claimsById = new Map(claims.map((claim) => [claim.id, claim]));
+
+  for (const step of orderedWorkStructureSteps(workStructure)) {
+    const path = workStructureTreePath(workStructure.structureType, step);
+    const parent = ensureFolderPath(root, path.path);
+    const stepNode: ThoughtMapNode = {
+      id: `step:${step.id}`,
+      kind: "step",
+      label: step.title,
+      description: step.purpose,
+      step,
+      children: [
+        ...step.detailChoices.map((choice) => ({
+          id: `choice:${step.id}:${choice.id}`,
+          kind: "choice" as const,
+          label: cleanChoiceLabel(choice.label),
+          description: choice.description,
+          children: [],
+        })),
+        ...step.claimIds.flatMap((claimId) => {
+          const claim = claimsById.get(claimId);
+
+          return claim
+            ? [
+                {
+                  id: `claim:${step.id}:${claim.id}`,
+                  kind: "claim" as const,
+                  label: claim.text,
+                  description: `${formatClaimKind(claim.kind)} claim`,
+                  claimId: claim.id,
+                  children: [],
+                },
+              ]
+            : [];
+        }),
+      ],
+    };
+
+    parent.children.push(stepNode);
+  }
+
+  sortThoughtMapFolders(root);
+
+  return root;
+}
+
+function orderedWorkStructureSteps(workStructure: WorkStructure): WorkStructureStep[] {
+  return [...workStructure.steps].sort((left, right) => {
+    const leftPath = workStructureTreePath(workStructure.structureType, left);
+    const rightPath = workStructureTreePath(workStructure.structureType, right);
+
+    return leftPath.order - rightPath.order || left.rank - right.rank || left.title.localeCompare(right.title);
+  });
+}
+
+function ensureFolderPath(root: ThoughtMapNode, path: string[]): ThoughtMapNode {
+  let parent = root;
+
+  for (const segment of path) {
+    const id = `${parent.id}/folder:${slugify(segment)}`;
+    let folder = parent.children.find((child) => child.id === id);
+
+    if (!folder) {
+      folder = {
+        id,
+        kind: "folder",
+        label: segment,
+        children: [],
+      };
+      parent.children.push(folder);
+    }
+
+    parent = folder;
+  }
+
+  return parent;
+}
+
+function sortThoughtMapFolders(node: ThoughtMapNode) {
+  node.children.sort((left, right) => nodeKindRank(left.kind) - nodeKindRank(right.kind) || left.label.localeCompare(right.label));
+  node.children.forEach(sortThoughtMapFolders);
+}
+
+function nodeKindRank(kind: ThoughtMapNodeKind): number {
+  switch (kind) {
+    case "folder":
+      return 0;
+    case "step":
+      return 1;
+    case "choice":
+      return 2;
+    case "claim":
+      return 3;
+    case "root":
+      return 4;
+  }
+}
+
+function thoughtMapNodeMetadata(node: ThoughtMapNode): string | null {
+  if (node.step) {
+    return `${formatStatus(node.step.status)} / fragile ${node.step.fragility}`;
+  }
+
+  if (node.kind === "claim" && node.description) {
+    return node.description;
+  }
+
+  if (node.kind === "root" && node.description) {
+    return truncateWords(node.description, 8);
+  }
+
+  return null;
+}
+
+function workStructureTreePath(structureType: WorkStructureType, step: WorkStructureStep): WorkStructureTreePath {
+  const explicitPath = workStructureTreePaths[structureType]?.[step.id];
+
+  if (explicitPath) {
+    return explicitPath;
+  }
+
+  return inferTreePath(step);
+}
+
+const workStructureTreePaths: Partial<Record<WorkStructureType, Record<string, WorkStructureTreePath>>> = {
+  essay: {
+    bound_topic: treePath(10, "Problem framing", "Topic"),
+    assignment_fit: treePath(20, "Problem framing", "Constraints"),
+    specific_evidence: treePath(30, "Evidence", "Sources"),
+    working_thesis: treePath(40, "Argument", "Thesis"),
+    counterargument: treePath(50, "Argument", "Counterarguments"),
+    pressure_test: treePath(60, "Risks", "Weak links"),
+    essay_outline: treePath(70, "Output", "Essay draft"),
+  },
+  startup: {
+    customer: treePath(10, "Users", "Segments"),
+    pain: treePath(20, "Users", "Needs"),
+    wedge: treePath(30, "Product", "MVP scope"),
+    business_model: treePath(40, "Business model", "Pricing"),
+    challenge: treePath(50, "Risks", "Assumptions"),
+    artifact: treePath(60, "Workflow", "Brief"),
+  },
+  research: {
+    question: treePath(10, "Question", "Scope"),
+    literature: treePath(20, "Precedent", "Literature"),
+    method: treePath(30, "Method", "Evidence design"),
+    challenge: treePath(40, "Validity", "Confounds"),
+    plan: treePath(50, "Output", "Research plan"),
+  },
+  decision: {
+    options: treePath(10, "Options", "Alternatives"),
+    criteria: treePath(20, "Criteria", "Tradeoffs"),
+    evidence: treePath(30, "Evidence", "Assumption tests"),
+    tradeoff: treePath(40, "Risks", "Downside"),
+    decision_brief: treePath(50, "Output", "Decision brief"),
+  },
+  general: {
+    clarify: treePath(10, "Problem", "Claim"),
+    assumptions: treePath(20, "Problem", "Dependencies"),
+    evidence: treePath(30, "Evidence", "Sources"),
+    challenge: treePath(40, "Risks", "Challenge"),
+    artifact: treePath(50, "Output", "Brief"),
+  },
+};
+
+function treePath(order: number, ...path: string[]): WorkStructureTreePath {
+  return { order, path };
+}
+
+function inferTreePath(step: WorkStructureStep): WorkStructureTreePath {
+  const text = `${step.title} ${step.purpose}`.toLowerCase();
+
+  if (hasAny(text, ["user", "customer", "student", "reader", "audience", "segment", "persona"])) {
+    return treePath(100, "Users", step.title);
+  }
+
+  if (hasAny(text, ["product", "feature", "mvp", "scope", "wedge"])) {
+    return treePath(110, "Product", step.title);
+  }
+
+  if (hasAny(text, ["tech", "implementation", "data", "integration", "method"])) {
+    return treePath(120, "Implementation", step.title);
+  }
+
+  if (hasAny(text, ["risk", "challenge", "fragile", "counter", "objection", "validity"])) {
+    return treePath(130, "Risks", step.title);
+  }
+
+  if (hasAny(text, ["evidence", "validation", "source", "test", "metric"])) {
+    return treePath(140, "Validation", step.title);
+  }
+
+  if (hasAny(text, ["workflow", "process", "outline", "plan", "brief", "artifact"])) {
+    return treePath(150, "Workflow", step.title);
+  }
+
+  if (hasAny(text, ["pricing", "revenue", "pay", "business", "market"])) {
+    return treePath(160, "Business model", step.title);
+  }
+
+  return treePath(900, "Thinking", step.title);
+}
+
+function cleanChoiceLabel(label: string): string {
+  return label.replace(/\s+choice$/i, "");
+}
+
+function formatClaimKind(kind: string): string {
+  return formatStatus(kind);
+}
+
+function formatStatus(value: string): string {
+  return value.replace(/_/g, " ");
+}
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function EmptyTree() {
