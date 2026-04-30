@@ -1103,7 +1103,7 @@
   }
 
   .composer-control button:disabled {
-    opacity: 0.35;
+    opacity: 1;
   }
 
   .composer-control button svg {
