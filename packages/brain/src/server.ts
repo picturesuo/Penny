@@ -39,28 +39,28 @@ import {
 import { handleVerifyConfidenceRequest, handleVerifyRequest } from "./verify-route.ts";
 import { handleSessionWikiRequest } from "./wiki-route.ts";
 
-type AuthMode = "dev" | "token";
+export type AuthMode = "dev" | "token";
 
-type ServerScope = {
+export type ServerScope = {
   userId: string;
   workspaceId: string;
   projectId: string;
   sphereId: string;
 };
 
-type ApiAuthResult = {
+export type ApiAuthResult = {
   identityKey: string;
   mode: AuthMode;
   scope: ServerScope;
 };
 
-type ApiGuardResult = {
+export type ApiGuardResult = {
   request: Request;
   headers: Headers;
   response?: Response;
 };
 
-type RateLimitResult = {
+export type RateLimitResult = {
   allowed: boolean;
   headers: Headers;
   retryAfterSeconds?: number;
@@ -73,20 +73,21 @@ const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 const migrationsDir = fileURLToPath(new URL("../../../drizzle", import.meta.url));
 const apiRateLimiter = createApiRateLimiter();
 
-const server = createServer(async (incoming, outgoing) => {
-  try {
-    let request = await toWebRequest(incoming);
-    const url = new URL(request.url);
-    const guard = guardApiRequest(request, url);
+export function createPennyServer(): ReturnType<typeof createServer> {
+  return createServer(async (incoming, outgoing) => {
+    try {
+      let request = await toWebRequest(incoming);
+      const url = new URL(request.url);
+      const guard = guardApiRequest(request, url);
 
-    applyResponseHeaders(outgoing, guard.headers);
+      applyResponseHeaders(outgoing, guard.headers);
 
-    if (guard.response) {
-      await writeWebResponse(outgoing, guard.response);
-      return;
-    }
+      if (guard.response) {
+        await writeWebResponse(outgoing, guard.response);
+        return;
+      }
 
-    request = guard.request;
+      request = guard.request;
 
     if (url.pathname === "/brain/seed") {
       await writeWebResponse(outgoing, await handleBrainSeedRequest(request));
@@ -591,35 +592,46 @@ const server = createServer(async (incoming, outgoing) => {
       ),
     );
     return;
-  } catch (error) {
-    await writeWebResponse(
-      outgoing,
-      new Response(
-        JSON.stringify({
-          error: {
-            code: "internal_error",
-            message: error instanceof Error ? error.message : String(error),
+    } catch (error) {
+      await writeWebResponse(
+        outgoing,
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "internal_error",
+              message: error instanceof Error ? error.message : String(error),
+            },
+          }),
+          {
+            status: 500,
+            headers: {
+              "content-type": "application/json; charset=utf-8",
+            },
           },
-        }),
-        {
-          status: 500,
-          headers: {
-            "content-type": "application/json; charset=utf-8",
-          },
-        },
-      ),
-    );
-  }
-});
-
-try {
-  await prepareDatabase();
-  server.listen(port, () => {
-    console.log(`Penny cockpit listening on http://localhost:${port}`);
+        ),
+      );
+    }
   });
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
+}
+
+export const server = createPennyServer();
+
+if (isMainModule()) {
+  try {
+    await prepareDatabase();
+    server.listen(port, () => {
+      console.log(`Penny cockpit listening on http://localhost:${port}`);
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+function isMainModule(): boolean {
+  const entrypoint = process.argv[1];
+
+  return !!entrypoint && fileURLToPath(import.meta.url) === entrypoint;
 }
 
 function parsePort(value: string | undefined): number {
@@ -632,7 +644,7 @@ function parsePort(value: string | undefined): number {
   return 3000;
 }
 
-function guardApiRequest(request: Request, url: URL): ApiGuardResult {
+export function guardApiRequest(request: Request, url: URL): ApiGuardResult {
   const cors = corsHeadersForRequest(request);
   const apiPath = isApiPath(url.pathname);
 
