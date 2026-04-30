@@ -156,6 +156,8 @@
     display: grid;
     grid-template-columns: minmax(260px, 356px) minmax(500px, 1fr) minmax(300px, 370px);
     min-height: calc(100vh - 117px);
+    max-height: calc(100vh - 117px);
+    overflow: hidden;
     padding: 0 18px 22px;
   }
 
@@ -167,14 +169,19 @@
 
   .left-rail {
     border-right: 1px solid #9e9e9e;
+    overflow: hidden;
   }
 
   .center-stage {
     border-right: 1px solid #9e9e9e;
-    padding: 21px 16px 40px 23px;
+    display: grid;
+    align-content: start;
+    overflow: hidden;
+    padding: 21px 16px 18px 23px;
   }
 
   .insight-rail {
+    overflow: hidden;
     padding: 21px 0 0 22px;
   }
 
@@ -194,7 +201,8 @@
   }
 
   .thought-map-section {
-    min-height: 540px;
+    max-height: calc(100vh - 355px);
+    overflow: hidden;
     padding: 22px 20px 18px;
   }
 
@@ -272,7 +280,7 @@
   .left-bottom-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    min-height: 236px;
+    height: 210px;
     border-top: 1px solid #b5b5b5;
   }
 
@@ -347,6 +355,8 @@
 
   .pathway-list {
     display: grid;
+    max-height: 272px;
+    overflow: hidden;
     border-top: 1px solid #c7c7c7;
   }
 
@@ -357,7 +367,7 @@
     align-items: center;
     border-top: 1px solid #111111;
     border-bottom: 1px solid #111111;
-    padding: 11px 0 12px;
+    padding: 8px 0;
   }
 
   .autopilot-card span {
@@ -392,9 +402,9 @@
   .autopilot-card small {
     margin-top: 4px;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
-    line-clamp: 2;
+    line-clamp: 1;
     font-size: 12px;
     line-height: 1.18;
   }
@@ -422,9 +432,9 @@
 
   .pathway-row {
     display: grid;
-    grid-template-columns: 56px minmax(170px, 1fr) minmax(116px, 178px) 94px;
+    grid-template-columns: 36px minmax(0, 1fr) 128px 78px;
     align-items: center;
-    min-height: 58px;
+    height: 68px;
     border-bottom: 1px solid #c7c7c7;
     font-size: 12px;
     overflow: hidden;
@@ -440,21 +450,22 @@
 
   .pathway-row strong {
     min-width: 0;
-    padding: 0 16px;
+    padding: 0 12px;
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     line-clamp: 2;
-    font-size: 17px;
+    font-size: 14px;
     font-weight: 700;
-    line-height: 1.05;
+    line-height: 1.02;
   }
 
   .pathway-row ul {
     margin: 0;
-    padding-left: 16px;
+    padding-left: 10px;
     overflow: hidden;
+    font-size: 11px;
     line-height: 1.22;
   }
 
@@ -469,7 +480,7 @@
   .pathway-row button {
     justify-self: end;
     border: 0;
-    padding: 0 10px 0 0;
+    padding: 0 8px 0 0;
     background: transparent;
     font-size: 12px;
     line-height: 1;
@@ -495,7 +506,7 @@
 
   .composer {
     width: min(604px, 100%);
-    margin: 22px 0 0 14px;
+    margin: 14px 0 0 14px;
   }
 
   .composer label {
@@ -549,11 +560,12 @@
   }
 
   .make-cents {
-    min-height: 466px;
+    overflow: hidden;
+    padding-bottom: 14px;
   }
 
   .rail-block {
-    margin: 38px 0 0 25px;
+    margin: 14px 0 0 25px;
     max-width: 240px;
   }
 
@@ -568,21 +580,25 @@
     margin: 0;
     overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
-    line-clamp: 3;
+    line-clamp: 2;
     font-size: 12px;
     line-height: 1.12;
   }
 
   .thinking-history {
     border-top: 1px solid #c0c0c0;
+    max-height: 260px;
+    overflow: hidden;
     padding: 18px 18px 12px 0;
   }
 
   .challenge-loop {
     border-top: 1px solid #c0c0c0;
-    padding: 18px 18px 18px 0;
+    max-height: 285px;
+    overflow: hidden;
+    padding: 16px 18px 14px 0;
   }
 
   .challenge-action-row,
@@ -625,8 +641,8 @@
 
   .challenge-response-form {
     display: grid;
-    gap: 10px;
-    margin-top: 16px;
+    gap: 8px;
+    margin-top: 12px;
   }
 
   .challenge-brief-sections {
@@ -716,9 +732,11 @@
   }
 
   .challenge-response-form textarea {
-    min-height: 66px;
+    height: 44px;
+    min-height: 44px;
     width: 100%;
-    resize: vertical;
+    resize: none;
+    overflow: hidden;
     border: 1px solid #cfcfcf;
     border-radius: 0;
     padding: 8px;
@@ -731,8 +749,8 @@
 
   .history-list {
     display: grid;
-    gap: 17px;
-    margin-top: 18px;
+    gap: 10px;
+    margin-top: 14px;
   }
 
   .history-list article {
@@ -747,6 +765,8 @@
   .history-list span {
     min-width: 0;
     overflow: hidden;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
   }
 
   .history-list time {
@@ -755,159 +775,11 @@
 
   .history-link {
     border: 0;
-    margin-top: 19px;
+    margin-top: 12px;
     padding: 0;
     background: transparent;
     font-size: 12px;
     line-height: 1;
-  }
-}
-
-@media (min-width: 1181px) {
-  html,
-  body,
-  #root {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .min-h-screen,
-  .min-h-\[calc\(100vh-5px\)\] {
-    min-height: 0;
-    height: 100vh;
-    overflow: hidden;
-  }
-
-  .cockpit-grid {
-    min-height: 0;
-    height: calc(100vh - 117px);
-    overflow: hidden;
-  }
-
-  .left-rail {
-    display: grid;
-    grid-template-rows: minmax(0, 1fr) 190px;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .thought-map-section {
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .thought-map-tree,
-  .tree-line,
-  .tree-group {
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .tree-group > strong,
-  .tree-branch span {
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    line-clamp: 2;
-  }
-
-  .tree-group > strong {
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-  }
-
-  .tree-branch span {
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-  }
-
-  .left-bottom-grid {
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .center-stage {
-    display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
-    min-height: 0;
-    overflow: hidden;
-    padding-bottom: 18px;
-  }
-
-  .current-exploration {
-    display: grid;
-    grid-template-rows: auto auto minmax(0, auto) minmax(0, 1fr);
-    min-height: 0;
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .pathway-list {
-    grid-auto-rows: minmax(0, 92px);
-    align-content: start;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .pathway-row {
-    min-height: 0;
-    height: 92px;
-  }
-
-  .composer {
-    margin-top: 16px;
-  }
-
-  .insight-rail {
-    display: grid;
-    grid-template-rows: minmax(0, 33%) minmax(0, 29%) minmax(0, 38%);
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .make-cents,
-  .challenge-loop,
-  .thinking-history {
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .make-cents {
-    display: grid;
-    grid-template-rows: auto repeat(4, minmax(0, 1fr));
-  }
-
-  .rail-block {
-    align-self: center;
-    margin: 0 0 0 25px;
-  }
-
-  .challenge-response-form {
-    gap: 8px;
-    margin-top: 12px;
-  }
-
-  .challenge-response-form textarea {
-    min-height: 52px;
-    height: 52px;
-    resize: none;
-    overflow: hidden;
-  }
-
-  .challenge-action-row,
-  .challenge-brief-row,
-  .challenge-receipt,
-  .history-list {
-    margin-top: 12px;
-  }
-
-  .history-list {
-    gap: 12px;
-    overflow: hidden;
-  }
-
-  .history-link {
-    margin-top: 14px;
   }
 }
 
