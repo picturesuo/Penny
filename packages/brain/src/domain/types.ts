@@ -1,3 +1,7 @@
+import type { ThinkingMode } from "../modes.ts";
+
+export type { MvpMode, ThinkingMode } from "../modes.ts";
+
 export const goldenDemoSeed = "I'm building Penny, a thinking autopilot for founders." as const;
 
 export const thinkingMoveKinds = [
@@ -43,7 +47,6 @@ export type EdgeKind =
   | "clarifies"
   | "teaches";
 export type EdgeStatus = "active" | "acknowledged_vulnerability";
-export type ThinkingMode = "brain" | "challenge" | "verify" | "learn" | "artifact";
 
 export type FocusSource =
   | "autopilot_suggestion"
