@@ -11,12 +11,12 @@ import {
   type BrainObjectsRouteService,
   type BrainRecentDto,
   type BrainRecentsPayload,
-  type BrainScope,
   type BrainSessionNoteDto,
   type CreateBrainRecentInput,
   type SaveBrainObjectInput,
   type SaveSessionNoteInput,
 } from "./brain-objects-route.ts";
+import type { BrainScope } from "./scope.ts";
 
 type BrainObjectsState = Parameters<typeof buildBrainObjects>[0];
 
