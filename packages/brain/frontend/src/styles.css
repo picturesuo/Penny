@@ -1936,6 +1936,79 @@
     font-weight: 400;
   }
 
+  .graph-node-card {
+    cursor: pointer;
+    outline: none;
+  }
+
+  .graph-node-card rect {
+    fill: #fffdfa;
+    stroke: #cfcfcf;
+    stroke-width: 2;
+    filter: drop-shadow(0 8px 12px rgb(17 17 17 / 0.08));
+  }
+
+  .graph-node-card.is-focused rect,
+  .graph-node-card.is-suggested rect {
+    stroke: #a96d37;
+    stroke-width: 3;
+  }
+
+  .graph-node-card:focus-visible rect {
+    stroke: #111111;
+    stroke-width: 3;
+  }
+
+  .graph-node-dot {
+    fill: #a96d37;
+  }
+
+  .graph-node-card.is-concept .graph-node-dot {
+    fill: #7b43b7;
+  }
+
+  .graph-node-card.is-support .graph-node-dot {
+    fill: #3d9865;
+  }
+
+  .graph-node-card.is-challenge .graph-node-dot,
+  .graph-node-card.is-question .graph-node-dot {
+    fill: #707070;
+  }
+
+  .graph-node-card.is-assumption .graph-node-dot,
+  .graph-node-card.is-requirement .graph-node-dot {
+    fill: #c98232;
+  }
+
+  .graph-node-role,
+  .graph-node-menu,
+  .graph-node-title {
+    fill: #111111;
+    font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+    pointer-events: none;
+  }
+
+  .graph-node-role {
+    fill: rgb(17 17 17 / 0.58);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .graph-node-menu {
+    fill: rgb(17 17 17 / 0.58);
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .graph-node-title {
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.05;
+  }
+
   .memory-empty-state,
   .graph-empty-state,
   .document-empty-state {
@@ -2103,6 +2176,11 @@
     min-height: 280px;
   }
 
+  .brain-graph-quarter .graph-board svg {
+    height: auto;
+    min-height: 360px;
+  }
+
   .graph-board-head {
     display: flex;
     align-items: center;
@@ -2117,6 +2195,13 @@
     font-size: 14px;
     line-height: 1;
     text-transform: uppercase;
+  }
+
+  .graph-board-head span {
+    color: rgb(17 17 17 / 0.58);
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   .focused-graph-detail {
