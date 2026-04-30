@@ -103,6 +103,9 @@ test("frontend brain client normalizes cockpit Autopilot state for the existing 
     assert.equal(cockpit.data.activeChallenge?.targetClaimId, uuidAt(201));
     assert.equal(cockpit.data.activeChallenge?.challenge, "Admiration is not paid urgency.");
     assert.equal(cockpit.data.latestArtifact?.title, "Challenge Brief");
+    assert.equal(cockpit.data.workStructure?.structureType, "startup");
+    assert.equal(cockpit.data.workStructure?.steps[0]?.id, "challenge");
+    assert.equal(cockpit.data.workStructure?.steps[0]?.detailChoices[0]?.label, "Defend choice");
   } finally {
     restoreFetch();
   }
@@ -177,6 +180,35 @@ function cockpitPayload(sessionId: string) {
       ],
       edges: [],
       keyInsight: "Founder urgency matters.",
+    },
+    workStructure: {
+      structureType: "startup",
+      label: "Startup Work Order",
+      description: "A live order for turning the idea into a testable startup thesis.",
+      activeStepId: "challenge",
+      steps: [
+        {
+          id: "challenge",
+          title: "Pressure-test the riskiest claim",
+          purpose: "Attack the assumption that the rest of the startup depends on.",
+          rank: 1,
+          fragility: 100,
+          importance: 100,
+          status: "active",
+          claimIds: [uuidAt(201)],
+          edgeIds: [uuidAt(301)],
+          whyNow: "The wedge depends on willingness to pay.",
+          detailChoices: [
+            {
+              id: "defend",
+              label: "Defend choice",
+              description: "Choose evidence that would defend the claim.",
+              claimIds: [uuidAt(201)],
+              edgeIds: [uuidAt(301)],
+            },
+          ],
+        },
+      ],
     },
     moves: [
       {
