@@ -2419,7 +2419,31 @@
   }
 
   .working-notes {
+    display: grid;
+    gap: 10px;
     padding: 18px 20px 20px;
+  }
+
+  .working-notes-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .working-notes-head h2 {
+    margin-bottom: 0;
+  }
+
+  .working-notes-head span {
+    min-width: 0;
+    overflow: hidden;
+    color: rgb(17 17 17 / 0.58);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    line-height: 1;
   }
 
   .working-notes textarea {
@@ -2508,6 +2532,79 @@
     margin: 10px 0 0;
     font-size: 16px;
     line-height: 1.35;
+  }
+
+  .idea-drop {
+    display: grid;
+    gap: 12px;
+    margin-top: 22px;
+  }
+
+  .idea-drop label {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .idea-drop textarea {
+    width: 100%;
+    min-height: 138px;
+    resize: vertical;
+    border: 1px solid #cfcfcf;
+    border-radius: 8px;
+    padding: 14px;
+    background: rgb(255 255 255 / 0.74);
+    color: #111111;
+    font: inherit;
+    font-size: 17px;
+    line-height: 1.32;
+  }
+
+  .idea-drop textarea::placeholder {
+    color: rgb(17 17 17 / 0.58);
+  }
+
+  .idea-drop-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .recents-pile {
+    display: grid;
+    gap: 10px;
+    margin-top: 10px;
+    border-top: 1px solid #d8d8d8;
+    padding-top: 16px;
+  }
+
+  .recents-pile > strong {
+    font-size: 12px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .recents-pile > div {
+    display: grid;
+    gap: 6px;
+  }
+
+  .recents-pile button {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    border-radius: 6px;
+    padding: 8px 10px;
+    overflow: hidden;
+    background: rgb(17 17 17 / 0.05);
+    color: #111111;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1.2;
   }
 }
 
