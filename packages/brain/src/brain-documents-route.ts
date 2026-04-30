@@ -120,10 +120,33 @@ export type BrainHierarchySpace = {
   folders: BrainHierarchyFolder[];
 };
 
+export type BrainQuickNote = {
+  id: string;
+  sessionId: string;
+  text: string;
+  meta: string;
+  kind: "next_action" | "open_question" | "recent_move";
+};
+
+export type BrainResearchItem = {
+  id: string;
+  sessionId: string;
+  kind: "source" | "research_lead" | "positive_example" | "failure_example" | "artifact";
+  title: string;
+  subtitle: string | null;
+};
+
+export type BrainSidebarPayload = {
+  quickNotes: BrainQuickNote[];
+  folders: BrainHierarchyFolder[];
+  research: BrainResearchItem[];
+};
+
 export type BrainDocumentsPayload = {
   sourceOfTruth: "sessions_sources_claims_claim_versions_edges_moves_artifacts";
   documents: BrainDocumentSummary[];
   hierarchy: BrainHierarchySpace[];
+  sidebar: BrainSidebarPayload;
   graph: {
     nodes: BrainDocumentGraphNode[];
     edges: BrainDocumentGraphEdge[];
@@ -247,6 +270,7 @@ export function buildBrainDocuments(state: BrainDocumentsState): BrainDocumentsP
     sourceOfTruth: "sessions_sources_claims_claim_versions_edges_moves_artifacts",
     documents,
     hierarchy: documentHierarchy(documents),
+    sidebar: documentSidebar(documents),
     graph: documentGraph(documents),
     meta: {
       documentCount: documents.length,
@@ -590,6 +614,152 @@ function documentHierarchy(documents: BrainDocumentSummary[]): BrainHierarchySpa
       };
     })
     .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function documentSidebar(documents: BrainDocumentSummary[]): BrainSidebarPayload {
+  return {
+    quickNotes: documentQuickNotes(documents),
+    folders: sidebarFolders(documents),
+    research: documentResearchItems(documents),
+  };
+}
+
+function sidebarFolders(documents: BrainDocumentSummary[]): BrainHierarchyFolder[] {
+  const folders = new Map<
+    string,
+    {
+      id: string;
+      label: string;
+      kind: BrainHierarchyFolder["kind"];
+      documents: BrainHierarchyDocument[];
+    }
+  >();
+
+  for (const document of documents) {
+    const folder = hierarchyFolder(document);
+    const existingFolder =
+      folders.get(folder.id) ??
+      {
+        ...folder,
+        documents: [],
+      };
+    const files = documentFiles(document);
+
+    existingFolder.documents.push({
+      id: document.id,
+      sessionId: document.sessionId,
+      title: document.title,
+      status: document.status,
+      updatedAt: document.updatedAt,
+      fileCount: files.length,
+      files,
+    });
+    folders.set(existingFolder.id, existingFolder);
+  }
+
+  return Array.from(folders.values())
+    .map((folder) => ({
+      ...folder,
+      documentCount: folder.documents.length,
+      documents: folder.documents.sort(compareHierarchyDocuments),
+    }))
+    .sort(compareHierarchyFolders);
+}
+
+function documentQuickNotes(documents: BrainDocumentSummary[]): BrainQuickNote[] {
+  const notes: BrainQuickNote[] = [];
+
+  for (const document of documents) {
+    for (const action of document.nextActions.slice(0, 2)) {
+      notes.push({
+        id: `quick-next:${document.sessionId}:${notes.length}`,
+        sessionId: document.sessionId,
+        text: action,
+        meta: `${formatLooseLabel(document.status)} - ${document.counts.claims} claims`,
+        kind: "next_action",
+      });
+    }
+
+    for (const idea of document.todoLaterIdeas.slice(0, 1)) {
+      notes.push({
+        id: `quick-open:${document.sessionId}:${notes.length}`,
+        sessionId: document.sessionId,
+        text: idea,
+        meta: document.title,
+        kind: "open_question",
+      });
+    }
+
+    if (document.lastMove) {
+      notes.push({
+        id: `quick-move:${document.lastMove.id}`,
+        sessionId: document.sessionId,
+        text: document.lastMove.summary,
+        meta: formatLooseLabel(document.lastMove.kind),
+        kind: "recent_move",
+      });
+    }
+  }
+
+  return uniqueBy(notes, (note) => `${note.kind}:${note.sessionId}:${note.text}`).slice(0, 6);
+}
+
+function documentResearchItems(documents: BrainDocumentSummary[]): BrainResearchItem[] {
+  const items: BrainResearchItem[] = [];
+
+  for (const document of documents) {
+    if (document.originalIdea) {
+      items.push({
+        id: `research-source:${document.sessionId}`,
+        sessionId: document.sessionId,
+        kind: "source",
+        title: "Source seed",
+        subtitle: document.originalIdea,
+      });
+    }
+
+    for (const claim of document.strongestOptions.slice(0, 2)) {
+      items.push({
+        id: `research-positive:${claim.id}`,
+        sessionId: document.sessionId,
+        kind: "positive_example",
+        title: `Positive: ${formatLooseLabel(claim.kind)}`,
+        subtitle: claim.text,
+      });
+    }
+
+    for (const claim of document.rejectedOptions.slice(0, 2)) {
+      items.push({
+        id: `research-failure:${claim.id}`,
+        sessionId: document.sessionId,
+        kind: "failure_example",
+        title: `Failure: ${formatLooseLabel(claim.kind)}`,
+        subtitle: claim.text,
+      });
+    }
+
+    for (const idea of document.todoLaterIdeas.slice(0, 2)) {
+      items.push({
+        id: `research-lead:${document.sessionId}:${items.length}`,
+        sessionId: document.sessionId,
+        kind: "research_lead",
+        title: "Research lead",
+        subtitle: idea,
+      });
+    }
+
+    if (document.latestArtifact) {
+      items.push({
+        id: `research-artifact:${document.latestArtifact.id}`,
+        sessionId: document.sessionId,
+        kind: "artifact",
+        title: document.latestArtifact.title,
+        subtitle: document.latestArtifact.summary,
+      });
+    }
+  }
+
+  return uniqueBy(items, (item) => `${item.kind}:${item.sessionId}:${item.title}:${item.subtitle ?? ""}`).slice(0, 10);
 }
 
 function hierarchySpace(document: BrainDocumentSummary): Pick<BrainHierarchySpace, "id" | "label" | "kind"> {
