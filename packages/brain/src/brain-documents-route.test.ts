@@ -80,6 +80,13 @@ test("buildBrainDocuments creates a document log with rundown sections and a gra
     payload.hierarchy[0]?.folders[0]?.documents[0]?.files.map((file) => file.kind),
     ["source", "claim", "claim", "claim", "artifact", "moves"],
   );
+  assert.equal(payload.sidebar.folders[0]?.label, "Dev Project");
+  assert.equal(payload.sidebar.folders[0]?.documents[0]?.sessionId, sessionId);
+  assert.equal(payload.sidebar.quickNotes.some((note) => note.kind === "next_action"), true);
+  assert.equal(payload.sidebar.quickNotes.some((note) => note.kind === "open_question"), true);
+  assert.equal(payload.sidebar.research.some((item) => item.kind === "source"), true);
+  assert.equal(payload.sidebar.research.some((item) => item.kind === "positive_example"), true);
+  assert.equal(payload.sidebar.research.some((item) => item.kind === "failure_example"), true);
   assert.equal(payload.graph.nodes.some((node) => node.id === `document:${sessionId}`), true);
   assert.equal(payload.graph.edges.some((edge) => edge.source === `document:${sessionId}`), true);
   assert.deepEqual(payload.meta, {
