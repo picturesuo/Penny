@@ -36,6 +36,17 @@ test("buildSessionCockpitPayload composes graph, moves, autopilot, active challe
   assert.equal(payload.workStructure.steps[0]?.rank, 1);
   assert.deepEqual(payload.workStructure.steps[0]?.claimIds.includes(uuidAt(201)), true);
   assert.deepEqual(payload.workStructure.steps[0]?.edgeIds.includes(uuidAt(301)), true);
+  assert.equal(payload.graphPath.layout, "top_down");
+  assert.equal(payload.graphPath.generatedFrom, "claims_edges_moves");
+  assert.equal(payload.graphPath.focusClaimId, uuidAt(201));
+  assert.equal(payload.graphPath.nodes.length, 2);
+  assert.equal(payload.graphPath.nodes[0]?.claimId, uuidAt(201));
+  assert.equal(payload.graphPath.nodes[0]?.role, "main_claim");
+  assert.equal(payload.graphPath.nodes[0]?.selected, true);
+  assert.equal(payload.graphPath.nodes[1]?.depth, 1);
+  assert.equal(payload.graphPath.edges[0]?.edgeId, uuidAt(301));
+  assert.equal(payload.graphPath.edges[0]?.fromNodeId, `claim:${uuidAt(201)}`);
+  assert.equal(payload.graphPath.edges[0]?.toNodeId, `claim:${uuidAt(202)}`);
   assert.equal(payload.graph.nodes[0]?.claimId, uuidAt(201));
   assert.equal(payload.moves[0]?.kind, "challenge_issued");
   assert.equal(payload.autopilot.selectedCandidate?.candidateId, "next_candidate");
