@@ -201,6 +201,44 @@
     padding: 21px 0 0 22px;
   }
 
+  .rail-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .rail-section-head h2 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .rail-section-head > span {
+    color: rgb(17 17 17 / 0.68);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .rail-section-head button {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border: 0;
+    background: transparent;
+  }
+
+  .rail-section-head button span {
+    width: 11px;
+    height: 16px;
+    border: 2px solid #111111;
+    border-bottom: 0;
+  }
+
   .section-label-row {
     display: flex;
     align-items: center;
@@ -939,44 +977,71 @@
     background: #050505;
   }
 
-  .make-cents {
+  .penny-insight {
     overflow: hidden;
-    padding-bottom: 14px;
+    border-bottom: 1px solid #c0c0c0;
+    padding: 0 18px 16px 0;
   }
 
-  .rail-block {
-    margin: 14px 0 0 25px;
-    max-width: 240px;
+  .insight-block {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    column-gap: 10px;
+    margin-top: 14px;
   }
 
-  .rail-block h3 {
+  .insight-block::before {
+    content: "";
+    width: 12px;
+    height: 12px;
+    border: 2px solid #111111;
+    border-radius: 50%;
+    margin-top: 1px;
+  }
+
+  .insight-block h3 {
+    grid-column: 2;
     margin: 0 0 5px;
     font-size: 12px;
     font-weight: 700;
     line-height: 1;
   }
 
-  .rail-block p {
+  .insight-block p {
+    grid-column: 2;
     margin: 0;
     overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
-    line-clamp: 2;
+    line-clamp: 3;
     font-size: 12px;
     line-height: 1.12;
   }
 
-  .thinking-history {
-    border-top: 1px solid #c0c0c0;
-    max-height: 260px;
+  .concept-chip-list {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .concept-chip-list span {
+    max-width: 100%;
+    border: 1px solid #d2d2d2;
+    border-radius: 4px;
+    padding: 6px 10px;
     overflow: hidden;
-    padding: 18px 18px 12px 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    line-height: 1;
   }
 
   .challenge-loop {
     border-top: 1px solid #c0c0c0;
-    max-height: 285px;
+    max-height: 230px;
     overflow: hidden;
     padding: 16px 18px 14px 0;
   }
@@ -1011,8 +1076,7 @@
   .challenge-brief-row span,
   .challenge-brief-row strong,
   .challenge-receipt span,
-  .challenge-receipt strong,
-  .history-list span {
+  .challenge-receipt strong {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -1127,39 +1191,127 @@
     line-height: 1.18;
   }
 
-  .history-list {
-    display: grid;
-    gap: 10px;
-    margin-top: 14px;
-  }
-
-  .history-list article {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 16px;
-    font-size: 12px;
-    line-height: 1;
+  .makes-cents-panel {
+    border-top: 1px solid #c0c0c0;
+    padding: 18px 18px 14px 0;
     overflow: hidden;
   }
 
-  .history-list span {
+  .makes-cents-answer {
+    min-height: 92px;
+    border: 1px solid #d5d5d5;
+    border-radius: 4px;
+    padding: 11px 13px;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.22;
+  }
+
+  .makes-cents-answer strong,
+  .makes-cents-answer p {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  .makes-cents-answer strong {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .makes-cents-answer p {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    margin-top: 7px;
+  }
+
+  .makes-cents-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    margin-top: 14px;
+    border: 1px solid #d5d5d5;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .makes-cents-form input {
+    min-width: 0;
+    border: 0;
+    padding: 10px 12px;
+    outline: 0;
+    background: #ffffff;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .makes-cents-form button {
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: #111111;
+    color: #ffffff;
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .makes-cents-form button:disabled {
+    opacity: 0.38;
+  }
+
+  .makes-cents-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .makes-cents-actions button,
+  .makes-cents-enter-row button {
+    min-width: 0;
+    border: 1px solid #d5d5d5;
+    border-radius: 4px;
+    padding: 8px 9px;
+    overflow: hidden;
+    background: #ffffff;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .makes-cents-actions button:disabled,
+  .makes-cents-enter-row button:disabled {
+    opacity: 0.42;
+  }
+
+  .makes-cents-enter-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .makes-cents-enter-row span {
     min-width: 0;
     overflow: hidden;
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
-  }
-
-  .history-list time {
+    color: rgb(17 17 17 / 0.68);
+    text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 11px;
+    line-height: 1;
   }
 
-  .history-link {
-    border: 0;
-    margin-top: 12px;
-    padding: 0;
-    background: transparent;
-    font-size: 12px;
-    line-height: 1;
+  .makes-cents-enter-row button {
+    border-color: #111111;
+    background: #111111;
+    color: #ffffff;
   }
 
   .brain-library-shell,
@@ -1685,12 +1837,6 @@
     padding: 22px 0 0;
   }
 
-  .thinking-history {
-    border-top: 0;
-    border-left: 1px solid #c0c0c0;
-    padding-left: 22px;
-  }
-
   .brain-document-shell {
     grid-template-columns: 1fr;
     overflow: auto;
@@ -1757,8 +1903,7 @@
 
   .left-rail,
   .center-stage,
-  .insight-rail,
-  .thinking-history {
+  .insight-rail {
     border-right: 0;
     border-left: 0;
   }
@@ -1798,7 +1943,7 @@
     margin-left: 0;
   }
 
-  .rail-block {
+  .insight-block {
     margin-left: 0;
   }
 

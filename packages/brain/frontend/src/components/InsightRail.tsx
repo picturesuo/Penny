@@ -2,24 +2,25 @@ import { type FormEvent, useEffect, useState } from "react";
 import type {
   AutopilotSuggestion,
   BrainClaim,
-  BrainMove,
   ChallengeBriefPayload,
   ChallengeBriefSections,
   ChallengeResponseKind,
   ChallengeSuggestion,
+  InlineLearnOutput,
   LearnCandidate,
   RespondToChallengeResponse,
   SessionCockpitData,
 } from "../types/brain";
+import { createInlineLearn, saveInlineLearn } from "../api/brainClient";
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
 
 interface InsightRailProps {
+  sessionId?: string | null;
   challenge: ChallengeSuggestion | undefined;
   autopilotSuggestion: AutopilotSuggestion | null;
   claims: BrainClaim[];
   learnCandidates: LearnCandidate[];
-  moves: BrainMove[];
   latestArtifact: SessionCockpitData["latestArtifact"] | null;
   challengeResponse: RespondToChallengeResponse["data"] | null;
   disabled: boolean;
@@ -35,11 +36,11 @@ interface InsightRailProps {
 }
 
 export function InsightRail({
+  sessionId,
   challenge,
   autopilotSuggestion,
   claims,
   learnCandidates,
-  moves,
   latestArtifact,
   challengeResponse,
   disabled,
@@ -47,26 +48,21 @@ export function InsightRail({
   onRespondChallenge,
   onCreateChallengeBrief,
 }: InsightRailProps) {
-  const target = claims.find((claim) => claim.id === challenge?.targetClaimId);
+  const seedClaim = claims.find((claim) => claim.seedId === "claim.seed") ?? claims[0] ?? null;
+  const target = claims.find((claim) => claim.id === challenge?.targetClaimId) ?? seedClaim;
   const importantInsight = target?.text ?? challenge?.weakestPart ?? "No active challenge";
   const whyItMatters = challenge?.challenge ?? learnCandidates[0]?.whyItMatters ?? "No challenge rationale";
+  const example = learnCandidates[0]?.unblockExplanation ?? challenge?.whatWouldResolveIt ?? "No example returned";
+  const relatedConcepts = learnCandidates.map((candidate) => candidate.term).slice(0, 5);
 
   return (
-    <aside className="insight-rail" aria-label="Makes Cents">
-      <section className="make-cents">
-        <h2 className="section-label">MAKE CENTS</h2>
-        <RailBlock title="MOST IMPORTANT INSIGHT">{importantInsight}</RailBlock>
-        <RailBlock title="WHY IT MATTERS">{whyItMatters}</RailBlock>
-        <RailBlock title="EXAMPLES">{learnCandidates[0]?.unblockExplanation ?? "No example returned"}</RailBlock>
-        <RailBlock title="RELATED CONCEPTS">
-          {learnCandidates.length > 0
-            ? learnCandidates
-                .slice(0, 3)
-                .map((candidate) => candidate.term)
-                .join(", ")
-            : "No related concepts"}
-        </RailBlock>
-      </section>
+    <aside className="insight-rail" aria-label="Penny side rail">
+      <PennyInsight
+        keyInsight={importantInsight}
+        whyItMatters={whyItMatters}
+        example={example}
+        relatedConcepts={relatedConcepts}
+      />
       <ChallengeLoop
         challenge={challenge}
         suggestion={autopilotSuggestion}
@@ -77,42 +73,190 @@ export function InsightRail({
         onRespondChallenge={onRespondChallenge}
         onCreateChallengeBrief={onCreateChallengeBrief}
       />
-      <ThinkingHistory moves={moves} />
+      <MakesCentsPanel
+        sessionId={sessionId ?? null}
+        targetClaim={target}
+        claims={claims}
+        challenge={challenge}
+        learnCandidates={learnCandidates}
+        disabled={disabled}
+      />
     </aside>
   );
 }
 
-function RailBlock({ title, children }: { title: string; children: string }) {
+function PennyInsight({
+  keyInsight,
+  whyItMatters,
+  example,
+  relatedConcepts,
+}: {
+  keyInsight: string;
+  whyItMatters: string;
+  example: string;
+  relatedConcepts: string[];
+}) {
   return (
-    <article className="rail-block">
+    <section className="penny-insight">
+      <div className="rail-section-head">
+        <h2>PENNY INSIGHT</h2>
+        <button type="button" aria-label="Save insight">
+          <span />
+        </button>
+      </div>
+      <InsightBlock title="KEY INSIGHT">{keyInsight}</InsightBlock>
+      <InsightBlock title="WHY IT MATTERS">{whyItMatters}</InsightBlock>
+      <InsightBlock title="EXAMPLES">{example}</InsightBlock>
+      <article className="insight-block">
+        <h3>RELATED CONCEPTS</h3>
+        <div className="concept-chip-list">
+          {relatedConcepts.length > 0 ? (
+            relatedConcepts.map((concept) => <span key={concept}>{truncateWords(concept, 3)}</span>)
+          ) : (
+            <span>No related concepts</span>
+          )}
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function InsightBlock({ title, children }: { title: string; children: string }) {
+  return (
+    <article className="insight-block">
       <h3>{title}</h3>
-      <p title={children}>{truncateWords(children, 14)}</p>
+      <p title={children}>{truncateWords(children, 16)}</p>
     </article>
   );
 }
 
-function ThinkingHistory({ moves }: { moves: BrainMove[] }) {
+function MakesCentsPanel({
+  sessionId,
+  targetClaim,
+  claims,
+  challenge,
+  learnCandidates,
+  disabled,
+}: {
+  sessionId?: string | null;
+  targetClaim: BrainClaim | null;
+  claims: BrainClaim[];
+  challenge: ChallengeSuggestion | undefined;
+  learnCandidates: LearnCandidate[];
+  disabled: boolean;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [answer, setAnswer] = useState<InlineLearnOutput | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [status, setStatus] = useState("Ask about this session.");
+  const canAsk = Boolean(sessionId && targetClaim && prompt.trim()) && !disabled && !isRunning;
+  const canEnter = Boolean(sessionId && targetClaim && answer) && !disabled && !isRunning;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await askMakesCents(prompt);
+  }
+
+  async function askMakesCents(rawPrompt: string) {
+    const question = rawPrompt.trim();
+
+    if (!question) {
+      return;
+    }
+
+    if (!sessionId || !targetClaim) {
+      setStatus("Open a session before asking Makes Cents.");
+      return;
+    }
+
+    setIsRunning(true);
+    setStatus("Thinking across the session");
+
+    try {
+      const output = await createInlineLearn({
+        term: question.slice(0, 120),
+        currentClaimId: targetClaim.id,
+        sessionId,
+        localContext: makesCentsContext(claims, challenge, learnCandidates),
+      });
+
+      setAnswer(output.data);
+      setPrompt("");
+      setStatus("Ready to enter");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
+  async function handleEnterThis() {
+    if (!sessionId || !targetClaim || !answer) {
+      return;
+    }
+
+    setIsRunning(true);
+    setStatus("Entering into the graph");
+
+    try {
+      await saveInlineLearn({
+        ...answer,
+        currentClaimId: targetClaim.id,
+        sessionId,
+      });
+      setStatus("Entered as Learn");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
   return (
-    <section className="thinking-history">
-      <h2 className="section-label">THINKING HISTORY</h2>
-      <div className="history-list">
-        {moves.length > 0 ? (
-          moves.slice(0, 6).map((move) => (
-            <article key={move.id}>
-              <span title={move.summary || formatLabel(move.type)}>{truncateWords(move.summary || formatLabel(move.type), 9)}</span>
-              <time>{move.createdAt ? formatHistoryTime(move.createdAt) : "Time"}</time>
-            </article>
-          ))
-        ) : (
-          <article>
-            <span>No moves recorded</span>
-            <time>-</time>
-          </article>
-        )}
+    <section className="makes-cents-panel" aria-label="Makes Cents">
+      <div className="rail-section-head">
+        <h2>MAKES CENTS</h2>
+        <span>{isRunning ? "Thinking" : "Open"}</span>
       </div>
-      <button type="button" className="history-link">
-        View full history <span aria-hidden="true">-&gt;</span>
-      </button>
+      <article className="makes-cents-answer">
+        {answer ? (
+          <>
+            <strong title={answer.term}>{truncateWords(answer.term, 9)}</strong>
+            <p title={answer.explanation}>{truncateWords(answer.explanation, 28)}</p>
+            <p title={answer.whyItMattersHere}>{truncateWords(answer.whyItMattersHere, 20)}</p>
+          </>
+        ) : (
+          <p>Ask Makes Cents when something in the session needs a clearer explanation.</p>
+        )}
+      </article>
+      <form className="makes-cents-form" onSubmit={handleSubmit}>
+        <input
+          value={prompt}
+          disabled={disabled || isRunning}
+          placeholder="Ask Makes Cents anything..."
+          onChange={(event) => setPrompt(event.target.value)}
+        />
+        <button type="submit" disabled={!canAsk} aria-label="Ask Makes Cents">
+          <span aria-hidden="true">-&gt;</span>
+        </button>
+      </form>
+      <div className="makes-cents-actions">
+        <button type="button" disabled={disabled || isRunning} onClick={() => askMakesCents("Give me an example")}>
+          Give me an example
+        </button>
+        <button type="button" disabled={disabled || isRunning} onClick={() => askMakesCents("Explain simpler")}>
+          Explain simpler
+        </button>
+        <button type="button" disabled={disabled || isRunning} onClick={() => askMakesCents("What if this is wrong?")}>
+          What if?
+        </button>
+      </div>
+      <div className="makes-cents-enter-row">
+        <span>{truncateWords(status, 8)}</span>
+        <button type="button" disabled={!canEnter} onClick={handleEnterThis}>
+          Enter this
+        </button>
+      </div>
     </section>
   );
 }
@@ -397,12 +541,23 @@ function formatResponse(response: ChallengeResponseKind): string {
   return response.charAt(0).toUpperCase() + response.slice(1);
 }
 
-function formatHistoryTime(value: string): string {
-  const date = new Date(value);
+function makesCentsContext(
+  claims: BrainClaim[],
+  challenge: ChallengeSuggestion | undefined,
+  learnCandidates: LearnCandidate[],
+): string {
+  const claimLines = claims
+    .slice(0, 8)
+    .map((claim) => `- ${claim.kind}: ${truncateWords(claim.text, 18)}`)
+    .join("\n");
+  const conceptLines = learnCandidates
+    .slice(0, 5)
+    .map((candidate) => `- ${candidate.term}: ${truncateWords(candidate.whyItMatters, 18)}`)
+    .join("\n");
+  const challengeLine = challenge?.challenge ? `Challenge: ${truncateWords(challenge.challenge, 32)}` : "";
 
-  if (Number.isNaN(date.getTime())) {
-    return "Time";
-  }
-
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return [claimLines ? `Claims:\n${claimLines}` : "", challengeLine, conceptLines ? `Concepts:\n${conceptLines}` : ""]
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, 2_000);
 }

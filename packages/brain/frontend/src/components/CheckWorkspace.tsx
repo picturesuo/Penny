@@ -4,7 +4,6 @@ import type {
   BrainData,
   BrainDocumentsData,
   BrainDocumentSummary,
-  BrainMove,
   ChallengeResponseKind,
   RespondToChallengeResponse,
   SessionCockpitData,
@@ -20,7 +19,6 @@ import { LeftRail } from "./LeftRail";
 interface CheckWorkspaceProps {
   documentsData: BrainDocumentsData | null;
   data: BrainData | null;
-  moves: BrainMove[];
   autopilot: AutopilotTickData | null;
   challengeResponse: RespondToChallengeResponse["data"] | null;
   latestArtifact: SessionCockpitData["latestArtifact"] | null;
@@ -47,7 +45,6 @@ interface CheckWorkspaceProps {
 export function CheckWorkspace({
   documentsData,
   data,
-  moves,
   autopilot,
   challengeResponse,
   latestArtifact,
@@ -112,11 +109,11 @@ export function CheckWorkspace({
         <Composer disabled={isThinking} status={status} storageKey="penny.checkComposerDraft" onSubmit={onSeed} />
       </div>
       <InsightRail
+        sessionId={data?.session?.id ?? null}
         challenge={data?.firstChallenge}
         autopilotSuggestion={autopilot?.suggestion ?? null}
         claims={claims}
         learnCandidates={data?.learnCandidates ?? []}
-        moves={moves}
         latestArtifact={latestArtifact}
         challengeResponse={challengeResponse}
         disabled={isThinking}

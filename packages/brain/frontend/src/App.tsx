@@ -421,7 +421,6 @@ export function App() {
           <CheckWorkspace
             documentsData={documentsData}
             data={data}
-            moves={moves}
             autopilot={autopilot}
             challengeResponse={challengeResponse}
             latestArtifact={latestArtifact ?? null}
