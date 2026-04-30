@@ -885,6 +885,9 @@
   }
 
   .penny-insight {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 9px;
     min-height: 0;
     height: 100%;
     overflow: hidden;
@@ -892,10 +895,185 @@
     padding: 14px 18px 12px 0;
   }
 
+  .penny-insight-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: baseline;
+    min-width: 0;
+  }
+
+  .penny-insight-head h2,
+  .penny-insight-head p,
+  .penny-insight-head span {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .penny-insight-head h2 {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .penny-insight-head p,
+  .penny-insight-head span {
+    color: rgb(17 17 17 / 0.64);
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .penny-insight-head span {
+    justify-self: end;
+    font-weight: 700;
+  }
+
+  .penny-insight-workbench {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 94px;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    border: 1px solid #d0d0d0;
+    border-radius: 4px;
+    background: rgb(255 255 255 / 0.32);
+  }
+
+  .penny-insight-canvas {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto auto auto;
+    gap: 8px;
+    min-width: 0;
+    min-height: 0;
+    padding: 12px;
+    overflow: hidden;
+    border-right: 1px solid #d0d0d0;
+    outline: 1px dashed rgb(17 17 17 / 0.18);
+    outline-offset: -7px;
+  }
+
+  .penny-insight-toolbox {
+    display: grid;
+    align-content: start;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .penny-insight-toolbox button {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 7px;
+    align-items: center;
+    min-width: 0;
+    min-height: 44px;
+    border: 0;
+    border-bottom: 1px solid #d9d9d9;
+    padding: 0 10px;
+    overflow: hidden;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .penny-insight-toolbox button.is-active {
+    background: rgb(17 17 17 / 0.055);
+    box-shadow: inset 3px 0 0 #111111;
+  }
+
+  .penny-insight-toolbox button:disabled {
+    opacity: 0.42;
+  }
+
+  .penny-insight-toolbox button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .penny-insight-empty,
+  .penny-insight-ready {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 0;
+    padding: 14px;
+    text-align: center;
+  }
+
+  .penny-insight-empty strong,
+  .penny-insight-ready strong {
+    max-width: 100%;
+    overflow: hidden;
+    color: #111111;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1.08;
+  }
+
+  .penny-insight-empty p,
+  .penny-insight-ready p {
+    max-width: 190px;
+    margin: 0;
+    color: rgb(17 17 17 / 0.72);
+    font-size: 12px;
+    line-height: 1.24;
+  }
+
+  .penny-insight-ready span {
+    color: rgb(17 17 17 / 0.56);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .penny-insight-result {
+    display: grid;
+    align-content: start;
+    gap: 7px;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .insight-current-term {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    border-bottom: 1px dotted rgb(17 17 17 / 0.38);
+    padding: 0 0 8px;
+  }
+
+  .insight-current-term span {
+    color: rgb(17 17 17 / 0.58);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .insight-current-term strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1.1;
+  }
+
   .insight-block {
     display: grid;
     gap: 4px;
-    margin-top: 8px;
+    min-width: 0;
   }
 
   .insight-block h3 {
@@ -912,15 +1090,15 @@
     margin: 0;
     overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
-    line-clamp: 2;
+    line-clamp: 3;
     font-size: 12px;
     line-height: 1.12;
   }
 
   .insight-concepts {
-    margin-top: 10px;
+    min-height: 0;
   }
 
   .concept-chip-list {
@@ -928,6 +1106,8 @@
     flex-wrap: wrap;
     gap: 6px;
     min-width: 0;
+    max-height: 48px;
+    overflow: hidden;
   }
 
   .concept-chip-list button,
@@ -951,17 +1131,19 @@
 
   .insight-screenshot {
     display: grid;
-    grid-template-columns: 74px minmax(0, 1fr);
+    grid-template-columns: 58px minmax(0, 1fr);
     gap: 8px;
     align-items: center;
-    margin: 9px 0 0;
+    min-width: 0;
+    margin: 0;
   }
 
   .insight-screenshot img {
     display: block;
-    width: 74px;
-    height: 42px;
+    width: 58px;
+    height: 36px;
     border: 1px solid #cfcfcf;
+    border-radius: 3px;
     object-fit: cover;
   }
 
@@ -971,21 +1153,70 @@
     line-height: 1;
   }
 
+  .penny-insight-question {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
+    align-items: center;
+    min-width: 0;
+    border: 1px solid #d4d4d4;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #ffffff;
+  }
+
+  .penny-insight-question input {
+    min-width: 0;
+    border: 0;
+    padding: 8px 9px;
+    outline: 0;
+    background: transparent;
+    color: #111111;
+    font: inherit;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .penny-insight-question input::placeholder {
+    color: rgb(17 17 17 / 0.48);
+  }
+
+  .penny-insight-question button {
+    align-self: stretch;
+    border: 0;
+    border-left: 1px solid #d4d4d4;
+    background: #f6f6f6;
+    color: inherit;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .penny-insight-question button:disabled {
+    opacity: 0.42;
+  }
+
   .penny-insight-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 10px;
+    gap: 7px;
+    min-width: 0;
   }
 
   .penny-insight-actions button {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
     min-width: 0;
     border: 1px solid #d5d5d5;
     border-radius: 4px;
-    padding: 7px 8px;
+    padding: 7px;
     overflow: hidden;
     background: transparent;
     color: inherit;
+    font: inherit;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 11px;
@@ -995,6 +1226,12 @@
 
   .penny-insight-actions button:disabled {
     opacity: 0.42;
+  }
+
+  .penny-insight-actions button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .challenge-loop {
