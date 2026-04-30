@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  BrainObjectsNotFoundError,
   buildBrainObjects,
   handleBrainObjectsRequest,
   handleBrainRecentsRequest,
@@ -161,6 +162,84 @@ test("GET and POST /api/brain/recents keep lightweight Learn outputs", async () 
   assert.equal(postedBody.data.recent.rawIdea, "Unsaved Learn output that should stay lightweight.");
 });
 
+test("new Brain object endpoints keep persisted rows isolated by scope", async () => {
+  const otherScope: BrainScope = { ...scope, userId: "other-user" };
+  const sessionId = uuidAt(101);
+  const persistedRecent = recentDto("Scoped dropped idea.");
+  const persistedObject = objectDto("brain_object", "saved_idea");
+  const persistedNote = noteDto(sessionId, "Scoped working note.");
+  const service = routeService({
+    async listRecents(requestScope) {
+      return recentsPayload(sameScope(requestScope, scope) ? [persistedRecent] : []);
+    },
+    async listObjects(requestScope) {
+      return {
+        ...emptyObjects(),
+        objects: sameScope(requestScope, scope) ? [persistedObject] : [],
+        meta: {
+          objectCount: sameScope(requestScope, scope) ? 1 : 0,
+          sessionCount: 0,
+          savedObjectCount: sameScope(requestScope, scope) ? 1 : 0,
+          noteCount: 0,
+        },
+      };
+    },
+    async getSessionNote(requestScope, requestSessionId) {
+      if (requestSessionId === sessionId && sameScope(requestScope, scope)) {
+        return persistedNote;
+      }
+
+      throw new BrainObjectsNotFoundError("Session was not found in this scope.");
+    },
+    async saveObject(input) {
+      if (input.recentId === persistedRecent.id && sameScope(input.scope, scope)) {
+        return persistedObject;
+      }
+
+      throw new BrainObjectsNotFoundError("Recent item was not found in this scope.");
+    },
+  });
+
+  const visibleRecents = await handleBrainRecentsRequest(scopedRequest("http://localhost/api/brain/recents"), { service });
+  const hiddenRecents = await handleBrainRecentsRequest(scopedRequestFor("http://localhost/api/brain/recents", otherScope), {
+    service,
+  });
+  const visibleObjects = await handleBrainObjectsRequest(scopedRequest("http://localhost/api/brain/objects"), { service });
+  const hiddenObjects = await handleBrainObjectsRequest(scopedRequestFor("http://localhost/api/brain/objects", otherScope), {
+    service,
+  });
+  const hiddenNote = await handleSessionNotesRequest(
+    scopedRequestFor(`http://localhost/api/sessions/${sessionId}/notes`, otherScope),
+    sessionId,
+    { service },
+  );
+  const hiddenSave = await handleSaveBrainObjectRequest(
+    scopedJsonRequestFor(
+      "http://localhost/api/brain/objects/save",
+      {
+        recentId: persistedRecent.id,
+      },
+      otherScope,
+    ),
+    { service },
+  );
+  const visibleRecentsBody = (await visibleRecents.json()) as { data: BrainRecentsPayload };
+  const hiddenRecentsBody = (await hiddenRecents.json()) as { data: BrainRecentsPayload };
+  const visibleObjectsBody = (await visibleObjects.json()) as { data: BrainObjectsPayload };
+  const hiddenObjectsBody = (await hiddenObjects.json()) as { data: BrainObjectsPayload };
+  const hiddenNoteBody = (await hiddenNote.json()) as { error: { code: string } };
+  const hiddenSaveBody = (await hiddenSave.json()) as { error: { code: string } };
+
+  assert.equal(visibleRecentsBody.data.recents[0]?.id, persistedRecent.id);
+  assert.deepEqual(hiddenRecentsBody.data.recents, []);
+  assert.equal(visibleObjectsBody.data.objects[0]?.id, persistedObject.id);
+  assert.deepEqual(hiddenObjectsBody.data.objects, []);
+  assert.equal(hiddenNote.status, 404);
+  assert.equal(hiddenNoteBody.error.code, "brain_object_not_found");
+  assert.equal(hiddenSave.status, 404);
+  assert.equal(hiddenSaveBody.error.code, "brain_object_not_found");
+});
+
 test("GET, POST, and PUT /api/sessions/:sessionId/notes persist working notes", async () => {
   const sessionId = uuidAt(101);
   const saved: SaveSessionNoteInput[] = [];
@@ -265,26 +344,34 @@ function routeService(overrides: Partial<BrainObjectsRouteService> = {}): BrainO
 }
 
 function scopedRequest(url: string, method = "GET"): Request {
-  return new Request(url, { method, headers: scopeHeaders() });
+  return scopedRequestFor(url, scope, method);
+}
+
+function scopedRequestFor(url: string, requestScope: BrainScope, method = "GET"): Request {
+  return new Request(url, { method, headers: scopeHeaders(requestScope) });
 }
 
 function scopedJsonRequest(url: string, body: unknown, method = "POST"): Request {
+  return scopedJsonRequestFor(url, body, scope, method);
+}
+
+function scopedJsonRequestFor(url: string, body: unknown, requestScope: BrainScope, method = "POST"): Request {
   return new Request(url, {
     method,
     headers: {
-      ...scopeHeaders(),
+      ...scopeHeaders(requestScope),
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
   });
 }
 
-function scopeHeaders(): Record<string, string> {
+function scopeHeaders(requestScope: BrainScope): Record<string, string> {
   return {
-    "x-user-id": scope.userId ?? "",
-    "x-workspace-id": scope.workspaceId ?? "",
-    "x-project-id": scope.projectId ?? "",
-    "x-sphere-id": scope.sphereId ?? "",
+    "x-user-id": requestScope.userId ?? "",
+    "x-workspace-id": requestScope.workspaceId ?? "",
+    "x-project-id": requestScope.projectId ?? "",
+    "x-sphere-id": requestScope.sphereId ?? "",
   };
 }
 
@@ -342,6 +429,15 @@ function noteDto(sessionId: string, content: string): BrainSessionNoteDto {
     createdAt: "2026-04-29T12:00:00.000Z",
     updatedAt: "2026-04-29T12:05:00.000Z",
   };
+}
+
+function sameScope(left: BrainScope, right: BrainScope): boolean {
+  return (
+    left.userId === right.userId &&
+    left.workspaceId === right.workspaceId &&
+    left.projectId === right.projectId &&
+    left.sphereId === right.sphereId
+  );
 }
 
 function sessionRow(id: string): BrainObjectsState["sessions"][number] {
