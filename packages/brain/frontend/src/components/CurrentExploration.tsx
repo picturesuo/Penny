@@ -89,10 +89,8 @@ export function CurrentExploration({
     <section className="current-exploration">
       <h2 className="section-label">CURRENT EXPLORATION</h2>
       <div className="exploration-headline">
-        <h1 title={title}>{title}</h1>
-        <p title={subtitle}>{subtitle}</p>
+        <strong title={subtitle ? `${title}: ${subtitle}` : title}>{title}</strong>
       </div>
-      {activeWorkStructureStep ? <WorkStructureStepDetail step={activeWorkStructureStep} focusedClaim={focusedClaim} /> : null}
       {autopilotSuggestion ? (
         <article className="autopilot-card">
           <div>
@@ -127,35 +125,6 @@ export function CurrentExploration({
       </div>
       {selectedPath ? <PathPreview row={selectedPath} index={selectedPathIndex ?? 0} onReturnToComposer={focusComposer} /> : <PathPreviewEmpty />}
     </section>
-  );
-}
-
-function WorkStructureStepDetail({
-  step,
-  focusedClaim,
-}: {
-  step: WorkStructureStep;
-  focusedClaim: BrainClaim | null;
-}) {
-  return (
-    <article className="work-step-detail">
-      <div className="work-step-detail-head">
-        <span>#{step.rank}</span>
-        <strong title={step.title}>{truncateWords(step.title, 8)}</strong>
-        <small>{formatStatus(step.status)}</small>
-      </div>
-      <p title={step.purpose}>{truncateWords(step.purpose, 18)}</p>
-      <p title={step.whyNow}>{truncateWords(step.whyNow, 18)}</p>
-      {focusedClaim ? <em title={focusedClaim.text}>{truncateWords(focusedClaim.text, 16)}</em> : null}
-      <div className="work-step-choices" aria-label="Work step choices">
-        {step.detailChoices.map((choice) => (
-          <article key={choice.id}>
-            <strong title={choice.label}>{truncateWords(choice.label, 4)}</strong>
-            <span title={choice.description}>{truncateWords(choice.description, 10)}</span>
-          </article>
-        ))}
-      </div>
-    </article>
   );
 }
 
@@ -316,39 +285,39 @@ function essayLikeContext(context: string): boolean {
 
 const essayIdeaRows: Array<Omit<PathRow, "id">> = [
   ideaRow(
+    "Positive case",
+    "Show why this can become a strong Expos essay.",
+    "Identify the most compelling payoff if the scope is right.",
+  ),
+  ideaRow(
+    "Negative case",
+    "Find why the topic may be too broad or under-sourced.",
+    "Decide what would make the idea not worth pursuing.",
+  ),
+  ideaRow(
+    "Curveball",
+    "Ask what unexpected frame could beat neoliberalism.",
+    "Test whether a sharper concept explains Harvard better.",
+  ),
+  ideaRow(
     "Expos Curriculum Deep Dive",
     "Retrieve official assignment expectations.",
     "Determine exact genre, evidence rules, and grading constraints.",
   ),
   ideaRow(
-    "Topic Boundary",
-    "Narrow neoliberalism to one tractable angle.",
-    "Prevent the essay from becoming a broad institutional critique.",
+    "Evidence path",
+    "List concrete Harvard practices and available sources.",
+    "Separate what can be proven from what only sounds plausible.",
   ),
   ideaRow(
-    "Neoliberalism Definitions",
-    "Collect 2-3 academic definitions.",
-    "Establish a precise working vocabulary before arguing.",
+    "Failure mode",
+    "Name how the essay could collapse in review.",
+    "Look for unsupported claims, vague definitions, or weak examples.",
   ),
   ideaRow(
-    "Harvard-Specific Cases",
-    "List concrete local practices.",
-    "Surface evidence that makes the essay specific rather than generic.",
-  ),
-  ideaRow(
-    "Assignment Alignment Check",
-    "Map the topic to Expos requirements.",
-    "Reveal mismatches that would force a scope change.",
-  ),
-  ideaRow(
-    "Source Availability Scan",
-    "Search for scholarly and primary sources.",
-    "Test whether enough accessible evidence exists.",
-  ),
-  ideaRow(
-    "Thesis Stress Test",
-    "Turn the idea into one defensible claim.",
-    "Identify what would make the argument collapse.",
+    "Ethical concern",
+    "Check whether the critique becomes unfair or overstated.",
+    "Keep the argument precise enough to be defensible.",
   ),
   ideaRow(
     "Counterargument Inventory",
@@ -356,9 +325,9 @@ const essayIdeaRows: Array<Omit<PathRow, "id">> = [
     "Decide whether to defend, revise, or absorb it.",
   ),
   ideaRow(
-    "Personal Connection Probe",
-    "Find the writer's direct stake.",
-    "Uncover a non-generic reason this essay should exist.",
+    "Thesis Stress Test",
+    "Turn the idea into one defensible claim.",
+    "Identify what would make the argument collapse.",
   ),
 ];
 
