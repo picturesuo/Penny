@@ -1588,7 +1588,6 @@
   .doc-log-meta small,
   .document-log-row time,
   .working-notes h2,
-  .graph-board-head div,
   .memory-graph-label span,
   .brain-doc-aside small {
     color: rgb(17 17 17 / 0.64);
@@ -1614,7 +1613,6 @@
 
   .brain-library-stats span,
   .document-facts span,
-  .graph-board-head div span,
   .doc-kind {
     border: 1px solid #cfcfcf;
     padding: 6px 8px;
@@ -1902,14 +1900,6 @@
     font-size: 14px;
     line-height: 1;
     text-transform: uppercase;
-  }
-
-  .graph-board-head div {
-    display: flex;
-  }
-
-  .graph-board-head div span + span {
-    border-left: 0;
   }
 
   .document-rundown {

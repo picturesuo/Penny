@@ -61,7 +61,6 @@ export interface BrainDocumentClaim {
   kind: string;
   status: ClaimStatus;
   text: string;
-  confidence: number;
   versionId: string;
   createdAt: string;
 }
@@ -73,7 +72,6 @@ export interface BrainDocumentSummary {
   status: string;
   originalIdea: string | null;
   mainClaim: BrainDocumentClaim | null;
-  confidence: number | null;
   strongestOptions: BrainDocumentClaim[];
   rejectedOptions: BrainDocumentClaim[];
   todoLaterIdeas: string[];
@@ -108,7 +106,6 @@ export interface BrainDocumentGraphNode {
   type: "document" | "claim" | "risk" | "concept" | string;
   label: string;
   sessionId: string;
-  confidence: number | null;
   status: string;
 }
 

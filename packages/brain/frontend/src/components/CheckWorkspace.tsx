@@ -9,7 +9,7 @@ import type {
   SessionCockpitData,
   WorkStructureStep,
 } from "../types/brain";
-import { shortId } from "../lib/format";
+import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
 import { Composer } from "./Composer";
 import { CurrentExploration } from "./CurrentExploration";
@@ -172,8 +172,8 @@ function CheckBrainDocumentRow({
         </small>
       </span>
       <span className="check-brain-doc-meta">
-        <strong>{document.confidence ?? "-"}%</strong>
-        <small>{document.counts.claims} claims</small>
+        <strong>{document.counts.claims} claims</strong>
+        <small>{formatLabel(document.status)}</small>
       </span>
     </button>
   );

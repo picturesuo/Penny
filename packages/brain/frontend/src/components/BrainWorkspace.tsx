@@ -179,8 +179,8 @@ function DocumentLogRow({
         </small>
       </span>
       <span className="doc-log-meta">
-        <strong>{document.confidence ?? "-"}%</strong>
-        <small>{document.counts.claims} claims</small>
+        <strong>{document.counts.claims} claims</strong>
+        <small>{formatLabel(document.status)}</small>
       </span>
       <time>{formatDate(document.updatedAt)}</time>
     </button>
@@ -208,7 +208,6 @@ function DocumentHeader({
       <div className="document-facts">
         <span>Created {formatDate(document.createdAt)}</span>
         <span>Updated {formatDate(document.updatedAt)}</span>
-        <span>Confidence {document.confidence ?? "-"}%</span>
         <span>{formatLabel(document.status)}</span>
       </div>
     </header>
@@ -237,10 +236,6 @@ function ConnectedGraphBoard({
     <section className="graph-board" aria-label={title}>
       <div className="graph-board-head">
         <h2>{title}</h2>
-        <div>
-          <span>Fit</span>
-          <span>100%</span>
-        </div>
       </div>
       {claims.length > 0 ? (
         <svg viewBox="0 0 1000 420" role="img" aria-label="Connected thought graph">
@@ -288,7 +283,7 @@ function ConnectedGraphBoard({
                     {truncateWords(claim.text, 5)}
                   </text>
                   <text className="graph-node-meta" x={point.x + 31} y={point.y + 16}>
-                    {formatLabel(claim.kind)} {claim.confidence ?? "-"}%
+                    {formatLabel(claim.kind)}
                   </text>
                 </g>
               );

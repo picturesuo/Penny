@@ -293,9 +293,9 @@ function claimRows(claims: BrainClaim[]): PathRow[] {
     .map((claim) => ({
       id: `claim:${claim.id}`,
       title: `${formatTitleStatus(claim.kind)} check`,
-      reasoning: [claim.text, `${claim.confidence ?? 60}% confidence / ${formatStatus(claim.status)}`],
+      reasoning: [claim.text, formatStatus(claim.status)],
       summary: "Preview how testing this claim changes the rest of the thinking pack.",
-      tweaks: [claim.text, `${claim.confidence ?? 60}% confidence`, formatStatus(claim.kind)],
+      tweaks: [claim.text, formatStatus(claim.status), formatStatus(claim.kind)],
     }));
 }
 
