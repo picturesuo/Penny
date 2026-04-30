@@ -660,7 +660,7 @@
   }
 
   .exploration-headline {
-    margin: 10px 0 8px;
+    margin: 6px 0 8px;
   }
 
   .exploration-headline strong {
@@ -673,9 +673,9 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     line-clamp: 2;
-    font-size: clamp(20px, 2vw, 26px);
+    font-size: 16px;
     font-weight: 700;
-    line-height: 1.08;
+    line-height: 1.12;
   }
 
   .pathway-list {
