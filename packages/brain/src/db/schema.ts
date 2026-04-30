@@ -65,6 +65,7 @@ export const nextMoveActionEnum = pgEnum("next_move_action", [
   "clarify",
   "verify",
   "challenge",
+  "save_to_brain",
 ]);
 export const challengeFailureTypeEnum = pgEnum("challenge_failure_type", [
   "weak_evidence",

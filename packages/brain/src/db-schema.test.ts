@@ -120,7 +120,14 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
     "challenge_response",
     "none",
   ]);
-  assert.deepEqual(nextMoveActionEnum.enumValues, ["resume_open_challenge", "learn", "clarify", "verify", "challenge"]);
+  assert.deepEqual(nextMoveActionEnum.enumValues, [
+    "resume_open_challenge",
+    "learn",
+    "clarify",
+    "verify",
+    "challenge",
+    "save_to_brain",
+  ]);
   assert.deepEqual(challengeFailureTypeEnum.enumValues, [
     "weak_evidence",
     "missing_counterargument",
