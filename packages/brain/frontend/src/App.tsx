@@ -12,6 +12,7 @@ import {
 } from "./api/brainClient";
 import { BrainWorkspace } from "./components/BrainWorkspace";
 import { CheckWorkspace } from "./components/CheckWorkspace";
+import { Composer } from "./components/Composer";
 import { Header } from "./components/Header";
 import { formatLabel, shortId } from "./lib/format";
 import type {
@@ -42,7 +43,7 @@ type ChallengeResponseDraft =
 
 const ACTIVE_SESSION_KEY = "penny.activeSessionId";
 const SESSION_QUERY_PARAM = "sessionId";
-type PennyMode = "Brain" | "Cents" | "Check" | "Search" | "Settings";
+type PennyMode = "Learn" | "Brain" | "Check";
 
 export function App() {
   const [documentsData, setDocumentsData] = useState<BrainDocumentsData | null>(null);
@@ -54,7 +55,7 @@ export function App() {
   const [latestArtifact, setLatestArtifact] = useState<SessionCockpitData["latestArtifact"]>(null);
   const [focusedClaimId, setFocusedClaimId] = useState<string | null>(null);
   const [focusedWorkStructureStepId, setFocusedWorkStructureStepId] = useState<string | null>(null);
-  const [activeMode, setActiveMode] = useState<PennyMode>("Brain");
+  const [activeMode, setActiveMode] = useState<PennyMode>("Learn");
   const [status, setStatus] = useState("Ready");
   const [isThinking, setIsThinking] = useState(false);
 
@@ -415,7 +416,20 @@ export function App() {
           activeItem={activeMode}
           onNavItemSelect={(item) => setActiveMode(item as PennyMode)}
         />
-        {activeMode === "Brain" ? (
+        {activeMode === "Learn" ? (
+          <LearnWorkspace
+            documentsData={documentsData}
+            selectedDocument={selectedDocument}
+            data={data}
+            autopilot={autopilot}
+            status={status}
+            isThinking={isThinking}
+            onSeed={handleSeed}
+            onSelectDocument={handleSelectDocument}
+            onOpenBrain={() => setActiveMode("Brain")}
+            onOpenCheck={() => setActiveMode("Check")}
+          />
+        ) : activeMode === "Brain" ? (
           <BrainWorkspace
             documentsData={documentsData}
             selectedDocument={selectedDocument}
@@ -453,16 +467,96 @@ export function App() {
             onRespondChallenge={handleChallengeResponse}
             onCreateChallengeBrief={handleCreateChallengeBrief}
           />
-        ) : (
-          <main className="mode-placeholder">
-            <section>
-              <h1>{activeMode}</h1>
-              <p>This mode will use the same thinking graph after Brain and Check are settled.</p>
-            </section>
-          </main>
-        )}
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function LearnWorkspace({
+  documentsData,
+  selectedDocument,
+  data,
+  autopilot,
+  status,
+  isThinking,
+  onSeed,
+  onSelectDocument,
+  onOpenBrain,
+  onOpenCheck,
+}: {
+  documentsData: BrainDocumentsData | null;
+  selectedDocument: BrainDocumentsData["documents"][number] | null;
+  data: BrainData | null;
+  autopilot: AutopilotTickData | null;
+  status: string;
+  isThinking: boolean;
+  onSeed: (rawIdea: string) => Promise<void>;
+  onSelectDocument: (sessionId: string) => void;
+  onOpenBrain: () => void;
+  onOpenCheck: () => void;
+}) {
+  const recentDocuments = documentsData?.documents.slice(0, 3) ?? [];
+  const activeClaim = data?.ideaMap?.claims?.[0]?.text ?? selectedDocument?.mainClaim?.text ?? null;
+  const suggestedNextStep = autopilot?.suggestion ?? null;
+
+  return (
+    <main className="mode-placeholder" aria-label="Learn">
+      <section>
+        <span className="section-label">LEARN</span>
+        <h1>Drop an idea</h1>
+        <p>
+          Start with one raw thought. Penny will turn it into saved Brain structure, then Autopilot can point Check at the
+          next weak spot.
+        </p>
+        <Composer disabled={isThinking} status={status} onSubmit={onSeed} storageKey="penny.learnIdeaDraft" />
+        {activeClaim ? (
+          <div className="challenge-action-row">
+            <span>
+              <strong>Saved to Brain</strong>
+              {activeClaim}
+            </span>
+            <button type="button" onClick={onOpenBrain}>
+              Open Brain
+            </button>
+          </div>
+        ) : null}
+        {suggestedNextStep ? (
+          <div className="challenge-action-row">
+            <span>
+              <strong>{suggestedNextStep.primaryActionLabel}</strong>
+              {suggestedNextStep.why}
+            </span>
+            <button type="button" onClick={onOpenCheck}>
+              Open Check
+            </button>
+          </div>
+        ) : null}
+        {recentDocuments.length > 0 ? (
+          <div className="document-log-table" aria-label="Recent Brain documents">
+            {recentDocuments.map((document) => (
+              <button
+                key={document.id}
+                type="button"
+                className="document-log-row"
+                onClick={() => onSelectDocument(document.sessionId)}
+              >
+                <span className="doc-kind">Brain</span>
+                <span>
+                  <strong>{document.title}</strong>
+                  <small>{document.mainClaim?.text ?? document.originalIdea ?? "No main claim yet"}</small>
+                </span>
+                <span className="doc-log-meta">
+                  <strong>{document.counts.claims} claims</strong>
+                  <small>{formatLabel(document.status)}</small>
+                </span>
+                <time>{shortId(document.sessionId)}</time>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
+    </main>
   );
 }
 
