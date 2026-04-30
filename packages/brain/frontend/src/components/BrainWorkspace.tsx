@@ -12,12 +12,18 @@ import type {
   BrainHierarchySpace,
   BrainMove,
   ChallengeBriefPayload,
+  ClaimDetailConnection,
+  ClaimDetailData,
+  ClaimDetailMove,
   SessionCockpitData,
   WorkStructure,
 } from "../types/brain";
+import { fetchClaimDetail } from "../api/brainClient";
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
 import { Composer } from "./Composer";
+
+type ClaimDetailStatus = "idle" | "loading" | "ready" | "error";
 
 interface BrainWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -69,6 +75,42 @@ export function BrainWorkspace({
 }: BrainWorkspaceProps) {
   const claims = selectedDocument ? data?.ideaMap?.claims ?? [] : [];
   const edges = selectedDocument ? data?.ideaMap?.edges ?? [] : [];
+  const focusedClaim = claims.find((claim) => claim.id === focusedClaimId) ?? null;
+  const [claimDetail, setClaimDetail] = useState<ClaimDetailData | null>(null);
+  const [claimDetailStatus, setClaimDetailStatus] = useState<ClaimDetailStatus>("idle");
+  const [claimDetailError, setClaimDetailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedDocument || !focusedClaimId) {
+      setClaimDetail(null);
+      setClaimDetailStatus("idle");
+      setClaimDetailError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setClaimDetailStatus("loading");
+    setClaimDetailError(null);
+
+    fetchClaimDetail(focusedClaimId)
+      .then((response) => {
+        if (!cancelled) {
+          setClaimDetail(response.data);
+          setClaimDetailStatus("ready");
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setClaimDetail(null);
+          setClaimDetailStatus("error");
+          setClaimDetailError(error instanceof Error ? error.message : String(error));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [focusedClaimId, selectedDocument]);
 
   return (
     <main className="brain-workspace-shell">
@@ -95,6 +137,15 @@ export function BrainWorkspace({
               </div>
             </div>
             <DocumentHeader document={selectedDocument} workStructure={data?.workStructure ?? null} />
+            <FocusedGraphDetail
+              focusedClaim={focusedClaim}
+              detail={claimDetail}
+              detailStatus={claimDetailStatus}
+              detailError={claimDetailError}
+              localClaims={claims}
+              localEdges={edges}
+              moves={moves}
+            />
             <DocumentRundown document={selectedDocument} moves={moves} latestArtifact={latestArtifact} />
             <WorkingNotes sessionId={selectedDocument.sessionId} title={selectedDocument.title} />
           </section>
@@ -109,7 +160,7 @@ export function BrainWorkspace({
             />
             <BrainDocumentAside
               document={selectedDocument}
-              focusedClaim={claims.find((claim) => claim.id === focusedClaimId) ?? null}
+              focusedClaim={focusedClaim}
               claims={claims}
               moves={moves}
               latestArtifact={latestArtifact}
@@ -131,6 +182,208 @@ export function BrainWorkspace({
         </>
       )}
     </main>
+  );
+}
+
+function FocusedGraphDetail({
+  focusedClaim,
+  detail,
+  detailStatus,
+  detailError,
+  localClaims,
+  localEdges,
+  moves,
+}: {
+  focusedClaim: BrainClaim | null;
+  detail: ClaimDetailData | null;
+  detailStatus: ClaimDetailStatus;
+  detailError: string | null;
+  localClaims: BrainClaim[];
+  localEdges: BrainEdge[];
+  moves: BrainMove[];
+}) {
+  const claim = detail?.claim ?? focusedClaim;
+  const focusKey = claim?.id ?? "none";
+  const [stitchMode, setStitchMode] = useState(false);
+
+  useEffect(() => {
+    setStitchMode(false);
+  }, [focusKey]);
+
+  if (!claim) {
+    return null;
+  }
+
+  const connections = detail?.connectedClaims ?? localClaimConnections(claim, localClaims, localEdges);
+  const supportConnections = connections.filter((connection) => isSupportConnection(connection.edge.kind));
+  const tensionConnections = connections.filter((connection) => isTensionConnection(connection.edge.kind));
+  const contextConnections = connections.filter(
+    (connection) => !isSupportConnection(connection.edge.kind) && !isTensionConnection(connection.edge.kind),
+  );
+  const reasoningItems = detail
+    ? reasoningFromDetailMoves(detail.moves)
+    : moves.slice(0, 5).map((move) => ({
+        id: move.id,
+        label: formatLabel(move.kind ?? move.type ?? "move"),
+        text: move.summary,
+        meta: move.createdAt ? formatDate(move.createdAt) : null,
+      }));
+  const sourceSpans = detail?.provenance.spans.filter((span) => span.text.trim()).slice(0, 3) ?? [];
+  const artifactReferences = detail?.artifactReferences.slice(0, 3) ?? [];
+  const latestVersion = detail?.currentVersion;
+
+  return (
+    <section className="focused-graph-detail" aria-label="Selected graph part full view">
+      <div className="focused-detail-head">
+        <div>
+          <span className="section-label">FULL VIEW</span>
+          <h2>{claim.text}</h2>
+        </div>
+        <div className="focused-detail-actions" aria-label="Full view options">
+          <button
+            type="button"
+            className={`stitch-toggle${stitchMode ? " is-active" : ""}`}
+            onClick={() => setStitchMode((current) => !current)}
+            aria-pressed={stitchMode}
+          >
+            Stitch {stitchMode ? "On" : "Off"}
+          </button>
+        </div>
+      </div>
+      <div className="focused-detail-meta" aria-label="Selected claim state">
+        <span>{formatLabel(claim.kind)}</span>
+        <span>{formatLabel(claim.status)}</span>
+        {typeof claim.confidence === "number" ? <span>{claim.confidence}% confidence</span> : null}
+        {latestVersion ? <span>Version {shortId(latestVersion.id)}</span> : null}
+      </div>
+      {detailStatus === "loading" ? <p className="focused-detail-note">Loading graph detail.</p> : null}
+      {detailStatus === "error" ? (
+        <p className="focused-detail-note">Using the current graph slice. {detailError}</p>
+      ) : null}
+      {stitchMode ? (
+        <StitchedReference
+          claimText={claim.text}
+          supportConnections={supportConnections}
+          tensionConnections={tensionConnections}
+          contextConnections={contextConnections}
+          reasoningItems={reasoningItems}
+        />
+      ) : (
+        <div className="focused-detail-grid">
+          <DetailList
+            title="Chosen Ideas"
+            emptyLabel="No connected ideas recorded yet."
+            items={[...supportConnections, ...contextConnections].slice(0, 6).map((connection) => ({
+              id: connection.edge.id,
+              label: relationshipLabel(connection),
+              text: connection.claim.text,
+              meta: `${formatLabel(connection.claim.kind)} / ${connection.direction}`,
+            }))}
+          />
+          <DetailList
+            title="Support / Tension"
+            emptyLabel="No support or tension links recorded yet."
+            items={[...supportConnections, ...tensionConnections].slice(0, 6).map((connection) => ({
+              id: `${connection.edge.id}-relation`,
+              label: relationshipLabel(connection),
+              text: connection.claim.text,
+              meta: connection.edge.status ? formatLabel(connection.edge.status) : null,
+            }))}
+          />
+          <DetailList
+            title="Reasoning"
+            emptyLabel="No reasoning moves recorded for this claim yet."
+            items={reasoningItems.slice(0, 6)}
+          />
+          <DetailList
+            title="Provenance"
+            emptyLabel="No source spans or artifacts reference this claim yet."
+            items={[
+              ...sourceSpans.map((span) => ({
+                id: span.id,
+                label: formatLabel(span.label ?? "source span"),
+                text: span.text,
+                meta: span.sourceId ? `Source ${shortId(span.sourceId)}` : null,
+              })),
+              ...artifactReferences.map((artifact) => ({
+                id: artifact.id,
+                label: formatLabel(artifact.kind),
+                text: artifact.summary || artifact.title,
+                meta: artifact.referenceReasons.map(formatLabel).join(", "),
+              })),
+            ]}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DetailList({
+  title,
+  emptyLabel,
+  items,
+}: {
+  title: string;
+  emptyLabel: string;
+  items: Array<{ id: string; label: string; text: string; meta: string | null }>;
+}) {
+  return (
+    <section className="detail-list">
+      <h3>{title}</h3>
+      {items.length > 0 ? (
+        <ul>
+          {items.map((item) => (
+            <li key={item.id}>
+              <span>{item.label}</span>
+              <strong>{item.text}</strong>
+              {item.meta ? <small>{item.meta}</small> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>{emptyLabel}</p>
+      )}
+    </section>
+  );
+}
+
+function StitchedReference({
+  claimText,
+  supportConnections,
+  tensionConnections,
+  contextConnections,
+  reasoningItems,
+}: {
+  claimText: string;
+  supportConnections: ClaimDetailConnection[];
+  tensionConnections: ClaimDetailConnection[];
+  contextConnections: ClaimDetailConnection[];
+  reasoningItems: Array<{ id: string; label: string; text: string; meta: string | null }>;
+}) {
+  return (
+    <article className="stitched-reference">
+      <section>
+        <h3>Core</h3>
+        <p>{claimText}</p>
+      </section>
+      <section>
+        <h3>Support</h3>
+        <p>{sentenceFromConnections(supportConnections, "No supporting idea is attached yet.")}</p>
+      </section>
+      <section>
+        <h3>Tension</h3>
+        <p>{sentenceFromConnections(tensionConnections, "No active tension is attached yet.")}</p>
+      </section>
+      <section>
+        <h3>Context</h3>
+        <p>{sentenceFromConnections(contextConnections, "No extra context is attached yet.")}</p>
+      </section>
+      <section>
+        <h3>Reasoning</h3>
+        <p>{reasoningItems[0]?.text ?? "No reasoning move is attached yet."}</p>
+      </section>
+    </article>
   );
 }
 
@@ -596,6 +849,90 @@ function WorkingNotes({ sessionId, title }: { sessionId: string; title: string }
       />
     </section>
   );
+}
+
+function localClaimConnections(claim: BrainClaim, claims: BrainClaim[], edges: BrainEdge[]): ClaimDetailConnection[] {
+  const claimMap = new Map(claims.map((item) => [item.id, item]));
+
+  return edges
+    .filter((edge) => edge.fromClaimId === claim.id || edge.toClaimId === claim.id)
+    .map((edge) => {
+      const connectedClaimId = edge.fromClaimId === claim.id ? edge.toClaimId : edge.fromClaimId;
+      const connectedClaim = claimMap.get(connectedClaimId);
+
+      if (!connectedClaim) {
+        return null;
+      }
+
+      return {
+        edge: {
+          id: edge.id,
+          fromClaimId: edge.fromClaimId,
+          toClaimId: edge.toClaimId,
+          kind: edge.kind,
+          status: edge.status ?? "active",
+          label: edge.label ?? null,
+          createdAt: "",
+        },
+        direction: edge.fromClaimId === claim.id ? "outgoing" : "incoming",
+        claim: connectedClaim,
+      };
+    })
+    .filter((connection): connection is ClaimDetailConnection => Boolean(connection));
+}
+
+function reasoningFromDetailMoves(moves: ClaimDetailMove[]): Array<{ id: string; label: string; text: string; meta: string | null }> {
+  return moves
+    .map((move) => {
+      const reasoning =
+        payloadString(move.payload, "reasoning") ??
+        payloadString(move.payload, "candidateReason") ??
+        payloadString(move.payload, "whyThis") ??
+        payloadString(move.payload, "reason") ??
+        move.summary;
+
+      return {
+        id: move.id,
+        label: formatLabel(move.kind),
+        text: reasoning,
+        meta: formatDate(move.createdAt),
+      };
+    })
+    .filter((item) => item.text.trim().length > 0);
+}
+
+function payloadString(payload: unknown, key: string): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const value = (payload as Record<string, unknown>)[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function relationshipLabel(connection: ClaimDetailConnection): string {
+  const edgeLabel = connection.edge.label?.trim();
+
+  return edgeLabel ? `${formatLabel(connection.edge.kind)} / ${edgeLabel}` : formatLabel(connection.edge.kind);
+}
+
+function isSupportConnection(kind: string): boolean {
+  return kind === "supports" || kind === "depends_on" || kind === "refines";
+}
+
+function isTensionConnection(kind: string): boolean {
+  return kind === "challenges" || kind === "contradicts";
+}
+
+function sentenceFromConnections(connections: ClaimDetailConnection[], emptyLabel: string): string {
+  const texts = connections.map((connection) => connection.claim.text).filter(Boolean);
+
+  if (texts.length === 0) {
+    return emptyLabel;
+  }
+
+  return texts.slice(0, 4).join(" ");
 }
 
 function claimPositions(claims: BrainClaim[]): GraphPoint[] {
