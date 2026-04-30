@@ -1,25 +1,5 @@
-import { useEffect, useMemo, useState, type ComponentType } from "react";
-import {
-  BookOpen,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  CircleDashed,
-  CircleDot,
-  ClipboardCheck,
-  FileText,
-  Layers,
-  Lightbulb,
-  ListChecks,
-  MessageCircleQuestionMark,
-  PenLine,
-  SearchCheck,
-  Target,
-  TriangleAlert,
-  type LucideProps,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type { BrainClaim, WorkStructure, WorkStructureStep, WorkStructureStepStatus, WorkStructureType } from "../types/brain";
-import { truncateWords } from "../lib/text";
 import { Section } from "./Section";
 
 interface LeftRailProps {
@@ -32,13 +12,10 @@ interface LeftRailProps {
   onWorkStructureSelect?: (step: WorkStructureStep) => void;
 }
 
-type StructureIcon = ComponentType<LucideProps>;
-
 type StructureDefinition = {
   id: string;
   title: string;
   description: string;
-  icon: StructureIcon;
   stepIds: string[];
   children?: StructureChildTemplate[];
 };
@@ -47,7 +24,6 @@ type StructureChildTemplate = {
   id: string;
   title: string;
   description: string;
-  icon: StructureIcon;
 };
 
 type StructureChild = {
@@ -55,7 +31,6 @@ type StructureChild = {
   title: string;
   description: string;
   status: WorkStructureStepStatus;
-  icon: StructureIcon;
   step?: WorkStructureStep;
   claimId?: string;
 };
@@ -65,7 +40,6 @@ type StructureBox = {
   title: string;
   description: string;
   status: WorkStructureStepStatus;
-  icon: StructureIcon;
   steps: WorkStructureStep[];
   children: StructureChild[];
 };
@@ -172,28 +146,17 @@ function StructureBoxRow({
   onSelect: () => void;
   onChildSelect: (child: StructureChild) => void;
 }) {
-  const Icon = box.icon;
-  const StatusIcon = statusIcon(box.status);
   const label = String(index + 1);
 
   return (
     <article className={`structure-box is-${box.status}${open ? " is-open" : ""}`} role="treeitem" aria-expanded={open}>
       <button type="button" className="structure-box-main" onClick={onSelect}>
-        {open ? (
-          <ChevronDown className="structure-chevron" size={14} strokeWidth={1.9} aria-hidden="true" />
-        ) : (
-          <ChevronRight className="structure-chevron" size={14} strokeWidth={1.9} aria-hidden="true" />
-        )}
-        <span className="structure-box-icon" aria-hidden="true">
-          <Icon size={16} strokeWidth={1.8} />
-          <span>{label}</span>
-        </span>
+        <span className="structure-box-index" aria-hidden="true">{label}</span>
         <span className="structure-box-copy">
           <strong title={box.title}>{box.title}</strong>
           <small title={box.description}>{box.description}</small>
         </span>
         <span className="structure-status-label">{statusLabel(box.status)}</span>
-        <StatusIcon className="structure-status-icon" size={15} strokeWidth={1.8} aria-hidden="true" />
       </button>
       {open ? (
         <div className="structure-subgroup" role="group">
@@ -214,7 +177,6 @@ function StructureBoxRow({
                 <small>This section is visible but has not been filled.</small>
               </span>
               <span className="structure-status-label">Missing</span>
-              <CircleDashed className="structure-status-icon" size={14} strokeWidth={1.8} aria-hidden="true" />
             </div>
           )}
         </div>
@@ -232,8 +194,6 @@ function StructureChildRow({
   label: string;
   onSelect: () => void;
 }) {
-  const Icon = child.icon;
-  const StatusIcon = statusIcon(child.status);
   const interactive = Boolean(child.step || child.claimId);
 
   return (
@@ -244,13 +204,11 @@ function StructureChildRow({
       onClick={interactive ? onSelect : undefined}
     >
       <span className="structure-child-index">{label}</span>
-      <Icon className="structure-child-icon" size={14} strokeWidth={1.7} aria-hidden="true" />
       <span className="structure-child-copy">
         <strong title={child.title}>{child.title}</strong>
         <small title={child.description}>{child.description}</small>
       </span>
       <span className="structure-status-label">{statusLabel(child.status)}</span>
-      <StatusIcon className="structure-status-icon" size={14} strokeWidth={1.8} aria-hidden="true" />
     </button>
   );
 }
@@ -293,7 +251,6 @@ function buildStructureBoxes(
           id: `extra:${step.id}`,
           title: step.title,
           description: step.purpose,
-          icon: Lightbulb,
           stepIds: [step.id],
         },
         [step],
@@ -320,12 +277,11 @@ function structureBoxFromDefinition(
   claimsById: Map<string, BrainClaim>,
 ): StructureBox {
   const status = structureBoxStatus(steps);
-  const stepChildren = steps.flatMap((step) => childrenFromStep(step, claimsById, definition.icon));
+  const stepChildren = steps.flatMap((step) => childrenFromStep(step, claimsById));
   const templateChildren = (definition.children ?? []).map((child, index) => ({
     id: `template:${definition.id}:${child.id}`,
     title: child.title,
     description: child.description,
-    icon: child.icon,
     status: templateChildStatus(status, index),
   }));
   const children = uniqueChildren([...stepChildren, ...templateChildren]);
@@ -335,7 +291,6 @@ function structureBoxFromDefinition(
     title: definition.title,
     description: steps[0]?.purpose ?? definition.description,
     status,
-    icon: definition.icon,
     steps,
     children,
   };
@@ -344,13 +299,11 @@ function structureBoxFromDefinition(
 function childrenFromStep(
   step: WorkStructureStep,
   claimsById: Map<string, BrainClaim>,
-  fallbackIcon: StructureIcon,
 ): StructureChild[] {
   const detailChildren = step.detailChoices.map((choice, index) => ({
     id: `choice:${step.id}:${choice.id}`,
     title: cleanChoiceLabel(choice.label),
     description: choice.description,
-    icon: childIconForText(choice.label, choice.description, fallbackIcon),
     status: childStatusFromParent(step.status, index),
     step,
   }));
@@ -362,8 +315,7 @@ function childrenFromStep(
           {
             id: `claim:${step.id}:${claim.id}`,
             title: formatClaimTitle(claim.kind),
-            description: truncateWords(claim.text, 9),
-            icon: childIconForText(claim.kind, claim.text, fallbackIcon),
+            description: claim.text,
             status: step.status,
             claimId: claim.id,
           },
@@ -380,7 +332,6 @@ function childrenFromStep(
       id: `step:${step.id}:purpose`,
       title: step.title,
       description: step.whyNow || step.purpose,
-      icon: fallbackIcon,
       status: step.status,
       step,
     },
@@ -484,40 +435,6 @@ function statusLabel(status: WorkStructureStepStatus): string {
   }
 }
 
-function statusIcon(status: WorkStructureStepStatus): StructureIcon {
-  switch (status) {
-    case "active":
-      return CircleDot;
-    case "resolved":
-      return CheckCircle2;
-    case "stale":
-    case "not_started":
-      return CircleDashed;
-  }
-}
-
-function childIconForText(title: string, description: string, fallbackIcon: StructureIcon): StructureIcon {
-  const text = `${title} ${description}`.toLowerCase();
-
-  if (hasAny(text, ["evidence", "source", "standard", "example"])) {
-    return SearchCheck;
-  }
-
-  if (hasAny(text, ["lens", "perspective", "concept", "definition", "term"])) {
-    return BookOpen;
-  }
-
-  if (hasAny(text, ["challenge", "counter", "risk", "fragile", "missing", "failure"])) {
-    return TriangleAlert;
-  }
-
-  if (hasAny(text, ["outline", "criteria", "expect", "prompt", "assignment"])) {
-    return ListChecks;
-  }
-
-  return fallbackIcon;
-}
-
 function cleanChoiceLabel(label: string): string {
   return label.replace(/\s+choice$/i, "");
 }
@@ -611,110 +528,103 @@ const structureDefinitions: Record<WorkStructureType, StructureDefinition[]> = {
       id: "topic_boundary",
       title: "Topic Boundary",
       description: "Bound the topic",
-      icon: Target,
       stepIds: ["bound_topic"],
       children: [
-        { id: "scope", title: "Scope Limit", description: "What the paper will include", icon: Target },
-        { id: "exclusions", title: "Exclusions", description: "What the paper will leave out", icon: Layers },
+        { id: "scope", title: "Scope Limit", description: "What the paper will include" },
+        { id: "exclusions", title: "Exclusions", description: "What the paper will leave out" },
       ],
     },
     {
       id: "working_thesis",
       title: "Working Thesis",
       description: "Thesis candidate",
-      icon: FileText,
       stepIds: ["working_thesis"],
       children: [
-        { id: "claim", title: "Claim Shape", description: "The sentence the essay can defend", icon: PenLine },
-        { id: "stakes", title: "Stakes", description: "Why the claim matters", icon: Lightbulb },
+        { id: "claim", title: "Claim Shape", description: "The sentence the essay can defend" },
+        { id: "stakes", title: "Stakes", description: "Why the claim matters" },
       ],
     },
     {
       id: "course_fit",
       title: "Course Fit",
       description: "Fit to assignment",
-      icon: ClipboardCheck,
       stepIds: ["assignment_fit"],
       children: [
-        { id: "expectations", title: "Expectations", description: "What the prompt expects", icon: ListChecks },
-        { id: "lens", title: "Lens / Perspective", description: "Which theoretical lens fits", icon: BookOpen },
-        { id: "key_concepts", title: "Key Concepts", description: "Core concepts to use", icon: Lightbulb },
-        { id: "evidence_standard", title: "Evidence Standard", description: "Type / depth of evidence", icon: SearchCheck },
-        { id: "success_criteria", title: "Success Criteria", description: "How this will be evaluated", icon: CheckCircle2 },
+        { id: "expectations", title: "Expectations", description: "What the prompt expects" },
+        { id: "lens", title: "Lens / Perspective", description: "Which theoretical lens fits" },
+        { id: "key_concepts", title: "Key Concepts", description: "Core concepts to use" },
+        { id: "evidence_standard", title: "Evidence Standard", description: "Type / depth of evidence" },
+        { id: "success_criteria", title: "Success Criteria", description: "How this will be evaluated" },
       ],
     },
     {
       id: "evidence_buckets",
       title: "Evidence Buckets",
       description: "Organize support",
-      icon: Layers,
       stepIds: ["specific_evidence"],
       children: [
-        { id: "primary", title: "Primary Evidence", description: "Concrete local examples", icon: SearchCheck },
-        { id: "secondary", title: "Secondary Evidence", description: "Academic support", icon: BookOpen },
+        { id: "primary", title: "Primary Evidence", description: "Concrete local examples" },
+        { id: "secondary", title: "Secondary Evidence", description: "Academic support" },
       ],
     },
     {
       id: "counterargument",
       title: "Counterargument",
       description: "Anticipate objections",
-      icon: MessageCircleQuestionMark,
       stepIds: ["counterargument"],
       children: [
-        { id: "strongest_objection", title: "Strongest Objection", description: "The critique most likely to land", icon: TriangleAlert },
-        { id: "response", title: "Response", description: "Defend, revise, or absorb", icon: MessageCircleQuestionMark },
+        { id: "strongest_objection", title: "Strongest Objection", description: "The critique most likely to land" },
+        { id: "response", title: "Response", description: "Defend, revise, or absorb" },
       ],
     },
     {
       id: "outline",
       title: "Outline",
       description: "Structure the argument",
-      icon: ListChecks,
       stepIds: ["essay_outline"],
       children: [
-        { id: "order", title: "Argument Order", description: "How the paper should unfold", icon: ListChecks },
-        { id: "sections", title: "Section Jobs", description: "What each paragraph must do", icon: FileText },
+        { id: "order", title: "Argument Order", description: "How the paper should unfold" },
+        { id: "sections", title: "Section Jobs", description: "What each paragraph must do" },
       ],
     },
     {
       id: "missing_pieces",
       title: "Missing Pieces",
       description: "What's not here yet",
-      icon: SearchCheck,
       stepIds: ["pressure_test"],
       children: [
-        { id: "weak_link", title: "Weak Link", description: "What would make the essay collapse", icon: TriangleAlert },
-        { id: "open_question", title: "Open Question", description: "What still needs an answer", icon: MessageCircleQuestionMark },
+        { id: "weak_link", title: "Weak Link", description: "What would make the essay collapse" },
+        { id: "open_question", title: "Open Question", description: "What still needs an answer" },
       ],
     },
   ],
   startup: [
-    { id: "customer", title: "Customer", description: "Who has the problem", icon: Target, stepIds: ["customer"] },
-    { id: "pain", title: "Pain", description: "Why it matters now", icon: TriangleAlert, stepIds: ["pain"] },
-    { id: "wedge", title: "Wedge", description: "First product surface", icon: Layers, stepIds: ["wedge"] },
-    { id: "business_model", title: "Business Model", description: "How it can work", icon: ClipboardCheck, stepIds: ["business_model"] },
-    { id: "challenge", title: "Challenge", description: "Riskiest assumption", icon: MessageCircleQuestionMark, stepIds: ["challenge"] },
-    { id: "artifact", title: "Output", description: "Brief or map", icon: FileText, stepIds: ["artifact"] },
+    { id: "customer", title: "Customer", description: "Who has the problem", stepIds: ["customer"] },
+    { id: "pain", title: "Pain", description: "Why it matters now", stepIds: ["pain"] },
+    { id: "wedge", title: "Wedge", description: "First product surface", stepIds: ["wedge"] },
+    { id: "business_model", title: "Business Model", description: "How it can work", stepIds: ["business_model"] },
+    { id: "challenge", title: "Challenge", description: "Riskiest assumption", stepIds: ["challenge"] },
+    { id: "artifact", title: "Output", description: "Brief or map", stepIds: ["artifact"] },
   ],
   research: [
-    { id: "question", title: "Question", description: "Research scope", icon: Target, stepIds: ["question"] },
-    { id: "literature", title: "Literature", description: "Relevant precedent", icon: BookOpen, stepIds: ["literature"] },
-    { id: "method", title: "Method", description: "Evidence design", icon: ClipboardCheck, stepIds: ["method"] },
-    { id: "challenge", title: "Validity", description: "Confounds and pressure", icon: TriangleAlert, stepIds: ["challenge"] },
-    { id: "plan", title: "Plan", description: "Research output", icon: ListChecks, stepIds: ["plan"] },
+    { id: "question", title: "Question", description: "Research scope", stepIds: ["question"] },
+    { id: "literature", title: "Literature", description: "Relevant precedent", stepIds: ["literature"] },
+    { id: "method", title: "Method", description: "Evidence design", stepIds: ["method"] },
+    { id: "challenge", title: "Validity", description: "Confounds and pressure", stepIds: ["challenge"] },
+    { id: "plan", title: "Plan", description: "Research output", stepIds: ["plan"] },
   ],
   decision: [
-    { id: "options", title: "Options", description: "Available paths", icon: Layers, stepIds: ["options"] },
-    { id: "criteria", title: "Criteria", description: "How to choose", icon: ClipboardCheck, stepIds: ["criteria"] },
-    { id: "evidence", title: "Evidence", description: "What supports each path", icon: SearchCheck, stepIds: ["evidence"] },
-    { id: "tradeoff", title: "Tradeoff", description: "Downside and risk", icon: TriangleAlert, stepIds: ["tradeoff"] },
-    { id: "decision_brief", title: "Decision Brief", description: "Final artifact", icon: FileText, stepIds: ["decision_brief"] },
+    { id: "options", title: "Options", description: "Available paths", stepIds: ["options"] },
+    { id: "criteria", title: "Criteria", description: "How to choose", stepIds: ["criteria"] },
+    { id: "evidence", title: "Evidence", description: "What supports each path", stepIds: ["evidence"] },
+    { id: "tradeoff", title: "Tradeoff", description: "Downside and risk", stepIds: ["tradeoff"] },
+    { id: "decision_brief", title: "Decision Brief", description: "Final artifact", stepIds: ["decision_brief"] },
   ],
   general: [
-    { id: "clarify", title: "Core Claim", description: "Make it specific", icon: Target, stepIds: ["clarify"] },
-    { id: "assumptions", title: "Assumptions", description: "What must be true", icon: Layers, stepIds: ["assumptions"] },
-    { id: "evidence", title: "Evidence", description: "What would prove it", icon: SearchCheck, stepIds: ["evidence"] },
-    { id: "challenge", title: "Challenge", description: "What could break it", icon: TriangleAlert, stepIds: ["challenge"] },
-    { id: "artifact", title: "Output", description: "Useful next artifact", icon: FileText, stepIds: ["artifact"] },
+    { id: "clarify", title: "Core Claim", description: "Make it specific", stepIds: ["clarify"] },
+    { id: "assumptions", title: "Assumptions", description: "What must be true", stepIds: ["assumptions"] },
+    { id: "evidence", title: "Evidence", description: "What would prove it", stepIds: ["evidence"] },
+    { id: "challenge", title: "Challenge", description: "What could break it", stepIds: ["challenge"] },
+    { id: "artifact", title: "Output", description: "Useful next artifact", stepIds: ["artifact"] },
   ],
 };
