@@ -678,7 +678,7 @@ function ConnectedGraphBoard({
   );
   const positions = useMemo(() => graphPathPositions(path.nodes), [path.nodes]);
   const positionMap = new Map(positions.map((point) => [point.id, point]));
-  const graphHeight = Math.max(360, 132 + path.meta.maxDepth * 116);
+  const graphHeight = graphCanvasHeight(positions);
 
   return (
     <section className="graph-board" aria-label={title}>
@@ -687,7 +687,7 @@ function ConnectedGraphBoard({
         <span>{path.meta.nodeCount} steps</span>
       </div>
       {path.nodes.length > 0 ? (
-        <svg viewBox={`0 0 680 ${graphHeight}`} role="img" aria-label="Connected thought graph path">
+        <svg viewBox={`0 0 ${graphCanvasWidth} ${graphHeight}`} role="img" aria-label="Connected thought graph path">
           <g className="graph-edge-layer">
             {path.edges.map((edge) => {
               const source = positionMap.get(edge.fromNodeId);
@@ -1095,29 +1095,98 @@ function fallbackGraphPath(
 }
 
 function graphPathPositions(nodes: BrainGraphPathNode[]): GraphCardPoint[] {
-  const width = 216;
-  const height = 76;
-  const centerX = 340;
-  const topY = 72;
-  const rowGap = 116;
-  const laneGap = 240;
+  const groups = new Map<number, BrainGraphPathNode[]>();
 
-  return nodes.map((node) => ({
+  for (const node of nodes) {
+    const group = groups.get(node.depth) ?? [];
+
+    group.push(node);
+    groups.set(node.depth, group);
+  }
+
+  const points: GraphCardPoint[] = [];
+  let row = 0;
+
+  for (const [, group] of [...groups.entries()].sort(([left], [right]) => left - right)) {
+    const sorted = [...group].sort(graphPathNodeSort);
+    const centerNode = sorted.find((node) => node.lane === 0) ?? sorted[0] ?? null;
+
+    if (!centerNode) {
+      continue;
+    }
+
+    points.push(graphPointForNode(centerNode, 0, row));
+    row += 1;
+
+    const branchNodes = sorted.filter((node) => node.id !== centerNode.id);
+
+    for (let index = 0; index < branchNodes.length; index += 2) {
+      const left = branchNodes[index] ?? null;
+      const right = branchNodes[index + 1] ?? null;
+
+      if (left && right) {
+        points.push(graphPointForNode(left, -1, row));
+        points.push(graphPointForNode(right, 1, row));
+      } else if (left) {
+        points.push(graphPointForNode(left, left.lane < 0 ? -1 : 1, row));
+      }
+
+      row += 1;
+    }
+  }
+
+  return points;
+}
+
+function graphPathNodeSort(left: BrainGraphPathNode, right: BrainGraphPathNode): number {
+  const leftLaneWeight = Math.abs(left.lane);
+  const rightLaneWeight = Math.abs(right.lane);
+
+  return leftLaneWeight - rightLaneWeight || left.lane - right.lane || left.rank - right.rank || left.label.localeCompare(right.label);
+}
+
+function graphPointForNode(node: BrainGraphPathNode, lane: number, row: number): GraphCardPoint {
+  return {
     id: node.id,
-    x: centerX + node.lane * laneGap,
-    y: topY + node.depth * rowGap,
-    width,
-    height,
-  }));
+    x: graphCenterX + lane * graphBranchOffset,
+    y: graphTopY + row * graphRowGap,
+    width: graphCardWidth,
+    height: graphCardHeight,
+  };
+}
+
+function graphCanvasHeight(points: GraphCardPoint[]): number {
+  const bottom = points.reduce((max, point) => Math.max(max, point.y + point.height / 2), 0);
+
+  return Math.max(380, bottom + graphBottomPadding);
 }
 
 function graphCardEdgePath(source: GraphCardPoint, target: GraphCardPoint): string {
   const sourceY = source.y + source.height / 2;
   const targetY = target.y - target.height / 2;
+
+  if (targetY <= sourceY + 12) {
+    const direction = target.x >= source.x ? 1 : -1;
+    const sourceX = source.x + direction * (source.width / 2);
+    const targetX = target.x - direction * (target.width / 2);
+    const midX = sourceX + (targetX - sourceX) / 2;
+
+    return `M ${sourceX} ${source.y} C ${midX} ${source.y}, ${midX} ${target.y}, ${targetX} ${target.y}`;
+  }
+
   const midY = sourceY + Math.max(28, (targetY - sourceY) / 2);
 
   return `M ${source.x} ${sourceY} C ${source.x} ${midY}, ${target.x} ${midY}, ${target.x} ${targetY}`;
 }
+
+const graphCanvasWidth = 640;
+const graphCardWidth = 230;
+const graphCardHeight = 78;
+const graphCenterX = graphCanvasWidth / 2;
+const graphTopY = 70;
+const graphRowGap = 122;
+const graphBranchOffset = 150;
+const graphBottomPadding = 60;
 
 function graphNodeLines(label: string): string[] {
   const words = label.split(/\s+/).filter(Boolean);
