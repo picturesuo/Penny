@@ -14,6 +14,8 @@ test("ThinkingModeService GET state is read-only", async () => {
 
   assert.equal(state.status, "empty");
   assert.equal(state.focusState.source, "none");
+  assert.deepEqual(state.modeContract.validModes, ["Learn", "Check", "Brain"]);
+  assert.equal(state.modeContract.activeMode, "Brain");
   assert.equal(repository.writes.length, 0);
 });
 
@@ -25,6 +27,9 @@ test("ThinkingModeService tick recomputes and persists candidates without mutati
   assert.equal(result.status, "ready");
   assert.equal(result.candidates.length, 3);
   assert.equal(result.selectedCandidate?.action, "challenge");
+  assert.equal(result.selectedCandidate?.mode, "challenge");
+  assert.equal(result.selectedCandidate?.mvpMode, "Check");
+  assert.equal(result.modeContract.activeMode, "Check");
   assert.equal(result.move?.kind, "next_move_recomputed");
   assert.equal(result.focusState.source, "autopilot_suggestion");
   assert.equal(repository.writes.includes("upsertNextMoveCandidates"), true);
@@ -47,6 +52,7 @@ test("ThinkingModeService startCandidate creates autopilot_focus_started and upd
   assert.equal(started.move.kind, "autopilot_focus_started");
   assert.equal(started.focusState.source, "autopilot_started");
   assert.equal(started.focusState.paused, false);
+  assert.equal(started.modeContract.activeMode, "Check");
 });
 
 test("ThinkingModeService manualFocus creates manual_node_selected and pauses autopilot", async () => {
@@ -64,6 +70,7 @@ test("ThinkingModeService manualFocus creates manual_node_selected and pauses au
   assert.equal(result.focusState.source, "manual_selection");
   assert.equal(result.focusState.paused, true);
   assert.equal(result.focusClaim.id, uuidAt(202));
+  assert.equal(result.modeContract.activeMode, "Brain");
 });
 
 function fakeRepository(): BrainRepository & { writes: string[] } {
