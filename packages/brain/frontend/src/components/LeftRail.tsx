@@ -130,7 +130,30 @@ export function LeftRail({
           ))}
         </div>
       </Section>
+      <QuickSelectKey />
     </aside>
+  );
+}
+
+function QuickSelectKey() {
+  const [lastKey, setLastKey] = useState("Key");
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      setLastKey(formatPressedKey(event));
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  return (
+    <div className="quick-select-corner" aria-live="polite" aria-label={`Last key pressed: ${lastKey}`}>
+      <kbd>{lastKey}</kbd>
+    </div>
   );
 }
 
@@ -240,7 +263,8 @@ function buildStructureBoxes(
   const claimsById = new Map(claims.map((claim) => [claim.id, claim]));
   const usedStepIds = new Set<string>();
   const definitions = structureDefinitions[structureType] ?? structureDefinitions.general;
-  const boxes = definitions.map((definition) => {
+  const laterDefinition = definitions[definitions.length - 1] as StructureDefinition;
+  const boxes = definitions.slice(0, -1).map((definition) => {
     const matchedSteps = definition.stepIds.flatMap((stepId) => {
       const step = stepsById.get(stepId);
 
@@ -251,6 +275,14 @@ function buildStructureBoxes(
 
     return structureBoxFromDefinition(definition, matchedSteps, claimsById);
   });
+  const laterSteps = laterDefinition.stepIds.flatMap((stepId) => {
+    const step = stepsById.get(stepId);
+
+    return step ? [step] : [];
+  });
+
+  laterSteps.forEach((step) => usedStepIds.add(step.id));
+
   const extraBoxes = steps
     .filter((step) => !usedStepIds.has(step.id))
     .map((step) =>
@@ -266,8 +298,18 @@ function buildStructureBoxes(
         claimsById,
       ),
     );
+  const laterBox = structureBoxFromDefinition(
+    {
+      ...laterDefinition,
+      id: "to_do_later",
+      title: "To Do Later",
+      description: "Parked work and unresolved pieces",
+    },
+    laterSteps,
+    claimsById,
+  );
 
-  return [...boxes, ...extraBoxes];
+  return [...boxes, ...extraBoxes, laterBox];
 }
 
 function structureBoxFromDefinition(
@@ -516,6 +558,49 @@ function inferStructureTypeFromClaims(claims: BrainClaim[]): WorkStructureType {
 
 function hasAny(value: string, terms: string[]): boolean {
   return terms.some((term) => value.includes(term));
+}
+
+function formatPressedKey(event: KeyboardEvent): string {
+  const modifierPrefix = [
+    event.metaKey && event.key !== "Meta" ? "Cmd+" : "",
+    event.ctrlKey && event.key !== "Control" ? "Ctrl+" : "",
+    event.altKey && event.key !== "Alt" ? "Alt+" : "",
+    event.shiftKey && event.key !== "Shift" && event.key.length > 1 ? "Shift+" : "",
+  ].join("");
+
+  return `${modifierPrefix}${keyLabel(event.key)}`;
+}
+
+function keyLabel(key: string): string {
+  switch (key) {
+    case " ":
+    case "Spacebar":
+      return "Space";
+    case "ArrowUp":
+      return "Up";
+    case "ArrowRight":
+      return "Right";
+    case "ArrowDown":
+      return "Down";
+    case "ArrowLeft":
+      return "Left";
+    case "Escape":
+      return "Esc";
+    case "Backspace":
+      return "Back";
+    case "Delete":
+      return "Del";
+    case "Enter":
+      return "Enter";
+    case "Tab":
+      return "Tab";
+    case "Meta":
+      return "Cmd";
+    case "Control":
+      return "Ctrl";
+    default:
+      return key.length === 1 ? key.toUpperCase() : key.replace(/^Key|^Digit/, "");
+  }
 }
 
 const structureDefinitions: Record<WorkStructureType, StructureDefinition[]> = {
