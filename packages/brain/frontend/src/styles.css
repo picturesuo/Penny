@@ -60,14 +60,14 @@
   }
 
   .newspaper-header {
-    padding: 12px 18px 0;
+    padding: 4px 18px 0;
   }
 
   .masthead {
     display: grid;
-    grid-template-columns: 195px minmax(420px, 1fr) 310px;
-    align-items: end;
-    min-height: 70px;
+    grid-template-columns: 150px minmax(420px, 1fr) 270px;
+    align-items: center;
+    min-height: 42px;
     border-bottom: 2px solid #111111;
   }
 
@@ -76,13 +76,13 @@
     align-items: end;
     gap: 0;
     min-width: 0;
-    padding-bottom: 9px;
+    padding-bottom: 3px;
   }
 
   .brand-mark {
     display: block;
-    width: 51.67px;
-    height: 62.78px;
+    width: 34px;
+    height: 41px;
     flex: 0 0 auto;
     margin-left: 0.79px;
     margin-right: -2.46px;
@@ -91,7 +91,7 @@
   }
 
   .brand-name {
-    font-size: 30px;
+    font-size: 24px;
     font-weight: 700;
     line-height: 0.9;
     letter-spacing: 0;
@@ -103,7 +103,7 @@
     gap: clamp(28px, 4.2vw, 62px);
     width: 100%;
     min-width: 0;
-    padding-bottom: 13px;
+    padding-bottom: 2px;
     overflow-x: auto;
   }
 
@@ -122,14 +122,14 @@
     color: #111111;
     text-decoration: underline;
     text-decoration-thickness: 2px;
-    text-underline-offset: 10px;
+    text-underline-offset: 6px;
   }
 
   .edition-block {
-    align-self: start;
+    align-self: center;
     justify-self: end;
-    width: 322px;
-    padding-top: 9px;
+    width: 270px;
+    padding-top: 0;
     color: rgb(17 17 17 / 0.61);
     font-size: 12px;
     line-height: 1.05;
@@ -140,7 +140,7 @@
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
 
   .edition-rules span {
@@ -158,8 +158,8 @@
     display: flex;
     justify-content: space-between;
     border-bottom: 1px solid #111111;
-    padding: 4px 0 5px;
-    font-size: 12px;
+    padding: 2px 0 3px;
+    font-size: 11px;
     font-weight: 700;
     line-height: 1;
   }
@@ -171,8 +171,8 @@
   .cockpit-grid {
     display: grid;
     grid-template-columns: minmax(260px, 356px) minmax(500px, 1fr) minmax(300px, 370px);
-    min-height: calc(100vh - 117px);
-    max-height: calc(100vh - 117px);
+    min-height: calc(100vh - 68px);
+    max-height: calc(100vh - 68px);
     overflow: hidden;
     padding: 0 18px 22px;
   }
@@ -1479,7 +1479,7 @@
   .brain-library-shell,
   .brain-document-shell,
   .mode-placeholder {
-    min-height: calc(100vh - 117px);
+    min-height: calc(100vh - 68px);
     padding: 26px 18px 30px;
     overflow: auto;
   }
@@ -1972,19 +1972,19 @@
 
 @media (max-width: 1180px) {
   .masthead {
-    grid-template-columns: 180px 1fr;
-    row-gap: 8px;
+    grid-template-columns: 138px minmax(300px, 1fr) 230px;
+    row-gap: 0;
   }
 
   .edition-block {
-    grid-column: 1 / -1;
-    justify-self: start;
-    width: auto;
-    text-align: left;
+    grid-column: auto;
+    justify-self: end;
+    width: 230px;
+    text-align: right;
   }
 
   .edition-rules {
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   .cockpit-grid {
@@ -2030,6 +2030,7 @@
 
   .masthead {
     align-items: start;
+    row-gap: 8px;
   }
 
   .nav-tabs {
