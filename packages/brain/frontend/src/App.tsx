@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import {
   createChallengeBrief,
   fetchBrainDocuments,
+  fetchBrainRecents,
   fetchSessionCockpit,
+  keepBrainRecentIdea,
   issueChallengeFromCandidate,
   respondToChallenge,
   seedBrain,
@@ -12,7 +14,6 @@ import {
 } from "./api/brainClient";
 import { BrainWorkspace } from "./components/BrainWorkspace";
 import { CheckWorkspace } from "./components/CheckWorkspace";
-import { Composer } from "./components/Composer";
 import { Header } from "./components/Header";
 import { formatLabel, shortId } from "./lib/format";
 import type {
@@ -20,6 +21,7 @@ import type {
   BrainData,
   BrainDocumentsData,
   BrainMove,
+  BrainRecentIdea,
   ChallengeResponseKind,
   RespondToChallengeResponse,
   SessionCockpitData,
@@ -47,6 +49,7 @@ type PennyMode = "Learn" | "Brain" | "Check";
 
 export function App() {
   const [documentsData, setDocumentsData] = useState<BrainDocumentsData | null>(null);
+  const [recents, setRecents] = useState<BrainRecentIdea[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [data, setData] = useState<BrainData | null>(null);
   const [moves, setMoves] = useState<BrainMove[]>([]);
@@ -81,6 +84,7 @@ export function App() {
         }
 
         setDocumentsData(documents.data);
+        await refreshRecents();
 
         if (!sessionId) {
           setStatus("Docs loaded");
@@ -144,6 +148,21 @@ export function App() {
       }
     } catch (error) {
       await refreshDocumentsAfterSeedFailure();
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsThinking(false);
+    }
+  }
+
+  async function handleKeepRecentIdea(rawIdea: string) {
+    setIsThinking(true);
+    setStatus("Keeping recent");
+
+    try {
+      const payload = await keepBrainRecentIdea(rawIdea);
+      setRecents(payload.data.recents ?? mergeRecentIdeas(payload.data.recent, recents));
+      setStatus("Kept in Recents");
+    } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
       setIsThinking(false);
@@ -407,6 +426,15 @@ export function App() {
     }
   }
 
+  async function refreshRecents(): Promise<void> {
+    try {
+      const payload = await fetchBrainRecents();
+      setRecents(payload.data.recents);
+    } catch {
+      setRecents([]);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white text-[#111]">
       <div className="mx-auto min-h-[calc(100vh-5px)] max-w-[1440px] border-t-[5px] border-black bg-white">
@@ -422,9 +450,11 @@ export function App() {
             selectedDocument={selectedDocument}
             data={data}
             autopilot={autopilot}
+            recents={recents}
             status={status}
             isThinking={isThinking}
             onSeed={handleSeed}
+            onKeepRecent={handleKeepRecentIdea}
             onSelectDocument={handleSelectDocument}
             onOpenBrain={() => setActiveMode("Brain")}
             onOpenCheck={() => setActiveMode("Check")}
@@ -440,6 +470,7 @@ export function App() {
             focusedClaimId={focusedClaimId}
             status={status}
             isThinking={isThinking}
+            recents={recents}
             onSelectDocument={handleSelectDocument}
             onBackToLibrary={handleBackToLibrary}
             onNewThought={handleNewThought}
@@ -478,9 +509,11 @@ function LearnWorkspace({
   selectedDocument,
   data,
   autopilot,
+  recents,
   status,
   isThinking,
   onSeed,
+  onKeepRecent,
   onSelectDocument,
   onOpenBrain,
   onOpenCheck,
@@ -489,9 +522,11 @@ function LearnWorkspace({
   selectedDocument: BrainDocumentsData["documents"][number] | null;
   data: BrainData | null;
   autopilot: AutopilotTickData | null;
+  recents: BrainRecentIdea[];
   status: string;
   isThinking: boolean;
   onSeed: (rawIdea: string) => Promise<void>;
+  onKeepRecent: (rawIdea: string) => Promise<void>;
   onSelectDocument: (sessionId: string) => void;
   onOpenBrain: () => void;
   onOpenCheck: () => void;
@@ -509,7 +544,7 @@ function LearnWorkspace({
           Start with one raw thought. Penny will turn it into saved Brain structure, then Autopilot can point Check at the
           next weak spot.
         </p>
-        <Composer disabled={isThinking} status={status} onSubmit={onSeed} storageKey="penny.learnIdeaDraft" />
+        <IdeaDrop disabled={isThinking} status={status} recents={recents} onSave={onSeed} onKeep={onKeepRecent} />
         {activeClaim ? (
           <div className="challenge-action-row">
             <span>
@@ -560,6 +595,81 @@ function LearnWorkspace({
   );
 }
 
+function IdeaDrop({
+  disabled,
+  status,
+  recents,
+  onSave,
+  onKeep,
+}: {
+  disabled: boolean;
+  status: string;
+  recents: BrainRecentIdea[];
+  onSave: (rawIdea: string) => Promise<void>;
+  onKeep: (rawIdea: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState("");
+  const trimmedDraft = draft.trim();
+
+  async function handleSave() {
+    if (!trimmedDraft) {
+      return;
+    }
+
+    await onSave(trimmedDraft);
+    setDraft("");
+  }
+
+  async function handleKeep() {
+    if (!trimmedDraft) {
+      return;
+    }
+
+    await onKeep(trimmedDraft);
+    setDraft("");
+  }
+
+  return (
+    <section className="idea-drop" aria-label="Drop an idea">
+      <label htmlFor="learnIdeaDrop">Drop an idea</label>
+      <textarea
+        id="learnIdeaDrop"
+        value={draft}
+        disabled={disabled}
+        placeholder="Write the raw thought Penny should preserve or revisit..."
+        aria-describedby="learnIdeaDropStatus"
+        onChange={(event) => setDraft(event.target.value)}
+      />
+      <div className="idea-drop-actions">
+        <button type="button" className="primary-command" disabled={disabled || !trimmedDraft} onClick={handleSave}>
+          Save to Brain
+        </button>
+        <button type="button" className="text-command" disabled={disabled || !trimmedDraft} onClick={handleKeep}>
+          Keep in Recents
+        </button>
+        <button type="button" className="text-command" disabled={disabled || !draft} onClick={() => setDraft("")}>
+          Discard
+        </button>
+      </div>
+      <p id="learnIdeaDropStatus" className="sr-only">
+        {status}
+      </p>
+      {recents.length > 0 ? (
+        <div className="recents-pile" aria-label="Recents pile">
+          <strong>Recents pile</strong>
+          <div>
+            {recents.slice(0, 4).map((recent) => (
+              <button key={recent.id} type="button" disabled={disabled} onClick={() => setDraft(recent.rawIdea)}>
+                {recent.rawIdea}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null): BrainData {
   const keyInsight = cockpit.ideaMap.keyInsight ?? current?.ideaMap?.keyInsight ?? null;
   const fallbackChallenge = current?.firstChallenge && !current.firstChallenge.id ? current.firstChallenge : null;
@@ -581,6 +691,10 @@ function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null
     learnCandidates: current?.learnCandidates ?? [],
     ...(firstChallenge ? { firstChallenge } : {}),
   };
+}
+
+function mergeRecentIdeas(recent: BrainRecentIdea, existing: BrainRecentIdea[]): BrainRecentIdea[] {
+  return [recent, ...existing.filter((item) => item.id !== recent.id)].slice(0, 8);
 }
 
 function responseLabel(response: ChallengeResponseKind): string {
