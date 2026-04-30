@@ -193,8 +193,9 @@
   .center-stage {
     border-right: 1px solid #9e9e9e;
     display: grid;
-    align-content: start;
-    overflow: auto;
+    grid-template-rows: minmax(0, 1fr);
+    align-content: stretch;
+    overflow: hidden;
     padding: 21px 16px 18px 23px;
   }
 
@@ -491,7 +492,12 @@
   }
 
   .current-exploration {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
     min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
   }
 
   .check-brain-memory {
@@ -647,8 +653,11 @@
 
   .decision-card {
     display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
     gap: 13px;
     margin-top: 16px;
+    min-height: 0;
+    overflow: hidden;
     border: 1px solid #d3d3d3;
     border-radius: 4px;
     padding: 14px 18px 16px;
@@ -679,8 +688,8 @@
   }
 
   .decision-chosen > p:first-child {
-    font-size: 15px;
-    line-height: 1.25;
+    font-size: 13px;
+    line-height: 1.16;
   }
 
   .decision-better-option {
@@ -705,7 +714,10 @@
 
   .decision-alternatives {
     display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     gap: 8px;
+    min-height: 0;
+    overflow: hidden;
     border-top: 1px solid #d7d7d7;
     padding-top: 12px;
   }
@@ -713,6 +725,10 @@
   .decision-alternatives > div {
     display: grid;
     gap: 1px;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
   }
 
   .decision-option {
