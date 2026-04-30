@@ -151,22 +151,24 @@ function DecisionCard({
           ))}
         </div>
       </section>
-      <label className="decision-better-option">
-        <span>EVEN BETTER IDEA</span>
-        <textarea
-          value={betterOption}
-          onChange={(event) => onBetterOptionChange(event.target.value)}
-          placeholder="Put an even better option here..."
-          rows={2}
-        />
-      </label>
-      <section className="decision-downstream" aria-label="Downstream changes">
-        <h4>WHAT CHANGES DOWNSTREAM</h4>
-        <div className="decision-impact">
-          <span>If you choose Option {selectedLetter}</span>
-          <strong>{downstreamImpact(selectedRow)}</strong>
-        </div>
-      </section>
+      <div className="decision-lower-grid">
+        <label className="decision-better-option">
+          <span>EVEN BETTER IDEA</span>
+          <textarea
+            value={betterOption}
+            onChange={(event) => onBetterOptionChange(event.target.value)}
+            placeholder="Put an even better option here..."
+            rows={2}
+          />
+        </label>
+        <section className="decision-downstream" aria-label="Downstream changes">
+          <h4>WHAT CHANGES DOWNSTREAM</h4>
+          <div className="decision-impact">
+            <span>If you choose Option {selectedLetter}</span>
+            <strong>{downstreamImpact(selectedRow)}</strong>
+          </div>
+        </section>
+      </div>
       <div className="decision-actions">
         <button type="button" disabled={previousIndex === null} onClick={() => previousIndex !== null && onSelectOption(previousIndex)}>
           <span aria-hidden="true">&lt;-</span> Previous{previousIndex !== null ? ` (${optionLetter(previousIndex)}. ${rows[previousIndex]?.title})` : ""}
