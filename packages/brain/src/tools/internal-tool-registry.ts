@@ -15,6 +15,7 @@ import type {
   ThinkingModeTickInput,
   ThinkingModeTickResponse,
 } from "../services/thinking-mode-service.ts";
+import { CandidateBrainObjectSchema } from "../candidate-brain-object.ts";
 import { MvpModeSchema } from "../modes.ts";
 
 export const pennyInternalToolNames = [
@@ -223,6 +224,7 @@ const CandidateOutputSchema = z
         artifactIds: z.array(UuidSchema),
       })
       .passthrough(),
+    candidateBrainObjects: z.array(CandidateBrainObjectSchema),
     selected: z.boolean(),
     selectedAt: z.string().nullable(),
   })

@@ -4,7 +4,7 @@ import test from "node:test";
 import type { CreatedMove } from "./move-payloads.ts";
 import type { BrainRepository, CurrentClaimVersion, PersistedNextMoveCandidate } from "./domain/repository.ts";
 import type { NextMoveCandidate } from "./domain/engine.ts";
-import type { EntityId, FocusState, PennyYcDemoGraphFixture } from "./domain/types.ts";
+import type { EntityId, FocusState, PennyYcDemoGraphFixture, ThinkingEdge, ThinkingMove } from "./domain/types.ts";
 import { ThinkingModeService } from "./services/thinking-mode-service.ts";
 
 test("ThinkingModeService GET state is read-only", async () => {
@@ -39,6 +39,19 @@ test("ThinkingModeService tick recomputes and persists candidates without mutati
   assert.equal(repository.writes.includes("markCandidateSelected"), true);
   assert.equal(repository.writes.includes("upsertFocusState"), true);
   assert.equal(repository.writes.includes("reviseClaim"), false);
+});
+
+test("ThinkingModeService exposes candidate BrainObjects for save_to_brain", async () => {
+  const repository = fakeRepository(withChallengeResponse(withOpenChallenge(loadFixture())));
+  const service = new ThinkingModeService(repository);
+  const result = await service.tick({ brainId: uuidAt(900), sessionId: uuidAt(101), limit: 1 });
+
+  assert.equal(result.selectedCandidate?.action, "save_to_brain");
+  assert.equal(result.selectedCandidate?.userAction, "save_to_brain");
+  assert.equal(result.selectedCandidate?.candidateBrainObjects.length, 1);
+  assert.equal(result.selectedCandidate?.candidateBrainObjects[0]?.objectType, "autopilot_save_candidate");
+  assert.equal(result.selectedCandidate?.candidateBrainObjects[0]?.source, "autopilot");
+  assert.match(result.selectedCandidate?.candidateBrainObjects[0]?.content ?? "", /Exit criteria/);
 });
 
 test("ThinkingModeService startCandidate creates autopilot_focus_started and updates focus", async () => {
@@ -76,8 +89,7 @@ test("ThinkingModeService manualFocus creates manual_node_selected and pauses au
   assert.equal(result.modeContract.activeMode, "Brain");
 });
 
-function fakeRepository(): BrainRepository & { writes: string[] } {
-  const graph = loadFixture();
+function fakeRepository(graph = loadFixture()): BrainRepository & { writes: string[] } {
   const writes: string[] = [];
   let focusState = defaultFocusState(graph.session.id);
   let candidates: PersistedNextMoveCandidate[] = [];
@@ -255,6 +267,65 @@ function loadFixture(): PennyYcDemoGraphFixture {
   return JSON.parse(
     readFileSync(new URL("../../../test/fixtures/penny-yc-demo-graph.json", import.meta.url), "utf8"),
   ) as PennyYcDemoGraphFixture;
+}
+
+function withOpenChallenge(graph: PennyYcDemoGraphFixture): PennyYcDemoGraphFixture {
+  const challengeEdge: ThinkingEdge = {
+    id: "00000000-0000-4000-8000-000000000399",
+    sessionId: graph.session.id,
+    fromClaimId: graph.expectedAutopilot.highConfidenceUnsupportedClaimId,
+    toClaimId: graph.expectedAutopilot.lowConfidenceMarketAssumptionId,
+    kind: "challenges",
+    status: "active",
+    label: "challenge founder adoption",
+    createdAt: "2026-04-29T14:00:09.000Z",
+  };
+  const challengeMove: ThinkingMove = {
+    id: "00000000-0000-4000-8000-000000000509",
+    sessionId: graph.session.id,
+    kind: "challenge_issued",
+    summary: "Issued a challenge against founder adoption.",
+    payload: {
+      claimIds: [challengeEdge.toClaimId, challengeEdge.fromClaimId],
+      edgeIds: [challengeEdge.id],
+      challengeEdgeId: challengeEdge.id,
+    },
+    createdAt: "2026-04-29T14:00:09.000Z",
+  };
+
+  return {
+    ...graph,
+    edges: [...graph.edges, challengeEdge],
+    moves: [...graph.moves, challengeMove],
+  };
+}
+
+function withChallengeResponse(graph: PennyYcDemoGraphFixture): PennyYcDemoGraphFixture {
+  const responseMove: ThinkingMove = {
+    id: "00000000-0000-4000-8000-000000000510",
+    sessionId: graph.session.id,
+    kind: "critique_absorbed",
+    summary: "User absorbed the challenge as a live risk.",
+    payload: {
+      response: "absorb",
+      targetClaimId: graph.expectedAutopilot.lowConfidenceMarketAssumptionId,
+      targetClaimVersionId: "00000000-0000-4000-8000-000000000202",
+      critiqueClaimId: graph.expectedAutopilot.highConfidenceUnsupportedClaimId,
+      challengeEdgeId: "00000000-0000-4000-8000-000000000399",
+      edgeStatus: "acknowledged_vulnerability",
+      claimIds: [
+        graph.expectedAutopilot.lowConfidenceMarketAssumptionId,
+        graph.expectedAutopilot.highConfidenceUnsupportedClaimId,
+      ],
+      edgeIds: ["00000000-0000-4000-8000-000000000399"],
+    },
+    createdAt: "2026-04-29T14:00:20.000Z",
+  };
+
+  return {
+    ...graph,
+    moves: [...graph.moves, responseMove],
+  };
 }
 
 function uuidAt(value: number): string {

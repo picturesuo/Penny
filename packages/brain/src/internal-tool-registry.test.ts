@@ -304,6 +304,7 @@ function candidate(): ThinkingModeCandidateDto {
       moveIds: [uuidAt(600)],
       artifactIds: [],
     },
+    candidateBrainObjects: [],
     selected: true,
     selectedAt: now(),
   };

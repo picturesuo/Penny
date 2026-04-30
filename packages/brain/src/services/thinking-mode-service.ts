@@ -1,5 +1,6 @@
 import type { CreatedMove } from "../move-payloads.ts";
 import { rankNextMoveCandidates, type NextMoveCandidate } from "../domain/engine.ts";
+import type { CandidateBrainObject } from "../candidate-brain-object.ts";
 import type {
   BrainRepository,
   PersistedNextMoveCandidate,
@@ -36,6 +37,7 @@ export type ThinkingModeCandidateDto = {
   scoreBreakdown: NextMoveCandidate["scoreBreakdown"];
   graphHash: string;
   provenance: NextMoveCandidate["provenance"];
+  candidateBrainObjects: ReadonlyArray<CandidateBrainObject>;
   selected: boolean;
   selectedAt: string | null;
 };
@@ -384,9 +386,36 @@ function candidateDto(candidate: PersistedNextMoveCandidate): ThinkingModeCandid
     scoreBreakdown: candidate.scoreBreakdown,
     graphHash: candidate.graphHash,
     provenance: candidate.provenance,
+    candidateBrainObjects: candidateBrainObjectsFor(candidate),
     selected: candidate.selected,
     selectedAt: candidate.selectedAt?.toISOString() ?? null,
   };
+}
+
+function candidateBrainObjectsFor(candidate: PersistedNextMoveCandidate): CandidateBrainObject[] {
+  if (candidate.action !== "save_to_brain") {
+    return [];
+  }
+
+  return [
+    {
+      objectType: "autopilot_save_candidate",
+      title: "Autopilot Save to Brain",
+      summary: clipText(candidate.reason, 360),
+      content: [
+        candidate.reason,
+        `Exit criteria: ${candidate.exitCriteria.label}`,
+        `Reason codes: ${candidate.reasonCodes.join(", ")}`,
+      ].join("\n"),
+      suggestedSaveReason: "Autopilot found a durable boundary where the current thinking should become a Brain object.",
+      source: "autopilot",
+      refs: {
+        targetClaimId: candidate.targetClaimId,
+        ...(candidate.targetEdgeId ? { targetEdgeId: candidate.targetEdgeId } : {}),
+        candidateId: candidate.candidateId,
+      },
+    },
+  ];
 }
 
 function moveDto(move: CreatedMove): ThinkingModeMoveDto {
@@ -429,6 +458,16 @@ function uniqueIds(ids: ReadonlyArray<EntityId>): EntityId[] {
 
 function isEntityId(value: EntityId | null): value is EntityId {
   return Boolean(value);
+}
+
+function clipText(value: string, maxLength: number): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+
+  return `${compact.slice(0, maxLength - 1).trimEnd()}.`;
 }
 
 function userActionFor(action: NextMoveCandidate["action"]): ThinkingModeCandidateUserAction {

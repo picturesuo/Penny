@@ -10,6 +10,8 @@ export {
   InlineLearnOutputSchema,
   InlineLearnProviderError,
   InlineLearnProviderSchema,
+  LearnOutputSchema,
+  LearnSuggestedNextMoveSchema,
   parseInlineLearnOutput,
   resolveXaiInlineLearnModel,
 } from "./inline-learn-core.ts";
@@ -19,4 +21,5 @@ export type {
   InlineLearnOutput,
   InlineLearnProvider,
   InlineLearnProviderOutput,
+  LearnOutput,
 } from "./inline-learn-core.ts";

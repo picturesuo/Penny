@@ -11,6 +11,24 @@ import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-
 import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 import { scopeValues } from "./scope.ts";
+import { CandidateBrainObjectSchema } from "./candidate-brain-object.ts";
+
+export const LearnSuggestedNextMoveSchema = z
+  .object({
+    action: z.enum(["learn", "check", "verify", "save_to_brain"]),
+    label: z.string().trim().min(1).max(120),
+    reason: z.string().trim().min(1).max(320),
+  })
+  .strict();
+
+const LegacyInlineLearnFieldsSchema = z.object({
+  term: z.string(),
+  explanation: z.string(),
+  whyItMattersHere: z.string(),
+  example: z.string(),
+  relatedConcepts: z.array(z.string()),
+  saveSuggestion: z.string(),
+});
 
 export const InlineLearnRequestSchema = z
   .object({
@@ -24,16 +42,19 @@ export const InlineLearnRequestSchema = z
 
 export const InlineLearnProviderSchema = z
   .object({
-    term: z.string(),
-    explanation: z.string(),
-    whyItMattersHere: z.string(),
-    example: z.string(),
-    relatedConcepts: z.array(z.string()),
-    saveSuggestion: z.string(),
+    ...LegacyInlineLearnFieldsSchema.shape,
+    coreIdea: z.string().optional(),
+    claims: z.array(z.string()).optional(),
+    assumptions: z.array(z.string()).optional(),
+    questions: z.array(z.string()).optional(),
+    misconceptionsGaps: z.array(z.string()).optional(),
+    creativeDirections: z.array(z.string()).optional(),
+    suggestedNextMove: LearnSuggestedNextMoveSchema.optional(),
+    candidateBrainObjects: z.array(CandidateBrainObjectSchema).optional(),
   })
   .strict();
 
-export const InlineLearnOutputSchema = z
+export const LearnOutputSchema = z
   .object({
     term: z.string().trim().min(1).max(120),
     explanation: z.string().trim().min(1).max(360),
@@ -41,10 +62,20 @@ export const InlineLearnOutputSchema = z
     example: z.string().trim().min(1).max(320),
     relatedConcepts: z.array(z.string().trim().min(1).max(80)).max(5),
     saveSuggestion: z.string().trim().min(1).max(220),
+    coreIdea: z.string().trim().min(1).max(360),
+    claims: z.array(z.string().trim().min(1).max(240)).max(5),
+    assumptions: z.array(z.string().trim().min(1).max(240)).max(5),
+    questions: z.array(z.string().trim().min(1).max(240)).max(5),
+    misconceptionsGaps: z.array(z.string().trim().min(1).max(240)).max(5),
+    creativeDirections: z.array(z.string().trim().min(1).max(240)).max(5),
+    suggestedNextMove: LearnSuggestedNextMoveSchema,
+    candidateBrainObjects: z.array(CandidateBrainObjectSchema).max(5),
   })
   .strict();
 
-export const InlineLearnSaveRequestSchema = InlineLearnOutputSchema.extend({
+export const InlineLearnOutputSchema = LearnOutputSchema;
+
+export const InlineLearnSaveRequestSchema = InlineLearnProviderSchema.extend({
   currentClaimId: z.string().uuid(),
   sessionId: z.string().uuid(),
 }).strict();
@@ -52,7 +83,8 @@ export const InlineLearnSaveRequestSchema = InlineLearnOutputSchema.extend({
 export type InlineLearnRequest = z.infer<typeof InlineLearnRequestSchema>;
 export type InlineLearnSaveRequest = z.infer<typeof InlineLearnSaveRequestSchema>;
 export type InlineLearnProviderOutput = z.infer<typeof InlineLearnProviderSchema>;
-export type InlineLearnOutput = z.infer<typeof InlineLearnOutputSchema>;
+export type LearnOutput = z.infer<typeof LearnOutputSchema>;
+export type InlineLearnOutput = LearnOutput;
 
 export type InlineLearnGenerationInput = {
   term: string;
@@ -72,7 +104,7 @@ export type InlineLearnProvider = {
 const inlineLearnOutputSpec = Output.object<InlineLearnProviderOutput>({
   schema: InlineLearnProviderSchema,
   name: "penny_inline_learn",
-  description: "A short contextual explanation for one term inside the current Penny Brain claim.",
+  description: "A contextual Learn output with structured thinking fields and candidate BrainObject suggestions.",
 });
 
 export type InlineLearnGenerateText = (request: {
@@ -288,10 +320,10 @@ export async function generateInlineLearnOutput(
   const provider = options.provider ?? createDefaultInlineLearnProvider();
   const providerOutput = await provider.generate(input);
 
-  return parseInlineLearnOutput(providerOutput);
+  return parseInlineLearnOutput(providerOutput, input);
 }
 
-export function parseInlineLearnOutput(output: unknown): InlineLearnOutput {
+export function parseInlineLearnOutput(output: unknown, input?: Partial<InlineLearnGenerationInput>): InlineLearnOutput {
   const providerParsed = InlineLearnProviderSchema.safeParse(output);
 
   if (!providerParsed.success) {
@@ -301,7 +333,7 @@ export function parseInlineLearnOutput(output: unknown): InlineLearnOutput {
     );
   }
 
-  const strictParsed = InlineLearnOutputSchema.safeParse(providerParsed.data);
+  const strictParsed = InlineLearnOutputSchema.safeParse(normalizeLearnOutput(providerParsed.data, input));
 
   if (!strictParsed.success) {
     throw new InlineLearnGenerationError(
@@ -382,9 +414,10 @@ export function buildInlineLearnSystemPrompt(): string {
   return [
     "You are Penny, a controllable thinking instrument enhanced by AI.",
     "Explain one confusing term inside the current Brain claim.",
-    "Keep the explanation contextual, short, and operational.",
+    "Keep the explanation contextual, short, operational, and ready to become BrainObjects if the user saves it.",
     "Do not start a separate Learn app, lesson, sidebar, curriculum, or chat.",
     "Do not invent citations, market facts, or external evidence.",
+    "Candidate BrainObjects are suggestions only; do not imply they have been saved.",
     "Return only the structured Learn object.",
   ].join("\n");
 }
@@ -400,6 +433,14 @@ export function buildInlineLearnPrompt(input: InlineLearnGenerationInput): strin
     "- example: one compact example tied to the local context.",
     "- relatedConcepts: up to five short concept names.",
     "- saveSuggestion: when the user should save this as a concept claim.",
+    "- coreIdea: the central point Penny should remember.",
+    "- claims: candidate claims that could become BrainObjects.",
+    "- assumptions: hidden dependencies or load-bearing assumptions.",
+    "- questions: follow-up questions this Learn pass opens.",
+    "- misconceptionsGaps: likely misconceptions, missing distinctions, or gaps.",
+    "- creativeDirections: useful new directions the user could explore.",
+    "- suggestedNextMove: one action with action, label, and reason. Use action learn, check, verify, or save_to_brain.",
+    "- candidateBrainObjects: unsaved candidates with objectType, title, summary, content, suggestedSaveReason, source, and refs.",
     "",
     "Lens rules:",
     "- Use confirmed shapes to choose framing and examples that fit this user's history.",
@@ -498,8 +539,16 @@ export async function persistInlineLearnConcept(
 ): Promise<NonNullable<PersistedInlineLearn["saved"]>> {
   return db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.currentClaimId, input.sessionId);
+    const output = normalizeLearnOutput(input, {
+      term: input.term,
+      currentClaimId: target.claim.id,
+      sessionId: input.sessionId,
+      localContext: target.version.content,
+      currentClaimText: target.version.content,
+      currentClaimKind: target.claim.kind,
+    });
 
-    return insertInlineLearnConcept(tx, input, input, target);
+    return insertInlineLearnConcept(tx, input, output, target);
   });
 }
 
@@ -713,20 +762,147 @@ function buildHeuristicInlineLearnOutput(input: InlineLearnGenerationInput): Inl
     );
   }
 
-  const parsed = InlineLearnOutputSchema.safeParse({
-    term,
-    explanation: concept.explanation,
-    whyItMattersHere: conceptWhyItMatters(term, concept.pressure, claim),
-    example: conceptExample(concept.example, context),
-    relatedConcepts: relatedConceptsFor(term, context, concept.relatedConcepts),
-    saveSuggestion: `Save ${term} if this definition will keep shaping assumptions, challenges, or the final brief.`,
-  });
+  const parsed = InlineLearnOutputSchema.safeParse(
+    normalizeLearnOutput(
+      {
+        term,
+        explanation: concept.explanation,
+        whyItMattersHere: conceptWhyItMatters(term, concept.pressure, claim),
+        example: conceptExample(concept.example, context),
+        relatedConcepts: relatedConceptsFor(term, context, concept.relatedConcepts),
+        saveSuggestion: `Save ${term} if this definition will keep shaping assumptions, challenges, or the final brief.`,
+      },
+      input,
+    ),
+  );
 
   if (!parsed.success) {
     throw new InlineLearnConflictError("Generated Learn output failed local validation.");
   }
 
   return parsed.data;
+}
+
+function normalizeLearnOutput(output: InlineLearnProviderOutput, input?: Partial<InlineLearnGenerationInput>): InlineLearnOutput {
+  const term = clipText(output.term, 120);
+  const explanation = clipText(output.explanation, 360);
+  const whyItMattersHere = clipText(output.whyItMattersHere, 360);
+  const example = clipText(output.example, 320);
+  const relatedConcepts = normalizedList(output.relatedConcepts, ["assumption", "evidence"], 5, 80);
+  const saveSuggestion = clipText(output.saveSuggestion, 220);
+  const coreIdea = clipText(output.coreIdea || `${term}: ${explanation}`, 360);
+  const claims = normalizedList(
+    output.claims,
+    [`${term} changes the current claim because ${lowercaseFirst(whyItMattersHere)}`],
+    5,
+    240,
+  );
+  const assumptions = normalizedList(
+    output.assumptions,
+    [`The current claim depends on whether "${term}" works in this specific context.`],
+    5,
+    240,
+  );
+  const questions = normalizedList(
+    output.questions,
+    [`What evidence would show that "${term}" is helping or hurting this claim?`],
+    5,
+    240,
+  );
+  const misconceptionsGaps = normalizedList(
+    output.misconceptionsGaps,
+    [`Do not treat "${term}" as a generic definition; test the local mechanism.`],
+    5,
+    240,
+  );
+  const creativeDirections = normalizedList(
+    output.creativeDirections,
+    [`Turn "${term}" into a concrete test, example, or artifact inside Brain.`],
+    5,
+    240,
+  );
+  const suggestedNextMove = output.suggestedNextMove ?? {
+    action: "save_to_brain" as const,
+    label: "Save Learn output to Brain",
+    reason: saveSuggestion,
+  };
+  const candidateBrainObjects =
+    output.candidateBrainObjects?.length ? output.candidateBrainObjects : [learnCandidateBrainObject({
+      term,
+      explanation,
+      whyItMattersHere,
+      example,
+      relatedConcepts,
+      saveSuggestion,
+      coreIdea,
+      claims,
+      assumptions,
+      questions,
+      misconceptionsGaps,
+      creativeDirections,
+      suggestedNextMove,
+    }, input)];
+
+  return {
+    term,
+    explanation,
+    whyItMattersHere,
+    example,
+    relatedConcepts,
+    saveSuggestion,
+    coreIdea,
+    claims,
+    assumptions,
+    questions,
+    misconceptionsGaps,
+    creativeDirections,
+    suggestedNextMove,
+    candidateBrainObjects: candidateBrainObjects.slice(0, 5),
+  };
+}
+
+function learnCandidateBrainObject(output: Omit<InlineLearnOutput, "candidateBrainObjects">, input?: Partial<InlineLearnGenerationInput>) {
+  return {
+    objectType: "learn_output",
+    title: `Learn: ${clipText(output.term, 120)}`,
+    summary: output.coreIdea,
+    content: learnOutputContent(output),
+    suggestedSaveReason: output.saveSuggestion,
+    source: "learn" as const,
+    refs: {
+      ...(input?.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(input?.currentClaimId ? { currentClaimId: input.currentClaimId } : {}),
+      term: output.term,
+    },
+  };
+}
+
+function learnOutputContent(output: Omit<InlineLearnOutput, "candidateBrainObjects">): string {
+  return [
+    output.coreIdea,
+    "",
+    `Explanation: ${output.explanation}`,
+    `Why here: ${output.whyItMattersHere}`,
+    `Example: ${output.example}`,
+    `Claims: ${output.claims.join("; ")}`,
+    `Assumptions: ${output.assumptions.join("; ")}`,
+    `Questions: ${output.questions.join("; ")}`,
+    `Gaps: ${output.misconceptionsGaps.join("; ")}`,
+    `Directions: ${output.creativeDirections.join("; ")}`,
+    `Next move: ${output.suggestedNextMove.label} - ${output.suggestedNextMove.reason}`,
+  ].join("\n");
+}
+
+function normalizedList(values: string[] | undefined, fallback: string[], limit: number, maxLength: number): string[] {
+  const normalized = (values?.length ? values : fallback)
+    .map((value) => clipText(value, maxLength))
+    .filter((value) => value.length > 0);
+
+  return [...new Set(normalized)].slice(0, limit);
+}
+
+function lowercaseFirst(value: string): string {
+  return value ? `${value.charAt(0).toLowerCase()}${value.slice(1)}` : value;
 }
 
 type HeuristicConcept = {

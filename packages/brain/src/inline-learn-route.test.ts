@@ -253,13 +253,26 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
 
   assert.equal(heuristic.term, "scope");
   assert.match(heuristic.explanation, /boundary/);
+  assert.match(heuristic.coreIdea, /scope/i);
+  assert.ok(heuristic.claims.length > 0);
+  assert.ok(heuristic.assumptions.length > 0);
+  assert.ok(heuristic.questions.length > 0);
+  assert.ok(heuristic.misconceptionsGaps.length > 0);
+  assert.ok(heuristic.creativeDirections.length > 0);
+  assert.equal(heuristic.suggestedNextMove.action, "save_to_brain");
+  assert.equal(heuristic.candidateBrainObjects[0]?.objectType, "learn_output");
+  assert.equal(heuristic.candidateBrainObjects[0]?.source, "learn");
+  assert.equal(heuristic.candidateBrainObjects[0]?.refs?.currentClaimId, uuidAt(101));
   assert.doesNotMatch(heuristic.explanation, /piece of meaning/i);
   assert.equal(xai.example, "Novice users may need a different test than expert users.");
+  assert.equal(xai.suggestedNextMove.action, "save_to_brain");
+  assert.equal(xai.candidateBrainObjects[0]?.objectType, "learn_output");
   assert.equal(resolveXaiInlineLearnModel({}), defaultXaiInlineLearnModel);
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.prompt ?? "", /Local context/);
   assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
   assert.match(calls[0]?.prompt ?? "", /concept_grounding/);
+  assert.match(calls[0]?.prompt ?? "", /candidateBrainObjects/);
 });
 
 test("generateInlineLearnOutput requires a recorded BrainRun id", async () => {
@@ -322,6 +335,19 @@ test("heuristic Learn teaches supported concepts instead of generic meta-definit
 });
 
 test("Learn output parsing and xAI provider failures are explicit", async () => {
+  const legacyOutput = parseInlineLearnOutput({
+    term: "scope",
+    explanation: "Scope is the boundary around where the claim applies.",
+    whyItMattersHere: "It keeps the claim from pretending to apply to every learner.",
+    example: "Novice users may need a different test than expert users.",
+    relatedConcepts: ["boundary"],
+    saveSuggestion: "Save this if the map keeps changing target users.",
+  });
+
+  assert.equal(legacyOutput.coreIdea, "scope: Scope is the boundary around where the claim applies.");
+  assert.equal(legacyOutput.suggestedNextMove.action, "save_to_brain");
+  assert.equal(legacyOutput.candidateBrainObjects[0]?.objectType, "learn_output");
+
   assert.throws(
     () =>
       parseInlineLearnOutput({
@@ -432,14 +458,14 @@ function claim(id: string, versionId: string, text: string) {
 }
 
 function learnOutput(term: string) {
-  return {
+  return parseInlineLearnOutput({
     term,
     explanation: `${term} is the mental effort or boundary the current claim needs to make clear.`,
     whyItMattersHere: "It decides whether the product is reducing effort or just adding another surface.",
     example: "A study flow lowers load if it removes choices instead of adding explanations.",
     relatedConcepts: ["working memory", "attention", "scope"],
     saveSuggestion: `Save ${term} when the map keeps using it as a load-bearing concept.`,
-  };
+  });
 }
 
 function uuidAt(value: number): string {

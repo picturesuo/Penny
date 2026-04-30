@@ -9,6 +9,8 @@ export {
   InlineLearnProviderSchema,
   InlineLearnRequestSchema,
   InlineLearnSaveRequestSchema,
+  LearnOutputSchema,
+  LearnSuggestedNextMoveSchema,
 } from "./inline-learn-core.ts";
 export type {
   InlineLearnGenerateText,
@@ -20,6 +22,7 @@ export type {
   InlineLearnRouteOptions,
   InlineLearnSaveRequest,
   InlineLearnSaveRouteOptions,
+  LearnOutput,
   PersistedInlineLearn,
 } from "./inline-learn-core.ts";
 export {

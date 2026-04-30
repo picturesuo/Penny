@@ -1070,6 +1070,7 @@ function candidateDto(sessionId: string) {
       moveIds: [uuidAt(503)],
       artifactIds: [],
     },
+    candidateBrainObjects: [],
     selected: true,
     selectedAt: "2026-04-29T00:00:09.000Z",
     sessionId,
