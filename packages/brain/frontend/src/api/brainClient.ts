@@ -2,6 +2,7 @@ import type {
   AutopilotSuggestion,
   AutopilotTickData,
   BrainClaim,
+  BrainDocumentsResponse,
   AutopilotTickResponse,
   ChallengeBriefResponse,
   ChallengeResponseKind,
@@ -66,6 +67,21 @@ export async function seedBrain(rawIdea: string): Promise<SeedBrainResponse> {
   }
 
   return payload as SeedBrainResponse;
+}
+
+export async function fetchBrainDocuments(): Promise<BrainDocumentsResponse> {
+  const response = await fetch("/api/brain/documents", {
+    method: "GET",
+    headers: requestHeaders(),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /api/brain/documents failed with ${response.status}.`));
+  }
+
+  return payload as BrainDocumentsResponse;
 }
 
 export async function tickAutopilot(sessionId: string, resume = false): Promise<AutopilotTickResponse> {
