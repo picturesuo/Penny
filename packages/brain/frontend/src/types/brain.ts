@@ -56,6 +56,89 @@ export interface BrainRun {
   operation?: string;
 }
 
+export interface BrainDocumentClaim {
+  id: string;
+  kind: string;
+  status: ClaimStatus;
+  text: string;
+  confidence: number;
+  versionId: string;
+  createdAt: string;
+}
+
+export interface BrainDocumentSummary {
+  id: string;
+  sessionId: string;
+  title: string;
+  status: string;
+  originalIdea: string | null;
+  mainClaim: BrainDocumentClaim | null;
+  confidence: number | null;
+  strongestOptions: BrainDocumentClaim[];
+  rejectedOptions: BrainDocumentClaim[];
+  todoLaterIdeas: string[];
+  finalRecommendations: string[];
+  nextActions: string[];
+  counts: {
+    claims: number;
+    edges: number;
+    moves: number;
+    artifacts: number;
+    versions: number;
+  };
+  latestArtifact: {
+    id: string;
+    kind: string;
+    title: string;
+    summary: string;
+    createdAt: string;
+  } | null;
+  lastMove: {
+    id: string;
+    kind: string;
+    summary: string;
+    createdAt: string;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BrainDocumentGraphNode {
+  id: string;
+  type: "document" | "claim" | "risk" | "concept" | string;
+  label: string;
+  sessionId: string;
+  confidence: number | null;
+  status: string;
+}
+
+export interface BrainDocumentGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  kind: string;
+  label: string | null;
+  sessionId: string;
+}
+
+export interface BrainDocumentsData {
+  sourceOfTruth: "sessions_sources_claims_claim_versions_edges_moves_artifacts" | string;
+  documents: BrainDocumentSummary[];
+  graph: {
+    nodes: BrainDocumentGraphNode[];
+    edges: BrainDocumentGraphEdge[];
+  };
+  meta: {
+    documentCount: number;
+    claimCount: number;
+    edgeCount: number;
+  };
+}
+
+export interface BrainDocumentsResponse {
+  data: BrainDocumentsData;
+}
+
 export interface BrainData {
   ideaMap?: {
     claims?: BrainClaim[];
