@@ -139,11 +139,52 @@ export type SessionCockpitArtifact = {
   createdAt: string;
 };
 
+export type BrainGraphPathNode = {
+  id: string;
+  claimId: EntityId;
+  label: string;
+  role: string;
+  kind: CockpitClaim["kind"];
+  status: CockpitClaim["status"];
+  confidence: number;
+  depth: number;
+  lane: number;
+  rank: number;
+  moveCount: number;
+  edgeIds: EntityId[];
+  selected: boolean;
+  suggested: boolean;
+};
+
+export type BrainGraphPathEdge = {
+  id: string;
+  edgeId: EntityId;
+  fromNodeId: string;
+  toNodeId: string;
+  kind: CockpitEdge["kind"];
+  status: CockpitEdge["status"];
+  label: string | null;
+};
+
+export type BrainGraphPath = {
+  layout: "top_down";
+  generatedFrom: "claims_edges_moves";
+  focusClaimId: EntityId | null;
+  nodes: BrainGraphPathNode[];
+  edges: BrainGraphPathEdge[];
+  meta: {
+    nodeCount: number;
+    edgeCount: number;
+    maxDepth: number;
+  };
+};
+
 export type SessionCockpitPayload = {
   session: SessionGraphPayload["session"];
   sourceOfTruth: SessionGraphPayload["sourceOfTruth"];
   ideaMap: SessionGraphPayload["ideaMap"];
   workStructure: WorkStructure;
+  graphPath: BrainGraphPath;
   graph: SessionGraphPayload["graph"];
   moves: SessionGraphPayload["moves"];
   lensSnapshot: SessionGraphPayload["lensSnapshot"];
@@ -430,6 +471,7 @@ export function buildSessionCockpitPayload(
     sourceOfTruth: graph.sourceOfTruth,
     ideaMap: graph.ideaMap,
     workStructure: buildWorkStructure(graph, autopilot, activeChallenge),
+    graphPath: buildBrainGraphPath(graph, autopilot, activeChallenge),
     graph: graph.graph,
     moves: graph.moves,
     lensSnapshot: graph.lensSnapshot,
@@ -442,6 +484,192 @@ export function buildSessionCockpitPayload(
       activeChallengeId: activeChallenge?.id ?? null,
     },
   };
+}
+
+export function buildBrainGraphPath(
+  graph: SessionGraphPayload,
+  autopilot: ThinkingModeStateResponse,
+  activeChallenge: SessionCockpitChallengeRound | null,
+): BrainGraphPath {
+  const claims = graph.ideaMap.claims;
+  const edges = graph.ideaMap.edges;
+  const focusClaimId =
+    activeChallenge?.targetClaimId ??
+    autopilot.focusState.focusedClaimId ??
+    autopilot.selectedCandidate?.targetClaimId ??
+    claims[0]?.id ??
+    null;
+  const rootClaimId = claims[0]?.id ?? focusClaimId;
+  const depths = graphPathDepths(claims, edges, rootClaimId ?? null);
+  const nodesByDepth = new Map<number, CockpitClaim[]>();
+
+  for (const claim of claims) {
+    const depth = depths.get(claim.id) ?? 0;
+    const siblings = nodesByDepth.get(depth) ?? [];
+    siblings.push(claim);
+    nodesByDepth.set(depth, siblings);
+  }
+
+  const nodes: BrainGraphPathNode[] = [];
+
+  for (const [depth, depthClaims] of [...nodesByDepth.entries()].sort(([left], [right]) => left - right)) {
+    const sortedClaims = [...depthClaims].sort((left, right) => graphPathClaimSort(left, right, focusClaimId));
+    const center = (sortedClaims.length - 1) / 2;
+
+    sortedClaims.forEach((claim, index) => {
+      const edgeIds = uniqueStrings([...claim.incomingEdgeIds, ...claim.outgoingEdgeIds]);
+
+      nodes.push({
+        id: `claim:${claim.id}`,
+        claimId: claim.id,
+        label: claim.text,
+        role: graphPathRole(claim, edges, rootClaimId ?? null),
+        kind: claim.kind,
+        status: claim.status,
+        confidence: claim.confidence,
+        depth,
+        lane: index - center,
+        rank: nodes.length + 1,
+        moveCount: claim.moveIds.length,
+        edgeIds,
+        selected: claim.id === focusClaimId,
+        suggested: claim.id === autopilot.selectedCandidate?.targetClaimId,
+      });
+    });
+  }
+
+  const nodeIds = new Set(nodes.map((node) => node.claimId));
+  const nodeByClaimId = new Map(nodes.map((node) => [node.claimId, node]));
+  const graphPathEdges = edges
+    .filter((edge) => nodeIds.has(edge.fromClaimId) && nodeIds.has(edge.toClaimId))
+    .map((edge) => {
+      const fromNode = nodeByClaimId.get(edge.fromClaimId);
+      const toNode = nodeByClaimId.get(edge.toClaimId);
+
+      if (!fromNode || !toNode) {
+        return null;
+      }
+
+      const shouldReverse = fromNode.depth > toNode.depth;
+      const source = shouldReverse ? toNode : fromNode;
+      const target = shouldReverse ? fromNode : toNode;
+
+      return {
+        id: `edge:${edge.id}`,
+        edgeId: edge.id,
+        fromNodeId: source.id,
+        toNodeId: target.id,
+        kind: edge.kind,
+        status: edge.status,
+        label: edge.label,
+      };
+    })
+    .filter((edge): edge is BrainGraphPathEdge => Boolean(edge));
+
+  return {
+    layout: "top_down",
+    generatedFrom: "claims_edges_moves",
+    focusClaimId,
+    nodes,
+    edges: graphPathEdges,
+    meta: {
+      nodeCount: nodes.length,
+      edgeCount: graphPathEdges.length,
+      maxDepth: nodes.reduce((maxDepth, node) => Math.max(maxDepth, node.depth), 0),
+    },
+  };
+}
+
+function graphPathDepths(claims: CockpitClaim[], edges: CockpitEdge[], rootClaimId: EntityId | null): Map<EntityId, number> {
+  const depths = new Map<EntityId, number>();
+  const claimIds = new Set(claims.map((claim) => claim.id));
+  const adjacency = new Map<EntityId, EntityId[]>();
+
+  for (const edge of edges) {
+    if (!claimIds.has(edge.fromClaimId) || !claimIds.has(edge.toClaimId)) {
+      continue;
+    }
+
+    adjacency.set(edge.fromClaimId, [...(adjacency.get(edge.fromClaimId) ?? []), edge.toClaimId]);
+    adjacency.set(edge.toClaimId, [...(adjacency.get(edge.toClaimId) ?? []), edge.fromClaimId]);
+  }
+
+  const queue: EntityId[] = [];
+
+  if (rootClaimId && claimIds.has(rootClaimId)) {
+    depths.set(rootClaimId, 0);
+    queue.push(rootClaimId);
+  }
+
+  while (queue.length > 0) {
+    const claimId = queue.shift();
+
+    if (!claimId) {
+      continue;
+    }
+
+    const nextDepth = (depths.get(claimId) ?? 0) + 1;
+
+    for (const nextClaimId of adjacency.get(claimId) ?? []) {
+      if (!depths.has(nextClaimId)) {
+        depths.set(nextClaimId, nextDepth);
+        queue.push(nextClaimId);
+      }
+    }
+  }
+
+  let disconnectedDepth = depths.size > 0 ? Math.max(...depths.values()) + 1 : 0;
+
+  for (const claim of claims) {
+    if (!depths.has(claim.id)) {
+      depths.set(claim.id, disconnectedDepth);
+      disconnectedDepth += 1;
+    }
+  }
+
+  return depths;
+}
+
+function graphPathClaimSort(left: CockpitClaim, right: CockpitClaim, focusClaimId: EntityId | null): number {
+  return (
+    Number(right.id === focusClaimId) - Number(left.id === focusClaimId) ||
+    right.moveIds.length - left.moveIds.length ||
+    left.createdAt.localeCompare(right.createdAt)
+  );
+}
+
+function graphPathRole(claim: CockpitClaim, edges: CockpitEdge[], rootClaimId: EntityId | null): string {
+  if (claim.id === rootClaimId) {
+    return "main_claim";
+  }
+
+  if (claim.kind === "concept") {
+    return "concept";
+  }
+
+  if (claim.kind === "question") {
+    return "question";
+  }
+
+  const claimEdges = edges.filter((edge) => edge.fromClaimId === claim.id || edge.toClaimId === claim.id);
+
+  if (claimEdges.some((edge) => edge.kind === "challenges" || edge.kind === "contradicts")) {
+    return "challenge";
+  }
+
+  if (claimEdges.some((edge) => edge.kind === "supports")) {
+    return "support";
+  }
+
+  if (claimEdges.some((edge) => edge.kind === "depends_on")) {
+    return claim.kind === "assumption" ? "assumption" : "requirement";
+  }
+
+  if (claimEdges.some((edge) => edge.kind === "teaches")) {
+    return "concept";
+  }
+
+  return claim.kind;
 }
 
 async function loadActiveChallenge(
