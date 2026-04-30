@@ -8,6 +8,7 @@ import type { EntityId, FocusState } from "../domain/types.ts";
 import { mvpModeForThinkingMode, mvpModeValues, type MvpMode, type ThinkingMode } from "../modes.ts";
 
 export type ThinkingModeStatus = "ready" | "paused" | "empty";
+export type ThinkingModeCandidateUserAction = "learn" | "check" | "verify" | "save_to_brain";
 
 export type MvpModeContractDto = {
   validModes: ReadonlyArray<MvpMode>;
@@ -22,10 +23,14 @@ export type ThinkingModeCandidateDto = {
   targetClaimId: EntityId;
   targetEdgeId: EntityId | null;
   action: NextMoveCandidate["action"];
+  userAction: ThinkingModeCandidateUserAction;
   mode: NextMoveCandidate["mode"];
   mvpMode: MvpMode;
+  label: string;
+  primaryActionLabel: string;
   score: number;
   reason: string;
+  whyNow: string;
   reasonCodes: ReadonlyArray<string>;
   exitCriteria: NextMoveCandidate["exitCriteria"];
   scoreBreakdown: NextMoveCandidate["scoreBreakdown"];
@@ -366,10 +371,14 @@ function candidateDto(candidate: PersistedNextMoveCandidate): ThinkingModeCandid
     targetClaimId: candidate.targetClaimId,
     targetEdgeId: candidate.targetEdgeId,
     action: candidate.action,
+    userAction: userActionFor(candidate.action),
     mode: candidate.mode,
     mvpMode: mvpModeForThinkingMode(candidate.mode),
+    label: candidateLabel(candidate.action),
+    primaryActionLabel: primaryActionLabel(candidate.action),
     score: candidate.score,
     reason: candidate.reason,
+    whyNow: candidate.reason,
     reasonCodes: candidate.reasonCodes,
     exitCriteria: candidate.exitCriteria,
     scoreBreakdown: candidate.scoreBreakdown,
@@ -420,4 +429,53 @@ function uniqueIds(ids: ReadonlyArray<EntityId>): EntityId[] {
 
 function isEntityId(value: EntityId | null): value is EntityId {
   return Boolean(value);
+}
+
+function userActionFor(action: NextMoveCandidate["action"]): ThinkingModeCandidateUserAction {
+  switch (action) {
+    case "learn":
+    case "clarify":
+      return "learn";
+    case "resume_open_challenge":
+    case "challenge":
+      return "check";
+    case "verify":
+      return "verify";
+    case "save_to_brain":
+      return "save_to_brain";
+  }
+}
+
+function candidateLabel(action: NextMoveCandidate["action"]): string {
+  switch (action) {
+    case "learn":
+      return "Learn the concept";
+    case "clarify":
+      return "Learn what needs sharpening";
+    case "resume_open_challenge":
+      return "Check the open challenge";
+    case "challenge":
+      return "Check the weakest claim";
+    case "verify":
+      return "Verify with evidence";
+    case "save_to_brain":
+      return "Save to Brain";
+  }
+}
+
+function primaryActionLabel(action: NextMoveCandidate["action"]): string {
+  switch (action) {
+    case "learn":
+      return "Start Learn";
+    case "clarify":
+      return "Clarify";
+    case "resume_open_challenge":
+      return "Resume Check";
+    case "challenge":
+      return "Start Check";
+    case "verify":
+      return "Start Verify";
+    case "save_to_brain":
+      return "Save to Brain";
+  }
 }

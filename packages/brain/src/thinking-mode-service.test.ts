@@ -27,6 +27,9 @@ test("ThinkingModeService tick recomputes and persists candidates without mutati
   assert.equal(result.status, "ready");
   assert.equal(result.candidates.length, 3);
   assert.equal(result.selectedCandidate?.action, "challenge");
+  assert.equal(result.selectedCandidate?.userAction, "check");
+  assert.equal(result.selectedCandidate?.label, "Check the weakest claim");
+  assert.equal(result.selectedCandidate?.primaryActionLabel, "Start Check");
   assert.equal(result.selectedCandidate?.mode, "challenge");
   assert.equal(result.selectedCandidate?.mvpMode, "Check");
   assert.equal(result.modeContract.activeMode, "Check");

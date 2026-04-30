@@ -71,7 +71,8 @@ export class PennyInternalToolNotFoundError extends Error {
 const UuidSchema = z.string().uuid();
 const CandidateReferenceSchema = z.string().trim().min(1).max(200);
 const JsonObjectSchema = z.record(z.string(), z.unknown());
-const ToolActionSchema = z.enum(["resume_open_challenge", "learn", "clarify", "verify", "challenge"]);
+const ToolActionSchema = z.enum(["resume_open_challenge", "learn", "clarify", "verify", "challenge", "save_to_brain"]);
+const ToolUserActionSchema = z.enum(["learn", "check", "verify", "save_to_brain"]);
 const ThinkingModeSchema = z.enum(["brain", "challenge", "verify", "learn", "artifact"]);
 const ChallengeResponseSchema = z.enum(["defend", "revise", "absorb"]);
 const ChallengeStrengthSchema = z.enum(["weak", "moderate", "strong"]);
@@ -193,10 +194,14 @@ const CandidateOutputSchema = z
     targetClaimId: UuidSchema,
     targetEdgeId: UuidSchema.nullable(),
     action: ToolActionSchema,
+    userAction: ToolUserActionSchema,
     mode: ThinkingModeSchema,
     mvpMode: MvpModeSchema,
+    label: z.string(),
+    primaryActionLabel: z.string(),
     score: z.number(),
     reason: z.string(),
+    whyNow: z.string(),
     reasonCodes: z.array(z.string()),
     exitCriteria: z
       .object({
