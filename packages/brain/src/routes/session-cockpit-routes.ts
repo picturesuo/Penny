@@ -189,6 +189,7 @@ export type SessionCockpitPayload = {
   moves: SessionGraphPayload["moves"];
   lensSnapshot: SessionGraphPayload["lensSnapshot"];
   autopilot: ThinkingModeStateResponse;
+  modeContract: ThinkingModeStateResponse["modeContract"];
   activeChallenge: SessionCockpitActiveChallenge | null;
   latestArtifact: SessionCockpitArtifact | null;
   meta: SessionGraphPayload["meta"] & {
@@ -476,6 +477,7 @@ export function buildSessionCockpitPayload(
     moves: graph.moves,
     lensSnapshot: graph.lensSnapshot,
     autopilot,
+    modeContract: autopilot.modeContract,
     activeChallenge: activeChallenge ? attachChallengeGraphRefs(activeChallenge, graph) : null,
     latestArtifact,
     meta: {
