@@ -273,8 +273,17 @@
     height: 0;
   }
 
-  .structure-helper {
+  .structure-helper-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
     margin: 14px 0 13px;
+    min-width: 0;
+  }
+
+  .structure-helper {
+    margin: 0;
     color: rgb(17 17 17 / 0.78);
     font-size: 12px;
     line-height: 1.2;
@@ -453,21 +462,18 @@
   }
 
   .quick-select-corner {
-    position: absolute;
-    right: 10px;
-    bottom: 10px;
-    z-index: 2;
     display: grid;
     place-items: center;
+    justify-self: end;
     pointer-events: none;
   }
 
   .quick-select-corner kbd {
     display: grid;
     place-items: center;
-    min-width: 28px;
+    min-width: 30px;
     max-width: 74px;
-    height: 24px;
+    height: 26px;
     padding: 0 7px;
     overflow: hidden;
     border: 1px solid #cfcfcf;
