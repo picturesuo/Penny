@@ -6,6 +6,7 @@ import type {
   AutopilotTickResponse,
   ChallengeBriefResponse,
   ChallengeResponseKind,
+  ClaimDetailResponse,
   BrainMove,
   InlineLearnOutput,
   InlineLearnResponse,
@@ -85,6 +86,21 @@ export async function fetchBrainDocuments(): Promise<BrainDocumentsResponse> {
   }
 
   return payload as BrainDocumentsResponse;
+}
+
+export async function fetchClaimDetail(claimId: string): Promise<ClaimDetailResponse> {
+  const response = await fetch(`/brain/claims/${encodeURIComponent(claimId)}/detail`, {
+    method: "GET",
+    headers: requestHeaders(),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /brain/claims/${claimId}/detail failed with ${response.status}.`));
+  }
+
+  return payload as ClaimDetailResponse;
 }
 
 export async function tickAutopilot(sessionId: string, resume = false): Promise<AutopilotTickResponse> {
