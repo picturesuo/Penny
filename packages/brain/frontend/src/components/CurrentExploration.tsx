@@ -147,10 +147,6 @@ function WorkStructureStepDetail({
       <p title={step.purpose}>{truncateWords(step.purpose, 18)}</p>
       <p title={step.whyNow}>{truncateWords(step.whyNow, 18)}</p>
       {focusedClaim ? <em title={focusedClaim.text}>{truncateWords(focusedClaim.text, 16)}</em> : null}
-      <div className="work-step-metrics" aria-label="Work step ranking">
-        <span>Fragility {step.fragility}</span>
-        <span>Importance {step.importance}</span>
-      </div>
       <div className="work-step-choices" aria-label="Work step choices">
         {step.detailChoices.map((choice) => (
           <article key={choice.id}>
@@ -266,7 +262,7 @@ function workStepRows(step: WorkStructureStep | null | undefined): PathRow[] {
       title: step.title,
       reasoning: [step.purpose, step.whyNow],
       summary: `Preview how working on "${step.title}" changes the current idea.`,
-      tweaks: [formatStatus(step.status), `Fragility ${step.fragility}`, `Importance ${step.importance}`],
+      tweaks: [formatStatus(step.status), step.purpose, step.whyNow],
     },
     ...step.detailChoices.map((choice) => ({
       id: `choice:${step.id}:${choice.id}`,
