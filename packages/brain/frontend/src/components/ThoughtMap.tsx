@@ -460,7 +460,7 @@ function nodeKindRank(kind: ThoughtMapNodeKind): number {
 
 function thoughtMapNodeMetadata(node: ThoughtMapNode): string | null {
   if (node.step) {
-    return `${formatStatus(node.step.status)} / fragile ${node.step.fragility}`;
+    return formatStatus(node.step.status);
   }
 
   if (node.kind === "claim" && node.description) {
