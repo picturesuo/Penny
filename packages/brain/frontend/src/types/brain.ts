@@ -295,6 +295,15 @@ export interface BrainData {
   brainRun?: BrainRun;
 }
 
+export interface LearnSessionOutput {
+  coreIdea: string;
+  claims: BrainClaim[];
+  assumptions: BrainClaim[];
+  questions: BrainClaim[];
+  creativePotential: string[];
+  autopilotNextMove: AutopilotSuggestion | null;
+}
+
 export interface BrainMove {
   id: string;
   type?: string;
