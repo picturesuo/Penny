@@ -65,9 +65,17 @@ export interface BrainDocumentClaim {
   createdAt: string;
 }
 
+export interface BrainScope {
+  userId: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
+  sphereId: string | null;
+}
+
 export interface BrainDocumentSummary {
   id: string;
   sessionId: string;
+  scope: BrainScope;
   title: string;
   status: string;
   originalIdea: string | null;
@@ -101,6 +109,42 @@ export interface BrainDocumentSummary {
   updatedAt: string;
 }
 
+export type BrainDocumentFileKind = "source" | "claim" | "artifact" | "moves" | string;
+
+export interface BrainDocumentFile {
+  id: string;
+  sessionId: string;
+  kind: BrainDocumentFileKind;
+  title: string;
+  subtitle: string | null;
+}
+
+export interface BrainHierarchyDocument {
+  id: string;
+  sessionId: string;
+  title: string;
+  status: string;
+  updatedAt: string;
+  fileCount: number;
+  files: BrainDocumentFile[];
+}
+
+export interface BrainHierarchyFolder {
+  id: string;
+  label: string;
+  kind: "project" | "status" | "inbox" | string;
+  documentCount: number;
+  documents: BrainHierarchyDocument[];
+}
+
+export interface BrainHierarchySpace {
+  id: string;
+  label: string;
+  kind: "sphere" | "workspace" | "default" | string;
+  documentCount: number;
+  folders: BrainHierarchyFolder[];
+}
+
 export interface BrainDocumentGraphNode {
   id: string;
   type: "document" | "claim" | "risk" | "concept" | string;
@@ -121,6 +165,7 @@ export interface BrainDocumentGraphEdge {
 export interface BrainDocumentsData {
   sourceOfTruth: "sessions_sources_claims_claim_versions_edges_moves_artifacts" | string;
   documents: BrainDocumentSummary[];
+  hierarchy: BrainHierarchySpace[];
   graph: {
     nodes: BrainDocumentGraphNode[];
     edges: BrainDocumentGraphEdge[];
