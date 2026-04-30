@@ -10,15 +10,12 @@ import type {
   BrainEdge,
   BrainMove,
   ChallengeBriefPayload,
-  ChallengeResponseKind,
-  RespondToChallengeResponse,
   SessionCockpitData,
   WorkStructure,
 } from "../types/brain";
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
 import { Composer } from "./Composer";
-import { InsightRail } from "./InsightRail";
 
 interface BrainWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -27,7 +24,6 @@ interface BrainWorkspaceProps {
   moves: BrainMove[];
   autopilot: AutopilotTickData | null;
   latestArtifact: SessionCockpitData["latestArtifact"] | null;
-  challengeResponse: RespondToChallengeResponse["data"] | null;
   focusedClaimId: string | null;
   status: string;
   isThinking: boolean;
@@ -37,15 +33,6 @@ interface BrainWorkspaceProps {
   onSeed: (rawIdea: string) => Promise<void>;
   onClaimSelect: (claimId: string) => void;
   onReworkDocument: () => Promise<void>;
-  onIssueChallenge: () => Promise<void>;
-  onRespondChallenge: (
-    challengeId: string,
-    draft:
-      | { response: "defend"; reasoning: string }
-      | { response: "revise"; revisedText: string; reasoning?: string }
-      | { response: "absorb"; reasoning?: string },
-  ) => Promise<void>;
-  onCreateChallengeBrief: () => Promise<void>;
 }
 
 interface GraphPoint {
@@ -61,7 +48,6 @@ export function BrainWorkspace({
   moves,
   autopilot,
   latestArtifact,
-  challengeResponse,
   focusedClaimId,
   status,
   isThinking,
@@ -71,9 +57,6 @@ export function BrainWorkspace({
   onSeed,
   onClaimSelect,
   onReworkDocument,
-  onIssueChallenge,
-  onRespondChallenge,
-  onCreateChallengeBrief,
 }: BrainWorkspaceProps) {
   if (!selectedDocument) {
     return (
@@ -118,18 +101,12 @@ export function BrainWorkspace({
         <DocumentRundown document={selectedDocument} moves={moves} latestArtifact={latestArtifact} />
         <WorkingNotes sessionId={selectedDocument.sessionId} title={selectedDocument.title} />
       </section>
-      <InsightRail
-        challenge={data?.firstChallenge}
-        autopilotSuggestion={autopilot?.suggestion ?? null}
+      <BrainDocumentAside
+        document={selectedDocument}
+        focusedClaim={claims.find((claim) => claim.id === focusedClaimId) ?? null}
         claims={claims}
-        learnCandidates={data?.learnCandidates ?? []}
         moves={moves}
-        latestArtifact={latestArtifact ?? null}
-        challengeResponse={challengeResponse}
-        disabled={isThinking}
-        onIssueChallenge={onIssueChallenge}
-        onRespondChallenge={onRespondChallenge}
-        onCreateChallengeBrief={onCreateChallengeBrief}
+        latestArtifact={latestArtifact}
       />
     </main>
   );
@@ -292,9 +269,21 @@ function ConnectedGraphBoard({
 
               return (
                 <g key={claim.id} className={`graph-node is-${claim.kind}${isFocused ? " is-focused" : ""}${isSuggested ? " is-suggested" : ""}`}>
-                  <button type="button" onClick={() => onClaimSelect(claim.id)} aria-label={`Focus ${claim.text}`}>
-                    <circle cx={point.x} cy={point.y} r={isFocused ? 24 : 18} />
-                  </button>
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r={isFocused ? 24 : 18}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Focus ${claim.text}`}
+                    onClick={() => onClaimSelect(claim.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onClaimSelect(claim.id);
+                      }
+                    }}
+                  />
                   <text x={point.x + 31} y={point.y - 4}>
                     {truncateWords(claim.text, 5)}
                   </text>
@@ -397,6 +386,55 @@ function DocumentRundown({
         values={moves.slice(0, 10).map((move) => `${formatLabel(move.kind ?? move.type)}: ${move.summary}`)}
       />
     </section>
+  );
+}
+
+function BrainDocumentAside({
+  document,
+  focusedClaim,
+  claims,
+  moves,
+  latestArtifact,
+}: {
+  document: BrainDocumentSummary;
+  focusedClaim: BrainClaim | null;
+  claims: BrainClaim[];
+  moves: BrainMove[];
+  latestArtifact: SessionCockpitData["latestArtifact"] | null;
+}) {
+  const concepts = claims.filter((claim) => claim.kind === "concept").slice(0, 4);
+
+  return (
+    <aside className="brain-doc-aside" aria-label="Document context">
+      <section>
+        <h2 className="section-label">MOST IMPORTANT INSIGHT</h2>
+        <p>{focusedClaim?.text ?? document.mainClaim?.text ?? "No selected claim yet."}</p>
+      </section>
+      <section>
+        <h2 className="section-label">RELATED CONCEPTS</h2>
+        {concepts.length > 0 ? (
+          <ul>
+            {concepts.map((claim) => (
+              <li key={claim.id}>
+                <span>{claim.text}</span>
+                <small>Concept</small>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No related concepts recorded yet.</p>
+        )}
+      </section>
+      <section>
+        <h2 className="section-label">DOCUMENT SUMMARY</h2>
+        <p>{latestArtifact?.summary ?? document.finalRecommendations[0] ?? document.originalIdea ?? "No summary yet."}</p>
+      </section>
+      <section>
+        <h2 className="section-label">LAST SESSION</h2>
+        <p>{document.lastMove ? `${formatDate(document.lastMove.createdAt)}: ${document.lastMove.summary}` : "No moves recorded."}</p>
+        <small>{moves.length} moves / {document.counts.versions} versions</small>
+      </section>
+    </aside>
   );
 }
 

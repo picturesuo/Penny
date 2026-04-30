@@ -3,11 +3,13 @@ import { PennyMark } from "./PennyMark";
 interface HeaderProps {
   sessionLabel: string;
   thinkingLabel: string;
+  activeItem?: string;
+  onNavItemSelect?: (item: string) => void;
 }
 
 const navItems = ["Brain", "Cents", "Check", "Search", "Settings"];
 
-export function Header({ sessionLabel, thinkingLabel }: HeaderProps) {
+export function Header({ sessionLabel, thinkingLabel, activeItem = "Brain", onNavItemSelect }: HeaderProps) {
   const editionDate = new Intl.DateTimeFormat(undefined, {
     weekday: "long",
     month: "long",
@@ -27,7 +29,12 @@ export function Header({ sessionLabel, thinkingLabel }: HeaderProps) {
 
         <nav className="nav-tabs" aria-label="Penny modes">
           {navItems.map((item) => (
-            <button key={item} className="nav-tab" type="button">
+            <button
+              key={item}
+              className={`nav-tab${item === activeItem ? " is-active" : ""}`}
+              type="button"
+              onClick={() => onNavItemSelect?.(item)}
+            >
               {item}
             </button>
           ))}

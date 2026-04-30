@@ -7,9 +7,11 @@ import {
   respondToChallenge,
   seedBrain,
   selectAutopilotNode,
+  startAutopilotCandidate,
   tickAutopilot,
 } from "./api/brainClient";
 import { BrainWorkspace } from "./components/BrainWorkspace";
+import { CheckWorkspace } from "./components/CheckWorkspace";
 import { Header } from "./components/Header";
 import { formatLabel, shortId } from "./lib/format";
 import type {
@@ -20,6 +22,7 @@ import type {
   ChallengeResponseKind,
   RespondToChallengeResponse,
   SessionCockpitData,
+  WorkStructureStep,
 } from "./types/brain";
 
 type ChallengeResponseDraft =
@@ -39,6 +42,7 @@ type ChallengeResponseDraft =
 
 const ACTIVE_SESSION_KEY = "penny.activeSessionId";
 const SESSION_QUERY_PARAM = "sessionId";
+type PennyMode = "Brain" | "Cents" | "Check" | "Search" | "Settings";
 
 export function App() {
   const [documentsData, setDocumentsData] = useState<BrainDocumentsData | null>(null);
@@ -49,10 +53,13 @@ export function App() {
   const [challengeResponse, setChallengeResponse] = useState<RespondToChallengeResponse["data"] | null>(null);
   const [latestArtifact, setLatestArtifact] = useState<SessionCockpitData["latestArtifact"]>(null);
   const [focusedClaimId, setFocusedClaimId] = useState<string | null>(null);
+  const [focusedWorkStructureStepId, setFocusedWorkStructureStepId] = useState<string | null>(null);
+  const [activeMode, setActiveMode] = useState<PennyMode>("Brain");
   const [status, setStatus] = useState("Ready");
   const [isThinking, setIsThinking] = useState(false);
 
   const selectedDocument = documentsData?.documents.find((document) => document.sessionId === selectedDocumentId) ?? null;
+  const workStructure = data?.workStructure ?? null;
   const sessionLabel = selectedDocument
     ? `Doc ${shortId(selectedDocument.sessionId)} ${formatLabel(selectedDocument.status)}`
     : `${documentsData?.meta.documentCount ?? 0} docs`;
@@ -108,6 +115,7 @@ export function App() {
       setData(payload.data);
       setChallengeResponse(null);
       setLatestArtifact(null);
+      setFocusedWorkStructureStepId(payload.data.workStructure?.activeStepId ?? null);
       setFocusedClaimId(payload.data.firstChallenge?.targetClaimId ?? payload.data.ideaMap?.claims?.[0]?.id ?? null);
       setStatus("Graph slice persisted");
 
@@ -179,7 +187,37 @@ export function App() {
       const cockpit = await refreshCockpit(data.session.id);
       setFocusedClaimId(cockpit.autopilot.suggestion?.targetClaimId ?? cockpit.ideaMap.claims[0]?.id ?? null);
       await refreshDocuments(data.session.id);
+      setActiveMode("Check");
       setStatus("Check ready");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsThinking(false);
+    }
+  }
+
+  async function handleGoThere() {
+    if (!data?.session?.id) {
+      setStatus("Autopilot needs a session first");
+      return;
+    }
+
+    const candidateId = autopilot?.suggestion?.candidateId ?? autopilot?.selectedCandidate?.candidateId ?? null;
+    const targetClaimId = autopilot?.suggestion?.targetClaimId ?? null;
+
+    if (!candidateId) {
+      setStatus("Autopilot has no candidate to start");
+      return;
+    }
+
+    setIsThinking(true);
+    setStatus("Starting Autopilot focus");
+
+    try {
+      await startAutopilotCandidate(data.session.id, candidateId);
+      const cockpit = await refreshCockpit(data.session.id);
+      setFocusedClaimId(cockpit.autopilot.focusState?.focusedClaimId ?? targetClaimId);
+      setStatus("Autopilot focus started");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
@@ -274,6 +312,8 @@ export function App() {
   }
 
   async function handleManualClaimSelect(claimId: string) {
+    setFocusedWorkStructureStepId(workStructure?.steps.find((step) => step.claimIds.includes(claimId))?.id ?? null);
+
     if (!data?.session?.id) {
       setFocusedClaimId(claimId);
       return;
@@ -298,10 +338,25 @@ export function App() {
     }
   }
 
+  async function handleWorkStructureSelect(step: WorkStructureStep) {
+    setFocusedWorkStructureStepId(step.id);
+
+    const claimId = step.claimIds[0] ?? null;
+
+    if (!claimId) {
+      setStatus(`${step.title} selected`);
+      return;
+    }
+
+    await handleManualClaimSelect(claimId);
+    setFocusedWorkStructureStepId(step.id);
+  }
+
   async function loadSession(sessionId: string, fallbackData: BrainData | null): Promise<SessionCockpitData> {
     setSelectedDocumentId(sessionId);
     rememberActiveSession(sessionId);
     const cockpit = await refreshCockpit(sessionId, fallbackData);
+    setFocusedWorkStructureStepId(cockpit.workStructure?.activeStepId ?? null);
     setFocusedClaimId(
       cockpit.autopilot.focusState?.focusedClaimId ??
         cockpit.autopilot.suggestion?.targetClaimId ??
@@ -320,6 +375,7 @@ export function App() {
     setAutopilot(cockpitData.autopilot);
     setMoves(cockpitData.moves);
     setLatestArtifact(cockpitData.latestArtifact ?? null);
+    setFocusedWorkStructureStepId(cockpitData.workStructure?.activeStepId ?? null);
     rememberActiveSession(cockpitData.session.id);
 
     return cockpitData;
@@ -337,28 +393,57 @@ export function App() {
   return (
     <div className="min-h-screen bg-white text-[#111]">
       <div className="mx-auto min-h-[calc(100vh-5px)] max-w-[1440px] border-t-[5px] border-black bg-white">
-        <Header sessionLabel={sessionLabel} thinkingLabel={isThinking ? "Thinking" : status} />
-        <BrainWorkspace
-          documentsData={documentsData}
-          selectedDocument={selectedDocument}
-          data={data}
-          moves={moves}
-          autopilot={autopilot}
-          latestArtifact={latestArtifact ?? null}
-          challengeResponse={challengeResponse}
-          focusedClaimId={focusedClaimId}
-          status={status}
-          isThinking={isThinking}
-          onSelectDocument={handleSelectDocument}
-          onBackToLibrary={handleBackToLibrary}
-          onNewThought={handleNewThought}
-          onSeed={handleSeed}
-          onClaimSelect={handleManualClaimSelect}
-          onReworkDocument={handleReworkDocument}
-          onIssueChallenge={handleIssueChallenge}
-          onRespondChallenge={handleChallengeResponse}
-          onCreateChallengeBrief={handleCreateChallengeBrief}
+        <Header
+          sessionLabel={sessionLabel}
+          thinkingLabel={isThinking ? "Thinking" : status}
+          activeItem={activeMode}
+          onNavItemSelect={(item) => setActiveMode(item as PennyMode)}
         />
+        {activeMode === "Brain" ? (
+          <BrainWorkspace
+            documentsData={documentsData}
+            selectedDocument={selectedDocument}
+            data={data}
+            moves={moves}
+            autopilot={autopilot}
+            latestArtifact={latestArtifact ?? null}
+            focusedClaimId={focusedClaimId}
+            status={status}
+            isThinking={isThinking}
+            onSelectDocument={handleSelectDocument}
+            onBackToLibrary={handleBackToLibrary}
+            onNewThought={handleNewThought}
+            onSeed={handleSeed}
+            onClaimSelect={handleManualClaimSelect}
+            onReworkDocument={handleReworkDocument}
+          />
+        ) : activeMode === "Check" ? (
+          <CheckWorkspace
+            data={data}
+            moves={moves}
+            autopilot={autopilot}
+            challengeResponse={challengeResponse}
+            latestArtifact={latestArtifact ?? null}
+            focusedClaimId={focusedClaimId}
+            focusedWorkStructureStepId={focusedWorkStructureStepId}
+            status={status}
+            isThinking={isThinking}
+            onSeed={handleSeed}
+            onGoThere={handleGoThere}
+            onClaimSelect={handleManualClaimSelect}
+            onWorkStructureSelect={handleWorkStructureSelect}
+            onIssueChallenge={handleIssueChallenge}
+            onRespondChallenge={handleChallengeResponse}
+            onCreateChallengeBrief={handleCreateChallengeBrief}
+          />
+        ) : (
+          <main className="mode-placeholder">
+            <section>
+              <h1>{activeMode}</h1>
+              <p>This mode will use the same thinking graph after Brain and Check are settled.</p>
+            </section>
+          </main>
+        )}
       </div>
     </div>
   );
