@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { truncateWords } from "../lib/text";
 import type { AutopilotSuggestion, BrainClaim, ExplorationPath, WorkStructureStep } from "../types/brain";
 
 interface CurrentExplorationProps {
@@ -126,19 +127,22 @@ function DecisionCard({
   selectedRow: PathRow;
 }) {
   const selectedLetter = optionLetter(selectedIndex);
-  const previousIndex = selectedIndex > 0 ? selectedIndex - 1 : null;
-  const nextIndex = selectedIndex < rows.length - 1 ? selectedIndex + 1 : null;
+  const selectedSentence = optionSentence(selectedRow);
+  const selectedReason = decisionReason(selectedRow);
 
   return (
     <article className="decision-card" aria-label="Penny decision">
-      <h3>PENNY'S CHOSEN OPTION</h3>
-      <div className="decision-chosen">
-        <p>
-          <strong>Option {selectedLetter}:</strong> {optionSentence(selectedRow)}
-        </p>
-        <h4>WHY PENNY CHOSE THIS</h4>
-        <p>{decisionReason(selectedRow)}</p>
-      </div>
+      <section className="decision-best-option" aria-label="Penny's best option">
+        <div>
+          <h3>PENNY'S BEST OPTION</h3>
+          <strong>Option {selectedLetter}</strong>
+        </div>
+        <p title={selectedSentence}>{selectedSentence}</p>
+      </section>
+      <section className="decision-chosen" aria-label="Why Penny chose this option">
+        <h4>WHY PENNY CHOSE IT</h4>
+        <p title={selectedReason}>{shortDecisionReason(selectedRow)}</p>
+      </section>
       <section className="decision-alternatives" aria-label="Alternative options">
         <h4>ALTERNATIVE OPTIONS</h4>
         <div>
@@ -157,32 +161,15 @@ function DecisionCard({
           ))}
         </div>
       </section>
-      <div className="decision-lower-grid">
-        <label className="decision-better-option">
-          <span>EVEN BETTER IDEA</span>
-          <textarea
-            value={betterOption}
-            onChange={(event) => onBetterOptionChange(event.target.value)}
-            placeholder="Put an even better option here..."
-            rows={2}
-          />
-        </label>
-        <section className="decision-downstream" aria-label="Downstream changes">
-          <h4>WHAT CHANGES DOWNSTREAM</h4>
-          <div className="decision-impact">
-            <span>If you choose Option {selectedLetter}</span>
-            <strong>{downstreamImpact(selectedRow)}</strong>
-          </div>
-        </section>
-      </div>
-      <div className="decision-actions">
-        <button type="button" disabled={previousIndex === null} onClick={() => previousIndex !== null && onSelectOption(previousIndex)}>
-          <span aria-hidden="true">&lt;-</span> Previous{previousIndex !== null ? ` (${optionLetter(previousIndex)}. ${rows[previousIndex]?.title})` : ""}
-        </button>
-        <button type="button" disabled={nextIndex === null} onClick={() => nextIndex !== null && onSelectOption(nextIndex)}>
-          Next from Option {selectedLetter} <span aria-hidden="true">-&gt;</span>
-        </button>
-      </div>
+      <label className="decision-better-option">
+        <span>EVEN BETTER IDEA</span>
+        <textarea
+          value={betterOption}
+          onChange={(event) => onBetterOptionChange(event.target.value)}
+          placeholder="Write a better option if Penny missed one..."
+          rows={3}
+        />
+      </label>
     </article>
   );
 }
@@ -499,8 +486,8 @@ function decisionReason(row: PathRow): string {
   return row.reasoning.filter(Boolean).join(" ");
 }
 
-function downstreamImpact(row: PathRow): string {
-  return row.tweaks[0] ?? row.reasoning[1] ?? `The next step follows ${row.title}.`;
+function shortDecisionReason(row: PathRow): string {
+  return truncateWords(decisionReason(row), 24);
 }
 
 function isCourseFitStep(step: WorkStructureStep | null | undefined): boolean {
