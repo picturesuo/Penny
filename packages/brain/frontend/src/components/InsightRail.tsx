@@ -1,4 +1,24 @@
-import { type ClipboardEvent, type DragEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ClipboardEvent,
+  type ComponentType,
+  type DragEvent,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  BookOpen,
+  Camera,
+  CircleHelp,
+  GitCompareArrows,
+  List,
+  Network,
+  Save,
+  Sparkles,
+  type LucideProps,
+} from "lucide-react";
 import type {
   AutopilotSuggestion,
   BrainClaim,
@@ -30,6 +50,48 @@ interface InsightRailProps {
   ) => Promise<void>;
   onCreateChallengeBrief: () => Promise<void>;
 }
+
+type InsightActionId = "define" | "explain" | "examples" | "related" | "contrast" | "question";
+
+type InsightAction = {
+  id: Exclude<InsightActionId, "question">;
+  label: string;
+  description: string;
+  icon: ComponentType<LucideProps>;
+};
+
+const insightActions: InsightAction[] = [
+  {
+    id: "define",
+    label: "Define",
+    description: "Give a tight contextual definition.",
+    icon: BookOpen,
+  },
+  {
+    id: "explain",
+    label: "Explain",
+    description: "Unpack the idea in plain language.",
+    icon: CircleHelp,
+  },
+  {
+    id: "examples",
+    label: "Examples",
+    description: "Show concrete local examples.",
+    icon: List,
+  },
+  {
+    id: "related",
+    label: "Related",
+    description: "Surface adjacent concepts.",
+    icon: Network,
+  },
+  {
+    id: "contrast",
+    label: "Contrast",
+    description: "Distinguish it from a nearby idea.",
+    icon: GitCompareArrows,
+  },
+];
 
 export function InsightRail({
   sessionId,
@@ -85,17 +147,57 @@ function PennyInsight({
 }) {
   const [definition, setDefinition] = useState<InlineLearnOutput | null>(null);
   const [screenshot, setScreenshot] = useState<ScreenshotCapture | null>(null);
+  const [selectedTerm, setSelectedTerm] = useState(targetClaim?.text ?? "");
+  const [activeAction, setActiveAction] = useState<InsightActionId>("define");
+  const [shortQuestion, setShortQuestion] = useState("");
   const [status, setStatus] = useState("ready");
   const [isRunning, setIsRunning] = useState(false);
+  const questionRef = useRef<HTMLInputElement>(null);
   const starterConcepts = uniqueStrings([
     ...learnCandidates.map((candidate) => candidate.term),
     ...claims.filter((claim) => claim.kind === "concept").map((claim) => claim.text),
     ...(challenge?.failureType ? [challenge.failureType] : []),
   ]).slice(0, 5);
   const relatedConcepts = definition?.relatedConcepts.length ? definition.relatedConcepts : starterConcepts;
+  const activeTerm = selectedTerm || definition?.term || targetClaim?.text || "";
 
-  const defineTerm = useCallback(
-    async (rawTerm: string, source: "chip" | "right_click" | "manual") => {
+  useEffect(() => {
+    setSelectedTerm(targetClaim?.text ?? "");
+    setDefinition(null);
+    setActiveAction("define");
+    setStatus("ready");
+  }, [targetClaim?.id, targetClaim?.text]);
+
+  useEffect(() => {
+    function handleSelectionChange() {
+      if (disabled || textEntryTarget(document.activeElement)) {
+        return;
+      }
+
+      const term = normalizeTerm(window.getSelection()?.toString() ?? "");
+
+      if (!term) {
+        return;
+      }
+
+      setSelectedTerm(term);
+      setStatus("selected");
+    }
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, [disabled]);
+
+  const runInsightAction = useCallback(
+    async (
+      rawTerm: string,
+      action: InsightActionId,
+      source: "chip" | "right_click" | "button" | "question",
+      question?: string,
+    ) => {
       const term = normalizeTerm(rawTerm);
 
       if (!term) {
@@ -107,19 +209,21 @@ function PennyInsight({
         return;
       }
 
+      setSelectedTerm(term);
+      setActiveAction(action);
       setIsRunning(true);
-      setStatus(source === "right_click" ? "defining selection" : "defining term");
+      setStatus(insightActionStatus(action, source));
 
       try {
         const output = await createInlineLearn({
           term,
           currentClaimId: targetClaim.id,
           sessionId,
-          localContext: pennyInsightContext(claims, challenge, learnCandidates, screenshot),
+          localContext: pennyInsightContextForAction(claims, challenge, learnCandidates, screenshot, action, question),
         });
 
         setDefinition(output.data);
-        setStatus("definition ready");
+        setStatus(`${insightActionLabel(action)} ready`);
       } catch (error) {
         setStatus(error instanceof Error ? error.message : String(error));
       } finally {
@@ -128,6 +232,22 @@ function PennyInsight({
     },
     [challenge, claims, learnCandidates, screenshot, sessionId, targetClaim],
   );
+
+  function handleAction(action: Exclude<InsightActionId, "question">) {
+    void runInsightAction(activeTerm, action, "button");
+  }
+
+  async function handleShortQuestion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const question = shortQuestion.trim();
+
+    if (!question) {
+      return;
+    }
+
+    await runInsightAction(activeTerm || question, "question", "question", question);
+    setShortQuestion("");
+  }
 
   useEffect(() => {
     function handleContextMenu(event: MouseEvent) {
@@ -142,7 +262,7 @@ function PennyInsight({
       }
 
       event.preventDefault();
-      void defineTerm(term, "right_click");
+      void runInsightAction(term, "define", "right_click");
     }
 
     document.addEventListener("contextmenu", handleContextMenu);
@@ -150,7 +270,7 @@ function PennyInsight({
     return () => {
       document.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [defineTerm, disabled, isRunning]);
+  }, [disabled, isRunning, runInsightAction]);
 
   async function handleScreenshot() {
     if (!navigator.mediaDevices?.getDisplayMedia) {
@@ -197,31 +317,139 @@ function PennyInsight({
 
   return (
     <section className="penny-insight">
-      <div className="rail-section-head">
+      <div className="penny-insight-head">
         <h2>PENNY INSIGHT</h2>
+        <p>Right-click a word or select text.</p>
         <span>{isRunning ? "Working" : status}</span>
       </div>
-      {definition ? (
-        <>
-          <InsightBlock title={definition.term}>{definition.explanation}</InsightBlock>
-          <InsightBlock title="WHY HERE">{definition.whyItMattersHere}</InsightBlock>
-          <InsightBlock title="EXAMPLE">{definition.example}</InsightBlock>
-        </>
-      ) : (
-        <InsightBlock title="TERM">{targetClaim?.text ?? "Select a term"}</InsightBlock>
-      )}
-      {screenshot ? (
-        <figure className="insight-screenshot">
-          <img src={screenshot.dataUrl} alt="Captured screen reference" />
-          <figcaption>{screenshot.width}x{screenshot.height}</figcaption>
-        </figure>
-      ) : null}
+      <div className="penny-insight-workbench">
+        <div className="penny-insight-canvas" aria-live="polite">
+          {definition ? (
+            <InsightResult
+              action={activeAction}
+              definition={definition}
+              relatedConcepts={relatedConcepts}
+              disabled={disabled || isRunning}
+              onConceptSelect={(concept) => runInsightAction(concept, "define", "chip")}
+            />
+          ) : (
+            <PennyInsightReady selectedTerm={activeTerm} />
+          )}
+          {screenshot ? (
+            <figure className="insight-screenshot">
+              <img src={screenshot.dataUrl} alt="Captured screen reference" />
+              <figcaption>{screenshot.width}x{screenshot.height}</figcaption>
+            </figure>
+          ) : null}
+          <form className="penny-insight-question" onSubmit={handleShortQuestion}>
+            <input
+              ref={questionRef}
+              value={shortQuestion}
+              disabled={disabled || isRunning}
+              placeholder="short question..."
+              onChange={(event) => setShortQuestion(event.target.value)}
+            />
+            <button type="submit" disabled={disabled || isRunning || !shortQuestion.trim()}>
+              Ask
+            </button>
+          </form>
+          <div className="penny-insight-actions">
+            <button type="button" disabled={disabled || isRunning} onClick={handleScreenshot}>
+              <Camera size={14} strokeWidth={1.8} aria-hidden="true" />
+              <span>Screenshot</span>
+            </button>
+            <button type="button" disabled={disabled || isRunning || !definition} onClick={handleSaveDefinition}>
+              <Save size={14} strokeWidth={1.8} aria-hidden="true" />
+              <span>Save</span>
+            </button>
+          </div>
+        </div>
+        <div className="penny-insight-toolbox" aria-label="Penny Insight actions">
+          {insightActions.map((action) => (
+            <InsightActionButton
+              key={action.id}
+              action={action}
+              active={activeAction === action.id}
+              disabled={disabled || isRunning || !activeTerm}
+              onClick={() => handleAction(action.id)}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function InsightActionButton({
+  action,
+  active,
+  disabled,
+  onClick,
+}: {
+  action: InsightAction;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const Icon = action.icon;
+
+  return (
+    <button type="button" className={active ? "is-active" : ""} disabled={disabled} title={action.description} onClick={onClick}>
+      <Icon size={15} strokeWidth={1.8} aria-hidden="true" />
+      <span>{action.label}</span>
+    </button>
+  );
+}
+
+function PennyInsightReady({ selectedTerm }: { selectedTerm: string }) {
+  if (!selectedTerm) {
+    return (
+      <article className="penny-insight-empty">
+        <BookOpen size={36} strokeWidth={1.6} aria-hidden="true" />
+        <strong>Nothing here yet.</strong>
+        <p>Right-click a word or select text in the page to look it up or explain an idea.</p>
+      </article>
+    );
+  }
+
+  return (
+    <article className="penny-insight-ready">
+      <Sparkles size={22} strokeWidth={1.7} aria-hidden="true" />
+      <span>Selected idea</span>
+      <strong title={selectedTerm}>{truncateWords(selectedTerm, 18)}</strong>
+      <p>Choose Define, Explain, Examples, Related, or Contrast.</p>
+    </article>
+  );
+}
+
+function InsightResult({
+  action,
+  definition,
+  relatedConcepts,
+  disabled,
+  onConceptSelect,
+}: {
+  action: InsightActionId;
+  definition: InlineLearnOutput;
+  relatedConcepts: string[];
+  disabled: boolean;
+  onConceptSelect: (concept: string) => void;
+}) {
+  return (
+    <div className="penny-insight-result">
+      <div className="insight-current-term">
+        <span>{insightActionLabel(action)}</span>
+        <strong title={definition.term}>{truncateWords(definition.term, 12)}</strong>
+      </div>
+      <InsightBlock title={insightPrimaryTitle(action)}>{definition.explanation}</InsightBlock>
+      <InsightBlock title={action === "question" ? "ANSWER" : "WHY HERE"}>{definition.whyItMattersHere}</InsightBlock>
+      <InsightBlock title={action === "contrast" ? "CONTRAST POINT" : "EXAMPLE"}>{definition.example}</InsightBlock>
       <article className="insight-block insight-concepts">
         <h3>RELATED</h3>
         <div className="concept-chip-list">
           {relatedConcepts.length > 0 ? (
             relatedConcepts.map((concept) => (
-              <button key={concept} type="button" disabled={disabled || isRunning} onClick={() => defineTerm(concept, "chip")}>
+              <button key={concept} type="button" disabled={disabled} onClick={() => onConceptSelect(concept)}>
                 {truncateWords(concept, 3)}
               </button>
             ))
@@ -230,15 +458,7 @@ function PennyInsight({
           )}
         </div>
       </article>
-      <div className="penny-insight-actions">
-        <button type="button" disabled={disabled || isRunning} onClick={handleScreenshot}>
-          Screenshot
-        </button>
-        <button type="button" disabled={disabled || isRunning || !definition} onClick={handleSaveDefinition}>
-          Save
-        </button>
-      </div>
-    </section>
+    </div>
   );
 }
 
@@ -249,6 +469,61 @@ function InsightBlock({ title, children }: { title: string; children: string }) 
       <p title={children}>{truncateWords(children, 16)}</p>
     </article>
   );
+}
+
+function insightActionLabel(action: InsightActionId): string {
+  switch (action) {
+    case "define":
+      return "Define";
+    case "explain":
+      return "Explain";
+    case "examples":
+      return "Examples";
+    case "related":
+      return "Related";
+    case "contrast":
+      return "Contrast";
+    case "question":
+      return "Question";
+  }
+}
+
+function insightPrimaryTitle(action: InsightActionId): string {
+  switch (action) {
+    case "define":
+      return "DEFINE";
+    case "explain":
+      return "EXPLAIN";
+    case "examples":
+      return "EXAMPLES";
+    case "related":
+      return "RELATED IDEA";
+    case "contrast":
+      return "CONTRAST";
+    case "question":
+      return "SHORT QUESTION";
+  }
+}
+
+function insightActionStatus(action: InsightActionId, source: "chip" | "right_click" | "button" | "question"): string {
+  if (source === "right_click") {
+    return "defining selection";
+  }
+
+  switch (action) {
+    case "define":
+      return "defining";
+    case "explain":
+      return "explaining";
+    case "examples":
+      return "finding examples";
+    case "related":
+      return "finding related";
+    case "contrast":
+      return "contrasting";
+    case "question":
+      return "answering";
+  }
 }
 
 type ScreenshotCapture = {
@@ -619,6 +894,42 @@ async function captureStreamFrame(stream: MediaStream): Promise<ScreenshotCaptur
   } finally {
     stream.getTracks().forEach((track) => track.stop());
     video.srcObject = null;
+  }
+}
+
+function pennyInsightContextForAction(
+  claims: BrainClaim[],
+  challenge: ChallengeSuggestion | undefined,
+  learnCandidates: LearnCandidate[],
+  screenshot: ScreenshotCapture | null,
+  action: InsightActionId,
+  question?: string,
+): string {
+  return [
+    pennyInsightActionInstruction(action, question),
+    pennyInsightContext(claims, challenge, learnCandidates, screenshot),
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, 2_000);
+}
+
+function pennyInsightActionInstruction(action: InsightActionId, question?: string): string {
+  const base = "Penny Insight is a small vocab and idea explainer, not the Makes Cents conversation panel.";
+
+  switch (action) {
+    case "define":
+      return `${base} Give a tight contextual definition of the selected term.`;
+    case "explain":
+      return `${base} Explain the selected idea in plain language within the current claim.`;
+    case "examples":
+      return `${base} Prioritize concrete examples and keep the definition short.`;
+    case "related":
+      return `${base} Prioritize adjacent concepts; make relatedConcepts especially useful and specific.`;
+    case "contrast":
+      return `${base} Contrast the selected idea with a nearby idea it might be confused with.`;
+    case "question":
+      return `${base} Answer this short question inside the current context: ${question ?? ""}`;
   }
 }
 
