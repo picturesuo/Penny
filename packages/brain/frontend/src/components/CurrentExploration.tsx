@@ -54,9 +54,14 @@ export function CurrentExploration({
       if (
         targetElement &&
         (targetElement.tagName === "INPUT" ||
+          targetElement.tagName === "SELECT" ||
           targetElement.tagName === "TEXTAREA" ||
           targetElement.isContentEditable)
       ) {
+        return;
+      }
+
+      if (event.altKey || event.ctrlKey || event.metaKey) {
         return;
       }
 
@@ -141,6 +146,7 @@ function DecisionCard({
             <button
               key={row.id}
               type="button"
+              aria-keyshortcuts={optionLetter(index)}
               className={`decision-option${index === selectedIndex ? " is-selected" : ""}`}
               onClick={() => onSelectOption(index)}
             >
@@ -564,6 +570,12 @@ function pathTweaks(values: Array<string | undefined>): string[] {
 }
 
 function shortcutIndex(key: string): number | null {
+  const letter = key.trim().toUpperCase();
+
+  if (/^[A-Z]$/.test(letter)) {
+    return letter.charCodeAt(0) - "A".charCodeAt(0);
+  }
+
   if (key === "0") {
     return 9;
   }
