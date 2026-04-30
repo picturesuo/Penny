@@ -109,6 +109,13 @@
     white-space: nowrap;
   }
 
+  .nav-tab.is-active {
+    color: #111111;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 10px;
+  }
+
   .edition-block {
     align-self: start;
     justify-self: end;
@@ -921,6 +928,499 @@
     font-size: 12px;
     line-height: 1;
   }
+
+  .brain-library-shell,
+  .brain-document-shell,
+  .mode-placeholder {
+    min-height: calc(100vh - 117px);
+    padding: 26px 18px 30px;
+    overflow: auto;
+  }
+
+  .brain-library-panel {
+    display: grid;
+    gap: 20px;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  .brain-library-head,
+  .brain-doc-toolbar,
+  .document-facts,
+  .brain-doc-actions,
+  .brain-library-stats {
+    display: flex;
+    align-items: center;
+  }
+
+  .brain-library-head {
+    justify-content: space-between;
+    gap: 24px;
+    border-bottom: 1px solid #111111;
+    padding-bottom: 14px;
+  }
+
+  .brain-library-head span,
+  .breadcrumb-line,
+  .document-facts,
+  .brain-library-stats,
+  .doc-log-meta small,
+  .document-log-row time,
+  .working-notes h2,
+  .graph-board-head div,
+  .memory-graph-label span,
+  .brain-doc-aside small {
+    color: rgb(17 17 17 / 0.64);
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .brain-library-head h1,
+  .brain-document-head h1,
+  .mode-placeholder h1 {
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+    font-size: clamp(34px, 4vw, 52px);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .brain-library-stats {
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .brain-library-stats span,
+  .document-facts span,
+  .graph-board-head div span,
+  .doc-kind {
+    border: 1px solid #cfcfcf;
+    padding: 6px 8px;
+    background: #ffffff;
+    white-space: nowrap;
+  }
+
+  .memory-graph-preview,
+  .graph-board,
+  .document-rundown,
+  .working-notes,
+  .brain-doc-aside,
+  .brain-new-thought,
+  .mode-placeholder section {
+    border: 1px solid #d8d8d8;
+    border-radius: 8px;
+    background: #ffffff;
+  }
+
+  .memory-graph-preview {
+    position: relative;
+    min-height: 332px;
+    overflow: hidden;
+  }
+
+  .memory-graph-label {
+    position: absolute;
+    top: 18px;
+    left: 20px;
+    z-index: 1;
+    display: grid;
+    gap: 5px;
+  }
+
+  .memory-graph-label strong {
+    font-size: 14px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .memory-graph-preview svg,
+  .graph-board svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .memory-edge,
+  .graph-edge {
+    fill: none;
+    stroke: #c9cfcb;
+    stroke-width: 1.4;
+    opacity: 0.78;
+  }
+
+  .memory-edge-depends_on,
+  .graph-edge-depends_on {
+    stroke: #6d8f73;
+  }
+
+  .memory-edge-challenges,
+  .graph-edge-challenges,
+  .graph-edge-contradicts {
+    stroke: #d26f4e;
+  }
+
+  .memory-edge-teaches,
+  .graph-edge-teaches {
+    stroke: #7b62a8;
+  }
+
+  .memory-node circle,
+  .graph-node circle {
+    fill: #ffffff;
+    stroke: #557b9b;
+    stroke-width: 3;
+    cursor: pointer;
+  }
+
+  .memory-node.is-document circle {
+    fill: #111111;
+    stroke: #111111;
+  }
+
+  .memory-node.is-concept circle,
+  .graph-node.is-concept circle {
+    stroke: #7b62a8;
+  }
+
+  .graph-node.is-assumption circle {
+    stroke: #c98232;
+  }
+
+  .graph-node.is-question circle {
+    stroke: #6d8f73;
+  }
+
+  .graph-node.is-focused circle,
+  .graph-node.is-suggested circle {
+    stroke-width: 5;
+  }
+
+  .memory-node text,
+  .graph-node text {
+    fill: #111111;
+    font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+    font-size: 18px;
+    font-weight: 700;
+    pointer-events: none;
+  }
+
+  .memory-node.is-document text {
+    font-size: 20px;
+  }
+
+  .graph-node-meta {
+    fill: rgb(17 17 17 / 0.58);
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  .memory-empty-state,
+  .graph-empty-state,
+  .document-empty-state {
+    display: grid;
+    place-items: center;
+    gap: 7px;
+    min-height: 220px;
+    color: rgb(17 17 17 / 0.68);
+    text-align: center;
+  }
+
+  .brain-new-thought {
+    padding: 16px;
+  }
+
+  .brain-new-thought .composer {
+    width: 100%;
+    margin: 0;
+  }
+
+  .document-log-table {
+    display: grid;
+    border-top: 1px solid #111111;
+  }
+
+  .document-log-row {
+    display: grid;
+    grid-template-columns: 66px minmax(0, 1fr) 112px 116px;
+    gap: 16px;
+    align-items: center;
+    min-height: 84px;
+    border: 0;
+    border-bottom: 1px solid #d2d2d2;
+    padding: 12px 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+  }
+
+  .document-log-row > span {
+    min-width: 0;
+  }
+
+  .document-log-row strong,
+  .document-log-row small {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .document-log-row strong {
+    font-size: 18px;
+    line-height: 1.05;
+  }
+
+  .document-log-row small {
+    margin-top: 6px;
+    color: rgb(17 17 17 / 0.64);
+    font-size: 12px;
+    line-height: 1.1;
+  }
+
+  .doc-log-meta {
+    justify-self: end;
+    text-align: right;
+  }
+
+  .brain-document-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 326px);
+    gap: 22px;
+    overflow: hidden;
+  }
+
+  .brain-document-main {
+    min-width: 0;
+    max-height: calc(100vh - 165px);
+    overflow: auto;
+    padding-right: 2px;
+  }
+
+  .brain-doc-toolbar {
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .brain-doc-actions {
+    gap: 10px;
+  }
+
+  .text-command,
+  .primary-command {
+    border: 1px solid #111111;
+    border-radius: 6px;
+    padding: 9px 12px;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .text-command {
+    background: #ffffff;
+    color: #111111;
+  }
+
+  .primary-command {
+    background: #111111;
+    color: #ffffff;
+  }
+
+  .text-command:disabled,
+  .primary-command:disabled {
+    opacity: 0.4;
+  }
+
+  .brain-document-head {
+    padding-bottom: 18px;
+  }
+
+  .breadcrumb-line {
+    display: flex;
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+
+  .breadcrumb-line span:not(:last-child)::after {
+    content: "/";
+    margin-left: 9px;
+    color: rgb(17 17 17 / 0.36);
+  }
+
+  .brain-document-head p {
+    max-width: 760px;
+    margin: 8px 0 14px;
+    overflow-wrap: anywhere;
+    font-size: 17px;
+    line-height: 1.32;
+  }
+
+  .document-facts {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .graph-board {
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+
+  .graph-board-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid #d8d8d8;
+    padding: 16px 18px;
+  }
+
+  .graph-board-head h2 {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .graph-board-head div {
+    display: flex;
+  }
+
+  .graph-board-head div span + span {
+    border-left: 0;
+  }
+
+  .document-rundown {
+    display: grid;
+    gap: 0;
+    margin-bottom: 20px;
+    padding: 0 20px;
+  }
+
+  .rundown-section {
+    border-bottom: 1px solid #d8d8d8;
+    padding: 18px 0;
+  }
+
+  .rundown-section:last-child {
+    border-bottom: 0;
+  }
+
+  .rundown-section h2,
+  .working-notes h2 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .rundown-section p,
+  .rundown-section li {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 15px;
+    line-height: 1.42;
+  }
+
+  .rundown-section ol {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding-left: 22px;
+  }
+
+  .working-notes {
+    padding: 18px 20px 20px;
+  }
+
+  .working-notes textarea {
+    width: 100%;
+    min-height: 128px;
+    resize: vertical;
+    border: 1px solid #cfcfcf;
+    border-radius: 6px;
+    padding: 12px;
+    font: inherit;
+    font-size: 15px;
+    line-height: 1.34;
+  }
+
+  .brain-doc-aside {
+    display: grid;
+    align-content: start;
+    max-height: calc(100vh - 165px);
+    overflow: auto;
+  }
+
+  .brain-doc-aside section {
+    border-bottom: 1px solid #d8d8d8;
+    padding: 20px;
+  }
+
+  .brain-doc-aside section:last-child {
+    border-bottom: 0;
+  }
+
+  .brain-doc-aside p {
+    margin: 14px 0 0;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .brain-doc-aside ul {
+    display: grid;
+    gap: 14px;
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .brain-doc-aside li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
+  .brain-doc-aside li::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    border: 2px solid #7b62a8;
+    border-radius: 999px;
+  }
+
+  .brain-doc-aside li {
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+  }
+
+  .brain-doc-aside li span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mode-placeholder {
+    display: grid;
+    place-items: center;
+  }
+
+  .mode-placeholder section {
+    width: min(720px, 100%);
+    padding: 36px;
+  }
+
+  .mode-placeholder p {
+    margin: 10px 0 0;
+    font-size: 16px;
+    line-height: 1.35;
+  }
 }
 
 @media (max-width: 1180px) {
@@ -956,6 +1456,16 @@
     border-top: 0;
     border-left: 1px solid #c0c0c0;
     padding-left: 22px;
+  }
+
+  .brain-document-shell {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .brain-document-main,
+  .brain-doc-aside {
+    max-height: none;
   }
 }
 
@@ -1057,5 +1567,45 @@
 
   .rail-block {
     margin-left: 0;
+  }
+
+  .brain-library-shell,
+  .brain-document-shell,
+  .mode-placeholder {
+    padding-inline: 14px;
+  }
+
+  .brain-library-head,
+  .brain-doc-toolbar,
+  .brain-doc-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .brain-library-stats,
+  .document-facts {
+    justify-content: flex-start;
+  }
+
+  .document-log-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .doc-kind,
+  .doc-log-meta,
+  .document-log-row time {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .memory-graph-preview,
+  .graph-board {
+    overflow-x: auto;
+  }
+
+  .memory-graph-preview svg,
+  .graph-board svg {
+    min-width: 780px;
   }
 }
