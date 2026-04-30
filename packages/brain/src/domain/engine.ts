@@ -11,7 +11,13 @@ import type {
 
 export const nextMoveEngineVersion = "thinking-mode-next-move-v1" as const;
 
-export type NextMoveEngineAction = "resume_open_challenge" | "learn" | "clarify" | "verify" | "challenge";
+export type NextMoveEngineAction =
+  | "resume_open_challenge"
+  | "learn"
+  | "clarify"
+  | "verify"
+  | "challenge"
+  | "save_to_brain";
 
 export type NextMoveScoreBreakdown = {
   leverage: number;
@@ -85,6 +91,7 @@ const challengeIssueMoveKinds = new Set<string>(["challenge_issued"]);
 const learnMoveKinds = new Set<string>(["learning_triggered", "learn_explanation_saved", "learn_explanation_dismissed"]);
 const verifyMoveKinds = new Set<string>(["verify_run", "confidence_update_accepted", "confidence_update_rejected"]);
 const clarifyMoveKinds = new Set<string>(["claim_revised", "focus_completed"]);
+const saveToBrainMoveKinds = new Set<string>(["artifact_created"]);
 
 export function buildGraphHash(graph: ThinkingGraphSnapshot): string {
   return stableHash({
@@ -117,6 +124,7 @@ export function rankNextMoveCandidates(graph: ThinkingGraphSnapshot, limit = Num
   const graphHash = buildGraphHash(graph);
   const candidates = [
     ...resumeOpenChallengeCandidates(graph),
+    ...saveToBrainCandidates(graph),
     ...challengeCandidates(graph),
     ...verifyCandidates(graph),
     ...clarifyCandidates(graph),
@@ -133,6 +141,62 @@ export function selectNextMove(graph: ThinkingGraphSnapshot): NextMoveCandidate 
   const candidates = rankNextMoveCandidates(graph, 1);
 
   return candidates[0] ?? null;
+}
+
+function saveToBrainCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
+  const latestResponse = latestChallengeResponseMove(graph.moves);
+
+  if (!latestResponse || hasArtifactAfterMove(graph.artifacts, latestResponse)) {
+    return [];
+  }
+
+  const targetClaimId = firstStringPayloadValue(latestResponse.payload, "targetClaimId") ?? graph.claims[0]?.id ?? null;
+
+  if (!targetClaimId) {
+    return [];
+  }
+
+  const target = claimsById(graph.claims).get(targetClaimId);
+
+  if (!target || target.status === "rejected") {
+    return [];
+  }
+
+  const targetEdgeId = firstStringPayloadValue(latestResponse.payload, "challengeEdgeId") ?? strongestConnectedEdgeId(graph.edges, target.id);
+  const scoreBreakdown: NextMoveScoreBreakdown = {
+    leverage: leverageScore(graph.edges, target.id) + 120,
+    fragility: 45,
+    stakes: stakesScore(target) + 80,
+    readiness: 420,
+    momentum: 230,
+    novelty: noveltyScore(graph.moves, target.id, "save_to_brain"),
+    shape: 0,
+    penalties: penaltyScore(target, graph.edges, graph.moves, targetEdgeId),
+  };
+
+  return [
+    {
+      targetClaimId: target.id,
+      targetEdgeId,
+      action: "save_to_brain",
+      mode: "artifact",
+      score: sumScore(scoreBreakdown),
+      reason: `Save the worked state around "${clipText(target.text)}" to Brain now that the challenge response is recorded.`,
+      reasonCodes: ["save_to_brain", "artifact_boundary", "challenge_response_recorded"],
+      exitCriteria: {
+        label: "A durable Brain artifact is created from the current claims, edges, and moves.",
+        acceptedMoveKinds: ["artifact_created"],
+      },
+      scoreBreakdown,
+      provenance: {
+        ruleIds: ["save_to_brain", "post_challenge_artifact_boundary"],
+        claimIds: evidenceClaimIds(graph.edges, target.id),
+        edgeIds: targetEdgeId ? uniqueIds([targetEdgeId, ...evidenceEdgeIds(graph.edges, target.id)]) : evidenceEdgeIds(graph.edges, target.id),
+        moveIds: [latestResponse.id],
+        artifactIds: graph.artifacts.map((artifact) => artifact.id).sort(),
+      },
+    },
+  ];
 }
 
 function resumeOpenChallengeCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
@@ -395,8 +459,10 @@ function actionPriority(action: NextMoveEngineAction): number {
       return 3;
     case "clarify":
       return 4;
-    case "learn":
+    case "save_to_brain":
       return 5;
+    case "learn":
+      return 6;
   }
 }
 
@@ -512,6 +578,18 @@ function challengeIssueMoveIds(moves: ReadonlyArray<ThinkingMove>, edgeId: Entit
     .filter((move) => challengeIssueMoveKinds.has(move.kind) && moveMentionsEdge(move, edgeId))
     .map((move) => move.id)
     .sort();
+}
+
+function latestChallengeResponseMove(moves: ReadonlyArray<ThinkingMove>): ThinkingMove | null {
+  return latestMove(moves.filter((move) => challengeResponseMoveKinds.has(move.kind)));
+}
+
+function latestMove(moves: ReadonlyArray<ThinkingMove>): ThinkingMove | null {
+  return [...moves].sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id))[0] ?? null;
+}
+
+function hasArtifactAfterMove(artifacts: ReadonlyArray<ChallengeBriefArtifact>, move: ThinkingMove): boolean {
+  return artifacts.some((artifact) => artifact.createdAt >= move.createdAt);
 }
 
 function leverageScore(edges: ReadonlyArray<ThinkingEdge>, claimId: EntityId): number {
@@ -724,6 +802,8 @@ function moveKindMatchesAction(kind: string, action: NextMoveEngineAction): bool
       return clarifyMoveKinds.has(kind);
     case "learn":
       return learnMoveKinds.has(kind);
+    case "save_to_brain":
+      return saveToBrainMoveKinds.has(kind);
   }
 }
 
@@ -746,6 +826,12 @@ function moveMentionsEdge(move: ThinkingMove, edgeId: EntityId): boolean {
     payload.challengeEdgeId === edgeId ||
     (Array.isArray(payload.edgeIds) && payload.edgeIds.includes(edgeId))
   );
+}
+
+function firstStringPayloadValue(payload: Record<string, unknown>, key: string): string | null {
+  const value = payload[key];
+
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function clampConfidence(confidence: number): number {

@@ -60,7 +60,8 @@ export type NextMoveAction =
   | "learn"
   | "clarify"
   | "verify"
-  | "challenge";
+  | "challenge"
+  | "save_to_brain";
 
 export type ChallengeResponseKind = "defend" | "revise" | "absorb";
 export type ArtifactKind = "idea_map" | "challenge_brief" | "idea_map_challenge_brief";

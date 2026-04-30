@@ -60,6 +60,19 @@ test("selectNextMove returns resume_open_challenge for an unanswered challenge",
   assert.ok(selected.scoreBreakdown.readiness > 0);
 });
 
+test("selectNextMove can recommend save_to_brain after a challenge response", () => {
+  const graph = withChallengeResponse(withOpenChallenge(loadFixture()));
+  const selected = selectNextMove(graph);
+
+  assert.ok(selected);
+  assert.equal(selected.action, "save_to_brain");
+  assert.equal(selected.mode, "artifact");
+  assert.equal(selected.targetClaimId, graph.expectedAutopilot.lowConfidenceMarketAssumptionId);
+  assert.equal(selected.targetEdgeId, "00000000-0000-4000-8000-000000000399");
+  assert.ok(selected.exitCriteria.acceptedMoveKinds.includes("artifact_created"));
+  assert.ok(selected.reasonCodes.includes("artifact_boundary"));
+});
+
 test("buildGraphHash and ranking are stable when graph arrays are reordered", () => {
   const graph = loadFixture();
   const reordered: ThinkingGraphSnapshot = {
@@ -147,6 +160,34 @@ function withOpenChallenge(graph: PennyYcDemoGraphFixture): PennyYcDemoGraphFixt
     ...graph,
     edges: [...graph.edges, challengeEdge],
     moves: [...graph.moves, challengeMove],
+  };
+}
+
+function withChallengeResponse(graph: PennyYcDemoGraphFixture): PennyYcDemoGraphFixture {
+  const responseMove: ThinkingMove = {
+    id: "00000000-0000-4000-8000-000000000510",
+    sessionId: graph.session.id,
+    kind: "critique_absorbed",
+    summary: "User absorbed the challenge as a live risk.",
+    payload: {
+      response: "absorb",
+      targetClaimId: graph.expectedAutopilot.lowConfidenceMarketAssumptionId,
+      targetClaimVersionId: "00000000-0000-4000-8000-000000000202",
+      critiqueClaimId: graph.expectedAutopilot.highConfidenceUnsupportedClaimId,
+      challengeEdgeId: "00000000-0000-4000-8000-000000000399",
+      edgeStatus: "acknowledged_vulnerability",
+      claimIds: [
+        graph.expectedAutopilot.lowConfidenceMarketAssumptionId,
+        graph.expectedAutopilot.highConfidenceUnsupportedClaimId,
+      ],
+      edgeIds: ["00000000-0000-4000-8000-000000000399"],
+    },
+    createdAt: "2026-04-29T14:00:20.000Z",
+  };
+
+  return {
+    ...graph,
+    moves: [...graph.moves, responseMove],
   };
 }
 

@@ -44,7 +44,14 @@ const AutopilotModeSchema = z.enum(["brain", "challenge", "verify", "artifact"])
 const AutopilotReasonCodeSchema = z.string().trim().min(1).max(120);
 const AutopilotScoreSchema = z.number().int().min(0).max(2_000);
 const ThinkingModeSchema = z.enum(["brain", "challenge", "verify", "learn", "artifact"]);
-const NextMoveEngineActionSchema = z.enum(["resume_open_challenge", "learn", "clarify", "verify", "challenge"]);
+const NextMoveEngineActionSchema = z.enum([
+  "resume_open_challenge",
+  "learn",
+  "clarify",
+  "verify",
+  "challenge",
+  "save_to_brain",
+]);
 const NextMoveFingerprintSchema = z.string().trim().min(1).max(160);
 const GraphHashSchema = z.string().trim().min(1).max(160);
 
