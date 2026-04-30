@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, FileText, Folder, Layers, Plus } from "lucide-react";
+import { BookOpen, FileText, Folder, Lightbulb, Plus, Search, TriangleAlert } from "lucide-react";
 import type {
   AutopilotTickData,
   BrainClaim,
@@ -9,7 +9,8 @@ import type {
   BrainDocumentsData,
   BrainDocumentSummary,
   BrainEdge,
-  BrainHierarchySpace,
+  BrainResearchItem,
+  BrainSidebarData,
   BrainMove,
   ChallengeBriefPayload,
   ClaimDetailConnection,
@@ -50,7 +51,7 @@ interface GraphPoint {
 }
 
 interface BrainHierarchySidebarProps {
-  spaces: BrainHierarchySpace[];
+  sidebar: BrainSidebarData | null;
   selectedSessionId: string | null;
   onSelectDocument: (sessionId: string) => void;
   onNewThought: () => void;
@@ -115,7 +116,7 @@ export function BrainWorkspace({
   return (
     <main className="brain-workspace-shell">
       <BrainHierarchySidebar
-        spaces={documentsData?.hierarchy ?? []}
+        sidebar={documentsData?.sidebar ?? null}
         selectedSessionId={selectedDocument?.sessionId ?? null}
         onSelectDocument={onSelectDocument}
         onNewThought={onNewThought}
@@ -387,35 +388,76 @@ function StitchedReference({
   );
 }
 
-function BrainHierarchySidebar({ spaces, selectedSessionId, onSelectDocument, onNewThought }: BrainHierarchySidebarProps) {
+function BrainHierarchySidebar({ sidebar, selectedSessionId, onSelectDocument, onNewThought }: BrainHierarchySidebarProps) {
+  const folders = sidebar?.folders ?? [];
+  const quickNotes = sidebar?.quickNotes ?? [];
+  const research = sidebar?.research ?? [];
+  const selectedFolderId =
+    folders.find((folder) => folder.documents.some((document) => document.sessionId === selectedSessionId))?.id ??
+    folders[0]?.id ??
+    null;
+  const [openFolderId, setOpenFolderId] = useState<string | null>(selectedFolderId);
+
+  useEffect(() => {
+    setOpenFolderId(selectedFolderId);
+  }, [selectedFolderId]);
+
   return (
-    <aside className="brain-hierarchy-sidebar" aria-label="Brain spaces">
+    <aside className="brain-hierarchy-sidebar" aria-label="Brain sidebar">
       <div className="brain-sidebar-head">
         <div>
-          <span>Spaces</span>
+          <span>Brain</span>
           <strong>Brain</strong>
         </div>
         <button type="button" className="brain-sidebar-new" onClick={onNewThought} aria-label="New thought">
           <Plus size={15} aria-hidden="true" />
         </button>
       </div>
-      {spaces.length > 0 ? (
-        <div className="brain-tree" role="tree" aria-label="Spaces, folders, docs, and files">
-          {spaces.map((space) => (
-            <div key={space.id} className="brain-tree-space" role="treeitem" aria-expanded="true">
-              <div className="brain-tree-row is-space">
-                <Layers size={15} aria-hidden="true" />
-                <span title={space.label}>{space.label}</span>
-                <small>{space.documentCount}</small>
-              </div>
-              <div className="brain-tree-children">
-                {space.folders.map((folder) => (
-                  <div key={folder.id} className="brain-tree-folder" role="treeitem" aria-expanded="true">
-                    <div className="brain-tree-row is-folder">
-                      <Folder size={15} aria-hidden="true" />
-                      <span title={folder.label}>{folder.label}</span>
-                      <small>{folder.documentCount}</small>
-                    </div>
+      <section className="brain-sidebar-section" aria-label="Quick notes">
+        <div className="brain-sidebar-section-head">
+          <Lightbulb size={15} aria-hidden="true" />
+          <strong>Quick Notes</strong>
+        </div>
+        {quickNotes.length > 0 ? (
+          <div className="brain-quick-list">
+            {quickNotes.map((note) => (
+              <button
+                key={note.id}
+                type="button"
+                className="brain-quick-note"
+                onClick={() => onSelectDocument(note.sessionId)}
+              >
+                <span title={note.text}>{truncateWords(note.text, 9)}</span>
+                <small>{note.meta}</small>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="brain-sidebar-muted">No quick notes yet.</p>
+        )}
+      </section>
+      <section className="brain-sidebar-section" aria-label="Folders">
+        <div className="brain-sidebar-section-head">
+          <Folder size={15} aria-hidden="true" />
+          <strong>Folders</strong>
+        </div>
+        {folders.length > 0 ? (
+          <div className="brain-tree" role="tree" aria-label="Folders and documents">
+            {folders.map((folder) => {
+              const open = folder.id === openFolderId;
+
+              return (
+                <div key={folder.id} className="brain-tree-folder" role="treeitem" aria-expanded={open}>
+                  <button
+                    type="button"
+                    className="brain-tree-row is-folder"
+                    onClick={() => setOpenFolderId((current) => (current === folder.id ? null : folder.id))}
+                  >
+                    <Folder size={15} aria-hidden="true" />
+                    <span title={folder.label}>{folder.label}</span>
+                    <small>{folder.documentCount}</small>
+                  </button>
+                  {open ? (
                     <div className="brain-tree-children">
                       {folder.documents.map((document) => {
                         const active = document.sessionId === selectedSessionId;
@@ -429,40 +471,80 @@ function BrainHierarchySidebar({ spaces, selectedSessionId, onSelectDocument, on
                               aria-current={active ? "page" : undefined}
                             >
                               <BookOpen size={14} aria-hidden="true" />
-                              <span title={document.title}>{truncateWords(document.title, 6)}</span>
+                              <span title={document.title}>{truncateWords(document.title, 7)}</span>
                               <small>{document.fileCount}</small>
                             </button>
-                            <div className="brain-file-list" role="group" aria-label={`${document.title} files`}>
-                              {document.files.map((file) => (
-                                <button
-                                  key={file.id}
-                                  type="button"
-                                  className={`brain-tree-row is-file${active ? " is-parent-active" : ""}`}
-                                  onClick={() => onSelectDocument(file.sessionId)}
-                                >
-                                  <FileText size={13} aria-hidden="true" />
-                                  <span title={file.subtitle ?? file.title}>{truncateWords(file.title, 4)}</span>
-                                </button>
-                              ))}
-                            </div>
+                            {active ? (
+                              <div className="brain-file-list" role="group" aria-label={`${document.title} files`}>
+                                {document.files.slice(0, 5).map((file) => (
+                                  <button
+                                    key={file.id}
+                                    type="button"
+                                    className="brain-tree-row is-file is-parent-active"
+                                    onClick={() => onSelectDocument(file.sessionId)}
+                                  >
+                                    <FileText size={13} aria-hidden="true" />
+                                    <span title={file.subtitle ?? file.title}>{truncateWords(file.title, 4)}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
                         );
                       })}
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="brain-sidebar-empty">
+            <strong>No folders yet</strong>
+            <span>Start with a thought to create the first document folder.</span>
+          </div>
+        )}
+      </section>
+      <section className="brain-sidebar-section" aria-label="Research and examples">
+        <div className="brain-sidebar-section-head">
+          <Search size={15} aria-hidden="true" />
+          <strong>Research</strong>
         </div>
-      ) : (
-        <div className="brain-sidebar-empty">
-          <strong>No Brain docs yet</strong>
-          <span>Start with a thought to create the first space.</span>
-        </div>
-      )}
+        {research.length > 0 ? (
+          <div className="brain-research-list">
+            {research.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`brain-research-item is-${item.kind}`}
+                onClick={() => onSelectDocument(item.sessionId)}
+              >
+                {researchIcon(item)}
+                <span>
+                  <strong title={item.title}>{truncateWords(item.title, 5)}</strong>
+                  <small title={item.subtitle ?? item.title}>{truncateWords(item.subtitle ?? item.title, 9)}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="brain-sidebar-muted">No sources or examples yet.</p>
+        )}
+      </section>
     </aside>
   );
+}
+
+function researchIcon(item: BrainResearchItem) {
+  if (item.kind === "failure_example") {
+    return <TriangleAlert size={14} aria-hidden="true" />;
+  }
+
+  if (item.kind === "research_lead" || item.kind === "source") {
+    return <Search size={14} aria-hidden="true" />;
+  }
+
+  return <FileText size={14} aria-hidden="true" />;
 }
 
 function BrainRecordLog({
