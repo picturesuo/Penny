@@ -2141,15 +2141,23 @@
 
   .path-preview {
     grid-template-columns: 1fr;
-    padding-left: 16px;
+    margin-inline: 0;
+    padding: 12px;
   }
 
   .path-preview ul {
+    grid-column: 1;
     flex-wrap: wrap;
   }
 
   .path-preview li {
     max-width: 100%;
+  }
+
+  .path-preview-return {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
   }
 
   .composer {
