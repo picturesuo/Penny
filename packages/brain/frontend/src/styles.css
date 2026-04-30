@@ -303,7 +303,7 @@
   .thought-node-row {
     position: relative;
     display: grid;
-    grid-template-columns: 10px 10px minmax(0, 1fr);
+    grid-template-columns: 10px 10px minmax(0, 1fr) auto;
     align-items: center;
     min-height: 25px;
     padding-left: calc(var(--thought-depth) * var(--thought-indent));
@@ -420,6 +420,17 @@
 
   .thought-node-count {
     display: none;
+    min-width: 18px;
+    border: 1px solid rgb(17 17 17 / 0.16);
+    padding: 1px 4px;
+    color: rgb(17 17 17 / 0.54);
+    font-size: 9px;
+    line-height: 1.25;
+    text-align: center;
+  }
+
+  .thought-node.is-collapsed > .thought-node-row .thought-node-count {
+    display: block;
   }
 
   .thought-node-label:hover,
@@ -431,6 +442,27 @@
   .thought-node.is-suggested > .thought-node-row .thought-node-label {
     border-bottom-color: #111111;
     background: rgb(17 17 17 / 0.06);
+  }
+
+  .thought-node.is-focus-path:not(.thought-node-root) > .thought-node-row .thought-node-label {
+    color: #111111;
+  }
+
+  .thought-node.is-context > .thought-node-row {
+    min-height: 22px;
+  }
+
+  .thought-node.is-context > .thought-node-row .thought-node-label {
+    color: rgb(17 17 17 / 0.64);
+  }
+
+  .thought-node.is-context > .thought-node-row .thought-node-label strong {
+    font-weight: 600;
+  }
+
+  .thought-node.is-context.thought-node-step > .thought-node-row .thought-node-label small,
+  .thought-node.is-context.thought-node-claim > .thought-node-row .thought-node-label small {
+    color: rgb(17 17 17 / 0.48);
   }
 
   .thought-node.is-suggested > .thought-node-row .thought-node-glyph::before {
