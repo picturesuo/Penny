@@ -5,8 +5,14 @@ import type {
   PersistedNextMoveCandidate,
 } from "../domain/repository.ts";
 import type { EntityId, FocusState } from "../domain/types.ts";
+import { mvpModeForThinkingMode, mvpModeValues, type MvpMode, type ThinkingMode } from "../modes.ts";
 
 export type ThinkingModeStatus = "ready" | "paused" | "empty";
+
+export type MvpModeContractDto = {
+  validModes: ReadonlyArray<MvpMode>;
+  activeMode: MvpMode;
+};
 
 export type ThinkingModeCandidateDto = {
   id: EntityId;
@@ -17,6 +23,7 @@ export type ThinkingModeCandidateDto = {
   targetEdgeId: EntityId | null;
   action: NextMoveCandidate["action"];
   mode: NextMoveCandidate["mode"];
+  mvpMode: MvpMode;
   score: number;
   reason: string;
   reasonCodes: ReadonlyArray<string>;
@@ -41,6 +48,7 @@ export type ThinkingModeStateResponse = {
   brainId: EntityId;
   sessionId: EntityId;
   focusState: FocusState;
+  modeContract: MvpModeContractDto;
   candidates: ReadonlyArray<ThinkingModeCandidateDto>;
   selectedCandidate: ThinkingModeCandidateDto | null;
 };
@@ -70,6 +78,7 @@ export type StartNextMoveResponse = {
   brainId: EntityId;
   sessionId: EntityId;
   focusState: FocusState;
+  modeContract: MvpModeContractDto;
   selectedCandidate: ThinkingModeCandidateDto;
   move: ThinkingModeMoveDto;
 };
@@ -87,6 +96,7 @@ export type ManualFocusResponse = {
   brainId: EntityId;
   sessionId: EntityId;
   focusState: FocusState;
+  modeContract: MvpModeContractDto;
   focusClaim: {
     id: EntityId;
     versionId: EntityId;
@@ -125,6 +135,7 @@ export class ThinkingModeService {
       brainId,
       sessionId,
       focusState: state.focusState,
+      modeContract: modeContractFor(state.focusState.mode),
       candidates,
       selectedCandidate,
     };
@@ -226,6 +237,7 @@ export class ThinkingModeService {
       brainId: input.brainId,
       sessionId: input.sessionId,
       focusState,
+      modeContract: modeContractFor(focusState.mode),
       selectedCandidate: candidateDto(selected),
       move: moveDto(move),
     };
@@ -279,6 +291,7 @@ export class ThinkingModeService {
       brainId: input.brainId,
       sessionId: input.sessionId,
       focusState,
+      modeContract: modeContractFor(focusState.mode),
       focusClaim: {
         id: claimVersion.claim.id,
         versionId: claimVersion.version.id,
@@ -305,6 +318,7 @@ export class ThinkingModeService {
       brainId,
       sessionId,
       focusState,
+      modeContract: modeContractFor(focusState.mode),
       candidates: candidateDtos,
       selectedCandidate: selectedCandidate ? candidateDto(selectedCandidate) : null,
     };
@@ -353,6 +367,7 @@ function candidateDto(candidate: PersistedNextMoveCandidate): ThinkingModeCandid
     targetEdgeId: candidate.targetEdgeId,
     action: candidate.action,
     mode: candidate.mode,
+    mvpMode: mvpModeForThinkingMode(candidate.mode),
     score: candidate.score,
     reason: candidate.reason,
     reasonCodes: candidate.reasonCodes,
@@ -372,6 +387,13 @@ function moveDto(move: CreatedMove): ThinkingModeMoveDto {
     summary: move.summary,
     payload: move.payload,
     createdAt: move.createdAt.toISOString(),
+  };
+}
+
+function modeContractFor(mode: ThinkingMode): MvpModeContractDto {
+  return {
+    validModes: mvpModeValues,
+    activeMode: mvpModeForThinkingMode(mode),
   };
 }
 
