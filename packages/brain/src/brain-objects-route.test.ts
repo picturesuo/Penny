@@ -162,6 +162,42 @@ test("GET and POST /api/brain/recents keep lightweight Learn outputs", async () 
   assert.equal(postedBody.data.recent.rawIdea, "Unsaved Learn output that should stay lightweight.");
 });
 
+test("created Brain recents are returned by a later read", async () => {
+  const recents: BrainRecentDto[] = [];
+  const service = routeService({
+    async listRecents(requestScope) {
+      assert.deepEqual(requestScope, scope);
+      return recentsPayload(recents);
+    },
+    async createRecent(input) {
+      const recent = {
+        ...recentDto(input.rawIdea ?? input.content ?? ""),
+        id: uuidAt(910 + recents.length),
+        scope: input.scope,
+      };
+      recents.unshift(recent);
+      return { recent, recents };
+    },
+  });
+
+  const created = await handleBrainRecentsRequest(
+    scopedJsonRequest("http://localhost/api/brain/recents", {
+      rawIdea: "Drop idea before structure, then read it back.",
+    }),
+    { service },
+  );
+  const listed = await handleBrainRecentsRequest(scopedRequest("http://localhost/api/brain/recents"), { service });
+  const createdBody = (await created.json()) as { data: { recent: BrainRecentDto } };
+  const listedBody = (await listed.json()) as { data: BrainRecentsPayload };
+
+  assert.equal(created.status, 201);
+  assert.equal(createdBody.data.recent.rawIdea, "Drop idea before structure, then read it back.");
+  assert.deepEqual(
+    listedBody.data.recents.map((recent) => recent.id),
+    [createdBody.data.recent.id],
+  );
+});
+
 test("new Brain object endpoints keep persisted rows isolated by scope", async () => {
   const otherScope: BrainScope = { ...scope, userId: "other-user" };
   const sessionId = uuidAt(101);
@@ -238,6 +274,41 @@ test("new Brain object endpoints keep persisted rows isolated by scope", async (
   assert.equal(hiddenNoteBody.error.code, "brain_object_not_found");
   assert.equal(hiddenSave.status, 404);
   assert.equal(hiddenSaveBody.error.code, "brain_object_not_found");
+});
+
+test("saved session notes survive a later refresh-style read", async () => {
+  const sessionId = uuidAt(101);
+  let persisted: BrainSessionNoteDto | null = null;
+  const service = routeService({
+    async getSessionNote(requestScope, requestSessionId) {
+      assert.deepEqual(requestScope, scope);
+      assert.equal(requestSessionId, sessionId);
+      return persisted;
+    },
+    async saveSessionNote(input) {
+      assert.deepEqual(input.scope, scope);
+      persisted = noteDto(input.sessionId, input.content);
+      return persisted;
+    },
+  });
+
+  const saved = await handleSessionNotesRequest(
+    scopedJsonRequest(`http://localhost/api/sessions/${sessionId}/notes`, {
+      content: "Reload should keep the working note.",
+    }, "PUT"),
+    sessionId,
+    { service },
+  );
+  const refreshed = await handleSessionNotesRequest(scopedRequest(`http://localhost/api/sessions/${sessionId}/notes`), sessionId, {
+    service,
+  });
+  const savedBody = (await saved.json()) as { data: { note: BrainSessionNoteDto } };
+  const refreshedBody = (await refreshed.json()) as { data: { note: BrainSessionNoteDto | null } };
+
+  assert.equal(saved.status, 200);
+  assert.equal(savedBody.data.note.content, "Reload should keep the working note.");
+  assert.equal(refreshed.status, 200);
+  assert.equal(refreshedBody.data.note?.content, savedBody.data.note.content);
 });
 
 test("GET, POST, and PUT /api/sessions/:sessionId/notes persist working notes", async () => {
