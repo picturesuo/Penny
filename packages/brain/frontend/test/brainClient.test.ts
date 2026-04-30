@@ -119,6 +119,10 @@ test("frontend brain client normalizes cockpit Autopilot state for the existing 
     assert.equal(cockpit.data.autopilot.suggestion?.primaryActionLabel, "Start challenge");
     assert.equal(cockpit.data.autopilot.suggestion?.why, "Challenge the paid founder workflow assumption.");
     assert.equal(cockpit.data.autopilot.suggestion?.exitCriteria.label, "Issue a challenge.");
+    assert.equal(cockpit.data.graphPath.layout, "top_down");
+    assert.equal(cockpit.data.graphPath.nodes[0]?.role, "main_claim");
+    assert.equal(cockpit.data.graphPath.nodes[0]?.selected, true);
+    assert.equal(cockpit.data.graphPath.edges[0]?.edgeId, uuidAt(301));
     assert.equal(cockpit.data.activeChallenge?.targetClaimId, uuidAt(201));
     assert.equal(cockpit.data.activeChallenge?.challenge, "Admiration is not paid urgency.");
     assert.equal(cockpit.data.latestArtifact?.title, "Challenge Brief");
@@ -228,6 +232,45 @@ function cockpitPayload(sessionId: string) {
           ],
         },
       ],
+    },
+    graphPath: {
+      layout: "top_down",
+      generatedFrom: "claims_edges_moves",
+      focusClaimId: uuidAt(201),
+      nodes: [
+        {
+          id: `claim:${uuidAt(201)}`,
+          claimId: uuidAt(201),
+          label: "Pre-seed founders will pay for structured thinking.",
+          role: "main_claim",
+          kind: "assumption",
+          status: "exploratory",
+          confidence: 42,
+          depth: 0,
+          lane: 0,
+          rank: 1,
+          moveCount: 1,
+          edgeIds: [uuidAt(301)],
+          selected: true,
+          suggested: true,
+        },
+      ],
+      edges: [
+        {
+          id: `edge:${uuidAt(301)}`,
+          edgeId: uuidAt(301),
+          fromNodeId: `claim:${uuidAt(201)}`,
+          toNodeId: `claim:${uuidAt(202)}`,
+          kind: "challenges",
+          status: "active",
+          label: "shaky_assumption",
+        },
+      ],
+      meta: {
+        nodeCount: 1,
+        edgeCount: 1,
+        maxDepth: 0,
+      },
     },
     moves: [
       {
