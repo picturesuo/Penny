@@ -198,6 +198,69 @@ test("created Brain recents are returned by a later read", async () => {
   );
 });
 
+test("POST /api/brain/recents accepts Learn session outputs for later Brain saves", async () => {
+  const sessionId = uuidAt(101);
+  const created: CreateBrainRecentInput[] = [];
+  const response = await handleBrainRecentsRequest(
+    scopedJsonRequest("http://localhost/api/brain/recents", {
+      learnOutput: {
+        sessionId,
+        title: "Learn: cognitive load",
+        summary: "Cognitive load changes what Penny should preserve.",
+        content: "The Learn session explains why cognitive load matters for the current claim.",
+        term: "cognitive load",
+        candidateBrainObjects: [
+          {
+            objectType: "learn_output",
+            title: "Learn: cognitive load",
+            summary: "Save the local definition and its claim pressure.",
+            content: "Cognitive load matters because the claim depends on reducing user effort.",
+            suggestedSaveReason: "This concept will keep shaping the session.",
+            source: "learn",
+            refs: {
+              sessionId,
+              currentClaimId: uuidAt(301),
+              term: "cognitive load",
+            },
+          },
+        ],
+      },
+    }),
+    {
+      service: routeService({
+        async createRecent(input) {
+          created.push(input);
+          const recent = {
+            ...recentDto(input.content ?? ""),
+            id: uuidAt(930),
+            sessionId: input.sessionId ?? null,
+            kind: input.kind ?? "learn_output",
+            title: input.title ?? "Learn output",
+            summary: input.summary ?? null,
+            payload: input.payload ?? {},
+          };
+
+          return { recent, recents: [recent] };
+        },
+      }),
+    },
+  );
+  const body = (await response.json()) as { data: { recent: BrainRecentDto } };
+  const payload = created[0]?.payload as Record<string, unknown> | undefined;
+  const learnSessionOutput = payload?.learnSessionOutput as Record<string, unknown> | undefined;
+  const candidateBrainObjects = payload?.candidateBrainObjects as unknown[] | undefined;
+
+  assert.equal(response.status, 201);
+  assert.equal(created[0]?.kind, "learn_output");
+  assert.equal(created[0]?.sessionId, sessionId);
+  assert.equal(created[0]?.title, "Learn: cognitive load");
+  assert.equal(created[0]?.content, "The Learn session explains why cognitive load matters for the current claim.");
+  assert.equal(payload?.source, "learn");
+  assert.equal(learnSessionOutput?.term, "cognitive load");
+  assert.equal(candidateBrainObjects?.length, 1);
+  assert.equal(body.data.recent.kind, "learn_output");
+});
+
 test("new Brain object endpoints keep persisted rows isolated by scope", async () => {
   const otherScope: BrainScope = { ...scope, userId: "other-user" };
   const sessionId = uuidAt(101);
