@@ -147,9 +147,21 @@ start_server_if_needed() {
   fi
 
   local port
+  local penny_auto_migrate="${PENNY_AUTO_MIGRATE:-}"
+
+  if [[ "$isolated_db" == "1" && -z "$penny_auto_migrate" ]]; then
+    penny_auto_migrate="0"
+  fi
+
   port="$(server_port)"
   echo "Starting Penny dev server at $base_url"
-  PORT="$port" XAI_API_KEY="" pnpm dev:api >"$tmp_dir/dev-server.log" 2>&1 &
+
+  if [[ -n "$penny_auto_migrate" ]]; then
+    PORT="$port" PENNY_AUTO_MIGRATE="$penny_auto_migrate" XAI_API_KEY="" pnpm dev:api >"$tmp_dir/dev-server.log" 2>&1 &
+  else
+    PORT="$port" XAI_API_KEY="" pnpm dev:api >"$tmp_dir/dev-server.log" 2>&1 &
+  fi
+
   server_pid="$!"
 
   if ! wait_for_server; then
@@ -454,8 +466,8 @@ echo "Smoke testing Thinking Mode at $base_url"
 
 expect_status "200" "GET" "/"
 expect_status "405" "GET" "/brain/seed"
-expect_status "405" "GET" "/api/brains/00000000-0000-4000-8000-000000000900/autopilot/tick"
-expect_status "400" "POST" "/api/brains/not-a-uuid/autopilot/tick" '{"sessionId":"00000000-0000-4000-8000-000000000101"}'
+expect_status "405" "GET" "/api/sessions/00000000-0000-4000-8000-000000000101/autopilot/tick"
+expect_status "400" "POST" "/api/sessions/not-a-uuid/autopilot/tick" '{}'
 
 seed_body='{"rawIdea":"Pre-seed founders will pay for structured thinking before traction because founder decisions are messy and generic chat tools lose the thread.","userId":"smoke-user","workspaceId":"smoke-workspace","projectId":"smoke-project","sphereId":"smoke-sphere"}'
 request_json "seed" "201" "POST" "/brain/seed" "$seed_body"
@@ -470,33 +482,33 @@ initial_graph_file="$response_file"
 
 request_json "moves_before_gets" "200" "GET" "/brain/session/$session_id/moves"
 moves_before_gets_file="$response_file"
-request_json "state_initial" "200" "GET" "/api/brains/$brain_id/autopilot/state?sessionId=$session_id"
+request_json "state_initial" "200" "GET" "/api/sessions/$session_id/autopilot/state"
 json_check "state" "$response_file"
 request_json "graph_get_guard" "200" "GET" "/brain/session/$session_id/graph"
 request_json "moves_after_gets" "200" "GET" "/brain/session/$session_id/moves"
 json_check "moves-same" "$moves_before_gets_file" "$response_file"
 
-request_json "tick_1" "201" "POST" "/api/brains/$brain_id/autopilot/tick" "{\"sessionId\":\"$session_id\",\"limit\":5}"
+request_json "tick_1" "201" "POST" "/api/sessions/$session_id/autopilot/tick" '{"limit":5}'
 tick_1_file="$response_file"
 json_check "tick" "$tick_1_file"
 candidate_id="$(json_value "$tick_1_file" "data.selectedCandidate.candidateId")"
 target_claim_id="$(json_value "$tick_1_file" "data.selectedCandidate.targetClaimId")"
 
-request_json "tick_2" "201" "POST" "/api/brains/$brain_id/autopilot/tick" "{\"sessionId\":\"$session_id\",\"limit\":5}"
+request_json "tick_2" "201" "POST" "/api/sessions/$session_id/autopilot/tick" '{"limit":5}'
 tick_2_file="$response_file"
 json_check "tick" "$tick_2_file"
-request_json "state_after_ticks" "200" "GET" "/api/brains/$brain_id/autopilot/state?sessionId=$session_id"
+request_json "state_after_ticks" "200" "GET" "/api/sessions/$session_id/autopilot/state"
 json_check "no-duplicate-candidates" "$tick_1_file" "$tick_2_file" "$response_file"
 
-request_json "start_focus" "201" "POST" "/api/next-move-candidates/$candidate_id/start" "{\"brainId\":\"$brain_id\",\"sessionId\":\"$session_id\"}"
+request_json "start_focus" "201" "POST" "/api/sessions/$session_id/next-move-candidates/$candidate_id/start" '{}'
 json_check "start" "$response_file"
 suggestion_move_id="$(json_value "$response_file" "data.move.id")"
 
 manual_claim_id="$(node "$checker" manual-claim-id "$seed_file" "$target_claim_id")"
-request_json "manual_focus" "201" "POST" "/api/brains/$brain_id/focus/manual" "{\"sessionId\":\"$session_id\",\"claimId\":\"$manual_claim_id\",\"reason\":\"Smoke test manual override.\",\"previousSuggestionMoveId\":\"$suggestion_move_id\"}"
+request_json "manual_focus" "201" "POST" "/api/sessions/$session_id/focus/manual" "{\"claimId\":\"$manual_claim_id\",\"reason\":\"Smoke test manual override.\",\"previousSuggestionMoveId\":\"$suggestion_move_id\"}"
 json_check "manual" "$response_file"
 
-request_json "issue_defend" "201" "POST" "/api/next-move-candidates/$candidate_id/challenge" "{\"brainId\":\"$brain_id\",\"sessionId\":\"$session_id\"}"
+request_json "issue_defend" "201" "POST" "/api/sessions/$session_id/next-move-candidates/$candidate_id/challenge" '{}'
 issue_defend_file="$response_file"
 json_check "issue" "$issue_defend_file"
 request_json "graph_before_defend" "200" "GET" "/brain/session/$session_id/graph"
@@ -507,7 +519,7 @@ json_check "respond" "$response_file" "defend"
 request_json "graph_after_defend" "200" "GET" "/brain/session/$session_id/graph"
 json_check "claims-unchanged" "$initial_graph_file" "$response_file"
 
-request_json "issue_revise" "201" "POST" "/api/next-move-candidates/$candidate_id/challenge" "{\"brainId\":\"$brain_id\",\"sessionId\":\"$session_id\"}"
+request_json "issue_revise" "201" "POST" "/api/sessions/$session_id/next-move-candidates/$candidate_id/challenge" '{}'
 issue_revise_file="$response_file"
 json_check "issue" "$issue_revise_file"
 revise_challenge_id="$(json_value "$issue_revise_file" "data.challengeRound.id")"
@@ -517,7 +529,7 @@ json_check "respond" "$response_file" "revise"
 request_json "graph_after_revise" "200" "GET" "/brain/session/$session_id/graph"
 json_check "claims-after-revise" "$initial_graph_file" "$response_file" "$target_claim_id" "$revised_text"
 
-request_json "issue_absorb" "201" "POST" "/api/next-move-candidates/$candidate_id/challenge" "{\"brainId\":\"$brain_id\",\"sessionId\":\"$session_id\"}"
+request_json "issue_absorb" "201" "POST" "/api/sessions/$session_id/next-move-candidates/$candidate_id/challenge" '{}'
 issue_absorb_file="$response_file"
 json_check "issue" "$issue_absorb_file"
 absorb_challenge_id="$(json_value "$issue_absorb_file" "data.challengeRound.id")"
