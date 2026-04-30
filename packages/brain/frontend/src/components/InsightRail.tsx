@@ -12,6 +12,7 @@ import type {
   SessionCockpitData,
 } from "../types/brain";
 import { formatLabel, shortId } from "../lib/format";
+import { truncateWords } from "../lib/text";
 
 interface InsightRailProps {
   challenge: ChallengeSuggestion | undefined;
@@ -85,7 +86,7 @@ function RailBlock({ title, children }: { title: string; children: string }) {
   return (
     <article className="rail-block">
       <h3>{title}</h3>
-      <p>{children}</p>
+      <p title={children}>{truncateWords(children, 14)}</p>
     </article>
   );
 }
@@ -98,7 +99,7 @@ function ThinkingHistory({ moves }: { moves: BrainMove[] }) {
         {moves.length > 0 ? (
           moves.slice(0, 6).map((move) => (
             <article key={move.id}>
-              <span>{move.summary || formatLabel(move.type)}</span>
+              <span title={move.summary || formatLabel(move.type)}>{truncateWords(move.summary || formatLabel(move.type), 9)}</span>
               <time>{move.createdAt ? formatHistoryTime(move.createdAt) : "Time"}</time>
             </article>
           ))
@@ -144,7 +145,9 @@ function ChallengeLoop({
         <ChallengeResponseForm challenge={challenge} disabled={disabled} onRespondChallenge={onRespondChallenge} />
       ) : (
         <div className="challenge-action-row">
-          <span>{suggestion?.primaryActionLabel ?? "No selected action"}</span>
+          <span title={suggestion?.primaryActionLabel ?? "No selected action"}>
+            {truncateWords(suggestion?.primaryActionLabel ?? "No selected action", 5)}
+          </span>
           <button type="button" disabled={disabled || !canIssueChallenge} onClick={onIssueChallenge}>
             {suggestion?.action === "challenge" ? "Issue challenge" : "Not a challenge"}
           </button>
@@ -153,8 +156,12 @@ function ChallengeLoop({
       {response ? <ChallengeReceipt response={response} /> : null}
       <div className="challenge-brief-row">
         <div>
-          <strong>{latestArtifact?.title ?? "Challenge Brief"}</strong>
-          <span>{latestArtifact?.summary ?? "No brief yet"}</span>
+          <strong title={latestArtifact?.title ?? "Challenge Brief"}>
+            {truncateWords(latestArtifact?.title ?? "Challenge Brief", 6)}
+          </strong>
+          <span title={latestArtifact?.summary ?? "No brief yet"}>
+            {truncateWords(latestArtifact?.summary ?? "No brief yet", 10)}
+          </span>
         </div>
         <button type="button" disabled={disabled || !response} onClick={onCreateChallengeBrief}>
           Create brief
@@ -177,7 +184,7 @@ function ChallengeBriefPreview({ artifact }: { artifact: SessionCockpitData["lat
       {briefSectionRows(sections).map((row) => (
         <article key={row.title}>
           <h3>{row.title}</h3>
-          <p>{row.text}</p>
+          <p title={row.text}>{truncateWords(row.text, 12)}</p>
         </article>
       ))}
     </div>
@@ -283,7 +290,9 @@ function ChallengeReceipt({ response }: { response: RespondToChallengeResponse["
       <span>focus completed</span>
       <span>{receipt.claimTextChanged ? `old ${shortId(receipt.previousClaimVersionId ?? "")}` : "claim unchanged"}</span>
       <span>{receipt.unresolvedRisk ? "risk carried forward" : `current ${shortId(receipt.currentClaimVersionId)}`}</span>
-      <span>{response.derivedEffects.length > 0 ? response.derivedEffects.map((effect) => effect.title).join(", ") : "no shape effect"}</span>
+      <span title={response.derivedEffects.length > 0 ? response.derivedEffects.map((effect) => effect.title).join(", ") : "no shape effect"}>
+        {truncateWords(response.derivedEffects.length > 0 ? response.derivedEffects.map((effect) => effect.title).join(", ") : "no shape effect", 8)}
+      </span>
     </article>
   );
 }
