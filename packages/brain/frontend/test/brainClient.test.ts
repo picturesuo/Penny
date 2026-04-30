@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createChallengeBrief,
+  fetchClaimDetail,
   fetchSessionCockpit,
   issueChallengeFromCandidate,
   respondToChallenge,
@@ -78,6 +79,24 @@ test("frontend brain client uses session-scoped Autopilot command routes", async
       assert.equal(call.headers["x-user-id"], undefined);
       assert.equal(call.headers["x-project-id"], undefined);
     }
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("frontend brain client fetches Brain claim detail from the graph detail route", async () => {
+  const claimId = uuidAt(201);
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [jsonResponse(claimDetailPayload(claimId))]);
+
+  try {
+    const detail = await fetchClaimDetail(claimId);
+
+    assert.equal(calls[0]?.url, `/brain/claims/${claimId}/detail`);
+    assert.equal(calls[0]?.method, "GET");
+    assert.equal(detail.data.claim.id, claimId);
+    assert.equal(detail.data.connectedClaims[0]?.edge.kind, "supports");
+    assert.equal(detail.data.moves[0]?.payload?.reasoning, "The source note makes the support explicit.");
   } finally {
     restoreFetch();
   }
@@ -242,6 +261,83 @@ function cockpitPayload(sessionId: string) {
       payload: {},
       createdAt: "2026-04-29T00:00:10.000Z",
     },
+  };
+}
+
+function claimDetailPayload(claimId: string) {
+  const supportClaimId = uuidAt(202);
+  const edgeId = uuidAt(301);
+
+  return {
+    claim: {
+      id: claimId,
+      text: "Neoliberalism at Harvard can be clearly defined and bounded.",
+      kind: "belief",
+      status: "exploratory",
+      confidence: 64,
+    },
+    currentVersion: {
+      id: uuidAt(401),
+      claimId,
+      sourceId: uuidAt(501),
+      brainRunId: null,
+      moveId: null,
+      content: "Neoliberalism at Harvard can be clearly defined and bounded.",
+      status: "exploratory",
+      confidence: 64,
+      state: "current",
+      isCurrent: true,
+      validFrom: "2026-04-29T00:00:00.000Z",
+      validUntil: null,
+      supersededByVersionId: null,
+      createdAt: "2026-04-29T00:00:00.000Z",
+    },
+    oldVersions: [],
+    versions: [],
+    confidenceHistory: [],
+    moves: [
+      {
+        id: uuidAt(601),
+        kind: "claim.created",
+        summary: "Created the bounded topic claim.",
+        claimIds: [claimId],
+        edgeIds: [edgeId],
+        artifactIds: [],
+        payload: {
+          reasoning: "The source note makes the support explicit.",
+        },
+        createdAt: "2026-04-29T00:00:01.000Z",
+      },
+    ],
+    provenance: {
+      source: null,
+      sources: [],
+      spans: [],
+    },
+    artifactReferences: [],
+    connectedClaims: [
+      {
+        edge: {
+          id: edgeId,
+          fromClaimId: supportClaimId,
+          toClaimId: claimId,
+          kind: "supports",
+          status: "active",
+          label: "institutional evidence",
+          createdAt: "2026-04-29T00:00:02.000Z",
+        },
+        direction: "incoming",
+        claim: {
+          id: supportClaimId,
+          text: "Harvard institutional practices provide concrete evidence.",
+          kind: "assumption",
+          status: "exploratory",
+          confidence: 58,
+        },
+      },
+    ],
+    activeChallenges: [],
+    learnedConcepts: [],
   };
 }
 
