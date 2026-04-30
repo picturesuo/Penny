@@ -482,6 +482,7 @@ function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null
       edges: cockpit.ideaMap.edges,
       ...(typeof keyInsight === "string" && keyInsight ? { keyInsight } : {}),
     },
+    graphPath: cockpit.graphPath,
     explorationPaths: current?.explorationPaths ?? [],
     learnCandidates: current?.learnCandidates ?? [],
     ...(firstChallenge ? { firstChallenge } : {}),
