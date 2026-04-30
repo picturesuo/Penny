@@ -15,6 +15,7 @@ import {
 import { BrainWorkspace } from "./components/BrainWorkspace";
 import { CheckWorkspace } from "./components/CheckWorkspace";
 import { Header } from "./components/Header";
+import { LearnWorkspace } from "./components/LearnWorkspace";
 import { formatLabel, shortId } from "./lib/format";
 import type {
   AutopilotTickData,
@@ -458,6 +459,7 @@ export function App() {
             onSelectDocument={handleSelectDocument}
             onOpenBrain={() => setActiveMode("Brain")}
             onOpenCheck={() => setActiveMode("Check")}
+            onOpenVerify={() => setActiveMode("Check")}
           />
         ) : activeMode === "Brain" ? (
           <BrainWorkspace
@@ -501,172 +503,6 @@ export function App() {
         ) : null}
       </div>
     </div>
-  );
-}
-
-function LearnWorkspace({
-  documentsData,
-  selectedDocument,
-  data,
-  autopilot,
-  recents,
-  status,
-  isThinking,
-  onSeed,
-  onKeepRecent,
-  onSelectDocument,
-  onOpenBrain,
-  onOpenCheck,
-}: {
-  documentsData: BrainDocumentsData | null;
-  selectedDocument: BrainDocumentsData["documents"][number] | null;
-  data: BrainData | null;
-  autopilot: AutopilotTickData | null;
-  recents: BrainRecentIdea[];
-  status: string;
-  isThinking: boolean;
-  onSeed: (rawIdea: string) => Promise<void>;
-  onKeepRecent: (rawIdea: string) => Promise<void>;
-  onSelectDocument: (sessionId: string) => void;
-  onOpenBrain: () => void;
-  onOpenCheck: () => void;
-}) {
-  const recentDocuments = documentsData?.documents.slice(0, 3) ?? [];
-  const activeClaim = data?.ideaMap?.claims?.[0]?.text ?? selectedDocument?.mainClaim?.text ?? null;
-  const suggestedNextStep = autopilot?.suggestion ?? null;
-
-  return (
-    <main className="mode-placeholder" aria-label="Learn">
-      <section>
-        <span className="section-label">LEARN</span>
-        <h1>Drop an idea</h1>
-        <p>
-          Start with one raw thought. Penny will turn it into saved Brain structure, then Autopilot can point Check at the
-          next weak spot.
-        </p>
-        <IdeaDrop disabled={isThinking} status={status} recents={recents} onSave={onSeed} onKeep={onKeepRecent} />
-        {activeClaim ? (
-          <div className="challenge-action-row">
-            <span>
-              <strong>Saved to Brain</strong>
-              {activeClaim}
-            </span>
-            <button type="button" onClick={onOpenBrain}>
-              Open Brain
-            </button>
-          </div>
-        ) : null}
-        {suggestedNextStep ? (
-          <div className="challenge-action-row">
-            <span>
-              <strong>{suggestedNextStep.primaryActionLabel}</strong>
-              {suggestedNextStep.why}
-            </span>
-            <button type="button" onClick={onOpenCheck}>
-              Open Check
-            </button>
-          </div>
-        ) : null}
-        {recentDocuments.length > 0 ? (
-          <div className="document-log-table" aria-label="Recent Brain documents">
-            {recentDocuments.map((document) => (
-              <button
-                key={document.id}
-                type="button"
-                className="document-log-row"
-                onClick={() => onSelectDocument(document.sessionId)}
-              >
-                <span className="doc-kind">Brain</span>
-                <span>
-                  <strong>{document.title}</strong>
-                  <small>{document.mainClaim?.text ?? document.originalIdea ?? "No main claim yet"}</small>
-                </span>
-                <span className="doc-log-meta">
-                  <strong>{document.counts.claims} claims</strong>
-                  <small>{formatLabel(document.status)}</small>
-                </span>
-                <time>{shortId(document.sessionId)}</time>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </section>
-    </main>
-  );
-}
-
-function IdeaDrop({
-  disabled,
-  status,
-  recents,
-  onSave,
-  onKeep,
-}: {
-  disabled: boolean;
-  status: string;
-  recents: BrainRecentIdea[];
-  onSave: (rawIdea: string) => Promise<void>;
-  onKeep: (rawIdea: string) => Promise<void>;
-}) {
-  const [draft, setDraft] = useState("");
-  const trimmedDraft = draft.trim();
-
-  async function handleSave() {
-    if (!trimmedDraft) {
-      return;
-    }
-
-    await onSave(trimmedDraft);
-    setDraft("");
-  }
-
-  async function handleKeep() {
-    if (!trimmedDraft) {
-      return;
-    }
-
-    await onKeep(trimmedDraft);
-    setDraft("");
-  }
-
-  return (
-    <section className="idea-drop" aria-label="Drop an idea">
-      <label htmlFor="learnIdeaDrop">Drop an idea</label>
-      <textarea
-        id="learnIdeaDrop"
-        value={draft}
-        disabled={disabled}
-        placeholder="Write the raw thought Penny should preserve or revisit..."
-        aria-describedby="learnIdeaDropStatus"
-        onChange={(event) => setDraft(event.target.value)}
-      />
-      <div className="idea-drop-actions">
-        <button type="button" className="primary-command" disabled={disabled || !trimmedDraft} onClick={handleSave}>
-          Save to Brain
-        </button>
-        <button type="button" className="text-command" disabled={disabled || !trimmedDraft} onClick={handleKeep}>
-          Keep in Recents
-        </button>
-        <button type="button" className="text-command" disabled={disabled || !draft} onClick={() => setDraft("")}>
-          Discard
-        </button>
-      </div>
-      <p id="learnIdeaDropStatus" className="sr-only">
-        {status}
-      </p>
-      {recents.length > 0 ? (
-        <div className="recents-pile" aria-label="Recents pile">
-          <strong>Recents pile</strong>
-          <div>
-            {recents.slice(0, 4).map((recent) => (
-              <button key={recent.id} type="button" disabled={disabled} onClick={() => setDraft(recent.rawIdea)}>
-                {recent.rawIdea}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </section>
   );
 }
 
