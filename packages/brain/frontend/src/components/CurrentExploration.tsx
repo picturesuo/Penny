@@ -20,7 +20,7 @@ interface PathRow {
   tweaks: string[];
 }
 
-const maxIdeaRows = 10;
+const maxIdeaRows = 8;
 
 export function CurrentExploration({
   title,
@@ -31,18 +31,13 @@ export function CurrentExploration({
 }: CurrentExplorationProps) {
   const rows = useMemo(() => buildRows(claims, paths, activeWorkStructureStep), [claims, paths, activeWorkStructureStep]);
   const [selectedPathIndex, setSelectedPathIndex] = useState<number | null>(null);
-  const selectedPath = selectedPathIndex === null ? null : rows[selectedPathIndex] ?? null;
-
-  function focusComposer() {
-    const input = document.getElementById("rawIdea");
-
-    if (!(input instanceof HTMLInputElement)) {
-      return;
-    }
-
-    input.scrollIntoView({ behavior: "smooth", block: "center" });
-    input.focus({ preventScroll: true });
-  }
+  const [betterOption, setBetterOption] = useState("");
+  const defaultPathIndex = defaultDecisionIndex(rows, activeWorkStructureStep);
+  const selectedDecisionIndex = selectedPathIndex ?? defaultPathIndex;
+  const selectedPath = selectedDecisionIndex === null ? null : rows[selectedDecisionIndex] ?? null;
+  const decisionLabel = activeWorkStructureStep?.title ?? "Current idea";
+  const decisionQuestion = decisionQuestionForStep(activeWorkStructureStep, title, subtitle);
+  const stepCountLabel = activeWorkStructureStep?.rank ? `Step ${Math.min(activeWorkStructureStep.rank, 7)} of 7` : `${rows.length} options`;
 
   useEffect(() => {
     if (selectedPathIndex !== null && selectedPathIndex >= rows.length) {
@@ -83,96 +78,123 @@ export function CurrentExploration({
 
   return (
     <section className="current-exploration">
-      <h2 className="section-label">CURRENT EXPLORATION</h2>
-      <div className="exploration-headline">
-        <strong title={subtitle ? `${title}: ${subtitle}` : title}>{title}</strong>
+      <div className="decision-kicker">
+        <h2 className="section-label">CURRENT DECISION</h2>
+        <span>{stepCountLabel}</span>
       </div>
-      <div className="pathway-list" aria-label="Exploration pathways">
-        {rows.length > 0 ? (
-          rows.map((row, index) => (
-            <PathwayRow
-              key={row.id}
-              row={row}
-              index={index}
-              selected={index === selectedPathIndex}
-              onSelect={() => setSelectedPathIndex(index)}
-            />
-          ))
-        ) : (
-          <EmptyPathways />
-        )}
+      <div className="decision-hero">
+        <p>
+          Penny thinks the next thing to validate is: <strong>{decisionLabel}</strong>
+        </p>
+        <h1 title={decisionQuestion}>{decisionQuestion}</h1>
       </div>
-      {selectedPath ? <PathPreview row={selectedPath} index={selectedPathIndex ?? 0} onReturnToComposer={focusComposer} /> : <PathPreviewEmpty />}
+      {selectedPath ? (
+        <DecisionCard
+          betterOption={betterOption}
+          onBetterOptionChange={setBetterOption}
+          onSelectOption={setSelectedPathIndex}
+          rows={rows}
+          selectedIndex={selectedDecisionIndex ?? 0}
+          selectedRow={selectedPath}
+        />
+      ) : (
+        <DecisionEmpty />
+      )}
     </section>
   );
 }
 
-function PathwayRow({
-  row,
-  index,
-  selected,
-  onSelect,
+function DecisionCard({
+  betterOption,
+  onBetterOptionChange,
+  onSelectOption,
+  rows,
+  selectedIndex,
+  selectedRow,
 }: {
-  row: PathRow;
-  index: number;
-  selected: boolean;
-  onSelect: () => void;
+  betterOption: string;
+  onBetterOptionChange: (value: string) => void;
+  onSelectOption: (index: number) => void;
+  rows: PathRow[];
+  selectedIndex: number;
+  selectedRow: PathRow;
 }) {
-  const shortcut = shortcutLabel(index);
+  const selectedLetter = optionLetter(selectedIndex);
+  const previousIndex = selectedIndex > 0 ? selectedIndex - 1 : null;
+  const nextIndex = selectedIndex < rows.length - 1 ? selectedIndex + 1 : null;
 
   return (
-    <article className={`pathway-row${selected ? " is-selected" : ""}`}>
-      <button type="button" className="path-index" aria-label={`Preview choice ${shortcut}`} onClick={onSelect}>
-        {shortcut}
-      </button>
-      <strong title={row.title}>{row.title}</strong>
-      <ul>
-        {row.reasoning.map((item, index) => (
-          <li key={`${row.id}-reason-${index}`} title={item}>
-            {item}
-          </li>
-        ))}
-      </ul>
-      <button type="button" className="path-explore-button" aria-label={`Preview ${row.title}`} onClick={onSelect}>
-        Preview <span aria-hidden="true">-&gt;</span>
-      </button>
-    </article>
-  );
-}
-
-function PathPreview({
-  row,
-  index,
-  onReturnToComposer,
-}: {
-  row: PathRow;
-  index: number;
-  onReturnToComposer: () => void;
-}) {
-  return (
-    <article className="path-preview" aria-label="Selected exploration preview">
-      <div>
-        <span>Choice {shortcutLabel(index)}</span>
-        <strong title={row.title}>{row.title}</strong>
+    <article className="decision-card" aria-label="Penny decision">
+      <h3>PENNY'S CHOSEN OPTION</h3>
+      <div className="decision-chosen">
+        <p>
+          <strong>Option {selectedLetter}:</strong> {optionSentence(selectedRow)}
+        </p>
+        <h4>WHY PENNY CHOSE THIS</h4>
+        <p>{decisionReason(selectedRow)}</p>
+        <label className="decision-better-option">
+          <span>EVEN BETTER IDEA</span>
+          <textarea
+            value={betterOption}
+            onChange={(event) => onBetterOptionChange(event.target.value)}
+            placeholder="Put an even better option here..."
+            rows={2}
+          />
+        </label>
       </div>
-      <p title={row.summary}>{row.summary}</p>
-      <ul aria-label="Tweakable aspects">
-        {row.tweaks.slice(0, 3).map((tweak) => (
-          <li key={tweak}>{tweak}</li>
-        ))}
-      </ul>
-      <button type="button" className="path-preview-return" onClick={onReturnToComposer}>
-        Ask about this <span aria-hidden="true">-&gt;</span>
-      </button>
+      <section className="decision-alternatives" aria-label="Alternative options">
+        <h4>ALTERNATIVE OPTIONS</h4>
+        <div>
+          {rows.map((row, index) => (
+            <button
+              key={row.id}
+              type="button"
+              className={`decision-option${index === selectedIndex ? " is-selected" : ""}`}
+              onClick={() => onSelectOption(index)}
+            >
+              <span className="decision-radio" aria-hidden="true" />
+              <strong>{optionLetter(index)}</strong>
+              <span title={optionSentence(row)}>{optionSentence(row)}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+      <section className="decision-downstream" aria-label="Downstream changes">
+        <h4>WHAT CHANGES DOWNSTREAM</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>If you choose...</th>
+              <th>Then this changes...</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 6).map((row, index) => (
+              <tr key={`${row.id}-impact`}>
+                <td>{optionLetter(index)}</td>
+                <td>{downstreamImpact(row)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      <div className="decision-actions">
+        <button type="button" disabled={previousIndex === null} onClick={() => previousIndex !== null && onSelectOption(previousIndex)}>
+          <span aria-hidden="true">&lt;-</span> Previous{previousIndex !== null ? ` (${optionLetter(previousIndex)}. ${rows[previousIndex]?.title})` : ""}
+        </button>
+        <button type="button" disabled={nextIndex === null} onClick={() => nextIndex !== null && onSelectOption(nextIndex)}>
+          Next from Option {selectedLetter} <span aria-hidden="true">-&gt;</span>
+        </button>
+      </div>
     </article>
   );
 }
 
-function PathPreviewEmpty() {
+function DecisionEmpty() {
   return (
-    <article className="path-preview is-empty" aria-label="Exploration preview">
-      <span>Press 1-9 or 0</span>
-      <p>Preview a path outcome, then decide which parts to tweak before exploring.</p>
+    <article className="decision-card is-empty" aria-label="Current decision">
+      <h3>NO DECISION OPTIONS</h3>
+      <p>Awaiting enough session state to compare options.</p>
     </article>
   );
 }
@@ -182,6 +204,10 @@ function buildRows(
   paths: ExplorationPath[],
   activeWorkStructureStep: WorkStructureStep | null | undefined,
 ): PathRow[] {
+  if (activeWorkStructureStep && isCourseFitStep(activeWorkStructureStep)) {
+    return courseFitRows(activeWorkStructureStep);
+  }
+
   const pathRows = paths.map((path, index) => ({
     id: `${path.title}-${index}`,
     title: path.title,
@@ -197,6 +223,56 @@ function buildRows(
   ];
 
   return uniquePathRows(rows).slice(0, maxIdeaRows);
+}
+
+function courseFitRows(step: WorkStructureStep): PathRow[] {
+  const rows = [
+    decisionRow(
+      "Too broad",
+      "This essay is too broad for the assignment.",
+      "You would need to tighten the topic boundary and thesis.",
+    ),
+    decisionRow(
+      "Too narrow",
+      "This essay is too narrow and limits analysis.",
+      "You would need to widen the frame before outlining.",
+    ),
+    decisionRow(
+      "Fits assignment framing",
+      "This essay fits the assignment, with a clear Argue/Analyze framing.",
+      step.whyNow || "The scope supports a clear claim with evidence-rich argument.",
+    ),
+    decisionRow(
+      "Lens mismatch",
+      "The lens does not match the course framing.",
+      "You would need to reframe the thesis or choose a better theoretical lens.",
+    ),
+    decisionRow(
+      "Missing concepts",
+      "The assignment expects more theory; add missing concepts.",
+      "You would need to add core concepts before the evidence pass.",
+    ),
+    decisionRow(
+      "Wrong essay type",
+      "The essay type should be compare/contrast, not argument.",
+      "You would need to restructure the outline and evidence.",
+    ),
+    decisionRow(
+      "Needs boundary",
+      "The scope needs a time or context boundary.",
+      "You would need to tighten scope and sources.",
+    ),
+    decisionRow(
+      "Not original enough",
+      "The claim is fine, but the angle is not original enough.",
+      "You would need to sharpen the angle and uniqueness.",
+    ),
+  ];
+
+  return rows.map((row, index) => ({
+    ...row,
+    id: `course-fit:${index}:${row.title}`,
+  }));
 }
 
 function workStepRows(step: WorkStructureStep | null | undefined): PathRow[] {
@@ -331,6 +407,79 @@ function ideaRow(title: string, firstReason: string, secondReason: string): Omit
   };
 }
 
+function decisionRow(title: string, option: string, downstream: string): Omit<PathRow, "id"> {
+  return {
+    title,
+    reasoning: [option, downstream],
+    summary: option,
+    tweaks: [downstream, option, "Next step updates from this option"],
+  };
+}
+
+function defaultDecisionIndex(rows: PathRow[], step: WorkStructureStep | null | undefined): number | null {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  if (isCourseFitStep(step)) {
+    return Math.min(2, rows.length - 1);
+  }
+
+  return 0;
+}
+
+function decisionQuestionForStep(step: WorkStructureStep | null | undefined, title: string, subtitle: string): string {
+  if (isCourseFitStep(step)) {
+    return "Does this essay fit the expectations and framing of the assignment?";
+  }
+
+  if (step?.purpose) {
+    return toQuestion(step.purpose);
+  }
+
+  return subtitle || title;
+}
+
+function optionLetter(index: number): string {
+  return String.fromCharCode("A".charCodeAt(0) + index);
+}
+
+function optionSentence(row: PathRow): string {
+  return row.summary || row.reasoning[0] || row.title;
+}
+
+function decisionReason(row: PathRow): string {
+  return row.reasoning.filter(Boolean).join(" ");
+}
+
+function downstreamImpact(row: PathRow): string {
+  return row.tweaks[0] ?? row.reasoning[1] ?? `The next step follows ${row.title}.`;
+}
+
+function isCourseFitStep(step: WorkStructureStep | null | undefined): boolean {
+  if (!step) {
+    return false;
+  }
+
+  const text = `${step.id} ${step.title} ${step.purpose}`.toLowerCase();
+
+  return text.includes("course fit") || text.includes("assignment_fit") || text.includes("assignment fit");
+}
+
+function toQuestion(value: string): string {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "What should Penny validate next?";
+  }
+
+  if (/[?!.]$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `${trimmed}?`;
+}
+
 function uniquePathRows(rows: PathRow[]): PathRow[] {
   const seen = new Set<string>();
   const unique: PathRow[] = [];
@@ -379,23 +528,6 @@ function shortcutIndex(key: string): number | null {
   }
 
   return null;
-}
-
-function shortcutLabel(index: number): string {
-  if (index === 9) {
-    return "0";
-  }
-
-  return String(index + 1);
-}
-
-function EmptyPathways() {
-  return (
-    <article className="pathway-empty">
-      <strong>No current pathways</strong>
-      <p>Awaiting session state.</p>
-    </article>
-  );
 }
 
 function formatStatus(value: string): string {
