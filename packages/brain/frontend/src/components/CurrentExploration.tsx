@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AutopilotSuggestion, BrainClaim, ExplorationPath, WorkStructureStep } from "../types/brain";
-import { truncateWords } from "../lib/text";
 
 interface CurrentExplorationProps {
   title: string;
@@ -28,10 +27,7 @@ export function CurrentExploration({
   subtitle,
   claims,
   paths,
-  autopilotSuggestion,
-  focusedClaim,
   activeWorkStructureStep,
-  onGoThere,
 }: CurrentExplorationProps) {
   const rows = useMemo(() => buildRows(claims, paths, activeWorkStructureStep), [claims, paths, activeWorkStructureStep]);
   const [selectedPathIndex, setSelectedPathIndex] = useState<number | null>(null);
@@ -91,23 +87,6 @@ export function CurrentExploration({
       <div className="exploration-headline">
         <strong title={subtitle ? `${title}: ${subtitle}` : title}>{title}</strong>
       </div>
-      {autopilotSuggestion ? (
-        <article className="autopilot-card">
-          <div>
-            <span>NEXT THINKING ACTION</span>
-            <strong title={autopilotSuggestion.label}>{truncateWords(autopilotSuggestion.label, 4)}</strong>
-            <p title={autopilotSuggestion.why}>{truncateWords(autopilotSuggestion.why, 18)}</p>
-            <p title={autopilotSuggestion.exitCriteria.label}>{truncateWords(autopilotSuggestion.exitCriteria.label, 16)}</p>
-            {autopilotSuggestion.exitCriteria.acceptedMoveKinds.length > 0 ? (
-              <small>{truncateWords(autopilotSuggestion.exitCriteria.acceptedMoveKinds.map(formatMoveKind).join(", "), 6)}</small>
-            ) : null}
-            {focusedClaim ? <em title={focusedClaim.text}>{truncateWords(focusedClaim.text, 16)}</em> : null}
-          </div>
-          <button type="button" onClick={onGoThere}>
-            {autopilotSuggestion.primaryActionLabel} <span aria-hidden="true">-&gt;</span>
-          </button>
-        </article>
-      ) : null}
       <div className="pathway-list" aria-label="Exploration pathways">
         {rows.length > 0 ? (
           rows.map((row, index) => (
@@ -417,10 +396,6 @@ function EmptyPathways() {
       <p>Awaiting session state.</p>
     </article>
   );
-}
-
-function formatMoveKind(value: string): string {
-  return value.replaceAll("_", " ");
 }
 
 function formatStatus(value: string): string {
