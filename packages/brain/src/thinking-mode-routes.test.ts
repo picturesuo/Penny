@@ -58,6 +58,7 @@ test("GET /api/brains/:brainId/autopilot/state covers invalid, empty, and seeded
           brainId: requestBrainId,
           sessionId: requestSessionId,
           focusState: focusState(requestSessionId, "autopilot_suggestion", false),
+          modeContract: modeContract("Check"),
           candidates: [candidate],
           selectedCandidate: candidate,
         };
@@ -845,6 +846,7 @@ function smokeRouteService(brainId: string, sessionId: string): ThinkingModeRout
         brainId,
         sessionId,
         focusState: currentFocusState,
+        modeContract: modeContract("Check"),
         candidates,
         selectedCandidate,
       };
@@ -867,6 +869,7 @@ function smokeRouteService(brainId: string, sessionId: string): ThinkingModeRout
         brainId,
         sessionId,
         focusState: currentFocusState,
+        modeContract: modeContract("Check"),
         candidates,
         selectedCandidate,
         graphHash: selectedCandidate.graphHash,
@@ -900,6 +903,7 @@ function smokeRouteService(brainId: string, sessionId: string): ThinkingModeRout
         brainId,
         sessionId,
         focusState: currentFocusState,
+        modeContract: modeContract("Check"),
         selectedCandidate: candidate,
         move,
       };
@@ -923,6 +927,7 @@ function smokeRouteService(brainId: string, sessionId: string): ThinkingModeRout
         brainId,
         sessionId,
         focusState: currentFocusState,
+        modeContract: modeContract("Check"),
         focusClaim: {
           id: input.claimId,
           versionId: uuidAt(702),
@@ -965,6 +970,7 @@ function stateResponse(brainId: string, sessionId: string) {
     brainId,
     sessionId,
     focusState: focusState(sessionId, "none", false),
+    modeContract: modeContract("Check"),
     candidates: [],
     selectedCandidate: null,
   };
@@ -978,6 +984,7 @@ function tickResponse(brainId: string, sessionId: string) {
     brainId,
     sessionId,
     focusState: focusState(sessionId, "autopilot_suggestion", false),
+    modeContract: modeContract("Check"),
     candidates: [candidate],
     selectedCandidate: candidate,
     graphHash: "graph_hash",
@@ -992,6 +999,7 @@ function startResponse(brainId: string, sessionId: string, candidateId: string) 
     brainId,
     sessionId,
     focusState: focusState(sessionId, "autopilot_started", false),
+    modeContract: modeContract("Check"),
     selectedCandidate: {
       ...candidateDto(sessionId),
       candidateId,
@@ -1006,6 +1014,7 @@ function manualResponse(brainId: string, sessionId: string, claimId: string) {
     brainId,
     sessionId,
     focusState: focusState(sessionId, "manual_selection", true),
+    modeContract: modeContract("Check"),
     focusClaim: {
       id: claimId,
       versionId: uuidAt(702),
@@ -1028,6 +1037,7 @@ function candidateDto(sessionId: string) {
     targetEdgeId: uuidAt(302),
     action: "challenge" as const,
     mode: "challenge" as const,
+    mvpMode: "Check" as const,
     score: 920,
     reason: "Challenge the load-bearing market assumption.",
     reasonCodes: ["load_bearing"],
@@ -1059,6 +1069,13 @@ function candidateDto(sessionId: string) {
     selected: true,
     selectedAt: "2026-04-29T00:00:09.000Z",
     sessionId,
+  };
+}
+
+function modeContract(activeMode: "Learn" | "Check" | "Brain") {
+  return {
+    validModes: ["Learn", "Check", "Brain"] as const,
+    activeMode,
   };
 }
 
