@@ -162,22 +162,10 @@ function DecisionCard({
       </section>
       <section className="decision-downstream" aria-label="Downstream changes">
         <h4>WHAT CHANGES DOWNSTREAM</h4>
-        <table>
-          <thead>
-            <tr>
-              <th>If you choose...</th>
-              <th>Then this changes...</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 6).map((row, index) => (
-              <tr key={`${row.id}-impact`}>
-                <td>{optionLetter(index)}</td>
-                <td>{downstreamImpact(row)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="decision-impact">
+          <span>If you choose Option {selectedLetter}</span>
+          <strong>{downstreamImpact(selectedRow)}</strong>
+        </div>
       </section>
       <div className="decision-actions">
         <button type="button" disabled={previousIndex === null} onClick={() => previousIndex !== null && onSelectOption(previousIndex)}>
