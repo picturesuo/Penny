@@ -336,6 +336,7 @@ interface RawSessionCockpitData {
     edges?: SessionCockpitData["ideaMap"]["edges"];
     keyInsight?: string | null;
   };
+  graphPath?: SessionCockpitData["graphPath"];
   workStructure?: SessionCockpitData["workStructure"];
   moves?: BrainMove[];
   autopilot: ThinkingModeStateData;
@@ -364,11 +365,27 @@ function normalizeCockpitData(data: RawSessionCockpitData): SessionCockpitData {
       edges: data.ideaMap.edges ?? [],
       ...(data.ideaMap.keyInsight !== undefined ? { keyInsight: data.ideaMap.keyInsight } : {}),
     },
+    graphPath: data.graphPath ?? emptyGraphPath(),
     workStructure: data.workStructure ?? null,
     moves: (data.moves ?? []).map(normalizeMove),
     autopilot: normalizeAutopilotState(data.autopilot),
     activeChallenge,
     latestArtifact: data.latestArtifact ?? null,
+  };
+}
+
+function emptyGraphPath(): SessionCockpitData["graphPath"] {
+  return {
+    layout: "top_down",
+    generatedFrom: "claims_edges_moves",
+    focusClaimId: null,
+    nodes: [],
+    edges: [],
+    meta: {
+      nodeCount: 0,
+      edgeCount: 0,
+      maxDepth: 0,
+    },
   };
 }
 

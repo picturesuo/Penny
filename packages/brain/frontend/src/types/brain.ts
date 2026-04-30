@@ -18,6 +18,46 @@ export interface BrainEdge {
   status?: string;
 }
 
+export interface BrainGraphPathNode {
+  id: string;
+  claimId: string;
+  label: string;
+  role: string;
+  kind: string;
+  status: ClaimStatus;
+  confidence: number;
+  depth: number;
+  lane: number;
+  rank: number;
+  moveCount: number;
+  edgeIds: string[];
+  selected: boolean;
+  suggested: boolean;
+}
+
+export interface BrainGraphPathEdge {
+  id: string;
+  edgeId: string;
+  fromNodeId: string;
+  toNodeId: string;
+  kind: string;
+  status: string;
+  label: string | null;
+}
+
+export interface BrainGraphPath {
+  layout: "top_down";
+  generatedFrom: "claims_edges_moves" | string;
+  focusClaimId: string | null;
+  nodes: BrainGraphPathNode[];
+  edges: BrainGraphPathEdge[];
+  meta: {
+    nodeCount: number;
+    edgeCount: number;
+    maxDepth: number;
+  };
+}
+
 export interface ExplorationPath {
   title: string;
   prompt?: string;
@@ -210,6 +250,7 @@ export interface BrainData {
     edges?: BrainEdge[];
     keyInsight?: string;
   };
+  graphPath?: BrainGraphPath;
   workStructure?: WorkStructure;
   source?: {
     kind?: string;
@@ -742,6 +783,7 @@ export interface SessionCockpitData {
     edges: BrainEdge[];
     keyInsight?: string | null;
   };
+  graphPath: BrainGraphPath;
   workStructure?: WorkStructure | null;
   moves: BrainMove[];
   autopilot: AutopilotTickData;
