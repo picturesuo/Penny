@@ -37,6 +37,17 @@ export function CurrentExploration({
   const [selectedPathIndex, setSelectedPathIndex] = useState<number | null>(null);
   const selectedPath = selectedPathIndex === null ? null : rows[selectedPathIndex] ?? null;
 
+  function focusComposer() {
+    const input = document.getElementById("rawIdea");
+
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+
+    input.scrollIntoView({ behavior: "smooth", block: "center" });
+    input.focus({ preventScroll: true });
+  }
+
   useEffect(() => {
     if (selectedPathIndex !== null && selectedPathIndex >= rows.length) {
       setSelectedPathIndex(rows.length > 0 ? rows.length - 1 : null);
@@ -114,7 +125,7 @@ export function CurrentExploration({
           <EmptyPathways />
         )}
       </div>
-      {selectedPath ? <PathPreview row={selectedPath} index={selectedPathIndex ?? 0} /> : <PathPreviewEmpty />}
+      {selectedPath ? <PathPreview row={selectedPath} index={selectedPathIndex ?? 0} onReturnToComposer={focusComposer} /> : <PathPreviewEmpty />}
     </section>
   );
 }
@@ -185,7 +196,15 @@ function PathwayRow({
   );
 }
 
-function PathPreview({ row, index }: { row: PathRow; index: number }) {
+function PathPreview({
+  row,
+  index,
+  onReturnToComposer,
+}: {
+  row: PathRow;
+  index: number;
+  onReturnToComposer: () => void;
+}) {
   return (
     <article className="path-preview" aria-label="Selected exploration preview">
       <div>
@@ -198,6 +217,9 @@ function PathPreview({ row, index }: { row: PathRow; index: number }) {
           <li key={tweak}>{tweak}</li>
         ))}
       </ul>
+      <button type="button" className="path-preview-return" onClick={onReturnToComposer}>
+        Ask about this <span aria-hidden="true">-&gt;</span>
+      </button>
     </article>
   );
 }
@@ -205,7 +227,7 @@ function PathPreview({ row, index }: { row: PathRow; index: number }) {
 function PathPreviewEmpty() {
   return (
     <article className="path-preview is-empty" aria-label="Exploration preview">
-      <span>Press 1-9</span>
+      <span>Press 1-9 or 0</span>
       <p>Preview a path outcome, then decide which parts to tweak before exploring.</p>
     </article>
   );
