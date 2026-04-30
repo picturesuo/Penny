@@ -310,6 +310,7 @@ export function App() {
     }
 
     await handleManualClaimSelect(claimId);
+    setFocusedWorkStructureStepId(step.id);
   }
 
   async function refreshCockpit(sessionId: string, fallbackData: BrainData | null = data): Promise<SessionCockpitData> {
