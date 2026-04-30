@@ -201,7 +201,7 @@
 
   .insight-rail {
     display: grid;
-    grid-template-rows: minmax(240px, 1fr) minmax(220px, 1fr);
+    grid-template-rows: minmax(176px, 0.58fr) minmax(360px, 1.42fr);
     align-content: start;
     overflow: hidden;
     padding: 21px 0 0 22px;
@@ -610,9 +610,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
     border-bottom: 1px solid #111111;
-    padding-bottom: 8px;
+    padding-bottom: 5px;
   }
 
   .decision-kicker span {
@@ -624,8 +624,8 @@
 
   .decision-hero {
     display: grid;
-    gap: 6px;
-    margin-top: 14px;
+    gap: 4px;
+    margin-top: 8px;
   }
 
   .decision-hero p,
@@ -636,8 +636,8 @@
   }
 
   .decision-hero p {
-    font-size: 13px;
-    line-height: 1.22;
+    font-size: 12px;
+    line-height: 1.16;
   }
 
   .decision-hero h1 {
@@ -646,24 +646,24 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     line-clamp: 2;
-    font-size: clamp(22px, 2vw, 26px);
+    font-size: clamp(18px, 1.65vw, 22px);
     font-weight: 700;
-    line-height: 1.05;
+    line-height: 1.03;
   }
 
   .decision-card {
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
-    gap: 13px;
-    margin-top: 16px;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    gap: 8px;
+    margin-top: 10px;
     min-height: 0;
     overflow: hidden;
     border: 1px solid #d3d3d3;
     border-radius: 4px;
-    padding: 14px 18px 16px;
+    padding: 12px 18px 12px;
     background: rgb(255 255 255 / 0.46);
-    font-size: 13px;
-    line-height: 1.28;
+    font-size: 12px;
+    line-height: 1.2;
   }
 
   .decision-card h3,
@@ -683,48 +683,57 @@
 
   .decision-chosen {
     display: grid;
-    gap: 8px;
+    gap: 4px;
     min-width: 0;
   }
 
   .decision-chosen > p:first-child {
-    font-size: 13px;
-    line-height: 1.16;
+    font-size: 12px;
+    line-height: 1.12;
+  }
+
+  .decision-lower-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.66fr);
+    gap: 10px;
+    align-items: start;
+    min-width: 0;
   }
 
   .decision-better-option {
     display: grid;
-    gap: 7px;
-    margin-top: 2px;
+    gap: 5px;
+    min-width: 0;
+    margin-top: 0;
   }
 
   .decision-better-option textarea {
     width: 100%;
-    min-height: 42px;
+    min-height: 36px;
     resize: vertical;
     border: 1px solid #d0d0d0;
     border-radius: 4px;
-    padding: 9px 10px;
+    padding: 7px 9px;
     background: rgb(255 255 255 / 0.7);
     color: #111111;
     font: inherit;
-    font-size: 13px;
-    line-height: 1.24;
+    font-size: 12px;
+    line-height: 1.18;
   }
 
   .decision-alternatives {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
-    gap: 8px;
+    gap: 5px;
     min-height: 0;
     overflow: hidden;
     border-top: 1px solid #d7d7d7;
-    padding-top: 12px;
+    padding-top: 8px;
   }
 
   .decision-alternatives > div {
     display: grid;
-    gap: 1px;
+    gap: 0;
     min-height: 0;
     overflow: auto;
     padding-right: 4px;
@@ -733,13 +742,13 @@
 
   .decision-option {
     display: grid;
-    grid-template-columns: 18px 24px minmax(0, 1fr);
+    grid-template-columns: 15px 20px minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
-    min-height: 27px;
+    gap: 7px;
+    min-height: 23px;
     border: 0;
     border-radius: 4px;
-    padding: 4px 7px;
+    padding: 2px 6px;
     background: transparent;
     color: #111111;
     text-align: left;
@@ -751,18 +760,18 @@
 
   .decision-radio {
     display: block;
-    width: 13px;
-    height: 13px;
+    width: 11px;
+    height: 11px;
     border: 2px solid rgb(17 17 17 / 0.38);
     border-radius: 999px;
   }
 
   .decision-option.is-selected .decision-radio {
-    border: 4px solid #111111;
+    border: 3px solid #111111;
   }
 
   .decision-option strong {
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1;
   }
 
@@ -771,26 +780,27 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
-    line-height: 1.16;
+    font-size: 12px;
+    line-height: 1.08;
   }
 
   .decision-downstream {
     display: grid;
-    gap: 8px;
+    gap: 5px;
+    min-width: 0;
+    align-content: start;
     overflow: hidden;
   }
 
   .decision-impact {
     display: grid;
-    grid-template-columns: 128px minmax(0, 1fr);
-    gap: 10px;
-    align-items: center;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
     border-top: 1px solid #d8d8d8;
     border-bottom: 1px solid #d8d8d8;
     padding: 7px 8px;
     font-size: 12px;
-    line-height: 1.18;
+    line-height: 1.12;
   }
 
   .decision-impact span,
@@ -814,14 +824,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
   }
 
   .decision-actions button {
     min-width: 0;
     border: 1px solid #d4d4d4;
     border-radius: 4px;
-    padding: 10px 14px;
+    padding: 8px 12px;
     background: rgb(255 255 255 / 0.58);
     color: #111111;
     font-size: 12px;
@@ -905,12 +915,12 @@
   .penny-insight {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
-    gap: 9px;
+    gap: 10px;
     min-height: 0;
     height: 100%;
     overflow: hidden;
     border-top: 1px solid #c0c0c0;
-    padding: 14px 18px 12px 0;
+    padding: 12px 18px 12px 0;
   }
 
   .penny-insight-head {
@@ -962,10 +972,10 @@
   .penny-insight-canvas {
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto auto auto;
-    gap: 8px;
+    gap: 9px;
     min-width: 0;
     min-height: 0;
-    padding: 12px;
+    padding: 14px;
     overflow: hidden;
     border-right: 1px solid #d0d0d0;
     outline: 1px dashed rgb(17 17 17 / 0.18);
@@ -1019,10 +1029,10 @@
     display: grid;
     place-items: center;
     align-content: center;
-    gap: 8px;
+    gap: 10px;
     min-width: 0;
     min-height: 0;
-    padding: 14px;
+    padding: 18px;
     text-align: center;
   }
 
@@ -1033,17 +1043,23 @@
     color: #111111;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
-    line-height: 1.08;
+    font-size: 15px;
+    line-height: 1.1;
   }
 
   .penny-insight-empty p,
   .penny-insight-ready p {
-    max-width: 190px;
+    max-width: 240px;
     margin: 0;
     color: rgb(17 17 17 / 0.72);
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.24;
+  }
+
+  .penny-insight-empty svg,
+  .penny-insight-ready svg {
+    width: 30px;
+    height: 30px;
   }
 
   .penny-insight-ready span {
@@ -1411,7 +1427,7 @@
     min-height: 0;
     height: 100%;
     border-bottom: 1px solid #c0c0c0;
-    padding: 0 18px 14px 0;
+    padding: 0 18px 10px 0;
     overflow: hidden;
   }
 
@@ -1423,12 +1439,12 @@
   .makes-cents-terminal {
     display: grid;
     align-content: start;
-    gap: 7px;
+    gap: 4px;
     min-height: 0;
     height: 100%;
     border: 1px solid #111111;
     border-radius: 4px;
-    padding: 12px;
+    padding: 10px;
     overflow: hidden;
     background: var(--penny-highlight);
     color: #111111;
@@ -1438,14 +1454,14 @@
   .terminal-line {
     display: grid;
     grid-template-columns: 58px minmax(0, 1fr);
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
     margin: 0;
     border-bottom: 1px dotted rgb(17 17 17 / 0.44);
-    padding: 8px 6px 11px;
+    padding: 6px 5px 8px;
     overflow: hidden;
-    font-size: 12px;
-    line-height: 1.3;
+    font-size: 11px;
+    line-height: 1.22;
   }
 
   .terminal-line:last-child {
@@ -1510,7 +1526,7 @@
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) 52px;
     align-items: center;
-    margin-top: 12px;
+    margin-top: 8px;
     border: 1px solid #111111;
     border-radius: 4px;
     overflow: hidden;
@@ -1528,7 +1544,7 @@
   .makes-cents-form input {
     min-width: 0;
     border: 0;
-    padding: 10px 8px;
+    padding: 8px 8px;
     outline: 0;
     background: #ffffff;
     font-size: 12px;
@@ -2153,6 +2169,10 @@
   .decision-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .decision-lower-grid {
+    grid-template-columns: 1fr;
   }
 
   .decision-actions button {
