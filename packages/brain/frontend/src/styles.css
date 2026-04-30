@@ -660,121 +660,22 @@
   }
 
   .exploration-headline {
-    margin-top: 13px;
+    margin: 10px 0 8px;
   }
 
-  .exploration-headline h1 {
-    margin: 0;
+  .exploration-headline strong {
+    display: block;
     max-width: 100%;
-    overflow-wrap: anywhere;
-    display: block;
-    font-size: clamp(30px, 3vw, 34px);
-    font-weight: 700;
-    line-height: 1.08;
-  }
-
-  .exploration-headline p {
-    margin: 6px 0 9px;
-    display: block;
-    overflow-wrap: anywhere;
-    font-size: 20px;
-    line-height: 1.1;
-  }
-
-  .work-step-detail {
-    display: grid;
-    gap: 7px;
-    border-top: 1px solid #111111;
-    padding: 9px 0 10px;
-    font-size: 12px;
-    line-height: 1.16;
-  }
-
-  .work-step-detail-head,
-  .work-step-metrics,
-  .work-step-choices {
-    display: grid;
-    min-width: 0;
-  }
-
-  .work-step-detail-head {
-    grid-template-columns: 38px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .work-step-detail-head span,
-  .work-step-detail-head small,
-  .work-step-metrics span {
-    color: rgb(17 17 17 / 0.62);
-    font-size: 11px;
-    line-height: 1;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  .work-step-detail-head strong,
-  .work-step-detail p,
-  .work-step-detail em,
-  .work-step-choices strong,
-  .work-step-choices span {
-    min-width: 0;
     margin: 0;
     overflow: hidden;
     overflow-wrap: anywhere;
-  }
-
-  .work-step-detail-head strong {
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .work-step-detail p,
-  .work-step-detail em {
     display: -webkit-box;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
-  }
-
-  .work-step-detail em {
-    color: rgb(17 17 17 / 0.62);
-    font-style: normal;
-  }
-
-  .work-step-metrics {
-    grid-template-columns: repeat(2, max-content);
-    gap: 12px;
-  }
-
-  .work-step-choices {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .work-step-choices article {
-    min-width: 0;
-    border-top: 1px solid #d7d7d7;
-    padding-top: 6px;
-  }
-
-  .work-step-choices strong,
-  .work-step-choices span {
-    display: block;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .work-step-choices strong {
-    font-size: 12px;
-    line-height: 1;
-  }
-
-  .work-step-choices span {
-    margin-top: 4px;
-    color: rgb(17 17 17 / 0.7);
-    font-size: 11px;
-    line-height: 1;
+    line-clamp: 2;
+    font-size: clamp(20px, 2vw, 26px);
+    font-weight: 700;
+    line-height: 1.08;
   }
 
   .pathway-list {
