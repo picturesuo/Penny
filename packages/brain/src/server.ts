@@ -10,6 +10,12 @@ import { handleArtifactRequest, handleSessionArtifactRequest } from "./artifact-
 import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
 import { handleAutopilotTickRequest, handleManualNodeSelectedRequest } from "./autopilot-route.ts";
 import { handleBrainDocumentsRequest } from "./brain-documents-route.ts";
+import {
+  handleBrainObjectsRequest,
+  handleBrainRecentsRequest,
+  handleSaveBrainObjectRequest,
+  handleSessionNotesRequest,
+} from "./brain-objects-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
 import { handleChallengeBriefRequest } from "./routes/challenge-brief-routes.ts";
@@ -96,6 +102,21 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/brain/documents") {
       await writeWebResponse(outgoing, await handleBrainDocumentsRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/objects") {
+      await writeWebResponse(outgoing, await handleBrainObjectsRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/objects/save") {
+      await writeWebResponse(outgoing, await handleSaveBrainObjectRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/recents") {
+      await writeWebResponse(outgoing, await handleBrainRecentsRequest(request));
       return;
     }
 
@@ -249,6 +270,20 @@ export function createPennyServer(): ReturnType<typeof createServer> {
       }
 
       await writeWebResponse(outgoing, await handleSessionCockpitRequest(request, decodeURIComponent(sessionId)));
+      return;
+    }
+
+    const sessionNotesMatch = /^\/api\/sessions\/([^/]+)\/notes$/.exec(url.pathname);
+
+    if (sessionNotesMatch) {
+      const sessionId = sessionNotesMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(outgoing, invalidPathResponse("invalid_session_id", "Session notes require a session id."));
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleSessionNotesRequest(request, decodeURIComponent(sessionId)));
       return;
     }
 
