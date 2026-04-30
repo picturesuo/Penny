@@ -588,7 +588,7 @@ function rankWorkStructureStep(
   const dependencyWeight = claims.reduce((total, claim) => total + claimDependencyWeight(claim, context.graph.ideaMap.edges), 0);
   const importance = clampScore(definition.baseImportance + dependencyWeight + edgeIds.length * 4 + (active ? 18 : 0));
   const status = workStructureStepStatus(active, fragility, claims, context.graph.moves);
-  const score = fragility * 4 + importance * 2 - order * 5;
+  const score = fragility * 4 + importance * 2 + (active ? 180 : 0) - order * 5;
 
   return {
     id: definition.id,
