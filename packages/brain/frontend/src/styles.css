@@ -618,8 +618,8 @@
 
   .decision-hero {
     display: grid;
-    gap: 8px;
-    margin-top: 18px;
+    gap: 6px;
+    margin-top: 14px;
   }
 
   .decision-hero p,
@@ -637,24 +637,24 @@
   .decision-hero h1 {
     display: -webkit-box;
     overflow: hidden;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
-    line-clamp: 3;
-    font-size: clamp(30px, 4vw, 48px);
+    line-clamp: 2;
+    font-size: clamp(30px, 3.6vw, 44px);
     font-weight: 700;
     line-height: 1.02;
   }
 
   .decision-card {
     display: grid;
-    gap: 18px;
-    margin-top: 22px;
+    gap: 13px;
+    margin-top: 16px;
     border: 1px solid #d3d3d3;
     border-radius: 4px;
-    padding: 16px 18px 18px;
+    padding: 14px 18px 16px;
     background: rgb(255 255 255 / 0.46);
     font-size: 13px;
-    line-height: 1.34;
+    line-height: 1.28;
   }
 
   .decision-card h3,
@@ -674,7 +674,7 @@
 
   .decision-chosen {
     display: grid;
-    gap: 11px;
+    gap: 8px;
     min-width: 0;
   }
 
@@ -691,7 +691,7 @@
 
   .decision-better-option textarea {
     width: 100%;
-    min-height: 54px;
+    min-height: 42px;
     resize: vertical;
     border: 1px solid #d0d0d0;
     border-radius: 4px;
@@ -705,9 +705,9 @@
 
   .decision-alternatives {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     border-top: 1px solid #d7d7d7;
-    padding-top: 16px;
+    padding-top: 12px;
   }
 
   .decision-alternatives > div {
@@ -720,7 +720,7 @@
     grid-template-columns: 18px 24px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
-    min-height: 30px;
+    min-height: 27px;
     border: 0;
     border-radius: 4px;
     padding: 4px 7px;
@@ -761,30 +761,37 @@
 
   .decision-downstream {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     overflow: hidden;
   }
 
-  .decision-downstream table {
-    width: min(100%, 540px);
-    border-collapse: collapse;
-    table-layout: fixed;
-    font-size: 11px;
-    line-height: 1.25;
-  }
-
-  .decision-downstream th,
-  .decision-downstream td {
+  .decision-impact {
+    display: grid;
+    grid-template-columns: 128px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    border-top: 1px solid #d8d8d8;
     border-bottom: 1px solid #d8d8d8;
-    padding: 6px 8px;
-    text-align: left;
-    vertical-align: top;
+    padding: 7px 8px;
+    font-size: 12px;
+    line-height: 1.18;
   }
 
-  .decision-downstream th:first-child,
-  .decision-downstream td:first-child {
-    width: 120px;
-    border-right: 1px solid #d8d8d8;
+  .decision-impact span,
+  .decision-impact strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .decision-impact span {
+    color: rgb(17 17 17 / 0.62);
+    font-weight: 700;
+  }
+
+  .decision-impact strong {
+    font-weight: 400;
   }
 
   .decision-actions {
