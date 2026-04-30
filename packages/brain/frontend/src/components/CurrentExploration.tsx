@@ -35,9 +35,10 @@ export function CurrentExploration({
   const defaultPathIndex = defaultDecisionIndex(rows, activeWorkStructureStep);
   const selectedDecisionIndex = selectedPathIndex ?? defaultPathIndex;
   const selectedPath = selectedDecisionIndex === null ? null : rows[selectedDecisionIndex] ?? null;
-  const decisionLabel = activeWorkStructureStep?.title ?? "Current idea";
+  const decisionLabel = decisionLabelForStep(activeWorkStructureStep);
   const decisionQuestion = decisionQuestionForStep(activeWorkStructureStep, title, subtitle);
-  const stepCountLabel = activeWorkStructureStep?.rank ? `Step ${Math.min(activeWorkStructureStep.rank, 7)} of 7` : `${rows.length} options`;
+  const stepNumber = decisionStepNumberForStep(activeWorkStructureStep);
+  const stepCountLabel = stepNumber ? `Step ${stepNumber} of 7` : `${rows.length} options`;
 
   useEffect(() => {
     if (selectedPathIndex !== null && selectedPathIndex >= rows.length) {
@@ -440,6 +441,56 @@ function decisionQuestionForStep(step: WorkStructureStep | null | undefined, tit
   return subtitle || title;
 }
 
+function decisionLabelForStep(step: WorkStructureStep | null | undefined): string {
+  if (!step) {
+    return "Current idea";
+  }
+
+  if (isCourseFitStep(step)) {
+    return "Course Fit";
+  }
+
+  return step.title;
+}
+
+function decisionStepNumberForStep(step: WorkStructureStep | null | undefined): number | null {
+  if (!step) {
+    return null;
+  }
+
+  const text = `${step.id} ${step.title} ${step.purpose}`.toLowerCase();
+
+  if (hasAny(text, ["bound_topic", "topic boundary", "bound the topic"])) {
+    return 1;
+  }
+
+  if (hasAny(text, ["working_thesis", "working thesis", "thesis candidate"])) {
+    return 2;
+  }
+
+  if (isCourseFitStep(step)) {
+    return 3;
+  }
+
+  if (hasAny(text, ["specific_evidence", "evidence bucket", "evidence path", "find specific evidence"])) {
+    return 4;
+  }
+
+  if (hasAny(text, ["counterargument", "objection"])) {
+    return 5;
+  }
+
+  if (hasAny(text, ["essay_outline", "outline"])) {
+    return 6;
+  }
+
+  if (hasAny(text, ["pressure_test", "missing", "weak link", "to do later"])) {
+    return 7;
+  }
+
+  return Math.min(Math.max(step.rank, 1), 7);
+}
+
 function optionLetter(index: number): string {
   return String.fromCharCode("A".charCodeAt(0) + index);
 }
@@ -464,6 +515,10 @@ function isCourseFitStep(step: WorkStructureStep | null | undefined): boolean {
   const text = `${step.id} ${step.title} ${step.purpose}`.toLowerCase();
 
   return text.includes("course fit") || text.includes("assignment_fit") || text.includes("assignment fit");
+}
+
+function hasAny(value: string, terms: string[]): boolean {
+  return terms.some((term) => value.includes(term));
 }
 
 function toQuestion(value: string): string {
