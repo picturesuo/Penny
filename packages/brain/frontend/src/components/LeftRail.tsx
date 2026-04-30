@@ -115,16 +115,7 @@ export function LeftRail({
 
   return (
     <aside className="left-rail" aria-label="Structure map">
-      <Section
-        title="STRUCTURE"
-        className="structure-map-section"
-        action={
-          <span className="structure-type-select" aria-label={`Current structure type: ${formatStructureType(structureType)}`}>
-            {formatStructureType(structureType)}
-            <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" />
-          </span>
-        }
-      >
+      <Section title="STRUCTURE" className="structure-map-section">
         <p className="structure-helper">A full type-specific structure, always visible.</p>
         <div className="structure-box-list" role="tree" aria-label={`${formatStructureType(structureType)} structure`}>
           {boxes.map((box, index) => (
