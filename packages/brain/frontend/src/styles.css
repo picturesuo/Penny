@@ -200,7 +200,7 @@
 
   .insight-rail {
     display: grid;
-    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: minmax(240px, 1fr) minmax(220px, 1fr);
     align-content: start;
     overflow: hidden;
     padding: 21px 0 0 22px;
@@ -1407,7 +1407,7 @@
   .makes-cents-terminal {
     display: grid;
     align-content: start;
-    gap: 9px;
+    gap: 7px;
     min-height: 0;
     height: 100%;
     border: 1px solid #111111;
@@ -1426,7 +1426,7 @@
     min-width: 0;
     margin: 0;
     border-bottom: 1px dotted rgb(17 17 17 / 0.44);
-    padding: 10px 6px 14px;
+    padding: 8px 6px 11px;
     overflow: hidden;
     font-size: 12px;
     line-height: 1.3;
