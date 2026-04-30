@@ -208,6 +208,131 @@ export interface BrainMove {
   createdAt?: string;
 }
 
+export interface ClaimDetailClaim extends BrainClaim {
+  scope?: BrainScope;
+  versionId?: string;
+  sessionId?: string;
+  sourceId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ClaimDetailVersion {
+  id: string;
+  claimId: string;
+  sourceId: string | null;
+  brainRunId: string | null;
+  moveId: string | null;
+  content: string;
+  status: ClaimStatus;
+  confidence: number;
+  state: "current" | "old" | string;
+  isCurrent: boolean;
+  validFrom: string;
+  validUntil: string | null;
+  supersededByVersionId: string | null;
+  createdAt: string;
+}
+
+export interface ClaimDetailEdge {
+  id: string;
+  fromClaimId: string;
+  toClaimId: string;
+  kind: string;
+  status: string;
+  label: string | null;
+  createdAt: string;
+}
+
+export interface ClaimDetailMove extends BrainMove {
+  kind: string;
+  claimIds: string[];
+  edgeIds: string[];
+  artifactIds: string[];
+  payload?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ClaimDetailSource {
+  id: string;
+  sessionId: string;
+  kind: string;
+  rawText: string;
+  createdAt: string;
+}
+
+export interface ClaimDetailSourceSpan {
+  id: string;
+  sourceId: string;
+  claimId: string | null;
+  claimVersionId: string | null;
+  startOffset: number;
+  endOffset: number;
+  label: string | null;
+  text: string;
+  createdAt: string;
+}
+
+export interface ClaimDetailArtifactReference {
+  id: string;
+  kind: string;
+  title: string;
+  summary: string;
+  referenceReasons: string[];
+  createdAt: string;
+}
+
+export interface ClaimDetailConnection {
+  edge: ClaimDetailEdge;
+  direction: "incoming" | "outgoing";
+  claim: ClaimDetailClaim;
+}
+
+export interface ClaimDetailActiveChallenge {
+  edge: ClaimDetailEdge;
+  targetClaim: ClaimDetailClaim | null;
+  critiqueClaim: ClaimDetailClaim | null;
+  responseState: string;
+  moves: ClaimDetailMove[];
+}
+
+export interface ClaimDetailLearnedConcept {
+  edge: ClaimDetailEdge;
+  conceptClaim: ClaimDetailClaim;
+  attachedClaim: ClaimDetailClaim;
+}
+
+export interface ClaimDetailData {
+  claim: ClaimDetailClaim;
+  currentVersion: ClaimDetailVersion;
+  oldVersions: ClaimDetailVersion[];
+  versions: ClaimDetailVersion[];
+  confidenceHistory: Array<{
+    versionId: string;
+    confidence: number;
+    status: ClaimStatus;
+    state: string;
+    validFrom: string;
+    validUntil: string | null;
+    supersededByVersionId: string | null;
+    createdAt: string;
+  }>;
+  moves: ClaimDetailMove[];
+  provenance: {
+    source: ClaimDetailSource | null;
+    sources: ClaimDetailSource[];
+    spans: ClaimDetailSourceSpan[];
+  };
+  artifactReferences: ClaimDetailArtifactReference[];
+  connectedClaims: ClaimDetailConnection[];
+  activeChallenges: ClaimDetailActiveChallenge[];
+  learnedConcepts: ClaimDetailLearnedConcept[];
+}
+
+export interface ClaimDetailResponse {
+  data: ClaimDetailData;
+}
+
 export interface AutopilotSuggestion {
   id?: string;
   candidateId: string;
