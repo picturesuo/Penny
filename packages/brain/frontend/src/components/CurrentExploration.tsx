@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { truncateWords } from "../lib/text";
 import type { AutopilotSuggestion, BrainClaim, ExplorationPath, WorkStructureStep } from "../types/brain";
 
 interface CurrentExplorationProps {
@@ -141,7 +140,7 @@ function DecisionCard({
       </section>
       <section className="decision-chosen" aria-label="Why Penny chose this option">
         <h4>WHY PENNY CHOSE IT</h4>
-        <p title={selectedReason}>{shortDecisionReason(selectedRow)}</p>
+        <p>{selectedReason}</p>
       </section>
       <section className="decision-alternatives" aria-label="Alternative options">
         <h4>ALTERNATIVE OPTIONS</h4>
@@ -484,10 +483,6 @@ function optionSentence(row: PathRow): string {
 
 function decisionReason(row: PathRow): string {
   return row.reasoning.filter(Boolean).join(" ");
-}
-
-function shortDecisionReason(row: PathRow): string {
-  return truncateWords(decisionReason(row), 24);
 }
 
 function isCourseFitStep(step: WorkStructureStep | null | undefined): boolean {
