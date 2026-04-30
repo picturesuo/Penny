@@ -28,6 +28,8 @@ type StructureChildTemplate = {
 
 type StructureChild = {
   id: string;
+  aspectId: string;
+  label: string;
   title: string;
   description: string;
   status: WorkStructureStepStatus;
@@ -37,6 +39,7 @@ type StructureChild = {
 
 type StructureBox = {
   id: string;
+  label: string;
   title: string;
   description: string;
   status: WorkStructureStepStatus;
@@ -95,11 +98,10 @@ export function LeftRail({
           <QuickSelectKey />
         </div>
         <div className="structure-box-list" role="tree" aria-label={`${formatStructureType(structureType)} structure`}>
-          {boxes.map((box, index) => (
+          {boxes.map((box) => (
             <StructureBoxRow
               key={box.id}
               box={box}
-              index={index}
               open={box.id === openBoxId}
               onSelect={() => handleBoxSelect(box)}
               onChildSelect={handleChildSelect}
@@ -135,23 +137,19 @@ function QuickSelectKey() {
 
 function StructureBoxRow({
   box,
-  index,
   open,
   onSelect,
   onChildSelect,
 }: {
   box: StructureBox;
-  index: number;
   open: boolean;
   onSelect: () => void;
   onChildSelect: (child: StructureChild) => void;
 }) {
-  const label = String(index + 1);
-
   return (
     <article className={`structure-box is-${box.status}${open ? " is-open" : ""}`} role="treeitem" aria-expanded={open}>
       <button type="button" className="structure-box-main" onClick={onSelect}>
-        <span className="structure-box-index" aria-hidden="true">{label}</span>
+        <span className="structure-box-index" aria-hidden="true">{box.label}</span>
         <span className="structure-box-copy">
           <strong title={box.title}>{box.title}</strong>
           <small title={box.description}>{box.description}</small>
@@ -161,17 +159,16 @@ function StructureBoxRow({
       {open ? (
         <div className="structure-subgroup" role="group">
           {box.children.length > 0 ? (
-            box.children.map((child, childIndex) => (
+            box.children.map((child) => (
               <StructureChildRow
                 key={child.id}
                 child={child}
-                label={`${label}.${childIndex + 1}`}
                 onSelect={() => onChildSelect(child)}
               />
             ))
           ) : (
             <div className="structure-child is-empty">
-              <span className="structure-child-index">{label}.1</span>
+              <span className="structure-child-index" aria-hidden="true" />
               <span className="structure-child-copy">
                 <strong>No subgroup yet</strong>
                 <small>This section is visible but has not been filled.</small>
@@ -187,11 +184,9 @@ function StructureBoxRow({
 
 function StructureChildRow({
   child,
-  label,
   onSelect,
 }: {
   child: StructureChild;
-  label: string;
   onSelect: () => void;
 }) {
   const interactive = Boolean(child.step || child.claimId);
@@ -203,7 +198,7 @@ function StructureChildRow({
       disabled={!interactive}
       onClick={interactive ? onSelect : undefined}
     >
-      <span className="structure-child-index">{label}</span>
+      <span className="structure-child-index">{child.label}</span>
       <span className="structure-child-copy">
         <strong title={child.title}>{child.title}</strong>
         <small title={child.description}>{child.description}</small>
@@ -268,7 +263,7 @@ function buildStructureBoxes(
     claimsById,
   );
 
-  return [...boxes, ...extraBoxes, laterBox];
+  return labelStructureBoxes([...boxes, ...extraBoxes, laterBox]);
 }
 
 function structureBoxFromDefinition(
@@ -280,6 +275,8 @@ function structureBoxFromDefinition(
   const stepChildren = steps.flatMap((step) => childrenFromStep(step, claimsById));
   const templateChildren = (definition.children ?? []).map((child, index) => ({
     id: `template:${definition.id}:${child.id}`,
+    aspectId: child.id,
+    label: "",
     title: child.title,
     description: child.description,
     status: templateChildStatus(status, index),
@@ -288,6 +285,7 @@ function structureBoxFromDefinition(
 
   return {
     id: definition.id,
+    label: "",
     title: definition.title,
     description: steps[0]?.purpose ?? definition.description,
     status,
@@ -302,6 +300,8 @@ function childrenFromStep(
 ): StructureChild[] {
   const detailChildren = step.detailChoices.map((choice, index) => ({
     id: `choice:${step.id}:${choice.id}`,
+    aspectId: choice.id,
+    label: "",
     title: cleanChoiceLabel(choice.label),
     description: choice.description,
     status: childStatusFromParent(step.status, index),
@@ -314,6 +314,8 @@ function childrenFromStep(
       ? [
           {
             id: `claim:${step.id}:${claim.id}`,
+            aspectId: claimAspectId(step, claim),
+            label: "",
             title: formatClaimTitle(claim.kind),
             description: claim.text,
             status: step.status,
@@ -330,6 +332,8 @@ function childrenFromStep(
   return [
     {
       id: `step:${step.id}:purpose`,
+      aspectId: step.id,
+      label: "",
       title: step.title,
       description: step.whyNow || step.purpose,
       status: step.status,
@@ -344,7 +348,7 @@ function uniqueChildren(children: StructureChild[]): StructureChild[] {
   const unique: StructureChild[] = [];
 
   for (const child of children) {
-    const key = child.title.trim().toLowerCase();
+    const key = child.aspectId.trim().toLowerCase();
 
     if (!key || seen.has(key)) {
       continue;
@@ -355,6 +359,40 @@ function uniqueChildren(children: StructureChild[]): StructureChild[] {
   }
 
   return unique.slice(0, 6);
+}
+
+function labelStructureBoxes(boxes: StructureBox[]): StructureBox[] {
+  return boxes.map((box, index) => {
+    const boxLabel = String(index + 1);
+    const aspectNumbers = new Map<string, number>();
+    let nextAspectNumber = 1;
+
+    const children = box.children.map((child) => {
+      const aspectKey = child.aspectId.trim().toLowerCase();
+      const aspectNumber = aspectNumbers.get(aspectKey) ?? nextAspectNumber++;
+
+      aspectNumbers.set(aspectKey, aspectNumber);
+
+      return {
+        ...child,
+        label: `${boxLabel}.${aspectNumber}`,
+      };
+    });
+
+    return {
+      ...box,
+      label: boxLabel,
+      children,
+    };
+  });
+}
+
+function claimAspectId(step: WorkStructureStep, claim: BrainClaim): string {
+  if (step.id === "working_thesis") {
+    return "claim";
+  }
+
+  return `claim:${claim.kind}`;
 }
 
 function preferredStructureBoxId(
