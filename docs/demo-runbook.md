@@ -65,30 +65,30 @@ This script creates a seed session, recomputes next moves, starts focus, records
 Optional mutating API smoke after seeding:
 
 ```bash
-curl -sS "$BASE_URL/api/brains/$DEMO_BRAIN_ID/autopilot/state?sessionId=$DEMO_SESSION_ID" \
+curl -sS "$BASE_URL/api/sessions/$DEMO_SESSION_ID/autopilot/state" \
   | tee /tmp/penny-demo-state-before.json
 
-curl -sS -X POST "$BASE_URL/api/brains/$DEMO_BRAIN_ID/autopilot/tick" \
+curl -sS -X POST "$BASE_URL/api/sessions/$DEMO_SESSION_ID/autopilot/tick" \
   -H "content-type: application/json" \
-  -d "{\"sessionId\":\"$DEMO_SESSION_ID\",\"limit\":3}" \
+  -d "{\"limit\":3}" \
   | tee /tmp/penny-demo-tick.json
 
 export DEMO_CANDIDATE_ID="$(
   node -e 'const fs=require("fs"); console.log(JSON.parse(fs.readFileSync("/tmp/penny-demo-tick.json","utf8")).data.selectedCandidate.candidateId)'
 )"
 
-curl -sS -X POST "$BASE_URL/api/next-move-candidates/$DEMO_CANDIDATE_ID/start" \
+curl -sS -X POST "$BASE_URL/api/sessions/$DEMO_SESSION_ID/next-move-candidates/$DEMO_CANDIDATE_ID/start" \
   -H "content-type: application/json" \
-  -d "{\"brainId\":\"$DEMO_BRAIN_ID\",\"sessionId\":\"$DEMO_SESSION_ID\"}" \
+  -d "{}" \
   | tee /tmp/penny-demo-start.json
 
 export DEMO_MANUAL_CLAIM_ID="$(
   node -e 'const fs=require("fs"); console.log(JSON.parse(fs.readFileSync("/tmp/penny-demo-tick.json","utf8")).data.candidates.at(-1).targetClaimId)'
 )"
 
-curl -sS -X POST "$BASE_URL/api/brains/$DEMO_BRAIN_ID/focus/manual" \
+curl -sS -X POST "$BASE_URL/api/sessions/$DEMO_SESSION_ID/focus/manual" \
   -H "content-type: application/json" \
-  -d "{\"sessionId\":\"$DEMO_SESSION_ID\",\"claimId\":\"$DEMO_MANUAL_CLAIM_ID\",\"reason\":\"Demo manual override.\"}" \
+  -d "{\"claimId\":\"$DEMO_MANUAL_CLAIM_ID\",\"reason\":\"Demo manual override.\"}" \
   | tee /tmp/penny-demo-manual.json
 ```
 
@@ -122,14 +122,14 @@ Visible demo path:
 - `data.firstChallenge.responseOptions` is `["Defend","Revise","Absorb"]`.
 - `data.moves` includes `source.recorded`, `seed_claim_created`, `assumptions_extracted`, and `first_challenge_suggested`.
 
-`GET /api/brains/:brainId/autopilot/state?sessionId=:sessionId`
+`GET /api/sessions/:sessionId/autopilot/state`
 
 - HTTP `200`.
 - `data.status` is `empty`, `ready`, or `paused`.
 - `data.focusState.sessionId` matches `DEMO_SESSION_ID`.
 - Before tick, `data.candidates` may be empty.
 
-`POST /api/brains/:brainId/autopilot/tick`
+`POST /api/sessions/:sessionId/autopilot/tick`
 
 - HTTP `201`.
 - `data.status` is usually `ready`.
@@ -138,14 +138,14 @@ Visible demo path:
 - `data.move.kind` is `next_move_recomputed`.
 - `data.focusState.source` is `autopilot_suggestion`.
 
-`POST /api/next-move-candidates/:candidateId/start`
+`POST /api/sessions/:sessionId/next-move-candidates/:candidateId/start`
 
 - HTTP `201`.
 - `data.status` is `started`.
 - `data.move.kind` is `autopilot_focus_started`.
 - `data.focusState.source` is `autopilot_started`.
 
-`POST /api/brains/:brainId/focus/manual`
+`POST /api/sessions/:sessionId/focus/manual`
 
 - HTTP `201`.
 - `data.status` is `paused`.
@@ -166,7 +166,7 @@ Visible demo path:
 - `relation ... does not exist` or enum errors: run `pnpm db:migrate` against the same `DATABASE_URL`.
 - Port `3000` already in use: stop the old process or run `PORT=3001 pnpm dev:api` and set `BASE_URL=http://localhost:3001`.
 - Seed returns provider/network errors: unset `XAI_API_KEY` for the deterministic heuristic demo, or verify the xAI key/model if intentionally using live AI.
-- `GET /brain/seed` or `GET /autopilot/tick` returns `405`: this is expected; these mutation surfaces are POST-only.
+- `GET /brain/seed` or `GET /api/sessions/:sessionId/autopilot/tick` returns `405`: this is expected; these mutation surfaces are POST-only.
 - Vite app on `5173` cannot call Autopilot APIs: verify `pnpm dev:api` is running on port `3000`, or set `PENNY_API_ORIGIN` before `pnpm dev:frontend` if the API uses another port.
 - `thinking_mode_not_found`: the `DEMO_SESSION_ID` was not exported from the seed response or the database was reset after seeding.
 - `invalid_request`: check that UUID values are valid and request bodies have `content-type: application/json`.
