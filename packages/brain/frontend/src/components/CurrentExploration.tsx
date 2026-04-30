@@ -133,15 +133,6 @@ function DecisionCard({
         </p>
         <h4>WHY PENNY CHOSE THIS</h4>
         <p>{decisionReason(selectedRow)}</p>
-        <label className="decision-better-option">
-          <span>EVEN BETTER IDEA</span>
-          <textarea
-            value={betterOption}
-            onChange={(event) => onBetterOptionChange(event.target.value)}
-            placeholder="Put an even better option here..."
-            rows={2}
-          />
-        </label>
       </div>
       <section className="decision-alternatives" aria-label="Alternative options">
         <h4>ALTERNATIVE OPTIONS</h4>
@@ -160,6 +151,15 @@ function DecisionCard({
           ))}
         </div>
       </section>
+      <label className="decision-better-option">
+        <span>EVEN BETTER IDEA</span>
+        <textarea
+          value={betterOption}
+          onChange={(event) => onBetterOptionChange(event.target.value)}
+          placeholder="Put an even better option here..."
+          rows={2}
+        />
+      </label>
       <section className="decision-downstream" aria-label="Downstream changes">
         <h4>WHAT CHANGES DOWNSTREAM</h4>
         <div className="decision-impact">
