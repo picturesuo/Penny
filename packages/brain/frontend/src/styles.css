@@ -281,7 +281,7 @@
   }
 
   .thought-node {
-    --thought-indent: 15px;
+    --thought-indent: 14px;
     position: relative;
     min-width: 0;
   }
@@ -291,29 +291,23 @@
     position: absolute;
     top: -2px;
     bottom: -2px;
-    left: calc((var(--thought-depth) * var(--thought-indent)) + 4px);
-    border-left: 1px solid #c8c8c8;
+    left: calc((var(--thought-depth) * var(--thought-indent)) + 3px);
+    border-left: 1px solid rgb(17 17 17 / 0.14);
     pointer-events: none;
   }
 
   .thought-node-row {
     position: relative;
     display: grid;
-    grid-template-columns: 12px 18px minmax(0, 1fr) auto;
+    grid-template-columns: 10px 10px minmax(0, 1fr);
     align-items: center;
-    min-height: 27px;
+    min-height: 25px;
     padding-left: calc(var(--thought-depth) * var(--thought-indent));
-    column-gap: 6px;
+    column-gap: 4px;
   }
 
   .thought-node:not(.thought-node-root) > .thought-node-row::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: calc((var(--thought-depth) * var(--thought-indent)) + 4px);
-    width: 10px;
-    border-top: 1px solid #c8c8c8;
-    pointer-events: none;
+    content: none;
   }
 
   .thought-node-toggle,
@@ -327,99 +321,71 @@
   .thought-node-toggle-spacer {
     display: grid;
     place-items: center;
-    width: 12px;
+    width: 10px;
     height: 18px;
     padding: 0;
   }
 
   .thought-node-toggle span {
+    position: relative;
     display: block;
-    width: 0;
-    height: 0;
-    border-top: 4px solid transparent;
-    border-bottom: 4px solid transparent;
-    border-left: 5px solid #111111;
-    transform: rotate(90deg);
-    transform-origin: 50% 50%;
+    width: 7px;
+    height: 1px;
+    border: 0;
+    background: rgb(17 17 17 / 0.74);
   }
 
-  .thought-node.is-collapsed > .thought-node-row .thought-node-toggle span {
-    transform: rotate(0deg);
+  .thought-node-toggle span::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 7px;
+    height: 1px;
+    background: transparent;
+    transform: rotate(90deg);
+  }
+
+  .thought-node.is-collapsed > .thought-node-row .thought-node-toggle span::after {
+    background: rgb(17 17 17 / 0.74);
   }
 
   .thought-node-glyph {
     position: relative;
     display: block;
-    width: 18px;
+    width: 10px;
     height: 18px;
   }
 
-  .thought-node-glyph.is-root::before {
+  .thought-node-glyph::before {
     content: "";
     position: absolute;
-    inset: 3px;
-    border: 1.5px solid #111111;
-    transform: rotate(45deg);
+    left: 1px;
+    top: 9px;
+    width: 7px;
+    border-top: 1px solid rgb(17 17 17 / 0.42);
   }
 
+  .thought-node-glyph.is-root::before,
   .thought-node-glyph.is-folder::before {
-    content: "";
-    position: absolute;
-    left: 2px;
-    top: 6px;
-    width: 13px;
-    height: 9px;
-    border: 1.3px solid #111111;
-    border-radius: 2px;
-    background: #ffffff;
+    width: 8px;
+    border-top-color: #111111;
   }
 
   .thought-node-glyph.is-folder::after {
-    content: "";
-    position: absolute;
-    left: 3px;
-    top: 4px;
-    width: 6px;
-    height: 4px;
-    border: 1.3px solid #111111;
-    border-bottom: 0;
-    border-radius: 2px 2px 0 0;
-    background: #ffffff;
-  }
-
-  .thought-node-glyph.is-step::before,
-  .thought-node-glyph.is-choice::before {
-    content: "";
-    position: absolute;
-    left: 4px;
-    top: 3px;
-    width: 10px;
-    height: 12px;
-    border: 1.2px solid #111111;
-    border-radius: 1px;
-    background: #ffffff;
-  }
-
-  .thought-node-glyph.is-choice::before {
-    border-style: dashed;
+    content: none;
   }
 
   .thought-node-glyph.is-claim::before {
-    content: "";
-    position: absolute;
-    left: 7px;
-    top: 7px;
     width: 4px;
-    height: 4px;
-    border-radius: 999px;
-    background: #9f9f9f;
+    border-top-color: rgb(17 17 17 / 0.28);
   }
 
   .thought-node-label {
     display: grid;
     gap: 2px;
     min-width: 0;
-    padding: 3px 4px 3px 0;
+    border-bottom: 1px solid transparent;
+    padding: 3px 5px 3px 2px;
     overflow: hidden;
     text-align: left;
   }
@@ -449,36 +415,31 @@
   }
 
   .thought-node-count {
-    display: grid;
-    place-items: center;
-    min-width: 20px;
-    height: 20px;
-    border: 1px solid #d4d4d4;
-    border-radius: 5px;
-    color: rgb(17 17 17 / 0.72);
-    background: #fbfbfb;
-    font-size: 11px;
-    line-height: 1;
+    display: none;
   }
 
   .thought-node-label:hover,
-  .thought-node-toggle:hover,
-  .thought-node.is-focused > .thought-node-row .thought-node-label {
-    background: #f2f2f2;
+  .thought-node-toggle:hover {
+    background: rgb(17 17 17 / 0.04);
+  }
+
+  .thought-node.is-focused > .thought-node-row .thought-node-label,
+  .thought-node.is-suggested > .thought-node-row .thought-node-label {
+    border-bottom-color: #111111;
+    background: rgb(17 17 17 / 0.06);
   }
 
   .thought-node.is-suggested > .thought-node-row .thought-node-glyph::before {
-    border-color: #111111;
-    background: #eeeeee;
+    border-top-color: #111111;
   }
 
   .thought-node.is-suggested.thought-node-claim > .thought-node-row .thought-node-glyph::before {
-    background: #111111;
+    border-top-color: #111111;
   }
 
   .thought-node-children {
     display: grid;
-    gap: 1px;
+    gap: 0;
     min-width: 0;
   }
 
