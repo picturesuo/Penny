@@ -1566,19 +1566,171 @@
     opacity: 0.38;
   }
 
-  .brain-library-shell,
-  .brain-document-shell,
+  .brain-workspace-shell,
   .mode-placeholder {
     min-height: calc(100vh - 68px);
-    padding: 26px 18px 30px;
-    overflow: auto;
+    overflow: hidden;
+  }
+
+  .brain-workspace-shell {
+    display: grid;
+    grid-template-columns: minmax(220px, 270px) minmax(430px, 1fr) minmax(310px, 0.46fr);
+    border-top: 1px solid #9e9e9e;
+    background: #fbf8ef;
   }
 
   .brain-library-panel {
     display: grid;
+    align-content: start;
     gap: 20px;
-    max-width: 1180px;
-    margin: 0 auto;
+    min-width: 0;
+    max-height: calc(100vh - 70px);
+    overflow: auto;
+    border-right: 1px solid #d0d0d0;
+    padding: 24px 28px 34px;
+  }
+
+  .brain-hierarchy-sidebar {
+    min-width: 0;
+    max-height: calc(100vh - 70px);
+    overflow: auto;
+    border-right: 1px solid #d0d0d0;
+    padding: 16px 16px 24px 14px;
+  }
+
+  .brain-sidebar-head,
+  .brain-tree-row {
+    display: grid;
+    align-items: center;
+  }
+
+  .brain-sidebar-head {
+    grid-template-columns: minmax(0, 1fr) 32px;
+    gap: 10px;
+    border-bottom: 1px solid #d8d8d8;
+    padding-bottom: 12px;
+  }
+
+  .brain-sidebar-head span,
+  .brain-sidebar-empty span,
+  .brain-tree-row small {
+    color: rgb(17 17 17 / 0.58);
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .brain-sidebar-head strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .brain-sidebar-new {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #c8c8c8;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #111111;
+  }
+
+  .brain-tree {
+    display: grid;
+    gap: 14px;
+    padding-top: 16px;
+  }
+
+  .brain-tree-space,
+  .brain-tree-folder,
+  .brain-tree-document,
+  .brain-file-list {
+    display: grid;
+    min-width: 0;
+  }
+
+  .brain-tree-children,
+  .brain-file-list {
+    display: grid;
+    gap: 5px;
+    margin-left: 8px;
+    border-left: 1px solid #d8d8d8;
+    padding-left: 10px;
+  }
+
+  .brain-tree-row {
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    gap: 8px;
+    width: 100%;
+    min-height: 30px;
+    border: 0;
+    border-radius: 6px;
+    padding: 6px 7px;
+    background: transparent;
+    color: #111111;
+    text-align: left;
+  }
+
+  .brain-tree-row span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .brain-tree-row svg {
+    color: rgb(17 17 17 / 0.62);
+  }
+
+  .brain-tree-row.is-space,
+  .brain-tree-row.is-folder {
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .brain-tree-row.is-folder {
+    margin-top: 4px;
+  }
+
+  .brain-tree-row.is-doc,
+  .brain-tree-row.is-file {
+    font-size: 12px;
+  }
+
+  .brain-tree-row.is-doc:hover,
+  .brain-tree-row.is-file:hover {
+    background: rgb(17 17 17 / 0.06);
+  }
+
+  .brain-tree-row.is-doc.is-active {
+    background: #111111;
+    color: #ffffff;
+  }
+
+  .brain-tree-row.is-doc.is-active svg,
+  .brain-tree-row.is-doc.is-active small {
+    color: rgb(255 255 255 / 0.72);
+  }
+
+  .brain-tree-row.is-file {
+    min-height: 26px;
+    color: rgb(17 17 17 / 0.68);
+  }
+
+  .brain-tree-row.is-file.is-parent-active {
+    color: #111111;
+  }
+
+  .brain-sidebar-empty {
+    display: grid;
+    gap: 6px;
+    margin-top: 16px;
+    border: 1px solid #d8d8d8;
+    border-radius: 8px;
+    padding: 14px;
+    background: #ffffff;
   }
 
   .brain-library-head,
@@ -1650,7 +1802,7 @@
 
   .memory-graph-preview {
     position: relative;
-    min-height: 332px;
+    min-height: 300px;
     overflow: hidden;
   }
 
@@ -1819,18 +1971,22 @@
     text-align: right;
   }
 
-  .brain-document-shell {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(270px, 326px);
-    gap: 22px;
-    overflow: hidden;
-  }
-
   .brain-document-main {
     min-width: 0;
-    max-height: calc(100vh - 165px);
+    max-height: calc(100vh - 70px);
     overflow: auto;
-    padding-right: 2px;
+    border-right: 1px solid #d0d0d0;
+    padding: 24px 28px 34px;
+  }
+
+  .brain-graph-quarter {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    min-width: 0;
+    max-height: calc(100vh - 70px);
+    overflow: auto;
+    padding: 14px 14px 24px 16px;
   }
 
   .brain-doc-toolbar {
@@ -1900,6 +2056,17 @@
   .graph-board {
     margin-bottom: 20px;
     overflow: hidden;
+  }
+
+  .brain-graph-quarter .graph-board,
+  .brain-graph-quarter .memory-graph-preview {
+    margin-bottom: 0;
+  }
+
+  .brain-graph-quarter .graph-board svg,
+  .brain-graph-quarter .memory-graph-preview svg {
+    height: min(38vh, 360px);
+    min-height: 280px;
   }
 
   .graph-board-head {
@@ -1977,8 +2144,7 @@
   .brain-doc-aside {
     display: grid;
     align-content: start;
-    max-height: calc(100vh - 165px);
-    overflow: auto;
+    overflow: hidden;
   }
 
   .brain-doc-aside section {
@@ -2036,6 +2202,8 @@
   .mode-placeholder {
     display: grid;
     place-items: center;
+    padding: 26px 18px 30px;
+    overflow: auto;
   }
 
   .mode-placeholder section {
@@ -2080,14 +2248,31 @@
     padding: 22px 0 0;
   }
 
-  .brain-document-shell {
-    grid-template-columns: 1fr;
+  .brain-workspace-shell {
+    grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
     overflow: auto;
   }
 
+  .brain-hierarchy-sidebar {
+    grid-row: 1 / span 2;
+  }
+
+  .brain-graph-quarter {
+    grid-column: 2;
+    max-height: none;
+    border-top: 1px solid #d0d0d0;
+  }
+
+  .brain-library-panel,
   .brain-document-main,
+  .brain-hierarchy-sidebar,
   .brain-doc-aside {
     max-height: none;
+  }
+
+  .brain-library-panel,
+  .brain-document-main {
+    border-right: 0;
   }
 }
 
@@ -2187,10 +2372,30 @@
     margin-left: 0;
   }
 
-  .brain-library-shell,
-  .brain-document-shell,
+  .brain-workspace-shell,
   .mode-placeholder {
     padding-inline: 14px;
+  }
+
+  .brain-workspace-shell {
+    grid-template-columns: 1fr;
+    padding-top: 14px;
+  }
+
+  .brain-hierarchy-sidebar,
+  .brain-library-panel,
+  .brain-document-main,
+  .brain-graph-quarter {
+    grid-column: auto;
+    max-height: none;
+    border-right: 0;
+    padding: 18px 0;
+  }
+
+  .brain-hierarchy-sidebar,
+  .brain-library-panel,
+  .brain-document-main {
+    border-bottom: 1px solid #d0d0d0;
   }
 
   .brain-library-head,

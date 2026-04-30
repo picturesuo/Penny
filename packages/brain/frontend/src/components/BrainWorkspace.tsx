@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { BookOpen, FileText, Folder, Layers, Plus } from "lucide-react";
 import type {
   AutopilotTickData,
   BrainClaim,
@@ -8,6 +9,7 @@ import type {
   BrainDocumentsData,
   BrainDocumentSummary,
   BrainEdge,
+  BrainHierarchySpace,
   BrainMove,
   ChallengeBriefPayload,
   SessionCockpitData,
@@ -41,6 +43,13 @@ interface GraphPoint {
   y: number;
 }
 
+interface BrainHierarchySidebarProps {
+  spaces: BrainHierarchySpace[];
+  selectedSessionId: string | null;
+  onSelectDocument: (sessionId: string) => void;
+  onNewThought: () => void;
+}
+
 export function BrainWorkspace({
   documentsData,
   selectedDocument,
@@ -58,57 +67,148 @@ export function BrainWorkspace({
   onClaimSelect,
   onReworkDocument,
 }: BrainWorkspaceProps) {
-  if (!selectedDocument) {
-    return (
-      <BrainRecordLog
-        documentsData={documentsData}
-        status={status}
-        isThinking={isThinking}
-        onSelectDocument={onSelectDocument}
-        onSeed={onSeed}
-      />
-    );
-  }
-
-  const claims = data?.ideaMap?.claims ?? [];
-  const edges = data?.ideaMap?.edges ?? [];
+  const claims = selectedDocument ? data?.ideaMap?.claims ?? [] : [];
+  const edges = selectedDocument ? data?.ideaMap?.edges ?? [] : [];
 
   return (
-    <main className="brain-document-shell">
-      <section className="brain-document-main" aria-label="Brain document">
-        <div className="brain-doc-toolbar">
-          <button type="button" className="text-command" onClick={onBackToLibrary}>
-            Back to docs
-          </button>
-          <div className="brain-doc-actions">
-            <button type="button" className="text-command" disabled={isThinking} onClick={onReworkDocument}>
-              Rework in Check
-            </button>
-            <button type="button" className="primary-command" onClick={onNewThought}>
-              New Thought
-            </button>
-          </div>
-        </div>
-        <DocumentHeader document={selectedDocument} workStructure={data?.workStructure ?? null} />
-        <ConnectedGraphBoard
-          title="Graph Path"
-          claims={claims}
-          edges={edges}
-          focusedClaimId={focusedClaimId}
-          suggestedClaimId={autopilot?.suggestion?.targetClaimId ?? null}
-          onClaimSelect={onClaimSelect}
-        />
-        <DocumentRundown document={selectedDocument} moves={moves} latestArtifact={latestArtifact} />
-        <WorkingNotes sessionId={selectedDocument.sessionId} title={selectedDocument.title} />
-      </section>
-      <BrainDocumentAside
-        document={selectedDocument}
-        focusedClaim={claims.find((claim) => claim.id === focusedClaimId) ?? null}
-        claims={claims}
-        moves={moves}
-        latestArtifact={latestArtifact}
+    <main className="brain-workspace-shell">
+      <BrainHierarchySidebar
+        spaces={documentsData?.hierarchy ?? []}
+        selectedSessionId={selectedDocument?.sessionId ?? null}
+        onSelectDocument={onSelectDocument}
+        onNewThought={onNewThought}
       />
+      {selectedDocument ? (
+        <>
+          <section className="brain-document-main" aria-label="Brain document">
+            <div className="brain-doc-toolbar">
+              <button type="button" className="text-command" onClick={onBackToLibrary}>
+                All docs
+              </button>
+              <div className="brain-doc-actions">
+                <button type="button" className="text-command" disabled={isThinking} onClick={onReworkDocument}>
+                  Rework in Check
+                </button>
+                <button type="button" className="primary-command" onClick={onNewThought}>
+                  New Thought
+                </button>
+              </div>
+            </div>
+            <DocumentHeader document={selectedDocument} workStructure={data?.workStructure ?? null} />
+            <DocumentRundown document={selectedDocument} moves={moves} latestArtifact={latestArtifact} />
+            <WorkingNotes sessionId={selectedDocument.sessionId} title={selectedDocument.title} />
+          </section>
+          <aside className="brain-graph-quarter" aria-label="Brain graph and context">
+            <ConnectedGraphBoard
+              title="Graph Path"
+              claims={claims}
+              edges={edges}
+              focusedClaimId={focusedClaimId}
+              suggestedClaimId={autopilot?.suggestion?.targetClaimId ?? null}
+              onClaimSelect={onClaimSelect}
+            />
+            <BrainDocumentAside
+              document={selectedDocument}
+              focusedClaim={claims.find((claim) => claim.id === focusedClaimId) ?? null}
+              claims={claims}
+              moves={moves}
+              latestArtifact={latestArtifact}
+            />
+          </aside>
+        </>
+      ) : (
+        <>
+          <BrainRecordLog
+            documentsData={documentsData}
+            status={status}
+            isThinking={isThinking}
+            onSelectDocument={onSelectDocument}
+            onSeed={onSeed}
+          />
+          <aside className="brain-graph-quarter" aria-label="Brain graph preview">
+            <DocumentMemoryGraph graph={documentsData?.graph ?? null} />
+          </aside>
+        </>
+      )}
     </main>
+  );
+}
+
+function BrainHierarchySidebar({ spaces, selectedSessionId, onSelectDocument, onNewThought }: BrainHierarchySidebarProps) {
+  return (
+    <aside className="brain-hierarchy-sidebar" aria-label="Brain spaces">
+      <div className="brain-sidebar-head">
+        <div>
+          <span>Spaces</span>
+          <strong>Brain</strong>
+        </div>
+        <button type="button" className="brain-sidebar-new" onClick={onNewThought} aria-label="New thought">
+          <Plus size={15} aria-hidden="true" />
+        </button>
+      </div>
+      {spaces.length > 0 ? (
+        <div className="brain-tree" role="tree" aria-label="Spaces, folders, docs, and files">
+          {spaces.map((space) => (
+            <div key={space.id} className="brain-tree-space" role="treeitem" aria-expanded="true">
+              <div className="brain-tree-row is-space">
+                <Layers size={15} aria-hidden="true" />
+                <span title={space.label}>{space.label}</span>
+                <small>{space.documentCount}</small>
+              </div>
+              <div className="brain-tree-children">
+                {space.folders.map((folder) => (
+                  <div key={folder.id} className="brain-tree-folder" role="treeitem" aria-expanded="true">
+                    <div className="brain-tree-row is-folder">
+                      <Folder size={15} aria-hidden="true" />
+                      <span title={folder.label}>{folder.label}</span>
+                      <small>{folder.documentCount}</small>
+                    </div>
+                    <div className="brain-tree-children">
+                      {folder.documents.map((document) => {
+                        const active = document.sessionId === selectedSessionId;
+
+                        return (
+                          <div key={document.id} className="brain-tree-document" role="treeitem" aria-expanded={active}>
+                            <button
+                              type="button"
+                              className={`brain-tree-row is-doc${active ? " is-active" : ""}`}
+                              onClick={() => onSelectDocument(document.sessionId)}
+                              aria-current={active ? "page" : undefined}
+                            >
+                              <BookOpen size={14} aria-hidden="true" />
+                              <span title={document.title}>{truncateWords(document.title, 6)}</span>
+                              <small>{document.fileCount}</small>
+                            </button>
+                            <div className="brain-file-list" role="group" aria-label={`${document.title} files`}>
+                              {document.files.map((file) => (
+                                <button
+                                  key={file.id}
+                                  type="button"
+                                  className={`brain-tree-row is-file${active ? " is-parent-active" : ""}`}
+                                  onClick={() => onSelectDocument(file.sessionId)}
+                                >
+                                  <FileText size={13} aria-hidden="true" />
+                                  <span title={file.subtitle ?? file.title}>{truncateWords(file.title, 4)}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="brain-sidebar-empty">
+          <strong>No Brain docs yet</strong>
+          <span>Start with a thought to create the first space.</span>
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -128,37 +228,34 @@ function BrainRecordLog({
   const documents = documentsData?.documents ?? [];
 
   return (
-    <main className="brain-library-shell">
-      <section className="brain-library-panel" aria-label="Brain document library">
-        <div className="brain-library-head">
-          <div>
-            <span>Brain</span>
-            <h1>Documents</h1>
-          </div>
-          <div className="brain-library-stats" aria-label="Brain document totals">
-            <span>{documentsData?.meta.documentCount ?? 0} docs</span>
-            <span>{documentsData?.meta.claimCount ?? 0} claims</span>
-            <span>{documentsData?.meta.edgeCount ?? 0} links</span>
-          </div>
+    <section className="brain-library-panel" aria-label="Brain document library">
+      <div className="brain-library-head">
+        <div>
+          <span>Brain</span>
+          <h1>Documents</h1>
         </div>
-        <DocumentMemoryGraph graph={documentsData?.graph ?? null} />
-        <section className="brain-new-thought" aria-label="New thought">
-          <Composer disabled={isThinking} status={status} onSubmit={onSeed} />
-        </section>
-        <div className="document-log-table" aria-label="Document log">
-          {documents.length > 0 ? (
-            documents.map((document) => (
-              <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
-            ))
-          ) : (
-            <article className="document-empty-state">
-              <strong>No docs yet</strong>
-              <span>Start with a thought and Penny will create the first record.</span>
-            </article>
-          )}
+        <div className="brain-library-stats" aria-label="Brain document totals">
+          <span>{documentsData?.meta.documentCount ?? 0} docs</span>
+          <span>{documentsData?.meta.claimCount ?? 0} claims</span>
+          <span>{documentsData?.meta.edgeCount ?? 0} links</span>
         </div>
+      </div>
+      <section className="brain-new-thought" aria-label="New thought">
+        <Composer disabled={isThinking} status={status} onSubmit={onSeed} />
       </section>
-    </main>
+      <div className="document-log-table" aria-label="Document log">
+        {documents.length > 0 ? (
+          documents.map((document) => (
+            <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
+          ))
+        ) : (
+          <article className="document-empty-state">
+            <strong>No docs yet</strong>
+            <span>Start with a thought and Penny will create the first record.</span>
+          </article>
+        )}
+      </div>
+    </section>
   );
 }
 
