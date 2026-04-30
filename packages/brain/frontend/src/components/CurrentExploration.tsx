@@ -21,6 +21,8 @@ interface PathRow {
   tweaks: string[];
 }
 
+const maxIdeaRows = 9;
+
 export function CurrentExploration({
   title,
   subtitle,
@@ -31,7 +33,7 @@ export function CurrentExploration({
   activeWorkStructureStep,
   onGoThere,
 }: CurrentExplorationProps) {
-  const rows = useMemo(() => buildRows(claims, paths), [claims, paths]);
+  const rows = useMemo(() => buildRows(claims, paths, activeWorkStructureStep), [claims, paths, activeWorkStructureStep]);
   const [selectedPathIndex, setSelectedPathIndex] = useState<number | null>(null);
   const selectedPath = selectedPathIndex === null ? null : rows[selectedPathIndex] ?? null;
 
@@ -76,8 +78,8 @@ export function CurrentExploration({
     <section className="current-exploration">
       <h2 className="section-label">CURRENT EXPLORATION</h2>
       <div className="exploration-headline">
-        <h1 title={title}>{truncateWords(title, 12)}</h1>
-        <p title={subtitle}>{truncateWords(subtitle, 3)}</p>
+        <h1 title={title}>{title}</h1>
+        <p title={subtitle}>{subtitle}</p>
       </div>
       {activeWorkStructureStep ? <WorkStructureStepDetail step={activeWorkStructureStep} focusedClaim={focusedClaim} /> : null}
       {autopilotSuggestion ? (
@@ -168,11 +170,11 @@ function PathwayRow({
       <button type="button" className="path-index" aria-label={`Preview choice ${shortcut}`} onClick={onSelect}>
         {shortcut}
       </button>
-      <strong title={row.title}>{truncateWords(row.title, 8)}</strong>
+      <strong title={row.title}>{row.title}</strong>
       <ul>
         {row.reasoning.map((item, index) => (
           <li key={`${row.id}-reason-${index}`} title={item}>
-            {truncateWords(item, 4)}
+            {item}
           </li>
         ))}
       </ul>
@@ -188,12 +190,12 @@ function PathPreview({ row, index }: { row: PathRow; index: number }) {
     <article className="path-preview" aria-label="Selected exploration preview">
       <div>
         <span>Choice {shortcutLabel(index)}</span>
-        <strong title={row.title}>{truncateWords(row.title, 10)}</strong>
+        <strong title={row.title}>{row.title}</strong>
       </div>
-      <p title={row.summary}>{truncateWords(row.summary, 22)}</p>
+      <p title={row.summary}>{row.summary}</p>
       <ul aria-label="Tweakable aspects">
         {row.tweaks.slice(0, 3).map((tweak) => (
-          <li key={tweak}>{truncateWords(tweak, 5)}</li>
+          <li key={tweak}>{tweak}</li>
         ))}
       </ul>
     </article>
@@ -203,45 +205,192 @@ function PathPreview({ row, index }: { row: PathRow; index: number }) {
 function PathPreviewEmpty() {
   return (
     <article className="path-preview is-empty" aria-label="Exploration preview">
-      <span>Press 1-9 or 0</span>
+      <span>Press 1-9</span>
       <p>Preview a path outcome, then decide which parts to tweak before exploring.</p>
     </article>
   );
 }
 
-function buildRows(claims: BrainClaim[], paths: ExplorationPath[]): PathRow[] {
-  if (paths.length > 0) {
-    return paths.slice(0, 10).map((path, index) => ({
-      id: `${path.title}-${index}`,
-      title: path.title,
-      reasoning: [path.prompt ?? "Reasoning", path.expectedValue ?? "Reasoning"].filter(Boolean),
-      summary: pathSummary(path.title, [path.prompt, path.expectedValue]),
-      tweaks: pathTweaks([path.prompt, path.expectedValue]),
-    }));
+function buildRows(
+  claims: BrainClaim[],
+  paths: ExplorationPath[],
+  activeWorkStructureStep: WorkStructureStep | null | undefined,
+): PathRow[] {
+  const pathRows = paths.map((path, index) => ({
+    id: `${path.title}-${index}`,
+    title: path.title,
+    reasoning: [path.prompt ?? "Reasoning", path.expectedValue ?? "Reasoning"].filter(Boolean),
+    summary: pathSummary(path.title, [path.prompt, path.expectedValue]),
+    tweaks: pathTweaks([path.prompt, path.expectedValue]),
+  }));
+  const rows = [
+    ...pathRows,
+    ...workStepRows(activeWorkStructureStep),
+    ...fallbackIdeaRows(claims, paths, activeWorkStructureStep),
+    ...claimRows(claims),
+  ];
+
+  return uniquePathRows(rows).slice(0, maxIdeaRows);
+}
+
+function workStepRows(step: WorkStructureStep | null | undefined): PathRow[] {
+  if (!step) {
+    return [];
   }
 
-  const assumptionRows = claims
-    .filter((claim) => claim.kind === "assumption")
-    .slice(0, 10)
-    .map((claim) => ({
-      id: claim.id,
-      title: claim.text,
-      reasoning: [`${claim.confidence ?? 60}% confidence`, claim.status],
-      summary: `Choosing this path tests how "${truncateWords(claim.text, 12)}" changes the rest of the thinking pack.`,
-      tweaks: [`${claim.confidence ?? 60}% confidence`, claim.status, claim.kind],
-    }));
+  return [
+    {
+      id: `step:${step.id}`,
+      title: step.title,
+      reasoning: [step.purpose, step.whyNow],
+      summary: `Preview how working on "${step.title}" changes the current idea.`,
+      tweaks: [formatStatus(step.status), `Fragility ${step.fragility}`, `Importance ${step.importance}`],
+    },
+    ...step.detailChoices.map((choice) => ({
+      id: `choice:${step.id}:${choice.id}`,
+      title: choice.label,
+      reasoning: [choice.description, step.whyNow],
+      summary: `Preview the outcome of choosing "${choice.label}" inside "${step.title}".`,
+      tweaks: [choice.description, step.purpose, step.whyNow],
+    })),
+  ];
+}
 
-  return assumptionRows;
+function claimRows(claims: BrainClaim[]): PathRow[] {
+  return claims
+    .filter((claim) => claim.kind !== "concept")
+    .map((claim) => ({
+      id: `claim:${claim.id}`,
+      title: `${formatTitleStatus(claim.kind)} check`,
+      reasoning: [claim.text, `${claim.confidence ?? 60}% confidence / ${formatStatus(claim.status)}`],
+      summary: "Preview how testing this claim changes the rest of the thinking pack.",
+      tweaks: [claim.text, `${claim.confidence ?? 60}% confidence`, formatStatus(claim.kind)],
+    }));
+}
+
+function fallbackIdeaRows(
+  claims: BrainClaim[],
+  paths: ExplorationPath[],
+  activeWorkStructureStep: WorkStructureStep | null | undefined,
+): PathRow[] {
+  const context = [
+    activeWorkStructureStep?.title,
+    activeWorkStructureStep?.purpose,
+    ...paths.flatMap((path) => [path.title, path.prompt, path.expectedValue]),
+    ...claims.map((claim) => claim.text),
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(" ")
+    .toLowerCase();
+  const sourceRows = essayLikeContext(context) ? essayIdeaRows : generalIdeaRows;
+
+  return sourceRows.map((row, index) => ({
+    ...row,
+    id: `fallback:${index}:${row.title}`,
+  }));
+}
+
+function essayLikeContext(context: string): boolean {
+  return ["essay", "expos", "harvard", "neoliberalism", "thesis", "counterargument"].some((term) =>
+    context.includes(term),
+  );
+}
+
+const essayIdeaRows: Array<Omit<PathRow, "id">> = [
+  ideaRow(
+    "Expos Curriculum Deep Dive",
+    "Retrieve official assignment expectations.",
+    "Determine exact genre, evidence rules, and grading constraints.",
+  ),
+  ideaRow(
+    "Topic Boundary",
+    "Narrow neoliberalism to one tractable angle.",
+    "Prevent the essay from becoming a broad institutional critique.",
+  ),
+  ideaRow(
+    "Neoliberalism Definitions",
+    "Collect 2-3 academic definitions.",
+    "Establish a precise working vocabulary before arguing.",
+  ),
+  ideaRow(
+    "Harvard-Specific Cases",
+    "List concrete local practices.",
+    "Surface evidence that makes the essay specific rather than generic.",
+  ),
+  ideaRow(
+    "Assignment Alignment Check",
+    "Map the topic to Expos requirements.",
+    "Reveal mismatches that would force a scope change.",
+  ),
+  ideaRow(
+    "Source Availability Scan",
+    "Search for scholarly and primary sources.",
+    "Test whether enough accessible evidence exists.",
+  ),
+  ideaRow(
+    "Thesis Stress Test",
+    "Turn the idea into one defensible claim.",
+    "Identify what would make the argument collapse.",
+  ),
+  ideaRow(
+    "Counterargument Inventory",
+    "Name the strongest objection.",
+    "Decide whether to defend, revise, or absorb it.",
+  ),
+  ideaRow(
+    "Personal Connection Probe",
+    "Find the writer's direct stake.",
+    "Uncover a non-generic reason this essay should exist.",
+  ),
+];
+
+const generalIdeaRows: Array<Omit<PathRow, "id">> = [
+  ideaRow("Clarify the Core Claim", "Rewrite the idea as one testable sentence.", "Separate the main claim from background context."),
+  ideaRow("Assumption Scan", "List what must be true.", "Find the dependencies that carry the most weight."),
+  ideaRow("Evidence Hunt", "Name the observations or sources needed.", "Distinguish evidence from vibes and preferences."),
+  ideaRow("User or Audience Check", "Identify who the idea must work for.", "Make the target user, reader, or stakeholder concrete."),
+  ideaRow("Constraint Check", "List rules, limits, and deadlines.", "Prevent work that cannot fit the actual situation."),
+  ideaRow("Risk Review", "Attack the most fragile part.", "Find what could make the idea fail."),
+  ideaRow("Counterargument Pass", "Write the strongest objection.", "Avoid protecting the idea from useful pressure."),
+  ideaRow("Revision Path", "Choose what should change if the critique lands.", "Turn pressure into a cleaner version."),
+  ideaRow("Artifact Plan", "Decide what output would be useful.", "Convert the thinking into a brief, map, outline, or next action."),
+];
+
+function ideaRow(title: string, firstReason: string, secondReason: string): Omit<PathRow, "id"> {
+  return {
+    title,
+    reasoning: [firstReason, secondReason],
+    summary: `${title}: ${firstReason} ${secondReason}`,
+    tweaks: [firstReason, secondReason, "Preview before exploring"],
+  };
+}
+
+function uniquePathRows(rows: PathRow[]): PathRow[] {
+  const seen = new Set<string>();
+  const unique: PathRow[] = [];
+
+  for (const row of rows) {
+    const key = row.title.trim().toLowerCase();
+
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(row);
+  }
+
+  return unique;
 }
 
 function pathSummary(title: string, values: Array<string | undefined>): string {
   const detail = values.find((value) => value?.trim())?.trim();
 
   if (!detail) {
-    return `Choosing this path previews how "${truncateWords(title, 12)}" changes the rest of the pack.`;
+    return `Choosing this path previews how "${title}" changes the rest of the pack.`;
   }
 
-  return `Choosing this path previews ${truncateWords(detail, 18)} against the rest of the pack.`;
+  return `Choosing this path previews ${detail} against the rest of the pack.`;
 }
 
 function pathTweaks(values: Array<string | undefined>): string[] {
@@ -255,10 +404,6 @@ function pathTweaks(values: Array<string | undefined>): string[] {
 }
 
 function shortcutIndex(key: string): number | null {
-  if (key === "0") {
-    return 9;
-  }
-
   if (/^[1-9]$/.test(key)) {
     return Number(key) - 1;
   }
@@ -267,7 +412,7 @@ function shortcutIndex(key: string): number | null {
 }
 
 function shortcutLabel(index: number): string {
-  return index === 9 ? "0" : String(index + 1);
+  return String(index + 1);
 }
 
 function EmptyPathways() {
@@ -285,4 +430,10 @@ function formatMoveKind(value: string): string {
 
 function formatStatus(value: string): string {
   return value.replaceAll("_", " ");
+}
+
+function formatTitleStatus(value: string): string {
+  const formatted = formatStatus(value);
+
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
