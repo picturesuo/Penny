@@ -7,7 +7,7 @@ interface HeaderProps {
   onNavItemSelect?: (item: string) => void;
 }
 
-const navItems = ["Brain", "Cents", "Check", "Search", "Settings"];
+const navItems = ["Learn", "Brain", "Check"];
 
 export function Header({ sessionLabel, thinkingLabel, activeItem = "Brain", onNavItemSelect }: HeaderProps) {
   const editionDate = new Intl.DateTimeFormat(undefined, {
