@@ -254,16 +254,60 @@
     background: #f2f2f2;
   }
 
+  .work-structure-tree .tree-group {
+    gap: 7px;
+  }
+
+  .work-structure-step {
+    min-height: 70px;
+    border-left-width: 3px;
+    padding: 6px 0 7px 9px;
+  }
+
+  .work-structure-step.is-active,
+  .work-structure-step.is-stale {
+    border-left-color: #111111;
+  }
+
+  .work-structure-step.is-resolved {
+    color: rgb(17 17 17 / 0.58);
+  }
+
   .tree-group strong,
   .tree-branch strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-weight: 700;
   }
 
   .tree-group span,
   .tree-branch span {
     display: block;
+    min-width: 0;
     padding-left: 28px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-weight: 400;
+  }
+
+  .tree-branch small,
+  .tree-branch em {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: rgb(17 17 17 / 0.62);
+    font-size: 10px;
+    font-style: normal;
+    line-height: 1;
+  }
+
+  .tree-branch em {
+    padding-left: 28px;
   }
 
   .tree-empty {
@@ -351,6 +395,102 @@
     line-clamp: 2;
     font-size: 20px;
     line-height: 1.1;
+  }
+
+  .work-step-detail {
+    display: grid;
+    gap: 7px;
+    border-top: 1px solid #111111;
+    padding: 9px 0 10px;
+    font-size: 12px;
+    line-height: 1.16;
+  }
+
+  .work-step-detail-head,
+  .work-step-metrics,
+  .work-step-choices {
+    display: grid;
+    min-width: 0;
+  }
+
+  .work-step-detail-head {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .work-step-detail-head span,
+  .work-step-detail-head small,
+  .work-step-metrics span {
+    color: rgb(17 17 17 / 0.62);
+    font-size: 11px;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .work-step-detail-head strong,
+  .work-step-detail p,
+  .work-step-detail em,
+  .work-step-choices strong,
+  .work-step-choices span {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  .work-step-detail-head strong {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .work-step-detail p,
+  .work-step-detail em {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .work-step-detail em {
+    color: rgb(17 17 17 / 0.62);
+    font-style: normal;
+  }
+
+  .work-step-metrics {
+    grid-template-columns: repeat(2, max-content);
+    gap: 12px;
+  }
+
+  .work-step-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .work-step-choices article {
+    min-width: 0;
+    border-top: 1px solid #d7d7d7;
+    padding-top: 6px;
+  }
+
+  .work-step-choices strong,
+  .work-step-choices span {
+    display: block;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .work-step-choices strong {
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .work-step-choices span {
+    margin-top: 4px;
+    color: rgb(17 17 17 / 0.7);
+    font-size: 11px;
+    line-height: 1;
   }
 
   .pathway-list {
