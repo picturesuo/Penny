@@ -23,6 +23,7 @@ import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import { createPennySql } from "./db/client.ts";
 import * as schema from "./db/schema.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
+import { handleLearnSessionRequest } from "./learn-session-route.ts";
 import { handleSessionGraphRequest } from "./session-graph-route.ts";
 import { handleSessionMovesRequest } from "./session-moves-route.ts";
 import {
@@ -117,6 +118,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/brain/recents") {
       await writeWebResponse(outgoing, await handleBrainRecentsRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/learn/session") {
+      await writeWebResponse(outgoing, await handleLearnSessionRequest(request));
       return;
     }
 
