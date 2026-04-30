@@ -202,7 +202,7 @@
 
   .insight-rail {
     display: grid;
-    grid-template-rows: minmax(260px, 3fr) minmax(260px, 2fr);
+    grid-template-rows: minmax(234px, 2.7fr) minmax(286px, 2.3fr);
     align-content: start;
     row-gap: 14px;
     overflow: hidden;
