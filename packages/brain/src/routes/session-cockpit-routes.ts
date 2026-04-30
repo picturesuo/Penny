@@ -574,9 +574,11 @@ function rankWorkStructureStep(
   const claims = selectClaimsForStep(definition, context);
   const claimIds = claims.map((claim) => claim.id);
   const edgeIds = selectEdgesForStep(definition, context, claimIds);
+  const matchesActiveFocus = stepMatchesActiveFocus(definition.id, context);
   const active =
-    Boolean(context.activeClaimId && claimIds.includes(context.activeClaimId)) ||
-    Boolean(context.activeEdgeId && edgeIds.includes(context.activeEdgeId));
+    matchesActiveFocus &&
+    (Boolean(context.activeClaimId && claimIds.includes(context.activeClaimId)) ||
+      Boolean(context.activeEdgeId && edgeIds.includes(context.activeEdgeId)));
   const vulnerabilities = claims.map((claim) => claimFragility(claim, context.graph.ideaMap.edges));
   const maxClaimFragility = Math.max(0, ...vulnerabilities);
   const activeChallengeBonus =
@@ -865,12 +867,14 @@ function selectClaimsForStep(
       definition.keywords.some((keyword) => text.includes(keyword))
     );
   });
-  const activeClaims = claims.filter(
-    (claim) =>
-      claim.id === context.activeClaimId ||
-      claim.id === context.activeChallenge?.targetClaimId ||
-      claim.id === context.autopilot.selectedCandidate?.targetClaimId,
-  );
+  const activeClaims = stepMatchesActiveFocus(definition.id, context)
+    ? claims.filter(
+        (claim) =>
+          claim.id === context.activeClaimId ||
+          claim.id === context.activeChallenge?.targetClaimId ||
+          claim.id === context.autopilot.selectedCandidate?.targetClaimId,
+      )
+    : [];
   const specialized = specializedClaimsForStep(definition.id, claims, context.graph.ideaMap.edges);
   const combined = uniqueClaims([...activeClaims, ...specialized, ...matched]);
 
@@ -879,6 +883,30 @@ function selectClaimsForStep(
   }
 
   return claims.slice(0, 3);
+}
+
+function stepMatchesActiveFocus(
+  stepId: string,
+  context: {
+    autopilot: ThinkingModeStateResponse;
+    activeChallenge: SessionCockpitChallengeRound | null;
+  },
+): boolean {
+  const action = context.activeChallenge ? "challenge" : context.autopilot.selectedCandidate?.action ?? null;
+
+  switch (action) {
+    case "challenge":
+    case "resume_open_challenge":
+      return hasAny(stepId, ["challenge", "pressure", "counterargument", "tradeoff", "validity"]);
+    case "verify":
+      return hasAny(stepId, ["evidence", "method", "assignment_fit", "business_model"]);
+    case "learn":
+      return hasAny(stepId, ["literature", "clarify", "question"]);
+    case "clarify":
+      return hasAny(stepId, ["bound", "clarify", "question", "options", "customer", "wedge"]);
+    default:
+      return false;
+  }
 }
 
 function specializedClaimsForStep(stepId: string, claims: CockpitClaim[], edges: CockpitEdge[]): CockpitClaim[] {
