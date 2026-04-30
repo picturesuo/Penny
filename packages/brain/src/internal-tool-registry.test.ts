@@ -178,6 +178,7 @@ function fakeServices(calls: string[]): PennyInternalToolServices {
           brainId: input.brainId,
           sessionId: input.sessionId,
           focusState: focusState(input.sessionId, "autopilot_started", false),
+          modeContract: modeContract("Check"),
           selectedCandidate: candidate(),
           move: thinkingMove("autopilot_focus_started"),
         };
@@ -192,6 +193,7 @@ function fakeServices(calls: string[]): PennyInternalToolServices {
           brainId: input.brainId,
           sessionId: input.sessionId,
           focusState: focusState(input.sessionId, "manual_selection", true),
+          modeContract: modeContract("Check"),
           focusClaim: {
             id: input.claimId,
             versionId: uuidAt(301),
@@ -238,6 +240,7 @@ function thinkingStateResponse(brainId: string, sessionId: string): ThinkingMode
     brainId,
     sessionId,
     focusState: focusState(sessionId, "autopilot_suggestion", false),
+    modeContract: modeContract("Check"),
     candidates: [selectedCandidate],
     selectedCandidate,
   };
@@ -268,6 +271,7 @@ function candidate(): ThinkingModeCandidateDto {
     targetEdgeId: null,
     action: "challenge",
     mode: "challenge",
+    mvpMode: "Check",
     score: 900,
     reason: "Challenge the weakest assumption.",
     reasonCodes: ["unresolved_claim"],
@@ -298,6 +302,13 @@ function candidate(): ThinkingModeCandidateDto {
     },
     selected: true,
     selectedAt: now(),
+  };
+}
+
+function modeContract(activeMode: "Learn" | "Check" | "Brain") {
+  return {
+    validModes: ["Learn", "Check", "Brain"] as const,
+    activeMode,
   };
 }
 
