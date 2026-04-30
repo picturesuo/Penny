@@ -296,7 +296,7 @@ export function parseInlineLearnOutput(output: unknown): InlineLearnOutput {
 
   if (!providerParsed.success) {
     throw new InlineLearnGenerationError(
-      "Inline Learn provider output failed validation.",
+      "Learn provider output failed validation.",
       flattenIssues(providerParsed.error),
     );
   }
@@ -305,7 +305,7 @@ export function parseInlineLearnOutput(output: unknown): InlineLearnOutput {
 
   if (!strictParsed.success) {
     throw new InlineLearnGenerationError(
-      "Inline Learn output failed strict validation.",
+      "Learn output failed strict validation.",
       flattenIssues(strictParsed.error),
     );
   }
@@ -342,7 +342,7 @@ export function createXaiInlineLearnProvider(
       const apiKey = env.XAI_API_KEY?.trim();
 
       if (!apiKey) {
-        throw new InlineLearnProviderError("XAI_API_KEY is required for the xAI Inline Learn provider.");
+        throw new InlineLearnProviderError("XAI_API_KEY is required for the xAI Learn provider.");
       }
 
       const xai = createXai(createXaiSettings(apiKey, env));
@@ -368,7 +368,7 @@ export function createXaiInlineLearnProvider(
           throw error;
         }
 
-        throw new InlineLearnProviderError(`xAI Inline Learn request failed: ${formatErrorMessage(error)}`);
+        throw new InlineLearnProviderError(`xAI Learn request failed: ${formatErrorMessage(error)}`);
       }
     },
   };
@@ -385,13 +385,13 @@ export function buildInlineLearnSystemPrompt(): string {
     "Keep the explanation contextual, short, and operational.",
     "Do not start a separate Learn app, lesson, sidebar, curriculum, or chat.",
     "Do not invent citations, market facts, or external evidence.",
-    "Return only the structured Inline Learn object.",
+    "Return only the structured Learn object.",
   ].join("\n");
 }
 
 export function buildInlineLearnPrompt(input: InlineLearnGenerationInput): string {
   return [
-    "Create a short inline Learn explanation for this term.",
+    "Create a short contextual Learn explanation for this term.",
     "",
     "Return:",
     "- term: the exact term being explained.",
@@ -445,7 +445,7 @@ async function createInlineLearnPrelude(
       .returning();
 
     if (!brainRun) {
-      throw new InlineLearnConflictError("Failed to record Inline Learn BrainRun.");
+      throw new InlineLearnConflictError("Failed to record Learn BrainRun.");
     }
 
     return { target, brainRun, lensSnapshot };
@@ -479,7 +479,7 @@ async function persistSavedInlineLearn(
       .returning();
 
     if (!completedBrainRun) {
-      throw new InlineLearnConflictError("Failed to complete Inline Learn BrainRun.");
+      throw new InlineLearnConflictError("Failed to complete Learn BrainRun.");
     }
 
     return {
@@ -554,7 +554,7 @@ async function insertInlineLearnConcept(
     id: moveId,
     sessionId: input.sessionId,
     scope: target.claim,
-    summary: "Saved an inline Learn concept inside Brain.",
+    summary: "Saved a Learn concept inside Brain.",
     payload: {
       term: output.term,
       currentClaimId: target.claim.id,
@@ -654,7 +654,7 @@ async function completeInlineLearnRun(
     const move = await createMove(tx, "learning_triggered", {
       sessionId: prelude.target.claim.sessionId,
       scope: prelude.target.claim,
-      summary: "Asked Makes Cents inline for a concept explanation.",
+      summary: "Asked Learn for a concept explanation.",
       payload: {
         term: output.term,
         currentClaimId: prelude.target.claim.id,
@@ -678,7 +678,7 @@ async function completeInlineLearnRun(
       .returning();
 
     if (!completedBrainRun) {
-      throw new InlineLearnConflictError("Failed to complete Inline Learn BrainRun.");
+      throw new InlineLearnConflictError("Failed to complete Learn BrainRun.");
     }
 
     await afterMoveEffectsInTransaction(tx, { sessionId: prelude.target.claim.sessionId, moveId: move.id });
@@ -709,7 +709,7 @@ function buildHeuristicInlineLearnOutput(input: InlineLearnGenerationInput): Inl
 
   if (!concept) {
     throw new InlineLearnProviderError(
-      `Inline Learn fallback cannot safely teach "${term}" without xAI. Add XAI_API_KEY or save a supported concept.`,
+      `Learn fallback cannot safely teach "${term}" without xAI. Add XAI_API_KEY or save a supported concept.`,
     );
   }
 
@@ -723,7 +723,7 @@ function buildHeuristicInlineLearnOutput(input: InlineLearnGenerationInput): Inl
   });
 
   if (!parsed.success) {
-    throw new InlineLearnConflictError("Generated Inline Learn output failed local validation.");
+    throw new InlineLearnConflictError("Generated Learn output failed local validation.");
   }
 
   return parsed.data;

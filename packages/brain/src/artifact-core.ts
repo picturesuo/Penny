@@ -1259,7 +1259,7 @@ function recommendNextMove(
   if (learnedConcepts.length === 0) {
     const target = claims.find((claim) => claim.kind === "assumption") ?? claims[0];
 
-    return `Use Makes Cents on a term inside "${clipText(target?.text ?? "the current claim", 120)}" before the next challenge.`;
+    return `Use Learn on a term inside "${clipText(target?.text ?? "the current claim", 120)}" before the next challenge.`;
   }
 
   const weakestClaim = [...claims].sort((left, right) => left.confidence - right.confidence)[0];

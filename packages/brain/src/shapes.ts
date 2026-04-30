@@ -251,7 +251,7 @@ function inferConceptGroundingShape(moves: ShapeMove[]): InferredShape | null {
   return {
     key: "concept_grounding",
     label: "Concept grounding",
-    description: "Recent moves use Makes Cents to clarify a concept before continuing the map.",
+    description: "Recent moves use Learn to clarify a concept before continuing the map.",
     confidence: boundedConfidence(50 + supporting.length * 10),
     supportingMoveIds: moveIds(supporting),
     status: "candidate",

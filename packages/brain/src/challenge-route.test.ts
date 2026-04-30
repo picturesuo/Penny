@@ -467,7 +467,7 @@ function lensSnapshot() {
         id: uuidAt(901),
         key: "concept_grounding",
         label: "Concept grounding",
-        description: "Recent moves use Makes Cents to clarify a concept before continuing the map.",
+        description: "Recent moves use Learn to clarify a concept before continuing the map.",
         confidence: 70,
         status: "confirmed" as const,
         supportingMoveIds: [uuidAt(501)],

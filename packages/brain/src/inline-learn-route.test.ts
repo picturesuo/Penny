@@ -166,7 +166,7 @@ test("POST /brain/learn/inline/save persists the displayed explanation without g
   assert.deepEqual(payload.data.saved.move.edgeIds, [uuidAt(401)]);
 });
 
-test("inline Learn maps route failures to stable errors", async () => {
+test("Learn route maps inline failures to stable errors", async () => {
   const notFound = await handleInlineLearnRequest(validRequest(), {
     async learnInline() {
       throw new InlineLearnNotFoundError("Current claim was not found in this session.");
@@ -179,12 +179,12 @@ test("inline Learn maps route failures to stable errors", async () => {
   });
   const providerFailure = await handleInlineLearnRequest(validRequest(), {
     async learnInline() {
-      throw new InlineLearnProviderError("xAI Inline Learn request failed.");
+      throw new InlineLearnProviderError("xAI Learn request failed.");
     },
   });
   const generationFailure = await handleInlineLearnRequest(validRequest(), {
     async learnInline() {
-      throw new InlineLearnGenerationError("Inline Learn output failed strict validation.", ["explanation too long"]);
+      throw new InlineLearnGenerationError("Learn output failed strict validation.", ["explanation too long"]);
     },
   });
   const notFoundPayload = (await notFound.json()) as { error: { code: string } };
@@ -203,7 +203,7 @@ test("inline Learn maps route failures to stable errors", async () => {
   assert.deepEqual(generationPayload.error.issues, ["explanation too long"]);
 });
 
-test("inline Learn provider schema stays loose while strict validation enforces local gates", () => {
+test("Learn provider schema stays loose while strict validation enforces local gates", () => {
   const looseProviderOutput = {
     term: "scope",
     explanation: "",
@@ -284,7 +284,7 @@ test("generateInlineLearnOutput requires a recorded BrainRun id", async () => {
   );
 });
 
-test("heuristic Inline Learn teaches supported concepts instead of generic meta-definitions", async () => {
+test("heuristic Learn teaches supported concepts instead of generic meta-definitions", async () => {
   const cognitiveLoad = await generateInlineLearnOutput(
     {
       term: "cognitive load",
@@ -321,7 +321,7 @@ test("heuristic Inline Learn teaches supported concepts instead of generic meta-
   assert.match(networkEffects.whyItMattersHere, /participation|compounds/i);
 });
 
-test("inline Learn output parsing and xAI provider failures are explicit", async () => {
+test("Learn output parsing and xAI provider failures are explicit", async () => {
   assert.throws(
     () =>
       parseInlineLearnOutput({
@@ -412,7 +412,7 @@ function savedConcept(term: string, currentClaimId: string) {
     move: {
       id: uuidAt(501),
       kind: "learning_triggered" as const,
-      summary: "Saved an inline Learn concept inside Brain.",
+      summary: "Saved a Learn concept inside Brain.",
       claimIds: [currentClaimId, uuidAt(301)],
       edgeIds: [uuidAt(401)],
       artifactIds: [],
@@ -453,7 +453,7 @@ function lensSnapshot() {
         id: uuidAt(901),
         key: "concept_grounding",
         label: "Concept grounding",
-        description: "Recent moves use Makes Cents to clarify a concept before continuing the map.",
+        description: "Recent moves use Learn to clarify a concept before continuing the map.",
         confidence: 70,
         status: "confirmed" as const,
         supportingMoveIds: [uuidAt(501)],

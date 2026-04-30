@@ -174,7 +174,7 @@ function sampleState(): ClaimDetailState {
         edgeIds: [challengeEdgeId],
         reasoning: "The critique still marks a risk.",
       }),
-      move(uuidAt(506), "learning_triggered", "Saved an inline Learn concept inside Brain.", 9, {
+      move(uuidAt(506), "learning_triggered", "Saved a Learn concept inside Brain.", 9, {
         claimIds: [assumptionClaimId, conceptClaimId],
         edgeIds: [teachesEdgeId],
         term: "cognitive load",

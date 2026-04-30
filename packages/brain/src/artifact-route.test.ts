@@ -362,7 +362,7 @@ function sampleContext(sessionId = uuidAt(100)): SessionArtifactContext {
         challengeEdgeId,
         strength: "strong",
       }),
-      move(uuidAt(504), "learning_triggered", "Saved an inline Learn concept.", [assumptionClaimId, conceptClaimId], [
+      move(uuidAt(504), "learning_triggered", "Saved a Learn concept.", [assumptionClaimId, conceptClaimId], [
         teachesEdgeId,
       ]),
     ],
