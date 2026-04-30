@@ -11,7 +11,6 @@ import type {
 } from "../types/brain";
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
-import { Composer } from "./Composer";
 import { CurrentExploration } from "./CurrentExploration";
 import { InsightRail } from "./InsightRail";
 import { LeftRail } from "./LeftRail";
@@ -50,9 +49,7 @@ export function CheckWorkspace({
   latestArtifact,
   focusedClaimId,
   focusedWorkStructureStepId,
-  status,
   isThinking,
-  onSeed,
   onSelectDocument,
   onGoThere,
   onClaimSelect,
@@ -105,7 +102,6 @@ export function CheckWorkspace({
         ) : (
           <CheckBrainMemory documents={documents} onSelectDocument={onSelectDocument} />
         )}
-        <Composer disabled={isThinking} status={status} storageKey="penny.checkComposerDraft" onSubmit={onSeed} />
       </div>
       <InsightRail
         sessionId={data?.session?.id ?? null}
