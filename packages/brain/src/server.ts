@@ -9,6 +9,7 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { handleArtifactRequest, handleSessionArtifactRequest } from "./artifact-route.ts";
 import { handleAssumptionResponseRequest } from "./assumption-response-route.ts";
 import { handleAutopilotTickRequest, handleManualNodeSelectedRequest } from "./autopilot-route.ts";
+import { handleBrainDocumentsRequest } from "./brain-documents-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
 import { handleChallengeBriefRequest } from "./routes/challenge-brief-routes.ts";
@@ -89,6 +90,11 @@ const server = createServer(async (incoming, outgoing) => {
 
     if (url.pathname === "/brain/seed") {
       await writeWebResponse(outgoing, await handleBrainSeedRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/documents") {
+      await writeWebResponse(outgoing, await handleBrainDocumentsRequest(request));
       return;
     }
 
