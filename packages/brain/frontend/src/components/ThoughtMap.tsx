@@ -313,7 +313,7 @@ function ensureFolderPath(root: ThoughtMapNode, path: string[]): ThoughtMapNode 
 }
 
 function sortThoughtMapFolders(node: ThoughtMapNode) {
-  node.children.sort((left, right) => nodeKindRank(left.kind) - nodeKindRank(right.kind) || left.label.localeCompare(right.label));
+  node.children.sort((left, right) => nodeKindRank(left.kind) - nodeKindRank(right.kind));
   node.children.forEach(sortThoughtMapFolders);
 }
 
