@@ -1,13 +1,30 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 interface ComposerProps {
   disabled: boolean;
   status: string;
   onSubmit: (rawIdea: string) => Promise<void>;
+  storageKey?: string;
 }
 
-export function Composer({ disabled, status, onSubmit }: ComposerProps) {
-  const [rawIdea, setRawIdea] = useState("");
+const DEFAULT_STORAGE_KEY = "penny.composerDraft";
+
+export function Composer({ disabled, status, onSubmit, storageKey = DEFAULT_STORAGE_KEY }: ComposerProps) {
+  const [rawIdea, setRawIdea] = useState(() => storedDraft(storageKey));
+
+  useEffect(() => {
+    const draft = rawIdea.trim();
+
+    if (!canStoreDraft()) {
+      return;
+    }
+
+    if (draft) {
+      window.localStorage.setItem(storageKey, rawIdea);
+    } else {
+      window.localStorage.removeItem(storageKey);
+    }
+  }, [rawIdea, storageKey]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -17,6 +34,7 @@ export function Composer({ disabled, status, onSubmit }: ComposerProps) {
     }
 
     await onSubmit(rawIdea.trim());
+    setRawIdea("");
   }
 
   return (
@@ -40,4 +58,16 @@ export function Composer({ disabled, status, onSubmit }: ComposerProps) {
       </p>
     </form>
   );
+}
+
+function storedDraft(storageKey: string): string {
+  if (!canStoreDraft()) {
+    return "";
+  }
+
+  return window.localStorage.getItem(storageKey) ?? "";
+}
+
+function canStoreDraft(): boolean {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
