@@ -5,12 +5,16 @@
 }
 
 @layer base {
+  :root {
+    --penny-paper: #f8f6ef;
+  }
+
   * {
     box-sizing: border-box;
   }
 
   html {
-    background: #ffffff;
+    background: var(--penny-paper);
     scrollbar-width: none;
   }
 
@@ -31,7 +35,7 @@
     min-width: 320px;
     font-family: Georgia, Cambria, "Times New Roman", Times, serif;
     color: #111111;
-    background: #ffffff;
+    background: var(--penny-paper);
     overflow-x: hidden;
   }
 
@@ -50,6 +54,11 @@
 }
 
 @layer components {
+  .min-h-screen.bg-white,
+  .mx-auto.bg-white {
+    background-color: var(--penny-paper);
+  }
+
   .newspaper-header {
     padding: 12px 18px 0;
   }
