@@ -567,3 +567,46 @@ export interface SessionCockpitData {
 export interface SessionCockpitResponse {
   data: SessionCockpitData;
 }
+
+export interface InlineLearnOutput {
+  term: string;
+  explanation: string;
+  whyItMattersHere: string;
+  example: string;
+  relatedConcepts: string[];
+  saveSuggestion: string;
+}
+
+export interface InlineLearnResponse {
+  data: InlineLearnOutput & {
+    brainRun?: {
+      id: string;
+      status: string;
+    };
+    saved?: InlineLearnSavedConcept;
+  };
+}
+
+export interface InlineLearnSaveResponse {
+  data: {
+    saved: InlineLearnSavedConcept;
+  };
+}
+
+export interface InlineLearnSavedConcept {
+  conceptClaim: {
+    id: string;
+    versionId: string;
+    text: string;
+  };
+  teachesEdge: {
+    id: string;
+    fromClaimId: string;
+    toClaimId: string;
+  };
+  move: {
+    id: string;
+    kind: string;
+    summary: string;
+  };
+}
