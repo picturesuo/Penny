@@ -419,6 +419,7 @@ export function App() {
           />
         ) : activeMode === "Check" ? (
           <CheckWorkspace
+            documentsData={documentsData}
             data={data}
             moves={moves}
             autopilot={autopilot}
@@ -429,6 +430,7 @@ export function App() {
             status={status}
             isThinking={isThinking}
             onSeed={handleSeed}
+            onSelectDocument={handleSelectDocument}
             onGoThere={handleGoThere}
             onClaimSelect={handleManualClaimSelect}
             onWorkStructureSelect={handleWorkStructureSelect}
