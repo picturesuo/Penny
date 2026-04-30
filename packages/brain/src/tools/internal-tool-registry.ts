@@ -15,6 +15,7 @@ import type {
   ThinkingModeTickInput,
   ThinkingModeTickResponse,
 } from "../services/thinking-mode-service.ts";
+import { MvpModeSchema } from "../modes.ts";
 
 export const pennyInternalToolNames = [
   "penny.get_autopilot_state",
@@ -176,6 +177,13 @@ const ScoreBreakdownOutputSchema = z
   })
   .passthrough();
 
+const ModeContractOutputSchema = z
+  .object({
+    validModes: z.array(MvpModeSchema),
+    activeMode: MvpModeSchema,
+  })
+  .passthrough();
+
 const CandidateOutputSchema = z
   .object({
     id: UuidSchema,
@@ -186,6 +194,7 @@ const CandidateOutputSchema = z
     targetEdgeId: UuidSchema.nullable(),
     action: ToolActionSchema,
     mode: ThinkingModeSchema,
+    mvpMode: MvpModeSchema,
     score: z.number(),
     reason: z.string(),
     reasonCodes: z.array(z.string()),
@@ -230,6 +239,7 @@ const ThinkingModeStateOutputSchema = z
     brainId: UuidSchema,
     sessionId: UuidSchema,
     focusState: FocusStateOutputSchema,
+    modeContract: ModeContractOutputSchema,
     candidates: z.array(CandidateOutputSchema),
     selectedCandidate: CandidateOutputSchema.nullable(),
   })
@@ -247,6 +257,7 @@ const StartNextMoveOutputSchema = z
     brainId: UuidSchema,
     sessionId: UuidSchema,
     focusState: FocusStateOutputSchema,
+    modeContract: ModeContractOutputSchema,
     selectedCandidate: CandidateOutputSchema,
     move: ThinkingModeMoveOutputSchema,
   })
@@ -258,6 +269,7 @@ const SelectManualNodeOutputSchema = z
     brainId: UuidSchema,
     sessionId: UuidSchema,
     focusState: FocusStateOutputSchema,
+    modeContract: ModeContractOutputSchema,
     focusClaim: z
       .object({
         id: UuidSchema,
