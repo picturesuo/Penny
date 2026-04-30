@@ -1,4 +1,4 @@
-import type { AutopilotSuggestion, BrainClaim, ExplorationPath } from "../types/brain";
+import type { AutopilotSuggestion, BrainClaim, ExplorationPath, WorkStructureStep } from "../types/brain";
 
 interface CurrentExplorationProps {
   title: string;
@@ -7,6 +7,7 @@ interface CurrentExplorationProps {
   paths: ExplorationPath[];
   autopilotSuggestion: AutopilotSuggestion | null;
   focusedClaim: BrainClaim | null;
+  activeWorkStructureStep?: WorkStructureStep | null;
   onGoThere: () => void;
 }
 
@@ -23,6 +24,7 @@ export function CurrentExploration({
   paths,
   autopilotSuggestion,
   focusedClaim,
+  activeWorkStructureStep,
   onGoThere,
 }: CurrentExplorationProps) {
   const rows = buildRows(claims, paths);
@@ -34,6 +36,7 @@ export function CurrentExploration({
         <h1>{title}</h1>
         <p>{subtitle}</p>
       </div>
+      {activeWorkStructureStep ? <WorkStructureStepDetail step={activeWorkStructureStep} focusedClaim={focusedClaim} /> : null}
       {autopilotSuggestion ? (
         <article className="autopilot-card">
           <div>
@@ -55,6 +58,39 @@ export function CurrentExploration({
         {rows.length > 0 ? rows.map((row) => <PathwayRow key={row.id} row={row} />) : <EmptyPathways />}
       </div>
     </section>
+  );
+}
+
+function WorkStructureStepDetail({
+  step,
+  focusedClaim,
+}: {
+  step: WorkStructureStep;
+  focusedClaim: BrainClaim | null;
+}) {
+  return (
+    <article className="work-step-detail">
+      <div className="work-step-detail-head">
+        <span>#{step.rank}</span>
+        <strong>{step.title}</strong>
+        <small>{formatStatus(step.status)}</small>
+      </div>
+      <p>{step.purpose}</p>
+      <p>{step.whyNow}</p>
+      {focusedClaim ? <em>{focusedClaim.text}</em> : null}
+      <div className="work-step-metrics" aria-label="Work step ranking">
+        <span>Fragility {step.fragility}</span>
+        <span>Importance {step.importance}</span>
+      </div>
+      <div className="work-step-choices" aria-label="Work step choices">
+        {step.detailChoices.map((choice) => (
+          <article key={choice.id}>
+            <strong>{choice.label}</strong>
+            <span>{choice.description}</span>
+          </article>
+        ))}
+      </div>
+    </article>
   );
 }
 
@@ -106,5 +142,9 @@ function EmptyPathways() {
 }
 
 function formatMoveKind(value: string): string {
+  return value.replaceAll("_", " ");
+}
+
+function formatStatus(value: string): string {
   return value.replaceAll("_", " ");
 }
