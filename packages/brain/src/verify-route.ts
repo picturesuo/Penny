@@ -48,3 +48,12 @@ export {
   verifyWebSearchDecision,
 } from "./verify-ai.ts";
 export { decideVerifyConfidence, runVerify } from "./verify-commands.ts";
+export {
+  VerifyRecipeTraceOutputSchema,
+  runVerifyRecipeTrace,
+  verifyRecipeTraceForBrainRun,
+} from "./verify-recipe.ts";
+export type {
+  VerifyRecipeStepName,
+  VerifyRecipeTraceOutput,
+} from "./verify-recipe.ts";

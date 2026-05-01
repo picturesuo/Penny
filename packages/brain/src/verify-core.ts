@@ -23,6 +23,7 @@ import { flattenIssues } from "./schema.ts";
 import { scopeValues } from "./scope.ts";
 import { createSearchBroker, searchTraceFromBrokerResult, type SearchTrace } from "./search-broker.ts";
 import { shouldUseWebSearch, type SearchDecision } from "./search-decision-service.ts";
+import { verifyRecipeTraceForBrainRun, type VerifyRecipeTraceOutput } from "./verify-recipe.ts";
 
 export const VerifyRequestSchema = z
   .object({
@@ -299,6 +300,7 @@ export type ConfidenceUpdateDecision = {
 };
 
 export type PersistedVerify = VerifyOutput & {
+  recipeTrace?: VerifyRecipeTraceOutput["recipeTrace"];
   targetClaim: PersistedClaimSlice;
   move: PersistedMoveSlice;
   brainRun: {
@@ -978,6 +980,15 @@ async function createVerifyPrelude(
     const lensSnapshot = await loadLensSnapshot(tx, input.sessionId);
     const generationInput = verifyGenerationInput(target, input, lensSnapshot);
     const searchDecision = verifyWebSearchDecision(generationInput);
+    const pendingRecipe = defaultVerifyRecipe({
+      input: generationInput,
+      output: {
+        verdict: "not_enough_evidence",
+        confidenceDeltaSuggestion: 0,
+      },
+      evidenceCards: [],
+      searchDecision,
+    });
 
     if (normalizeClaimText(target.version.content) !== normalizeClaimText(input.currentClaimText)) {
       throw new VerifyConflictError("Verify requires the current ClaimVersion text.");
@@ -1003,15 +1014,8 @@ async function createVerifyPrelude(
           currentClaimConfidence: target.version.confidence,
           searchEnabled: provider.searchEnabled,
           searchDecision,
-          recipe: defaultVerifyRecipe({
-            input: generationInput,
-            output: {
-              verdict: "not_enough_evidence",
-              confidenceDeltaSuggestion: 0,
-            },
-            evidenceCards: [],
-            searchDecision,
-          }),
+          recipe: pendingRecipe,
+          recipeTrace: verifyRecipeTraceForBrainRun(pendingRecipe),
           lensSnapshot,
         },
       })
@@ -1035,8 +1039,10 @@ async function persistVerifyResult(
     const citationSources = await insertCitationSources(tx, prelude.target, output.citations);
     const confidenceUpdate = confidenceUpdateDecision(output);
     const persistedSearchTrace = persistedSearchTraceFromRun(searchTrace, citationSources);
+    const recipeTrace = verifyRecipeTraceForBrainRun(output.recipe);
     const persistedOutput = {
       ...output,
+      recipeTrace,
       citationSources,
       searchTrace: persistedSearchTrace,
       confidenceUpdate,
