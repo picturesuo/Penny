@@ -1,52 +1,66 @@
-import React from "react";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { fetchSessionCanvas } from "../api/brainClient";
-import type { BrainData, CanvasNode, CanvasNodeAction, SessionCanvasData } from "../types/brain";
+import type { CanvasNode, CanvasNodeAction, SessionCanvasData } from "../types/brain";
 import { CanvasEdgeLayer, type PositionedCanvasNode } from "./CanvasEdgeLayer";
 import { CanvasNodeCard } from "./CanvasNodeCard";
 
 interface CanvasWorkspaceProps {
   sessionId: string | null;
-  data: BrainData | null;
   focusedClaimId: string | null;
   disabled?: boolean;
   initialCanvasData?: SessionCanvasData;
   onNodeAction: (action: CanvasNodeAction, node: CanvasNode) => void;
 }
 
+const emptyCanvas: SessionCanvasData = {
+  nodes: [],
+  edges: [],
+};
+
 const nodeWidth = 236;
 const nodeHeight = 132;
 
 export function CanvasWorkspace({
   sessionId,
-  data,
   focusedClaimId,
   disabled = false,
   initialCanvasData,
   onNodeAction,
 }: CanvasWorkspaceProps) {
-  const fallbackCanvas = useMemo(
-    () => initialCanvasData ?? buildMockCanvasData(sessionId, data, focusedClaimId),
-    [data, focusedClaimId, initialCanvasData, sessionId],
-  );
-  const [canvasData, setCanvasData] = useState<SessionCanvasData>(fallbackCanvas);
+  const [canvasData, setCanvasData] = useState<SessionCanvasData>(initialCanvasData ?? emptyCanvas);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(
-    fallbackCanvas.selectedNodeId ?? fallbackCanvas.nodes[0]?.id ?? null,
+    selectedNodeFrom(initialCanvasData ?? emptyCanvas, focusedClaimId),
   );
-  const [loadState, setLoadState] = useState<"stub" | "loading" | "ready">("stub");
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">(
+    initialCanvasData ? "ready" : "idle",
+  );
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    setCanvasData(fallbackCanvas);
-    setSelectedNodeId(fallbackCanvas.selectedNodeId ?? fallbackCanvas.nodes[0]?.id ?? null);
-  }, [fallbackCanvas]);
+    if (!initialCanvasData) {
+      return;
+    }
+
+    setCanvasData(initialCanvasData);
+    setSelectedNodeId(selectedNodeFrom(initialCanvasData, focusedClaimId));
+    setLoadState("ready");
+    setLoadError(null);
+  }, [focusedClaimId, initialCanvasData]);
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!sessionId || initialCanvasData) {
+      if (!sessionId && !initialCanvasData) {
+        setCanvasData(emptyCanvas);
+        setSelectedNodeId(null);
+        setLoadState("idle");
+        setLoadError(null);
+      }
       return;
     }
 
     let cancelled = false;
     setLoadState("loading");
+    setLoadError(null);
 
     fetchSessionCanvas(sessionId)
       .then((response) => {
@@ -54,26 +68,30 @@ export function CanvasWorkspace({
           return;
         }
 
-        const nextCanvas = response.nodes.length > 0 ? response : fallbackCanvas;
-        setCanvasData(nextCanvas);
-        setSelectedNodeId(nextCanvas.selectedNodeId ?? nextCanvas.nodes[0]?.id ?? null);
+        setCanvasData(response.data);
+        setSelectedNodeId(selectedNodeFrom(response.data, focusedClaimId));
         setLoadState("ready");
       })
-      .catch(() => {
-        if (!cancelled) {
-          setCanvasData(fallbackCanvas);
-          setLoadState("stub");
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
         }
+
+        setCanvasData(emptyCanvas);
+        setSelectedNodeId(null);
+        setLoadState("error");
+        setLoadError(error instanceof Error ? error.message : String(error));
       });
 
     return () => {
       cancelled = true;
     };
-  }, [fallbackCanvas, sessionId]);
+  }, [focusedClaimId, initialCanvasData, sessionId]);
 
   const nodes = useMemo(() => layoutCanvasNodes(canvasData.nodes), [canvasData.nodes]);
   const recommendedPath = canvasData.recommendedPath ?? [];
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? nodes[0] ?? null;
+  const isEmpty = loadState !== "loading" && nodes.length === 0;
 
   return (
     <section className="canvas-workspace" aria-label="Canvas workspace">
@@ -83,128 +101,58 @@ export function CanvasWorkspace({
           <h2>Thinking graph</h2>
         </div>
         <div className="canvas-toolbar-meta" aria-label="Canvas status">
-          <span>{loadState === "ready" ? "Session canvas" : loadState === "loading" ? "Loading canvas" : "Mock canvas"}</span>
+          <span>{canvasStatusLabel(loadState)}</span>
           <span>{nodes.length} nodes</span>
           <span>{canvasData.edges.length} edges</span>
+          {recommendedPath.length > 0 ? <span>{recommendedPath.length} path steps</span> : null}
         </div>
       </header>
 
-      <div className="canvas-board" aria-label="Miro-style thinking canvas">
-        <CanvasEdgeLayer
-          edges={canvasData.edges}
-          nodes={nodes}
-          selectedNodeId={selectedNode?.id ?? null}
-          recommendedPath={recommendedPath}
-        />
-        {nodes.map((node) => (
-          <CanvasNodeCard
-            key={node.id}
-            node={node}
-            selected={node.id === selectedNode?.id}
-            recommended={recommendedPath.includes(node.id)}
-            onSelect={setSelectedNodeId}
-            onAction={disabled ? () => undefined : onNodeAction}
-          />
-        ))}
+      <div className="canvas-board" aria-label="Thinking canvas">
+        {isEmpty ? (
+          <div className="canvas-empty-state">
+            <strong>{loadState === "error" ? "Canvas unavailable" : "No canvas nodes yet"}</strong>
+            <p>
+              {loadState === "error"
+                ? loadError ?? "The session canvas could not be loaded."
+                : "Penny will show backend graph nodes here after the session has canvas data."}
+            </p>
+          </div>
+        ) : (
+          <>
+            <CanvasEdgeLayer
+              edges={canvasData.edges}
+              nodes={nodes}
+              selectedNodeId={selectedNode?.id ?? null}
+              recommendedPath={recommendedPath}
+            />
+            {nodes.map((node) => (
+              <CanvasNodeCard
+                key={node.id}
+                node={node}
+                selected={node.id === selectedNode?.id}
+                recommended={recommendedPath.includes(node.id)}
+                onSelect={setSelectedNodeId}
+                onAction={disabled ? () => undefined : onNodeAction}
+              />
+            ))}
+          </>
+        )}
       </div>
     </section>
   );
 }
 
-export function buildMockCanvasData(
-  sessionId: string | null,
-  data: BrainData | null,
-  focusedClaimId: string | null = null,
-): SessionCanvasData {
-  const claims = data?.ideaMap?.claims ?? [];
-  const edges = data?.ideaMap?.edges ?? [];
+function selectedNodeFrom(canvas: SessionCanvasData, focusedClaimId: string | null): string | null {
+  if (focusedClaimId) {
+    const focused = canvas.nodes.find((node) => node.refs?.claimId === focusedClaimId || node.id === `claim:${focusedClaimId}`);
 
-  if (claims.length > 0) {
-    const nodeIdsByClaimId = new Map(claims.map((claim) => [claim.id, `claim:${claim.id}`]));
-    const nodes = claims.slice(0, 8).map((claim, index) => ({
-      id: nodeIdsByClaimId.get(claim.id) ?? `claim:${claim.id}`,
-      kind: claim.kind,
-      title: claim.kind === "belief" ? "Claim" : claim.kind,
-      summary: claim.text,
-      status: claim.status,
-      confidence: typeof claim.confidence === "number" ? claim.confidence : null,
-      refs: { claimId: claim.id },
-      ...gridPosition(index),
-    }));
-    const canvasEdges = edges
-      .map((edge) => ({
-        id: `edge:${edge.id}`,
-        source: nodeIdsByClaimId.get(edge.fromClaimId) ?? "",
-        target: nodeIdsByClaimId.get(edge.toClaimId) ?? "",
-        kind: edge.kind,
-        label: edge.label ?? edge.kind,
-      }))
-      .filter((edge) => edge.source && edge.target);
-    const selectedNodeId = focusedClaimId ? nodeIdsByClaimId.get(focusedClaimId) : nodes[0]?.id;
-
-    return {
-      nodes,
-      edges: canvasEdges,
-      recommendedPath: nodes.slice(0, 4).map((node) => node.id),
-      ...(selectedNodeId ? { selectedNodeId } : {}),
-    };
+    if (focused) {
+      return focused.id;
+    }
   }
 
-  return {
-    selectedNodeId: "canvas-seed",
-    recommendedPath: ["canvas-seed", "canvas-assumption", "canvas-verify", "canvas-brief"],
-    nodes: [
-      {
-        id: "canvas-seed",
-        kind: "claim",
-        title: "Dropped idea",
-        summary: data?.source?.rawText ?? "Drop an idea in Learn to turn it into a canvas.",
-        status: sessionId ? "open" : "draft",
-        confidence: 60,
-        x: 120,
-        y: 130,
-        refs: {},
-      },
-      {
-        id: "canvas-assumption",
-        kind: "assumption",
-        title: "Hidden assumption",
-        summary: "Penny will place the load-bearing assumption here after the graph is persisted.",
-        status: "exploratory",
-        confidence: 54,
-        x: 430,
-        y: 95,
-        refs: {},
-      },
-      {
-        id: "canvas-verify",
-        kind: "question",
-        title: "Evidence to verify",
-        summary: "Verify turns the riskiest factual claim into source-grounded evidence.",
-        status: "open",
-        confidence: null,
-        x: 430,
-        y: 310,
-        refs: {},
-      },
-      {
-        id: "canvas-brief",
-        kind: "artifact",
-        title: "Challenge Brief",
-        summary: "The first useful artifact appears after Check and response.",
-        status: "draft",
-        confidence: null,
-        x: 760,
-        y: 210,
-        refs: {},
-      },
-    ],
-    edges: [
-      { id: "canvas-edge-seed-assumption", source: "canvas-seed", target: "canvas-assumption", kind: "depends_on", label: "depends on" },
-      { id: "canvas-edge-assumption-verify", source: "canvas-assumption", target: "canvas-verify", kind: "questions", label: "needs evidence" },
-      { id: "canvas-edge-verify-brief", source: "canvas-verify", target: "canvas-brief", kind: "supports", label: "feeds" },
-    ],
-  };
+  return canvas.selectedNodeId ?? canvas.nodes[0]?.id ?? null;
 }
 
 function layoutCanvasNodes(nodes: CanvasNode[]): PositionedCanvasNode[] {
@@ -227,4 +175,17 @@ function gridPosition(index: number): { x: number; y: number } {
     x: 92 + column * 270 + laneOffset,
     y: 90 + row * 190 + (column % 2) * 34,
   };
+}
+
+function canvasStatusLabel(loadState: "idle" | "loading" | "ready" | "error"): string {
+  switch (loadState) {
+    case "loading":
+      return "Loading canvas";
+    case "ready":
+      return "Session canvas";
+    case "error":
+      return "Canvas error";
+    default:
+      return "No session";
+  }
 }

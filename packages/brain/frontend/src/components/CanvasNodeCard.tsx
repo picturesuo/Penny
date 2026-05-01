@@ -1,3 +1,4 @@
+import React from "react";
 import { BookOpen, CheckCircle2, Network, Save, ShieldCheck } from "lucide-react";
 import type { CanvasNode, CanvasNodeAction } from "../types/brain";
 import type { PositionedCanvasNode } from "./CanvasEdgeLayer";

@@ -13,10 +13,12 @@ import {
   type SaveBrainObjectInput,
 } from "./brain-objects-route.ts";
 import { handleLearnSessionRequest, type LearnSessionPayload } from "./learn-session-route.ts";
+import { handleSessionCanvasRequest, type SessionCanvasPayload } from "./session-canvas-route.ts";
 import type { BrainSeedInput, BrainSeedOutput } from "./seed.ts";
 import type { BrainSeedPrelude, BrainSeedRunInput, PersistedBrainSeed } from "./seed-persistence.ts";
 import type { ThinkingModeCandidateDto, ThinkingModeTickResponse } from "./services/thinking-mode-service.ts";
 import { type BrainScope, scopeValues } from "./scope.ts";
+import { runVerifyRecipeTrace } from "./verify-recipe.ts";
 
 const scope: BrainScope = {
   userId: "demo-user",
@@ -128,6 +130,171 @@ test("MVP idea-drop Learn flow creates a session, suggests Autopilot, keeps rece
     ),
     true,
   );
+});
+
+test("P2 smoke: idea drop, canvas fetch, recipe trace, and Brain context stay connected", async () => {
+  const idea = "Penny should help solo founders see which assumption makes their launch plan fragile.";
+  const brainObjects = new MemoryBrainObjectsService();
+  let persistedSeed: PersistedBrainSeed | null = null;
+
+  const learnResponse = await handleLearnSessionRequest(scopedJsonRequest("http://localhost/api/learn/session", {
+    rawIdea: idea,
+    autopilot: { limit: 1 },
+  }), {
+    async prepareSeedRun(input, options) {
+      return createPersistedPrelude(input, options.run);
+    },
+    async generateSeed(input) {
+      return demoSeedOutput(input.rawIdea, input.sessionId ?? uuidAt(120));
+    },
+    async persistSeed(seed, options) {
+      persistedSeed = createPersistedSeed(seed, options.prelude);
+      return persistedSeed;
+    },
+    async tickAutopilot(input) {
+      return demoAutopilotTick(input.sessionId, uuidAt(201));
+    },
+  });
+  const learnBody = (await learnResponse.json()) as { data: LearnSessionPayload };
+  const sessionId = learnBody.data.session.id;
+  const saveCandidate = learnBody.data.candidateBrainObjects[0];
+
+  assert.equal(learnResponse.status, 201);
+  assert.ok(saveCandidate);
+  assert.ok(persistedSeed);
+
+  const kept = await handleBrainRecentsRequest(scopedJsonRequest("http://localhost/api/brain/recents", {
+    rawIdea: saveCandidate.content,
+    kind: saveCandidate.objectType,
+    title: saveCandidate.title,
+    summary: saveCandidate.summary,
+    content: saveCandidate.content,
+    sessionId,
+    payload: {
+      source: "p2_smoke",
+      candidateBrainObjects: [saveCandidate],
+    },
+  }), { service: brainObjects });
+  const keptBody = (await kept.json()) as { data: { recent: BrainRecentDto } };
+  const saved = await handleSaveBrainObjectRequest(scopedJsonRequest("http://localhost/api/brain/objects/save", {
+    recentId: keptBody.data.recent.id,
+    sessionId,
+    objectType: saveCandidate.objectType,
+    title: saveCandidate.title,
+  }), { service: brainObjects });
+
+  assert.equal(kept.status, 201);
+  assert.equal(saved.status, 201);
+
+  const canvasResponse = await handleSessionCanvasRequest(scopedRequest(`http://localhost/api/sessions/${sessionId}/canvas`), sessionId, {
+    async loadSessionCanvas(targetSessionId, requestScope) {
+      assert.equal(targetSessionId, sessionId);
+      assert.deepEqual(requestScope, scope);
+
+      return {
+        nodes: [
+          {
+            id: `claim:${persistedSeed?.claims[0]?.id}`,
+            kind: "claim",
+            title: "Core idea",
+            summary: persistedSeed?.claimVersions[0]?.content ?? idea,
+            status: "exploratory",
+            confidence: persistedSeed?.claimVersions[0]?.confidence ?? null,
+            refs: {
+              claimId: persistedSeed?.claims[0]?.id,
+              sourceId: persistedSeed?.source.id,
+            },
+          },
+          {
+            id: `brain_object:${uuidAt(950)}`,
+            kind: "learn_session",
+            title: saveCandidate.title,
+            summary: saveCandidate.summary,
+            status: "saved",
+            refs: {},
+            actions: ["learn", "check", "verify", "save", "related"],
+          },
+        ],
+        edges: [
+          {
+            id: "smoke-canvas-edge",
+            source: `claim:${persistedSeed?.claims[0]?.id}`,
+            target: `brain_object:${uuidAt(950)}`,
+            kind: "supports",
+            label: "feeds saved Brain context",
+          },
+        ],
+        recommendedPath: [`claim:${persistedSeed?.claims[0]?.id}`, `brain_object:${uuidAt(950)}`],
+        selectedNodeId: `claim:${persistedSeed?.claims[0]?.id}`,
+      } satisfies SessionCanvasPayload;
+    },
+  });
+  const canvasBody = (await canvasResponse.json()) as { data: SessionCanvasPayload };
+  const recipe = runVerifyRecipeTrace({
+    steps: [
+      {
+        step: "decompose_claim",
+        title: "Decompose claim",
+        status: "completed",
+        summary: "Identified the fragile launch assumption from the canvas claim.",
+        inputs: [canvasBody.data.nodes[0]?.summary ?? idea],
+        outputs: ["testable launch assumption"],
+      },
+      {
+        step: "search_gather",
+        title: "Search and gather",
+        status: "skipped",
+        summary: "Used local Brain and canvas context for the smoke test.",
+        inputs: [sessionId],
+        outputs: ["local canvas context"],
+      },
+      {
+        step: "evaluate_evidence",
+        title: "Evaluate evidence",
+        status: "completed",
+        summary: "Checked that the saved Brain object still relates to the canvas claim.",
+        inputs: [saveCandidate.title],
+        outputs: ["brain context attached"],
+      },
+      {
+        step: "synthesize_verdict",
+        title: "Synthesize verdict",
+        status: "completed",
+        summary: "The P2 contracts can pass session context across Brain, Canvas, and recipe traces.",
+        inputs: ["brain context attached"],
+        outputs: ["supported"],
+      },
+      {
+        step: "suggest_confidence_change",
+        title: "Suggest confidence change",
+        status: "completed",
+        summary: "No confidence mutation happens in the smoke recipe.",
+        inputs: ["supported"],
+        outputs: ["delta 0"],
+      },
+    ],
+  });
+  const brain = await handleBrainObjectsRequest(scopedRequest("http://localhost/api/brain/objects"), {
+    service: brainObjects,
+  });
+  const brainBody = (await brain.json()) as { data: BrainObjectsPayload };
+
+  assert.equal(canvasResponse.status, 200);
+  assert.equal(canvasBody.data.nodes.some((node) => node.id.startsWith("claim:")), true);
+  assert.equal(canvasBody.data.nodes.some((node) => node.id.startsWith("brain_object:")), true);
+  assert.equal(canvasBody.data.edges[0]?.kind, "supports");
+  assert.equal(recipe.recipeTrace.status, "completed");
+  assert.deepEqual(recipe.recipeTrace.steps.map((step) => step.step), [
+    "decompose_claim",
+    "search_gather",
+    "evaluate_evidence",
+    "synthesize_verdict",
+    "suggest_confidence_change",
+  ]);
+  assert.equal(brain.status, 200);
+  assert.equal(brainBody.data.meta.savedObjectCount, 1);
+  assert.equal(brainBody.data.objects[0]?.sessionId, sessionId);
+  assert.match(brainBody.data.objects[0]?.preview ?? "", /fragile|thinking artifacts|launch/i);
 });
 
 class MemoryBrainObjectsService implements BrainObjectsRouteService {
