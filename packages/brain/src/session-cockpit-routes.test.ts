@@ -50,6 +50,16 @@ test("buildSessionCockpitPayload composes graph, moves, autopilot, active challe
   assert.equal(payload.graph.nodes[0]?.claimId, uuidAt(201));
   assert.equal(payload.moves[0]?.kind, "challenge_issued");
   assert.equal(payload.autopilot.selectedCandidate?.candidateId, "next_candidate");
+  assert.equal(payload.autopilot.selectedCandidate?.action, "challenge");
+  assert.equal(payload.autopilot.selectedCandidate?.title, "Check the weakest claim");
+  assert.equal(payload.autopilot.selectedCandidate?.reason, "Challenge the paid founder workflow assumption.");
+  assert.equal(payload.autopilot.selectedCandidate?.target.claimId, uuidAt(201));
+  assert.equal(payload.autopilot.selectedCandidate?.targetObject.id, `claim:${uuidAt(201)}`);
+  assert.equal(payload.autopilot.selectedCandidate?.targetObject.title, "Pre-seed founders will pay for structured thinking.");
+  assert.equal(payload.autopilot.selectedCandidate?.targetClaim?.id, uuidAt(201));
+  assert.equal(payload.autopilot.selectedCandidate?.priority.normalized, 92);
+  assert.equal(payload.autopilot.selectedCandidate?.confidence, 92);
+  assert.equal(payload.autopilot.selectedCandidate?.ctaLabel, "Start Check");
   assert.deepEqual(payload.modeContract.validModes, ["Learn", "Check", "Brain"]);
   assert.equal(payload.modeContract.activeMode, "Check");
   assert.equal(payload.activeChallenge?.id, uuidAt(701));
@@ -471,15 +481,29 @@ function candidateDto(sessionId: string) {
     candidateId: "next_candidate",
     fingerprint: "fingerprint_123",
     rank: 1,
+    title: "Check the weakest claim",
     targetClaimId: uuidAt(201),
     targetEdgeId: uuidAt(301),
+    target: {
+      type: "claim" as const,
+      id: uuidAt(201),
+      claimId: uuidAt(201),
+      edgeId: uuidAt(301),
+    },
     action: "challenge" as const,
     userAction: "check" as const,
     mode: "challenge" as const,
     mvpMode: "Check" as const,
     label: "Check the weakest claim",
+    ctaLabel: "Start Check",
     primaryActionLabel: "Start Check",
     score: 920,
+    priority: {
+      rank: 1,
+      score: 920,
+      normalized: 92,
+    },
+    confidence: 92,
     reason: "Challenge the paid founder workflow assumption.",
     whyNow: "Challenge the paid founder workflow assumption.",
     reasonCodes: ["load_bearing"],
