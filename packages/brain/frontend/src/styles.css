@@ -281,7 +281,11 @@
     align-items: end;
     gap: 0;
     min-width: 0;
+    border: 0;
     padding-bottom: 3px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
   }
 
   .brand-mark {
