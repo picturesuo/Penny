@@ -9,6 +9,7 @@ import type {
   ChallengeBriefResponse,
   ChallengeResponseKind,
   ClaimDetailResponse,
+  SessionCanvasResponse,
   BrainMove,
   InlineLearnOutput,
   InlineLearnResponse,
@@ -139,6 +140,25 @@ export async function fetchSessionNote(sessionId: string): Promise<BrainSessionN
   return payload as BrainSessionNoteResponse;
 }
 
+export async function fetchSessionCanvas(sessionId: string): Promise<SessionCanvasResponse> {
+  try {
+    const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/canvas`, {
+      method: "GET",
+      headers: requestHeaders(),
+    });
+
+    const payload = await readJson(response);
+
+    if (!response.ok) {
+      return mockSessionCanvas(sessionId);
+    }
+
+    return normalizeSessionCanvas(payload, sessionId);
+  } catch {
+    return mockSessionCanvas(sessionId);
+  }
+}
+
 export async function saveSessionNote(input: { sessionId: string; content: string }): Promise<BrainSessionNoteResponse> {
   const response = await fetch(`/api/sessions/${encodeURIComponent(input.sessionId)}/notes`, {
     method: "PUT",
@@ -153,6 +173,102 @@ export async function saveSessionNote(input: { sessionId: string; content: strin
   }
 
   return payload as BrainSessionNoteResponse;
+}
+
+function normalizeSessionCanvas(payload: unknown, sessionId: string): SessionCanvasResponse {
+  const maybePayload =
+    payload && typeof payload === "object" && "data" in payload ? (payload as { data?: unknown }).data : payload;
+
+  if (isSessionCanvasData(maybePayload)) {
+    return maybePayload;
+  }
+
+  return mockSessionCanvas(sessionId);
+}
+
+function isSessionCanvasData(payload: unknown): payload is SessionCanvasResponse {
+  return (
+    Boolean(payload) &&
+    typeof payload === "object" &&
+    Array.isArray((payload as SessionCanvasResponse).nodes) &&
+    Array.isArray((payload as SessionCanvasResponse).edges)
+  );
+}
+
+function mockSessionCanvas(sessionId: string): SessionCanvasResponse {
+  return {
+    selectedNodeId: "canvas-claim-core",
+    recommendedPath: ["canvas-claim-core", "canvas-assumption-risk", "canvas-question-evidence", "canvas-artifact-brief"],
+    nodes: [
+      {
+        id: "canvas-claim-core",
+        kind: "claim",
+        title: "Core idea",
+        summary: "The dropped idea is structured enough to inspect as a graph.",
+        status: "exploratory",
+        confidence: 62,
+        x: 120,
+        y: 130,
+        refs: {},
+      },
+      {
+        id: "canvas-assumption-risk",
+        kind: "assumption",
+        title: "Load-bearing assumption",
+        summary: "The weakest hidden premise should be challenged before the user saves the plan.",
+        status: "exploratory",
+        confidence: 54,
+        x: 430,
+        y: 95,
+        refs: {},
+      },
+      {
+        id: "canvas-question-evidence",
+        kind: "question",
+        title: "Evidence question",
+        summary: "The next Verify pass should ask what observable evidence would move confidence.",
+        status: "open",
+        confidence: null,
+        x: 430,
+        y: 310,
+        refs: {},
+      },
+      {
+        id: "canvas-artifact-brief",
+        kind: "artifact",
+        title: "Challenge Brief",
+        summary: `Session ${sessionId.slice(0, 8)} can produce a shareable challenge brief after Check.`,
+        status: "draft",
+        confidence: null,
+        x: 760,
+        y: 210,
+        refs: {},
+      },
+    ],
+    edges: [
+      {
+        id: "canvas-edge-core-risk",
+        source: "canvas-claim-core",
+        target: "canvas-assumption-risk",
+        kind: "depends_on",
+        label: "depends on",
+      },
+      {
+        id: "canvas-edge-risk-evidence",
+        source: "canvas-assumption-risk",
+        target: "canvas-question-evidence",
+        kind: "questions",
+        label: "needs evidence",
+      },
+      {
+        id: "canvas-edge-evidence-brief",
+        source: "canvas-question-evidence",
+        target: "canvas-artifact-brief",
+        kind: "supports",
+        label: "feeds",
+      },
+    ],
+  };
 }
 
 export async function fetchClaimDetail(claimId: string): Promise<ClaimDetailResponse> {

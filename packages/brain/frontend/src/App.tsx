@@ -24,6 +24,8 @@ import type {
   BrainDocumentsData,
   BrainMove,
   BrainRecentIdea,
+  CanvasNode,
+  CanvasNodeAction,
   ChallengeResponseKind,
   RespondToChallengeResponse,
   SessionCockpitData,
@@ -59,6 +61,7 @@ export function App() {
   const [latestArtifact, setLatestArtifact] = useState<SessionCockpitData["latestArtifact"]>(null);
   const [focusedClaimId, setFocusedClaimId] = useState<string | null>(null);
   const [focusedWorkStructureStepId, setFocusedWorkStructureStepId] = useState<string | null>(null);
+  const [brainCanvasOpen, setBrainCanvasOpen] = useState(false);
   const [activeMode, setActiveMode] = useState<PennyMode>("Learn");
   const [status, setStatus] = useState("Ready");
   const [isThinking, setIsThinking] = useState(false);
@@ -121,6 +124,7 @@ export function App() {
       setData(payload.data);
       setChallengeResponse(null);
       setLatestArtifact(null);
+      setBrainCanvasOpen(false);
       setFocusedWorkStructureStepId(payload.data.workStructure?.activeStepId ?? null);
       setFocusedClaimId(payload.data.firstChallenge?.targetClaimId ?? payload.data.ideaMap?.claims?.[0]?.id ?? null);
       setStatus("Graph slice persisted");
@@ -198,6 +202,7 @@ export function App() {
     setChallengeResponse(null);
     setLatestArtifact(null);
     setFocusedClaimId(null);
+    setBrainCanvasOpen(false);
     forgetActiveSession();
     setStatus("Ready");
   }
@@ -390,7 +395,53 @@ export function App() {
     }
 
     await handleManualClaimSelect(claimId);
-    setFocusedWorkStructureStepId(step.id);
+      setFocusedWorkStructureStepId(step.id);
+  }
+
+  function handleOpenCanvas() {
+    const sessionId = data?.session?.id ?? selectedDocument?.sessionId ?? null;
+
+    if (!sessionId) {
+      setStatus("Save an idea to Brain before opening Canvas");
+      return;
+    }
+
+    setBrainCanvasOpen(true);
+    setActiveMode("Brain");
+    setStatus("Canvas ready");
+  }
+
+  function handleCanvasNodeAction(action: CanvasNodeAction, node: CanvasNode) {
+    const claimId = node.refs?.claimId ?? (node.id.startsWith("claim:") ? node.id.slice("claim:".length) : null);
+
+    if (claimId) {
+      setFocusedClaimId(claimId);
+    }
+
+    switch (action) {
+      case "learn":
+        setActiveMode("Learn");
+        setStatus(`Learn from ${node.title}`);
+        break;
+      case "check":
+        setActiveMode("Check");
+        setStatus(`Check ${node.title}`);
+        break;
+      case "verify":
+        setActiveMode("Check");
+        setStatus(`Verify ${node.title}`);
+        break;
+      case "save":
+        setActiveMode("Brain");
+        setBrainCanvasOpen(false);
+        setStatus(`Save ${node.title} from Brain`);
+        break;
+      case "related":
+        setActiveMode("Brain");
+        setBrainCanvasOpen(true);
+        setStatus(`Related nodes for ${node.title}`);
+        break;
+    }
   }
 
   async function loadSession(sessionId: string, fallbackData: BrainData | null): Promise<SessionCockpitData> {
@@ -470,6 +521,7 @@ export function App() {
             onKeepRecent={handleKeepRecentIdea}
             onSelectDocument={handleSelectDocument}
             onOpenBrain={() => setActiveMode("Brain")}
+            onOpenCanvas={handleOpenCanvas}
             onOpenCheck={() => setActiveMode("Check")}
             onOpenVerify={() => setActiveMode("Check")}
             onVerifyChanged={handleVerifyChanged}
@@ -483,6 +535,7 @@ export function App() {
             autopilot={autopilot}
             latestArtifact={latestArtifact ?? null}
             focusedClaimId={focusedClaimId}
+            canvasOpen={brainCanvasOpen}
             status={status}
             isThinking={isThinking}
             recents={recents}
@@ -492,6 +545,8 @@ export function App() {
             onSeed={handleSeed}
             onClaimSelect={handleManualClaimSelect}
             onReworkDocument={handleReworkDocument}
+            onCanvasOpenChange={setBrainCanvasOpen}
+            onCanvasNodeAction={handleCanvasNodeAction}
           />
         ) : activeMode === "Check" ? (
           <CheckWorkspace

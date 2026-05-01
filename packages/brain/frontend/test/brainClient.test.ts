@@ -5,6 +5,7 @@ import {
   decideVerifyConfidence,
   fetchBrainRecents,
   fetchClaimDetail,
+  fetchSessionCanvas,
   fetchSessionCockpit,
   fetchSessionNote,
   keepBrainRecentIdea,
@@ -165,6 +166,55 @@ test("frontend brain client uses persisted recents and notes routes", async () =
     assert.equal(calls[3]?.url, `/api/sessions/${sessionId}/notes`);
     assert.equal(calls[3]?.method, "PUT");
     assert.deepEqual(calls[3]?.body, { content: "Preserve the founder workflow risk." });
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("frontend brain client fetches session canvas and falls back to mocked canvas data", async () => {
+  const sessionId = uuidAt(101);
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    new Response(
+      JSON.stringify({
+        nodes: [
+          {
+            id: "claim-node",
+            kind: "claim",
+            title: "Core claim",
+            summary: "A persisted canvas claim.",
+            status: "exploratory",
+            confidence: 68,
+            x: 120,
+            y: 80,
+          },
+        ],
+        edges: [],
+        recommendedPath: ["claim-node"],
+        selectedNodeId: "claim-node",
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    ),
+    new Response(JSON.stringify({ error: { message: "not ready" } }), {
+      status: 404,
+      headers: { "content-type": "application/json" },
+    }),
+  ]);
+
+  try {
+    const canvas = await fetchSessionCanvas(sessionId);
+    const fallback = await fetchSessionCanvas(sessionId);
+
+    assert.equal(calls[0]?.url, `/api/sessions/${sessionId}/canvas`);
+    assert.equal(calls[0]?.method, "GET");
+    assert.equal(canvas.nodes[0]?.id, "claim-node");
+    assert.equal(canvas.selectedNodeId, "claim-node");
+    assert.equal(calls[1]?.url, `/api/sessions/${sessionId}/canvas`);
+    assert.equal(fallback.nodes.length >= 4, true);
+    assert.equal(fallback.selectedNodeId, "canvas-claim-core");
   } finally {
     restoreFetch();
   }

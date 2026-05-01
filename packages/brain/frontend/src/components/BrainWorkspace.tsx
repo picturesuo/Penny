@@ -14,6 +14,8 @@ import type {
   BrainRecentIdea,
   BrainResearchItem,
   BrainSidebarData,
+  CanvasNode,
+  CanvasNodeAction,
   BrainMove,
   ChallengeBriefPayload,
   ClaimDetailConnection,
@@ -25,6 +27,7 @@ import type {
 import { fetchClaimDetail, fetchSessionNote, saveSessionNote } from "../api/brainClient";
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
+import { CanvasWorkspace } from "./CanvasWorkspace";
 import { Composer } from "./Composer";
 
 type ClaimDetailStatus = "idle" | "loading" | "ready" | "error";
@@ -37,6 +40,7 @@ interface BrainWorkspaceProps {
   autopilot: AutopilotTickData | null;
   latestArtifact: SessionCockpitData["latestArtifact"] | null;
   focusedClaimId: string | null;
+  canvasOpen: boolean;
   status: string;
   isThinking: boolean;
   recents?: BrainRecentIdea[];
@@ -46,6 +50,8 @@ interface BrainWorkspaceProps {
   onSeed: (rawIdea: string) => Promise<void>;
   onClaimSelect: (claimId: string) => void;
   onReworkDocument: () => Promise<void>;
+  onCanvasOpenChange: (open: boolean) => void;
+  onCanvasNodeAction: (action: CanvasNodeAction, node: CanvasNode) => void;
 }
 
 interface GraphPoint {
@@ -75,6 +81,7 @@ export function BrainWorkspace({
   autopilot,
   latestArtifact,
   focusedClaimId,
+  canvasOpen,
   status,
   isThinking,
   recents = [],
@@ -84,6 +91,8 @@ export function BrainWorkspace({
   onSeed,
   onClaimSelect,
   onReworkDocument,
+  onCanvasOpenChange,
+  onCanvasNodeAction,
 }: BrainWorkspaceProps) {
   const claims = selectedDocument ? data?.ideaMap?.claims ?? [] : [];
   const edges = selectedDocument ? data?.ideaMap?.edges ?? [] : [];
@@ -145,23 +154,43 @@ export function BrainWorkspace({
                 <button type="button" className="text-command" disabled={isThinking} onClick={onReworkDocument}>
                   Rework in Check
                 </button>
+                <button
+                  type="button"
+                  className={canvasOpen ? "primary-command" : "text-command"}
+                  disabled={isThinking}
+                  onClick={() => onCanvasOpenChange(!canvasOpen)}
+                >
+                  Canvas
+                </button>
                 <button type="button" className="primary-command" onClick={onNewThought}>
                   New Thought
                 </button>
               </div>
             </div>
-            <DocumentHeader document={selectedDocument} workStructure={data?.workStructure ?? null} />
-            <FocusedGraphDetail
-              focusedClaim={focusedClaim}
-              detail={claimDetail}
-              detailStatus={claimDetailStatus}
-              detailError={claimDetailError}
-              localClaims={claims}
-              localEdges={edges}
-              moves={moves}
-            />
-            <DocumentRundown document={selectedDocument} moves={moves} latestArtifact={latestArtifact} />
-            <WorkingNotes sessionId={selectedDocument.sessionId} title={selectedDocument.title} />
+            {canvasOpen ? (
+              <CanvasWorkspace
+                sessionId={selectedDocument.sessionId}
+                data={data}
+                focusedClaimId={focusedClaimId}
+                disabled={isThinking}
+                onNodeAction={onCanvasNodeAction}
+              />
+            ) : (
+              <>
+                <DocumentHeader document={selectedDocument} workStructure={data?.workStructure ?? null} />
+                <FocusedGraphDetail
+                  focusedClaim={focusedClaim}
+                  detail={claimDetail}
+                  detailStatus={claimDetailStatus}
+                  detailError={claimDetailError}
+                  localClaims={claims}
+                  localEdges={edges}
+                  moves={moves}
+                />
+                <DocumentRundown document={selectedDocument} moves={moves} latestArtifact={latestArtifact} />
+                <WorkingNotes sessionId={selectedDocument.sessionId} title={selectedDocument.title} />
+              </>
+            )}
           </section>
           <aside className="brain-graph-quarter" aria-label="Brain graph and context">
             <ConnectedGraphBoard

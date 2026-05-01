@@ -2537,6 +2537,222 @@
     white-space: nowrap;
   }
 
+  .canvas-workspace {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .canvas-toolbar {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 18px;
+    border-bottom: 1px solid #d8d8d8;
+    padding-bottom: 14px;
+  }
+
+  .canvas-toolbar h2 {
+    margin: 6px 0 0;
+    font-size: 20px;
+    line-height: 1.1;
+  }
+
+  .canvas-toolbar-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .canvas-toolbar-meta span {
+    border: 1px solid #cfcfcf;
+    border-radius: 999px;
+    padding: 6px 9px;
+    background: #ffffff;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .canvas-board {
+    position: relative;
+    height: min(64vh, 620px);
+    min-height: 540px;
+    overflow: auto;
+    border: 1px solid #111111;
+    border-radius: 8px;
+    background:
+      linear-gradient(rgb(17 17 17 / 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(17 17 17 / 0.06) 1px, transparent 1px),
+      #f8f7f1;
+    background-size: 32px 32px;
+  }
+
+  .canvas-board::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.72);
+  }
+
+  .canvas-edge-layer {
+    position: absolute;
+    inset: 0;
+    width: 1080px;
+    height: 620px;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .canvas-edge path {
+    fill: none;
+    stroke: rgb(17 17 17 / 0.26);
+    stroke-linecap: round;
+    stroke-width: 2;
+  }
+
+  .canvas-edge text {
+    fill: rgb(17 17 17 / 0.58);
+    font-size: 11px;
+    paint-order: stroke;
+    stroke: #f8f7f1;
+    stroke-width: 5px;
+  }
+
+  .canvas-edge.is-active path,
+  .canvas-edge.is-recommended path {
+    stroke: #111111;
+    stroke-width: 2.5;
+  }
+
+  .canvas-edge.is-challenges path,
+  .canvas-edge.is-contradicts path {
+    stroke: #9c2f2f;
+  }
+
+  .canvas-edge.is-questions path {
+    stroke-dasharray: 6 6;
+  }
+
+  .canvas-node-card {
+    position: absolute;
+    z-index: 1;
+    border: 1px solid #111111;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 10px 0 rgb(17 17 17 / 0.06);
+  }
+
+  .canvas-node-card.is-selected {
+    z-index: 3;
+    box-shadow: 0 0 0 3px #111111, 0 14px 0 rgb(17 17 17 / 0.08);
+  }
+
+  .canvas-node-card.is-recommended:not(.is-selected) {
+    box-shadow: 0 0 0 2px rgb(17 17 17 / 0.3), 0 10px 0 rgb(17 17 17 / 0.06);
+  }
+
+  .canvas-node-hitbox {
+    display: grid;
+    width: 100%;
+    min-height: 132px;
+    border: 0;
+    padding: 13px 14px;
+    background: transparent;
+    color: #111111;
+    text-align: left;
+  }
+
+  .canvas-node-kind {
+    justify-self: start;
+    margin-bottom: 7px;
+    border: 1px solid #111111;
+    border-radius: 999px;
+    padding: 4px 7px;
+    font-size: 10px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .canvas-node-card.is-assumption .canvas-node-kind {
+    background: #fbf0c8;
+  }
+
+  .canvas-node-card.is-question .canvas-node-kind {
+    background: #dff0ef;
+  }
+
+  .canvas-node-card.is-concept .canvas-node-kind {
+    background: #e7e0fb;
+  }
+
+  .canvas-node-card.is-artifact .canvas-node-kind {
+    background: #dfe9fb;
+  }
+
+  .canvas-node-hitbox strong {
+    overflow-wrap: anywhere;
+    font-size: 14px;
+    line-height: 1.18;
+  }
+
+  .canvas-node-hitbox p {
+    display: -webkit-box;
+    margin: 8px 0;
+    overflow: hidden;
+    color: rgb(17 17 17 / 0.7);
+    font-size: 12px;
+    line-height: 1.32;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+
+  .canvas-node-meta {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-self: end;
+  }
+
+  .canvas-node-meta span {
+    border-radius: 999px;
+    background: #f1f1f1;
+    padding: 4px 6px;
+    color: rgb(17 17 17 / 0.64);
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .canvas-node-menu {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+    border-top: 1px solid #d8d8d8;
+    padding: 6px;
+  }
+
+  .canvas-node-action {
+    display: grid;
+    justify-items: center;
+    gap: 3px;
+    min-width: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 6px 4px;
+    background: #ffffff;
+    color: #111111;
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .canvas-node-action:hover,
+  .canvas-node-action:focus-visible {
+    border-color: #111111;
+    background: #f3f3f3;
+  }
+
   .focused-graph-detail {
     display: grid;
     gap: 14px;
@@ -3512,12 +3728,26 @@
   }
 
   .memory-graph-preview,
-  .graph-board {
+  .graph-board,
+  .canvas-board {
     overflow-x: auto;
   }
 
   .memory-graph-preview svg,
   .graph-board svg {
     min-width: 780px;
+  }
+
+  .canvas-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .canvas-board {
+    min-height: 520px;
+  }
+
+  .canvas-edge-layer {
+    min-width: 1080px;
   }
 }

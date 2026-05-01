@@ -25,6 +25,7 @@ interface LearnWorkspaceProps {
   onKeepRecent: (rawIdea: string) => Promise<void>;
   onSelectDocument: (sessionId: string) => void;
   onOpenBrain: () => void;
+  onOpenCanvas: () => void;
   onOpenCheck: () => void;
   onOpenVerify: () => void;
   onVerifyChanged?: () => Promise<void>;
@@ -42,6 +43,7 @@ export function LearnWorkspace({
   onKeepRecent,
   onSelectDocument,
   onOpenBrain,
+  onOpenCanvas,
   onOpenCheck,
   onOpenVerify,
   onVerifyChanged,
@@ -72,6 +74,7 @@ export function LearnWorkspace({
             searchWebRequested={searchWebRequested}
             disabled={isThinking}
             onOpenBrain={onOpenBrain}
+            onOpenCanvas={onOpenCanvas}
             onOpenCheck={onOpenCheck}
             onOpenVerify={onOpenVerify}
             onSaveToBrain={onSeed}
@@ -110,6 +113,7 @@ function LearnSessionView({
   searchWebRequested,
   disabled,
   onOpenBrain,
+  onOpenCanvas,
   onOpenCheck,
   onOpenVerify,
   onSaveToBrain,
@@ -122,6 +126,7 @@ function LearnSessionView({
   searchWebRequested: boolean;
   disabled: boolean;
   onOpenBrain: () => void;
+  onOpenCanvas: () => void;
   onOpenCheck: () => void;
   onOpenVerify: () => void;
   onSaveToBrain: (rawIdea: string) => Promise<void>;
@@ -146,6 +151,9 @@ function LearnSessionView({
       <div className="learn-output-actions" aria-label="Learn next actions">
         <button type="button" className="primary-command" disabled={disabled} onClick={onOpenCheck}>
           Check
+        </button>
+        <button type="button" className="text-command" disabled={disabled || !currentSessionId} onClick={onOpenCanvas}>
+          Canvas
         </button>
         <button type="button" className="text-command" disabled={disabled} onClick={onOpenVerify}>
           Verify
