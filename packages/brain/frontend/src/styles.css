@@ -3465,7 +3465,7 @@
     display: block;
     height: calc(100vh - 92px);
     min-height: 640px;
-    padding: 14px 24px 18px;
+    padding: 0 24px 18px;
     overflow: hidden;
     background: #fbfaf6;
   }
