@@ -3663,7 +3663,7 @@
     height: 100%;
     min-height: 0;
     overflow: auto;
-    padding: 18px clamp(18px, 3vw, 42px) 42px;
+    padding: 14px clamp(18px, 3vw, 42px) 42px;
   }
 
   .learn-ask-toggle {
@@ -3687,43 +3687,43 @@
   .learn-goal-block {
     max-width: 920px;
     border-bottom: 2px solid #111111;
-    padding-bottom: 14px;
+    padding-bottom: 10px;
   }
 
   .learn-goal-block h1 {
-    margin: 12px 0 0;
+    margin: 8px 0 0;
     overflow-wrap: anywhere;
-    font-size: clamp(28px, 3.2vw, 48px);
+    font-size: clamp(24px, 2.55vw, 38px);
     font-weight: 500;
     letter-spacing: 0;
     line-height: 0.98;
   }
 
   .learn-session-output.ask-open .learn-goal-block h1 {
-    font-size: clamp(25px, 2.45vw, 36px);
+    font-size: clamp(23px, 2.2vw, 32px);
   }
 
   .learn-step-header {
     max-width: 760px;
-    padding: 16px 0 14px;
-  }
-
-  .learn-session-output.ask-open .learn-step-header {
     padding: 12px 0 10px;
   }
 
+  .learn-session-output.ask-open .learn-step-header {
+    padding: 9px 0 8px;
+  }
+
   .learn-step-header h2 {
-    margin: 8px 0 0;
-    font-size: clamp(24px, 2.4vw, 36px);
+    margin: 6px 0 0;
+    font-size: clamp(21px, 1.9vw, 30px);
     font-weight: 700;
     letter-spacing: 0;
     line-height: 1;
   }
 
   .learn-step-header p {
-    margin: 12px 0 0;
+    margin: 8px 0 0;
     color: rgb(17 17 17 / 0.72);
-    font-size: 16px;
+    font-size: 15px;
     line-height: 1.24;
   }
 
