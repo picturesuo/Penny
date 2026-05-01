@@ -10,7 +10,7 @@
 
 ## Project Facts
 - Project name: Penny.
-- `docs/queue.md` is the lightweight task queue. `docs/knowledge.md` is only for durable, reusable project knowledge.
+- `docs/knowledge.md` is only for durable, reusable project knowledge.
 - Task-specific goals, criteria, status, assumptions, and open questions belong in the shared context file; promote only stable repo facts or reusable operating rules into `docs/knowledge.md`.
 - Shared context sections owned by the active role may be updated directly, but historical logs and unrelated role-owned sections should not be rewritten.
 - The repo-local operating model favors small reversible changes and one-file commits when work moves across files.
