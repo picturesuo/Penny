@@ -38,53 +38,32 @@ export function LearnWorkspace({
   selectedDocument,
   data,
   autopilot,
-  recents,
   focusedClaimId,
   focusNode,
   relatedBrainSearch,
-  status,
   isThinking,
-  onSeed,
-  onKeepRecent,
   onSearchBrainRelated,
 }: LearnWorkspaceProps) {
-  const output = useMemo(() => buildLearnSessionOutput(data, selectedDocument, autopilot), [data, selectedDocument, autopilot]);
+  const output = useMemo(
+    () => buildLearnSessionOutput(data, selectedDocument, autopilot) ?? defaultLearnSessionOutput(),
+    [data, selectedDocument, autopilot],
+  );
   const [searchWebRequested, setSearchWebRequested] = useState(false);
   const sourceText = data?.source?.rawText ?? selectedDocument?.originalIdea ?? output?.coreIdea ?? "";
 
-  async function handleSeedFromDrop(rawIdea: string, options: { searchWeb: boolean }) {
-    setSearchWebRequested(options.searchWeb);
-    await onSeed(rawIdea);
-  }
-
   return (
-    <main className={`learn-workspace${output ? "" : " is-entry-mode"}`} aria-label="Learn">
+    <main className="learn-workspace" aria-label="Learn">
       <section className="learn-main">
-        {output ? (
-          <LearnSessionView
-            output={output}
-            sourceText={sourceText}
-            focusedClaimId={focusedClaimId}
-            focusNode={focusNode}
-            relatedBrainSearch={relatedBrainSearch}
-            searchWebRequested={searchWebRequested}
-            disabled={isThinking}
-            onSearchBrainRelated={onSearchBrainRelated}
-          />
-        ) : (
-          <section className="learn-entry" aria-label="Drop an idea">
-            <h1>What shall we think through?</h1>
-            <LearnIdeaDrop
-              disabled={isThinking}
-              status={status}
-              recents={recents}
-              searchWeb={searchWebRequested}
-              onSearchWebChange={setSearchWebRequested}
-              onSave={handleSeedFromDrop}
-              onKeep={onKeepRecent}
-            />
-          </section>
-        )}
+        <LearnSessionView
+          output={output}
+          sourceText={sourceText}
+          focusedClaimId={focusedClaimId}
+          focusNode={focusNode}
+          relatedBrainSearch={relatedBrainSearch}
+          searchWebRequested={searchWebRequested}
+          disabled={isThinking}
+          onSearchBrainRelated={onSearchBrainRelated}
+        />
       </section>
     </main>
   );
@@ -933,6 +912,17 @@ function buildLearnSessionOutput(
     questions,
     creativePotential: creativePotentialFrom(data, selectedDocument),
     autopilotNextMove: autopilot?.suggestion ?? autopilot?.selectedCandidate ?? null,
+  };
+}
+
+function defaultLearnSessionOutput(): LearnSessionOutput {
+  return {
+    coreIdea: "a new topic with Penny's guided learning path",
+    claims: [],
+    assumptions: [],
+    questions: [],
+    creativePotential: ["Start with the frame, then let the example reveal what Penny should teach next."],
+    autopilotNextMove: null,
   };
 }
 
