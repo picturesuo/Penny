@@ -4,6 +4,7 @@ export {
   runVerify,
   VerifyConflictError,
   VerifyNotFoundError,
+  verifyConfidenceCascadePolicy,
 } from "./verify-core.ts";
 export type {
   ConfidenceCascadeApplied,
