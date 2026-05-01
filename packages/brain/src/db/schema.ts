@@ -59,6 +59,13 @@ export const focusSourceEnum = pgEnum("focus_source", [
   "challenge_response",
   "none",
 ]);
+export const brainEmbeddingObjectTypeEnum = pgEnum("brain_embedding_object_type", [
+  "brain_object",
+  "session_note",
+  "claim_version",
+  "brain_recent",
+  "artifact",
+]);
 export const nextMoveActionEnum = pgEnum("next_move_action", [
   "resume_open_challenge",
   "learn",
@@ -212,6 +219,41 @@ export const sessionNotes = pgTable(
     uniqueIndex("session_notes_session_id_idx").on(table.sessionId),
     index("session_notes_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
     index("session_notes_updated_at_idx").on(table.updatedAt),
+  ],
+);
+
+export const brainEmbeddings = pgTable(
+  "brain_embeddings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
+    objectType: brainEmbeddingObjectTypeEnum("object_type").notNull(),
+    objectId: uuid("object_id").notNull(),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    contentHash: text("content_hash").notNull(),
+    embeddingModel: text("embedding_model").notNull(),
+    embeddingJson: jsonb("embedding_json").$type<number[]>().notNull().default([]),
+    embeddingText: text("embedding_text").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("brain_embeddings_object_idx").on(table.objectType, table.objectId),
+    index("brain_embeddings_session_id_idx").on(table.sessionId),
+    index("brain_embeddings_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_embeddings_type_idx").on(table.objectType),
+    index("brain_embeddings_model_idx").on(table.embeddingModel),
+    index("brain_embeddings_updated_at_idx").on(table.updatedAt),
+    index("brain_embeddings_expires_at_idx").on(table.expiresAt),
+    check("brain_embeddings_title_present", sql`length(trim(${table.title})) > 0`),
+    check("brain_embeddings_content_present", sql`length(trim(${table.content})) > 0`),
+    check("brain_embeddings_content_hash_present", sql`length(trim(${table.contentHash})) > 0`),
+    check("brain_embeddings_embedding_model_present", sql`length(trim(${table.embeddingModel})) > 0`),
+    check("brain_embeddings_embedding_text_present", sql`length(trim(${table.embeddingText})) > 0`),
   ],
 );
 
@@ -673,6 +715,8 @@ export const pennySchema = {
   artifacts,
   artifactKindEnum,
   brainObjects,
+  brainEmbeddingObjectTypeEnum,
+  brainEmbeddings,
   brainRecents,
   brainRunOperationEnum,
   brainRunStatusEnum,

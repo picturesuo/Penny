@@ -66,6 +66,70 @@ export type NextMoveAction =
 export type ChallengeResponseKind = "defend" | "revise" | "absorb";
 export type ArtifactKind = "idea_map" | "challenge_brief" | "idea_map_challenge_brief";
 
+export type BrainEmbeddingObjectType =
+  | "brain_object"
+  | "session_note"
+  | "claim_version"
+  | "brain_recent"
+  | "artifact";
+
+export type BrainSearchResult = {
+  objectType: BrainEmbeddingObjectType;
+  objectId: EntityId;
+  sessionId: EntityId | null;
+  title: string;
+  preview: string;
+  score: number;
+  semanticScore: number;
+  lexicalScore: number;
+  source: "semantic" | "hybrid" | "lexical";
+  metadata: Record<string, unknown>;
+  updatedAt: IsoTimestamp;
+};
+
+export type CanvasNode = {
+  id: string;
+  objectId?: string;
+  claimId?: string;
+  type:
+    | "idea"
+    | "claim"
+    | "assumption"
+    | "question"
+    | "concept"
+    | "source"
+    | "note"
+    | "creative_direction"
+    | "artifact"
+    | "evidence";
+  title: string;
+  preview?: string;
+  status?: "ephemeral" | "recent" | "saved" | "archived";
+  confidence?: number;
+  sourceCount?: number;
+  x?: number;
+  y?: number;
+  metadata?: Record<string, unknown>;
+};
+
+export type CanvasEdge = {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  type:
+    | "supports"
+    | "depends_on"
+    | "questions"
+    | "challenges"
+    | "contradicts"
+    | "clarifies"
+    | "teaches"
+    | "related_to"
+    | "verified_by";
+  weight?: number;
+  provenance?: "claim_edge" | "brain_object" | "autopilot" | "manual";
+};
+
 export type ClaimVersionSnapshot = {
   id: EntityId;
   claimId: EntityId;

@@ -4,6 +4,8 @@ import { getTableName } from "drizzle-orm";
 import {
   artifactKindEnum,
   artifacts,
+  brainEmbeddingObjectTypeEnum,
+  brainEmbeddings,
   brainObjects,
   brainRecents,
   brainRunOperationEnum,
@@ -55,6 +57,7 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(derivedEffects), "derived_effects");
   assert.equal(getTableName(focusStates), "focus_states");
   assert.equal(getTableName(nextMoveCandidates), "next_move_candidates");
+  assert.equal(getTableName(brainEmbeddings), "brain_embeddings");
   assert.equal(getTableName(brainObjects), "brain_objects");
   assert.equal(getTableName(brainRecents), "brain_recents");
   assert.equal(getTableName(sessionNotes), "session_notes");
@@ -82,6 +85,7 @@ test("Penny core tables persist user and workspace scope", () => {
     derivedEffects,
     focusStates,
     nextMoveCandidates,
+    brainEmbeddings,
     brainObjects,
     brainRecents,
     sessionNotes,
@@ -137,6 +141,13 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
     "challenge",
     "save_to_brain",
   ]);
+  assert.deepEqual(brainEmbeddingObjectTypeEnum.enumValues, [
+    "brain_object",
+    "session_note",
+    "claim_version",
+    "brain_recent",
+    "artifact",
+  ]);
   assert.deepEqual(challengeFailureTypeEnum.enumValues, [
     "weak_evidence",
     "missing_counterargument",
@@ -186,6 +197,8 @@ test("Penny schema has a clean aggregate export surface", () => {
   assert.deepEqual(Object.keys(pennySchema).sort(), [
     "artifactKindEnum",
     "artifacts",
+    "brainEmbeddingObjectTypeEnum",
+    "brainEmbeddings",
     "brainObjects",
     "brainRecents",
     "brainRunOperationEnum",

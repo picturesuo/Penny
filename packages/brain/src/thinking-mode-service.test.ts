@@ -178,6 +178,21 @@ function fakeRepository(graph = loadFixture()): BrainRepository & { writes: stri
       writes.push("reviseClaim");
       throw new Error("reviseClaim should not run in Thinking Mode service tests");
     },
+    async upsertEmbeddingForObject() {
+      throw new Error("upsertEmbeddingForObject should not run in Thinking Mode service tests");
+    },
+    async searchBrainSemantic() {
+      return [];
+    },
+    async searchBrainHybrid() {
+      return [];
+    },
+    async listCanvasNodesForSession() {
+      return [];
+    },
+    async listCanvasEdgesForSession() {
+      return [];
+    },
   };
 }
 

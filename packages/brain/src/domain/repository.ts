@@ -1,8 +1,11 @@
-import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { createHash, randomUUID } from "node:crypto";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { PennyDatabase } from "../db/client.ts";
 import {
   artifacts,
+  brainEmbeddings,
+  brainObjects,
   brainRecents,
   challengeRounds,
   claimEdges,
@@ -11,7 +14,9 @@ import {
   focusStates,
   moves,
   nextMoveCandidates,
+  sessionNotes,
   sessions,
+  sources,
 } from "../db/schema.ts";
 import {
   createMove as createPersistedMove,
@@ -25,8 +30,12 @@ import {
   type LearnSessionOutput,
   type LearnSessionSaveCandidate,
 } from "../learn-session-output.ts";
-import { scopeValues } from "../scope.ts";
+import { scopeValues, type BrainScope } from "../scope.ts";
 import type {
+  BrainEmbeddingObjectType,
+  BrainSearchResult,
+  CanvasEdge,
+  CanvasNode,
   ChallengeBriefArtifact,
   ClaimVersionSnapshot,
   EntityId,
@@ -42,6 +51,30 @@ import type {
   NextMoveProvenance,
   NextMoveScoreBreakdown,
 } from "./engine.ts";
+
+export const recentSearchTtlMs = 1000 * 60 * 60 * 24 * 14;
+
+export type UpsertEmbeddingForObjectInput = {
+  scope: BrainScope;
+  objectType: BrainEmbeddingObjectType;
+  objectId: EntityId;
+  title: string;
+  content: string;
+  embedding: ReadonlyArray<number>;
+  embeddingModel: string;
+  sessionId?: EntityId | null;
+  metadata?: Record<string, unknown>;
+  expiresAt?: Date | string | null;
+};
+
+export type BrainSearchInput = {
+  scope: BrainScope;
+  query: string;
+  embedding?: ReadonlyArray<number>;
+  limit?: number;
+  now?: Date;
+  includeExpired?: boolean;
+};
 
 export type PersistedNextMoveCandidate = Omit<
   typeof nextMoveCandidates.$inferSelect,
@@ -106,6 +139,11 @@ export interface BrainRepository {
   createMove<K extends MoveKind>(kind: K, input: CreateMoveInput<K>): Promise<CreatedMove<K>>;
   getClaimCurrentVersion(claimId: EntityId): Promise<CurrentClaimVersion>;
   reviseClaim(input: ReviseClaimInput): Promise<RevisedClaim>;
+  upsertEmbeddingForObject(input: UpsertEmbeddingForObjectInput): Promise<BrainSearchResult>;
+  searchBrainSemantic(input: BrainSearchInput): Promise<ReadonlyArray<BrainSearchResult>>;
+  searchBrainHybrid(input: BrainSearchInput): Promise<ReadonlyArray<BrainSearchResult>>;
+  listCanvasNodesForSession(sessionId: EntityId, scope?: BrainScope): Promise<ReadonlyArray<CanvasNode>>;
+  listCanvasEdgesForSession(sessionId: EntityId, scope?: BrainScope): Promise<ReadonlyArray<CanvasEdge>>;
 }
 
 type BrainTransaction = Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
@@ -117,6 +155,18 @@ type MoveRow = typeof moves.$inferSelect;
 type ArtifactRow = typeof artifacts.$inferSelect;
 type SessionRow = typeof sessions.$inferSelect;
 type FocusStateRow = typeof focusStates.$inferSelect;
+type SourceRow = typeof sources.$inferSelect;
+type BrainEmbeddingRow = typeof brainEmbeddings.$inferSelect;
+type BrainObjectRow = typeof brainObjects.$inferSelect;
+type BrainRecentRow = typeof brainRecents.$inferSelect;
+type SessionNoteRow = typeof sessionNotes.$inferSelect;
+type ScopeColumn = AnyPgColumn;
+type ScopeTable = {
+  userId: ScopeColumn;
+  workspaceId: ScopeColumn;
+  projectId: ScopeColumn;
+  sphereId: ScopeColumn;
+};
 
 export class DrizzleBrainRepository implements BrainRepository {
   constructor(private readonly db: PennyDatabase) {}
@@ -384,6 +434,72 @@ export class DrizzleBrainRepository implements BrainRepository {
       };
     });
   }
+
+  async upsertEmbeddingForObject(input: UpsertEmbeddingForObjectInput): Promise<BrainSearchResult> {
+    const title = requiredText(input.title, "Embedding title is required.");
+    const content = requiredText(input.content, "Embedding content is required.");
+    const embedding = normalizeEmbedding(input.embedding);
+    const embeddingModel = requiredText(input.embeddingModel, "Embedding model is required.");
+    const now = new Date();
+    const [row] = await this.db
+      .insert(brainEmbeddings)
+      .values({
+        ...input.scope,
+        sessionId: input.sessionId ?? null,
+        objectType: input.objectType,
+        objectId: input.objectId,
+        title,
+        content,
+        contentHash: hashText(content),
+        embeddingModel,
+        embeddingJson: embedding,
+        embeddingText: JSON.stringify(embedding),
+        metadata: input.metadata ?? {},
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [brainEmbeddings.objectType, brainEmbeddings.objectId],
+        set: {
+          ...input.scope,
+          sessionId: input.sessionId ?? null,
+          title,
+          content,
+          contentHash: hashText(content),
+          embeddingModel,
+          embeddingJson: embedding,
+          embeddingText: JSON.stringify(embedding),
+          metadata: input.metadata ?? {},
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+          updatedAt: now,
+        },
+      })
+      .returning();
+
+    if (!row) {
+      throw new BrainRepositoryConflictError("Failed to upsert Brain embedding.");
+    }
+
+    return embeddingRowToSearchResult(row, 1, 0, "semantic");
+  }
+
+  async searchBrainSemantic(input: BrainSearchInput): Promise<ReadonlyArray<BrainSearchResult>> {
+    return searchBrainSemantic(this.db, input);
+  }
+
+  async searchBrainHybrid(input: BrainSearchInput): Promise<ReadonlyArray<BrainSearchResult>> {
+    return searchBrainHybrid(this.db, input);
+  }
+
+  async listCanvasNodesForSession(sessionId: EntityId, scope?: BrainScope): Promise<ReadonlyArray<CanvasNode>> {
+    const state = await loadCanvasState(this.db, sessionId, scope);
+    return buildCanvasNodes(state);
+  }
+
+  async listCanvasEdgesForSession(sessionId: EntityId, scope?: BrainScope): Promise<ReadonlyArray<CanvasEdge>> {
+    const state = await loadCanvasState(this.db, sessionId, scope);
+    return buildCanvasEdges(state);
+  }
 }
 
 export function createBrainRepository(db: PennyDatabase): BrainRepository {
@@ -421,6 +537,114 @@ export async function recordLearnSessionOutput(
   });
 }
 
+export async function searchBrainSemantic(
+  db: PennyDatabase,
+  input: BrainSearchInput,
+): Promise<ReadonlyArray<BrainSearchResult>> {
+  const query = requiredText(input.query, "Brain search query is required.");
+  const limit = normalizeLimit(input.limit);
+  const now = input.now ?? new Date();
+  const rows = await db
+    .select()
+    .from(brainEmbeddings)
+    .where(scopeCondition(brainEmbeddings, input.scope))
+    .orderBy(desc(brainEmbeddings.updatedAt))
+    .limit(500);
+  const activeRows = input.includeExpired ? rows : rows.filter((row) => !row.expiresAt || row.expiresAt > now);
+  const queryEmbedding = normalizeEmbedding(input.embedding ?? mockedEmbeddingForText(query));
+
+  return activeRows
+    .map((row) => embeddingRowToSearchResult(row, cosineSimilarity(queryEmbedding, normalizeEmbedding(row.embeddingJson)), 0, "semantic"))
+    .filter((result) => result.semanticScore > 0)
+    .sort(searchResultSort)
+    .slice(0, limit);
+}
+
+export async function searchBrainHybrid(
+  db: PennyDatabase,
+  input: BrainSearchInput,
+): Promise<ReadonlyArray<BrainSearchResult>> {
+  const query = requiredText(input.query, "Brain search query is required.");
+  const limit = normalizeLimit(input.limit);
+  const semanticResults = await searchBrainSemantic(db, { ...input, limit: 100 });
+  const lexicalObjects = await listBrainSearchIndexObjects(db, input.scope, input.now ?? new Date());
+  const merged = new Map<string, BrainSearchResult>();
+
+  for (const result of semanticResults) {
+    merged.set(searchResultKey(result), {
+      ...result,
+      source: "hybrid",
+      score: result.semanticScore * 0.7,
+    });
+  }
+
+  for (const object of lexicalObjects) {
+    const lexicalScore = lexicalMatchScore(query, `${object.title} ${object.preview}`);
+    if (lexicalScore <= 0) {
+      continue;
+    }
+
+    const key = `${object.objectType}:${object.objectId}`;
+    const existing = merged.get(key);
+
+    if (existing) {
+      merged.set(key, {
+        ...existing,
+        lexicalScore,
+        source: "hybrid",
+        score: existing.semanticScore * 0.7 + lexicalScore * 0.3,
+      });
+      continue;
+    }
+
+    merged.set(key, {
+      ...object,
+      lexicalScore,
+      semanticScore: 0,
+      source: "lexical",
+      score: lexicalScore * 0.6,
+    });
+  }
+
+  return [...merged.values()].sort(searchResultSort).slice(0, limit);
+}
+
+export async function listBrainSearchIndexObjects(
+  db: PennyDatabase,
+  scope: BrainScope,
+  now = new Date(),
+): Promise<ReadonlyArray<Omit<BrainSearchResult, "score" | "semanticScore" | "lexicalScore" | "source">>> {
+  const [objectRows, noteRows, recentRows, artifactRows, claimRows] = await Promise.all([
+    db.select().from(brainObjects).where(scopeCondition(brainObjects, scope)).orderBy(desc(brainObjects.updatedAt)).limit(200),
+    db.select().from(sessionNotes).where(scopeCondition(sessionNotes, scope)).orderBy(desc(sessionNotes.updatedAt)).limit(200),
+    db.select().from(brainRecents).where(scopeCondition(brainRecents, scope)).orderBy(desc(brainRecents.updatedAt)).limit(200),
+    db.select().from(artifacts).where(scopeCondition(artifacts, scope)).orderBy(desc(artifacts.createdAt)).limit(200),
+    db.select().from(claims).where(scopeCondition(claims, scope)).orderBy(desc(claims.createdAt)).limit(300),
+  ]);
+  const claimIds = claimRows.map((claim) => claim.id);
+  const versionRows =
+    claimIds.length > 0
+      ? await db
+          .select()
+          .from(claimVersions)
+          .where(and(inArray(claimVersions.claimId, claimIds), eq(claimVersions.isCurrent, true)))
+          .orderBy(desc(claimVersions.createdAt))
+      : [];
+  const claimsById = new Map(claimRows.map((claim) => [claim.id, claim]));
+  const recentCutoff = new Date(now.getTime() - recentSearchTtlMs);
+
+  return [
+    ...objectRows.map(searchObjectFromBrainObject),
+    ...noteRows.map(searchObjectFromNote),
+    ...recentRows.filter((row) => row.updatedAt >= recentCutoff).map(searchObjectFromRecent),
+    ...artifactRows.map(searchObjectFromArtifact),
+    ...versionRows.flatMap((row) => {
+      const claim = claimsById.get(row.claimId);
+      return claim ? [searchObjectFromClaimVersion(row, claim)] : [];
+    }),
+  ];
+}
+
 export class BrainRepositoryNotFoundError extends Error {
   constructor(message: string) {
     super(message);
@@ -433,6 +657,199 @@ export class BrainRepositoryConflictError extends Error {
     super(message);
     this.name = "BrainRepositoryConflictError";
   }
+}
+
+type CanvasState = {
+  session: SessionRow;
+  sources: SourceRow[];
+  claims: ClaimRow[];
+  claimVersions: ClaimVersionRow[];
+  edges: EdgeRow[];
+  notes: SessionNoteRow[];
+  brainObjects: BrainObjectRow[];
+  artifacts: ArtifactRow[];
+};
+
+async function loadCanvasState(db: PennyDatabase, sessionId: EntityId, scope?: BrainScope): Promise<CanvasState> {
+  const [session] = await db
+    .select()
+    .from(sessions)
+    .where(sessionCondition(sessionId, scope))
+    .limit(1);
+
+  if (!session) {
+    throw new BrainRepositoryNotFoundError("Session was not found.");
+  }
+
+  const [sourceRows, claimRows, edgeRows, noteRows, objectRows, artifactRows] = await Promise.all([
+    db.select().from(sources).where(eq(sources.sessionId, session.id)).orderBy(asc(sources.createdAt)),
+    db.select().from(claims).where(eq(claims.sessionId, session.id)).orderBy(asc(claims.createdAt)),
+    db.select().from(claimEdges).where(eq(claimEdges.sessionId, session.id)).orderBy(asc(claimEdges.createdAt)),
+    db.select().from(sessionNotes).where(eq(sessionNotes.sessionId, session.id)).orderBy(asc(sessionNotes.updatedAt)),
+    db.select().from(brainObjects).where(eq(brainObjects.sessionId, session.id)).orderBy(asc(brainObjects.updatedAt)),
+    db.select().from(artifacts).where(eq(artifacts.sessionId, session.id)).orderBy(asc(artifacts.createdAt)),
+  ]);
+  const claimIds = claimRows.map((claim) => claim.id);
+  const versionRows =
+    claimIds.length > 0
+      ? await db
+          .select()
+          .from(claimVersions)
+          .where(and(inArray(claimVersions.claimId, claimIds), eq(claimVersions.isCurrent, true)))
+          .orderBy(asc(claimVersions.createdAt))
+      : [];
+
+  return {
+    session,
+    sources: sourceRows,
+    claims: claimRows,
+    claimVersions: versionRows,
+    edges: edgeRows,
+    notes: noteRows,
+    brainObjects: objectRows,
+    artifacts: artifactRows,
+  };
+}
+
+function buildCanvasNodes(state: CanvasState): CanvasNode[] {
+  const currentVersions = new Map(state.claimVersions.map((version) => [version.claimId, version]));
+  const sourceCountByClaimId = new Map<string, number>();
+  const nodes: CanvasNode[] = [];
+
+  for (const source of state.sources) {
+    nodes.push(canvasNodeWithPosition(nodes.length, {
+      id: `source:${source.id}`,
+      objectId: source.id,
+      type: source.kind === "raw_idea" ? "idea" : "evidence",
+      title: source.kind === "raw_idea" ? "Dropped idea" : formatCanvasTitle(source.kind),
+      preview: clipText(source.rawText, 280),
+      status: "recent",
+      sourceCount: 1,
+      metadata: {
+        sessionId: source.sessionId,
+        sourceKind: source.kind,
+      },
+    }));
+  }
+
+  for (const claim of state.claims) {
+    const version = currentVersions.get(claim.id);
+    if (!version) {
+      continue;
+    }
+
+    if (claim.sourceId) {
+      sourceCountByClaimId.set(claim.id, 1);
+    }
+
+    nodes.push(canvasNodeWithPosition(nodes.length, {
+      id: `claim:${claim.id}`,
+      claimId: claim.id,
+      type: canvasNodeTypeForClaim(claim.kind),
+      title: clipText(version.content, 96),
+      preview: clipText(version.content, 280),
+      status: canvasStatusForClaimVersion(version),
+      confidence: version.confidence,
+      sourceCount: sourceCountByClaimId.get(claim.id) ?? 0,
+      metadata: {
+        sessionId: claim.sessionId,
+        claimVersionId: version.id,
+        claimKind: claim.kind,
+        claimStatus: version.status,
+      },
+    }));
+  }
+
+  for (const note of state.notes) {
+    if (!note.content.trim()) {
+      continue;
+    }
+
+    nodes.push(canvasNodeWithPosition(nodes.length, {
+      id: `note:${note.id}`,
+      objectId: note.id,
+      type: "note",
+      title: "Working notes",
+      preview: clipText(note.content, 280),
+      status: "saved",
+      metadata: {
+        sessionId: note.sessionId,
+      },
+    }));
+  }
+
+  for (const object of state.brainObjects) {
+    nodes.push(canvasNodeWithPosition(nodes.length, {
+      id: `brain_object:${object.id}`,
+      objectId: object.id,
+      type: canvasNodeTypeForBrainObject(object.objectType),
+      title: object.title,
+      preview: clipText(object.summary ?? object.body, 280),
+      status: "saved",
+      metadata: {
+        sessionId: object.sessionId,
+        objectType: object.objectType,
+        sourceRecentId: object.sourceRecentId,
+      },
+    }));
+  }
+
+  for (const artifact of state.artifacts) {
+    nodes.push(canvasNodeWithPosition(nodes.length, {
+      id: `artifact:${artifact.id}`,
+      objectId: artifact.id,
+      type: "artifact",
+      title: artifact.title,
+      preview: clipText(artifact.summary, 280),
+      status: "saved",
+      metadata: {
+        sessionId: artifact.sessionId,
+        artifactKind: artifact.kind,
+      },
+    }));
+  }
+
+  return nodes;
+}
+
+function buildCanvasEdges(state: CanvasState): CanvasEdge[] {
+  const edges: CanvasEdge[] = state.edges.map((edge) => ({
+    id: `claim_edge:${edge.id}`,
+    sourceId: `claim:${edge.fromClaimId}`,
+    targetId: `claim:${edge.toClaimId}`,
+    type: edge.kind,
+    weight: edge.status === "active" ? 1 : 0.5,
+    provenance: "claim_edge",
+  }));
+
+  for (const object of state.brainObjects) {
+    const refs = asRecord(object.payload).refs;
+    const claimIds = typeof refs === "object" && refs ? stringArrayValues(asRecord(refs), ["claimIds", "currentClaimId"]) : [];
+
+    for (const claimId of claimIds) {
+      edges.push({
+        id: `brain_object:${object.id}:claim:${claimId}`,
+        sourceId: `brain_object:${object.id}`,
+        targetId: `claim:${claimId}`,
+        type: "related_to",
+        weight: 0.4,
+        provenance: "brain_object",
+      });
+    }
+  }
+
+  return edges;
+}
+
+function canvasNodeWithPosition(index: number, node: CanvasNode): CanvasNode {
+  const column = index % 4;
+  const row = Math.floor(index / 4);
+
+  return {
+    ...node,
+    x: column * 260,
+    y: row * 180,
+  };
 }
 
 async function loadGraphSnapshotInTransaction(tx: BrainTransaction, sessionId: EntityId): Promise<ThinkingGraphSnapshot> {
@@ -685,4 +1102,301 @@ function textArray(value: unknown): string[] {
 
     return typeof text === "string" ? [text] : [];
   });
+}
+
+function searchObjectFromBrainObject(
+  row: BrainObjectRow,
+): Omit<BrainSearchResult, "score" | "semanticScore" | "lexicalScore" | "source"> {
+  return {
+    objectType: "brain_object",
+    objectId: row.id,
+    sessionId: row.sessionId,
+    title: row.title,
+    preview: clipText(row.summary ?? row.body, 360),
+    metadata: {
+      objectType: row.objectType,
+      sourceRecentId: row.sourceRecentId,
+    },
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function searchObjectFromNote(
+  row: SessionNoteRow,
+): Omit<BrainSearchResult, "score" | "semanticScore" | "lexicalScore" | "source"> {
+  return {
+    objectType: "session_note",
+    objectId: row.id,
+    sessionId: row.sessionId,
+    title: "Working notes",
+    preview: clipText(row.content, 360),
+    metadata: {},
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function searchObjectFromRecent(
+  row: BrainRecentRow,
+): Omit<BrainSearchResult, "score" | "semanticScore" | "lexicalScore" | "source"> {
+  return {
+    objectType: "brain_recent",
+    objectId: row.id,
+    sessionId: row.sessionId,
+    title: row.title,
+    preview: clipText(row.summary ?? row.body, 360),
+    metadata: {
+      kind: row.kind,
+      expiresAfterMs: recentSearchTtlMs,
+    },
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function searchObjectFromArtifact(
+  row: ArtifactRow,
+): Omit<BrainSearchResult, "score" | "semanticScore" | "lexicalScore" | "source"> {
+  return {
+    objectType: "artifact",
+    objectId: row.id,
+    sessionId: row.sessionId,
+    title: row.title,
+    preview: clipText(row.summary, 360),
+    metadata: {
+      artifactKind: row.kind,
+    },
+    updatedAt: row.createdAt.toISOString(),
+  };
+}
+
+function searchObjectFromClaimVersion(
+  version: ClaimVersionRow,
+  claim: ClaimRow,
+): Omit<BrainSearchResult, "score" | "semanticScore" | "lexicalScore" | "source"> {
+  return {
+    objectType: "claim_version",
+    objectId: version.id,
+    sessionId: claim.sessionId,
+    title: formatCanvasTitle(claim.kind),
+    preview: clipText(version.content, 360),
+    metadata: {
+      claimId: claim.id,
+      claimKind: claim.kind,
+      claimStatus: version.status,
+      confidence: version.confidence,
+    },
+    updatedAt: version.createdAt.toISOString(),
+  };
+}
+
+function embeddingRowToSearchResult(
+  row: BrainEmbeddingRow,
+  semanticScore: number,
+  lexicalScore: number,
+  source: BrainSearchResult["source"],
+): BrainSearchResult {
+  return {
+    objectType: row.objectType,
+    objectId: row.objectId,
+    sessionId: row.sessionId,
+    title: row.title,
+    preview: clipText(row.content, 360),
+    score: semanticScore * 0.7 + lexicalScore * 0.3,
+    semanticScore,
+    lexicalScore,
+    source,
+    metadata: asRecord(row.metadata),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function searchResultKey(result: Pick<BrainSearchResult, "objectType" | "objectId">): string {
+  return `${result.objectType}:${result.objectId}`;
+}
+
+function searchResultSort(left: BrainSearchResult, right: BrainSearchResult): number {
+  return right.score - left.score || Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+}
+
+function lexicalMatchScore(query: string, text: string): number {
+  const queryTerms = termSet(query);
+  if (queryTerms.size === 0) {
+    return 0;
+  }
+
+  const textTerms = termSet(text);
+  let matches = 0;
+
+  for (const term of queryTerms) {
+    if (textTerms.has(term)) {
+      matches += 1;
+    }
+  }
+
+  return matches / queryTerms.size;
+}
+
+function termSet(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .split(/[^a-z0-9]+/g)
+      .map((term) => term.trim())
+      .filter((term) => term.length > 1),
+  );
+}
+
+function mockedEmbeddingForText(value: string, dimensions = 16): number[] {
+  const digest = createHash("sha256").update(value).digest();
+  const values: number[] = [];
+
+  for (let index = 0; index < dimensions; index += 1) {
+    values.push((digest[index % digest.length] ?? 0) / 255);
+  }
+
+  return normalizeEmbedding(values);
+}
+
+function normalizeEmbedding(embedding: ReadonlyArray<number>): number[] {
+  return embedding.map((value) => (Number.isFinite(value) ? Number(value) : 0));
+}
+
+function cosineSimilarity(left: ReadonlyArray<number>, right: ReadonlyArray<number>): number {
+  const dimensions = Math.min(left.length, right.length);
+  if (dimensions === 0) {
+    return 0;
+  }
+
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+
+  for (let index = 0; index < dimensions; index += 1) {
+    const leftValue = left[index] ?? 0;
+    const rightValue = right[index] ?? 0;
+    dot += leftValue * rightValue;
+    leftNorm += leftValue * leftValue;
+    rightNorm += rightValue * rightValue;
+  }
+
+  if (leftNorm === 0 || rightNorm === 0) {
+    return 0;
+  }
+
+  return Math.max(0, dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm)));
+}
+
+function hashText(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function requiredText(value: string, message: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new BrainRepositoryConflictError(message);
+  }
+
+  return trimmed;
+}
+
+function normalizeLimit(value: number | undefined): number {
+  if (!value || !Number.isFinite(value)) {
+    return 10;
+  }
+
+  return Math.max(1, Math.min(50, Math.floor(value)));
+}
+
+function scopeCondition(table: ScopeTable, scope: BrainScope) {
+  return and(
+    scopeColumnCondition(table.userId, scope.userId),
+    scopeColumnCondition(table.workspaceId, scope.workspaceId),
+    scopeColumnCondition(table.projectId, scope.projectId),
+    scopeColumnCondition(table.sphereId, scope.sphereId),
+  );
+}
+
+function sessionCondition(sessionId: EntityId, scope: BrainScope | undefined) {
+  return scope ? and(eq(sessions.id, sessionId), scopeCondition(sessions, scope)) : eq(sessions.id, sessionId);
+}
+
+function scopeColumnCondition(column: ScopeColumn, value: string | null) {
+  return value === null ? isNull(column) : eq(column, value);
+}
+
+function canvasNodeTypeForClaim(kind: ClaimRow["kind"]): CanvasNode["type"] {
+  switch (kind) {
+    case "assumption":
+      return "assumption";
+    case "question":
+      return "question";
+    case "concept":
+      return "concept";
+    case "belief":
+      return "claim";
+  }
+}
+
+function canvasNodeTypeForBrainObject(objectType: string): CanvasNode["type"] {
+  if (objectType.includes("creative")) {
+    return "creative_direction";
+  }
+
+  if (objectType.includes("learn") || objectType.includes("concept")) {
+    return "concept";
+  }
+
+  if (objectType.includes("evidence") || objectType.includes("verify")) {
+    return "evidence";
+  }
+
+  return "idea";
+}
+
+function canvasStatusForClaimVersion(version: ClaimVersionRow): NonNullable<CanvasNode["status"]> {
+  switch (version.status) {
+    case "committed":
+    case "resolved":
+      return "saved";
+    case "rejected":
+      return "archived";
+    case "exploratory":
+      return "recent";
+  }
+}
+
+function formatCanvasTitle(value: string): string {
+  return value
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function stringArrayValues(record: Record<string, unknown>, keys: ReadonlyArray<string>): string[] {
+  const values: string[] = [];
+
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string") {
+      values.push(value);
+    } else if (Array.isArray(value)) {
+      values.push(...value.filter(isString));
+    }
+  }
+
+  return uniqueStrings(values);
+}
+
+function clipText(value: string, max: number): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  return trimmed.length > max ? `${trimmed.slice(0, Math.max(0, max - 1)).trimEnd()}...` : trimmed;
+}
+
+function uniqueStrings(values: ReadonlyArray<string | null | undefined>): string[] {
+  return [...new Set(values.filter(isString))];
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
 }

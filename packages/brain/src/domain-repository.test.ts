@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PennyDatabase } from "./db/client.ts";
-import { brainRecents, claimVersions, focusStates, moves, nextMoveCandidates } from "./db/schema.ts";
+import {
+  brainEmbeddings,
+  brainObjects,
+  brainRecents,
+  claimVersions,
+  focusStates,
+  moves,
+  nextMoveCandidates,
+} from "./db/schema.ts";
 import { createBrainRepository, recordLearnSessionOutput } from "./domain/repository.ts";
 import type { NextMoveCandidate } from "./domain/engine.ts";
 import type { FocusState } from "./domain/types.ts";
@@ -227,6 +235,146 @@ test("recordLearnSessionOutput stores a save-ready Learn recent in the session s
   assert.equal(output.saveCandidate.content, "Cognitive load matters because the claim depends on reducing user effort.");
 });
 
+test("upsertEmbeddingForObject stores JSON/text fallback embeddings for searchable Brain objects", async () => {
+  const { db, calls } = fakeRepositoryDb({
+    insertRows: [embeddingRow({ objectType: "brain_object", objectId: uuidAt(960), title: "Saved founder insight" })],
+  });
+  const repository = createBrainRepository(db);
+  const result = await repository.upsertEmbeddingForObject({
+    scope: scopeInput(),
+    objectType: "brain_object",
+    objectId: uuidAt(960),
+    sessionId: uuidAt(101),
+    title: "Saved founder insight",
+    content: "Founders need a concrete artifact before they pay.",
+    embedding: [1, 0, 0],
+    embeddingModel: "test-embedding",
+    metadata: { source: "unit-test" },
+  });
+  const insert = calls.insert[0];
+
+  assert.equal(result.objectType, "brain_object");
+  assert.equal(result.objectId, uuidAt(960));
+  assert.equal(insert?.table, brainEmbeddings);
+  assert.equal(insert?.values.objectType, "brain_object");
+  assert.deepEqual(insert?.values.embeddingJson, [1, 0, 0]);
+  assert.equal(insert?.values.embeddingText, "[1,0,0]");
+  assert.equal(typeof insert?.values.contentHash, "string");
+  assert.deepEqual(targetNames(insert?.onConflict?.target), [
+    brainEmbeddings.objectType.name,
+    brainEmbeddings.objectId.name,
+  ]);
+});
+
+test("searchBrainSemantic ranks stored fallback embeddings without mutating rows", async () => {
+  const { db, calls } = fakeRepositoryDb({
+    selectRows: [
+      [
+        embeddingRow({ objectType: "claim_version", objectId: uuidAt(701), title: "Willingness to pay", embeddingJson: [1, 0] }),
+        embeddingRow({ objectType: "artifact", objectId: uuidAt(901), title: "Challenge Brief", embeddingJson: [0, 1] }),
+      ],
+    ],
+  });
+  const repository = createBrainRepository(db);
+  const results = await repository.searchBrainSemantic({
+    scope: scopeInput(),
+    query: "founder payment",
+    embedding: [1, 0],
+  });
+
+  assert.equal(results[0]?.objectType, "claim_version");
+  assert.equal(results[0]?.semanticScore, 1);
+  assert.equal(calls.select, 1);
+  assert.equal(calls.insert.length, 0);
+});
+
+test("searchBrainHybrid covers saved objects, notes, current claims, live recents, and artifacts", async () => {
+  const { db } = fakeRepositoryDb({
+    selectRows: [
+      [],
+      [brainObjectRow({ title: "Saved payment insight", body: "Founders pay for urgent artifacts." })],
+      [sessionNoteRow({ content: "Keep the founder payment thread visible." })],
+      [
+        brainRecentRow({
+          title: "Recent Learn output",
+          summary: null,
+          body: "Autopilot should suggest the next founder payment check.",
+          updatedAt: new Date("2026-05-01T00:00:00.000Z"),
+        }),
+        brainRecentRow({
+          id: uuidAt(951),
+          title: "Expired recent",
+          body: "Old irrelevant scratch.",
+          updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+        }),
+      ],
+      [artifactRow({ title: "Founder payment Challenge Brief", summary: "Artifact for founder willingness to pay." })],
+      [claimRow()],
+      [claimVersionRow({ content: "Founders pay when a structured thinking artifact helps this week." })],
+    ],
+  });
+  const repository = createBrainRepository(db);
+  const results = await repository.searchBrainHybrid({
+    scope: scopeInput(),
+    query: "founder payment artifact",
+    now: new Date("2026-05-01T00:00:00.000Z"),
+  });
+
+  assert.ok(results.some((result) => result.objectType === "brain_object"));
+  assert.ok(results.some((result) => result.objectType === "session_note"));
+  assert.ok(results.some((result) => result.objectType === "brain_recent"));
+  assert.ok(results.some((result) => result.objectType === "artifact"));
+  assert.ok(results.some((result) => result.objectType === "claim_version"));
+  assert.equal(results.some((result) => result.title === "Expired recent"), false);
+});
+
+test("listCanvasNodesForSession returns the Wave 8 canvas node contract", async () => {
+  const { db } = fakeRepositoryDb({
+    selectRows: [
+      [sessionRow()],
+      [sourceRow()],
+      [claimRow()],
+      [edgeRow()],
+      [sessionNoteRow()],
+      [brainObjectRow({ objectType: "creative_direction", title: "YC angle" })],
+      [artifactRow()],
+      [claimVersionRow()],
+    ],
+  });
+  const repository = createBrainRepository(db);
+  const nodes = await repository.listCanvasNodesForSession(uuidAt(101), scopeInput());
+
+  assert.ok(nodes.some((node) => node.type === "idea"));
+  assert.ok(nodes.some((node) => node.type === "assumption" && node.claimId === uuidAt(201)));
+  assert.ok(nodes.some((node) => node.type === "note"));
+  assert.ok(nodes.some((node) => node.type === "creative_direction"));
+  assert.ok(nodes.some((node) => node.type === "artifact"));
+  assert.equal(nodes.every((node) => typeof node.x === "number" && typeof node.y === "number"), true);
+});
+
+test("listCanvasEdgesForSession maps claim edges into canvas edges", async () => {
+  const { db } = fakeRepositoryDb({
+    selectRows: [
+      [sessionRow()],
+      [sourceRow()],
+      [claimRow()],
+      [edgeRow()],
+      [],
+      [],
+      [],
+      [claimVersionRow()],
+    ],
+  });
+  const repository = createBrainRepository(db);
+  const edges = await repository.listCanvasEdgesForSession(uuidAt(101), scopeInput());
+
+  assert.equal(edges[0]?.id, `claim_edge:${uuidAt(301)}`);
+  assert.equal(edges[0]?.sourceId, `claim:${uuidAt(202)}`);
+  assert.equal(edges[0]?.targetId, `claim:${uuidAt(201)}`);
+  assert.equal(edges[0]?.type, "challenges");
+  assert.equal(edges[0]?.provenance, "claim_edge");
+});
+
 test("starting focus does not mutate claim text or confidence", async () => {
   const startFocus = focusStateInput({
     source: "autopilot_started",
@@ -331,6 +479,9 @@ function fakeRepositoryDb(options: {
     },
   };
   const db = {
+    select: tx.select,
+    insert: tx.insert,
+    update: tx.update,
     transaction<T>(run: (transaction: typeof tx) => Promise<T> | T): Promise<T> {
       return Promise.resolve(run(tx));
     },
@@ -609,6 +760,60 @@ function artifactRow(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function sourceRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(601),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    kind: "raw_idea",
+    rawText: "Penny should help founders stress-test payment assumptions.",
+    createdAt: new Date("2026-04-29T00:00:00.500Z"),
+    ...overrides,
+  };
+}
+
+function sessionNoteRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(970),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    content: "Keep the founder payment thread visible.",
+    createdAt: new Date("2026-04-29T00:00:05.000Z"),
+    updatedAt: new Date("2026-04-29T00:00:06.000Z"),
+    ...overrides,
+  };
+}
+
+function brainObjectRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(960),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    sourceRecentId: uuidAt(950),
+    objectType: "saved_idea",
+    title: "Saved founder insight",
+    summary: "Founders pay when the artifact is urgent.",
+    body: "Founders pay for structured thinking when it produces a concrete artifact this week.",
+    payload: {
+      refs: {
+        claimIds: [uuidAt(201)],
+      },
+    },
+    createdAt: new Date("2026-04-29T00:00:07.000Z"),
+    updatedAt: new Date("2026-04-29T00:00:08.000Z"),
+    ...overrides,
+  };
+}
+
 function brainRecentRow(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: uuidAt(950),
@@ -631,6 +836,30 @@ function brainRecentRow(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function embeddingRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(980),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    objectType: "brain_object",
+    objectId: uuidAt(960),
+    title: "Saved founder insight",
+    content: "Founders pay for urgent artifacts.",
+    contentHash: "content-hash",
+    embeddingModel: "test-embedding",
+    embeddingJson: [1, 0],
+    embeddingText: "[1,0]",
+    metadata: {},
+    expiresAt: null,
+    createdAt: new Date("2026-04-29T00:00:09.000Z"),
+    updatedAt: new Date("2026-04-29T00:00:09.000Z"),
+    ...overrides,
+  };
+}
+
 function sessionRow() {
   return {
     id: uuidAt(101),
@@ -642,6 +871,15 @@ function sessionRow() {
     title: "Test session",
     createdAt: new Date("2026-04-29T00:00:00.000Z"),
     endedAt: null,
+  };
+}
+
+function scopeInput() {
+  return {
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
   };
 }
 
