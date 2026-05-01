@@ -2,6 +2,7 @@ import { asc, desc, inArray } from "drizzle-orm";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { artifacts, claimEdges, claims, claimVersions, moves, sessions, sources } from "./db/schema.ts";
 import { scopeValues, type BrainScope, type OptionalBrainScope } from "./scope.ts";
+import { loadScopedSourcesForSession } from "./source-loading.ts";
 
 type SessionRow = OptionalBrainScope<typeof sessions.$inferSelect>;
 type SourceRow = OptionalBrainScope<typeof sources.$inferSelect>;
@@ -209,7 +210,7 @@ export async function loadBrainDocuments(db: PennyDatabase): Promise<BrainDocume
   }
 
   const [sourceRows, claimRows, edgeRows, moveRows, artifactRows] = await Promise.all([
-    db.select().from(sources).where(inArray(sources.sessionId, sessionIds)).orderBy(asc(sources.createdAt)),
+    Promise.all(sessionRows.map((session) => loadScopedSourcesForSession(db, session))).then((rows) => rows.flat()),
     db.select().from(claims).where(inArray(claims.sessionId, sessionIds)).orderBy(asc(claims.createdAt)),
     db.select().from(claimEdges).where(inArray(claimEdges.sessionId, sessionIds)).orderBy(asc(claimEdges.createdAt)),
     db.select().from(moves).where(inArray(moves.sessionId, sessionIds)).orderBy(asc(moves.createdAt)),
