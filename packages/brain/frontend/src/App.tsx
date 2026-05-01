@@ -19,6 +19,7 @@ import { buildAutopilotStartIntent, runAutopilotGoThere, type PennyMode } from "
 import { BrainWorkspace } from "./components/BrainWorkspace";
 import { CheckWorkspace } from "./components/CheckWorkspace";
 import { Header } from "./components/Header";
+import { LandingPage } from "./components/LandingPage";
 import { LearnWorkspace } from "./components/LearnWorkspace";
 import { formatLabel, shortId } from "./lib/format";
 import type {
@@ -71,6 +72,7 @@ export function App() {
   const [learnFocusNode, setLearnFocusNode] = useState<CanvasNode | null>(null);
   const [relatedBrainSearch, setRelatedBrainSearch] = useState<BrainRelatedSearchState | null>(null);
   const [activeMode, setActiveMode] = useState<PennyMode>("Learn");
+  const [landingVisible, setLandingVisible] = useState(() => activeSessionId() === null);
   const [status, setStatus] = useState("Ready");
   const [isThinking, setIsThinking] = useState(false);
 
@@ -99,14 +101,17 @@ export function App() {
         await refreshRecents();
 
         if (!sessionId) {
+          setLandingVisible(true);
           setStatus("Docs loaded");
           return;
         }
 
+        setLandingVisible(false);
         await loadSession(sessionId, null);
       } catch (error) {
         if (!cancelled) {
           forgetActiveSession();
+          setLandingVisible(true);
           setStatus(error instanceof Error ? error.message : String(error));
         }
       } finally {
@@ -133,6 +138,7 @@ export function App() {
       setChallengeResponse(null);
       setLatestArtifact(null);
       setBrainCanvasOpen(false);
+      setLandingVisible(false);
       setFocusedWorkStructureStepId(payload.data.workStructure?.activeStepId ?? null);
       setFocusedClaimId(payload.data.firstChallenge?.targetClaimId ?? payload.data.ideaMap?.claims?.[0]?.id ?? null);
       setStatus("Graph slice persisted");
@@ -185,6 +191,7 @@ export function App() {
   async function handleSelectDocument(sessionId: string) {
     setIsThinking(true);
     setStatus("Opening doc");
+    setLandingVisible(false);
 
     try {
       await loadSession(sessionId, data);
@@ -213,8 +220,29 @@ export function App() {
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
+    setLandingVisible(true);
     forgetActiveSession();
     setStatus("Ready");
+  }
+
+  async function handleLandingSeed(rawIdea: string) {
+    setLandingVisible(false);
+    setActiveMode("Brain");
+    await handleSeed(rawIdea);
+  }
+
+  function handleLandingModeSelect(mode: PennyMode) {
+    setLandingVisible(false);
+    setActiveMode(mode);
+  }
+
+  async function handleLandingQuickNote(rawIdea: string) {
+    setLandingVisible(false);
+    setActiveMode("Learn");
+
+    if (rawIdea.trim()) {
+      await handleKeepRecentIdea(rawIdea);
+    }
   }
 
   async function handleReworkDocument() {
@@ -611,13 +639,23 @@ export function App() {
   return (
     <div className="min-h-screen bg-white text-[#111]">
       <div className="mx-auto min-h-[calc(100vh-5px)] max-w-[1440px] border-t-[5px] border-black bg-white">
-        <Header
-          sessionLabel={sessionLabel}
-          thinkingLabel={isThinking ? "Thinking" : status}
-          activeItem={activeMode}
-          onNavItemSelect={(item) => setActiveMode(item as PennyMode)}
-        />
-        {activeMode === "Learn" ? (
+        {landingVisible ? (
+          <LandingPage
+            disabled={isThinking}
+            status={status}
+            onSeed={handleLandingSeed}
+            onModeSelect={handleLandingModeSelect}
+            onQuickNote={handleLandingQuickNote}
+          />
+        ) : (
+          <>
+            <Header
+              sessionLabel={sessionLabel}
+              thinkingLabel={isThinking ? "Thinking" : status}
+              activeItem={activeMode}
+              onNavItemSelect={(item) => setActiveMode(item as PennyMode)}
+            />
+            {activeMode === "Learn" ? (
           <LearnWorkspace
             documentsData={documentsData}
             selectedDocument={selectedDocument}
@@ -685,7 +723,9 @@ export function App() {
             onRespondChallenge={handleChallengeResponse}
             onCreateChallengeBrief={handleCreateChallengeBrief}
           />
-        ) : null}
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   );
