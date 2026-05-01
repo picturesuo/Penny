@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { decideVerifyConfidence, verifyClaim } from "../api/brainClient";
 import type {
   BrainClaim,
+  BrainSearchTraceResult,
   BrainVerifyConfidenceDecisionResponse,
   BrainVerifyEvidenceCard,
   BrainVerifyResult,
@@ -144,6 +145,7 @@ export function VerifyResultDetails({
   const confidenceDelta = result.confidenceDeltaSuggestion;
   const hasPendingConfidence = Boolean(result.move.id && result.confidenceUpdate.decision === "pending_user_decision");
   const hasCitations = result.citationSources.length > 0 || result.citations.length > 0;
+  const sourceItems = verifySourceItems(result);
 
   return (
     <>
@@ -151,6 +153,10 @@ export function VerifyResultDetails({
         <span>{formatLabel(result.verdict)}</span>
         <p>{result.summary}</p>
       </div>
+
+      <VerifySourceBar result={result} />
+
+      {sourceItems.length > 0 ? <VerifySourceList items={sourceItems} /> : null}
 
       <div className="verify-confidence-row">
         <span>
@@ -226,6 +232,53 @@ export function VerifyResultDetails({
   );
 }
 
+function VerifySourceBar({ result }: { result: BrainVerifyResult }) {
+  const trace = result.searchTrace ?? null;
+  const decision = trace?.decision ?? null;
+  const usedWeb = Boolean(decision?.useWebSearch && trace?.providerToolAttached);
+  const label = usedWeb ? "Used web because" : "Used your Brain";
+  const detail = usedWeb
+    ? decision?.reason
+    : trace && decision?.useWebSearch && !trace.providerToolAttached
+      ? "Web was requested for this Verify run, but no provider web tool was attached."
+      : decision?.reason ?? "Verify used Penny's saved graph context and any persisted citation evidence.";
+  const meta = trace
+    ? [
+        trace.providerName ? `${formatLabel(trace.providerName)} provider` : null,
+        trace.resultCount > 0 ? `${trace.resultCount} search sources` : null,
+        trace.savedSourceIds?.length ? `${trace.savedSourceIds.length} saved sources` : null,
+      ].filter((item): item is string => Boolean(item))
+    : [];
+
+  return (
+    <div className={`verify-source-bar${usedWeb ? " used-web" : ""}`} aria-label="Verify source behavior">
+      <span>{label}</span>
+      <p>{detail}</p>
+      {meta.length > 0 ? <small>{meta.join(" / ")}</small> : null}
+    </div>
+  );
+}
+
+function VerifySourceList({ items }: { items: VerifySourceItem[] }) {
+  return (
+    <div className="verify-source-list" aria-label="Sources used">
+      <strong>Sources used</strong>
+      {items.slice(0, 5).map((item, index) => (
+        <p key={`${item.title}-${item.url ?? index}`}>
+          {item.url ? (
+            <a href={item.url} target="_blank" rel="noreferrer">
+              {item.title}
+            </a>
+          ) : (
+            <span>{item.title}</span>
+          )}
+          {item.detail ? <small>{item.detail}</small> : null}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function EvidenceCard({ card }: { card: BrainVerifyEvidenceCard }) {
   return (
     <article className={`verify-evidence-card is-${card.stance}`}>
@@ -244,4 +297,50 @@ function EvidenceCard({ card }: { card: BrainVerifyEvidenceCard }) {
       {card.citation ? <small>{card.citation}</small> : null}
     </article>
   );
+}
+
+interface VerifySourceItem {
+  title: string;
+  url?: string | null;
+  detail?: string | null;
+}
+
+function verifySourceItems(result: BrainVerifyResult): VerifySourceItem[] {
+  const seen = new Set<string>();
+  const items: VerifySourceItem[] = [];
+
+  for (const traceResult of result.searchTrace?.results ?? []) {
+    appendVerifySourceItem(items, seen, sourceItemFromTrace(traceResult));
+  }
+
+  for (const citation of result.citations) {
+    appendVerifySourceItem(items, seen, {
+      title: citation.title || citation.sourceName || "Citation",
+      url: citation.sourceUrl ?? null,
+      detail: citation.citation ?? citation.sourceName ?? null,
+    });
+  }
+
+  return items;
+}
+
+function sourceItemFromTrace(result: BrainSearchTraceResult): VerifySourceItem {
+  const fallbackTitle = result.url ?? result.sourceType ?? "Search source";
+
+  return {
+    title: result.title ?? fallbackTitle,
+    url: result.url,
+    detail: result.snippet ?? result.sourceType,
+  };
+}
+
+function appendVerifySourceItem(items: VerifySourceItem[], seen: Set<string>, item: VerifySourceItem): void {
+  const key = `${item.url ?? ""}|${item.title}|${item.detail ?? ""}`;
+
+  if (seen.has(key)) {
+    return;
+  }
+
+  seen.add(key);
+  items.push(item);
 }
