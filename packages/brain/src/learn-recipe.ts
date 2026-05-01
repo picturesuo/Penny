@@ -102,9 +102,10 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
       run(context) {
         const claims = context.seedPayload.ideaMap.claims;
         const assumptions = claims.filter((claim) => claim.kind === "assumption");
+        const strongestAssumption = assumptions[0]?.text ?? context.seedPayload.ideaMap.keyInsight;
 
         return {
-          summary: "Structured the seed idea into stable claims, assumptions, questions, concepts, and exploration paths.",
+          summary: `Structured the idea around its load-bearing assumption: ${clipText(strongestAssumption, 160)}`,
           inputs: [context.rawIdea],
           outputs: [
             `${claims.length} claims`,
@@ -183,12 +184,12 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
         const questions = claims.filter((claim) => claim.kind === "question");
 
         return {
-          summary: "Produced the Learn-facing claims, assumptions, questions, contextual concepts, and creative directions.",
+          summary: `Produced a Learn surface centered on: ${clipText(context.seedPayload.ideaMap.keyInsight, 170)}`,
           inputs: [context.seedPayload.ideaMap.keyInsight],
           outputs: [
-            `${claims.length} claims`,
-            `${questions.length} questions`,
-            `${concepts.length} concepts`,
+            clipText(claims[0]?.text ?? context.seedPayload.ideaMap.keyInsight, 180),
+            ...questions.slice(0, 2).map((question) => clipText(question.text, 180)),
+            ...concepts.slice(0, 2).map((concept) => `Learn: ${clipText(concept.term, 170)}`),
             `${context.seedPayload.explorationPaths.length} creative directions`,
           ],
         };
@@ -198,10 +199,14 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
       step: "produce_next_moves",
       title: "Produce next moves",
       run(context) {
+        const recommended = recommendPrimaryNextMove(context.nextMoves);
+
         return {
-          summary: "Reduced the recipe output to the four UI-safe moves Penny already exposes.",
+          summary: recommended
+            ? `Recommended ${nextMoveDisplayName(recommended.action)} next: ${clipText(recommended.reason, 180)}`
+            : "Reduced the recipe output to the four UI-safe moves Penny already exposes.",
           inputs: context.nextMoves.map((move) => move.reason),
-          outputs: context.nextMoves.map((move) => move.action),
+          outputs: context.nextMoves.map((move) => `${nextMoveDisplayName(move.action)}: ${clipText(move.label, 180)}`),
         };
       },
     },
@@ -221,4 +226,37 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
 
 export function learnRecipeTraceForBrainRun(output: LearnRecipeOutput): RecipeTrace {
   return output.recipe;
+}
+
+function recommendPrimaryNextMove(moves: ReadonlyArray<LearnRecipeNextMove>): LearnRecipeNextMove | null {
+  return (
+    moves.find((move) => move.action === "check") ??
+    moves.find((move) => move.action === "verify") ??
+    moves.find((move) => move.action === "save_to_brain") ??
+    moves[0] ??
+    null
+  );
+}
+
+function nextMoveDisplayName(action: LearnRecipeNextMove["action"]): string {
+  switch (action) {
+    case "learn":
+      return "Learn";
+    case "check":
+      return "Check";
+    case "verify":
+      return "Verify";
+    case "save_to_brain":
+      return "Save";
+  }
+}
+
+function clipText(value: string, maxLength: number): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+
+  return `${compact.slice(0, maxLength - 1).trimEnd()}.`;
 }
