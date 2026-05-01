@@ -192,15 +192,33 @@ const CandidateOutputSchema = z
     candidateId: z.string(),
     fingerprint: z.string(),
     rank: z.number().int(),
+    title: z.string(),
     targetClaimId: UuidSchema,
     targetEdgeId: UuidSchema.nullable(),
+    target: z
+      .object({
+        type: z.literal("claim"),
+        id: UuidSchema,
+        claimId: UuidSchema,
+        edgeId: UuidSchema.nullable(),
+      })
+      .passthrough(),
     action: ToolActionSchema,
     userAction: ToolUserActionSchema,
     mode: ThinkingModeSchema,
     mvpMode: MvpModeSchema,
     label: z.string(),
+    ctaLabel: z.string(),
     primaryActionLabel: z.string(),
     score: z.number(),
+    priority: z
+      .object({
+        rank: z.number().int(),
+        score: z.number(),
+        normalized: z.number(),
+      })
+      .passthrough(),
+    confidence: z.number(),
     reason: z.string(),
     whyNow: z.string(),
     reasonCodes: z.array(z.string()),
