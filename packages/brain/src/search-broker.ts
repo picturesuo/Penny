@@ -23,11 +23,32 @@ export type SearchBrokerResult = {
   decision: SearchDecision;
   tools: ToolSet | undefined;
   toolOptions: ReturnType<typeof webSearchToolOptions> | null;
+  providerName: string;
+  providerToolAvailable: boolean;
+  providerToolAttached: boolean;
   instructions: string;
 };
 
 export type SearchBroker = {
   prepare(input: SearchDecisionInput, mode: SearchMode, context?: SearchDecisionContext): SearchBrokerResult;
+};
+
+export type SearchTraceResult = {
+  title: string | null;
+  url: string | null;
+  snippet: string | null;
+  sourceType: string | null;
+};
+
+export type SearchTrace = {
+  mode: SearchMode;
+  decision: SearchDecision;
+  providerName: string;
+  providerToolAvailable: boolean;
+  providerToolAttached: boolean;
+  toolOptions: ReturnType<typeof webSearchToolOptions> | null;
+  resultCount: number;
+  results: SearchTraceResult[];
 };
 
 export function createSearchBroker(capabilities: SearchBrokerCapabilities = {}): SearchBroker {
@@ -37,14 +58,20 @@ export function createSearchBroker(capabilities: SearchBrokerCapabilities = {}):
       const toolOptions = webSearchToolOptions(decision);
       const webSearch = capabilities.webSearch ?? null;
       const tools = decision.useWebSearch && webSearch ? ({ web_search: webSearch(toolOptions) } as ToolSet) : undefined;
+      const providerName = capabilities.providerName ?? "unknown";
+      const providerToolAvailable = Boolean(webSearch);
+      const providerToolAttached = Boolean(tools);
 
       return {
         decision,
         tools,
         toolOptions: tools ? toolOptions : null,
+        providerName,
+        providerToolAvailable,
+        providerToolAttached,
         instructions: searchInstructions(decision, {
-          providerName: capabilities.providerName ?? "unknown",
-          toolAvailable: Boolean(webSearch),
+          providerName,
+          toolAvailable: providerToolAvailable,
           toolOptions: tools ? toolOptions : null,
         }),
       };
@@ -95,6 +122,24 @@ export function searchInstructions(
   ].join("\n");
 }
 
+export function searchTraceFromBrokerResult(result: SearchBrokerResult, providerSources: unknown[] = []): SearchTrace {
+  const results = providerSources
+    .map(searchTraceResult)
+    .filter((source): source is SearchTraceResult => Boolean(source))
+    .slice(0, 12);
+
+  return {
+    mode: result.decision.mode,
+    decision: result.decision,
+    providerName: result.providerName,
+    providerToolAvailable: result.providerToolAvailable,
+    providerToolAttached: result.providerToolAttached,
+    toolOptions: result.toolOptions,
+    resultCount: results.length,
+    results,
+  };
+}
+
 function domainFilterOptions(filters: SearchFilters): {
   allowedDomains?: string[];
   excludedDomains?: string[];
@@ -103,4 +148,44 @@ function domainFilterOptions(filters: SearchFilters): {
     ...(filters.allowedDomains?.length ? { allowedDomains: [...filters.allowedDomains].slice(0, 5) } : {}),
     ...(filters.excludedDomains?.length ? { excludedDomains: [...filters.excludedDomains].slice(0, 5) } : {}),
   };
+}
+
+function searchTraceResult(source: unknown): SearchTraceResult | null {
+  const record = objectRecord(source);
+
+  if (!record) {
+    return null;
+  }
+
+  const url = firstString(record, ["url", "uri", "link"]);
+  const title = firstString(record, ["title", "name"]);
+  const snippet = firstString(record, ["snippet", "summary", "description", "text", "content"]);
+  const sourceType = firstString(record, ["sourceType", "type", "kind"]);
+
+  if (!url && !title && !snippet) {
+    return null;
+  }
+
+  return {
+    title: title ? title.slice(0, 240) : null,
+    url: url ? url.slice(0, 500) : null,
+    snippet: snippet ? snippet.slice(0, 1_000) : null,
+    sourceType: sourceType ? sourceType.slice(0, 80) : null,
+  };
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function firstString(record: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
 }
