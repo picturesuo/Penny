@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AutopilotSuggestion, BrainClaim, ExplorationPath, WorkStructureStep } from "../types/brain";
+import { NextMoveCard } from "./NextMoveCard";
 
 interface CurrentExplorationProps {
   title: string;
@@ -7,9 +8,15 @@ interface CurrentExplorationProps {
   claims: BrainClaim[];
   paths: ExplorationPath[];
   autopilotSuggestion: AutopilotSuggestion | null;
+  autopilotCandidates?: AutopilotSuggestion[];
   focusedClaim: BrainClaim | null;
   activeWorkStructureStep?: WorkStructureStep | null;
-  onGoThere: () => void;
+  disabled?: boolean;
+  onGoThere: (candidateId?: string) => Promise<void>;
+  onOpenLearn?: () => void;
+  onOpenCheck?: () => void;
+  onOpenVerify?: () => void;
+  onOpenSave?: () => void;
 }
 
 interface PathRow {
@@ -27,7 +34,16 @@ export function CurrentExploration({
   subtitle,
   claims,
   paths,
+  autopilotSuggestion,
+  autopilotCandidates = [],
+  focusedClaim,
   activeWorkStructureStep,
+  disabled = false,
+  onGoThere,
+  onOpenLearn,
+  onOpenCheck,
+  onOpenVerify,
+  onOpenSave,
 }: CurrentExplorationProps) {
   const rows = useMemo(() => buildRows(claims, paths, activeWorkStructureStep), [claims, paths, activeWorkStructureStep]);
   const [selectedPathIndex, setSelectedPathIndex] = useState<number | null>(null);
@@ -39,6 +55,8 @@ export function CurrentExploration({
   const decisionQuestion = decisionQuestionForStep(activeWorkStructureStep, title, subtitle);
   const stepNumber = decisionStepNumberForStep(activeWorkStructureStep);
   const stepCountLabel = stepNumber ? `Step ${stepNumber} of 7` : `${rows.length} options`;
+  const currentMoveLabel = autopilotSuggestion?.primaryActionLabel ?? decisionLabel;
+  const currentMoveReason = autopilotSuggestion?.why ?? "Penny is comparing the current paths before choosing a move.";
 
   useEffect(() => {
     if (selectedPathIndex !== null && selectedPathIndex >= rows.length) {
@@ -90,10 +108,23 @@ export function CurrentExploration({
       </div>
       <div className="decision-hero">
         <p>
-          Penny thinks the next thing to validate is: <strong>{decisionLabel}</strong>
+          Penny thinks the next move is: <strong>{currentMoveLabel}</strong>
         </p>
         <h1 title={decisionQuestion}>{decisionQuestion}</h1>
+        <small>{currentMoveReason}</small>
       </div>
+      <NextMoveCard
+        suggestion={autopilotSuggestion}
+        candidates={autopilotCandidates}
+        claims={claims}
+        focusedClaim={focusedClaim}
+        disabled={disabled}
+        onAccept={onGoThere}
+        {...(onOpenLearn ? { onOpenLearn } : {})}
+        {...(onOpenCheck ? { onOpenCheck } : {})}
+        {...(onOpenVerify ? { onOpenVerify } : {})}
+        {...(onOpenSave ? { onOpenSave } : {})}
+      />
       {selectedPath ? (
         <DecisionCard
           betterOption={betterOption}
