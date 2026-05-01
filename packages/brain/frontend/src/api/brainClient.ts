@@ -3,6 +3,7 @@ import type {
   AutopilotTickData,
   BrainClaim,
   BrainDocumentsResponse,
+  BrainHybridSearchResponse,
   BrainRecentsResponse,
   BrainSessionNoteResponse,
   AutopilotTickResponse,
@@ -20,6 +21,7 @@ import type {
   KeepBrainRecentIdeaResponse,
   ManualNodeSelectionResponse,
   RespondToChallengeResponse,
+  SaveBrainObjectResponse,
   SeedBrainResponse,
   SessionCockpitData,
   SessionCockpitResponse,
@@ -141,22 +143,18 @@ export async function fetchSessionNote(sessionId: string): Promise<BrainSessionN
 }
 
 export async function fetchSessionCanvas(sessionId: string): Promise<SessionCanvasResponse> {
-  try {
-    const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/canvas`, {
-      method: "GET",
-      headers: requestHeaders(),
-    });
+  const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/canvas`, {
+    method: "GET",
+    headers: requestHeaders(),
+  });
 
-    const payload = await readJson(response);
+  const payload = await readJson(response);
 
-    if (!response.ok) {
-      return mockSessionCanvas(sessionId);
-    }
-
-    return normalizeSessionCanvas(payload, sessionId);
-  } catch {
-    return mockSessionCanvas(sessionId);
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /api/sessions/${sessionId}/canvas failed with ${response.status}.`));
   }
+
+  return normalizeSessionCanvas(payload);
 }
 
 export async function saveSessionNote(input: { sessionId: string; content: string }): Promise<BrainSessionNoteResponse> {
@@ -175,99 +173,116 @@ export async function saveSessionNote(input: { sessionId: string; content: strin
   return payload as BrainSessionNoteResponse;
 }
 
-function normalizeSessionCanvas(payload: unknown, sessionId: string): SessionCanvasResponse {
+export async function saveBrainObject(input: {
+  sessionId?: string | null;
+  objectType?: string;
+  title?: string;
+  summary?: string | null;
+  content: string;
+  payload?: Record<string, unknown>;
+}): Promise<SaveBrainObjectResponse> {
+  const response = await fetch("/api/brain/objects/save", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/brain/objects/save failed with ${response.status}.`));
+  }
+
+  return payload as SaveBrainObjectResponse;
+}
+
+export async function fetchBrainHybridSearch(input: {
+  query: string;
+  sessionId?: string | null;
+  claimId?: string | null;
+  mode?: "learn" | "check" | "verify" | "autopilot";
+  limit?: number;
+}): Promise<BrainHybridSearchResponse> {
+  const response = await fetch("/api/brain/search/hybrid", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (response.status === 404 || response.status === 405) {
+    return unavailableHybridSearch(input.query);
+  }
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/brain/search/hybrid failed with ${response.status}.`));
+  }
+
+  return normalizeBrainHybridSearch(payload, input.query);
+}
+
+function normalizeSessionCanvas(payload: unknown): SessionCanvasResponse {
   const maybePayload =
     payload && typeof payload === "object" && "data" in payload ? (payload as { data?: unknown }).data : payload;
 
   if (isSessionCanvasData(maybePayload)) {
-    return maybePayload;
+    return { data: maybePayload };
   }
 
-  return mockSessionCanvas(sessionId);
+  return {
+    data: {
+      nodes: [],
+      edges: [],
+    },
+  };
 }
 
-function isSessionCanvasData(payload: unknown): payload is SessionCanvasResponse {
+function isSessionCanvasData(payload: unknown): payload is SessionCanvasResponse["data"] {
   return (
     Boolean(payload) &&
     typeof payload === "object" &&
-    Array.isArray((payload as SessionCanvasResponse).nodes) &&
-    Array.isArray((payload as SessionCanvasResponse).edges)
+    Array.isArray((payload as SessionCanvasResponse["data"]).nodes) &&
+    Array.isArray((payload as SessionCanvasResponse["data"]).edges)
   );
 }
 
-function mockSessionCanvas(sessionId: string): SessionCanvasResponse {
+function normalizeBrainHybridSearch(payload: unknown, query: string): BrainHybridSearchResponse {
+  const maybePayload =
+    payload && typeof payload === "object" && "data" in payload ? (payload as { data?: unknown }).data : payload;
+
+  if (!maybePayload || typeof maybePayload !== "object") {
+    return unavailableHybridSearch(query);
+  }
+
+  const candidate = maybePayload as Partial<BrainHybridSearchResponse["data"]>;
+  const results = Array.isArray(candidate.results) ? candidate.results : [];
+
   return {
-    selectedNodeId: "canvas-claim-core",
-    recommendedPath: ["canvas-claim-core", "canvas-assumption-risk", "canvas-question-evidence", "canvas-artifact-brief"],
-    nodes: [
-      {
-        id: "canvas-claim-core",
-        kind: "claim",
-        title: "Core idea",
-        summary: "The dropped idea is structured enough to inspect as a graph.",
-        status: "exploratory",
-        confidence: 62,
-        x: 120,
-        y: 130,
-        refs: {},
+    data: {
+      available: candidate.available !== false,
+      ...(typeof candidate.sourceOfTruth === "string" ? { sourceOfTruth: candidate.sourceOfTruth } : {}),
+      ...(typeof candidate.strategy === "string" ? { strategy: candidate.strategy } : {}),
+      results,
+      meta: {
+        ...(candidate.meta && typeof candidate.meta === "object" ? candidate.meta : {}),
+        query,
+        resultCount: results.length,
       },
-      {
-        id: "canvas-assumption-risk",
-        kind: "assumption",
-        title: "Load-bearing assumption",
-        summary: "The weakest hidden premise should be challenged before the user saves the plan.",
-        status: "exploratory",
-        confidence: 54,
-        x: 430,
-        y: 95,
-        refs: {},
+    },
+  };
+}
+
+function unavailableHybridSearch(query: string): BrainHybridSearchResponse {
+  return {
+    data: {
+      available: false,
+      results: [],
+      meta: {
+        query,
+        resultCount: 0,
       },
-      {
-        id: "canvas-question-evidence",
-        kind: "question",
-        title: "Evidence question",
-        summary: "The next Verify pass should ask what observable evidence would move confidence.",
-        status: "open",
-        confidence: null,
-        x: 430,
-        y: 310,
-        refs: {},
-      },
-      {
-        id: "canvas-artifact-brief",
-        kind: "artifact",
-        title: "Challenge Brief",
-        summary: `Session ${sessionId.slice(0, 8)} can produce a shareable challenge brief after Check.`,
-        status: "draft",
-        confidence: null,
-        x: 760,
-        y: 210,
-        refs: {},
-      },
-    ],
-    edges: [
-      {
-        id: "canvas-edge-core-risk",
-        source: "canvas-claim-core",
-        target: "canvas-assumption-risk",
-        kind: "depends_on",
-        label: "depends on",
-      },
-      {
-        id: "canvas-edge-risk-evidence",
-        source: "canvas-assumption-risk",
-        target: "canvas-question-evidence",
-        kind: "questions",
-        label: "needs evidence",
-      },
-      {
-        id: "canvas-edge-evidence-brief",
-        source: "canvas-question-evidence",
-        target: "canvas-artifact-brief",
-        kind: "supports",
-        label: "feeds",
-      },
-    ],
+    },
   };
 }
 

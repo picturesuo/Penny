@@ -324,7 +324,47 @@ export interface SessionCanvasData {
   selectedNodeId?: string;
 }
 
-export type SessionCanvasResponse = SessionCanvasData;
+export interface SessionCanvasResponse {
+  data: SessionCanvasData;
+}
+
+export interface SaveBrainObjectResponse {
+  data: {
+    object: {
+      id: string;
+      objectType: string;
+      sessionId: string | null;
+      title: string;
+      summary: string | null;
+      status: string | null;
+      createdAt: string;
+      updatedAt: string;
+    };
+  };
+}
+
+export interface BrainHybridSearchResult {
+  id: string;
+  title: string;
+  summary: string | null;
+  kind: string;
+  sessionId?: string | null;
+  claimId?: string | null;
+  score?: number | null;
+}
+
+export interface BrainHybridSearchResponse {
+  data: {
+    available: boolean;
+    sourceOfTruth?: "brain_rows_hybrid_retrieval" | string;
+    strategy?: "hybrid_lexical_vector" | "lexical" | string;
+    results: BrainHybridSearchResult[];
+    meta?: {
+      query: string;
+      resultCount: number;
+    };
+  };
+}
 
 export interface BrainRecentIdea {
   id: string;

@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createChallengeBrief,
   decideVerifyConfidence,
+  fetchBrainHybridSearch,
   fetchBrainRecents,
   fetchClaimDetail,
   fetchSessionCanvas,
@@ -11,6 +12,7 @@ import {
   keepBrainRecentIdea,
   issueChallengeFromCandidate,
   respondToChallenge,
+  saveBrainObject,
   saveSessionNote,
   selectAutopilotNode,
   startAutopilotCandidate,
@@ -171,33 +173,55 @@ test("frontend brain client uses persisted recents and notes routes", async () =
   }
 });
 
-test("frontend brain client fetches session canvas and falls back to mocked canvas data", async () => {
+test("frontend brain client uses session canvas, save object, and optional hybrid search contracts", async () => {
   const sessionId = uuidAt(101);
   const calls: FetchCall[] = [];
   const restoreFetch = mockFetch(calls, [
-    new Response(
-      JSON.stringify({
-        nodes: [
-          {
-            id: "claim-node",
-            kind: "claim",
-            title: "Core claim",
-            summary: "A persisted canvas claim.",
-            status: "exploratory",
-            confidence: 68,
-            x: 120,
-            y: 80,
-          },
-        ],
-        edges: [],
-        recommendedPath: ["claim-node"],
-        selectedNodeId: "claim-node",
-      }),
-      {
-        status: 200,
-        headers: { "content-type": "application/json" },
+    jsonResponse({
+      nodes: [
+        {
+          id: `claim:${uuidAt(201)}`,
+          kind: "assumption",
+          title: "Load-bearing assumption",
+          summary: "Founders will pay for structured thinking.",
+          status: "exploratory",
+          confidence: 42,
+          refs: { claimId: uuidAt(201) },
+          actions: ["check", "verify", "learn", "related"],
+        },
+      ],
+      edges: [],
+      recommendedPath: [`claim:${uuidAt(201)}`],
+      selectedNodeId: `claim:${uuidAt(201)}`,
+    }),
+    jsonResponse({
+      object: {
+        id: uuidAt(901),
+        objectType: "concept",
+        sessionId,
+        title: "Canvas node",
+        summary: "Saved from canvas.",
+        status: "saved",
+        createdAt: "2026-04-30T00:00:00.000Z",
+        updatedAt: "2026-04-30T00:00:00.000Z",
       },
-    ),
+    }),
+    jsonResponse({
+      available: true,
+      sourceOfTruth: "brain_rows_hybrid_retrieval",
+      strategy: "hybrid_lexical_vector",
+      results: [
+        {
+          id: "match-1",
+          title: "Prior Brain claim",
+          summary: "A related thought from Brain.",
+          kind: "claim",
+          sessionId,
+          claimId: uuidAt(201),
+          score: 0.78,
+        },
+      ],
+    }),
     new Response(JSON.stringify({ error: { message: "not ready" } }), {
       status: 404,
       headers: { "content-type": "application/json" },
@@ -206,15 +230,49 @@ test("frontend brain client fetches session canvas and falls back to mocked canv
 
   try {
     const canvas = await fetchSessionCanvas(sessionId);
-    const fallback = await fetchSessionCanvas(sessionId);
+    const saved = await saveBrainObject({
+      sessionId,
+      objectType: "concept",
+      title: "Canvas node",
+      summary: "Saved from canvas.",
+      content: "Founders will pay for structured thinking.",
+    });
+    const related = await fetchBrainHybridSearch({
+      query: "Founders will pay for structured thinking.",
+      sessionId,
+      claimId: uuidAt(201),
+      mode: "learn",
+      limit: 5,
+    });
+    const unavailable = await fetchBrainHybridSearch({ query: "No endpoint yet" });
 
     assert.equal(calls[0]?.url, `/api/sessions/${sessionId}/canvas`);
     assert.equal(calls[0]?.method, "GET");
-    assert.equal(canvas.nodes[0]?.id, "claim-node");
-    assert.equal(canvas.selectedNodeId, "claim-node");
-    assert.equal(calls[1]?.url, `/api/sessions/${sessionId}/canvas`);
-    assert.equal(fallback.nodes.length >= 4, true);
-    assert.equal(fallback.selectedNodeId, "canvas-claim-core");
+    assert.equal(canvas.data.nodes[0]?.id, `claim:${uuidAt(201)}`);
+    assert.deepEqual(canvas.data.recommendedPath, [`claim:${uuidAt(201)}`]);
+    assert.equal(saved.data.object.id, uuidAt(901));
+    assert.equal(related.data.available, true);
+    assert.equal(related.data.results[0]?.title, "Prior Brain claim");
+    assert.equal(unavailable.data.available, false);
+    assert.equal(calls[1]?.url, "/api/brain/objects/save");
+    assert.equal(calls[1]?.method, "POST");
+    assert.deepEqual(calls[1]?.body, {
+      sessionId,
+      objectType: "concept",
+      title: "Canvas node",
+      summary: "Saved from canvas.",
+      content: "Founders will pay for structured thinking.",
+    });
+    assert.equal(calls[2]?.url, "/api/brain/search/hybrid");
+    assert.equal(calls[2]?.method, "POST");
+    assert.deepEqual(calls[2]?.body, {
+      query: "Founders will pay for structured thinking.",
+      sessionId,
+      claimId: uuidAt(201),
+      mode: "learn",
+      limit: 5,
+    });
+    assert.equal(calls[3]?.url, "/api/brain/search/hybrid");
   } finally {
     restoreFetch();
   }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AutopilotSuggestion,
   AutopilotTickData,
@@ -6,7 +6,9 @@ import type {
   BrainData,
   BrainDocumentSummary,
   BrainDocumentsData,
+  BrainHybridSearchResponse,
   BrainRecentIdea,
+  CanvasNode,
   LearnSessionOutput,
 } from "../types/brain";
 import { formatLabel, shortId } from "../lib/format";
@@ -19,6 +21,9 @@ interface LearnWorkspaceProps {
   data: BrainData | null;
   autopilot: AutopilotTickData | null;
   recents: BrainRecentIdea[];
+  focusedClaimId: string | null;
+  focusNode: CanvasNode | null;
+  relatedBrainSearch: BrainHybridSearchResponse["data"] | null;
   status: string;
   isThinking: boolean;
   onSeed: (rawIdea: string) => Promise<void>;
@@ -28,6 +33,7 @@ interface LearnWorkspaceProps {
   onOpenCanvas: () => void;
   onOpenCheck: () => void;
   onOpenVerify: () => void;
+  onSearchBrainRelated: (query: string, claimId?: string | null) => Promise<BrainHybridSearchResponse["data"]>;
   onVerifyChanged?: () => Promise<void>;
 }
 
@@ -37,6 +43,9 @@ export function LearnWorkspace({
   data,
   autopilot,
   recents,
+  focusedClaimId,
+  focusNode,
+  relatedBrainSearch,
   status,
   isThinking,
   onSeed,
@@ -46,6 +55,7 @@ export function LearnWorkspace({
   onOpenCanvas,
   onOpenCheck,
   onOpenVerify,
+  onSearchBrainRelated,
   onVerifyChanged,
 }: LearnWorkspaceProps) {
   const output = useMemo(() => buildLearnSessionOutput(data, selectedDocument, autopilot), [
@@ -71,12 +81,16 @@ export function LearnWorkspace({
             output={output}
             currentSessionId={currentSessionId}
             sourceText={sourceText}
+            focusedClaimId={focusedClaimId}
+            focusNode={focusNode}
+            relatedBrainSearch={relatedBrainSearch}
             searchWebRequested={searchWebRequested}
             disabled={isThinking}
             onOpenBrain={onOpenBrain}
             onOpenCanvas={onOpenCanvas}
             onOpenCheck={onOpenCheck}
             onOpenVerify={onOpenVerify}
+            onSearchBrainRelated={onSearchBrainRelated}
             onSaveToBrain={onSeed}
             onKeepRecent={onKeepRecent}
             {...(onVerifyChanged ? { onVerifyChanged } : {})}
@@ -110,12 +124,16 @@ function LearnSessionView({
   output,
   currentSessionId,
   sourceText,
+  focusedClaimId,
+  focusNode,
+  relatedBrainSearch,
   searchWebRequested,
   disabled,
   onOpenBrain,
   onOpenCanvas,
   onOpenCheck,
   onOpenVerify,
+  onSearchBrainRelated,
   onSaveToBrain,
   onKeepRecent,
   onVerifyChanged,
@@ -123,21 +141,35 @@ function LearnSessionView({
   output: LearnSessionOutput;
   currentSessionId: string | null;
   sourceText: string;
+  focusedClaimId: string | null;
+  focusNode: CanvasNode | null;
+  relatedBrainSearch: BrainHybridSearchResponse["data"] | null;
   searchWebRequested: boolean;
   disabled: boolean;
   onOpenBrain: () => void;
   onOpenCanvas: () => void;
   onOpenCheck: () => void;
   onOpenVerify: () => void;
+  onSearchBrainRelated: (query: string, claimId?: string | null) => Promise<BrainHybridSearchResponse["data"]>;
   onSaveToBrain: (rawIdea: string) => Promise<void>;
   onKeepRecent: (rawIdea: string) => Promise<void>;
   onVerifyChanged?: () => Promise<void>;
 }) {
   const isSavedToBrain = Boolean(currentSessionId);
   const hasCoreIdea = Boolean(output.coreIdea.trim());
+  const focusedClaim = focusedClaimId
+    ? [...output.claims, ...output.assumptions, ...output.questions].find((claim) => claim.id === focusedClaimId) ?? null
+    : null;
+  const relatedQuery = focusNode?.summary?.trim() || focusedClaim?.text || output.coreIdea;
   const [selectedVerifyClaim, setSelectedVerifyClaim] = useState<BrainClaim | null>(
-    output.assumptions[0] ?? output.claims[0] ?? null,
+    focusedClaim ?? output.assumptions[0] ?? output.claims[0] ?? null,
   );
+
+  useEffect(() => {
+    if (focusedClaim) {
+      setSelectedVerifyClaim(focusedClaim);
+    }
+  }, [focusedClaim]);
 
   return (
     <section className="learn-session-output" aria-label="Learn session output">
@@ -179,9 +211,20 @@ function LearnSessionView({
         >
           Keep in Recents
         </button>
+        <button
+          type="button"
+          className="text-command"
+          disabled={disabled || !relatedQuery.trim()}
+          onClick={() => {
+            void onSearchBrainRelated(relatedQuery, focusedClaim?.id ?? focusNode?.refs?.claimId ?? null);
+          }}
+        >
+          Have I thought about this before?
+        </button>
       </div>
 
       <div className="learn-output-grid">
+        {focusNode || focusedClaim ? <LearnFocusCard node={focusNode} claim={focusedClaim} /> : null}
         <article className="learn-output-card learn-core-idea">
           <span>Core idea</span>
           <p>{output.coreIdea}</p>
@@ -215,6 +258,7 @@ function LearnSessionView({
         />
         <CreativePotential items={output.creativePotential} />
         <AutopilotNextMove suggestion={output.autopilotNextMove} claims={output.claims} />
+        <RelatedFromBrain search={relatedBrainSearch} onSelectDocument={onOpenBrain} />
         <div className="learn-verify-slot">
           <VerifyPanel
             sessionId={currentSessionId}
@@ -227,6 +271,47 @@ function LearnSessionView({
         </div>
       </div>
     </section>
+  );
+}
+
+function LearnFocusCard({ node, claim }: { node: CanvasNode | null; claim: BrainClaim | null }) {
+  return (
+    <article className="learn-output-card learn-focus-card">
+      <span>Selected context</span>
+      <strong>{node?.title ?? claim?.kind ?? "Canvas node"}</strong>
+      <p>{node?.summary ?? claim?.text ?? "Learn is focused on the selected graph node."}</p>
+    </article>
+  );
+}
+
+function RelatedFromBrain({
+  search,
+  onSelectDocument,
+}: {
+  search: BrainHybridSearchResponse["data"] | null;
+  onSelectDocument: () => void;
+}) {
+  if (!search?.available) {
+    return null;
+  }
+
+  return (
+    <article className="learn-output-card learn-related-brain">
+      <span>Related from your Brain</span>
+      {search.results.length > 0 ? (
+        <div className="learn-related-list">
+          {search.results.slice(0, 5).map((result) => (
+            <button key={result.id} type="button" onClick={onSelectDocument}>
+              <strong>{truncateWords(result.title, 10)}</strong>
+              <small>{truncateWords(result.summary ?? result.kind, 16)}</small>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="learn-empty-note">No related Brain matches for this prompt yet.</p>
+      )}
+      {search.strategy ? <small>{formatLabel(search.strategy)}</small> : null}
+    </article>
   );
 }
 

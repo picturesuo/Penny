@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
 import {
   createChallengeBrief,
+  fetchBrainHybridSearch,
   fetchBrainDocuments,
   fetchBrainRecents,
   fetchSessionCockpit,
   keepBrainRecentIdea,
   issueChallengeFromCandidate,
   respondToChallenge,
+  saveBrainObject,
   seedBrain,
   selectAutopilotNode,
   startAutopilotCandidate,
   tickAutopilot,
+  verifyClaim,
 } from "./api/brainClient";
 import { buildAutopilotStartIntent, runAutopilotGoThere, type PennyMode } from "./autopilotUx";
 import { BrainWorkspace } from "./components/BrainWorkspace";
@@ -22,6 +25,7 @@ import type {
   AutopilotTickData,
   BrainData,
   BrainDocumentsData,
+  BrainHybridSearchResponse,
   BrainMove,
   BrainRecentIdea,
   CanvasNode,
@@ -47,6 +51,8 @@ type ChallengeResponseDraft =
       reasoning?: string;
     };
 
+type BrainRelatedSearchState = BrainHybridSearchResponse["data"];
+
 const ACTIVE_SESSION_KEY = "penny.activeSessionId";
 const SESSION_QUERY_PARAM = "sessionId";
 
@@ -62,6 +68,8 @@ export function App() {
   const [focusedClaimId, setFocusedClaimId] = useState<string | null>(null);
   const [focusedWorkStructureStepId, setFocusedWorkStructureStepId] = useState<string | null>(null);
   const [brainCanvasOpen, setBrainCanvasOpen] = useState(false);
+  const [learnFocusNode, setLearnFocusNode] = useState<CanvasNode | null>(null);
+  const [relatedBrainSearch, setRelatedBrainSearch] = useState<BrainRelatedSearchState | null>(null);
   const [activeMode, setActiveMode] = useState<PennyMode>("Learn");
   const [status, setStatus] = useState("Ready");
   const [isThinking, setIsThinking] = useState(false);
@@ -203,6 +211,8 @@ export function App() {
     setLatestArtifact(null);
     setFocusedClaimId(null);
     setBrainCanvasOpen(false);
+    setLearnFocusNode(null);
+    setRelatedBrainSearch(null);
     forgetActiveSession();
     setStatus("Ready");
   }
@@ -411,8 +421,43 @@ export function App() {
     setStatus("Canvas ready");
   }
 
-  function handleCanvasNodeAction(action: CanvasNodeAction, node: CanvasNode) {
-    const claimId = node.refs?.claimId ?? (node.id.startsWith("claim:") ? node.id.slice("claim:".length) : null);
+  async function handleBrainRelatedSearch(query: string, claimId?: string | null): Promise<BrainHybridSearchResponse["data"]> {
+    const trimmedQuery = query.trim();
+
+    if (!trimmedQuery) {
+      const emptySearch = { available: false, results: [], meta: { query: "", resultCount: 0 } };
+      setRelatedBrainSearch(emptySearch);
+      return emptySearch;
+    }
+
+    setIsThinking(true);
+    setStatus("Checking Brain memory");
+
+    try {
+      const response = await fetchBrainHybridSearch({
+        query: trimmedQuery,
+        sessionId: data?.session?.id ?? selectedDocument?.sessionId ?? null,
+        claimId: claimId ?? null,
+        mode: "learn",
+        limit: 5,
+      });
+      setRelatedBrainSearch(response.data);
+      setStatus(response.data.available ? "Brain memory checked" : "Brain related search unavailable");
+      return response.data;
+    } catch (error) {
+      const failedSearch = { available: false, results: [], meta: { query: trimmedQuery, resultCount: 0 } };
+      setRelatedBrainSearch(failedSearch);
+      setStatus(error instanceof Error ? error.message : String(error));
+      return failedSearch;
+    } finally {
+      setIsThinking(false);
+    }
+  }
+
+  async function handleCanvasNodeAction(action: CanvasNodeAction, node: CanvasNode) {
+    const claimId = claimIdFromCanvasNode(node);
+    const claim = claimId ? data?.ideaMap?.claims?.find((item) => item.id === claimId) ?? null : null;
+    const nodeText = node.summary?.trim() || claim?.text || node.title;
 
     if (claimId) {
       setFocusedClaimId(claimId);
@@ -420,27 +465,91 @@ export function App() {
 
     switch (action) {
       case "learn":
+        setLearnFocusNode(node);
         setActiveMode("Learn");
-        setStatus(`Learn from ${node.title}`);
-        break;
+        setStatus("Learn focused on canvas node");
+        return;
       case "check":
         setActiveMode("Check");
-        setStatus(`Check ${node.title}`);
-        break;
+        if (claimId) {
+          await handleManualClaimSelect(claimId);
+        } else {
+          setStatus("Check opened for canvas node");
+        }
+        return;
       case "verify":
-        setActiveMode("Check");
-        setStatus(`Verify ${node.title}`);
-        break;
+        await handleCanvasVerify(node, claimId, nodeText);
+        return;
       case "save":
-        setActiveMode("Brain");
-        setBrainCanvasOpen(false);
-        setStatus(`Save ${node.title} from Brain`);
-        break;
+        await handleCanvasSave(node, nodeText);
+        return;
       case "related":
-        setActiveMode("Brain");
-        setBrainCanvasOpen(true);
-        setStatus(`Related nodes for ${node.title}`);
-        break;
+        setLearnFocusNode(node);
+        await handleBrainRelatedSearch(nodeText, claimId);
+        setActiveMode("Learn");
+        return;
+    }
+  }
+
+  async function handleCanvasVerify(node: CanvasNode, claimId: string | null, currentClaimText: string) {
+    if (!data?.session?.id || !claimId) {
+      setActiveMode("Check");
+      setStatus("Open a saved claim before running Verify");
+      return;
+    }
+
+    setIsThinking(true);
+    setStatus("Verifying canvas claim");
+
+    try {
+      await verifyClaim({ sessionId: data.session.id, claimId, currentClaimText });
+      const cockpit = await refreshCockpit(data.session.id);
+      await refreshDocuments(data.session.id);
+      setFocusedClaimId(claimId ?? cockpit.autopilot.suggestion?.targetClaimId ?? null);
+      setLearnFocusNode(node);
+      setActiveMode("Check");
+      setStatus("Verify completed");
+    } catch (error) {
+      setActiveMode("Check");
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsThinking(false);
+    }
+  }
+
+  async function handleCanvasSave(node: CanvasNode, content: string) {
+    if (node.id.startsWith("brain_object:")) {
+      setStatus("Canvas object is already saved in Brain");
+      return;
+    }
+
+    if (!content.trim()) {
+      setStatus("Canvas node has no content to save");
+      return;
+    }
+
+    setIsThinking(true);
+    setStatus("Saving canvas node");
+
+    try {
+      await saveBrainObject({
+        sessionId: data?.session?.id ?? selectedDocument?.sessionId ?? null,
+        objectType: node.kind,
+        title: node.title,
+        summary: node.summary ?? null,
+        content,
+        payload: {
+          source: "canvas_node",
+          canvasNodeId: node.id,
+          refs: node.refs ?? {},
+        },
+      });
+      await refreshDocuments(data?.session?.id ?? selectedDocument?.sessionId ?? null);
+      setStatus("Canvas node saved to Brain");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsThinking(false);
     }
   }
 
@@ -515,6 +624,9 @@ export function App() {
             data={data}
             autopilot={autopilot}
             recents={recents}
+            focusedClaimId={focusedClaimId}
+            focusNode={learnFocusNode}
+            relatedBrainSearch={relatedBrainSearch}
             status={status}
             isThinking={isThinking}
             onSeed={handleSeed}
@@ -524,6 +636,7 @@ export function App() {
             onOpenCanvas={handleOpenCanvas}
             onOpenCheck={() => setActiveMode("Check")}
             onOpenVerify={() => setActiveMode("Check")}
+            onSearchBrainRelated={handleBrainRelatedSearch}
             onVerifyChanged={handleVerifyChanged}
           />
         ) : activeMode === "Brain" ? (
@@ -611,6 +724,14 @@ function responseLabel(response: ChallengeResponseKind): string {
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function claimIdFromCanvasNode(node: CanvasNode): string | null {
+  if (node.refs?.claimId) {
+    return node.refs.claimId;
+  }
+
+  return node.id.startsWith("claim:") ? node.id.slice("claim:".length) : null;
 }
 
 function activeSessionId(): string | null {
