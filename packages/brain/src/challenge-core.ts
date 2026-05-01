@@ -18,6 +18,11 @@ import { brainRuns, claimEdges, claimVersions, claims } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 import { afterMoveEffectsInTransaction, type PersistedDerivedEffect } from "./after-move-effects.ts";
 import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
+import {
+  formatHybridRetrievalContext,
+  loadHybridRetrievalContext,
+  type HybridRetrievalContext,
+} from "./hybrid-retrieval.ts";
 import { createMove, type CreatedMove } from "./move-payloads.ts";
 import { FailureTypeSchema, flattenIssues } from "./schema.ts";
 import { scopeValues } from "./scope.ts";
@@ -96,6 +101,7 @@ export type ChallengeGenerationInput = {
   targetStatus: "exploratory" | "committed" | "resolved" | "rejected";
   targetConfidence: number;
   lensSnapshot?: LensSnapshot;
+  retrievalContext?: HybridRetrievalContext;
 };
 
 const challengeOutputSpec = Output.object<ChallengeProviderOutput>({
@@ -322,6 +328,16 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
   const prelude = await db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.targetClaimId);
     const lensSnapshot = await loadLensSnapshot(tx, target.claim.sessionId);
+    const generationInputWithoutRetrieval = challengeGenerationInput(target, lensSnapshot);
+    const retrievalContext = await loadHybridRetrievalContext(tx, {
+      mode: "check",
+      query: challengeRetrievalQuery(generationInputWithoutRetrieval),
+      sessionId: target.claim.sessionId,
+      currentClaimId: target.claim.id,
+      projectId: target.claim.projectId,
+      scope: target.claim,
+      limit: 8,
+    });
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
@@ -336,6 +352,7 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
           targetClaimId: target.claim.id,
           targetClaimVersionId: target.version.id,
           targetText: target.version.content,
+          retrievalContext,
           lensSnapshot,
         },
       })
@@ -345,13 +362,16 @@ export async function persistChallenge(db: PennyDatabase, input: ChallengeReques
       throw new ChallengeConflictError("Failed to record challenge BrainRun.");
     }
 
-    return { target, brainRun, lensSnapshot };
+    return { target, brainRun, lensSnapshot, retrievalContext };
   });
 
   try {
-    const challenge = await generateChallengeOutput(challengeGenerationInput(prelude.target, prelude.lensSnapshot), {
-      brainRunId: prelude.brainRun.id,
-    });
+    const challenge = await generateChallengeOutput(
+      challengeGenerationInput(prelude.target, prelude.lensSnapshot, prelude.retrievalContext),
+      {
+        brainRunId: prelude.brainRun.id,
+      },
+    );
 
     return await db.transaction(async (tx) => {
       const critiqueConfidence = confidenceForStrength(challenge.strength);
@@ -787,12 +807,15 @@ export function buildChallengePrompt(input: ChallengeGenerationInput): string {
     "- Use confirmed shapes as durable priors about how this user thinks.",
     "- Treat candidate shapes as tentative: let them influence critique selection, but do not assert them as facts.",
     "- Pending effects can suggest unresolved risks, stale artifacts, or next moves worth pressure-testing.",
+    "- Use Check retrieval to find prior shapes, mistakes, misconceptions, and graph neighbors before selecting the critique.",
+    "- Retrieval context is internal Brain memory, not external evidence.",
     "",
     `Target claim id: ${input.targetClaimId}`,
     `Target kind: ${input.targetKind}`,
     `Target status: ${input.targetStatus}`,
     `Target confidence: ${input.targetConfidence}`,
     `Target text: ${input.targetText}`,
+    formatHybridRetrievalContext(input.retrievalContext),
     `Lens snapshot JSON: ${formatLensSnapshot(input.lensSnapshot)}`,
   ].join("\n");
 }
@@ -820,6 +843,7 @@ function buildChallengeOutput(targetText: string): ChallengeOutput {
 function challengeGenerationInput(
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
   lensSnapshot: LensSnapshot,
+  retrievalContext?: HybridRetrievalContext,
 ): ChallengeGenerationInput {
   return {
     targetClaimId: target.claim.id,
@@ -828,7 +852,15 @@ function challengeGenerationInput(
     targetStatus: target.version.status,
     targetConfidence: target.version.confidence,
     lensSnapshot,
+    ...(retrievalContext ? { retrievalContext } : {}),
   };
+}
+
+function challengeRetrievalQuery(input: ChallengeGenerationInput): string {
+  return [
+    input.targetText,
+    "prior shapes mistakes misconceptions challenge risk counterargument failure mode",
+  ].join("\n");
 }
 
 async function markChallengeRunFailed(db: PennyDatabase, brainRunId: string, error: unknown): Promise<void> {

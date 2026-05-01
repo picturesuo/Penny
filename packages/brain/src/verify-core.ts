@@ -18,6 +18,11 @@ import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claimVersions, claims, moves, sourceSpans, sources } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
+import {
+  formatHybridRetrievalContext,
+  loadHybridRetrievalContext,
+  type HybridRetrievalContext,
+} from "./hybrid-retrieval.ts";
 import { createMove, parseMovePayload } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 import { scopeValues } from "./scope.ts";
@@ -265,6 +270,7 @@ export type VerifyGenerationInput = {
   currentClaimStatus: "exploratory" | "committed" | "resolved" | "rejected";
   currentClaimConfidence: number;
   lensSnapshot?: LensSnapshot;
+  retrievalContext?: HybridRetrievalContext;
 };
 
 const verifyOutputSpec = Output.object<VerifyProviderOutput>({
@@ -385,6 +391,7 @@ type VerifyPrelude = {
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>;
   brainRun: typeof brainRuns.$inferSelect;
   lensSnapshot: LensSnapshot;
+  retrievalContext: HybridRetrievalContext;
 };
 
 type VerifyTransaction = Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
@@ -574,10 +581,13 @@ export async function runVerify(
   const prelude = await createVerifyPrelude(db, input, provider);
 
   try {
-    const generated = await generateVerifyRunOutput(verifyGenerationInput(prelude.target, input, prelude.lensSnapshot), {
-      provider,
-      brainRunId: prelude.brainRun.id,
-    });
+    const generated = await generateVerifyRunOutput(
+      verifyGenerationInput(prelude.target, input, prelude.lensSnapshot, prelude.retrievalContext),
+      {
+        provider,
+        brainRunId: prelude.brainRun.id,
+      },
+    );
 
     return await persistVerifyResult(db, generated.output, prelude, generated.searchTrace);
   } catch (error) {
@@ -957,6 +967,8 @@ export function buildVerifyPrompt(input: VerifyGenerationInput, searchInstructio
     "- Use shapes only to choose what evidence to look for and what follow-up question to ask.",
     "- Do not let shapes bias the verdict; evidence must drive support, weakening, or uncertainty.",
     "- Candidate shapes are tentative and must not be stated as facts about the user.",
+    "- Use local Brain/source retrieval before web search. Brain memory is context; local source rows can guide evidence selection.",
+    "- Do not cite local Brain memory as external evidence unless it is a retrieved source row or citation source.",
     "",
     searchInstructions ?? createSearchBroker().prepare(verifySearchInput(input), "verify", verifySearchContext(input)).instructions,
     "",
@@ -966,6 +978,7 @@ export function buildVerifyPrompt(input: VerifyGenerationInput, searchInstructio
     `Current claim status: ${input.currentClaimStatus}`,
     `Current claim confidence: ${input.currentClaimConfidence}`,
     `Current claim text: ${input.currentClaimText}`,
+    formatHybridRetrievalContext(input.retrievalContext),
     `Lens snapshot JSON: ${formatLensSnapshot(input.lensSnapshot)}`,
   ].join("\n");
 }
@@ -978,7 +991,25 @@ async function createVerifyPrelude(
   return db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.claimId, input.sessionId);
     const lensSnapshot = await loadLensSnapshot(tx, input.sessionId);
-    const generationInput = verifyGenerationInput(target, input, lensSnapshot);
+
+    if (normalizeClaimText(target.version.content) !== normalizeClaimText(input.currentClaimText)) {
+      throw new VerifyConflictError("Verify requires the current ClaimVersion text.");
+    }
+
+    const generationInputWithoutRetrieval = verifyGenerationInput(target, input, lensSnapshot);
+    const retrievalContext = await loadHybridRetrievalContext(tx, {
+      mode: "verify",
+      query: verifyRetrievalQuery(generationInputWithoutRetrieval),
+      sessionId: input.sessionId,
+      currentClaimId: target.claim.id,
+      projectId: target.claim.projectId,
+      scope: target.claim,
+      limit: 8,
+    });
+    const generationInput = {
+      ...generationInputWithoutRetrieval,
+      retrievalContext,
+    };
     const searchDecision = verifyWebSearchDecision(generationInput);
     const pendingRecipe = defaultVerifyRecipe({
       input: generationInput,
@@ -989,10 +1020,6 @@ async function createVerifyPrelude(
       evidenceCards: [],
       searchDecision,
     });
-
-    if (normalizeClaimText(target.version.content) !== normalizeClaimText(input.currentClaimText)) {
-      throw new VerifyConflictError("Verify requires the current ClaimVersion text.");
-    }
 
     const [brainRun] = await tx
       .insert(brainRuns)
@@ -1014,6 +1041,7 @@ async function createVerifyPrelude(
           currentClaimConfidence: target.version.confidence,
           searchEnabled: provider.searchEnabled,
           searchDecision,
+          retrievalContext,
           recipe: pendingRecipe,
           recipeTrace: verifyRecipeTraceForBrainRun(pendingRecipe),
           lensSnapshot,
@@ -1025,7 +1053,7 @@ async function createVerifyPrelude(
       throw new VerifyConflictError("Failed to record Verify BrainRun.");
     }
 
-    return { target, brainRun, lensSnapshot };
+    return { target, brainRun, lensSnapshot, retrievalContext };
   });
 }
 
@@ -1464,6 +1492,7 @@ function verifyGenerationInput(
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
   input: VerifyRequest,
   lensSnapshot: LensSnapshot,
+  retrievalContext?: HybridRetrievalContext,
 ): VerifyGenerationInput {
   return {
     claimId: target.claim.id,
@@ -1473,7 +1502,15 @@ function verifyGenerationInput(
     currentClaimStatus: target.version.status,
     currentClaimConfidence: target.version.confidence,
     lensSnapshot,
+    ...(retrievalContext ? { retrievalContext } : {}),
   };
+}
+
+function verifyRetrievalQuery(input: VerifyGenerationInput): string {
+  return [
+    input.currentClaimText,
+    "source evidence citations prior verification local Brain context",
+  ].join("\n");
 }
 
 export function verifyWebSearchDecision(input?: VerifyGenerationInput): VerifyWebSearchDecision {
@@ -1490,7 +1527,9 @@ function verifySearchInput(input?: VerifyGenerationInput) {
 
 function verifySearchContext(input?: VerifyGenerationInput) {
   return {
-    brainContext: input ? formatLensSnapshot(input.lensSnapshot) : null,
+    brainContext: input
+      ? [formatHybridRetrievalContext(input.retrievalContext), formatLensSnapshot(input.lensSnapshot)].join("\n")
+      : null,
     brainContextSufficient: false,
     claimRequiresExternalEvidence: true,
     verifyRequiresSources: true,

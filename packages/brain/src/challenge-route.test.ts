@@ -21,6 +21,7 @@ import {
 } from "./challenge-route.ts";
 import { BrainRunGuardError } from "./brain-run-guard.ts";
 import { createMemoryCommandIdempotencyStore } from "./command-idempotency.ts";
+import type { HybridRetrievalContext, HybridRetrievalMode } from "./hybrid-retrieval.ts";
 
 test("POST /brain/challenge validates the target claim request before persistence", async () => {
   let issued = false;
@@ -281,6 +282,7 @@ test("generateChallengeOutput validates heuristic and xAI structured outputs", a
     targetStatus: "exploratory" as const,
     targetConfidence: 64,
     lensSnapshot: lensSnapshot(),
+    retrievalContext: hybridContext("check"),
   };
   const heuristic = await generateChallengeOutput(input, {
     provider: createHeuristicChallengeProvider(),
@@ -312,6 +314,8 @@ test("generateChallengeOutput validates heuristic and xAI structured outputs", a
   assert.equal(resolveXaiBrainChallengeModel({}), defaultXaiBrainChallengeModel);
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.prompt ?? "", /Target claim id/);
+  assert.match(calls[0]?.prompt ?? "", /Local Brain retrieval/);
+  assert.match(calls[0]?.prompt ?? "", /Prior misconception/);
   assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
   assert.match(calls[0]?.prompt ?? "", /concept_grounding/);
 });
@@ -474,5 +478,32 @@ function lensSnapshot() {
       },
     ],
     pendingEffects: [],
+  };
+}
+
+function hybridContext(mode: HybridRetrievalMode): HybridRetrievalContext {
+  return {
+    sourceOfTruth: "brain_rows_hybrid_retrieval",
+    mode,
+    query: "prior shapes mistakes misconceptions",
+    planner: "graph_lexical_semantic_recency_scope",
+    embeddingProvider: "deterministic_mock",
+    terminal1SemanticAvailable: false,
+    summary: "Retrieved 1 prior pattern for Check.",
+    results: [
+      {
+        id: uuidAt(801),
+        type: "note",
+        title: "Prior misconception",
+        text: "The user previously treated motivation and cognitive load as interchangeable.",
+        score: 0.76,
+        scoreBreakdown: {
+          lexical: 0.7,
+          graph: 0.4,
+          recency: 1,
+        },
+        sessionId: uuidAt(100),
+      },
+    ],
   };
 }

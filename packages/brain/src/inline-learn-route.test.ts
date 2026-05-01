@@ -20,6 +20,7 @@ import {
   type InlineLearnSaveRequest,
 } from "./inline-learn-route.ts";
 import { BrainRunGuardError } from "./brain-run-guard.ts";
+import type { HybridRetrievalContext, HybridRetrievalMode } from "./hybrid-retrieval.ts";
 
 test("POST /brain/learn/inline validates requests before running Learn", async () => {
   let learned = false;
@@ -226,6 +227,7 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
     currentClaimText: "The idea improves clarity only inside the first draft.",
     currentClaimKind: "assumption" as const,
     lensSnapshot: lensSnapshot(),
+    retrievalContext: hybridContext("learn"),
   };
   const heuristic = await generateInlineLearnOutput(input, {
     provider: createHeuristicInlineLearnProvider(),
@@ -270,6 +272,8 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
   assert.equal(resolveXaiInlineLearnModel({}), defaultXaiInlineLearnModel);
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.prompt ?? "", /Local context/);
+  assert.match(calls[0]?.prompt ?? "", /Local Brain retrieval/);
+  assert.match(calls[0]?.prompt ?? "", /Prior Learn concept/);
   assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
   assert.match(calls[0]?.prompt ?? "", /concept_grounding/);
   assert.match(calls[0]?.prompt ?? "", /candidateBrainObjects/);
@@ -523,5 +527,33 @@ function lensSnapshot() {
       },
     ],
     pendingEffects: [],
+  };
+}
+
+function hybridContext(mode: HybridRetrievalMode): HybridRetrievalContext {
+  return {
+    sourceOfTruth: "brain_rows_hybrid_retrieval",
+    mode,
+    query: "scope first draft",
+    planner: "graph_lexical_semantic_recency_scope",
+    embeddingProvider: "deterministic_mock",
+    terminal1SemanticAvailable: false,
+    summary: "Retrieved 1 local Brain item for Learn.",
+    results: [
+      {
+        id: uuidAt(801),
+        type: "claim",
+        title: "Prior Learn concept",
+        text: "Scope has already been used as the boundary around where the claim applies.",
+        score: 0.82,
+        scoreBreakdown: {
+          lexical: 0.8,
+          graph: 0.35,
+          recency: 1,
+        },
+        sessionId: uuidAt(100),
+        claimId: uuidAt(101),
+      },
+    ],
   };
 }
