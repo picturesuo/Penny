@@ -907,12 +907,20 @@ async function loadCanvasState(db: PennyDatabase, sessionId: EntityId, scope?: B
   }
 
   const [sourceRows, claimRows, edgeRows, noteRows, objectRows, artifactRows] = await Promise.all([
-    db.select().from(sources).where(eq(sources.sessionId, session.id)).orderBy(asc(sources.createdAt)),
-    db.select().from(claims).where(eq(claims.sessionId, session.id)).orderBy(asc(claims.createdAt)),
-    db.select().from(claimEdges).where(eq(claimEdges.sessionId, session.id)).orderBy(asc(claimEdges.createdAt)),
-    db.select().from(sessionNotes).where(eq(sessionNotes.sessionId, session.id)).orderBy(asc(sessionNotes.updatedAt)),
-    db.select().from(brainObjects).where(eq(brainObjects.sessionId, session.id)).orderBy(asc(brainObjects.updatedAt)),
-    db.select().from(artifacts).where(eq(artifacts.sessionId, session.id)).orderBy(asc(artifacts.createdAt)),
+    db.select().from(sources).where(scopedSessionCondition(sources, session.id, scope)).orderBy(asc(sources.createdAt)),
+    db.select().from(claims).where(scopedSessionCondition(claims, session.id, scope)).orderBy(asc(claims.createdAt)),
+    db.select().from(claimEdges).where(scopedSessionCondition(claimEdges, session.id, scope)).orderBy(asc(claimEdges.createdAt)),
+    db
+      .select()
+      .from(sessionNotes)
+      .where(scopedSessionCondition(sessionNotes, session.id, scope))
+      .orderBy(asc(sessionNotes.updatedAt)),
+    db
+      .select()
+      .from(brainObjects)
+      .where(scopedSessionCondition(brainObjects, session.id, scope))
+      .orderBy(asc(brainObjects.updatedAt)),
+    db.select().from(artifacts).where(scopedSessionCondition(artifacts, session.id, scope)).orderBy(asc(artifacts.createdAt)),
   ]);
   const claimIds = claimRows.map((claim) => claim.id);
   const versionRows =
@@ -1675,6 +1683,10 @@ function scopeCondition(table: ScopeTable, scope: BrainScope) {
 
 function sessionCondition(sessionId: EntityId, scope: BrainScope | undefined) {
   return scope ? and(eq(sessions.id, sessionId), scopeCondition(sessions, scope)) : eq(sessions.id, sessionId);
+}
+
+function scopedSessionCondition(table: ScopeTable & { sessionId: ScopeColumn }, sessionId: EntityId, scope: BrainScope | undefined) {
+  return scope ? and(eq(table.sessionId, sessionId), scopeCondition(table, scope)) : eq(table.sessionId, sessionId);
 }
 
 function scopeColumnCondition(column: ScopeColumn, value: string | null) {
