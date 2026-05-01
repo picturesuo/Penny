@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LearnWorkspace } from "../src/components/LearnWorkspace";
 
-test("LearnWorkspace first screen shows a centered composer and Penny loadout", () => {
+test("LearnWorkspace first screen opens directly to the lesson view", () => {
   const markup = renderToStaticMarkup(
     createElement(LearnWorkspace, {
       documentsData: null,
@@ -30,10 +30,12 @@ test("LearnWorkspace first screen shows a centered composer and Penny loadout", 
     }),
   );
 
-  assert.match(markup, /What shall we think through/);
-  assert.match(markup, /Save to Brain/);
-  assert.match(markup, /Keep in Recents/);
-  assert.match(markup, /Web sources/);
-  assert.match(markup, /Quick note/);
+  assert.match(markup, /LEARNING PATH/);
+  assert.match(markup, /YOUR GOAL/);
+  assert.match(markup, /CORE IDEA/);
+  assert.match(markup, /FULLY FLESHED-OUT EXAMPLE/);
+  assert.match(markup, /ASK PENNY/);
+  assert.doesNotMatch(markup, /What shall we think through/);
+  assert.doesNotMatch(markup, /Save to Brain/);
   assert.doesNotMatch(markup, /Search\/Settings|Settings|Makes Cents|MAKES CENTS/);
 });
