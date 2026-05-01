@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import type { CreatedMove } from "./move-payloads.ts";
+import { parseMovePayload, type CreatedMove } from "./move-payloads.ts";
 import type { BrainRepository, CurrentClaimVersion, PersistedNextMoveCandidate } from "./domain/repository.ts";
 import type { NextMoveCandidate } from "./domain/engine.ts";
 import type { EntityId, FocusState, PennyYcDemoGraphFixture, ThinkingEdge, ThinkingMove } from "./domain/types.ts";
@@ -40,6 +40,8 @@ test("ThinkingModeService tick recomputes and persists candidates without mutati
   assert.equal(result.selectedCandidate?.priority.normalized, result.selectedCandidate?.confidence);
   assert.equal(result.modeContract.activeMode, "Check");
   assert.equal(result.move?.kind, "next_move_recomputed");
+  const candidateSummaries = result.move.payload.candidates as Array<{ whyPennyRecommendsThis?: string }>;
+  assert.match(candidateSummaries[0]?.whyPennyRecommendsThis ?? "", /Why Penny recommends this/);
   assert.equal(result.focusState.source, "autopilot_suggestion");
   assert.equal(repository.writes.includes("upsertNextMoveCandidates"), true);
   assert.equal(repository.writes.includes("markCandidateSelected"), true);
@@ -155,13 +157,14 @@ function fakeRepository(graph = loadFixture()): BrainRepository & { writes: stri
     async createMove(kind, input) {
       writes.push(`createMove:${kind}`);
       moveCounter += 1;
+      const payload = parseMovePayload(kind, input.payload);
 
       return {
         id: uuidAt(moveCounter),
         sessionId: input.sessionId,
         kind,
         summary: input.summary,
-        payload: input.payload,
+        payload,
         userId: null,
         workspaceId: null,
         projectId: null,
