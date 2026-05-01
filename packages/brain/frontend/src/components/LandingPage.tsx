@@ -1,4 +1,4 @@
-import { ArrowUp, Mic, Paperclip, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { type PennyMode } from "../autopilotUx";
 import { PennyMark } from "./PennyMark";
@@ -20,10 +20,10 @@ const shortcuts: Array<{ key: string; label: string; mode?: PennyMode; action: "
 
 export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNote }: LandingPageProps) {
   const [rawIdea, setRawIdea] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    textareaRef.current?.focus();
+    inputRef.current?.focus();
   }, []);
 
   useEffect(() => {
@@ -96,40 +96,26 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
             <label className="sr-only" htmlFor="landingIdea">
               Ask Penny anything
             </label>
-            <textarea
+            <button type="button" className="landing-plus-button" aria-label="Add a new thought" disabled={disabled}>
+              <Plus size={18} strokeWidth={1.8} />
+            </button>
+            <input
               id="landingIdea"
-              ref={textareaRef}
+              ref={inputRef}
               value={rawIdea}
               onChange={(event) => setRawIdea(event.target.value)}
               disabled={disabled}
               placeholder="Ask anything..."
-              rows={3}
               aria-describedby="landingStatus"
             />
-            <div className="landing-composer-actions">
-              <div className="landing-attachment-actions" aria-label="Input actions">
-                <button type="button" aria-label="Add a new thought" disabled={disabled}>
-                  <Plus size={24} strokeWidth={1.8} />
-                </button>
-                <button type="button" className="landing-file-button" aria-label="Add files" disabled={disabled}>
-                  <Paperclip size={23} strokeWidth={1.8} />
-                  <span>Add files</span>
-                </button>
-              </div>
-              <div className="landing-send-actions">
-                <button type="button" aria-label="Use voice input" disabled={disabled}>
-                  <Mic size={23} strokeWidth={1.8} />
-                </button>
-                <button
-                  type="submit"
-                  className="landing-submit-button"
-                  disabled={disabled || rawIdea.trim().length === 0}
-                  aria-label="Send thought"
-                >
-                  <ArrowUp size={24} strokeWidth={2.1} />
-                </button>
-              </div>
-            </div>
+            <button
+              type="submit"
+              className="landing-submit-button"
+              disabled={disabled || rawIdea.trim().length === 0}
+              aria-label="Send thought"
+            >
+              Send
+            </button>
             <p id="landingStatus" className="sr-only">
               {status}
             </p>
