@@ -2575,6 +2575,83 @@
     line-height: 1;
   }
 
+  .canvas-path-strip {
+    display: grid;
+    gap: 8px;
+    border: 1px solid #d5d0c6;
+    border-radius: 8px;
+    padding: 12px;
+    background: #ffffff;
+  }
+
+  .canvas-path-strip > span,
+  .canvas-context-panel > span {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .canvas-path-strip ol {
+    display: flex;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    overflow-x: auto;
+    list-style: none;
+  }
+
+  .canvas-path-strip li {
+    flex: 0 0 min(230px, 72vw);
+    min-width: 0;
+  }
+
+  .canvas-path-strip button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    border: 1px solid #cfc8ba;
+    border-radius: 8px;
+    padding: 9px;
+    background: #fbfaf6;
+    color: #111111;
+    text-align: left;
+  }
+
+  .canvas-path-strip button.is-selected {
+    border-color: #111111;
+    background: var(--penny-highlight);
+  }
+
+  .canvas-path-strip small {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background: #111111;
+    color: #ffffff;
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  .canvas-path-strip strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    line-height: 1.15;
+  }
+
+  .canvas-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+    gap: 14px;
+    min-width: 0;
+  }
+
   .canvas-board {
     position: relative;
     height: min(64vh, 620px);
@@ -2620,6 +2697,84 @@
     color: rgb(17 17 17 / 0.68);
     font-size: 13px;
     line-height: 1.35;
+  }
+
+  .canvas-context-panel {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+    border: 1px solid #111111;
+    border-radius: 8px;
+    padding: 14px;
+    background: #ffffff;
+  }
+
+  .canvas-context-panel strong {
+    overflow-wrap: anywhere;
+    font-size: 19px;
+    line-height: 1.12;
+  }
+
+  .canvas-context-panel p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: rgb(17 17 17 / 0.7);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .canvas-context-panel dl {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .canvas-context-panel dl div {
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    border-top: 1px solid #e2ddd2;
+    padding-top: 8px;
+  }
+
+  .canvas-context-panel dt,
+  .canvas-context-panel dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .canvas-context-panel dt {
+    color: rgb(17 17 17 / 0.56);
+  }
+
+  .canvas-context-actions {
+    display: grid;
+    gap: 7px;
+  }
+
+  .canvas-context-actions button {
+    border: 1px solid #111111;
+    border-radius: 7px;
+    padding: 9px 10px;
+    background: #ffffff;
+    color: #111111;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    text-align: left;
+  }
+
+  .canvas-context-actions button:first-child {
+    background: var(--penny-highlight);
+  }
+
+  .canvas-context-actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.46;
   }
 
   .canvas-edge-layer {
@@ -3811,6 +3966,10 @@
   .canvas-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .canvas-stage {
+    grid-template-columns: 1fr;
   }
 
   .canvas-board {

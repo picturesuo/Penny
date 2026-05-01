@@ -52,10 +52,13 @@ test("CanvasWorkspace renders nodes, connectors, selection, and action menu", ()
   );
 
   assert.match(markup, /Thinking graph/);
+  assert.match(markup, /Recommended path/);
+  assert.match(markup, /Selected node/);
   assert.match(markup, /Core claim/);
   assert.match(markup, /Hidden assumption/);
   assert.match(markup, /depends on/);
   assert.match(markup, /Canvas node actions/);
+  assert.match(markup, /Open in Learn/);
   assert.match(markup, /Learn/);
   assert.match(markup, /Check/);
   assert.match(markup, /Verify/);

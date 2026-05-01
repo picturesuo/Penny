@@ -90,8 +90,12 @@ export function CanvasWorkspace({
 
   const nodes = useMemo(() => layoutCanvasNodes(canvasData.nodes), [canvasData.nodes]);
   const recommendedPath = canvasData.recommendedPath ?? [];
+  const recommendedNodes = recommendedPath
+    .map((nodeId) => nodes.find((node) => node.id === nodeId))
+    .filter((node): node is PositionedCanvasNode => Boolean(node));
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? nodes[0] ?? null;
   const isEmpty = loadState !== "loading" && nodes.length === 0;
+  const selectedActions = selectedNode?.actions?.length ? selectedNode.actions : defaultCanvasActions;
 
   return (
     <section className="canvas-workspace" aria-label="Canvas workspace">
@@ -108,39 +112,132 @@ export function CanvasWorkspace({
         </div>
       </header>
 
-      <div className="canvas-board" aria-label="Thinking canvas">
-        {isEmpty ? (
-          <div className="canvas-empty-state">
-            <strong>{loadState === "error" ? "Canvas unavailable" : "No canvas nodes yet"}</strong>
-            <p>
-              {loadState === "error"
-                ? loadError ?? "The session canvas could not be loaded."
-                : "Penny will show backend graph nodes here after the session has canvas data."}
-            </p>
-          </div>
-        ) : (
-          <>
-            <CanvasEdgeLayer
-              edges={canvasData.edges}
-              nodes={nodes}
-              selectedNodeId={selectedNode?.id ?? null}
-              recommendedPath={recommendedPath}
-            />
-            {nodes.map((node) => (
-              <CanvasNodeCard
-                key={node.id}
-                node={node}
-                selected={node.id === selectedNode?.id}
-                recommended={recommendedPath.includes(node.id)}
-                onSelect={setSelectedNodeId}
-                onAction={disabled ? () => undefined : onNodeAction}
-              />
+      {recommendedNodes.length > 0 ? (
+        <div className="canvas-path-strip" aria-label="Recommended path">
+          <span>Recommended path</span>
+          <ol>
+            {recommendedNodes.map((node, index) => (
+              <li key={node.id}>
+                <button type="button" className={node.id === selectedNode?.id ? "is-selected" : ""} onClick={() => setSelectedNodeId(node.id)}>
+                  <small>{index + 1}</small>
+                  <strong>{node.title}</strong>
+                </button>
+              </li>
             ))}
-          </>
-        )}
+          </ol>
+        </div>
+      ) : null}
+
+      <div className="canvas-stage">
+        <div className="canvas-board" aria-label="Thinking canvas">
+          {isEmpty ? (
+            <div className="canvas-empty-state">
+              <strong>{loadState === "error" ? "Canvas unavailable" : "Canvas starts after the first saved idea"}</strong>
+              <p>
+                {loadState === "error"
+                  ? loadError ?? "The session canvas could not be loaded."
+                  : "Save an idea to Brain, then Canvas will show claims, assumptions, questions, and the recommended path."}
+              </p>
+            </div>
+          ) : (
+            <>
+              <CanvasEdgeLayer
+                edges={canvasData.edges}
+                nodes={nodes}
+                selectedNodeId={selectedNode?.id ?? null}
+                recommendedPath={recommendedPath}
+              />
+              {nodes.map((node) => (
+                <CanvasNodeCard
+                  key={node.id}
+                  node={node}
+                  selected={node.id === selectedNode?.id}
+                  recommended={recommendedPath.includes(node.id)}
+                  onSelect={setSelectedNodeId}
+                  onAction={disabled ? () => undefined : onNodeAction}
+                />
+              ))}
+            </>
+          )}
+        </div>
+
+        <aside className="canvas-context-panel" aria-label="Selected node">
+          <span>Selected node</span>
+          {selectedNode ? (
+            <>
+              <strong>{selectedNode.title}</strong>
+              <p>{selectedNode.summary ?? "No summary is attached to this node yet."}</p>
+              <dl>
+                <div>
+                  <dt>Kind</dt>
+                  <dd>{selectedNode.kind}</dd>
+                </div>
+                {selectedNode.status ? (
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{selectedNode.status}</dd>
+                  </div>
+                ) : null}
+                {typeof selectedNode.confidence === "number" ? (
+                  <div>
+                    <dt>Confidence</dt>
+                    <dd>{selectedNode.confidence}%</dd>
+                  </div>
+                ) : null}
+              </dl>
+              <div className="canvas-context-actions">
+                {selectedActions.map((action) => (
+                  <button
+                    key={action}
+                    type="button"
+                    disabled={disabled}
+                    title={canvasActionTitle(action)}
+                    onClick={() => onNodeAction(action, selectedNode)}
+                  >
+                    {canvasActionLabel(action)}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p>Select a graph node to open Learn, Check, Verify, Save, or Related actions.</p>
+          )}
+        </aside>
       </div>
     </section>
   );
+}
+
+const defaultCanvasActions: CanvasNodeAction[] = ["learn", "check", "verify", "save", "related"];
+
+function canvasActionLabel(action: CanvasNodeAction): string {
+  switch (action) {
+    case "learn":
+      return "Open in Learn";
+    case "check":
+      return "Check";
+    case "verify":
+      return "Verify";
+    case "save":
+      return "Save";
+    case "related":
+      return "Related";
+  }
+}
+
+function canvasActionTitle(action: CanvasNodeAction): string {
+  switch (action) {
+    case "learn":
+      return "Open Learn with this node as context";
+    case "check":
+      return "Open Check focused on this node";
+    case "verify":
+      return "Run Verify for this node";
+    case "save":
+      return "Save this node to Brain";
+    case "related":
+      return "Find related Brain context";
+  }
 }
 
 function selectedNodeFrom(canvas: SessionCanvasData, focusedClaimId: string | null): string | null {
