@@ -53,6 +53,13 @@ export function LearnWorkspace({
   ]);
   const recentDocuments = documentsData?.documents.slice(0, 4) ?? [];
   const currentSessionId = data?.session?.id ?? selectedDocument?.sessionId ?? null;
+  const [searchWebRequested, setSearchWebRequested] = useState(false);
+  const sourceText = data?.source?.rawText ?? selectedDocument?.originalIdea ?? output?.coreIdea ?? "";
+
+  async function handleSeedFromDrop(rawIdea: string, options: { searchWeb: boolean }) {
+    setSearchWebRequested(options.searchWeb);
+    await onSeed(rawIdea);
+  }
 
   return (
     <main className="learn-workspace" aria-label="Learn">
@@ -61,6 +68,8 @@ export function LearnWorkspace({
           <LearnSessionView
             output={output}
             currentSessionId={currentSessionId}
+            sourceText={sourceText}
+            searchWebRequested={searchWebRequested}
             disabled={isThinking}
             onOpenBrain={onOpenBrain}
             onOpenCheck={onOpenCheck}
@@ -77,7 +86,9 @@ export function LearnWorkspace({
               disabled={isThinking}
               status={status}
               recents={recents}
-              onSave={onSeed}
+              searchWeb={searchWebRequested}
+              onSearchWebChange={setSearchWebRequested}
+              onSave={handleSeedFromDrop}
               onKeep={onKeepRecent}
             />
           </section>
@@ -95,6 +106,8 @@ export function LearnWorkspace({
 function LearnSessionView({
   output,
   currentSessionId,
+  sourceText,
+  searchWebRequested,
   disabled,
   onOpenBrain,
   onOpenCheck,
@@ -105,6 +118,8 @@ function LearnSessionView({
 }: {
   output: LearnSessionOutput;
   currentSessionId: string | null;
+  sourceText: string;
+  searchWebRequested: boolean;
   disabled: boolean;
   onOpenBrain: () => void;
   onOpenCheck: () => void;
@@ -125,6 +140,7 @@ function LearnSessionView({
         <span className="section-label">LEARN</span>
         <h1>Penny found structure in your idea</h1>
         <p>{truncateWords(output.coreIdea, 28)}</p>
+        <LearnSourceIndicator behavior={learnSourceBehavior(sourceText, searchWebRequested)} />
       </div>
 
       <div className="learn-output-actions" aria-label="Learn next actions">
@@ -210,13 +226,17 @@ function LearnIdeaDrop({
   disabled,
   status,
   recents,
+  searchWeb,
+  onSearchWebChange,
   onSave,
   onKeep,
 }: {
   disabled: boolean;
   status: string;
   recents: BrainRecentIdea[];
-  onSave: (rawIdea: string) => Promise<void>;
+  searchWeb: boolean;
+  onSearchWebChange: (searchWeb: boolean) => void;
+  onSave: (rawIdea: string, options: { searchWeb: boolean }) => Promise<void>;
   onKeep: (rawIdea: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState("");
@@ -227,7 +247,7 @@ function LearnIdeaDrop({
       return;
     }
 
-    await onSave(trimmedDraft);
+    await onSave(trimmedDraft, { searchWeb });
     setDraft("");
   }
 
@@ -251,6 +271,18 @@ function LearnIdeaDrop({
         aria-describedby="learnIdeaDropStatus"
         onChange={(event) => setDraft(event.target.value)}
       />
+      <div className="learn-search-row">
+        <label className="learn-search-toggle">
+          <input
+            type="checkbox"
+            checked={searchWeb}
+            disabled={disabled}
+            onChange={(event) => onSearchWebChange(event.target.checked)}
+          />
+          <span>Search web</span>
+        </label>
+        <LearnSourceIndicator behavior={learnSourceBehavior(trimmedDraft, searchWeb)} />
+      </div>
       <div className="idea-drop-actions">
         <button type="button" className="primary-command" disabled={disabled || !trimmedDraft} onClick={handleSave}>
           Save to Brain
@@ -279,6 +311,59 @@ function LearnIdeaDrop({
       ) : null}
     </section>
   );
+}
+
+interface LearnSourceBehavior {
+  usedWeb: boolean;
+  label: "Used your Brain" | "Used web because";
+  detail: string;
+}
+
+function LearnSourceIndicator({ behavior }: { behavior: LearnSourceBehavior }) {
+  return (
+    <div className={`learn-source-indicator${behavior.usedWeb ? " used-web" : ""}`} aria-label="Learn source behavior">
+      <span>{behavior.label}</span>
+      <p>{behavior.detail}</p>
+    </div>
+  );
+}
+
+function learnSourceBehavior(text: string, searchWebRequested: boolean): LearnSourceBehavior {
+  if (searchWebRequested) {
+    return {
+      usedWeb: true,
+      label: "Used web because",
+      detail: "you turned Search web on for this idea.",
+    };
+  }
+
+  const webReason = learnWebReason(text);
+
+  if (webReason) {
+    return {
+      usedWeb: true,
+      label: "Used web because",
+      detail: webReason,
+    };
+  }
+
+  return {
+    usedWeb: false,
+    label: "Used your Brain",
+    detail: "Penny started from the saved graph context and this idea.",
+  };
+}
+
+function learnWebReason(text: string): string | null {
+  if (/\b(search|web|browse|look up|lookup|source|sources|citation|citations|verify|fact[- ]check|find evidence)\b/i.test(text)) {
+    return "the idea asks for external sources.";
+  }
+
+  if (/\b(current|latest|today|recent|news|pricing|version|release|law|regulation|202[4-9])\b/i.test(text)) {
+    return "the idea may need current information.";
+  }
+
+  return null;
 }
 
 function LearnClaimList({
