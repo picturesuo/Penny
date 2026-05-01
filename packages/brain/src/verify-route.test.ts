@@ -23,6 +23,7 @@ import {
 } from "./verify-route.ts";
 import { BrainRunGuardError } from "./brain-run-guard.ts";
 import { createMemoryCommandIdempotencyStore } from "./command-idempotency.ts";
+import type { HybridRetrievalContext, HybridRetrievalMode } from "./hybrid-retrieval.ts";
 
 test("POST /brain/verify validates requests before running Verify", async () => {
   let verified = false;
@@ -482,6 +483,7 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
     currentClaimStatus: "exploratory" as const,
     currentClaimConfidence: 64,
     lensSnapshot: lensSnapshot(),
+    retrievalContext: hybridContext("verify"),
   };
   const heuristic = await generateVerifyOutput(input, {
     provider: createHeuristicVerifyProvider(),
@@ -547,6 +549,8 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
   assert.equal(calls.length, 1);
   assert.ok(calls[0]?.tools?.web_search);
   assert.match(calls[0]?.prompt ?? "", /Current claim text/);
+  assert.match(calls[0]?.prompt ?? "", /Local Brain retrieval/);
+  assert.match(calls[0]?.prompt ?? "", /Local citation row/);
   assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
   assert.match(calls[0]?.prompt ?? "", /evidence_checking/);
   assert.match(calls[0]?.prompt ?? "", /Search decision/);
@@ -983,5 +987,33 @@ function lensSnapshot() {
       },
     ],
     pendingEffects: [],
+  };
+}
+
+function hybridContext(mode: HybridRetrievalMode): HybridRetrievalContext {
+  return {
+    sourceOfTruth: "brain_rows_hybrid_retrieval",
+    mode,
+    query: "cognitive load source evidence",
+    planner: "graph_lexical_semantic_recency_scope",
+    embeddingProvider: "deterministic_mock",
+    terminal1SemanticAvailable: true,
+    summary: "Retrieved 1 local Brain source for Verify.",
+    results: [
+      {
+        id: uuidAt(801),
+        type: "source",
+        title: "Local citation row",
+        text: "Worked examples can reduce unnecessary cognitive load.",
+        score: 0.91,
+        scoreBreakdown: {
+          semantic: 0.95,
+          lexical: 0.6,
+          recency: 1,
+        },
+        sessionId: uuidAt(100),
+        sourceId: uuidAt(501),
+      },
+    ],
   };
 }
