@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { AutopilotSuggestion, BrainClaim, ExplorationPath, WorkStructureStep } from "../types/brain";
 import { NextMoveCard } from "./NextMoveCard";
+import { VerifyPanel } from "./VerifyPanel";
 
 interface CurrentExplorationProps {
   title: string;
   subtitle: string;
   claims: BrainClaim[];
   paths: ExplorationPath[];
+  sessionId?: string | null;
   autopilotSuggestion: AutopilotSuggestion | null;
   autopilotCandidates?: AutopilotSuggestion[];
   focusedClaim: BrainClaim | null;
@@ -17,6 +19,7 @@ interface CurrentExplorationProps {
   onOpenCheck?: () => void;
   onOpenVerify?: () => void;
   onOpenSave?: () => void;
+  onVerifyChanged?: () => Promise<void>;
 }
 
 interface PathRow {
@@ -34,6 +37,7 @@ export function CurrentExploration({
   subtitle,
   claims,
   paths,
+  sessionId = null,
   autopilotSuggestion,
   autopilotCandidates = [],
   focusedClaim,
@@ -44,6 +48,7 @@ export function CurrentExploration({
   onOpenCheck,
   onOpenVerify,
   onOpenSave,
+  onVerifyChanged,
 }: CurrentExplorationProps) {
   const rows = useMemo(() => buildRows(claims, paths, activeWorkStructureStep), [claims, paths, activeWorkStructureStep]);
   const [selectedPathIndex, setSelectedPathIndex] = useState<number | null>(null);
@@ -124,6 +129,14 @@ export function CurrentExploration({
         {...(onOpenCheck ? { onOpenCheck } : {})}
         {...(onOpenVerify ? { onOpenVerify } : {})}
         {...(onOpenSave ? { onOpenSave } : {})}
+      />
+      <VerifyPanel
+        sessionId={sessionId}
+        claim={focusedClaim}
+        disabled={disabled || !sessionId || !focusedClaim}
+        title="Verify focused claim"
+        compact
+        {...(onVerifyChanged ? { onVerifyChanged } : {})}
       />
       {selectedPath ? (
         <DecisionCard
