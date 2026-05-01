@@ -96,6 +96,51 @@ export interface BrainRun {
   operation?: string;
 }
 
+export type BrainSearchMode = "learn" | "verify" | "check" | "brain" | "autopilot" | string;
+export type BrainSearchDepth = "fast" | "deep" | string;
+
+export interface BrainSearchFilters {
+  allowedDomains?: string[];
+  excludedDomains?: string[];
+  recencyDays?: number;
+  academic?: boolean;
+}
+
+export interface BrainSearchDecision {
+  mode: BrainSearchMode;
+  useWebSearch: boolean;
+  depth: BrainSearchDepth;
+  reason: string;
+  reasonCodes: string[];
+  signals: string[];
+  query: string;
+  filters: BrainSearchFilters;
+}
+
+export interface BrainSearchTraceResult {
+  title: string | null;
+  url: string | null;
+  snippet: string | null;
+  sourceType: string | null;
+}
+
+export interface BrainSearchTrace {
+  mode: BrainSearchMode;
+  decision: BrainSearchDecision;
+  providerName: string;
+  providerToolAvailable: boolean;
+  providerToolAttached: boolean;
+  toolOptions: {
+    allowedDomains?: string[];
+    excludedDomains?: string[];
+    enableImageUnderstanding: false;
+  } | null;
+  resultCount: number;
+  results: BrainSearchTraceResult[];
+  savedSourceIds?: string[];
+  savedSourceSpanIds?: string[];
+}
+
 export interface BrainDocumentClaim {
   id: string;
   kind: string;
@@ -397,6 +442,7 @@ export interface BrainVerifyResult {
     status: string;
   };
   citationSources: BrainVerifyCitationSource[];
+  searchTrace?: BrainSearchTrace | null;
   confidenceUpdate: BrainVerifyConfidenceUpdate;
 }
 
