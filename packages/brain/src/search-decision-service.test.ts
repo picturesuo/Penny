@@ -92,6 +92,25 @@ test("shouldUseWebSearch defaults Verify to source grounding", () => {
   assert.ok(decision.reasonCodes.includes("verify_requires_sources"));
 });
 
+test("shouldUseWebSearch keeps Brain mode offline even with explicit search language", () => {
+  const decision = shouldUseWebSearch(
+    {
+      query: "latest pricing",
+      text: "Search the latest pricing and cite sources.",
+      userRequest: "Search the web.",
+    },
+    "brain",
+    {
+      brainContextSufficient: false,
+    },
+  );
+
+  assert.equal(decision.useWebSearch, false);
+  assert.equal(decision.depth, "fast");
+  assert.deepEqual(decision.reasonCodes, []);
+  assert.match(decision.reason, /does not browse/);
+});
+
 test("SearchBroker attaches provider tool options and preserves unsupported filters in instructions", () => {
   const seenOptions: unknown[] = [];
   const broker = createSearchBroker({
