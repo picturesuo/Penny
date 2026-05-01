@@ -450,6 +450,31 @@ test("heuristic provider keeps seed extraction usable without live AI credential
   assert.equal("artifacts" in output, false);
 });
 
+test("heuristic provider gives the YC demo idea a sharp first-loop structure", async () => {
+  const rawIdea =
+    "Penny is the most consistently efficient way to evoke creativity and turn it into structured, source-grounded thinking.";
+  const output = await generateBrainSeed(
+    { rawIdea },
+    { provider: createHeuristicBrainSeedProvider(), brainRunId: "00000000-0000-4000-8000-000000000703" },
+  );
+
+  assert.equal(output.seedClaim.text, rawIdea);
+  assert.equal(output.assumptions.length, 3);
+  assert.match(output.keyInsight, /inspectable, challengeable, and source-grounded/);
+  assert.match(output.assumptions[0]?.text ?? "", /creative starting points/);
+  assert.match(output.assumptions[1]?.text ?? "", /claims, assumptions, checks, and sources/);
+  assert.equal(output.firstChallenge.targetClaimId, "claim.assumption.creativity");
+  assert.equal(output.firstChallenge.failureType, "shaky_assumption");
+  assert.match(output.firstChallenge.challenge, /strong prompt in a chat window/);
+  assert.ok(output.thoughtMap.claims.some((claim) => claim.kind === "question" && /first-session signal/.test(claim.text)));
+  assert.ok(output.thoughtMap.claims.some((claim) => claim.kind === "concept" && /Source-grounded thinking/.test(claim.text)));
+  assert.deepEqual(
+    output.learnCandidates.map((candidate) => candidate.term),
+    ["source-grounded thinking", "structured creativity"],
+  );
+  assert.ok(output.explorationPaths.some((path) => /grounding threshold/i.test(path.title)));
+});
+
 test("xAI provider uses AI SDK structured output with the default model", async () => {
   const calls: Parameters<BrainSeedGenerateText>[0][] = [];
   const generateText: BrainSeedGenerateText = async (request) => {
