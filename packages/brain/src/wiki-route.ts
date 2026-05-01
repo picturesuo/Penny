@@ -9,13 +9,13 @@ import {
   claimVersions,
   moves,
   sessions,
-  sources,
   sourceSpans,
   wikiPages,
 } from "./db/schema.ts";
 import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 import { scopeValues, type BrainScope, type OptionalBrainScope } from "./scope.ts";
+import { loadScopedSourcesForSession, loadSourceSpansForSourceIds } from "./source-loading.ts";
 
 export const WikiRouteRequestSchema = z
   .object({
@@ -379,15 +379,11 @@ async function loadWikiCompileState(tx: WikiTransaction, sessionId: string): Pro
     .from(artifacts)
     .where(eq(artifacts.sessionId, sessionId))
     .orderBy(asc(artifacts.createdAt));
-  const sourceRows = await tx.select().from(sources).where(eq(sources.sessionId, sessionId)).orderBy(asc(sources.createdAt));
-  const spanRows =
-    sourceRows.length === 0
-      ? []
-      : await tx
-          .select()
-          .from(sourceSpans)
-          .where(inArray(sourceSpans.sourceId, sourceRows.map((source) => source.id)))
-          .orderBy(asc(sourceSpans.createdAt));
+  const sourceRows = await loadScopedSourcesForSession(tx, session);
+  const spanRows = await loadSourceSpansForSourceIds(
+    tx,
+    sourceRows.map((source) => source.id),
+  );
 
   return {
     session,
