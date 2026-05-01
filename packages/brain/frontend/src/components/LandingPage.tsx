@@ -86,6 +86,7 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
           <div className="landing-brand" aria-label="Penny. For your thoughts.">
             <div className="landing-wordmark">
               <PennyMark />
+              <span>enny</span>
             </div>
             <div className="landing-rule" aria-hidden="true" />
             <p>FOR YOUR THOUGHTS</p>
