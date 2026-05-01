@@ -203,10 +203,14 @@ export async function fetchBrainHybridSearch(input: {
   mode?: "learn" | "check" | "verify" | "autopilot";
   limit?: number;
 }): Promise<BrainHybridSearchResponse> {
-  const response = await fetch("/api/brain/search/hybrid", {
-    method: "POST",
+  const params = new URLSearchParams({ q: input.query });
+  if (input.limit) {
+    params.set("limit", String(input.limit));
+  }
+
+  const response = await fetch(`/api/brain/search?${params.toString()}`, {
+    method: "GET",
     headers: requestHeaders(),
-    body: JSON.stringify(input),
   });
 
   const payload = await readJson(response);
@@ -216,7 +220,7 @@ export async function fetchBrainHybridSearch(input: {
   }
 
   if (!response.ok) {
-    throw new Error(errorMessage(payload, `POST /api/brain/search/hybrid failed with ${response.status}.`));
+    throw new Error(errorMessage(payload, `GET /api/brain/search failed with ${response.status}.`));
   }
 
   return normalizeBrainHybridSearch(payload, input.query);
@@ -255,22 +259,59 @@ function normalizeBrainHybridSearch(payload: unknown, query: string): BrainHybri
     return unavailableHybridSearch(query);
   }
 
-  const candidate = maybePayload as Partial<BrainHybridSearchResponse["data"]>;
-  const results = Array.isArray(candidate.results) ? candidate.results : [];
+  const candidate = maybePayload as Partial<BrainHybridSearchResponse["data"]> & {
+    sourceOfTruth?: string;
+    mode?: string;
+    query?: string;
+    results?: unknown[];
+  };
+  const results = Array.isArray(candidate.results) ? candidate.results.map(normalizeBrainSearchResult) : [];
 
   return {
     data: {
       available: candidate.available !== false,
       ...(typeof candidate.sourceOfTruth === "string" ? { sourceOfTruth: candidate.sourceOfTruth } : {}),
-      ...(typeof candidate.strategy === "string" ? { strategy: candidate.strategy } : {}),
+      ...(typeof candidate.strategy === "string"
+        ? { strategy: candidate.strategy }
+        : typeof candidate.mode === "string"
+          ? { strategy: candidate.mode }
+          : {}),
       results,
       meta: {
         ...(candidate.meta && typeof candidate.meta === "object" ? candidate.meta : {}),
-        query,
+        query: typeof candidate.query === "string" ? candidate.query : query,
         resultCount: results.length,
       },
     },
   };
+}
+
+function normalizeBrainSearchResult(value: unknown): BrainHybridSearchResponse["data"]["results"][number] {
+  const result = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const id = stringValue(result.id) ?? stringValue(result.objectId) ?? "brain-search-result";
+  const title = stringValue(result.title) ?? "Brain result";
+  const normalized: BrainHybridSearchResponse["data"]["results"][number] = {
+    id,
+    title,
+    summary: stringValue(result.summary) ?? stringValue(result.preview) ?? null,
+    kind: stringValue(result.kind) ?? stringValue(result.objectType) ?? "brain",
+  };
+  const sessionId = stringValue(result.sessionId);
+  const claimId = stringValue(result.claimId);
+
+  if (sessionId) {
+    normalized.sessionId = sessionId;
+  }
+
+  if (claimId) {
+    normalized.claimId = claimId;
+  }
+
+  if (typeof result.score === "number") {
+    normalized.score = result.score;
+  }
+
+  return normalized;
 }
 
 function unavailableHybridSearch(query: string): BrainHybridSearchResponse {
@@ -284,6 +325,10 @@ function unavailableHybridSearch(query: string): BrainHybridSearchResponse {
       },
     },
   };
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
 }
 
 export async function fetchClaimDetail(claimId: string): Promise<ClaimDetailResponse> {

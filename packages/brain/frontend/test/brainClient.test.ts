@@ -207,18 +207,22 @@ test("frontend brain client uses session canvas, save object, and optional hybri
       },
     }),
     jsonResponse({
-      available: true,
-      sourceOfTruth: "brain_rows_hybrid_retrieval",
-      strategy: "hybrid_lexical_vector",
+      sourceOfTruth: "brain_embeddings_plus_brain_objects_notes_claim_versions_recents_artifacts",
+      mode: "hybrid_json_embedding_fallback",
+      query: "Founders will pay for structured thinking.",
       results: [
         {
-          id: "match-1",
+          objectId: "match-1",
+          objectType: "claim_version",
           title: "Prior Brain claim",
-          summary: "A related thought from Brain.",
-          kind: "claim",
+          preview: "A related thought from Brain.",
           sessionId,
-          claimId: uuidAt(201),
           score: 0.78,
+          semanticScore: 0.5,
+          lexicalScore: 0.28,
+          source: "hybrid",
+          metadata: { claimId: uuidAt(201) },
+          updatedAt: "2026-04-30T00:00:00.000Z",
         },
       ],
     }),
@@ -263,16 +267,10 @@ test("frontend brain client uses session canvas, save object, and optional hybri
       summary: "Saved from canvas.",
       content: "Founders will pay for structured thinking.",
     });
-    assert.equal(calls[2]?.url, "/api/brain/search/hybrid");
-    assert.equal(calls[2]?.method, "POST");
-    assert.deepEqual(calls[2]?.body, {
-      query: "Founders will pay for structured thinking.",
-      sessionId,
-      claimId: uuidAt(201),
-      mode: "learn",
-      limit: 5,
-    });
-    assert.equal(calls[3]?.url, "/api/brain/search/hybrid");
+    assert.equal(calls[2]?.url, "/api/brain/search?q=Founders+will+pay+for+structured+thinking.&limit=5");
+    assert.equal(calls[2]?.method, "GET");
+    assert.equal(calls[2]?.body, null);
+    assert.equal(calls[3]?.url, "/api/brain/search?q=No+endpoint+yet");
   } finally {
     restoreFetch();
   }
