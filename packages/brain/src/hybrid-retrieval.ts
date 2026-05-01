@@ -117,6 +117,7 @@ export async function planHybridRetrieval(
 ): Promise<HybridRetrievalContext> {
   const limit = clampLimit(request.limit);
   const embeddingProvider = options.embeddingProvider ?? createEmbeddingProvider();
+  const terminal1SemanticAvailable = Boolean(repository.terminal1SemanticSearch);
   const [candidates, graphNeighbors, lexicalMatches, terminalSemanticMatches] = await Promise.all([
     repository.scopedCandidates(request),
     repository.graphNeighbors?.(request) ?? Promise.resolve([]),
@@ -140,7 +141,7 @@ export async function planHybridRetrieval(
     query: compactText(request.query),
     planner: "graph_lexical_semantic_recency_scope",
     embeddingProvider: embeddingProvider.kind,
-    terminal1SemanticAvailable: terminalSemanticMatches.length > 0,
+    terminal1SemanticAvailable,
     results: merged,
     summary:
       merged.length === 0
