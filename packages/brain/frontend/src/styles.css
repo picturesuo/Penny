@@ -91,7 +91,7 @@
 
   .landing-wordmark {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
   }
 
@@ -100,6 +100,14 @@
     height: 108px;
     margin: 0;
     color: #303030;
+  }
+
+  .landing-wordmark span {
+    margin-left: -4px;
+    color: #303030;
+    font-size: clamp(58px, 5.8vw, 78px);
+    font-weight: 700;
+    line-height: 0.86;
   }
 
   .landing-rule {
@@ -3440,6 +3448,13 @@
     overflow: auto;
   }
 
+  .learn-workspace.is-entry-mode {
+    grid-template-columns: 1fr;
+    place-items: center;
+    min-height: calc(100vh - 184px);
+    padding: 34px 28px 56px;
+  }
+
   .learn-main,
   .learn-sidebar {
     min-width: 0;
@@ -3447,17 +3462,9 @@
 
   .learn-entry {
     display: grid;
-    align-content: start;
-    width: min(760px, 100%);
-    padding-top: 34px;
-  }
-
-  .learn-entry-lede {
-    max-width: 600px;
-    margin: 12px 0 0;
-    color: rgb(17 17 17 / 0.7);
-    font-size: 17px;
-    line-height: 1.35;
+    justify-items: center;
+    width: min(980px, 100%);
+    margin-top: -28px;
   }
 
   .learn-entry h1,
