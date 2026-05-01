@@ -21,6 +21,7 @@ import {
   ThinkingModeService,
   type ManualFocusResponse,
   type StartNextMoveResponse,
+  type ThinkingModeCandidateDto,
   type ThinkingModeStateResponse,
   type ThinkingModeTickResponse,
 } from "../services/thinking-mode-service.ts";
@@ -179,6 +180,26 @@ export type BrainGraphPath = {
   };
 };
 
+export type SessionCockpitCandidateTargetObject = {
+  type: "claim";
+  id: string;
+  claimId: EntityId;
+  edgeId: EntityId | null;
+  title: string;
+  status: CockpitClaim["status"] | null;
+  confidence: number;
+};
+
+export type SessionCockpitNextMoveCandidate = ThinkingModeCandidateDto & {
+  targetObject: SessionCockpitCandidateTargetObject;
+  targetClaim: CockpitClaim | null;
+};
+
+export type SessionCockpitAutopilotState = Omit<ThinkingModeStateResponse, "candidates" | "selectedCandidate"> & {
+  candidates: ReadonlyArray<SessionCockpitNextMoveCandidate>;
+  selectedCandidate: SessionCockpitNextMoveCandidate | null;
+};
+
 export type SessionCockpitPayload = {
   session: SessionGraphPayload["session"];
   sourceOfTruth: SessionGraphPayload["sourceOfTruth"];
@@ -188,7 +209,7 @@ export type SessionCockpitPayload = {
   graph: SessionGraphPayload["graph"];
   moves: SessionGraphPayload["moves"];
   lensSnapshot: SessionGraphPayload["lensSnapshot"];
-  autopilot: ThinkingModeStateResponse;
+  autopilot: SessionCockpitAutopilotState;
   modeContract: ThinkingModeStateResponse["modeContract"];
   activeChallenge: SessionCockpitActiveChallenge | null;
   latestArtifact: SessionCockpitArtifact | null;
@@ -467,17 +488,19 @@ export function buildSessionCockpitPayload(
   activeChallenge: SessionCockpitChallengeRound | null,
   latestArtifact: SessionCockpitArtifact | null = null,
 ): SessionCockpitPayload {
+  const cockpitAutopilot = attachAutopilotGraphRefs(autopilot, graph);
+
   return {
     session: graph.session,
     sourceOfTruth: graph.sourceOfTruth,
     ideaMap: graph.ideaMap,
-    workStructure: buildWorkStructure(graph, autopilot, activeChallenge),
-    graphPath: buildBrainGraphPath(graph, autopilot, activeChallenge),
+    workStructure: buildWorkStructure(graph, cockpitAutopilot, activeChallenge),
+    graphPath: buildBrainGraphPath(graph, cockpitAutopilot, activeChallenge),
     graph: graph.graph,
     moves: graph.moves,
     lensSnapshot: graph.lensSnapshot,
-    autopilot,
-    modeContract: autopilot.modeContract,
+    autopilot: cockpitAutopilot,
+    modeContract: cockpitAutopilot.modeContract,
     activeChallenge: activeChallenge ? attachChallengeGraphRefs(activeChallenge, graph) : null,
     latestArtifact,
     meta: {
@@ -486,6 +509,49 @@ export function buildSessionCockpitPayload(
       activeChallengeId: activeChallenge?.id ?? null,
     },
   };
+}
+
+function attachAutopilotGraphRefs(
+  autopilot: ThinkingModeStateResponse,
+  graph: SessionGraphPayload,
+): SessionCockpitAutopilotState {
+  const claimsById = new Map(graph.ideaMap.claims.map((claim) => [claim.id, claim]));
+  const candidates = autopilot.candidates.map((candidate) => enrichAutopilotCandidate(candidate, claimsById));
+  const selectedCandidate = autopilot.selectedCandidate
+    ? candidates.find((candidate) => sameCandidate(candidate, autopilot.selectedCandidate)) ??
+      enrichAutopilotCandidate(autopilot.selectedCandidate, claimsById)
+    : null;
+
+  return {
+    ...autopilot,
+    candidates,
+    selectedCandidate,
+  };
+}
+
+function enrichAutopilotCandidate(
+  candidate: ThinkingModeCandidateDto,
+  claimsById: ReadonlyMap<EntityId, CockpitClaim>,
+): SessionCockpitNextMoveCandidate {
+  const targetClaim = claimsById.get(candidate.targetClaimId) ?? null;
+
+  return {
+    ...candidate,
+    targetClaim,
+    targetObject: {
+      type: "claim",
+      id: `claim:${candidate.targetClaimId}`,
+      claimId: candidate.targetClaimId,
+      edgeId: candidate.targetEdgeId,
+      title: targetClaim?.text ?? candidate.title,
+      status: targetClaim?.status ?? null,
+      confidence: targetClaim?.confidence ?? candidate.confidence,
+    },
+  };
+}
+
+function sameCandidate(left: ThinkingModeCandidateDto, right: ThinkingModeCandidateDto): boolean {
+  return left.id === right.id || left.candidateId === right.candidateId || left.fingerprint === right.fingerprint;
 }
 
 export function buildBrainGraphPath(
