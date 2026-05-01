@@ -225,12 +225,6 @@ export function App() {
     setStatus("Ready");
   }
 
-  async function handleLandingSeed(rawIdea: string) {
-    setLandingVisible(false);
-    setActiveMode("Brain");
-    await handleSeed(rawIdea);
-  }
-
   function handleLandingModeSelect(mode: PennyMode) {
     setLandingVisible(false);
     setActiveMode(mode);
@@ -650,7 +644,6 @@ export function App() {
           <LandingPage
             disabled={isThinking}
             status={status}
-            onSeed={handleLandingSeed}
             onModeSelect={handleLandingModeSelect}
             onPromptSubmit={handleLandingPromptSubmit}
             onQuickNote={handleLandingQuickNote}

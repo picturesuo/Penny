@@ -234,7 +234,8 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    border: 0;
+    border: 1px solid transparent;
+    border-radius: 7px;
     padding: 3px 6px;
     color: inherit;
     background: transparent;
@@ -242,6 +243,12 @@
     font-weight: 700;
     line-height: 1;
     white-space: nowrap;
+  }
+
+  .landing-shortcuts button.is-selected {
+    border-color: rgb(46 46 46 / 0.26);
+    background: rgb(46 46 46 / 0.06);
+    box-shadow: 0 1px 2px rgb(46 46 46 / 0.08);
   }
 
   .landing-shortcuts kbd {

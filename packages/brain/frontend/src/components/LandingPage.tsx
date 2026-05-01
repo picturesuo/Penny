@@ -6,14 +6,18 @@ import { PennyMark } from "./PennyMark";
 interface LandingPageProps {
   disabled: boolean;
   status: string;
-  onSeed: (rawIdea: string) => Promise<void>;
   onModeSelect: (mode: PennyMode) => void;
   onPromptSubmit: (mode: Extract<PennyMode, "Learn" | "Check">, rawIdea: string) => Promise<void>;
   onQuickNote: (rawIdea: string) => Promise<void>;
 }
 
+type LandingDestination = Extract<PennyMode, "Learn" | "Check"> | "QuickNote";
+
 type LandingShortcutIntent =
   | { action: "open-mode"; mode: PennyMode }
+  | { action: "select-destination"; destination: LandingDestination };
+
+type LandingSubmitIntent =
   | { action: "submit-prompt"; mode: Extract<PennyMode, "Learn" | "Check">; rawIdea: string }
   | { action: "quick-note"; rawIdea: string };
 
@@ -24,39 +28,66 @@ const shortcuts: Array<{ key: string; label: string }> = [
   { key: "Q", label: "for Quick note" },
 ];
 
-export function landingShortcutIntent(key: string, rawIdea: string): LandingShortcutIntent | null {
+function destinationForShortcutKey(key: string | null): LandingDestination | null {
+  if (key === "L") {
+    return "Learn";
+  }
+
+  if (key === "C") {
+    return "Check";
+  }
+
+  if (key === "Q") {
+    return "QuickNote";
+  }
+
+  return null;
+}
+
+export function landingShortcutIntent(key: string): LandingShortcutIntent | null {
   const normalizedKey = key.trim().toLowerCase();
-  const trimmedIdea = rawIdea.trim();
 
   if (normalizedKey === "b") {
     return { action: "open-mode", mode: "Brain" };
   }
 
   if (normalizedKey === "l") {
-    return trimmedIdea
-      ? { action: "submit-prompt", mode: "Learn", rawIdea: trimmedIdea }
-      : { action: "open-mode", mode: "Learn" };
+    return { action: "select-destination", destination: "Learn" };
   }
 
   if (normalizedKey === "c") {
-    return trimmedIdea
-      ? { action: "submit-prompt", mode: "Check", rawIdea: trimmedIdea }
-      : { action: "open-mode", mode: "Check" };
+    return { action: "select-destination", destination: "Check" };
   }
 
   if (normalizedKey === "q") {
-    return trimmedIdea ? { action: "quick-note", rawIdea: trimmedIdea } : { action: "open-mode", mode: "Learn" };
+    return { action: "select-destination", destination: "QuickNote" };
   }
 
   return null;
 }
 
-export function LandingPage({ disabled, status, onSeed, onModeSelect, onPromptSubmit, onQuickNote }: LandingPageProps) {
+export function landingSubmitIntent(destination: LandingDestination | null, rawIdea: string): LandingSubmitIntent | null {
+  const trimmedIdea = rawIdea.trim();
+
+  if (!destination || !trimmedIdea) {
+    return null;
+  }
+
+  if (destination === "QuickNote") {
+    return { action: "quick-note", rawIdea: trimmedIdea };
+  }
+
+  return { action: "submit-prompt", mode: destination, rawIdea: trimmedIdea };
+}
+
+export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, onQuickNote }: LandingPageProps) {
   const [rawIdea, setRawIdea] = useState("");
   const [isCtrlDown, setIsCtrlDown] = useState(false);
   const [activeShortcutKey, setActiveShortcutKey] = useState<string | null>(null);
+  const [selectedShortcutKey, setSelectedShortcutKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const activeShortcutTimeoutRef = useRef<number | null>(null);
+  const submitIntent = landingSubmitIntent(destinationForShortcutKey(selectedShortcutKey), rawIdea);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -80,7 +111,6 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onPromptSu
       }
 
       event.preventDefault();
-      pulseShortcut(shortcut.key);
       void runShortcut(shortcut.key);
     }
 
@@ -102,7 +132,7 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onPromptSu
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleWindowBlur);
     };
-  }, [rawIdea, disabled, onModeSelect, onPromptSubmit, onQuickNote]);
+  }, [disabled, onModeSelect]);
 
   useEffect(() => {
     return () => {
@@ -115,28 +145,31 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onPromptSu
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const trimmedIdea = rawIdea.trim();
+    const intent = landingSubmitIntent(destinationForShortcutKey(selectedShortcutKey), rawIdea);
 
-    if (!trimmedIdea) {
+    if (!intent || disabled) {
       return;
     }
 
-    await onSeed(trimmedIdea);
     setRawIdea("");
-  }
+    setSelectedShortcutKey(null);
 
-  async function handleQuickNote() {
-    await runShortcut("Q");
+    if (intent.action === "quick-note") {
+      await onQuickNote(intent.rawIdea);
+    } else {
+      await onPromptSubmit(intent.mode, intent.rawIdea);
+    }
   }
 
   async function runShortcut(key: string) {
-    const intent = landingShortcutIntent(key, rawIdea);
+    const intent = landingShortcutIntent(key);
 
     if (!intent) {
       return;
     }
 
     if (intent.action === "open-mode") {
+      pulseShortcut(key);
       onModeSelect(intent.mode);
       return;
     }
@@ -145,14 +178,8 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onPromptSu
       return;
     }
 
-    if (intent.action === "quick-note") {
-      await onQuickNote(intent.rawIdea);
-      setRawIdea("");
-      return;
-    }
-
-    await onPromptSubmit(intent.mode, intent.rawIdea);
-    setRawIdea("");
+    setSelectedShortcutKey(key.toUpperCase());
+    inputRef.current?.focus();
   }
 
   function pulseShortcut(key: string) {
@@ -199,7 +226,7 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onPromptSu
             <button
               type="submit"
               className="landing-submit-button"
-              disabled={disabled || rawIdea.trim().length === 0}
+              disabled={disabled || submitIntent === null}
               aria-label="Send thought"
             >
               <ArrowUp size={18} strokeWidth={2.2} />
@@ -215,16 +242,26 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onPromptSu
                 {index > 0 ? <span className="landing-shortcut-divider" aria-hidden="true" /> : null}
                 <button
                   type="button"
-                  disabled={disabled}
+                  disabled={disabled && shortcut.key !== "B"}
+                  aria-pressed={selectedShortcutKey === shortcut.key}
+                  className={selectedShortcutKey === shortcut.key ? "is-selected" : undefined}
                   onClick={() => {
-                    pulseShortcut(shortcut.key);
                     void runShortcut(shortcut.key);
                   }}
                 >
-                  <kbd className={isCtrlDown ? "is-pressed" : undefined} aria-label="Control">
+                  <kbd
+                    className={isCtrlDown || selectedShortcutKey === shortcut.key ? "is-pressed" : undefined}
+                    aria-label="Control"
+                  >
                     Ctrl
                   </kbd>
-                  <kbd className={activeShortcutKey === shortcut.key ? "is-pressed" : undefined}>{shortcut.key}</kbd>
+                  <kbd
+                    className={
+                      activeShortcutKey === shortcut.key || selectedShortcutKey === shortcut.key ? "is-pressed" : undefined
+                    }
+                  >
+                    {shortcut.key}
+                  </kbd>
                   <span>{shortcut.label}</span>
                 </button>
               </div>
