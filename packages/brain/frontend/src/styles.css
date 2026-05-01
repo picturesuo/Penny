@@ -3505,18 +3505,18 @@
   }
 
   .learn-session-output {
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(150px, 20%) minmax(0, 80%) minmax(0, 0);
+    grid-template-columns: minmax(150px, 20%) minmax(0, 1fr);
     height: 100%;
     min-height: 0;
     overflow: hidden;
     border-top: 1px solid #111111;
     border-bottom: 1px solid #111111;
-    transition: grid-template-columns 220ms ease;
   }
 
   .learn-session-output.ask-open {
-    grid-template-columns: minmax(130px, 15%) minmax(0, 60%) minmax(260px, 25%);
+    grid-template-columns: minmax(150px, 20%) minmax(0, 1fr);
   }
 
   .learn-path-sidebar {
@@ -3656,13 +3656,13 @@
   .learn-editorial-main {
     position: relative;
     display: grid;
-    grid-template-rows: auto auto minmax(160px, 0.82fr) minmax(165px, 0.78fr) auto auto auto;
+    grid-template-rows: auto auto auto auto auto auto auto;
     align-content: start;
     min-width: 0;
     height: 100%;
     min-height: 0;
-    overflow: hidden;
-    padding: 18px clamp(18px, 3vw, 42px) 18px;
+    overflow: auto;
+    padding: 18px clamp(18px, 3vw, 42px) 42px;
   }
 
   .learn-ask-toggle {
@@ -3723,7 +3723,7 @@
     grid-template-columns: minmax(0, 0.56fr) minmax(240px, 0.44fr);
     gap: 20px;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
     border-top: 1px solid #111111;
     border-bottom: 1px solid #111111;
     padding: 14px 0;
@@ -3790,7 +3790,7 @@
     grid-template-columns: minmax(0, 1fr) minmax(210px, 0.32fr);
     gap: 18px;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
     margin-top: 14px;
     border: 2px solid #111111;
     padding: 16px;
@@ -3958,13 +3958,19 @@
   }
 
   .ask-penny-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 8;
+    width: min(430px, 32vw);
     min-width: 0;
     height: 100%;
     min-height: 0;
     overflow: hidden;
     border-left: 1px solid #111111;
     background: #f5f3ed;
-    transform: translateX(100%);
+    transform: translateX(calc(100% + 1px));
     opacity: 0;
     transition:
       transform 220ms ease,
@@ -3974,7 +3980,7 @@
 
   .ask-penny-panel.is-open {
     display: grid;
-    grid-template-rows: auto auto minmax(120px, 0.9fr) minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(120px, 0.8fr) minmax(0, 1fr) auto;
     gap: 12px;
     padding: 26px 28px;
     transform: translateX(0);
