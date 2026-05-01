@@ -169,6 +169,7 @@ const NextMoveCandidateSummarySchema = z
     score: z.number().int().min(0).max(5_000),
     rank: z.number().int().min(1).max(100),
     reason: z.string().trim().min(1).max(1_200),
+    whyPennyRecommendsThis: z.string().trim().min(1).max(1_500),
     reasonCodes: z.array(AutopilotReasonCodeSchema).min(1).max(16),
     graphHash: GraphHashSchema,
   })
