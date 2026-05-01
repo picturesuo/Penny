@@ -12,9 +12,10 @@ import {
   type CreateBrainRecentInput,
   type SaveBrainObjectInput,
 } from "./brain-objects-route.ts";
+import { handleBrainSearchRequest, type BrainSearchPayload } from "./brain-search-route.ts";
 import { handleLearnSessionRequest, type LearnSessionPayload } from "./learn-session-route.ts";
 import { handleSessionCanvasRequest, type SessionCanvasPayload } from "./session-canvas-route.ts";
-import type { BrainSeedInput, BrainSeedOutput } from "./seed.ts";
+import { createHeuristicBrainSeedProvider, generateBrainSeed, type BrainSeedInput, type BrainSeedOutput } from "./seed.ts";
 import type { BrainSeedPrelude, BrainSeedRunInput, PersistedBrainSeed } from "./seed-persistence.ts";
 import type { ThinkingModeCandidateDto, ThinkingModeTickResponse } from "./services/thinking-mode-service.ts";
 import { type BrainScope, scopeValues } from "./scope.ts";
@@ -295,6 +296,181 @@ test("P2 smoke: idea drop, canvas fetch, recipe trace, and Brain context stay co
   assert.equal(brainBody.data.meta.savedObjectCount, 1);
   assert.equal(brainBody.data.objects[0]?.sessionId, sessionId);
   assert.match(brainBody.data.objects[0]?.preview ?? "", /fragile|thinking artifacts|launch/i);
+});
+
+test("YC MVP demo smoke: exact idea reaches Check, Brain, Canvas, and related context", async () => {
+  const idea =
+    "Penny is the most consistently efficient way to evoke creativity and turn it into structured, source-grounded thinking.";
+  const brainObjects = new MemoryBrainObjectsService();
+  let persistedSeed: PersistedBrainSeed | null = null;
+
+  const learnResponse = await handleLearnSessionRequest(scopedJsonRequest("http://localhost/api/learn/session", {
+    rawIdea: idea,
+    autopilot: { limit: 4 },
+  }), {
+    provider: createHeuristicBrainSeedProvider(),
+    async prepareSeedRun(input, options) {
+      return createPersistedPrelude(input, options.run);
+    },
+    async generateSeed(input, options) {
+      return generateBrainSeed(input, {
+        provider: createHeuristicBrainSeedProvider(),
+        brainRunId: options.brainRunId,
+      });
+    },
+    async persistSeed(seed, options) {
+      persistedSeed = createPersistedSeed(seed, options.prelude);
+      return persistedSeed;
+    },
+    async tickAutopilot(input) {
+      return demoCheckAutopilotTick(input.sessionId, uuidAt(202));
+    },
+  });
+  const learnBody = (await learnResponse.json()) as { data: LearnSessionPayload };
+  const sessionId = learnBody.data.session.id;
+  const saveCandidate = learnBody.data.candidateBrainObjects[0];
+
+  assert.equal(learnResponse.status, 201);
+  assert.equal(learnBody.data.source.rawText, idea);
+  assert.match(learnBody.data.learn.coreIdea, /inspectable, challengeable, and source-grounded/i);
+  assert.ok(learnBody.data.learn.claims.length >= 4);
+  assert.ok(learnBody.data.learn.assumptions.length >= 3);
+  assert.ok(learnBody.data.learn.questions.length >= 4);
+  assert.deepEqual(
+    learnBody.data.learn.concepts.map((concept) => concept.term),
+    ["source-grounded thinking", "structured creativity"],
+  );
+  assert.equal(learnBody.data.autopilot.selectedCandidate?.userAction, "check");
+  assert.equal(learnBody.data.autopilot.selectedCandidate?.mvpMode, "Check");
+  assert.ok(saveCandidate);
+
+  const kept = await handleBrainRecentsRequest(scopedJsonRequest("http://localhost/api/brain/recents", {
+    rawIdea: saveCandidate.content,
+    kind: saveCandidate.objectType,
+    title: saveCandidate.title,
+    summary: saveCandidate.summary,
+    content: saveCandidate.content,
+    sessionId,
+    payload: {
+      source: "yc_mvp_demo",
+      seedIdea: idea,
+      candidateBrainObjects: [saveCandidate],
+    },
+  }), { service: brainObjects });
+  const keptBody = (await kept.json()) as { data: { recent: BrainRecentDto } };
+  const saved = await handleSaveBrainObjectRequest(scopedJsonRequest("http://localhost/api/brain/objects/save", {
+    recentId: keptBody.data.recent.id,
+    sessionId,
+    objectType: saveCandidate.objectType,
+    title: saveCandidate.title,
+  }), { service: brainObjects });
+  const savedBody = (await saved.json()) as { data: { object: BrainObjectDto } };
+  const brain = await handleBrainObjectsRequest(scopedRequest("http://localhost/api/brain/objects"), {
+    service: brainObjects,
+  });
+  const brainBody = (await brain.json()) as { data: BrainObjectsPayload };
+
+  assert.equal(kept.status, 201);
+  assert.equal(saved.status, 201);
+  assert.equal(brainBody.data.meta.savedObjectCount, 1);
+  assert.equal(brainBody.data.objects[0]?.id, savedBody.data.object.id);
+  assert.match(brainBody.data.objects[0]?.preview ?? "", /source-grounded thinking|structured creativity/i);
+  assert.ok(persistedSeed);
+
+  const canvasResponse = await handleSessionCanvasRequest(scopedRequest(`http://localhost/api/sessions/${sessionId}/canvas`), sessionId, {
+    async loadSessionCanvas(targetSessionId, requestScope) {
+      assert.equal(targetSessionId, sessionId);
+      assert.deepEqual(requestScope, scope);
+
+      return {
+        nodes: [
+          canvasNode("source", "Original idea", idea, { sourceId: persistedSeed?.source.id ?? null }),
+          canvasNode("claim", "Core claim", "Penny can make creative thinking structured and source-grounded.", {
+            claimId: persistedSeed?.claims[0]?.id ?? null,
+            sourceId: persistedSeed?.source.id ?? null,
+          }),
+          canvasNode("assumption", "Creativity mechanism", "Penny reliably evokes better creativity through structure.", {
+            claimId: persistedSeed?.claims[1]?.id ?? null,
+          }),
+          canvasNode("question", "Proof question", "What evidence shows this is more efficient than a strong prompt?", {
+            claimId: persistedSeed?.claims[4]?.id ?? null,
+          }),
+          canvasNode("evidence", "Source grounding", "Verify or Brain context should ground the claim before the demo overstates it.", {}),
+          {
+            ...canvasNode("artifact", "Next move", "Check the creativity mechanism, then save the useful result.", {}),
+            actions: ["check", "verify", "save", "related"],
+          },
+        ],
+        edges: [
+          canvasEdge("source-to-claim", "source:Original idea", "claim:Core claim", "supports"),
+          canvasEdge("claim-to-assumption", "claim:Core claim", "assumption:Creativity mechanism", "depends_on"),
+          canvasEdge("assumption-to-question", "assumption:Creativity mechanism", "question:Proof question", "questions"),
+          canvasEdge("question-to-evidence", "question:Proof question", "evidence:Source grounding", "verified_by"),
+          canvasEdge("evidence-to-next", "evidence:Source grounding", "artifact:Next move", "related_to"),
+        ],
+        recommendedPath: [
+          "source:Original idea",
+          "claim:Core claim",
+          "assumption:Creativity mechanism",
+          "question:Proof question",
+          "evidence:Source grounding",
+          "artifact:Next move",
+        ],
+        selectedNodeId: "claim:Core claim",
+      } satisfies SessionCanvasPayload;
+    },
+  });
+  const canvasBody = (await canvasResponse.json()) as { data: SessionCanvasPayload };
+
+  assert.equal(canvasResponse.status, 200);
+  assert.deepEqual(
+    canvasBody.data.nodes.map((node) => node.kind),
+    ["source", "claim", "assumption", "question", "evidence", "artifact"],
+  );
+  assert.deepEqual(canvasBody.data.recommendedPath, [
+    "source:Original idea",
+    "claim:Core claim",
+    "assumption:Creativity mechanism",
+    "question:Proof question",
+    "evidence:Source grounding",
+    "artifact:Next move",
+  ]);
+  assert.equal(canvasBody.data.nodes.at(-1)?.actions?.includes("related"), true);
+
+  const searchResponse = await handleBrainSearchRequest(scopedRequest(
+    "http://localhost/api/brain/search?q=source-grounded%20creativity&limit=5",
+  ), {
+    service: {
+      async search(input) {
+        assert.equal(input.query, "source-grounded creativity");
+        assert.equal(input.scope.userId, scope.userId);
+
+        return [
+          {
+            objectType: "brain_object",
+            objectId: savedBody.data.object.id,
+            sessionId,
+            title: savedBody.data.object.title,
+            preview: savedBody.data.object.preview ?? "",
+            score: 0.98,
+            semanticScore: 0.62,
+            lexicalScore: 0.36,
+            source: "hybrid",
+            metadata: { demo: "yc_mvp_demo" },
+            updatedAt: savedBody.data.object.updatedAt,
+          },
+        ];
+      },
+      async listCanvas() {
+        throw new Error("listCanvas is not part of the Brain search smoke");
+      },
+    },
+  });
+  const searchBody = (await searchResponse.json()) as { data: BrainSearchPayload };
+
+  assert.equal(searchResponse.status, 200);
+  assert.equal(searchBody.data.results[0]?.objectId, savedBody.data.object.id);
+  assert.match(searchBody.data.results[0]?.preview ?? "", /source-grounded thinking|structured creativity/i);
 });
 
 class MemoryBrainObjectsService implements BrainObjectsRouteService {
@@ -643,6 +819,81 @@ function demoAutopilotTick(sessionId: string, targetClaimId: string): ThinkingMo
       },
       createdAt: now,
     },
+  };
+}
+
+function demoCheckAutopilotTick(sessionId: string, targetClaimId: string): ThinkingModeTickResponse {
+  const response = demoAutopilotTick(sessionId, targetClaimId);
+  const selected = response.selectedCandidate;
+  const move = response.move;
+
+  assert.ok(selected);
+  assert.ok(move);
+
+  const candidate: ThinkingModeCandidateDto = {
+    ...selected,
+    action: "challenge",
+    userAction: "check",
+    mode: "challenge",
+    mvpMode: "Check",
+    title: "Check the creativity mechanism",
+    label: "Check the creativity mechanism",
+    ctaLabel: "Start Check",
+    primaryActionLabel: "Start Check",
+    reason: "Check whether Penny reliably evokes creativity through structure, provenance, and next-move pressure.",
+    whyNow: "The demo promise depends on a named creativity mechanism, not just a broad efficiency claim.",
+    whyPennyRecommendsThis:
+      "Why Penny recommends this: the core claim is ambitious and source-grounded, so the next move should pressure-test the mechanism.",
+    reasonCodes: ["challenge", "demo_creativity_mechanism", "source_grounding"],
+    exitCriteria: {
+      label: "The creativity mechanism is named strongly enough to defend or revise.",
+      acceptedMoveKinds: ["challenge_issued"],
+    },
+  };
+
+  return {
+    ...response,
+    focusState: {
+      ...response.focusState,
+      mode: "challenge",
+      focusedClaimId: targetClaimId,
+      reason: candidate.reason,
+    },
+    modeContract: {
+      validModes: ["Learn", "Check", "Brain"],
+      activeMode: "Check",
+    },
+    candidates: [candidate],
+    selectedCandidate: candidate,
+    move: {
+      ...move,
+      summary: "Recomputed next moves and selected Check.",
+    },
+  };
+}
+
+function canvasNode(
+  kind: string,
+  title: string,
+  summary: string,
+  refs: NonNullable<SessionCanvasPayload["nodes"][number]["refs"]>,
+): SessionCanvasPayload["nodes"][number] {
+  return {
+    id: `${kind}:${title}`,
+    kind,
+    title,
+    summary,
+    status: "saved",
+    refs,
+  };
+}
+
+function canvasEdge(source: string, from: string, to: string, kind: string): SessionCanvasPayload["edges"][number] {
+  return {
+    id: source,
+    source: from,
+    target: to,
+    kind,
   };
 }
 
