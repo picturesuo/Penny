@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { ArrowUp, Plus } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { type PennyMode } from "../autopilotUx";
 import { PennyMark } from "./PennyMark";
@@ -114,7 +114,7 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
               disabled={disabled || rawIdea.trim().length === 0}
               aria-label="Send thought"
             >
-              Send
+              <ArrowUp size={18} strokeWidth={2.2} />
             </button>
             <p id="landingStatus" className="sr-only">
               {status}
