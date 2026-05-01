@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { artifacts, claimEdges, claims, claimVersions, moves, sources, sourceSpans } from "./db/schema.ts";
 import { scopeValues, type OptionalBrainScope } from "./scope.ts";
+import { filterSourceSpansToSources, loadScopedSourcesByIds } from "./source-loading.ts";
 
 const ClaimDetailPathSchema = z.string().uuid();
 
@@ -123,10 +124,8 @@ export async function loadClaimDetail(db: PennyDatabase, claimId: string): Promi
     ...versionRows.map((version) => version.sourceId),
     ...spanRows.map((span) => span.sourceId),
   ]);
-  const sourceRows =
-    sourceIds.length > 0
-      ? await db.select().from(sources).where(inArray(sources.id, sourceIds)).orderBy(asc(sources.createdAt))
-      : [];
+  const sourceRows = await loadScopedSourcesByIds(db, sourceIds, claim);
+  const scopedSpanRows = filterSourceSpansToSources(spanRows, sourceRows);
   const moveRows = await db.select().from(moves).where(eq(moves.sessionId, claim.sessionId)).orderBy(asc(moves.createdAt));
   const artifactRows = await db
     .select()
@@ -142,7 +141,7 @@ export async function loadClaimDetail(db: PennyDatabase, claimId: string): Promi
     connectedVersions: connectedVersionRows,
     moves: moveRows,
     sources: sourceRows,
-    sourceSpans: spanRows,
+    sourceSpans: scopedSpanRows,
     artifacts: artifactRows,
   });
 }
