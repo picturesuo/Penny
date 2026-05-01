@@ -4,12 +4,13 @@ import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { afterMoveEffectsInTransaction } from "./after-move-effects.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
-import { artifacts, brainRuns, claimEdges, claimVersions, claims, moves, sessions, shapes as shapeRows, sources } from "./db/schema.ts";
+import { artifacts, brainRuns, claimEdges, claimVersions, claims, moves, sessions, shapes as shapeRows } from "./db/schema.ts";
 import { requireRecordedBrainRun, type BrainRunGuardOptions } from "./brain-run-guard.ts";
 import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-snapshot.ts";
 import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 import { scopeValues } from "./scope.ts";
+import { loadScopedSourcesForSession } from "./source-loading.ts";
 import {
   compiledShapesFromRows,
   inferredShapeSlices,
@@ -875,7 +876,7 @@ async function loadSessionArtifactContext(
     throw new ArtifactNotFoundError("Session was not found.");
   }
 
-  const sourceRows = await tx.select().from(sources).where(eq(sources.sessionId, sessionId)).orderBy(asc(sources.createdAt));
+  const sourceRows = await loadScopedSourcesForSession(tx, session);
   const claimRows = await tx.select().from(claims).where(eq(claims.sessionId, sessionId)).orderBy(asc(claims.createdAt));
 
   if (claimRows.length === 0) {
