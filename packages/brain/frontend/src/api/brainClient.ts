@@ -14,6 +14,8 @@ import type {
   InlineLearnResponse,
   InlineLearnSaveResponse,
   IssueChallengeResponse,
+  BrainVerifyConfidenceDecisionResponse,
+  BrainVerifyResponse,
   KeepBrainRecentIdeaResponse,
   ManualNodeSelectionResponse,
   RespondToChallengeResponse,
@@ -287,6 +289,46 @@ export async function createChallengeBrief(sessionId: string): Promise<Challenge
   }
 
   return payload as ChallengeBriefResponse;
+}
+
+export async function verifyClaim(input: {
+  claimId: string;
+  currentClaimText: string;
+  sessionId: string;
+}): Promise<BrainVerifyResponse> {
+  const response = await fetch("/brain/verify", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /brain/verify failed with ${response.status}.`));
+  }
+
+  return payload as BrainVerifyResponse;
+}
+
+export async function decideVerifyConfidence(input: {
+  verifyMoveId: string;
+  decision: "accept" | "reject";
+  reason?: string;
+}): Promise<BrainVerifyConfidenceDecisionResponse> {
+  const response = await fetch("/brain/verify/confidence", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /brain/verify/confidence failed with ${response.status}.`));
+  }
+
+  return payload as BrainVerifyConfidenceDecisionResponse;
 }
 
 export async function createInlineLearn(input: {

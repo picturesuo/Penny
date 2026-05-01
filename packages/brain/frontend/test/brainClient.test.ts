@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createChallengeBrief,
+  decideVerifyConfidence,
   fetchBrainRecents,
   fetchClaimDetail,
   fetchSessionCockpit,
@@ -13,6 +14,7 @@ import {
   selectAutopilotNode,
   startAutopilotCandidate,
   tickAutopilot,
+  verifyClaim,
 } from "../src/api/brainClient";
 
 test("frontend brain client uses session-scoped Autopilot command routes", async () => {
@@ -163,6 +165,53 @@ test("frontend brain client uses persisted recents and notes routes", async () =
     assert.equal(calls[3]?.url, `/api/sessions/${sessionId}/notes`);
     assert.equal(calls[3]?.method, "PUT");
     assert.deepEqual(calls[3]?.body, { content: "Preserve the founder workflow risk." });
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("frontend brain client runs Verify and decides confidence", async () => {
+  const sessionId = uuidAt(101);
+  const claimId = uuidAt(201);
+  const verifyMoveId = uuidAt(901);
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse(verifyPayload({ claimId, sessionId, verifyMoveId })),
+    jsonResponse(verifyConfidencePayload({ claimId, verifyMoveId })),
+  ]);
+
+  try {
+    const verified = await verifyClaim({
+      sessionId,
+      claimId,
+      currentClaimText: "Pre-seed founders will pay for structured thinking.",
+    });
+    const decision = await decideVerifyConfidence({
+      verifyMoveId,
+      decision: "accept",
+      reason: "The citation directly tests the premise.",
+    });
+
+    assert.equal(verified.data.verdict, "mixed");
+    assert.equal(verified.data.evidenceCards[0]?.stance, "supports");
+    assert.equal(verified.data.citations[0]?.sourceUrl, "https://example.test/source");
+    assert.equal(verified.data.confidenceUpdate.decision, "pending_user_decision");
+    assert.equal(decision.data.move.kind, "confidence_update_accepted");
+    assert.equal(decision.data.confidenceUpdate.accepted, true);
+    assert.equal(calls[0]?.url, "/brain/verify");
+    assert.equal(calls[0]?.method, "POST");
+    assert.deepEqual(calls[0]?.body, {
+      sessionId,
+      claimId,
+      currentClaimText: "Pre-seed founders will pay for structured thinking.",
+    });
+    assert.equal(calls[1]?.url, "/brain/verify/confidence");
+    assert.equal(calls[1]?.method, "POST");
+    assert.deepEqual(calls[1]?.body, {
+      verifyMoveId,
+      decision: "accept",
+      reason: "The citation directly tests the premise.",
+    });
   } finally {
     restoreFetch();
   }
@@ -640,6 +689,142 @@ function manualFocusPayload(sessionId: string, claimId: string) {
       kind: "manual_node_selected",
       summary: "User manually selected a graph node.",
     },
+  };
+}
+
+function verifyPayload({
+  claimId,
+  sessionId,
+  verifyMoveId,
+}: {
+  claimId: string;
+  sessionId: string;
+  verifyMoveId: string;
+}) {
+  return {
+    verdict: "mixed",
+    summary: "The evidence supports the mechanism but not the full willingness-to-pay claim.",
+    evidenceCards: [
+      {
+        title: "Founder workflow survey",
+        summary: "The source supports urgency around fundraising decisions.",
+        stance: "supports",
+        sourceName: "Example Source",
+        sourceUrl: "https://example.test/source",
+        citation: "Founders report urgency around fundraising choices.",
+      },
+    ],
+    citations: [
+      {
+        title: "Founder workflow survey",
+        sourceName: "Example Source",
+        sourceUrl: "https://example.test/source",
+        citation: "Founders report urgency around fundraising choices.",
+      },
+    ],
+    unsupportedParts: [
+      {
+        part: "Will pay",
+        reason: "The citation shows urgency, not purchase intent.",
+        neededEvidence: "A direct payment test.",
+      },
+    ],
+    confidenceDeltaSuggestion: -4,
+    whatWouldChangeThis: "A paid pilot would change the verdict.",
+    nextQuestion: "Which founder segment has paid urgency?",
+    recipe: {
+      steps: [
+        verifyRecipeStep("decompose_claim"),
+        verifyRecipeStep("search_gather"),
+        verifyRecipeStep("evaluate_evidence"),
+        verifyRecipeStep("synthesize_verdict"),
+        verifyRecipeStep("suggest_confidence_change"),
+      ],
+    },
+    targetClaim: {
+      id: claimId,
+      versionId: uuidAt(401),
+      kind: "assumption",
+      status: "exploratory",
+      text: "Pre-seed founders will pay for structured thinking.",
+      confidence: 42,
+    },
+    move: {
+      id: verifyMoveId,
+      kind: "verify_run",
+      summary: "Verified claim: mixed.",
+      claimIds: [claimId],
+      edgeIds: [],
+      artifactIds: [],
+    },
+    brainRun: {
+      id: uuidAt(902),
+      status: "succeeded",
+    },
+    citationSources: [
+      {
+        evidenceTitle: "Founder workflow survey",
+        source: {
+          id: uuidAt(903),
+          kind: "verification_citation",
+          rawText: "Title: Founder workflow survey",
+        },
+        sourceSpan: {
+          id: uuidAt(904),
+          sourceId: uuidAt(903),
+          claimId,
+          claimVersionId: uuidAt(401),
+          label: "verify_evidence",
+        },
+      },
+    ],
+    confidenceUpdate: {
+      suggestedDelta: -4,
+      autoApplied: false,
+      decision: "pending_user_decision",
+    },
+  };
+}
+
+function verifyConfidencePayload({ claimId, verifyMoveId }: { claimId: string; verifyMoveId: string }) {
+  return {
+    decision: "accept",
+    targetClaim: {
+      id: claimId,
+      versionId: uuidAt(402),
+      kind: "assumption",
+      status: "exploratory",
+      text: "Pre-seed founders will pay for structured thinking.",
+      confidence: 38,
+    },
+    move: {
+      id: uuidAt(905),
+      kind: "confidence_update_accepted",
+      summary: "Accepted Verify confidence suggestion.",
+      claimIds: [claimId],
+      edgeIds: [],
+      artifactIds: [],
+    },
+    confidenceUpdate: {
+      verifyMoveId,
+      suggestedDelta: -4,
+      accepted: true,
+      previousConfidence: 42,
+      currentConfidence: 38,
+      appliedDelta: -4,
+      cascade: [],
+    },
+  };
+}
+
+function verifyRecipeStep(step: string) {
+  return {
+    step,
+    title: step.replaceAll("_", " "),
+    status: "completed",
+    summary: "Completed.",
+    inputs: [],
+    outputs: [],
   };
 }
 
