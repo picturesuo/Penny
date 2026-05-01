@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
@@ -198,7 +198,7 @@ export type ConfidenceCascadeApplied = {
 
 export type ConfidenceCascadeEdge = Pick<
   typeof claimEdges.$inferSelect,
-  "id" | "fromClaimId" | "toClaimId" | "kind" | "status" | "createdAt"
+  "id" | "userId" | "workspaceId" | "projectId" | "sphereId" | "fromClaimId" | "toClaimId" | "kind" | "status" | "createdAt"
 >;
 
 export type ConfidenceCascadePlanStep = {
@@ -206,6 +206,16 @@ export type ConfidenceCascadePlanStep = {
   viaEdgeId: string;
   depth: number;
   appliedDelta: number;
+};
+
+export type ConfidenceCascadePolicy = {
+  maxDepth: number;
+  maxClaims: number;
+};
+
+export const verifyConfidenceCascadePolicy: ConfidenceCascadePolicy = {
+  maxDepth: 2,
+  maxClaims: 12,
 };
 
 export type PersistedVerifyConfidenceDecision = {
@@ -251,6 +261,12 @@ type VerifyPrelude = {
 };
 
 type VerifyTransaction = Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
+type ScopedRecord = {
+  userId: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
+  sphereId: string | null;
+};
 
 type PersistedClaimSlice = {
   id: string;
@@ -461,6 +477,7 @@ export async function decideVerifyConfidence(
     await assertPendingConfidenceDecision(tx, verifyMove.sessionId, verifyMove.id);
 
     const target = await loadClaimWithCurrentVersion(tx, verifyPayload.claimId, verifyMove.sessionId);
+    assertSameScope(verifyMove, target.claim, "Verify confidence decision is outside the target claim scope.");
 
     if (input.decision === "reject") {
       const move = await createMove(tx, "confidence_update_rejected", {
@@ -478,6 +495,8 @@ export async function decideVerifyConfidence(
           claimIds: [verifyPayload.claimId],
           claimVersionIds: [verifyPayload.claimVersionId],
           edgeIds: [],
+          sourceIds: verifyPayload.sourceIds,
+          sourceSpanIds: verifyPayload.sourceSpanIds,
         },
       });
       await afterMoveEffectsInTransaction(tx, { sessionId: verifyMove.sessionId, moveId: move.id });
@@ -507,15 +526,17 @@ export async function decideVerifyConfidence(
       .select()
       .from(claimEdges)
       .where(and(eq(claimEdges.sessionId, verifyMove.sessionId), eq(claimEdges.kind, "depends_on")));
+    const scopedEdges = edges.filter((edge) => sameScope(edge, target.claim));
     const cascadePlan = buildConfidenceCascadePlan({
       changedClaimId: target.claim.id,
       delta: targetMutation.appliedDelta,
-      edges,
+      edges: scopedEdges,
     });
     const cascadeMutations: Array<ReturnType<typeof confidenceMutation> & { viaEdgeId: string; depth: number }> = [];
 
     for (const step of cascadePlan) {
       const dependent = await loadClaimWithCurrentVersion(tx, step.claimId, verifyMove.sessionId);
+      assertSameScope(target.claim, dependent.claim, "Verify confidence cascade crossed a scope boundary.");
       const mutation = confidenceMutation(dependent, step.appliedDelta);
 
       if (mutation.appliedDelta !== 0) {
@@ -555,10 +576,18 @@ export async function decideVerifyConfidence(
         claimIds,
         claimVersionIds,
         edgeIds,
+        sourceIds: verifyPayload.sourceIds,
+        sourceSpanIds: verifyPayload.sourceSpanIds,
       },
     });
 
     const currentTargetVersion = await applyConfidenceMutation(tx, targetMutation, move.id);
+    await copyVerifyEvidenceSpansToCurrentVersion(
+      tx,
+      verifyPayload.sourceSpanIds,
+      target.claim.id,
+      currentTargetVersion.id,
+    );
 
     for (const mutation of cascadeMutations) {
       await applyConfidenceMutation(tx, mutation, move.id);
@@ -954,8 +983,16 @@ export function buildConfidenceCascadePlan(input: {
   changedClaimId: string;
   delta: number;
   edges: ConfidenceCascadeEdge[];
+  policy?: Partial<ConfidenceCascadePolicy>;
 }): ConfidenceCascadePlanStep[] {
   if (input.delta === 0) {
+    return [];
+  }
+
+  const maxDepth = Math.max(0, Math.floor(input.policy?.maxDepth ?? verifyConfidenceCascadePolicy.maxDepth));
+  const maxClaims = Math.max(0, Math.floor(input.policy?.maxClaims ?? verifyConfidenceCascadePolicy.maxClaims));
+
+  if (maxDepth === 0 || maxClaims === 0) {
     return [];
   }
 
@@ -982,9 +1019,17 @@ export function buildConfidenceCascadePlan(input: {
       continue;
     }
 
+    if (current.depth >= maxDepth) {
+      continue;
+    }
+
     const dependentEdges = dependentsByDependency.get(current.claimId) ?? [];
 
     for (const edge of dependentEdges) {
+      if (plan.length >= maxClaims) {
+        return plan;
+      }
+
       if (visited.has(edge.fromClaimId)) {
         continue;
       }
@@ -1094,12 +1139,72 @@ async function applyConfidenceMutation(
   return version;
 }
 
+async function copyVerifyEvidenceSpansToCurrentVersion(
+  db: VerifyTransaction,
+  sourceSpanIds: string[],
+  claimId: string,
+  claimVersionId: string,
+): Promise<void> {
+  const uniqueSourceSpanIds = uniqueStrings(sourceSpanIds);
+
+  if (uniqueSourceSpanIds.length === 0) {
+    return;
+  }
+
+  const spans = await db.select().from(sourceSpans).where(inArray(sourceSpans.id, uniqueSourceSpanIds));
+
+  if (spans.length !== uniqueSourceSpanIds.length) {
+    throw new VerifyConflictError("Verify evidence source span was not found.");
+  }
+
+  for (const span of spans) {
+    if (span.claimId !== claimId) {
+      throw new VerifyConflictError("Verify evidence source span does not belong to the target claim.");
+    }
+
+    if (span.claimVersionId === claimVersionId) {
+      continue;
+    }
+
+    const [copiedSpan] = await db
+      .insert(sourceSpans)
+      .values({
+        sourceId: span.sourceId,
+        claimId,
+        claimVersionId,
+        startOffset: span.startOffset,
+        endOffset: span.endOffset,
+        label: "verify_confidence_evidence",
+      })
+      .returning();
+
+    if (!copiedSpan) {
+      throw new VerifyConflictError("Failed to connect Verify evidence to the current ClaimVersion.");
+    }
+  }
+}
+
 function confidenceDecisionMoveTargets(move: typeof moves.$inferSelect, verifyMoveId: string): boolean {
   if (!["confidence_update_accepted", "confidence_update_rejected"].includes(move.kind)) {
     return false;
   }
 
   return objectRecord(move.payload).verifyMoveId === verifyMoveId;
+}
+
+function sameScope(left: ScopedRecord, right: ScopedRecord): boolean {
+  return (
+    left.userId === right.userId &&
+    left.workspaceId === right.workspaceId &&
+    left.projectId === right.projectId &&
+    left.sphereId === right.sphereId
+  );
+}
+
+function assertSameScope(left: ScopedRecord, right: ScopedRecord, message: string): void {
+  if (!sameScope(left, right)) {
+    throw new VerifyConflictError(message);
+  }
 }
 
 async function markVerifyRunFailed(db: PennyDatabase, brainRunId: string, error: unknown): Promise<void> {
