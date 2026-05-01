@@ -59,6 +59,19 @@ export function shouldUseWebSearch(
   const signals = new Set<string>();
   const filters: SearchFilters = { ...(context.filters ?? {}) };
 
+  if (mode === "brain") {
+    return {
+      mode,
+      useWebSearch: false,
+      depth: "fast",
+      reason: "Brain mode reads persisted Penny rows and does not browse.",
+      reasonCodes: [],
+      signals: [],
+      query: query || requestText.slice(0, 240),
+      filters: normalizeFilters(filters),
+    };
+  }
+
   if (explicitSearchPattern.test(`${input.userRequest ?? ""}\n${input.text ?? ""}`)) {
     reasonCodes.add("user_explicitly_asks");
     signals.add("explicit_search_request");
