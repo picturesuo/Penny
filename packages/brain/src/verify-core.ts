@@ -42,6 +42,13 @@ export const VerifyConfidenceDecisionRequestSchema = z
 
 const VerifyVerdictSchema = z.enum(["supported", "weakened", "mixed", "not_enough_evidence"]);
 const EvidenceStanceSchema = z.enum(["supports", "weakens", "mixed", "unclear"]);
+const VerifyRecipeStepNameSchema = z.enum([
+  "decompose_claim",
+  "search_gather",
+  "evaluate_evidence",
+  "synthesize_verdict",
+  "suggest_confidence_change",
+]);
 
 const NullableProviderStringSchema = z.string().nullable().optional();
 
@@ -61,9 +68,49 @@ export const VerifyProviderSchema = z
         })
         .strict(),
     ),
+    citations: z
+      .array(
+        z
+          .object({
+            title: z.string(),
+            sourceName: NullableProviderStringSchema,
+            sourceUrl: NullableProviderStringSchema,
+            citation: NullableProviderStringSchema,
+          })
+          .strict(),
+      )
+      .optional(),
+    unsupportedParts: z
+      .array(
+        z
+          .object({
+            part: z.string(),
+            reason: z.string(),
+            neededEvidence: NullableProviderStringSchema,
+          })
+          .strict(),
+      )
+      .optional(),
     confidenceDeltaSuggestion: z.number(),
     whatWouldChangeThis: z.string(),
     nextQuestion: z.string(),
+    recipe: z
+      .object({
+        steps: z.array(
+          z
+            .object({
+              step: VerifyRecipeStepNameSchema,
+              title: z.string(),
+              status: z.enum(["completed", "limited", "skipped"]),
+              summary: z.string(),
+              inputs: z.array(z.string()).optional(),
+              outputs: z.array(z.string()).optional(),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -86,14 +133,70 @@ const EvidenceCardSchema = z
   })
   .strict();
 
+const VerifyCitationSchema = z
+  .object({
+    title: z.string().trim().min(1).max(180),
+    sourceName: OptionalTextSchema(180),
+    sourceUrl: OptionalUrlSchema,
+    citation: OptionalTextSchema(700),
+  })
+  .strict();
+
+const UnsupportedPartSchema = z
+  .object({
+    part: z.string().trim().min(1).max(300),
+    reason: z.string().trim().min(1).max(700),
+    neededEvidence: OptionalTextSchema(700),
+  })
+  .strict();
+
+const VerifyRecipeStepSchema = z
+  .object({
+    step: VerifyRecipeStepNameSchema,
+    title: z.string().trim().min(1).max(120),
+    status: z.enum(["completed", "limited", "skipped"]),
+    summary: z.string().trim().min(1).max(500),
+    inputs: z.array(z.string().trim().min(1).max(180)).max(6),
+    outputs: z.array(z.string().trim().min(1).max(180)).max(6),
+  })
+  .strict();
+
+const verifyRecipeStepOrder = [
+  "decompose_claim",
+  "search_gather",
+  "evaluate_evidence",
+  "synthesize_verdict",
+  "suggest_confidence_change",
+] as const;
+
+const VerifyRecipeSchema = z
+  .object({
+    steps: z.array(VerifyRecipeStepSchema).length(verifyRecipeStepOrder.length),
+  })
+  .strict()
+  .superRefine((recipe, context) => {
+    recipe.steps.forEach((step, index) => {
+      if (step.step !== verifyRecipeStepOrder[index]) {
+        context.addIssue({
+          code: "custom",
+          path: ["steps", index, "step"],
+          message: `verify recipe step ${index + 1} must be ${verifyRecipeStepOrder[index]}`,
+        });
+      }
+    });
+  });
+
 export const VerifyOutputSchema = z
   .object({
     verdict: VerifyVerdictSchema,
     summary: z.string().trim().min(1).max(900),
     evidenceCards: z.array(EvidenceCardSchema).min(1).max(6),
+    citations: z.array(VerifyCitationSchema).max(8),
+    unsupportedParts: z.array(UnsupportedPartSchema).max(8),
     confidenceDeltaSuggestion: z.number().int().min(-30).max(30),
     whatWouldChangeThis: z.string().trim().min(1).max(700),
     nextQuestion: z.string().trim().min(1).max(300),
+    recipe: VerifyRecipeSchema,
   })
   .strict()
   .superRefine((output, context) => {
@@ -101,6 +204,19 @@ export const VerifyOutputSchema = z
       output.summary,
       output.whatWouldChangeThis,
       output.nextQuestion,
+      ...output.citations.flatMap((citation) => [
+        citation.title,
+        citation.sourceName ?? "",
+        citation.sourceUrl ?? "",
+        citation.citation ?? "",
+      ]),
+      ...output.unsupportedParts.flatMap((part) => [part.part, part.reason, part.neededEvidence ?? ""]),
+      ...output.recipe.steps.flatMap((step) => [
+        step.title,
+        step.summary,
+        ...step.inputs,
+        ...step.outputs,
+      ]),
       ...output.evidenceCards.flatMap((card) => [
         card.title,
         card.summary,
@@ -131,6 +247,16 @@ export type VerifyConfidenceDecisionRequest = WithoutCommandIdempotencyFields<
 export type VerifyOutput = z.infer<typeof VerifyOutputSchema>;
 export type VerifyProviderOutput = z.infer<typeof VerifyProviderSchema>;
 export type EvidenceCard = z.infer<typeof EvidenceCardSchema>;
+export type VerifyCitation = z.infer<typeof VerifyCitationSchema>;
+export type UnsupportedPart = z.infer<typeof UnsupportedPartSchema>;
+export type VerifyRecipe = z.infer<typeof VerifyRecipeSchema>;
+export type VerifyRecipeStep = z.infer<typeof VerifyRecipeStepSchema>;
+
+export type VerifyWebSearchDecision = {
+  useWebSearch: boolean;
+  reason: string;
+  signals: ReadonlyArray<string>;
+};
 
 export type VerifyGenerationInput = {
   claimId: string;
@@ -145,7 +271,7 @@ export type VerifyGenerationInput = {
 const verifyOutputSpec = Output.object<VerifyProviderOutput>({
   schema: VerifyProviderSchema,
   name: "penny_verify_run",
-  description: "A Penny Verify result with evidence cards and a pending confidence delta suggestion.",
+  description: "A source-grounded Penny Verify result with evidence cards, unsupported parts, recipe steps, and a pending confidence delta suggestion.",
 });
 
 export type VerifyGenerateText = (request: {
@@ -621,22 +747,36 @@ export async function generateVerifyOutput(
   const provider = options.provider ?? defaultVerifyProvider();
   const result = await provider.generate(input);
 
-  return parseVerifyOutput(result.output, result.sources ?? []);
+  return parseVerifyOutput(result.output, result.sources ?? [], input);
 }
 
-export function parseVerifyOutput(output: unknown, providerSources: unknown[] = []): VerifyOutput {
+export function parseVerifyOutput(
+  output: unknown,
+  providerSources: unknown[] = [],
+  input?: VerifyGenerationInput,
+): VerifyOutput {
   const parsed = VerifyProviderSchema.safeParse(output);
 
   if (!parsed.success) {
     throw new VerifyGenerationError("Verify output failed provider validation.", flattenIssues(parsed.error));
   }
 
+  const evidenceCards = normalizeEvidenceCards(parsed.data.evidenceCards, providerSources);
+  const searchDecision = verifyWebSearchDecision(input);
   const strictInput = {
     ...parsed.data,
     summary: parsed.data.summary.trim(),
-    evidenceCards: normalizeEvidenceCards(parsed.data.evidenceCards, providerSources),
+    evidenceCards,
+    citations: normalizeVerifyCitations(parsed.data.citations, evidenceCards, providerSources),
+    unsupportedParts: normalizeUnsupportedParts(parsed.data.unsupportedParts, parsed.data.verdict, input),
     whatWouldChangeThis: parsed.data.whatWouldChangeThis.trim(),
     nextQuestion: parsed.data.nextQuestion.trim(),
+    recipe: normalizeVerifyRecipe(parsed.data.recipe, {
+      input,
+      output: parsed.data,
+      evidenceCards,
+      searchDecision,
+    }),
   };
   const strict = VerifyOutputSchema.safeParse(strictInput);
 
@@ -674,9 +814,26 @@ export function createHeuristicVerifyProvider(): VerifyProvider {
               citation: null,
             },
           ],
+          citations: [],
+          unsupportedParts: [
+            {
+              part: clipText(input.currentClaimText, 180),
+              reason: "No search-capable verification provider is configured, so Penny cannot ground this claim in external sources.",
+              neededEvidence: "Run Verify with citation search enabled or attach reliable sources that directly test the claim.",
+            },
+          ],
           confidenceDeltaSuggestion: 0,
           whatWouldChangeThis: "Run Verify with citation search enabled or attach reliable sources that directly test the claim.",
           nextQuestion: `What source would directly test "${clipText(input.currentClaimText, 120)}"?`,
+          recipe: defaultVerifyRecipe({
+            input,
+            output: {
+              verdict: "not_enough_evidence",
+              confidenceDeltaSuggestion: 0,
+            },
+            evidenceCards: [],
+            searchDecision: verifyWebSearchDecision(input),
+          }),
         },
         sources: [],
       };
@@ -704,6 +861,7 @@ export function createXaiVerifyProvider(
         typeof xai.tools.webSearch === "function"
           ? xai.tools.webSearch({ enableImageUnderstanding: false })
           : null;
+      const searchDecision = verifyWebSearchDecision(input);
 
       try {
         const request: Parameters<VerifyGenerateText>[0] = {
@@ -719,7 +877,7 @@ export function createXaiVerifyProvider(
           },
         };
 
-        if (webSearchTool) {
+        if (webSearchTool && searchDecision.useWebSearch) {
           request.tools = { web_search: webSearchTool };
         }
 
@@ -742,14 +900,17 @@ export function resolveXaiVerifyModel(env: Record<string, string | undefined> = 
 export function buildVerifySystemPrompt(): string {
   return [
     "You are Penny Check, a verification mode inside Brain.",
-    "Verify the target claim with citation-backed evidence cards.",
-    "Use the available web_search tool when present. Cite only retrieved sources.",
+    "Verify the target claim with source-grounded evidence cards and action-ready confidence guidance.",
+    "Use the available web_search tool when the prompt says search is needed. Cite only retrieved or provided sources.",
+    "Follow the recipe order: decompose claim, search/gather, evaluate evidence, synthesize verdict, suggest confidence change.",
     "Do not change confidence, rewrite claims, create graph edges, or invent citations.",
     "Return only the structured Verify object.",
   ].join("\n");
 }
 
 export function buildVerifyPrompt(input: VerifyGenerationInput): string {
+  const searchDecision = verifyWebSearchDecision(input);
+
   return [
     "Check this stable Penny claim against external evidence.",
     "",
@@ -757,14 +918,23 @@ export function buildVerifyPrompt(input: VerifyGenerationInput): string {
     "- verdict: supported, weakened, mixed, or not_enough_evidence.",
     "- summary: the shortest useful evidence-grounded reading.",
     "- evidenceCards: 1 to 6 cards with title, summary, stance, sourceName, sourceUrl, and citation when available.",
+    "- citations: source/citation rows derived from retrieved or provided sources.",
+    "- unsupportedParts: specific parts of the claim that evidence does not yet support.",
     "- confidenceDeltaSuggestion: an integer from -30 to 30. This is only a suggestion.",
     "- whatWouldChangeThis: what evidence would alter the verdict.",
     "- nextQuestion: the next focused verification question.",
+    "- recipe.steps: exactly five steps in this order: decompose_claim, search_gather, evaluate_evidence, synthesize_verdict, suggest_confidence_change.",
     "",
     "Lens rules:",
     "- Use shapes only to choose what evidence to look for and what follow-up question to ask.",
     "- Do not let shapes bias the verdict; evidence must drive support, weakening, or uncertainty.",
     "- Candidate shapes are tentative and must not be stated as facts about the user.",
+    "",
+    "Search decision:",
+    `- useWebSearch: ${searchDecision.useWebSearch}`,
+    `- reason: ${searchDecision.reason}`,
+    `- signals: ${searchDecision.signals.join(", ") || "none"}`,
+    "- If useWebSearch is false, rely only on provided context and mark unsupported external parts clearly.",
     "",
     `Session id: ${input.sessionId}`,
     `Claim id: ${input.claimId}`,
@@ -784,6 +954,8 @@ async function createVerifyPrelude(
   return db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.claimId, input.sessionId);
     const lensSnapshot = await loadLensSnapshot(tx, input.sessionId);
+    const generationInput = verifyGenerationInput(target, input, lensSnapshot);
+    const searchDecision = verifyWebSearchDecision(generationInput);
 
     if (normalizeClaimText(target.version.content) !== normalizeClaimText(input.currentClaimText)) {
       throw new VerifyConflictError("Verify requires the current ClaimVersion text.");
@@ -808,6 +980,16 @@ async function createVerifyPrelude(
           currentClaimStatus: target.version.status,
           currentClaimConfidence: target.version.confidence,
           searchEnabled: provider.searchEnabled,
+          searchDecision,
+          recipe: defaultVerifyRecipe({
+            input: generationInput,
+            output: {
+              verdict: "not_enough_evidence",
+              confidenceDeltaSuggestion: 0,
+            },
+            evidenceCards: [],
+            searchDecision,
+          }),
           lensSnapshot,
         },
       })
@@ -1248,6 +1430,61 @@ function verifyGenerationInput(
   };
 }
 
+export function verifyWebSearchDecision(input?: VerifyGenerationInput): VerifyWebSearchDecision {
+  if (!input) {
+    return {
+      useWebSearch: true,
+      reason: "No generation context was provided, so Verify defaults to source search for grounding.",
+      signals: ["verify_default_source_grounding"],
+    };
+  }
+
+  const haystack = input.currentClaimText.toLowerCase();
+  const signals: string[] = [];
+
+  if (/[$%]|\b\d+(?:\.\d+)?\s*(?:percent|%|k|m|million|billion|users|customers|founders|months|days|weeks|dollars|usd)\b/.test(haystack)) {
+    signals.push("quantitative_claim");
+  }
+
+  if (/\b(study|research|source|citation|evidence|survey|benchmark|according to|reported|data)\b/.test(haystack)) {
+    signals.push("explicit_evidence_claim");
+  }
+
+  if (/\b(founder|customer|market|adoption|retention|conversion|revenue|sales|pricing|pay|users|companies)\b/.test(haystack)) {
+    signals.push("market_or_customer_claim");
+  }
+
+  if (/\b(cognitive load|learning science|memory|attention|science|clinical|legal|tax|finance|security|regulation)\b/.test(haystack)) {
+    signals.push("domain_factual_claim");
+  }
+
+  if (input.currentClaimKind === "belief" || input.currentClaimKind === "assumption") {
+    signals.push("claim_kind_needs_grounding");
+  }
+
+  const personalOnly =
+    /\b(i|my|we|our)\b/.test(haystack) &&
+    !signals.some((signal) => signal !== "claim_kind_needs_grounding") &&
+    !/\b(users|customers|market|study|data|percent|revenue|pay)\b/.test(haystack);
+
+  if (personalOnly) {
+    return {
+      useWebSearch: false,
+      reason: "The claim appears to be about local intent or preference rather than an external factual assertion.",
+      signals: ["personal_or_local_claim"],
+    };
+  }
+
+  return {
+    useWebSearch: signals.length > 0,
+    reason:
+      signals.length > 0
+        ? "The claim needs source grounding before Penny treats the verdict as stable."
+        : "No external factual signal was detected, so Verify can proceed from local context and mark any gaps.",
+    signals: uniqueStrings(signals),
+  };
+}
+
 function normalizeEvidenceCards(cards: VerifyProviderOutput["evidenceCards"], providerSources: unknown[]): EvidenceCard[] {
   const normalizedCards = cards.map(normalizeEvidenceCard).filter((card): card is EvidenceCard => Boolean(card));
 
@@ -1294,6 +1531,179 @@ function sourceToEvidenceCard(source: unknown): EvidenceCard | null {
   });
 
   return parsed.success ? parsed.data : null;
+}
+
+function normalizeVerifyCitations(
+  citations: VerifyProviderOutput["citations"],
+  evidenceCards: EvidenceCard[],
+  providerSources: unknown[],
+): VerifyCitation[] {
+  const normalized = [
+    ...(citations ?? []).map(normalizeVerifyCitation).filter((citation): citation is VerifyCitation => Boolean(citation)),
+    ...evidenceCards.filter(hasCitationProvenance).map(evidenceCardToCitation),
+    ...providerSources.map(sourceToVerifyCitation).filter((citation): citation is VerifyCitation => Boolean(citation)),
+  ];
+  const unique: VerifyCitation[] = [];
+  const seen = new Set<string>();
+
+  for (const citation of normalized) {
+    const key = `${citation.sourceUrl ?? ""}|${citation.sourceName ?? ""}|${citation.title}|${citation.citation ?? ""}`;
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(citation);
+  }
+
+  return unique.slice(0, 8);
+}
+
+function normalizeVerifyCitation(citation: NonNullable<VerifyProviderOutput["citations"]>[number]): VerifyCitation | null {
+  const parsed = VerifyCitationSchema.safeParse({
+    ...citation,
+    title: citation.title.trim(),
+    sourceName: trimmedNullable(citation.sourceName),
+    sourceUrl: trimmedNullable(citation.sourceUrl),
+    citation: trimmedNullable(citation.citation),
+  });
+
+  return parsed.success ? parsed.data : null;
+}
+
+function evidenceCardToCitation(card: EvidenceCard): VerifyCitation {
+  return {
+    title: card.title,
+    sourceName: card.sourceName ?? null,
+    sourceUrl: card.sourceUrl ?? null,
+    citation: card.citation ?? card.summary,
+  };
+}
+
+function sourceToVerifyCitation(source: unknown): VerifyCitation | null {
+  const card = sourceToEvidenceCard(source);
+
+  return card ? evidenceCardToCitation(card) : null;
+}
+
+function normalizeUnsupportedParts(
+  parts: VerifyProviderOutput["unsupportedParts"],
+  verdict: VerifyProviderOutput["verdict"],
+  input?: VerifyGenerationInput,
+): UnsupportedPart[] {
+  const normalized = (parts ?? []).map(normalizeUnsupportedPart).filter((part): part is UnsupportedPart => Boolean(part));
+
+  if (normalized.length > 0) {
+    return normalized.slice(0, 8);
+  }
+
+  if (verdict === "supported") {
+    return [];
+  }
+
+  const claimText = clipText(input?.currentClaimText ?? "The target claim", 260);
+  const fallback =
+    verdict === "not_enough_evidence"
+      ? {
+          part: claimText,
+          reason: "Penny did not find enough source-grounded evidence to verify this part.",
+          neededEvidence: "A reliable source or direct observation that specifically tests the claim.",
+        }
+      : {
+          part: "The portion of the claim not directly covered by the evidence.",
+          reason: "The available evidence is mixed or only addresses part of the claim.",
+          neededEvidence: "More direct evidence that separates the supported and weakened parts of the claim.",
+        };
+
+  return [fallback];
+}
+
+function normalizeUnsupportedPart(part: NonNullable<VerifyProviderOutput["unsupportedParts"]>[number]): UnsupportedPart | null {
+  const parsed = UnsupportedPartSchema.safeParse({
+    ...part,
+    part: part.part.trim(),
+    reason: part.reason.trim(),
+    neededEvidence: trimmedNullable(part.neededEvidence),
+  });
+
+  return parsed.success ? parsed.data : null;
+}
+
+function normalizeVerifyRecipe(
+  recipe: VerifyProviderOutput["recipe"],
+  context: {
+    input: VerifyGenerationInput | undefined;
+    output: Pick<VerifyProviderOutput, "verdict" | "confidenceDeltaSuggestion">;
+    evidenceCards: EvidenceCard[];
+    searchDecision: VerifyWebSearchDecision;
+  },
+): VerifyRecipe {
+  const parsed = VerifyRecipeSchema.safeParse(recipe);
+
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  return defaultVerifyRecipe(context);
+}
+
+function defaultVerifyRecipe(context: {
+  input: VerifyGenerationInput | undefined;
+  output: Pick<VerifyProviderOutput, "verdict" | "confidenceDeltaSuggestion">;
+  evidenceCards: ReadonlyArray<EvidenceCard>;
+  searchDecision: VerifyWebSearchDecision;
+}): VerifyRecipe {
+  const claimText = clipText(context.input?.currentClaimText ?? "target claim", 140);
+  const sourceCount = context.evidenceCards.filter(hasCitationProvenance).length;
+  const searchStatus = context.searchDecision.useWebSearch ? "completed" : "limited";
+
+  return {
+    steps: [
+      {
+        step: "decompose_claim",
+        title: "Decompose claim",
+        status: "completed",
+        summary: "Separated the target claim into the assertion to test and the evidence needed to support it.",
+        inputs: [claimText],
+        outputs: ["Target assertion", "Evidence need"],
+      },
+      {
+        step: "search_gather",
+        title: "Search and gather",
+        status: searchStatus,
+        summary: context.searchDecision.useWebSearch
+          ? "Used available source search or provider citations to gather evidence."
+          : "Search was not required or not available; Penny marked the source gap explicitly.",
+        inputs: [...context.searchDecision.signals],
+        outputs: [`${sourceCount} citation-backed evidence card${sourceCount === 1 ? "" : "s"}`],
+      },
+      {
+        step: "evaluate_evidence",
+        title: "Evaluate evidence",
+        status: context.evidenceCards.length > 0 ? "completed" : "limited",
+        summary: "Compared each evidence card against the exact claim and assigned a stance.",
+        inputs: context.evidenceCards.map((card) => card.title).slice(0, 6),
+        outputs: context.evidenceCards.map((card) => card.stance),
+      },
+      {
+        step: "synthesize_verdict",
+        title: "Synthesize verdict",
+        status: "completed",
+        summary: `Combined the evidence stances into a ${context.output.verdict} verdict.`,
+        inputs: context.evidenceCards.map((card) => card.stance),
+        outputs: [context.output.verdict],
+      },
+      {
+        step: "suggest_confidence_change",
+        title: "Suggest confidence change",
+        status: "completed",
+        summary: `Suggested a ${context.output.confidenceDeltaSuggestion} point confidence delta for user review.`,
+        inputs: [context.output.verdict],
+        outputs: [`delta ${context.output.confidenceDeltaSuggestion}`],
+      },
+    ],
+  };
 }
 
 function objectRecord(value: unknown): Record<string, unknown> {

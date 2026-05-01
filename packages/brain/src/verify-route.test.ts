@@ -17,6 +17,7 @@ import {
   parseVerifyOutput,
   resolveXaiVerifyModel,
   verifyConfidenceCascadePolicy,
+  verifyWebSearchDecision,
   type VerifyGenerateText,
   type VerifyRequest,
 } from "./verify-route.ts";
@@ -74,9 +75,25 @@ test("POST /brain/verify returns verdict, evidence cards, BrainRun, and verify_r
               citation: "Worked examples can reduce unnecessary cognitive load.",
             },
           ],
+          citations: [
+            {
+              title: "Worked examples lower load",
+              sourceName: "Example Journal",
+              sourceUrl: "https://example.test/source",
+              citation: "Worked examples can reduce unnecessary cognitive load.",
+            },
+          ],
+          unsupportedParts: [
+            {
+              part: "First bottleneck",
+              reason: "The cited mechanism does not prove this is the first product bottleneck.",
+              neededEvidence: "Direct user evidence comparing cognitive load against other bottlenecks.",
+            },
+          ],
           confidenceDeltaSuggestion: -5,
           whatWouldChangeThis: "Direct user evidence that cognitive load is or is not the first bottleneck.",
           nextQuestion: "Which user behavior would show cognitive load is actually the bottleneck?",
+          recipe: verifyRecipe("mixed", -5),
           targetClaim: {
             id: claimId,
             versionId: uuidAt(201),
@@ -127,9 +144,12 @@ test("POST /brain/verify returns verdict, evidence cards, BrainRun, and verify_r
     data: {
       verdict: string;
       evidenceCards: Array<{ sourceUrl: string; stance: string }>;
+      citations: Array<{ sourceUrl: string; citation: string }>;
+      unsupportedParts: Array<{ part: string; neededEvidence: string }>;
       confidenceDeltaSuggestion: number;
       whatWouldChangeThis: string;
       nextQuestion: string;
+      recipe: { steps: Array<{ step: string; status: string }> };
       targetClaim: { confidence: number };
       brainRun: { status: string };
       move: { kind: string; claimIds: string[] };
@@ -146,6 +166,10 @@ test("POST /brain/verify returns verdict, evidence cards, BrainRun, and verify_r
   assert.equal(payload.data.evidenceCards.length, 1);
   assert.equal(payload.data.evidenceCards[0]?.sourceUrl, "https://example.test/source");
   assert.equal(payload.data.evidenceCards[0]?.stance, "supports");
+  assert.equal(payload.data.citations[0]?.sourceUrl, "https://example.test/source");
+  assert.match(payload.data.citations[0]?.citation ?? "", /Worked examples/);
+  assert.equal(payload.data.unsupportedParts[0]?.part, "First bottleneck");
+  assert.equal(payload.data.recipe.steps.map((step) => step.step).join(","), "decompose_claim,search_gather,evaluate_evidence,synthesize_verdict,suggest_confidence_change");
   assert.equal(payload.data.confidenceDeltaSuggestion, -5);
   assert.match(payload.data.whatWouldChangeThis, /Direct user evidence/);
   assert.match(payload.data.nextQuestion, /Which user behavior/);
@@ -479,9 +503,19 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
             citation: "Worked examples can reduce unnecessary cognitive load.",
           },
         ],
+        citations: [
+          {
+            title: "Worked examples",
+            sourceName: "Example Journal",
+            sourceUrl: "https://example.test/worked-examples",
+            citation: "Worked examples can reduce unnecessary cognitive load.",
+          },
+        ],
+        unsupportedParts: [],
         confidenceDeltaSuggestion: 6,
         whatWouldChangeThis: "A trial showing no improvement from worked examples would weaken the claim.",
         nextQuestion: "Does the target student group benefit from worked examples?",
+        recipe: verifyRecipe("supported", 6),
       },
       sources: [
         {
@@ -499,15 +533,77 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
 
   assert.equal(heuristic.verdict, "not_enough_evidence");
   assert.equal(heuristic.evidenceCards.length, 1);
+  assert.equal(heuristic.unsupportedParts.length, 1);
+  assert.equal(heuristic.recipe.steps[1]?.step, "search_gather");
   assert.equal(heuristic.confidenceDeltaSuggestion, 0);
   assert.equal(xai.verdict, "supported");
   assert.equal(xai.evidenceCards[0]?.sourceUrl, "https://example.test/worked-examples");
+  assert.equal(xai.citations[0]?.sourceUrl, "https://example.test/worked-examples");
+  assert.equal(xai.unsupportedParts.length, 0);
+  assert.equal(xai.recipe.steps.map((step) => step.step).join(","), "decompose_claim,search_gather,evaluate_evidence,synthesize_verdict,suggest_confidence_change");
   assert.equal(resolveXaiVerifyModel({}), defaultXaiVerifyModel);
   assert.equal(calls.length, 1);
   assert.ok(calls[0]?.tools?.web_search);
   assert.match(calls[0]?.prompt ?? "", /Current claim text/);
   assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
   assert.match(calls[0]?.prompt ?? "", /evidence_checking/);
+  assert.match(calls[0]?.prompt ?? "", /Search decision/);
+  assert.match(calls[0]?.prompt ?? "", /recipe\.steps/);
+});
+
+test("Verify web search routing only enables search for source-grounded claims", async () => {
+  const factualInput = {
+    claimId: uuidAt(101),
+    sessionId: uuidAt(100),
+    currentClaimText: "40% of founders will pay $200/month for this workflow.",
+    currentClaimKind: "assumption" as const,
+    currentClaimStatus: "exploratory" as const,
+    currentClaimConfidence: 64,
+  };
+  const localInput = {
+    ...factualInput,
+    currentClaimText: "I want this idea to feel calmer than a generic dashboard.",
+  };
+  const calls: Parameters<VerifyGenerateText>[0][] = [];
+  const generateText: VerifyGenerateText = async (request) => {
+    calls.push(request);
+
+    return {
+      output: {
+        verdict: "not_enough_evidence",
+        summary: "The available context is not enough to ground the claim.",
+        evidenceCards: [
+          {
+            title: "Local context",
+            summary: "The claim is local to the user's stated preference.",
+            stance: "unclear",
+            sourceName: "Penny Brain",
+            sourceUrl: null,
+            citation: null,
+          },
+        ],
+        confidenceDeltaSuggestion: 0,
+        whatWouldChangeThis: "A directly relevant source or user observation would change this.",
+        nextQuestion: "What evidence would directly test this claim?",
+      },
+      sources: [],
+    };
+  };
+
+  assert.equal(verifyWebSearchDecision(factualInput).useWebSearch, true);
+  assert.equal(verifyWebSearchDecision(localInput).useWebSearch, false);
+
+  await generateVerifyOutput(factualInput, {
+    provider: createXaiVerifyProvider({ XAI_API_KEY: "test-key" }, { generateText }),
+    brainRunId: uuidAt(703),
+  });
+  await generateVerifyOutput(localInput, {
+    provider: createXaiVerifyProvider({ XAI_API_KEY: "test-key" }, { generateText }),
+    brainRunId: uuidAt(704),
+  });
+
+  assert.ok(calls[0]?.tools?.web_search);
+  assert.equal(calls[1]?.tools, undefined);
 });
 
 test("generateVerifyOutput requires a recorded BrainRun id", async () => {
@@ -554,6 +650,9 @@ test("verify output parsing can fall back to provider source cards", () => {
   assert.equal(output.evidenceCards.length, 1);
   assert.equal(output.evidenceCards[0]?.sourceUrl, "https://example.test/worked-examples");
   assert.equal(output.evidenceCards[0]?.stance, "unclear");
+  assert.equal(output.citations[0]?.sourceUrl, "https://example.test/worked-examples");
+  assert.equal(output.unsupportedParts.length, 0);
+  assert.equal(output.recipe.steps[0]?.step, "decompose_claim");
 });
 
 test("verify output parsing and xAI provider failures are explicit", async () => {
@@ -657,9 +756,25 @@ function verifiedResult(claimId: string) {
         citation: "Worked examples can reduce unnecessary cognitive load.",
       },
     ],
+    citations: [
+      {
+        title: "Worked examples lower load",
+        sourceName: "Example Journal",
+        sourceUrl: "https://example.test/source",
+        citation: "Worked examples can reduce unnecessary cognitive load.",
+      },
+    ],
+    unsupportedParts: [
+      {
+        part: "First bottleneck",
+        reason: "The citation supports the mechanism but not the product bottleneck ranking.",
+        neededEvidence: "Direct user evidence that cognitive load is the first bottleneck.",
+      },
+    ],
     confidenceDeltaSuggestion: -5,
     whatWouldChangeThis: "Direct user evidence that cognitive load is or is not the first bottleneck.",
     nextQuestion: "Which user behavior would show cognitive load is actually the bottleneck?",
+    recipe: verifyRecipe("mixed", -5),
     targetClaim: {
       id: claimId,
       versionId: uuidAt(201),
@@ -717,6 +832,53 @@ function confidenceDecisionResult(verifyMoveId: string) {
       appliedDelta: 8,
       cascade: [],
     },
+  };
+}
+
+function verifyRecipe(verdict: "supported" | "weakened" | "mixed" | "not_enough_evidence", delta: number) {
+  return {
+    steps: [
+      {
+        step: "decompose_claim" as const,
+        title: "Decompose claim",
+        status: "completed" as const,
+        summary: "Separated the target claim into testable parts.",
+        inputs: ["Cognitive load is the first bottleneck to test."],
+        outputs: ["mechanism", "first bottleneck ranking"],
+      },
+      {
+        step: "search_gather" as const,
+        title: "Search and gather",
+        status: "completed" as const,
+        summary: "Gathered citation-backed evidence cards.",
+        inputs: ["domain_factual_claim"],
+        outputs: ["1 citation-backed evidence card"],
+      },
+      {
+        step: "evaluate_evidence" as const,
+        title: "Evaluate evidence",
+        status: "completed" as const,
+        summary: "Compared the evidence card against the exact claim.",
+        inputs: ["Worked examples lower load"],
+        outputs: ["supports mechanism", "does not prove first bottleneck"],
+      },
+      {
+        step: "synthesize_verdict" as const,
+        title: "Synthesize verdict",
+        status: "completed" as const,
+        summary: `Synthesized the evidence into a ${verdict} verdict.`,
+        inputs: ["supports", "unsupported part"],
+        outputs: [verdict],
+      },
+      {
+        step: "suggest_confidence_change" as const,
+        title: "Suggest confidence change",
+        status: "completed" as const,
+        summary: `Suggested a ${delta} point confidence delta for user review.`,
+        inputs: [verdict],
+        outputs: [`delta ${delta}`],
+      },
+    ],
   };
 }
 

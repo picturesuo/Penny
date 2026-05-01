@@ -20,15 +20,20 @@ export type {
   EvidenceCard,
   PersistedVerify,
   PersistedVerifyConfidenceDecision,
+  UnsupportedPart,
   VerifyConfidenceDecisionRequest,
   VerifyConfidenceRouteOptions,
+  VerifyCitation,
   VerifyGenerateText,
   VerifyGenerationInput,
   VerifyOutput,
   VerifyProvider,
   VerifyProviderOutput,
+  VerifyRecipe,
+  VerifyRecipeStep,
   VerifyRequest,
   VerifyRouteOptions,
+  VerifyWebSearchDecision,
 } from "./verify-core.ts";
 export {
   buildVerifyPrompt,
@@ -40,5 +45,6 @@ export {
   generateVerifyOutput,
   parseVerifyOutput,
   resolveXaiVerifyModel,
+  verifyWebSearchDecision,
 } from "./verify-ai.ts";
 export { decideVerifyConfidence, runVerify } from "./verify-commands.ts";

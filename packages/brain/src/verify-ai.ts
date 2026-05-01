@@ -8,6 +8,7 @@ export {
   generateVerifyOutput,
   parseVerifyOutput,
   resolveXaiVerifyModel,
+  verifyWebSearchDecision,
   VerifyGenerationError,
   VerifyOutputSchema,
   VerifyProviderError,
@@ -15,9 +16,14 @@ export {
 } from "./verify-core.ts";
 export type {
   EvidenceCard,
+  UnsupportedPart,
+  VerifyCitation,
   VerifyGenerateText,
   VerifyGenerationInput,
   VerifyOutput,
   VerifyProvider,
   VerifyProviderOutput,
+  VerifyRecipe,
+  VerifyRecipeStep,
+  VerifyWebSearchDecision,
 } from "./verify-core.ts";
