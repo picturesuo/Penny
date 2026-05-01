@@ -16,6 +16,7 @@ import {
   handleVerifyRequest,
   parseVerifyOutput,
   resolveXaiVerifyModel,
+  verifyConfidenceCascadePolicy,
   type VerifyGenerateText,
   type VerifyRequest,
 } from "./verify-route.ts";
@@ -339,6 +340,7 @@ test("confidence cascade follows active depends_on edges with attenuation", () =
     edges: [
       edge(uuidAt(601), directDependentClaimId, rootClaimId, "depends_on", "active", 1),
       edge(uuidAt(602), secondOrderDependentClaimId, directDependentClaimId, "depends_on", "active", 2),
+      edge(uuidAt(606), uuidAt(106), secondOrderDependentClaimId, "depends_on", "active", 6),
       edge(uuidAt(603), inactiveDependentClaimId, rootClaimId, "depends_on", "acknowledged_vulnerability", 3),
       edge(uuidAt(604), uuidAt(105), rootClaimId, "supports", "active", 4),
       edge(uuidAt(605), rootClaimId, secondOrderDependentClaimId, "depends_on", "active", 5),
@@ -357,6 +359,39 @@ test("confidence cascade follows active depends_on edges with attenuation", () =
       viaEdgeId: uuidAt(602),
       depth: 2,
       appliedDelta: -5,
+    },
+  ]);
+});
+
+test("confidence cascade limits blast radius by depth and claim count", () => {
+  const rootClaimId = uuidAt(101);
+  const plan = buildConfidenceCascadePlan({
+    changedClaimId: rootClaimId,
+    delta: 24,
+    policy: {
+      maxDepth: verifyConfidenceCascadePolicy.maxDepth,
+      maxClaims: 2,
+    },
+    edges: [
+      edge(uuidAt(601), uuidAt(102), rootClaimId, "depends_on", "active", 1),
+      edge(uuidAt(602), uuidAt(103), rootClaimId, "depends_on", "active", 2),
+      edge(uuidAt(603), uuidAt(104), rootClaimId, "depends_on", "active", 3),
+      edge(uuidAt(604), uuidAt(105), uuidAt(102), "depends_on", "active", 4),
+    ],
+  });
+
+  assert.deepEqual(plan, [
+    {
+      claimId: uuidAt(102),
+      viaEdgeId: uuidAt(601),
+      depth: 1,
+      appliedDelta: 12,
+    },
+    {
+      claimId: uuidAt(103),
+      viaEdgeId: uuidAt(602),
+      depth: 1,
+      appliedDelta: 12,
     },
   ]);
 });
@@ -699,6 +734,10 @@ function edge(
 ) {
   return {
     id,
+    userId: "dev-user",
+    workspaceId: null,
+    projectId: "dev-project",
+    sphereId: null,
     fromClaimId,
     toClaimId,
     kind,
