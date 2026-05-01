@@ -317,20 +317,40 @@ export async function loadBrainObjects(db: PennyDatabase, scope: BrainScope): Pr
   const [sourceRows, claimRows, edgeRows, moveRows, artifactRows, savedObjectRows, noteRows] = await Promise.all([
     loadScopedSourcesForSessionIds(db, sessionIds, scope),
     sessionIds.length > 0
-      ? db.select().from(claims).where(inArray(claims.sessionId, sessionIds)).orderBy(asc(claims.createdAt))
+      ? db
+          .select()
+          .from(claims)
+          .where(and(inArray(claims.sessionId, sessionIds), scopeCondition(claims, scope)))
+          .orderBy(asc(claims.createdAt))
       : [],
     sessionIds.length > 0
-      ? db.select().from(claimEdges).where(inArray(claimEdges.sessionId, sessionIds)).orderBy(asc(claimEdges.createdAt))
+      ? db
+          .select()
+          .from(claimEdges)
+          .where(and(inArray(claimEdges.sessionId, sessionIds), scopeCondition(claimEdges, scope)))
+          .orderBy(asc(claimEdges.createdAt))
       : [],
     sessionIds.length > 0
-      ? db.select().from(moves).where(inArray(moves.sessionId, sessionIds)).orderBy(asc(moves.createdAt))
+      ? db
+          .select()
+          .from(moves)
+          .where(and(inArray(moves.sessionId, sessionIds), scopeCondition(moves, scope)))
+          .orderBy(asc(moves.createdAt))
       : [],
     sessionIds.length > 0
-      ? db.select().from(artifacts).where(inArray(artifacts.sessionId, sessionIds)).orderBy(asc(artifacts.createdAt))
+      ? db
+          .select()
+          .from(artifacts)
+          .where(and(inArray(artifacts.sessionId, sessionIds), scopeCondition(artifacts, scope)))
+          .orderBy(asc(artifacts.createdAt))
       : [],
     db.select().from(brainObjects).where(scopeCondition(brainObjects, scope)).orderBy(desc(brainObjects.updatedAt)).limit(80),
     sessionIds.length > 0
-      ? db.select().from(sessionNotes).where(inArray(sessionNotes.sessionId, sessionIds)).orderBy(desc(sessionNotes.updatedAt))
+      ? db
+          .select()
+          .from(sessionNotes)
+          .where(and(inArray(sessionNotes.sessionId, sessionIds), scopeCondition(sessionNotes, scope)))
+          .orderBy(desc(sessionNotes.updatedAt))
       : [],
   ]);
   const claimIds = claimRows.map((claim) => claim.id);
