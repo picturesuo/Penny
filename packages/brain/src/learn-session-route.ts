@@ -7,6 +7,7 @@ import type { EntityId } from "./domain/types.ts";
 import {
   BrainSeedProviderError,
   BrainSeedValidationError,
+  brainSeedSearchDecision,
   createDefaultBrainSeedProvider,
   generateBrainSeed,
   resolveXaiBrainSeedModel,
@@ -243,6 +244,7 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
               rawIdea: seedInput.rawIdea,
               sessionId: seedInput.sessionId,
               source: "learn_session",
+              searchDecision: brainSeedSearchDecision(seedInput),
             },
             scope: context,
             startedAt: new Date(),

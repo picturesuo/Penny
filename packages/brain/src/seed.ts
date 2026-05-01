@@ -55,6 +55,7 @@ export {
   BrainSeedProviderError,
   buildBrainSeedPrompt,
   buildBrainSeedSystemPrompt,
+  brainSeedSearchDecision,
   createAiSdkXaiBrainSeedProvider,
   createDefaultBrainSeedProvider,
   createHeuristicBrainSeedProvider,

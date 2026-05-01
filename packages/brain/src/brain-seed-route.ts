@@ -13,6 +13,7 @@ import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import {
   BrainSeedProviderError,
   BrainSeedValidationError,
+  brainSeedSearchDecision,
   createDefaultBrainSeedProvider,
   generateBrainSeed,
   resolveXaiBrainSeedModel,
@@ -407,6 +408,7 @@ function buildBrainSeedRunInput(
     input: {
       ...input,
       scope: context,
+      searchDecision: brainSeedSearchDecision(input),
     },
     scope: context,
     startedAt,

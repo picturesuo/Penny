@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { createXai } from "@ai-sdk/xai";
-import { generateText, Output, type LanguageModel } from "ai";
+import { generateText, Output, type LanguageModel, type ToolSet } from "ai";
 import { z } from "zod";
 import { afterMoveEffectsInTransaction } from "./after-move-effects.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
@@ -12,6 +12,8 @@ import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 import { scopeValues } from "./scope.ts";
 import { CandidateBrainObjectSchema } from "./candidate-brain-object.ts";
+import { createSearchBroker } from "./search-broker.ts";
+import { shouldUseWebSearch } from "./search-decision-service.ts";
 
 export const LearnSuggestedNextMoveSchema = z
   .object({
@@ -113,6 +115,7 @@ export type InlineLearnGenerateText = (request: {
   prompt: string;
   output: typeof inlineLearnOutputSpec;
   maxRetries: number;
+  tools?: ToolSet;
   providerOptions: {
     xai: {
       store: false;
@@ -379,12 +382,17 @@ export function createXaiInlineLearnProvider(
 
       const xai = createXai(createXaiSettings(apiKey, env));
       const callGenerateText = options.generateText ?? generateStructuredInlineLearn;
+      const searchBroker = createSearchBroker({
+        providerName: "xai",
+        webSearch: typeof xai.tools.webSearch === "function" ? xai.tools.webSearch : null,
+      });
+      const search = searchBroker.prepare(inlineLearnSearchInput(input), "learn", inlineLearnSearchContext(input));
 
       try {
-        const result = await callGenerateText({
+        const request: Parameters<InlineLearnGenerateText>[0] = {
           model: xai.responses(resolveXaiInlineLearnModel(env)),
           system: buildInlineLearnSystemPrompt(),
-          prompt: buildInlineLearnPrompt(input),
+          prompt: buildInlineLearnPrompt(input, search.instructions),
           output: inlineLearnOutputSpec,
           maxRetries: 1,
           providerOptions: {
@@ -392,7 +400,13 @@ export function createXaiInlineLearnProvider(
               store: false,
             },
           },
-        });
+        };
+
+        if (search.tools) {
+          request.tools = search.tools;
+        }
+
+        const result = await callGenerateText(request);
 
         return result.output;
       } catch (error) {
@@ -422,7 +436,7 @@ export function buildInlineLearnSystemPrompt(): string {
   ].join("\n");
 }
 
-export function buildInlineLearnPrompt(input: InlineLearnGenerationInput): string {
+export function buildInlineLearnPrompt(input: InlineLearnGenerationInput, searchInstructions?: string): string {
   return [
     "Create a short contextual Learn explanation for this term.",
     "",
@@ -447,6 +461,8 @@ export function buildInlineLearnPrompt(input: InlineLearnGenerationInput): strin
     "- Treat candidate shapes as tentative and do not label the user with them.",
     "- If the lens suggests concept grounding or evidence checking patterns, make the explanation more operational.",
     "",
+    searchInstructions ?? createSearchBroker().prepare(inlineLearnSearchInput(input), "learn", inlineLearnSearchContext(input)).instructions,
+    "",
     `Term: ${input.term}`,
     `Current claim id: ${input.currentClaimId}`,
     `Current claim kind: ${input.currentClaimKind}`,
@@ -464,6 +480,8 @@ async function createInlineLearnPrelude(
   return db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.currentClaimId, input.sessionId);
     const lensSnapshot = await loadLensSnapshot(tx, input.sessionId);
+    const generationInput = learnGenerationInput(target, input, lensSnapshot);
+    const searchDecision = shouldUseWebSearch(inlineLearnSearchInput(generationInput), "learn", inlineLearnSearchContext(generationInput));
     const [brainRun] = await tx
       .insert(brainRuns)
       .values({
@@ -480,6 +498,7 @@ async function createInlineLearnPrelude(
           currentClaimVersionId: target.version.id,
           localContext: input.localContext,
           save: input.save,
+          searchDecision,
           lensSnapshot,
         },
       })
@@ -691,6 +710,21 @@ function learnGenerationInput(
     currentClaimText: target.version.content,
     currentClaimKind: target.claim.kind,
     lensSnapshot,
+  };
+}
+
+function inlineLearnSearchInput(input: InlineLearnGenerationInput) {
+  return {
+    query: `${input.term} ${input.currentClaimText}`,
+    text: [input.term, input.currentClaimText, input.localContext].join("\n"),
+    userRequest: input.localContext,
+  };
+}
+
+function inlineLearnSearchContext(input: InlineLearnGenerationInput) {
+  return {
+    brainContext: [input.currentClaimText, input.localContext, formatLensSnapshot(input.lensSnapshot)].join("\n"),
+    brainContextSufficient: true,
   };
 }
 

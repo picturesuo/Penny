@@ -551,7 +551,7 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
   assert.match(calls[0]?.prompt ?? "", /recipe\.steps/);
 });
 
-test("Verify web search routing only enables search for source-grounded claims", async () => {
+test("Verify web search routing enables search by default when possible", async () => {
   const factualInput = {
     claimId: uuidAt(101),
     sessionId: uuidAt(100),
@@ -591,7 +591,7 @@ test("Verify web search routing only enables search for source-grounded claims",
   };
 
   assert.equal(verifyWebSearchDecision(factualInput).useWebSearch, true);
-  assert.equal(verifyWebSearchDecision(localInput).useWebSearch, false);
+  assert.equal(verifyWebSearchDecision(localInput).useWebSearch, true);
 
   await generateVerifyOutput(factualInput, {
     provider: createXaiVerifyProvider({ XAI_API_KEY: "test-key" }, { generateText }),
@@ -603,7 +603,7 @@ test("Verify web search routing only enables search for source-grounded claims",
   });
 
   assert.ok(calls[0]?.tools?.web_search);
-  assert.equal(calls[1]?.tools, undefined);
+  assert.ok(calls[1]?.tools?.web_search);
 });
 
 test("generateVerifyOutput requires a recorded BrainRun id", async () => {

@@ -1,6 +1,8 @@
 import { createXai } from "@ai-sdk/xai";
-import { generateText, Output, type LanguageModel } from "ai";
+import { generateText, Output, type LanguageModel, type ToolSet } from "ai";
 import { SeedProviderSchema, type BrainSeedInput, type BrainSeedOutput, type SeedProviderOutput } from "./schema.ts";
+import { createSearchBroker } from "./search-broker.ts";
+import { shouldUseWebSearch } from "./search-decision-service.ts";
 
 export const defaultXaiBrainSeedModel = "grok-4.20-reasoning";
 
@@ -16,6 +18,7 @@ export type BrainSeedGenerateText = (request: {
   prompt: string;
   output: typeof brainSeedOutputSpec;
   maxRetries: number;
+  tools?: ToolSet;
   providerOptions: {
     xai: {
       store: false;
@@ -78,12 +81,17 @@ export function createAiSdkXaiBrainSeedProvider(
 
       const xai = createXai(createXaiSettings(apiKey, env));
       const callGenerateText = options.generateText ?? generateStructuredBrainSeed;
+      const searchBroker = createSearchBroker({
+        providerName: "xai",
+        webSearch: typeof xai.tools.webSearch === "function" ? xai.tools.webSearch : null,
+      });
+      const search = searchBroker.prepare(brainSeedSearchInput(input), "learn", brainSeedSearchContext(input));
 
       try {
-        const result = await callGenerateText({
+        const request: Parameters<BrainSeedGenerateText>[0] = {
           model: xai.responses(resolveXaiBrainSeedModel(env)),
           system: buildBrainSeedSystemPrompt(),
-          prompt: buildBrainSeedPrompt(input),
+          prompt: buildBrainSeedPrompt(input, search.instructions),
           output: brainSeedOutputSpec,
           maxRetries: 1,
           providerOptions: {
@@ -91,7 +99,13 @@ export function createAiSdkXaiBrainSeedProvider(
               store: false,
             },
           },
-        });
+        };
+
+        if (search.tools) {
+          request.tools = search.tools;
+        }
+
+        const result = await callGenerateText(request);
 
         return result.output;
       } catch (error) {
@@ -122,7 +136,7 @@ export function buildBrainSeedSystemPrompt(): string {
   ].join("\n");
 }
 
-export function buildBrainSeedPrompt(input: BrainSeedInput): string {
+export function buildBrainSeedPrompt(input: BrainSeedInput, searchInstructions?: string): string {
   const sessionId = resolveSeedSessionId(input);
 
   return [
@@ -147,9 +161,32 @@ export function buildBrainSeedPrompt(input: BrainSeedInput): string {
     "- Return at least 6 exploration paths that help the user decide what to inspect next in Brain.",
     "- The challenge should name the weakest load-bearing assumption and pressure it directly.",
     "- Keep the output compact enough for a first session.",
+    "- If web search is attached, use it only for current facts or named entities the user explicitly brings into the idea.",
+    "- Do not add external facts to the graph unless the searched source directly grounds them.",
+    "",
+    searchInstructions ?? createSearchBroker().prepare(brainSeedSearchInput(input), "learn", brainSeedSearchContext(input)).instructions,
     "",
     `Raw idea: ${input.rawIdea}`,
   ].join("\n");
+}
+
+export function brainSeedSearchDecision(input: BrainSeedInput) {
+  return shouldUseWebSearch(brainSeedSearchInput(input), "learn", brainSeedSearchContext(input));
+}
+
+function brainSeedSearchInput(input: BrainSeedInput) {
+  return {
+    query: input.rawIdea,
+    text: input.rawIdea,
+    userRequest: input.rawIdea,
+  };
+}
+
+function brainSeedSearchContext(_input: BrainSeedInput) {
+  return {
+    brainContext: null,
+    brainContextSufficient: true,
+  };
 }
 
 function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {

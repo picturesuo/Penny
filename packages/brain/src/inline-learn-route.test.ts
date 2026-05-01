@@ -222,8 +222,8 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
     term: "scope",
     currentClaimId: uuidAt(101),
     sessionId: uuidAt(100),
-    localContext: "The claim may only apply to novice users.",
-    currentClaimText: "The assistant improves learning outcomes for novice users.",
+    localContext: "The claim may only apply to the first draft.",
+    currentClaimText: "The idea improves clarity only inside the first draft.",
     currentClaimKind: "assumption" as const,
     lensSnapshot: lensSnapshot(),
   };
@@ -273,6 +273,43 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
   assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
   assert.match(calls[0]?.prompt ?? "", /concept_grounding/);
   assert.match(calls[0]?.prompt ?? "", /candidateBrainObjects/);
+  assert.match(calls[0]?.prompt ?? "", /Search decision/);
+  assert.equal(calls[0]?.tools, undefined);
+});
+
+test("xAI inline Learn attaches web search only when the shared decision says yes", async () => {
+  const input = {
+    term: "OpenAI pricing",
+    currentClaimId: uuidAt(101),
+    sessionId: uuidAt(100),
+    localContext: "Search current sources for the latest OpenAI pricing before explaining this dependency.",
+    currentClaimText: "The product's margin depends on OpenAI pricing staying below current levels.",
+    currentClaimKind: "assumption" as const,
+    lensSnapshot: lensSnapshot(),
+  };
+  const calls: Parameters<InlineLearnGenerateText>[0][] = [];
+  const generateText: InlineLearnGenerateText = async (request) => {
+    calls.push(request);
+
+    return {
+      output: {
+        term: "OpenAI pricing",
+        explanation: "Pricing is the unit cost schedule that determines whether the workflow can be delivered profitably.",
+        whyItMattersHere: "The claim depends on a current external price, so Penny should avoid treating the number as a local assumption.",
+        example: "If token prices change, the same user workflow can move from viable to unprofitable.",
+        relatedConcepts: ["unit cost", "margin"],
+        saveSuggestion: "Save this if pricing keeps shaping the business model.",
+      },
+    };
+  };
+  const output = await generateInlineLearnOutput(input, {
+    provider: createXaiInlineLearnProvider({ XAI_API_KEY: "test-key" }, { generateText }),
+    brainRunId: uuidAt(703),
+  });
+
+  assert.equal(output.term, "OpenAI pricing");
+  assert.ok(calls[0]?.tools?.web_search);
+  assert.match(calls[0]?.prompt ?? "", /current_or_time_sensitive/);
 });
 
 test("generateInlineLearnOutput requires a recorded BrainRun id", async () => {

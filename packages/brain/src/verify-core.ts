@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { createXai } from "@ai-sdk/xai";
-import { generateText, Output, type LanguageModel } from "ai";
+import { generateText, Output, type LanguageModel, type ToolSet } from "ai";
 import { z } from "zod";
 import {
   CommandIdempotencyRequestFields,
@@ -21,6 +21,8 @@ import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-
 import { createMove, parseMovePayload } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 import { scopeValues } from "./scope.ts";
+import { createSearchBroker } from "./search-broker.ts";
+import { shouldUseWebSearch, type SearchDecision } from "./search-decision-service.ts";
 
 export const VerifyRequestSchema = z
   .object({
@@ -252,11 +254,7 @@ export type UnsupportedPart = z.infer<typeof UnsupportedPartSchema>;
 export type VerifyRecipe = z.infer<typeof VerifyRecipeSchema>;
 export type VerifyRecipeStep = z.infer<typeof VerifyRecipeStepSchema>;
 
-export type VerifyWebSearchDecision = {
-  useWebSearch: boolean;
-  reason: string;
-  signals: ReadonlyArray<string>;
-};
+export type VerifyWebSearchDecision = SearchDecision;
 
 export type VerifyGenerationInput = {
   claimId: string;
@@ -280,7 +278,7 @@ export type VerifyGenerateText = (request: {
   prompt: string;
   output: typeof verifyOutputSpec;
   maxRetries: number;
-  tools?: Record<string, unknown> | undefined;
+  tools?: ToolSet;
   providerOptions: {
     xai: {
       store: false;
@@ -857,17 +855,17 @@ export function createXaiVerifyProvider(
 
       const xai = createXai(createXaiSettings(apiKey, env));
       const callGenerateText = options.generateText ?? generateStructuredVerify;
-      const webSearchTool =
-        typeof xai.tools.webSearch === "function"
-          ? xai.tools.webSearch({ enableImageUnderstanding: false })
-          : null;
-      const searchDecision = verifyWebSearchDecision(input);
+      const searchBroker = createSearchBroker({
+        providerName: "xai",
+        webSearch: typeof xai.tools.webSearch === "function" ? xai.tools.webSearch : null,
+      });
+      const search = searchBroker.prepare(verifySearchInput(input), "verify", verifySearchContext(input));
 
       try {
         const request: Parameters<VerifyGenerateText>[0] = {
           model: xai.responses(resolveXaiVerifyModel(env)),
           system: buildVerifySystemPrompt(),
-          prompt: buildVerifyPrompt(input),
+          prompt: buildVerifyPrompt(input, search.instructions),
           output: verifyOutputSpec,
           maxRetries: 1,
           providerOptions: {
@@ -877,8 +875,8 @@ export function createXaiVerifyProvider(
           },
         };
 
-        if (webSearchTool && searchDecision.useWebSearch) {
-          request.tools = { web_search: webSearchTool };
+        if (search.tools) {
+          request.tools = search.tools;
         }
 
         return await callGenerateText(request);
@@ -908,9 +906,7 @@ export function buildVerifySystemPrompt(): string {
   ].join("\n");
 }
 
-export function buildVerifyPrompt(input: VerifyGenerationInput): string {
-  const searchDecision = verifyWebSearchDecision(input);
-
+export function buildVerifyPrompt(input: VerifyGenerationInput, searchInstructions?: string): string {
   return [
     "Check this stable Penny claim against external evidence.",
     "",
@@ -930,11 +926,7 @@ export function buildVerifyPrompt(input: VerifyGenerationInput): string {
     "- Do not let shapes bias the verdict; evidence must drive support, weakening, or uncertainty.",
     "- Candidate shapes are tentative and must not be stated as facts about the user.",
     "",
-    "Search decision:",
-    `- useWebSearch: ${searchDecision.useWebSearch}`,
-    `- reason: ${searchDecision.reason}`,
-    `- signals: ${searchDecision.signals.join(", ") || "none"}`,
-    "- If useWebSearch is false, rely only on provided context and mark unsupported external parts clearly.",
+    searchInstructions ?? createSearchBroker().prepare(verifySearchInput(input), "verify", verifySearchContext(input)).instructions,
     "",
     `Session id: ${input.sessionId}`,
     `Claim id: ${input.claimId}`,
@@ -1431,57 +1423,23 @@ function verifyGenerationInput(
 }
 
 export function verifyWebSearchDecision(input?: VerifyGenerationInput): VerifyWebSearchDecision {
-  if (!input) {
-    return {
-      useWebSearch: true,
-      reason: "No generation context was provided, so Verify defaults to source search for grounding.",
-      signals: ["verify_default_source_grounding"],
-    };
-  }
+  return shouldUseWebSearch(verifySearchInput(input), "verify", verifySearchContext(input));
+}
 
-  const haystack = input.currentClaimText.toLowerCase();
-  const signals: string[] = [];
-
-  if (/[$%]|\b\d+(?:\.\d+)?\s*(?:percent|%|k|m|million|billion|users|customers|founders|months|days|weeks|dollars|usd)\b/.test(haystack)) {
-    signals.push("quantitative_claim");
-  }
-
-  if (/\b(study|research|source|citation|evidence|survey|benchmark|according to|reported|data)\b/.test(haystack)) {
-    signals.push("explicit_evidence_claim");
-  }
-
-  if (/\b(founder|customer|market|adoption|retention|conversion|revenue|sales|pricing|pay|users|companies)\b/.test(haystack)) {
-    signals.push("market_or_customer_claim");
-  }
-
-  if (/\b(cognitive load|learning science|memory|attention|science|clinical|legal|tax|finance|security|regulation)\b/.test(haystack)) {
-    signals.push("domain_factual_claim");
-  }
-
-  if (input.currentClaimKind === "belief" || input.currentClaimKind === "assumption") {
-    signals.push("claim_kind_needs_grounding");
-  }
-
-  const personalOnly =
-    /\b(i|my|we|our)\b/.test(haystack) &&
-    !signals.some((signal) => signal !== "claim_kind_needs_grounding") &&
-    !/\b(users|customers|market|study|data|percent|revenue|pay)\b/.test(haystack);
-
-  if (personalOnly) {
-    return {
-      useWebSearch: false,
-      reason: "The claim appears to be about local intent or preference rather than an external factual assertion.",
-      signals: ["personal_or_local_claim"],
-    };
-  }
-
+function verifySearchInput(input?: VerifyGenerationInput) {
   return {
-    useWebSearch: signals.length > 0,
-    reason:
-      signals.length > 0
-        ? "The claim needs source grounding before Penny treats the verdict as stable."
-        : "No external factual signal was detected, so Verify can proceed from local context and mark any gaps.",
-    signals: uniqueStrings(signals),
+    query: input?.currentClaimText ?? "Verify this claim with sources.",
+    text: input?.currentClaimText ?? "Verify this claim with sources.",
+    userRequest: "Verify requires source-grounded evidence.",
+  };
+}
+
+function verifySearchContext(input?: VerifyGenerationInput) {
+  return {
+    brainContext: input ? formatLensSnapshot(input.lensSnapshot) : null,
+    brainContextSufficient: false,
+    claimRequiresExternalEvidence: true,
+    verifyRequiresSources: true,
   };
 }
 
@@ -1675,7 +1633,7 @@ function defaultVerifyRecipe(context: {
         summary: context.searchDecision.useWebSearch
           ? "Used available source search or provider citations to gather evidence."
           : "Search was not required or not available; Penny marked the source gap explicitly.",
-        inputs: [...context.searchDecision.signals],
+        inputs: [...context.searchDecision.signals].slice(0, 6),
         outputs: [`${sourceCount} citation-backed evidence card${sourceCount === 1 ? "" : "s"}`],
       },
       {

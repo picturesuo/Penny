@@ -469,8 +469,28 @@ test("xAI provider uses AI SDK structured output with the default model", async 
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.system ?? "", /hidden assumptions/i);
   assert.match(calls[0]?.prompt ?? "", /load-bearing assumption/i);
+  assert.match(calls[0]?.prompt ?? "", /Search decision/);
+  assert.equal(calls[0]?.tools, undefined);
   assert.equal(calls[0]?.providerOptions.xai.store, false);
   assert.equal("reasoningEffort" in (calls[0]?.providerOptions.xai ?? {}), false);
+});
+
+test("xAI seed provider attaches web search only for decision-backed Learn inputs", async () => {
+  const calls: Parameters<BrainSeedGenerateText>[0][] = [];
+  const generateText: BrainSeedGenerateText = async (request) => {
+    calls.push(request);
+
+    return { output: validSeedOutput };
+  };
+
+  const provider = createXaiBrainSeedProvider({ XAI_API_KEY: "test-key" }, { generateText });
+  await generateBrainSeed(
+    { rawIdea: "Search current OpenAI pricing before structuring this product margin idea." },
+    { provider, brainRunId: "00000000-0000-4000-8000-000000000702" },
+  );
+
+  assert.ok(calls[0]?.tools?.web_search);
+  assert.match(calls[0]?.prompt ?? "", /current_or_time_sensitive/);
 });
 
 test("xAI provider lets env override the default seed model", () => {
