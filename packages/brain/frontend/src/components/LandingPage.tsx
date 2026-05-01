@@ -13,14 +13,17 @@ interface LandingPageProps {
 
 const shortcuts: Array<{ key: string; label: string; mode?: PennyMode; action: "mode" | "quick-note" }> = [
   { key: "B", label: "for Brain", mode: "Brain", action: "mode" },
-  { key: "C", label: "for Check", mode: "Check", action: "mode" },
   { key: "L", label: "for Learn", mode: "Learn", action: "mode" },
+  { key: "C", label: "for Check", mode: "Check", action: "mode" },
   { key: "Q", label: "for Quick note", action: "quick-note" },
 ];
 
 export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNote }: LandingPageProps) {
   const [rawIdea, setRawIdea] = useState("");
+  const [isCtrlDown, setIsCtrlDown] = useState(false);
+  const [activeShortcutKey, setActiveShortcutKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeShortcutTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -28,7 +31,12 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
+      if (event.key === "Control") {
+        setIsCtrlDown(true);
+        return;
+      }
+
+      if (!event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) {
         return;
       }
 
@@ -39,6 +47,7 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
       }
 
       event.preventDefault();
+      pulseShortcut(shortcut.key);
 
       if (shortcut.action === "quick-note") {
         void handleQuickNote();
@@ -50,9 +59,33 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
       }
     }
 
+    function handleKeyUp(event: KeyboardEvent) {
+      if (event.key === "Control") {
+        setIsCtrlDown(false);
+      }
+    }
+
+    function handleWindowBlur() {
+      setIsCtrlDown(false);
+    }
+
     window.addEventListener("keydown", handleShortcut);
-    return () => window.removeEventListener("keydown", handleShortcut);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleWindowBlur);
+    return () => {
+      window.removeEventListener("keydown", handleShortcut);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
   }, [rawIdea, onModeSelect]);
+
+  useEffect(() => {
+    return () => {
+      if (activeShortcutTimeoutRef.current) {
+        window.clearTimeout(activeShortcutTimeoutRef.current);
+      }
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,6 +110,18 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
 
     await onQuickNote(trimmedIdea);
     setRawIdea("");
+  }
+
+  function pulseShortcut(key: string) {
+    if (activeShortcutTimeoutRef.current) {
+      window.clearTimeout(activeShortcutTimeoutRef.current);
+    }
+
+    setActiveShortcutKey(key);
+    activeShortcutTimeoutRef.current = window.setTimeout(() => {
+      setActiveShortcutKey(null);
+      activeShortcutTimeoutRef.current = null;
+    }, 180);
   }
 
   return (
@@ -127,12 +172,15 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
                 {index > 0 ? <span className="landing-shortcut-divider" aria-hidden="true" /> : null}
                 <button
                   type="button"
-                  onClick={() =>
-                    shortcut.action === "quick-note" ? void handleQuickNote() : shortcut.mode && onModeSelect(shortcut.mode)
-                  }
+                  onClick={() => {
+                    pulseShortcut(shortcut.key);
+                    return shortcut.action === "quick-note" ? void handleQuickNote() : shortcut.mode && onModeSelect(shortcut.mode);
+                  }}
                 >
-                  <kbd aria-label="Command">⌘</kbd>
-                  <kbd>{shortcut.key}</kbd>
+                  <kbd className={isCtrlDown ? "is-pressed" : undefined} aria-label="Control">
+                    Ctrl
+                  </kbd>
+                  <kbd className={activeShortcutKey === shortcut.key ? "is-pressed" : undefined}>{shortcut.key}</kbd>
                   <span>{shortcut.label}</span>
                 </button>
               </div>
