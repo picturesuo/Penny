@@ -107,7 +107,10 @@ export function InsightRail({
   onCreateChallengeBrief,
 }: InsightRailProps) {
   const seedClaim = claims.find((claim) => claim.seedId === "claim.seed") ?? claims[0] ?? null;
-  const target = claims.find((claim) => claim.id === challenge?.targetClaimId) ?? seedClaim;
+  const target =
+    claims.find((claim) => claim.id === challenge?.targetClaimId) ??
+    claims.find((claim) => claim.id === autopilotSuggestion?.targetClaimId) ??
+    seedClaim;
   return (
     <aside className="insight-rail" aria-label="Penny side rail">
       <MakesCentsPanel
@@ -118,6 +121,16 @@ export function InsightRail({
         learnCandidates={learnCandidates}
         disabled={disabled}
       />
+      <ChallengeLoop
+        challenge={challenge}
+        autopilotSuggestion={autopilotSuggestion}
+        latestArtifact={latestArtifact}
+        challengeResponse={challengeResponse}
+        disabled={disabled}
+        onIssueChallenge={onIssueChallenge}
+        onRespondChallenge={onRespondChallenge}
+        onCreateChallengeBrief={onCreateChallengeBrief}
+      />
       <PennyInsight
         sessionId={sessionId ?? null}
         targetClaim={target}
@@ -127,6 +140,170 @@ export function InsightRail({
         disabled={disabled}
       />
     </aside>
+  );
+}
+
+function ChallengeLoop({
+  challenge,
+  autopilotSuggestion,
+  latestArtifact,
+  challengeResponse,
+  disabled,
+  onIssueChallenge,
+  onRespondChallenge,
+  onCreateChallengeBrief,
+}: {
+  challenge: ChallengeSuggestion | undefined;
+  autopilotSuggestion: AutopilotSuggestion | null;
+  latestArtifact: SessionCockpitData["latestArtifact"] | null;
+  challengeResponse: RespondToChallengeResponse["data"] | null;
+  disabled: boolean;
+  onIssueChallenge: () => Promise<void>;
+  onRespondChallenge: InsightRailProps["onRespondChallenge"];
+  onCreateChallengeBrief: () => Promise<void>;
+}) {
+  const [response, setResponse] = useState<"defend" | "revise" | "absorb">("defend");
+  const [reasoning, setReasoning] = useState("");
+  const [revisedText, setRevisedText] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const challengeText = challenge?.challenge ?? challenge?.critique ?? null;
+  const challengeId = challenge?.id ?? null;
+  const hasResponse = Boolean(challengeResponse || challenge?.response);
+  const canIssue = Boolean(autopilotSuggestion?.action === "challenge") && !disabled && !isSubmitting;
+  const canRespond =
+    Boolean(challengeId) &&
+    !hasResponse &&
+    !disabled &&
+    !isSubmitting &&
+    (response === "revise" ? Boolean(revisedText.trim()) : response === "defend" ? Boolean(reasoning.trim()) : true);
+  const canCreateBrief = hasResponse && !disabled && !isSubmitting;
+
+  async function handleRespond(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!challengeId || !canRespond) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      if (response === "revise") {
+        await onRespondChallenge(challengeId, {
+          response,
+          revisedText: revisedText.trim(),
+          ...(reasoning.trim() ? { reasoning: reasoning.trim() } : {}),
+        });
+      } else if (response === "defend") {
+        await onRespondChallenge(challengeId, {
+          response,
+          reasoning: reasoning.trim(),
+        });
+      } else {
+        await onRespondChallenge(challengeId, {
+          response,
+          ...(reasoning.trim() ? { reasoning: reasoning.trim() } : {}),
+        });
+      }
+
+      setReasoning("");
+      setRevisedText("");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="challenge-loop" aria-label="Challenge loop">
+      <div className="rail-section-head">
+        <h2>CHALLENGE</h2>
+        <span>{hasResponse ? "Answered" : challengeText ? "Open" : "Waiting"}</span>
+      </div>
+
+      {challengeText ? (
+        <div className="challenge-action-row">
+          <span>
+            <strong>{formatChallengeType(challenge?.failureType)}</strong>
+            {challengeText}
+          </span>
+          {!challengeId ? (
+            <button type="button" disabled={!canIssue} onClick={() => void onIssueChallenge()}>
+              Issue
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="challenge-action-row">
+          <span>
+            <strong>{autopilotSuggestion?.primaryActionLabel ?? "No active challenge"}</strong>
+            {autopilotSuggestion?.why ?? "Autopilot will surface a challenge after Penny has a pressure point."}
+          </span>
+          <button type="button" disabled={!canIssue} onClick={() => void onIssueChallenge()}>
+            Issue
+          </button>
+        </div>
+      )}
+
+      {challengeId && !hasResponse ? (
+        <form className="challenge-response-form" onSubmit={handleRespond}>
+          <div className="challenge-mode-row" role="group" aria-label="Challenge response">
+            {(["defend", "revise", "absorb"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                disabled={disabled || isSubmitting}
+                aria-pressed={response === option}
+                onClick={() => setResponse(option)}
+              >
+                {formatChallengeType(option)}
+              </button>
+            ))}
+          </div>
+          {response === "revise" ? (
+            <label>
+              Revised claim
+              <textarea
+                value={revisedText}
+                disabled={disabled || isSubmitting}
+                placeholder="Write the cleaner claim..."
+                onChange={(event) => setRevisedText(event.target.value)}
+              />
+            </label>
+          ) : null}
+          <label>
+            Reasoning
+            <textarea
+              value={reasoning}
+              disabled={disabled || isSubmitting}
+              placeholder={response === "absorb" ? "Optional note..." : "Why is this the right response?"}
+              onChange={(event) => setReasoning(event.target.value)}
+            />
+          </label>
+          <button type="submit" disabled={!canRespond}>
+            Save response
+          </button>
+        </form>
+      ) : null}
+
+      {hasResponse ? (
+        <div className="challenge-receipt">
+          <span>
+            <strong>{formatChallengeType(challengeResponse?.response ?? challenge?.response ?? "response")}</strong>
+            {challengeResponse?.move.summary ?? "Challenge response recorded as a Move."}
+          </span>
+        </div>
+      ) : null}
+
+      <div className="challenge-brief-row">
+        <span>
+          <strong>{latestArtifact?.title ?? "Challenge Brief"}</strong>
+          {latestArtifact?.summary ?? "Create the useful artifact after the challenge has a response."}
+        </span>
+        <button type="button" disabled={!canCreateBrief} onClick={() => void onCreateChallengeBrief()}>
+          Brief
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -399,6 +576,16 @@ function InsightActionButton({
       <span>{action.label}</span>
     </button>
   );
+}
+
+function formatChallengeType(value: string | undefined): string {
+  if (!value) {
+    return "";
+  }
+
+  return value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function PennyInsightReady({ selectedTerm }: { selectedTerm: string }) {
