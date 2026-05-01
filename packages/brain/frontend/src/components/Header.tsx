@@ -5,11 +5,12 @@ interface HeaderProps {
   thinkingLabel: string;
   activeItem?: string;
   onNavItemSelect?: (item: string) => void;
+  onLogoSelect?: () => void;
 }
 
 export const navItems = ["Learn", "Check", "Brain"] as const;
 
-export function Header({ sessionLabel, thinkingLabel, activeItem = "Brain", onNavItemSelect }: HeaderProps) {
+export function Header({ sessionLabel, thinkingLabel, activeItem = "Brain", onNavItemSelect, onLogoSelect }: HeaderProps) {
   const editionDate = new Intl.DateTimeFormat(undefined, {
     weekday: "long",
     month: "long",
@@ -20,12 +21,12 @@ export function Header({ sessionLabel, thinkingLabel, activeItem = "Brain", onNa
   return (
     <header className="newspaper-header">
       <div className="masthead">
-        <div className="brand" aria-label="Penny">
+        <button className="brand" type="button" aria-label="Go to Penny home" onClick={onLogoSelect}>
           <PennyMark />
           <span className="brand-name">
             <span className="sr-only">P</span>ENNY
           </span>
-        </div>
+        </button>
 
         <nav className="nav-tabs" aria-label="Penny modes">
           {navItems.map((item) => (
