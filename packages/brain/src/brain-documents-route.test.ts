@@ -6,6 +6,7 @@ import {
   type BrainDocumentsPayload,
   type BrainDocumentsState,
 } from "./brain-documents-route.ts";
+import type { BrainScope } from "./scope.ts";
 
 test("buildBrainDocuments creates a document log with rundown sections and a graph preview", () => {
   const sessionId = uuidAt(101);
@@ -120,6 +121,19 @@ test("GET /api/brain/documents delegates to the route loader", async () => {
   assert.deepEqual(calls, ["loadDocuments"]);
 });
 
+test("GET /api/brain/documents forwards header scope to the loader", async () => {
+  const observedScopes: BrainScope[] = [];
+  const response = await handleBrainDocumentsRequest(scopedRequest("http://localhost/api/brain/documents"), {
+    async loadDocuments(requestScope) {
+      observedScopes.push(requestScope);
+      return emptyDocuments();
+    },
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(observedScopes, [scope]);
+});
+
 test("GET /api/brain/documents validates method before loading", async () => {
   const calls: string[] = [];
   const response = await handleBrainDocumentsRequest(
@@ -151,6 +165,28 @@ function emptyDocuments(): BrainDocumentsPayload {
     moves: [],
     artifacts: [],
   });
+}
+
+const scope: BrainScope = {
+  userId: "dev-user",
+  workspaceId: "dev-workspace",
+  projectId: "dev-project",
+  sphereId: "dev-sphere",
+};
+
+function scopedRequest(url: string): Request {
+  return new Request(url, {
+    headers: scopeHeaders(scope),
+  });
+}
+
+function scopeHeaders(requestScope: BrainScope): HeadersInit {
+  return {
+    "x-user-id": requestScope.userId ?? "",
+    "x-workspace-id": requestScope.workspaceId ?? "",
+    "x-project-id": requestScope.projectId ?? "",
+    "x-sphere-id": requestScope.sphereId ?? "",
+  };
 }
 
 function sessionRow(id: string, title: string, createdAt: string): BrainDocumentsState["sessions"][number] {
