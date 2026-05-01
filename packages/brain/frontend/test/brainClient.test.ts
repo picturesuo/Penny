@@ -195,6 +195,9 @@ test("frontend brain client runs Verify and decides confidence", async () => {
     assert.equal(verified.data.verdict, "mixed");
     assert.equal(verified.data.evidenceCards[0]?.stance, "supports");
     assert.equal(verified.data.citations[0]?.sourceUrl, "https://example.test/source");
+    assert.equal(verified.data.citationSources[0]?.source.kind, "verification_citation");
+    assert.equal(verified.data.citationSources[0]?.sourceSpan.label, "verify_evidence");
+    assert.equal(verified.data.citationSources[0]?.sourceSpan.claimVersionId, uuidAt(401));
     assert.equal(verified.data.confidenceUpdate.decision, "pending_user_decision");
     assert.equal(decision.data.move.kind, "confidence_update_accepted");
     assert.equal(decision.data.confidenceUpdate.accepted, true);
