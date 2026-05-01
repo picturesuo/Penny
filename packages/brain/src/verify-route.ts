@@ -10,6 +10,7 @@ export {
   VerifyProviderError,
   VerifyProviderSchema,
   VerifyRequestSchema,
+  verifyConfidenceCascadePolicy,
 } from "./verify-core.ts";
 export type {
   ConfidenceCascadeApplied,
