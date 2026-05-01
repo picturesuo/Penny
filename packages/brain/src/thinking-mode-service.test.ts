@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import type { CreatedMove } from "./move-payloads.ts";
+import { parseMovePayload, type CreatedMove } from "./move-payloads.ts";
 import type { BrainRepository, CurrentClaimVersion, PersistedNextMoveCandidate } from "./domain/repository.ts";
 import type { NextMoveCandidate } from "./domain/engine.ts";
 import type { EntityId, FocusState, PennyYcDemoGraphFixture, ThinkingEdge, ThinkingMove } from "./domain/types.ts";
@@ -40,6 +40,9 @@ test("ThinkingModeService tick recomputes and persists candidates without mutati
   assert.equal(result.selectedCandidate?.priority.normalized, result.selectedCandidate?.confidence);
   assert.equal(result.modeContract.activeMode, "Check");
   assert.equal(result.move?.kind, "next_move_recomputed");
+  assert.ok(result.move);
+  const recomputedMove = result.move;
+  assert.doesNotThrow(() => parseMovePayload("next_move_recomputed", recomputedMove.payload));
   assert.equal(result.focusState.source, "autopilot_suggestion");
   assert.equal(repository.writes.includes("upsertNextMoveCandidates"), true);
   assert.equal(repository.writes.includes("markCandidateSelected"), true);
