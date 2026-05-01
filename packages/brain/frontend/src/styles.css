@@ -384,6 +384,10 @@
     min-width: 0;
   }
 
+  .newspaper-header.is-learn .strapline {
+    border-bottom: 0;
+  }
+
   .cockpit-grid {
     display: grid;
     grid-template-columns: minmax(230px, 300px) minmax(420px, 0.9fr) minmax(390px, 480px);

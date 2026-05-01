@@ -19,7 +19,7 @@ export function Header({ sessionLabel, thinkingLabel, activeItem = "Brain", onNa
   }).format(new Date());
 
   return (
-    <header className="newspaper-header">
+    <header className={`newspaper-header is-${activeItem.toLowerCase()}`}>
       <div className="masthead">
         <button className="brand" type="button" aria-label="Go to Penny home" onClick={onLogoSelect}>
           <PennyMark />
