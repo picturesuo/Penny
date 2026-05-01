@@ -2,9 +2,9 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { PennyDatabase } from "./db/client.ts";
 import { sources, sourceSpans } from "./db/schema.ts";
-import { scopeValues, type BrainScope, type BrainScopeInput, type OptionalBrainScope } from "./scope.ts";
+import { scopeValues, type BrainScope, type BrainScopeInput } from "./scope.ts";
 
-type SourceRow = OptionalBrainScope<typeof sources.$inferSelect>;
+type SourceRow = typeof sources.$inferSelect;
 type SourceSpanRow = typeof sourceSpans.$inferSelect;
 type SelectDb = Pick<PennyDatabase, "select">;
 type ScopeColumn = AnyPgColumn;
