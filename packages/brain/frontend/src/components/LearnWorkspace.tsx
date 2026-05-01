@@ -314,7 +314,6 @@ function LearningPathSidebar({
         <div className="learn-progress-bar" aria-hidden="true">
           <span style={{ width: `${progressPercent}%` }} />
         </div>
-        <button type="button">Skip to a step you know</button>
       </div>
     </aside>
   );
