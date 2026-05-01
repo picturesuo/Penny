@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { AutopilotSuggestion, BrainClaim } from "../types/brain";
 import { formatLabel } from "../lib/format";
 import { truncateWords } from "../lib/text";
@@ -126,7 +126,13 @@ export function NextMoveCard({
       </div>
 
       <div className="next-move-accept-row">
-        <button type="button" className="primary-command" disabled={disabled || isAccepting || !selectedCandidate} onClick={handleAccept}>
+        <button
+          type="button"
+          className="primary-command"
+          aria-label={`Go There: ${acceptLabel}`}
+          disabled={disabled || isAccepting || !selectedCandidate}
+          onClick={handleAccept}
+        >
           {isAccepting ? "Starting" : acceptLabel}
         </button>
         <span>{selectedCandidate ? `${formatLabel(selectedCandidate.action)} / ${Math.round(selectedCandidate.score * 100)} score` : "Awaiting Autopilot"}</span>
