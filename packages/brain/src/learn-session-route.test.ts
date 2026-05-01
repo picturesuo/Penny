@@ -308,21 +308,38 @@ function candidate(
     userAction === "check"
       ? "challenge"
       : userAction;
+  const rank = userAction === "check" ? 1 : 2;
+  const targetClaimId = uuidAt(201);
+  const targetEdgeId = mode === "challenge" ? uuidAt(301) : null;
 
   return {
     id: uuidAt(userAction.length + 700),
     candidateId: `candidate-${userAction}`,
     fingerprint: `fingerprint-${userAction}`,
-    rank: userAction === "check" ? 1 : 2,
-    targetClaimId: uuidAt(201),
-    targetEdgeId: mode === "challenge" ? uuidAt(301) : null,
+    rank,
+    title: label,
+    targetClaimId,
+    targetEdgeId,
+    target: {
+      type: "claim",
+      id: targetClaimId,
+      claimId: targetClaimId,
+      edgeId: targetEdgeId,
+    },
     action,
     userAction,
     mode,
     mvpMode: mode === "learn" ? "Learn" : "Check",
     label,
+    ctaLabel: label,
     primaryActionLabel: label,
     score: 900,
+    priority: {
+      rank,
+      score: 900,
+      normalized: 90,
+    },
+    confidence: 90,
     reason: `${label}.`,
     whyNow: `${label}.`,
     reasonCodes: [userAction],
@@ -346,7 +363,7 @@ function candidate(
       graphHash: "graph-hash",
       source: "thinking_graph_snapshot",
       ruleIds: [userAction],
-      claimIds: [uuidAt(201)],
+      claimIds: [targetClaimId],
       edgeIds: [],
       moveIds: [uuidAt(501)],
       artifactIds: [],
