@@ -517,9 +517,9 @@ function attachAutopilotGraphRefs(
 ): SessionCockpitAutopilotState {
   const claimsById = new Map(graph.ideaMap.claims.map((claim) => [claim.id, claim]));
   const candidates = autopilot.candidates.map((candidate) => enrichAutopilotCandidate(candidate, claimsById));
-  const selectedCandidate = autopilot.selectedCandidate
-    ? candidates.find((candidate) => sameCandidate(candidate, autopilot.selectedCandidate)) ??
-      enrichAutopilotCandidate(autopilot.selectedCandidate, claimsById)
+  const selected = autopilot.selectedCandidate;
+  const selectedCandidate = selected
+    ? candidates.find((candidate) => sameCandidate(candidate, selected)) ?? enrichAutopilotCandidate(selected, claimsById)
     : null;
 
   return {
