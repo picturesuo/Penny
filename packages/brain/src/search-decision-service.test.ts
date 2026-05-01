@@ -59,6 +59,44 @@ test("shouldUseWebSearch keeps local Learn context offline when Brain context is
   assert.deepEqual(decision.reasonCodes, []);
 });
 
+test("shouldUseWebSearch keeps purely personal Learn ideas offline", () => {
+  const decision = shouldUseWebSearch(
+    {
+      query: "writing routine",
+      text: "I want my morning writing flow to feel calmer and less scattered.",
+      userRequest: "Help me learn what this means inside my own idea.",
+    },
+    "learn",
+    {
+      brainContext: "The idea is a personal workflow preference with no external factual claim.",
+      brainContextSufficient: true,
+    },
+  );
+
+  assert.equal(decision.useWebSearch, false);
+  assert.equal(decision.depth, "fast");
+  assert.deepEqual(decision.reasonCodes, []);
+});
+
+test("shouldUseWebSearch enables Learn search when the user says search web", () => {
+  const decision = shouldUseWebSearch(
+    {
+      query: "pricing psychology",
+      text: "Explain pricing psychology for this idea.",
+      userRequest: "Search web before explaining this.",
+    },
+    "learn",
+    {
+      brainContext: "The Brain has only local product notes.",
+      brainContextSufficient: true,
+    },
+  );
+
+  assert.equal(decision.useWebSearch, true);
+  assert.ok(decision.reasonCodes.includes("user_explicitly_asks"));
+  assert.equal(decision.reason, "The user explicitly asked Penny to search or cite sources.");
+});
+
 test("shouldUseWebSearch does not treat Brain context history as a web-search trigger", () => {
   const decision = shouldUseWebSearch(
     {
