@@ -71,8 +71,103 @@ test("LearnRecipe structures recipe steps and keeps web search hidden behind Sea
   assert.equal(output.searchDecision.mode, "learn");
   assert.equal(output.searchDecision.useWebSearch, true);
   assert.match(output.recipe.steps[2]?.summary ?? "", /SearchDecisionService/);
-  assert.deepEqual(output.recipe.steps[4]?.outputs, ["learn", "check", "verify", "save_to_brain"]);
+  assert.deepEqual(output.recipe.steps[4]?.outputs, [
+    "Learn: Learn onboarding strategy",
+    "Check: Check the pricing assumption",
+    "Verify: Verify pricing",
+    "Save: Save to Brain",
+  ]);
+  assert.match(output.recipe.steps[4]?.summary ?? "", /Recommended Check next/);
 });
+
+test("LearnRecipe makes the YC demo idea read like a useful thinking recipe", async () => {
+  const output = await runLearnRecipe({
+    rawIdea: ycDemoIdea,
+    seedPayload: {
+      session: { id: uuidAt(300) },
+      source: {
+        id: uuidAt(301),
+        rawText: ycDemoIdea,
+      },
+      ideaMap: {
+        keyInsight:
+          "The load-bearing bet is not generation; it is making creative thinking inspectable, challengeable, and source-grounded without losing speed.",
+        claims: [
+          { id: uuidAt(401), kind: "belief", text: ycDemoIdea },
+          {
+            id: uuidAt(402),
+            kind: "assumption",
+            text: "Penny can evoke better creative starting points more consistently than an open-ended chat or blank document.",
+          },
+          {
+            id: uuidAt(403),
+            kind: "assumption",
+            text: "Penny can turn that creative spark into claims, assumptions, checks, and sources without slowing the user down.",
+          },
+          {
+            id: uuidAt(404),
+            kind: "question",
+            text: "What observable first-session signal proves Penny is more efficient?",
+          },
+          {
+            id: uuidAt(405),
+            kind: "concept",
+            text: "Source-grounded thinking keeps a visible path back to evidence, assumptions, or user-provided context.",
+          },
+        ],
+      },
+      learnCandidates: [
+        { term: "source-grounded thinking", claimId: uuidAt(405) },
+        { term: "structured creativity", claimId: uuidAt(402) },
+      ],
+      explorationPaths: [
+        { title: "Define efficiency", prompt: "What proves Penny is faster and better?" },
+        { title: "Name the mechanism", prompt: "Where does creativity actually come from?" },
+        { title: "Source threshold", prompt: "Which claims need Verify?" },
+      ],
+    },
+    nextMoves: [
+      {
+        action: "learn",
+        label: "Learn source-grounded thinking",
+        reason: "Clarify the promise before presenting it.",
+        targetClaimId: uuidAt(405),
+      },
+      {
+        action: "check",
+        label: "Check the creativity mechanism",
+        reason: "The idea depends on Penny being better than a strong chat prompt.",
+        targetClaimId: uuidAt(402),
+      },
+      {
+        action: "verify",
+        label: "Verify efficiency claim",
+        reason: "The comparative efficiency claim needs evidence before it becomes stable.",
+        targetClaimId: uuidAt(401),
+      },
+      {
+        action: "save_to_brain",
+        label: "Save demo idea",
+        reason: "Save after the weakest assumption has been checked.",
+        targetClaimId: uuidAt(401),
+      },
+    ],
+  });
+
+  assert.equal(LearnRecipeOutputSchema.safeParse(output).success, true);
+  assert.match(output.recipe.steps[0]?.summary ?? "", /load-bearing assumption/i);
+  assert.match(output.recipe.steps[3]?.summary ?? "", /inspectable, challengeable, and source-grounded/i);
+  assert.deepEqual(output.recipe.steps[4]?.outputs, [
+    "Learn: Learn source-grounded thinking",
+    "Check: Check the creativity mechanism",
+    "Verify: Verify efficiency claim",
+    "Save: Save demo idea",
+  ]);
+  assert.match(output.recipe.steps[4]?.summary ?? "", /Recommended Check next/);
+});
+
+const ycDemoIdea =
+  "Penny is the most consistently efficient way to evoke creativity and turn it into structured, source-grounded thinking.";
 
 function uuidAt(value: number): string {
   return `00000000-0000-4000-8000-${value.toString().padStart(12, "0")}`;
