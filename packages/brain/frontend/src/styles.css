@@ -186,14 +186,13 @@
   }
 
   .landing-submit-button {
-    min-width: 58px;
+    width: 36px;
+    min-width: 36px;
     height: 36px;
-    border-radius: 6px;
-    padding: 0 14px !important;
+    border-radius: 999px;
+    padding: 0 !important;
     color: #ffffff !important;
     background: #303030 !important;
-    font-size: 13px;
-    font-weight: 700;
   }
 
   .landing-submit-button:disabled {
@@ -4053,9 +4052,9 @@
   }
 
   .landing-submit-button {
-    min-width: 54px;
+    width: 34px;
+    min-width: 34px;
     height: 34px;
-    padding-inline: 12px !important;
   }
 
   .landing-shortcuts {
