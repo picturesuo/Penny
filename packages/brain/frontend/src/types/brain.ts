@@ -304,6 +304,134 @@ export interface LearnSessionOutput {
   autopilotNextMove: AutopilotSuggestion | null;
 }
 
+export type BrainVerifyVerdict = "supported" | "weakened" | "mixed" | "not_enough_evidence";
+export type BrainVerifyEvidenceStance = "supports" | "weakens" | "mixed" | "unclear";
+
+export interface BrainVerifyEvidenceCard {
+  title: string;
+  summary: string;
+  stance: BrainVerifyEvidenceStance;
+  sourceName?: string | null;
+  sourceUrl?: string | null;
+  citation?: string | null;
+}
+
+export interface BrainVerifyCitation {
+  title: string;
+  sourceName?: string | null;
+  sourceUrl?: string | null;
+  citation?: string | null;
+}
+
+export interface BrainVerifyUnsupportedPart {
+  part: string;
+  reason: string;
+  neededEvidence?: string | null;
+}
+
+export interface BrainVerifyRecipeStep {
+  step: string;
+  title: string;
+  status: "completed" | "limited" | "skipped";
+  summary: string;
+  inputs: string[];
+  outputs: string[];
+}
+
+export interface BrainVerifyCitationSource {
+  evidenceTitle: string;
+  source: {
+    id: string;
+    kind: "verification_citation";
+    rawText: string;
+  };
+  sourceSpan: {
+    id: string;
+    sourceId: string;
+    claimId: string | null;
+    claimVersionId: string | null;
+    label: string | null;
+  };
+}
+
+export interface BrainVerifyMove {
+  id: string;
+  kind: "verify_run" | "confidence_update_accepted" | "confidence_update_rejected" | string;
+  summary: string;
+  claimIds: string[];
+  edgeIds: string[];
+  artifactIds: string[];
+}
+
+export interface BrainVerifyTargetClaim {
+  id: string;
+  versionId: string;
+  kind: string;
+  status: ClaimStatus;
+  text: string;
+  confidence: number;
+}
+
+export interface BrainVerifyConfidenceUpdate {
+  suggestedDelta: number;
+  autoApplied?: false;
+  decision?: "pending_user_decision";
+}
+
+export interface BrainVerifyResult {
+  verdict: BrainVerifyVerdict;
+  summary: string;
+  evidenceCards: BrainVerifyEvidenceCard[];
+  citations: BrainVerifyCitation[];
+  unsupportedParts: BrainVerifyUnsupportedPart[];
+  confidenceDeltaSuggestion: number;
+  whatWouldChangeThis: string;
+  nextQuestion: string;
+  recipe: {
+    steps: BrainVerifyRecipeStep[];
+  };
+  targetClaim: BrainVerifyTargetClaim;
+  move: BrainVerifyMove;
+  brainRun: {
+    id: string;
+    status: string;
+  };
+  citationSources: BrainVerifyCitationSource[];
+  confidenceUpdate: BrainVerifyConfidenceUpdate;
+}
+
+export interface BrainVerifyResponse {
+  data: BrainVerifyResult;
+}
+
+export interface BrainVerifyConfidenceCascade {
+  claimId: string;
+  viaEdgeId: string;
+  depth: number;
+  previousVersionId: string;
+  currentVersionId: string;
+  previousConfidence: number;
+  currentConfidence: number;
+  appliedDelta: number;
+}
+
+export interface BrainVerifyConfidenceDecisionResponse {
+  data: {
+    decision: "accept" | "reject";
+    targetClaim: BrainVerifyTargetClaim;
+    move: BrainVerifyMove;
+    confidenceUpdate: {
+      verifyMoveId: string;
+      suggestedDelta: number;
+      accepted: boolean;
+      previousConfidence: number;
+      currentConfidence: number;
+      appliedDelta: number;
+      cascade: BrainVerifyConfidenceCascade[];
+    };
+  };
+}
+
 export interface BrainMove {
   id: string;
   type?: string;
