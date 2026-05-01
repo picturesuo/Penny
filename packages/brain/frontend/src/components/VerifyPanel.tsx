@@ -31,9 +31,7 @@ export function VerifyPanel({
   const [status, setStatus] = useState("Ready");
   const [isRunning, setIsRunning] = useState(false);
   const canVerify = Boolean(sessionId && claim) && !disabled && !isRunning;
-  const confidenceDelta = result?.confidenceDeltaSuggestion ?? 0;
   const hasPendingConfidence = Boolean(result?.move.id && result.confidenceUpdate.decision === "pending_user_decision");
-  const hasCitations = (result?.citationSources.length ?? 0) > 0 || (result?.citations.length ?? 0) > 0;
 
   useEffect(() => {
     setResult(null);
@@ -112,89 +110,119 @@ export function VerifyPanel({
       </div>
 
       {result ? (
-        <>
-          <div className={`verify-verdict is-${result.verdict}`}>
-            <span>{formatLabel(result.verdict)}</span>
-            <p>{result.summary}</p>
-          </div>
-
-          <div className="verify-confidence-row">
-            <span>
-              Confidence suggestion: <strong>{confidenceDelta > 0 ? `+${confidenceDelta}` : confidenceDelta}</strong>
-            </span>
-            <div>
-              <button
-                type="button"
-                className="text-command"
-                disabled={disabled || isRunning || !hasPendingConfidence || Boolean(decision)}
-                onClick={() => void handleConfidenceDecision("accept")}
-              >
-                Accept Confidence Change
-              </button>
-              <button
-                type="button"
-                className="text-command"
-                disabled={disabled || isRunning || !hasPendingConfidence || Boolean(decision)}
-                onClick={() => void handleConfidenceDecision("reject")}
-              >
-                Ignore
-              </button>
-              <button type="button" className="text-command" disabled title="Verify stores citation evidence when available.">
-                {hasCitations ? "Evidence Saved" : "Save Evidence"}
-              </button>
-            </div>
-          </div>
-
-          {decision ? (
-            <p className="verify-decision-note">
-              {decision.confidenceUpdate.accepted
-                ? `Confidence moved from ${decision.confidenceUpdate.previousConfidence}% to ${decision.confidenceUpdate.currentConfidence}%.`
-                : "Confidence suggestion ignored."}
-            </p>
-          ) : null}
-
-          <div className="verify-evidence-list" aria-label="Evidence cards">
-            {result.evidenceCards.map((card, index) => (
-              <EvidenceCard key={`${card.title}-${index}`} card={card} />
-            ))}
-          </div>
-
-          {result.citations.length > 0 ? (
-            <div className="verify-citations" aria-label="Citations">
-              <strong>Citations</strong>
-              {result.citations.map((citation, index) => (
-                <p key={`${citation.title}-${index}`}>
-                  {citation.sourceUrl ? (
-                    <a href={citation.sourceUrl} target="_blank" rel="noreferrer">
-                      {citation.title}
-                    </a>
-                  ) : (
-                    <span>{citation.title}</span>
-                  )}
-                  {citation.citation ? <small>{citation.citation}</small> : null}
-                </p>
-              ))}
-            </div>
-          ) : null}
-
-          {result.unsupportedParts.length > 0 ? (
-            <div className="verify-unsupported" aria-label="Unsupported parts">
-              <strong>Still unsupported</strong>
-              {result.unsupportedParts.slice(0, 3).map((part) => (
-                <p key={part.part}>
-                  <span>{part.part}</span>
-                  <small>{part.neededEvidence ?? part.reason}</small>
-                </p>
-              ))}
-            </div>
-          ) : null}
-        </>
+        <VerifyResultDetails
+          result={result}
+          decision={decision}
+          disabled={disabled}
+          isRunning={isRunning}
+          onConfidenceDecision={(nextDecision) => {
+            void handleConfidenceDecision(nextDecision);
+          }}
+        />
       ) : (
         <p className="verify-empty">
           Verify checks the selected claim against evidence and keeps confidence changes pending until you accept them.
         </p>
       )}
     </section>
+  );
+}
+
+export function VerifyResultDetails({
+  result,
+  decision,
+  disabled,
+  isRunning,
+  onConfidenceDecision,
+}: {
+  result: BrainVerifyResult;
+  decision: BrainVerifyConfidenceDecisionResponse["data"] | null;
+  disabled: boolean;
+  isRunning: boolean;
+  onConfidenceDecision: (decision: "accept" | "reject") => void;
+}) {
+  const confidenceDelta = result.confidenceDeltaSuggestion;
+  const hasPendingConfidence = Boolean(result.move.id && result.confidenceUpdate.decision === "pending_user_decision");
+  const hasCitations = result.citationSources.length > 0 || result.citations.length > 0;
+
+  return (
+    <>
+      <div className={`verify-verdict is-${result.verdict}`}>
+        <span>{formatLabel(result.verdict)}</span>
+        <p>{result.summary}</p>
+      </div>
+
+      <div className="verify-confidence-row">
+        <span>
+          Confidence suggestion: <strong>{confidenceDelta > 0 ? `+${confidenceDelta}` : confidenceDelta}</strong>
+        </span>
+        <div>
+          <button
+            type="button"
+            className="text-command"
+            disabled={disabled || isRunning || !hasPendingConfidence || Boolean(decision)}
+            onClick={() => onConfidenceDecision("accept")}
+          >
+            Accept Confidence Change
+          </button>
+          <button
+            type="button"
+            className="text-command"
+            disabled={disabled || isRunning || !hasPendingConfidence || Boolean(decision)}
+            onClick={() => onConfidenceDecision("reject")}
+          >
+            Ignore
+          </button>
+          <button type="button" className="text-command" disabled title="Verify stores citation evidence when available.">
+            {hasCitations ? "Evidence Saved" : "Save Evidence"}
+          </button>
+        </div>
+      </div>
+
+      {decision ? (
+        <p className="verify-decision-note">
+          {decision.confidenceUpdate.accepted
+            ? `Confidence moved from ${decision.confidenceUpdate.previousConfidence}% to ${decision.confidenceUpdate.currentConfidence}%.`
+            : "Confidence suggestion ignored."}
+        </p>
+      ) : null}
+
+      <div className="verify-evidence-list" aria-label="Evidence cards">
+        {result.evidenceCards.map((card, index) => (
+          <EvidenceCard key={`${card.title}-${index}`} card={card} />
+        ))}
+      </div>
+
+      {result.citations.length > 0 ? (
+        <div className="verify-citations" aria-label="Citations">
+          <strong>Citations</strong>
+          {result.citations.map((citation, index) => (
+            <p key={`${citation.title}-${index}`}>
+              {citation.sourceUrl ? (
+                <a href={citation.sourceUrl} target="_blank" rel="noreferrer">
+                  {citation.title}
+                </a>
+              ) : (
+                <span>{citation.title}</span>
+              )}
+              {citation.citation ? <small>{citation.citation}</small> : null}
+            </p>
+          ))}
+        </div>
+      ) : null}
+
+      {result.unsupportedParts.length > 0 ? (
+        <div className="verify-unsupported" aria-label="Unsupported parts">
+          <strong>Still unsupported</strong>
+          {result.unsupportedParts.slice(0, 3).map((part) => (
+            <p key={part.part}>
+              <span>{part.part}</span>
+              <small>{part.neededEvidence ?? part.reason}</small>
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </>
   );
 }
 
