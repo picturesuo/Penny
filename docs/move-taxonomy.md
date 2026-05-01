@@ -16,8 +16,8 @@ The current Thinking Mode service records candidate ranking through `next_move_r
 | `source_recorded` | user/backend | Raw user input was recorded as a source. | Creates source provenance only. |
 | `seed_claim_created` | backend | The seed idea produced the stable root claim or primary claim set. | Creates claim identity and initial claim versions. |
 | `assumptions_extracted` | backend/AI | Penny extracted assumptions from the seed and connected them to the graph. | Creates assumption claims, claim versions, and dependency edges after validation. |
-| `autopilot_focus_started` | user | The user clicked "Go there" on an Autopilot suggestion. | Updates focus/navigation state only. |
-| `manual_node_selected` | user | The user selected another graph node instead of following Autopilot. | Updates focus/navigation state only and pauses Autopilot. |
+| `autopilot_focus_started` | user | The user accepted a ranked Autopilot candidate and started its next thinking action. | Updates FocusState and candidate-selection audit only; does not mutate claim, edge, confidence, or artifact truth. |
+| `manual_node_selected` | user | The user selected another graph node instead of following Autopilot. | Updates FocusState only and pauses Autopilot; does not mutate claim, edge, confidence, or artifact truth. |
 | `challenge_issued` | backend/AI | Penny issued a challenge against a target claim. | Creates critique claim and challenge/contradiction edge after validation. |
 | `user_defended` | user | The user defended the target claim against the critique. | None. Records reasoning and override signal. |
 | `claim_revised` | user | The user revised the claim in response to critique. | Creates a new current ClaimVersion and closes the previous version. |
@@ -55,13 +55,19 @@ The current Thinking Mode service records candidate ranking through `next_move_r
 
 ### `autopilot_focus_started`
 
-- `suggestionMoveId`
 - `candidateId`
+- `candidateFingerprint`
 - `sessionId`
+- `action`
 - `mode`
-- `focusedClaimId`
-- `focusedEdgeId`
-- `startedByUserId`
+- `targetClaimId`
+- nullable `targetEdgeId`
+- `graphHash`
+- `reason`
+- `score`
+- `claimIds`
+- `edgeIds`
+- `artifactIds`
 
 ### `manual_node_selected`
 
