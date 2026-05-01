@@ -16,6 +16,7 @@ import {
   handleSaveBrainObjectRequest,
   handleSessionNotesRequest,
 } from "./brain-objects-route.ts";
+import { handleBrainSearchRequest } from "./brain-search-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
 import { handleChallengeBriefRequest } from "./routes/challenge-brief-routes.ts";
@@ -119,6 +120,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/brain/recents") {
       await writeWebResponse(outgoing, await handleBrainRecentsRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/search") {
+      await writeWebResponse(outgoing, await handleBrainSearchRequest(request));
       return;
     }
 

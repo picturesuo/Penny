@@ -176,6 +176,13 @@
       "when": 1777599567623,
       "tag": "0024_lazy_thunderball",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1777600091132,
+      "tag": "0025_add_brain_embeddings",
+      "breakpoints": true
     }
   ]
 }
