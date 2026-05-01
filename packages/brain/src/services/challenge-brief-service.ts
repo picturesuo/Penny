@@ -16,6 +16,7 @@ import {
 } from "../db/schema.ts";
 import { createMove } from "../move-payloads.ts";
 import { scopeValues } from "../scope.ts";
+import { loadScopedSourcesForSession, loadSourceSpansForSourceIds } from "../source-loading.ts";
 import type { EntityId } from "../domain/types.ts";
 
 type ChallengeBriefTransaction = Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
@@ -503,15 +504,11 @@ async function loadChallengeBriefState(
     throw new ChallengeBriefNotFoundError("Session was not found.");
   }
 
-  const sourceRows = await tx.select().from(sources).where(eq(sources.sessionId, sessionId)).orderBy(asc(sources.createdAt));
-  const sourceSpanRows =
-    sourceRows.length > 0
-      ? await tx
-          .select()
-          .from(sourceSpans)
-          .where(inArray(sourceSpans.sourceId, sourceRows.map((source) => source.id)))
-          .orderBy(asc(sourceSpans.createdAt))
-      : [];
+  const sourceRows = await loadScopedSourcesForSession(tx, session);
+  const sourceSpanRows = await loadSourceSpansForSourceIds(
+    tx,
+    sourceRows.map((source) => source.id),
+  );
   const claimRows = await tx.select().from(claims).where(eq(claims.sessionId, sessionId)).orderBy(asc(claims.createdAt));
 
   if (claimRows.length === 0) {
