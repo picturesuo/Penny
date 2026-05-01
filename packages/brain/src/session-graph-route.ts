@@ -14,6 +14,7 @@ import {
 } from "./db/schema.ts";
 import { scopeValues, type OptionalBrainScope } from "./scope.ts";
 import { compiledShapesFromRows } from "./shapes.ts";
+import { loadScopedSourcesForSession, loadSourceSpansForSourceIds } from "./source-loading.ts";
 
 const SessionGraphPathSchema = z.string().uuid();
 
@@ -140,16 +141,9 @@ export async function loadSessionGraph(db: PennyDatabase, sessionId: string): Pr
     .where(eq(claimEdges.sessionId, session.id))
     .orderBy(asc(claimEdges.createdAt));
   const moveRows = await db.select().from(moves).where(eq(moves.sessionId, session.id)).orderBy(asc(moves.createdAt));
-  const sourceRows = await db.select().from(sources).where(eq(sources.sessionId, session.id)).orderBy(asc(sources.createdAt));
+  const sourceRows = await loadScopedSourcesForSession(db, session);
   const sourceIds = sourceRows.map((source) => source.id);
-  const spanRows =
-    sourceIds.length > 0
-      ? await db
-          .select()
-          .from(sourceSpans)
-          .where(inArray(sourceSpans.sourceId, sourceIds))
-          .orderBy(asc(sourceSpans.createdAt))
-      : [];
+  const spanRows = await loadSourceSpansForSourceIds(db, sourceIds);
   const shapeRows = await db.select().from(shapes).where(eq(shapes.sessionId, session.id)).orderBy(desc(shapes.createdAt));
   const pendingEffectRows = await db
     .select()
