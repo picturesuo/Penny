@@ -201,15 +201,15 @@ test("P2 smoke: idea drop, canvas fetch, recipe trace, and Brain context stay co
             status: "exploratory",
             confidence: persistedSeed?.claimVersions[0]?.confidence ?? null,
             refs: {
-              claimId: persistedSeed?.claims[0]?.id,
-              sourceId: persistedSeed?.source.id,
+              claimId: persistedSeed?.claims[0]?.id ?? null,
+              sourceId: persistedSeed?.source.id ?? null,
             },
           },
           {
             id: `brain_object:${uuidAt(950)}`,
             kind: "learn_session",
             title: saveCandidate.title,
-            summary: saveCandidate.summary,
+            summary: saveCandidate.summary ?? null,
             status: "saved",
             refs: {},
             actions: ["learn", "check", "verify", "save", "related"],
