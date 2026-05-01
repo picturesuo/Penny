@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { brainRuns, claimEdges, claims, claimVersions, moves, sessions, sources, sourceSpans } from "./db/schema.ts";
 import { scopeValues, type OptionalBrainScope } from "./scope.ts";
+import { filterSourceSpansToSources, loadScopedSourcesByIds } from "./source-loading.ts";
 
 const SessionMovesPathSchema = z.string().uuid();
 
@@ -201,10 +202,8 @@ export async function loadSessionMoves(db: PennyDatabase, sessionId: string): Pr
     sourceIds.add(span.sourceId);
   }
 
-  const sourceRows =
-    sourceIds.size > 0
-      ? await db.select().from(sources).where(inArray(sources.id, [...sourceIds])).orderBy(asc(sources.createdAt))
-      : [];
+  const sourceRows = await loadScopedSourcesByIds(db, [...sourceIds], session);
+  const scopedSourceSpanRows = filterSourceSpansToSources(sourceSpanRows, sourceRows);
 
   return buildSessionMovesTimeline({
     session,
@@ -214,7 +213,7 @@ export async function loadSessionMoves(db: PennyDatabase, sessionId: string): Pr
     edges: edgeRows,
     brainRuns: brainRunRows,
     sources: sourceRows,
-    sourceSpans: sourceSpanRows,
+    sourceSpans: scopedSourceSpanRows,
   });
 }
 
