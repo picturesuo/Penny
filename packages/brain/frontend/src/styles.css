@@ -3517,7 +3517,7 @@
   }
 
   .learn-session-output.ask-open {
-    grid-template-columns: minmax(150px, 20%) minmax(0, 1fr) minmax(330px, 30%);
+    grid-template-columns: minmax(150px, 20%) minmax(0, 1fr) minmax(300px, 28%);
   }
 
   .learn-path-sidebar {
@@ -3700,12 +3700,16 @@
   }
 
   .learn-session-output.ask-open .learn-goal-block h1 {
-    font-size: clamp(26px, 2.7vw, 42px);
+    font-size: clamp(25px, 2.45vw, 36px);
   }
 
   .learn-step-header {
     max-width: 760px;
     padding: 16px 0 14px;
+  }
+
+  .learn-session-output.ask-open .learn-step-header {
+    padding: 12px 0 10px;
   }
 
   .learn-step-header h2 {
@@ -3737,6 +3741,11 @@
   .learn-session-output.ask-open .learn-core-section,
   .learn-session-output.ask-open .learn-example-panel {
     grid-template-columns: 1fr;
+  }
+
+  .learn-session-output.ask-open .learn-core-section {
+    gap: 10px;
+    padding: 10px 0;
   }
 
   .learn-core-copy {
@@ -3787,6 +3796,10 @@
     text-align: center;
   }
 
+  .learn-session-output.ask-open .learn-visual-placeholder {
+    min-height: 112px;
+  }
+
   .learn-visual-placeholder span {
     max-width: 280px;
     color: rgb(17 17 17 / 0.64);
@@ -3805,6 +3818,12 @@
     border: 2px solid #111111;
     padding: 16px;
     background: #ffffff;
+  }
+
+  .learn-session-output.ask-open .learn-example-panel {
+    gap: 10px;
+    margin-top: 10px;
+    padding: 12px;
   }
 
   .learn-example-panel h3 {
@@ -3985,9 +4004,9 @@
 
   .ask-penny-panel.is-open {
     display: grid;
-    grid-template-rows: auto auto minmax(120px, 0.8fr) minmax(0, 1fr) auto;
-    gap: 12px;
-    padding: 26px 28px;
+    grid-template-rows: auto auto minmax(78px, 0.45fr) minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 18px 20px;
     transform: translateX(0);
     opacity: 1;
     pointer-events: auto;
@@ -3999,7 +4018,7 @@
     justify-content: space-between;
     gap: 12px;
     border-bottom: 1px solid #111111;
-    padding-bottom: 24px;
+    padding-bottom: 16px;
   }
 
   .ask-penny-panel header span {
@@ -4009,36 +4028,36 @@
   }
 
   .ask-penny-panel header p {
-    margin: 13px 0 0;
+    margin: 8px 0 0;
     color: rgb(17 17 17 / 0.58);
-    font-size: 18px;
+    font-size: 16px;
     line-height: 1.1;
   }
 
   .ask-penny-panel header button {
     display: grid;
     place-items: center;
-    width: 56px;
-    height: 56px;
+    width: 44px;
+    height: 44px;
     border: 2px solid #111111;
     border-radius: 999px;
     background: transparent;
     color: #111111;
-    font-size: 36px;
+    font-size: 28px;
     line-height: 1;
   }
 
   .ask-penny-intro {
     display: grid;
     align-content: center;
-    gap: 8px;
+    gap: 5px;
     border: 2px solid #111111;
-    padding: 28px;
+    padding: 16px 18px;
     background: rgb(255 255 255 / 0.42);
   }
 
   .ask-penny-intro strong {
-    font-size: 34px;
+    font-size: 26px;
     line-height: 1;
   }
 
@@ -4046,18 +4065,18 @@
   .ask-penny-intro small {
     margin: 0;
     color: rgb(17 17 17 / 0.67);
-    font-size: 22px;
-    line-height: 1.18;
+    font-size: 17px;
+    line-height: 1.15;
   }
 
   .ask-penny-thread {
     display: grid;
     align-content: start;
-    gap: 10px;
+    gap: 8px;
     min-height: 0;
     overflow: auto;
     border: 1px solid rgb(17 17 17 / 0.28);
-    padding: 12px;
+    padding: 10px;
     background: rgb(255 255 255 / 0.35);
   }
 
@@ -4107,7 +4126,7 @@
   .ask-penny-suggestions {
     display: grid;
     align-content: start;
-    gap: 8px;
+    gap: 7px;
     overflow: auto;
   }
 
@@ -4115,11 +4134,11 @@
     width: 100%;
     border: 1px solid rgb(17 17 17 / 0.38);
     border-radius: 0;
-    padding: 18px 22px;
+    padding: 12px 14px;
     background: transparent;
     color: #111111;
     text-align: left;
-    font-size: 22px;
+    font-size: 17px;
     font-weight: 700;
     line-height: 1.1;
   }
