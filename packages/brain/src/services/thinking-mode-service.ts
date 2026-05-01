@@ -16,20 +16,38 @@ export type MvpModeContractDto = {
   activeMode: MvpMode;
 };
 
+export type ThinkingModeCandidateTargetDto = {
+  type: "claim";
+  id: EntityId;
+  claimId: EntityId;
+  edgeId: EntityId | null;
+};
+
+export type ThinkingModeCandidatePriorityDto = {
+  rank: number;
+  score: number;
+  normalized: number;
+};
+
 export type ThinkingModeCandidateDto = {
   id: EntityId;
   candidateId: string;
   fingerprint: string;
   rank: number;
+  title: string;
   targetClaimId: EntityId;
   targetEdgeId: EntityId | null;
+  target: ThinkingModeCandidateTargetDto;
   action: NextMoveCandidate["action"];
   userAction: ThinkingModeCandidateUserAction;
   mode: NextMoveCandidate["mode"];
   mvpMode: MvpMode;
   label: string;
+  ctaLabel: string;
   primaryActionLabel: string;
   score: number;
+  priority: ThinkingModeCandidatePriorityDto;
+  confidence: number;
   reason: string;
   whyNow: string;
   reasonCodes: ReadonlyArray<string>;
@@ -365,20 +383,34 @@ function nextMoveRecomputedPayload(
 }
 
 function candidateDto(candidate: PersistedNextMoveCandidate): ThinkingModeCandidateDto {
+  const label = candidateLabel(candidate.action);
+  const ctaLabel = primaryActionLabel(candidate.action);
+  const priority = candidatePriority(candidate);
+
   return {
     id: candidate.id,
     candidateId: candidate.candidateId,
     fingerprint: candidate.fingerprint,
     rank: candidate.rank,
+    title: label,
     targetClaimId: candidate.targetClaimId,
     targetEdgeId: candidate.targetEdgeId,
+    target: {
+      type: "claim",
+      id: candidate.targetClaimId,
+      claimId: candidate.targetClaimId,
+      edgeId: candidate.targetEdgeId,
+    },
     action: candidate.action,
     userAction: userActionFor(candidate.action),
     mode: candidate.mode,
     mvpMode: mvpModeForThinkingMode(candidate.mode),
-    label: candidateLabel(candidate.action),
-    primaryActionLabel: primaryActionLabel(candidate.action),
+    label,
+    ctaLabel,
+    primaryActionLabel: ctaLabel,
     score: candidate.score,
+    priority,
+    confidence: priority.normalized,
     reason: candidate.reason,
     whyNow: candidate.reason,
     reasonCodes: candidate.reasonCodes,
@@ -390,6 +422,18 @@ function candidateDto(candidate: PersistedNextMoveCandidate): ThinkingModeCandid
     selected: candidate.selected,
     selectedAt: candidate.selectedAt?.toISOString() ?? null,
   };
+}
+
+function candidatePriority(candidate: PersistedNextMoveCandidate): ThinkingModeCandidatePriorityDto {
+  return {
+    rank: candidate.rank,
+    score: candidate.score,
+    normalized: normalizeCandidateScore(candidate.score),
+  };
+}
+
+function normalizeCandidateScore(score: number): number {
+  return Math.max(0, Math.min(100, Math.round(score / 10)));
 }
 
 function candidateBrainObjectsFor(candidate: PersistedNextMoveCandidate): CandidateBrainObject[] {
