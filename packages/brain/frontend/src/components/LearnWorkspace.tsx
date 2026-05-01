@@ -74,7 +74,7 @@ export function LearnWorkspace({
   }
 
   return (
-    <main className="learn-workspace" aria-label="Learn">
+    <main className={`learn-workspace${output ? "" : " is-entry-mode"}`} aria-label="Learn">
       <section className="learn-main">
         {output ? (
           <LearnSessionView
@@ -97,11 +97,7 @@ export function LearnWorkspace({
           />
         ) : (
           <section className="learn-entry" aria-label="Drop an idea">
-            <span className="section-label">LEARN</span>
-            <h1>Start with the raw idea</h1>
-            <p className="learn-entry-lede">
-              Save it to Brain when you want Penny to structure it now, or keep it in Recents when it is not ready.
-            </p>
+            <h1>What shall we think through?</h1>
             <LearnIdeaDrop
               disabled={isThinking}
               status={status}
@@ -115,10 +111,12 @@ export function LearnWorkspace({
         )}
       </section>
 
-      <aside className="learn-sidebar" aria-label="Learn sidebar">
-        <LearnRecents recents={recents} disabled={isThinking} onSeed={onSeed} onKeep={onKeepRecent} />
-        <LearnRecentDocuments documents={recentDocuments} onSelectDocument={onSelectDocument} onOpenBrain={onOpenBrain} />
-      </aside>
+      {output ? (
+        <aside className="learn-sidebar" aria-label="Learn sidebar">
+          <LearnRecents recents={recents} disabled={isThinking} onSeed={onSeed} onKeep={onKeepRecent} />
+          <LearnRecentDocuments documents={recentDocuments} onSelectDocument={onSelectDocument} onOpenBrain={onOpenBrain} />
+        </aside>
+      ) : null}
     </main>
   );
 }
@@ -358,7 +356,7 @@ function LearnIdeaDrop({
 
   return (
     <section className="idea-drop" aria-label="Drop an idea entry">
-      <label htmlFor="learnIdeaDrop">Idea</label>
+      <label className="sr-only" htmlFor="learnIdeaDrop">Idea</label>
       <textarea
         id="learnIdeaDrop"
         value={draft}
@@ -367,7 +365,10 @@ function LearnIdeaDrop({
         aria-describedby="learnIdeaDropStatus"
         onChange={(event) => setDraft(event.target.value)}
       />
-      <div className="learn-search-row">
+      <div className="idea-drop-footer">
+        <button type="button" className="idea-drop-tool" disabled={disabled || !draft} onClick={() => setDraft("")}>
+          Clear
+        </button>
         <label className="learn-search-toggle">
           <input
             type="checkbox"
@@ -375,27 +376,19 @@ function LearnIdeaDrop({
             disabled={disabled}
             onChange={(event) => onSearchWebChange(event.target.checked)}
           />
-          <span>Use web sources</span>
+          <span>Web sources</span>
         </label>
-        <LearnSourceIndicator behavior={learnSourceBehavior(trimmedDraft, searchWeb)} />
+        <div className="idea-drop-actions">
+          <button type="button" className="text-command" disabled={disabled || !trimmedDraft} onClick={handleKeep}>
+            Keep in Recents
+          </button>
+          <button type="button" className="primary-command" disabled={disabled || !trimmedDraft} onClick={handleSave}>
+            Save to Brain
+          </button>
+        </div>
       </div>
-      <div className="idea-drop-next-move" aria-label="Next move">
-        <span>Next move</span>
-        <strong>Save to Brain</strong>
-        <p>Creates the first graph slice, then Autopilot recommends the next Learn, Check, Verify, or Save action.</p>
-        <small>Use Keep in Recents for loose thoughts you want nearby but not structured yet.</small>
-      </div>
-      <div className="idea-drop-actions">
-        <button type="button" className="primary-command" disabled={disabled || !trimmedDraft} onClick={handleSave}>
-          Save to Brain
-        </button>
-        <button type="button" className="text-command" disabled={disabled || !trimmedDraft} onClick={handleKeep}>
-          Keep in Recents
-        </button>
-        <button type="button" className="text-command" disabled={disabled || !draft} onClick={() => setDraft("")}>
-          Discard
-        </button>
-      </div>
+      <LearnSourceIndicator behavior={learnSourceBehavior(trimmedDraft, searchWeb)} />
+      <LearnLoadout />
       <p id="learnIdeaDropStatus" className="sr-only">
         {status}
       </p>
@@ -412,6 +405,33 @@ function LearnIdeaDrop({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function LearnLoadout() {
+  return (
+    <div className="learn-loadout" aria-label="Penny loadout">
+      <span>
+        <kbd>⌘</kbd>
+        <kbd>B</kbd>
+        <strong>Brain</strong>
+      </span>
+      <span>
+        <kbd>⌘</kbd>
+        <kbd>C</kbd>
+        <strong>Check</strong>
+      </span>
+      <span>
+        <kbd>⌘</kbd>
+        <kbd>L</kbd>
+        <strong>Learn</strong>
+      </span>
+      <span>
+        <kbd>⌘</kbd>
+        <kbd>Q</kbd>
+        <strong>Quick note</strong>
+      </span>
+    </div>
   );
 }
 
