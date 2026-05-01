@@ -24,6 +24,7 @@ import { createPennySql } from "./db/client.ts";
 import * as schema from "./db/schema.ts";
 import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleLearnSessionRequest } from "./learn-session-route.ts";
+import { handleSessionCanvasRequest } from "./session-canvas-route.ts";
 import { handleSessionGraphRequest } from "./session-graph-route.ts";
 import { handleSessionMovesRequest } from "./session-moves-route.ts";
 import {
@@ -259,6 +260,20 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/brain/artifact") {
       await writeWebResponse(outgoing, await handleArtifactRequest(request));
+      return;
+    }
+
+    const sessionCanvasMatch = /^\/api\/sessions\/([^/]+)\/canvas$/.exec(url.pathname);
+
+    if (sessionCanvasMatch) {
+      const sessionId = sessionCanvasMatch[1];
+
+      if (!sessionId) {
+        await writeWebResponse(outgoing, invalidPathResponse("invalid_session_id", "Session canvas requires a session id."));
+        return;
+      }
+
+      await writeWebResponse(outgoing, await handleSessionCanvasRequest(request, decodeURIComponent(sessionId)));
       return;
     }
 

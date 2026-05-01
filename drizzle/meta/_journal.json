@@ -169,6 +169,13 @@
       "when": 1777592285143,
       "tag": "0023_same_frog_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1777599567623,
+      "tag": "0024_lazy_thunderball",
+      "breakpoints": true
     }
   ]
 }

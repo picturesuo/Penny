@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PennyDatabase } from "./db/client.ts";
-import { brainRecents, claimVersions, focusStates, moves, nextMoveCandidates } from "./db/schema.ts";
-import { createBrainRepository, recordLearnSessionOutput } from "./domain/repository.ts";
+import { brainRecents, claimVersions, focusStates, moves, nextMoveCandidates, recipeRuns, recipeSteps } from "./db/schema.ts";
+import { createBrainRepository, persistRecipeRun, recordLearnSessionOutput } from "./domain/repository.ts";
 import type { NextMoveCandidate } from "./domain/engine.ts";
 import type { FocusState } from "./domain/types.ts";
+import type { BrainScope } from "./scope.ts";
 
 test("loadGraphSnapshot returns the Thinking Mode contract shape", async () => {
   const { db, calls } = fakeRepositoryDb({
@@ -225,6 +226,77 @@ test("recordLearnSessionOutput stores a save-ready Learn recent in the session s
   assert.equal(output.saveCandidate.sessionId, uuidAt(101));
   assert.equal(output.saveCandidate.objectType, "learn_output");
   assert.equal(output.saveCandidate.content, "Cognitive load matters because the claim depends on reducing user effort.");
+});
+
+test("persistRecipeRun stores scoped recipe runs and ordered recipe steps", async () => {
+  const { db, calls } = fakeRepositoryDb({
+    selectRows: [[sessionRow()], [claimRow()], [brainRunRow()]],
+    insertRows: [
+      recipeRunRow({
+        status: "running",
+        title: "Verify source-grounded claim",
+        goal: "Evaluate the claim against local and external evidence.",
+      }),
+      recipeStepRow({ stepKey: "retrieve_local_context", position: 1, status: "completed" }),
+      recipeStepRow({ stepKey: "evaluate_evidence", position: 2, status: "pending" }),
+    ],
+  });
+  const run = await persistRecipeRun(db, {
+    id: uuidAt(710),
+    scope: scopeInput(),
+    sessionId: uuidAt(101),
+    targetClaimId: uuidAt(201),
+    brainRunId: uuidAt(610),
+    kind: "verify",
+    title: "Verify source-grounded claim",
+    goal: "Evaluate the claim against local and external evidence.",
+    status: "running",
+    input: { claimId: uuidAt(201) },
+    steps: [
+      {
+        id: uuidAt(711),
+        key: "retrieve_local_context",
+        title: "Retrieve local context",
+        status: "completed",
+        inputs: { required: ["claimId"] },
+        outputs: { resultCount: 3 },
+      },
+      {
+        id: "recipe-run-step-2",
+        key: "evaluate_evidence",
+        title: "Evaluate evidence",
+        inputs: { required: ["claimText", "sources"] },
+      },
+    ],
+  });
+  const runInsert = calls.insert[0];
+  const firstStepInsert = calls.insert[1];
+  const secondStepInsert = calls.insert[2];
+
+  assert.equal(run.kind, "verify");
+  assert.equal(run.status, "running");
+  assert.equal(run.steps.length, 2);
+  assert.equal(run.steps[0]?.key, "retrieve_local_context");
+  assert.equal(run.steps[0]?.status, "completed");
+  assert.deepEqual(run.input, { claimId: uuidAt(201) });
+  assert.equal(calls.select, 3);
+  assert.equal(runInsert?.table, recipeRuns);
+  assert.equal(runInsert?.values.userId, "test-user");
+  assert.equal(runInsert?.values.workspaceId, "test-workspace");
+  assert.equal(runInsert?.values.sessionId, uuidAt(101));
+  assert.equal(runInsert?.values.targetClaimId, uuidAt(201));
+  assert.equal(runInsert?.values.brainRunId, uuidAt(610));
+  assert.deepEqual(targetNames(runInsert?.onConflict?.target), [recipeRuns.id.name]);
+  assert.equal(firstStepInsert?.table, recipeSteps);
+  assert.equal(firstStepInsert?.values.recipeRunId, uuidAt(710));
+  assert.equal(firstStepInsert?.values.status, "completed");
+  assert.ok(firstStepInsert?.values.completedAt instanceof Date);
+  assert.equal(secondStepInsert?.values.stepKey, "evaluate_evidence");
+  assert.match(String(secondStepInsert?.values.id), /^[0-9a-f-]{36}$/);
+  assert.deepEqual(targetNames(secondStepInsert?.onConflict?.target), [
+    recipeSteps.recipeRunId.name,
+    recipeSteps.stepKey.name,
+  ]);
 });
 
 test("starting focus does not mutate claim text or confidence", async () => {
@@ -628,6 +700,87 @@ function brainRecentRow(overrides: Partial<Record<string, unknown>> = {}) {
     createdAt: new Date("2026-04-29T00:00:05.000Z"),
     updatedAt: new Date("2026-04-29T00:00:05.000Z"),
     ...overrides,
+  };
+}
+
+function brainRunRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(610),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    sourceId: null,
+    operation: "verify_run",
+    provider: "test",
+    model: "test-model",
+    status: "running",
+    input: {},
+    output: null,
+    error: null,
+    createdAt: new Date("2026-04-29T00:00:06.000Z"),
+    completedAt: null,
+    ...overrides,
+  };
+}
+
+function recipeRunRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(710),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    sessionId: uuidAt(101),
+    targetClaimId: uuidAt(201),
+    brainRunId: uuidAt(610),
+    kind: "verify",
+    version: 1,
+    title: "Verify source-grounded claim",
+    goal: "Evaluate the claim against local and external evidence.",
+    status: "pending",
+    input: { claimId: uuidAt(201) },
+    output: null,
+    error: null,
+    startedAt: new Date("2026-04-29T00:00:07.000Z"),
+    completedAt: null,
+    createdAt: new Date("2026-04-29T00:00:07.000Z"),
+    updatedAt: new Date("2026-04-29T00:00:07.000Z"),
+    ...overrides,
+  };
+}
+
+function recipeStepRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: uuidAt(711),
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
+    recipeRunId: uuidAt(710),
+    sessionId: uuidAt(101),
+    stepKey: "retrieve_local_context",
+    title: "Retrieve local context",
+    position: 1,
+    status: "pending",
+    inputs: { required: ["claimId"] },
+    outputs: null,
+    error: null,
+    startedAt: null,
+    completedAt: null,
+    createdAt: new Date("2026-04-29T00:00:08.000Z"),
+    updatedAt: new Date("2026-04-29T00:00:08.000Z"),
+    ...overrides,
+  };
+}
+
+function scopeInput(): BrainScope {
+  return {
+    userId: "test-user",
+    workspaceId: "test-workspace",
+    projectId: null,
+    sphereId: null,
   };
 }
 

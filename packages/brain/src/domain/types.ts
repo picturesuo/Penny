@@ -65,6 +65,39 @@ export type NextMoveAction =
 
 export type ChallengeResponseKind = "defend" | "revise" | "absorb";
 export type ArtifactKind = "idea_map" | "challenge_brief" | "idea_map_challenge_brief";
+export type RecipeKind = "learn" | "verify" | "check";
+export type RecipeStepStatus = "pending" | "running" | "completed" | "limited" | "failed" | "skipped";
+
+export type RecipeStepRun = {
+  id: EntityId;
+  recipeRunId: EntityId;
+  key: string;
+  title: string;
+  status: RecipeStepStatus;
+  position: number;
+  startedAt?: IsoTimestamp;
+  completedAt?: IsoTimestamp;
+  inputs?: Record<string, unknown>;
+  outputs?: Record<string, unknown>;
+  error?: string;
+};
+
+export type RecipeRun = {
+  id: EntityId;
+  kind: RecipeKind;
+  version: number;
+  sessionId: EntityId;
+  targetClaimId?: EntityId;
+  status: RecipeStepStatus;
+  title: string;
+  goal: string;
+  startedAt: IsoTimestamp;
+  completedAt?: IsoTimestamp;
+  steps: RecipeStepRun[];
+  input: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  error?: string;
+};
 
 export type ClaimVersionSnapshot = {
   id: EntityId;

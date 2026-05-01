@@ -34,6 +34,10 @@ import {
   claimVersions,
   moves,
   pennySchema,
+  recipeKindEnum,
+  recipeRuns,
+  recipeStepStatusEnum,
+  recipeSteps,
   sessionNotes,
   sessions,
   shapeStatusEnum,
@@ -61,6 +65,8 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(challengeRounds), "challenge_rounds");
   assert.equal(getTableName(shapes), "shapes");
   assert.equal(getTableName(brainRuns), "brain_runs");
+  assert.equal(getTableName(recipeRuns), "recipe_runs");
+  assert.equal(getTableName(recipeSteps), "recipe_steps");
   assert.equal(getTableName(artifacts), "artifacts");
   assert.equal(getTableName(wikiPages), "wiki_pages");
   assert.equal(getTableName(commandIdempotencyKeys), "command_idempotency_keys");
@@ -88,6 +94,8 @@ test("Penny core tables persist user and workspace scope", () => {
     challengeRounds,
     shapes,
     brainRuns,
+    recipeRuns,
+    recipeSteps,
     artifacts,
     wikiPages,
     commandIdempotencyKeys,
@@ -158,6 +166,15 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
     "verify_run",
   ]);
   assert.deepEqual(brainRunStatusEnum.enumValues, ["running", "succeeded", "failed"]);
+  assert.deepEqual(recipeKindEnum.enumValues, ["learn", "verify", "check"]);
+  assert.deepEqual(recipeStepStatusEnum.enumValues, [
+    "pending",
+    "running",
+    "completed",
+    "limited",
+    "failed",
+    "skipped",
+  ]);
   assert.deepEqual(commandIdempotencyStatusEnum.enumValues, ["running", "succeeded", "failed"]);
   assert.ok(moveKindEnum.enumValues.includes("seed_claim_created"));
   assert.ok(moveKindEnum.enumValues.includes("assumptions_extracted"));
@@ -215,6 +232,10 @@ test("Penny schema has a clean aggregate export surface", () => {
     "moves",
     "nextMoveActionEnum",
     "nextMoveCandidates",
+    "recipeKindEnum",
+    "recipeRuns",
+    "recipeStepStatusEnum",
+    "recipeSteps",
     "sessionNotes",
     "sessionStatusEnum",
     "sessions",

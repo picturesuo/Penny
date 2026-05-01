@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { PennyDatabase } from "../db/client.ts";
 import {
   artifacts,
   brainRecents,
+  brainRuns,
   challengeRounds,
   claimEdges,
   claims,
@@ -11,6 +13,8 @@ import {
   focusStates,
   moves,
   nextMoveCandidates,
+  recipeRuns,
+  recipeSteps,
   sessions,
 } from "../db/schema.ts";
 import {
@@ -25,12 +29,16 @@ import {
   type LearnSessionOutput,
   type LearnSessionSaveCandidate,
 } from "../learn-session-output.ts";
-import { scopeValues } from "../scope.ts";
+import { scopeValues, type BrainScope } from "../scope.ts";
 import type {
   ChallengeBriefArtifact,
   ClaimVersionSnapshot,
   EntityId,
   FocusState,
+  RecipeKind,
+  RecipeRun,
+  RecipeStepRun,
+  RecipeStepStatus,
   ThinkingClaim,
   ThinkingEdge,
   ThinkingGraphSnapshot,
@@ -42,6 +50,8 @@ import type {
   NextMoveProvenance,
   NextMoveScoreBreakdown,
 } from "./engine.ts";
+
+const uuidValuePattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type PersistedNextMoveCandidate = Omit<
   typeof nextMoveCandidates.$inferSelect,
@@ -89,6 +99,48 @@ export type PersistedLearnSessionRecent = {
   saveCandidate: LearnSessionSaveCandidate;
 };
 
+export type PersistRecipeRunInput = {
+  id?: EntityId;
+  scope: BrainScope;
+  sessionId: EntityId;
+  targetClaimId?: EntityId | null;
+  brainRunId?: EntityId | null;
+  kind: RecipeKind;
+  version?: number;
+  title: string;
+  goal: string;
+  status?: RecipeStepStatus;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown> | null;
+  error?: string | null;
+  startedAt?: IsoDateInput;
+  completedAt?: IsoDateInput | null;
+  steps: ReadonlyArray<{
+    id?: EntityId;
+    key: string;
+    title: string;
+    position?: number;
+    status?: RecipeStepStatus;
+    inputs?: Record<string, unknown>;
+    outputs?: Record<string, unknown> | null;
+    error?: string | null;
+    startedAt?: IsoDateInput | null;
+    completedAt?: IsoDateInput | null;
+  }>;
+};
+
+export type UpdateRecipeStepRunInput = {
+  scope: BrainScope;
+  sessionId: EntityId;
+  recipeRunId: EntityId;
+  stepKey: string;
+  status: RecipeStepStatus;
+  outputs?: Record<string, unknown> | null;
+  error?: string | null;
+  startedAt?: IsoDateInput | null;
+  completedAt?: IsoDateInput | null;
+};
+
 export type ChallengeRoundPersistenceModel = typeof challengeRounds;
 export const challengeRoundPersistenceModel: ChallengeRoundPersistenceModel = challengeRounds;
 export type ExistingArtifactModel = typeof artifacts;
@@ -117,6 +169,10 @@ type MoveRow = typeof moves.$inferSelect;
 type ArtifactRow = typeof artifacts.$inferSelect;
 type SessionRow = typeof sessions.$inferSelect;
 type FocusStateRow = typeof focusStates.$inferSelect;
+type BrainRunRow = typeof brainRuns.$inferSelect;
+type RecipeRunRow = typeof recipeRuns.$inferSelect;
+type RecipeStepRow = typeof recipeSteps.$inferSelect;
+type IsoDateInput = string | Date;
 
 export class DrizzleBrainRepository implements BrainRepository {
   constructor(private readonly db: PennyDatabase) {}
@@ -421,6 +477,177 @@ export async function recordLearnSessionOutput(
   });
 }
 
+export async function persistRecipeRun(db: PennyDatabase, input: PersistRecipeRunInput): Promise<RecipeRun> {
+  return db.transaction(async (tx) => {
+    const session = await requireScopedSession(tx, input.scope, input.sessionId);
+
+    if (input.targetClaimId) {
+      await requireScopedSessionClaim(tx, input.scope, session.id, input.targetClaimId);
+    }
+
+    if (input.brainRunId) {
+      await requireScopedBrainRun(tx, input.scope, session.id, input.brainRunId);
+    }
+
+    const now = new Date();
+    const runStatus = input.status ?? "pending";
+    const runCompletedAt = completedAtForStatus(runStatus, input.completedAt, now);
+    const runId = uuidOrRandom(input.id);
+    const [run] = await tx
+      .insert(recipeRuns)
+      .values({
+        id: runId,
+        ...input.scope,
+        sessionId: session.id,
+        targetClaimId: input.targetClaimId ?? null,
+        brainRunId: input.brainRunId ?? null,
+        kind: input.kind,
+        version: input.version ?? 1,
+        title: requiredText(input.title, "Recipe title is required."),
+        goal: requiredText(input.goal, "Recipe goal is required."),
+        status: runStatus,
+        input: input.input ?? {},
+        output: input.output ?? null,
+        error: input.error ?? null,
+        startedAt: input.startedAt ? new Date(input.startedAt) : now,
+        completedAt: runCompletedAt,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: recipeRuns.id,
+        set: {
+          ...input.scope,
+          sessionId: session.id,
+          targetClaimId: input.targetClaimId ?? null,
+          brainRunId: input.brainRunId ?? null,
+          kind: input.kind,
+          version: input.version ?? 1,
+          title: requiredText(input.title, "Recipe title is required."),
+          goal: requiredText(input.goal, "Recipe goal is required."),
+          status: runStatus,
+          input: input.input ?? {},
+          output: input.output ?? null,
+          error: input.error ?? null,
+          startedAt: input.startedAt ? new Date(input.startedAt) : now,
+          completedAt: runCompletedAt,
+          updatedAt: now,
+        },
+      })
+      .returning();
+
+    if (!run) {
+      throw new BrainRepositoryConflictError("Failed to persist recipe run.");
+    }
+
+    const persistedSteps: RecipeStepRow[] = [];
+
+    for (const [index, step] of input.steps.entries()) {
+      const stepStatus = step.status ?? "pending";
+      const [row] = await tx
+        .insert(recipeSteps)
+        .values({
+          id: uuidOrRandom(step.id),
+          ...input.scope,
+          recipeRunId: run.id,
+          sessionId: session.id,
+          stepKey: requiredText(step.key, "Recipe step key is required."),
+          title: requiredText(step.title, "Recipe step title is required."),
+          position: step.position ?? index + 1,
+          status: stepStatus,
+          inputs: step.inputs ?? {},
+          outputs: step.outputs ?? null,
+          error: step.error ?? null,
+          startedAt: step.startedAt ? new Date(step.startedAt) : null,
+          completedAt: completedAtForStatus(stepStatus, step.completedAt, now),
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [recipeSteps.recipeRunId, recipeSteps.stepKey],
+          set: {
+            ...input.scope,
+            sessionId: session.id,
+            title: requiredText(step.title, "Recipe step title is required."),
+            position: step.position ?? index + 1,
+            status: stepStatus,
+            inputs: step.inputs ?? {},
+            outputs: step.outputs ?? null,
+            error: step.error ?? null,
+            startedAt: step.startedAt ? new Date(step.startedAt) : null,
+            completedAt: completedAtForStatus(stepStatus, step.completedAt, now),
+            updatedAt: now,
+          },
+        })
+        .returning();
+
+      if (!row) {
+        throw new BrainRepositoryConflictError("Failed to persist recipe step.");
+      }
+
+      persistedSteps.push(row);
+    }
+
+    return recipeRunFromRows(run, persistedSteps);
+  });
+}
+
+export async function updateRecipeStepRun(
+  db: PennyDatabase,
+  input: UpdateRecipeStepRunInput,
+): Promise<RecipeStepRun> {
+  await requireScopedSession(db, input.scope, input.sessionId);
+  const now = new Date();
+  const [row] = await db
+    .update(recipeSteps)
+    .set({
+      status: input.status,
+      ...(input.outputs !== undefined ? { outputs: input.outputs } : {}),
+      ...(input.error !== undefined ? { error: input.error } : {}),
+      ...(input.startedAt !== undefined ? { startedAt: input.startedAt ? new Date(input.startedAt) : null } : {}),
+      completedAt: completedAtForStatus(input.status, input.completedAt, now),
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(recipeSteps.recipeRunId, input.recipeRunId),
+        eq(recipeSteps.sessionId, input.sessionId),
+        eq(recipeSteps.stepKey, input.stepKey),
+        scopeCondition(recipeSteps, input.scope),
+      ),
+    )
+    .returning();
+
+  if (!row) {
+    throw new BrainRepositoryNotFoundError("Recipe step was not found in this scope.");
+  }
+
+  return recipeStepFromRow(row);
+}
+
+export async function listRecipeRunsForSession(
+  db: PennyDatabase,
+  scope: BrainScope,
+  sessionId: EntityId,
+): Promise<ReadonlyArray<RecipeRun>> {
+  await requireScopedSession(db, scope, sessionId);
+  const runRows = await db
+    .select()
+    .from(recipeRuns)
+    .where(and(eq(recipeRuns.sessionId, sessionId), scopeCondition(recipeRuns, scope)))
+    .orderBy(desc(recipeRuns.startedAt));
+  const runIds = runRows.map((run) => run.id);
+  const stepRows =
+    runIds.length > 0
+      ? await db
+          .select()
+          .from(recipeSteps)
+          .where(and(inArray(recipeSteps.recipeRunId, runIds), scopeCondition(recipeSteps, scope)))
+          .orderBy(asc(recipeSteps.position), asc(recipeSteps.createdAt))
+      : [];
+  const stepsByRunId = groupRowsBy(stepRows, (step) => step.recipeRunId);
+
+  return runRows.map((run) => recipeRunFromRows(run, stepsByRunId.get(run.id) ?? []));
+}
+
 export class BrainRepositoryNotFoundError extends Error {
   constructor(message: string) {
     super(message);
@@ -480,6 +707,62 @@ async function requireSession(tx: BrainTransaction, sessionId: EntityId): Promis
   }
 
   return session;
+}
+
+async function requireScopedSession(
+  tx: Pick<PennyDatabase, "select">,
+  scope: BrainScope,
+  sessionId: EntityId,
+): Promise<SessionRow> {
+  const [session] = await tx
+    .select()
+    .from(sessions)
+    .where(and(eq(sessions.id, sessionId), scopeCondition(sessions, scope)))
+    .limit(1);
+
+  if (!session) {
+    throw new BrainRepositoryNotFoundError("Session was not found in this scope.");
+  }
+
+  return session;
+}
+
+async function requireScopedSessionClaim(
+  tx: Pick<PennyDatabase, "select">,
+  scope: BrainScope,
+  sessionId: EntityId,
+  claimId: EntityId,
+): Promise<ClaimRow> {
+  const [claim] = await tx
+    .select()
+    .from(claims)
+    .where(and(eq(claims.id, claimId), eq(claims.sessionId, sessionId), scopeCondition(claims, scope)))
+    .limit(1);
+
+  if (!claim) {
+    throw new BrainRepositoryNotFoundError("Target claim was not found in this recipe session scope.");
+  }
+
+  return claim;
+}
+
+async function requireScopedBrainRun(
+  tx: Pick<PennyDatabase, "select">,
+  scope: BrainScope,
+  sessionId: EntityId,
+  brainRunId: EntityId,
+): Promise<BrainRunRow> {
+  const [run] = await tx
+    .select()
+    .from(brainRuns)
+    .where(and(eq(brainRuns.id, brainRunId), eq(brainRuns.sessionId, sessionId), scopeCondition(brainRuns, scope)))
+    .limit(1);
+
+  if (!run) {
+    throw new BrainRepositoryNotFoundError("Brain run was not found in this recipe session scope.");
+  }
+
+  return run;
 }
 
 async function getClaimCurrentVersionInTransaction(tx: BrainTransaction, claimId: EntityId): Promise<CurrentClaimVersion> {
@@ -648,6 +931,113 @@ function toChallengeBriefArtifact(row: ArtifactRow): ChallengeBriefArtifact {
       recommendedNextMove: typeof challengeBrief.recommendedNextMove === "string" ? challengeBrief.recommendedNextMove : null,
     },
   };
+}
+
+function recipeRunFromRows(run: RecipeRunRow, steps: ReadonlyArray<RecipeStepRow>): RecipeRun {
+  return {
+    id: run.id,
+    kind: run.kind,
+    version: run.version,
+    sessionId: run.sessionId,
+    ...(run.targetClaimId ? { targetClaimId: run.targetClaimId } : {}),
+    status: run.status,
+    title: run.title,
+    goal: run.goal,
+    startedAt: run.startedAt.toISOString(),
+    ...(run.completedAt ? { completedAt: run.completedAt.toISOString() } : {}),
+    steps: [...steps].sort(recipeStepRowSort).map(recipeStepFromRow),
+    input: asRecord(run.input),
+    ...(run.output ? { output: asRecord(run.output) } : {}),
+    ...(run.error ? { error: run.error } : {}),
+  };
+}
+
+function recipeStepFromRow(step: RecipeStepRow): RecipeStepRun {
+  return {
+    id: step.id,
+    recipeRunId: step.recipeRunId,
+    key: step.stepKey,
+    title: step.title,
+    status: step.status,
+    position: step.position,
+    ...(step.startedAt ? { startedAt: step.startedAt.toISOString() } : {}),
+    ...(step.completedAt ? { completedAt: step.completedAt.toISOString() } : {}),
+    inputs: asRecord(step.inputs),
+    ...(step.outputs ? { outputs: asRecord(step.outputs) } : {}),
+    ...(step.error ? { error: step.error } : {}),
+  };
+}
+
+function recipeStepRowSort(left: RecipeStepRow, right: RecipeStepRow): number {
+  return left.position - right.position || left.createdAt.getTime() - right.createdAt.getTime();
+}
+
+function completedAtForStatus(
+  status: RecipeStepStatus,
+  explicit: IsoDateInput | null | undefined,
+  fallback: Date,
+): Date | null {
+  if (explicit !== undefined) {
+    return explicit ? new Date(explicit) : null;
+  }
+
+  return terminalRecipeStatus(status) ? fallback : null;
+}
+
+function terminalRecipeStatus(status: RecipeStepStatus): boolean {
+  return status === "completed" || status === "failed" || status === "limited" || status === "skipped";
+}
+
+function requiredText(value: string, message: string): string {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    throw new BrainRepositoryConflictError(message);
+  }
+
+  return trimmed;
+}
+
+function uuidOrRandom(value: string | undefined): string {
+  return value && uuidValuePattern.test(value) ? value : randomUUID();
+}
+
+function groupRowsBy<Row, Key>(rows: ReadonlyArray<Row>, keyFor: (row: Row) => Key): Map<Key, Row[]> {
+  const grouped = new Map<Key, Row[]>();
+
+  for (const row of rows) {
+    const key = keyFor(row);
+    const existing = grouped.get(key);
+
+    if (existing) {
+      existing.push(row);
+      continue;
+    }
+
+    grouped.set(key, [row]);
+  }
+
+  return grouped;
+}
+
+type ScopeTable = {
+  userId: AnyPgColumn;
+  workspaceId: AnyPgColumn;
+  projectId: AnyPgColumn;
+  sphereId: AnyPgColumn;
+};
+
+function scopeCondition(table: ScopeTable, scope: BrainScope) {
+  return and(
+    scopeColumnCondition(table.userId, scope.userId),
+    scopeColumnCondition(table.workspaceId, scope.workspaceId),
+    scopeColumnCondition(table.projectId, scope.projectId),
+    scopeColumnCondition(table.sphereId, scope.sphereId),
+  );
+}
+
+function scopeColumnCondition(column: AnyPgColumn, value: string | null) {
+  return value === null ? isNull(column) : eq(column, value);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

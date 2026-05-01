@@ -88,6 +88,15 @@ export const brainRunOperationEnum = pgEnum("brain_run_operation", [
   "verify_run",
 ]);
 export const brainRunStatusEnum = pgEnum("brain_run_status", ["running", "succeeded", "failed"]);
+export const recipeKindEnum = pgEnum("recipe_kind", ["learn", "verify", "check"]);
+export const recipeStepStatusEnum = pgEnum("recipe_step_status", [
+  "pending",
+  "running",
+  "completed",
+  "limited",
+  "failed",
+  "skipped",
+]);
 export const commandIdempotencyStatusEnum = pgEnum("command_idempotency_status", [
   "running",
   "succeeded",
@@ -600,6 +609,85 @@ export const brainRuns = pgTable(
   ],
 );
 
+export const recipeRuns = pgTable(
+  "recipe_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    targetClaimId: uuid("target_claim_id").references(() => claims.id, { onDelete: "set null" }),
+    brainRunId: uuid("brain_run_id").references(() => brainRuns.id, { onDelete: "set null" }),
+    kind: recipeKindEnum("kind").notNull(),
+    version: integer("version").notNull().default(1),
+    title: text("title").notNull(),
+    goal: text("goal").notNull(),
+    status: recipeStepStatusEnum("status").notNull().default("pending"),
+    input: jsonb("input").notNull().default({}),
+    output: jsonb("output"),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("recipe_runs_session_id_idx").on(table.sessionId),
+    index("recipe_runs_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("recipe_runs_target_claim_id_idx").on(table.targetClaimId),
+    index("recipe_runs_brain_run_id_idx").on(table.brainRunId),
+    index("recipe_runs_kind_status_idx").on(table.kind, table.status),
+    index("recipe_runs_started_at_idx").on(table.startedAt),
+    check("recipe_runs_version_positive", sql`${table.version} > 0`),
+    check("recipe_runs_title_present", sql`length(trim(${table.title})) > 0`),
+    check("recipe_runs_goal_present", sql`length(trim(${table.goal})) > 0`),
+    check(
+      "recipe_runs_completion_matches_status",
+      sql`(${table.status} IN ('completed', 'failed', 'limited', 'skipped') AND ${table.completedAt} IS NOT NULL) OR (${table.status} IN ('pending', 'running') AND ${table.completedAt} IS NULL)`,
+    ),
+  ],
+);
+
+export const recipeSteps = pgTable(
+  "recipe_steps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    recipeRunId: uuid("recipe_run_id")
+      .notNull()
+      .references(() => recipeRuns.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    stepKey: text("step_key").notNull(),
+    title: text("title").notNull(),
+    position: integer("position").notNull(),
+    status: recipeStepStatusEnum("status").notNull().default("pending"),
+    inputs: jsonb("inputs").notNull().default({}),
+    outputs: jsonb("outputs"),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("recipe_steps_run_step_key_idx").on(table.recipeRunId, table.stepKey),
+    index("recipe_steps_recipe_run_id_idx").on(table.recipeRunId),
+    index("recipe_steps_session_id_idx").on(table.sessionId),
+    index("recipe_steps_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("recipe_steps_status_idx").on(table.status),
+    check("recipe_steps_position_positive", sql`${table.position} > 0`),
+    check("recipe_steps_key_present", sql`length(trim(${table.stepKey})) > 0`),
+    check("recipe_steps_title_present", sql`length(trim(${table.title})) > 0`),
+    check(
+      "recipe_steps_completion_matches_status",
+      sql`(${table.status} IN ('completed', 'failed', 'limited', 'skipped') AND ${table.completedAt} IS NOT NULL) OR (${table.status} IN ('pending', 'running') AND ${table.completedAt} IS NULL)`,
+    ),
+  ],
+);
+
 export const artifacts = pgTable(
   "artifacts",
   {
@@ -701,6 +789,10 @@ export const pennySchema = {
   moves,
   nextMoveActionEnum,
   nextMoveCandidates,
+  recipeKindEnum,
+  recipeRuns,
+  recipeStepStatusEnum,
+  recipeSteps,
   sessionNotes,
   sessionStatusEnum,
   sessions,
