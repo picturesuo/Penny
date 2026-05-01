@@ -217,33 +217,41 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-wrap: wrap;
-    gap: 0;
-    margin-top: 54px;
+    flex-wrap: nowrap;
+    gap: 14px;
+    width: 100%;
+    margin-top: 28px;
     color: #333333;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .landing-shortcuts::-webkit-scrollbar {
+    display: none;
   }
 
   .landing-shortcut-group {
     display: inline-flex;
     align-items: center;
-    gap: 24px;
+    flex: 0 0 auto;
+    gap: 14px;
   }
 
   .landing-shortcut-divider {
     width: 1px;
-    height: 30px;
+    height: 22px;
     background: rgb(46 46 46 / 0.2);
   }
 
   .landing-shortcuts button {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     border: 0;
-    padding: 8px 22px;
+    padding: 4px 8px;
     color: inherit;
     background: transparent;
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 700;
     line-height: 1;
     white-space: nowrap;
@@ -252,15 +260,15 @@
   .landing-shortcuts kbd {
     display: inline-grid;
     place-items: center;
-    min-width: 30px;
-    height: 30px;
+    min-width: 24px;
+    height: 24px;
     border: 1px solid rgb(46 46 46 / 0.19);
-    border-radius: 6px;
+    border-radius: 5px;
     background: rgb(238 238 238 / 0.52);
     box-shadow: 0 1px 2px rgb(46 46 46 / 0.12);
     color: #303030;
     font-family: Georgia, Cambria, "Times New Roman", Times, serif;
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 700;
   }
 
@@ -4066,32 +4074,25 @@
   }
 
   .landing-shortcuts {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px 6px;
-    width: 100%;
-    margin-top: 28px;
+    justify-content: flex-start;
+    gap: 8px;
+    margin-top: 18px;
   }
 
   .landing-shortcut-group {
-    gap: 0;
-  }
-
-  .landing-shortcut-divider {
-    display: none;
+    gap: 8px;
   }
 
   .landing-shortcuts button {
-    width: 100%;
     justify-content: center;
-    padding: 7px 4px;
-    font-size: 13px;
+    padding: 4px 2px;
+    font-size: 12px;
   }
 
   .landing-shortcuts kbd {
-    min-width: 26px;
-    height: 26px;
-    font-size: 13px;
+    min-width: 22px;
+    height: 22px;
+    font-size: 12px;
   }
 
   .newspaper-header {
