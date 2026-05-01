@@ -316,6 +316,8 @@ const ConfidenceUpdateAcceptedPayloadSchema = z
     claimIds: UuidArraySchema,
     claimVersionIds: UuidArraySchema,
     edgeIds: UuidArraySchema,
+    sourceIds: UuidArraySchema.optional(),
+    sourceSpanIds: UuidArraySchema.optional(),
   })
   .strict();
 
@@ -331,6 +333,8 @@ const ConfidenceUpdateRejectedPayloadSchema = z
     claimIds: UuidArraySchema,
     claimVersionIds: UuidArraySchema,
     edgeIds: UuidArraySchema,
+    sourceIds: UuidArraySchema.optional(),
+    sourceSpanIds: UuidArraySchema.optional(),
   })
   .strict();
 
