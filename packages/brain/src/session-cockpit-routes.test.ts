@@ -506,6 +506,7 @@ function candidateDto(sessionId: string) {
     confidence: 92,
     reason: "Challenge the paid founder workflow assumption.",
     whyNow: "Challenge the paid founder workflow assumption.",
+    whyPennyRecommendsThis: "Why Penny recommends this: the idea depends on a fragile assumption.",
     reasonCodes: ["load_bearing"],
     exitCriteria: {
       label: "Issue a challenge.",

@@ -411,6 +411,7 @@ function demoAutopilotTick(sessionId: string, targetClaimId: string): ThinkingMo
     confidence: 91,
     reason: "Clarify what a thinking artifact is before saving the result to Brain.",
     whyNow: "Clarify what a thinking artifact is before saving the result to Brain.",
+    whyPennyRecommendsThis: "Why Penny recommends this: the idea contains a concept or gap that should be understood before the next reasoning step.",
     reasonCodes: ["learn", "concept_unlock"],
     exitCriteria: {
       label: "The founder can explain what will be saved to Brain.",

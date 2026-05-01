@@ -292,6 +292,7 @@ function candidate(): ThinkingModeCandidateDto {
     confidence: 90,
     reason: "Challenge the weakest assumption.",
     whyNow: "Challenge the weakest assumption.",
+    whyPennyRecommendsThis: "Why Penny recommends this: the idea depends on a fragile assumption.",
     reasonCodes: ["unresolved_claim"],
     exitCriteria: {
       label: "A challenge is issued.",

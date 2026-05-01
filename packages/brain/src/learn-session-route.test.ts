@@ -342,6 +342,7 @@ function candidate(
     confidence: 90,
     reason: `${label}.`,
     whyNow: `${label}.`,
+    whyPennyRecommendsThis: `Why Penny recommends this: ${label}.`,
     reasonCodes: [userAction],
     exitCriteria: {
       label: `${label} completes.`,

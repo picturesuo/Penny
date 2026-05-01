@@ -50,6 +50,7 @@ export type ThinkingModeCandidateDto = {
   confidence: number;
   reason: string;
   whyNow: string;
+  whyPennyRecommendsThis: string;
   reasonCodes: ReadonlyArray<string>;
   exitCriteria: NextMoveCandidate["exitCriteria"];
   scoreBreakdown: NextMoveCandidate["scoreBreakdown"];
@@ -371,6 +372,7 @@ function nextMoveRecomputedPayload(
       score: candidate.score,
       rank: candidate.rank,
       reason: candidate.reason,
+      whyPennyRecommendsThis: candidate.whyPennyRecommendsThis,
       reasonCodes: [...candidate.reasonCodes],
       graphHash: candidate.graphHash,
     })),
@@ -413,6 +415,7 @@ function candidateDto(candidate: PersistedNextMoveCandidate): ThinkingModeCandid
     confidence: priority.normalized,
     reason: candidate.reason,
     whyNow: candidate.reason,
+    whyPennyRecommendsThis: whyPennyExplanationFor(candidate),
     reasonCodes: candidate.reasonCodes,
     exitCriteria: candidate.exitCriteria,
     scoreBreakdown: candidate.scoreBreakdown,
@@ -436,6 +439,39 @@ function normalizeCandidateScore(score: number): number {
   return Math.max(0, Math.min(100, Math.round(score / 10)));
 }
 
+function whyPennyExplanationFor(candidate: Pick<PersistedNextMoveCandidate, "action" | "reasonCodes">): string {
+  switch (candidate.action) {
+    case "learn":
+      if (candidate.reasonCodes.includes("concept_confusion_high") || candidate.reasonCodes.includes("knowledge_gap")) {
+        return "Why Penny recommends this: the idea contains concept confusion or a knowledge gap that should be understood before the next reasoning step.";
+      }
+
+      return "Why Penny recommends this: the idea contains a concept or gap that should be understood before the next reasoning step.";
+    case "clarify":
+      return "Why Penny recommends this: the current node needs sharper wording before Learn, Check, Verify, or Save will be useful.";
+    case "resume_open_challenge":
+      return "Why Penny recommends this: an open Check is already in progress and should be resolved before starting new work.";
+    case "challenge":
+      if (candidate.reasonCodes.includes("assumption_fragility_high")) {
+        return "Why Penny recommends this: the idea depends on a fragile assumption, so Penny should pressure-test it before building on top of it.";
+      }
+
+      return "Why Penny recommends this: the idea depends on a fragile assumption that should be pressure-tested.";
+    case "verify":
+      if (candidate.reasonCodes.includes("external_factual_claim")) {
+        return "Why Penny recommends this: this claim reaches outside the idea map into facts about the world, so Penny should ground it in sources before treating it as stable.";
+      }
+
+      return "Why Penny recommends this: the claim needs evidence or source grounding before Penny treats it as stable.";
+    case "save_to_brain":
+      if (candidate.reasonCodes.includes("stable_structure")) {
+        return "Why Penny recommends this: the dropped idea now has a usable structure that is worth preserving as durable Brain material.";
+      }
+
+      return "Why Penny recommends this: the current structure is ready to be preserved as durable Brain material.";
+  }
+}
+
 function candidateBrainObjectsFor(candidate: PersistedNextMoveCandidate): CandidateBrainObject[] {
   if (candidate.action !== "save_to_brain") {
     return [];
@@ -448,6 +484,7 @@ function candidateBrainObjectsFor(candidate: PersistedNextMoveCandidate): Candid
       summary: clipText(candidate.reason, 360),
       content: [
         candidate.reason,
+        whyPennyExplanationFor(candidate),
         `Exit criteria: ${candidate.exitCriteria.label}`,
         `Reason codes: ${candidate.reasonCodes.join(", ")}`,
       ].join("\n"),

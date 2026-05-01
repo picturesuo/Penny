@@ -221,6 +221,7 @@ const CandidateOutputSchema = z
     confidence: z.number(),
     reason: z.string(),
     whyNow: z.string(),
+    whyPennyRecommendsThis: z.string(),
     reasonCodes: z.array(z.string()),
     exitCriteria: z
       .object({
