@@ -11,6 +11,7 @@ import type {
 } from "../types/brain";
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
+import { VerifyPanel } from "./VerifyPanel";
 
 interface LearnWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -26,6 +27,7 @@ interface LearnWorkspaceProps {
   onOpenBrain: () => void;
   onOpenCheck: () => void;
   onOpenVerify: () => void;
+  onVerifyChanged?: () => Promise<void>;
 }
 
 export function LearnWorkspace({
@@ -42,6 +44,7 @@ export function LearnWorkspace({
   onOpenBrain,
   onOpenCheck,
   onOpenVerify,
+  onVerifyChanged,
 }: LearnWorkspaceProps) {
   const output = useMemo(() => buildLearnSessionOutput(data, selectedDocument, autopilot), [
     data,
@@ -64,6 +67,7 @@ export function LearnWorkspace({
             onOpenVerify={onOpenVerify}
             onSaveToBrain={onSeed}
             onKeepRecent={onKeepRecent}
+            {...(onVerifyChanged ? { onVerifyChanged } : {})}
           />
         ) : (
           <section className="learn-entry" aria-label="Drop an idea">
@@ -97,6 +101,7 @@ function LearnSessionView({
   onOpenVerify,
   onSaveToBrain,
   onKeepRecent,
+  onVerifyChanged,
 }: {
   output: LearnSessionOutput;
   currentSessionId: string | null;
@@ -106,9 +111,13 @@ function LearnSessionView({
   onOpenVerify: () => void;
   onSaveToBrain: (rawIdea: string) => Promise<void>;
   onKeepRecent: (rawIdea: string) => Promise<void>;
+  onVerifyChanged?: () => Promise<void>;
 }) {
   const isSavedToBrain = Boolean(currentSessionId);
   const hasCoreIdea = Boolean(output.coreIdea.trim());
+  const [selectedVerifyClaim, setSelectedVerifyClaim] = useState<BrainClaim | null>(
+    output.assumptions[0] ?? output.claims[0] ?? null,
+  );
 
   return (
     <section className="learn-session-output" aria-label="Learn session output">
@@ -159,11 +168,21 @@ function LearnSessionView({
           ) : null}
         </article>
 
-        <LearnClaimList title="Structured claims" claims={output.claims} emptyText="No claims have been shaped yet." />
+        <LearnClaimList
+          title="Structured claims"
+          claims={output.claims}
+          emptyText="No claims have been shaped yet."
+          selectedClaimId={selectedVerifyClaim?.id ?? null}
+          disabled={disabled || !currentSessionId}
+          onVerify={setSelectedVerifyClaim}
+        />
         <LearnClaimList
           title="Assumptions"
           claims={output.assumptions}
           emptyText="No explicit assumptions were returned in this graph slice."
+          selectedClaimId={selectedVerifyClaim?.id ?? null}
+          disabled={disabled || !currentSessionId}
+          onVerify={setSelectedVerifyClaim}
         />
         <LearnClaimList
           title="Questions"
@@ -172,6 +191,16 @@ function LearnSessionView({
         />
         <CreativePotential items={output.creativePotential} />
         <AutopilotNextMove suggestion={output.autopilotNextMove} claims={output.claims} />
+        <div className="learn-verify-slot">
+          <VerifyPanel
+            sessionId={currentSessionId}
+            claim={selectedVerifyClaim}
+            disabled={disabled || !currentSessionId}
+            title="Verify evidence"
+            compact
+            {...(onVerifyChanged ? { onVerifyChanged } : {})}
+          />
+        </div>
       </div>
     </section>
   );
@@ -256,10 +285,16 @@ function LearnClaimList({
   title,
   claims,
   emptyText,
+  selectedClaimId,
+  disabled = false,
+  onVerify,
 }: {
   title: string;
   claims: BrainClaim[];
   emptyText: string;
+  selectedClaimId?: string | null;
+  disabled?: boolean;
+  onVerify?: (claim: BrainClaim) => void;
 }) {
   return (
     <article className="learn-output-card">
@@ -268,7 +303,19 @@ function LearnClaimList({
         <ul className="learn-claim-list">
           {claims.slice(0, 5).map((claim) => (
             <li key={claim.id}>
-              <strong>{formatLabel(claim.kind)}</strong>
+              <div className="learn-claim-row-head">
+                <strong>{formatLabel(claim.kind)}</strong>
+                {onVerify ? (
+                  <button
+                    type="button"
+                    className={claim.id === selectedClaimId ? "is-selected" : ""}
+                    disabled={disabled}
+                    onClick={() => onVerify(claim)}
+                  >
+                    Verify
+                  </button>
+                ) : null}
+              </div>
               <p>{claim.text}</p>
             </li>
           ))}
