@@ -21,7 +21,7 @@ import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-
 import { createMove, parseMovePayload } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 import { scopeValues } from "./scope.ts";
-import { createSearchBroker } from "./search-broker.ts";
+import { createSearchBroker, searchTraceFromBrokerResult, type SearchTrace } from "./search-broker.ts";
 import { shouldUseWebSearch, type SearchDecision } from "./search-decision-service.ts";
 
 export const VerifyRequestSchema = z
@@ -289,7 +289,7 @@ export type VerifyGenerateText = (request: {
 export type VerifyProvider = {
   name: string;
   searchEnabled: boolean;
-  generate(input: VerifyGenerationInput): Promise<{ output: unknown; sources?: unknown[] }>;
+  generate(input: VerifyGenerationInput): Promise<{ output: unknown; sources?: unknown[]; searchTrace?: SearchTrace }>;
 };
 
 export type ConfidenceUpdateDecision = {
@@ -306,6 +306,7 @@ export type PersistedVerify = VerifyOutput & {
     status: string;
   };
   citationSources: PersistedCitationSlice[];
+  searchTrace: PersistedSearchTrace | null;
   confidenceUpdate: ConfidenceUpdateDecision;
 };
 
@@ -433,6 +434,11 @@ type PersistedCitationSlice = {
     claimVersionId: string | null;
     label: string | null;
   };
+};
+
+type PersistedSearchTrace = SearchTrace & {
+  savedSourceIds: string[];
+  savedSourceSpanIds: string[];
 };
 
 export const defaultXaiVerifyModel = "grok-4.20-reasoning";
@@ -566,12 +572,12 @@ export async function runVerify(
   const prelude = await createVerifyPrelude(db, input, provider);
 
   try {
-    const output = await generateVerifyOutput(verifyGenerationInput(prelude.target, input, prelude.lensSnapshot), {
+    const generated = await generateVerifyRunOutput(verifyGenerationInput(prelude.target, input, prelude.lensSnapshot), {
       provider,
       brainRunId: prelude.brainRun.id,
     });
 
-    return await persistVerifyResult(db, output, prelude);
+    return await persistVerifyResult(db, generated.output, prelude, generated.searchTrace);
   } catch (error) {
     await markVerifyRunFailed(db, prelude.brainRun.id, error);
     throw error;
@@ -740,12 +746,24 @@ export async function generateVerifyOutput(
   input: VerifyGenerationInput,
   options: { provider?: VerifyProvider } & BrainRunGuardOptions = {},
 ): Promise<VerifyOutput> {
+  const result = await generateVerifyRunOutput(input, options);
+
+  return result.output;
+}
+
+async function generateVerifyRunOutput(
+  input: VerifyGenerationInput,
+  options: { provider?: VerifyProvider } & BrainRunGuardOptions = {},
+): Promise<{ output: VerifyOutput; searchTrace: SearchTrace | null }> {
   requireRecordedBrainRun("verify_run", options);
 
   const provider = options.provider ?? defaultVerifyProvider();
   const result = await provider.generate(input);
 
-  return parseVerifyOutput(result.output, result.sources ?? [], input);
+  return {
+    output: parseVerifyOutput(result.output, result.sources ?? [], input),
+    searchTrace: result.searchTrace ?? null,
+  };
 }
 
 export function parseVerifyOutput(
@@ -765,7 +783,7 @@ export function parseVerifyOutput(
     ...parsed.data,
     summary: parsed.data.summary.trim(),
     evidenceCards,
-    citations: normalizeVerifyCitations(parsed.data.citations, evidenceCards, providerSources),
+    citations: normalizeVerifyCitations(parsed.data.citations, evidenceCards),
     unsupportedParts: normalizeUnsupportedParts(parsed.data.unsupportedParts, parsed.data.verdict, input),
     whatWouldChangeThis: parsed.data.whatWouldChangeThis.trim(),
     nextQuestion: parsed.data.nextQuestion.trim(),
@@ -798,6 +816,12 @@ export function createHeuristicVerifyProvider(): VerifyProvider {
     name: "heuristic",
     searchEnabled: false,
     async generate(input) {
+      const search = createSearchBroker({ providerName: "heuristic" }).prepare(
+        verifySearchInput(input),
+        "verify",
+        verifySearchContext(input),
+      );
+
       return {
         output: {
           verdict: "not_enough_evidence",
@@ -834,6 +858,7 @@ export function createHeuristicVerifyProvider(): VerifyProvider {
           }),
         },
         sources: [],
+        searchTrace: searchTraceFromBrokerResult(search, []),
       };
     },
   };
@@ -879,7 +904,12 @@ export function createXaiVerifyProvider(
           request.tools = search.tools;
         }
 
-        return await callGenerateText(request);
+        const result = await callGenerateText(request);
+
+        return {
+          ...result,
+          searchTrace: searchTraceFromBrokerResult(search, result.sources ?? []),
+        };
       } catch (error) {
         if (error instanceof VerifyProviderError) {
           throw error;
@@ -999,13 +1029,16 @@ async function persistVerifyResult(
   db: PennyDatabase,
   output: VerifyOutput,
   prelude: VerifyPrelude,
+  searchTrace: SearchTrace | null,
 ): Promise<PersistedVerify> {
   return db.transaction(async (tx) => {
-    const citationSources = await insertCitationSources(tx, prelude.target, output.evidenceCards);
+    const citationSources = await insertCitationSources(tx, prelude.target, output.citations);
     const confidenceUpdate = confidenceUpdateDecision(output);
+    const persistedSearchTrace = persistedSearchTraceFromRun(searchTrace, citationSources);
     const persistedOutput = {
       ...output,
       citationSources,
+      searchTrace: persistedSearchTrace,
       confidenceUpdate,
     };
     const move = await createMove(tx, "verify_run", {
@@ -1059,12 +1092,12 @@ async function persistVerifyResult(
 async function insertCitationSources(
   db: PennyDatabase,
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
-  evidenceCards: EvidenceCard[],
+  verifyCitations: VerifyCitation[],
 ): Promise<PersistedCitationSlice[]> {
   const citations = [];
 
-  for (const card of evidenceCards.filter(hasCitationProvenance)) {
-    const rawText = citationRawText(card);
+  for (const citation of verifyCitations.filter(hasCitationProvenance)) {
+    const rawText = citationRawText(citation);
     const [source] = await db
       .insert(sources)
       .values({
@@ -1096,7 +1129,7 @@ async function insertCitationSources(
     }
 
     citations.push({
-      evidenceTitle: card.title,
+      evidenceTitle: citation.title,
       source: {
         id: source.id,
         kind: "verification_citation" as const,
@@ -1113,6 +1146,21 @@ async function insertCitationSources(
   }
 
   return citations;
+}
+
+function persistedSearchTraceFromRun(
+  trace: SearchTrace | null | undefined,
+  citationSources: PersistedCitationSlice[],
+): PersistedSearchTrace | null {
+  if (!trace) {
+    return null;
+  }
+
+  return {
+    ...trace,
+    savedSourceIds: citationSources.map((citation) => citation.source.id),
+    savedSourceSpanIds: citationSources.map((citation) => citation.sourceSpan.id),
+  };
 }
 
 async function loadClaimWithCurrentVersion(db: PennyDatabase, claimId: string, sessionId: string) {
@@ -1494,12 +1542,10 @@ function sourceToEvidenceCard(source: unknown): EvidenceCard | null {
 function normalizeVerifyCitations(
   citations: VerifyProviderOutput["citations"],
   evidenceCards: EvidenceCard[],
-  providerSources: unknown[],
 ): VerifyCitation[] {
   const normalized = [
     ...(citations ?? []).map(normalizeVerifyCitation).filter((citation): citation is VerifyCitation => Boolean(citation)),
     ...evidenceCards.filter(hasCitationProvenance).map(evidenceCardToCitation),
-    ...providerSources.map(sourceToVerifyCitation).filter((citation): citation is VerifyCitation => Boolean(citation)),
   ];
   const unique: VerifyCitation[] = [];
   const seen = new Set<string>();
@@ -1537,12 +1583,6 @@ function evidenceCardToCitation(card: EvidenceCard): VerifyCitation {
     sourceUrl: card.sourceUrl ?? null,
     citation: card.citation ?? card.summary,
   };
-}
-
-function sourceToVerifyCitation(source: unknown): VerifyCitation | null {
-  const card = sourceToEvidenceCard(source);
-
-  return card ? evidenceCardToCitation(card) : null;
 }
 
 function normalizeUnsupportedParts(
@@ -1746,18 +1786,21 @@ function confidenceUpdateDecision(output: VerifyOutput): ConfidenceUpdateDecisio
   };
 }
 
-function hasCitationProvenance(card: EvidenceCard): boolean {
-  return Boolean(card.citation || card.sourceUrl || card.sourceName);
+function hasCitationProvenance(citation: EvidenceCard | VerifyCitation): boolean {
+  return Boolean(citation.citation || citation.sourceUrl || citation.sourceName);
 }
 
-function citationRawText(card: EvidenceCard): string {
+function citationRawText(citation: EvidenceCard | VerifyCitation): string {
+  const summary = "summary" in citation ? citation.summary : null;
+  const stance = "stance" in citation ? citation.stance : null;
+
   return [
-    `Title: ${card.title}`,
-    card.sourceName ? `Source: ${card.sourceName}` : null,
-    card.sourceUrl ? `URL: ${card.sourceUrl}` : null,
-    `Stance: ${card.stance}`,
-    card.citation ? `Citation: ${card.citation}` : null,
-    `Summary: ${card.summary}`,
+    `Title: ${citation.title}`,
+    citation.sourceName ? `Source: ${citation.sourceName}` : null,
+    citation.sourceUrl ? `URL: ${citation.sourceUrl}` : null,
+    stance ? `Stance: ${stance}` : null,
+    citation.citation ? `Citation: ${citation.citation}` : null,
+    summary ? `Summary: ${summary}` : null,
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");

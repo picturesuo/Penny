@@ -131,6 +131,7 @@ test("POST /brain/verify returns verdict, evidence cards, BrainRun, and verify_r
               },
             },
           ],
+          searchTrace: null,
           confidenceUpdate: {
             suggestedDelta: -5,
             autoApplied: false,
@@ -154,6 +155,7 @@ test("POST /brain/verify returns verdict, evidence cards, BrainRun, and verify_r
       brainRun: { status: string };
       move: { kind: string; claimIds: string[] };
       citationSources: unknown[];
+      searchTrace: unknown;
       confidenceUpdate: { suggestedDelta: number; autoApplied: boolean; decision: string };
     };
   };
@@ -606,6 +608,64 @@ test("Verify web search routing enables search by default when possible", async 
   assert.ok(calls[1]?.tools?.web_search);
 });
 
+test("xAI Verify provider records search trace without promoting unused provider sources", async () => {
+  const input = {
+    claimId: uuidAt(101),
+    sessionId: uuidAt(100),
+    currentClaimText: "Worked examples reduce cognitive load.",
+    currentClaimKind: "assumption" as const,
+    currentClaimStatus: "exploratory" as const,
+    currentClaimConfidence: 64,
+  };
+  const generateText: VerifyGenerateText = async () => ({
+    output: {
+      verdict: "supported",
+      summary: "The used citation supports the target mechanism.",
+      evidenceCards: [
+        {
+          title: "Used source",
+          summary: "Worked examples reduce avoidable cognitive load.",
+          stance: "supports",
+          sourceName: "Example Journal",
+          sourceUrl: "https://example.test/used",
+          citation: "Worked examples reduce avoidable cognitive load.",
+        },
+      ],
+      citations: [],
+      unsupportedParts: [],
+      confidenceDeltaSuggestion: 4,
+      whatWouldChangeThis: "A stronger contrary result would weaken this.",
+      nextQuestion: "Does the target learner group show the same effect?",
+      recipe: verifyRecipe("supported", 4),
+    },
+    sources: [
+      {
+        sourceType: "url",
+        title: "Used source",
+        url: "https://example.test/used",
+        snippet: "Worked examples reduce avoidable cognitive load.",
+      },
+      {
+        sourceType: "url",
+        title: "Unused provider source",
+        url: "https://unused.example/source",
+        snippet: "This provider result was not cited in the saved output.",
+      },
+    ],
+  });
+
+  const provider = createXaiVerifyProvider({ XAI_API_KEY: "test-key" }, { generateText });
+  const generated = await provider.generate(input);
+  const output = parseVerifyOutput(generated.output, generated.sources ?? [], input);
+
+  assert.equal(generated.searchTrace?.providerName, "xai");
+  assert.equal(generated.searchTrace?.providerToolAttached, true);
+  assert.equal(generated.searchTrace?.results.length, 2);
+  assert.equal(generated.searchTrace?.results[1]?.url, "https://unused.example/source");
+  assert.equal(output.citations.some((citation) => citation.sourceUrl === "https://example.test/used"), true);
+  assert.equal(output.citations.some((citation) => citation.sourceUrl === "https://unused.example/source"), false);
+});
+
 test("generateVerifyOutput requires a recorded BrainRun id", async () => {
   await assert.rejects(
     () =>
@@ -796,6 +856,7 @@ function verifiedResult(claimId: string) {
       artifactIds: [],
     },
     citationSources: [],
+    searchTrace: null,
     confidenceUpdate: {
       suggestedDelta: -5,
       autoApplied: false as const,
