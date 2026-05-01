@@ -12,6 +12,7 @@ import {
 } from "./seed.ts";
 import type { BrainSeedPrelude, BrainSeedRunInput, PersistedBrainSeed } from "./seed-persistence.ts";
 import type { ThinkingModeTickResponse } from "./services/thinking-mode-service.ts";
+import type { BrainRetrievalContext, BrainRetrievalRequest } from "./brain-retrieval-contract.ts";
 import { scopeValues } from "./scope.ts";
 
 test("POST /api/learn/session validates dropped ideas before generation", async () => {
@@ -35,8 +36,11 @@ test("POST /api/learn/session validates dropped ideas before generation", async 
 
 test("POST /api/learn/session structures a dropped idea and ticks Autopilot", async () => {
   let preparedRun: BrainSeedRunInput | undefined;
+  let generatedInput: BrainSeedInput | undefined;
+  let retrievalRequest: BrainRetrievalRequest | undefined;
   let tickedSessionId: string | undefined;
   const rawIdea = "Penny should help founders learn whether a strategy bet is worth saving.";
+  const retrievedContext = retrievalContext(rawIdea);
   const response = await handleLearnSessionRequest(
     request("http://localhost/api/learn/session", {
       rawIdea,
@@ -49,6 +53,7 @@ test("POST /api/learn/session structures a dropped idea and ticks Autopilot", as
         return createPersistedPrelude(input, options.run);
       },
       async generateSeed(input, options) {
+        generatedInput = input;
         return generateBrainSeed(input, {
           provider: createHeuristicBrainSeedProvider(),
           brainRunId: options.brainRunId,
@@ -62,6 +67,12 @@ test("POST /api/learn/session structures a dropped idea and ticks Autopilot", as
         assert.equal(input.limit, 4);
         return autopilotResponse(input.sessionId);
       },
+      retrievalProvider: {
+        async retrieve(input) {
+          retrievalRequest = input;
+          return retrievedContext;
+        },
+      },
     },
   );
   const payload = (await response.json()) as { data: LearnSessionPayload };
@@ -69,7 +80,13 @@ test("POST /api/learn/session structures a dropped idea and ticks Autopilot", as
   assert.equal(response.status, 201);
   assert.equal(preparedRun?.operation, "brain.seed");
   assert.equal((preparedRun?.input as { source?: string } | undefined)?.source, "learn_session");
+  assert.equal((preparedRun?.input as { brainContext?: BrainRetrievalContext } | undefined)?.brainContext?.matchCount, 1);
+  assert.equal(generatedInput?.brainContext?.matches[0]?.title, "Founder WTP note");
+  assert.equal(retrievalRequest?.mode, "learn");
+  assert.equal(retrievalRequest?.query, rawIdea);
   assert.equal(tickedSessionId, payload.data.session.id);
+  assert.equal(payload.data.sourceOfTruth, "claims_claim_versions_edges_moves_next_move_candidates_brain_rows_hybrid_retrieval");
+  assert.equal(payload.data.brainContext.matchCount, 1);
   assert.equal(payload.data.source.rawText, rawIdea);
   assert.match(payload.data.learn.coreIdea, /load-bearing question|assistant/i);
   assert.equal(payload.data.learn.claims.length, 4);
@@ -102,6 +119,37 @@ function request(url: string, body: unknown): Request {
     },
     body: JSON.stringify(body),
   });
+}
+
+function retrievalContext(query: string): BrainRetrievalContext {
+  return {
+    sourceOfTruth: "brain_rows_hybrid_retrieval",
+    mode: "learn",
+    query,
+    strategy: "hybrid_lexical_vector",
+    vectorContract: "BrainVectorProvider",
+    vectorProvider: "deterministic_mock",
+    matchCount: 1,
+    matches: [
+      {
+        id: "brain-retrieval:claim:001",
+        kind: "claim",
+        title: "Founder WTP note",
+        text: "Earlier Brain work found that founders say yes to strategy tools but resist paying before traction.",
+        sessionId: uuidAt(901),
+        claimId: uuidAt(902),
+        sourceId: uuidAt(903),
+        score: 0.91,
+        lexicalScore: 0.88,
+        vectorScore: 0.74,
+        recencyScore: 0.63,
+        graphScore: 0.54,
+        matchedTerms: ["founders", "strategy"],
+        reasons: ["lexical_overlap", "vector_similarity"],
+      },
+    ],
+    summary: "Retrieved one prior Brain claim about founder willingness to pay.",
+  };
 }
 
 function createPersistedPrelude(input: BrainSeedInput, run: BrainSeedRunInput): BrainSeedPrelude {

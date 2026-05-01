@@ -1,6 +1,7 @@
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel, type ToolSet } from "ai";
 import { SeedProviderSchema, type BrainSeedInput, type BrainSeedOutput, type SeedProviderOutput } from "./schema.ts";
+import { formatBrainRetrievalContext } from "./brain-retrieval-contract.ts";
 import { createSearchBroker } from "./search-broker.ts";
 import { shouldUseWebSearch } from "./search-decision-service.ts";
 
@@ -156,6 +157,11 @@ export function buildBrainSeedPrompt(input: BrainSeedInput, searchInstructions?:
     "- Do not return moves. Penny creates immutable Moves locally after persistence.",
     "- Do not return artifacts. Penny compiles artifacts later from actual session state.",
     "",
+    "Retrieved Brain context:",
+    "- Use these rows as Penny memory from Brain, not as external proof or citations.",
+    "- Preserve seed fidelity: prior Brain context may shape questions and assumptions, but the new graph must still come from the raw idea.",
+    formatBrainRetrievalContext(input.brainContext),
+    "",
     "Quality bar:",
     "- Return at least 3 hidden assumptions specific to the user's raw idea, not generic implementation advice.",
     "- Return at least 6 exploration paths that help the user decide what to inspect next in Brain.",
@@ -182,10 +188,12 @@ function brainSeedSearchInput(input: BrainSeedInput) {
   };
 }
 
-function brainSeedSearchContext(_input: BrainSeedInput) {
+function brainSeedSearchContext(input: BrainSeedInput) {
+  const brainContext = input.brainContext ?? null;
+
   return {
-    brainContext: null,
-    brainContextSufficient: true,
+    brainContext: brainContext ? formatBrainRetrievalContext(brainContext) : null,
+    brainContextSufficient: brainContext ? brainContext.matches.length > 0 : true,
   };
 }
 

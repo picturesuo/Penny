@@ -432,6 +432,46 @@ test("parseBrainSeedOutput does not require seed-time artifacts", () => {
   assert.equal("artifacts" in output, false);
 });
 
+test("brain seed prompt carries Brain retrieval context without treating it as proof", () => {
+  const prompt = buildBrainSeedPrompt({
+    rawIdea: "Use prior founder notes to structure this pricing bet.",
+    sessionId: "00000000-0000-4000-8000-000000000701",
+    brainContext: {
+      sourceOfTruth: "brain_rows_hybrid_retrieval",
+      mode: "learn",
+      query: "founder pricing bet",
+      strategy: "hybrid_lexical_vector",
+      vectorContract: "BrainVectorProvider",
+      vectorProvider: "deterministic_mock",
+      matchCount: 1,
+      matches: [
+        {
+          id: "brain-retrieval:claim:001",
+          kind: "claim",
+          title: "Founder WTP note",
+          text: "Prior Brain work says founders like structured strategy reviews but may resist paying before traction.",
+          sessionId: "00000000-0000-4000-8000-000000000801",
+          claimId: "00000000-0000-4000-8000-000000000802",
+          sourceId: "00000000-0000-4000-8000-000000000803",
+          score: 0.91,
+          lexicalScore: 0.87,
+          vectorScore: 0.77,
+          recencyScore: 0.62,
+          graphScore: 0.51,
+          matchedTerms: ["founder", "pricing"],
+          reasons: ["lexical_overlap", "vector_similarity"],
+        },
+      ],
+      summary: "Retrieved one prior Brain claim about founder willingness to pay.",
+    },
+  });
+
+  assert.match(prompt, /Brain retrieval context/);
+  assert.match(prompt, /Founder WTP note/);
+  assert.match(prompt, /not as external proof or citations/);
+  assert.match(prompt, /sourceOfTruth: brain_rows_hybrid_retrieval/);
+});
+
 test("heuristic provider keeps seed extraction usable without live AI credentials", async () => {
   const output = await generateBrainSeed(
     { rawIdea: "I think source-backed memory should become a thinking cockpit." },

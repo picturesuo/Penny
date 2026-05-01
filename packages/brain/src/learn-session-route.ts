@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import {
+  emptyBrainRetrievalContext,
+  type BrainRetrievalContext,
+  type BrainRetrievalProvider,
+} from "./brain-retrieval-contract.ts";
 import { CandidateBrainObjectSchema, type CandidateBrainObject } from "./candidate-brain-object.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { createBrainRepository } from "./domain/repository.ts";
@@ -90,10 +95,11 @@ export type LearnSessionStructure = {
 };
 
 export type LearnSessionPayload = {
-  sourceOfTruth: "claims_claim_versions_edges_moves_next_move_candidates";
+  sourceOfTruth: "claims_claim_versions_edges_moves_next_move_candidates_brain_rows_hybrid_retrieval";
   session: BrainSeedUiPayload["session"];
   source: BrainSeedUiPayload["source"];
   brainRun: BrainSeedUiPayload["brainRun"];
+  brainContext: BrainRetrievalContext;
   learn: LearnSessionStructure;
   ideaMap: BrainSeedUiPayload["ideaMap"];
   explorationPaths: BrainSeedUiPayload["explorationPaths"];
@@ -130,6 +136,7 @@ export type LearnSessionRouteOptions = {
     options: { db?: PennyDatabase },
   ) => Promise<void>;
   tickAutopilot?: (input: { sessionId: EntityId; resume?: boolean; limit?: number }) => Promise<ThinkingModeTickResponse>;
+  retrievalProvider?: BrainRetrievalProvider;
 };
 
 export async function handleLearnSessionRequest(
@@ -158,6 +165,11 @@ export async function handleLearnSessionRequest(
 export function buildLearnSessionPayload(
   seedPayload: BrainSeedUiPayload,
   autopilot: ThinkingModeTickResponse,
+  brainContext: BrainRetrievalContext = emptyBrainRetrievalContext({
+    mode: "learn",
+    query: seedPayload.source.rawText,
+    sessionId: seedPayload.session.id,
+  }),
 ): LearnSessionPayload {
   const candidateBrainObjects = learnSessionCandidateBrainObjects(seedPayload);
   const learn = {
@@ -180,10 +192,11 @@ export function buildLearnSessionPayload(
   };
 
   return {
-    sourceOfTruth: "claims_claim_versions_edges_moves_next_move_candidates",
+    sourceOfTruth: "claims_claim_versions_edges_moves_next_move_candidates_brain_rows_hybrid_retrieval",
     session: seedPayload.session,
     source: seedPayload.source,
     brainRun: seedPayload.brainRun,
+    brainContext,
     learn,
     ideaMap: seedPayload.ideaMap,
     explorationPaths: seedPayload.explorationPaths,
@@ -200,9 +213,16 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
   return {
     async create(input, request) {
       const context = resolveDevContext(request, input);
+      const brainContext = await (options.retrievalProvider ?? emptyRetrievalProvider).retrieve({
+        mode: "learn",
+        query: input.rawIdea,
+        sessionId: input.sessionId ?? null,
+        limit: 6,
+      });
       const seedInput: BrainSeedInput = {
         rawIdea: input.rawIdea,
         sessionId: input.sessionId ?? randomUUID(),
+        ...(brainContext.matches.length > 0 ? { brainContext } : {}),
       };
       const provider = options.provider ?? createDefaultBrainSeedProvider();
       const prepareSeedRun =
@@ -243,6 +263,7 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
             input: {
               rawIdea: seedInput.rawIdea,
               sessionId: seedInput.sessionId,
+              brainContext,
               source: "learn_session",
               searchDecision: brainSeedSearchDecision(seedInput),
             },
@@ -259,7 +280,7 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
           limit: input.autopilot.limit ?? 6,
         });
 
-        return buildLearnSessionPayload(seedPayload, autopilot);
+        return buildLearnSessionPayload(seedPayload, autopilot, brainContext);
       } catch (error) {
         if (prelude) {
           await failSeedRun(prelude, error, dbOption(db));
@@ -270,6 +291,12 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
     },
   };
 }
+
+const emptyRetrievalProvider: BrainRetrievalProvider = {
+  async retrieve(request) {
+    return emptyBrainRetrievalContext(request);
+  },
+};
 
 function learnClaim(claim: BrainSeedUiPayload["ideaMap"]["claims"][number]): LearnSessionClaim {
   return {

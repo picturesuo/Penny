@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { BrainRetrievalContextSchema } from "./brain-retrieval-contract.ts";
 
 export const BrainSeedInputSchema = z
   .object({
     rawIdea: z.string().trim().min(1).max(4_000),
     sessionId: z.string().uuid().optional(),
+    brainContext: BrainRetrievalContextSchema.optional(),
   })
   .strict();
 
