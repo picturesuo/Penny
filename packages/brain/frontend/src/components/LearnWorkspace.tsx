@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type {
-  AutopilotSuggestion,
   AutopilotTickData,
   BrainClaim,
   BrainData,
@@ -11,9 +10,7 @@ import type {
   CanvasNode,
   LearnSessionOutput,
 } from "../types/brain";
-import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
-import { VerifyPanel } from "./VerifyPanel";
 
 interface LearnWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -38,7 +35,6 @@ interface LearnWorkspaceProps {
 }
 
 export function LearnWorkspace({
-  documentsData,
   selectedDocument,
   data,
   autopilot,
@@ -50,21 +46,9 @@ export function LearnWorkspace({
   isThinking,
   onSeed,
   onKeepRecent,
-  onSelectDocument,
-  onOpenBrain,
-  onOpenCanvas,
-  onOpenCheck,
-  onOpenVerify,
   onSearchBrainRelated,
-  onVerifyChanged,
 }: LearnWorkspaceProps) {
-  const output = useMemo(() => buildLearnSessionOutput(data, selectedDocument, autopilot), [
-    data,
-    selectedDocument,
-    autopilot,
-  ]);
-  const recentDocuments = documentsData?.documents.slice(0, 4) ?? [];
-  const currentSessionId = data?.session?.id ?? selectedDocument?.sessionId ?? null;
+  const output = useMemo(() => buildLearnSessionOutput(data, selectedDocument, autopilot), [data, selectedDocument, autopilot]);
   const [searchWebRequested, setSearchWebRequested] = useState(false);
   const sourceText = data?.source?.rawText ?? selectedDocument?.originalIdea ?? output?.coreIdea ?? "";
 
@@ -79,21 +63,13 @@ export function LearnWorkspace({
         {output ? (
           <LearnSessionView
             output={output}
-            currentSessionId={currentSessionId}
             sourceText={sourceText}
             focusedClaimId={focusedClaimId}
             focusNode={focusNode}
             relatedBrainSearch={relatedBrainSearch}
             searchWebRequested={searchWebRequested}
             disabled={isThinking}
-            onOpenBrain={onOpenBrain}
-            onOpenCanvas={onOpenCanvas}
-            onOpenCheck={onOpenCheck}
-            onOpenVerify={onOpenVerify}
             onSearchBrainRelated={onSearchBrainRelated}
-            onSaveToBrain={onSeed}
-            onKeepRecent={onKeepRecent}
-            {...(onVerifyChanged ? { onVerifyChanged } : {})}
           />
         ) : (
           <section className="learn-entry" aria-label="Drop an idea">
@@ -110,210 +86,649 @@ export function LearnWorkspace({
           </section>
         )}
       </section>
-
-      {output ? (
-        <aside className="learn-sidebar" aria-label="Learn sidebar">
-          <LearnRecents recents={recents} disabled={isThinking} onSeed={onSeed} onKeep={onKeepRecent} />
-          <LearnRecentDocuments documents={recentDocuments} onSelectDocument={onSelectDocument} onOpenBrain={onOpenBrain} />
-        </aside>
-      ) : null}
     </main>
   );
 }
 
 function LearnSessionView({
   output,
-  currentSessionId,
   sourceText,
   focusedClaimId,
   focusNode,
   relatedBrainSearch,
   searchWebRequested,
   disabled,
-  onOpenBrain,
-  onOpenCanvas,
-  onOpenCheck,
-  onOpenVerify,
   onSearchBrainRelated,
-  onSaveToBrain,
-  onKeepRecent,
-  onVerifyChanged,
 }: {
   output: LearnSessionOutput;
-  currentSessionId: string | null;
   sourceText: string;
   focusedClaimId: string | null;
   focusNode: CanvasNode | null;
   relatedBrainSearch: BrainHybridSearchResponse["data"] | null;
   searchWebRequested: boolean;
   disabled: boolean;
-  onOpenBrain: () => void;
-  onOpenCanvas: () => void;
-  onOpenCheck: () => void;
-  onOpenVerify: () => void;
   onSearchBrainRelated: (query: string, claimId?: string | null) => Promise<BrainHybridSearchResponse["data"]>;
-  onSaveToBrain: (rawIdea: string) => Promise<void>;
-  onKeepRecent: (rawIdea: string) => Promise<void>;
-  onVerifyChanged?: () => Promise<void>;
 }) {
-  const isSavedToBrain = Boolean(currentSessionId);
-  const hasCoreIdea = Boolean(output.coreIdea.trim());
   const focusedClaim = focusedClaimId
     ? [...output.claims, ...output.assumptions, ...output.questions].find((claim) => claim.id === focusedClaimId) ?? null
     : null;
-  const relatedQuery = focusNode?.summary?.trim() || focusedClaim?.text || output.coreIdea;
-  const [selectedVerifyClaim, setSelectedVerifyClaim] = useState<BrainClaim | null>(
-    focusedClaim ?? output.assumptions[0] ?? output.claims[0] ?? null,
+  const pageData = useMemo(() => buildLearnPageData(output, sourceText, focusedClaim, focusNode), [
+    focusedClaim,
+    focusNode,
+    output,
+    sourceText,
+  ]);
+  const [askPennyOpen, setAskPennyOpen] = useState(false);
+  const [activeMainStepId, setActiveMainStepId] = useState(pageData.steps[0]?.id ?? "step-1");
+  const [activeSubstepId, setActiveSubstepId] = useState(pageData.steps[0]?.substeps[0]?.id ?? "step-1-substep-1");
+  const activeStepIndex = Math.max(
+    0,
+    pageData.steps.findIndex((step) => step.id === activeMainStepId),
   );
+  const activeStep = pageData.steps[activeStepIndex] ?? pageData.steps[0];
+  const currentProgressPercent = Math.round(((activeStepIndex + 1) / pageData.steps.length) * 100);
+  const relatedQuery = focusNode?.summary?.trim() || focusedClaim?.text || pageData.goal;
 
   useEffect(() => {
-    if (focusedClaim) {
-      setSelectedVerifyClaim(focusedClaim);
+    const firstStep = pageData.steps[0];
+
+    if (!firstStep) {
+      return;
     }
-  }, [focusedClaim]);
+
+    if (!pageData.steps.some((step) => step.id === activeMainStepId)) {
+      setActiveMainStepId(firstStep.id);
+      setActiveSubstepId(firstStep.substeps[0]?.id ?? firstStep.id);
+    }
+  }, [activeMainStepId, pageData.steps]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+      const isTextInput =
+        target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
+
+      if (event.ctrlKey && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        setAskPennyOpen((isOpen) => !isOpen);
+        return;
+      }
+
+      if (event.key === "Enter" && !isTextInput) {
+        event.preventDefault();
+        goToNextStep();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
+
+  function selectStep(stepId: string) {
+    const step = pageData.steps.find((item) => item.id === stepId);
+
+    if (!step) {
+      return;
+    }
+
+    setActiveMainStepId(step.id);
+    setActiveSubstepId(step.substeps[0]?.id ?? step.id);
+  }
+
+  function goToNextStep() {
+    const nextStep = pageData.steps[activeStepIndex + 1];
+
+    if (!nextStep) {
+      return;
+    }
+
+    setActiveMainStepId(nextStep.id);
+    setActiveSubstepId(nextStep.substeps[0]?.id ?? nextStep.id);
+  }
+
+  function goToPreviousStep() {
+    const previousStep = pageData.steps[activeStepIndex - 1];
+
+    if (!previousStep) {
+      return;
+    }
+
+    setActiveMainStepId(previousStep.id);
+    setActiveSubstepId(previousStep.substeps[0]?.id ?? previousStep.id);
+  }
+
+  function handleSuggestedQuestion(question: string) {
+    void onSearchBrainRelated(question, focusedClaim?.id ?? focusNode?.refs?.claimId ?? null);
+  }
 
   return (
-    <section className="learn-session-output" aria-label="Learn session output">
-      <div className="learn-emotional-moment">
-        <span className="section-label">LEARN</span>
-        <h1>Penny found structure in your idea</h1>
-        <p>{truncateWords(output.coreIdea, 28)}</p>
-        <LearnSourceIndicator behavior={learnSourceBehavior(sourceText, searchWebRequested)} />
-      </div>
+    <section className={`learn-session-output${askPennyOpen ? " ask-open" : ""}`} aria-label="Learn session output">
+      <LearningPathSidebar
+        steps={pageData.steps}
+        activeMainStepId={activeMainStepId}
+        activeSubstepId={activeSubstepId}
+        progressPercent={currentProgressPercent}
+        onStepSelect={selectStep}
+      />
 
-      <div className="learn-output-actions" aria-label="Learn next actions">
-        <button type="button" className="primary-command" disabled={disabled} onClick={onOpenCheck}>
-          Check
-        </button>
-        <button type="button" className="text-command" disabled={disabled || !currentSessionId} onClick={onOpenCanvas}>
-          Canvas
-        </button>
-        <button type="button" className="text-command" disabled={disabled} onClick={onOpenVerify}>
-          Verify
-        </button>
-        <button
-          type="button"
-          className="text-command"
-          disabled={disabled || !hasCoreIdea || isSavedToBrain}
-          title={isSavedToBrain ? "This idea is already saved in Brain." : undefined}
-          onClick={() => {
-            void onSaveToBrain(output.coreIdea);
-          }}
-        >
-          Save to Brain
-        </button>
-        <button
-          type="button"
-          className="text-command"
-          disabled={disabled || !hasCoreIdea}
-          onClick={() => {
-            void onKeepRecent(output.coreIdea);
-          }}
-        >
-          Keep in Recents
-        </button>
-        <button
-          type="button"
-          className="text-command"
-          disabled={disabled || !relatedQuery.trim()}
-          onClick={() => {
-            void onSearchBrainRelated(relatedQuery, focusedClaim?.id ?? focusNode?.refs?.claimId ?? null);
-          }}
-        >
-          Have I thought about this before?
-        </button>
-      </div>
+      <LearnMainContent
+        pageData={pageData}
+        activeStepIndex={activeStepIndex}
+        sourceText={sourceText}
+        searchWebRequested={searchWebRequested}
+        relatedBrainSearch={relatedBrainSearch}
+        relatedQuery={relatedQuery}
+        disabled={disabled}
+        onPrevious={goToPreviousStep}
+        onNext={goToNextStep}
+        onAskPennyToggle={() => setAskPennyOpen((isOpen) => !isOpen)}
+        onSearchBrainRelated={() => {
+          void onSearchBrainRelated(relatedQuery, focusedClaim?.id ?? focusNode?.refs?.claimId ?? null);
+        }}
+      />
 
-      <div className="learn-output-grid">
-        {focusNode || focusedClaim ? <LearnFocusCard node={focusNode} claim={focusedClaim} /> : null}
-        <article className="learn-output-card learn-core-idea">
-          <span>Core idea</span>
-          <p>{output.coreIdea}</p>
-          {currentSessionId ? (
-            <button type="button" className="text-command" onClick={onOpenBrain}>
-              Open Brain doc {shortId(currentSessionId)}
-            </button>
-          ) : null}
-        </article>
-
-        <LearnClaimList
-          title="Structured claims"
-          claims={output.claims}
-          emptyText="No claims have been shaped yet."
-          selectedClaimId={selectedVerifyClaim?.id ?? null}
-          disabled={disabled || !currentSessionId}
-          onVerify={setSelectedVerifyClaim}
-        />
-        <LearnClaimList
-          title="Assumptions"
-          claims={output.assumptions}
-          emptyText="No explicit assumptions were returned in this graph slice."
-          selectedClaimId={selectedVerifyClaim?.id ?? null}
-          disabled={disabled || !currentSessionId}
-          onVerify={setSelectedVerifyClaim}
-        />
-        <LearnClaimList
-          title="Questions"
-          claims={output.questions}
-          emptyText="No open questions were returned in this graph slice."
-        />
-        <CreativePotential items={output.creativePotential} />
-        <AutopilotNextMove suggestion={output.autopilotNextMove} claims={output.claims} />
-        <RelatedFromBrain search={relatedBrainSearch} onSelectDocument={onOpenBrain} />
-        <div className="learn-verify-slot">
-          <VerifyPanel
-            sessionId={currentSessionId}
-            claim={selectedVerifyClaim}
-            disabled={disabled || !currentSessionId}
-            title="Verify evidence"
-            compact
-            {...(onVerifyChanged ? { onVerifyChanged } : {})}
-          />
-        </div>
-      </div>
+      <AskPennyPanel
+        askPenny={pageData.askPenny}
+        currentStepTitle={activeStep?.title ?? pageData.currentStep.title}
+        isOpen={askPennyOpen}
+        disabled={disabled}
+        onClose={() => setAskPennyOpen(false)}
+        onPromptSelect={handleSuggestedQuestion}
+      />
     </section>
   );
 }
 
-function LearnFocusCard({ node, claim }: { node: CanvasNode | null; claim: BrainClaim | null }) {
+type LearnExampleFormat = "generic" | "math" | "code" | "writing" | "business";
+
+type LearnPageData = {
+  goal: string;
+  progressPercent: number;
+  steps: Array<{
+    id: string;
+    title: string;
+    expanded: boolean;
+    substeps: Array<{
+      id: string;
+      title: string;
+      isActive: boolean;
+    }>;
+  }>;
+  currentStep: {
+    stepNumber: number;
+    totalSteps: number;
+    title: string;
+    shortExplanation: string;
+    coreIdea: {
+      bullets: string[];
+      visualPlaceholderLabel?: string;
+    };
+    example: {
+      title: string;
+      description: string;
+      lines: string[];
+      whyThisMatters: string;
+      format: LearnExampleFormat;
+    };
+    inlineNote?: string;
+    nextStepTitle: string;
+    previousStepTitle?: string;
+  };
+  askPenny: {
+    suggestedQuestions: string[];
+    placeholder: string;
+  };
+};
+
+function LearningPathSidebar({
+  steps,
+  activeMainStepId,
+  activeSubstepId,
+  progressPercent,
+  onStepSelect,
+}: {
+  steps: LearnPageData["steps"];
+  activeMainStepId: string;
+  activeSubstepId: string;
+  progressPercent: number;
+  onStepSelect: (stepId: string) => void;
+}) {
   return (
-    <article className="learn-output-card learn-focus-card">
-      <span>Selected context</span>
-      <strong>{node?.title ?? claim?.kind ?? "Canvas node"}</strong>
-      <p>{node?.summary ?? claim?.text ?? "Learn is focused on the selected graph node."}</p>
+    <aside className="learn-path-sidebar" aria-label="Learning path">
+      <div className="learn-path-kicker">
+        <span>LEARNING PATH</span>
+        <p>Expert-designed order</p>
+      </div>
+
+      <ol className="learn-path-list">
+        {steps.map((step, index) => {
+          const isActive = step.id === activeMainStepId;
+
+          return (
+            <li key={step.id} className={isActive ? "is-active" : ""}>
+              <button type="button" onClick={() => onStepSelect(step.id)}>
+                <span>{index + 1}</span>
+                <strong>{step.title}</strong>
+              </button>
+              {isActive ? (
+                <ol>
+                  {step.substeps.map((substep, substepIndex) => (
+                    <li key={substep.id} className={substep.id === activeSubstepId ? "is-active-substep" : ""}>
+                      <span>
+                        {index + 1}.{substepIndex + 1}
+                      </span>
+                      {substep.title}
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="learn-path-footer">
+        <div className="learn-progress-row">
+          <span>Progress</span>
+          <strong>{progressPercent}%</strong>
+        </div>
+        <div className="learn-progress-bar" aria-hidden="true">
+          <span style={{ width: `${progressPercent}%` }} />
+        </div>
+        <button type="button">Skip to a step you know</button>
+      </div>
+    </aside>
+  );
+}
+
+function LearnMainContent({
+  pageData,
+  activeStepIndex,
+  sourceText,
+  searchWebRequested,
+  relatedBrainSearch,
+  relatedQuery,
+  disabled,
+  onPrevious,
+  onNext,
+  onAskPennyToggle,
+  onSearchBrainRelated,
+}: {
+  pageData: LearnPageData;
+  activeStepIndex: number;
+  sourceText: string;
+  searchWebRequested: boolean;
+  relatedBrainSearch: BrainHybridSearchResponse["data"] | null;
+  relatedQuery: string;
+  disabled: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+  onAskPennyToggle: () => void;
+  onSearchBrainRelated: () => void;
+}) {
+  const activeStep = pageData.steps[activeStepIndex] ?? pageData.steps[0];
+  const nextStep = pageData.steps[activeStepIndex + 1];
+  const currentStep = {
+    ...pageData.currentStep,
+    title: activeStep?.title ?? pageData.currentStep.title,
+    stepNumber: activeStepIndex + 1,
+    shortExplanation: stepExplanation(activeStep?.id ?? "step-1"),
+    nextStepTitle: nextStep?.title ?? "finish this lesson",
+  };
+  const canGoPrevious = activeStepIndex > 0;
+  const canGoNext = activeStepIndex < pageData.steps.length - 1;
+
+  return (
+    <article className="learn-editorial-main" aria-label="Current learning step">
+      <button type="button" className="learn-ask-toggle" onClick={onAskPennyToggle} aria-label="Toggle Ask Penny">
+        ?
+      </button>
+
+      <section className="learn-goal-block" aria-label="Your goal">
+        <span>YOUR GOAL</span>
+        <h1>{pageData.goal}</h1>
+      </section>
+
+      <section className="learn-step-header" aria-label="Current step">
+        <span>
+          STEP {activeStepIndex + 1} OF {pageData.steps.length}
+        </span>
+        <h2>{currentStep.title}</h2>
+        <p>{currentStep.shortExplanation}</p>
+      </section>
+
+      <section className="learn-core-section" aria-label="Core idea">
+        <div className="learn-core-copy">
+          <span>CORE IDEA</span>
+          <ul>
+            {currentStep.coreIdea.bullets.map((bullet) => (
+              <li key={bullet}>{bullet}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="learn-visual-placeholder" aria-label="Visual placeholder">
+          <span>{currentStep.coreIdea.visualPlaceholderLabel ?? "Visual / diagram / graph / flow / illustration"}</span>
+        </div>
+      </section>
+
+      <section className="learn-example-panel" aria-label="Fully fleshed-out example">
+        <div>
+          <span>FULLY FLESHED-OUT EXAMPLE</span>
+          <h3>{currentStep.example.title}</h3>
+          <p>{currentStep.example.description}</p>
+          <ol className={currentStep.example.format === "code" ? "is-code" : ""}>
+            {currentStep.example.lines.map((line, index) => (
+              <li key={`${line}-${index}`}>{line}</li>
+            ))}
+          </ol>
+        </div>
+        <aside>
+          <span>WHY THIS MATTERS</span>
+          <p>{currentStep.example.whyThisMatters}</p>
+        </aside>
+      </section>
+
+      {currentStep.inlineNote ? (
+        <aside className="learn-inline-note">
+          <span>NOTE</span>
+          <p>{currentStep.inlineNote}</p>
+        </aside>
+      ) : null}
+
+      <div className="learn-context-actions">
+        <LearnSourceIndicator behavior={learnSourceBehavior(sourceText, searchWebRequested)} />
+        <button type="button" disabled={disabled || !relatedQuery.trim()} onClick={onSearchBrainRelated}>
+          Have I thought about this before?
+        </button>
+        <RelatedFromBrain search={relatedBrainSearch} />
+      </div>
+
+      <nav className="learn-bottom-nav" aria-label="Step navigation">
+        <button type="button" disabled={!canGoPrevious} onClick={onPrevious}>
+          Previous
+        </button>
+        <div>
+          <button type="button" className="learn-next-step" disabled={!canGoNext} onClick={onNext}>
+            Next: {currentStep.nextStepTitle} →
+          </button>
+          <small>Press Enter ↵</small>
+        </div>
+      </nav>
     </article>
   );
 }
 
-function RelatedFromBrain({
-  search,
-  onSelectDocument,
+function AskPennyPanel({
+  askPenny,
+  currentStepTitle,
+  isOpen,
+  disabled,
+  onClose,
+  onPromptSelect,
 }: {
-  search: BrainHybridSearchResponse["data"] | null;
-  onSelectDocument: () => void;
+  askPenny: LearnPageData["askPenny"];
+  currentStepTitle: string;
+  isOpen: boolean;
+  disabled: boolean;
+  onClose: () => void;
+  onPromptSelect: (question: string) => void;
 }) {
+  const [draft, setDraft] = useState("");
+  const trimmedDraft = draft.trim();
+
+  function submitPrompt() {
+    if (!trimmedDraft) {
+      return;
+    }
+
+    onPromptSelect(trimmedDraft);
+    setDraft("");
+  }
+
+  return (
+    <aside className={`ask-penny-panel${isOpen ? " is-open" : ""}`} aria-label="Ask Penny" aria-hidden={!isOpen}>
+      <header>
+        <div>
+          <span>ASK PENNY</span>
+          <p>Ctrl + A to toggle</p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close Ask Penny">
+          ×
+        </button>
+      </header>
+
+      <div className="ask-penny-intro">
+        <strong>Hi! I'm Penny.</strong>
+        <p>Ask me anything about this step.</p>
+        <small>{currentStepTitle}</small>
+      </div>
+
+      <div className="ask-penny-suggestions">
+        {askPenny.suggestedQuestions.map((question) => (
+          <button key={question} type="button" disabled={disabled} onClick={() => onPromptSelect(question)}>
+            {question}
+          </button>
+        ))}
+      </div>
+
+      <form
+        className="ask-penny-input"
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitPrompt();
+        }}
+      >
+        <label className="sr-only" htmlFor="askPennyInput">Ask Penny</label>
+        <input
+          id="askPennyInput"
+          value={draft}
+          disabled={disabled}
+          placeholder={askPenny.placeholder}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <button type="submit" disabled={disabled || !trimmedDraft} aria-label="Send question">
+          →
+        </button>
+      </form>
+    </aside>
+  );
+}
+
+function RelatedFromBrain({ search }: { search: BrainHybridSearchResponse["data"] | null }) {
   if (!search?.available) {
     return null;
   }
 
   return (
-    <article className="learn-output-card learn-related-brain">
+    <div className="learn-related-inline">
       <span>Related from your Brain</span>
       {search.results.length > 0 ? (
-        <div className="learn-related-list">
-          {search.results.slice(0, 5).map((result) => (
-            <button key={result.id} type="button" onClick={onSelectDocument}>
-              <strong>{truncateWords(result.title, 10)}</strong>
-              <small>{truncateWords(result.summary ?? result.kind, 16)}</small>
-            </button>
+        <ul>
+          {search.results.slice(0, 3).map((result) => (
+            <li key={result.id}>{truncateWords(result.title, 12)}</li>
           ))}
-        </div>
+        </ul>
       ) : (
-        <p className="learn-empty-note">No related Brain matches for this prompt yet.</p>
+        <p>No related Brain matches for this prompt yet.</p>
       )}
-      {search.strategy ? <small>{formatLabel(search.strategy)}</small> : null}
-    </article>
+    </div>
   );
+}
+
+function buildLearnPageData(
+  output: LearnSessionOutput,
+  sourceText: string,
+  focusedClaim: BrainClaim | null,
+  focusNode: CanvasNode | null,
+): LearnPageData {
+  const goal = goalFrom(output.coreIdea);
+  const coreBullets = coreIdeaBullets(output, focusedClaim, focusNode);
+  const primaryExample = firstText(focusedClaim?.text, focusNode?.summary, output.claims[0]?.text, output.coreIdea);
+  const conceptNote = output.creativePotential[0] ?? "Use this step to separate what you know from what still needs testing.";
+  const steps = [
+    {
+      id: "step-1",
+      title: "Frame the idea",
+      expanded: true,
+      substeps: [
+        { id: "step-1-substep-1", title: "Name the goal", isActive: true },
+        { id: "step-1-substep-2", title: "Find the central claim", isActive: false },
+        { id: "step-1-substep-3", title: "Mark the useful boundary", isActive: false },
+      ],
+    },
+    {
+      id: "step-2",
+      title: "Separate assumptions",
+      expanded: false,
+      substeps: [
+        { id: "step-2-substep-1", title: "List the hidden premises", isActive: false },
+        { id: "step-2-substep-2", title: "Sort strong from weak", isActive: false },
+      ],
+    },
+    {
+      id: "step-3",
+      title: "Work through an example",
+      expanded: false,
+      substeps: [
+        { id: "step-3-substep-1", title: "Choose a concrete case", isActive: false },
+        { id: "step-3-substep-2", title: "Run the transformation", isActive: false },
+        { id: "step-3-substep-3", title: "Name the output", isActive: false },
+      ],
+    },
+    {
+      id: "step-4",
+      title: "Challenge the weak point",
+      expanded: false,
+      substeps: [
+        { id: "step-4-substep-1", title: "Find the strongest objection", isActive: false },
+        { id: "step-4-substep-2", title: "Decide what would change your mind", isActive: false },
+      ],
+    },
+    {
+      id: "step-5",
+      title: "Make it reusable",
+      expanded: false,
+      substeps: [
+        { id: "step-5-substep-1", title: "Save the pattern", isActive: false },
+        { id: "step-5-substep-2", title: "Prepare the next question", isActive: false },
+      ],
+    },
+  ];
+
+  return {
+    goal,
+    progressPercent: 22,
+    steps,
+    currentStep: {
+      stepNumber: 1,
+      totalSteps: steps.length,
+      title: "Frame the idea",
+      shortExplanation:
+        "Start by turning the messy topic into one teachable claim, then keep only the details that help explain it.",
+      coreIdea: {
+        bullets: coreBullets,
+        visualPlaceholderLabel: "Reserved space for a concept map, flow diagram, worked graph, or code trace",
+      },
+      example: {
+        title: "From broad prompt to teachable frame",
+        description: "A concrete pass through the current learning goal.",
+        lines: [
+          `Input: ${truncateWords(sourceText || output.coreIdea, 18)}`,
+          `Central claim: ${truncateWords(primaryExample, 18)}`,
+          `Key move: explain the claim before branching into side questions.`,
+          `Output: a step Penny can teach, test, and connect back to the graph.`,
+        ],
+        whyThisMatters:
+          "A clear frame keeps Learn Mode from becoming a generic explanation. It gives Penny a stable object to teach, challenge, and remember.",
+        format: inferExampleFormat(sourceText),
+      },
+      inlineNote: conceptNote,
+      nextStepTitle: "Separate assumptions",
+    },
+    askPenny: {
+      suggestedQuestions: [
+        "Can you explain this in simpler terms?",
+        "Can you show a visual?",
+        "What's the most important part here?",
+        "Give me another example.",
+      ],
+      placeholder: "Ask anything...",
+    },
+  };
+}
+
+function stepExplanation(stepId: string): string {
+  switch (stepId) {
+    case "step-2":
+      return "Make the hidden premises visible so Penny can teach what depends on them.";
+    case "step-3":
+      return "Run the idea through a concrete case, because examples reveal missing steps faster than summaries.";
+    case "step-4":
+      return "Test the weakest important point before treating the lesson as learned.";
+    case "step-5":
+      return "Turn the lesson into a reusable pattern Penny can bring back later.";
+    default:
+      return "Start by turning the messy topic into one teachable claim, then keep only the details that help explain it.";
+  }
+}
+
+function goalFrom(coreIdea: string): string {
+  const trimmed = coreIdea.trim();
+
+  if (!trimmed) {
+    return "I want to understand this idea clearly.";
+  }
+
+  if (/^i\s+(want|need|would like|am trying)/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `I want to understand how ${trimmed} works.`;
+}
+
+function coreIdeaBullets(
+  output: LearnSessionOutput,
+  focusedClaim: BrainClaim | null,
+  focusNode: CanvasNode | null,
+): string[] {
+  const candidates = uniqueNonEmpty([
+    focusedClaim?.text ?? "",
+    focusNode?.summary ?? "",
+    ...output.claims.map((claim) => claim.text),
+    ...output.assumptions.map((claim) => `Assumption to watch: ${claim.text}`),
+    ...output.questions.map((claim) => `Open question: ${claim.text}`),
+  ]);
+
+  if (candidates.length >= 3) {
+    return candidates.slice(0, 5).map((item) => truncateWords(item, 20));
+  }
+
+  return [
+    "Name the central claim before adding detail.",
+    "Separate what is known from what is assumed.",
+    "Use one concrete example to make the step inspectable.",
+    "Keep the next challenge visible so learning stays testable.",
+  ];
+}
+
+function inferExampleFormat(text: string): LearnExampleFormat {
+  if (/```|function\s|const\s|let\s|class\s|import\s|def\s/i.test(text)) {
+    return "code";
+  }
+
+  if (/[=∫∑]|derivative|equation|formula|calculate/i.test(text)) {
+    return "math";
+  }
+
+  if (/\bessay|paragraph|outline|draft|sentence|writing\b/i.test(text)) {
+    return "writing";
+  }
+
+  if (/\bmarket|customer|revenue|pricing|business|sales\b/i.test(text)) {
+    return "business";
+  }
+
+  return "generic";
 }
 
 function LearnIdeaDrop({
@@ -486,195 +901,6 @@ function learnWebReason(text: string): string | null {
   }
 
   return null;
-}
-
-function LearnClaimList({
-  title,
-  claims,
-  emptyText,
-  selectedClaimId,
-  disabled = false,
-  onVerify,
-}: {
-  title: string;
-  claims: BrainClaim[];
-  emptyText: string;
-  selectedClaimId?: string | null;
-  disabled?: boolean;
-  onVerify?: (claim: BrainClaim) => void;
-}) {
-  return (
-    <article className="learn-output-card">
-      <span>{title}</span>
-      {claims.length > 0 ? (
-        <ul className="learn-claim-list">
-          {claims.slice(0, 5).map((claim) => (
-            <li key={claim.id}>
-              <div className="learn-claim-row-head">
-                <strong>{formatLabel(claim.kind)}</strong>
-                {onVerify ? (
-                  <button
-                    type="button"
-                    className={claim.id === selectedClaimId ? "is-selected" : ""}
-                    disabled={disabled}
-                    onClick={() => onVerify(claim)}
-                  >
-                    Verify
-                  </button>
-                ) : null}
-              </div>
-              <p>{claim.text}</p>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="learn-empty-note">{emptyText}</p>
-      )}
-    </article>
-  );
-}
-
-function CreativePotential({ items }: { items: string[] }) {
-  return (
-    <article className="learn-output-card">
-      <span>Creative potential</span>
-      <ul className="learn-plain-list">
-        {items.map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-    </article>
-  );
-}
-
-function AutopilotNextMove({
-  suggestion,
-  claims,
-}: {
-  suggestion: AutopilotSuggestion | null;
-  claims: BrainClaim[];
-}) {
-  const targetClaim = suggestion?.targetClaimId ? claims.find((claim) => claim.id === suggestion.targetClaimId) : null;
-
-  return (
-    <article className="learn-output-card learn-next-move">
-      <span>Autopilot next move</span>
-      {suggestion ? (
-        <>
-          <strong>{suggestion.primaryActionLabel}</strong>
-          <p>{suggestion.why}</p>
-          {targetClaim ? <small>Target: {truncateWords(targetClaim.text, 18)}</small> : null}
-          <small>{suggestion.exitCriteria.label}</small>
-        </>
-      ) : (
-        <>
-          <strong>Open Check</strong>
-          <p>Autopilot will choose the next weak spot after this idea has a saved graph slice.</p>
-        </>
-      )}
-    </article>
-  );
-}
-
-function LearnRecents({
-  recents,
-  disabled,
-  onSeed,
-  onKeep,
-}: {
-  recents: BrainRecentIdea[];
-  disabled: boolean;
-  onSeed: (rawIdea: string) => Promise<void>;
-  onKeep: (rawIdea: string) => Promise<void>;
-}) {
-  const [draft, setDraft] = useState("");
-  const trimmedDraft = draft.trim();
-
-  return (
-    <section className="learn-side-panel" aria-label="Keep in Recents">
-      <span>Recents</span>
-      <textarea
-        value={draft}
-        disabled={disabled}
-        placeholder="Park an idea without building it yet..."
-        onChange={(event) => setDraft(event.target.value)}
-      />
-      <div className="learn-side-actions">
-        <button
-          type="button"
-          className="text-command"
-          disabled={disabled || !trimmedDraft}
-          onClick={() => {
-            void onKeep(trimmedDraft).then(() => setDraft(""));
-          }}
-        >
-          Keep
-        </button>
-        <button
-          type="button"
-          className="text-command"
-          disabled={disabled || !trimmedDraft}
-          onClick={() => setDraft("")}
-        >
-          Discard
-        </button>
-      </div>
-      {recents.length > 0 ? (
-        <div className="learn-recents-list">
-          {recents.slice(0, 5).map((recent) => (
-            <button
-              key={recent.id}
-              type="button"
-              disabled={disabled}
-              onClick={() => {
-                void onSeed(recent.rawIdea);
-              }}
-            >
-              <strong>{truncateWords(recent.rawIdea, 10)}</strong>
-              <small>Save to Brain</small>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className="learn-empty-note">Nothing parked yet.</p>
-      )}
-    </section>
-  );
-}
-
-function LearnRecentDocuments({
-  documents,
-  onSelectDocument,
-  onOpenBrain,
-}: {
-  documents: BrainDocumentSummary[];
-  onSelectDocument: (sessionId: string) => void;
-  onOpenBrain: () => void;
-}) {
-  return (
-    <section className="learn-side-panel" aria-label="Recent Brain documents">
-      <div className="learn-side-head">
-        <span>Brain</span>
-        <button type="button" className="text-command" onClick={onOpenBrain}>
-          Open
-        </button>
-      </div>
-      {documents.length > 0 ? (
-        <div className="learn-document-list">
-          {documents.map((document) => (
-            <button key={document.id} type="button" onClick={() => onSelectDocument(document.sessionId)}>
-              <strong>{truncateWords(document.title, 9)}</strong>
-              <small>
-                {document.counts.claims} claims / {formatLabel(document.status)} / {shortId(document.sessionId)}
-              </small>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className="learn-empty-note">Brain docs will appear here after the first saved idea.</p>
-      )}
-    </section>
-  );
 }
 
 function buildLearnSessionOutput(
