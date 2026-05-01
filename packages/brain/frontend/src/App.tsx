@@ -337,6 +337,21 @@ export function App() {
     }
   }
 
+  async function handleVerifyChanged() {
+    if (!data?.session?.id) {
+      return;
+    }
+
+    const cockpit = await refreshCockpit(data.session.id);
+    await refreshDocuments(cockpit.session.id);
+    setFocusedClaimId(
+      cockpit.autopilot.focusState?.focusedClaimId ??
+        cockpit.autopilot.suggestion?.targetClaimId ??
+        cockpit.ideaMap.claims[0]?.id ??
+        null,
+    );
+  }
+
   async function handleManualClaimSelect(claimId: string) {
     setFocusedWorkStructureStepId(workStructure?.steps.find((step) => step.claimIds.includes(claimId))?.id ?? null);
 
@@ -457,6 +472,7 @@ export function App() {
             onOpenBrain={() => setActiveMode("Brain")}
             onOpenCheck={() => setActiveMode("Check")}
             onOpenVerify={() => setActiveMode("Check")}
+            onVerifyChanged={handleVerifyChanged}
           />
         ) : activeMode === "Brain" ? (
           <BrainWorkspace
@@ -494,6 +510,7 @@ export function App() {
             onOpenLearn={() => setActiveMode("Learn")}
             onOpenBrain={() => setActiveMode("Brain")}
             onOpenVerify={() => setActiveMode("Check")}
+            onVerifyChanged={handleVerifyChanged}
             onClaimSelect={handleManualClaimSelect}
             onWorkStructureSelect={handleWorkStructureSelect}
             onIssueChallenge={handleIssueChallenge}
