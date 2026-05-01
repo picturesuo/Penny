@@ -16,6 +16,7 @@ import {
 } from "./db/schema.ts";
 import { LearnSessionOutputSchema, learnRecentInputFromSessionOutput } from "./learn-session-output.ts";
 import { scopeValues, type BrainScope, type OptionalBrainScope } from "./scope.ts";
+import { loadScopedSourcesForSessionIds } from "./source-loading.ts";
 
 const UuidSchema = z.string().uuid();
 const JsonObjectSchema = z.record(z.string(), z.unknown());
@@ -314,9 +315,7 @@ export async function loadBrainObjects(db: PennyDatabase, scope: BrainScope): Pr
     .limit(80);
   const sessionIds = sessionRows.map((session) => session.id);
   const [sourceRows, claimRows, edgeRows, moveRows, artifactRows, savedObjectRows, noteRows] = await Promise.all([
-    sessionIds.length > 0
-      ? db.select().from(sources).where(inArray(sources.sessionId, sessionIds)).orderBy(asc(sources.createdAt))
-      : [],
+    loadScopedSourcesForSessionIds(db, sessionIds, scope),
     sessionIds.length > 0
       ? db.select().from(claims).where(inArray(claims.sessionId, sessionIds)).orderBy(asc(claims.createdAt))
       : [],
