@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { CandidateBrainObjectSchema, type CandidateBrainObject } from "./candidate-brain-object.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
+import { brainRuns } from "./db/schema.ts";
 import { createBrainRepository } from "./domain/repository.ts";
 import type { EntityId } from "./domain/types.ts";
+import { runLearnRecipe, type LearnRecipeOutput } from "./learn-recipe.ts";
 import {
   BrainSeedProviderError,
   BrainSeedValidationError,
@@ -94,6 +97,9 @@ export type LearnSessionPayload = {
   session: BrainSeedUiPayload["session"];
   source: BrainSeedUiPayload["source"];
   brainRun: BrainSeedUiPayload["brainRun"];
+  recipe: LearnRecipeOutput["recipe"];
+  searchDecision: LearnRecipeOutput["searchDecision"];
+  brainContext: LearnRecipeOutput["brainContext"];
   learn: LearnSessionStructure;
   ideaMap: BrainSeedUiPayload["ideaMap"];
   explorationPaths: BrainSeedUiPayload["explorationPaths"];
@@ -158,6 +164,7 @@ export async function handleLearnSessionRequest(
 export function buildLearnSessionPayload(
   seedPayload: BrainSeedUiPayload,
   autopilot: ThinkingModeTickResponse,
+  recipeOutput: LearnRecipeOutput,
 ): LearnSessionPayload {
   const candidateBrainObjects = learnSessionCandidateBrainObjects(seedPayload);
   const learn = {
@@ -184,6 +191,9 @@ export function buildLearnSessionPayload(
     session: seedPayload.session,
     source: seedPayload.source,
     brainRun: seedPayload.brainRun,
+    recipe: recipeOutput.recipe,
+    searchDecision: recipeOutput.searchDecision,
+    brainContext: recipeOutput.brainContext,
     learn,
     ideaMap: seedPayload.ideaMap,
     explorationPaths: seedPayload.explorationPaths,
@@ -258,8 +268,15 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
           resume: input.autopilot.resume,
           limit: input.autopilot.limit ?? 6,
         });
+        const recipeOutput = await runLearnRecipe({
+          rawIdea: input.rawIdea,
+          seedPayload,
+          nextMoves: learnSessionNextMoves(seedPayload, autopilot),
+        });
 
-        return buildLearnSessionPayload(seedPayload, autopilot);
+        await recordLearnRecipeTrace(db, persisted.brainRun.id, seed, recipeOutput);
+
+        return buildLearnSessionPayload(seedPayload, autopilot, recipeOutput);
       } catch (error) {
         if (prelude) {
           await failSeedRun(prelude, error, dbOption(db));
@@ -423,6 +440,29 @@ function resolveDevContext(request: Request, body: LearnSessionRequest): BrainSe
     projectId: firstPresentHeader(request, ["x-project-id", "x-penny-project-id"]) ?? body.projectId ?? "dev-project",
     sphereId: firstPresentHeader(request, ["x-sphere-id", "x-penny-sphere-id"]) ?? body.sphereId ?? "dev-sphere",
   };
+}
+
+async function recordLearnRecipeTrace(
+  db: PennyDatabase | undefined,
+  brainRunId: string,
+  seed: BrainSeedOutput,
+  recipeOutput: LearnRecipeOutput,
+): Promise<void> {
+  if (!db) {
+    return;
+  }
+
+  await db
+    .update(brainRuns)
+    .set({
+      output: {
+        ...seed,
+        recipe: recipeOutput.recipe,
+        searchDecision: recipeOutput.searchDecision,
+        brainContext: recipeOutput.brainContext,
+      },
+    })
+    .where(eq(brainRuns.id, brainRunId));
 }
 
 function firstPresentHeader(request: Request, names: string[]): string | undefined {
@@ -607,3 +647,6 @@ function formatErrorMessage(error: unknown): string {
 
   return String(error);
 }
+
+export { LearnRecipeOutputSchema, runLearnRecipe } from "./learn-recipe.ts";
+export type { LearnRecipeInput, LearnRecipeOutput, LearnRecipeStepName } from "./learn-recipe.ts";
