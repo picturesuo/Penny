@@ -1,4 +1,3 @@
-import React from "react";
 import type { CanvasEdge, CanvasNode } from "../types/brain";
 
 export interface PositionedCanvasNode extends CanvasNode {

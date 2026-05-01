@@ -1,4 +1,3 @@
-import React from "react";
 import { BookOpen, CheckCircle2, Network, Save, ShieldCheck } from "lucide-react";
 import type { CanvasNode, CanvasNodeAction } from "../types/brain";
 import type { PositionedCanvasNode } from "./CanvasEdgeLayer";
@@ -17,11 +16,11 @@ const nodeActions: Array<{
   title: string;
   Icon: typeof BookOpen;
 }> = [
-  { action: "learn", label: "Learn", title: "Learn from this node", Icon: BookOpen },
-  { action: "check", label: "Check", title: "Check this node", Icon: CheckCircle2 },
-  { action: "verify", label: "Verify", title: "Verify this node", Icon: ShieldCheck },
-  { action: "save", label: "Save", title: "Save this node", Icon: Save },
-  { action: "related", label: "Related", title: "Show related nodes", Icon: Network },
+  { action: "learn", label: "Learn", title: "Open Learn with this node as context", Icon: BookOpen },
+  { action: "check", label: "Check", title: "Open Check focused on this node", Icon: CheckCircle2 },
+  { action: "verify", label: "Verify", title: "Run Verify for this node when possible", Icon: ShieldCheck },
+  { action: "save", label: "Save", title: "Save this object to Brain", Icon: Save },
+  { action: "related", label: "Related", title: "Find related Brain context", Icon: Network },
 ];
 
 export function CanvasNodeCard({ node, selected, recommended, onSelect, onAction }: CanvasNodeCardProps) {
