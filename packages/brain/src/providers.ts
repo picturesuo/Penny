@@ -192,6 +192,12 @@ function brainSeedSearchContext(_input: BrainSeedInput) {
 function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
   const idea = input.rawIdea.trim();
   const sessionId = input.sessionId ?? "00000000-0000-4000-8000-000000000001";
+  const demoSeed = buildPennyDemoHeuristicSeed(idea, sessionId);
+
+  if (demoSeed) {
+    return demoSeed;
+  }
+
   const focusTerm = extractFocusTerm(idea);
   const learnTerm = extractLearnTerm(idea);
   const assumptionOne =
@@ -347,6 +353,205 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
         term: learnTerm,
         whyItMatters: `The seed idea relies on ${learnTerm} being concrete enough to challenge and measure.`,
         unblockExplanation: `${capitalize(learnTerm)} is the mental effort needed to process a task. In this idea, Penny should ask what part of studying consumes that effort before assuming AI reduces it.`,
+      },
+    ],
+  };
+}
+
+function buildPennyDemoHeuristicSeed(idea: string, sessionId: string): BrainSeedOutput | null {
+  if (!/\bpenny\b/i.test(idea) || !/\bcreativ/i.test(idea) || !/\bsource[-\s]grounded\b/i.test(idea)) {
+    return null;
+  }
+
+  const assumptionOne = "Penny can evoke better creative starting points more consistently than an open-ended chat or blank document.";
+  const assumptionTwo = "Penny can turn that creative spark into claims, assumptions, checks, and sources without slowing the user down.";
+  const assumptionThree = "Users will trust structured, source-grounded thinking more than fast but unsupported generative output.";
+  const questionOne = "What observable first-session signal proves Penny is more efficient?";
+  const conceptOne = "Source-grounded thinking means each important claim keeps a visible path back to evidence, assumptions, or user-provided context.";
+
+  return {
+    source: {
+      id: "source.raw_idea",
+      rawText: idea,
+    },
+    session: {
+      id: sessionId,
+      sourceId: "source.raw_idea",
+      status: "open",
+    },
+    seedClaim: {
+      id: "claim.seed",
+      kind: "belief",
+      text: idea,
+      confidence: 64,
+    },
+    assumptions: [
+      {
+        id: "claim.assumption.creativity",
+        kind: "assumption",
+        text: assumptionOne,
+        confidence: 46,
+        pressure: "high",
+        whyItMatters: "If Penny cannot reliably evoke better starting material, the efficiency claim becomes a prettier capture flow rather than a thinking advantage.",
+      },
+      {
+        id: "claim.assumption.structure",
+        kind: "assumption",
+        text: assumptionTwo,
+        confidence: 50,
+        pressure: "high",
+        whyItMatters: "If structure adds friction, Penny loses the efficiency wedge even if the final map is intellectually cleaner.",
+      },
+      {
+        id: "claim.assumption.trust",
+        kind: "assumption",
+        text: assumptionThree,
+        confidence: 52,
+        pressure: "medium",
+        whyItMatters: "If users do not care about provenance during creative work, source grounding may be a later enterprise feature rather than the first-loop hook.",
+      },
+    ],
+    thoughtMap: {
+      claims: [
+        {
+          id: "claim.seed",
+          kind: "belief",
+          text: idea,
+          confidence: 64,
+        },
+        {
+          id: "claim.assumption.creativity",
+          kind: "assumption",
+          text: assumptionOne,
+          confidence: 46,
+        },
+        {
+          id: "claim.assumption.structure",
+          kind: "assumption",
+          text: assumptionTwo,
+          confidence: 50,
+        },
+        {
+          id: "claim.assumption.trust",
+          kind: "assumption",
+          text: assumptionThree,
+          confidence: 52,
+        },
+        {
+          id: "claim.question.efficiency",
+          kind: "question",
+          text: questionOne,
+          confidence: 66,
+        },
+        {
+          id: "claim.concept.source_grounded",
+          kind: "concept",
+          text: conceptOne,
+          confidence: 74,
+        },
+      ],
+      edges: [
+        {
+          id: "edge.seed.creativity",
+          fromClaimId: "claim.seed",
+          toClaimId: "claim.assumption.creativity",
+          kind: "depends_on",
+          label: "depends on creativity being reliably evoked",
+        },
+        {
+          id: "edge.seed.structure",
+          fromClaimId: "claim.seed",
+          toClaimId: "claim.assumption.structure",
+          kind: "depends_on",
+          label: "depends on structure preserving speed",
+        },
+        {
+          id: "edge.seed.trust",
+          fromClaimId: "claim.seed",
+          toClaimId: "claim.assumption.trust",
+          kind: "depends_on",
+          label: "depends on source grounding increasing trust",
+        },
+        {
+          id: "edge.question.seed",
+          fromClaimId: "claim.question.efficiency",
+          toClaimId: "claim.seed",
+          kind: "questions",
+          label: "asks how efficiency will be observed",
+        },
+        {
+          id: "edge.concept.seed",
+          fromClaimId: "claim.concept.source_grounded",
+          toClaimId: "claim.seed",
+          kind: "teaches",
+          label: "defines the source-grounded thinking promise",
+        },
+      ],
+    },
+    explorationPaths: [
+      {
+        id: "path-first-session-signal",
+        title: "Define the first-session efficiency signal",
+        prompt: "What should a user accomplish in the first five minutes that would be slower or weaker in chat, notes, or a blank document?",
+        expectedValue: "Turns the efficiency claim into a demo-visible outcome.",
+      },
+      {
+        id: "path-creativity-mechanism",
+        title: "Name the creativity mechanism",
+        prompt: "Does Penny evoke creativity through better prompts, visible assumptions, pressure from Check, retrieval from Brain, or a canvas that makes relationships obvious?",
+        expectedValue: "Separates real product mechanism from a broad creativity slogan.",
+      },
+      {
+        id: "path-structure-without-friction",
+        title: "Test structure without friction",
+        prompt: "Where could the claim and source structure slow the user enough that a looser AI chat feels more efficient?",
+        expectedValue: "Finds the main product tradeoff before the demo overclaims speed.",
+      },
+      {
+        id: "path-source-grounding-threshold",
+        title: "Set the grounding threshold",
+        prompt: "Which claims need sources immediately, and which can remain clearly labeled as assumptions until Verify is invoked?",
+        expectedValue: "Keeps source grounding from becoming fake citation theater.",
+      },
+      {
+        id: "path-compare-current-workflow",
+        title: "Compare the current workflow",
+        prompt: "What does the target user do today when they need creative but rigorous thinking: chat, docs, Miro, notes, research tabs, or a teammate?",
+        expectedValue: "Anchors the demo in a concrete before-and-after workflow.",
+      },
+      {
+        id: "path-saveable-artifact",
+        title: "Choose the saveable artifact",
+        prompt: "Should the first loop leave behind an Idea Map, Challenge Brief, decision memo, or reusable Brain object?",
+        expectedValue: "Connects the creative spark to durable structured memory.",
+      },
+    ],
+    keyInsight:
+      "The load-bearing bet is not that Penny can generate ideas; it is that Penny can make creative thinking inspectable, challengeable, and source-grounded without losing speed.",
+    firstChallenge: {
+      targetClaimId: "claim.assumption.creativity",
+      failureType: "shaky_assumption",
+      weakestPart: "The demo claim assumes Penny reliably evokes better creativity, but it has not named the mechanism or the first-session proof.",
+      challenge:
+        "Defend why Penny is more efficient than a strong prompt in a chat window. If the advantage is really structure, provenance, or follow-through rather than creativity itself, revise the claim so the demo pressure lands on the true mechanism.",
+      responseOptions: ["Defend", "Revise", "Absorb"],
+    },
+    learnCandidates: [
+      {
+        id: "learn.source-grounded-thinking",
+        claimId: "claim.concept.source_grounded",
+        term: "source-grounded thinking",
+        whyItMatters: "The seed promise depends on grounding being visible enough to build trust without turning creativity into a research chore.",
+        unblockExplanation:
+          "Source-grounded thinking means Penny marks which parts came from the user, which parts are assumptions, and which parts need Verify before they become stable claims.",
+      },
+      {
+        id: "learn-structured-creativity",
+        claimId: "claim.assumption.creativity",
+        term: "structured creativity",
+        whyItMatters: "The demo needs to show that structure improves creative output instead of merely organizing it after the fact.",
+        unblockExplanation:
+          "Structured creativity is divergent thinking with constraints: Penny surfaces options, then turns them into claims and assumptions that can be checked.",
       },
     ],
   };
