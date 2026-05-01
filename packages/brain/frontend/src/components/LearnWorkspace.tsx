@@ -8,8 +8,10 @@ import type {
   BrainHybridSearchResponse,
   BrainRecentIdea,
   CanvasNode,
+  InlineLearnOutput,
   LearnSessionOutput,
 } from "../types/brain";
+import { createInlineLearn } from "../api/brainClient";
 import { truncateWords } from "../lib/text";
 
 interface LearnWorkspaceProps {
@@ -50,6 +52,7 @@ export function LearnWorkspace({
   );
   const [searchWebRequested, setSearchWebRequested] = useState(false);
   const sourceText = data?.source?.rawText ?? selectedDocument?.originalIdea ?? output?.coreIdea ?? "";
+  const currentSessionId = data?.session?.id ?? selectedDocument?.sessionId ?? null;
 
   return (
     <main className="learn-workspace" aria-label="Learn">
@@ -57,6 +60,7 @@ export function LearnWorkspace({
         <LearnSessionView
           output={output}
           sourceText={sourceText}
+          sessionId={currentSessionId}
           focusedClaimId={focusedClaimId}
           focusNode={focusNode}
           relatedBrainSearch={relatedBrainSearch}
@@ -72,6 +76,7 @@ export function LearnWorkspace({
 function LearnSessionView({
   output,
   sourceText,
+  sessionId,
   focusedClaimId,
   focusNode,
   relatedBrainSearch,
@@ -81,6 +86,7 @@ function LearnSessionView({
 }: {
   output: LearnSessionOutput;
   sourceText: string;
+  sessionId: string | null;
   focusedClaimId: string | null;
   focusNode: CanvasNode | null;
   relatedBrainSearch: BrainHybridSearchResponse["data"] | null;
@@ -91,6 +97,7 @@ function LearnSessionView({
   const focusedClaim = focusedClaimId
     ? [...output.claims, ...output.assumptions, ...output.questions].find((claim) => claim.id === focusedClaimId) ?? null
     : null;
+  const askTargetClaim = focusedClaim ?? output.assumptions[0] ?? output.claims[0] ?? output.questions[0] ?? null;
   const pageData = useMemo(() => buildLearnPageData(output, sourceText, focusedClaim, focusNode), [
     focusedClaim,
     focusNode,
@@ -209,6 +216,9 @@ function LearnSessionView({
       <AskPennyPanel
         askPenny={pageData.askPenny}
         currentStepTitle={activeStep?.title ?? pageData.currentStep.title}
+        sessionId={sessionId}
+        targetClaim={askTargetClaim}
+        localContext={askPennyContext(pageData, activeStep?.title ?? pageData.currentStep.title, sourceText)}
         isOpen={askPennyOpen}
         disabled={disabled}
         onClose={() => setAskPennyOpen(false)}
@@ -439,6 +449,9 @@ function LearnMainContent({
 function AskPennyPanel({
   askPenny,
   currentStepTitle,
+  sessionId,
+  targetClaim,
+  localContext,
   isOpen,
   disabled,
   onClose,
@@ -446,20 +459,53 @@ function AskPennyPanel({
 }: {
   askPenny: LearnPageData["askPenny"];
   currentStepTitle: string;
+  sessionId: string | null;
+  targetClaim: BrainClaim | null;
+  localContext: string;
   isOpen: boolean;
   disabled: boolean;
   onClose: () => void;
   onPromptSelect: (question: string) => void;
 }) {
   const [draft, setDraft] = useState("");
+  const [answer, setAnswer] = useState<InlineLearnOutput | null>(null);
+  const [lastQuestion, setLastQuestion] = useState<string | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
   const trimmedDraft = draft.trim();
 
-  function submitPrompt() {
-    if (!trimmedDraft) {
+  async function submitPrompt(question: string) {
+    const trimmedQuestion = question.trim();
+
+    if (!trimmedQuestion) {
       return;
     }
 
-    onPromptSelect(trimmedDraft);
+    onPromptSelect(trimmedQuestion);
+    setLastQuestion(trimmedQuestion);
+    setIsRunning(true);
+
+    if (!sessionId || !targetClaim) {
+      setAnswer(localAskPennyAnswer(trimmedQuestion, currentStepTitle));
+      setDraft("");
+      setIsRunning(false);
+      return;
+    }
+
+    try {
+      const response = await createInlineLearn({
+        term: trimmedQuestion.slice(0, 120),
+        currentClaimId: targetClaim.id,
+        sessionId,
+        localContext,
+      });
+
+      setAnswer(response.data);
+    } catch (error) {
+      setAnswer(localAskPennyAnswer(trimmedQuestion, currentStepTitle, error));
+    } finally {
+      setIsRunning(false);
+    }
+
     setDraft("");
   }
 
@@ -481,9 +527,36 @@ function AskPennyPanel({
         <small>{currentStepTitle}</small>
       </div>
 
+      <div className="ask-penny-thread" role="log" aria-live="polite">
+        {lastQuestion ? (
+          <p className="ask-penny-message is-user">
+            <span>You</span>
+            <strong>{lastQuestion}</strong>
+          </p>
+        ) : null}
+        {answer ? (
+          <div className="ask-penny-answer">
+            <span>Penny</span>
+            <p>{answer.explanation}</p>
+            <p>{answer.whyItMattersHere}</p>
+            <small>{answer.example}</small>
+          </div>
+        ) : (
+          <p className="ask-penny-empty">Pick a prompt or ask your own question. Useful answers can become reusable Brain context.</p>
+        )}
+        {isRunning ? <p className="ask-penny-empty">Thinking...</p> : null}
+      </div>
+
       <div className="ask-penny-suggestions">
         {askPenny.suggestedQuestions.map((question) => (
-          <button key={question} type="button" disabled={disabled} onClick={() => onPromptSelect(question)}>
+          <button
+            key={question}
+            type="button"
+            disabled={disabled || isRunning}
+            onClick={() => {
+              void submitPrompt(question);
+            }}
+          >
             {question}
           </button>
         ))}
@@ -493,23 +566,49 @@ function AskPennyPanel({
         className="ask-penny-input"
         onSubmit={(event) => {
           event.preventDefault();
-          submitPrompt();
+          void submitPrompt(trimmedDraft);
         }}
       >
         <label className="sr-only" htmlFor="askPennyInput">Ask Penny</label>
         <input
           id="askPennyInput"
           value={draft}
-          disabled={disabled}
+          disabled={disabled || isRunning}
           placeholder={askPenny.placeholder}
           onChange={(event) => setDraft(event.target.value)}
         />
-        <button type="submit" disabled={disabled || !trimmedDraft} aria-label="Send question">
+        <button type="submit" disabled={disabled || isRunning || !trimmedDraft} aria-label="Send question">
           →
         </button>
       </form>
     </aside>
   );
+}
+
+function askPennyContext(pageData: LearnPageData, currentStepTitle: string, sourceText: string): string {
+  return [
+    `Goal: ${pageData.goal}`,
+    `Current step: ${currentStepTitle}`,
+    `Core idea: ${pageData.currentStep.coreIdea.bullets.join(" ")}`,
+    `Example: ${pageData.currentStep.example.description}`,
+    sourceText ? `Source: ${truncateWords(sourceText, 80)}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, 2_000);
+}
+
+function localAskPennyAnswer(question: string, currentStepTitle: string, error?: unknown): InlineLearnOutput {
+  const errorNote = error instanceof Error ? ` ${error.message}` : "";
+
+  return {
+    term: question,
+    explanation: `For this step, focus on ${currentStepTitle.toLowerCase()} and restate the idea in one reusable sentence.`,
+    whyItMattersHere: `This keeps the learning attached to the current thinking step instead of becoming a generic aside.${errorNote}`,
+    example: "Example: turn a vague question into a claim, then name the assumption that would make the claim fail.",
+    relatedConcepts: ["reusable explanation", "current step"],
+    saveSuggestion: "Save the simplified explanation if it clarifies the current Brain node.",
+  };
 }
 
 function RelatedFromBrain({ search }: { search: BrainHybridSearchResponse["data"] | null }) {
