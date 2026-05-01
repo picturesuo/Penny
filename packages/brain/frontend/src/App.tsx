@@ -236,6 +236,13 @@ export function App() {
     setActiveMode(mode);
   }
 
+  async function handleLandingPromptSubmit(mode: Extract<PennyMode, "Learn" | "Check">, rawIdea: string) {
+    setLandingVisible(false);
+    setActiveMode("Learn");
+    await handleSeed(rawIdea);
+    setActiveMode(mode);
+  }
+
   async function handleLandingQuickNote(rawIdea: string) {
     setLandingVisible(false);
     setActiveMode("Learn");
@@ -645,6 +652,7 @@ export function App() {
             status={status}
             onSeed={handleLandingSeed}
             onModeSelect={handleLandingModeSelect}
+            onPromptSubmit={handleLandingPromptSubmit}
             onQuickNote={handleLandingQuickNote}
           />
         ) : (

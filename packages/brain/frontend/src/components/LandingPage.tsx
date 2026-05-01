@@ -8,17 +8,50 @@ interface LandingPageProps {
   status: string;
   onSeed: (rawIdea: string) => Promise<void>;
   onModeSelect: (mode: PennyMode) => void;
+  onPromptSubmit: (mode: Extract<PennyMode, "Learn" | "Check">, rawIdea: string) => Promise<void>;
   onQuickNote: (rawIdea: string) => Promise<void>;
 }
 
-const shortcuts: Array<{ key: string; label: string; mode?: PennyMode; action: "mode" | "quick-note" }> = [
-  { key: "B", label: "for Brain", mode: "Brain", action: "mode" },
-  { key: "L", label: "for Learn", mode: "Learn", action: "mode" },
-  { key: "C", label: "for Check", mode: "Check", action: "mode" },
-  { key: "Q", label: "for Quick note", action: "quick-note" },
+type LandingShortcutIntent =
+  | { action: "open-mode"; mode: PennyMode }
+  | { action: "submit-prompt"; mode: Extract<PennyMode, "Learn" | "Check">; rawIdea: string }
+  | { action: "quick-note"; rawIdea: string };
+
+const shortcuts: Array<{ key: string; label: string }> = [
+  { key: "B", label: "for Brain" },
+  { key: "L", label: "for Learn" },
+  { key: "C", label: "for Check" },
+  { key: "Q", label: "for Quick note" },
 ];
 
-export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNote }: LandingPageProps) {
+export function landingShortcutIntent(key: string, rawIdea: string): LandingShortcutIntent | null {
+  const normalizedKey = key.trim().toLowerCase();
+  const trimmedIdea = rawIdea.trim();
+
+  if (normalizedKey === "b") {
+    return { action: "open-mode", mode: "Brain" };
+  }
+
+  if (normalizedKey === "l") {
+    return trimmedIdea
+      ? { action: "submit-prompt", mode: "Learn", rawIdea: trimmedIdea }
+      : { action: "open-mode", mode: "Learn" };
+  }
+
+  if (normalizedKey === "c") {
+    return trimmedIdea
+      ? { action: "submit-prompt", mode: "Check", rawIdea: trimmedIdea }
+      : { action: "open-mode", mode: "Check" };
+  }
+
+  if (normalizedKey === "q") {
+    return trimmedIdea ? { action: "quick-note", rawIdea: trimmedIdea } : { action: "open-mode", mode: "Learn" };
+  }
+
+  return null;
+}
+
+export function LandingPage({ disabled, status, onSeed, onModeSelect, onPromptSubmit, onQuickNote }: LandingPageProps) {
   const [rawIdea, setRawIdea] = useState("");
   const [isCtrlDown, setIsCtrlDown] = useState(false);
   const [activeShortcutKey, setActiveShortcutKey] = useState<string | null>(null);
@@ -48,15 +81,7 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
 
       event.preventDefault();
       pulseShortcut(shortcut.key);
-
-      if (shortcut.action === "quick-note") {
-        void handleQuickNote();
-        return;
-      }
-
-      if (shortcut.mode) {
-        onModeSelect(shortcut.mode);
-      }
+      void runShortcut(shortcut.key);
     }
 
     function handleKeyUp(event: KeyboardEvent) {
@@ -77,7 +102,7 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleWindowBlur);
     };
-  }, [rawIdea, onModeSelect]);
+  }, [rawIdea, disabled, onModeSelect, onPromptSubmit, onQuickNote]);
 
   useEffect(() => {
     return () => {
@@ -101,14 +126,32 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
   }
 
   async function handleQuickNote() {
-    const trimmedIdea = rawIdea.trim();
+    await runShortcut("Q");
+  }
 
-    if (!trimmedIdea || disabled) {
-      onModeSelect("Learn");
+  async function runShortcut(key: string) {
+    const intent = landingShortcutIntent(key, rawIdea);
+
+    if (!intent) {
       return;
     }
 
-    await onQuickNote(trimmedIdea);
+    if (intent.action === "open-mode") {
+      onModeSelect(intent.mode);
+      return;
+    }
+
+    if (disabled) {
+      return;
+    }
+
+    if (intent.action === "quick-note") {
+      await onQuickNote(intent.rawIdea);
+      setRawIdea("");
+      return;
+    }
+
+    await onPromptSubmit(intent.mode, intent.rawIdea);
     setRawIdea("");
   }
 
@@ -172,9 +215,10 @@ export function LandingPage({ disabled, status, onSeed, onModeSelect, onQuickNot
                 {index > 0 ? <span className="landing-shortcut-divider" aria-hidden="true" /> : null}
                 <button
                   type="button"
+                  disabled={disabled}
                   onClick={() => {
                     pulseShortcut(shortcut.key);
-                    return shortcut.action === "quick-note" ? void handleQuickNote() : shortcut.mode && onModeSelect(shortcut.mode);
+                    void runShortcut(shortcut.key);
                   }}
                 >
                   <kbd className={isCtrlDown ? "is-pressed" : undefined} aria-label="Control">

@@ -412,22 +412,22 @@ function LearnLoadout() {
   return (
     <div className="learn-loadout" aria-label="Penny loadout">
       <span>
-        <kbd>⌘</kbd>
+        <kbd>Ctrl</kbd>
         <kbd>B</kbd>
         <strong>Brain</strong>
       </span>
       <span>
-        <kbd>⌘</kbd>
+        <kbd>Ctrl</kbd>
         <kbd>C</kbd>
         <strong>Check</strong>
       </span>
       <span>
-        <kbd>⌘</kbd>
+        <kbd>Ctrl</kbd>
         <kbd>L</kbd>
         <strong>Learn</strong>
       </span>
       <span>
-        <kbd>⌘</kbd>
+        <kbd>Ctrl</kbd>
         <kbd>Q</kbd>
         <strong>Quick note</strong>
       </span>
