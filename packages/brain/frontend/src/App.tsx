@@ -639,7 +639,11 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-white text-[#111]">
-      <div className="mx-auto min-h-[calc(100vh-5px)] max-w-[1440px] border-t-[5px] border-black bg-white">
+      <div
+        className={`mx-auto min-h-[calc(100vh-5px)] max-w-[1440px] bg-white${
+          landingVisible ? "" : " border-t-[5px] border-black"
+        }`}
+      >
         {landingVisible ? (
           <LandingPage
             disabled={isThinking}
