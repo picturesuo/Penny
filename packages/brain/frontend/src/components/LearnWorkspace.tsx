@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type {
   AutopilotSuggestion,
   AutopilotTickData,
@@ -98,7 +98,10 @@ export function LearnWorkspace({
         ) : (
           <section className="learn-entry" aria-label="Drop an idea">
             <span className="section-label">LEARN</span>
-            <h1>Drop an idea</h1>
+            <h1>Start with the raw idea</h1>
+            <p className="learn-entry-lede">
+              Save it to Brain when you want Penny to structure it now, or keep it in Recents when it is not ready.
+            </p>
             <LearnIdeaDrop
               disabled={isThinking}
               status={status}
@@ -360,7 +363,7 @@ function LearnIdeaDrop({
         id="learnIdeaDrop"
         value={draft}
         disabled={disabled}
-        placeholder="Write the raw thought Penny should preserve or revisit..."
+        placeholder="Paste the messy thought, decision, or question you want to make rigorous..."
         aria-describedby="learnIdeaDropStatus"
         onChange={(event) => setDraft(event.target.value)}
       />
@@ -372,9 +375,15 @@ function LearnIdeaDrop({
             disabled={disabled}
             onChange={(event) => onSearchWebChange(event.target.checked)}
           />
-          <span>Search web</span>
+          <span>Use web sources</span>
         </label>
         <LearnSourceIndicator behavior={learnSourceBehavior(trimmedDraft, searchWeb)} />
+      </div>
+      <div className="idea-drop-next-move" aria-label="Next move">
+        <span>Next move</span>
+        <strong>Save to Brain</strong>
+        <p>Creates the first graph slice, then Autopilot recommends the next Learn, Check, Verify, or Save action.</p>
+        <small>Use Keep in Recents for loose thoughts you want nearby but not structured yet.</small>
       </div>
       <div className="idea-drop-actions">
         <button type="button" className="primary-command" disabled={disabled || !trimmedDraft} onClick={handleSave}>
@@ -426,7 +435,7 @@ function learnSourceBehavior(text: string, searchWebRequested: boolean): LearnSo
     return {
       usedWeb: true,
       label: "Used web because",
-      detail: "you turned Search web on for this idea.",
+      detail: "you turned web sources on for this idea.",
     };
   }
 
