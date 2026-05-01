@@ -12,6 +12,7 @@ import {
   startAutopilotCandidate,
   tickAutopilot,
 } from "./api/brainClient";
+import { buildAutopilotStartIntent, runAutopilotGoThere, type PennyMode } from "./autopilotUx";
 import { BrainWorkspace } from "./components/BrainWorkspace";
 import { CheckWorkspace } from "./components/CheckWorkspace";
 import { Header } from "./components/Header";
@@ -46,7 +47,6 @@ type ChallengeResponseDraft =
 
 const ACTIVE_SESSION_KEY = "penny.activeSessionId";
 const SESSION_QUERY_PARAM = "sessionId";
-type PennyMode = "Learn" | "Brain" | "Check";
 
 export function App() {
   const [documentsData, setDocumentsData] = useState<BrainDocumentsData | null>(null);
@@ -225,17 +225,11 @@ export function App() {
     }
   }
 
-  async function handleGoThere() {
-    if (!data?.session?.id) {
-      setStatus("Autopilot needs a session first");
-      return;
-    }
+  async function handleGoThere(candidateIdOverride?: string) {
+    const intent = buildAutopilotStartIntent(data?.session?.id, autopilot, candidateIdOverride);
 
-    const candidateId = autopilot?.suggestion?.candidateId ?? autopilot?.selectedCandidate?.candidateId ?? null;
-    const targetClaimId = autopilot?.suggestion?.targetClaimId ?? null;
-
-    if (!candidateId) {
-      setStatus("Autopilot has no candidate to start");
+    if (!intent.ok) {
+      setStatus(intent.status);
       return;
     }
 
@@ -243,9 +237,12 @@ export function App() {
     setStatus("Starting Autopilot focus");
 
     try {
-      await startAutopilotCandidate(data.session.id, candidateId);
-      const cockpit = await refreshCockpit(data.session.id);
-      setFocusedClaimId(cockpit.autopilot.focusState?.focusedClaimId ?? targetClaimId);
+      const result = await runAutopilotGoThere(intent, {
+        startCandidate: startAutopilotCandidate,
+        refreshCockpit,
+      });
+      setFocusedClaimId(result.focusedClaimId);
+      setActiveMode(result.nextMode);
       setStatus("Autopilot focus started");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -494,6 +491,9 @@ export function App() {
             onSeed={handleSeed}
             onSelectDocument={handleSelectDocument}
             onGoThere={handleGoThere}
+            onOpenLearn={() => setActiveMode("Learn")}
+            onOpenBrain={() => setActiveMode("Brain")}
+            onOpenVerify={() => setActiveMode("Check")}
             onClaimSelect={handleManualClaimSelect}
             onWorkStructureSelect={handleWorkStructureSelect}
             onIssueChallenge={handleIssueChallenge}
