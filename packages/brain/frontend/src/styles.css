@@ -1676,7 +1676,7 @@
     line-height: 1.18;
   }
 
-  .makes-cents-panel {
+  .learn-panel {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     border-top: 0;
@@ -1687,12 +1687,12 @@
     overflow: hidden;
   }
 
-  .makes-cents-panel.is-dragging-screenshot .makes-cents-terminal {
+  .learn-panel.is-dragging-screenshot .learn-panel-terminal {
     border-color: #111111;
     box-shadow: inset 0 0 0 2px rgb(17 17 17 / 0.18);
   }
 
-  .makes-cents-terminal {
+  .learn-panel-terminal {
     display: grid;
     align-content: start;
     gap: 4px;
@@ -1778,7 +1778,7 @@
     object-fit: cover;
   }
 
-  .makes-cents-form {
+  .learn-panel-form {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) 52px;
     align-items: center;
@@ -1789,7 +1789,7 @@
     background: #ffffff;
   }
 
-  .makes-cents-form > span {
+  .learn-panel-form > span {
     padding-left: 10px;
     color: rgb(17 17 17 / 0.62);
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -1797,7 +1797,7 @@
     line-height: 1;
   }
 
-  .makes-cents-form input {
+  .learn-panel-form input {
     min-width: 0;
     border: 0;
     padding: 8px 8px;
@@ -1807,7 +1807,7 @@
     line-height: 1;
   }
 
-  .makes-cents-form button {
+  .learn-panel-form button {
     display: grid;
     place-items: center;
     border: 0;
@@ -1818,7 +1818,7 @@
     line-height: 1;
   }
 
-  .makes-cents-form button:disabled {
+  .learn-panel-form button:disabled {
     opacity: 0.38;
   }
 

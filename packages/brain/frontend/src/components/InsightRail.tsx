@@ -113,7 +113,7 @@ export function InsightRail({
     seedClaim;
   return (
     <aside className="insight-rail" aria-label="Penny side rail">
-      <MakesCentsPanel
+      <LearnPanel
         sessionId={sessionId ?? null}
         targetClaim={target}
         claims={claims}
@@ -721,7 +721,7 @@ type ScreenshotCapture = {
   name: string;
 };
 
-function MakesCentsPanel({
+function LearnPanel({
   sessionId,
   targetClaim,
   claims,
@@ -768,10 +768,10 @@ function MakesCentsPanel({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await askMakesCents(prompt);
+    await askLearn(prompt);
   }
 
-  async function askMakesCents(rawPrompt: string) {
+  async function askLearn(rawPrompt: string) {
     const question = rawPrompt.trim();
 
     if (!question) {
@@ -790,7 +790,7 @@ function MakesCentsPanel({
         term: question.slice(0, 120),
         currentClaimId: targetClaim.id,
         sessionId,
-        localContext: makesCentsContext(claims, challenge, learnCandidates, screenshots),
+        localContext: learnPanelContext(claims, challenge, learnCandidates, screenshots),
       });
 
       setAnswer(output.data);
@@ -841,17 +841,17 @@ function MakesCentsPanel({
 
   return (
     <section
-      className={`makes-cents-panel${isDraggingScreenshot ? " is-dragging-screenshot" : ""}`}
-      aria-label="Makes Cents"
+      className={`learn-panel${isDraggingScreenshot ? " is-dragging-screenshot" : ""}`}
+      aria-label="Learn"
       onDrop={handleScreenshotDrop}
       onDragOver={handleScreenshotDragOver}
       onDragLeave={handleScreenshotDragLeave}
     >
       <div className="rail-section-head">
-        <h2>MAKES CENTS</h2>
+        <h2>LEARN</h2>
         <span>{isRunning ? "Thinking" : "Open"}</span>
       </div>
-      <div className="makes-cents-terminal" role="log" aria-live="polite">
+      <div className="learn-panel-terminal" role="log" aria-live="polite">
         <TerminalLine label="system">
           session-level Q&A active. Ask about any claim, challenge, assumption, or unclear term in the middle panel.
         </TerminalLine>
@@ -870,7 +870,7 @@ function MakesCentsPanel({
           </TerminalLine>
         )}
       </div>
-      <form className="makes-cents-form" onSubmit={handleSubmit}>
+      <form className="learn-panel-form" onSubmit={handleSubmit}>
         <span aria-hidden="true">&gt;</span>
         <input
           ref={inputRef}
@@ -880,7 +880,7 @@ function MakesCentsPanel({
           onChange={(event) => setPrompt(event.target.value)}
           onPaste={handlePaste}
         />
-        <button type="submit" disabled={!canAsk} aria-label="Ask Makes Cents">
+        <button type="submit" disabled={!canAsk} aria-label="Ask Learn">
           Run
         </button>
       </form>
@@ -1102,7 +1102,7 @@ function pennyInsightContextForAction(
 }
 
 function pennyInsightActionInstruction(action: InsightActionId, question?: string): string {
-  const base = "Penny Insight is a small vocab and idea explainer, not the Makes Cents conversation panel.";
+  const base = "Penny Insight is a small vocab and idea explainer, not the Learn conversation panel.";
 
   switch (action) {
     case "define":
@@ -1150,7 +1150,7 @@ function pennyInsightContext(
     .slice(0, 2_000);
 }
 
-function makesCentsContext(
+function learnPanelContext(
   claims: BrainClaim[],
   challenge: ChallengeSuggestion | undefined,
   learnCandidates: LearnCandidate[],
