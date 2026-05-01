@@ -392,6 +392,7 @@ function nextMoveCandidate(): NextMoveCandidate {
     mode: "challenge",
     score: 920,
     reason: "Challenge the load-bearing assumption.",
+    whyPennyRecommendsThis: "Why Penny recommends this: the idea depends on a fragile assumption.",
     reasonCodes: ["load_bearing", "low_confidence"],
     exitCriteria: {
       label: "Issue a challenge.",

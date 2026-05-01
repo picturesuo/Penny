@@ -55,6 +55,7 @@ export type NextMoveCandidate = {
   mode: ThinkingMode;
   score: number;
   reason: string;
+  whyPennyRecommendsThis: string;
   reasonCodes: ReadonlyArray<string>;
   exitCriteria: NextMoveExitCriteria;
   scoreBreakdown: NextMoveScoreBreakdown;
@@ -147,7 +148,7 @@ function saveToBrainCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
   const latestResponse = latestChallengeResponseMove(graph.moves);
 
   if (!latestResponse || hasArtifactAfterMove(graph.artifacts, latestResponse)) {
-    return [];
+    return stableStructureSaveCandidates(graph);
   }
 
   const targetClaimId = firstStringPayloadValue(latestResponse.payload, "targetClaimId") ?? graph.claims[0]?.id ?? null;
@@ -182,6 +183,9 @@ function saveToBrainCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
       mode: "artifact",
       score: sumScore(scoreBreakdown),
       reason: `Save the worked state around "${clipText(target.text)}" to Brain now that the challenge response is recorded.`,
+      whyPennyRecommendsThis: whyPennyRecommendsThis(
+        "the challenge response creates a durable boundary, so this thinking is ready to become a Brain object.",
+      ),
       reasonCodes: ["save_to_brain", "artifact_boundary", "challenge_response_recorded"],
       exitCriteria: {
         label: "A durable Brain artifact is created from the current claims, edges, and moves.",
@@ -194,6 +198,63 @@ function saveToBrainCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
         edgeIds: targetEdgeId ? uniqueIds([targetEdgeId, ...evidenceEdgeIds(graph.edges, target.id)]) : evidenceEdgeIds(graph.edges, target.id),
         moveIds: [latestResponse.id],
         artifactIds: graph.artifacts.map((artifact) => artifact.id).sort(),
+      },
+    },
+  ];
+}
+
+function stableStructureSaveCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
+  if (graph.artifacts.length > 0 || hasUnansweredChallenge(graph)) {
+    return [];
+  }
+
+  const structureScore = stableStructureScore(graph);
+
+  if (structureScore < 260) {
+    return [];
+  }
+
+  const target = primaryClaim(graph);
+
+  if (!target || target.status === "rejected") {
+    return [];
+  }
+
+  const targetEdgeId = strongestConnectedEdgeId(graph.edges, target.id);
+  const scoreBreakdown: NextMoveScoreBreakdown = {
+    leverage: Math.min(280, leverageScore(graph.edges, target.id)),
+    fragility: 25,
+    stakes: Math.min(180, stakesScore(target)),
+    readiness: 175,
+    momentum: seedMomentumScore(graph.moves, target.id),
+    novelty: noveltyScore(graph.moves, target.id, "save_to_brain"),
+    shape: Math.min(240, structureScore),
+    penalties: penaltyScore(target, graph.edges, graph.moves, targetEdgeId),
+  };
+
+  return [
+    {
+      targetClaimId: target.id,
+      targetEdgeId,
+      action: "save_to_brain",
+      mode: "artifact",
+      score: sumScore(scoreBreakdown),
+      reason: `Save "${clipText(target.text)}" to Brain because Penny has enough stable structure to preserve it.`,
+      whyPennyRecommendsThis: whyPennyRecommendsThis(
+        "the dropped idea now has a usable structure of claims, assumptions, questions, and links that is worth preserving.",
+      ),
+      reasonCodes: ["save_to_brain", "stable_structure", "useful_structure"],
+      exitCriteria: {
+        label: "A durable Brain object is created from the current structured idea.",
+        acceptedMoveKinds: ["artifact_created"],
+      },
+      scoreBreakdown,
+      provenance: {
+        ruleIds: ["save_to_brain", "stable_structured_idea"],
+        claimIds: evidenceClaimIds(graph.edges, target.id),
+        edgeIds: evidenceEdgeIds(graph.edges, target.id),
+        moveIds: seedMoveIds(graph.moves),
+        artifactIds: [],
       },
     },
   ];
@@ -232,6 +293,9 @@ function resumeOpenChallengeCandidates(graph: ThinkingGraphSnapshot): CandidateD
           mode: "challenge",
           score: sumScore(scoreBreakdown),
           reason: `Resume the open challenge on "${clipText(target.text)}" before starting new work.`,
+          whyPennyRecommendsThis: whyPennyRecommendsThis(
+            "there is already an unanswered Check in progress, and resolving it keeps the reasoning loop coherent.",
+          ),
           reasonCodes: ["open_challenge", "defend_revise_absorb_required", ...tagReasonCodes(target)],
           exitCriteria: {
             label: "The user responds to the challenge with Defend, Revise, or Absorb.",
@@ -251,26 +315,32 @@ function resumeOpenChallengeCandidates(graph: ThinkingGraphSnapshot): CandidateD
 }
 
 function challengeCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
+  const respondedEdgeIds = challengeResponseEdgeIds(graph.moves);
   const openChallengeTargets = new Set(
     graph.edges
-      .filter((edge) => isChallengeEdge(edge) && edge.status === "active" && !challengeResponseEdgeIds(graph.moves).has(edge.id))
+      .filter((edge) => isChallengeEdge(edge) && edge.status === "active" && !respondedEdgeIds.has(edge.id))
       .map((edge) => edge.toClaimId),
+  );
+  const respondedChallengeTargets = new Set(
+    graph.edges.filter((edge) => isChallengeEdge(edge) && respondedEdgeIds.has(edge.id)).map((edge) => edge.toClaimId),
   );
 
   return sortedClaims(graph.claims)
     .filter((claim) => claim.status === "exploratory")
     .filter((claim) => claim.kind === "assumption" || claim.confidence <= 55 || hasAnyTag(claim, ["load_bearing"]))
     .filter((claim) => !openChallengeTargets.has(claim.id))
+    .filter((claim) => !respondedChallengeTargets.has(claim.id))
     .map((claim) => {
       const targetEdgeId = strongestConnectedEdgeId(graph.edges, claim.id);
+      const assumptionFragility = assumptionFragilityScore(claim, graph.edges);
       const scoreBreakdown: NextMoveScoreBreakdown = {
         leverage: leverageScore(graph.edges, claim.id) + (hasAnyTag(claim, ["load_bearing"]) ? 90 : 0),
-        fragility: fragilityScore(claim, graph.edges),
+        fragility: fragilityScore(claim, graph.edges) + Math.round(assumptionFragility * 0.45),
         stakes: stakesScore(claim),
-        readiness: claim.kind === "assumption" ? 160 : 110,
+        readiness: (claim.kind === "assumption" ? 170 : 110) + (assumptionFragility >= 260 ? 80 : 0),
         momentum: seedMomentumScore(graph.moves, claim.id),
         novelty: noveltyScore(graph.moves, claim.id, "challenge"),
-        shape: 0,
+        shape: Math.min(110, Math.round(assumptionFragility * 0.3)),
         penalties: penaltyScore(claim, graph.edges, graph.moves, targetEdgeId),
       };
 
@@ -280,7 +350,10 @@ function challengeCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
         action: "challenge",
         mode: "challenge",
         score: sumScore(scoreBreakdown),
-        reason: `Challenge "${clipText(claim.text)}" because it is an unresolved, load-bearing risk in the map.`,
+        reason: `Check "${clipText(claim.text)}" because it is an unresolved, load-bearing risk in the map.`,
+        whyPennyRecommendsThis: whyPennyRecommendsThis(
+          "the idea depends on a fragile assumption, so Penny should pressure-test it before building on top of it.",
+        ),
         reasonCodes: ["unresolved_claim", ...challengeReasonCodes(claim, graph.edges)],
         exitCriteria: {
           label: "A challenge is issued and the user can answer with Defend, Revise, or Absorb.",
@@ -301,18 +374,26 @@ function challengeCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
 function verifyCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
   return sortedClaims(graph.claims)
     .filter((claim) => claim.status !== "rejected" && claim.kind !== "concept")
-    .filter((claim) => claim.confidence >= 85 || (claim.confidence <= 35 && supportCount(graph.edges, claim.id) === 0))
+    .filter(
+      (claim) =>
+        claim.confidence >= 85 ||
+        (claim.confidence <= 35 && supportCount(graph.edges, claim.id) === 0) ||
+        externalFactualityScore(claim) >= 100,
+    )
     .map((claim) => {
+      const externalFactuality = externalFactualityScore(claim);
+      const unsupported = supportCount(graph.edges, claim.id) === 0;
       const scoreBreakdown: NextMoveScoreBreakdown = {
         leverage: leverageScore(graph.edges, claim.id),
-        fragility: fragilityScore(claim, graph.edges) + (supportCount(graph.edges, claim.id) === 0 ? 130 : 0),
-        stakes: stakesScore(claim),
-        readiness: 130,
+        fragility: fragilityScore(claim, graph.edges) + (unsupported ? 130 : 0) + Math.round(externalFactuality * 0.2),
+        stakes: stakesScore(claim) + Math.round(externalFactuality * 0.35),
+        readiness: (externalFactuality >= 100 ? 210 : 130) + (unsupported ? 20 : 0),
         momentum: seedMomentumScore(graph.moves, claim.id),
         novelty: noveltyScore(graph.moves, claim.id, "verify"),
-        shape: 0,
+        shape: Math.min(110, Math.round(externalFactuality * 0.35)),
         penalties: penaltyScore(claim, graph.edges, graph.moves, null),
       };
+      const externalReason = externalFactuality >= 100;
 
       return {
         targetClaimId: claim.id,
@@ -320,8 +401,15 @@ function verifyCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
         action: "verify",
         mode: "verify",
         score: sumScore(scoreBreakdown),
-        reason: `Verify "${clipText(claim.text)}" because its confidence is not backed by enough explicit support.`,
-        reasonCodes: [claim.confidence >= 85 ? "high_confidence" : "very_low_confidence", "unsupported_or_extreme_confidence"],
+        reason: externalReason
+          ? `Verify "${clipText(claim.text)}" because it makes an external factual claim that needs source grounding.`
+          : `Verify "${clipText(claim.text)}" because its confidence is not backed by enough explicit support.`,
+        whyPennyRecommendsThis: whyPennyRecommendsThis(
+          externalReason
+            ? "this claim reaches outside the idea map into facts about the world, so Penny should ground it in sources before treating it as stable."
+            : "the confidence level is extreme or unsupported, so Penny should look for evidence before the map relies on it.",
+        ),
+        reasonCodes: verifyReasonCodes(claim, externalFactuality, unsupported),
         exitCriteria: {
           label: "Verify produces evidence and any confidence change is explicitly accepted or rejected.",
           acceptedMoveKinds: ["verify_run", "confidence_update_accepted", "confidence_update_rejected"],
@@ -361,6 +449,9 @@ function clarifyCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
         mode: "brain",
         score: sumScore(scoreBreakdown),
         reason: `Clarify "${clipText(claim.text)}" so the map has a sharper question or claim before deeper work.`,
+        whyPennyRecommendsThis: whyPennyRecommendsThis(
+          "the current wording is still ambiguous, and a sharper node will make Learn, Check, Verify, or Save more useful.",
+        ),
         reasonCodes: claim.kind === "question" ? ["open_question", "needs_clarification"] : ["ambiguous_claim", "needs_clarification"],
         exitCriteria: {
           label: "The ambiguity is turned into a clearer claim, question, or explicit decision to leave it unchanged.",
@@ -382,14 +473,15 @@ function learnCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
   return sortedClaims(graph.claims)
     .filter((claim) => claim.status !== "rejected" && claim.kind === "concept")
     .map((claim) => {
+      const confusion = conceptConfusionScore(claim, graph.edges);
       const scoreBreakdown: NextMoveScoreBreakdown = {
         leverage: leverageScore(graph.edges, claim.id),
-        fragility: 40,
+        fragility: 40 + Math.round(confusion * 0.25),
         stakes: stakesScore(claim),
-        readiness: 105,
+        readiness: 130 + Math.round(confusion * 0.7),
         momentum: seedMomentumScore(graph.moves, claim.id),
         novelty: noveltyScore(graph.moves, claim.id, "learn"),
-        shape: 0,
+        shape: Math.min(130, Math.round(confusion * 0.35)),
         penalties: penaltyScore(claim, graph.edges, graph.moves, null),
       };
 
@@ -400,7 +492,10 @@ function learnCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
         mode: "learn",
         score: sumScore(scoreBreakdown),
         reason: `Learn the concept behind "${clipText(claim.text)}" to improve the user's next reasoning step.`,
-        reasonCodes: ["concept_node", "learn_in_context"],
+        whyPennyRecommendsThis: whyPennyRecommendsThis(
+          "the idea contains concept confusion or a knowledge gap that will block better questions and stronger checks.",
+        ),
+        reasonCodes: ["concept_node", "learn_in_context", ...conceptReasonCodes(claim, confusion)],
         exitCriteria: {
           label: "The user saves, dismisses, or completes the contextual Learn explanation.",
           acceptedMoveKinds: ["learning_triggered", "learn_explanation_saved", "learn_explanation_dismissed"],
@@ -592,6 +687,12 @@ function hasArtifactAfterMove(artifacts: ReadonlyArray<ChallengeBriefArtifact>, 
   return artifacts.some((artifact) => artifact.createdAt >= move.createdAt);
 }
 
+function hasUnansweredChallenge(graph: ThinkingGraphSnapshot): boolean {
+  const respondedEdgeIds = challengeResponseEdgeIds(graph.moves);
+
+  return graph.edges.some((edge) => isChallengeEdge(edge) && edge.status === "active" && !respondedEdgeIds.has(edge.id));
+}
+
 function leverageScore(edges: ReadonlyArray<ThinkingEdge>, claimId: EntityId): number {
   const activeConnectedEdges = edges.filter((edge) => edge.status === "active" && connectsClaim(edge, claimId));
   const dependencyEdges = activeConnectedEdges.filter((edge) => edge.kind === "depends_on");
@@ -629,6 +730,127 @@ function stakesScore(claim: ClaimView): number {
   }
 
   return score;
+}
+
+function assumptionFragilityScore(claim: ClaimView, edges: ReadonlyArray<ThinkingEdge>): number {
+  if (claim.kind !== "assumption" && !hasAnyTag(claim, ["load_bearing"])) {
+    return 0;
+  }
+
+  const connectedDependsOn = edges.filter((edge) => edge.status === "active" && edge.kind === "depends_on" && connectsClaim(edge, claim.id)).length;
+  let score = claim.kind === "assumption" ? 115 : 45;
+
+  if (claim.confidence <= 55) {
+    score += (56 - clampConfidence(claim.confidence)) * 4;
+  }
+
+  if (supportCount(edges, claim.id) === 0) {
+    score += 65;
+  }
+
+  score += Math.min(160, connectedDependsOn * 80);
+
+  if (hasAnyTag(claim, ["load_bearing"])) {
+    score += 85;
+  }
+
+  return score;
+}
+
+function externalFactualityScore(claim: ClaimView): number {
+  const haystack = `${claim.text} ${claim.tags.join(" ")}`.toLowerCase();
+  let score = 0;
+
+  if (/\b(study|research|source|citation|evidence|survey|benchmark|according to|reported|data)\b/.test(haystack)) {
+    score += 90;
+  }
+
+  if (/\b(founder|customer|market|adoption|retention|conversion|revenue|sales|pricing|pay|users|companies)\b/.test(haystack)) {
+    score += 70;
+  }
+
+  if (/[$%]|\b\d+(?:\.\d+)?\s*(?:percent|%|k|m|million|billion|users|customers|founders|months|days|weeks|dollars|usd)\b/.test(haystack)) {
+    score += 100;
+  }
+
+  if (hasAnyTag(claim, ["external_fact", "factual_claim", "needs_source", "source_grounding", "high_confidence_unsupported_claim"])) {
+    score += 120;
+  }
+
+  return score;
+}
+
+function conceptConfusionScore(claim: ClaimView, edges: ReadonlyArray<ThinkingEdge>): number {
+  if (claim.kind !== "concept") {
+    return 0;
+  }
+
+  const haystack = `${claim.text} ${claim.tags.join(" ")}`.toLowerCase();
+  const connectedLearningEdges = edges.filter(
+    (edge) => edge.status === "active" && connectsClaim(edge, claim.id) && (edge.kind === "questions" || edge.kind === "clarifies" || edge.kind === "teaches"),
+  ).length;
+  let score = 110;
+
+  if (/\b(unclear|confus(?:e|ing|ion)|gap|misconception|missing|unknown|jargon|definition|distinction|what is|how does)\b/.test(haystack)) {
+    score += 150;
+  }
+
+  if (claim.confidence <= 60) {
+    score += 65;
+  }
+
+  if (hasAnyTag(claim, ["concept_gap", "knowledge_gap", "misconception", "unclear"])) {
+    score += 120;
+  }
+
+  return score + Math.min(90, connectedLearningEdges * 30);
+}
+
+function stableStructureScore(graph: ThinkingGraphSnapshot): number {
+  const activeEdges = graph.edges.filter((edge) => edge.status === "active");
+  const claimKinds = new Set(graph.claims.filter((claim) => claim.status !== "rejected").map((claim) => claim.kind));
+  let score = 0;
+
+  if (graph.claims.length >= 3) {
+    score += 90;
+  }
+
+  if (claimKinds.has("assumption")) {
+    score += 55;
+  }
+
+  if (claimKinds.has("question")) {
+    score += 45;
+  }
+
+  if (claimKinds.has("concept")) {
+    score += 35;
+  }
+
+  if (activeEdges.length >= 2) {
+    score += 70;
+  }
+
+  if (graph.moves.some((move) => move.kind === "seed_claim_created")) {
+    score += 55;
+  }
+
+  if (graph.moves.some((move) => move.kind === "assumptions_extracted")) {
+    score += 65;
+  }
+
+  return score;
+}
+
+function primaryClaim(graph: ThinkingGraphSnapshot): ClaimView | null {
+  const claimMap = claimsById(graph.claims);
+  const seedClaimId =
+    graph.moves
+      .filter((move) => move.kind === "seed_claim_created")
+      .map((move) => firstStringPayloadValue(move.payload, "claimId") ?? firstStringPayloadValue(move.payload, "targetClaimId"))
+      .find((claimId): claimId is EntityId => Boolean(claimId)) ?? null;
+
+  return (seedClaimId ? claimMap.get(seedClaimId) : null) ?? sortedClaims(graph.claims).find((claim) => claim.status !== "rejected") ?? null;
 }
 
 function seedMomentumScore(moves: ReadonlyArray<ThinkingMove>, claimId: EntityId): number {
@@ -735,6 +957,7 @@ function relatedMoveIds(moves: ReadonlyArray<ThinkingMove>, claimId: EntityId, e
 
 function challengeReasonCodes(claim: ClaimView, edges: ReadonlyArray<ThinkingEdge>): string[] {
   const codes = ["challengeable"];
+  const fragility = assumptionFragilityScore(claim, edges);
 
   if (claim.kind === "assumption") {
     codes.push("assumption");
@@ -748,7 +971,49 @@ function challengeReasonCodes(claim: ClaimView, edges: ReadonlyArray<ThinkingEdg
     codes.push("load_bearing");
   }
 
+  if (fragility >= 260) {
+    codes.push("assumption_fragility_high");
+  }
+
   codes.push(...tagReasonCodes(claim));
+
+  return uniqueIds(codes);
+}
+
+function verifyReasonCodes(claim: ClaimView, externalFactuality: number, unsupported: boolean): string[] {
+  const codes: string[] = [];
+
+  if (claim.confidence >= 85) {
+    codes.push("high_confidence");
+  }
+
+  if (claim.confidence <= 35) {
+    codes.push("very_low_confidence");
+  }
+
+  if (unsupported || claim.confidence >= 85 || claim.confidence <= 35) {
+    codes.push("unsupported_or_extreme_confidence");
+  }
+
+  if (externalFactuality >= 100) {
+    codes.push("external_factual_claim", "source_grounding_needed");
+  }
+
+  codes.push(...tagReasonCodes(claim));
+
+  return uniqueIds(codes.length > 0 ? codes : ["verify_evidence"]);
+}
+
+function conceptReasonCodes(claim: ClaimView, confusion: number): string[] {
+  const codes: string[] = [];
+
+  if (confusion >= 260) {
+    codes.push("concept_confusion_high");
+  }
+
+  if (hasAnyTag(claim, ["concept_gap", "knowledge_gap", "misconception", "unclear"])) {
+    codes.push("knowledge_gap");
+  }
 
   return uniqueIds(codes);
 }
@@ -875,4 +1140,8 @@ function clipText(value: string, maxLength = 110): string {
   }
 
   return `${compact.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+function whyPennyRecommendsThis(reason: string): string {
+  return `Why Penny recommends this: ${reason}`;
 }
