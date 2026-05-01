@@ -654,6 +654,7 @@ export function App() {
               thinkingLabel={isThinking ? "Thinking" : status}
               activeItem={activeMode}
               onNavItemSelect={(item) => setActiveMode(item as PennyMode)}
+              onLogoSelect={handleNewThought}
             />
             {activeMode === "Learn" ? (
           <LearnWorkspace
