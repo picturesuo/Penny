@@ -289,6 +289,43 @@ export interface BrainDocumentsResponse {
   data: BrainDocumentsData;
 }
 
+export type CanvasNodeKind = "claim" | "assumption" | "question" | "concept" | "artifact" | "source" | string;
+export type CanvasNodeAction = "learn" | "check" | "verify" | "save" | "related";
+
+export interface CanvasNode {
+  id: string;
+  kind: CanvasNodeKind;
+  title: string;
+  summary?: string | null;
+  status?: string | null;
+  confidence?: number | null;
+  x?: number;
+  y?: number;
+  refs?: {
+    claimId?: string | null;
+    sourceId?: string | null;
+    artifactId?: string | null;
+  };
+  actions?: CanvasNodeAction[];
+}
+
+export interface CanvasEdge {
+  id: string;
+  source: string;
+  target: string;
+  kind: string;
+  label?: string | null;
+}
+
+export interface SessionCanvasData {
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
+  recommendedPath?: string[];
+  selectedNodeId?: string;
+}
+
+export type SessionCanvasResponse = SessionCanvasData;
+
 export interface BrainRecentIdea {
   id: string;
   rawIdea: string;
