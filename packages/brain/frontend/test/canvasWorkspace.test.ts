@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CanvasWorkspace } from "../src/components/CanvasWorkspace";
+import { CanvasWorkspace } from "../src/components/CanvasWorkspace.tsx";
 import type { SessionCanvasData } from "../src/types/brain";
 
 test("CanvasWorkspace renders nodes, connectors, selection, and action menu", () => {

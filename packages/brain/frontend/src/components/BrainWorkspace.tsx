@@ -170,7 +170,6 @@ export function BrainWorkspace({
             {canvasOpen ? (
               <CanvasWorkspace
                 sessionId={selectedDocument.sessionId}
-                data={data}
                 focusedClaimId={focusedClaimId}
                 disabled={isThinking}
                 onNodeAction={onCanvasNodeAction}

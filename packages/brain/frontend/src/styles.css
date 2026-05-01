@@ -2597,6 +2597,31 @@
     box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.72);
   }
 
+  .canvas-empty-state {
+    position: absolute;
+    top: 44px;
+    left: 44px;
+    display: grid;
+    gap: 8px;
+    max-width: 360px;
+    border: 1px solid #111111;
+    border-radius: 8px;
+    padding: 16px;
+    background: #ffffff;
+  }
+
+  .canvas-empty-state strong,
+  .canvas-empty-state p {
+    overflow-wrap: anywhere;
+  }
+
+  .canvas-empty-state p {
+    margin: 0;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
   .canvas-edge-layer {
     position: absolute;
     inset: 0;
