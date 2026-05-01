@@ -1,4 +1,5 @@
-import { asc, desc, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { artifacts, claimEdges, claims, claimVersions, moves, sessions, sources } from "./db/schema.ts";
 import { scopeValues, type BrainScope, type OptionalBrainScope } from "./scope.ts";
@@ -162,7 +163,7 @@ export type BrainDocumentsPayload = {
 export type BrainDocumentsRouteOptions = {
   db?: PennyDatabase;
   databaseUrl?: string;
-  loadDocuments?: (options: { db?: PennyDatabase }) => Promise<BrainDocumentsPayload>;
+  loadDocuments?: (scope: BrainScope, options: { db?: PennyDatabase }) => Promise<BrainDocumentsPayload>;
 };
 
 export async function handleBrainDocumentsRequest(
@@ -174,12 +175,14 @@ export async function handleBrainDocumentsRequest(
   }
 
   const db = resolveDocumentsDb(options, Boolean(options.loadDocuments));
+  const scope = scopeFromRequest(request);
   const loadDocuments =
     options.loadDocuments ??
-    ((loadOptions: { db?: PennyDatabase }) => loadBrainDocuments(requireDocumentsDb(loadOptions.db)));
+    ((requestScope: BrainScope, loadOptions: { db?: PennyDatabase }) =>
+      loadBrainDocuments(requireDocumentsDb(loadOptions.db), requestScope));
 
   try {
-    return jsonResponse({ data: await loadDocuments(dbOption(db)) }, 200);
+    return jsonResponse({ data: await loadDocuments(scope, dbOption(db)) }, 200);
   } catch (error) {
     return jsonResponse(
       {
@@ -193,8 +196,13 @@ export async function handleBrainDocumentsRequest(
   }
 }
 
-export async function loadBrainDocuments(db: PennyDatabase): Promise<BrainDocumentsPayload> {
-  const sessionRows = await db.select().from(sessions).orderBy(desc(sessions.createdAt)).limit(80);
+export async function loadBrainDocuments(db: PennyDatabase, scope: BrainScope): Promise<BrainDocumentsPayload> {
+  const sessionRows = await db
+    .select()
+    .from(sessions)
+    .where(scopeCondition(sessions, scope))
+    .orderBy(desc(sessions.createdAt))
+    .limit(80);
   const sessionIds = sessionRows.map((session) => session.id);
 
   if (sessionIds.length === 0) {
@@ -211,10 +219,26 @@ export async function loadBrainDocuments(db: PennyDatabase): Promise<BrainDocume
 
   const [sourceRows, claimRows, edgeRows, moveRows, artifactRows] = await Promise.all([
     Promise.all(sessionRows.map((session) => loadScopedSourcesForSession(db, session))).then((rows) => rows.flat()),
-    db.select().from(claims).where(inArray(claims.sessionId, sessionIds)).orderBy(asc(claims.createdAt)),
-    db.select().from(claimEdges).where(inArray(claimEdges.sessionId, sessionIds)).orderBy(asc(claimEdges.createdAt)),
-    db.select().from(moves).where(inArray(moves.sessionId, sessionIds)).orderBy(asc(moves.createdAt)),
-    db.select().from(artifacts).where(inArray(artifacts.sessionId, sessionIds)).orderBy(asc(artifacts.createdAt)),
+    db
+      .select()
+      .from(claims)
+      .where(and(inArray(claims.sessionId, sessionIds), scopeCondition(claims, scope)))
+      .orderBy(asc(claims.createdAt)),
+    db
+      .select()
+      .from(claimEdges)
+      .where(and(inArray(claimEdges.sessionId, sessionIds), scopeCondition(claimEdges, scope)))
+      .orderBy(asc(claimEdges.createdAt)),
+    db
+      .select()
+      .from(moves)
+      .where(and(inArray(moves.sessionId, sessionIds), scopeCondition(moves, scope)))
+      .orderBy(asc(moves.createdAt)),
+    db
+      .select()
+      .from(artifacts)
+      .where(and(inArray(artifacts.sessionId, sessionIds), scopeCondition(artifacts, scope)))
+      .orderBy(asc(artifacts.createdAt)),
   ]);
   const claimIds = claimRows.map((claim) => claim.id);
   const versionRows =
@@ -1032,6 +1056,47 @@ function requireDocumentsDb(db: PennyDatabase | undefined): PennyDatabase {
 
 function dbOption(db: PennyDatabase | undefined): { db?: PennyDatabase } {
   return db ? { db } : {};
+}
+
+function scopeFromRequest(request: Request): BrainScope {
+  return scopeValues({
+    userId: firstPresentHeader(request, ["x-user-id", "x-penny-user-id"]) ?? null,
+    workspaceId: firstPresentHeader(request, ["x-workspace-id", "x-penny-workspace-id"]) ?? null,
+    projectId: firstPresentHeader(request, ["x-project-id", "x-penny-project-id"]) ?? null,
+    sphereId: firstPresentHeader(request, ["x-sphere-id", "x-penny-sphere-id"]) ?? null,
+  });
+}
+
+type ScopeTable = {
+  userId: AnyPgColumn;
+  workspaceId: AnyPgColumn;
+  projectId: AnyPgColumn;
+  sphereId: AnyPgColumn;
+};
+
+function scopeCondition(table: ScopeTable, scope: BrainScope) {
+  return and(
+    scopeColumnCondition(table.userId, scope.userId),
+    scopeColumnCondition(table.workspaceId, scope.workspaceId),
+    scopeColumnCondition(table.projectId, scope.projectId),
+    scopeColumnCondition(table.sphereId, scope.sphereId),
+  );
+}
+
+function scopeColumnCondition(column: AnyPgColumn, value: string | null) {
+  return value === null ? isNull(column) : eq(column, value);
+}
+
+function firstPresentHeader(request: Request, names: readonly string[]): string | undefined {
+  for (const name of names) {
+    const value = request.headers.get(name)?.trim();
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
 }
 
 function methodNotAllowed(message: string): Response {
