@@ -775,7 +775,8 @@ export async function searchBrainSemantic(
     .where(scopeCondition(brainEmbeddings, input.scope))
     .orderBy(desc(brainEmbeddings.updatedAt))
     .limit(500);
-  const activeRows = input.includeExpired ? rows : rows.filter((row) => !row.expiresAt || row.expiresAt > now);
+  const scopedRows = rows.filter((row) => rowInScope(row, input.scope));
+  const activeRows = input.includeExpired ? scopedRows : scopedRows.filter((row) => !row.expiresAt || row.expiresAt > now);
   const queryEmbedding = normalizeEmbedding(input.embedding ?? mockedEmbeddingForText(query));
 
   return activeRows
@@ -846,7 +847,12 @@ export async function listBrainSearchIndexObjects(
     db.select().from(artifacts).where(scopeCondition(artifacts, scope)).orderBy(desc(artifacts.createdAt)).limit(200),
     db.select().from(claims).where(scopeCondition(claims, scope)).orderBy(desc(claims.createdAt)).limit(300),
   ]);
-  const claimIds = claimRows.map((claim) => claim.id);
+  const scopedObjectRows = objectRows.filter((row) => rowInScope(row, scope));
+  const scopedNoteRows = noteRows.filter((row) => rowInScope(row, scope));
+  const scopedRecentRows = recentRows.filter((row) => rowInScope(row, scope));
+  const scopedArtifactRows = artifactRows.filter((row) => rowInScope(row, scope));
+  const scopedClaimRows = claimRows.filter((row) => rowInScope(row, scope));
+  const claimIds = scopedClaimRows.map((claim) => claim.id);
   const versionRows =
     claimIds.length > 0
       ? await db
@@ -855,14 +861,14 @@ export async function listBrainSearchIndexObjects(
           .where(and(inArray(claimVersions.claimId, claimIds), eq(claimVersions.isCurrent, true)))
           .orderBy(desc(claimVersions.createdAt))
       : [];
-  const claimsById = new Map(claimRows.map((claim) => [claim.id, claim]));
+  const claimsById = new Map(scopedClaimRows.map((claim) => [claim.id, claim]));
   const recentCutoff = new Date(now.getTime() - recentSearchTtlMs);
 
   return [
-    ...objectRows.map(searchObjectFromBrainObject),
-    ...noteRows.map(searchObjectFromNote),
-    ...recentRows.filter((row) => row.updatedAt >= recentCutoff).map(searchObjectFromRecent),
-    ...artifactRows.map(searchObjectFromArtifact),
+    ...scopedObjectRows.map(searchObjectFromBrainObject),
+    ...scopedNoteRows.map(searchObjectFromNote),
+    ...scopedRecentRows.filter((row) => row.updatedAt >= recentCutoff).map(searchObjectFromRecent),
+    ...scopedArtifactRows.map(searchObjectFromArtifact),
     ...versionRows.flatMap((row) => {
       const claim = claimsById.get(row.claimId);
       return claim ? [searchObjectFromClaimVersion(row, claim)] : [];
@@ -1691,6 +1697,17 @@ function scopedSessionCondition(table: ScopeTable & { sessionId: ScopeColumn }, 
 
 function scopeColumnCondition(column: ScopeColumn, value: string | null) {
   return value === null ? isNull(column) : eq(column, value);
+}
+
+function rowInScope(row: Partial<BrainScope>, scope: BrainScope) {
+  const rowScope = scopeValues(row);
+
+  return (
+    rowScope.userId === scope.userId &&
+    rowScope.workspaceId === scope.workspaceId &&
+    rowScope.projectId === scope.projectId &&
+    rowScope.sphereId === scope.sphereId
+  );
 }
 
 function canvasNodeTypeForClaim(kind: ClaimRow["kind"]): CanvasNode["type"] {
