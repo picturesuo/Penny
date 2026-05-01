@@ -12,6 +12,11 @@ import { createMove } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 import { scopeValues } from "./scope.ts";
 import { CandidateBrainObjectSchema } from "./candidate-brain-object.ts";
+import {
+  formatBrainRetrievalContext,
+  loadBrainRetrievalContext,
+  type BrainRetrievalContext,
+} from "./brain-retrieval.ts";
 import { createSearchBroker } from "./search-broker.ts";
 import { shouldUseWebSearch } from "./search-decision-service.ts";
 
@@ -96,6 +101,7 @@ export type InlineLearnGenerationInput = {
   currentClaimText: string;
   currentClaimKind: "belief" | "assumption" | "question" | "concept";
   lensSnapshot?: LensSnapshot;
+  retrievalContext?: BrainRetrievalContext;
 };
 
 export type InlineLearnProvider = {
@@ -187,6 +193,7 @@ type InlineLearnPrelude = {
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>;
   brainRun: typeof brainRuns.$inferSelect;
   lensSnapshot: LensSnapshot;
+  retrievalContext: BrainRetrievalContext;
 };
 
 export async function handleInlineLearnRequest(
@@ -284,10 +291,13 @@ export async function runInlineLearn(
   const prelude = await createInlineLearnPrelude(db, input, provider);
 
   try {
-    const output = await generateInlineLearnOutput(learnGenerationInput(prelude.target, input, prelude.lensSnapshot), {
-      provider,
-      brainRunId: prelude.brainRun.id,
-    });
+    const output = await generateInlineLearnOutput(
+      learnGenerationInput(prelude.target, input, prelude.lensSnapshot, prelude.retrievalContext),
+      {
+        provider,
+        brainRunId: prelude.brainRun.id,
+      },
+    );
 
     if (input.save) {
       const saved = await persistSavedInlineLearn(db, input, output, prelude);
@@ -460,6 +470,7 @@ export function buildInlineLearnPrompt(input: InlineLearnGenerationInput, search
     "- Use confirmed shapes to choose framing and examples that fit this user's history.",
     "- Treat candidate shapes as tentative and do not label the user with them.",
     "- If the lens suggests concept grounding or evidence checking patterns, make the explanation more operational.",
+    "- Use Brain retrieval context as the user's durable memory; do not present it as an external citation.",
     "",
     searchInstructions ?? createSearchBroker().prepare(inlineLearnSearchInput(input), "learn", inlineLearnSearchContext(input)).instructions,
     "",
@@ -468,6 +479,7 @@ export function buildInlineLearnPrompt(input: InlineLearnGenerationInput, search
     `Current claim kind: ${input.currentClaimKind}`,
     `Current claim: ${input.currentClaimText}`,
     `Local context: ${input.localContext}`,
+    formatBrainRetrievalContext(input.retrievalContext),
     `Lens snapshot JSON: ${formatLensSnapshot(input.lensSnapshot)}`,
   ].join("\n");
 }
@@ -480,7 +492,19 @@ async function createInlineLearnPrelude(
   return db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.currentClaimId, input.sessionId);
     const lensSnapshot = await loadLensSnapshot(tx, input.sessionId);
-    const generationInput = learnGenerationInput(target, input, lensSnapshot);
+    const generationInputWithoutRetrieval = learnGenerationInput(target, input, lensSnapshot);
+    const retrievalContext = await loadBrainRetrievalContext(tx, {
+      mode: "learn",
+      query: inlineLearnRetrievalQuery(generationInputWithoutRetrieval),
+      sessionId: input.sessionId,
+      currentClaimId: target.claim.id,
+      scope: target.claim,
+      limit: 6,
+    });
+    const generationInput = {
+      ...generationInputWithoutRetrieval,
+      retrievalContext,
+    };
     const searchDecision = shouldUseWebSearch(inlineLearnSearchInput(generationInput), "learn", inlineLearnSearchContext(generationInput));
     const [brainRun] = await tx
       .insert(brainRuns)
@@ -499,6 +523,7 @@ async function createInlineLearnPrelude(
           localContext: input.localContext,
           save: input.save,
           searchDecision,
+          retrievalContext,
           lensSnapshot,
         },
       })
@@ -508,7 +533,7 @@ async function createInlineLearnPrelude(
       throw new InlineLearnConflictError("Failed to record Learn BrainRun.");
     }
 
-    return { target, brainRun, lensSnapshot };
+    return { target, brainRun, lensSnapshot, retrievalContext };
   });
 }
 
@@ -701,6 +726,7 @@ function learnGenerationInput(
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
   input: InlineLearnRequest,
   lensSnapshot: LensSnapshot,
+  retrievalContext?: BrainRetrievalContext,
 ): InlineLearnGenerationInput {
   return {
     term: input.term,
@@ -710,7 +736,12 @@ function learnGenerationInput(
     currentClaimText: target.version.content,
     currentClaimKind: target.claim.kind,
     lensSnapshot,
+    ...(retrievalContext ? { retrievalContext } : {}),
   };
+}
+
+function inlineLearnRetrievalQuery(input: InlineLearnGenerationInput): string {
+  return [input.term, input.currentClaimText, input.localContext].join("\n");
 }
 
 function inlineLearnSearchInput(input: InlineLearnGenerationInput) {
@@ -723,7 +754,12 @@ function inlineLearnSearchInput(input: InlineLearnGenerationInput) {
 
 function inlineLearnSearchContext(input: InlineLearnGenerationInput) {
   return {
-    brainContext: [input.currentClaimText, input.localContext, formatLensSnapshot(input.lensSnapshot)].join("\n"),
+    brainContext: [
+      input.currentClaimText,
+      input.localContext,
+      formatBrainRetrievalContext(input.retrievalContext),
+      formatLensSnapshot(input.lensSnapshot),
+    ].join("\n"),
     brainContextSufficient: true,
   };
 }

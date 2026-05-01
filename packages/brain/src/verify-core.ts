@@ -21,6 +21,11 @@ import { formatLensSnapshot, loadLensSnapshot, type LensSnapshot } from "./lens-
 import { createMove, parseMovePayload } from "./move-payloads.ts";
 import { flattenIssues } from "./schema.ts";
 import { scopeValues } from "./scope.ts";
+import {
+  formatBrainRetrievalContext,
+  loadBrainRetrievalContext,
+  type BrainRetrievalContext,
+} from "./brain-retrieval.ts";
 import { createSearchBroker, searchTraceFromBrokerResult, type SearchTrace } from "./search-broker.ts";
 import { shouldUseWebSearch, type SearchDecision } from "./search-decision-service.ts";
 
@@ -264,6 +269,7 @@ export type VerifyGenerationInput = {
   currentClaimStatus: "exploratory" | "committed" | "resolved" | "rejected";
   currentClaimConfidence: number;
   lensSnapshot?: LensSnapshot;
+  retrievalContext?: BrainRetrievalContext;
 };
 
 const verifyOutputSpec = Output.object<VerifyProviderOutput>({
@@ -383,6 +389,7 @@ type VerifyPrelude = {
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>;
   brainRun: typeof brainRuns.$inferSelect;
   lensSnapshot: LensSnapshot;
+  retrievalContext: BrainRetrievalContext;
 };
 
 type VerifyTransaction = Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
@@ -572,10 +579,13 @@ export async function runVerify(
   const prelude = await createVerifyPrelude(db, input, provider);
 
   try {
-    const generated = await generateVerifyRunOutput(verifyGenerationInput(prelude.target, input, prelude.lensSnapshot), {
-      provider,
-      brainRunId: prelude.brainRun.id,
-    });
+    const generated = await generateVerifyRunOutput(
+      verifyGenerationInput(prelude.target, input, prelude.lensSnapshot, prelude.retrievalContext),
+      {
+        provider,
+        brainRunId: prelude.brainRun.id,
+      },
+    );
 
     return await persistVerifyResult(db, generated.output, prelude, generated.searchTrace);
   } catch (error) {
@@ -955,6 +965,7 @@ export function buildVerifyPrompt(input: VerifyGenerationInput, searchInstructio
     "- Use shapes only to choose what evidence to look for and what follow-up question to ask.",
     "- Do not let shapes bias the verdict; evidence must drive support, weakening, or uncertainty.",
     "- Candidate shapes are tentative and must not be stated as facts about the user.",
+    "- Use Brain retrieval context to focus the verification question, but do not treat it as an external citation.",
     "",
     searchInstructions ?? createSearchBroker().prepare(verifySearchInput(input), "verify", verifySearchContext(input)).instructions,
     "",
@@ -964,6 +975,7 @@ export function buildVerifyPrompt(input: VerifyGenerationInput, searchInstructio
     `Current claim status: ${input.currentClaimStatus}`,
     `Current claim confidence: ${input.currentClaimConfidence}`,
     `Current claim text: ${input.currentClaimText}`,
+    formatBrainRetrievalContext(input.retrievalContext),
     `Lens snapshot JSON: ${formatLensSnapshot(input.lensSnapshot)}`,
   ].join("\n");
 }
@@ -976,7 +988,19 @@ async function createVerifyPrelude(
   return db.transaction(async (tx) => {
     const target = await loadClaimWithCurrentVersion(tx, input.claimId, input.sessionId);
     const lensSnapshot = await loadLensSnapshot(tx, input.sessionId);
-    const generationInput = verifyGenerationInput(target, input, lensSnapshot);
+    const generationInputWithoutRetrieval = verifyGenerationInput(target, input, lensSnapshot);
+    const retrievalContext = await loadBrainRetrievalContext(tx, {
+      mode: "verify",
+      query: generationInputWithoutRetrieval.currentClaimText,
+      sessionId: input.sessionId,
+      currentClaimId: target.claim.id,
+      scope: target.claim,
+      limit: 6,
+    });
+    const generationInput = {
+      ...generationInputWithoutRetrieval,
+      retrievalContext,
+    };
     const searchDecision = verifyWebSearchDecision(generationInput);
 
     if (normalizeClaimText(target.version.content) !== normalizeClaimText(input.currentClaimText)) {
@@ -1003,6 +1027,7 @@ async function createVerifyPrelude(
           currentClaimConfidence: target.version.confidence,
           searchEnabled: provider.searchEnabled,
           searchDecision,
+          retrievalContext,
           recipe: defaultVerifyRecipe({
             input: generationInput,
             output: {
@@ -1021,7 +1046,7 @@ async function createVerifyPrelude(
       throw new VerifyConflictError("Failed to record Verify BrainRun.");
     }
 
-    return { target, brainRun, lensSnapshot };
+    return { target, brainRun, lensSnapshot, retrievalContext };
   });
 }
 
@@ -1458,6 +1483,7 @@ function verifyGenerationInput(
   target: Awaited<ReturnType<typeof loadClaimWithCurrentVersion>>,
   input: VerifyRequest,
   lensSnapshot: LensSnapshot,
+  retrievalContext?: BrainRetrievalContext,
 ): VerifyGenerationInput {
   return {
     claimId: target.claim.id,
@@ -1467,6 +1493,7 @@ function verifyGenerationInput(
     currentClaimStatus: target.version.status,
     currentClaimConfidence: target.version.confidence,
     lensSnapshot,
+    ...(retrievalContext ? { retrievalContext } : {}),
   };
 }
 
@@ -1484,7 +1511,9 @@ function verifySearchInput(input?: VerifyGenerationInput) {
 
 function verifySearchContext(input?: VerifyGenerationInput) {
   return {
-    brainContext: input ? formatLensSnapshot(input.lensSnapshot) : null,
+    brainContext: input
+      ? [formatBrainRetrievalContext(input.retrievalContext), formatLensSnapshot(input.lensSnapshot)].join("\n")
+      : null,
     brainContextSufficient: false,
     claimRequiresExternalEvidence: true,
     verifyRequiresSources: true,

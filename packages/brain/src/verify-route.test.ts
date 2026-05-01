@@ -23,6 +23,7 @@ import {
 } from "./verify-route.ts";
 import { BrainRunGuardError } from "./brain-run-guard.ts";
 import { createMemoryCommandIdempotencyStore } from "./command-idempotency.ts";
+import { buildBrainRetrievalDocument, retrieveBrainContext } from "./brain-retrieval.ts";
 
 test("POST /brain/verify validates requests before running Verify", async () => {
   let verified = false;
@@ -474,6 +475,22 @@ test("verify provider schema stays loose while strict validation enforces local 
 });
 
 test("generateVerifyOutput validates heuristic and xAI structured outputs", async () => {
+  const retrievalContext = await retrieveBrainContext(
+    [
+      buildBrainRetrievalDocument({
+        id: uuidAt(801),
+        kind: "claim",
+        title: "assumption: cognitive load bottleneck",
+        text: "Cognitive load is the first bottleneck to test for novice users.",
+        sessionId: uuidAt(100),
+        claimId: uuidAt(101),
+        sourceId: uuidAt(901),
+        updatedAt: "2026-05-01T12:00:00.000Z",
+        tags: ["assumption", "verify"],
+      }),
+    ],
+    { mode: "verify", query: "cognitive load bottleneck", sessionId: uuidAt(100), currentClaimId: uuidAt(101) },
+  );
   const input = {
     claimId: uuidAt(101),
     sessionId: uuidAt(100),
@@ -482,6 +499,7 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
     currentClaimStatus: "exploratory" as const,
     currentClaimConfidence: 64,
     lensSnapshot: lensSnapshot(),
+    retrievalContext,
   };
   const heuristic = await generateVerifyOutput(input, {
     provider: createHeuristicVerifyProvider(),
@@ -548,6 +566,8 @@ test("generateVerifyOutput validates heuristic and xAI structured outputs", asyn
   assert.ok(calls[0]?.tools?.web_search);
   assert.match(calls[0]?.prompt ?? "", /Current claim text/);
   assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
+  assert.match(calls[0]?.prompt ?? "", /Brain retrieval context/);
+  assert.match(calls[0]?.prompt ?? "", /cognitive load bottleneck/);
   assert.match(calls[0]?.prompt ?? "", /evidence_checking/);
   assert.match(calls[0]?.prompt ?? "", /Search decision/);
   assert.match(calls[0]?.prompt ?? "", /recipe\.steps/);

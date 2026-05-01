@@ -20,6 +20,7 @@ import {
   type InlineLearnSaveRequest,
 } from "./inline-learn-route.ts";
 import { BrainRunGuardError } from "./brain-run-guard.ts";
+import { buildBrainRetrievalDocument, retrieveBrainContext } from "./brain-retrieval.ts";
 
 test("POST /brain/learn/inline validates requests before running Learn", async () => {
   let learned = false;
@@ -218,6 +219,22 @@ test("Learn provider schema stays loose while strict validation enforces local g
 });
 
 test("generateInlineLearnOutput validates heuristic and xAI structured outputs", async () => {
+  const retrievalContext = await retrieveBrainContext(
+    [
+      buildBrainRetrievalDocument({
+        id: uuidAt(801),
+        kind: "brain_object",
+        title: "Saved scope note",
+        text: "Scope should stay tied to novice users and first-draft behavior.",
+        sessionId: uuidAt(100),
+        claimId: uuidAt(101),
+        sourceId: null,
+        updatedAt: "2026-05-01T12:00:00.000Z",
+        tags: ["brain_object", "scope"],
+      }),
+    ],
+    { mode: "learn", query: "scope novice users", sessionId: uuidAt(100), currentClaimId: uuidAt(101) },
+  );
   const input = {
     term: "scope",
     currentClaimId: uuidAt(101),
@@ -226,6 +243,7 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
     currentClaimText: "The idea improves clarity only inside the first draft.",
     currentClaimKind: "assumption" as const,
     lensSnapshot: lensSnapshot(),
+    retrievalContext,
   };
   const heuristic = await generateInlineLearnOutput(input, {
     provider: createHeuristicInlineLearnProvider(),
@@ -271,6 +289,8 @@ test("generateInlineLearnOutput validates heuristic and xAI structured outputs",
   assert.equal(calls.length, 1);
   assert.match(calls[0]?.prompt ?? "", /Local context/);
   assert.match(calls[0]?.prompt ?? "", /Lens snapshot JSON/);
+  assert.match(calls[0]?.prompt ?? "", /Brain retrieval context/);
+  assert.match(calls[0]?.prompt ?? "", /Saved scope note/);
   assert.match(calls[0]?.prompt ?? "", /concept_grounding/);
   assert.match(calls[0]?.prompt ?? "", /candidateBrainObjects/);
   assert.match(calls[0]?.prompt ?? "", /Search decision/);
