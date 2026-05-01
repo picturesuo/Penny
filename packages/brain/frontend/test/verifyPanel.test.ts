@@ -17,6 +17,10 @@ test("Verify result renders evidence cards, citations, saved evidence state, and
   );
 
   assert.match(markup, /Evidence cards/);
+  assert.match(markup, /Used web because/);
+  assert.match(markup, /Verify requires source grounding/);
+  assert.match(markup, /Sources used/);
+  assert.match(markup, /Search result source/);
   assert.match(markup, /Founder workflow survey/);
   assert.match(markup, /Example Source/);
   assert.match(markup, /href="https:\/\/example.test\/source"/);
@@ -108,6 +112,36 @@ function verifyResult(): BrainVerifyResult {
         },
       },
     ],
+    searchTrace: {
+      mode: "verify",
+      decision: {
+        mode: "verify",
+        useWebSearch: true,
+        depth: "deep",
+        reason: "Verify requires source grounding when search is available.",
+        reasonCodes: ["verify_requires_sources"],
+        signals: ["verify_source_grounding"],
+        query: "Founders will pay for clearer decision support.",
+        filters: {},
+      },
+      providerName: "xai",
+      providerToolAvailable: true,
+      providerToolAttached: true,
+      toolOptions: {
+        enableImageUnderstanding: false,
+      },
+      resultCount: 1,
+      results: [
+        {
+          title: "Search result source",
+          url: "https://example.test/search",
+          snippet: "Independent source result used by Verify.",
+          sourceType: "web",
+        },
+      ],
+      savedSourceIds: [uuidAt(701)],
+      savedSourceSpanIds: [uuidAt(801)],
+    },
     confidenceUpdate: {
       suggestedDelta: -4,
       autoApplied: false,
