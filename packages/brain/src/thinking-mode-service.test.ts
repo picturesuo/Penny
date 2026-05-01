@@ -28,10 +28,16 @@ test("ThinkingModeService tick recomputes and persists candidates without mutati
   assert.equal(result.candidates.length, 3);
   assert.equal(result.selectedCandidate?.action, "challenge");
   assert.equal(result.selectedCandidate?.userAction, "check");
+  assert.equal(result.selectedCandidate?.title, "Check the weakest claim");
   assert.equal(result.selectedCandidate?.label, "Check the weakest claim");
+  assert.equal(result.selectedCandidate?.ctaLabel, "Start Check");
   assert.equal(result.selectedCandidate?.primaryActionLabel, "Start Check");
   assert.equal(result.selectedCandidate?.mode, "challenge");
   assert.equal(result.selectedCandidate?.mvpMode, "Check");
+  assert.equal(result.selectedCandidate?.target.type, "claim");
+  assert.equal(result.selectedCandidate?.target.claimId, result.selectedCandidate?.targetClaimId);
+  assert.equal(result.selectedCandidate?.priority.rank, 1);
+  assert.equal(result.selectedCandidate?.priority.normalized, result.selectedCandidate?.confidence);
   assert.equal(result.modeContract.activeMode, "Check");
   assert.equal(result.move?.kind, "next_move_recomputed");
   assert.equal(result.focusState.source, "autopilot_suggestion");
@@ -44,14 +50,15 @@ test("ThinkingModeService tick recomputes and persists candidates without mutati
 test("ThinkingModeService exposes candidate BrainObjects for save_to_brain", async () => {
   const repository = fakeRepository(withChallengeResponse(withOpenChallenge(loadFixture())));
   const service = new ThinkingModeService(repository);
-  const result = await service.tick({ brainId: uuidAt(900), sessionId: uuidAt(101), limit: 1 });
+  const result = await service.tick({ brainId: uuidAt(900), sessionId: uuidAt(101), limit: 5 });
+  const saveCandidate = result.candidates.find((candidate) => candidate.action === "save_to_brain");
 
-  assert.equal(result.selectedCandidate?.action, "save_to_brain");
-  assert.equal(result.selectedCandidate?.userAction, "save_to_brain");
-  assert.equal(result.selectedCandidate?.candidateBrainObjects.length, 1);
-  assert.equal(result.selectedCandidate?.candidateBrainObjects[0]?.objectType, "autopilot_save_candidate");
-  assert.equal(result.selectedCandidate?.candidateBrainObjects[0]?.source, "autopilot");
-  assert.match(result.selectedCandidate?.candidateBrainObjects[0]?.content ?? "", /Exit criteria/);
+  assert.ok(saveCandidate);
+  assert.equal(saveCandidate.userAction, "save_to_brain");
+  assert.equal(saveCandidate.candidateBrainObjects.length, 1);
+  assert.equal(saveCandidate.candidateBrainObjects[0]?.objectType, "autopilot_save_candidate");
+  assert.equal(saveCandidate.candidateBrainObjects[0]?.source, "autopilot");
+  assert.match(saveCandidate.candidateBrainObjects[0]?.content ?? "", /Exit criteria/);
 });
 
 test("ThinkingModeService startCandidate creates autopilot_focus_started and updates focus", async () => {
