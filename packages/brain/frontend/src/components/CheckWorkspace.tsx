@@ -31,6 +31,7 @@ interface CheckWorkspaceProps {
   onOpenLearn?: () => void;
   onOpenBrain?: () => void;
   onOpenVerify?: () => void;
+  onVerifyChanged?: () => Promise<void>;
   onClaimSelect: (claimId: string) => void;
   onWorkStructureSelect: (step: WorkStructureStep) => void;
   onIssueChallenge: () => Promise<void>;
@@ -58,6 +59,7 @@ export function CheckWorkspace({
   onOpenLearn,
   onOpenBrain,
   onOpenVerify,
+  onVerifyChanged,
   onClaimSelect,
   onWorkStructureSelect,
   onIssueChallenge,
@@ -100,6 +102,7 @@ export function CheckWorkspace({
             subtitle={currentSubtitle}
             claims={claims}
             paths={data?.explorationPaths ?? []}
+            sessionId={data?.session?.id ?? null}
             autopilotSuggestion={autopilot?.suggestion ?? null}
             autopilotCandidates={autopilot?.candidates ?? []}
             focusedClaim={focusedClaim}
@@ -110,6 +113,7 @@ export function CheckWorkspace({
             onOpenCheck={() => undefined}
             {...(onOpenVerify ? { onOpenVerify } : {})}
             {...(onOpenBrain ? { onOpenSave: onOpenBrain } : {})}
+            {...(onVerifyChanged ? { onVerifyChanged } : {})}
           />
         ) : (
           <CheckBrainMemory documents={documents} onSelectDocument={onSelectDocument} />
