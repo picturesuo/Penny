@@ -127,6 +127,53 @@ test("rankNextMoveCandidates recommends Check when a dropped idea has fragile as
   assert.match(selected.whyPennyRecommendsThis, /Why Penny recommends this/);
 });
 
+test("rankNextMoveCandidates recommends Check for the YC demo idea's load-bearing creativity assumption", () => {
+  const seed = sampleClaim(
+    1801,
+    "belief",
+    "Penny is the most consistently efficient way to evoke creativity and turn it into structured, source-grounded thinking.",
+    64,
+    ["seed"],
+  );
+  const creativity = sampleClaim(
+    1802,
+    "assumption",
+    "Penny can evoke better creative starting points more consistently than an open-ended chat or blank document.",
+    46,
+    ["load_bearing"],
+  );
+  const structure = sampleClaim(
+    1803,
+    "assumption",
+    "Penny can turn that creative spark into claims, assumptions, checks, and sources without slowing the user down.",
+    50,
+  );
+  const concept = sampleClaim(
+    1804,
+    "concept",
+    "Source-grounded thinking keeps a visible path back to evidence, assumptions, or user-provided context.",
+    74,
+  );
+  const graph = sampleDroppedIdeaGraph({
+    claims: [seed, creativity, structure, concept],
+    edges: [
+      sampleEdge(1901, seed.id, creativity.id, "depends_on"),
+      sampleEdge(1902, seed.id, structure.id, "depends_on"),
+      sampleEdge(1903, concept.id, seed.id, "teaches"),
+    ],
+  });
+  const selected = selectNextMove(graph);
+  const candidates = rankNextMoveCandidates(graph, 4);
+
+  assert.ok(selected);
+  assert.equal(selected.action, "challenge");
+  assert.equal(selected.mode, "challenge");
+  assert.equal(selected.targetClaimId, creativity.id);
+  assert.ok(selected.reasonCodes.includes("assumption_fragility_high"));
+  assert.match(selected.reason, /load-bearing risk/);
+  assert.ok(candidates.some((candidate) => candidate.action === "learn" && candidate.targetClaimId === concept.id));
+});
+
 test("rankNextMoveCandidates recommends Verify when a dropped idea has external factual claims", () => {
   const seed = sampleClaim(1401, "belief", "Build a founder workflow assistant.", 78, ["seed"]);
   const factualClaim = sampleClaim(
