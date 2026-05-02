@@ -58,6 +58,15 @@ type QuickNoteAction = "build" | "brain" | "check" | "learn" | "archive" | "rest
 
 const ACTIVE_SESSION_KEY = "penny.activeSessionId";
 const SESSION_QUERY_PARAM = "sessionId";
+const YC_MOCK_LEARN_RECENT_ID = "mock-recent-yc-jan-1";
+const YC_MOCK_LEARN_RECENT: BrainRecentIdea = {
+  id: YC_MOCK_LEARN_RECENT_ID,
+  rawIdea:
+    "January 1 mock learning event: what YC does, what YC looks for in batch applications, and whether founders, ideas, or investors matter most.",
+  status: "active",
+  createdAt: "2026-01-01T12:00:00.000Z",
+  updatedAt: "2026-01-01T12:00:00.000Z",
+};
 
 export function App() {
   const [documentsData, setDocumentsData] = useState<BrainDocumentsData | null>(null);
@@ -182,7 +191,7 @@ export function App() {
 
     try {
       const payload = await keepBrainRecentIdea(rawIdea);
-      setRecents(payload.data.recents ?? mergeRecentIdeas(payload.data.recent, recents));
+      setRecents(withBuiltInRecents(payload.data.recents ?? mergeRecentIdeas(payload.data.recent, recents)));
       setArchivedRecents(payload.data.archived ?? archivedRecents);
       setStatus("Quick note saved");
     } catch (error) {
@@ -635,10 +644,10 @@ export function App() {
   async function refreshRecents(): Promise<void> {
     try {
       const payload = await fetchBrainRecents();
-      setRecents(payload.data.recents);
+      setRecents(withBuiltInRecents(payload.data.recents));
       setArchivedRecents(payload.data.archived ?? []);
     } catch {
-      setRecents([]);
+      setRecents(withBuiltInRecents([]));
       setArchivedRecents([]);
     }
   }
@@ -649,7 +658,7 @@ export function App() {
 
     try {
       const payload = await updateBrainRecentStatus(recentId, nextStatus);
-      setRecents(payload.data.recents);
+      setRecents(withBuiltInRecents(payload.data.recents));
       setArchivedRecents(payload.data.archived ?? []);
       setStatus(nextStatus === "archived" ? "Quick note archived" : "Quick note restored");
     } catch (error) {
@@ -661,6 +670,12 @@ export function App() {
 
   async function handleQuickNoteAction(recent: BrainRecentIdea, action: QuickNoteAction) {
     if (action === "archive" || action === "restore") {
+      if (isBuiltInRecent(recent)) {
+        setRecents((current) => current.filter((item) => item.id !== recent.id));
+        setStatus("Mock learning event hidden");
+        return;
+      }
+
       await handleQuickNoteStatus(recent.id, action === "archive" ? "archived" : "active");
       return;
     }
@@ -693,9 +708,13 @@ export function App() {
               : "Quick note built",
         );
 
-        const payload = await updateBrainRecentStatus(recent.id, "archived");
-        setRecents(payload.data.recents);
-        setArchivedRecents(payload.data.archived ?? []);
+        if (isBuiltInRecent(recent)) {
+          setRecents((current) => withBuiltInRecents(current));
+        } else {
+          const payload = await updateBrainRecentStatus(recent.id, "archived");
+          setRecents(withBuiltInRecents(payload.data.recents));
+          setArchivedRecents(payload.data.archived ?? []);
+        }
       }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -834,6 +853,18 @@ function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null
 
 function mergeRecentIdeas(recent: BrainRecentIdea, existing: BrainRecentIdea[]): BrainRecentIdea[] {
   return [recent, ...existing.filter((item) => item.id !== recent.id)].slice(0, 8);
+}
+
+function withBuiltInRecents(recents: BrainRecentIdea[]): BrainRecentIdea[] {
+  if (recents.some((recent) => recent.id === YC_MOCK_LEARN_RECENT_ID)) {
+    return recents;
+  }
+
+  return [YC_MOCK_LEARN_RECENT, ...recents].slice(0, 20);
+}
+
+function isBuiltInRecent(recent: BrainRecentIdea): boolean {
+  return recent.id === YC_MOCK_LEARN_RECENT_ID;
 }
 
 function responseLabel(response: ChallengeResponseKind): string {
