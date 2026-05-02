@@ -3951,7 +3951,9 @@
   }
 
   .learn-example-panel {
-    display: block;
+    display: grid;
+    gap: 16px;
+    align-content: start;
     min-height: auto;
     overflow: visible;
     border: 1px solid #111111;
@@ -3960,6 +3962,7 @@
   }
 
   .learn-session-output.ask-open .learn-example-panel {
+    gap: 14px;
     padding: 12px 14px 14px;
   }
 
@@ -4009,11 +4012,14 @@
   }
 
   .learn-example-panel aside {
+    display: grid;
+    gap: 6px;
     align-self: start;
     min-width: 0;
-    margin-top: 14px;
-    border-top: 1px solid #111111;
-    padding-top: 10px;
+    margin-top: 0;
+    border: 1px solid rgb(17 17 17 / 0.28);
+    background: #fbfaf6;
+    padding: 10px 12px 11px;
   }
 
   .learn-example-panel > div {
@@ -4027,6 +4033,10 @@
     border-top: 1px solid rgb(17 17 17 / 0.35);
     border-bottom: 1px solid rgb(17 17 17 / 0.35);
     padding: 10px 0;
+  }
+
+  .learn-editorial-main > .learn-inline-note {
+    margin-top: 22px;
   }
 
   .learn-inline-note p {
