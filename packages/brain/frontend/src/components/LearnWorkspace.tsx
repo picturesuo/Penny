@@ -92,6 +92,7 @@ function LearnSessionView({
     sourceText,
   ]);
   const [askPennyOpen, setAskPennyOpen] = useState(false);
+  const [askPennySeed, setAskPennySeed] = useState<AskPennySeed | null>(null);
   const [activeMainStepId, setActiveMainStepId] = useState(pageData.steps[0]?.id ?? "step-1");
   const [activeSubstepId, setActiveSubstepId] = useState(pageData.steps[0]?.substeps[0]?.id ?? "step-1-substep-1");
   const lessonPages = useMemo(() => flattenLessonPages(pageData.steps), [pageData.steps]);
@@ -131,9 +132,23 @@ function LearnSessionView({
       const target = event.target;
       const isTextInput =
         target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
+      const selectedText = window.getSelection()?.toString().trim() ?? "";
+
+      if (event.key === "Control" && selectedText) {
+        event.preventDefault();
+        setAskPennyOpen(true);
+        setAskPennySeed({ text: selectedText, id: Date.now() });
+        return;
+      }
 
       if (event.ctrlKey && event.key.toLowerCase() === "a") {
         event.preventDefault();
+        if (selectedText) {
+          setAskPennyOpen(true);
+          setAskPennySeed({ text: selectedText, id: Date.now() });
+          return;
+        }
+
         setAskPennyOpen((isOpen) => !isOpen);
         return;
       }
@@ -217,6 +232,7 @@ function LearnSessionView({
         currentStepTitle={lessonPages[activeLessonIndex]?.substep.lesson.title ?? activeStep?.title ?? pageData.currentStep.title}
         localContext={askPennyContext(pageData, activeStep?.title ?? pageData.currentStep.title, sourceText)}
         isOpen={askPennyOpen}
+        selectedQuestionSeed={askPennySeed}
         disabled={disabled}
         onClose={() => setAskPennyOpen(false)}
         onPromptSelect={handleSuggestedQuestion}
@@ -226,6 +242,11 @@ function LearnSessionView({
 }
 
 type LearnExampleFormat = "generic" | "math" | "code" | "writing" | "business";
+
+type AskPennySeed = {
+  text: string;
+  id: number;
+};
 
 type LearnLesson = {
   stepNumber: number;
@@ -368,7 +389,8 @@ function LearnMainContent({
   return (
     <article className="learn-editorial-main" aria-label="Current learning step">
       <button type="button" className="learn-ask-toggle" onClick={onAskPennyToggle} aria-label="Toggle Ask Penny">
-        ?
+        <span>Ask</span>
+        <kbd>Ctrl+A</kbd>
       </button>
 
       <section className="learn-goal-block" aria-label="Your goal">
@@ -443,6 +465,7 @@ function AskPennyPanel({
   currentStepTitle,
   localContext,
   isOpen,
+  selectedQuestionSeed,
   disabled,
   onClose,
   onPromptSelect,
@@ -451,6 +474,7 @@ function AskPennyPanel({
   currentStepTitle: string;
   localContext: string;
   isOpen: boolean;
+  selectedQuestionSeed: AskPennySeed | null;
   disabled: boolean;
   onClose: () => void;
   onPromptSelect: (question: string) => void;
@@ -461,6 +485,14 @@ function AskPennyPanel({
   ]);
   const [isRunning, setIsRunning] = useState(false);
   const trimmedDraft = draft.trim();
+
+  useEffect(() => {
+    if (!selectedQuestionSeed) {
+      return;
+    }
+
+    setDraft(selectedQuestionSeed.text);
+  }, [selectedQuestionSeed]);
 
   async function submitPrompt(question: string) {
     const trimmedQuestion = question.trim();
