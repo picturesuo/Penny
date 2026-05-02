@@ -475,6 +475,31 @@ test("heuristic provider gives the YC demo idea a sharp first-loop structure", a
   assert.ok(output.explorationPaths.some((path) => /grounding threshold/i.test(path.title)));
 });
 
+test("heuristic provider structures a YC application learning prompt", async () => {
+  const rawIdea =
+    "I want to learn what Y Combinator does, what YC looks for in founders, whether YC cares most about founders, ideas, investors, traction, or market.";
+  const output = await generateBrainSeed(
+    { rawIdea },
+    { provider: createHeuristicBrainSeedProvider(), brainRunId: "00000000-0000-4000-8000-000000000704" },
+  );
+
+  assert.match(output.seedClaim.text, /YC as an application evaluation model/);
+  assert.match(output.keyInsight, /signal-reading system/);
+  assert.equal(output.assumptions.length, 3);
+  assert.match(output.assumptions[0]?.text ?? "", /founders/);
+  assert.match(output.assumptions[1]?.text ?? "", /investor interest/);
+  assert.match(output.assumptions[2]?.text ?? "", /idea, market, traction, and investors/);
+  assert.equal(output.firstChallenge.targetClaimId, "claim.assumption.signal");
+  assert.equal(output.firstChallenge.failureType, "weak_evidence");
+  assert.ok(output.thoughtMap.edges.some((edge) => edge.kind === "teaches" && /founder proof/.test(edge.label)));
+  assert.ok(output.explorationPaths.some((path) => /Frame what YC does/i.test(path.title)));
+  assert.ok(output.explorationPaths.some((path) => /foundation gap/i.test(path.title) && /concrete example/i.test(path.prompt)));
+  assert.deepEqual(
+    output.learnCandidates.map((candidate) => candidate.term),
+    ["founder evidence", "application signal"],
+  );
+});
+
 test("xAI provider uses AI SDK structured output with the default model", async () => {
   const calls: Parameters<BrainSeedGenerateText>[0][] = [];
   const generateText: BrainSeedGenerateText = async (request) => {
