@@ -686,53 +686,53 @@ function buildLearnPageData(
   const baseSteps = [
     {
       id: "step-1",
-      title: "Frame the idea",
+      title: "Understand the target",
       expanded: true,
       substeps: [
-        { id: "step-1-substep-1", title: "Name the goal", isActive: true },
-        { id: "step-1-substep-2", title: "Find the central claim", isActive: false },
-        { id: "step-1-substep-3", title: "Mark the useful boundary", isActive: false },
+        { id: "step-1-substep-1", title: "Name the end state", isActive: true },
+        { id: "step-1-substep-2", title: "Identify the main object", isActive: false },
+        { id: "step-1-substep-3", title: "Define done for this lesson", isActive: false },
       ],
     },
     {
       id: "step-2",
-      title: "Separate assumptions",
+      title: "Break it into work chunks",
       expanded: false,
       substeps: [
-        { id: "step-2-substep-1", title: "List the hidden premises", isActive: false },
-        { id: "step-2-substep-2", title: "Sort strong from weak", isActive: false },
-        { id: "step-2-substep-3", title: "Name what each assumption supports", isActive: false },
+        { id: "step-2-substep-1", title: "List the required pieces", isActive: false },
+        { id: "step-2-substep-2", title: "Order the chunks", isActive: false },
+        { id: "step-2-substep-3", title: "Connect each chunk to the goal", isActive: false },
       ],
     },
     {
       id: "step-3",
-      title: "Work through an example",
+      title: "Work the chunks",
       expanded: false,
       substeps: [
-        { id: "step-3-substep-1", title: "Choose a concrete case", isActive: false },
-        { id: "step-3-substep-2", title: "Run the transformation", isActive: false },
-        { id: "step-3-substep-3", title: "Name the output", isActive: false },
-        { id: "step-3-substep-4", title: "Compare it to the starting idea", isActive: false },
+        { id: "step-3-substep-1", title: "Choose the first case", isActive: false },
+        { id: "step-3-substep-2", title: "Do the expert move", isActive: false },
+        { id: "step-3-substep-3", title: "Capture the result", isActive: false },
+        { id: "step-3-substep-4", title: "Compare result to goal", isActive: false },
       ],
     },
     {
       id: "step-4",
-      title: "Challenge the weak point",
+      title: "Check the work",
       expanded: false,
       substeps: [
-        { id: "step-4-substep-1", title: "Find the strongest objection", isActive: false },
-        { id: "step-4-substep-2", title: "Decide what would change your mind", isActive: false },
-        { id: "step-4-substep-3", title: "Revise the claim without losing the lesson", isActive: false },
+        { id: "step-4-substep-1", title: "Find the failure point", isActive: false },
+        { id: "step-4-substep-2", title: "Set the revision rule", isActive: false },
+        { id: "step-4-substep-3", title: "Revise without losing the goal", isActive: false },
       ],
     },
     {
       id: "step-5",
-      title: "Make it reusable",
+      title: "Finish with a usable result",
       expanded: false,
       substeps: [
-        { id: "step-5-substep-1", title: "Save the pattern", isActive: false },
-        { id: "step-5-substep-2", title: "Prepare the next question", isActive: false },
-        { id: "step-5-substep-3", title: "Connect it back to the graph", isActive: false },
+        { id: "step-5-substep-1", title: "Produce the final takeaway", isActive: false },
+        { id: "step-5-substep-2", title: "Decide the next action", isActive: false },
+        { id: "step-5-substep-3", title: "Connect result to the graph", isActive: false },
       ],
     },
   ];
@@ -905,28 +905,28 @@ function buildSubstepLesson({
 function lessonBullets(stepId: string, substepId: string, coreBullets: string[], claim: string): string[] {
   const fallbackByStep: Record<string, string[]> = {
     "step-1": [
-      `Keep the goal tied to: ${claim}`,
-      "Use one sentence before adding branches.",
-      "Trim details that do not change what must be learned.",
+      `Keep the end state tied to: ${claim}`,
+      "Name what finished understanding should let you do.",
+      "Trim details that do not affect the goal.",
     ],
     "step-2": [
-      "Turn each hidden premise into a visible claim.",
-      "Mark which premise carries the most weight.",
-      "Keep assumptions connected to the claim they support.",
+      "Turn the goal into visible work chunks.",
+      "Put the chunks in the order an expert would use.",
+      "Connect each chunk back to the goal.",
     ],
     "step-3": [
-      "Use one concrete case with observable parts.",
-      "Show the move instead of summarizing it.",
-      "Name the output so it can be tested again.",
+      "Work one chunk at a time.",
+      "Show the expert move instead of summarizing it.",
+      "Capture the result before continuing.",
     ],
     "step-4": [
-      "Challenge the most important weak point first.",
-      "Name the evidence that would force revision.",
-      "Revise without discarding what still holds.",
+      "Check the most important weak point first.",
+      "Name what would force revision.",
+      "Revise without losing the goal.",
     ],
     "step-5": [
-      "Save the reusable pattern as a Penny-native claim.",
-      "Attach the next question to the same graph.",
+      "Produce a final takeaway Penny can reuse.",
+      "Choose the next action from the remaining gap.",
       "Leave a clear checkpoint for later review.",
     ],
   };
@@ -942,22 +942,22 @@ function lessonBullets(stepId: string, substepId: string, coreBullets: string[],
 
 function substepExplanation(stepId: string, substepId: string): string {
   const explanations: Record<string, string> = {
-    "step-1-substep-1": "Turn the topic into a plain-language learning target before adding detail.",
-    "step-1-substep-2": "Pick the central claim Penny should teach, test, and remember.",
-    "step-1-substep-3": "Set the boundary so the lesson stays focused instead of becoming a survey.",
-    "step-2-substep-1": "Pull hidden premises into view so they can be inspected.",
-    "step-2-substep-2": "Separate load-bearing assumptions from nice-to-have context.",
-    "step-2-substep-3": "Connect each assumption to the exact claim it supports.",
-    "step-3-substep-1": "Choose a concrete case small enough to fit on one page.",
-    "step-3-substep-2": "Walk through the move one action at a time.",
-    "step-3-substep-3": "Name what the example produces so it becomes reusable.",
-    "step-3-substep-4": "Compare the output with the starting idea and keep only useful differences.",
-    "step-4-substep-1": "Find the objection that would matter if it were true.",
-    "step-4-substep-2": "Name what evidence would change the lesson.",
-    "step-4-substep-3": "Revise the claim while preserving the part that survived challenge.",
-    "step-5-substep-1": "Store the pattern as a compact reusable lesson.",
-    "step-5-substep-2": "Prepare the next question so learning continues cleanly.",
-    "step-5-substep-3": "Attach the learned pattern back to Penny's graph.",
+    "step-1-substep-1": "Turn the prompt into the finished understanding this page is trying to reach.",
+    "step-1-substep-2": "Name the main claim, object, or skill the rest of the path must work on.",
+    "step-1-substep-3": "Define what counts as done so the path can move all the way to a result.",
+    "step-2-substep-1": "List the pieces that must be handled before the goal is genuinely understood.",
+    "step-2-substep-2": "Put the pieces in the order an expert would work them.",
+    "step-2-substep-3": "Make every chunk point back to the goal it serves.",
+    "step-3-substep-1": "Choose the first concrete case small enough to fit on one page.",
+    "step-3-substep-2": "Do the expert move one visible action at a time.",
+    "step-3-substep-3": "Capture what the work produced before continuing.",
+    "step-3-substep-4": "Compare the result with the goal and keep only useful differences.",
+    "step-4-substep-1": "Find the failure point that would matter if it were true.",
+    "step-4-substep-2": "Name what would force the work to change.",
+    "step-4-substep-3": "Revise the result while preserving what still serves the goal.",
+    "step-5-substep-1": "Turn the completed work into a compact final takeaway.",
+    "step-5-substep-2": "Choose the next action from what remains unresolved.",
+    "step-5-substep-3": "Attach the result back to Penny's graph.",
   };
 
   return explanations[substepId] ?? stepExplanation(stepId);
@@ -972,15 +972,15 @@ function lessonVisualLabel(stepId: string): string {
     case "step-4":
       return "Challenge loop: objection -> test -> revision";
     case "step-5":
-      return "Graph save path: pattern -> claim -> next question";
+      return "Finish path: takeaway -> next action -> graph";
     default:
-      return "Concept frame: goal -> claim -> boundary";
+      return "Goal path: prompt -> end state -> done";
   }
 }
 
 function lessonExampleTitle(stepId: string, substepId: string): string {
   if (substepId.endsWith("1")) {
-    return stepId === "step-1" ? "From broad prompt to goal" : "Start the chunk";
+    return stepId === "step-1" ? "From prompt to end state" : "Start the chunk";
   }
 
   if (stepId === "step-3") {
@@ -998,28 +998,28 @@ function lessonExampleLines(stepId: string, substepId: string, source: string, c
   const base: Record<string, string[]> = {
     "step-1": [
       `Input: ${source}`,
-      `Claim to teach: ${claim}`,
-      "Boundary: keep only details that change the explanation.",
+      `End state: ${claim}`,
+      "Done means the learner can explain the goal and name the weak point.",
     ],
     "step-2": [
-      `Claim: ${claim}`,
-      "Assumption: name the premise that must be true.",
-      "Support: attach it to the claim it carries.",
+      `Goal: ${claim}`,
+      "Chunk: name one piece that must be worked.",
+      "Link: attach the chunk to the goal it serves.",
     ],
     "step-3": [
       `Case: ${source}`,
-      "Move: apply the claim to one concrete situation.",
+      "Move: work one chunk in a concrete situation.",
       "Output: name what changed and why it matters.",
     ],
     "step-4": [
       `Target: ${claim}`,
-      "Objection: state the strongest failure mode.",
-      "Revision rule: decide what evidence would change the claim.",
+      "Failure point: state the strongest thing that could break the result.",
+      "Revision rule: decide what would change the work.",
     ],
     "step-5": [
-      `Lesson: ${claim}`,
-      "Save: turn the pattern into a reusable claim.",
-      "Next: attach the follow-up question to the graph.",
+      `Result: ${claim}`,
+      "Finish: turn the work into a usable takeaway.",
+      "Next: attach the follow-up action to the graph.",
     ],
   };
   const detail = substepId.endsWith("3") || substepId.endsWith("4") ? "Checkpoint: keep the result small enough to revisit later." : "";
@@ -1036,7 +1036,7 @@ function lessonWhyItMatters(stepId: string): string {
     case "step-4":
       return "Challenge keeps the lesson from hardening around an untested weak point.";
     case "step-5":
-      return "A reusable pattern lets Penny bring the lesson back in later sessions.";
+      return "A finished result lets Penny bring the work back in later sessions.";
     default:
       return "A clear frame gives Penny one stable object to teach, challenge, and remember.";
   }
@@ -1045,15 +1045,15 @@ function lessonWhyItMatters(stepId: string): string {
 function stepExplanation(stepId: string): string {
   switch (stepId) {
     case "step-2":
-      return "Make the hidden premises visible so Penny can teach what depends on them.";
+      return "Break the target into ordered chunks so each page does one real piece of work.";
     case "step-3":
-      return "Run the idea through a concrete case, because examples reveal missing steps faster than summaries.";
+      return "Work the chunks through concrete cases, because examples reveal missing steps faster than summaries.";
     case "step-4":
-      return "Test the weakest important point before treating the lesson as learned.";
+      return "Check the weakest important point before treating the work as finished.";
     case "step-5":
-      return "Turn the lesson into a reusable pattern Penny can bring back later.";
+      return "Turn the completed work into a usable takeaway Penny can bring back later.";
     default:
-      return "Start by turning the messy topic into one teachable claim, then keep only the details that help explain it.";
+      return "Start by naming the end state, then keep only the details that help reach it.";
   }
 }
 
