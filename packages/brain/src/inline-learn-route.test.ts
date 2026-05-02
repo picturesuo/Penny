@@ -7,10 +7,12 @@ import {
   InlineLearnOutputSchema,
   InlineLearnProviderError,
   InlineLearnProviderSchema,
+  createDefaultAskPennyProvider,
   createHeuristicInlineLearnProvider,
   createXaiInlineLearnProvider,
   defaultXaiInlineLearnModel,
   generateInlineLearnOutput,
+  handleAskPennyRequest,
   handleInlineLearnRequest,
   handleInlineLearnSaveRequest,
   parseInlineLearnOutput,
@@ -45,6 +47,41 @@ test("POST /brain/learn/inline validates requests before running Learn", async (
   assert.match(payload.error.issues.join("\n"), /term/);
   assert.match(payload.error.issues.join("\n"), /currentClaimId/);
   assert.equal(learned, false);
+});
+
+test("POST /brain/learn/ask answers freeform step questions without a claim", async () => {
+  const response = await handleAskPennyRequest(
+    request("http://localhost/brain/learn/ask", {
+      question: "Give me a concrete example.",
+      currentStepTitle: "Produce the final takeaway",
+      localContext: "Goal: understand the pricing decision. Current step: produce the final takeaway.",
+    }),
+    {
+      provider: {
+        name: "anthropic",
+        model: "claude-test",
+        async generate(input) {
+          return {
+            answer: `Example for ${input.currentStepTitle}: convert the lesson into one pricing rule and one next test.`,
+            provider: "anthropic",
+            model: "claude-test",
+          };
+        },
+      },
+    },
+  );
+  const payload = (await response.json()) as { data: { answer: string; provider: string; model: string } };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.provider, "anthropic");
+  assert.equal(payload.data.model, "claude-test");
+  assert.match(payload.data.answer, /pricing rule/);
+});
+
+test("Ask Penny provider selection prefers Claude then xAI then heuristic", () => {
+  assert.equal(createDefaultAskPennyProvider({ ANTHROPIC_API_KEY: "claude", XAI_API_KEY: "xai" }).name, "anthropic");
+  assert.equal(createDefaultAskPennyProvider({ XAI_API_KEY: "xai" }).name, "xai");
+  assert.equal(createDefaultAskPennyProvider({}).name, "heuristic");
 });
 
 test("POST /brain/learn/inline returns a contextual explanation without saved graph rows by default", async () => {
