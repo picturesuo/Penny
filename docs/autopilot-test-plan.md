@@ -19,7 +19,7 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 - SP1: In scope: deterministic next-move engine tests, Thinking Mode service/route tests, Challenge service tests, Challenge Brief tests, frontend client tests that exercise backend-owned contracts, and the smoke script listed in this file.
 - SP2: In scope: documenting the minimum test mapping needed before a demo or contract-changing implementation.
 - SP3: Out of scope: new product surfaces, generic chat behavior, broad document ingestion, external provider quality, vector ranking quality, and UI polish unrelated to Autopilot contract correctness.
-- SP4: Out of scope for this Builder pass: adding new runtime behavior or changing product contracts beyond this test-plan artifact.
+- SP4: Out of scope for this documentation pass: adding new runtime behavior or changing product contracts beyond this test-plan artifact.
 
 ## Constraints
 
@@ -127,5 +127,5 @@ If `DATABASE_URL` is not configured for the smoke script, run the first three co
 ## Status
 
 - ST1: This artifact is initialized for the current Autopilot test-plan task.
-- ST2: This Builder pass changes documentation only; no runtime API, schema, or exported TypeScript contract changes are introduced.
+- ST2: This documentation pass changes documentation only; no runtime API, schema, or exported TypeScript contract changes are introduced.
 - ST3: Implementation should stop here until a later role takes a specific test or runtime gap from the Success Criteria or Test Mapping.
