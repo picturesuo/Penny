@@ -151,7 +151,7 @@
   .landing-composer {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
+    align-items: end;
     gap: 14px;
     min-height: 108px;
     padding: 28px 26px 10px;
@@ -162,7 +162,8 @@
     width: 100%;
     min-width: 0;
     min-height: 32px;
-    max-height: 180px;
+    max-height: min(34vh, 320px);
+    align-self: start;
     border: 0;
     padding: 0;
     color: #2d2d2d;
@@ -171,8 +172,9 @@
     font-size: 18px;
     line-height: 1.35;
     outline: none;
-    overflow: hidden;
+    overflow-y: hidden;
     resize: none;
+    scrollbar-width: thin;
   }
 
   .landing-composer textarea::placeholder {
@@ -4705,6 +4707,7 @@
 
   .landing-composer textarea {
     min-height: 32px;
+    max-height: min(42vh, 260px);
     font-size: 16px;
   }
 
