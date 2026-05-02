@@ -94,7 +94,7 @@ export function LeftRail({
     <aside className="left-rail" aria-label="Structure map">
       <Section title="STRUCTURE" className="structure-map-section">
         <div className="structure-helper-row">
-          <p className="structure-helper">A full type-specific structure, always visible.</p>
+          <p className="structure-helper">Idea to steps to less generic output.</p>
           <QuickSelectKey />
         </div>
         <div className="structure-box-list" role="tree" aria-label={`${formatStructureType(structureType)} structure`}>
