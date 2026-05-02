@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, FileText, Folder, Lightbulb, Plus, Search, TriangleAlert } from "lucide-react";
+import { BookOpen, Folder, Plus } from "lucide-react";
 import type {
   AutopilotTickData,
   BrainClaim,
@@ -12,12 +12,10 @@ import type {
   BrainGraphPath,
   BrainGraphPathNode,
   BrainRecentIdea,
-  BrainResearchItem,
   BrainSidebarData,
   CanvasNode,
   CanvasNodeAction,
   BrainMove,
-  ChallengeBriefPayload,
   ClaimDetailConnection,
   ClaimDetailData,
   ClaimDetailMove,
@@ -44,10 +42,13 @@ interface BrainWorkspaceProps {
   status: string;
   isThinking: boolean;
   recents?: BrainRecentIdea[];
+  archivedRecents?: BrainRecentIdea[];
   onSelectDocument: (sessionId: string) => void;
   onBackToLibrary: () => void;
   onNewThought: () => void;
   onSeed: (rawIdea: string) => Promise<void>;
+  onQuickNoteCreate?: (rawIdea: string) => Promise<void>;
+  onQuickNoteAction?: (recent: BrainRecentIdea, action: "build" | "brain" | "check" | "learn" | "archive" | "restore") => Promise<void>;
   onClaimSelect: (claimId: string) => void;
   onReworkDocument: () => Promise<void>;
   onCanvasOpenChange: (open: boolean) => void;
@@ -68,7 +69,6 @@ interface GraphCardPoint extends GraphPoint {
 interface BrainHierarchySidebarProps {
   sidebar: BrainSidebarData | null;
   selectedSessionId: string | null;
-  recents?: BrainRecentIdea[];
   onSelectDocument: (sessionId: string) => void;
   onNewThought: () => void;
 }
@@ -84,7 +84,6 @@ export function BrainWorkspace({
   canvasOpen,
   status,
   isThinking,
-  recents = [],
   onSelectDocument,
   onBackToLibrary,
   onNewThought,
@@ -139,7 +138,6 @@ export function BrainWorkspace({
       <BrainHierarchySidebar
         sidebar={documentsData?.sidebar ?? null}
         selectedSessionId={selectedDocument?.sessionId ?? null}
-        recents={recents}
         onSelectDocument={onSelectDocument}
         onNewThought={onNewThought}
       />
@@ -186,7 +184,7 @@ export function BrainWorkspace({
                   localEdges={edges}
                   moves={moves}
                 />
-                <DocumentRundown document={selectedDocument} moves={moves} latestArtifact={latestArtifact} />
+                <DocumentRundown document={selectedDocument} />
                 <WorkingNotes sessionId={selectedDocument.sessionId} title={selectedDocument.title} />
               </>
             )}
@@ -433,13 +431,10 @@ function StitchedReference({
 function BrainHierarchySidebar({
   sidebar,
   selectedSessionId,
-  recents = [],
   onSelectDocument,
   onNewThought,
 }: BrainHierarchySidebarProps) {
   const folders = sidebar?.folders ?? [];
-  const quickNotes = sidebar?.quickNotes ?? [];
-  const research = sidebar?.research ?? [];
   const selectedFolderId =
     folders.find((folder) => folder.documents.some((document) => document.sessionId === selectedSessionId))?.id ??
     folders[0]?.id ??
@@ -461,51 +456,10 @@ function BrainHierarchySidebar({
           <Plus size={15} aria-hidden="true" />
         </button>
       </div>
-      <section className="brain-sidebar-section" aria-label="Quick notes">
-        <div className="brain-sidebar-section-head">
-          <Lightbulb size={15} aria-hidden="true" />
-          <strong>Quick Notes</strong>
-        </div>
-        {quickNotes.length > 0 ? (
-          <div className="brain-quick-list">
-            {quickNotes.map((note) => (
-              <button
-                key={note.id}
-                type="button"
-                className="brain-quick-note"
-                onClick={() => onSelectDocument(note.sessionId)}
-              >
-                <span title={note.text}>{truncateWords(note.text, 9)}</span>
-                <small>{note.meta}</small>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="brain-sidebar-muted">No quick notes yet.</p>
-        )}
-      </section>
-      <section className="brain-sidebar-section" aria-label="Recents pile">
-        <div className="brain-sidebar-section-head">
-          <Lightbulb size={15} aria-hidden="true" />
-          <strong>Recents</strong>
-        </div>
-        {recents.length > 0 ? (
-          <div className="brain-quick-list">
-            {recents.slice(0, 5).map((recent) => (
-              <article key={recent.id} className="brain-quick-note">
-                <span title={recent.rawIdea}>{truncateWords(recent.rawIdea, 9)}</span>
-                <small>{formatDate(recent.updatedAt ?? recent.createdAt)}</small>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="brain-sidebar-muted">No kept ideas yet.</p>
-        )}
-      </section>
       <section className="brain-sidebar-section" aria-label="Folders">
         <div className="brain-sidebar-section-head">
           <Folder size={15} aria-hidden="true" />
-          <strong>Folders</strong>
+          <strong>Documents</strong>
         </div>
         {folders.length > 0 ? (
           <div className="brain-tree" role="tree" aria-label="Folders and documents">
@@ -529,7 +483,7 @@ function BrainHierarchySidebar({
                         const active = document.sessionId === selectedSessionId;
 
                         return (
-                          <div key={document.id} className="brain-tree-document" role="treeitem" aria-expanded={active}>
+                          <div key={document.id} className="brain-tree-document" role="treeitem">
                             <button
                               type="button"
                               className={`brain-tree-row is-doc${active ? " is-active" : ""}`}
@@ -540,21 +494,6 @@ function BrainHierarchySidebar({
                               <span title={document.title}>{truncateWords(document.title, 7)}</span>
                               <small>{document.fileCount}</small>
                             </button>
-                            {active ? (
-                              <div className="brain-file-list" role="group" aria-label={`${document.title} files`}>
-                                {document.files.slice(0, 5).map((file) => (
-                                  <button
-                                    key={file.id}
-                                    type="button"
-                                    className="brain-tree-row is-file is-parent-active"
-                                    onClick={() => onSelectDocument(file.sessionId)}
-                                  >
-                                    <FileText size={13} aria-hidden="true" />
-                                    <span title={file.subtitle ?? file.title}>{truncateWords(file.title, 4)}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
                           </div>
                         );
                       })}
@@ -571,46 +510,8 @@ function BrainHierarchySidebar({
           </div>
         )}
       </section>
-      <section className="brain-sidebar-section" aria-label="Research and examples">
-        <div className="brain-sidebar-section-head">
-          <Search size={15} aria-hidden="true" />
-          <strong>Research</strong>
-        </div>
-        {research.length > 0 ? (
-          <div className="brain-research-list">
-            {research.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`brain-research-item is-${item.kind}`}
-                onClick={() => onSelectDocument(item.sessionId)}
-              >
-                {researchIcon(item)}
-                <span>
-                  <strong title={item.title}>{truncateWords(item.title, 5)}</strong>
-                  <small title={item.subtitle ?? item.title}>{truncateWords(item.subtitle ?? item.title, 9)}</small>
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="brain-sidebar-muted">No sources or examples yet.</p>
-        )}
-      </section>
     </aside>
   );
-}
-
-function researchIcon(item: BrainResearchItem) {
-  if (item.kind === "failure_example") {
-    return <TriangleAlert size={14} aria-hidden="true" />;
-  }
-
-  if (item.kind === "research_lead" || item.kind === "source") {
-    return <Search size={14} aria-hidden="true" />;
-  }
-
-  return <FileText size={14} aria-hidden="true" />;
 }
 
 function BrainRecordLog({
@@ -873,31 +774,13 @@ function DocumentMemoryGraph({ graph }: { graph: BrainDocumentsData["graph"] | n
   );
 }
 
-function DocumentRundown({
-  document,
-  moves,
-  latestArtifact,
-}: {
-  document: BrainDocumentSummary;
-  moves: BrainMove[];
-  latestArtifact: SessionCockpitData["latestArtifact"] | null;
-}) {
-  const brief = challengeBriefPayload(latestArtifact?.payload);
-
+function DocumentRundown({ document }: { document: BrainDocumentSummary }) {
   return (
     <section className="document-rundown" aria-label="Doc rundown">
       <RundownSection title="Original Idea" values={[document.originalIdea ?? "No original idea recorded."]} />
       <RundownSection title="Main Claim" values={[document.mainClaim?.text ?? "No main claim yet."]} />
-      <RundownSection title="Strongest Options" values={document.strongestOptions.map((claim) => claim.text)} />
-      <RundownSection title="Rejected Options" values={document.rejectedOptions.map((claim) => claim.text)} />
-      <RundownSection title="To-Do-Later Ideas" values={document.todoLaterIdeas} />
-      <RundownSection title="Final Recommendations" values={document.finalRecommendations} />
-      <RundownSection title="Next Actions" values={document.nextActions} />
-      {brief ? <ChallengeBriefRundown payload={brief} /> : null}
-      <RundownSection
-        title="History"
-        values={moves.slice(0, 10).map((move) => `${formatLabel(move.kind ?? move.type)}: ${move.summary}`)}
-      />
+      <RundownSection title="Current Direction" values={document.finalRecommendations} />
+      <RundownSection title="Next Action" values={document.nextActions.slice(0, 1)} />
     </section>
   );
 }
@@ -966,22 +849,6 @@ function RundownSection({ title, values }: { title: string; values: string[] }) 
       ) : (
         <p>{cleaned[0] ?? "Nothing recorded yet."}</p>
       )}
-    </article>
-  );
-}
-
-function ChallengeBriefRundown({ payload }: { payload: ChallengeBriefPayload }) {
-  const sections = payload.sections;
-
-  return (
-    <article className="rundown-section is-brief">
-      <h2>Generated Doc</h2>
-      <p>{payload.title}</p>
-      <ol>
-        <li>{sections.challengeIssued.text}</li>
-        <li>{sections.userResponse.text}</li>
-        <li>{sections.recommendedNextMove.why}</li>
-      </ol>
     </article>
   );
 }
@@ -1375,22 +1242,6 @@ function edgePath(source: GraphPoint, target: GraphPoint): string {
   const midY = (source.y + target.y) / 2 - 20;
 
   return `M ${source.x} ${source.y} Q ${midX} ${midY} ${target.x} ${target.y}`;
-}
-
-function challengeBriefPayload(payload: unknown): ChallengeBriefPayload | null {
-  return isChallengeBriefPayload(payload) ? payload : null;
-}
-
-function isChallengeBriefPayload(payload: unknown): payload is ChallengeBriefPayload {
-  return Boolean(
-    payload &&
-      typeof payload === "object" &&
-      "kind" in payload &&
-      payload.kind === "challenge_brief" &&
-      "sections" in payload &&
-      payload.sections &&
-      typeof payload.sections === "object",
-  );
 }
 
 function formatDate(value: string): string {
