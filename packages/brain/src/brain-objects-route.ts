@@ -123,12 +123,12 @@ export type BrainRecentDto = {
   kind: string;
   title: string;
   summary: string | null;
-  status: "active" | "archived";
+  status?: "active" | "archived";
   rawIdea: string;
   content: string;
   payload: Record<string, unknown>;
-  archivedAt: string | null;
-  archiveExpiresAt: string | null;
+  archivedAt?: string | null;
+  archiveExpiresAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -155,7 +155,7 @@ export type BrainObjectsPayload = {
 
 export type BrainRecentsPayload = {
   recents: BrainRecentDto[];
-  archived: BrainRecentDto[];
+  archived?: BrainRecentDto[];
 };
 
 export type SaveBrainObjectInput = {
@@ -198,7 +198,7 @@ export type BrainObjectsRouteService = {
   saveObject(input: SaveBrainObjectInput): Promise<BrainObjectDto>;
   listRecents(scope: BrainScope): Promise<BrainRecentsPayload>;
   createRecent(input: CreateBrainRecentInput): Promise<{ recent: BrainRecentDto; recents: BrainRecentDto[] }>;
-  updateRecentStatus(input: UpdateBrainRecentStatusInput): Promise<BrainRecentsPayload>;
+  updateRecentStatus?(input: UpdateBrainRecentStatusInput): Promise<BrainRecentsPayload>;
   getSessionNote(scope: BrainScope, sessionId: string): Promise<BrainSessionNoteDto | null>;
   saveSessionNote(input: SaveSessionNoteInput): Promise<BrainSessionNoteDto>;
 };
@@ -284,7 +284,7 @@ export async function handleBrainRecentRequest(
 ): Promise<Response> {
   const recentIdResult = UuidSchema.safeParse(recentId);
   if (!recentIdResult.success) {
-    return invalidPathResponse("invalid_recent_id", "Brain recent updates require a recent id.");
+    return invalidRequest("Brain recent updates require a recent id.", ["recentId: Invalid uuid"]);
   }
 
   if (request.method !== "PATCH") {
@@ -298,6 +298,10 @@ export async function handleBrainRecentRequest(
 
   try {
     const service = resolveService(options);
+    if (!service.updateRecentStatus) {
+      return methodNotAllowed("PATCH /api/brain/recents/:recentId is not available.", "GET, POST");
+    }
+
     return jsonResponse({
       data: await service.updateRecentStatus({
         scope: scopeFromRequest(request),
