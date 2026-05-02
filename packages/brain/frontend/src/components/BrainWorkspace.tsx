@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Archive, BookOpen, CheckCircle2, Folder, GraduationCap, Hammer, Plus, RotateCcw, Save } from "lucide-react";
 import type {
   AutopilotTickData,
@@ -492,35 +492,46 @@ function BrainHierarchySidebar({
       </div>
       <section className="brain-sidebar-section" aria-label="Quick notes">
         <div className="brain-sidebar-section-head">
-          <CheckCircle2 size={15} aria-hidden="true" />
+          <Folder size={15} aria-hidden="true" />
           <strong>Quick Notes</strong>
         </div>
-        <div className="quick-note-capture">
-          <textarea
-            value={quickNoteDraft}
-            onChange={(event) => setQuickNoteDraft(event.target.value)}
-            placeholder="Capture a quick note."
-            rows={2}
-          />
-          <button
-            type="button"
-            className="brain-sidebar-new"
-            disabled={!onQuickNoteCreate || !quickNoteDraft.trim()}
-            onClick={handleQuickNoteCreate}
-            aria-label="Add quick note"
-          >
-            <Plus size={15} aria-hidden="true" />
-          </button>
-        </div>
-        {recents.length > 0 ? (
-          <div className="brain-quick-list">
-            {recents.slice(0, 6).map((recent) => (
-              <QuickNoteRow key={recent.id} recent={recent} archived={false} onAction={onQuickNoteAction} />
-            ))}
+        <div className="brain-tree" role="tree" aria-label="Quick notes folder">
+          <div className="brain-tree-folder" role="treeitem" aria-expanded="true">
+            <div className="brain-tree-row is-folder">
+              <Folder size={15} aria-hidden="true" />
+              <span>Quick Notes</span>
+              <small>{recents.length}</small>
+            </div>
+            <div className="brain-tree-children">
+              <div className="quick-note-capture">
+                <textarea
+                  value={quickNoteDraft}
+                  onChange={(event) => setQuickNoteDraft(event.target.value)}
+                  placeholder="Capture a quick note."
+                  rows={2}
+                />
+                <button
+                  type="button"
+                  className="brain-sidebar-new"
+                  disabled={!onQuickNoteCreate || !quickNoteDraft.trim()}
+                  onClick={handleQuickNoteCreate}
+                  aria-label="Add quick note"
+                >
+                  <Plus size={15} aria-hidden="true" />
+                </button>
+              </div>
+              {recents.length > 0 ? (
+                <div className="brain-quick-list">
+                  {recents.slice(0, 12).map((recent) => (
+                    <QuickNoteRow key={recent.id} recent={recent} archived={false} onAction={onQuickNoteAction} />
+                  ))}
+                </div>
+              ) : (
+                <p className="brain-sidebar-muted">No quick notes yet.</p>
+              )}
+            </div>
           </div>
-        ) : (
-          <p className="brain-sidebar-muted">No quick notes yet.</p>
-        )}
+        </div>
         {archivedRecents.length > 0 ? (
           <div className="quick-note-archive">
             <button type="button" className="quick-note-archive-toggle" onClick={() => setArchiveOpen((open) => !open)}>
