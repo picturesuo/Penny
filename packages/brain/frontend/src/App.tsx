@@ -70,7 +70,7 @@ const YC_MOCK_LEARN_RECENT: BrainRecentIdea = {
 
 export function App() {
   const [documentsData, setDocumentsData] = useState<BrainDocumentsData | null>(null);
-  const [recents, setRecents] = useState<BrainRecentIdea[]>([]);
+  const [recents, setRecents] = useState<BrainRecentIdea[]>(() => withBuiltInRecents([]));
   const [archivedRecents, setArchivedRecents] = useState<BrainRecentIdea[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [data, setData] = useState<BrainData | null>(null);
