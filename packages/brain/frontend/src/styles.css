@@ -214,10 +214,10 @@
   .landing-prompt-actions {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 12px;
     min-height: 58px;
-    padding: 0 24px 22px;
+    padding: 0 44px 22px;
   }
 
   .landing-shortcuts {
@@ -231,13 +231,13 @@
   }
 
   .landing-shortcuts {
-    justify-content: center;
+    justify-content: flex-start;
     max-width: 100%;
   }
 
   .landing-submit-form {
     flex: 0 0 auto;
-    margin: 0;
+    margin: 0 0 0 auto;
   }
 
   .landing-shortcuts::-webkit-scrollbar {
@@ -266,7 +266,7 @@
     padding: 3px 6px;
     color: inherit;
     background: transparent;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     line-height: 1;
     white-space: nowrap;
@@ -281,15 +281,15 @@
   .landing-shortcuts kbd {
     display: inline-grid;
     place-items: center;
-    min-width: 22px;
-    height: 22px;
+    min-width: 24px;
+    height: 24px;
     border: 1px solid rgb(46 46 46 / 0.19);
     border-radius: 4px;
     background: rgb(246 246 246 / 0.72);
     box-shadow: 0 1px 1px rgb(46 46 46 / 0.08);
     color: #303030;
     font-family: Georgia, Cambria, "Times New Roman", Times, serif;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
   }
 
@@ -4709,14 +4709,14 @@
   .landing-prompt-actions {
     align-items: center;
     flex-direction: row;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 10px;
     min-height: auto;
     padding: 0 18px 18px;
   }
 
   .landing-shortcuts {
-    justify-content: center;
+    justify-content: flex-start;
     gap: 8px;
     width: auto;
   }
