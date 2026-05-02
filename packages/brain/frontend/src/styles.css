@@ -2148,6 +2148,10 @@
     background: #fbf8ef;
   }
 
+  .brain-workspace-shell.is-quick-note-doc {
+    grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+  }
+
   .brain-library-panel {
     display: grid;
     align-content: start;
@@ -2294,9 +2298,31 @@
     background: #f7f7f7;
   }
 
+  .brain-quick-note.is-note.is-active {
+    border-color: #111111;
+    background: #111111;
+    color: #ffffff;
+  }
+
   .brain-quick-note:hover,
   .brain-research-item:hover {
     background: rgb(17 17 17 / 0.06);
+  }
+
+  .brain-quick-note.is-active:hover {
+    background: #111111;
+  }
+
+  .quick-note-open {
+    display: grid;
+    gap: 3px;
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
   }
 
   .brain-quick-note span,
@@ -2312,6 +2338,10 @@
   .brain-quick-note span {
     font-size: 12px;
     line-height: 1.18;
+  }
+
+  .brain-quick-note.is-active small {
+    color: rgb(255 255 255 / 0.7);
   }
 
   .quick-note-actions {
@@ -2814,6 +2844,55 @@
     overflow: auto;
     border-right: 1px solid #d0d0d0;
     padding: 24px 28px 34px;
+  }
+
+  .quick-note-document-main {
+    min-width: 0;
+    max-height: calc(100vh - 70px);
+    overflow: auto;
+    padding: 24px clamp(24px, 4vw, 56px) 42px;
+  }
+
+  .quick-note-document {
+    display: grid;
+    gap: 24px;
+    min-height: min(680px, calc(100vh - 170px));
+    border: 1px solid #d0d0d0;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 18px 42px rgb(17 17 17 / 0.08);
+    padding: clamp(28px, 4vw, 56px);
+  }
+
+  .quick-note-document-head {
+    display: grid;
+    gap: 8px;
+    max-width: 780px;
+  }
+
+  .quick-note-document-head span,
+  .quick-note-document-head small {
+    color: rgb(17 17 17 / 0.58);
+    font-size: 12px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .quick-note-document-head h1 {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: clamp(30px, 4vw, 52px);
+    line-height: 1.04;
+  }
+
+  .quick-note-document-body {
+    min-height: 300px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: #111111;
+    font-size: clamp(20px, 2.3vw, 30px);
+    line-height: 1.45;
   }
 
   .brain-graph-quarter {
@@ -4635,6 +4714,7 @@
 
   .brain-library-panel,
   .brain-document-main,
+  .quick-note-document-main,
   .brain-hierarchy-sidebar,
   .brain-doc-aside {
     max-height: none;
@@ -4878,6 +4958,7 @@
   .brain-hierarchy-sidebar,
   .brain-library-panel,
   .brain-document-main,
+  .quick-note-document-main,
   .brain-graph-quarter {
     grid-column: auto;
     max-height: none;
@@ -4887,7 +4968,8 @@
 
   .brain-hierarchy-sidebar,
   .brain-library-panel,
-  .brain-document-main {
+  .brain-document-main,
+  .quick-note-document-main {
     border-bottom: 1px solid #d0d0d0;
   }
 
