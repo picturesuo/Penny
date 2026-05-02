@@ -83,6 +83,7 @@
     justify-items: center;
     width: min(100%, 620px);
     padding: 20px 0;
+    transform: translateY(-24px);
   }
 
   .landing-brand {
@@ -216,11 +217,12 @@
 
   .landing-prompt-actions {
     display: flex;
+    position: relative;
     align-items: center;
     justify-content: center;
     gap: 10px;
     min-height: 48px;
-    padding: 0 30px 18px;
+    padding: 0 58px 18px 30px;
   }
 
   .landing-shortcuts {
@@ -236,8 +238,12 @@
   }
 
   .landing-submit-form {
+    position: absolute;
+    top: calc(50% - 9px);
+    right: 22px;
     flex: 0 0 auto;
-    margin: 0 0 0 auto;
+    margin: 0;
+    transform: translateY(-50%);
   }
 
   .landing-shortcuts::-webkit-scrollbar {
