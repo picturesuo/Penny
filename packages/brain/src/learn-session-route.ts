@@ -88,6 +88,7 @@ export type LearnSessionStructure = {
   questions: string[];
   concepts: LearnSessionConcept[];
   creativePotential: string[];
+  learningPlan: LearnRecipeOutput["learningPlan"];
   nextMoves: LearnSessionNextMove[];
   candidateBrainObjects: CandidateBrainObject[];
 };
@@ -182,6 +183,7 @@ export function buildLearnSessionPayload(
     creativePotential: seedPayload.explorationPaths.map(
       (path) => `${path.title}: ${path.expectedValue}`,
     ),
+    learningPlan: recipeOutput.learningPlan,
     nextMoves: learnSessionNextMoves(seedPayload, autopilot),
     candidateBrainObjects,
   };
