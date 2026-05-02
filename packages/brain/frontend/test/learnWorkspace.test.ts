@@ -20,6 +20,8 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /Enter forward \/ Esc back/);
   assert.doesNotMatch(markup, /What shall we think through/);
   assert.doesNotMatch(markup, /Save to Brain/);
+  assert.doesNotMatch(markup, /Have I thought about this before/);
+  assert.doesNotMatch(markup, /USED YOUR BRAIN/);
   assert.doesNotMatch(markup, /Search\/Settings|Settings|Makes Cents|MAKES CENTS/);
 });
 
