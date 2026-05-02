@@ -99,9 +99,9 @@ export function NextMoveCard({
       <div className="next-move-body">
         <p>
           {selectedCandidate?.why ??
-            "Penny needs a saved graph slice before it can choose the next Learn, Check, Verify, or Save move."}
+            "Save or select a graph slice so Penny can choose the next step."}
         </p>
-        {targetClaim ? <small>Target: {truncateWords(targetClaim.text, 20)}</small> : null}
+        {targetClaim ? <small>Target: {truncateWords(targetClaim.text, 16)}</small> : null}
         {selectedCandidate?.exitCriteria.label ? <small>Done when: {selectedCandidate.exitCriteria.label}</small> : null}
       </div>
 
