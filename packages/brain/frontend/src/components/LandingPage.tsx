@@ -28,8 +28,6 @@ export const landingShortcuts: Array<{ key: string; label: string }> = [
   { key: "Q", label: "for Quick note" },
 ];
 
-export const landingPromptTools = ["Learn", "Code", "Life stuff"];
-
 function destinationForShortcutKey(key: string | null): LandingDestination | null {
   if (key === "L") {
     return "Learn";
@@ -253,14 +251,6 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             </form>
 
             <div className="landing-prompt-actions">
-              <div className="landing-tool-chips" aria-label="Prompt tools">
-                {landingPromptTools.map((tool) => (
-                  <span className="landing-tool-chip" key={tool}>
-                    {tool}
-                  </span>
-                ))}
-              </div>
-
               <div className="landing-shortcuts" aria-label="Keyboard shortcuts">
                 {landingShortcuts.map((shortcut, index) => (
                   <div className="landing-shortcut-group" key={shortcut.key}>
