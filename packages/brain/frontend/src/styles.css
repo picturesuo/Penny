@@ -3760,6 +3760,7 @@
     position: relative;
     display: grid;
     grid-template-columns: minmax(280px, 25%) minmax(0, 1fr);
+    align-items: start;
     min-height: calc(100dvh - 92px);
     overflow-x: clip;
     overflow-y: visible;
@@ -3776,6 +3777,9 @@
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 12px;
     min-width: 0;
+    height: calc(100dvh - 92px);
+    max-height: calc(100dvh - 92px);
+    min-height: 0;
     border-right: 1px solid #111111;
     padding: 14px 12px 14px 0;
   }
@@ -4234,7 +4238,9 @@
     gap: 14px;
     min-width: 0;
     width: 100%;
-    min-height: 100%;
+    height: calc(100dvh - 92px);
+    max-height: calc(100dvh - 92px);
+    min-height: 0;
     overflow: hidden;
     border-right: 1px solid #111111;
     background: #f5f3ed;
