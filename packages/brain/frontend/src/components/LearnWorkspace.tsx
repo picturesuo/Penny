@@ -107,12 +107,17 @@ function LearnSessionView({
   const [askPennyOpen, setAskPennyOpen] = useState(false);
   const [activeMainStepId, setActiveMainStepId] = useState(pageData.steps[0]?.id ?? "step-1");
   const [activeSubstepId, setActiveSubstepId] = useState(pageData.steps[0]?.substeps[0]?.id ?? "step-1-substep-1");
+  const lessonPages = useMemo(() => flattenLessonPages(pageData.steps), [pageData.steps]);
   const activeStepIndex = Math.max(
     0,
     pageData.steps.findIndex((step) => step.id === activeMainStepId),
   );
   const activeStep = pageData.steps[activeStepIndex] ?? pageData.steps[0];
-  const currentProgressPercent = Math.round(((activeStepIndex + 1) / pageData.steps.length) * 100);
+  const activeLessonIndex = Math.max(
+    0,
+    lessonPages.findIndex((lesson) => lesson.substep.id === activeSubstepId),
+  );
+  const currentProgressPercent = Math.round(((activeLessonIndex + 1) / lessonPages.length) * 100);
   const relatedQuery = focusNode?.summary?.trim() || focusedClaim?.text || pageData.goal;
 
   useEffect(() => {
@@ -125,8 +130,15 @@ function LearnSessionView({
     if (!pageData.steps.some((step) => step.id === activeMainStepId)) {
       setActiveMainStepId(firstStep.id);
       setActiveSubstepId(firstStep.substeps[0]?.id ?? firstStep.id);
+      return;
     }
-  }, [activeMainStepId, pageData.steps]);
+
+    const activeStep = pageData.steps.find((step) => step.id === activeMainStepId);
+
+    if (activeStep && !activeStep.substeps.some((substep) => substep.id === activeSubstepId)) {
+      setActiveSubstepId(activeStep.substeps[0]?.id ?? activeStep.id);
+    }
+  }, [activeMainStepId, activeSubstepId, pageData.steps]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -142,7 +154,13 @@ function LearnSessionView({
 
       if (event.key === "Enter" && !isTextInput) {
         event.preventDefault();
-        goToNextStep();
+        goToNextLesson();
+        return;
+      }
+
+      if (event.key === "Escape" && !isTextInput) {
+        event.preventDefault();
+        goToPreviousLesson();
       }
     }
 
@@ -150,7 +168,7 @@ function LearnSessionView({
     return () => window.removeEventListener("keydown", handleKeyDown);
   });
 
-  function selectStep(stepId: string) {
+  function selectStep(stepId: string, substepId?: string) {
     const step = pageData.steps.find((item) => item.id === stepId);
 
     if (!step) {
@@ -158,29 +176,29 @@ function LearnSessionView({
     }
 
     setActiveMainStepId(step.id);
-    setActiveSubstepId(step.substeps[0]?.id ?? step.id);
+    setActiveSubstepId(substepId ?? step.substeps[0]?.id ?? step.id);
   }
 
-  function goToNextStep() {
-    const nextStep = pageData.steps[activeStepIndex + 1];
+  function goToNextLesson() {
+    const nextLesson = lessonPages[activeLessonIndex + 1];
 
-    if (!nextStep) {
+    if (!nextLesson) {
       return;
     }
 
-    setActiveMainStepId(nextStep.id);
-    setActiveSubstepId(nextStep.substeps[0]?.id ?? nextStep.id);
+    setActiveMainStepId(nextLesson.step.id);
+    setActiveSubstepId(nextLesson.substep.id);
   }
 
-  function goToPreviousStep() {
-    const previousStep = pageData.steps[activeStepIndex - 1];
+  function goToPreviousLesson() {
+    const previousLesson = lessonPages[activeLessonIndex - 1];
 
-    if (!previousStep) {
+    if (!previousLesson) {
       return;
     }
 
-    setActiveMainStepId(previousStep.id);
-    setActiveSubstepId(previousStep.substeps[0]?.id ?? previousStep.id);
+    setActiveMainStepId(previousLesson.step.id);
+    setActiveSubstepId(previousLesson.substep.id);
   }
 
   function handleSuggestedQuestion(question: string) {
@@ -200,13 +218,16 @@ function LearnSessionView({
       <LearnMainContent
         pageData={pageData}
         activeStepIndex={activeStepIndex}
+        activeLessonIndex={activeLessonIndex}
+        activeSubstepId={activeSubstepId}
+        lessonPages={lessonPages}
         sourceText={sourceText}
         searchWebRequested={searchWebRequested}
         relatedBrainSearch={relatedBrainSearch}
         relatedQuery={relatedQuery}
         disabled={disabled}
-        onPrevious={goToPreviousStep}
-        onNext={goToNextStep}
+        onPrevious={goToPreviousLesson}
+        onNext={goToNextLesson}
         onAskPennyToggle={() => setAskPennyOpen((isOpen) => !isOpen)}
         onSearchBrainRelated={() => {
           void onSearchBrainRelated(relatedQuery, focusedClaim?.id ?? focusNode?.refs?.claimId ?? null);
@@ -215,7 +236,7 @@ function LearnSessionView({
 
       <AskPennyPanel
         askPenny={pageData.askPenny}
-        currentStepTitle={activeStep?.title ?? pageData.currentStep.title}
+        currentStepTitle={lessonPages[activeLessonIndex]?.substep.lesson.title ?? activeStep?.title ?? pageData.currentStep.title}
         sessionId={sessionId}
         targetClaim={askTargetClaim}
         localContext={askPennyContext(pageData, activeStep?.title ?? pageData.currentStep.title, sourceText)}
@@ -230,6 +251,30 @@ function LearnSessionView({
 
 type LearnExampleFormat = "generic" | "math" | "code" | "writing" | "business";
 
+type LearnLesson = {
+  stepNumber: number;
+  totalSteps: number;
+  substepNumber: number;
+  totalSubsteps: number;
+  title: string;
+  parentTitle: string;
+  shortExplanation: string;
+  coreIdea: {
+    bullets: string[];
+    visualPlaceholderLabel?: string;
+  };
+  example: {
+    title: string;
+    description: string;
+    lines: string[];
+    whyThisMatters: string;
+    format: LearnExampleFormat;
+  };
+  inlineNote?: string;
+  nextStepTitle: string;
+  previousStepTitle?: string;
+};
+
 type LearnPageData = {
   goal: string;
   progressPercent: number;
@@ -241,32 +286,19 @@ type LearnPageData = {
       id: string;
       title: string;
       isActive: boolean;
+      lesson: LearnLesson;
     }>;
   }>;
-  currentStep: {
-    stepNumber: number;
-    totalSteps: number;
-    title: string;
-    shortExplanation: string;
-    coreIdea: {
-      bullets: string[];
-      visualPlaceholderLabel?: string;
-    };
-    example: {
-      title: string;
-      description: string;
-      lines: string[];
-      whyThisMatters: string;
-      format: LearnExampleFormat;
-    };
-    inlineNote?: string;
-    nextStepTitle: string;
-    previousStepTitle?: string;
-  };
+  currentStep: LearnLesson;
   askPenny: {
     suggestedQuestions: string[];
     placeholder: string;
   };
+};
+
+type LearnLessonPage = {
+  step: LearnPageData["steps"][number];
+  substep: LearnPageData["steps"][number]["substeps"][number];
 };
 
 function LearningPathSidebar({
@@ -280,7 +312,7 @@ function LearningPathSidebar({
   activeMainStepId: string;
   activeSubstepId: string;
   progressPercent: number;
-  onStepSelect: (stepId: string) => void;
+  onStepSelect: (stepId: string, substepId?: string) => void;
 }) {
   return (
     <aside className="learn-path-sidebar" aria-label="Learning path">
@@ -303,10 +335,12 @@ function LearningPathSidebar({
                 <ol>
                   {step.substeps.map((substep, substepIndex) => (
                     <li key={substep.id} className={substep.id === activeSubstepId ? "is-active-substep" : ""}>
-                      <span>
-                        {index + 1}.{substepIndex + 1}
-                      </span>
-                      {substep.title}
+                      <button type="button" onClick={() => onStepSelect(step.id, substep.id)}>
+                        <span>
+                          {index + 1}.{substepIndex + 1}
+                        </span>
+                        {substep.title}
+                      </button>
                     </li>
                   ))}
                 </ol>
@@ -332,6 +366,9 @@ function LearningPathSidebar({
 function LearnMainContent({
   pageData,
   activeStepIndex,
+  activeLessonIndex,
+  activeSubstepId,
+  lessonPages,
   sourceText,
   searchWebRequested,
   relatedBrainSearch,
@@ -344,6 +381,9 @@ function LearnMainContent({
 }: {
   pageData: LearnPageData;
   activeStepIndex: number;
+  activeLessonIndex: number;
+  activeSubstepId: string;
+  lessonPages: LearnLessonPage[];
   sourceText: string;
   searchWebRequested: boolean;
   relatedBrainSearch: BrainHybridSearchResponse["data"] | null;
@@ -355,16 +395,11 @@ function LearnMainContent({
   onSearchBrainRelated: () => void;
 }) {
   const activeStep = pageData.steps[activeStepIndex] ?? pageData.steps[0];
-  const nextStep = pageData.steps[activeStepIndex + 1];
-  const currentStep = {
-    ...pageData.currentStep,
-    title: activeStep?.title ?? pageData.currentStep.title,
-    stepNumber: activeStepIndex + 1,
-    shortExplanation: stepExplanation(activeStep?.id ?? "step-1"),
-    nextStepTitle: nextStep?.title ?? "finish this lesson",
-  };
-  const canGoPrevious = activeStepIndex > 0;
-  const canGoNext = activeStepIndex < pageData.steps.length - 1;
+  const activeSubstep = activeStep?.substeps.find((substep) => substep.id === activeSubstepId);
+  const nextLesson = lessonPages[activeLessonIndex + 1];
+  const currentStep = activeSubstep?.lesson ?? pageData.currentStep;
+  const canGoPrevious = activeLessonIndex > 0;
+  const canGoNext = activeLessonIndex < lessonPages.length - 1;
 
   return (
     <article className="learn-editorial-main" aria-label="Current learning step">
@@ -379,9 +414,10 @@ function LearnMainContent({
 
       <section className="learn-step-header" aria-label="Current step">
         <span>
-          STEP {activeStepIndex + 1} OF {pageData.steps.length}
+          STEP {currentStep.stepNumber}.{currentStep.substepNumber} OF {lessonPages.length}
         </span>
         <h2>{currentStep.title}</h2>
+        <strong>{currentStep.parentTitle}</strong>
         <p>{currentStep.shortExplanation}</p>
       </section>
 
@@ -437,9 +473,9 @@ function LearnMainContent({
         </button>
         <div>
           <button type="button" className="learn-next-step" disabled={!canGoNext} onClick={onNext}>
-            Next: {currentStep.nextStepTitle} →
+            Next: {nextLesson?.substep.title ?? currentStep.nextStepTitle} →
           </button>
-          <small>Press Enter ↵</small>
+          <small>Enter forward / Esc back</small>
         </div>
       </nav>
     </article>
@@ -642,7 +678,7 @@ function buildLearnPageData(
   const coreBullets = coreIdeaBullets(output, focusedClaim, focusNode);
   const primaryExample = firstText(focusedClaim?.text, focusNode?.summary, output.claims[0]?.text, output.coreIdea);
   const conceptNote = output.creativePotential[0] ?? "Use this step to separate what you know from what still needs testing.";
-  const steps = [
+  const baseSteps = [
     {
       id: "step-1",
       title: "Frame the idea",
@@ -660,6 +696,7 @@ function buildLearnPageData(
       substeps: [
         { id: "step-2-substep-1", title: "List the hidden premises", isActive: false },
         { id: "step-2-substep-2", title: "Sort strong from weak", isActive: false },
+        { id: "step-2-substep-3", title: "Name what each assumption supports", isActive: false },
       ],
     },
     {
@@ -670,6 +707,7 @@ function buildLearnPageData(
         { id: "step-3-substep-1", title: "Choose a concrete case", isActive: false },
         { id: "step-3-substep-2", title: "Run the transformation", isActive: false },
         { id: "step-3-substep-3", title: "Name the output", isActive: false },
+        { id: "step-3-substep-4", title: "Compare it to the starting idea", isActive: false },
       ],
     },
     {
@@ -679,6 +717,7 @@ function buildLearnPageData(
       substeps: [
         { id: "step-4-substep-1", title: "Find the strongest objection", isActive: false },
         { id: "step-4-substep-2", title: "Decide what would change your mind", isActive: false },
+        { id: "step-4-substep-3", title: "Revise the claim without losing the lesson", isActive: false },
       ],
     },
     {
@@ -688,40 +727,35 @@ function buildLearnPageData(
       substeps: [
         { id: "step-5-substep-1", title: "Save the pattern", isActive: false },
         { id: "step-5-substep-2", title: "Prepare the next question", isActive: false },
+        { id: "step-5-substep-3", title: "Connect it back to the graph", isActive: false },
       ],
     },
   ];
+  const totalSteps = baseSteps.length;
+  const steps = baseSteps.map((step, stepIndex) => ({
+    ...step,
+    substeps: step.substeps.map((substep, substepIndex) => ({
+      ...substep,
+      lesson: buildSubstepLesson({
+        step,
+        substep,
+        stepIndex,
+        substepIndex,
+        totalSteps,
+        sourceText,
+        output,
+        primaryExample,
+        coreBullets,
+        conceptNote,
+      }),
+    })),
+  }));
 
   return {
     goal,
     progressPercent: 22,
     steps,
-    currentStep: {
-      stepNumber: 1,
-      totalSteps: steps.length,
-      title: "Frame the idea",
-      shortExplanation:
-        "Start by turning the messy topic into one teachable claim, then keep only the details that help explain it.",
-      coreIdea: {
-        bullets: coreBullets,
-        visualPlaceholderLabel: "Reserved space for a concept map, flow diagram, worked graph, or code trace",
-      },
-      example: {
-        title: "From broad prompt to teachable frame",
-        description: "A concrete pass through the current learning goal.",
-        lines: [
-          `Input: ${truncateWords(sourceText || output.coreIdea, 18)}`,
-          `Central claim: ${truncateWords(primaryExample, 18)}`,
-          `Key move: explain the claim before branching into side questions.`,
-          `Output: a step Penny can teach, test, and connect back to the graph.`,
-        ],
-        whyThisMatters:
-          "A clear frame keeps Learn Mode from becoming a generic explanation. It gives Penny a stable object to teach, challenge, and remember.",
-        format: inferExampleFormat(sourceText),
-      },
-      inlineNote: conceptNote,
-      nextStepTitle: "Separate assumptions",
-    },
+    currentStep: steps[0]!.substeps[0]!.lesson,
     askPenny: {
       suggestedQuestions: [
         "Can you explain this in simpler terms?",
@@ -732,6 +766,209 @@ function buildLearnPageData(
       placeholder: "Ask anything...",
     },
   };
+}
+
+function flattenLessonPages(steps: LearnPageData["steps"]): LearnLessonPage[] {
+  return steps.flatMap((step) => step.substeps.map((substep) => ({ step, substep })));
+}
+
+function buildSubstepLesson({
+  step,
+  substep,
+  stepIndex,
+  substepIndex,
+  totalSteps,
+  sourceText,
+  output,
+  primaryExample,
+  coreBullets,
+  conceptNote,
+}: {
+  step: {
+    id: string;
+    title: string;
+    substeps: Array<{ id: string; title: string }>;
+  };
+  substep: { id: string; title: string };
+  stepIndex: number;
+  substepIndex: number;
+  totalSteps: number;
+  sourceText: string;
+  output: LearnSessionOutput;
+  primaryExample: string;
+  coreBullets: string[];
+  conceptNote: string;
+}): LearnLesson {
+  const source = truncateWords(sourceText || output.coreIdea, 16);
+  const claim = truncateWords(primaryExample, 16);
+  const compactBullets = lessonBullets(step.id, substep.id, coreBullets, claim);
+  const nextSubstep = step.substeps[substepIndex + 1];
+
+  const lesson: LearnLesson = {
+    stepNumber: stepIndex + 1,
+    totalSteps,
+    substepNumber: substepIndex + 1,
+    totalSubsteps: step.substeps.length,
+    title: substep.title,
+    parentTitle: step.title,
+    shortExplanation: substepExplanation(step.id, substep.id),
+    coreIdea: {
+      bullets: compactBullets,
+      visualPlaceholderLabel: lessonVisualLabel(step.id),
+    },
+    example: {
+      title: lessonExampleTitle(step.id, substep.id),
+      description: "One compact pass sized for this page.",
+      lines: lessonExampleLines(step.id, substep.id, source, claim),
+      whyThisMatters: lessonWhyItMatters(step.id),
+      format: inferExampleFormat(sourceText),
+    },
+    inlineNote: substepIndex === 0 ? conceptNote : `Keep this chunk small: finish ${substep.title.toLowerCase()} before opening the next idea.`,
+    nextStepTitle: nextSubstep?.title ?? "the next learning chunk",
+  };
+  const previousSubstep = step.substeps[substepIndex - 1];
+
+  return previousSubstep ? { ...lesson, previousStepTitle: previousSubstep.title } : lesson;
+}
+
+function lessonBullets(stepId: string, substepId: string, coreBullets: string[], claim: string): string[] {
+  const fallbackByStep: Record<string, string[]> = {
+    "step-1": [
+      `Keep the goal tied to: ${claim}`,
+      "Use one sentence before adding branches.",
+      "Trim details that do not change what must be learned.",
+    ],
+    "step-2": [
+      "Turn each hidden premise into a visible claim.",
+      "Mark which premise carries the most weight.",
+      "Keep assumptions connected to the claim they support.",
+    ],
+    "step-3": [
+      "Use one concrete case with observable parts.",
+      "Show the move instead of summarizing it.",
+      "Name the output so it can be tested again.",
+    ],
+    "step-4": [
+      "Challenge the most important weak point first.",
+      "Name the evidence that would force revision.",
+      "Revise without discarding what still holds.",
+    ],
+    "step-5": [
+      "Save the reusable pattern as a Penny-native claim.",
+      "Attach the next question to the same graph.",
+      "Leave a clear checkpoint for later review.",
+    ],
+  };
+  const firstCore = coreBullets.slice(0, 2).map((item) => truncateWords(item, 14));
+  const fallback = fallbackByStep[stepId] ?? fallbackByStep["step-1"]!;
+
+  if (substepId.endsWith("1") && firstCore.length > 0) {
+    return uniqueNonEmpty([...firstCore, fallback[0]!, fallback[1]!]).slice(0, 3);
+  }
+
+  return fallback;
+}
+
+function substepExplanation(stepId: string, substepId: string): string {
+  const explanations: Record<string, string> = {
+    "step-1-substep-1": "Turn the topic into a plain-language learning target before adding detail.",
+    "step-1-substep-2": "Pick the central claim Penny should teach, test, and remember.",
+    "step-1-substep-3": "Set the boundary so the lesson stays focused instead of becoming a survey.",
+    "step-2-substep-1": "Pull hidden premises into view so they can be inspected.",
+    "step-2-substep-2": "Separate load-bearing assumptions from nice-to-have context.",
+    "step-2-substep-3": "Connect each assumption to the exact claim it supports.",
+    "step-3-substep-1": "Choose a concrete case small enough to fit on one page.",
+    "step-3-substep-2": "Walk through the move one action at a time.",
+    "step-3-substep-3": "Name what the example produces so it becomes reusable.",
+    "step-3-substep-4": "Compare the output with the starting idea and keep only useful differences.",
+    "step-4-substep-1": "Find the objection that would matter if it were true.",
+    "step-4-substep-2": "Name what evidence would change the lesson.",
+    "step-4-substep-3": "Revise the claim while preserving the part that survived challenge.",
+    "step-5-substep-1": "Store the pattern as a compact reusable lesson.",
+    "step-5-substep-2": "Prepare the next question so learning continues cleanly.",
+    "step-5-substep-3": "Attach the learned pattern back to Penny's graph.",
+  };
+
+  return explanations[substepId] ?? stepExplanation(stepId);
+}
+
+function lessonVisualLabel(stepId: string): string {
+  switch (stepId) {
+    case "step-2":
+      return "Assumption stack: claim -> premise -> risk";
+    case "step-3":
+      return "Worked example trace: input -> move -> output";
+    case "step-4":
+      return "Challenge loop: objection -> test -> revision";
+    case "step-5":
+      return "Graph save path: pattern -> claim -> next question";
+    default:
+      return "Concept frame: goal -> claim -> boundary";
+  }
+}
+
+function lessonExampleTitle(stepId: string, substepId: string): string {
+  if (substepId.endsWith("1")) {
+    return stepId === "step-1" ? "From broad prompt to goal" : "Start the chunk";
+  }
+
+  if (stepId === "step-3") {
+    return "Worked case in miniature";
+  }
+
+  if (stepId === "step-4") {
+    return "Challenge and response";
+  }
+
+  return "Chunked lesson move";
+}
+
+function lessonExampleLines(stepId: string, substepId: string, source: string, claim: string): string[] {
+  const base: Record<string, string[]> = {
+    "step-1": [
+      `Input: ${source}`,
+      `Claim to teach: ${claim}`,
+      "Boundary: keep only details that change the explanation.",
+    ],
+    "step-2": [
+      `Claim: ${claim}`,
+      "Assumption: name the premise that must be true.",
+      "Support: attach it to the claim it carries.",
+    ],
+    "step-3": [
+      `Case: ${source}`,
+      "Move: apply the claim to one concrete situation.",
+      "Output: name what changed and why it matters.",
+    ],
+    "step-4": [
+      `Target: ${claim}`,
+      "Objection: state the strongest failure mode.",
+      "Revision rule: decide what evidence would change the claim.",
+    ],
+    "step-5": [
+      `Lesson: ${claim}`,
+      "Save: turn the pattern into a reusable claim.",
+      "Next: attach the follow-up question to the graph.",
+    ],
+  };
+  const detail = substepId.endsWith("3") || substepId.endsWith("4") ? "Checkpoint: keep the result small enough to revisit later." : "";
+
+  return uniqueNonEmpty([...(base[stepId] ?? base["step-1"]!), detail]).slice(0, 4);
+}
+
+function lessonWhyItMatters(stepId: string): string {
+  switch (stepId) {
+    case "step-2":
+      return "Visible assumptions make the lesson testable instead of persuasive by default.";
+    case "step-3":
+      return "A worked case exposes missing moves before they become hidden confusion.";
+    case "step-4":
+      return "Challenge keeps the lesson from hardening around an untested weak point.";
+    case "step-5":
+      return "A reusable pattern lets Penny bring the lesson back in later sessions.";
+    default:
+      return "A clear frame gives Penny one stable object to teach, challenge, and remember.";
+  }
 }
 
 function stepExplanation(stepId: string): string {
