@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { landingShortcutIntent, landingSubmitIntent } from "../src/components/LandingPage";
+import { landingShortcutIntent, landingShortcuts, landingSubmitIntent } from "../src/components/LandingPage";
 
 test("landing shortcuts either open Brain or select a composer destination", () => {
   assert.deepEqual(landingShortcutIntent("B"), {
@@ -39,4 +39,11 @@ test("landing submit requires a selected destination and prompt", () => {
     action: "quick-note",
     rawIdea: "Founder pricing risk",
   });
+});
+
+test("landing shortcuts render in Brain, Check, Learn, Quick note order", () => {
+  assert.deepEqual(
+    landingShortcuts.map((shortcut) => shortcut.label),
+    ["for Brain", "for Check", "for Learn", "for Quick note"],
+  );
 });

@@ -21,10 +21,10 @@ type LandingSubmitIntent =
   | { action: "submit-prompt"; mode: Extract<PennyMode, "Learn" | "Check">; rawIdea: string }
   | { action: "quick-note"; rawIdea: string };
 
-const shortcuts: Array<{ key: string; label: string }> = [
+export const landingShortcuts: Array<{ key: string; label: string }> = [
   { key: "B", label: "for Brain" },
-  { key: "L", label: "for Learn" },
   { key: "C", label: "for Check" },
+  { key: "L", label: "for Learn" },
   { key: "Q", label: "for Quick note" },
 ];
 
@@ -104,7 +104,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
         return;
       }
 
-      const shortcut = shortcuts.find((item) => item.key.toLowerCase() === event.key.toLowerCase());
+      const shortcut = landingShortcuts.find((item) => item.key.toLowerCase() === event.key.toLowerCase());
 
       if (!shortcut) {
         return;
@@ -237,7 +237,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
           </form>
 
           <div className="landing-shortcuts" aria-label="Keyboard shortcuts">
-            {shortcuts.map((shortcut, index) => (
+            {landingShortcuts.map((shortcut, index) => (
               <div className="landing-shortcut-group" key={shortcut.key}>
                 {index > 0 ? <span className="landing-shortcut-divider" aria-hidden="true" /> : null}
                 <button
