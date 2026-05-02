@@ -178,13 +178,13 @@ export function App() {
 
   async function handleKeepRecentIdea(rawIdea: string) {
     setIsThinking(true);
-    setStatus("Keeping recent");
+    setStatus("Saving quick note");
 
     try {
       const payload = await keepBrainRecentIdea(rawIdea);
       setRecents(payload.data.recents ?? mergeRecentIdeas(payload.data.recent, recents));
       setArchivedRecents(payload.data.archived ?? archivedRecents);
-      setStatus("Kept in Recents");
+      setStatus("Quick note saved");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
