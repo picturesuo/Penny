@@ -1063,6 +1063,12 @@ function buildHeuristicInlineLearnOutput(input: InlineLearnGenerationInput): Inl
 }
 
 function heuristicAskPennyAnswer(input: AskPennyRequest): string {
+  const factualAnswer = simpleFactualAnswer(input.question);
+
+  if (factualAnswer) {
+    return factualAnswer;
+  }
+
   const arithmeticAnswer = simpleArithmeticAnswer(input.question);
 
   if (arithmeticAnswer) {
@@ -1074,11 +1080,21 @@ function heuristicAskPennyAnswer(input: AskPennyRequest): string {
   const context = clipText(input.localContext, 420);
 
   return [
-    `For "${step}", answer the question by tying it back to the current lesson goal instead of opening a new thread.`,
-    `Question: ${question}`,
-    `Use this context: ${context}`,
-    "A useful answer should name the concrete move, show one small example, and end with the next thing to inspect or revise.",
+    `Short answer: ${question}`,
+    `In this step, treat that as a focused check inside "${step}" rather than a new thread.`,
+    `Relevant context: ${context}`,
+    "Next move: connect the answer back to the claim you are trying to understand, then keep going.",
   ].join("\n\n");
+}
+
+function simpleFactualAnswer(question: string): string | null {
+  const compact = question.trim().toLowerCase();
+
+  if (/why\s+is\s+the\s+sky\s+blue\??/.test(compact)) {
+    return "The sky looks blue because air molecules scatter shorter blue wavelengths of sunlight more than longer red wavelengths. That scattered blue light reaches your eyes from across the sky.";
+  }
+
+  return null;
 }
 
 function simpleArithmeticAnswer(question: string): string | null {

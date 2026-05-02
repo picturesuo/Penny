@@ -79,28 +79,40 @@ test("POST /brain/learn/ask answers freeform step questions without a claim", as
 });
 
 test("POST /brain/learn/ask falls back locally when the live provider is rate limited", async () => {
-  const response = await handleAskPennyRequest(
-    request("http://localhost/brain/learn/ask", {
-      question: "what's 4x4",
-      currentStepTitle: "Produce the final takeaway",
-      localContext: "Goal: understand the pricing decision. Current step: produce the final takeaway.",
-    }),
-    {
-      provider: {
-        name: "xai",
-        model: "grok-test",
-        async generate() {
-          throw new InlineLearnProviderError("xAI Ask Penny request failed: Too Many Requests");
+  async function askWithRateLimitedProvider(question: string) {
+    return handleAskPennyRequest(
+      request("http://localhost/brain/learn/ask", {
+        question,
+        currentStepTitle: "Produce the final takeaway",
+        localContext: "Goal: understand the pricing decision. Current step: produce the final takeaway.",
+      }),
+      {
+        provider: {
+          name: "xai",
+          model: "grok-test",
+          async generate() {
+            throw new InlineLearnProviderError("xAI Ask Penny request failed: Too Many Requests");
+          },
         },
       },
-    },
-  );
-  const payload = (await response.json()) as { data: { answer: string; provider: string; model: string | null } };
+    );
+  }
 
-  assert.equal(response.status, 200);
-  assert.equal(payload.data.provider, "heuristic");
-  assert.equal(payload.data.model, null);
-  assert.match(payload.data.answer, /4 x 4 = 16/);
+  const arithmetic = await askWithRateLimitedProvider("what's 4x4");
+  const arithmeticPayload = (await arithmetic.json()) as { data: { answer: string; provider: string; model: string | null } };
+
+  assert.equal(arithmetic.status, 200);
+  assert.equal(arithmeticPayload.data.provider, "heuristic");
+  assert.equal(arithmeticPayload.data.model, null);
+  assert.match(arithmeticPayload.data.answer, /4 x 4 = 16/);
+
+  const factual = await askWithRateLimitedProvider("why is the sky blue?");
+  const factualPayload = (await factual.json()) as { data: { answer: string; provider: string; model: string | null } };
+
+  assert.equal(factual.status, 200);
+  assert.equal(factualPayload.data.provider, "heuristic");
+  assert.match(factualPayload.data.answer, /blue wavelengths/);
+  assert.doesNotMatch(factualPayload.data.answer, /Use this context/);
 });
 
 test("Ask Penny provider selection prefers Claude then xAI then heuristic", () => {
