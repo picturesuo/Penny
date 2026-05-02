@@ -162,7 +162,7 @@ test("LearnRecipe makes the YC demo idea read like a useful thinking recipe", as
 
   assert.equal(LearnRecipeOutputSchema.safeParse(output).success, true);
   assert.match(output.learningPlan.expertRole, /startup|expert/i);
-  assert.match(output.learningPlan.groups[3]?.title ?? "", /Challenge/i);
+  assert.match(output.learningPlan.groups[3]?.title ?? "", /Check the work/i);
   assert.match(output.recipe.steps[0]?.summary ?? "", /load-bearing assumption/i);
   assert.match(output.recipe.steps[3]?.summary ?? "", /inspectable, challengeable, and source-grounded/i);
   assert.deepEqual(output.recipe.steps[4]?.outputs, [
