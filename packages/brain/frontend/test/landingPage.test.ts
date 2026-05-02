@@ -4,8 +4,8 @@ import { landingShortcutIntent, landingShortcuts, landingSubmitIntent } from "..
 
 test("landing shortcuts either open Brain or select a composer destination", () => {
   assert.deepEqual(landingShortcutIntent("Q"), {
-    action: "open-mode",
-    mode: "Brain",
+    action: "select-destination",
+    destination: "QuickNote",
   });
   assert.deepEqual(landingShortcutIntent("L"), {
     action: "select-destination",
@@ -16,8 +16,8 @@ test("landing shortcuts either open Brain or select a composer destination", () 
     destination: "Check",
   });
   assert.deepEqual(landingShortcutIntent("B"), {
-    action: "select-destination",
-    destination: "QuickNote",
+    action: "open-mode",
+    mode: "Brain",
   });
   assert.equal(landingShortcutIntent("X"), null);
 });
@@ -44,6 +44,6 @@ test("landing submit requires a selected destination and prompt", () => {
 test("landing shortcuts render in Brain, Check, Learn, Quick note order", () => {
   assert.deepEqual(
     landingShortcuts.map((shortcut) => `${shortcut.key} ${shortcut.label}`),
-    ["Q for Brain", "C for Check", "L for Learn", "B for Quick note"],
+    ["B for Brain", "C for Check", "L for Learn", "Q for Quick note"],
   );
 });

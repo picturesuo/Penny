@@ -22,10 +22,10 @@ type LandingSubmitIntent =
   | { action: "quick-note"; rawIdea: string };
 
 export const landingShortcuts: Array<{ key: string; label: string }> = [
-  { key: "Q", label: "for Brain" },
+  { key: "B", label: "for Brain" },
   { key: "C", label: "for Check" },
   { key: "L", label: "for Learn" },
-  { key: "B", label: "for Quick note" },
+  { key: "Q", label: "for Quick note" },
 ];
 
 function destinationForShortcutKey(key: string | null): LandingDestination | null {
@@ -37,7 +37,7 @@ function destinationForShortcutKey(key: string | null): LandingDestination | nul
     return "Check";
   }
 
-  if (key === "B") {
+  if (key === "Q") {
     return "QuickNote";
   }
 
@@ -47,7 +47,7 @@ function destinationForShortcutKey(key: string | null): LandingDestination | nul
 export function landingShortcutIntent(key: string): LandingShortcutIntent | null {
   const normalizedKey = key.trim().toLowerCase();
 
-  if (normalizedKey === "q") {
+  if (normalizedKey === "b") {
     return { action: "open-mode", mode: "Brain" };
   }
 
@@ -59,7 +59,7 @@ export function landingShortcutIntent(key: string): LandingShortcutIntent | null
     return { action: "select-destination", destination: "Check" };
   }
 
-  if (normalizedKey === "b") {
+  if (normalizedKey === "q") {
     return { action: "select-destination", destination: "QuickNote" };
   }
 
@@ -249,7 +249,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                     {index > 0 ? <span className="landing-shortcut-divider" aria-hidden="true" /> : null}
                     <button
                       type="button"
-                      disabled={disabled && shortcut.key !== "Q"}
+                      disabled={disabled && shortcut.key !== "B"}
                       aria-pressed={selectedShortcutKey === shortcut.key}
                       className={selectedShortcutKey === shortcut.key ? "is-selected" : undefined}
                       onClick={() => {

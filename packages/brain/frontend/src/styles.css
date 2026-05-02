@@ -61,8 +61,10 @@
   }
 
   .landing-page {
+    display: grid;
+    place-items: center;
     min-height: calc(100vh - 5px);
-    padding: clamp(18px, 6vh, 72px) clamp(16px, 5vw, 72px);
+    padding: clamp(16px, 5vh, 54px) clamp(16px, 5vw, 72px);
     background: #ffffff;
     color: #2e2e2e;
   }
@@ -70,7 +72,8 @@
   .landing-frame {
     display: grid;
     place-items: center;
-    min-height: min(78vh, 640px);
+    width: 100%;
+    min-height: min(82vh, 620px);
     border: 0;
     background: #ffffff;
   }
@@ -78,8 +81,8 @@
   .landing-center {
     display: grid;
     justify-items: center;
-    width: min(100%, 680px);
-    padding: 32px 20px;
+    width: min(100%, 620px);
+    padding: 20px 0;
   }
 
   .landing-brand {
@@ -138,22 +141,22 @@
 
   .landing-prompt-box {
     display: grid;
-    grid-template-rows: minmax(96px, auto) auto;
+    grid-template-rows: minmax(78px, auto) auto;
     align-content: stretch;
-    width: min(100%, 680px);
-    min-height: 174px;
+    width: min(100%, 620px);
+    min-height: 150px;
     border: 1px solid rgb(46 46 46 / 0.16);
-    border-radius: 22px;
+    border-radius: 20px;
     background: #ffffff;
-    box-shadow: 0 18px 32px rgb(46 46 46 / 0.08);
+    box-shadow: 0 16px 30px rgb(46 46 46 / 0.08);
   }
 
   .landing-composer {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
-    min-height: 108px;
-    padding: 44px 44px 10px;
+    min-height: 88px;
+    padding: 36px 38px 8px;
   }
 
   .landing-composer textarea {
@@ -214,25 +217,22 @@
   .landing-prompt-actions {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    gap: 12px;
-    min-height: 58px;
-    padding: 0 44px 22px;
+    justify-content: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 0 30px 18px;
   }
 
   .landing-shortcuts {
     display: flex;
     align-items: center;
     flex-wrap: nowrap;
-    gap: 8px;
+    justify-content: center;
+    gap: 6px;
+    max-width: 100%;
     color: #333333;
     overflow-x: auto;
     scrollbar-width: none;
-  }
-
-  .landing-shortcuts {
-    justify-content: flex-start;
-    max-width: 100%;
   }
 
   .landing-submit-form {
@@ -248,12 +248,12 @@
     display: inline-flex;
     align-items: center;
     flex: 0 0 auto;
-    gap: 10px;
+    gap: 6px;
   }
 
   .landing-shortcut-divider {
     width: 1px;
-    height: 22px;
+    height: 18px;
     background: rgb(46 46 46 / 0.2);
   }
 
@@ -262,11 +262,11 @@
     align-items: center;
     gap: 5px;
     border: 1px solid transparent;
-    border-radius: 7px;
-    padding: 3px 6px;
+    border-radius: 6px;
+    padding: 2px 4px;
     color: inherit;
     background: transparent;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
     line-height: 1;
     white-space: nowrap;
@@ -281,21 +281,21 @@
   .landing-shortcuts kbd {
     display: inline-grid;
     place-items: center;
-    min-width: 24px;
-    height: 24px;
+    min-width: 20px;
+    height: 20px;
     border: 1px solid rgb(46 46 46 / 0.19);
     border-radius: 4px;
     background: rgb(246 246 246 / 0.72);
     box-shadow: 0 1px 1px rgb(46 46 46 / 0.08);
     color: #303030;
     font-family: Georgia, Cambria, "Times New Roman", Times, serif;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
   }
 
   .landing-shortcuts kbd[aria-label="Control"] {
-    min-width: 38px;
-    padding-inline: 6px;
+    min-width: 31px;
+    padding-inline: 5px;
   }
 
   .landing-shortcuts kbd.is-pressed {
