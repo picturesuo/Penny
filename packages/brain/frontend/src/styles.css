@@ -3759,19 +3759,19 @@
   .learn-session-output {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(150px, 20%) minmax(0, 1fr) 0;
+    grid-template-columns: minmax(280px, 25%) minmax(0, 1fr);
     min-height: calc(100dvh - 92px);
-    overflow: visible;
+    overflow-x: clip;
+    overflow-y: visible;
     border-top: 1px solid #111111;
     border-bottom: 0;
-    transition: grid-template-columns 220ms ease;
-  }
-
-  .learn-session-output.ask-open {
-    grid-template-columns: minmax(150px, 20%) minmax(0, 1fr) minmax(300px, 28%);
   }
 
   .learn-path-sidebar {
+    position: relative;
+    z-index: 1;
+    grid-column: 1;
+    grid-row: 1;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 12px;
@@ -3780,9 +3780,18 @@
     padding: 14px 12px 14px 0;
   }
 
+  .learn-path-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+
   .learn-path-kicker {
     display: grid;
     gap: 5px;
+    min-width: 0;
   }
 
   .learn-path-kicker span,
@@ -3922,6 +3931,8 @@
 
   .learn-editorial-main {
     position: relative;
+    grid-column: 2;
+    grid-row: 1;
     display: block;
     min-width: 0;
     height: auto;
@@ -3940,27 +3951,12 @@
     margin-top: 20px;
   }
 
-  .learn-session-output.ask-open .learn-editorial-main {
-    padding-top: 8px;
-  }
-
-  .learn-session-output.ask-open .learn-editorial-main > section,
-  .learn-session-output.ask-open .learn-editorial-main > aside,
-  .learn-session-output.ask-open .learn-editorial-main > nav {
-    margin-top: 12px;
-  }
-
-  .learn-session-output.ask-open .learn-editorial-main > .learn-goal-block {
-    margin-top: 12px;
-  }
-
   .learn-ask-toggle {
-    position: sticky;
-    top: 0;
+    position: static;
     z-index: 2;
-    float: right;
     display: inline-flex;
     align-items: center;
+    flex: 0 0 auto;
     gap: 7px;
     width: max-content;
     min-height: 34px;
@@ -4001,17 +3997,9 @@
     line-height: 1;
   }
 
-  .learn-session-output.ask-open .learn-goal-block h1 {
-    font-size: clamp(21px, 1.85vw, 28px);
-  }
-
   .learn-step-header {
     max-width: 760px;
     padding: 4px 0;
-  }
-
-  .learn-session-output.ask-open .learn-step-header {
-    padding: 7px 0;
   }
 
   .learn-step-header h2 {
@@ -4046,16 +4034,6 @@
     border-top: 1px solid #111111;
     border-bottom: 1px solid #111111;
     padding: 10px 0;
-  }
-
-  .learn-session-output.ask-open .learn-core-section,
-  .learn-session-output.ask-open .learn-example-panel {
-    grid-template-columns: 1fr;
-  }
-
-  .learn-session-output.ask-open .learn-core-section {
-    gap: 7px;
-    padding: 6px 0;
   }
 
   .learn-core-copy {
@@ -4106,10 +4084,6 @@
     text-align: center;
   }
 
-  .learn-session-output.ask-open .learn-visual-placeholder {
-    min-height: 54px;
-  }
-
   .learn-visual-placeholder span {
     max-width: 280px;
     color: rgb(17 17 17 / 0.64);
@@ -4127,11 +4101,6 @@
     border: 1px solid #111111;
     padding: 14px 18px 16px;
     background: #ffffff;
-  }
-
-  .learn-session-output.ask-open .learn-example-panel {
-    gap: 10px;
-    padding: 11px 14px 12px;
   }
 
   .learn-example-panel h3 {
@@ -4207,10 +4176,6 @@
     margin-top: 18px;
   }
 
-  .learn-session-output.ask-open .learn-editorial-main > .learn-inline-note {
-    margin-top: 14px;
-  }
-
   .learn-inline-note p {
     margin: 0;
     color: rgb(17 17 17 / 0.7);
@@ -4260,13 +4225,21 @@
   }
 
   .ask-penny-panel {
+    position: relative;
+    z-index: 3;
+    grid-column: 1;
+    grid-row: 1;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 14px;
     min-width: 0;
-    width: auto;
+    width: 100%;
     min-height: 100%;
-    overflow: visible;
-    border-left: 1px solid #111111;
+    overflow: hidden;
+    border-right: 1px solid #111111;
     background: #f5f3ed;
-    transform: translateX(calc(100% + 1px));
+    padding: 18px 20px;
+    transform: translateX(calc(-100% - 1px));
     opacity: 0;
     transition:
       transform 220ms ease,
@@ -4275,10 +4248,6 @@
   }
 
   .ask-penny-panel.is-open {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    gap: 14px;
-    padding: 18px 20px;
     transform: translateX(0);
     opacity: 1;
     pointer-events: auto;
@@ -4699,7 +4668,7 @@
   }
 
   .learn-workspace {
-    grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .brain-hierarchy-sidebar {
@@ -4902,6 +4871,22 @@
     grid-template-columns: 1fr;
     gap: 20px;
     padding-top: 18px;
+  }
+
+  .learn-session-output {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .learn-path-sidebar,
+  .ask-penny-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .learn-editorial-main {
+    grid-column: 1;
+    grid-row: 2;
+    padding-inline: 0;
   }
 
   .learn-sidebar {
