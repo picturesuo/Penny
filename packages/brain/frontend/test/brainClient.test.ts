@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  askPenny,
   createChallengeBrief,
   decideVerifyConfidence,
   fetchBrainHybridSearch,
@@ -88,6 +89,61 @@ test("frontend brain client uses session-scoped Autopilot command routes", async
       assert.equal(call.headers["x-user-id"], undefined);
       assert.equal(call.headers["x-project-id"], undefined);
     }
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("frontend Ask Penny falls back locally when the request cannot reach the API", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (): Promise<Response> => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  try {
+    const response = await askPenny({
+      question: "why is the sky blue?",
+      currentStepTitle: "Produce the final takeaway",
+      localContext:
+        "Goal: understand the current lesson. Current step: Produce the final takeaway. Core idea: explain the idea from local context.",
+    });
+
+    assert.equal(response.data.provider, "heuristic");
+    assert.equal(response.data.model, null);
+    assert.match(response.data.answer, /blue wavelengths/);
+    assert.doesNotMatch(response.data.answer, /Failed to fetch/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("frontend Ask Penny still uses the live API when it responds", async () => {
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse({
+      answer: "Use the current lesson context to make one concrete distinction.",
+      provider: "anthropic",
+      model: "claude-test",
+    }),
+  ]);
+
+  try {
+    const response = await askPenny({
+      question: "what does this mean?",
+      currentStepTitle: "Produce the final takeaway",
+      localContext: "Goal: understand the current lesson.",
+    });
+
+    assert.equal(calls[0]?.url, "/brain/learn/ask");
+    assert.equal(calls[0]?.method, "POST");
+    assert.deepEqual(calls[0]?.body, {
+      question: "what does this mean?",
+      currentStepTitle: "Produce the final takeaway",
+      localContext: "Goal: understand the current lesson.",
+    });
+    assert.equal(response.data.provider, "anthropic");
+    assert.equal(response.data.model, "claude-test");
   } finally {
     restoreFetch();
   }

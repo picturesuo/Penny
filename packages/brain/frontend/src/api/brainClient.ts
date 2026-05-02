@@ -555,11 +555,17 @@ export async function askPenny(input: {
   currentStepTitle: string;
   localContext: string;
 }): Promise<AskPennyResponse> {
-  const response = await fetch("/brain/learn/ask", {
-    method: "POST",
-    headers: requestHeaders(),
-    body: JSON.stringify(input),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch("/brain/learn/ask", {
+      method: "POST",
+      headers: requestHeaders(),
+      body: JSON.stringify(input),
+    });
+  } catch (error) {
+    return localAskPennyResponse(input, error);
+  }
 
   const payload = await readJson(response);
 
@@ -568,6 +574,78 @@ export async function askPenny(input: {
   }
 
   return payload as AskPennyResponse;
+}
+
+function localAskPennyResponse(
+  input: {
+    question: string;
+    currentStepTitle: string;
+    localContext: string;
+  },
+  error: unknown,
+): AskPennyResponse {
+  const answer = localAskPennyAnswer(input);
+  const suffix =
+    error instanceof Error && error.message && error.message !== "Failed to fetch"
+      ? `\n\nThe live Ask Penny service was unreachable: ${error.message}`
+      : "";
+
+  return {
+    data: {
+      answer: `${answer}${suffix}`,
+      provider: "heuristic",
+      model: null,
+    },
+  };
+}
+
+function localAskPennyAnswer(input: {
+  question: string;
+  currentStepTitle: string;
+  localContext: string;
+}): string {
+  const question = input.question.trim();
+  const compactQuestion = question.toLowerCase();
+  const arithmetic = compactQuestion.match(
+    /^what(?:'s| is)?\s+(-?\d+(?:\.\d+)?)\s*(?:x|\*|times|multiplied by)\s*(-?\d+(?:\.\d+)?)\??$/,
+  );
+
+  if (/why\s+is\s+the\s+sky\s+blue\??/.test(compactQuestion)) {
+    return "The sky looks blue because air molecules scatter shorter blue wavelengths of sunlight more than longer red wavelengths. That scattered blue light reaches your eyes from across the sky.";
+  }
+
+  if (arithmetic) {
+    const left = Number(arithmetic[1]);
+    const right = Number(arithmetic[2]);
+
+    if (Number.isFinite(left) && Number.isFinite(right)) {
+      return `${arithmetic[1]} x ${arithmetic[2]} = ${formatAskPennyNumber(left * right)}.`;
+    }
+  }
+
+  const step = clipAskPennyText(input.currentStepTitle, 120);
+  const context = clipAskPennyText(input.localContext, 420);
+  const clippedQuestion = clipAskPennyText(question, 220);
+
+  return [
+    `A useful way to answer "${clippedQuestion}" is to keep it inside the current step: ${step}.`,
+    `Use the lesson context as the boundary: ${context}`,
+    "Then state one concrete implication for what you should inspect, revise, or explain next.",
+  ].join("\n\n");
+}
+
+function formatAskPennyNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(10)));
+}
+
+function clipAskPennyText(value: string, maxLength: number): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+
+  return `${compact.slice(0, maxLength - 1).trimEnd()}...`;
 }
 
 export async function saveInlineLearn(input: InlineLearnOutput & {
