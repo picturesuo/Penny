@@ -85,7 +85,7 @@
   .landing-brand {
     display: grid;
     justify-items: center;
-    margin-bottom: 48px;
+    margin-bottom: 24px;
     color: #2d2d2d;
   }
 
@@ -142,10 +142,10 @@
     align-items: center;
     gap: 10px;
     width: min(100%, 680px);
-    min-height: 48px;
+    min-height: 62px;
     border: 1px solid rgb(46 46 46 / 0.16);
     border-radius: 8px;
-    padding: 5px 6px 5px 12px;
+    padding: 8px 10px 8px 14px;
     background: #ffffff;
     box-shadow: 0 1px 2px rgb(46 46 46 / 0.04);
   }
@@ -154,7 +154,7 @@
     display: block;
     width: 100%;
     min-width: 0;
-    height: 36px;
+    height: 42px;
     border: 0;
     padding: 0;
     color: #2d2d2d;
@@ -186,13 +186,18 @@
   }
 
   .landing-submit-button {
-    width: 36px;
-    min-width: 36px;
-    height: 36px;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
     border-radius: 999px;
     padding: 0 !important;
     color: #ffffff !important;
     background: #303030 !important;
+  }
+
+  .landing-submit-button svg {
+    width: 15px;
+    height: 15px;
   }
 
   .landing-submit-button:disabled {
@@ -4560,7 +4565,7 @@
   }
 
   .landing-brand {
-    margin-bottom: 34px;
+    margin-bottom: 18px;
   }
 
   .landing-wordmark .brand-mark {
@@ -4578,20 +4583,20 @@
   }
 
   .landing-composer {
-    min-height: 46px;
+    min-height: 58px;
     gap: 8px;
-    padding: 5px 5px 5px 10px;
+    padding: 7px 8px 7px 12px;
   }
 
   .landing-composer input {
-    height: 34px;
+    height: 40px;
     font-size: 15px;
   }
 
   .landing-submit-button {
-    width: 34px;
-    min-width: 34px;
-    height: 34px;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
   }
 
   .landing-shortcuts {
