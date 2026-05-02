@@ -27,6 +27,7 @@ import type {
   AutopilotTickData,
   BrainData,
   BrainDocumentsData,
+  BrainDocumentSummary,
   BrainHybridSearchResponse,
   BrainMove,
   BrainRecentIdea,
@@ -67,6 +68,8 @@ const YC_MOCK_LEARN_RECENT: BrainRecentIdea = {
   createdAt: "2026-01-01T12:00:00.000Z",
   updatedAt: "2026-01-01T12:00:00.000Z",
 };
+const YC_MOCK_LEARN_SESSION_ID = "mock-session-yc-jan-1";
+const YC_MOCK_LEARN_DOC_TITLE = "January 1 YC application lesson";
 
 export function App() {
   const [documentsData, setDocumentsData] = useState<BrainDocumentsData | null>(null);
@@ -109,7 +112,7 @@ export function App() {
           return;
         }
 
-        setDocumentsData(documents.data);
+        setDocumentsData(withBuiltInDocuments(documents.data));
         await refreshRecents();
 
         if (!sessionId) {
@@ -202,6 +205,23 @@ export function App() {
   }
 
   async function handleSelectDocument(sessionId: string) {
+    if (sessionId === YC_MOCK_LEARN_SESSION_ID) {
+      setSelectedDocumentId(sessionId);
+      setData(null);
+      setMoves([]);
+      setAutopilot(null);
+      setChallengeResponse(null);
+      setLatestArtifact(null);
+      setFocusedClaimId(null);
+      setBrainCanvasOpen(false);
+      setLearnFocusNode(null);
+      setRelatedBrainSearch(null);
+      setLandingVisible(false);
+      setActiveMode("Learn");
+      setStatus("YC mock Learn doc opened");
+      return;
+    }
+
     setIsThinking(true);
     setStatus("Opening doc");
     setLandingVisible(false);
@@ -626,7 +646,7 @@ export function App() {
 
   async function refreshDocuments(preferredSessionId: string | null = selectedDocumentId): Promise<void> {
     const documents = await fetchBrainDocuments();
-    setDocumentsData(documents.data);
+    setDocumentsData(withBuiltInDocuments(documents.data));
 
     if (preferredSessionId) {
       setSelectedDocumentId(preferredSessionId);
@@ -865,6 +885,149 @@ function withBuiltInRecents(recents: BrainRecentIdea[]): BrainRecentIdea[] {
 
 function isBuiltInRecent(recent: BrainRecentIdea): boolean {
   return recent.id === YC_MOCK_LEARN_RECENT_ID;
+}
+
+function withBuiltInDocuments(documentsData: BrainDocumentsData): BrainDocumentsData {
+  if (documentsData.documents.some((document) => document.sessionId === YC_MOCK_LEARN_SESSION_ID)) {
+    return documentsData;
+  }
+
+  const mockDocument = builtInYcMockDocument();
+  const mockHierarchyDocument = {
+    id: mockDocument.id,
+    sessionId: mockDocument.sessionId,
+    title: mockDocument.title,
+    status: mockDocument.status,
+    updatedAt: mockDocument.updatedAt,
+    fileCount: 4,
+    files: [
+      {
+        id: `${YC_MOCK_LEARN_SESSION_ID}:source`,
+        sessionId: YC_MOCK_LEARN_SESSION_ID,
+        kind: "source",
+        title: "January 1 learning event",
+        subtitle: "Mock source",
+      },
+      {
+        id: `${YC_MOCK_LEARN_SESSION_ID}:claim`,
+        sessionId: YC_MOCK_LEARN_SESSION_ID,
+        kind: "claim",
+        title: "YC evaluates founders plus insight",
+        subtitle: "Main claim",
+      },
+      {
+        id: `${YC_MOCK_LEARN_SESSION_ID}:artifact`,
+        sessionId: YC_MOCK_LEARN_SESSION_ID,
+        kind: "artifact",
+        title: "YC application spine",
+        subtitle: "Learn output",
+      },
+      {
+        id: `${YC_MOCK_LEARN_SESSION_ID}:moves`,
+        sessionId: YC_MOCK_LEARN_SESSION_ID,
+        kind: "moves",
+        title: "January 1 mock learning event",
+        subtitle: "Session moves",
+      },
+    ],
+  };
+  const mockFolder = {
+    id: "mock-folder-learn-events",
+    label: "Mock Learn Events",
+    kind: "project",
+    documentCount: 1,
+    documents: [mockHierarchyDocument],
+  };
+  const mockGraphNode = {
+    id: `document:${YC_MOCK_LEARN_SESSION_ID}`,
+    type: "document",
+    label: mockDocument.title,
+    sessionId: YC_MOCK_LEARN_SESSION_ID,
+    status: mockDocument.status,
+  };
+
+  return {
+    ...documentsData,
+    documents: [mockDocument, ...documentsData.documents],
+    hierarchy: [
+      {
+        id: "mock-space-learning",
+        label: "Learning",
+        kind: "sphere",
+        documentCount: 1,
+        folders: [mockFolder],
+      },
+      ...documentsData.hierarchy,
+    ],
+    sidebar: {
+      ...documentsData.sidebar,
+      folders: [mockFolder, ...documentsData.sidebar.folders],
+    },
+    graph: {
+      nodes: [mockGraphNode, ...documentsData.graph.nodes],
+      edges: documentsData.graph.edges,
+    },
+    meta: {
+      ...documentsData.meta,
+      documentCount: documentsData.meta.documentCount + 1,
+      claimCount: documentsData.meta.claimCount + 1,
+    },
+  };
+}
+
+function builtInYcMockDocument(): BrainDocumentSummary {
+  return {
+    id: YC_MOCK_LEARN_SESSION_ID,
+    sessionId: YC_MOCK_LEARN_SESSION_ID,
+    scope: {
+      userId: null,
+      workspaceId: "mock-workspace",
+      projectId: "mock-learn",
+      sphereId: "learning",
+    },
+    title: YC_MOCK_LEARN_DOC_TITLE,
+    status: "open",
+    originalIdea: YC_MOCK_LEARN_RECENT.rawIdea,
+    mainClaim: {
+      id: "mock-claim-yc-main",
+      kind: "claim",
+      status: "exploratory",
+      text: "YC is more interested in founders plus insight than in existing investors; the idea matters when it proves the team's judgment.",
+      versionId: "mock-claim-version-yc-main",
+      createdAt: "2026-01-01T12:00:00.000Z",
+    },
+    strongestOptions: [],
+    rejectedOptions: [],
+    todoLaterIdeas: ["Verify the current application details before treating this as public application advice."],
+    finalRecommendations: [
+      "Draft a matter-of-fact product sentence.",
+      "List one concrete impressive achievement per founder.",
+      "Name the non-obvious insight and the evidence behind it.",
+    ],
+    nextActions: ["Open in Learn", "Check the weakest sentence in the application spine"],
+    counts: {
+      claims: 1,
+      edges: 0,
+      moves: 1,
+      artifacts: 1,
+      versions: 1,
+    },
+    latestArtifact: {
+      id: "mock-artifact-yc-learn",
+      kind: "learn_path",
+      title: "YC application learning path",
+      summary: "January 1 mock lesson about YC signals: founders, insight, ideas, and investors.",
+      createdAt: "2026-01-01T12:00:00.000Z",
+    },
+    lastMove: {
+      id: "mock-move-yc-learning-event",
+      kind: "learning_triggered",
+      summary: "January 1 mock YC learning event created.",
+      createdAt: "2026-01-01T12:00:00.000Z",
+    },
+    createdAt: "2026-01-01T12:00:00.000Z",
+    updatedAt: "2026-01-01T12:00:00.000Z",
+  };
 }
 
 function responseLabel(response: ChallengeResponseKind): string {
