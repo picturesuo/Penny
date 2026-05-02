@@ -240,6 +240,14 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
               <p id="landingStatus" className="sr-only">
                 {status}
               </p>
+              <button
+                type="submit"
+                className="landing-submit-button"
+                disabled={disabled || submitIntent === null}
+                aria-label="Send thought"
+              >
+                <ArrowUp size={18} strokeWidth={2.2} />
+              </button>
             </form>
 
             <div className="landing-prompt-actions">
@@ -274,16 +282,6 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                   </div>
                 ))}
               </div>
-              <form className="landing-submit-form" onSubmit={handleSubmit}>
-                <button
-                  type="submit"
-                  className="landing-submit-button"
-                  disabled={disabled || submitIntent === null}
-                  aria-label="Send thought"
-                >
-                  <ArrowUp size={18} strokeWidth={2.2} />
-                </button>
-              </form>
             </div>
           </div>
         </div>
