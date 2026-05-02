@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
@@ -62,6 +62,11 @@ const RecentBodySchema = z
       });
     }
   });
+const RecentStatusBodySchema = z
+  .object({
+    status: z.enum(["active", "archived"]),
+  })
+  .strict();
 const NoteBodySchema = z
   .object({
     content: z.string().max(50_000),
@@ -118,9 +123,12 @@ export type BrainRecentDto = {
   kind: string;
   title: string;
   summary: string | null;
+  status: "active" | "archived";
   rawIdea: string;
   content: string;
   payload: Record<string, unknown>;
+  archivedAt: string | null;
+  archiveExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -147,6 +155,7 @@ export type BrainObjectsPayload = {
 
 export type BrainRecentsPayload = {
   recents: BrainRecentDto[];
+  archived: BrainRecentDto[];
 };
 
 export type SaveBrainObjectInput = {
@@ -172,6 +181,12 @@ export type CreateBrainRecentInput = {
   payload?: Record<string, unknown> | undefined;
 };
 
+export type UpdateBrainRecentStatusInput = {
+  scope: BrainScope;
+  recentId: string;
+  status: "active" | "archived";
+};
+
 export type SaveSessionNoteInput = {
   scope: BrainScope;
   sessionId: string;
@@ -183,6 +198,7 @@ export type BrainObjectsRouteService = {
   saveObject(input: SaveBrainObjectInput): Promise<BrainObjectDto>;
   listRecents(scope: BrainScope): Promise<BrainRecentsPayload>;
   createRecent(input: CreateBrainRecentInput): Promise<{ recent: BrainRecentDto; recents: BrainRecentDto[] }>;
+  updateRecentStatus(input: UpdateBrainRecentStatusInput): Promise<BrainRecentsPayload>;
   getSessionNote(scope: BrainScope, sessionId: string): Promise<BrainSessionNoteDto | null>;
   saveSessionNote(input: SaveSessionNoteInput): Promise<BrainSessionNoteDto>;
 };
@@ -259,6 +275,39 @@ export async function handleBrainRecentsRequest(
   }
 
   return methodNotAllowed("GET or POST /api/brain/recents requires GET or POST.", "GET, POST");
+}
+
+export async function handleBrainRecentRequest(
+  request: Request,
+  recentId: string,
+  options: BrainObjectsRouteOptions = {},
+): Promise<Response> {
+  const recentIdResult = UuidSchema.safeParse(recentId);
+  if (!recentIdResult.success) {
+    return invalidPathResponse("invalid_recent_id", "Brain recent updates require a recent id.");
+  }
+
+  if (request.method !== "PATCH") {
+    return methodNotAllowed("PATCH /api/brain/recents/:recentId requires PATCH.", "PATCH");
+  }
+
+  const parsed = await parseJsonRequest(request, RecentStatusBodySchema);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  try {
+    const service = resolveService(options);
+    return jsonResponse({
+      data: await service.updateRecentStatus({
+        scope: scopeFromRequest(request),
+        recentId: recentIdResult.data,
+        status: parsed.data.status,
+      }),
+    });
+  } catch (error) {
+    return routeErrorResponse(error, "brain_recent_update_failed");
+  }
 }
 
 export async function handleSessionNotesRequest(
@@ -542,15 +591,19 @@ export async function saveBrainObject(db: PennyDatabase, input: SaveBrainObjectI
 }
 
 export async function loadBrainRecents(db: PennyDatabase, scope: BrainScope): Promise<BrainRecentsPayload> {
+  await deleteExpiredArchivedRecents(db, scope);
+
   const rows = await db
     .select()
     .from(brainRecents)
     .where(scopeCondition(brainRecents, scope))
     .orderBy(desc(brainRecents.updatedAt))
-    .limit(20);
+    .limit(60);
+  const recents = rows.map(recentDto);
 
   return {
-    recents: rows.map(recentDto),
+    recents: recents.filter((recent) => recent.status !== "archived").slice(0, 20),
+    archived: recents.filter((recent) => recent.status === "archived").slice(0, 20),
   };
 }
 
@@ -590,6 +643,41 @@ export async function createBrainRecent(
     recent: recentDto(row),
     recents: recents.recents,
   };
+}
+
+export async function updateBrainRecentStatus(
+  db: PennyDatabase,
+  input: UpdateBrainRecentStatusInput,
+): Promise<BrainRecentsPayload> {
+  const [existing] = await db
+    .select()
+    .from(brainRecents)
+    .where(and(eq(brainRecents.id, input.recentId), scopeCondition(brainRecents, input.scope)))
+    .limit(1);
+
+  if (!existing) {
+    throw new BrainObjectsNotFoundError("Brain recent was not found.");
+  }
+
+  const payload = asRecord(existing.payload);
+  const nextPayload =
+    input.status === "archived"
+      ? {
+          ...payload,
+          status: "archived",
+          archivedAt: new Date().toISOString(),
+        }
+      : activeRecentPayload(payload);
+
+  await db
+    .update(brainRecents)
+    .set({
+      payload: nextPayload,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(brainRecents.id, input.recentId), scopeCondition(brainRecents, input.scope)));
+
+  return loadBrainRecents(db, input.scope);
 }
 
 export async function getSessionNote(
@@ -697,6 +785,7 @@ function resolveService(options: BrainObjectsRouteOptions): BrainObjectsRouteSer
     saveObject: (input) => saveBrainObject(db, input),
     listRecents: (scope) => loadBrainRecents(db, scope),
     createRecent: (input) => createBrainRecent(db, input),
+    updateRecentStatus: (input) => updateBrainRecentStatus(db, input),
     getSessionNote: (scope, sessionId) => getSessionNote(db, scope, sessionId),
     saveSessionNote: (input) => saveSessionNote(db, input),
   };
@@ -775,6 +864,10 @@ function noteObject(row: SessionNoteRow): BrainObjectDto {
 }
 
 function recentDto(row: BrainRecentRow): BrainRecentDto {
+  const payload = asRecord(row.payload);
+  const status = payload.status === "archived" ? "archived" : "active";
+  const archivedAt = typeof payload.archivedAt === "string" ? payload.archivedAt : null;
+
   return {
     id: row.id,
     scope: scopeValues(row),
@@ -782,12 +875,45 @@ function recentDto(row: BrainRecentRow): BrainRecentDto {
     kind: row.kind,
     title: row.title,
     summary: row.summary,
+    status,
     rawIdea: row.body,
     content: row.body,
-    payload: asRecord(row.payload),
+    payload,
+    archivedAt,
+    archiveExpiresAt: archivedAt ? archiveExpiryIso(archivedAt) : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+function activeRecentPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const { status: _status, archivedAt: _archivedAt, ...rest } = payload;
+
+  return rest;
+}
+
+async function deleteExpiredArchivedRecents(db: PennyDatabase, scope: BrainScope): Promise<void> {
+  const archiveCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1_000).toISOString();
+
+  await db
+    .delete(brainRecents)
+    .where(
+      and(
+        scopeCondition(brainRecents, scope),
+        sql`${brainRecents.payload}->>'status' = 'archived'`,
+        sql`${brainRecents.payload}->>'archivedAt' < ${archiveCutoff}`,
+      ),
+    );
+}
+
+function archiveExpiryIso(archivedAt: string): string | null {
+  const archivedTime = Date.parse(archivedAt);
+
+  if (!Number.isFinite(archivedTime)) {
+    return null;
+  }
+
+  return new Date(archivedTime + 30 * 24 * 60 * 60 * 1_000).toISOString();
 }
 
 function noteDto(row: SessionNoteRow): BrainSessionNoteDto {
