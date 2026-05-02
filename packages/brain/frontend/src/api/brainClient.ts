@@ -1,5 +1,6 @@
 import type {
   AutopilotSuggestion,
+  AskPennyResponse,
   AutopilotTickData,
   BrainClaim,
   BrainDocumentsResponse,
@@ -28,6 +29,7 @@ import type {
   StartNextMoveResponse,
   ThinkingModeCandidate,
   ThinkingModeStateData,
+  UpdateBrainRecentStatusResponse,
 } from "../types/brain";
 
 const jsonHeaders = {
@@ -125,6 +127,25 @@ export async function keepBrainRecentIdea(rawIdea: string): Promise<KeepBrainRec
   }
 
   return payload as KeepBrainRecentIdeaResponse;
+}
+
+export async function updateBrainRecentStatus(
+  recentId: string,
+  status: "active" | "archived",
+): Promise<UpdateBrainRecentStatusResponse> {
+  const response = await fetch(`/api/brain/recents/${encodeURIComponent(recentId)}`, {
+    method: "PATCH",
+    headers: requestHeaders(),
+    body: JSON.stringify({ status }),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `PATCH /api/brain/recents/${recentId} failed with ${response.status}.`));
+  }
+
+  return payload as UpdateBrainRecentStatusResponse;
 }
 
 export async function fetchSessionNote(sessionId: string): Promise<BrainSessionNoteResponse> {
@@ -527,6 +548,26 @@ export async function createInlineLearn(input: {
   }
 
   return payload as InlineLearnResponse;
+}
+
+export async function askPenny(input: {
+  question: string;
+  currentStepTitle: string;
+  localContext: string;
+}): Promise<AskPennyResponse> {
+  const response = await fetch("/brain/learn/ask", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /brain/learn/ask failed with ${response.status}.`));
+  }
+
+  return payload as AskPennyResponse;
 }
 
 export async function saveInlineLearn(input: InlineLearnOutput & {
