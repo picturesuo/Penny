@@ -412,9 +412,39 @@ export interface BrainData {
   };
   explorationPaths?: ExplorationPath[];
   learnCandidates?: LearnCandidate[];
+  learningPlan?: LearningPlan;
+  learn?: {
+    learningPlan?: LearningPlan;
+  };
   firstChallenge?: ChallengeSuggestion;
   session?: BrainSession;
   brainRun?: BrainRun;
+}
+
+export interface LearningPlan {
+  expertRole: string;
+  goal: string;
+  paragraphFit: "one_subgroup_per_page";
+  groups: LearningPlanGroup[];
+}
+
+export interface LearningPlanGroup {
+  id: string;
+  title: string;
+  purpose: string;
+  subgroups: LearningPlanSubgroup[];
+}
+
+export interface LearningPlanSubgroup {
+  id: string;
+  title: string;
+  teachingParagraph: string;
+  keyMoves: string[];
+  workedExample: string;
+  visualExample: {
+    title: string;
+    description: string;
+  };
 }
 
 export interface LearnSessionOutput {
@@ -423,6 +453,7 @@ export interface LearnSessionOutput {
   assumptions: BrainClaim[];
   questions: BrainClaim[];
   creativePotential: string[];
+  learningPlan?: LearningPlan;
   autopilotNextMove: AutopilotSuggestion | null;
 }
 
