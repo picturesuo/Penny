@@ -1,5 +1,8 @@
 export {
+  AskPennyOutputSchema,
+  AskPennyRequestSchema,
   handleInlineLearnRequest,
+  handleAskPennyRequest,
   handleInlineLearnSaveRequest,
   InlineLearnConflictError,
   InlineLearnGenerationError,
@@ -13,6 +16,10 @@ export {
   LearnSuggestedNextMoveSchema,
 } from "./inline-learn-core.ts";
 export type {
+  AskPennyOutput,
+  AskPennyProvider,
+  AskPennyRequest,
+  AskPennyRouteOptions,
   InlineLearnGenerateText,
   InlineLearnGenerationInput,
   InlineLearnOutput,
@@ -26,14 +33,22 @@ export type {
   PersistedInlineLearn,
 } from "./inline-learn-core.ts";
 export {
+  buildAskPennyPrompt,
+  buildAskPennySystemPrompt,
+  createAnthropicAskPennyProvider,
+  createDefaultAskPennyProvider,
   buildInlineLearnPrompt,
   buildInlineLearnSystemPrompt,
+  createHeuristicAskPennyProvider,
   createDefaultInlineLearnProvider,
   createHeuristicInlineLearnProvider,
+  createXaiAskPennyProvider,
   createXaiInlineLearnProvider,
   defaultXaiInlineLearnModel,
   generateInlineLearnOutput,
   parseInlineLearnOutput,
+  resolveAnthropicAskPennyModel,
+  resolveXaiAskPennyModel,
   resolveXaiInlineLearnModel,
 } from "./inline-learn-ai.ts";
 export { persistInlineLearnConcept } from "./inline-learn-commands.ts";
