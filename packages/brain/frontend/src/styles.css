@@ -139,23 +139,24 @@
   .landing-composer {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
+    align-items: start;
     gap: 10px;
     width: min(100%, 680px);
-    min-height: 58px;
+    min-height: 60px;
     border: 1px solid rgb(46 46 46 / 0.16);
     border-bottom-color: transparent;
     border-radius: 8px 8px 0 0;
-    padding: 8px 12px 8px 14px;
+    padding: 16px 12px 6px 14px;
     background: #ffffff;
     box-shadow: 0 1px 2px rgb(46 46 46 / 0.04);
   }
 
-  .landing-composer input {
+  .landing-composer textarea {
     display: block;
     width: 100%;
     min-width: 0;
-    height: 38px;
+    min-height: 32px;
+    max-height: 180px;
     border: 0;
     padding: 0;
     color: #2d2d2d;
@@ -164,9 +165,11 @@
     font-size: 16px;
     line-height: 1.35;
     outline: none;
+    overflow: hidden;
+    resize: none;
   }
 
-  .landing-composer input::placeholder {
+  .landing-composer textarea::placeholder {
     color: rgb(46 46 46 / 0.46);
   }
 
@@ -183,6 +186,7 @@
   .landing-plus-button {
     width: 28px;
     height: 28px;
+    margin-top: 2px;
     color: rgb(46 46 46 / 0.76);
   }
 
@@ -190,6 +194,7 @@
     width: 28px;
     min-width: 28px;
     height: 28px;
+    margin-top: 1px;
     border-radius: 999px;
     padding: 0 !important;
     color: #ffffff !important;
@@ -216,7 +221,7 @@
     min-height: 52px;
     margin-top: 0;
     border: 1px solid rgb(46 46 46 / 0.16);
-    border-top-color: rgb(46 46 46 / 0.12);
+    border-top-color: transparent;
     border-radius: 0 0 8px 8px;
     padding: 12px 14px 13px;
     background: #ffffff;
@@ -4667,13 +4672,13 @@
   }
 
   .landing-composer {
-    min-height: 56px;
+    min-height: 58px;
     gap: 8px;
-    padding: 7px 10px 7px 12px;
+    padding: 14px 10px 6px 12px;
   }
 
-  .landing-composer input {
-    height: 38px;
+  .landing-composer textarea {
+    min-height: 32px;
     font-size: 15px;
   }
 
