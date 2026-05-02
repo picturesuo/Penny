@@ -11,6 +11,7 @@ import { handleAssumptionResponseRequest } from "./assumption-response-route.ts"
 import { handleAutopilotTickRequest, handleManualNodeSelectedRequest } from "./autopilot-route.ts";
 import { handleBrainDocumentsRequest } from "./brain-documents-route.ts";
 import {
+  handleBrainRecentRequest,
   handleBrainObjectsRequest,
   handleBrainRecentsRequest,
   handleSaveBrainObjectRequest,
@@ -120,6 +121,12 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/brain/recents") {
       await writeWebResponse(outgoing, await handleBrainRecentsRequest(request));
+      return;
+    }
+
+    const brainRecentMatch = /^\/api\/brain\/recents\/([^/]+)$/.exec(url.pathname);
+    if (brainRecentMatch) {
+      await writeWebResponse(outgoing, await handleBrainRecentRequest(request, decodeURIComponent(brainRecentMatch[1] ?? "")));
       return;
     }
 
