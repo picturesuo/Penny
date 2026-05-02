@@ -9,6 +9,7 @@ import type {
   BrainRecentIdea,
   CanvasNode,
   InlineLearnOutput,
+  LearningPlan,
   LearnSessionOutput,
 } from "../types/brain";
 import { createInlineLearn } from "../api/brainClient";
@@ -674,6 +675,10 @@ function buildLearnPageData(
   focusedClaim: BrainClaim | null,
   focusNode: CanvasNode | null,
 ): LearnPageData {
+  if (output.learningPlan) {
+    return buildLearnPageDataFromPlan(output.learningPlan, sourceText, output);
+  }
+
   const goal = goalFrom(output.coreIdea);
   const coreBullets = coreIdeaBullets(output, focusedClaim, focusNode);
   const primaryExample = firstText(focusedClaim?.text, focusNode?.summary, output.claims[0]?.text, output.coreIdea);
@@ -764,6 +769,72 @@ function buildLearnPageData(
         "Give me another example.",
       ],
       placeholder: "Ask anything...",
+    },
+  };
+}
+
+function buildLearnPageDataFromPlan(
+  plan: LearningPlan,
+  sourceText: string,
+  output: LearnSessionOutput,
+): LearnPageData {
+  const totalSteps = plan.groups.length;
+  const steps = plan.groups.map((group, stepIndex) => ({
+    id: group.id,
+    title: group.title,
+    expanded: stepIndex === 0,
+    substeps: group.subgroups.map((subgroup, substepIndex) => {
+      const nextSubgroup = group.subgroups[substepIndex + 1];
+      const lesson: LearnLesson = {
+        stepNumber: stepIndex + 1,
+        totalSteps,
+        substepNumber: substepIndex + 1,
+        totalSubsteps: group.subgroups.length,
+        title: subgroup.title,
+        parentTitle: group.title,
+        shortExplanation: subgroup.teachingParagraph,
+        coreIdea: {
+          bullets: subgroup.keyMoves.slice(0, 4),
+          visualPlaceholderLabel: `${subgroup.visualExample.title}: ${subgroup.visualExample.description}`,
+        },
+        example: {
+          title: subgroup.visualExample.title,
+          description: "Big-picture example for this subgroup.",
+          lines: [
+            `Prompt: ${truncateWords(sourceText || output.coreIdea, 18)}`,
+            subgroup.workedExample,
+            `Use: ${subgroup.visualExample.description}`,
+          ],
+          whyThisMatters: group.purpose,
+          format: inferExampleFormat(sourceText),
+        },
+        inlineNote: plan.expertRole,
+        nextStepTitle: nextSubgroup?.title ?? "the next learning chunk",
+      };
+      const previousSubgroup = group.subgroups[substepIndex - 1];
+
+      return {
+        id: subgroup.id,
+        title: subgroup.title,
+        isActive: stepIndex === 0 && substepIndex === 0,
+        lesson: previousSubgroup ? { ...lesson, previousStepTitle: previousSubgroup.title } : lesson,
+      };
+    }),
+  }));
+
+  return {
+    goal: plan.goal,
+    progressPercent: 0,
+    steps,
+    currentStep: steps[0]!.substeps[0]!.lesson,
+    askPenny: {
+      suggestedQuestions: [
+        "Can you teach this more simply?",
+        "Show me another worked example.",
+        "What should I challenge here?",
+        "How does this connect to my Brain?",
+      ],
+      placeholder: "Ask about this subgroup...",
     },
   };
 }
@@ -1239,6 +1310,7 @@ function buildLearnSessionOutput(
     selectedDocument?.mainClaim?.text,
     claims[0]?.text,
   );
+  const learningPlan = data?.learningPlan ?? data?.learn?.learningPlan;
 
   return {
     coreIdea,
@@ -1246,6 +1318,7 @@ function buildLearnSessionOutput(
     assumptions,
     questions,
     creativePotential: creativePotentialFrom(data, selectedDocument),
+    ...(learningPlan ? { learningPlan } : {}),
     autopilotNextMove: autopilot?.suggestion ?? autopilot?.selectedCandidate ?? null,
   };
 }
