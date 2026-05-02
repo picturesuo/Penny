@@ -3551,10 +3551,11 @@
   }
 
   .learn-workspace {
-    display: block;
-    height: calc(100vh - 92px);
-    min-height: 640px;
-    padding: 0 24px 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    height: calc(100dvh - 92px);
+    min-height: 0;
+    padding: 0 24px max(34px, calc(18px + env(safe-area-inset-bottom)));
     overflow: hidden;
     background: #fbfaf6;
   }
@@ -3568,6 +3569,8 @@
 
   .learn-main {
     min-width: 0;
+    min-height: 0;
+    height: 100%;
   }
 
   .learn-entry {
