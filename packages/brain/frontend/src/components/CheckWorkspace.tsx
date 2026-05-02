@@ -146,10 +146,10 @@ function CheckBrainMemory({
   const recentDocuments = documents.slice(0, 6);
 
   return (
-    <section className="check-brain-memory" aria-label="Saved Brain documents">
+    <section className="check-brain-memory" aria-label="Saved ideas for Check">
       <div className="check-brain-memory-head">
-        <span>Brain</span>
-        <h1>Saved ideas</h1>
+        <span>Check</span>
+        <h1>Choose an idea</h1>
       </div>
       <div className="check-brain-doc-list">
         {recentDocuments.length > 0 ? (
@@ -159,7 +159,7 @@ function CheckBrainMemory({
         ) : (
           <article className="check-brain-empty">
             <strong>No saved ideas yet</strong>
-            <span>Submit a thought to create the first Brain document.</span>
+            <span>Submit a thought to create the first idea for Check.</span>
           </article>
         )}
       </div>
