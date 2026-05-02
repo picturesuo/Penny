@@ -1214,6 +1214,10 @@ function buildLearnSessionOutput(
   selectedDocument: BrainDocumentSummary | null,
   autopilot: AutopilotTickData | null,
 ): LearnSessionOutput | null {
+  if (selectedDocument?.sessionId === "mock-session-yc-jan-1") {
+    return defaultLearnSessionOutput();
+  }
+
   if (!data && !selectedDocument) {
     return null;
   }
