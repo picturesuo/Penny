@@ -142,10 +142,11 @@
     align-items: center;
     gap: 10px;
     width: min(100%, 680px);
-    min-height: 70px;
+    min-height: 58px;
     border: 1px solid rgb(46 46 46 / 0.16);
-    border-radius: 8px;
-    padding: 10px 12px 10px 14px;
+    border-bottom-color: transparent;
+    border-radius: 8px 8px 0 0;
+    padding: 8px 12px 8px 14px;
     background: #ffffff;
     box-shadow: 0 1px 2px rgb(46 46 46 / 0.04);
   }
@@ -154,7 +155,7 @@
     display: block;
     width: 100%;
     min-width: 0;
-    height: 46px;
+    height: 38px;
     border: 0;
     padding: 0;
     color: #2d2d2d;
@@ -211,8 +212,14 @@
     justify-content: center;
     flex-wrap: nowrap;
     gap: 10px;
-    width: 100%;
-    margin-top: 22px;
+    width: min(100%, 680px);
+    min-height: 52px;
+    margin-top: 0;
+    border: 1px solid rgb(46 46 46 / 0.16);
+    border-top-color: rgb(46 46 46 / 0.12);
+    border-radius: 0 0 8px 8px;
+    padding: 12px 14px 13px;
+    background: #ffffff;
     color: #333333;
     overflow-x: auto;
     scrollbar-width: none;
@@ -4642,13 +4649,13 @@
   }
 
   .landing-composer {
-    min-height: 64px;
+    min-height: 56px;
     gap: 8px;
-    padding: 9px 10px 9px 12px;
+    padding: 7px 10px 7px 12px;
   }
 
   .landing-composer input {
-    height: 44px;
+    height: 38px;
     font-size: 15px;
   }
 
@@ -4661,7 +4668,9 @@
   .landing-shortcuts {
     justify-content: flex-start;
     gap: 8px;
-    margin-top: 16px;
+    min-height: 50px;
+    margin-top: 0;
+    padding: 11px 12px 12px;
   }
 
   .landing-shortcut-group {
