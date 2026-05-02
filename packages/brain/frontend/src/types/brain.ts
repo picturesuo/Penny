@@ -369,6 +369,9 @@ export interface BrainHybridSearchResponse {
 export interface BrainRecentIdea {
   id: string;
   rawIdea: string;
+  status?: "active" | "archived";
+  archivedAt?: string | null;
+  archiveExpiresAt?: string | null;
   createdAt: string;
   updatedAt?: string;
 }
@@ -376,6 +379,7 @@ export interface BrainRecentIdea {
 export interface BrainRecentsResponse {
   data: {
     recents: BrainRecentIdea[];
+    archived?: BrainRecentIdea[];
   };
 }
 
@@ -383,6 +387,14 @@ export interface KeepBrainRecentIdeaResponse {
   data: {
     recent: BrainRecentIdea;
     recents?: BrainRecentIdea[];
+    archived?: BrainRecentIdea[];
+  };
+}
+
+export interface UpdateBrainRecentStatusResponse {
+  data: {
+    recents: BrainRecentIdea[];
+    archived?: BrainRecentIdea[];
   };
 }
 
@@ -1139,6 +1151,14 @@ export interface InlineLearnResponse {
       status: string;
     };
     saved?: InlineLearnSavedConcept;
+  };
+}
+
+export interface AskPennyResponse {
+  data: {
+    answer: string;
+    provider: "anthropic" | "xai" | "heuristic";
+    model: string | null;
   };
 }
 
