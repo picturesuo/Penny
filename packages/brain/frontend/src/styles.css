@@ -136,19 +136,25 @@
     background: rgb(46 46 46 / 0.32);
   }
 
+  .landing-prompt-box {
+    display: grid;
+    grid-template-rows: minmax(96px, auto) auto;
+    align-content: stretch;
+    width: min(100%, 760px);
+    min-height: 174px;
+    border: 1px solid rgb(46 46 46 / 0.16);
+    border-radius: 22px;
+    background: #ffffff;
+    box-shadow: 0 18px 32px rgb(46 46 46 / 0.08);
+  }
+
   .landing-composer {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
-    gap: 10px;
-    width: min(100%, 680px);
-    min-height: 60px;
-    border: 1px solid rgb(46 46 46 / 0.16);
-    border-bottom-color: transparent;
-    border-radius: 8px 8px 0 0;
-    padding: 16px 12px 6px 14px;
-    background: #ffffff;
-    box-shadow: 0 1px 2px rgb(46 46 46 / 0.04);
+    gap: 14px;
+    min-height: 108px;
+    padding: 28px 26px 10px;
   }
 
   .landing-composer textarea {
@@ -162,7 +168,7 @@
     color: #2d2d2d;
     background: transparent;
     font-family: Georgia, Cambria, "Times New Roman", Times, serif;
-    font-size: 16px;
+    font-size: 18px;
     line-height: 1.35;
     outline: none;
     overflow: hidden;
@@ -183,18 +189,11 @@
     background: transparent;
   }
 
-  .landing-plus-button {
-    width: 28px;
-    height: 28px;
-    margin-top: 2px;
-    color: rgb(46 46 46 / 0.76);
-  }
-
   .landing-submit-button {
     width: 28px;
     min-width: 28px;
     height: 28px;
-    margin-top: 1px;
+    margin-top: 0;
     border-radius: 999px;
     padding: 0 !important;
     color: #ffffff !important;
@@ -211,25 +210,50 @@
     background: rgb(48 48 48 / 0.42) !important;
   }
 
+  .landing-prompt-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 58px;
+    padding: 0 24px 22px;
+  }
+
+  .landing-tool-chips,
   .landing-shortcuts {
     display: flex;
     align-items: center;
-    justify-content: center;
     flex-wrap: nowrap;
-    gap: 10px;
-    width: min(100%, 680px);
-    min-height: 52px;
-    margin-top: 0;
-    border: 1px solid rgb(46 46 46 / 0.16);
-    border-top-color: transparent;
-    border-radius: 0 0 8px 8px;
-    padding: 12px 14px 13px;
-    background: #ffffff;
+    gap: 8px;
     color: #333333;
     overflow-x: auto;
     scrollbar-width: none;
   }
 
+  .landing-tool-chips {
+    flex: 0 1 auto;
+  }
+
+  .landing-shortcuts {
+    justify-content: flex-end;
+    flex: 1 1 auto;
+  }
+
+  .landing-tool-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    border: 1px solid rgb(46 46 46 / 0.16);
+    border-radius: 12px;
+    padding: 5px 12px;
+    background: #ffffff;
+    color: rgb(46 46 46 / 0.82);
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .landing-tool-chips::-webkit-scrollbar,
   .landing-shortcuts::-webkit-scrollbar {
     display: none;
   }
@@ -4671,15 +4695,20 @@
     letter-spacing: 0.32em;
   }
 
+  .landing-prompt-box {
+    min-height: 166px;
+    border-radius: 18px;
+  }
+
   .landing-composer {
-    min-height: 58px;
-    gap: 8px;
-    padding: 14px 10px 6px 12px;
+    min-height: 96px;
+    gap: 10px;
+    padding: 22px 18px 8px;
   }
 
   .landing-composer textarea {
     min-height: 32px;
-    font-size: 15px;
+    font-size: 16px;
   }
 
   .landing-submit-button {
@@ -4688,12 +4717,19 @@
     height: 26px;
   }
 
+  .landing-prompt-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    min-height: auto;
+    padding: 0 18px 18px;
+  }
+
+  .landing-tool-chips,
   .landing-shortcuts {
     justify-content: flex-start;
     gap: 8px;
-    min-height: 50px;
-    margin-top: 0;
-    padding: 11px 12px 12px;
+    width: 100%;
   }
 
   .landing-shortcut-group {
