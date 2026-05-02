@@ -3643,10 +3643,9 @@
   .learn-workspace {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    height: calc(100dvh - 92px);
-    min-height: 0;
+    min-height: calc(100dvh - 92px);
     padding: 0 24px max(34px, calc(18px + env(safe-area-inset-bottom)));
-    overflow: hidden;
+    overflow: visible;
     background: #fbfaf6;
   }
 
@@ -3660,7 +3659,7 @@
   .learn-main {
     min-width: 0;
     min-height: 0;
-    height: 100%;
+    height: auto;
   }
 
   .learn-entry {
@@ -3690,9 +3689,8 @@
     position: relative;
     display: grid;
     grid-template-columns: minmax(150px, 20%) minmax(0, 1fr) 0;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
+    min-height: calc(100dvh - 92px);
+    overflow: visible;
     border-top: 1px solid #111111;
     border-bottom: 0;
     transition: grid-template-columns 220ms ease;
@@ -3855,10 +3853,10 @@
     position: relative;
     display: block;
     min-width: 0;
-    height: 100%;
+    height: auto;
     min-height: 0;
-    overflow: auto;
-    padding: 10px clamp(18px, 3vw, 42px) 28px;
+    overflow: visible;
+    padding: 10px clamp(18px, 3vw, 42px) 72px;
   }
 
   .learn-editorial-main > section,
@@ -4193,9 +4191,8 @@
   .ask-penny-panel {
     min-width: 0;
     width: auto;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
+    min-height: 100%;
+    overflow: visible;
     border-left: 1px solid #111111;
     background: #f5f3ed;
     transform: translateX(calc(100% + 1px));
