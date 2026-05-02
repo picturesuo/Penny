@@ -1,5 +1,5 @@
 import { ArrowUp, Plus } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type PennyMode } from "../autopilotUx";
 import { PennyMark } from "./PennyMark";
 
@@ -85,13 +85,24 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
   const [isCtrlDown, setIsCtrlDown] = useState(false);
   const [activeShortcutKey, setActiveShortcutKey] = useState<string | null>(null);
   const [selectedShortcutKey, setSelectedShortcutKey] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeShortcutTimeoutRef = useRef<number | null>(null);
   const submitIntent = landingSubmitIntent(destinationForShortcutKey(selectedShortcutKey), rawIdea);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+
+    if (!input) {
+      return;
+    }
+
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight}px`;
+  }, [rawIdea]);
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -214,7 +225,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             <button type="button" className="landing-plus-button" aria-label="Add a new thought" disabled={disabled}>
               <Plus size={18} strokeWidth={1.8} />
             </button>
-            <input
+            <textarea
               id="landingIdea"
               ref={inputRef}
               value={rawIdea}
@@ -222,6 +233,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
               disabled={disabled}
               placeholder="Ask anything..."
               aria-describedby="landingStatus"
+              rows={1}
             />
             <button
               type="submit"
