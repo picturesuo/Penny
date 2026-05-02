@@ -115,7 +115,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
         return;
       }
 
-      if (!event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) {
+      if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey) {
         return;
       }
 
@@ -222,7 +222,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             <p>FOR YOUR THOUGHTS</p>
           </div>
 
-          <div className="landing-prompt-box">
+          <div className={selectedShortcutKey ? "landing-prompt-box has-selected-shortcut" : "landing-prompt-box"}>
             <form className="landing-composer" onSubmit={handleSubmit}>
               <label className="sr-only" htmlFor="landingIdea">
                 Ask Penny anything
@@ -242,7 +242,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
               </p>
               <button
                 type="submit"
-                className="landing-submit-button"
+                className={selectedShortcutKey === null ? "landing-submit-button" : "landing-submit-button is-visible"}
                 disabled={disabled || submitIntent === null}
                 aria-label="Send thought"
               >
@@ -253,7 +253,10 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             <div className="landing-prompt-actions">
               <div className="landing-shortcuts" aria-label="Keyboard shortcuts">
                 {landingShortcuts.map((shortcut, index) => (
-                  <div className="landing-shortcut-group" key={shortcut.key}>
+                  <div
+                    className={selectedShortcutKey && selectedShortcutKey !== shortcut.key ? "landing-shortcut-group is-hidden" : "landing-shortcut-group"}
+                    key={shortcut.key}
+                  >
                     {index > 0 ? <span className="landing-shortcut-divider" aria-hidden="true" /> : null}
                     <button
                       type="button"
@@ -277,7 +280,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                       >
                         {shortcut.key}
                       </kbd>
-                      <span>{shortcut.label}</span>
+                      {selectedShortcutKey === shortcut.key ? null : <span>{shortcut.label}</span>}
                     </button>
                   </div>
                 ))}
