@@ -3842,6 +3842,20 @@
     margin-top: 20px;
   }
 
+  .learn-session-output.ask-open .learn-editorial-main {
+    padding-top: 8px;
+  }
+
+  .learn-session-output.ask-open .learn-editorial-main > section,
+  .learn-session-output.ask-open .learn-editorial-main > aside,
+  .learn-session-output.ask-open .learn-editorial-main > nav {
+    margin-top: 12px;
+  }
+
+  .learn-session-output.ask-open .learn-editorial-main > .learn-goal-block {
+    margin-top: 12px;
+  }
+
   .learn-ask-toggle {
     position: sticky;
     top: 0;
@@ -3943,7 +3957,7 @@
 
   .learn-session-output.ask-open .learn-core-section {
     gap: 7px;
-    padding: 7px 0;
+    padding: 6px 0;
   }
 
   .learn-core-copy {
@@ -3995,7 +4009,7 @@
   }
 
   .learn-session-output.ask-open .learn-visual-placeholder {
-    min-height: 72px;
+    min-height: 54px;
   }
 
   .learn-visual-placeholder span {
@@ -4018,8 +4032,8 @@
   }
 
   .learn-session-output.ask-open .learn-example-panel {
-    gap: 14px;
-    padding: 12px 14px 14px;
+    gap: 10px;
+    padding: 11px 14px 12px;
   }
 
   .learn-example-panel h3 {
@@ -4092,7 +4106,11 @@
   }
 
   .learn-editorial-main > .learn-inline-note {
-    margin-top: 22px;
+    margin-top: 18px;
+  }
+
+  .learn-session-output.ask-open .learn-editorial-main > .learn-inline-note {
+    margin-top: 14px;
   }
 
   .learn-inline-note p {
