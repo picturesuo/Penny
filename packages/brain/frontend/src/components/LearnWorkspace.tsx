@@ -187,6 +187,7 @@ function LearnSessionView({
       return;
     }
 
+    setAskPennyOpen(false);
     setActiveMainStepId(nextLesson.step.id);
     setActiveSubstepId(nextLesson.substep.id);
   }
@@ -214,6 +215,7 @@ function LearnSessionView({
         activeSubstepId={activeSubstepId}
         progressPercent={currentProgressPercent}
         onStepSelect={selectStep}
+        onAskPennyToggle={() => setAskPennyOpen((isOpen) => !isOpen)}
       />
 
       <LearnMainContent
@@ -224,7 +226,6 @@ function LearnSessionView({
         lessonPages={lessonPages}
         onPrevious={goToPreviousLesson}
         onNext={goToNextLesson}
-        onAskPennyToggle={() => setAskPennyOpen((isOpen) => !isOpen)}
       />
 
       <AskPennyPanel
@@ -304,18 +305,26 @@ function LearningPathSidebar({
   activeSubstepId,
   progressPercent,
   onStepSelect,
+  onAskPennyToggle,
 }: {
   steps: LearnPageData["steps"];
   activeMainStepId: string;
   activeSubstepId: string;
   progressPercent: number;
   onStepSelect: (stepId: string, substepId?: string) => void;
+  onAskPennyToggle: () => void;
 }) {
   return (
     <aside className="learn-path-sidebar" aria-label="Learning path">
-      <div className="learn-path-kicker">
-        <span>LEARNING PATH</span>
-        <p>Expert-designed order</p>
+      <div className="learn-path-head">
+        <div className="learn-path-kicker">
+          <span>LEARNING PATH</span>
+          <p>Expert-designed order</p>
+        </div>
+        <button type="button" className="learn-ask-toggle" onClick={onAskPennyToggle} aria-label="Toggle Ask Penny">
+          <span>Ask</span>
+          <kbd>Ctrl+A</kbd>
+        </button>
       </div>
 
       <ol className="learn-path-list">
@@ -368,7 +377,6 @@ function LearnMainContent({
   lessonPages,
   onPrevious,
   onNext,
-  onAskPennyToggle,
 }: {
   pageData: LearnPageData;
   activeStepIndex: number;
@@ -377,7 +385,6 @@ function LearnMainContent({
   lessonPages: LearnLessonPage[];
   onPrevious: () => void;
   onNext: () => void;
-  onAskPennyToggle: () => void;
 }) {
   const activeStep = pageData.steps[activeStepIndex] ?? pageData.steps[0];
   const activeSubstep = activeStep?.substeps.find((substep) => substep.id === activeSubstepId);
@@ -388,11 +395,6 @@ function LearnMainContent({
 
   return (
     <article className="learn-editorial-main" aria-label="Current learning step">
-      <button type="button" className="learn-ask-toggle" onClick={onAskPennyToggle} aria-label="Toggle Ask Penny">
-        <span>Ask</span>
-        <kbd>Ctrl+A</kbd>
-      </button>
-
       <section className="learn-goal-block" aria-label="Your goal">
         <span>YOUR GOAL</span>
         <h1>{pageData.goal}</h1>
