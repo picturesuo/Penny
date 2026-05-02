@@ -111,6 +111,10 @@ test("POST /brain/seed persists the seed and returns a UI-ready payload", async 
   assert.equal(payload.data.learnCandidates.length, 1);
   assert.match(payload.data.learnCandidates[0]?.claimId ?? "", /^[0-9a-f-]{36}$/);
   assert.equal(payload.data.learnCandidates[0]?.seedClaimId, "claim.assumption.1");
+  assert.equal(payload.data.learningPlan.paragraphFit, "one_subgroup_per_page");
+  assert.match(payload.data.learningPlan.expertRole, /startup|expert/i);
+  assert.match(payload.data.learningPlan.groups[0]?.subgroups[0]?.teachingParagraph ?? "", /goal|mastery|understand/i);
+  assert.match(payload.data.learningPlan.groups[2]?.subgroups[0]?.visualExample.description ?? "", /prompt|case|question/i);
   assert.equal(payload.data.brainRun.status, "succeeded");
   assert.deepEqual(payload.data.artifacts, []);
   assert.deepEqual(
