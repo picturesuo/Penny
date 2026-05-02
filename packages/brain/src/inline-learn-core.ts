@@ -87,11 +87,29 @@ export const InlineLearnSaveRequestSchema = InlineLearnProviderSchema.extend({
   sessionId: z.string().uuid(),
 }).strict();
 
+export const AskPennyRequestSchema = z
+  .object({
+    question: z.string().trim().min(1).max(1_000),
+    currentStepTitle: z.string().trim().min(1).max(160),
+    localContext: z.string().trim().min(1).max(4_000),
+  })
+  .strict();
+
+export const AskPennyOutputSchema = z
+  .object({
+    answer: z.string().trim().min(1).max(2_000),
+    provider: z.enum(["anthropic", "xai", "heuristic"]),
+    model: z.string().trim().min(1).max(120).nullable(),
+  })
+  .strict();
+
 export type InlineLearnRequest = z.infer<typeof InlineLearnRequestSchema>;
 export type InlineLearnSaveRequest = z.infer<typeof InlineLearnSaveRequestSchema>;
 export type InlineLearnProviderOutput = z.infer<typeof InlineLearnProviderSchema>;
 export type LearnOutput = z.infer<typeof LearnOutputSchema>;
 export type InlineLearnOutput = LearnOutput;
+export type AskPennyRequest = z.infer<typeof AskPennyRequestSchema>;
+export type AskPennyOutput = z.infer<typeof AskPennyOutputSchema>;
 
 export type InlineLearnGenerationInput = {
   term: string;
@@ -107,6 +125,12 @@ export type InlineLearnGenerationInput = {
 export type InlineLearnProvider = {
   name: string;
   generate(input: InlineLearnGenerationInput): Promise<unknown>;
+};
+
+export type AskPennyProvider = {
+  name: AskPennyOutput["provider"];
+  model: string | null;
+  generate(input: AskPennyRequest): Promise<AskPennyOutput>;
 };
 
 const inlineLearnOutputSpec = Output.object<InlineLearnProviderOutput>({
@@ -151,6 +175,11 @@ export type InlineLearnRouteOptions = {
     input: InlineLearnRequest,
     options: { db?: PennyDatabase; provider: InlineLearnProvider },
   ) => Promise<PersistedInlineLearn>;
+};
+
+export type AskPennyRouteOptions = {
+  provider?: AskPennyProvider;
+  askPenny?: (input: AskPennyRequest, options: { provider: AskPennyProvider }) => Promise<AskPennyOutput>;
 };
 
 export type InlineLearnSaveRouteOptions = {
@@ -246,6 +275,32 @@ export async function handleInlineLearnSaveRequest(
 
   try {
     return jsonResponse({ data: { saved: await saveInlineLearn(parsed.data, dbOption(db)) } }, 201);
+  } catch (error) {
+    return inlineLearnErrorResponse(error);
+  }
+}
+
+export async function handleAskPennyRequest(
+  request: Request,
+  options: AskPennyRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /brain/learn/ask requires the POST method.");
+  }
+
+  const parsed = await parseJsonRequest(request, AskPennyRequestSchema);
+
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const provider = options.provider ?? createDefaultAskPennyProvider();
+  const askPenny =
+    options.askPenny ??
+    ((input: AskPennyRequest, askOptions: { provider: AskPennyProvider }) => askOptions.provider.generate(input));
+
+  try {
+    return jsonResponse({ data: AskPennyOutputSchema.parse(await askPenny(parsed.data, { provider })) }, 200);
   } catch (error) {
     return inlineLearnErrorResponse(error);
   }
@@ -368,6 +423,32 @@ export function createDefaultInlineLearnProvider(
   return createHeuristicInlineLearnProvider();
 }
 
+export function createDefaultAskPennyProvider(env: Record<string, string | undefined> = process.env): AskPennyProvider {
+  if (env.ANTHROPIC_API_KEY?.trim()) {
+    return createAnthropicAskPennyProvider(env);
+  }
+
+  if (env.XAI_API_KEY?.trim()) {
+    return createXaiAskPennyProvider(env);
+  }
+
+  return createHeuristicAskPennyProvider();
+}
+
+export function createHeuristicAskPennyProvider(): AskPennyProvider {
+  return {
+    name: "heuristic",
+    model: null,
+    async generate(input) {
+      return {
+        answer: heuristicAskPennyAnswer(input),
+        provider: "heuristic",
+        model: null,
+      };
+    },
+  };
+}
+
 export function createHeuristicInlineLearnProvider(): InlineLearnProvider {
   return {
     name: "heuristic",
@@ -430,8 +511,131 @@ export function createXaiInlineLearnProvider(
   };
 }
 
+export function createXaiAskPennyProvider(
+  env: Record<string, string | undefined> = process.env,
+  options: { generateText?: typeof generateText } = {},
+): AskPennyProvider {
+  const model = resolveXaiAskPennyModel(env);
+
+  return {
+    name: "xai",
+    model,
+    async generate(input) {
+      const apiKey = env.XAI_API_KEY?.trim();
+
+      if (!apiKey) {
+        throw new InlineLearnProviderError("XAI_API_KEY is required for the xAI Ask Penny provider.");
+      }
+
+      const xai = createXai(createXaiSettings(apiKey, env));
+      const callGenerateText = options.generateText ?? generateText;
+
+      try {
+        const result = await callGenerateText({
+          model: xai.responses(model),
+          system: buildAskPennySystemPrompt(),
+          prompt: buildAskPennyPrompt(input),
+          maxRetries: 1,
+          providerOptions: {
+            xai: {
+              store: false,
+            },
+          },
+        });
+
+        return AskPennyOutputSchema.parse({
+          answer: result.text,
+          provider: "xai",
+          model,
+        });
+      } catch (error) {
+        throw new InlineLearnProviderError(`xAI Ask Penny request failed: ${formatErrorMessage(error)}`);
+      }
+    },
+  };
+}
+
+export function createAnthropicAskPennyProvider(
+  env: Record<string, string | undefined> = process.env,
+  options: { fetch?: typeof fetch } = {},
+): AskPennyProvider {
+  const model = resolveAnthropicAskPennyModel(env);
+
+  return {
+    name: "anthropic",
+    model,
+    async generate(input) {
+      const apiKey = env.ANTHROPIC_API_KEY?.trim();
+
+      if (!apiKey) {
+        throw new InlineLearnProviderError("ANTHROPIC_API_KEY is required for the Anthropic Ask Penny provider.");
+      }
+
+      const callFetch = options.fetch ?? fetch;
+      const response = await callFetch(`${env.ANTHROPIC_BASE_URL?.trim().replace(/\/+$/, "") || "https://api.anthropic.com"}/v1/messages`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": env.ANTHROPIC_VERSION?.trim() || "2023-06-01",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 700,
+          system: buildAskPennySystemPrompt(),
+          messages: [
+            {
+              role: "user",
+              content: buildAskPennyPrompt(input),
+            },
+          ],
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as unknown;
+
+      if (!response.ok) {
+        throw new InlineLearnProviderError(`Anthropic Ask Penny request failed with ${response.status}: ${anthropicErrorMessage(payload)}`);
+      }
+
+      return AskPennyOutputSchema.parse({
+        answer: anthropicText(payload),
+        provider: "anthropic",
+        model,
+      });
+    },
+  };
+}
+
 export function resolveXaiInlineLearnModel(env: Record<string, string | undefined> = process.env): string {
   return env.XAI_INLINE_LEARN_MODEL?.trim() || env.XAI_MODEL?.trim() || defaultXaiInlineLearnModel;
+}
+
+export function resolveXaiAskPennyModel(env: Record<string, string | undefined> = process.env): string {
+  return env.XAI_ASK_PENNY_MODEL?.trim() || env.XAI_INLINE_LEARN_MODEL?.trim() || env.XAI_MODEL?.trim() || defaultXaiInlineLearnModel;
+}
+
+export function resolveAnthropicAskPennyModel(env: Record<string, string | undefined> = process.env): string {
+  return env.ANTHROPIC_ASK_PENNY_MODEL?.trim() || env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-6";
+}
+
+export function buildAskPennySystemPrompt(): string {
+  return [
+    "You are Penny inside Learn Mode.",
+    "Answer the user's question directly using the current step and local lesson context.",
+    "Be concrete, useful, and concise. If the user asks for an example, give an example.",
+    "Do not say you saved anything. Do not invent external facts or citations.",
+    "Use plain text only.",
+  ].join("\n");
+}
+
+export function buildAskPennyPrompt(input: AskPennyRequest): string {
+  return [
+    `Current step: ${input.currentStepTitle}`,
+    `Local lesson context: ${input.localContext}`,
+    `Question: ${input.question}`,
+    "",
+    "Answer in 2-5 short paragraphs or a compact list if that is clearer.",
+  ].join("\n\n");
 }
 
 export function buildInlineLearnSystemPrompt(): string {
@@ -852,6 +1056,19 @@ function buildHeuristicInlineLearnOutput(input: InlineLearnGenerationInput): Inl
   }
 
   return parsed.data;
+}
+
+function heuristicAskPennyAnswer(input: AskPennyRequest): string {
+  const question = clipText(input.question, 220);
+  const step = clipText(input.currentStepTitle, 120);
+  const context = clipText(input.localContext, 420);
+
+  return [
+    `For "${step}", answer the question by tying it back to the current lesson goal instead of opening a new thread.`,
+    `Question: ${question}`,
+    `Use this context: ${context}`,
+    "A useful answer should name the concrete move, show one small example, and end with the next thing to inspect or revise.",
+  ].join("\n\n");
 }
 
 function normalizeLearnOutput(output: InlineLearnProviderOutput, input?: Partial<InlineLearnGenerationInput>): InlineLearnOutput {
@@ -1294,6 +1511,46 @@ function clipText(value: string, maxLength: number): string {
   }
 
   return `${compact.slice(0, maxLength - 1).trimEnd()}.`;
+}
+
+function anthropicText(payload: unknown): string {
+  if (!payload || typeof payload !== "object" || !("content" in payload) || !Array.isArray(payload.content)) {
+    throw new InlineLearnProviderError("Anthropic Ask Penny response did not include text content.");
+  }
+
+  const text = payload.content
+    .map((item) => {
+      if (item && typeof item === "object" && "type" in item && item.type === "text" && "text" in item && typeof item.text === "string") {
+        return item.text;
+      }
+
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+
+  if (!text) {
+    throw new InlineLearnProviderError("Anthropic Ask Penny response text was empty.");
+  }
+
+  return text;
+}
+
+function anthropicErrorMessage(payload: unknown): string {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "error" in payload &&
+    payload.error &&
+    typeof payload.error === "object" &&
+    "message" in payload.error &&
+    typeof payload.error.message === "string"
+  ) {
+    return payload.error.message;
+  }
+
+  return "unknown error";
 }
 
 function formatErrorMessage(error: unknown): string {
