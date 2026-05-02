@@ -24,7 +24,7 @@ import { handleChallengeBriefRequest } from "./routes/challenge-brief-routes.ts"
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import { createPennySql } from "./db/client.ts";
 import * as schema from "./db/schema.ts";
-import { handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
+import { handleAskPennyRequest, handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleLearnSessionRequest } from "./learn-session-route.ts";
 import { handleSessionCanvasRequest } from "./session-canvas-route.ts";
 import { handleSessionGraphRequest } from "./session-graph-route.ts";
@@ -565,6 +565,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/brain/learn/inline") {
       await writeWebResponse(outgoing, await handleInlineLearnRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/brain/learn/ask") {
+      await writeWebResponse(outgoing, await handleAskPennyRequest(request));
       return;
     }
 
