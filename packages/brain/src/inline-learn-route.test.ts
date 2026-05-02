@@ -140,6 +140,22 @@ test("POST /brain/learn/ask falls back locally when the live provider is rate li
   assert.match(tieInPayload.data.answer, /support signal, not main proof/);
   assert.match(tieInPayload.data.answer, /one connection, one consequence, one next question/);
   assert.ok(tieInPayload.data.answer.length < 700);
+
+  const thisMeans = await askWithRateLimitedProvider("what does this mean?");
+  const thisMeansPayload = (await thisMeans.json()) as { data: { answer: string } };
+
+  assert.equal(thisMeans.status, 200);
+  assert.match(thisMeansPayload.data.answer, /usable distinction/);
+  assert.match(thisMeansPayload.data.answer, /one sentence/);
+  assert.ok(thisMeansPayload.data.answer.length < 700);
+
+  const thisWorks = await askWithRateLimitedProvider("how does this work?");
+  const thisWorksPayload = (await thisWorks.json()) as { data: { answer: string } };
+
+  assert.equal(thisWorks.status, 200);
+  assert.match(thisWorksPayload.data.answer, /small reasoning loop/);
+  assert.match(thisWorksPayload.data.answer, /changes what you should believe or do next/);
+  assert.ok(thisWorksPayload.data.answer.length < 700);
 });
 
 test("Ask Penny provider selection prefers Claude then xAI then heuristic", () => {
