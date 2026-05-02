@@ -42,6 +42,7 @@ test("BrainWorkspace renders persisted quick notes as the first sidebar folder",
   assert.match(markup, /Persist this note in Brain/);
   assert.doesNotMatch(markup, /No quick notes yet/);
   assert.match(markup, /aria-label="Quick notes folder"/);
+  assert.match(markup, /class="quick-note-open"/);
 });
 
 function emptyDocumentsData(): BrainDocumentsData {
