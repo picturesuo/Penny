@@ -5,12 +5,14 @@
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
+    "build": "pnpm build:frontend",
     "build:frontend": "vite build --config packages/brain/frontend/vite.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "dev:frontend": "vite --host 0.0.0.0 --config packages/brain/frontend/vite.config.ts",
     "dev:api": "tsx packages/brain/src/server.ts",
     "lint": "tsc --noEmit --pretty false && tsc --noEmit --pretty false -p packages/brain/frontend/tsconfig.json",
+    "start": "tsx packages/brain/src/server.ts",
     "test": "tsx --test packages/brain/src/*.test.ts packages/brain/frontend/test/*.test.ts test/brain/nextMoveEngine.test.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p packages/brain/frontend/tsconfig.json"
   },
