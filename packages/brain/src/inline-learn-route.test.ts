@@ -120,7 +120,8 @@ test("POST /brain/learn/ask falls back locally when the live provider is rate li
 
   assert.equal(definition.status, 200);
   assert.match(definitionPayload.data.answer, /Founder evidence means/);
-  assert.match(definitionPayload.data.answer, /clarity of thought/);
+  assert.match(definitionPayload.data.answer, /concrete proof/);
+  assert.match(definitionPayload.data.answer, /reader can inspect/);
   assert.ok(definitionPayload.data.answer.length < 700);
 
   const mechanism = await askWithRateLimitedProvider("how does YC evaluation work?");
@@ -128,6 +129,7 @@ test("POST /brain/learn/ask falls back locally when the live provider is rate li
 
   assert.equal(mechanism.status, 200);
   assert.match(mechanismPayload.data.answer, /YC evaluation works by/);
+  assert.match(mechanismPayload.data.answer, /team quality/);
   assert.match(mechanismPayload.data.answer, /input -> mechanism -> observable result/);
   assert.ok(mechanismPayload.data.answer.length < 700);
 
@@ -135,7 +137,7 @@ test("POST /brain/learn/ask falls back locally when the live provider is rate li
   const tieInPayload = (await tieIn.json()) as { data: { answer: string } };
 
   assert.equal(tieIn.status, 200);
-  assert.match(tieInPayload.data.answer, /ties into investor interest/);
+  assert.match(tieInPayload.data.answer, /support signal, not main proof/);
   assert.match(tieInPayload.data.answer, /one connection, one consequence, one next question/);
   assert.ok(tieInPayload.data.answer.length < 700);
 });

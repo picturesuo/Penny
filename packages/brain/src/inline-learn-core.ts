@@ -1103,7 +1103,7 @@ function shapedAskPennyAnswer(input: AskPennyRequest): string | null {
 
   if (definitionTerm) {
     return [
-      `${capitalizeFirst(definitionTerm)} means the part of this lesson you need to make explicit enough to use, test, or explain back.`,
+      definitionAnswer(definitionTerm),
       `Here, connect it to ${context}.`,
       `A right-sized answer is a working definition plus one implication for "${step}".`,
     ].join("\n\n");
@@ -1119,7 +1119,7 @@ function shapedAskPennyAnswer(input: AskPennyRequest): string | null {
 
   if (mechanismTerm) {
     return [
-      `${capitalizeFirst(mechanismTerm)} works by separating the goal, the moving parts, and the signal that tells you whether it is working.`,
+      mechanismAnswer(mechanismTerm),
       `In this lesson, use ${context} as the case.`,
       `Trace it as: input -> mechanism -> observable result. Keep the answer to that chain unless a source check is needed.`,
     ].join("\n\n");
@@ -1134,13 +1134,51 @@ function shapedAskPennyAnswer(input: AskPennyRequest): string | null {
 
   if (tieTarget) {
     return [
-      `It ties into ${tieTarget} by showing what role the current lesson plays in that bigger frame.`,
+      tieInAnswer(tieTarget),
       `Use ${context} as the bridge: name the shared concept, say what changes, then state why ${tieTarget} now matters.`,
       `Keep it tight: one connection, one consequence, one next question.`,
     ].join("\n\n");
   }
 
   return null;
+}
+
+function definitionAnswer(term: string): string {
+  const compactTerm = term.toLowerCase();
+
+  if (compactTerm.includes("founder evidence")) {
+    return "Founder evidence means concrete proof that a founder can notice a real problem, build or learn quickly, and turn that insight into action. It is stronger than adjectives like smart or driven because the reader can inspect what happened.";
+  }
+
+  if (compactTerm.includes("investor interest")) {
+    return "Investor interest means outside people may see promise, but it is secondary evidence. It helps only when it points back to a stronger signal: user demand, founder insight, progress, or unusual execution.";
+  }
+
+  if (compactTerm.includes("yc evaluation")) {
+    return "YC evaluation means reading an application for evidence that the team can become unusually effective during the batch. The useful signals are founder quality, problem insight, speed, clarity, and proof of progress.";
+  }
+
+  return `${capitalizeFirst(term)} means the concrete concept or signal you need to define well enough to use, test, or explain back. Do not leave it as a label; say what would count as evidence for it.`;
+}
+
+function mechanismAnswer(term: string): string {
+  const compactTerm = term.toLowerCase();
+
+  if (compactTerm.includes("yc")) {
+    return "YC evaluation works by converting a short application into signals about team quality, problem insight, speed, and evidence of progress. Strong answers make those signals inspectable instead of asking the reader to trust broad claims.";
+  }
+
+  return `${capitalizeFirst(term)} works by separating the goal, the moving parts, and the signal that tells you whether it is working. Explain the input, the mechanism that changes it, and the observable result.`;
+}
+
+function tieInAnswer(target: string): string {
+  const compactTarget = target.toLowerCase();
+
+  if (compactTarget.includes("investor interest")) {
+    return "It ties into investor interest by putting that interest in the right role: support signal, not main proof. The application should still show why the founders, problem, and progress are strong on their own.";
+  }
+
+  return `It ties into ${target} by showing what role the current lesson plays in that bigger frame.`;
 }
 
 function definitionQuestionTerm(question: string): string | null {
