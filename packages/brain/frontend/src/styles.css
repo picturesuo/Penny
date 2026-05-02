@@ -3778,17 +3778,31 @@
     top: 0;
     z-index: 2;
     float: right;
-    display: grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    width: max-content;
+    min-height: 34px;
     border: 1px solid #111111;
-    border-radius: 999px;
+    border-radius: 4px;
     background: #fbfaf6;
     color: #111111;
-    font-size: 18px;
+    padding: 4px 7px;
+    font-size: 12px;
     font-weight: 700;
     line-height: 1;
+  }
+
+  .learn-ask-toggle kbd {
+    display: inline-grid;
+    place-items: center;
+    min-height: 22px;
+    border: 1px solid rgb(17 17 17 / 0.3);
+    border-radius: 3px;
+    background: #ffffff;
+    padding: 0 5px;
+    font: inherit;
+    font-size: 11px;
   }
 
   .learn-goal-block {
