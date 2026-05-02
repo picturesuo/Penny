@@ -3614,11 +3614,26 @@
 
   .learn-path-list ol li {
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr);
-    gap: 7px;
     color: rgb(17 17 17 / 0.58);
     font-size: 11px;
     line-height: 1.18;
+  }
+
+  .learn-path-list ol li button {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 7px;
+    min-width: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+  }
+
+  .learn-path-list ol li button span {
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
   }
 
   .learn-path-list ol li.is-active-substep {
@@ -3717,6 +3732,14 @@
     font-size: clamp(19px, 1.55vw, 25px);
     font-weight: 700;
     letter-spacing: 0;
+    line-height: 1;
+  }
+
+  .learn-step-header strong {
+    display: block;
+    margin-top: 4px;
+    color: rgb(17 17 17 / 0.6);
+    font-size: 12px;
     line-height: 1;
   }
 
