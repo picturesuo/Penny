@@ -70,6 +70,12 @@ test("LearnRecipe structures recipe steps and keeps web search hidden behind Sea
   assert.equal(output.brainContext.assumptionCount, 1);
   assert.equal(output.searchDecision.mode, "learn");
   assert.equal(output.searchDecision.useWebSearch, true);
+  assert.equal(output.learningPlan.paragraphFit, "one_subgroup_per_page");
+  assert.match(output.learningPlan.expertRole, /expert|instructor/i);
+  assert.ok(output.learningPlan.groups.length >= 5);
+  assert.ok(output.learningPlan.groups.every((group) => group.subgroups.length >= 2));
+  assert.match(output.learningPlan.groups[0]?.subgroups[0]?.teachingParagraph ?? "", /goal|mastery|understand/i);
+  assert.match(output.learningPlan.groups[2]?.subgroups[0]?.visualExample.description ?? "", /prompt|case|question/i);
   assert.match(output.recipe.steps[2]?.summary ?? "", /SearchDecisionService/);
   assert.deepEqual(output.recipe.steps[4]?.outputs, [
     "Learn: Learn onboarding strategy",
@@ -155,6 +161,8 @@ test("LearnRecipe makes the YC demo idea read like a useful thinking recipe", as
   });
 
   assert.equal(LearnRecipeOutputSchema.safeParse(output).success, true);
+  assert.match(output.learningPlan.expertRole, /startup|expert/i);
+  assert.match(output.learningPlan.groups[3]?.title ?? "", /Challenge/i);
   assert.match(output.recipe.steps[0]?.summary ?? "", /load-bearing assumption/i);
   assert.match(output.recipe.steps[3]?.summary ?? "", /inspectable, challengeable, and source-grounded/i);
   assert.deepEqual(output.recipe.steps[4]?.outputs, [
