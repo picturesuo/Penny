@@ -102,8 +102,12 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
       return;
     }
 
+    const maxHeight = Number.parseFloat(window.getComputedStyle(input).maxHeight);
+    const nextHeight = Number.isFinite(maxHeight) ? Math.min(input.scrollHeight, maxHeight) : input.scrollHeight;
+
     input.style.height = "auto";
-    input.style.height = `${input.scrollHeight}px`;
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > nextHeight ? "auto" : "hidden";
   }, [rawIdea]);
 
   useEffect(() => {
