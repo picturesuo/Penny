@@ -286,7 +286,17 @@ function recipeStatus(steps: ReadonlyArray<RecipeStepTrace>): RecipeTraceStepSta
 }
 
 function sanitizeList(values: ReadonlyArray<string> | undefined): string[] {
-  return [...new Set((values ?? []).map((value) => value.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, 8);
+  return [...new Set((values ?? []).map((value) => clipTraceItem(value)).filter(Boolean))].slice(0, 8);
+}
+
+function clipTraceItem(value: string): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+
+  if (compact.length <= 220) {
+    return compact;
+  }
+
+  return `${compact.slice(0, 219).trimEnd()}.`;
 }
 
 function isoNow(): string {
