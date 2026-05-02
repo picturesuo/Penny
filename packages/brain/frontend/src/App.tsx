@@ -681,6 +681,7 @@ export function App() {
           },
         });
         setStatus("Quick note added to Brain");
+        await refreshRecents();
       } else {
         await handleSeed(recent.rawIdea);
         setActiveMode(action === "check" ? "Check" : action === "learn" ? "Learn" : "Brain");
@@ -691,11 +692,11 @@ export function App() {
               ? "Quick note opened in Learn"
               : "Quick note built",
         );
-      }
 
-      const payload = await updateBrainRecentStatus(recent.id, "archived");
-      setRecents(payload.data.recents);
-      setArchivedRecents(payload.data.archived ?? []);
+        const payload = await updateBrainRecentStatus(recent.id, "archived");
+        setRecents(payload.data.recents);
+        setArchivedRecents(payload.data.archived ?? []);
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
