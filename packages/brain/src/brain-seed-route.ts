@@ -29,6 +29,7 @@ import {
   type BrainSeedRunInput,
   type PersistedBrainSeed,
 } from "./seed-persistence.ts";
+import { buildExpertLearningPlan } from "./learn-plan.ts";
 import { scopeValues } from "./scope.ts";
 
 export const BrainSeedRouteRequestSchema = z
@@ -290,6 +291,13 @@ export function buildBrainSeedUiPayload(
       }),
     },
     explorationPaths: seed.explorationPaths,
+    learningPlan: buildExpertLearningPlan({
+      rawIdea: persisted.source.rawText,
+      keyInsight: seed.keyInsight,
+      claims: seed.thoughtMap.claims,
+      learnCandidates: seed.learnCandidates,
+      explorationPaths: seed.explorationPaths,
+    }),
     firstChallenge: {
       targetClaimId: requirePersistedClaim(claimsBySeedId, seed.firstChallenge.targetClaimId).id,
       targetSeedClaimId: seed.firstChallenge.targetClaimId,
