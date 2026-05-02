@@ -1,4 +1,12 @@
 export {
+  AskPennyOutputSchema,
+  AskPennyRequestSchema,
+  buildAskPennyPrompt,
+  buildAskPennySystemPrompt,
+  createAnthropicAskPennyProvider,
+  createDefaultAskPennyProvider,
+  createHeuristicAskPennyProvider,
+  createXaiAskPennyProvider,
   buildInlineLearnPrompt,
   buildInlineLearnSystemPrompt,
   createDefaultInlineLearnProvider,
@@ -13,9 +21,15 @@ export {
   LearnOutputSchema,
   LearnSuggestedNextMoveSchema,
   parseInlineLearnOutput,
+  resolveAnthropicAskPennyModel,
+  resolveXaiAskPennyModel,
   resolveXaiInlineLearnModel,
 } from "./inline-learn-core.ts";
 export type {
+  AskPennyOutput,
+  AskPennyProvider,
+  AskPennyRequest,
+  AskPennyRouteOptions,
   InlineLearnGenerateText,
   InlineLearnGenerationInput,
   InlineLearnOutput,
