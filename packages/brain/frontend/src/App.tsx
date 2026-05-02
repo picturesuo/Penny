@@ -13,6 +13,7 @@ import {
   selectAutopilotNode,
   startAutopilotCandidate,
   tickAutopilot,
+  updateBrainRecentStatus,
   verifyClaim,
 } from "./api/brainClient";
 import { buildAutopilotStartIntent, runAutopilotGoThere, type PennyMode } from "./autopilotUx";
@@ -53,6 +54,7 @@ type ChallengeResponseDraft =
     };
 
 type BrainRelatedSearchState = BrainHybridSearchResponse["data"];
+type QuickNoteAction = "build" | "brain" | "check" | "learn" | "archive" | "restore";
 
 const ACTIVE_SESSION_KEY = "penny.activeSessionId";
 const SESSION_QUERY_PARAM = "sessionId";
@@ -60,6 +62,7 @@ const SESSION_QUERY_PARAM = "sessionId";
 export function App() {
   const [documentsData, setDocumentsData] = useState<BrainDocumentsData | null>(null);
   const [recents, setRecents] = useState<BrainRecentIdea[]>([]);
+  const [archivedRecents, setArchivedRecents] = useState<BrainRecentIdea[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [data, setData] = useState<BrainData | null>(null);
   const [moves, setMoves] = useState<BrainMove[]>([]);
@@ -180,6 +183,7 @@ export function App() {
     try {
       const payload = await keepBrainRecentIdea(rawIdea);
       setRecents(payload.data.recents ?? mergeRecentIdeas(payload.data.recent, recents));
+      setArchivedRecents(payload.data.archived ?? archivedRecents);
       setStatus("Kept in Recents");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -632,8 +636,70 @@ export function App() {
     try {
       const payload = await fetchBrainRecents();
       setRecents(payload.data.recents);
+      setArchivedRecents(payload.data.archived ?? []);
     } catch {
       setRecents([]);
+      setArchivedRecents([]);
+    }
+  }
+
+  async function handleQuickNoteStatus(recentId: string, nextStatus: "active" | "archived") {
+    setIsThinking(true);
+    setStatus(nextStatus === "archived" ? "Archiving quick note" : "Restoring quick note");
+
+    try {
+      const payload = await updateBrainRecentStatus(recentId, nextStatus);
+      setRecents(payload.data.recents);
+      setArchivedRecents(payload.data.archived ?? []);
+      setStatus(nextStatus === "archived" ? "Quick note archived" : "Quick note restored");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsThinking(false);
+    }
+  }
+
+  async function handleQuickNoteAction(recent: BrainRecentIdea, action: QuickNoteAction) {
+    if (action === "archive" || action === "restore") {
+      await handleQuickNoteStatus(recent.id, action === "archive" ? "archived" : "active");
+      return;
+    }
+
+    setIsThinking(true);
+    setStatus("Using quick note");
+
+    try {
+      if (action === "brain") {
+        await saveBrainObject({
+          objectType: "quick_note",
+          title: recent.rawIdea,
+          summary: "Promoted from Quick Notes.",
+          content: recent.rawIdea,
+          payload: {
+            source: "quick_note",
+            recentId: recent.id,
+          },
+        });
+        setStatus("Quick note added to Brain");
+      } else {
+        await handleSeed(recent.rawIdea);
+        setActiveMode(action === "check" ? "Check" : action === "learn" ? "Learn" : "Brain");
+        setStatus(
+          action === "check"
+            ? "Quick note sent to Check"
+            : action === "learn"
+              ? "Quick note opened in Learn"
+              : "Quick note built",
+        );
+      }
+
+      const payload = await updateBrainRecentStatus(recent.id, "archived");
+      setRecents(payload.data.recents);
+      setArchivedRecents(payload.data.archived ?? []);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsThinking(false);
     }
   }
 
@@ -696,10 +762,13 @@ export function App() {
             status={status}
             isThinking={isThinking}
             recents={recents}
+            archivedRecents={archivedRecents}
             onSelectDocument={handleSelectDocument}
             onBackToLibrary={handleBackToLibrary}
             onNewThought={handleNewThought}
             onSeed={handleSeed}
+            onQuickNoteCreate={handleKeepRecentIdea}
+            onQuickNoteAction={handleQuickNoteAction}
             onClaimSelect={handleManualClaimSelect}
             onReworkDocument={handleReworkDocument}
             onCanvasOpenChange={setBrainCanvasOpen}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Folder, Plus } from "lucide-react";
+import { Archive, BookOpen, CheckCircle2, Folder, GraduationCap, Hammer, Plus, RotateCcw, Save } from "lucide-react";
 import type {
   AutopilotTickData,
   BrainClaim,
@@ -47,8 +47,10 @@ interface BrainWorkspaceProps {
   onBackToLibrary: () => void;
   onNewThought: () => void;
   onSeed: (rawIdea: string) => Promise<void>;
-  onQuickNoteCreate?: (rawIdea: string) => Promise<void>;
-  onQuickNoteAction?: (recent: BrainRecentIdea, action: "build" | "brain" | "check" | "learn" | "archive" | "restore") => Promise<void>;
+  onQuickNoteCreate?: ((rawIdea: string) => Promise<void>) | undefined;
+  onQuickNoteAction?:
+    | ((recent: BrainRecentIdea, action: "build" | "brain" | "check" | "learn" | "archive" | "restore") => Promise<void>)
+    | undefined;
   onClaimSelect: (claimId: string) => void;
   onReworkDocument: () => Promise<void>;
   onCanvasOpenChange: (open: boolean) => void;
@@ -69,8 +71,14 @@ interface GraphCardPoint extends GraphPoint {
 interface BrainHierarchySidebarProps {
   sidebar: BrainSidebarData | null;
   selectedSessionId: string | null;
+  recents?: BrainRecentIdea[];
+  archivedRecents?: BrainRecentIdea[];
   onSelectDocument: (sessionId: string) => void;
   onNewThought: () => void;
+  onQuickNoteCreate?: ((rawIdea: string) => Promise<void>) | undefined;
+  onQuickNoteAction?:
+    | ((recent: BrainRecentIdea, action: "build" | "brain" | "check" | "learn" | "archive" | "restore") => Promise<void>)
+    | undefined;
 }
 
 export function BrainWorkspace({
@@ -84,10 +92,14 @@ export function BrainWorkspace({
   canvasOpen,
   status,
   isThinking,
+  recents = [],
+  archivedRecents = [],
   onSelectDocument,
   onBackToLibrary,
   onNewThought,
   onSeed,
+  onQuickNoteCreate,
+  onQuickNoteAction,
   onClaimSelect,
   onReworkDocument,
   onCanvasOpenChange,
@@ -138,8 +150,12 @@ export function BrainWorkspace({
       <BrainHierarchySidebar
         sidebar={documentsData?.sidebar ?? null}
         selectedSessionId={selectedDocument?.sessionId ?? null}
+        recents={recents}
+        archivedRecents={archivedRecents}
         onSelectDocument={onSelectDocument}
         onNewThought={onNewThought}
+        onQuickNoteCreate={onQuickNoteCreate}
+        onQuickNoteAction={onQuickNoteAction}
       />
       {selectedDocument ? (
         <>
@@ -431,19 +447,37 @@ function StitchedReference({
 function BrainHierarchySidebar({
   sidebar,
   selectedSessionId,
+  recents = [],
+  archivedRecents = [],
   onSelectDocument,
   onNewThought,
+  onQuickNoteCreate,
+  onQuickNoteAction,
 }: BrainHierarchySidebarProps) {
   const folders = sidebar?.folders ?? [];
+  const suggestedActions = sidebar?.quickNotes ?? [];
   const selectedFolderId =
     folders.find((folder) => folder.documents.some((document) => document.sessionId === selectedSessionId))?.id ??
     folders[0]?.id ??
     null;
   const [openFolderId, setOpenFolderId] = useState<string | null>(selectedFolderId);
+  const [quickNoteDraft, setQuickNoteDraft] = useState("");
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   useEffect(() => {
     setOpenFolderId(selectedFolderId);
   }, [selectedFolderId]);
+
+  async function handleQuickNoteCreate() {
+    const trimmedDraft = quickNoteDraft.trim();
+
+    if (!trimmedDraft || !onQuickNoteCreate) {
+      return;
+    }
+
+    await onQuickNoteCreate(trimmedDraft);
+    setQuickNoteDraft("");
+  }
 
   return (
     <aside className="brain-hierarchy-sidebar" aria-label="Brain sidebar">
@@ -456,6 +490,77 @@ function BrainHierarchySidebar({
           <Plus size={15} aria-hidden="true" />
         </button>
       </div>
+      <section className="brain-sidebar-section" aria-label="Quick notes">
+        <div className="brain-sidebar-section-head">
+          <CheckCircle2 size={15} aria-hidden="true" />
+          <strong>Quick Notes</strong>
+        </div>
+        <div className="quick-note-capture">
+          <textarea
+            value={quickNoteDraft}
+            onChange={(event) => setQuickNoteDraft(event.target.value)}
+            placeholder="Capture a quick note."
+            rows={2}
+          />
+          <button
+            type="button"
+            className="brain-sidebar-new"
+            disabled={!onQuickNoteCreate || !quickNoteDraft.trim()}
+            onClick={handleQuickNoteCreate}
+            aria-label="Add quick note"
+          >
+            <Plus size={15} aria-hidden="true" />
+          </button>
+        </div>
+        {recents.length > 0 ? (
+          <div className="brain-quick-list">
+            {recents.slice(0, 6).map((recent) => (
+              <QuickNoteRow key={recent.id} recent={recent} archived={false} onAction={onQuickNoteAction} />
+            ))}
+          </div>
+        ) : (
+          <p className="brain-sidebar-muted">No quick notes yet.</p>
+        )}
+        {archivedRecents.length > 0 ? (
+          <div className="quick-note-archive">
+            <button type="button" className="quick-note-archive-toggle" onClick={() => setArchiveOpen((open) => !open)}>
+              <Archive size={14} aria-hidden="true" />
+              <span>Archive</span>
+              <small>{archivedRecents.length}</small>
+            </button>
+            {archiveOpen ? (
+              <div className="brain-quick-list">
+                {archivedRecents.slice(0, 6).map((recent) => (
+                  <QuickNoteRow key={recent.id} recent={recent} archived onAction={onQuickNoteAction} />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+      <section className="brain-sidebar-section" aria-label="Suggested next actions">
+        <div className="brain-sidebar-section-head">
+          <CheckCircle2 size={15} aria-hidden="true" />
+          <strong>Next Actions</strong>
+        </div>
+        {suggestedActions.length > 0 ? (
+          <div className="brain-quick-list">
+            {suggestedActions.map((note) => (
+              <button
+                key={note.id}
+                type="button"
+                className="brain-quick-note"
+                onClick={() => onSelectDocument(note.sessionId)}
+              >
+                <span title={note.text}>{truncateWords(note.text, 9)}</span>
+                <small>{note.meta}</small>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="brain-sidebar-muted">No suggested actions yet.</p>
+        )}
+      </section>
       <section className="brain-sidebar-section" aria-label="Folders">
         <div className="brain-sidebar-section-head">
           <Folder size={15} aria-hidden="true" />
@@ -512,6 +617,94 @@ function BrainHierarchySidebar({
       </section>
     </aside>
   );
+}
+
+function QuickNoteRow({
+  recent,
+  archived,
+  onAction,
+}: {
+  recent: BrainRecentIdea;
+  archived: boolean;
+  onAction?:
+    | ((recent: BrainRecentIdea, action: "build" | "brain" | "check" | "learn" | "archive" | "restore") => Promise<void>)
+    | undefined;
+}) {
+  return (
+    <article className={`brain-quick-note is-note${archived ? " is-archived" : ""}`}>
+      <span title={recent.rawIdea}>{truncateWords(recent.rawIdea, 9)}</span>
+      <small>{archived ? archiveMeta(recent) : formatDate(recent.updatedAt ?? recent.createdAt)}</small>
+      <div className="quick-note-actions" aria-label={`Actions for ${truncateWords(recent.rawIdea, 5)}`}>
+        {archived ? (
+          <button
+            type="button"
+            disabled={!onAction}
+            onClick={() => void onAction?.(recent, "restore")}
+            aria-label="Restore quick note"
+            title="Restore"
+          >
+            <RotateCcw size={13} aria-hidden="true" />
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={!onAction}
+              onClick={() => void onAction?.(recent, "build")}
+              aria-label="Build quick note"
+              title="Build"
+            >
+              <Hammer size={13} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              disabled={!onAction}
+              onClick={() => void onAction?.(recent, "brain")}
+              aria-label="Add quick note to Brain"
+              title="Add to Brain"
+            >
+              <Save size={13} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              disabled={!onAction}
+              onClick={() => void onAction?.(recent, "check")}
+              aria-label="Send quick note to Check"
+              title="Send to Check"
+            >
+              <CheckCircle2 size={13} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              disabled={!onAction}
+              onClick={() => void onAction?.(recent, "learn")}
+              aria-label="Learn quick note"
+              title="Learn"
+            >
+              <GraduationCap size={13} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              disabled={!onAction}
+              onClick={() => void onAction?.(recent, "archive")}
+              aria-label="Archive quick note"
+              title="Archive"
+            >
+              <Archive size={13} aria-hidden="true" />
+            </button>
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function archiveMeta(recent: BrainRecentIdea): string {
+  if (!recent.archiveExpiresAt) {
+    return "Archived";
+  }
+
+  return `Archived until ${formatDate(recent.archiveExpiresAt)}`;
 }
 
 function BrainRecordLog({
