@@ -1075,16 +1075,114 @@ function heuristicAskPennyAnswer(input: AskPennyRequest): string {
     return arithmeticAnswer;
   }
 
+  const shapedAnswer = shapedAskPennyAnswer(input);
+
+  if (shapedAnswer) {
+    return shapedAnswer;
+  }
+
   const question = clipText(input.question, 220);
   const step = clipText(input.currentStepTitle, 120);
   const context = clipText(input.localContext, 420);
 
   return [
-    `Short answer: ${question}`,
-    `In this step, treat that as a focused check inside "${step}" rather than a new thread.`,
-    `Relevant context: ${context}`,
-    "Next move: connect the answer back to the claim you are trying to understand, then keep going.",
+    `A useful way to answer "${question}" is to keep it inside the current step: ${step}.`,
+    `Use the lesson context as the boundary: ${context}`,
+    "Then state one concrete implication for what you should inspect, revise, or explain next.",
   ].join("\n\n");
+}
+
+function shapedAskPennyAnswer(input: AskPennyRequest): string | null {
+  const question = compactText(input.question);
+  const compactQuestion = question.toLowerCase();
+  const step = clipText(input.currentStepTitle, 120);
+  const context = contextBrief(input.localContext);
+  const definitionTerm = definitionQuestionTerm(question);
+  const mechanismTerm = mechanismQuestionTerm(question);
+  const tieTarget = tieInQuestionTarget(question);
+
+  if (definitionTerm) {
+    return [
+      `${capitalizeFirst(definitionTerm)} means the part of this lesson you need to make explicit enough to use, test, or explain back.`,
+      `Here, connect it to ${context}.`,
+      `A right-sized answer is a working definition plus one implication for "${step}".`,
+    ].join("\n\n");
+  }
+
+  if (compactQuestion.includes("what does this mean") || compactQuestion.includes("what does it mean")) {
+    return [
+      `It means the current lesson is asking you to turn the idea into a usable distinction, not just recognize the words.`,
+      `In context, focus on ${context}.`,
+      `For "${step}", write the meaning in one sentence and add one example that would prove you understand it.`,
+    ].join("\n\n");
+  }
+
+  if (mechanismTerm) {
+    return [
+      `${capitalizeFirst(mechanismTerm)} works by separating the goal, the moving parts, and the signal that tells you whether it is working.`,
+      `In this lesson, use ${context} as the case.`,
+      `Trace it as: input -> mechanism -> observable result. Keep the answer to that chain unless a source check is needed.`,
+    ].join("\n\n");
+  }
+
+  if (compactQuestion.includes("how does this work") || compactQuestion.includes("how does it work")) {
+    return [
+      `This works by turning the lesson context into a small reasoning loop: name the goal, isolate the key concept, apply it to the current case, then check the result.`,
+      `For "${step}", the immediate job is to explain how ${context} changes what you should believe or do next.`,
+    ].join("\n\n");
+  }
+
+  if (tieTarget) {
+    return [
+      `It ties into ${tieTarget} by showing what role the current lesson plays in that bigger frame.`,
+      `Use ${context} as the bridge: name the shared concept, say what changes, then state why ${tieTarget} now matters.`,
+      `Keep it tight: one connection, one consequence, one next question.`,
+    ].join("\n\n");
+  }
+
+  return null;
+}
+
+function definitionQuestionTerm(question: string): string | null {
+  const match = question.match(/^(?:what\s+(?:does|do|is)\s+)(.+?)(?:\s+mean|\?)\??$/i);
+  const term = match?.[1]?.replace(/^["']|["']$/g, "").trim();
+
+  if (!term || ["this", "it", "that"].includes(term.toLowerCase())) {
+    return null;
+  }
+
+  return clipText(term, 80);
+}
+
+function mechanismQuestionTerm(question: string): string | null {
+  const match = question.match(/^how\s+does\s+(.+?)\s+work\??$/i);
+  const term = match?.[1]?.replace(/^["']|["']$/g, "").trim();
+
+  if (!term || ["this", "it", "that"].includes(term.toLowerCase())) {
+    return null;
+  }
+
+  return clipText(term, 80);
+}
+
+function tieInQuestionTarget(question: string): string | null {
+  const match = question.match(/(?:tie|connect|relate)s?\s+(?:in\s+)?(?:with|to|into|back\s+to)\s+(.+?)\??$/i);
+  const target = match?.[1]?.replace(/^["']|["']$/g, "").trim();
+
+  return target ? clipText(target, 90) : null;
+}
+
+function contextBrief(localContext: string): string {
+  const coreIdea = localContext.match(/Core idea:\s*([^.\n]+(?:\.[^.\n]+)?)/i)?.[1];
+  const goal = localContext.match(/Goal:\s*([^.\n]+(?:\.[^.\n]+)?)/i)?.[1];
+  const currentStep = localContext.match(/Current step:\s*([^.\n]+)/i)?.[1];
+  const selected = coreIdea ?? goal ?? currentStep ?? localContext;
+
+  return clipText(selected, 220);
+}
+
+function capitalizeFirst(value: string): string {
+  return value.length > 0 ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : value;
 }
 
 function simpleFactualAnswer(question: string): string | null {

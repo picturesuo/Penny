@@ -84,7 +84,8 @@ test("POST /brain/learn/ask falls back locally when the live provider is rate li
       request("http://localhost/brain/learn/ask", {
         question,
         currentStepTitle: "Produce the final takeaway",
-        localContext: "Goal: understand the pricing decision. Current step: produce the final takeaway.",
+        localContext:
+          "Goal: understand YC as an application evaluation model. Current step: Produce the final takeaway. Core idea: founder evidence, clarity of thought, and problem insight matter more than outside investor interest.",
       }),
       {
         provider: {
@@ -113,6 +114,30 @@ test("POST /brain/learn/ask falls back locally when the live provider is rate li
   assert.equal(factualPayload.data.provider, "heuristic");
   assert.match(factualPayload.data.answer, /blue wavelengths/);
   assert.doesNotMatch(factualPayload.data.answer, /Use this context/);
+
+  const definition = await askWithRateLimitedProvider("what does founder evidence mean?");
+  const definitionPayload = (await definition.json()) as { data: { answer: string } };
+
+  assert.equal(definition.status, 200);
+  assert.match(definitionPayload.data.answer, /Founder evidence means/);
+  assert.match(definitionPayload.data.answer, /clarity of thought/);
+  assert.ok(definitionPayload.data.answer.length < 700);
+
+  const mechanism = await askWithRateLimitedProvider("how does YC evaluation work?");
+  const mechanismPayload = (await mechanism.json()) as { data: { answer: string } };
+
+  assert.equal(mechanism.status, 200);
+  assert.match(mechanismPayload.data.answer, /YC evaluation works by/);
+  assert.match(mechanismPayload.data.answer, /input -> mechanism -> observable result/);
+  assert.ok(mechanismPayload.data.answer.length < 700);
+
+  const tieIn = await askWithRateLimitedProvider("how does this tie in with investor interest?");
+  const tieInPayload = (await tieIn.json()) as { data: { answer: string } };
+
+  assert.equal(tieIn.status, 200);
+  assert.match(tieInPayload.data.answer, /ties into investor interest/);
+  assert.match(tieInPayload.data.answer, /one connection, one consequence, one next question/);
+  assert.ok(tieInPayload.data.answer.length < 700);
 });
 
 test("Ask Penny provider selection prefers Claude then xAI then heuristic", () => {
