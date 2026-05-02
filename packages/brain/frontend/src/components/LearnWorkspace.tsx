@@ -1246,14 +1246,287 @@ function buildLearnSessionOutput(
 
 function defaultLearnSessionOutput(): LearnSessionOutput {
   return {
-    coreIdea: "a new topic with Penny's guided learning path",
+    coreIdea:
+      "Mock learning event on January 1: understand what YC does and whether its batch application cares more about investors, ideas, or people.",
     claims: [],
-    assumptions: [],
-    questions: [],
-    creativePotential: ["Start with the frame, then let the example reveal what Penny should teach next."],
+    assumptions: [
+      {
+        id: "yc-mock-assumption-founders",
+        seedId: "yc.mock.assumption.founders",
+        kind: "assumption",
+        status: "exploratory",
+        text: "YC uses the quality, clarity, and evidence of the founders as the strongest signal when the company is still early.",
+        confidence: 78,
+      },
+      {
+        id: "yc-mock-assumption-investors",
+        seedId: "yc.mock.assumption.investors",
+        kind: "assumption",
+        status: "exploratory",
+        text: "Having investors already interested may help context, but it is not the central thing YC says applicants should optimize for.",
+        confidence: 72,
+      },
+    ],
+    questions: [
+      {
+        id: "yc-mock-question",
+        seedId: "yc.mock.question",
+        kind: "question",
+        status: "exploratory",
+        text: "If YC cares more about founders and insight than outside investors, what should a first-time applicant make concrete in the application?",
+        confidence: 64,
+      },
+    ],
+    creativePotential: [
+      "Turn YC from a vague prestige signal into a concrete evaluation model: founders, insight, clarity, progress, and evidence.",
+      "Use the January 1 mock event as a Learn session, then save the takeaways to Brain for a later Check pass.",
+    ],
+    learningPlan: ycMockLearningPlan,
     autopilotNextMove: null,
   };
 }
+
+const ycMockLearningPlan: LearningPlan = {
+  expertRole: "A startup admissions instructor teaching YC through application signals, evidence, examples, and challenge questions.",
+  goal:
+    "Understand what YC does and whether its batch application is primarily evaluating investors, ideas, or people.",
+  paragraphFit: "one_subgroup_per_page",
+  groups: [
+    {
+      id: "yc-frame",
+      title: "Frame what YC is",
+      purpose: "Start by separating YC the startup program from the application screen and from outside fundraising status.",
+      subgroups: [
+        {
+          id: "yc-frame-program",
+          title: "Name the program",
+          teachingParagraph:
+            "YC is not just an investor logo. In this mock January 1 learning event, treat it as a short, intense startup program whose job is to help a company become much stronger in a few months: clearer product, more users, better fundraising options, and better founder judgment. That frame matters because it makes the application question less about prestige and more about whether YC can see a company that could take off with pressure, advice, and community.",
+          keyMoves: [
+            "Separate program value from application scoring.",
+            "Name the intended company improvement.",
+            "Keep fundraising as one outcome, not the whole object.",
+          ],
+          workedExample:
+            "Instead of asking, 'Will investors like us?', ask, 'Can YC see a founding team and startup that could become dramatically stronger during the batch?'",
+          visualExample: {
+            title: "YC program loop",
+            description:
+              "A simple diagram showing startup enters YC, passes through advice, batch pressure, users, and fundraising options, then exits stronger.",
+          },
+        },
+        {
+          id: "yc-frame-question",
+          title: "Ask the real application question",
+          teachingParagraph:
+            "The useful question is not whether YC prefers investors, ideas, or people as isolated categories. The real question is which signals make a very early company believable. YC's public application guidance puts heavy weight on clear descriptions, impressive founder evidence, and insight about the idea. Existing investor interest is secondary because many accepted companies are very early and may have little or no revenue.",
+          keyMoves: [
+            "Replace categories with signals.",
+            "Track what makes an early startup believable.",
+            "Mark investors as context, not proof.",
+          ],
+          workedExample:
+            "A weak answer says, 'We are an AI platform changing productivity.' A stronger answer says, 'We help PhD students turn messy notes into cited literature-review claims in one hour.'",
+          visualExample: {
+            title: "Signal stack",
+            description:
+              "A stacked card image with founders and clarity at the base, idea insight in the middle, and investor interest as a smaller context card.",
+          },
+        },
+        {
+          id: "yc-frame-event",
+          title: "Anchor the mock event",
+          teachingParagraph:
+            "The January 1 date should act like provenance, not decoration. It tells Penny this was a specific learning event with a concrete question: what does YC evaluate when it chooses a batch? Treating the date as a session marker lets the lesson become durable Brain material later instead of a loose explanation that disappears after reading.",
+          keyMoves: [
+            "Mark January 1 as the learning event.",
+            "Keep the question attached to the session.",
+            "Save the takeaway as Brain-ready material.",
+          ],
+          workedExample:
+            "Session title: January 1 YC application lesson. Core question: does YC care more about investors, ideas, or people?",
+          visualExample: {
+            title: "Learning event stamp",
+            description:
+              "A dated session card labeled January 1, connected to the YC question, the answer, and the next Check action.",
+          },
+        },
+      ],
+    },
+    {
+      id: "yc-people",
+      title: "Understand the people signal",
+      purpose: "Explain why founder evidence often matters more than the first version of the idea.",
+      subgroups: [
+        {
+          id: "yc-people-achievement",
+          title: "Show founder magnitude",
+          teachingParagraph:
+            "YC's application guidance asks for specific impressive things each founder has built or achieved. The lesson is not that one resume type wins; it is that extraordinary startup outcomes require people who have already shown unusual initiative, technical ability, persistence, taste, or system-hacking ability. Specific proof beats adjectives because a reader can inspect what actually happened.",
+          keyMoves: [
+            "Use one concrete founder proof point.",
+            "Prefer built or achieved over self-description.",
+            "Show difficulty, not personality branding.",
+          ],
+          workedExample:
+            "Weak: 'I am hardworking.' Strong: 'I built a campus scheduling tool used by 1,400 students and handled every support ticket myself.'",
+          visualExample: {
+            title: "Founder evidence card",
+            description:
+              "A before-and-after card comparing vague founder adjectives with one concrete built achievement and measurable usage.",
+          },
+        },
+        {
+          id: "yc-people-why",
+          title: "Why people can outweigh the idea",
+          teachingParagraph:
+            "The reason founders matter so much is that early startup ideas change. If YC believes the founders are unusually capable, flexible, and clear, the first idea can be treated as evidence of judgment rather than a fixed plan. A good idea still matters, but mainly because it reveals the team's insight, taste, and understanding of a non-obvious problem.",
+          keyMoves: [
+            "Treat the first idea as evidence of founder judgment.",
+            "Ask whether the team can adapt.",
+            "Separate insight from a polished pitch.",
+          ],
+          workedExample:
+            "If two teams propose similar products, the team with sharper user insight and proof of building hard things is easier to believe.",
+          visualExample: {
+            title: "Idea as evidence",
+            description:
+              "A split image where the idea points back to founder qualities such as insight, speed, clarity, and ability to build.",
+          },
+        },
+      ],
+    },
+    {
+      id: "yc-idea",
+      title: "Understand the idea signal",
+      purpose: "Show how ideas matter when they demonstrate insight instead of vague ambition.",
+      subgroups: [
+        {
+          id: "yc-idea-clarity",
+          title: "Make the idea reproducible",
+          teachingParagraph:
+            "YC readers need to understand the company quickly, so the first description should be matter-of-fact. The goal is not to sound huge; it is to let a tired application reader reproduce the basic product in their head. Vague market language creates no inspectable claim, while a narrow description gives the reader something concrete to judge.",
+          keyMoves: [
+            "Start with the plain product.",
+            "Avoid market-speak.",
+            "Make the reader able to picture it.",
+          ],
+          workedExample:
+            "Better than 'reimagining founder intelligence': 'a tool that turns a founder's raw idea into assumptions, challenges, and a source-grounded brief.'",
+          visualExample: {
+            title: "Plain sentence test",
+            description:
+              "A visual showing a vague sentence dissolving into fog and a concrete sentence becoming a simple product sketch.",
+          },
+        },
+        {
+          id: "yc-idea-insight",
+          title: "Find the non-obvious insight",
+          teachingParagraph:
+            "A good idea gets attention when it contains insight: a distinctive reason this team can win despite obstacles. 'Easy to use' is usually too generic. The stronger move is to name the overlooked customer behavior, distribution wedge, technical breakthrough, or market shift that changes the odds.",
+          keyMoves: [
+            "Name the obstacle.",
+            "Name the wedge.",
+            "Explain why this team sees it.",
+          ],
+          workedExample:
+            "For Penny, the insight might be: ambitious thinkers do not need more notes; they need a graph that stress-tests claims and remembers how their judgment changes.",
+          visualExample: {
+            title: "Insight wedge",
+            description:
+              "A wedge diagram showing a specific insight opening a path through an otherwise crowded or difficult market.",
+          },
+        },
+      ],
+    },
+    {
+      id: "yc-investors",
+      title: "Place investors correctly",
+      purpose: "Answer the user's investor question directly without pretending fundraising is irrelevant.",
+      subgroups: [
+        {
+          id: "yc-investors-secondary",
+          title: "Do investors matter?",
+          teachingParagraph:
+            "Investors can matter as evidence that other people believe the company is fundable, but YC does not appear to make outside investor interest the main thing early applicants should optimize for. YC explicitly accepts many companies that are just an idea or pre-revenue, and it says the money is only a small part of what YC does. Investor interest is useful context, not a substitute for founders, clarity, insight, or progress.",
+          keyMoves: [
+            "Treat investor interest as context.",
+            "Do not use it to replace founder evidence.",
+            "Ask what it proves, if anything.",
+          ],
+          workedExample:
+            "If you have investor interest, phrase it as evidence of a real signal: 'Three seed investors asked for updates after seeing our waitlist conversion,' not 'investors like us.'",
+          visualExample: {
+            title: "Investor signal scale",
+            description:
+              "A scale where founder proof and customer insight outweigh a smaller investor-interest weight unless the investor signal reveals real traction.",
+          },
+        },
+        {
+          id: "yc-investors-answer",
+          title: "Answer the tradeoff",
+          teachingParagraph:
+            "The clean answer is: YC is more interested in people plus insight than in existing investors. Ideas matter, but the idea is strongest when it reveals smart, specific founder insight. Investors can strengthen the story only if they point to real evidence, such as traction, customer demand, or unusually credible market validation.",
+          keyMoves: [
+            "Rank people and insight first.",
+            "Use the idea as proof of insight.",
+            "Use investors only when they reveal evidence.",
+          ],
+          workedExample:
+            "Application priority: concrete founder achievement, clear company description, specific insight, real user/progress evidence, then investor interest if it adds signal.",
+          visualExample: {
+            title: "YC priority ladder",
+            description:
+              "A ladder with founder evidence and insight on the lower load-bearing rungs, progress above them, and investor interest as an optional top rung.",
+          },
+        },
+      ],
+    },
+    {
+      id: "yc-apply",
+      title: "Turn the lesson into an application move",
+      purpose: "Convert the YC explanation into a practical next step Penny can save, Check, or Verify.",
+      subgroups: [
+        {
+          id: "yc-apply-draft",
+          title: "Draft the application spine",
+          teachingParagraph:
+            "The useful output of this Learn event is a short application spine. It should say what the company makes, what specific problem or user behavior gives the team insight, what each founder has done that proves unusual ability, and what progress or customer evidence exists. This keeps the application grounded instead of performative.",
+          keyMoves: [
+            "Write one matter-of-fact product sentence.",
+            "Add one founder achievement per founder.",
+            "Add one insight and one evidence point.",
+          ],
+          workedExample:
+            "Penny application spine: 'Penny helps ambitious thinkers turn raw thoughts into challengeable claim graphs. The insight is that memory is weak unless it stress-tests beliefs over time. Evidence: users keep returning to revise claims.'",
+          visualExample: {
+            title: "Application spine",
+            description:
+              "A one-page application outline with four boxes: product sentence, founder proof, insight, and evidence.",
+          },
+        },
+        {
+          id: "yc-apply-check",
+          title: "Set the Check question",
+          teachingParagraph:
+            "A strong Learn session should end with a Check target. For this mock event, the first challenge is whether the team's proof is specific enough for a YC reader to believe it quickly. If the proof is vague, the next action is not to polish wording; it is to find a stronger concrete example or admit the weakness.",
+          keyMoves: [
+            "Challenge the weakest proof point.",
+            "Ask what a reader still cannot believe.",
+            "Revise with evidence, not adjectives.",
+          ],
+          workedExample:
+            "Check prompt: 'Which sentence in this YC application asks the reader to trust us without concrete proof?'",
+          visualExample: {
+            title: "Check loop",
+            description:
+              "A loop from application spine to weakest sentence, then to evidence needed, then back to a revised application spine.",
+          },
+        },
+      ],
+    },
+  ],
+};
 
 function creativePotentialFrom(data: BrainData | null, selectedDocument: BrainDocumentSummary | null): string[] {
   const exploration = (data?.explorationPaths ?? []).map((path) =>
