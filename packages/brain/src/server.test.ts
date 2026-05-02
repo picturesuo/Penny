@@ -134,6 +134,31 @@ test("API guard handles CORS before auth and exposes API preflight headers", asy
   );
 });
 
+test("API guard allows loopback dev origins on fallback frontend ports", async () => {
+  await withPennyEnv(
+    {
+      NODE_ENV: "development",
+      PENNY_AUTH_MODE: "dev",
+      PENNY_RATE_LIMIT_MAX: "0",
+    },
+    async () => {
+      const allowedRequest = apiRequest({ origin: "http://localhost:5174" });
+      const allowed = guardApiRequest(allowedRequest, new URL(allowedRequest.url));
+
+      assert.equal(allowed.response, undefined);
+      assert.equal(allowed.headers.get("access-control-allow-origin"), "http://localhost:5174");
+      assert.equal(allowed.headers.get("access-control-allow-credentials"), "true");
+
+      const rejectedRequest = apiRequest({ origin: "http://demo.local:5174" });
+      const rejected = guardApiRequest(rejectedRequest, new URL(rejectedRequest.url));
+      const rejectedPayload = await errorPayload(rejected.response);
+
+      assert.equal(rejected.response?.status, 403);
+      assert.equal(rejectedPayload.error.code, "cors_origin_not_allowed");
+    },
+  );
+});
+
 test("API rate limit is scoped to the authenticated identity", async () => {
   await withPennyEnv(
     {

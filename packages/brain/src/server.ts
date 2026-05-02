@@ -969,7 +969,25 @@ function allowedCorsOrigins(): string[] {
 }
 
 function isAllowedCorsOrigin(origin: string, allowedOrigins: string[]): boolean {
-  return allowedOrigins.includes("*") || allowedOrigins.includes(origin);
+  return allowedOrigins.includes("*") || allowedOrigins.includes(origin) || isDevLoopbackOrigin(origin, allowedOrigins);
+}
+
+function isDevLoopbackOrigin(origin: string, allowedOrigins: string[]): boolean {
+  if (process.env.NODE_ENV === "production" || allowedOrigins.length === 0) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(origin);
+
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname) &&
+      parsed.port.length > 0
+    );
+  } catch {
+    return false;
+  }
 }
 
 function preflightHeaders(headers: Headers): Headers {
