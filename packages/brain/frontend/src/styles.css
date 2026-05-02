@@ -1245,10 +1245,11 @@
 
   .decision-card {
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
-    gap: 10px;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 9px;
     margin-top: 10px;
     min-height: 0;
+    max-height: 100%;
     overflow: hidden;
     border: 1px solid #d3d3d3;
     border-radius: 4px;
@@ -1334,7 +1335,7 @@
   }
 
   .decision-better-option {
-    display: grid;
+    display: none;
     gap: 8px;
     min-width: 0;
     margin-top: 0;
@@ -1367,9 +1368,11 @@
 
   .decision-alternatives > div {
     display: grid;
-    gap: 3px;
+    align-content: start;
+    gap: 2px;
+    height: 100%;
     min-height: 0;
-    max-height: 154px;
+    max-height: 118px;
     overflow: auto;
     padding-right: 4px;
     scrollbar-width: thin;
@@ -1378,9 +1381,11 @@
   .decision-option {
     display: grid;
     grid-template-columns: 16px 28px minmax(0, 1fr);
-    align-items: start;
+    align-items: center;
     gap: 10px;
     min-height: 0;
+    max-height: 28px;
+    overflow: hidden;
     border: 0;
     border-radius: 4px;
     padding: 6px 9px;
@@ -1413,14 +1418,15 @@
   .decision-option span:last-child {
     display: -webkit-box;
     min-width: 0;
+    max-height: 16px;
     overflow: hidden;
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
     white-space: normal;
-    font-size: 13px;
-    line-height: 1.2;
+    font-size: 12px;
+    line-height: 1.15;
   }
 
   .decision-card.is-empty {
