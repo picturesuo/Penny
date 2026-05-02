@@ -43,7 +43,6 @@ export function LearnWorkspace({
   autopilot,
   focusedClaimId,
   focusNode,
-  relatedBrainSearch,
   isThinking,
   onSearchBrainRelated,
 }: LearnWorkspaceProps) {
@@ -51,7 +50,6 @@ export function LearnWorkspace({
     () => buildLearnSessionOutput(data, selectedDocument, autopilot) ?? defaultLearnSessionOutput(),
     [data, selectedDocument, autopilot],
   );
-  const [searchWebRequested, setSearchWebRequested] = useState(false);
   const sourceText = data?.source?.rawText ?? selectedDocument?.originalIdea ?? output?.coreIdea ?? "";
   const currentSessionId = data?.session?.id ?? selectedDocument?.sessionId ?? null;
 
@@ -64,8 +62,6 @@ export function LearnWorkspace({
           sessionId={currentSessionId}
           focusedClaimId={focusedClaimId}
           focusNode={focusNode}
-          relatedBrainSearch={relatedBrainSearch}
-          searchWebRequested={searchWebRequested}
           disabled={isThinking}
           onSearchBrainRelated={onSearchBrainRelated}
         />
@@ -80,8 +76,6 @@ function LearnSessionView({
   sessionId,
   focusedClaimId,
   focusNode,
-  relatedBrainSearch,
-  searchWebRequested,
   disabled,
   onSearchBrainRelated,
 }: {
@@ -90,8 +84,6 @@ function LearnSessionView({
   sessionId: string | null;
   focusedClaimId: string | null;
   focusNode: CanvasNode | null;
-  relatedBrainSearch: BrainHybridSearchResponse["data"] | null;
-  searchWebRequested: boolean;
   disabled: boolean;
   onSearchBrainRelated: (query: string, claimId?: string | null) => Promise<BrainHybridSearchResponse["data"]>;
 }) {
@@ -119,7 +111,6 @@ function LearnSessionView({
     lessonPages.findIndex((lesson) => lesson.substep.id === activeSubstepId),
   );
   const currentProgressPercent = Math.round(((activeLessonIndex + 1) / lessonPages.length) * 100);
-  const relatedQuery = focusNode?.summary?.trim() || focusedClaim?.text || pageData.goal;
 
   useEffect(() => {
     const firstStep = pageData.steps[0];
@@ -222,17 +213,9 @@ function LearnSessionView({
         activeLessonIndex={activeLessonIndex}
         activeSubstepId={activeSubstepId}
         lessonPages={lessonPages}
-        sourceText={sourceText}
-        searchWebRequested={searchWebRequested}
-        relatedBrainSearch={relatedBrainSearch}
-        relatedQuery={relatedQuery}
-        disabled={disabled}
         onPrevious={goToPreviousLesson}
         onNext={goToNextLesson}
         onAskPennyToggle={() => setAskPennyOpen((isOpen) => !isOpen)}
-        onSearchBrainRelated={() => {
-          void onSearchBrainRelated(relatedQuery, focusedClaim?.id ?? focusNode?.refs?.claimId ?? null);
-        }}
       />
 
       <AskPennyPanel
@@ -370,30 +353,18 @@ function LearnMainContent({
   activeLessonIndex,
   activeSubstepId,
   lessonPages,
-  sourceText,
-  searchWebRequested,
-  relatedBrainSearch,
-  relatedQuery,
-  disabled,
   onPrevious,
   onNext,
   onAskPennyToggle,
-  onSearchBrainRelated,
 }: {
   pageData: LearnPageData;
   activeStepIndex: number;
   activeLessonIndex: number;
   activeSubstepId: string;
   lessonPages: LearnLessonPage[];
-  sourceText: string;
-  searchWebRequested: boolean;
-  relatedBrainSearch: BrainHybridSearchResponse["data"] | null;
-  relatedQuery: string;
-  disabled: boolean;
   onPrevious: () => void;
   onNext: () => void;
   onAskPennyToggle: () => void;
-  onSearchBrainRelated: () => void;
 }) {
   const activeStep = pageData.steps[activeStepIndex] ?? pageData.steps[0];
   const activeSubstep = activeStep?.substeps.find((substep) => substep.id === activeSubstepId);
@@ -459,14 +430,6 @@ function LearnMainContent({
           <p>{currentStep.inlineNote}</p>
         </aside>
       ) : null}
-
-      <div className="learn-context-actions">
-        <LearnSourceIndicator behavior={learnSourceBehavior(sourceText, searchWebRequested)} />
-        <button type="button" disabled={disabled || !relatedQuery.trim()} onClick={onSearchBrainRelated}>
-          Have I thought about this before?
-        </button>
-        <RelatedFromBrain search={relatedBrainSearch} />
-      </div>
 
       <nav className="learn-bottom-nav" aria-label="Step navigation">
         <button type="button" disabled={!canGoPrevious} onClick={onPrevious}>
@@ -646,27 +609,6 @@ function localAskPennyAnswer(question: string, currentStepTitle: string, error?:
     relatedConcepts: ["reusable explanation", "current step"],
     saveSuggestion: "Save the simplified explanation if it clarifies the current Brain node.",
   };
-}
-
-function RelatedFromBrain({ search }: { search: BrainHybridSearchResponse["data"] | null }) {
-  if (!search?.available) {
-    return null;
-  }
-
-  return (
-    <div className="learn-related-inline">
-      <span>Related from your Brain</span>
-      {search.results.length > 0 ? (
-        <ul>
-          {search.results.slice(0, 3).map((result) => (
-            <li key={result.id}>{truncateWords(result.title, 12)}</li>
-          ))}
-        </ul>
-      ) : (
-        <p>No related Brain matches for this prompt yet.</p>
-      )}
-    </div>
-  );
 }
 
 function buildLearnPageData(
