@@ -14,6 +14,7 @@ The backend remains the source of canonical thinking state. Tests should verify 
 - Local API: `pnpm dev:api`, serving `http://localhost:3000`.
 - DB setup: `DATABASE_URL` must be exported before `pnpm db:migrate` or DB-backed API smoke tests.
 - Removed gap: TODO-only skeleton tests were deleted; the remaining `test/brain` suite is real and runs in the default test script.
+- Smoke status: `scripts/smoke-thinking-mode.sh` is the current full mutating happy-path smoke, not a placeholder waiting for promotion.
 
 ## Active Coverage
 
@@ -35,11 +36,11 @@ The backend remains the source of canonical thinking state. Tests should verify 
 1. Keep the next-move engine tests database-free.
 2. Add DB-backed service tests only after a stable test database bootstrap exists.
 3. Keep default `pnpm test` free of TODO-only placeholders.
-4. Use focused service or route tests for new Move-backed behavior before relying on smoke coverage.
+4. Treat the smoke script as a demo/readiness gate for the full happy path, and keep focused service or route tests as the first proof for each new Move-backed behavior.
 
 ## Demo Gate
 
-Before a demo, run:
+Before a demo against disposable local data or an isolated smoke database, run:
 
 ```sh
 pnpm typecheck
