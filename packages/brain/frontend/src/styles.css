@@ -3670,7 +3670,7 @@
     min-height: 0;
     overflow: hidden;
     border-top: 1px solid #111111;
-    border-bottom: 1px solid #111111;
+    border-bottom: 0;
     transition: grid-template-columns 220ms ease;
   }
 
