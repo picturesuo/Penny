@@ -302,6 +302,10 @@ export async function handleAskPennyRequest(
   try {
     return jsonResponse({ data: AskPennyOutputSchema.parse(await askPenny(parsed.data, { provider })) }, 200);
   } catch (error) {
+    if (error instanceof InlineLearnProviderError) {
+      return jsonResponse({ data: AskPennyOutputSchema.parse(await createHeuristicAskPennyProvider().generate(parsed.data)) }, 200);
+    }
+
     return inlineLearnErrorResponse(error);
   }
 }
@@ -1059,6 +1063,12 @@ function buildHeuristicInlineLearnOutput(input: InlineLearnGenerationInput): Inl
 }
 
 function heuristicAskPennyAnswer(input: AskPennyRequest): string {
+  const arithmeticAnswer = simpleArithmeticAnswer(input.question);
+
+  if (arithmeticAnswer) {
+    return arithmeticAnswer;
+  }
+
   const question = clipText(input.question, 220);
   const step = clipText(input.currentStepTitle, 120);
   const context = clipText(input.localContext, 420);
@@ -1069,6 +1079,28 @@ function heuristicAskPennyAnswer(input: AskPennyRequest): string {
     `Use this context: ${context}`,
     "A useful answer should name the concrete move, show one small example, and end with the next thing to inspect or revise.",
   ].join("\n\n");
+}
+
+function simpleArithmeticAnswer(question: string): string | null {
+  const compact = question.trim().toLowerCase();
+  const multiply = compact.match(/^what(?:'s| is)?\s+(-?\d+(?:\.\d+)?)\s*(?:x|\*|times|multiplied by)\s*(-?\d+(?:\.\d+)?)\??$/);
+
+  if (!multiply) {
+    return null;
+  }
+
+  const left = Number(multiply[1]);
+  const right = Number(multiply[2]);
+
+  if (!Number.isFinite(left) || !Number.isFinite(right)) {
+    return null;
+  }
+
+  return `${multiply[1]} x ${multiply[2]} = ${formatArithmeticNumber(left * right)}.`;
+}
+
+function formatArithmeticNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(10)));
 }
 
 function normalizeLearnOutput(output: InlineLearnProviderOutput, input?: Partial<InlineLearnGenerationInput>): InlineLearnOutput {

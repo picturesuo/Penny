@@ -78,6 +78,31 @@ test("POST /brain/learn/ask answers freeform step questions without a claim", as
   assert.match(payload.data.answer, /pricing rule/);
 });
 
+test("POST /brain/learn/ask falls back locally when the live provider is rate limited", async () => {
+  const response = await handleAskPennyRequest(
+    request("http://localhost/brain/learn/ask", {
+      question: "what's 4x4",
+      currentStepTitle: "Produce the final takeaway",
+      localContext: "Goal: understand the pricing decision. Current step: produce the final takeaway.",
+    }),
+    {
+      provider: {
+        name: "xai",
+        model: "grok-test",
+        async generate() {
+          throw new InlineLearnProviderError("xAI Ask Penny request failed: Too Many Requests");
+        },
+      },
+    },
+  );
+  const payload = (await response.json()) as { data: { answer: string; provider: string; model: string | null } };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.provider, "heuristic");
+  assert.equal(payload.data.model, null);
+  assert.match(payload.data.answer, /4 x 4 = 16/);
+});
+
 test("Ask Penny provider selection prefers Claude then xAI then heuristic", () => {
   assert.equal(createDefaultAskPennyProvider({ ANTHROPIC_API_KEY: "claude", XAI_API_KEY: "xai" }).name, "anthropic");
   assert.equal(createDefaultAskPennyProvider({ XAI_API_KEY: "xai" }).name, "xai");
