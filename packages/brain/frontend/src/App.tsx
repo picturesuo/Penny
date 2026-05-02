@@ -756,6 +756,8 @@ function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null
     graphPath: cockpit.graphPath,
     explorationPaths: current?.explorationPaths ?? [],
     learnCandidates: current?.learnCandidates ?? [],
+    ...(current?.learningPlan ? { learningPlan: current.learningPlan } : {}),
+    ...(current?.learn ? { learn: current.learn } : {}),
     ...(firstChallenge ? { firstChallenge } : {}),
   };
 }
