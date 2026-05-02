@@ -3915,59 +3915,6 @@
     line-height: 1.25;
   }
 
-  .learn-context-actions {
-    display: grid;
-    grid-template-columns: minmax(260px, 0.5fr) auto;
-    gap: 10px;
-    align-items: center;
-    max-width: 920px;
-    margin-top: 10px;
-  }
-
-  .learn-context-actions .learn-source-indicator {
-    margin-top: 0;
-  }
-
-  .learn-context-actions > button {
-    justify-self: start;
-    border: 1px solid #111111;
-    border-radius: 0;
-    padding: 8px 10px;
-    background: transparent;
-    color: #111111;
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1;
-  }
-
-  .learn-context-actions > button:disabled {
-    opacity: 0.42;
-  }
-
-  .learn-related-inline {
-    grid-column: 1 / -1;
-    display: grid;
-    gap: 8px;
-    border-top: 1px solid rgb(17 17 17 / 0.25);
-    padding-top: 12px;
-  }
-
-  .learn-related-inline ul {
-    display: grid;
-    gap: 5px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .learn-related-inline li,
-  .learn-related-inline p {
-    margin: 0;
-    color: rgb(17 17 17 / 0.66);
-    font-size: 14px;
-    line-height: 1.25;
-  }
-
   .learn-bottom-nav {
     display: flex;
     justify-content: space-between;
