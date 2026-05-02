@@ -192,7 +192,12 @@ function brainSeedSearchContext(_input: BrainSeedInput) {
 function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
   const idea = input.rawIdea.trim();
   const sessionId = input.sessionId ?? "00000000-0000-4000-8000-000000000001";
+  const ycSeed = buildYcHeuristicSeed(idea, sessionId);
   const demoSeed = buildPennyDemoHeuristicSeed(idea, sessionId);
+
+  if (ycSeed) {
+    return ycSeed;
+  }
 
   if (demoSeed) {
     return demoSeed;
@@ -353,6 +358,226 @@ function buildHeuristicSeed(input: BrainSeedInput): BrainSeedOutput {
         term: learnTerm,
         whyItMatters: `The seed idea relies on ${learnTerm} being concrete enough to challenge and measure.`,
         unblockExplanation: `${capitalize(learnTerm)} is the mental effort needed to process a task. In this idea, Penny should ask what part of studying consumes that effort before assuming AI reduces it.`,
+      },
+    ],
+  };
+}
+
+function buildYcHeuristicSeed(idea: string, sessionId: string): BrainSeedOutput | null {
+  if (!/\b(yc|y combinator)\b/i.test(idea)) {
+    return null;
+  }
+
+  const seedText =
+    "Learn YC as an application evaluation model: what the program does, which early-company signals matter, and how a founder should turn that into concrete application proof.";
+  const assumptionOne =
+    "YC is primarily evaluating whether the founders can make an early startup become much stronger during the batch.";
+  const assumptionTwo =
+    "Founder evidence, clarity of thought, and problem insight matter more than outside investor interest for an early application.";
+  const assumptionThree =
+    "The idea, market, traction, and investors are useful only when they make the founder-team and company trajectory more believable.";
+  const questionOne = "Which part of the application currently asks YC to trust a vague adjective instead of inspecting concrete proof?";
+  const conceptOne =
+    "Founder evidence means specific built, learned, sold, shipped, or unusually hard things that show the team can execute under uncertainty.";
+  const conceptTwo =
+    "Application signal means a concrete detail that lets a reader infer team quality, market pull, insight, speed, or learning rate.";
+
+  return {
+    source: {
+      id: "source.raw_idea",
+      rawText: idea,
+    },
+    session: {
+      id: sessionId,
+      sourceId: "source.raw_idea",
+      status: "open",
+    },
+    seedClaim: {
+      id: "claim.seed",
+      kind: "belief",
+      text: seedText,
+      confidence: 68,
+    },
+    assumptions: [
+      {
+        id: "claim.assumption.founders",
+        kind: "assumption",
+        text: assumptionOne,
+        confidence: 64,
+        pressure: "high",
+        whyItMatters: "If YC is not mostly judging founder capacity and learning rate, the learning path will optimize the wrong signal.",
+      },
+      {
+        id: "claim.assumption.signal",
+        kind: "assumption",
+        text: assumptionTwo,
+        confidence: 62,
+        pressure: "high",
+        whyItMatters: "If investor interest is treated as the main proof, the application can hide the more important founder and insight evidence.",
+      },
+      {
+        id: "claim.assumption.context",
+        kind: "assumption",
+        text: assumptionThree,
+        confidence: 58,
+        pressure: "medium",
+        whyItMatters: "If each category is learned in isolation, the founder will memorize labels instead of building a coherent application spine.",
+      },
+    ],
+    thoughtMap: {
+      claims: [
+        {
+          id: "claim.seed",
+          kind: "belief",
+          text: seedText,
+          confidence: 68,
+        },
+        {
+          id: "claim.assumption.founders",
+          kind: "assumption",
+          text: assumptionOne,
+          confidence: 64,
+        },
+        {
+          id: "claim.assumption.signal",
+          kind: "assumption",
+          text: assumptionTwo,
+          confidence: 62,
+        },
+        {
+          id: "claim.assumption.context",
+          kind: "assumption",
+          text: assumptionThree,
+          confidence: 58,
+        },
+        {
+          id: "claim.question.application-proof",
+          kind: "question",
+          text: questionOne,
+          confidence: 70,
+        },
+        {
+          id: "claim.concept.founder-evidence",
+          kind: "concept",
+          text: conceptOne,
+          confidence: 74,
+        },
+        {
+          id: "claim.concept.application-signal",
+          kind: "concept",
+          text: conceptTwo,
+          confidence: 72,
+        },
+      ],
+      edges: [
+        {
+          id: "edge.seed.founders",
+          fromClaimId: "claim.seed",
+          toClaimId: "claim.assumption.founders",
+          kind: "depends_on",
+          label: "depends on YC judging early founder capacity",
+        },
+        {
+          id: "edge.seed.signal",
+          fromClaimId: "claim.seed",
+          toClaimId: "claim.assumption.signal",
+          kind: "depends_on",
+          label: "depends on concrete signals mattering more than investor status",
+        },
+        {
+          id: "edge.seed.context",
+          fromClaimId: "claim.seed",
+          toClaimId: "claim.assumption.context",
+          kind: "depends_on",
+          label: "depends on idea, market, traction, and investors acting as evidence",
+        },
+        {
+          id: "edge.question.signal",
+          fromClaimId: "claim.question.application-proof",
+          toClaimId: "claim.assumption.signal",
+          kind: "questions",
+          label: "asks where the application lacks inspectable proof",
+        },
+        {
+          id: "edge.concept.founder-evidence",
+          fromClaimId: "claim.concept.founder-evidence",
+          toClaimId: "claim.assumption.founders",
+          kind: "teaches",
+          label: "defines founder proof",
+        },
+        {
+          id: "edge.concept.application-signal",
+          fromClaimId: "claim.concept.application-signal",
+          toClaimId: "claim.assumption.signal",
+          kind: "teaches",
+          label: "defines what the application should expose",
+        },
+      ],
+    },
+    explorationPaths: [
+      {
+        id: "path-reword-goal",
+        title: "Reword the real goal",
+        prompt: "Can the founder restate the YC task as proving team quality, insight, and progress rather than winning prestige?",
+        expectedValue: "Turns a broad YC question into an actionable application model.",
+      },
+      {
+        id: "path-what-yc-does",
+        title: "Frame what YC does",
+        prompt: "What changes for a company during YC: advice, batch pressure, user learning, fundraising readiness, or founder judgment?",
+        expectedValue: "Separates YC the program from investor logo-chasing.",
+      },
+      {
+        id: "path-founder-proof",
+        title: "Inventory founder evidence",
+        prompt: "What has each founder built, shipped, sold, learned, or endured that proves unusual execution ability?",
+        expectedValue: "Creates the proof base before polishing application prose.",
+      },
+      {
+        id: "path-idea-insight",
+        title: "Name the insight in the idea",
+        prompt: "What non-obvious user behavior, workflow pain, or market opening makes this idea more than a generic startup category?",
+        expectedValue: "Connects idea quality to founder insight.",
+      },
+      {
+        id: "path-traction-market",
+        title: "Sort traction and market signals",
+        prompt: "Which traction or market facts show real pull, and which are only large-market storytelling?",
+        expectedValue: "Prevents market size or early investors from substituting for proof.",
+      },
+      {
+        id: "path-application-gap",
+        title: "Find the foundation gap",
+        prompt: "Which application sentence needs a concrete example, number, user quote, shipped artifact, or customer fact before Check or Verify?",
+        expectedValue: "Produces the next Check or Verify target.",
+      },
+    ],
+    keyInsight:
+      "The reworded goal is to learn YC as a signal-reading system: show founder quality, clear insight, and evidence of progress, while treating investors as context rather than the main proof.",
+    firstChallenge: {
+      targetClaimId: "claim.assumption.signal",
+      failureType: "weak_evidence",
+      weakestPart: "The founder may still be ranking YC categories abstractly instead of naming the concrete proof that would make an application believable.",
+      challenge:
+        "Defend the strongest concrete signal in the application. If the proof is only adjectives, market size, or investor interest, revise the application spine around founder evidence, insight, and progress before moving to Verify.",
+      responseOptions: ["Defend", "Revise", "Absorb"],
+    },
+    learnCandidates: [
+      {
+        id: "learn.founder-evidence",
+        claimId: "claim.concept.founder-evidence",
+        term: "founder evidence",
+        whyItMatters: "The learning path depends on knowing what proof makes founders credible before the company has much history.",
+        unblockExplanation:
+          "Founder evidence is specific behavior or output that proves the team can execute: shipped products, customer learning, unusual speed, technical depth, sales ability, or hard-won domain insight.",
+      },
+      {
+        id: "learn.application-signal",
+        claimId: "claim.concept.application-signal",
+        term: "application signal",
+        whyItMatters: "The founder needs to turn each YC answer into inspectable evidence rather than broad ambition.",
+        unblockExplanation:
+          "An application signal is a detail that lets a reader infer something important quickly, such as team quality, user pull, market insight, learning speed, or execution under uncertainty.",
       },
     ],
   };
