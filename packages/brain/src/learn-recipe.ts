@@ -2,6 +2,7 @@ import { z } from "zod";
 import { RecipeEngine, RecipeTraceSchema, type RecipeTrace } from "./recipe-engine.ts";
 import { shouldUseWebSearch, type SearchDecision } from "./search-decision-service.ts";
 import type { EntityId } from "./domain/types.ts";
+import { LearningPlanSchema, buildExpertLearningPlan } from "./learn-plan.ts";
 
 const LearnRecipeStepNameSchema = z.enum([
   "structure_idea",
@@ -41,6 +42,7 @@ export const LearnRecipeOutputSchema = z
       questionCount: z.number().int().min(0),
       conceptCount: z.number().int().min(0),
     }),
+    learningPlan: LearningPlanSchema,
   })
   .strict();
 
@@ -184,7 +186,7 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
         const questions = claims.filter((claim) => claim.kind === "question");
 
         return {
-          summary: `Produced a Learn surface centered on: ${clipText(context.seedPayload.ideaMap.keyInsight, 170)}`,
+          summary: `Produced an expert lesson plan with paragraph-sized subgroups centered on: ${clipText(context.seedPayload.ideaMap.keyInsight, 170)}`,
           inputs: [context.seedPayload.ideaMap.keyInsight],
           outputs: [
             clipText(claims[0]?.text ?? context.seedPayload.ideaMap.keyInsight, 180),
@@ -221,6 +223,13 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
     recipe: result.trace,
     searchDecision: result.context.searchDecision,
     brainContext: result.context.brainContext,
+    learningPlan: buildExpertLearningPlan({
+      rawIdea: input.rawIdea,
+      keyInsight: input.seedPayload.ideaMap.keyInsight,
+      claims: input.seedPayload.ideaMap.claims,
+      learnCandidates: input.seedPayload.learnCandidates,
+      explorationPaths: input.seedPayload.explorationPaths,
+    }),
   });
 }
 
