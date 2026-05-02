@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+.git
+.github
+node_modules
+packages/brain/public
+coverage
+dist
+.next
+.turbo
+npm-debug.log*
+pnpm-debug.log*
