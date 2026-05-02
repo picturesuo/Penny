@@ -341,7 +341,12 @@
     white-space: nowrap;
   }
 
-  .nav-tab.is-active {
+  .nav-tab:focus {
+    outline: none;
+  }
+
+  .nav-tab.is-active,
+  .nav-tab:focus-visible {
     color: #111111;
     text-decoration: underline;
     text-decoration-thickness: 2px;
