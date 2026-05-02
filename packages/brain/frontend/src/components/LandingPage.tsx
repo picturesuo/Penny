@@ -1,4 +1,4 @@
-import { ArrowUp, Plus } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type PennyMode } from "../autopilotUx";
 import { PennyMark } from "./PennyMark";
@@ -27,6 +27,8 @@ export const landingShortcuts: Array<{ key: string; label: string }> = [
   { key: "L", label: "for Learn" },
   { key: "Q", label: "for Quick note" },
 ];
+
+export const landingPromptTools = ["Learn", "Code", "Life stuff"];
 
 function destinationForShortcutKey(key: string | null): LandingDestination | null {
   if (key === "L") {
@@ -218,66 +220,75 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             <p>FOR YOUR THOUGHTS</p>
           </div>
 
-          <form className="landing-composer" onSubmit={handleSubmit}>
-            <label className="sr-only" htmlFor="landingIdea">
-              Ask Penny anything
-            </label>
-            <button type="button" className="landing-plus-button" aria-label="Add a new thought" disabled={disabled}>
-              <Plus size={18} strokeWidth={1.8} />
-            </button>
-            <textarea
-              id="landingIdea"
-              ref={inputRef}
-              value={rawIdea}
-              onChange={(event) => setRawIdea(event.target.value)}
-              disabled={disabled}
-              placeholder="Ask anything..."
-              aria-describedby="landingStatus"
-              rows={1}
-            />
-            <button
-              type="submit"
-              className="landing-submit-button"
-              disabled={disabled || submitIntent === null}
-              aria-label="Send thought"
-            >
-              <ArrowUp size={18} strokeWidth={2.2} />
-            </button>
-            <p id="landingStatus" className="sr-only">
-              {status}
-            </p>
-          </form>
+          <div className="landing-prompt-box">
+            <form className="landing-composer" onSubmit={handleSubmit}>
+              <label className="sr-only" htmlFor="landingIdea">
+                Ask Penny anything
+              </label>
+              <textarea
+                id="landingIdea"
+                ref={inputRef}
+                value={rawIdea}
+                onChange={(event) => setRawIdea(event.target.value)}
+                disabled={disabled}
+                placeholder="Ask anything..."
+                aria-describedby="landingStatus"
+                rows={1}
+              />
+              <button
+                type="submit"
+                className="landing-submit-button"
+                disabled={disabled || submitIntent === null}
+                aria-label="Send thought"
+              >
+                <ArrowUp size={18} strokeWidth={2.2} />
+              </button>
+              <p id="landingStatus" className="sr-only">
+                {status}
+              </p>
+            </form>
 
-          <div className="landing-shortcuts" aria-label="Keyboard shortcuts">
-            {landingShortcuts.map((shortcut, index) => (
-              <div className="landing-shortcut-group" key={shortcut.key}>
-                {index > 0 ? <span className="landing-shortcut-divider" aria-hidden="true" /> : null}
-                <button
-                  type="button"
-                  disabled={disabled && shortcut.key !== "B"}
-                  aria-pressed={selectedShortcutKey === shortcut.key}
-                  className={selectedShortcutKey === shortcut.key ? "is-selected" : undefined}
-                  onClick={() => {
-                    void runShortcut(shortcut.key);
-                  }}
-                >
-                  <kbd
-                    className={isCtrlDown || selectedShortcutKey === shortcut.key ? "is-pressed" : undefined}
-                    aria-label="Control"
-                  >
-                    Ctrl
-                  </kbd>
-                  <kbd
-                    className={
-                      activeShortcutKey === shortcut.key || selectedShortcutKey === shortcut.key ? "is-pressed" : undefined
-                    }
-                  >
-                    {shortcut.key}
-                  </kbd>
-                  <span>{shortcut.label}</span>
-                </button>
+            <div className="landing-prompt-actions">
+              <div className="landing-tool-chips" aria-label="Prompt tools">
+                {landingPromptTools.map((tool) => (
+                  <span className="landing-tool-chip" key={tool}>
+                    {tool}
+                  </span>
+                ))}
               </div>
-            ))}
+
+              <div className="landing-shortcuts" aria-label="Keyboard shortcuts">
+                {landingShortcuts.map((shortcut, index) => (
+                  <div className="landing-shortcut-group" key={shortcut.key}>
+                    {index > 0 ? <span className="landing-shortcut-divider" aria-hidden="true" /> : null}
+                    <button
+                      type="button"
+                      disabled={disabled && shortcut.key !== "B"}
+                      aria-pressed={selectedShortcutKey === shortcut.key}
+                      className={selectedShortcutKey === shortcut.key ? "is-selected" : undefined}
+                      onClick={() => {
+                        void runShortcut(shortcut.key);
+                      }}
+                    >
+                      <kbd
+                        className={isCtrlDown || selectedShortcutKey === shortcut.key ? "is-pressed" : undefined}
+                        aria-label="Control"
+                      >
+                        Ctrl
+                      </kbd>
+                      <kbd
+                        className={
+                          activeShortcutKey === shortcut.key || selectedShortcutKey === shortcut.key ? "is-pressed" : undefined
+                        }
+                      >
+                        {shortcut.key}
+                      </kbd>
+                      <span>{shortcut.label}</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
