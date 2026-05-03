@@ -411,42 +411,20 @@ function LearnMainContent({
       </section>
 
       <section className="learn-core-section" aria-label="Core idea">
+        <div className="learn-big-picture-copy">
+          <span>BIG PICTURE</span>
+          <h3>{currentStep.parentTitle}</h3>
+          <p>{currentStep.shortExplanation}</p>
+        </div>
         <div className="learn-core-copy">
-          <span>CORE IDEA</span>
+          <span>ZOOM IN</span>
           <ul>
             {currentStep.coreIdea.bullets.map((bullet) => (
               <li key={bullet}>{bullet}</li>
             ))}
           </ul>
         </div>
-        <div className="learn-visual-placeholder" aria-label="Visual placeholder">
-          <span>{currentStep.coreIdea.visualPlaceholderLabel ?? "Visual / diagram / graph / flow / illustration"}</span>
-        </div>
       </section>
-
-      <section className="learn-example-panel" aria-label="Fully fleshed-out example">
-        <div>
-          <span>FULLY FLESHED-OUT EXAMPLE</span>
-          <h3>{currentStep.example.title}</h3>
-          <p>{currentStep.example.description}</p>
-          <ol className={currentStep.example.format === "code" ? "is-code" : ""}>
-            {currentStep.example.lines.map((line, index) => (
-              <li key={`${line}-${index}`}>{line}</li>
-            ))}
-          </ol>
-        </div>
-        <aside>
-          <span>WHY THIS MATTERS</span>
-          <p>{currentStep.example.whyThisMatters}</p>
-        </aside>
-      </section>
-
-      {currentStep.inlineNote ? (
-        <aside className="learn-inline-note">
-          <span>NOTE</span>
-          <p>{currentStep.inlineNote}</p>
-        </aside>
-      ) : null}
 
       <nav className="learn-bottom-nav" aria-label="Step navigation">
         <button type="button" disabled={!canGoPrevious} onClick={onPrevious}>
