@@ -106,6 +106,7 @@ function LearnSessionView({
     0,
     lessonPages.findIndex((lesson) => lesson.substep.id === activeSubstepId),
   );
+  const activeLesson = lessonPages[activeLessonIndex];
   const currentProgressPercent = Math.round(((activeLessonIndex + 1) / lessonPages.length) * 100);
 
   useEffect(() => {
@@ -232,8 +233,9 @@ function LearnSessionView({
 
       <AskPennyPanel
         askPenny={pageData.askPenny}
-        currentStepTitle={lessonPages[activeLessonIndex]?.substep.lesson.title ?? activeStep?.title ?? pageData.currentStep.title}
-        localContext={askPennyContext(pageData, activeStep?.title ?? pageData.currentStep.title, sourceText)}
+        contextKey={activeStep?.id ?? "step-1"}
+        currentStepTitle={activeLesson?.substep.lesson.title ?? activeStep?.title ?? pageData.currentStep.title}
+        localContext={askPennyContextForStep(pageData, activeStep, activeLesson?.substep.lesson ?? pageData.currentStep, sourceText)}
         isOpen={askPennyOpen}
         selectedQuestionSeed={askPennySeed}
         disabled={disabled}
@@ -510,6 +512,7 @@ function LearnMainContent({
 
 function AskPennyPanel({
   askPenny,
+  contextKey,
   currentStepTitle,
   localContext,
   isOpen,
@@ -519,6 +522,7 @@ function AskPennyPanel({
   onPromptSelect,
 }: {
   askPenny: LearnPageData["askPenny"];
+  contextKey: string;
   currentStepTitle: string;
   localContext: string;
   isOpen: boolean;
@@ -541,6 +545,13 @@ function AskPennyPanel({
 
     setDraft(selectedQuestionSeed.text);
   }, [selectedQuestionSeed]);
+
+  useEffect(() => {
+    setDraft("");
+    setMessages([
+      { role: "system", text: "Ask a question about this category. Penny will answer from this category only." },
+    ]);
+  }, [contextKey]);
 
   async function submitPrompt(question: string) {
     const trimmedQuestion = question.trim();
@@ -625,13 +636,26 @@ function AskPennyPanel({
   );
 }
 
-function askPennyContext(pageData: LearnPageData, currentStepTitle: string, sourceText: string): string {
+export function askPennyContextForStep(
+  pageData: LearnPageData,
+  activeStep: LearnPageData["steps"][number] | undefined,
+  activeLesson: LearnLesson,
+  sourceText: string,
+): string {
+  const category = activeStep ?? pageData.steps[0];
+  const categoryLessons = category?.substeps.map((substep) => substep.lesson) ?? [activeLesson];
+  const categoryMoves = categoryLessons.flatMap((lesson) => lesson.coreIdea.bullets);
+  const categoryExamples = categoryLessons.map((lesson) => `${lesson.title}: ${lesson.example.lines.join(" ")}`);
+
   return [
     `Goal: ${pageData.goal}`,
-    `Current step: ${currentStepTitle}`,
-    `Core idea: ${pageData.currentStep.coreIdea.bullets.join(" ")}`,
-    `Example: ${pageData.currentStep.example.description}`,
-    sourceText ? `Source: ${truncateWords(sourceText, 80)}` : "",
+    `Current category: ${category?.title ?? activeLesson.parentTitle}`,
+    `Current step: ${activeLesson.title}`,
+    `Category purpose: ${activeLesson.example.whyThisMatters}`,
+    `Category steps: ${categoryLessons.map((lesson) => lesson.title).join(" -> ")}`,
+    `Core moves: ${categoryMoves.join(" ")}`,
+    `Examples inside this category: ${categoryExamples.join(" ")}`,
+    sourceText ? `Source seed: ${truncateWords(sourceText, 30)}` : "",
   ]
     .filter(Boolean)
     .join("\n\n")
