@@ -210,17 +210,7 @@ function LearnSessionView({
   }
 
   return (
-    <section className={`learn-session-output${askPennyOpen ? " ask-open" : ""}`} aria-label="Learn session output">
-      <LearningPathSidebar
-        steps={pageData.steps}
-        goal={pageData.goal}
-        activeMainStepId={activeMainStepId}
-        activeSubstepId={activeSubstepId}
-        progressPercent={currentProgressPercent}
-        onStepSelect={selectStep}
-        onAskPennyToggle={() => setAskPennyOpen((isOpen) => !isOpen)}
-      />
-
+    <section className="learn-session-output" aria-label="Learn session output">
       <LearnMainContent
         pageData={pageData}
         activeStepIndex={activeStepIndex}
@@ -484,47 +474,7 @@ function LearnMainContent({
       </section>
 
       <section className="learn-step-header" aria-label="Current step">
-        <strong>{currentStep.parentTitle}</strong>
-        <p>{currentStep.learningGoal}</p>
-      </section>
-
-      <section className="learn-answer-section" aria-label="Direct answer">
-        <article>
-          <span>ANSWER</span>
-          <p>{directAnswerForLesson(currentStep)}</p>
-        </article>
-        <article>
-          <span>WRITE THIS DOWN</span>
-          <ul>
-            {currentStep.coreIdea.bullets.slice(0, 3).map((bullet) => (
-              <li key={bullet}>{bullet}</li>
-            ))}
-          </ul>
-        </article>
-      </section>
-
-      <section className="learn-core-section" aria-label="Subsection lesson">
-        {currentStep.teachingSections.map((section) => (
-          <article key={section.title} className="learn-teaching-section">
-            <span>{section.title}</span>
-            <p>{section.body}</p>
-          </article>
-        ))}
-      </section>
-
-      <section className="learn-support-section" aria-label="Misconceptions and example">
-        <div className="learn-misconception-copy">
-          <span>MISCONCEPTIONS</span>
-          <ul>
-            {currentStep.misconceptions.map((misconception) => (
-              <li key={misconception}>{misconception}</li>
-            ))}
-          </ul>
-        </div>
-        <div className="learn-example-copy">
-          <span>EXAMPLE</span>
-          <p>{currentStep.example.lines.join(" ")}</p>
-        </div>
+        <p>{directAnswerForLesson(currentStep)}</p>
       </section>
 
       <nav className="learn-bottom-nav" aria-label="Step navigation">

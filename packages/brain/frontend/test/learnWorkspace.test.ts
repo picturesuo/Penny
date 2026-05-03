@@ -9,28 +9,21 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
     createElement(LearnWorkspace, learnWorkspaceProps()),
   );
 
-  assert.match(markup, /LEARNING PATH/);
-  assert.match(markup, /January 1/);
-  assert.match(markup, /what YC does/i);
-  assert.match(markup, /Frame what YC is/);
   assert.match(markup, /Name the program/);
-  assert.match(markup, /Definition/);
-  assert.match(markup, /Application/);
-  assert.match(markup, /Procedure/);
-  assert.match(markup, /ANSWER/);
   assert.match(markup, /YC is a three-month startup accelerator/);
-  assert.match(markup, /WRITE THIS DOWN/);
-  assert.match(markup, /MISCONCEPTIONS/);
-  assert.match(markup, /EXAMPLE/);
   assert.match(markup, /Ask Penny/);
-  assert.match(markup, /Thinking graph/);
   assert.match(markup, /STEP 1\.1 OF 15/);
-  assert.match(markup, /Use &quot;Name the program&quot; to answer what YC would actually evaluate/);
-  assert.match(markup, /Do not treat investor interest as stronger than founder proof/);
-  assert.match(markup, /1\.1/);
-  assert.match(markup, /1\.2/);
-  assert.match(markup, /1\.3/);
   assert.match(markup, /Enter forward \/ Esc back/);
+  assert.doesNotMatch(markup, /Definition/);
+  assert.doesNotMatch(markup, /Application/);
+  assert.doesNotMatch(markup, /Procedure/);
+  assert.doesNotMatch(markup, /ANSWER/);
+  assert.doesNotMatch(markup, /WRITE THIS DOWN/);
+  assert.doesNotMatch(markup, /MISCONCEPTIONS/);
+  assert.doesNotMatch(markup, /EXAMPLE/);
+  assert.doesNotMatch(markup, /Thinking graph/);
+  assert.doesNotMatch(markup, /Use &quot;Name the program&quot; to answer what YC would actually evaluate/);
+  assert.doesNotMatch(markup, /Do not treat investor interest as stronger than founder proof/);
   assert.doesNotMatch(markup, /What shall we think through/);
   assert.doesNotMatch(markup, /Save to Brain/);
   assert.doesNotMatch(markup, /Have I thought about this before/);
@@ -210,10 +203,11 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   );
 
   assert.match(markup, /Name the pricing goal/);
-  assert.match(markup, /Name the buyer/);
-  assert.match(markup, /Definition/);
-  assert.match(markup, /MISCONCEPTIONS/);
-  assert.match(markup, /Package pricing/);
+  assert.match(markup, /An expert starts by naming what the pricing decision must accomplish/);
+  assert.doesNotMatch(markup, /Name the buyer/);
+  assert.doesNotMatch(markup, /Definition/);
+  assert.doesNotMatch(markup, /MISCONCEPTIONS/);
+  assert.doesNotMatch(markup, /Package pricing/);
   assert.doesNotMatch(markup, /Iterate pricing/);
   assert.doesNotMatch(markup, /A pricing expert teaching/);
   assert.doesNotMatch(markup, /Pricing value map/);
