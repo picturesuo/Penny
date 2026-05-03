@@ -468,14 +468,25 @@
   }
 
   .strapline {
+    position: relative;
     display: flex;
     align-items: start;
     justify-content: space-between;
-    border-bottom: 1px solid #111111;
+    border-bottom: 0;
     padding: 4px 0;
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
+  }
+
+  .strapline::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1px;
+    background: #111111;
   }
 
   .strapline span {
@@ -483,12 +494,12 @@
     display: block;
   }
 
-  .newspaper-header.is-learn .strapline {
-    border-bottom: 0;
+  .newspaper-header.is-learn .strapline::after {
+    content: none;
   }
 
-  .newspaper-header.is-brain .strapline {
-    border-bottom: 0;
+  .newspaper-header.is-brain .strapline::after {
+    content: none;
   }
 
   .cockpit-grid {
