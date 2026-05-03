@@ -1283,6 +1283,12 @@ function technicalAskPennyAnswer(question: string): string | null {
     return null;
   }
 
+  const linearDerivative = derivativeOfLinearExpressionAnswer(compact);
+
+  if (linearDerivative) {
+    return linearDerivative;
+  }
+
   if (/\b(projectile|kinematic|velocity|acceleration|force|newton|physics|gravity)\b/.test(compact)) {
     return [
       "For a physics problem, first name the knowns, the unknown, and the model. If the motion has constant acceleration, the core equations are:",
@@ -1332,6 +1338,30 @@ function technicalAskPennyAnswer(question: string): string | null {
     "For a technical question, give the answer as a worked chain: define the quantities, choose the governing relation, substitute, simplify, and interpret.",
     "$$\\text{knowns} \\rightarrow \\text{model} \\rightarrow \\text{calculation} \\rightarrow \\text{check}$$",
     "A comprehensive answer should include formulas in LaTeX, the units or assumptions, and a final sentence explaining what the result means.",
+  ].join("\n\n");
+}
+
+function derivativeOfLinearExpressionAnswer(compactQuestion: string): string | null {
+  const match = compactQuestion.match(
+    /\b(?:derivative|differentiate|derive|slope|rate of change)\b(?:\s+(?:of|for))?\s+(-?\d+(?:\.\d+)?)\s*\*?\s*x\b/,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const coefficient = Number(match[1]);
+
+  if (!Number.isFinite(coefficient)) {
+    return null;
+  }
+
+  const coefficientText = formatArithmeticNumber(coefficient);
+
+  return [
+    `For $f(x)=${coefficientText}x$, the derivative is $f'(x)=${coefficientText}$.`,
+    `Use the constant multiple rule: the derivative of $x$ is $1$, so $\\frac{d}{dx}(${coefficientText}x)=${coefficientText}\\cdot 1=${coefficientText}$.`,
+    `That means the line $${coefficientText}x$ changes by ${coefficientText} for every 1-unit increase in $x$.`,
   ].join("\n\n");
 }
 
