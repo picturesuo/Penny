@@ -607,7 +607,7 @@ function localAskPennyAnswer(input: {
   const question = input.question.trim();
   const compactQuestion = question.toLowerCase();
   const arithmetic = compactQuestion.match(
-    /^what(?:'s| is)?\s+(-?\d+(?:\.\d+)?)\s*(?:x|\*|times|multiplied by)\s*(-?\d+(?:\.\d+)?)\??$/,
+    /(?:^|\b)(?:what(?:'s| is)?\s+)?(-?\d+(?:\.\d+)?)\s*(?:x|\*|times|multiplied by)\s*(-?\d+(?:\.\d+)?)(?:\?|$)/,
   );
 
   if (/why\s+is\s+the\s+sky\s+blue\??/.test(compactQuestion)) {

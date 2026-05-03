@@ -118,6 +118,29 @@ test("frontend Ask Penny falls back locally when the request cannot reach the AP
   }
 });
 
+test("frontend Ask Penny local fallback answers conversational arithmetic", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (): Promise<Response> => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  try {
+    const response = await askPenny({
+      question: "Hello what is 4x4",
+      currentStepTitle: "Name the program",
+      localContext:
+        "Goal: Understand what YC does. Current step: Name the program. Core idea: Separate program value from application scoring.",
+    });
+
+    assert.equal(response.data.provider, "heuristic");
+    assert.equal(response.data.model, null);
+    assert.match(response.data.answer, /4 x 4 = 16/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("frontend Ask Penny still uses the live API when it responds", async () => {
   const calls: FetchCall[] = [];
   const restoreFetch = mockFetch(calls, [
