@@ -488,6 +488,21 @@ function LearnMainContent({
         <p>{currentStep.learningGoal}</p>
       </section>
 
+      <section className="learn-answer-section" aria-label="Direct answer">
+        <article>
+          <span>ANSWER</span>
+          <p>{directAnswerForLesson(currentStep)}</p>
+        </article>
+        <article>
+          <span>WRITE THIS DOWN</span>
+          <ul>
+            {currentStep.coreIdea.bullets.slice(0, 3).map((bullet) => (
+              <li key={bullet}>{bullet}</li>
+            ))}
+          </ul>
+        </article>
+      </section>
+
       <section className="learn-core-section" aria-label="Subsection lesson">
         {currentStep.teachingSections.map((section) => (
           <article key={section.title} className="learn-teaching-section">
@@ -525,6 +540,40 @@ function LearnMainContent({
       </nav>
     </article>
   );
+}
+
+function directAnswerForLesson(lesson: LearnLesson): string {
+  if (lesson.parentTitle.startsWith("Frame what YC is")) {
+    if (lesson.title === "Name the program") {
+      return "YC is a three-month startup accelerator. The answer is not 'investors like us'; it is 'this team and company could get much stronger during the batch through advice, pressure, users, and fundraising access.'";
+    }
+
+    if (lesson.title === "Ask the real application question") {
+      return "The real application question is: can YC quickly see a strong founding team, a clear startup idea, and evidence that the team can learn fast? Investors are supporting context, not the center of the answer.";
+    }
+
+    if (lesson.title === "Anchor the mock event") {
+      return "Save this as the January 1 YC application lesson: YC is evaluating founders plus insight first, idea clarity second, and investor interest only when it proves real traction or market pull.";
+    }
+  }
+
+  if (lesson.parentTitle.startsWith("Understand the people signal")) {
+    return "People matter most when the company is early because the first idea can change. The application should name concrete founder proof: what each founder built, achieved, learned, or did that was unusually hard.";
+  }
+
+  if (lesson.parentTitle.startsWith("Understand the idea signal")) {
+    return "The idea matters when it shows a specific user, a painful problem, and a non-obvious insight. Do not pitch a category; state the exact improvement the startup creates and why now is the right moment.";
+  }
+
+  if (lesson.parentTitle.startsWith("Place investors correctly")) {
+    return "Investor interest is useful evidence only if it points to something real: traction, urgency, credible market validation, or founder access. It should never replace founder evidence, customer learning, or idea clarity.";
+  }
+
+  if (lesson.parentTitle.startsWith("Turn the lesson into an application move")) {
+    return "The final application move is: write a direct company sentence, attach one concrete founder proof point per founder, name the insight, and keep investor interest as optional evidence rather than the main claim.";
+  }
+
+  return lesson.shortExplanation;
 }
 
 function AskPennyPanel({

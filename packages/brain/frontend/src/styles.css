@@ -4476,6 +4476,59 @@
     line-height: 1.18;
   }
 
+  .learn-answer-section {
+    display: grid;
+    grid-template-columns: minmax(0, 0.58fr) minmax(0, 0.42fr);
+    gap: 18px;
+    border-top: 2px solid #111111;
+    border-bottom: 1px solid #111111;
+    padding: 14px 0;
+  }
+
+  .learn-answer-section article {
+    display: grid;
+    align-content: start;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .learn-answer-section p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #111111;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.22;
+  }
+
+  .learn-answer-section ul {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .learn-answer-section li {
+    display: grid;
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: 8px;
+    overflow-wrap: anywhere;
+    color: rgb(17 17 17 / 0.78);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.18;
+  }
+
+  .learn-answer-section li::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    margin-top: 4px;
+    border: 1px solid #111111;
+    background: #111111;
+  }
+
   .learn-core-section {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -5264,6 +5317,11 @@
   }
 
   .learn-core-section {
+    grid-template-columns: 1fr;
+  }
+
+  .learn-answer-section,
+  .learn-support-section {
     grid-template-columns: 1fr;
   }
 

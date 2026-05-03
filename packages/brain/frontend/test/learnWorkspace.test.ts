@@ -17,6 +17,9 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /Definition/);
   assert.match(markup, /Application/);
   assert.match(markup, /Procedure/);
+  assert.match(markup, /ANSWER/);
+  assert.match(markup, /YC is a three-month startup accelerator/);
+  assert.match(markup, /WRITE THIS DOWN/);
   assert.match(markup, /MISCONCEPTIONS/);
   assert.match(markup, /EXAMPLE/);
   assert.match(markup, /Ask Penny/);
