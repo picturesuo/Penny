@@ -212,6 +212,7 @@ function LearnSessionView({
     <section className={`learn-session-output${askPennyOpen ? " ask-open" : ""}`} aria-label="Learn session output">
       <LearningPathSidebar
         steps={pageData.steps}
+        output={output}
         activeMainStepId={activeMainStepId}
         activeSubstepId={activeSubstepId}
         progressPercent={currentProgressPercent}
@@ -302,6 +303,7 @@ type LearnLessonPage = {
 
 function LearningPathSidebar({
   steps,
+  output,
   activeMainStepId,
   activeSubstepId,
   progressPercent,
@@ -309,12 +311,15 @@ function LearningPathSidebar({
   onAskPennyToggle,
 }: {
   steps: LearnPageData["steps"];
+  output: LearnSessionOutput;
   activeMainStepId: string;
   activeSubstepId: string;
   progressPercent: number;
   onStepSelect: (stepId: string, substepId?: string) => void;
   onAskPennyToggle: () => void;
 }) {
+  const visibleSteps = visibleLearningPathSteps(steps, activeMainStepId);
+
   return (
     <aside className="learn-path-sidebar" aria-label="Learning path">
       <div className="learn-path-head">
@@ -328,8 +333,9 @@ function LearningPathSidebar({
         </button>
       </div>
 
-      <ol className="learn-path-list">
-        {steps.map((step, index) => {
+      <div className="learn-path-middle">
+        <ol className="learn-path-list">
+        {visibleSteps.map(({ step, index }) => {
           const isActive = step.id === activeMainStepId;
 
           return (
@@ -355,7 +361,10 @@ function LearningPathSidebar({
             </li>
           );
         })}
-      </ol>
+        </ol>
+
+        <LearnThinkingGraph output={output} />
+      </div>
 
       <div className="learn-path-footer">
         <div className="learn-progress-row">
@@ -368,6 +377,64 @@ function LearningPathSidebar({
       </div>
     </aside>
   );
+}
+
+export function visibleLearningPathSteps(steps: LearnPageData["steps"], activeMainStepId: string) {
+  const activeIndex = Math.max(
+    0,
+    steps.findIndex((step) => step.id === activeMainStepId),
+  );
+
+  return steps.slice(activeIndex, activeIndex + 5).map((step, offset) => ({
+    step,
+    index: activeIndex + offset,
+  }));
+}
+
+function LearnThinkingGraph({ output }: { output: LearnSessionOutput }) {
+  const graphItems = learnThinkingGraphItems(output);
+
+  return (
+    <section className="learn-thinking-graph" aria-label="Thinking graph preview">
+      <div className="learn-thinking-graph-head">
+        <span>CANVAS</span>
+        <strong>Thinking graph</strong>
+      </div>
+      <div className="learn-thinking-graph-board">
+        {graphItems.length > 0 ? (
+          <ol>
+            {graphItems.map((item, index) => (
+              <li key={item.id} className={`is-${item.kind}`} style={{ "--graph-index": index } as React.CSSProperties}>
+                <span>{item.kind}</span>
+                <strong>{item.title}</strong>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="learn-thinking-graph-empty">
+            <strong>Canvas starts after the first saved idea</strong>
+            <p>Save an idea to Brain, then Canvas will show claims, assumptions, questions, and the recommended path.</p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function learnThinkingGraphItems(output: LearnSessionOutput) {
+  return [
+    ...output.claims.map((claim) => graphItemFromClaim(claim, "claim")),
+    ...output.assumptions.map((claim) => graphItemFromClaim(claim, "assumption")),
+    ...output.questions.map((claim) => graphItemFromClaim(claim, "question")),
+  ].slice(0, 6);
+}
+
+function graphItemFromClaim(claim: BrainClaim, kind: "claim" | "assumption" | "question") {
+  return {
+    id: claim.id,
+    kind,
+    title: truncateWords(claim.text, 10),
+  };
 }
 
 function LearnMainContent({
