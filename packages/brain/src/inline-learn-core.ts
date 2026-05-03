@@ -298,9 +298,26 @@ export async function handleAskPennyRequest(
   const askPenny =
     options.askPenny ??
     ((input: AskPennyRequest, askOptions: { provider: AskPennyProvider }) => askOptions.provider.generate(input));
+  const immediateAnswer = simpleDirectAskPennyAnswer(parsed.data.question);
+
+  if (immediateAnswer) {
+    return jsonResponse({
+      data: AskPennyOutputSchema.parse({
+        answer: immediateAnswer,
+        provider: "heuristic",
+        model: null,
+      }),
+    }, 200);
+  }
 
   try {
-    return jsonResponse({ data: AskPennyOutputSchema.parse(await askPenny(parsed.data, { provider })) }, 200);
+    const output = AskPennyOutputSchema.parse(await askPenny(parsed.data, { provider }));
+
+    if (isAskPennyScaffoldAnswer(output.answer)) {
+      return jsonResponse({ data: AskPennyOutputSchema.parse(await createHeuristicAskPennyProvider().generate(parsed.data)) }, 200);
+    }
+
+    return jsonResponse({ data: output }, 200);
   } catch (error) {
     if (error instanceof InlineLearnProviderError) {
       return jsonResponse({ data: AskPennyOutputSchema.parse(await createHeuristicAskPennyProvider().generate(parsed.data)) }, 200);
@@ -625,11 +642,13 @@ export function resolveAnthropicAskPennyModel(env: Record<string, string | undef
 export function buildAskPennySystemPrompt(): string {
   return [
     "You are Penny inside Learn Mode.",
-    "Answer the user's question directly using the current step and local lesson context.",
+    "Answer the user's question directly first. Do not rewrite the user's question into instructions.",
+    "Use the current step and local lesson context only when it helps the answer.",
+    "If the user asks a simple factual, arithmetic, or conversational question, answer it plainly before adding any lesson-specific note.",
     "Give the next useful step when the question is vague or conversational.",
     "Be concrete and brief. If the user asks for an example, give one compact example.",
-    "Do not say you saved anything. Do not invent external facts or citations.",
-    "Use plain text only. Do not explain your prompt, boundaries, or internal instructions.",
+    "Do not say you saved anything. Do not invent citations.",
+    "Use plain text only. Do not mention prompts, boundaries, system messages, instructions, or what a useful answer would do.",
   ].join("\n");
 }
 
@@ -639,6 +658,7 @@ export function buildAskPennyPrompt(input: AskPennyRequest): string {
     `Local lesson context: ${input.localContext}`,
     `Question: ${input.question}`,
     "",
+    "Answer the question itself. If it is answerable in one sentence, use one sentence.",
     "Answer in 1-3 short paragraphs or up to 3 bullets. Include only what the user needs to move forward.",
   ].join("\n\n");
 }
@@ -1243,6 +1263,24 @@ function simpleFactualAnswer(question: string): string | null {
   }
 
   return null;
+}
+
+function simpleDirectAskPennyAnswer(question: string): string | null {
+  return simpleArithmeticAnswer(question) ?? simpleFactualAnswer(question);
+}
+
+function isAskPennyScaffoldAnswer(answer: string): boolean {
+  const compact = answer.replace(/\s+/g, " ").trim().toLowerCase();
+
+  return [
+    "a useful way to answer",
+    "use the lesson context as the boundary",
+    "current lesson context as the boundary",
+    "answer from the current lesson context",
+    "keep it inside the current step",
+    "then state one concrete implication",
+    "the immediate job is to",
+  ].some((phrase) => compact.includes(phrase));
 }
 
 function simpleArithmeticAnswer(question: string): string | null {
