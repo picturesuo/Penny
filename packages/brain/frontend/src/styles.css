@@ -3335,6 +3335,7 @@
     position: relative;
     height: min(64vh, 620px);
     min-height: 540px;
+    min-width: 0;
     overflow: auto;
     border: 1px solid #111111;
     border-radius: 8px;
@@ -3458,9 +3459,8 @@
 
   .canvas-edge-layer {
     position: absolute;
-    inset: 0;
-    width: 1080px;
-    height: 620px;
+    top: 0;
+    left: 0;
     overflow: visible;
     pointer-events: none;
   }
@@ -3477,7 +3477,8 @@
     font-size: 11px;
     paint-order: stroke;
     stroke: #f8f7f1;
-    stroke-width: 5px;
+    stroke-linejoin: round;
+    stroke-width: 7px;
   }
 
   .canvas-edge.is-active path,
@@ -3987,6 +3988,14 @@
     padding: 14px 12px 14px 0;
   }
 
+  .learn-path-middle {
+    display: grid;
+    grid-template-rows: auto minmax(220px, 1fr);
+    gap: 14px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .learn-path-head {
     display: flex;
     align-items: flex-start;
@@ -4027,7 +4036,7 @@
     gap: 4px;
     margin: 0;
     padding: 0;
-    overflow: auto;
+    overflow: hidden;
     list-style: none;
   }
 
@@ -4105,6 +4114,140 @@
   .learn-path-list ol li.is-active-substep {
     color: #111111;
     font-weight: 700;
+  }
+
+  .learn-thinking-graph {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 7px;
+    min-height: 0;
+  }
+
+  .learn-thinking-graph-head {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .learn-thinking-graph-head span {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .learn-thinking-graph-head strong {
+    min-width: 0;
+    overflow: hidden;
+    color: rgb(17 17 17 / 0.7);
+    font-size: 12px;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .learn-thinking-graph-board {
+    position: relative;
+    min-height: 220px;
+    overflow: hidden;
+    border: 1px solid #111111;
+    border-radius: 8px;
+    background:
+      linear-gradient(90deg, rgb(17 17 17 / 0.07) 1px, transparent 1px),
+      linear-gradient(rgb(17 17 17 / 0.07) 1px, transparent 1px),
+      #ffffff;
+    background-size: 24px 24px;
+  }
+
+  .learn-thinking-graph-board ol {
+    position: relative;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .learn-thinking-graph-board li {
+    position: absolute;
+    left: calc(8% + (var(--graph-index) % 2) * 40%);
+    top: calc(10% + var(--graph-index) * 13%);
+    display: grid;
+    gap: 5px;
+    width: min(46%, 180px);
+    min-height: 58px;
+    border: 1px solid #111111;
+    border-radius: 7px;
+    padding: 8px 9px;
+    background: #fbfaf6;
+    box-shadow: 0 6px 0 rgb(17 17 17 / 0.05);
+  }
+
+  .learn-thinking-graph-board li::before {
+    content: "";
+    position: absolute;
+    right: -34px;
+    top: 50%;
+    width: 34px;
+    border-top: 1px solid rgb(17 17 17 / 0.28);
+  }
+
+  .learn-thinking-graph-board li:nth-child(2n)::before,
+  .learn-thinking-graph-board li:last-child::before {
+    display: none;
+  }
+
+  .learn-thinking-graph-board li span {
+    color: rgb(17 17 17 / 0.54);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .learn-thinking-graph-board li strong {
+    display: -webkit-box;
+    overflow: hidden;
+    color: #111111;
+    font-size: 11px;
+    line-height: 1.14;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .learn-thinking-graph-board li.is-assumption {
+    background: #fbf0c8;
+  }
+
+  .learn-thinking-graph-board li.is-question {
+    background: #dff0ef;
+  }
+
+  .learn-thinking-graph-empty {
+    position: absolute;
+    left: 12%;
+    top: 16%;
+    display: grid;
+    gap: 8px;
+    width: min(76%, 260px);
+    border: 1px solid #111111;
+    border-radius: 8px;
+    padding: 12px 14px;
+    background: #ffffff;
+  }
+
+  .learn-thinking-graph-empty strong {
+    overflow-wrap: anywhere;
+    font-size: 15px;
+    line-height: 1.12;
+  }
+
+  .learn-thinking-graph-empty p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 11px;
+    line-height: 1.25;
   }
 
   .learn-path-footer {
