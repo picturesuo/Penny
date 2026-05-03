@@ -21,6 +21,9 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /EXAMPLE/);
   assert.match(markup, /Ask Penny/);
   assert.match(markup, /Thinking graph/);
+  assert.match(markup, /STEP 1\.1 OF 15/);
+  assert.match(markup, /Use &quot;Name the program&quot; to answer what YC would actually evaluate/);
+  assert.match(markup, /Do not treat investor interest as stronger than founder proof/);
   assert.match(markup, /1\.1/);
   assert.match(markup, /1\.2/);
   assert.match(markup, /1\.3/);
