@@ -44,6 +44,20 @@ function destinationForShortcutKey(key: string | null): LandingDestination | nul
   return null;
 }
 
+function labelForDestination(destination: LandingDestination): string {
+  if (destination === "QuickNote") {
+    return "Quick note";
+  }
+
+  return destination;
+}
+
+function labelForShortcutKey(key: string): string {
+  const destination = destinationForShortcutKey(key);
+
+  return destination ? labelForDestination(destination) : "Brain";
+}
+
 export function landingShortcutIntent(key: string): LandingShortcutIntent | null {
   const normalizedKey = key.trim().toLowerCase();
 
@@ -110,6 +124,14 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        if (selectedShortcutKey) {
+          event.preventDefault();
+          clearSelectedShortcut();
+        }
+        return;
+      }
+
       if (event.key === "Control") {
         setIsCtrlDown(true);
         return;
@@ -147,7 +169,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleWindowBlur);
     };
-  }, [disabled, onModeSelect]);
+  }, [disabled, onModeSelect, selectedShortcutKey]);
 
   useEffect(() => {
     return () => {
@@ -197,6 +219,11 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
     inputRef.current?.focus();
   }
 
+  function clearSelectedShortcut() {
+    setSelectedShortcutKey(null);
+    inputRef.current?.focus();
+  }
+
   function pulseShortcut(key: string) {
     if (activeShortcutTimeoutRef.current) {
       window.clearTimeout(activeShortcutTimeoutRef.current);
@@ -222,7 +249,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             <p>FOR YOUR THOUGHTS</p>
           </div>
 
-          <div className={selectedShortcutKey ? "landing-prompt-box has-selected-shortcut" : "landing-prompt-box"}>
+          <div className="landing-prompt-box">
             <form className="landing-composer" onSubmit={handleSubmit}>
               <label className="sr-only" htmlFor="landingIdea">
                 Ask Penny anything
@@ -280,11 +307,20 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                       >
                         {shortcut.key}
                       </kbd>
-                      {selectedShortcutKey === shortcut.key ? null : <span>{shortcut.label}</span>}
+                      {selectedShortcutKey === shortcut.key ? (
+                        <span>{labelForShortcutKey(shortcut.key)}</span>
+                      ) : (
+                        <span>{shortcut.label}</span>
+                      )}
                     </button>
                   </div>
                 ))}
               </div>
+              {selectedShortcutKey ? (
+                <button type="button" className="landing-escape-button" onClick={clearSelectedShortcut}>
+                  <kbd>Escape</kbd>
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
