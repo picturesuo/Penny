@@ -149,6 +149,31 @@ test("frontend Ask Penny still uses the live API when it responds", async () => 
   }
 });
 
+test("frontend Ask Penny generic fallback gives the next step instead of prompt scaffolding", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (): Promise<Response> => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  try {
+    const response = await askPenny({
+      question: "Hello?",
+      currentStepTitle: "Name the end state",
+      localContext:
+        "Goal: I want to write an expos essay at Harvard on neoliberalism at Harvard Current step: Name the end state Core idea: Neoliberalism manifests in distinct, citable ways at Harvard suitable for an undergraduate expository essay Keep the end state tied to: Neoliberalism manifests in distinct, citable ways at Harvard suitable for an undergraduate.",
+    });
+
+    assert.equal(response.data.provider, "heuristic");
+    assert.match(response.data.answer, /Next step:/);
+    assert.match(response.data.answer, /Neoliberalism manifests in distinct, citable ways/);
+    assert.doesNotMatch(response.data.answer, /Use the lesson context as the boundary/);
+    assert.ok(response.data.answer.length < 700);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("frontend brain client fetches Brain claim detail from the graph detail route", async () => {
   const claimId = uuidAt(201);
   const calls: FetchCall[] = [];

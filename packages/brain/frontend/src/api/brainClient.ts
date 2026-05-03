@@ -624,13 +624,14 @@ function localAskPennyAnswer(input: {
   }
 
   const step = clipAskPennyText(input.currentStepTitle, 120);
-  const context = clipAskPennyText(input.localContext, 420);
   const clippedQuestion = clipAskPennyText(question, 220);
+  const { goal, coreIdea } = askPennyContextParts(input.localContext);
+  const focus = coreIdea ?? goal ?? clipAskPennyText(input.localContext, 220);
 
   return [
-    `A useful way to answer "${clippedQuestion}" is to keep it inside the current step: ${step}.`,
-    `Use the lesson context as the boundary: ${context}`,
-    "Then state one concrete implication for what you should inspect, revise, or explain next.",
+    `Next step: write one plain sentence for "${step}" that answers the question "${clippedQuestion}" from the lesson you are working on.`,
+    `For this lesson, that sentence should stay focused on: ${focus}.`,
+    "If the sentence still feels vague, add one specific example or source you could inspect next.",
   ].join("\n\n");
 }
 
@@ -646,6 +647,16 @@ function clipAskPennyText(value: string, maxLength: number): string {
   }
 
   return `${compact.slice(0, maxLength - 1).trimEnd()}...`;
+}
+
+function askPennyContextParts(localContext: string): { goal: string | null; coreIdea: string | null } {
+  const goal = localContext.match(/Goal:\s*(.*?)(?:\s+Current step:|\s+Core idea:|$)/i)?.[1];
+  const coreIdea = localContext.match(/Core idea:\s*(.*?)(?:\s+Keep the end state tied to:|$)/i)?.[1];
+
+  return {
+    goal: goal ? clipAskPennyText(goal, 180) : null,
+    coreIdea: coreIdea ? clipAskPennyText(coreIdea, 220) : null,
+  };
 }
 
 export async function saveInlineLearn(input: InlineLearnOutput & {

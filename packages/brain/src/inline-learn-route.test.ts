@@ -156,6 +156,15 @@ test("POST /brain/learn/ask falls back locally when the live provider is rate li
   assert.match(thisWorksPayload.data.answer, /small reasoning loop/);
   assert.match(thisWorksPayload.data.answer, /changes what you should believe or do next/);
   assert.ok(thisWorksPayload.data.answer.length < 700);
+
+  const generic = await askWithRateLimitedProvider("Hello?");
+  const genericPayload = (await generic.json()) as { data: { answer: string } };
+
+  assert.equal(generic.status, 200);
+  assert.match(genericPayload.data.answer, /Next step:/);
+  assert.match(genericPayload.data.answer, /founder evidence, clarity of thought, and problem insight/);
+  assert.doesNotMatch(genericPayload.data.answer, /Use the lesson context as the boundary/);
+  assert.ok(genericPayload.data.answer.length < 700);
 });
 
 test("Ask Penny provider selection prefers Claude then xAI then heuristic", () => {
