@@ -1091,19 +1091,23 @@ function stripPromptPrefix(value: string): string {
 }
 
 function headlineFromText(value: string, maxLength: number): string {
-  const clipped = clipCharacters(value, maxLength).replace(/[.?!:,;]+$/g, "").trim();
+  const clipped = clipHeadline(value, maxLength).replace(/[.?!:,;]+$/g, "").trim();
 
   return clipped || "Untitled document";
 }
 
-function clipCharacters(value: string, maxLength: number): string {
+function clipHeadline(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, " ").trim();
 
   if (normalized.length <= maxLength) {
     return normalized;
   }
 
-  return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
+  const clipped = normalized.slice(0, maxLength - 1);
+  const wordBoundary = clipped.lastIndexOf(" ");
+  const cleanClip = clipped.slice(0, wordBoundary > 32 ? wordBoundary : clipped.length).trimEnd();
+
+  return `${cleanClip}...`;
 }
 
 function clipWords(value: string, maxWords: number): string {
