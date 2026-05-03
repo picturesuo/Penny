@@ -13,6 +13,7 @@ import type {
 } from "../types/brain";
 import { askPenny as askPennyQuestion } from "../api/brainClient";
 import { truncateWords } from "../lib/text";
+import { AskPennyRenderedText } from "./AskPennyRenderedText";
 
 interface LearnWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -543,16 +544,16 @@ function AskPennyPanel({
 
       <div className="ask-penny-thread" role="log" aria-live="polite">
         {messages.map((message, index) => (
-          <p key={`${message.role}-${index}`} className={`ask-penny-message is-${message.role}`}>
+          <div key={`${message.role}-${index}`} className={`ask-penny-message is-${message.role}`}>
             <span>{message.role === "penny" ? "Penny" : message.role === "user" ? "You" : "System"}</span>
-            <strong>{message.text}</strong>
-          </p>
+            <AskPennyRenderedText text={message.text} />
+          </div>
         ))}
         {isRunning ? (
-          <p className="ask-penny-message is-system">
+          <div className="ask-penny-message is-system">
             <span>Penny</span>
-            <strong>Thinking...</strong>
-          </p>
+            <AskPennyRenderedText text="Thinking..." />
+          </div>
         ) : null}
       </div>
 

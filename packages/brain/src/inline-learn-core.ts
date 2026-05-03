@@ -445,12 +445,12 @@ export function createDefaultInlineLearnProvider(
 }
 
 export function createDefaultAskPennyProvider(env: Record<string, string | undefined> = process.env): AskPennyProvider {
-  if (env.ANTHROPIC_API_KEY?.trim()) {
-    return createAnthropicAskPennyProvider(env);
-  }
-
   if (env.XAI_API_KEY?.trim()) {
     return createXaiAskPennyProvider(env);
+  }
+
+  if (env.ANTHROPIC_API_KEY?.trim()) {
+    return createAnthropicAskPennyProvider(env);
   }
 
   return createHeuristicAskPennyProvider();
@@ -647,8 +647,9 @@ export function buildAskPennySystemPrompt(): string {
     "If the user asks a simple factual, arithmetic, or conversational question, answer it plainly before adding any lesson-specific note.",
     "Give the next useful step when the question is vague or conversational.",
     "Be concrete and brief. If the user asks for an example, give one compact example.",
+    "For math, physics, statistics, or quantitative work, use LaTeX delimiters for formulas: inline `$...$` and display `$$...$$`.",
     "Do not say you saved anything. Do not invent citations.",
-    "Use plain text only. Do not mention prompts, boundaries, system messages, instructions, or what a useful answer would do.",
+    "Use plain text plus LaTeX only. Do not mention prompts, boundaries, system messages, instructions, or what a useful answer would do.",
   ].join("\n");
 }
 

@@ -1,0 +1,125 @@
+.ask-penny-rendered {
+  display: grid;
+  gap: 12px;
+  color: #111111;
+  overflow-wrap: anywhere;
+  font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.38;
+}
+
+.ask-penny-message.is-user .ask-penny-rendered {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+}
+
+.ask-penny-rendered-line {
+  min-width: 0;
+}
+
+.ask-penny-rendered-line.is-bullet {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+}
+
+.ask-penny-rendered-line.is-bullet::before {
+  content: "•";
+  margin-top: 1px;
+}
+
+.ask-penny-rendered-line.is-bullet > span:first-child {
+  display: contents;
+}
+
+.ask-penny-rendered-line.is-bullet > span:first-child::first-letter {
+  color: transparent;
+}
+
+.ask-penny-math {
+  display: inline-flex;
+  align-items: baseline;
+  max-width: 100%;
+  margin: 0 0.12em;
+  padding: 0.06em 0.18em;
+  border-radius: 4px;
+  background: rgb(17 17 17 / 0.045);
+  color: #111111;
+  font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+  font-size: 1.08em;
+  line-height: 1.15;
+  vertical-align: baseline;
+}
+
+.ask-penny-math.is-display {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin: 6px 0;
+  padding: 10px 12px;
+  border: 1px solid rgb(17 17 17 / 0.14);
+  background: rgb(255 255 255 / 0.52);
+  font-size: 1.18em;
+  overflow-x: auto;
+}
+
+.ask-penny-frac {
+  display: inline-grid;
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-items: center;
+  min-width: 1.6em;
+  margin: 0 0.12em;
+  vertical-align: middle;
+}
+
+.ask-penny-frac > span:first-child {
+  width: 100%;
+  border-bottom: 1px solid currentColor;
+  padding: 0 0.16em 0.08em;
+  text-align: center;
+}
+
+.ask-penny-frac > span:last-child {
+  padding: 0.08em 0.16em 0;
+  text-align: center;
+}
+
+.ask-penny-root {
+  display: inline-flex;
+  align-items: stretch;
+  margin: 0 0.1em;
+}
+
+.ask-penny-root::before {
+  content: "√";
+  padding-right: 0.08em;
+  font-size: 1.18em;
+  line-height: 1;
+}
+
+.ask-penny-root > span {
+  border-top: 1px solid currentColor;
+  padding: 0.02em 0.12em 0;
+}
+
+.ask-penny-symbol::before {
+  content: attr(class);
+}
+
+.ask-penny-symbol.is-alpha::before { content: "α"; }
+.ask-penny-symbol.is-beta::before { content: "β"; }
+.ask-penny-symbol.is-gamma::before { content: "γ"; }
+.ask-penny-symbol.is-delta::before { content: "δ"; }
+.ask-penny-symbol.is-epsilon::before { content: "ε"; }
+.ask-penny-symbol.is-theta::before { content: "θ"; }
+.ask-penny-symbol.is-lambda::before { content: "λ"; }
+.ask-penny-symbol.is-mu::before { content: "μ"; }
+.ask-penny-symbol.is-pi::before { content: "π"; }
+.ask-penny-symbol.is-rho::before { content: "ρ"; }
+.ask-penny-symbol.is-sigma::before { content: "σ"; }
+.ask-penny-symbol.is-tau::before { content: "τ"; }
+.ask-penny-symbol.is-omega::before { content: "ω"; }
+.ask-penny-symbol.is-Delta::before { content: "Δ"; }
+.ask-penny-symbol.is-Sigma::before { content: "Σ"; }
+.ask-penny-symbol.is-Omega::before { content: "Ω"; }
