@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    --penny-paper: #f9f5ea;
+    --penny-paper: #f7f1e8;
     --penny-highlight: #f4edde;
   }
 
@@ -65,7 +65,7 @@
     place-items: center;
     min-height: calc(100vh - 5px);
     padding: clamp(16px, 5vh, 54px) clamp(16px, 5vw, 72px);
-    background: #ffffff;
+    background: var(--penny-paper);
     color: #2e2e2e;
   }
 
@@ -75,7 +75,7 @@
     width: 100%;
     min-height: min(82vh, 620px);
     border: 0;
-    background: #ffffff;
+    background: var(--penny-paper);
   }
 
   .landing-center {
