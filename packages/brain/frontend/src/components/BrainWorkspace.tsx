@@ -20,6 +20,7 @@ import type {
   ClaimDetailConnection,
   ClaimDetailData,
   ClaimDetailMove,
+  SessionCanvasData,
   SessionCockpitData,
   WorkStructure,
 } from "../types/brain";
@@ -109,6 +110,10 @@ export function BrainWorkspace({
   const claims = selectedDocument ? data?.ideaMap?.claims ?? [] : [];
   const edges = selectedDocument ? data?.ideaMap?.edges ?? [] : [];
   const graphPath = selectedDocument ? data?.graphPath ?? null : null;
+  const initialCanvasData = useMemo(
+    () => (selectedDocument ? canvasDataFromBrainData(data, focusedClaimId) : undefined),
+    [data, focusedClaimId, selectedDocument],
+  );
   const focusedClaim = claims.find((claim) => claim.id === focusedClaimId) ?? null;
   const [claimDetail, setClaimDetail] = useState<ClaimDetailData | null>(null);
   const [claimDetailStatus, setClaimDetailStatus] = useState<ClaimDetailStatus>("idle");
@@ -227,6 +232,7 @@ export function BrainWorkspace({
               <CanvasWorkspace
                 sessionId={selectedDocument.sessionId}
                 focusedClaimId={focusedClaimId}
+                {...(initialCanvasData ? { initialCanvasData } : {})}
                 disabled={isThinking}
                 onNodeAction={onCanvasNodeAction}
               />
@@ -274,6 +280,88 @@ export function BrainWorkspace({
       )}
     </main>
   );
+}
+
+function canvasDataFromBrainData(data: BrainData | null, focusedClaimId: string | null): SessionCanvasData | undefined {
+  if (!data) {
+    return undefined;
+  }
+
+  if (data.graphPath?.nodes.length) {
+    const nodes = data.graphPath.nodes.map((node) => ({
+      id: node.id,
+      kind: node.kind,
+      title: node.label,
+      status: node.status,
+      confidence: node.confidence,
+      x: 104 + node.lane * 340,
+      y: 112 + node.depth * 248,
+      refs: {
+        claimId: node.claimId,
+      },
+    }));
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    const edges = data.graphPath.edges
+      .filter((edge) => nodeIds.has(edge.fromNodeId) && nodeIds.has(edge.toNodeId))
+      .map((edge) => ({
+        id: edge.id,
+        source: edge.fromNodeId,
+        target: edge.toNodeId,
+        kind: edge.kind,
+        label: edge.label,
+      }));
+    const selectedNodeId =
+      nodes.find((node) => node.refs.claimId === focusedClaimId)?.id ??
+      nodes.find((node) => data.graphPath?.focusClaimId && node.refs.claimId === data.graphPath.focusClaimId)?.id ??
+      nodes.find((node) => data.graphPath?.nodes.some((pathNode) => pathNode.id === node.id && pathNode.selected))?.id ??
+      nodes[0]?.id;
+    const recommendedPath = data.graphPath.nodes
+      .filter((node) => node.suggested || node.selected)
+      .sort((left, right) => left.rank - right.rank)
+      .map((node) => node.id);
+
+    return {
+      nodes,
+      edges,
+      ...(recommendedPath.length ? { recommendedPath } : {}),
+      ...(selectedNodeId ? { selectedNodeId } : {}),
+    };
+  }
+
+  const claims = data.ideaMap?.claims ?? [];
+
+  if (!claims.length) {
+    return undefined;
+  }
+
+  const nodes = claims.map((claim) => ({
+    id: `claim:${claim.id}`,
+    kind: claim.kind,
+    title: claim.text,
+    status: claim.status,
+    confidence: claim.confidence ?? null,
+    refs: {
+      claimId: claim.id,
+    },
+  }));
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = (data.ideaMap?.edges ?? [])
+    .map((edge) => ({
+      id: edge.id,
+      source: `claim:${edge.fromClaimId}`,
+      target: `claim:${edge.toClaimId}`,
+      kind: edge.kind,
+      label: edge.label ?? null,
+    }))
+    .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+  const selectedNodeId =
+    (focusedClaimId ? nodes.find((node) => node.refs.claimId === focusedClaimId)?.id : undefined) ?? nodes[0]?.id;
+
+  return {
+    nodes,
+    edges,
+    ...(selectedNodeId ? { selectedNodeId } : {}),
+  };
 }
 
 function QuickNoteDocumentView({
