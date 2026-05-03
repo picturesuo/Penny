@@ -1285,7 +1285,9 @@ function isAskPennyScaffoldAnswer(answer: string): boolean {
 
 function simpleArithmeticAnswer(question: string): string | null {
   const compact = question.trim().toLowerCase();
-  const multiply = compact.match(/^what(?:'s| is)?\s+(-?\d+(?:\.\d+)?)\s*(?:x|\*|times|multiplied by)\s*(-?\d+(?:\.\d+)?)\??$/);
+  const multiply = compact.match(
+    /(?:^|\b)(?:what(?:'s| is)?\s+)?(-?\d+(?:\.\d+)?)\s*(?:x|\*|times|multiplied by)\s*(-?\d+(?:\.\d+)?)(?:\?|$)/,
+  );
 
   if (!multiply) {
     return null;

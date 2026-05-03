@@ -78,6 +78,73 @@ test("POST /brain/learn/ask answers freeform step questions without a claim", as
   assert.match(payload.data.answer, /pricing rule/);
 });
 
+test("POST /brain/learn/ask answers simple direct questions before the provider", async () => {
+  let providerCalled = false;
+  const response = await handleAskPennyRequest(
+    request("http://localhost/brain/learn/ask", {
+      question: "Hello what is 4x4",
+      currentStepTitle: "Name the program",
+      localContext:
+        "Goal: Understand what YC does. Current step: Name the program. Core idea: Separate program value from application scoring.",
+    }),
+    {
+      provider: {
+        name: "anthropic",
+        model: "claude-test",
+        async generate() {
+          providerCalled = true;
+          return {
+            answer: "This should not be used.",
+            provider: "anthropic",
+            model: "claude-test",
+          };
+        },
+      },
+    },
+  );
+  const payload = (await response.json()) as { data: { answer: string; provider: string; model: string | null } };
+
+  assert.equal(response.status, 200);
+  assert.equal(providerCalled, false);
+  assert.equal(payload.data.provider, "heuristic");
+  assert.equal(payload.data.model, null);
+  assert.match(payload.data.answer, /4 x 4 = 16/);
+});
+
+test("POST /brain/learn/ask replaces provider scaffolding with a useful fallback", async () => {
+  const response = await handleAskPennyRequest(
+    request("http://localhost/brain/learn/ask", {
+      question: "Hello?",
+      currentStepTitle: "Name the program",
+      localContext:
+        "Goal: Understand what YC does. Current step: Name the program. Core idea: Separate program value from application scoring.",
+    }),
+    {
+      provider: {
+        name: "anthropic",
+        model: "claude-test",
+        async generate() {
+          return {
+            answer:
+              'A useful way to answer "Hello?" is to keep it inside the current step. Use the lesson context as the boundary. Then state one concrete implication.',
+            provider: "anthropic",
+            model: "claude-test",
+          };
+        },
+      },
+    },
+  );
+  const payload = (await response.json()) as { data: { answer: string; provider: string; model: string | null } };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.provider, "heuristic");
+  assert.equal(payload.data.model, null);
+  assert.match(payload.data.answer, /Next step:/);
+  assert.match(payload.data.answer, /Separate program value from application scoring/);
+  assert.doesNotMatch(payload.data.answer, /A useful way to answer/);
+  assert.doesNotMatch(payload.data.answer, /Use the lesson context as the boundary/);
+});
+
 test("POST /brain/learn/ask falls back locally when the live provider is rate limited", async () => {
   async function askWithRateLimitedProvider(question: string) {
     return handleAskPennyRequest(
