@@ -111,6 +111,34 @@ test("POST /brain/learn/ask answers simple direct questions before the provider"
   assert.match(payload.data.answer, /4 x 4 = 16/);
 });
 
+test("POST /brain/learn/ask falls back to worked LaTeX for technical questions", async () => {
+  const response = await handleAskPennyRequest(
+    request("http://localhost/brain/learn/ask", {
+      question: "How do I solve a physics projectile motion question?",
+      currentStepTitle: "Work the example",
+      localContext: "Goal: understand physics word problems. Current step: Work the example.",
+    }),
+    {
+      provider: {
+        name: "anthropic",
+        model: "claude-test",
+        async generate() {
+          throw new InlineLearnProviderError("xAI Ask Penny request failed: Too Many Requests");
+        },
+      },
+    },
+  );
+  const payload = (await response.json()) as { data: { answer: string; provider: string; model: string | null } };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.provider, "heuristic");
+  assert.equal(payload.data.model, null);
+  assert.match(payload.data.answer, /\$\$x = x_0 \+ v_0t \+ \\frac\{1\}\{2\}at\^2\$\$/);
+  assert.match(payload.data.answer, /knowns/);
+  assert.match(payload.data.answer, /units/);
+  assert.doesNotMatch(payload.data.answer, /Next step:/);
+});
+
 test("POST /brain/learn/ask replaces provider scaffolding with a useful fallback", async () => {
   const response = await handleAskPennyRequest(
     request("http://localhost/brain/learn/ask", {
