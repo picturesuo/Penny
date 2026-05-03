@@ -1,5 +1,5 @@
 import { ArrowUp } from "lucide-react";
-import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type FormEvent, type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type PennyMode } from "../autopilotUx";
 import { PennyMark } from "./PennyMark";
 
@@ -198,6 +198,16 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
     }
   }
 
+  function handlePromptBoxClick(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target;
+
+    if (target instanceof Element && target.closest("button")) {
+      return;
+    }
+
+    inputRef.current?.focus();
+  }
+
   async function runShortcut(key: string) {
     const intent = landingShortcutIntent(key);
 
@@ -249,7 +259,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             <p>FOR YOUR THOUGHTS</p>
           </div>
 
-          <div className="landing-prompt-box">
+          <div className="landing-prompt-box" onClick={handlePromptBoxClick}>
             <form className="landing-composer" onSubmit={handleSubmit}>
               <label className="sr-only" htmlFor="landingIdea">
                 Ask Penny anything
