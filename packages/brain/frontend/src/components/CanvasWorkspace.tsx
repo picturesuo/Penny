@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { fetchSessionCanvas } from "../api/brainClient";
 import type { CanvasNode, CanvasNodeAction, SessionCanvasData } from "../types/brain";
 import { CanvasEdgeLayer, type PositionedCanvasNode } from "./CanvasEdgeLayer";
@@ -36,6 +36,8 @@ export function CanvasWorkspace({
     initialCanvasData ? "ready" : "idle",
   );
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ pointerId: 0, x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
   useEffect(() => {
     if (!initialCanvasData) {
@@ -99,6 +101,39 @@ export function CanvasWorkspace({
   const isEmpty = loadState !== "loading" && nodes.length === 0;
   const selectedActions = selectedNode?.actions?.length ? selectedNode.actions : defaultCanvasActions;
 
+  function handleBoardPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    const target = event.target;
+
+    if (!(target instanceof Element) || target.closest("button, a, input, textarea, select")) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panStartRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: event.currentTarget.scrollLeft,
+      scrollTop: event.currentTarget.scrollTop,
+    };
+    setIsPanning(true);
+  }
+
+  function handleBoardPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!isPanning || event.pointerId !== panStartRef.current.pointerId) {
+      return;
+    }
+
+    event.currentTarget.scrollLeft = panStartRef.current.scrollLeft - (event.clientX - panStartRef.current.x);
+    event.currentTarget.scrollTop = panStartRef.current.scrollTop - (event.clientY - panStartRef.current.y);
+  }
+
+  function stopBoardPan(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerId === panStartRef.current.pointerId) {
+      setIsPanning(false);
+    }
+  }
+
   return (
     <section className="canvas-workspace" aria-label="Canvas workspace">
       <header className="canvas-toolbar">
@@ -131,7 +166,14 @@ export function CanvasWorkspace({
       ) : null}
 
       <div className="canvas-stage">
-        <div className="canvas-board" aria-label="Thinking canvas">
+        <div
+          className={`canvas-board${isPanning ? " is-panning" : ""}`}
+          aria-label="Thinking canvas"
+          onPointerDown={handleBoardPointerDown}
+          onPointerMove={handleBoardPointerMove}
+          onPointerUp={stopBoardPan}
+          onPointerCancel={stopBoardPan}
+        >
           {isEmpty ? (
             <div className="canvas-empty-state">
               <strong>{loadState === "error" ? "Canvas unavailable" : "Canvas starts after the first saved idea"}</strong>
@@ -142,7 +184,7 @@ export function CanvasWorkspace({
               </p>
             </div>
           ) : (
-            <>
+            <div className="canvas-plane" style={{ width: canvasSize.width, height: canvasSize.height }}>
               <CanvasEdgeLayer
                 edges={canvasData.edges}
                 nodes={nodes}
@@ -161,7 +203,7 @@ export function CanvasWorkspace({
                   onAction={disabled ? () => undefined : onNodeAction}
                 />
               ))}
-            </>
+            </div>
           )}
         </div>
 
@@ -251,13 +293,32 @@ function selectedNodeFrom(canvas: SessionCanvasData, focusedClaimId: string | nu
 }
 
 function layoutCanvasNodes(nodes: CanvasNode[]): PositionedCanvasNode[] {
-  return nodes.map((node, index) => ({
+  const positioned = nodes.map((node, index) => ({
     ...node,
     ...gridPosition(index),
     ...(typeof node.x === "number" ? { x: node.x } : {}),
     ...(typeof node.y === "number" ? { y: node.y } : {}),
     width: nodeWidth,
     height: nodeHeight,
+  }));
+
+  if (positioned.length === 0) {
+    return positioned;
+  }
+
+  const minX = Math.min(...positioned.map((node) => node.x));
+  const minY = Math.min(...positioned.map((node) => node.y));
+  const offsetX = minX < canvasPadding ? canvasPadding - minX : 0;
+  const offsetY = minY < canvasPadding ? canvasPadding - minY : 0;
+
+  if (offsetX === 0 && offsetY === 0) {
+    return positioned;
+  }
+
+  return positioned.map((node) => ({
+    ...node,
+    x: node.x + offsetX,
+    y: node.y + offsetY,
   }));
 }
 
