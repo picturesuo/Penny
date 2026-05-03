@@ -297,7 +297,8 @@
   }
 
   .landing-shortcuts button.is-selected {
-    border-color: rgb(46 46 46 / 0.26);
+    border-color: transparent;
+    padding: 0;
     background: transparent;
     box-shadow: none;
   }
@@ -351,23 +352,14 @@
     display: inline-flex;
     align-items: center;
     border: 0;
-    padding: 0;
+    padding: 2px 0;
     background: transparent;
-    color: #303030;
-  }
-
-  .landing-escape-button kbd {
-    display: inline-grid;
-    place-items: center;
-    min-width: 54px;
-    height: 24px;
-    border: 1px solid rgb(46 46 46 / 0.19);
-    border-radius: 5px;
-    background: rgb(246 246 246 / 0.72);
-    box-shadow: 0 1px 1px rgb(46 46 46 / 0.08);
+    color: rgb(46 46 46 / 0.42);
     font-family: Georgia, Cambria, "Times New Roman", Times, serif;
     font-size: 11px;
     font-weight: 700;
+    line-height: 1;
+    text-transform: lowercase;
   }
 
   .newspaper-header {

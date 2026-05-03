@@ -317,8 +317,8 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                 ))}
               </div>
               {selectedShortcutKey ? (
-                <button type="button" className="landing-escape-button" onClick={clearSelectedShortcut}>
-                  <kbd>Escape</kbd>
+                <button type="button" className="landing-escape-button" onClick={clearSelectedShortcut} aria-label="Clear selected mode">
+                  esc
                 </button>
               ) : null}
             </div>
