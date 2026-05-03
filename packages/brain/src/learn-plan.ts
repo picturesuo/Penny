@@ -114,6 +114,16 @@ export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan 
         "That rule names what observation, source, counterexample, or user signal would change the claim.",
         "Without this rule, Verify becomes confirmation-seeking.",
       ]), ["Name disconfirming evidence.", "Name confirming evidence.", "Decide the revision threshold."], "If the expected signal is absent, weaken the claim; if the opposite signal appears, revise it.", "Revision threshold", "A balance scale with evidence that would support the claim on one side and evidence that would revise it on the other."),
+      subgroup("group-4-subgroup-3", "Run a counterexample", paragraph([
+        "A useful counterexample is small enough to inspect but strong enough to threaten the claim.",
+        `Test the lesson against ${clipText(questions[1] ?? questions[0] ?? "the most plausible opposite case", 150)} before treating it as learned.`,
+        "This gives Ask Penny and Verify a narrow local context instead of reopening the whole topic.",
+      ]), ["Pick one counterexample.", "Apply the revision rule.", "Keep only the changed claim visible."], "Counterexample pass: one case, one expected failure, one decision about whether the claim survives.", "Counterexample pass", "A single counterexample card passing through the revision rule and producing keep, weaken, or revise."),
+      subgroup("group-4-subgroup-4", "Mark what still needs evidence", paragraph([
+        "The check ends by separating what the learner now understands from what still requires evidence.",
+        "This prevents a good explanation from pretending to be verified fact.",
+        "The remaining evidence need becomes the next Check or Verify target in the same thinking graph.",
+      ]), ["Name understood claims.", "Name evidence gaps.", "Send unresolved facts to Check or Verify."], "Evidence gap: a claim can be well explained and still need a source, measurement, or real-world test.", "Evidence ledger", "A ledger with understood claims on the left and unresolved evidence needs on the right."),
     ]),
     group("group-5", "Finish with a usable result", "The final expert move is to compress the lesson into a result Penny can remember, reuse, and continue from.", [
       subgroup("group-5-subgroup-1", "Produce the final takeaway", paragraph([
@@ -126,6 +136,16 @@ export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan 
         `A good next question is: ${clipText(questions[0] ?? input.explorationPaths[0]?.prompt ?? "Which assumption should be checked first?", 180)}`,
         "That question gives the next Learn, Check, or Verify move a real target.",
       ]), ["Use the unresolved weak point.", "Point to a claim or assumption.", "Make the next action obvious."], "Next: turn the unresolved question into a Check or Verify target.", "Next-step arrow", "An arrow from the saved pattern to the next question and then into Check or Verify."),
+      subgroup("group-5-subgroup-3", "Save the graph hook", paragraph([
+        "The final output should point back to the claim, assumption, or concept it changes.",
+        "That hook is what lets a later session resume the work without replaying the whole lesson.",
+        "If the hook is missing, the result is just prose instead of durable Penny material.",
+      ]), ["Choose the graph node.", "Attach the takeaway.", "Keep the unresolved edge visible."], "Graph hook: save the takeaway beside the exact claim or assumption it updates, not beside the whole source prompt.", "Graph hook", "A takeaway card attached to one graph node with an unresolved evidence edge still visible."),
+      subgroup("group-5-subgroup-4", "Close the category context", paragraph([
+        "When the learner leaves this numbered category, the local Ask Penny context should close with it.",
+        "The next category starts fresh so the assistant does not keep spending attention on old examples.",
+        "The durable output is the takeaway and graph hook, not the transient chat thread.",
+      ]), ["End the local context.", "Carry forward only saved takeaways.", "Start the next category clean."], "Context close: keep the saved result, drop the category chat, and move forward with a smaller prompt.", "Context handoff", "A closed category folder handing only a takeaway card into the next numbered category."),
     ]),
   ];
 
