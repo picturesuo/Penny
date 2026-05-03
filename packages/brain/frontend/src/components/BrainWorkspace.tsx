@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Archive, BookOpen, CheckCircle2, Folder, GraduationCap, Hammer, Plus, RotateCcw, Save } from "lucide-react";
+import { Archive, BookOpen, Folder } from "lucide-react";
 import type {
   AutopilotTickData,
   BrainClaim,
@@ -26,7 +26,6 @@ import { fetchClaimDetail, fetchSessionNote, saveSessionNote } from "../api/brai
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
 import { CanvasWorkspace } from "./CanvasWorkspace";
-import { Composer } from "./Composer";
 
 type ClaimDetailStatus = "idle" | "loading" | "ready" | "error";
 
@@ -76,7 +75,6 @@ interface BrainHierarchySidebarProps {
   archivedRecents?: BrainRecentIdea[];
   onSelectDocument: (sessionId: string) => void;
   onSelectQuickNote: (recent: BrainRecentIdea) => void;
-  onNewThought: () => void;
   onQuickNoteCreate?: ((rawIdea: string) => Promise<void>) | undefined;
   onQuickNoteAction?:
     | ((recent: BrainRecentIdea, action: "build" | "brain" | "check" | "learn" | "archive" | "restore") => Promise<void>)
@@ -99,7 +97,6 @@ export function BrainWorkspace({
   onSelectDocument,
   onBackToLibrary,
   onNewThought,
-  onSeed,
   onQuickNoteCreate,
   onQuickNoteAction,
   onClaimSelect,
@@ -188,7 +185,6 @@ export function BrainWorkspace({
         archivedRecents={archivedRecents}
         onSelectDocument={handleSelectDocument}
         onSelectQuickNote={(recent) => setSelectedQuickNoteId(recent.id)}
-        onNewThought={onNewThought}
         onQuickNoteCreate={onQuickNoteCreate}
         onQuickNoteAction={handleQuickNoteAction}
       />
@@ -268,18 +264,10 @@ export function BrainWorkspace({
           </aside>
         </>
       ) : (
-        <>
-          <BrainRecordLog
-            documentsData={documentsData}
-            status={status}
-            isThinking={isThinking}
-            onSelectDocument={handleSelectDocument}
-            onSeed={onSeed}
-          />
-          <aside className="brain-graph-quarter" aria-label="Brain graph preview">
-            <DocumentMemoryGraph graph={documentsData?.graph ?? null} />
-          </aside>
-        </>
+        <BrainRecordLog
+          documentsData={documentsData}
+          onSelectDocument={handleSelectDocument}
+        />
       )}
     </main>
   );
@@ -582,12 +570,10 @@ function BrainHierarchySidebar({
   archivedRecents = [],
   onSelectDocument,
   onSelectQuickNote,
-  onNewThought,
   onQuickNoteCreate,
   onQuickNoteAction,
 }: BrainHierarchySidebarProps) {
   const folders = sidebar?.folders ?? [];
-  const suggestedActions = sidebar?.quickNotes ?? [];
   const selectedFolderId =
     folders.find((folder) => folder.documents.some((document) => document.sessionId === selectedSessionId))?.id ??
     folders[0]?.id ??
@@ -613,20 +599,8 @@ function BrainHierarchySidebar({
 
   return (
     <aside className="brain-hierarchy-sidebar" aria-label="Brain sidebar">
-      <div className="brain-sidebar-head">
-        <div>
-          <span>Brain</span>
-          <strong>Brain</strong>
-        </div>
-        <button type="button" className="brain-sidebar-new" onClick={onNewThought} aria-label="New thought">
-          <Plus size={15} aria-hidden="true" />
-        </button>
-      </div>
       <section className="brain-sidebar-section" aria-label="Quick notes">
-        <div className="brain-sidebar-section-head">
-          <Folder size={15} aria-hidden="true" />
-          <strong>Quick Notes</strong>
-        </div>
+        <div className="brain-sidebar-section-head is-quiet">Capture a quick note</div>
         <div className="brain-tree" role="tree" aria-label="Quick notes folder">
           <div className="brain-tree-folder" role="treeitem" aria-expanded="true">
             <div className="brain-tree-row is-folder">
@@ -641,20 +615,17 @@ function BrainHierarchySidebar({
                   onChange={(event) => setQuickNoteDraft(event.target.value)}
                   placeholder="Capture a quick note."
                   rows={2}
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      event.preventDefault();
+                      void handleQuickNoteCreate();
+                    }
+                  }}
                 />
-                <button
-                  type="button"
-                  className="brain-sidebar-new"
-                  disabled={!onQuickNoteCreate || !quickNoteDraft.trim()}
-                  onClick={handleQuickNoteCreate}
-                  aria-label="Add quick note"
-                >
-                  <Plus size={15} aria-hidden="true" />
-                </button>
               </div>
               {recents.length > 0 ? (
                 <div className="brain-quick-list">
-                  {recents.slice(0, 12).map((recent) => (
+                  {recents.slice(0, 3).map((recent) => (
                     <QuickNoteRow
                       key={recent.id}
                       recent={recent}
@@ -695,29 +666,6 @@ function BrainHierarchySidebar({
           </div>
         ) : null}
       </section>
-      <section className="brain-sidebar-section" aria-label="Suggested next actions">
-        <div className="brain-sidebar-section-head">
-          <CheckCircle2 size={15} aria-hidden="true" />
-          <strong>Next Actions</strong>
-        </div>
-        {suggestedActions.length > 0 ? (
-          <div className="brain-quick-list">
-            {suggestedActions.map((note) => (
-              <button
-                key={note.id}
-                type="button"
-                className="brain-quick-note"
-                onClick={() => onSelectDocument(note.sessionId)}
-              >
-                <span title={note.text}>{truncateWords(note.text, 9)}</span>
-                <small>{note.meta}</small>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="brain-sidebar-muted">No suggested actions yet.</p>
-        )}
-      </section>
       <section className="brain-sidebar-section" aria-label="Folders">
         <div className="brain-sidebar-section-head">
           <Folder size={15} aria-hidden="true" />
@@ -741,7 +689,7 @@ function BrainHierarchySidebar({
                   </button>
                   {open ? (
                     <div className="brain-tree-children">
-                      {folder.documents.map((document) => {
+                      {folder.documents.slice(0, 3).map((document) => {
                         const active = document.sessionId === selectedSessionId;
 
                         return (
@@ -802,67 +750,16 @@ function QuickNoteRow({
         <span title={recent.rawIdea}>{truncateWords(recent.rawIdea, 9)}</span>
         <small>{archived ? archiveMeta(recent) : formatDate(recent.updatedAt ?? recent.createdAt)}</small>
       </button>
-      <div className="quick-note-actions" aria-label={`Actions for ${truncateWords(recent.rawIdea, 5)}`}>
-        {archived ? (
-          <button
-            type="button"
-            disabled={!onAction}
-            onClick={() => void onAction?.(recent, "restore")}
-            aria-label="Restore quick note"
-            title="Restore"
-          >
-            <RotateCcw size={13} aria-hidden="true" />
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              disabled={!onAction}
-              onClick={() => void onAction?.(recent, "build")}
-              aria-label="Build quick note"
-              title="Build"
-            >
-              <Hammer size={13} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              disabled={!onAction}
-              onClick={() => void onAction?.(recent, "brain")}
-              aria-label="Add quick note to Brain"
-              title="Add to Brain"
-            >
-              <Save size={13} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              disabled={!onAction}
-              onClick={() => void onAction?.(recent, "check")}
-              aria-label="Send quick note to Check"
-              title="Send to Check"
-            >
-              <CheckCircle2 size={13} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              disabled={!onAction}
-              onClick={() => void onAction?.(recent, "learn")}
-              aria-label="Learn quick note"
-              title="Learn"
-            >
-              <GraduationCap size={13} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              disabled={!onAction}
-              onClick={() => void onAction?.(recent, "archive")}
-              aria-label="Archive quick note"
-              title="Archive"
-            >
-              <Archive size={13} aria-hidden="true" />
-            </button>
-          </>
-        )}
-      </div>
+      {archived ? (
+        <button
+          type="button"
+          className="quick-note-restore"
+          disabled={!onAction}
+          onClick={() => void onAction?.(recent, "restore")}
+        >
+          Restore
+        </button>
+      ) : null}
     </article>
   );
 }
@@ -877,48 +774,242 @@ function archiveMeta(recent: BrainRecentIdea): string {
 
 function BrainRecordLog({
   documentsData,
-  status,
-  isThinking,
   onSelectDocument,
-  onSeed,
 }: {
   documentsData: BrainDocumentsData | null;
-  status: string;
-  isThinking: boolean;
   onSelectDocument: (sessionId: string) => void;
-  onSeed: (rawIdea: string) => Promise<void>;
 }) {
   const documents = documentsData?.documents ?? [];
+  const [searchQuery, setSearchQuery] = useState("");
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const recentClaims = useMemo(() => recentClaimRows(documents), [documents]);
+  const searchResults = useMemo(() => {
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    return searchDocumentRows(documents, normalizedQuery);
+  }, [documents, normalizedQuery]);
 
   return (
     <section className="brain-library-panel" aria-label="Brain document library">
       <div className="brain-library-head">
         <div>
-          <span>Brain</span>
           <h1>Documents</h1>
         </div>
-        <div className="brain-library-stats" aria-label="Brain document totals">
-          <span>{documentsData?.meta.documentCount ?? 0} docs</span>
-          <span>{documentsData?.meta.claimCount ?? 0} claims</span>
-          <span>{documentsData?.meta.edgeCount ?? 0} links</span>
-        </div>
       </div>
-      <section className="brain-new-thought" aria-label="New thought">
-        <Composer disabled={isThinking} status={status} onSubmit={onSeed} />
+      <section className="brain-search-panel" aria-label="Search through your thinking">
+        <label className="sr-only" htmlFor="brainDocumentSearch">
+          Search through your thinking
+        </label>
+        <input
+          id="brainDocumentSearch"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search through your thinking"
+          type="search"
+        />
+        <p>Search scans your documents and claims for matching keywords.</p>
       </section>
-      <div className="document-log-table" aria-label="Document log">
-        {documents.length > 0 ? (
-          documents.map((document) => (
-            <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
-          ))
-        ) : (
-          <article className="document-empty-state">
-            <strong>No docs yet</strong>
-            <span>Start with a thought and Penny will create the first record.</span>
-          </article>
-        )}
-      </div>
+      {normalizedQuery ? (
+        <section className="brain-search-results" aria-label="Search results">
+          <div className="brain-section-title">
+            <strong>Search results</strong>
+            <span>{searchResults.length} matches</span>
+          </div>
+          {searchResults.length > 0 ? (
+            <div className="document-log-table">
+              {searchResults.map((result) => (
+                <SearchResultRow key={result.id} result={result} onSelectDocument={onSelectDocument} />
+              ))}
+            </div>
+          ) : (
+            <article className="document-empty-state">
+              <strong>No matches</strong>
+              <span>Try a different keyword or phrase.</span>
+            </article>
+          )}
+        </section>
+      ) : (
+        <section className="brain-recent-claims" aria-label="Most recent claims">
+          <div className="brain-section-title">
+            <strong>Most recent claims</strong>
+            <span>{recentClaims.length} shown</span>
+          </div>
+          {recentClaims.length > 0 ? (
+            <div className="claim-log-table">
+              {recentClaims.map((claim) => (
+                <RecentClaimRow key={claim.id} claim={claim} onSelectDocument={onSelectDocument} />
+              ))}
+            </div>
+          ) : documents.length > 0 ? (
+            <div className="document-log-table" aria-label="Document log">
+              {documents.map((document) => (
+                <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
+              ))}
+            </div>
+          ) : (
+            <article className="document-empty-state">
+              <strong>No docs yet</strong>
+              <span>Start with a thought and Penny will create the first record.</span>
+            </article>
+          )}
+        </section>
+      )}
+      {normalizedQuery ? null : (
+        <section className="brain-recent-documents" aria-label="Recent documents">
+          <div className="brain-section-title">
+            <strong>Recent documents</strong>
+            <span>{documentsData?.meta.documentCount ?? documents.length} docs</span>
+          </div>
+          <div className="document-log-table" aria-label="Document log">
+            {documents.length > 0 ? (
+              documents.map((document) => (
+                <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
+              ))
+            ) : null}
+          </div>
+        </section>
+      )}
     </section>
+  );
+}
+
+interface ClaimRow {
+  id: string;
+  sessionId: string;
+  documentTitle: string;
+  text: string;
+  kind: string;
+  status: string;
+  updatedAt: string;
+}
+
+interface SearchResult {
+  id: string;
+  sessionId: string;
+  title: string;
+  body: string;
+  type: "Document" | "Claim";
+  updatedAt: string;
+}
+
+function recentClaimRows(documents: BrainDocumentSummary[]): ClaimRow[] {
+  return documents
+    .flatMap((document) =>
+      documentClaims(document).map((claim, index) => ({
+        id: `${document.id}-${index}-${claim.text}`,
+        sessionId: document.sessionId,
+        documentTitle: document.title,
+        text: claim.text,
+        kind: claim.kind,
+        status: claim.status,
+        updatedAt: document.updatedAt,
+      })),
+    )
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+    .slice(0, 18);
+}
+
+function searchDocumentRows(documents: BrainDocumentSummary[], query: string): SearchResult[] {
+  return documents
+    .flatMap((document) => {
+      const results: SearchResult[] = [];
+      const documentText = [document.title, document.originalIdea, document.mainClaim?.text, ...document.finalRecommendations]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      if (documentText.includes(query)) {
+        results.push({
+          id: `${document.id}-document`,
+          sessionId: document.sessionId,
+          title: document.title,
+          body: document.originalIdea ?? document.mainClaim?.text ?? "Document",
+          type: "Document",
+          updatedAt: document.updatedAt,
+        });
+      }
+
+      documentClaims(document).forEach((claim, index) => {
+        if (claim.text.toLowerCase().includes(query)) {
+          results.push({
+            id: `${document.id}-claim-${index}`,
+            sessionId: document.sessionId,
+            title: claim.text,
+            body: document.title,
+            type: "Claim",
+            updatedAt: document.updatedAt,
+          });
+        }
+      });
+
+      return results;
+    })
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+}
+
+function documentClaims(document: BrainDocumentSummary): Array<{ text: string; kind: string; status: string }> {
+  const claims = [document.mainClaim, ...document.strongestOptions, ...document.rejectedOptions].filter((claim): claim is NonNullable<typeof claim> =>
+    Boolean(claim?.text?.trim()),
+  );
+  const seen = new Set<string>();
+
+  return claims.filter((claim) => {
+    const key = claim.text.trim().toLowerCase();
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function RecentClaimRow({
+  claim,
+  onSelectDocument,
+}: {
+  claim: ClaimRow;
+  onSelectDocument: (sessionId: string) => void;
+}) {
+  return (
+    <button type="button" className="claim-log-row" onClick={() => onSelectDocument(claim.sessionId)}>
+      <span className="doc-kind">Claim</span>
+      <span>
+        <strong title={claim.text}>{truncateWords(claim.text, 18)}</strong>
+        <small title={claim.documentTitle}>{claim.documentTitle}</small>
+      </span>
+      <span className="doc-log-meta">
+        <strong>{formatLabel(claim.kind)}</strong>
+        <small>{formatLabel(claim.status)}</small>
+      </span>
+      <time>{formatDate(claim.updatedAt)}</time>
+    </button>
+  );
+}
+
+function SearchResultRow({
+  result,
+  onSelectDocument,
+}: {
+  result: SearchResult;
+  onSelectDocument: (sessionId: string) => void;
+}) {
+  return (
+    <button type="button" className="document-log-row" onClick={() => onSelectDocument(result.sessionId)}>
+      <span className="doc-kind">{result.type}</span>
+      <span>
+        <strong title={result.title}>{truncateWords(result.title, 18)}</strong>
+        <small title={result.body}>{truncateWords(result.body, 18)}</small>
+      </span>
+      <span className="doc-log-meta">
+        <strong>Open</strong>
+        <small>{formatLabel(result.type)}</small>
+      </span>
+      <time>{formatDate(result.updatedAt)}</time>
+    </button>
   );
 }
 
