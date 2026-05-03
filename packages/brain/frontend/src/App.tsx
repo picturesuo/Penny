@@ -986,6 +986,7 @@ function builtInYcMockDocument(): BrainDocumentSummary {
       sphereId: "learning",
     },
     title: YC_MOCK_LEARN_DOC_TITLE,
+    description: "YC application signals: founders, insight, ideas, and investor traction in a mock learning event.",
     status: "open",
     originalIdea: YC_MOCK_LEARN_RECENT.rawIdea,
     mainClaim: {

@@ -1231,6 +1231,8 @@ function buildLearnSessionOutput(
   const questions = claims.filter((claim) => isKind(claim, "question"));
   const structuredClaims = claims.filter((claim) => !isKind(claim, "assumption") && !isKind(claim, "question"));
   const coreIdea = firstText(
+    selectedDocument?.title,
+    selectedDocument?.description,
     data?.source?.rawText,
     selectedDocument?.originalIdea,
     claims.find((claim) => claim.seedId === "claim.seed")?.text,

@@ -179,8 +179,8 @@ function CheckBrainDocumentRow({
       <span className="check-brain-doc-kind">Doc {shortId(document.sessionId)}</span>
       <span>
         <strong title={document.title}>{truncateWords(document.title, 12)}</strong>
-        <small title={document.mainClaim?.text ?? document.originalIdea ?? ""}>
-          {truncateWords(document.mainClaim?.text ?? document.originalIdea ?? "No main claim yet", 16)}
+        <small title={document.description}>
+          {truncateWords(document.description, 16)}
         </small>
       </span>
       <span className="check-brain-doc-meta">

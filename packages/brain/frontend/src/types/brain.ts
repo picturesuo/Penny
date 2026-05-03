@@ -162,6 +162,7 @@ export interface BrainDocumentSummary {
   sessionId: string;
   scope: BrainScope;
   title: string;
+  description: string;
   status: string;
   originalIdea: string | null;
   mainClaim: BrainDocumentClaim | null;

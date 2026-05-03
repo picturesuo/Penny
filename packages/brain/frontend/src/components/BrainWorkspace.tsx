@@ -966,7 +966,7 @@ function searchDocumentRows(documents: BrainDocumentSummary[], query: string): S
   return documents
     .flatMap((document) => {
       const results: SearchResult[] = [];
-      const documentText = [document.title, document.originalIdea, document.mainClaim?.text, ...document.finalRecommendations]
+      const documentText = [document.title, document.description, document.originalIdea, document.mainClaim?.text, ...document.finalRecommendations]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -976,7 +976,7 @@ function searchDocumentRows(documents: BrainDocumentSummary[], query: string): S
           id: `${document.id}-document`,
           sessionId: document.sessionId,
           title: document.title,
-          body: document.originalIdea ?? document.mainClaim?.text ?? "Document",
+          body: document.description,
           type: "Document",
           updatedAt: document.updatedAt,
         });
@@ -1052,8 +1052,8 @@ function DocumentLogRow({
     <button type="button" className="document-log-row is-document-summary" onClick={() => onSelectDocument(document.sessionId)}>
       <span className="document-log-copy">
         <strong title={document.title}>{truncateWords(document.title, 28)}</strong>
-        <small title={document.mainClaim?.text ?? document.originalIdea ?? ""}>
-          {truncateWords(document.mainClaim?.text ?? document.originalIdea ?? "No summary yet.", 34)}
+        <small title={document.description}>
+          {truncateWords(document.description, 34)}
         </small>
       </span>
       <time>{formatDate(document.updatedAt)}</time>
@@ -1076,8 +1076,8 @@ function DocumentHeader({
         <span>{shortId(document.sessionId)}</span>
       </div>
       <h1 title={document.title}>{document.title}</h1>
-      <p title={document.originalIdea ?? document.mainClaim?.text ?? ""}>
-        {truncateWords(document.originalIdea ?? document.mainClaim?.text ?? "No original idea recorded.", 26)}
+      <p title={document.description}>
+        {truncateWords(document.description, 26)}
       </p>
       <div className="document-facts">
         <span>Created {formatDate(document.createdAt)}</span>

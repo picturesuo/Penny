@@ -37,6 +37,7 @@ export type BrainDocumentSummary = {
   sessionId: string;
   scope: BrainScope;
   title: string;
+  description: string;
   status: SessionRow["status"];
   originalIdea: string | null;
   mainClaim: BrainDocumentClaim | null;
@@ -328,13 +329,21 @@ function documentSummary(
     ...state.claims.map((claim) => new Date(claim.createdAt)),
   ]);
   const artifactPayload = latestArtifact ? objectRecord(latestArtifact.payload) : {};
-  const title = session.title?.trim() || mainClaim?.text || originalIdea || "Untitled doc";
+  const title = generatedDocumentTitle({ mainClaim, originalIdea, latestArtifact, lastMove, session });
+  const description = generatedDocumentDescription({
+    mainClaim,
+    originalIdea,
+    latestArtifact,
+    strongestOptions: strongestOptions(state.claims, mainClaim?.id ?? null),
+    nextActions: nextActions(artifactPayload, state.claims, state.edges),
+  });
 
   return {
     id: session.id,
     sessionId: session.id,
     scope: scopeValues(session),
     title,
+    description,
     status: session.status,
     originalIdea,
     mainClaim,
@@ -370,6 +379,58 @@ function documentSummary(
     createdAt: session.createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
   };
+}
+
+function generatedDocumentTitle({
+  mainClaim,
+  originalIdea,
+  latestArtifact,
+  lastMove,
+  session,
+}: {
+  mainClaim: BrainDocumentClaim | null;
+  originalIdea: string | null;
+  latestArtifact: ArtifactRow | null;
+  lastMove: MoveRow | null;
+  session: SessionRow;
+}): string {
+  const candidate = firstMeaningfulText(
+    mainClaim?.text,
+    latestArtifact?.title,
+    originalIdea,
+    lastMove?.summary,
+    session.title,
+    "Untitled document",
+  );
+  const cleaned = stripPromptPrefix(firstSentence(candidate));
+
+  return headlineFromText(cleaned, 86);
+}
+
+function generatedDocumentDescription({
+  mainClaim,
+  originalIdea,
+  latestArtifact,
+  strongestOptions,
+  nextActions,
+}: {
+  mainClaim: BrainDocumentClaim | null;
+  originalIdea: string | null;
+  latestArtifact: ArtifactRow | null;
+  strongestOptions: BrainDocumentClaim[];
+  nextActions: string[];
+}): string {
+  const candidate = firstMeaningfulText(
+    latestArtifact?.summary,
+    mainClaim?.text,
+    originalIdea,
+    strongestOptions[0]?.text,
+    nextActions[0],
+    "A saved Penny document.",
+  );
+  const cleaned = stripPromptPrefix(firstSentence(candidate));
+
+  return ensureTerminalPunctuation(clipWords(cleaned, 34));
 }
 
 function claimSlice(claim: ClaimRow, version: ClaimVersionRow): BrainDocumentClaim & { sessionId: string } {
@@ -1006,6 +1067,63 @@ function objectRecord(value: unknown): Record<string, unknown> {
 
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function firstMeaningfulText(...values: Array<string | null | undefined>): string {
+  return values.find((value) => value?.trim())?.trim() ?? "";
+}
+
+function firstSentence(value: string): string {
+  return value
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/(?<=[.!?])\s+/)[0]
+    ?.trim() ?? "";
+}
+
+function stripPromptPrefix(value: string): string {
+  return value
+    .replace(/^core idea:\s*/i, "")
+    .replace(/^i want to\s+(?:learn|write|build|make|create|understand|explore)\s+/i, "")
+    .replace(/^i want\s+/i, "")
+    .replace(/^learn\s+/i, "")
+    .trim();
+}
+
+function headlineFromText(value: string, maxLength: number): string {
+  const clipped = clipCharacters(value, maxLength).replace(/[.?!:,;]+$/g, "").trim();
+
+  return clipped || "Untitled document";
+}
+
+function clipCharacters(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}...`;
+}
+
+function clipWords(value: string, maxWords: number): string {
+  const words = value.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+
+  if (words.length <= maxWords) {
+    return words.join(" ");
+  }
+
+  return `${words.slice(0, maxWords).join(" ")}...`;
+}
+
+function ensureTerminalPunctuation(value: string): string {
+  const trimmed = value.trim();
+
+  if (!trimmed || /[.!?]$/.test(trimmed) || trimmed.endsWith("...")) {
+    return trimmed;
+  }
+
+  return `${trimmed}.`;
 }
 
 function uniqueStrings(values: string[]): string[] {
