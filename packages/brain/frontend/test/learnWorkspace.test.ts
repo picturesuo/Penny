@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LearnWorkspace, visibleLearningPathSteps } from "../src/components/LearnWorkspace";
+import { LearnWorkspace, askPennyContextForStep, visibleLearningPathSteps } from "../src/components/LearnWorkspace";
 
 test("LearnWorkspace first screen opens directly to the lesson view", () => {
   const markup = renderToStaticMarkup(
@@ -238,6 +238,41 @@ test("LearnWorkspace keeps the active learning path at the top of a five-step wi
   );
 });
 
+test("Ask Penny context stays inside the active main learning category", () => {
+  const stepOneLesson = lesson("Name the program", "Frame what YC is", ["name YC", "separate program from investors"], "YC is an accelerator.");
+  const stepTwoLesson = lesson("Read people signal", "Understand the people signal", ["founder learning rate"], "People signal means founder evidence.");
+  const pageData = {
+    goal: "Understand YC.",
+    progressPercent: 0,
+    steps: [
+      {
+        id: "group-1",
+        title: "Frame what YC is",
+        expanded: true,
+        substeps: [{ id: "group-1-subgroup-1", title: stepOneLesson.title, isActive: true, lesson: stepOneLesson }],
+      },
+      {
+        id: "group-2",
+        title: "Understand the people signal",
+        expanded: false,
+        substeps: [{ id: "group-2-subgroup-1", title: stepTwoLesson.title, isActive: false, lesson: stepTwoLesson }],
+      },
+    ],
+    currentStep: stepOneLesson,
+    askPenny: { suggestedQuestions: [], placeholder: "Ask..." },
+  };
+
+  const firstContext = askPennyContextForStep(pageData, pageData.steps[0], stepOneLesson, "YC application guide source text");
+  const secondContext = askPennyContextForStep(pageData, pageData.steps[1], stepTwoLesson, "YC application guide source text");
+
+  assert.match(firstContext, /Current category: Frame what YC is/);
+  assert.match(firstContext, /name YC/);
+  assert.doesNotMatch(firstContext, /founder learning rate/);
+  assert.match(secondContext, /Current category: Understand the people signal/);
+  assert.match(secondContext, /founder learning rate/);
+  assert.doesNotMatch(secondContext, /separate program from investors/);
+});
+
 function learnWorkspaceProps(overrides: Record<string, unknown> = {}) {
   return {
     documentsData: null,
@@ -261,5 +296,26 @@ function learnWorkspaceProps(overrides: Record<string, unknown> = {}) {
       return { available: false, results: [], meta: { query: "", resultCount: 0 } };
     },
     ...overrides,
+  };
+}
+
+function lesson(title: string, parentTitle: string, bullets: string[], exampleLine: string) {
+  return {
+    stepNumber: 1,
+    totalSteps: 2,
+    substepNumber: 1,
+    totalSubsteps: 1,
+    title,
+    parentTitle,
+    shortExplanation: `${title} explanation.`,
+    coreIdea: { bullets },
+    example: {
+      title: `${title} example`,
+      description: exampleLine,
+      lines: [exampleLine],
+      whyThisMatters: `${parentTitle} purpose.`,
+      format: "business" as const,
+    },
+    nextStepTitle: "Next",
   };
 }
