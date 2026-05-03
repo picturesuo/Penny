@@ -75,6 +75,9 @@ test("LearnRecipe structures recipe steps and keeps web search hidden behind Sea
   assert.ok(output.learningPlan.groups.length >= 5);
   assert.ok(output.learningPlan.groups.every((group) => group.subgroups.length >= 3));
   assert.match(output.learningPlan.groups[0]?.subgroups[0]?.teachingParagraph ?? "", /goal|mastery|understand/i);
+  assert.match(output.learningPlan.groups[0]?.subgroups[0]?.oneLineGoal ?? "", /subsection/i);
+  assert.equal(output.learningPlan.groups[0]?.subgroups[0]?.teachingSections.length, 3);
+  assert.ok((output.learningPlan.groups[0]?.subgroups[0]?.misconceptions.length ?? 0) >= 1);
   assert.match(output.learningPlan.groups[2]?.subgroups[0]?.visualExample.description ?? "", /prompt|case|question/i);
   assert.match(output.recipe.steps[2]?.summary ?? "", /SearchDecisionService/);
   assert.deepEqual(output.recipe.steps[4]?.outputs, [

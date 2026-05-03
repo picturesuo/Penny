@@ -4,8 +4,20 @@ export const LearningPlanSubgroupSchema = z
   .object({
     id: z.string().trim().min(1),
     title: z.string().trim().min(1).max(90),
+    oneLineGoal: z.string().trim().min(20).max(220),
     teachingParagraph: z.string().trim().min(80).max(720),
+    teachingSections: z
+      .array(
+        z
+          .object({
+            title: z.string().trim().min(1).max(80),
+            body: z.string().trim().min(40).max(360),
+          })
+          .strict(),
+      )
+      .length(3),
     keyMoves: z.array(z.string().trim().min(1).max(160)).min(2).max(4),
+    misconceptions: z.array(z.string().trim().min(1).max(220)).min(1).max(4),
     workedExample: z.string().trim().min(40).max(360),
     visualExample: z
       .object({
@@ -170,7 +182,43 @@ function subgroup(
   visualTitle: string,
   visualDescription: string,
 ): LearningPlan["groups"][number]["subgroups"][number] {
-  return { id, title, teachingParagraph, keyMoves, workedExample, visualExample: { title: visualTitle, description: visualDescription } };
+  const oneLineGoal = `Learn ${title.toLowerCase()} as one subsection of the current thinking graph.`;
+  const teachingSections = [
+    {
+      title: "Definition",
+      body: keyMoves[0]
+        ? `First, define the move: ${keyMoves[0]} This gives the subsection a single object to teach instead of a broad topic.`
+        : teachingParagraph,
+    },
+    {
+      title: "Application",
+      body: keyMoves[1]
+        ? `Second, apply it locally: ${keyMoves[1]} Keep the explanation tied to this prompt and this graph node.`
+        : teachingParagraph,
+    },
+    {
+      title: "Procedure",
+      body: keyMoves[2]
+        ? `Third, make it repeatable: ${keyMoves[2]} The learner should leave with one action they can use on the next subsection.`
+        : `Third, make it repeatable: ${workedExample}`,
+    },
+  ];
+  const misconceptions = [
+    "Do not treat the subsection title as the whole lesson.",
+    "Do not add background unless it changes the current claim, assumption, or example.",
+  ];
+
+  return {
+    id,
+    title,
+    oneLineGoal,
+    teachingParagraph,
+    teachingSections,
+    keyMoves,
+    misconceptions,
+    workedExample,
+    visualExample: { title: visualTitle, description: visualDescription },
+  };
 }
 
 function inferExpertRole(input: LearningPlanInput): string {

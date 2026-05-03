@@ -80,6 +80,8 @@ test("POST /api/learn/session structures a dropped idea and ticks Autopilot", as
   assert.equal(payload.data.learn.learningPlan.paragraphFit, "one_subgroup_per_page");
   assert.ok(payload.data.learn.learningPlan.groups.length >= 5);
   assert.match(payload.data.learn.learningPlan.groups[0]?.subgroups[0]?.teachingParagraph ?? "", /goal|mastery|understand/i);
+  assert.match(payload.data.learn.learningPlan.groups[0]?.subgroups[0]?.oneLineGoal ?? "", /subsection/i);
+  assert.equal(payload.data.learn.learningPlan.groups[0]?.subgroups[0]?.teachingSections.length, 3);
   assert.match(payload.data.learn.learningPlan.groups[2]?.subgroups[0]?.visualExample.description ?? "", /prompt|case|question/i);
   assert.deepEqual(
     payload.data.learn.nextMoves.map((move) => move.action),
