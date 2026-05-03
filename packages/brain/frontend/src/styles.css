@@ -4209,43 +4209,98 @@
     background-size: 24px 24px;
   }
 
+  .learn-thinking-graph-map {
+    position: relative;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 26px;
+    height: 100%;
+    min-height: 220px;
+    padding: 16px 14px 14px;
+  }
+
+  .learn-thinking-graph-map::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 78px;
+    bottom: 78px;
+    border-left: 1px solid rgb(17 17 17 / 0.35);
+    transform: translateX(-50%);
+  }
+
+  .learn-thinking-graph-main,
+  .learn-thinking-graph-board li {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    align-content: start;
+    gap: 5px;
+    border: 1px solid #111111;
+    border-radius: 7px;
+    background: #fbfaf6;
+    box-shadow: 0 6px 0 rgb(17 17 17 / 0.05);
+  }
+
+  .learn-thinking-graph-main {
+    justify-self: center;
+    width: min(86%, 250px);
+    min-height: 56px;
+    padding: 9px 10px;
+  }
+
+  .learn-thinking-graph-main::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -27px;
+    height: 27px;
+    border-left: 1px solid rgb(17 17 17 / 0.35);
+    transform: translateX(-50%);
+  }
+
   .learn-thinking-graph-board ol {
     position: relative;
-    min-height: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 16px 18px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .learn-thinking-graph-board li {
+  .learn-thinking-graph-board ol::before {
+    content: "";
     position: absolute;
-    left: calc(8% + (var(--graph-index) % 2) * 40%);
-    top: calc(10% + var(--graph-index) * 13%);
-    display: grid;
-    gap: 5px;
-    width: min(46%, 180px);
-    min-height: 58px;
-    border: 1px solid #111111;
-    border-radius: 7px;
+    left: 25%;
+    right: 25%;
+    top: -13px;
+    border-top: 1px solid rgb(17 17 17 / 0.35);
+  }
+
+  .learn-thinking-graph-board li {
+    min-height: 52px;
     padding: 8px 9px;
-    background: #fbfaf6;
-    box-shadow: 0 6px 0 rgb(17 17 17 / 0.05);
   }
 
   .learn-thinking-graph-board li::before {
     content: "";
     position: absolute;
-    right: -34px;
-    top: 50%;
-    width: 34px;
-    border-top: 1px solid rgb(17 17 17 / 0.28);
+    left: 50%;
+    top: -17px;
+    height: 16px;
+    border-left: 1px solid rgb(17 17 17 / 0.35);
+    transform: translateX(-50%);
   }
 
-  .learn-thinking-graph-board li:nth-child(2n)::before,
-  .learn-thinking-graph-board li:last-child::before {
-    display: none;
+  .learn-thinking-graph-main.is-selected,
+  .learn-thinking-graph-board li.is-selected {
+    outline: 2px solid #111111;
+    outline-offset: 2px;
   }
 
+  .learn-thinking-graph-main span,
   .learn-thinking-graph-board li span {
     color: rgb(17 17 17 / 0.54);
     font-size: 9px;
@@ -4254,6 +4309,7 @@
     text-transform: uppercase;
   }
 
+  .learn-thinking-graph-main strong,
   .learn-thinking-graph-board li strong {
     display: -webkit-box;
     overflow: hidden;
@@ -4262,14 +4318,6 @@
     line-height: 1.14;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
-  }
-
-  .learn-thinking-graph-board li.is-assumption {
-    background: #fbf0c8;
-  }
-
-  .learn-thinking-graph-board li.is-question {
-    background: #dff0ef;
   }
 
   .learn-thinking-graph-empty {
