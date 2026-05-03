@@ -451,8 +451,14 @@ export interface LearningPlanGroup {
 export interface LearningPlanSubgroup {
   id: string;
   title: string;
+  oneLineGoal?: string;
   teachingParagraph: string;
+  teachingSections?: Array<{
+    title: string;
+    body: string;
+  }>;
   keyMoves: string[];
+  misconceptions?: string[];
   workedExample: string;
   visualExample: {
     title: string;

@@ -4040,10 +4040,21 @@
 
   .learn-path-middle {
     display: grid;
-    grid-template-rows: auto minmax(220px, 1fr);
-    gap: 14px;
+    grid-template-rows: auto auto minmax(220px, 1fr);
+    gap: 10px;
     min-height: 0;
     overflow: hidden;
+  }
+
+  .learn-path-topic {
+    margin: 0;
+    overflow: hidden;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .learn-path-head {
@@ -4063,6 +4074,9 @@
   .learn-path-kicker span,
   .learn-goal-block span,
   .learn-step-header span,
+  .learn-teaching-section span,
+  .learn-misconception-copy span,
+  .learn-example-copy span,
   .learn-big-picture-copy span,
   .learn-core-copy span,
   .learn-related-inline span {
@@ -4437,10 +4451,10 @@
   .learn-goal-block h1 {
     margin: 6px 0 0;
     overflow-wrap: anywhere;
-    font-size: clamp(22px, 2.15vw, 32px);
+    font-size: clamp(36px, 3.4vw, 56px);
     font-weight: 500;
     letter-spacing: 0;
-    line-height: 1;
+    line-height: 0.98;
   }
 
   .learn-step-header {
@@ -4448,17 +4462,8 @@
     padding: 4px 0;
   }
 
-  .learn-step-header h2 {
-    margin: 4px 0 0;
-    font-size: clamp(19px, 1.55vw, 25px);
-    font-weight: 700;
-    letter-spacing: 0;
-    line-height: 1;
-  }
-
   .learn-step-header strong {
     display: block;
-    margin-top: 4px;
     color: rgb(17 17 17 / 0.6);
     font-size: 12px;
     line-height: 1;
@@ -4473,32 +4478,24 @@
 
   .learn-core-section {
     display: grid;
-    grid-template-columns: minmax(0, 0.58fr) minmax(240px, 0.42fr);
-    gap: 14px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
     min-height: 0;
     overflow: visible;
     border-top: 1px solid #111111;
     border-bottom: 1px solid #111111;
-    padding: 10px 0;
+    padding: 16px 0;
   }
 
-  .learn-big-picture-copy {
+  .learn-teaching-section {
     display: grid;
     align-content: start;
-    gap: 7px;
+    gap: 8px;
     min-width: 0;
   }
 
-  .learn-big-picture-copy h3 {
-    margin: 0;
-    overflow-wrap: anywhere;
-    font-size: clamp(22px, 2vw, 31px);
-    font-weight: 700;
-    letter-spacing: 0;
-    line-height: 1.02;
-  }
-
-  .learn-big-picture-copy p {
+  .learn-teaching-section p,
+  .learn-example-copy p {
     margin: 0;
     overflow-wrap: anywhere;
     color: rgb(17 17 17 / 0.74);
@@ -4506,32 +4503,40 @@
     line-height: 1.28;
   }
 
-  .learn-core-copy {
+  .learn-support-section {
     display: grid;
-    align-content: start;
-    gap: 6px;
-    min-width: 0;
-    overflow: visible;
+    grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+    gap: 18px;
+    border-bottom: 1px solid #111111;
+    padding: 0 0 16px;
   }
 
-  .learn-core-copy ul {
+  .learn-misconception-copy,
+  .learn-example-copy {
     display: grid;
-    gap: 4px;
+    align-content: start;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .learn-misconception-copy ul {
+    display: grid;
+    gap: 6px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .learn-core-copy li {
+  .learn-misconception-copy li {
     display: grid;
     grid-template-columns: 15px minmax(0, 1fr);
     gap: 8px;
     overflow-wrap: anywhere;
-    font-size: 13px;
-    line-height: 1.16;
+    font-size: 14px;
+    line-height: 1.22;
   }
 
-  .learn-core-copy li::before {
+  .learn-misconception-copy li::before {
     content: "";
     width: 8px;
     height: 8px;

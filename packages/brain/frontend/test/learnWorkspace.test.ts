@@ -12,11 +12,13 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /LEARNING PATH/);
   assert.match(markup, /January 1/);
   assert.match(markup, /what YC does/i);
-  assert.match(markup, /investors, ideas, or people/i);
   assert.match(markup, /Frame what YC is/);
-  assert.match(markup, /YOUR GOAL/);
-  assert.match(markup, /BIG PICTURE/);
-  assert.match(markup, /ZOOM IN/);
+  assert.match(markup, /Name the program/);
+  assert.match(markup, /Definition/);
+  assert.match(markup, /Application/);
+  assert.match(markup, /Procedure/);
+  assert.match(markup, /MISCONCEPTIONS/);
+  assert.match(markup, /EXAMPLE/);
   assert.match(markup, /Ask Penny/);
   assert.match(markup, /Thinking graph/);
   assert.match(markup, /1\.1/);
@@ -203,6 +205,8 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
 
   assert.match(markup, /Name the pricing goal/);
   assert.match(markup, /Name the buyer/);
+  assert.match(markup, /Definition/);
+  assert.match(markup, /MISCONCEPTIONS/);
   assert.match(markup, /Package pricing/);
   assert.doesNotMatch(markup, /Iterate pricing/);
   assert.doesNotMatch(markup, /A pricing expert teaching/);
@@ -307,7 +311,14 @@ function lesson(title: string, parentTitle: string, bullets: string[], exampleLi
     totalSubsteps: 1,
     title,
     parentTitle,
+    learningGoal: `Learn ${title}.`,
     shortExplanation: `${title} explanation.`,
+    teachingSections: [
+      { title: "Definition", body: bullets[0] ?? `${title} definition.` },
+      { title: "Application", body: bullets[1] ?? `${title} application.` },
+      { title: "Procedure", body: bullets[2] ?? `${title} procedure.` },
+    ],
+    misconceptions: [`${title} misconception.`],
     coreIdea: { bullets },
     example: {
       title: `${title} example`,

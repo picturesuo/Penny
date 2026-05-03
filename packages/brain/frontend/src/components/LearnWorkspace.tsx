@@ -213,6 +213,7 @@ function LearnSessionView({
     <section className={`learn-session-output${askPennyOpen ? " ask-open" : ""}`} aria-label="Learn session output">
       <LearningPathSidebar
         steps={pageData.steps}
+        goal={pageData.goal}
         activeMainStepId={activeMainStepId}
         activeSubstepId={activeSubstepId}
         progressPercent={currentProgressPercent}
@@ -259,7 +260,13 @@ type LearnLesson = {
   totalSubsteps: number;
   title: string;
   parentTitle: string;
+  learningGoal: string;
   shortExplanation: string;
+  teachingSections: Array<{
+    title: string;
+    body: string;
+  }>;
+  misconceptions: string[];
   coreIdea: {
     bullets: string[];
     visualPlaceholderLabel?: string;
@@ -304,6 +311,7 @@ type LearnLessonPage = {
 
 function LearningPathSidebar({
   steps,
+  goal,
   activeMainStepId,
   activeSubstepId,
   progressPercent,
@@ -311,6 +319,7 @@ function LearningPathSidebar({
   onAskPennyToggle,
 }: {
   steps: LearnPageData["steps"];
+  goal: string;
   activeMainStepId: string;
   activeSubstepId: string;
   progressPercent: number;
@@ -333,6 +342,7 @@ function LearningPathSidebar({
       </div>
 
       <div className="learn-path-middle">
+        <p className="learn-path-topic">{truncateWords(goal, 9)}</p>
         <ol className="learn-path-list">
         {visibleSteps.map(({ step, index }) => {
           const isActive = step.id === activeMainStepId;
@@ -467,32 +477,38 @@ function LearnMainContent({
   return (
     <article className="learn-editorial-main" aria-label="Current learning step">
       <section className="learn-goal-block" aria-label="Your goal">
-        <span>YOUR GOAL</span>
-        <h1>{pageData.goal}</h1>
-      </section>
-
-      <section className="learn-step-header" aria-label="Current step">
         <span>
           STEP {currentStep.stepNumber}.{currentStep.substepNumber} OF {lessonPages.length}
         </span>
-        <h2>{currentStep.title}</h2>
-        <strong>{currentStep.parentTitle}</strong>
-        <p>{currentStep.shortExplanation}</p>
+        <h1>{currentStep.title}</h1>
       </section>
 
-      <section className="learn-core-section" aria-label="Core idea">
-        <div className="learn-big-picture-copy">
-          <span>BIG PICTURE</span>
-          <h3>{currentStep.parentTitle}</h3>
-          <p>{currentStep.shortExplanation}</p>
-        </div>
-        <div className="learn-core-copy">
-          <span>ZOOM IN</span>
+      <section className="learn-step-header" aria-label="Current step">
+        <strong>{currentStep.parentTitle}</strong>
+        <p>{currentStep.learningGoal}</p>
+      </section>
+
+      <section className="learn-core-section" aria-label="Subsection lesson">
+        {currentStep.teachingSections.map((section) => (
+          <article key={section.title} className="learn-teaching-section">
+            <span>{section.title}</span>
+            <p>{section.body}</p>
+          </article>
+        ))}
+      </section>
+
+      <section className="learn-support-section" aria-label="Misconceptions and example">
+        <div className="learn-misconception-copy">
+          <span>MISCONCEPTIONS</span>
           <ul>
-            {currentStep.coreIdea.bullets.map((bullet) => (
-              <li key={bullet}>{bullet}</li>
+            {currentStep.misconceptions.map((misconception) => (
+              <li key={misconception}>{misconception}</li>
             ))}
           </ul>
+        </div>
+        <div className="learn-example-copy">
+          <span>EXAMPLE</span>
+          <p>{currentStep.example.lines.join(" ")}</p>
         </div>
       </section>
 
@@ -806,7 +822,10 @@ function buildLearnPageDataFromPlan(
         totalSubsteps: group.subgroups.length,
         title: subgroup.title,
         parentTitle: group.title,
+        learningGoal: subgroup.oneLineGoal ?? `Learn ${subgroup.title.toLowerCase()} as the next subsection.`,
         shortExplanation: subgroup.teachingParagraph,
+        teachingSections: normalizeTeachingSections(subgroup.teachingSections, subgroup.keyMoves, subgroup.teachingParagraph),
+        misconceptions: normalizeMisconceptions(subgroup.misconceptions),
         coreIdea: {
           bullets: subgroup.keyMoves.slice(0, 4),
           visualPlaceholderLabel: `${subgroup.visualExample.title}: ${subgroup.visualExample.description}`,
@@ -857,6 +876,49 @@ function flattenLessonPages(steps: LearnPageData["steps"]): LearnLessonPage[] {
   return steps.flatMap((step) => step.substeps.map((substep) => ({ step, substep })));
 }
 
+function normalizeTeachingSections(
+  sections: LearningPlan["groups"][number]["subgroups"][number]["teachingSections"] | undefined,
+  keyMoves: string[],
+  teachingParagraph: string,
+): LearnLesson["teachingSections"] {
+  if (sections?.length === 3) {
+    return sections;
+  }
+
+  return fallbackTeachingSections(keyMoves, teachingParagraph);
+}
+
+function fallbackTeachingSections(keyMoves: string[], teachingParagraph: string): LearnLesson["teachingSections"] {
+  const [firstMove, secondMove, thirdMove] = keyMoves;
+
+  return [
+    {
+      title: "Definition",
+      body: firstMove ?? teachingParagraph,
+    },
+    {
+      title: "Application",
+      body: secondMove ?? teachingParagraph,
+    },
+    {
+      title: "Procedure",
+      body: thirdMove ?? "Use this subsection to produce one reusable claim, distinction, or next question.",
+    },
+  ];
+}
+
+function normalizeMisconceptions(misconceptions: string[] | undefined): string[] {
+  return misconceptions?.length ? misconceptions.slice(0, 4) : fallbackMisconceptions();
+}
+
+function fallbackMisconceptions(stepId?: string): string[] {
+  if (stepId === "step-4") {
+    return ["A challenge is not proof by itself.", "A checked explanation can still need external evidence."];
+  }
+
+  return ["Do not treat this subsection as the whole topic.", "Do not add background unless it changes the current point."];
+}
+
 function buildSubstepLesson({
   step,
   substep,
@@ -896,7 +958,10 @@ function buildSubstepLesson({
     totalSubsteps: step.substeps.length,
     title: substep.title,
     parentTitle: step.title,
+    learningGoal: `Learn ${substep.title.toLowerCase()} as the next subsection of ${step.title.toLowerCase()}.`,
     shortExplanation: substepExplanation(step.id, substep.id),
+    teachingSections: fallbackTeachingSections(compactBullets, substepExplanation(step.id, substep.id)),
+    misconceptions: fallbackMisconceptions(step.id),
     coreIdea: {
       bullets: compactBullets,
       visualPlaceholderLabel: lessonVisualLabel(step.id),
