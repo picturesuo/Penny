@@ -469,17 +469,18 @@
 
   .strapline {
     display: flex;
-    align-items: center;
+    align-items: start;
     justify-content: space-between;
     border-bottom: 1px solid #111111;
-    padding: 4px 0 3px;
+    padding: 4px 0;
     font-size: 11px;
     font-weight: 700;
-    line-height: 1.15;
+    line-height: 1;
   }
 
   .strapline span {
     min-width: 0;
+    display: block;
   }
 
   .newspaper-header.is-learn .strapline {
@@ -3341,10 +3342,24 @@
     border: 1px solid #111111;
     border-radius: 8px;
     background:
-      linear-gradient(#f4efe7 1px, transparent 1px),
-      linear-gradient(90deg, #f4efe7 1px, transparent 1px),
+      linear-gradient(#eadfce 1px, transparent 1px),
+      linear-gradient(90deg, #eadfce 1px, transparent 1px),
       var(--penny-paper);
     background-size: 32px 32px;
+    cursor: grab;
+    overscroll-behavior: contain;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .canvas-board.is-panning {
+    cursor: grabbing;
+  }
+
+  .canvas-plane {
+    position: relative;
+    min-width: 100%;
+    min-height: 100%;
   }
 
   .canvas-board::before {
