@@ -564,6 +564,12 @@ export async function askPenny(input: {
       body: JSON.stringify(input),
     });
   } catch (error) {
+    const directResponse = await askPennyViaApiOrigin(input).catch(() => null);
+
+    if (directResponse) {
+      return directResponse;
+    }
+
     return localAskPennyResponse(input, error);
   }
 
@@ -574,6 +580,31 @@ export async function askPenny(input: {
   }
 
   return payload as AskPennyResponse;
+}
+
+async function askPennyViaApiOrigin(input: {
+  question: string;
+  currentStepTitle: string;
+  localContext: string;
+}): Promise<AskPennyResponse> {
+  const response = await fetch(`${askPennyApiOrigin()}/brain/learn/ask`, {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /brain/learn/ask failed with ${response.status}.`));
+  }
+
+  return payload as AskPennyResponse;
+}
+
+function askPennyApiOrigin(): string {
+  const configuredOrigin = import.meta.env?.VITE_PENNY_API_ORIGIN;
+
+  return (configuredOrigin && configuredOrigin.trim()) || "http://localhost:3000";
 }
 
 function localAskPennyResponse(

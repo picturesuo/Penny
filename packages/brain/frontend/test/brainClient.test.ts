@@ -196,6 +196,36 @@ test("frontend Ask Penny still uses the live API when it responds", async () => 
   }
 });
 
+test("frontend Ask Penny retries the API origin before using the local fallback", async () => {
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    fetchError("Failed to fetch"),
+    jsonResponse({
+      answer: "The square root of a number is the value that multiplies by itself to make that number.",
+      provider: "xai",
+      model: "grok-test",
+    }),
+  ]);
+
+  try {
+    const response = await askPenny({
+      question: "teach me how the square root works of a number",
+      currentStepTitle: "Name the program",
+      localContext:
+        "Goal: Understand what YC does and whether its batch application is primarily evaluating investors, ideas, or people.",
+    });
+
+    assert.equal(calls[0]?.url, "/brain/learn/ask");
+    assert.equal(calls[1]?.url, "http://localhost:3000/brain/learn/ask");
+    assert.equal(response.data.provider, "xai");
+    assert.equal(response.data.model, "grok-test");
+    assert.match(response.data.answer, /multiplies by itself/);
+    assert.doesNotMatch(response.data.answer, /Next step:/);
+  } finally {
+    restoreFetch();
+  }
+});
+
 test("frontend Ask Penny generic fallback gives the next step instead of prompt scaffolding", async () => {
   const originalFetch = globalThis.fetch;
 
@@ -512,6 +542,10 @@ function mockFetch(calls: FetchCall[], responses: Response[]): () => void {
       });
     }
 
+    if (response.status === 599) {
+      throw new TypeError(response.statusText);
+    }
+
     return response;
   };
 
@@ -534,6 +568,13 @@ function jsonResponse(data: unknown): Response {
   return new Response(JSON.stringify({ data }), {
     status: 200,
     headers: { "content-type": "application/json" },
+  });
+}
+
+function fetchError(message: string): Response {
+  return new Response(null, {
+    status: 599,
+    statusText: message,
   });
 }
 
