@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AutopilotTickData,
   BrainClaim,
@@ -536,6 +536,7 @@ function AskPennyPanel({
     { role: "system", text: "Ask a question about this step. Penny will answer from the current lesson context." },
   ]);
   const [isRunning, setIsRunning] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const trimmedDraft = draft.trim();
 
   useEffect(() => {
@@ -552,6 +553,17 @@ function AskPennyPanel({
       { role: "system", text: "Ask a question about this category. Penny will answer from this category only." },
     ]);
   }, [contextKey]);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [draft]);
 
   async function submitPrompt(question: string) {
     const trimmedQuestion = question.trim();
@@ -621,12 +633,20 @@ function AskPennyPanel({
         }}
       >
         <label className="sr-only" htmlFor="askPennyInput">Ask Penny</label>
-        <input
+        <textarea
+          ref={textareaRef}
           id="askPennyInput"
           value={draft}
           disabled={disabled || isRunning}
           placeholder={askPenny.placeholder}
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void submitPrompt(trimmedDraft);
+            }
+          }}
+          rows={1}
         />
         <button type="submit" disabled={disabled || isRunning || !trimmedDraft} aria-label="Send question">
           →

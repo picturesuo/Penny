@@ -4606,25 +4606,31 @@
   .ask-penny-input {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 48px;
+    align-items: end;
     gap: 8px;
     border-top: 1px solid #111111;
     padding-top: 12px;
   }
 
-  .ask-penny-input input {
+  .ask-penny-input textarea {
     width: 100%;
     min-width: 0;
+    max-height: 40dvh;
     border: 1px solid #111111;
     border-radius: 0;
     padding: 12px;
     background: #ffffff;
     color: #111111;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    font-size: 14px;
-    line-height: 1.2;
+    font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+    font-size: 16px;
+    line-height: 1.28;
+    overflow-y: auto;
+    resize: none;
   }
 
   .ask-penny-input button {
+    width: 48px;
+    height: 48px;
     border: 1px solid #111111;
     border-radius: 0;
     background: var(--penny-highlight);
