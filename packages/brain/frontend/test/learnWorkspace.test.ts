@@ -15,8 +15,8 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /investors, ideas, or people/i);
   assert.match(markup, /Frame what YC is/);
   assert.match(markup, /YOUR GOAL/);
-  assert.match(markup, /CORE IDEA/);
-  assert.match(markup, /FULLY FLESHED-OUT EXAMPLE/);
+  assert.match(markup, /BIG PICTURE/);
+  assert.match(markup, /ZOOM IN/);
   assert.match(markup, /ASK PENNY/);
   assert.match(markup, /1\.1/);
   assert.match(markup, /1\.2/);
@@ -29,6 +29,9 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.doesNotMatch(markup, /Can you explain this in simpler terms/);
   assert.doesNotMatch(markup, /Give me another example/);
   assert.doesNotMatch(markup, /Search\/Settings|Settings|Makes Cents|MAKES CENTS/);
+  assert.doesNotMatch(markup, /FULLY FLESHED-OUT EXAMPLE/);
+  assert.doesNotMatch(markup, /Visual placeholder/);
+  assert.doesNotMatch(markup, /NOTE/);
 });
 
 test("LearnWorkspace renders backend expert learning plan subgroups", () => {
@@ -134,16 +137,76 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
                 },
               ],
             },
+            {
+              id: "pricing-packaging",
+              title: "Package pricing",
+              purpose: "Keep packaging connected to the same buyer logic.",
+              subgroups: [
+                {
+                  id: "pricing-packaging-tier",
+                  title: "Name the package",
+                  teachingParagraph:
+                    "A package should bundle the smallest set of features that make the buyer's value moment repeatable.",
+                  keyMoves: ["Name the repeated value.", "Name the bundle.", "Name the excluded feature."],
+                  workedExample: "Bundle repeated decision reviews instead of generic unlimited chat.",
+                  visualExample: {
+                    title: "Package stack",
+                    description: "A stack of included value moments.",
+                  },
+                },
+              ],
+            },
+            {
+              id: "pricing-evidence",
+              title: "Read pricing evidence",
+              purpose: "Separate compliments from willingness to pay.",
+              subgroups: [
+                {
+                  id: "pricing-evidence-signal",
+                  title: "Find the payment signal",
+                  teachingParagraph:
+                    "The useful evidence is not whether users like the product; it is whether the moment has budget, urgency, and repeat value.",
+                  keyMoves: ["Name budget.", "Name urgency.", "Name repeat value."],
+                  workedExample: "A founder asking for another review before fundraising is stronger than a nice demo reaction.",
+                  visualExample: {
+                    title: "Payment signal",
+                    description: "Budget, urgency, and repeat value in one evidence row.",
+                  },
+                },
+              ],
+            },
+            {
+              id: "pricing-iterate",
+              title: "Iterate pricing",
+              purpose: "Use the first signal to revise the price claim.",
+              subgroups: [
+                {
+                  id: "pricing-iterate-rule",
+                  title: "Revise the rule",
+                  teachingParagraph:
+                    "The lesson ends by changing the pricing claim only when the evidence changes the buyer, value unit, or failure signal.",
+                  keyMoves: ["Compare the signal.", "Revise the rule.", "Save the next Check target."],
+                  workedExample: "If buyers pay for fundraising prep, revise around that moment instead of broad founder clarity.",
+                  visualExample: {
+                    title: "Revision rule",
+                    description: "A price claim flowing through evidence into a revised Check target.",
+                  },
+                },
+              ],
+            },
           ],
         },
       },
     })),
   );
 
-  assert.match(markup, /A pricing expert teaching/);
   assert.match(markup, /Name the pricing goal/);
-  assert.match(markup, /Pricing value map/);
-  assert.match(markup, /buyer, value unit, and failure signal/);
+  assert.match(markup, /Name the buyer/);
+  assert.match(markup, /Package pricing/);
+  assert.match(markup, /Iterate pricing/);
+  assert.match(markup, />6</);
+  assert.doesNotMatch(markup, /A pricing expert teaching/);
+  assert.doesNotMatch(markup, /Pricing value map/);
 });
 
 function learnWorkspaceProps(overrides: Record<string, unknown> = {}) {
