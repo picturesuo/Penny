@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Archive, BookOpen, Folder, Plus } from "lucide-react";
+import { Archive, BookOpen, FilePlus, Folder, FolderPlus } from "lucide-react";
 import type {
   AutopilotTickData,
   BrainClaim,
@@ -11,6 +11,7 @@ import type {
   BrainEdge,
   BrainGraphPath,
   BrainGraphPathNode,
+  BrainHierarchyFolder,
   BrainRecentIdea,
   BrainSidebarData,
   CanvasNode,
@@ -576,13 +577,20 @@ function BrainHierarchySidebar({
   onQuickNoteAction,
 }: BrainHierarchySidebarProps) {
   const folders = sidebar?.folders ?? [];
+  const [localFolders, setLocalFolders] = useState<BrainHierarchyFolder[]>([]);
+  const [documentFolderOverrides, setDocumentFolderOverrides] = useState<Record<string, string>>({});
   const selectedFolderId =
-    folders.find((folder) => folder.documents.some((document) => document.sessionId === selectedSessionId))?.id ??
+    [...localFolders, ...folders].find((folder) => folder.documents.some((document) => document.sessionId === selectedSessionId))?.id ??
     folders[0]?.id ??
+    localFolders[0]?.id ??
     null;
   const [openFolderId, setOpenFolderId] = useState<string | null>(selectedFolderId);
   const [quickNoteDraft, setQuickNoteDraft] = useState("");
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const visibleFolders = useMemo(
+    () => mergeSidebarFolders(folders, localFolders, documentFolderOverrides),
+    [folders, localFolders, documentFolderOverrides],
+  );
 
   useEffect(() => {
     setOpenFolderId(selectedFolderId);
@@ -597,6 +605,35 @@ function BrainHierarchySidebar({
 
     await onQuickNoteCreate(trimmedDraft);
     setQuickNoteDraft("");
+  }
+
+  function handleAddFolder() {
+    const folderNumber = localFolders.length + 1;
+    const folder: BrainHierarchyFolder = {
+      id: `local-folder-${Date.now()}`,
+      label: `New Folder ${folderNumber}`,
+      kind: "local",
+      documentCount: 0,
+      documents: [],
+    };
+
+    setLocalFolders((currentFolders) => [folder, ...currentFolders]);
+    setOpenFolderId(folder.id);
+  }
+
+  function handleDocumentDrop(event: React.DragEvent<HTMLElement>, folderId: string) {
+    const documentId = event.dataTransfer.getData("application/x-penny-document-id");
+
+    if (!documentId) {
+      return;
+    }
+
+    event.preventDefault();
+    setDocumentFolderOverrides((currentOverrides) => ({
+      ...currentOverrides,
+      [documentId]: folderId,
+    }));
+    setOpenFolderId(folderId);
   }
 
   return (
@@ -668,22 +705,29 @@ function BrainHierarchySidebar({
           </div>
         ) : null}
       </section>
-      <section className="brain-sidebar-section" aria-label="Folders">
+      <section className="brain-sidebar-section" aria-label="Document folders">
         <div className="brain-sidebar-section-head">
           <Folder size={15} aria-hidden="true" />
-          <strong>Documents</strong>
-          <button type="button" className="brain-sidebar-add-doc" onClick={onNewDocument}>
-            <Plus size={14} aria-hidden="true" />
-            <span>Add document</span>
+          <strong>Folders</strong>
+          <button type="button" className="brain-sidebar-add-doc" onClick={handleAddFolder}>
+            <FolderPlus size={14} aria-hidden="true" />
+            <span>Add Folder</span>
           </button>
         </div>
-        {folders.length > 0 ? (
+        {visibleFolders.length > 0 ? (
           <div className="brain-tree" role="tree" aria-label="Folders and documents">
-            {folders.map((folder) => {
+            {visibleFolders.map((folder) => {
               const open = folder.id === openFolderId;
 
               return (
-                <div key={folder.id} className="brain-tree-folder" role="treeitem" aria-expanded={open}>
+                <div
+                  key={folder.id}
+                  className="brain-tree-folder"
+                  role="treeitem"
+                  aria-expanded={open}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => handleDocumentDrop(event, folder.id)}
+                >
                   <button
                     type="button"
                     className="brain-tree-row is-folder"
@@ -695,6 +739,10 @@ function BrainHierarchySidebar({
                   </button>
                   {open ? (
                     <div className="brain-tree-children">
+                      <button type="button" className="brain-tree-row is-doc is-new-doc" onClick={onNewDocument}>
+                        <FilePlus size={14} aria-hidden="true" />
+                        <span>New document</span>
+                      </button>
                       {folder.documents.slice(0, 3).map((document) => {
                         const active = document.sessionId === selectedSessionId;
 
@@ -704,6 +752,11 @@ function BrainHierarchySidebar({
                               type="button"
                               className={`brain-tree-row is-doc${active ? " is-active" : ""}`}
                               onClick={() => onSelectDocument(document.sessionId)}
+                              draggable
+                              onDragStart={(event) => {
+                                event.dataTransfer.setData("application/x-penny-document-id", document.id);
+                                event.dataTransfer.effectAllowed = "move";
+                              }}
                               aria-current={active ? "page" : undefined}
                             >
                               <BookOpen size={14} aria-hidden="true" />
@@ -768,6 +821,42 @@ function QuickNoteRow({
       ) : null}
     </article>
   );
+}
+
+function mergeSidebarFolders(
+  folders: BrainHierarchyFolder[],
+  localFolders: BrainHierarchyFolder[],
+  documentFolderOverrides: Record<string, string>,
+): BrainHierarchyFolder[] {
+  if (localFolders.length === 0 && Object.keys(documentFolderOverrides).length === 0) {
+    return folders;
+  }
+
+  const folderMap = new Map<string, BrainHierarchyFolder>();
+
+  [...localFolders, ...folders].forEach((folder) => {
+    folderMap.set(folder.id, { ...folder, documents: [] });
+  });
+
+  for (const folder of folders) {
+    for (const document of folder.documents) {
+      const targetFolder = folderMap.get(documentFolderOverrides[document.id] ?? folder.id);
+
+      if (!targetFolder) {
+        continue;
+      }
+
+      targetFolder.documents.push(document);
+    }
+  }
+
+  return [...localFolders.map((folder) => folder.id), ...folders.map((folder) => folder.id)]
+    .map((folderId) => folderMap.get(folderId))
+    .filter((folder): folder is BrainHierarchyFolder => Boolean(folder))
+    .map((folder) => ({
+      ...folder,
+      documentCount: folder.documents.length,
+    }));
 }
 
 function archiveMeta(recent: BrainRecentIdea): string {
@@ -962,9 +1051,9 @@ function DocumentLogRow({
   return (
     <button type="button" className="document-log-row is-document-summary" onClick={() => onSelectDocument(document.sessionId)}>
       <span className="document-log-copy">
-        <strong title={document.title}>{truncateWords(document.title, 14)}</strong>
+        <strong title={document.title}>{truncateWords(document.title, 28)}</strong>
         <small title={document.mainClaim?.text ?? document.originalIdea ?? ""}>
-          {truncateWords(document.mainClaim?.text ?? document.originalIdea ?? "No summary yet.", 22)}
+          {truncateWords(document.mainClaim?.text ?? document.originalIdea ?? "No summary yet.", 34)}
         </small>
       </span>
       <time>{formatDate(document.updatedAt)}</time>

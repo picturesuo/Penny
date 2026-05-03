@@ -2301,6 +2301,7 @@
     grid-template-columns: 14px auto;
     gap: 5px;
     align-items: center;
+    justify-self: end;
     border: 1px solid #cfcfcf;
     border-radius: 6px;
     background: #ffffff;
@@ -2571,6 +2572,11 @@
   .brain-tree-row.is-doc:hover,
   .brain-tree-row.is-file:hover {
     background: rgb(17 17 17 / 0.06);
+  }
+
+  .brain-tree-row.is-new-doc {
+    color: rgb(17 17 17 / 0.72);
+    font-weight: 700;
   }
 
   .brain-tree-row.is-doc.is-active {
@@ -2954,7 +2960,9 @@
   }
 
   .document-log-row.is-document-summary {
-    grid-template-columns: minmax(0, 1fr) 116px;
+    grid-template-columns: minmax(0, 1fr) 126px;
+    gap: clamp(18px, 4vw, 48px);
+    min-height: 96px;
   }
 
   .document-log-row > span,
@@ -2964,6 +2972,17 @@
 
   .document-log-copy {
     display: block;
+  }
+
+  .document-log-row.is-document-summary strong {
+    font-size: clamp(20px, 2vw, 28px);
+    line-height: 1.06;
+  }
+
+  .document-log-row.is-document-summary small {
+    max-width: min(100%, 980px);
+    font-size: 14px;
+    line-height: 1.18;
   }
 
   .document-log-row strong,
