@@ -2537,7 +2537,9 @@
   }
 
   .brain-tree-row {
+    display: grid;
     grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
     gap: 8px;
     width: 100%;
     min-height: 30px;
@@ -2563,10 +2565,25 @@
   .brain-tree-row.is-folder {
     font-size: 13px;
     font-weight: 700;
+    cursor: pointer;
   }
 
   .brain-tree-row.is-folder {
     margin-top: 0;
+  }
+
+  .brain-folder-rename-input {
+    min-width: 0;
+    width: 100%;
+    border: 0;
+    border-radius: 3px;
+    padding: 0 2px;
+    background: rgb(17 17 17 / 0.08);
+    color: #111111;
+    font: inherit;
+    font-weight: 700;
+    line-height: 1.2;
+    outline: 1px solid rgb(17 17 17 / 0.34);
   }
 
   .brain-tree-row.is-doc,
