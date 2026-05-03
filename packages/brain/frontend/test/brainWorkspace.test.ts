@@ -9,7 +9,7 @@ test("BrainWorkspace renders persisted quick notes as the first sidebar folder",
   const markup = renderToStaticMarkup(
     createElement(BrainWorkspace, {
       documentsData: emptyDocumentsData(),
-      selectedDocument: documentSummary(),
+      selectedDocument: null,
       data: null,
       moves: [],
       autopilot: null,
@@ -41,7 +41,9 @@ test("BrainWorkspace renders persisted quick notes as the first sidebar folder",
   assert.ok(quickNotesIndex < documentsIndex);
   assert.match(markup, /Persist this note in Brain/);
   assert.doesNotMatch(markup, /No quick notes yet/);
+  assert.doesNotMatch(markup, /Capture a quick note/);
   assert.match(markup, /aria-label="Quick notes folder"/);
+  assert.match(markup, /aria-label="Send quick note"/);
   assert.match(markup, /class="quick-note-open"/);
 });
 
@@ -75,6 +77,7 @@ function documentSummary(): BrainDocumentsData["documents"][number] {
     sessionId: "session-1",
     scope: {},
     title: "Saved document",
+    description: "A saved document for the sidebar test.",
     status: "open",
     originalIdea: "A persisted thought.",
     mainClaim: null,

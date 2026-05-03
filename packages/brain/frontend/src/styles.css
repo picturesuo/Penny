@@ -2331,7 +2331,9 @@
 
   .quick-note-capture {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 34px;
+    align-items: end;
+    gap: 7px;
   }
 
   .quick-note-capture textarea {
@@ -2349,6 +2351,23 @@
 
   .quick-note-capture textarea::placeholder {
     color: rgb(17 17 17 / 0.48);
+  }
+
+  .quick-note-capture button {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid #cfcfcf;
+    border-radius: 6px;
+    background: #111111;
+    color: #ffffff;
+  }
+
+  .quick-note-capture button:disabled {
+    background: #ffffff;
+    color: rgb(17 17 17 / 0.34);
+    cursor: default;
   }
 
   .brain-quick-list,
