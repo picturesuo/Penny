@@ -578,7 +578,10 @@ function BrainHierarchySidebar({
 }: BrainHierarchySidebarProps) {
   const folders = sidebar?.folders ?? [];
   const [localFolders, setLocalFolders] = useState<BrainHierarchyFolder[]>([]);
+  const [folderLabelOverrides, setFolderLabelOverrides] = useState<Record<string, string>>({});
   const [documentFolderOverrides, setDocumentFolderOverrides] = useState<Record<string, string>>({});
+  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
   const selectedFolderId =
     [...localFolders, ...folders].find((folder) => folder.documents.some((document) => document.sessionId === selectedSessionId))?.id ??
     folders[0]?.id ??
@@ -588,8 +591,8 @@ function BrainHierarchySidebar({
   const [quickNoteDraft, setQuickNoteDraft] = useState("");
   const [archiveOpen, setArchiveOpen] = useState(false);
   const visibleFolders = useMemo(
-    () => mergeSidebarFolders(folders, localFolders, documentFolderOverrides),
-    [folders, localFolders, documentFolderOverrides],
+    () => applyFolderLabelOverrides(mergeSidebarFolders(folders, localFolders, documentFolderOverrides), folderLabelOverrides),
+    [folders, localFolders, documentFolderOverrides, folderLabelOverrides],
   );
 
   useEffect(() => {
@@ -619,6 +622,34 @@ function BrainHierarchySidebar({
 
     setLocalFolders((currentFolders) => [folder, ...currentFolders]);
     setOpenFolderId(folder.id);
+  }
+
+  function startFolderRename(folder: BrainHierarchyFolder) {
+    setOpenFolderId(folder.id);
+    setRenamingFolderId(folder.id);
+    setRenameDraft(folder.label);
+  }
+
+  function commitFolderRename(folderId: string) {
+    const trimmedDraft = renameDraft.trim();
+
+    if (trimmedDraft) {
+      setLocalFolders((currentFolders) =>
+        currentFolders.map((folder) => (folder.id === folderId ? { ...folder, label: trimmedDraft } : folder)),
+      );
+      setFolderLabelOverrides((currentOverrides) => ({
+        ...currentOverrides,
+        [folderId]: trimmedDraft,
+      }));
+    }
+
+    setRenamingFolderId(null);
+    setRenameDraft("");
+  }
+
+  function cancelFolderRename() {
+    setRenamingFolderId(null);
+    setRenameDraft("");
   }
 
   function handleDocumentDrop(event: React.DragEvent<HTMLElement>, folderId: string) {
@@ -728,15 +759,54 @@ function BrainHierarchySidebar({
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => handleDocumentDrop(event, folder.id)}
                 >
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     className="brain-tree-row is-folder"
                     onClick={() => setOpenFolderId((current) => (current === folder.id ? null : folder.id))}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      startFolderRename(folder);
+                    }}
+                    onKeyDown={(event) => {
+                      if (renamingFolderId === folder.id) {
+                        return;
+                      }
+
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setOpenFolderId((current) => (current === folder.id ? null : folder.id));
+                      }
+                    }}
                   >
                     <Folder size={15} aria-hidden="true" />
-                    <span title={folder.label}>{folder.label}</span>
+                    {renamingFolderId === folder.id ? (
+                      <input
+                        className="brain-folder-rename-input"
+                        value={renameDraft}
+                        onChange={(event) => setRenameDraft(event.target.value)}
+                        onClick={(event) => event.stopPropagation()}
+                        onContextMenu={(event) => event.stopPropagation()}
+                        onBlur={() => commitFolderRename(folder.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            commitFolderRename(folder.id);
+                          }
+
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            cancelFolderRename();
+                          }
+                        }}
+                        autoFocus
+                        aria-label={`Rename ${folder.label}`}
+                      />
+                    ) : (
+                      <span title={folder.label}>{folder.label}</span>
+                    )}
                     <small>{folder.documentCount}</small>
-                  </button>
+                  </div>
                   {open ? (
                     <div className="brain-tree-children">
                       <button type="button" className="brain-tree-row is-doc is-new-doc" onClick={onNewDocument}>
@@ -857,6 +927,16 @@ function mergeSidebarFolders(
       ...folder,
       documentCount: folder.documents.length,
     }));
+}
+
+function applyFolderLabelOverrides(
+  folders: BrainHierarchyFolder[],
+  folderLabelOverrides: Record<string, string>,
+): BrainHierarchyFolder[] {
+  return folders.map((folder) => ({
+    ...folder,
+    label: folderLabelOverrides[folder.id] ?? folder.label,
+  }));
 }
 
 function archiveMeta(recent: BrainRecentIdea): string {
