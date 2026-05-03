@@ -590,7 +590,7 @@ function AskPennyPanel({
     <aside className={`ask-penny-panel${isOpen ? " is-open" : ""}`} aria-label="Ask Penny" aria-hidden={!isOpen}>
       <header>
         <div>
-          <span>ASK PENNY</span>
+          <span>Ask Penny</span>
           <p>Ctrl + A to toggle</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close Ask Penny">
@@ -601,7 +601,7 @@ function AskPennyPanel({
       <div className="ask-penny-thread" role="log" aria-live="polite">
         {messages.map((message, index) => (
           <div key={`${message.role}-${index}`} className={`ask-penny-message is-${message.role}`}>
-            <span>{message.role === "penny" ? "Penny" : message.role === "user" ? "You" : "System"}</span>
+            <span>{message.role === "penny" ? "Penny" : message.role === "user" ? "You" : "Ask Penny"}</span>
             <AskPennyRenderedText text={message.text} />
           </div>
         ))}

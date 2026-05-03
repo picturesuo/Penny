@@ -4016,7 +4016,6 @@
   .learn-step-header span,
   .learn-big-picture-copy span,
   .learn-core-copy span,
-  .ask-penny-panel header span,
   .learn-related-inline span {
     font-size: 11px;
     font-weight: 700;
@@ -4528,6 +4527,7 @@
     font-size: 16px;
     font-weight: 700;
     line-height: 1;
+    text-transform: none;
   }
 
   .ask-penny-panel header p {
@@ -4580,12 +4580,12 @@
     padding-bottom: 0;
   }
 
-  .ask-penny-message span {
+  .ask-penny-message > span {
     color: rgb(17 17 17 / 0.58);
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
-    text-transform: uppercase;
+    text-transform: none;
   }
 
   .ask-penny-message strong {

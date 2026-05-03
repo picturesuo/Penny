@@ -728,9 +728,9 @@ function derivativeOfLinearExpressionAnswer(compactQuestion: string): string | n
   const coefficientText = formatAskPennyNumber(coefficient);
 
   return [
-    `For $f(x)=${coefficientText}x$, the derivative is $f'(x)=${coefficientText}$.`,
-    `Use the constant multiple rule: the derivative of $x$ is $1$, so $\\frac{d}{dx}(${coefficientText}x)=${coefficientText}\\cdot 1=${coefficientText}$.`,
-    `That means the line $${coefficientText}x$ changes by ${coefficientText} for every 1-unit increase in $x$.`,
+    `For f(x) = ${coefficientText}x, the derivative is f'(x) = ${coefficientText}.`,
+    `Use the constant multiple rule: x has derivative 1, so the derivative of ${coefficientText}x is ${coefficientText} times 1, which is ${coefficientText}.`,
+    `In plain language, the line ${coefficientText}x changes by ${coefficientText} for every 1-unit increase in x.`,
   ].join("\n\n");
 }
 
