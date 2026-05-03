@@ -159,6 +159,7 @@
     align-items: start;
     min-height: 88px;
     gap: 14px;
+    background: #ffffff;
     padding: 34px 34px 6px 38px;
   }
 
@@ -172,7 +173,7 @@
     border: 0;
     padding: 0;
     color: #2d2d2d;
-    background: transparent;
+    background: #ffffff;
     font-family: Georgia, Cambria, "Times New Roman", Times, serif;
     font-size: 16px;
     line-height: 1.35;
