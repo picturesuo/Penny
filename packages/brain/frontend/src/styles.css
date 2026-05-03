@@ -198,9 +198,9 @@
 
   .landing-submit-button {
     position: absolute;
-    right: -22px;
-    bottom: 58px;
-    transform: translate(50%, 50%) scale(0.86);
+    right: 24px;
+    bottom: 24px;
+    transform: scale(0.86);
     width: 30px;
     min-width: 30px;
     height: 30px;
@@ -219,7 +219,7 @@
   }
 
   .landing-submit-button.is-visible {
-    transform: translate(50%, 50%) scale(1);
+    transform: scale(1);
     opacity: 1;
     pointer-events: auto;
   }
@@ -4815,8 +4815,8 @@
   }
 
   .landing-submit-button {
-    right: -18px;
-    bottom: 48px;
+    right: 20px;
+    bottom: 20px;
     width: 28px;
     min-width: 28px;
     height: 28px;
