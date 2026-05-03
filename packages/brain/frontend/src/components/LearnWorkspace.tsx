@@ -822,10 +822,10 @@ function buildLearnPageDataFromPlan(
         totalSubsteps: group.subgroups.length,
         title: subgroup.title,
         parentTitle: group.title,
-        learningGoal: subgroup.oneLineGoal ?? `Learn ${subgroup.title.toLowerCase()} as the next subsection.`,
+        learningGoal: subgroup.oneLineGoal ?? fallbackOneLineGoal(group.id, subgroup.title),
         shortExplanation: subgroup.teachingParagraph,
         teachingSections: normalizeTeachingSections(subgroup.teachingSections, subgroup.keyMoves, subgroup.teachingParagraph),
-        misconceptions: normalizeMisconceptions(subgroup.misconceptions),
+        misconceptions: normalizeMisconceptions(subgroup.misconceptions, subgroup.id),
         coreIdea: {
           bullets: subgroup.keyMoves.slice(0, 4),
           visualPlaceholderLabel: `${subgroup.visualExample.title}: ${subgroup.visualExample.description}`,
@@ -907,11 +907,27 @@ function fallbackTeachingSections(keyMoves: string[], teachingParagraph: string)
   ];
 }
 
-function normalizeMisconceptions(misconceptions: string[] | undefined): string[] {
-  return misconceptions?.length ? misconceptions.slice(0, 4) : fallbackMisconceptions();
+function fallbackOneLineGoal(groupId: string, subgroupTitle: string): string {
+  if (groupId.startsWith("yc-")) {
+    return `Use "${subgroupTitle}" to answer what YC would actually evaluate in the January 1 application question.`;
+  }
+
+  return `Use "${subgroupTitle}" to produce one concrete learning result for this section.`;
+}
+
+function normalizeMisconceptions(misconceptions: string[] | undefined, stepId?: string): string[] {
+  return misconceptions?.length ? misconceptions.slice(0, 4) : fallbackMisconceptions(stepId);
 }
 
 function fallbackMisconceptions(stepId?: string): string[] {
+  if (stepId?.startsWith("yc-")) {
+    return [
+      "Do not turn the YC question into a prestige ranking.",
+      "Do not treat investor interest as stronger than founder proof, insight, or traction.",
+      "Do not answer with startup folklore; convert the claim into application evidence.",
+    ];
+  }
+
   if (stepId === "step-4") {
     return ["A challenge is not proof by itself.", "A checked explanation can still need external evidence."];
   }
@@ -1685,6 +1701,120 @@ const ycMockLearningPlan: LearningPlan = {
             title: "Check loop",
             description:
               "A loop from application spine to weakest sentence, then to evidence needed, then back to a revised application spine.",
+          },
+        },
+      ],
+    },
+    {
+      id: "yc-evidence",
+      title: "Build the evidence packet",
+      purpose: "Turn the YC lesson into concrete proof that a reader can inspect instead of asking them to trust the pitch.",
+      subgroups: [
+        {
+          id: "yc-evidence-founder",
+          title: "Collect founder proof",
+          oneLineGoal:
+            "Choose the founder evidence that would make a YC reader believe the team can build, learn, and persist.",
+          teachingParagraph:
+            "For the YC question, founder proof is not a biography. It is a short evidence packet showing what each founder has already done that predicts startup execution: built something hard, learned unusually fast, recruited users, solved a technical problem, or kept going when the default outcome was quitting. This section turns 'people matter' into inspectable proof.",
+          keyMoves: [
+            "List one unusually concrete achievement per founder.",
+            "Attach difficulty, scale, or speed to each proof point.",
+            "Cut traits that are not backed by an event.",
+          ],
+          misconceptions: [
+            "Do not write a founder bio when the application needs evidence.",
+            "Do not claim grit, speed, or taste without a concrete event.",
+            "Do not hide the strongest proof behind modest wording.",
+          ],
+          workedExample:
+            "For Penny: 'Built a working claim-graph learning prototype, shipped Brain/Check/Learn loops, and used user feedback to revise the interface repeatedly' is stronger than 'passionate about AI tools.'",
+          visualExample: {
+            title: "Founder proof table",
+            description:
+              "A table with founder, hard thing built, measurable signal, and what that signal proves for YC.",
+          },
+        },
+        {
+          id: "yc-evidence-user",
+          title: "Collect user proof",
+          oneLineGoal:
+            "Separate real user evidence from compliments so the application can show why the idea is not imaginary.",
+          teachingParagraph:
+            "YC does not need a mature company, but it does need a reason to believe the problem is real. User proof can be usage, waitlist behavior, repeated conversations, pilots, revenue, or a sharp pattern from customer interviews. The point is to show that the team has touched reality and learned something specific about demand.",
+          keyMoves: [
+            "Name the user group precisely.",
+            "Show one behavior, not just an opinion.",
+            "Explain what changed in the product or claim because of that evidence.",
+          ],
+          misconceptions: [
+            "Do not count polite enthusiasm as traction.",
+            "Do not describe a huge market before proving one user behavior.",
+            "Do not bury the evidence under future roadmap language.",
+          ],
+          workedExample:
+            "For Penny: 'Users return to revise old claims after challenges' is a stronger demand signal than 'people say thinking tools are interesting.'",
+          visualExample: {
+            title: "Reality contact log",
+            description:
+              "A compact log of user behavior, what it proves, and what assumption it changes in the application.",
+          },
+        },
+      ],
+    },
+    {
+      id: "yc-final",
+      title: "Answer the YC question",
+      purpose: "End with a direct answer and a reusable application checklist for the January 1 learning event.",
+      subgroups: [
+        {
+          id: "yc-final-ranking",
+          title: "Rank people, idea, investors",
+          oneLineGoal:
+            "Give the direct answer: YC should be read as people plus insight first, with investors as optional evidence.",
+          teachingParagraph:
+            "The final answer should be blunt enough to use. For a YC batch application, people and insight carry the most weight because the company is early and the first version of the idea may change. The idea matters when it proves clear thinking about a real problem. Existing investors matter only when they reveal real evidence such as traction, urgency, or credible market validation.",
+          keyMoves: [
+            "Put founder proof and insight first.",
+            "Use the idea to show judgment and market understanding.",
+            "Use investor interest only as evidence of something real.",
+          ],
+          misconceptions: [
+            "Do not say YC ignores the idea.",
+            "Do not say investors never matter.",
+            "Do not let the ranking replace the evidence packet.",
+          ],
+          workedExample:
+            "Answer: YC is not mainly checking whether investors already like the company. It is checking whether the founders have a clear, promising startup with evidence that they can learn fast and make it much stronger.",
+          visualExample: {
+            title: "YC answer stack",
+            description:
+              "A stack with founder proof and insight as the base, clear idea and progress above it, and investor interest as optional supporting evidence.",
+          },
+        },
+        {
+          id: "yc-final-save",
+          title: "Save the Brain claim",
+          oneLineGoal:
+            "Convert the lesson into a Penny claim that can be challenged later instead of disappearing as a one-off note.",
+          teachingParagraph:
+            "The January 1 Learn output should become a durable Brain claim with assumptions and a Check prompt. That keeps the YC lesson connected to Penny's actual loop: claim, assumptions, challenge, response, and artifact. The saved claim should be specific enough to be wrong, because a vague lesson cannot be checked.",
+          keyMoves: [
+            "Write one challengeable YC claim.",
+            "Attach assumptions about founders, ideas, and investors.",
+            "Create the next Check prompt from the weakest assumption.",
+          ],
+          misconceptions: [
+            "Do not save a summary that cannot be challenged.",
+            "Do not leave the investor question as a loose impression.",
+            "Do not skip the next Check target after Learn.",
+          ],
+          workedExample:
+            "Brain claim: 'For early YC applicants, founder evidence and specific insight matter more than existing investor interest.' Check prompt: 'What evidence would make this false for Penny's application?'",
+          visualExample: {
+            title: "Brain-ready YC claim",
+            description:
+              "A claim card connected to three assumptions and one Check prompt for the YC application question.",
           },
         },
       ],
