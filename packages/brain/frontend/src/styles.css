@@ -4004,9 +4004,8 @@
   .learn-path-kicker span,
   .learn-goal-block span,
   .learn-step-header span,
+  .learn-big-picture-copy span,
   .learn-core-copy span,
-  .learn-example-panel span,
-  .learn-inline-note span,
   .ask-penny-panel header span,
   .learn-related-inline span {
     font-size: 11px;
@@ -4234,13 +4233,37 @@
 
   .learn-core-section {
     display: grid;
-    grid-template-columns: minmax(0, 0.56fr) minmax(240px, 0.44fr);
+    grid-template-columns: minmax(0, 0.58fr) minmax(240px, 0.42fr);
     gap: 14px;
     min-height: 0;
     overflow: visible;
     border-top: 1px solid #111111;
     border-bottom: 1px solid #111111;
     padding: 10px 0;
+  }
+
+  .learn-big-picture-copy {
+    display: grid;
+    align-content: start;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .learn-big-picture-copy h3 {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: clamp(22px, 2vw, 31px);
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.02;
+  }
+
+  .learn-big-picture-copy p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: rgb(17 17 17 / 0.74);
+    font-size: 15px;
+    line-height: 1.28;
   }
 
   .learn-core-copy {
@@ -4275,120 +4298,6 @@
     margin-top: 4px;
     border: 1px solid #111111;
     background: #111111;
-  }
-
-  .learn-visual-placeholder {
-    display: grid;
-    place-items: center;
-    min-height: 108px;
-    border: 1px solid #111111;
-    background:
-      linear-gradient(90deg, rgb(17 17 17 / 0.06) 1px, transparent 1px),
-      linear-gradient(rgb(17 17 17 / 0.06) 1px, transparent 1px),
-      #ffffff;
-    background-size: 22px 22px;
-    padding: 10px;
-    text-align: center;
-  }
-
-  .learn-visual-placeholder span {
-    max-width: 280px;
-    color: rgb(17 17 17 / 0.64);
-    font-size: 12px;
-    font-style: italic;
-    line-height: 1.22;
-  }
-
-  .learn-example-panel {
-    display: grid;
-    gap: 16px;
-    align-content: start;
-    min-height: auto;
-    overflow: visible;
-    border: 1px solid #111111;
-    padding: 14px 18px 16px;
-    background: #ffffff;
-  }
-
-  .learn-example-panel h3 {
-    margin: 5px 0 0;
-    overflow-wrap: anywhere;
-    font-size: 18px;
-    font-weight: 700;
-    line-height: 1.05;
-  }
-
-  .learn-example-panel p {
-    margin: 5px 0 0;
-    color: rgb(17 17 17 / 0.74);
-    overflow-wrap: anywhere;
-    font-size: 12px;
-    line-height: 1.18;
-  }
-
-  .learn-example-panel ol {
-    display: grid;
-    gap: 4px;
-    margin: 8px 0 0;
-    padding: 0;
-    list-style: none;
-    counter-reset: learn-example;
-  }
-
-  .learn-example-panel ol li {
-    display: grid;
-    grid-template-columns: 20px minmax(0, 1fr);
-    gap: 8px;
-    overflow-wrap: anywhere;
-    font-size: 12px;
-    line-height: 1.18;
-  }
-
-  .learn-example-panel ol li::before {
-    counter-increment: learn-example;
-    content: counter(learn-example);
-    font-weight: 700;
-  }
-
-  .learn-example-panel ol.is-code li {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    font-size: 12px;
-  }
-
-  .learn-example-panel aside {
-    display: grid;
-    gap: 6px;
-    align-self: start;
-    min-width: 0;
-    margin-top: 0;
-    border: 1px solid rgb(17 17 17 / 0.28);
-    background: #fbfaf6;
-    padding: 10px 12px 11px;
-  }
-
-  .learn-example-panel > div {
-    min-width: 0;
-  }
-
-  .learn-inline-note {
-    display: grid;
-    gap: 8px;
-    max-width: 920px;
-    border-top: 1px solid rgb(17 17 17 / 0.35);
-    border-bottom: 1px solid rgb(17 17 17 / 0.35);
-    padding: 10px 0;
-  }
-
-  .learn-editorial-main > .learn-inline-note {
-    margin-top: 18px;
-  }
-
-  .learn-inline-note p {
-    margin: 0;
-    color: rgb(17 17 17 / 0.7);
-    overflow-wrap: anywhere;
-    font-size: 13px;
-    line-height: 1.25;
   }
 
   .learn-bottom-nav {
@@ -5100,6 +5009,10 @@
     grid-column: 1;
     grid-row: 2;
     padding-inline: 0;
+  }
+
+  .learn-core-section {
+    grid-template-columns: 1fr;
   }
 
   .learn-sidebar {
