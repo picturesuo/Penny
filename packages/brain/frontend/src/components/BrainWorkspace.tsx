@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Archive, BookOpen, FilePlus, Folder, FolderPlus } from "lucide-react";
+import { Archive, BookOpen, FilePlus, Folder, FolderPlus, Send } from "lucide-react";
 import type {
   AutopilotTickData,
   BrainClaim,
@@ -758,7 +758,6 @@ function BrainHierarchySidebar({
   return (
     <aside className="brain-hierarchy-sidebar" aria-label="Brain sidebar">
       <section className="brain-sidebar-section" aria-label="Quick notes">
-        <div className="brain-sidebar-section-head is-quiet">Capture a quick note</div>
         <div className="brain-tree" role="tree" aria-label="Quick notes folder">
           <div className="brain-tree-folder" role="treeitem" aria-expanded="true">
             <div className="brain-tree-row is-folder">
@@ -767,11 +766,17 @@ function BrainHierarchySidebar({
               <small>{recents.length}</small>
             </div>
             <div className="brain-tree-children">
-              <div className="quick-note-capture">
+              <form
+                className="quick-note-capture"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleQuickNoteCreate();
+                }}
+              >
                 <textarea
                   value={quickNoteDraft}
                   onChange={(event) => setQuickNoteDraft(event.target.value)}
-                  placeholder="Capture a quick note."
+                  placeholder="Write a quick note."
                   rows={2}
                   onKeyDown={(event) => {
                     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -780,7 +785,15 @@ function BrainHierarchySidebar({
                     }
                   }}
                 />
-              </div>
+                <button
+                  type="submit"
+                  disabled={!quickNoteDraft.trim() || !onQuickNoteCreate}
+                  aria-label="Send quick note"
+                  title="Send quick note"
+                >
+                  <Send size={15} aria-hidden="true" />
+                </button>
+              </form>
               {recents.length > 0 ? (
                 <div className="brain-quick-list">
                   {recents.slice(0, 3).map((recent) => (
@@ -1194,15 +1207,13 @@ function SearchResultRow({
   onSelectDocument: (sessionId: string) => void;
 }) {
   return (
-    <button type="button" className="document-log-row" onClick={() => onSelectDocument(result.sessionId)}>
-      <span className="doc-kind">{result.type}</span>
+    <button type="button" className="document-log-row is-search-result" onClick={() => onSelectDocument(result.sessionId)}>
       <span>
         <strong title={result.title}>{truncateWords(result.title, 18)}</strong>
         <small title={result.body}>{truncateWords(result.body, 18)}</small>
       </span>
       <span className="doc-log-meta">
         <strong>Open</strong>
-        <small>{formatLabel(result.type)}</small>
       </span>
       <time>{formatDate(result.updatedAt)}</time>
     </button>

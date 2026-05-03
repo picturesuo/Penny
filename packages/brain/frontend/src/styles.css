@@ -2989,6 +2989,10 @@
     min-height: 96px;
   }
 
+  .document-log-row.is-search-result {
+    grid-template-columns: minmax(0, 1fr) 112px 116px;
+  }
+
   .document-log-row > span,
   .claim-log-row > span {
     min-width: 0;
@@ -4169,9 +4173,9 @@
     border: 1px solid #111111;
     border-radius: 8px;
     background:
-      linear-gradient(90deg, rgb(17 17 17 / 0.07) 1px, transparent 1px),
-      linear-gradient(rgb(17 17 17 / 0.07) 1px, transparent 1px),
-      #ffffff;
+      linear-gradient(90deg, #eadfce 1px, transparent 1px),
+      linear-gradient(#eadfce 1px, transparent 1px),
+      var(--penny-paper);
     background-size: 24px 24px;
   }
 
@@ -5264,6 +5268,10 @@
   .document-log-row {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .document-log-row.is-search-result {
+    grid-template-columns: 1fr;
   }
 
   .focused-detail-head,
