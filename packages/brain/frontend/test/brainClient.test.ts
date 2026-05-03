@@ -141,6 +141,30 @@ test("frontend Ask Penny local fallback answers conversational arithmetic", asyn
   }
 });
 
+test("frontend Ask Penny local fallback gives worked LaTeX for technical questions", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (): Promise<Response> => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  try {
+    const response = await askPenny({
+      question: "How do I solve a physics projectile motion question?",
+      currentStepTitle: "Work the example",
+      localContext: "Goal: understand physics word problems. Current step: Work the example.",
+    });
+
+    assert.equal(response.data.provider, "heuristic");
+    assert.equal(response.data.model, null);
+    assert.match(response.data.answer, /\$\$x = x_0 \+ v_0t \+ \\frac\{1\}\{2\}at\^2\$\$/);
+    assert.match(response.data.answer, /units/);
+    assert.doesNotMatch(response.data.answer, /Next step:/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("frontend Ask Penny still uses the live API when it responds", async () => {
   const calls: FetchCall[] = [];
   const restoreFetch = mockFetch(calls, [
