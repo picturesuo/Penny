@@ -623,6 +623,12 @@ function localAskPennyAnswer(input: {
     }
   }
 
+  const technicalAnswer = localTechnicalAskPennyAnswer(question);
+
+  if (technicalAnswer) {
+    return technicalAnswer;
+  }
+
   const step = clipAskPennyText(input.currentStepTitle, 120);
   const clippedQuestion = clipAskPennyText(question, 220);
   const { goal, coreIdea } = askPennyContextParts(input.localContext);
@@ -637,6 +643,65 @@ function localAskPennyAnswer(input: {
 
 function formatAskPennyNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(10)));
+}
+
+function localTechnicalAskPennyAnswer(question: string): string | null {
+  const compact = question.trim().toLowerCase();
+
+  if (!/\b(math|physics|formula|equation|solve|derive|calculate|compute|derivative|integral|algebra|quadratic|probability|statistics|kinematic|velocity|acceleration|force|newton|energy|momentum|latex)\b/.test(compact)) {
+    return null;
+  }
+
+  if (/\b(projectile|kinematic|velocity|acceleration|force|newton|physics|gravity)\b/.test(compact)) {
+    return [
+      "For a physics problem, first name the knowns, the unknown, and the model. If the motion has constant acceleration, the core equations are:",
+      "$$v = v_0 + at$$",
+      "$$x = x_0 + v_0t + \\frac{1}{2}at^2$$",
+      "$$v^2 = v_0^2 + 2a(x-x_0)$$",
+      "For projectile motion, split the problem into horizontal and vertical parts. Usually $a_x = 0$ and $a_y = -g$, so solve vertical motion for time, then use that time in horizontal motion. A complete answer should include the setup, substitution, units, and a quick check that the sign and size make sense.",
+    ].join("\n\n");
+  }
+
+  if (/\b(derivative|differentiate|slope|rate of change)\b/.test(compact)) {
+    return [
+      "To answer a derivative question, identify the function, apply the rule, then interpret the result. The derivative is the instantaneous rate of change:",
+      "$$f'(x)=\\lim_{h\\to 0}\\frac{f(x+h)-f(x)}{h}$$",
+      "For example, if $f(x)=x^2$, then $f'(x)=2x$. At $x=3$, the slope is $f'(3)=6$. A good answer should show the rule used, the simplified derivative, and what the derivative means in the original situation.",
+    ].join("\n\n");
+  }
+
+  if (/\b(integral|integrate|area under|antiderivative)\b/.test(compact)) {
+    return [
+      "For an integration question, decide whether you need an antiderivative or an accumulated quantity. The basic form is:",
+      "$$\\int_a^b f(x)\\,dx = F(b)-F(a)$$",
+      "where $F'(x)=f(x)$. A complete answer should state the antiderivative, apply the bounds if present, keep units attached, and interpret the sign or area in context.",
+    ].join("\n\n");
+  }
+
+  if (/\b(probability|statistics|expected value|variance|standard deviation)\b/.test(compact)) {
+    return [
+      "For a statistics or probability question, define the random variable, list the possible outcomes or distribution, then compute from the definition.",
+      "$$E[X]=\\sum_i x_iP(X=x_i)$$",
+      "$$\\mathrm{Var}(X)=E[X^2]-E[X]^2$$",
+      "A complete answer should say what the variable represents, show the calculation, and translate the result back into the real-world meaning of the question.",
+    ].join("\n\n");
+  }
+
+  if (/\b(solve|equation|algebra|quadratic|system)\b/.test(compact)) {
+    return [
+      "For an algebra question, isolate the unknown while doing the same operation to both sides. If it is quadratic, put it in standard form:",
+      "$$ax^2+bx+c=0$$",
+      "then use factoring when obvious or the quadratic formula:",
+      "$$x=\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}$$",
+      "A complete answer should show each transformation, check the solution in the original equation, and reject any value that violates the original constraints.",
+    ].join("\n\n");
+  }
+
+  return [
+    "For a technical question, give the answer as a worked chain: define the quantities, choose the governing relation, substitute, simplify, and interpret.",
+    "$$\\text{knowns} \\rightarrow \\text{model} \\rightarrow \\text{calculation} \\rightarrow \\text{check}$$",
+    "A comprehensive answer should include formulas in LaTeX, the units or assumptions, and a final sentence explaining what the result means.",
+  ].join("\n\n");
 }
 
 function clipAskPennyText(value: string, maxLength: number): string {
