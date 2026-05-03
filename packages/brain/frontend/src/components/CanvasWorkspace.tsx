@@ -19,6 +19,7 @@ const emptyCanvas: SessionCanvasData = {
 
 const nodeWidth = 236;
 const nodeHeight = 132;
+const canvasPadding = 150;
 
 export function CanvasWorkspace({
   sessionId,
@@ -89,6 +90,7 @@ export function CanvasWorkspace({
   }, [focusedClaimId, initialCanvasData, sessionId]);
 
   const nodes = useMemo(() => layoutCanvasNodes(canvasData.nodes), [canvasData.nodes]);
+  const canvasSize = useMemo(() => canvasContentSize(nodes), [nodes]);
   const recommendedPath = canvasData.recommendedPath ?? [];
   const recommendedNodes = recommendedPath
     .map((nodeId) => nodes.find((node) => node.id === nodeId))
@@ -146,6 +148,8 @@ export function CanvasWorkspace({
                 nodes={nodes}
                 selectedNodeId={selectedNode?.id ?? null}
                 recommendedPath={recommendedPath}
+                width={canvasSize.width}
+                height={canvasSize.height}
               />
               {nodes.map((node) => (
                 <CanvasNodeCard
@@ -260,11 +264,22 @@ function layoutCanvasNodes(nodes: CanvasNode[]): PositionedCanvasNode[] {
 function gridPosition(index: number): { x: number; y: number } {
   const column = index % 4;
   const row = Math.floor(index / 4);
-  const laneOffset = row % 2 === 0 ? 0 : 96;
+  const laneOffset = row % 2 === 0 ? 0 : 138;
 
   return {
-    x: 92 + column * 270 + laneOffset,
-    y: 90 + row * 190 + (column % 2) * 34,
+    x: 104 + column * 340 + laneOffset,
+    y: 112 + row * 248 + (column % 2) * 46,
+  };
+}
+
+function canvasContentSize(nodes: PositionedCanvasNode[]): { width: number; height: number } {
+  if (nodes.length === 0) {
+    return { width: 1080, height: 620 };
+  }
+
+  return {
+    width: Math.max(1080, Math.ceil(Math.max(...nodes.map((node) => node.x + node.width)) + canvasPadding)),
+    height: Math.max(620, Math.ceil(Math.max(...nodes.map((node) => node.y + node.height)) + canvasPadding)),
   };
 }
 
