@@ -50,7 +50,7 @@ export function Header({ sessionLabel, thinkingLabel, activeItem = "Brain", onNa
             <span />
           </div>
           <p>{editionDate}</p>
-          <p>Edition 1.0</p>
+          <p>Edition 3.0</p>
           <p className="sr-only">{sessionLabel}</p>
           <p className="sr-only">{thinkingLabel}</p>
         </div>
