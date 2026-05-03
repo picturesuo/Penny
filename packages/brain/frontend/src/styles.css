@@ -3340,8 +3340,8 @@
     border: 1px solid #111111;
     border-radius: 8px;
     background:
-      linear-gradient(rgb(17 17 17 / 0.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(17 17 17 / 0.06) 1px, transparent 1px),
+      linear-gradient(#f4efe7 1px, transparent 1px),
+      linear-gradient(90deg, #f4efe7 1px, transparent 1px),
       #f8f7f1;
     background-size: 32px 32px;
   }
