@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { decideVerifyConfidence, verifyClaim } from "../api/brainClient";
+import { verifyClaim } from "../api/brainClient";
 import type {
   BrainClaim,
   BrainSearchTraceResult,
-  BrainVerifyConfidenceDecisionResponse,
   BrainVerifyEvidenceCard,
   BrainVerifyResult,
 } from "../types/brain";
@@ -28,15 +27,12 @@ export function VerifyPanel({
   onVerifyChanged,
 }: VerifyPanelProps) {
   const [result, setResult] = useState<BrainVerifyResult | null>(null);
-  const [decision, setDecision] = useState<BrainVerifyConfidenceDecisionResponse["data"] | null>(null);
   const [status, setStatus] = useState("Ready");
   const [isRunning, setIsRunning] = useState(false);
   const canVerify = Boolean(sessionId && claim) && !disabled && !isRunning;
-  const hasPendingConfidence = Boolean(result?.move.id && result.confidenceUpdate.decision === "pending_user_decision");
 
   useEffect(() => {
     setResult(null);
-    setDecision(null);
     setStatus("Ready");
   }, [claim?.id, sessionId]);
 
@@ -47,7 +43,6 @@ export function VerifyPanel({
 
     setIsRunning(true);
     setStatus("Checking evidence");
-    setDecision(null);
 
     try {
       const payload = await verifyClaim({
@@ -57,33 +52,6 @@ export function VerifyPanel({
       });
       setResult(payload.data);
       setStatus("Evidence ready");
-      await onVerifyChanged?.();
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsRunning(false);
-    }
-  }
-
-  async function handleConfidenceDecision(nextDecision: "accept" | "reject") {
-    if (!result || !hasPendingConfidence || isRunning) {
-      return;
-    }
-
-    setIsRunning(true);
-    setStatus(nextDecision === "accept" ? "Accepting confidence change" : "Ignoring confidence change");
-
-    try {
-      const payload = await decideVerifyConfidence({
-        verifyMoveId: result.move.id,
-        decision: nextDecision,
-        reason:
-          nextDecision === "accept"
-            ? "Accepted from the frontend Verify panel."
-            : "Ignored from the frontend Verify panel.",
-      });
-      setDecision(payload.data);
-      setStatus(nextDecision === "accept" ? "Confidence changed" : "Confidence ignored");
       await onVerifyChanged?.();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -106,23 +74,18 @@ export function VerifyPanel({
 
       <div className="verify-panel-meta">
         {claim ? <span>{formatLabel(claim.kind)}</span> : null}
-        {typeof claim?.confidence === "number" ? <span>{claim.confidence}% confidence</span> : null}
         <span>{status}</span>
       </div>
 
       {result ? (
         <VerifyResultDetails
           result={result}
-          decision={decision}
           disabled={disabled}
           isRunning={isRunning}
-          onConfidenceDecision={(nextDecision) => {
-            void handleConfidenceDecision(nextDecision);
-          }}
         />
       ) : (
         <p className="verify-empty">
-          Verify checks the selected claim against evidence and keeps confidence changes pending until you accept them.
+          Verify checks the selected claim against evidence and saves citation support when available.
         </p>
       )}
     </section>
@@ -131,19 +94,13 @@ export function VerifyPanel({
 
 export function VerifyResultDetails({
   result,
-  decision,
   disabled,
   isRunning,
-  onConfidenceDecision,
 }: {
   result: BrainVerifyResult;
-  decision: BrainVerifyConfidenceDecisionResponse["data"] | null;
   disabled: boolean;
   isRunning: boolean;
-  onConfidenceDecision: (decision: "accept" | "reject") => void;
 }) {
-  const confidenceDelta = result.confidenceDeltaSuggestion;
-  const hasPendingConfidence = Boolean(result.move.id && result.confidenceUpdate.decision === "pending_user_decision");
   const hasCitations = result.citationSources.length > 0 || result.citations.length > 0;
   const sourceItems = verifySourceItems(result);
 
@@ -158,40 +115,11 @@ export function VerifyResultDetails({
 
       {sourceItems.length > 0 ? <VerifySourceList items={sourceItems} /> : null}
 
-      <div className="verify-confidence-row">
-        <span>
-          Confidence suggestion: <strong>{confidenceDelta > 0 ? `+${confidenceDelta}` : confidenceDelta}</strong>
-        </span>
-        <div>
-          <button
-            type="button"
-            className="text-command"
-            disabled={disabled || isRunning || !hasPendingConfidence || Boolean(decision)}
-            onClick={() => onConfidenceDecision("accept")}
-          >
-            Accept Confidence Change
-          </button>
-          <button
-            type="button"
-            className="text-command"
-            disabled={disabled || isRunning || !hasPendingConfidence || Boolean(decision)}
-            onClick={() => onConfidenceDecision("reject")}
-          >
-            Ignore
-          </button>
-          <button type="button" className="text-command" disabled title="Verify stores citation evidence when available.">
-            {hasCitations ? "Evidence Saved" : "Save Evidence"}
-          </button>
-        </div>
+      <div className="verify-evidence-actions">
+        <button type="button" className="text-command" disabled={disabled || isRunning} title="Verify stores citation evidence when available.">
+          {hasCitations ? "Evidence Saved" : "Save Evidence"}
+        </button>
       </div>
-
-      {decision ? (
-        <p className="verify-decision-note">
-          {decision.confidenceUpdate.accepted
-            ? `Confidence moved from ${decision.confidenceUpdate.previousConfidence}% to ${decision.confidenceUpdate.currentConfidence}%.`
-            : "Confidence suggestion ignored."}
-        </p>
-      ) : null}
 
       <div className="verify-evidence-list" aria-label="Evidence cards">
         {result.evidenceCards.map((card, index) => (

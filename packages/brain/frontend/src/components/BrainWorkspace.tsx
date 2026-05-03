@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Archive, BookOpen, Folder } from "lucide-react";
+import { Archive, BookOpen, Folder, Plus } from "lucide-react";
 import type {
   AutopilotTickData,
   BrainClaim,
@@ -75,6 +75,7 @@ interface BrainHierarchySidebarProps {
   archivedRecents?: BrainRecentIdea[];
   onSelectDocument: (sessionId: string) => void;
   onSelectQuickNote: (recent: BrainRecentIdea) => void;
+  onNewDocument: () => void;
   onQuickNoteCreate?: ((rawIdea: string) => Promise<void>) | undefined;
   onQuickNoteAction?:
     | ((recent: BrainRecentIdea, action: "build" | "brain" | "check" | "learn" | "archive" | "restore") => Promise<void>)
@@ -185,6 +186,7 @@ export function BrainWorkspace({
         archivedRecents={archivedRecents}
         onSelectDocument={handleSelectDocument}
         onSelectQuickNote={(recent) => setSelectedQuickNoteId(recent.id)}
+        onNewDocument={onNewThought}
         onQuickNoteCreate={onQuickNoteCreate}
         onQuickNoteAction={handleQuickNoteAction}
       />
@@ -428,7 +430,6 @@ function FocusedGraphDetail({
       <div className="focused-detail-meta" aria-label="Selected claim state">
         <span>{formatLabel(claim.kind)}</span>
         <span>{formatLabel(claim.status)}</span>
-        {typeof claim.confidence === "number" ? <span>{claim.confidence}% confidence</span> : null}
         {latestVersion ? <span>Version {shortId(latestVersion.id)}</span> : null}
       </div>
       {detailStatus === "loading" ? <p className="focused-detail-note">Loading graph detail.</p> : null}
@@ -570,6 +571,7 @@ function BrainHierarchySidebar({
   archivedRecents = [],
   onSelectDocument,
   onSelectQuickNote,
+  onNewDocument,
   onQuickNoteCreate,
   onQuickNoteAction,
 }: BrainHierarchySidebarProps) {
@@ -670,6 +672,10 @@ function BrainHierarchySidebar({
         <div className="brain-sidebar-section-head">
           <Folder size={15} aria-hidden="true" />
           <strong>Documents</strong>
+          <button type="button" className="brain-sidebar-add-doc" onClick={onNewDocument}>
+            <Plus size={14} aria-hidden="true" />
+            <span>Add document</span>
+          </button>
         </div>
         {folders.length > 0 ? (
           <div className="brain-tree" role="tree" aria-label="Folders and documents">
@@ -782,7 +788,7 @@ function BrainRecordLog({
   const documents = documentsData?.documents ?? [];
   const [searchQuery, setSearchQuery] = useState("");
   const normalizedQuery = searchQuery.trim().toLowerCase();
-  const recentClaims = useMemo(() => recentClaimRows(documents), [documents]);
+  const recentDocuments = useMemo(() => recentDocumentRows(documents), [documents]);
   const searchResults = useMemo(() => {
     if (!normalizedQuery) {
       return [];
@@ -831,20 +837,14 @@ function BrainRecordLog({
           )}
         </section>
       ) : (
-        <section className="brain-recent-claims" aria-label="Most recent claims">
+        <section className="brain-recent-documents" aria-label="Most recent documents">
           <div className="brain-section-title">
-            <strong>Most recent claims</strong>
-            <span>{recentClaims.length} shown</span>
+            <strong>Most recent docs</strong>
+            <span>{recentDocuments.length} shown</span>
           </div>
-          {recentClaims.length > 0 ? (
-            <div className="claim-log-table">
-              {recentClaims.map((claim) => (
-                <RecentClaimRow key={claim.id} claim={claim} onSelectDocument={onSelectDocument} />
-              ))}
-            </div>
-          ) : documents.length > 0 ? (
-            <div className="document-log-table" aria-label="Document log">
-              {documents.map((document) => (
+          {recentDocuments.length > 0 ? (
+            <div className="document-log-table" aria-label="Most recent documents">
+              {recentDocuments.map((document) => (
                 <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
               ))}
             </div>
@@ -856,33 +856,8 @@ function BrainRecordLog({
           )}
         </section>
       )}
-      {normalizedQuery ? null : (
-        <section className="brain-recent-documents" aria-label="Recent documents">
-          <div className="brain-section-title">
-            <strong>Recent documents</strong>
-            <span>{documentsData?.meta.documentCount ?? documents.length} docs</span>
-          </div>
-          <div className="document-log-table" aria-label="Document log">
-            {documents.length > 0 ? (
-              documents.map((document) => (
-                <DocumentLogRow key={document.id} document={document} onSelectDocument={onSelectDocument} />
-              ))
-            ) : null}
-          </div>
-        </section>
-      )}
     </section>
   );
-}
-
-interface ClaimRow {
-  id: string;
-  sessionId: string;
-  documentTitle: string;
-  text: string;
-  kind: string;
-  status: string;
-  updatedAt: string;
 }
 
 interface SearchResult {
@@ -894,21 +869,8 @@ interface SearchResult {
   updatedAt: string;
 }
 
-function recentClaimRows(documents: BrainDocumentSummary[]): ClaimRow[] {
-  return documents
-    .flatMap((document) =>
-      documentClaims(document).map((claim, index) => ({
-        id: `${document.id}-${index}-${claim.text}`,
-        sessionId: document.sessionId,
-        documentTitle: document.title,
-        text: claim.text,
-        kind: claim.kind,
-        status: claim.status,
-        updatedAt: document.updatedAt,
-      })),
-    )
-    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-    .slice(0, 18);
+function recentDocumentRows(documents: BrainDocumentSummary[]): BrainDocumentSummary[] {
+  return [...documents].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt)).slice(0, 18);
 }
 
 function searchDocumentRows(documents: BrainDocumentSummary[], query: string): SearchResult[] {
@@ -967,29 +929,6 @@ function documentClaims(document: BrainDocumentSummary): Array<{ text: string; k
   });
 }
 
-function RecentClaimRow({
-  claim,
-  onSelectDocument,
-}: {
-  claim: ClaimRow;
-  onSelectDocument: (sessionId: string) => void;
-}) {
-  return (
-    <button type="button" className="claim-log-row" onClick={() => onSelectDocument(claim.sessionId)}>
-      <span className="doc-kind">Claim</span>
-      <span>
-        <strong title={claim.text}>{truncateWords(claim.text, 18)}</strong>
-        <small title={claim.documentTitle}>{claim.documentTitle}</small>
-      </span>
-      <span className="doc-log-meta">
-        <strong>{formatLabel(claim.kind)}</strong>
-        <small>{formatLabel(claim.status)}</small>
-      </span>
-      <time>{formatDate(claim.updatedAt)}</time>
-    </button>
-  );
-}
-
 function SearchResultRow({
   result,
   onSelectDocument,
@@ -1021,17 +960,12 @@ function DocumentLogRow({
   onSelectDocument: (sessionId: string) => void;
 }) {
   return (
-    <button type="button" className="document-log-row" onClick={() => onSelectDocument(document.sessionId)}>
-      <span className="doc-kind">Doc</span>
-      <span>
+    <button type="button" className="document-log-row is-document-summary" onClick={() => onSelectDocument(document.sessionId)}>
+      <span className="document-log-copy">
         <strong title={document.title}>{truncateWords(document.title, 14)}</strong>
         <small title={document.mainClaim?.text ?? document.originalIdea ?? ""}>
-          {truncateWords(document.mainClaim?.text ?? document.originalIdea ?? "No main claim yet", 16)}
+          {truncateWords(document.mainClaim?.text ?? document.originalIdea ?? "No summary yet.", 22)}
         </small>
-      </span>
-      <span className="doc-log-meta">
-        <strong>{document.counts.claims} claims</strong>
-        <small>{formatLabel(document.status)}</small>
       </span>
       <time>{formatDate(document.updatedAt)}</time>
     </button>

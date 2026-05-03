@@ -178,12 +178,6 @@ export function CanvasWorkspace({
                     <dd>{selectedNode.status}</dd>
                   </div>
                 ) : null}
-                {typeof selectedNode.confidence === "number" ? (
-                  <div>
-                    <dt>Confidence</dt>
-                    <dd>{selectedNode.confidence}%</dd>
-                  </div>
-                ) : null}
               </dl>
               <div className="canvas-context-actions">
                 {selectedActions.map((action) => (

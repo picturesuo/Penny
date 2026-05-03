@@ -46,7 +46,6 @@ export function CanvasNodeCard({ node, selected, recommended, onSelect, onAction
         {node.summary ? <p>{node.summary}</p> : null}
         <span className="canvas-node-meta">
           {node.status ? <span>{node.status}</span> : null}
-          {typeof node.confidence === "number" ? <span>{node.confidence}%</span> : null}
           {recommended ? <span>Path</span> : null}
         </span>
       </button>
