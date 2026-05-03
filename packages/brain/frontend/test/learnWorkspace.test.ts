@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LearnWorkspace } from "../src/components/LearnWorkspace";
+import { LearnWorkspace, visibleLearningPathSteps } from "../src/components/LearnWorkspace";
 
 test("LearnWorkspace first screen opens directly to the lesson view", () => {
   const markup = renderToStaticMarkup(
@@ -18,6 +18,7 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /BIG PICTURE/);
   assert.match(markup, /ZOOM IN/);
   assert.match(markup, /ASK PENNY/);
+  assert.match(markup, /Thinking graph/);
   assert.match(markup, /1\.1/);
   assert.match(markup, /1\.2/);
   assert.match(markup, /1\.3/);
@@ -203,10 +204,38 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   assert.match(markup, /Name the pricing goal/);
   assert.match(markup, /Name the buyer/);
   assert.match(markup, /Package pricing/);
-  assert.match(markup, /Iterate pricing/);
-  assert.match(markup, />6</);
+  assert.doesNotMatch(markup, /Iterate pricing/);
   assert.doesNotMatch(markup, /A pricing expert teaching/);
   assert.doesNotMatch(markup, /Pricing value map/);
+});
+
+test("LearnWorkspace keeps the active learning path at the top of a five-step window", () => {
+  const steps = Array.from({ length: 8 }, (_, index) => ({
+    id: `step-${index + 1}`,
+    title: `Step ${index + 1}`,
+    expanded: false,
+    substeps: [],
+  }));
+
+  assert.deepEqual(
+    visibleLearningPathSteps(steps, "step-6").map((item) => [item.index + 1, item.step.title]),
+    [
+      [6, "Step 6"],
+      [7, "Step 7"],
+      [8, "Step 8"],
+    ],
+  );
+
+  assert.deepEqual(
+    visibleLearningPathSteps(steps, "step-2").map((item) => [item.index + 1, item.step.title]),
+    [
+      [2, "Step 2"],
+      [3, "Step 3"],
+      [4, "Step 4"],
+      [5, "Step 5"],
+      [6, "Step 6"],
+    ],
+  );
 });
 
 function learnWorkspaceProps(overrides: Record<string, unknown> = {}) {
