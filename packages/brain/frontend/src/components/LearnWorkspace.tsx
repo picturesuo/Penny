@@ -137,7 +137,11 @@ function LearnSessionView({
         target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
       const selectedText = window.getSelection()?.toString().trim() ?? "";
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+      const isAskPennyPasteShortcut =
+        ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") ||
+        (selectedText && (event.key === "Control" || event.key === "Meta"));
+
+      if (isAskPennyPasteShortcut) {
         if (isTextInput) {
           return;
         }
@@ -912,6 +916,10 @@ function AskPennyPanel({
     }
 
     setDraft(selectedQuestionSeed.text);
+    window.setTimeout(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(selectedQuestionSeed.text.length, selectedQuestionSeed.text.length);
+    }, 0);
   }, [selectedQuestionSeed]);
 
   useEffect(() => {
