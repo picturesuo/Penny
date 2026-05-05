@@ -4413,20 +4413,22 @@
     position: relative;
     grid-column: 2;
     grid-row: 1;
-    display: block;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-items: start;
     min-width: 0;
-    height: auto;
+    height: calc(100dvh - 92px);
     min-height: 0;
-    overflow: visible;
+    overflow: hidden;
     max-width: 980px;
     margin: 0 auto;
-    padding: clamp(42px, 7vw, 96px) clamp(18px, 4vw, 56px) 72px;
+    padding: clamp(18px, 3vw, 40px) clamp(18px, 4vw, 56px) clamp(18px, 3vw, 36px);
   }
 
   .learn-editorial-main > section,
   .learn-editorial-main > aside,
   .learn-editorial-main > nav {
-    margin-top: 18px;
+    margin-top: 14px;
   }
 
   .learn-editorial-main > .learn-goal-block {
@@ -4467,21 +4469,22 @@
   .learn-goal-block {
     max-width: none;
     border-bottom: 2px solid #111111;
-    padding-bottom: 18px;
+    padding-bottom: 12px;
   }
 
   .learn-goal-block h1 {
-    margin: 10px 0 0;
+    margin: 8px 0 0;
     overflow-wrap: anywhere;
-    font-size: clamp(52px, 7vw, 112px);
+    font-size: clamp(40px, 5vw, 72px);
     font-weight: 500;
     letter-spacing: 0;
-    line-height: 0.92;
+    line-height: 0.96;
   }
 
   .learn-step-header {
+    align-self: center;
     max-width: 880px;
-    padding: clamp(28px, 5vw, 56px) 0 0;
+    padding: clamp(18px, 3vw, 34px) 0;
   }
 
   .learn-step-header strong {
@@ -4494,7 +4497,7 @@
   .learn-step-header p {
     margin: 0;
     color: rgb(17 17 17 / 0.82);
-    font-size: clamp(25px, 3.1vw, 42px);
+    font-size: clamp(34px, 4.1vw, 58px);
     font-weight: 650;
     line-height: 1.08;
   }
@@ -4625,9 +4628,7 @@
     display: flex;
     justify-content: space-between;
     gap: 20px;
-    border-top: 2px solid #111111;
-    margin-top: clamp(44px, 8vw, 92px);
-    padding-top: 18px;
+    margin-top: 14px;
   }
 
   .learn-bottom-nav button {
@@ -4672,11 +4673,11 @@
   .ask-penny-panel {
     position: relative;
     z-index: 3;
-    grid-column: 2;
+    grid-column: 1;
     grid-row: 1;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
-    gap: 14px;
+    gap: 12px;
     min-width: 0;
     width: 100%;
     height: calc(100dvh - 92px);
@@ -4684,8 +4685,8 @@
     min-height: 0;
     overflow: hidden;
     border-right: 1px solid #111111;
-    background: #f5f3ed;
-    padding: 18px 20px;
+    background: var(--penny-paper);
+    padding: 14px 12px 14px 0;
     transform: translateX(calc(-100% - 1px));
     opacity: 0;
     transition:
@@ -4704,9 +4705,9 @@
     display: flex;
     align-items: start;
     justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
     border-bottom: 1px solid #111111;
-    padding-bottom: 16px;
+    padding-bottom: 12px;
   }
 
   .ask-penny-panel header span {
@@ -4717,33 +4718,33 @@
   }
 
   .ask-penny-panel header p {
-    margin: 8px 0 0;
+    margin: 7px 0 0;
     color: rgb(17 17 17 / 0.58);
-    font-size: 16px;
+    font-size: 12px;
     line-height: 1.1;
   }
 
   .ask-penny-panel header button {
     display: grid;
     place-items: center;
-    width: 44px;
-    height: 44px;
+    width: 34px;
+    height: 34px;
     border: 2px solid #111111;
     border-radius: 999px;
     background: transparent;
     color: #111111;
-    font-size: 28px;
+    font-size: 24px;
     line-height: 1;
   }
 
   .ask-penny-thread {
     display: grid;
     align-content: start;
-    gap: 12px;
+    gap: 10px;
     min-height: 0;
     overflow: auto;
     border: 2px solid #111111;
-    padding: 14px;
+    padding: 12px;
     background: var(--penny-paper);
     color: #111111;
   }
@@ -4791,7 +4792,7 @@
 
   .ask-penny-input {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 48px;
+    grid-template-columns: minmax(0, 1fr) 42px;
     align-items: end;
     gap: 8px;
     border-top: 1px solid #111111;
@@ -4804,19 +4805,19 @@
     max-height: 40dvh;
     border: 1px solid #111111;
     border-radius: 0;
-    padding: 12px;
+    padding: 10px;
     background: #ffffff;
     color: #111111;
     font-family: Georgia, Cambria, "Times New Roman", Times, serif;
-    font-size: 16px;
+    font-size: 14px;
     line-height: 1.28;
     overflow-y: auto;
     resize: none;
   }
 
   .ask-penny-input button {
-    width: 48px;
-    height: 48px;
+    width: 42px;
+    height: 42px;
     border: 1px solid #111111;
     border-radius: 0;
     background: var(--penny-highlight);
@@ -5345,6 +5346,11 @@
     grid-column: 1;
     grid-row: 2;
     padding-inline: 0;
+  }
+
+  .ask-penny-panel {
+    grid-row: 1;
+    padding: 14px 0;
   }
 
   .learn-core-section {
