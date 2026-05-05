@@ -506,7 +506,7 @@ function LearnMainContent({
         <AskPennyRenderedText text={currentStepText} />
       </section>
 
-      <LearnCheckWorksheet lesson={currentStep} />
+      <LearnPracticalStep lesson={currentStep} activeLessonIndex={activeLessonIndex} lessonCount={lessonPages.length} />
 
       <nav className="learn-bottom-nav" aria-label="Step navigation">
         <div className="learn-nav-control learn-nav-control-previous">
@@ -523,6 +523,36 @@ function LearnMainContent({
         </div>
       </nav>
     </article>
+  );
+}
+
+function LearnPracticalStep({
+  lesson,
+  activeLessonIndex,
+  lessonCount,
+}: {
+  lesson: LearnLesson;
+  activeLessonIndex: number;
+  lessonCount: number;
+}) {
+  const actions = practicalActionsForLesson(lesson);
+
+  return (
+    <section className="learn-practical-step" aria-label="Practical learning step">
+      <div className="learn-practical-head">
+        <span>Practical step {activeLessonIndex + 1}</span>
+        <strong>{activeLessonIndex + 1} / {lessonCount}</strong>
+      </div>
+      <div className="learn-practical-card">
+        <p>{lesson.shortExplanation}</p>
+        <ol>
+          {actions.map((action, index) => (
+            <li key={`${lesson.stepNumber}-${lesson.substepNumber}-action-${index}`}>{action}</li>
+          ))}
+        </ol>
+      </div>
+      <p className="learn-practical-note">{lesson.example.whyThisMatters}</p>
+    </section>
   );
 }
 
@@ -706,6 +736,18 @@ function LearnCheckCategoryEditor({
       </label>
     </section>
   );
+}
+
+function practicalActionsForLesson(lesson: LearnLesson): string[] {
+  const directMoves = lesson.coreIdea.bullets.map((bullet) => ensureSentence(bullet));
+  const workedLines = lesson.example.lines.map((line) => ensureSentence(line));
+  const misconception = lesson.misconceptions[0] ? `Avoid this gap: ${ensureSentence(lesson.misconceptions[0])}` : "";
+
+  return uniqueNonEmpty([
+    ...directMoves,
+    ...workedLines,
+    misconception,
+  ]).slice(0, 5);
 }
 
 function learnCheckCategoriesForLesson(lesson: LearnLesson): LearnCheckCategory[] {
