@@ -23,6 +23,7 @@
 - Frontend rule: the frontend must not invent canonical workspace context, breadcrumb, mode identity, or backend-derived state.
 - Durable project fact: request rate limiting should be centralized in a shared server helper so server actions and route handlers cannot bypass the same abuse guard.
 - Durable project fact: export has an open JSON, Markdown, and CSV schema with a portability guarantee for user-owned data.
+- Durable project fact: speed-critical AI workflow should keep local graph/ranking paths provider-free, give every provider-backed operation a latency class, context budget, timeout, and BrainRun speed metadata, and treat Gemini-style streaming or reasoning controls as provider-route details behind schema validation.
 
 ## Supermemory Understanding
 - Last updated: 2026-04-27.
