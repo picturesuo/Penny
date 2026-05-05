@@ -136,14 +136,11 @@ function LearnSessionView({
         target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
       const selectedText = window.getSelection()?.toString().trim() ?? "";
 
-      if (event.key === "Control" && selectedText) {
-        event.preventDefault();
-        setAskPennyOpen(true);
-        setAskPennySeed({ text: selectedText, id: Date.now() });
-        return;
-      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+        if (isTextInput) {
+          return;
+        }
 
-      if (event.ctrlKey && event.key.toLowerCase() === "a") {
         event.preventDefault();
         if (selectedText) {
           setAskPennyOpen(true);
@@ -417,6 +414,7 @@ function LearnThinkingGraph({
     steps.findIndex((step) => step.id === activeMainStepId),
   );
   const activeStep = steps[activeStepIndex] ?? steps[0] ?? null;
+  const visibleSubsteps = activeStep ? visibleThinkingGraphSubsteps(activeStep.substeps, activeSubstepId) : [];
 
   return (
     <section className="learn-thinking-graph" aria-label="Thinking graph preview">
@@ -429,19 +427,19 @@ function LearnThinkingGraph({
           <div className="learn-thinking-graph-map">
             <article className="learn-thinking-graph-root">
               <span>Main topic</span>
-              <strong>{truncateWords(steps[0]?.substeps[0]?.lesson.learningGoal ?? activeStep.title, 10)}</strong>
+              <strong>{compactGraphTitle(steps[0]?.substeps[0]?.lesson.learningGoal ?? activeStep.title, 9)}</strong>
             </article>
             <article className="learn-thinking-graph-main is-selected">
               <span>SECTION {activeStepIndex + 1}</span>
-              <strong>{activeStep.title}</strong>
+              <strong>{compactGraphTitle(activeStep.title, 7)}</strong>
             </article>
             <ol>
-              {activeStep.substeps.map((substep, substepIndex) => (
+              {visibleSubsteps.map(({ substep, index: substepIndex }) => (
                 <li key={substep.id} className={substep.id === activeSubstepId ? "is-selected" : ""}>
                   <span>
                     {activeStepIndex + 1}.{substepIndex + 1}
                   </span>
-                  <strong>{substep.title}</strong>
+                  <strong>{compactGraphTitle(substep.title, 6)}</strong>
                 </li>
               ))}
             </ol>
@@ -478,6 +476,8 @@ function LearnMainContent({
   const activeSubstep = activeStep?.substeps.find((substep) => substep.id === activeSubstepId);
   const nextLesson = lessonPages[activeLessonIndex + 1];
   const currentStep = activeSubstep?.lesson ?? pageData.currentStep;
+  const currentStepText = directAnswerForLesson(currentStep);
+  const textDensity = learnStepTextDensity(currentStepText);
   const canGoPrevious = activeLessonIndex > 0;
   const canGoNext = activeLessonIndex < lessonPages.length - 1;
 
@@ -490,8 +490,8 @@ function LearnMainContent({
         <h1>{currentStep.title}</h1>
       </section>
 
-      <section className="learn-step-header" aria-label="Current step">
-        <AskPennyRenderedText text={directAnswerForLesson(currentStep)} />
+      <section className={`learn-step-header is-${textDensity}`} aria-label="Current step">
+        <AskPennyRenderedText text={currentStepText} />
       </section>
 
       <LearnCheckWorksheet lesson={currentStep} />
@@ -736,7 +736,70 @@ function directAnswerForLesson(lesson: LearnLesson): string {
     return "The final application move is: write a direct company sentence, attach one concrete founder proof point per founder, name the insight, and keep investor interest as optional evidence rather than the main claim.";
   }
 
-  return lesson.shortExplanation;
+  return filledLessonText(lesson);
+}
+
+function filledLessonText(lesson: LearnLesson): string {
+  const moves = lesson.coreIdea.bullets
+    .slice(0, 3)
+    .map((move) => ensureSentence(move))
+    .join(" ");
+  const example = uniqueNonEmpty([lesson.example.description, ...lesson.example.lines])
+    .map((line) => ensureSentence(line))
+    .join(" ");
+
+  return uniqueNonEmpty([
+    lesson.shortExplanation,
+    moves ? `Use this move: ${moves}` : "",
+    example ? `Example: ${truncateWords(example, 42)}` : "",
+  ]).join("\n\n");
+}
+
+function learnStepTextDensity(text: string): "short" | "medium" | "long" {
+  const length = text.replace(/\s+/g, " ").trim().length;
+
+  if (length > 620) {
+    return "long";
+  }
+
+  if (length > 320) {
+    return "medium";
+  }
+
+  return "short";
+}
+
+function ensureSentence(value: string): string {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function visibleThinkingGraphSubsteps(
+  substeps: LearnPageData["steps"][number]["substeps"],
+  activeSubstepId: string,
+): Array<{ substep: LearnPageData["steps"][number]["substeps"][number]; index: number }> {
+  const indexed = substeps.map((substep, index) => ({ substep, index }));
+
+  if (indexed.length <= 4) {
+    return indexed;
+  }
+
+  const activeIndex = Math.max(
+    0,
+    indexed.findIndex((item) => item.substep.id === activeSubstepId),
+  );
+  const startIndex = Math.min(Math.max(activeIndex - 1, 0), indexed.length - 4);
+
+  return indexed.slice(startIndex, startIndex + 4);
+}
+
+function compactGraphTitle(value: string, maxWords: number): string {
+  return truncateWords(value.replace(/\s+/g, " ").trim(), maxWords);
 }
 
 function AskPennyPanel({
