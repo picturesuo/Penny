@@ -4815,6 +4815,96 @@
     line-height: 1.35;
   }
 
+  .ask-penny-rendered {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    font-size: clamp(18px, 4.8vw, 25px);
+    line-height: 1.28;
+  }
+
+  .ask-penny-rendered-line {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .ask-penny-rendered-line.is-bullet {
+    padding-left: 1.15em;
+    text-indent: -0.85em;
+  }
+
+  .ask-penny-math {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    margin: 0 0.1em;
+    border-radius: 4px;
+    background: rgb(255 255 255 / 0.56);
+    padding: 0 0.18em;
+    overflow-x: auto;
+    overflow-y: hidden;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .ask-penny-math.is-display {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin: 8px 0;
+    border: 1px solid rgb(17 17 17 / 0.16);
+    border-radius: 4px;
+    padding: 14px 10px;
+    background: rgb(255 255 255 / 0.62);
+    font-size: 0.92em;
+  }
+
+  .ask-penny-frac {
+    display: inline-grid;
+    grid-template-rows: auto auto;
+    align-items: center;
+    justify-items: center;
+    min-width: 1.4em;
+    margin: 0 0.08em;
+    line-height: 1.05;
+    vertical-align: middle;
+  }
+
+  .ask-penny-frac > span:first-child {
+    width: 100%;
+    border-bottom: 1px solid currentColor;
+    padding: 0 0.18em 0.08em;
+    text-align: center;
+  }
+
+  .ask-penny-frac > span:last-child {
+    padding: 0.08em 0.18em 0;
+    text-align: center;
+  }
+
+  .ask-penny-root {
+    display: inline-flex;
+    align-items: start;
+    gap: 0.04em;
+  }
+
+  .ask-penny-root::before {
+    content: "sqrt";
+    font-size: 0.62em;
+    line-height: 1;
+  }
+
+  .ask-penny-root > span {
+    border-top: 1px solid currentColor;
+    padding: 0 0.12em;
+  }
+
+  .ask-penny-math sup,
+  .ask-penny-math sub {
+    font-size: 0.65em;
+    line-height: 0;
+  }
+
   .ask-penny-empty {
     color: rgb(17 17 17 / 0.7);
     font-size: 14px;

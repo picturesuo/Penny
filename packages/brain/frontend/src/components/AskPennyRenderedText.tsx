@@ -23,6 +23,17 @@ const greekSymbols: Record<string, string> = {
   Omega: "Omega",
 };
 
+const textCommands: Record<string, string> = {
+  lim: "lim",
+  sin: "sin",
+  cos: "cos",
+  tan: "tan",
+  log: "log",
+  ln: "ln",
+  min: "min",
+  max: "max",
+};
+
 export function AskPennyRenderedText({ text }: { text: string }) {
   return (
     <div className="ask-penny-rendered">
@@ -126,9 +137,16 @@ function renderMath(value: string): ReactNode[] {
     if (normalized[index] === "\\") {
       const command = normalized.slice(index + 1).match(/^[A-Za-z]+/);
       const symbol = command ? greekSymbols[command[0]] : null;
+      const text = command ? textCommands[command[0]] : null;
 
       if (symbol) {
         nodes.push(<span className={`ask-penny-symbol is-${symbol}`} key={`symbol-${index}`} />);
+        index += command![0].length + 1;
+        continue;
+      }
+
+      if (text) {
+        nodes.push(<span key={`command-${index}`}>{text}</span>);
         index += command![0].length + 1;
         continue;
       }
