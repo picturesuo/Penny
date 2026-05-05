@@ -914,7 +914,7 @@ function BrainHierarchySidebar({
                         <FilePlus size={14} aria-hidden="true" />
                         <span>New document</span>
                       </button>
-                      {folder.documents.slice(0, 3).map((document) => {
+                      {folder.documents.map((document) => {
                         const active = document.sessionId === selectedSessionId;
 
                         return (
