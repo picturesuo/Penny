@@ -88,6 +88,7 @@ export function App() {
   const [brainCanvasOpen, setBrainCanvasOpen] = useState(false);
   const [learnFocusNode, setLearnFocusNode] = useState<CanvasNode | null>(null);
   const [relatedBrainSearch, setRelatedBrainSearch] = useState<BrainRelatedSearchState | null>(null);
+  const [checkInitialSeedText, setCheckInitialSeedText] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<PennyMode>("Learn");
   const [landingVisible, setLandingVisible] = useState(() => activeSessionId() === null);
   const [status, setStatus] = useState("Ready");
@@ -303,6 +304,7 @@ export function App() {
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
+    setCheckInitialSeedText(null);
     setLandingVisible(true);
     forgetActiveSession();
     setStatus("Ready");
@@ -319,15 +321,26 @@ export function App() {
     sourceMaterial?: LearnSourceMaterialInput,
   ) {
     setLandingVisible(false);
-    setActiveMode("Learn");
 
     if (mode === "Learn") {
+      setActiveMode("Learn");
       await handleLearnSeed(rawIdea, sourceMaterial);
       return;
     }
 
-    await handleSeed(rawIdea);
-    setActiveMode(mode);
+    setData(null);
+    setMoves([]);
+    setAutopilot(null);
+    setChallengeResponse(null);
+    setLatestArtifact(null);
+    setFocusedClaimId(null);
+    setFocusedWorkStructureStepId(null);
+    setBrainCanvasOpen(false);
+    setLearnFocusNode(null);
+    setRelatedBrainSearch(null);
+    setCheckInitialSeedText(sourceMaterial?.extractedText || rawIdea);
+    setActiveMode("Check");
+    setStatus("Preparing Check");
   }
 
   async function handleLandingQuickNote(rawIdea: string) {
@@ -780,10 +793,24 @@ export function App() {
       } else {
         if (action === "learn") {
           await handleLearnSeed(recent.rawIdea);
+        } else if (action === "check") {
+          setData(null);
+          setMoves([]);
+          setAutopilot(null);
+          setChallengeResponse(null);
+          setLatestArtifact(null);
+          setFocusedClaimId(null);
+          setFocusedWorkStructureStepId(null);
+          setBrainCanvasOpen(false);
+          setLearnFocusNode(null);
+          setRelatedBrainSearch(null);
+          setCheckInitialSeedText(recent.rawIdea);
+          setActiveMode("Check");
+          setStatus("Quick note sent to Check");
         } else {
           await handleSeed(recent.rawIdea);
+          setActiveMode("Brain");
         }
-        setActiveMode(action === "check" ? "Check" : action === "learn" ? "Learn" : "Brain");
         setStatus(
           action === "check"
             ? "Quick note sent to Check"
@@ -889,6 +916,10 @@ export function App() {
             focusedWorkStructureStepId={focusedWorkStructureStepId}
             status={status}
             isThinking={isThinking}
+            initialSeedText={checkInitialSeedText}
+            onInitialSeedConsumed={() => setCheckInitialSeedText(null)}
+            onStatusChange={setStatus}
+            onThinkingChange={setIsThinking}
             onSeed={handleSeed}
             onSelectDocument={handleSelectDocument}
             onGoThere={handleGoThere}
