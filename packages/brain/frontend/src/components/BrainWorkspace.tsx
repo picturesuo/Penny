@@ -87,7 +87,7 @@ interface GraphCardPoint extends GraphPoint {
   height: number;
 }
 
-interface BrainHierarchySidebarProps {
+interface BrainSidebarProps {
   sidebar: BrainSidebarData | null;
   documents: BrainDocumentSummary[];
   selectedSessionId: string | null;
@@ -219,7 +219,7 @@ export function BrainWorkspace({
 
   return (
     <main className={`brain-workspace-shell${selectedQuickNote ? " is-quick-note-doc" : ""}`}>
-      <BrainHierarchySidebar
+      <BrainSidebar
         sidebar={documentsData?.sidebar ?? null}
         documents={documentsData?.documents ?? []}
         selectedSessionId={selectedDocument?.sessionId ?? null}
@@ -1241,7 +1241,7 @@ function StitchedReference({
   );
 }
 
-function BrainHierarchySidebar({
+function BrainSidebar({
   sidebar,
   documents,
   selectedSessionId,
@@ -1253,7 +1253,7 @@ function BrainHierarchySidebar({
   onNewDocument,
   onQuickNoteCreate,
   onQuickNoteAction,
-}: BrainHierarchySidebarProps) {
+}: BrainSidebarProps) {
   const folders = sidebar?.folders ?? [];
   const [searchQuery, setSearchQuery] = useState("");
   const [localFolders, setLocalFolders] = useState<BrainHierarchyFolder[]>([]);
