@@ -2,7 +2,8 @@
 
 Artifact ID: `ARCHIVE-README-2-FIRST-ARTIFACT`
 Target file: `_archive_old_restart/README 2.md`
-Role: `BACKEND`
+Role: `BACKEND-2`
+Classification: `tiny`
 Queue item: `Initialize the first real task artifact.`
 Status: `initialized`
 
@@ -14,7 +15,7 @@ Status: `initialized`
 
 ## 2. Scope
 
-- SP1: In scope: this target file and shared-context status notes for the current BACKEND pass.
+- SP1: In scope: this target file and shared-context status notes for the current BACKEND-2 pass.
 - SP2: In scope: replacing the stale duplicate archive README copy at this exact path with artifact metadata and execution criteria.
 - SP3: Out of scope: root `README.md`, active app/server code, package configuration, migrations, tests, queue cleanup, and broad archive normalization.
 - SP4: Out of scope: promoting any code or docs from `_archive_old_restart/` into the active implementation.
@@ -70,9 +71,9 @@ Status: `initialized`
 
 ## 9. Status
 
-- ST1: On 2026-05-05, BACKEND read `AGENTS.md`, the shared context file, `docs/queue.md`, and `docs/knowledge.md` before editing.
-- ST2: BACKEND classified this implementation as `tiny`.
-- ST3: BACKEND observed `docs/queue.md` still lists `Initialize the first real task artifact.` under `Now`.
-- ST4: BACKEND initially observed this target as an untracked duplicate of neighboring archive README files; immediately before creation, the exact target path was absent while `_archive_old_restart/README.md` and `_archive_old_restart/README 3.md` remained present.
-- ST5: BACKEND initialized this target as a documentation-only task artifact and did not touch runtime code, active docs, queue files, knowledge files, or neighboring archive README copies.
+- ST1: On 2026-05-05, BACKEND-2 read `AGENTS.md`, the shared context file, `docs/queue.md`, and `docs/knowledge.md` before editing.
+- ST2: BACKEND-2 classified this implementation as `tiny`.
+- ST3: BACKEND-2 observed `docs/queue.md` still lists `Initialize the first real task artifact.` under `Now`.
+- ST4: BACKEND-2 initially observed this target as an untracked duplicate of neighboring archive README files; immediately before creation, the exact target path was absent while `_archive_old_restart/README.md` and `_archive_old_restart/README 3.md` remained present.
+- ST5: BACKEND-2 initialized this target as a documentation-only task artifact and did not touch runtime code, active docs, queue files, knowledge files, or neighboring archive README copies.
 - ST6: Verification and publication status are recorded in the shared context for this pass.
