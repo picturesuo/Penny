@@ -155,7 +155,7 @@
 
   .landing-composer {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 34px;
+    grid-template-columns: minmax(0, 1fr) 34px 34px;
     align-items: start;
     min-height: 88px;
     gap: 14px;
@@ -218,6 +218,23 @@
       background-color 140ms ease;
   }
 
+  .landing-file-button {
+    position: absolute;
+    right: 62px;
+    bottom: 24px;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    color: rgb(46 46 46 / 0.74) !important;
+    background: rgb(46 46 46 / 0.06) !important;
+  }
+
+  .landing-file-button.is-attached {
+    color: #ffffff !important;
+    background: #5b6d61 !important;
+  }
+
   .landing-submit-button.is-visible {
     transform: scale(1);
     opacity: 1;
@@ -241,6 +258,40 @@
     gap: 10px;
     min-height: 48px;
     padding: 0 30px 18px;
+  }
+
+  .landing-file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 260px;
+    border: 1px solid rgb(46 46 46 / 0.12);
+    border-radius: 999px;
+    padding: 6px 8px 6px 10px;
+    color: rgb(46 46 46 / 0.78);
+    background: rgb(255 255 255 / 0.62);
+    font-size: 12px;
+  }
+
+  .landing-file-chip span {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+  }
+
+  .landing-file-chip strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .landing-file-chip button {
+    border: 0;
+    padding: 0;
+    color: rgb(46 46 46 / 0.58);
+    background: transparent;
+    font-size: 12px;
   }
 
   .landing-shortcuts {
@@ -5780,7 +5831,7 @@
   }
 
   .landing-composer {
-    grid-template-columns: minmax(0, 1fr) 32px;
+    grid-template-columns: minmax(0, 1fr) 32px 32px;
     gap: 10px;
     min-height: 96px;
     padding: 32px 24px 8px 28px;
@@ -5794,6 +5845,14 @@
 
   .landing-submit-button {
     right: 20px;
+    bottom: 20px;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+  }
+
+  .landing-file-button {
+    right: 56px;
     bottom: 20px;
     width: 28px;
     min-width: 28px;

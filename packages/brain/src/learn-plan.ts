@@ -25,6 +25,15 @@ export const LearningPlanSubgroupSchema = z
         description: z.string().trim().min(40).max(260),
       })
       .strict(),
+    sourceContext: z
+      .object({
+        clusterId: z.string().trim().min(1),
+        clusterTitle: z.string().trim().min(1).max(90),
+        localSummary: z.string().trim().min(20).max(360),
+        sourceRange: z.string().trim().min(1).max(80),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -54,6 +63,21 @@ export type LearningPlanInput = {
   claims: ReadonlyArray<{ kind: string; text: string }>;
   learnCandidates: ReadonlyArray<{ term: string; whyItMatters?: string; unblockExplanation?: string }>;
   explorationPaths: ReadonlyArray<{ title: string; prompt: string; expectedValue?: string }>;
+  sourceContext?: LearningSourceContext | null;
+};
+
+export type LearningSourceCluster = {
+  id: string;
+  title: string;
+  summary: string;
+  sourceRange: string;
+};
+
+export type LearningSourceContext = {
+  kind: "text" | "pdf" | "slides" | "document";
+  fileName: string | null;
+  mainIdea: string;
+  clusters: LearningSourceCluster[];
 };
 
 export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan {
@@ -63,7 +87,10 @@ export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan 
   const questions = input.claims.filter((claim) => claim.kind === "question").map((claim) => claim.text);
   const concepts = input.learnCandidates.map((candidate) => candidate.term);
   const expertRole = inferExpertRole(input);
-  const groups = [
+  const sourceGroups = sourceContextGroups(input);
+  const groups = sourceGroups.length
+    ? sourceGroups
+    : [
     group("group-1", "Understand the target", "An expert starts like a careful agent: identify the real goal, the usable end state, and the boundary of the work.", [
       subgroup("group-1-subgroup-1", "Name the end state", paragraph([
         `Treat the prompt as a request to understand ${rawIdea}.`,
@@ -159,7 +186,7 @@ export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan 
         "The durable output is the takeaway and graph hook, not the transient chat thread.",
       ]), ["End the local context.", "Carry forward only saved takeaways.", "Start the next category clean."], "Context close: keep the saved result, drop the category chat, and move forward with a smaller prompt.", "Context handoff", "A closed category folder handing only a takeaway card into the next numbered category."),
     ]),
-  ];
+    ];
 
   return LearningPlanSchema.parse({
     expertRole,
@@ -167,6 +194,78 @@ export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan 
     paragraphFit: "one_subgroup_per_page",
     groups,
   });
+}
+
+function sourceContextGroups(input: LearningPlanInput): LearningPlan["groups"] {
+  const context = input.sourceContext;
+
+  if (!context?.clusters.length) {
+    return [];
+  }
+
+  const maxGroups = context.clusters.slice(0, 7);
+
+  return maxGroups.map((cluster, index) => {
+    const nextCluster = maxGroups[index + 1];
+
+    return group(
+      `source-group-${index + 1}`,
+      cluster.title,
+      `Teach this ${context.kind} cluster as a scoped bite-sized lecture unit, keeping Ask Penny context inside ${cluster.sourceRange}.`,
+      [
+        sourceSubgroup(cluster, index, 1, "Extract the main idea", [
+          `Read only ${cluster.sourceRange} first.`,
+          `State the local idea: ${clipText(cluster.summary, 130)}`,
+          "Do not pull in later clusters until this local point is stable.",
+        ]),
+        sourceSubgroup(cluster, index, 2, "Break down the mechanism", [
+          "Split the cluster into the terms, cause-effect links, examples, and assumptions it uses.",
+          "Turn every hidden prerequisite into a visible claim.",
+          "Keep each piece tied to this cluster summary.",
+        ]),
+        sourceSubgroup(cluster, index, 3, "Work one example", [
+          "Choose the smallest example or slide detail in this cluster.",
+          "Explain what changes from input to output.",
+          "Name the reusable pattern the learner can carry forward.",
+        ]),
+        sourceSubgroup(cluster, index, 4, "Check the takeaway", [
+          "Ask what would make this cluster's takeaway misleading.",
+          "Separate understood context from evidence that still needs Verify.",
+          nextCluster ? `Hand off only the saved takeaway before moving to ${nextCluster.title}.` : "Close the lesson by saving the final takeaway to Brain.",
+        ]),
+      ],
+    );
+  });
+}
+
+function sourceSubgroup(
+  cluster: LearningSourceCluster,
+  groupIndex: number,
+  subgroupIndex: number,
+  title: string,
+  keyMoves: string[],
+): LearningPlan["groups"][number]["subgroups"][number] {
+  return {
+    ...subgroup(
+      `source-group-${groupIndex + 1}-subgroup-${subgroupIndex}`,
+      title,
+      paragraph([
+        `${cluster.title} is a local context cluster from ${cluster.sourceRange}.`,
+        cluster.summary,
+        "Teach it as one concise lecture page so the learner can pause, ask questions, and continue without the next cluster leaking in.",
+      ]),
+      keyMoves,
+      `Worked example from ${cluster.sourceRange}: ${clipText(cluster.summary, 220)}`,
+      "Cluster context",
+      `A source cluster card showing ${cluster.sourceRange}, its local summary, and arrows to its next saved takeaway.`,
+    ),
+    sourceContext: {
+      clusterId: cluster.id,
+      clusterTitle: cluster.title,
+      localSummary: cluster.summary,
+      sourceRange: cluster.sourceRange,
+    },
+  };
 }
 
 function group(id: string, title: string, purpose: string, subgroups: LearningPlan["groups"][number]["subgroups"]): LearningPlan["groups"][number] {

@@ -429,6 +429,17 @@ export interface BrainData {
   learn?: {
     learningPlan?: LearningPlan;
   };
+  sourceContext?: {
+    kind: "text" | "pdf" | "slides" | "document" | string;
+    fileName: string | null;
+    mainIdea: string;
+    clusters: Array<{
+      id: string;
+      title: string;
+      summary: string;
+      sourceRange: string;
+    }>;
+  } | null;
   firstChallenge?: ChallengeSuggestion;
   session?: BrainSession;
   brainRun?: BrainRun;
@@ -463,6 +474,12 @@ export interface LearningPlanSubgroup {
   visualExample: {
     title: string;
     description: string;
+  };
+  sourceContext?: {
+    clusterId: string;
+    clusterTitle: string;
+    localSummary: string;
+    sourceRange: string;
   };
 }
 

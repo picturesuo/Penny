@@ -84,11 +84,17 @@ export async function seedBrain(rawIdea: string): Promise<SeedBrainResponse> {
   return payload as SeedBrainResponse;
 }
 
-export async function createLearnSession(rawIdea: string): Promise<LearnSessionResponse> {
+export type LearnSourceMaterialInput = {
+  kind: "text" | "pdf" | "slides" | "document";
+  fileName?: string;
+  extractedText: string;
+};
+
+export async function createLearnSession(rawIdea: string, sourceMaterial?: LearnSourceMaterialInput): Promise<LearnSessionResponse> {
   const response = await fetch("/api/learn/session", {
     method: "POST",
     headers: requestHeaders(),
-    body: JSON.stringify({ rawIdea, autopilot: { limit: 6 } }),
+    body: JSON.stringify({ rawIdea, ...(sourceMaterial ? { sourceMaterial } : {}), autopilot: { limit: 6 } }),
   });
 
   const payload = await readJson(response);

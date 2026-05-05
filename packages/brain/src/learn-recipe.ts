@@ -2,7 +2,7 @@ import { z } from "zod";
 import { RecipeEngine, RecipeTraceSchema, type RecipeTrace } from "./recipe-engine.ts";
 import { shouldUseWebSearch, type SearchDecision } from "./search-decision-service.ts";
 import type { EntityId } from "./domain/types.ts";
-import { LearningPlanSchema, buildExpertLearningPlan } from "./learn-plan.ts";
+import { LearningPlanSchema, buildExpertLearningPlan, type LearningSourceContext } from "./learn-plan.ts";
 
 const LearnRecipeStepNameSchema = z.enum([
   "structure_idea",
@@ -42,6 +42,21 @@ export const LearnRecipeOutputSchema = z
       questionCount: z.number().int().min(0),
       conceptCount: z.number().int().min(0),
     }),
+    sourceContext: z
+      .object({
+        kind: z.enum(["text", "pdf", "slides", "document"]),
+        fileName: z.string().nullable(),
+        mainIdea: z.string(),
+        clusters: z.array(
+          z.object({
+            id: z.string(),
+            title: z.string(),
+            summary: z.string(),
+            sourceRange: z.string(),
+          }),
+        ),
+      })
+      .nullable(),
     learningPlan: LearningPlanSchema,
   })
   .strict();
@@ -53,6 +68,7 @@ export type LearnRecipeInput = {
   rawIdea: string;
   seedPayload: LearnRecipeSeedPayload;
   nextMoves: ReadonlyArray<LearnRecipeNextMove>;
+  sourceContext?: LearningSourceContext | null;
 };
 
 export type LearnRecipeSeedPayload = {
@@ -93,6 +109,7 @@ type LearnRecipeContext = {
   seedPayload: LearnRecipeSeedPayload;
   nextMoves: ReadonlyArray<LearnRecipeNextMove>;
   brainContext?: LearnRecipeOutput["brainContext"];
+  sourceContext?: LearningSourceContext | null;
   searchDecision?: SearchDecision;
 };
 
@@ -186,7 +203,9 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
         const questions = claims.filter((claim) => claim.kind === "question");
 
         return {
-          summary: `Produced an expert lesson plan with paragraph-sized subgroups centered on: ${clipText(context.seedPayload.ideaMap.keyInsight, 170)}`,
+          summary: context.sourceContext
+            ? `Produced a source-clustered lesson plan for ${context.sourceContext.fileName ?? context.sourceContext.kind}.`
+            : `Produced an expert lesson plan with paragraph-sized subgroups centered on: ${clipText(context.seedPayload.ideaMap.keyInsight, 170)}`,
           inputs: [context.seedPayload.ideaMap.keyInsight],
           outputs: [
             clipText(claims[0]?.text ?? context.seedPayload.ideaMap.keyInsight, 180),
@@ -217,18 +236,21 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
     rawIdea: input.rawIdea,
     seedPayload: input.seedPayload,
     nextMoves: input.nextMoves,
+    sourceContext: input.sourceContext ?? null,
   });
 
   return LearnRecipeOutputSchema.parse({
     recipe: result.trace,
     searchDecision: result.context.searchDecision,
     brainContext: result.context.brainContext,
+    sourceContext: input.sourceContext ?? null,
     learningPlan: buildExpertLearningPlan({
       rawIdea: input.rawIdea,
       keyInsight: input.seedPayload.ideaMap.keyInsight,
       claims: input.seedPayload.ideaMap.claims,
       learnCandidates: input.seedPayload.learnCandidates,
       explorationPaths: input.seedPayload.explorationPaths,
+      sourceContext: input.sourceContext ?? null,
     }),
   });
 }

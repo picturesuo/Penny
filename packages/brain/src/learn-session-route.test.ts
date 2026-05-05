@@ -66,7 +66,7 @@ test("POST /api/learn/session structures a dropped idea and ticks Autopilot", as
   );
   const payload = (await response.json()) as { data: LearnSessionPayload };
 
-  assert.equal(response.status, 201);
+  assert.equal(response.status, 201, JSON.stringify(payload));
   assert.equal(preparedRun?.operation, "brain.seed");
   assert.equal((preparedRun?.input as { source?: string } | undefined)?.source, "learn_session");
   assert.equal(tickedSessionId, payload.data.session.id);
@@ -94,6 +94,57 @@ test("POST /api/learn/session structures a dropped idea and ticks Autopilot", as
   assert.equal(payload.data.candidateBrainObjects[0]?.source, "learn");
   assert.equal(payload.data.autopilot.selectedCandidate?.userAction, "check");
   assert.equal(payload.data.modeContract.activeMode, "Check");
+});
+
+test("POST /api/learn/session turns uploaded source text into clustered lesson context", async () => {
+  const response = await handleLearnSessionRequest(
+    request("http://localhost/api/learn/session", {
+      rawIdea: "Teach this lecture chapter as concise steps.",
+      sourceMaterial: {
+        kind: "pdf",
+        fileName: "strategy-chapter.pdf",
+        extractedText: [
+          "Customer discovery explains how teams learn what users are trying to do before they build.",
+          "Interviews should separate stated preferences from observed behavior and recent examples.",
+          "Segmentation groups users by shared pressure, workflow, and willingness to change.",
+          "A good wedge starts with one urgent segment rather than a broad market description.",
+          "Evidence quality improves when claims are connected to source spans and revision rules.",
+          "The lesson should end with what is understood, what is still assumed, and what needs verification.",
+        ].join("\n\n"),
+      },
+    }),
+    {
+      provider: createHeuristicBrainSeedProvider(),
+      async prepareSeedRun(input, options) {
+        assert.match(input.rawIdea, /strategy-chapter\.pdf/);
+        return createPersistedPrelude(input, options.run);
+      },
+      async generateSeed(input, options) {
+        return generateBrainSeed(input, {
+          provider: createHeuristicBrainSeedProvider(),
+          brainRunId: options.brainRunId,
+        });
+      },
+      async persistSeed(seed, options) {
+        return createPersistedSeed(seed, options.prelude);
+      },
+      async failSeedRun() {
+        return;
+      },
+      async tickAutopilot(input) {
+        return autopilotResponse(input.sessionId);
+      },
+    },
+  );
+  const payload = (await response.json()) as { data: LearnSessionPayload };
+
+  assert.equal(response.status, 201, JSON.stringify(payload));
+  assert.equal(payload.data.sourceContext?.kind, "pdf");
+  assert.equal(payload.data.sourceContext?.fileName, "strategy-chapter.pdf");
+  assert.ok((payload.data.sourceContext?.clusters.length ?? 0) >= 3);
+  assert.match(payload.data.learn.learningPlan.groups[0]?.id ?? "", /source-group/);
+  assert.equal(payload.data.learn.learningPlan.groups[0]?.subgroups[0]?.sourceContext?.clusterId, "source-cluster-1");
+  assert.match(payload.data.learn.learningPlan.groups[0]?.purpose ?? "", /scoped bite-sized lecture unit/i);
 });
 
 function request(url: string, body: unknown): Request {

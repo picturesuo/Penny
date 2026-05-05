@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   createChallengeBrief,
   createLearnSession,
+  type LearnSourceMaterialInput,
   fetchBrainHybridSearch,
   fetchBrainDocuments,
   fetchBrainRecents,
@@ -189,12 +190,12 @@ export function App() {
     }
   }
 
-  async function handleLearnSeed(rawIdea: string) {
+  async function handleLearnSeed(rawIdea: string, sourceMaterial?: LearnSourceMaterialInput) {
     setIsThinking(true);
     setStatus("Building Learn path");
 
     try {
-      const payload = await createLearnSession(rawIdea);
+      const payload = await createLearnSession(rawIdea, sourceMaterial);
       const learnData = payload.data;
       setData(learnData);
       setAutopilot(learnData.autopilot ?? null);
@@ -312,12 +313,16 @@ export function App() {
     setActiveMode(mode);
   }
 
-  async function handleLandingPromptSubmit(mode: Extract<PennyMode, "Learn" | "Check">, rawIdea: string) {
+  async function handleLandingPromptSubmit(
+    mode: Extract<PennyMode, "Learn" | "Check">,
+    rawIdea: string,
+    sourceMaterial?: LearnSourceMaterialInput,
+  ) {
     setLandingVisible(false);
     setActiveMode("Learn");
 
     if (mode === "Learn") {
-      await handleLearnSeed(rawIdea);
+      await handleLearnSeed(rawIdea, sourceMaterial);
       return;
     }
 

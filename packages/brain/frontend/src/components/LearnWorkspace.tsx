@@ -1270,14 +1270,19 @@ function buildLearnPageDataFromPlan(
           title: subgroup.visualExample.title,
           description: "Big-picture example for this subgroup.",
           lines: [
+            subgroup.sourceContext
+              ? `Local context: ${subgroup.sourceContext.sourceRange} - ${subgroup.sourceContext.localSummary}`
+              : "",
             `Prompt: ${truncateWords(sourceText || output.coreIdea, 18)}`,
             subgroup.workedExample,
             `Use: ${subgroup.visualExample.description}`,
-          ],
+          ].filter(Boolean),
           whyThisMatters: group.purpose,
           format: inferExampleFormat(sourceText),
         },
-        inlineNote: plan.expertRole,
+        inlineNote: subgroup.sourceContext
+          ? `${plan.expertRole} Context is scoped to ${subgroup.sourceContext.clusterTitle}.`
+          : plan.expertRole,
         nextStepTitle: nextSubgroup?.title ?? "the next learning chunk",
       };
       const previousSubgroup = group.subgroups[substepIndex - 1];

@@ -61,6 +61,41 @@ test("frontend brain client creates Learn sessions from landing prompts", async 
   }
 });
 
+test("frontend brain client sends source material for Learn file drops", async () => {
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse({
+      session: { id: uuidAt(101), status: "active" },
+      source: { kind: "raw_idea", rawText: "Teach this chapter." },
+      ideaMap: { claims: [], edges: [], keyInsight: "A chapter can be clustered into local contexts." },
+      explorationPaths: [],
+      firstChallenge: null,
+      learn: { learningPlan: { expertRole: "A teacher.", goal: "Learn the chapter.", paragraphFit: "one_subgroup_per_page", groups: [] } },
+      autopilot: thinkingModeState(uuidAt(101)),
+    }),
+  ]);
+
+  try {
+    await createLearnSession("Teach this chapter.", {
+      kind: "pdf",
+      fileName: "chapter.pdf",
+      extractedText: "Chapter text",
+    });
+
+    assert.deepEqual(calls[0]?.body, {
+      rawIdea: "Teach this chapter.",
+      sourceMaterial: {
+        kind: "pdf",
+        fileName: "chapter.pdf",
+        extractedText: "Chapter text",
+      },
+      autopilot: { limit: 6 },
+    });
+  } finally {
+    restoreFetch();
+  }
+});
+
 test("frontend brain client uses session-scoped Autopilot command routes", async () => {
   const sessionId = uuidAt(101);
   const claimId = uuidAt(201);

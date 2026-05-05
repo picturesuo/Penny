@@ -7,6 +7,7 @@ import { brainRuns } from "./db/schema.ts";
 import { createBrainRepository } from "./domain/repository.ts";
 import type { EntityId } from "./domain/types.ts";
 import { runLearnRecipe, type LearnRecipeOutput } from "./learn-recipe.ts";
+import type { LearningSourceContext } from "./learn-plan.ts";
 import {
   BrainSeedProviderError,
   BrainSeedValidationError,
@@ -34,10 +35,18 @@ import {
 import { ThinkingModeService, type ThinkingModeTickResponse } from "./services/thinking-mode-service.ts";
 
 const UuidSchema = z.string().uuid();
+const LearnSourceMaterialSchema = z
+  .object({
+    kind: z.enum(["text", "pdf", "slides", "document"]).optional().default("text"),
+    fileName: z.string().trim().min(1).max(240).optional(),
+    extractedText: z.string().trim().min(1).max(120_000),
+  })
+  .strict();
 
 export const LearnSessionRequestSchema = z
   .object({
-    rawIdea: z.string().trim().min(1).max(4_000),
+    rawIdea: z.string().trim().max(4_000).optional().default(""),
+    sourceMaterial: LearnSourceMaterialSchema.optional(),
     sessionId: UuidSchema.optional(),
     userId: z.string().trim().min(1).max(120).optional(),
     workspaceId: z.string().trim().min(1).max(120).optional(),
@@ -52,7 +61,11 @@ export const LearnSessionRequestSchema = z
       .optional()
       .default({ resume: false }),
   })
-  .strict();
+  .strict()
+  .refine((value) => value.rawIdea.length > 0 || value.sourceMaterial?.extractedText, {
+    message: "Provide rawIdea or sourceMaterial.extractedText.",
+    path: ["rawIdea"],
+  });
 
 export type LearnSessionRequest = z.infer<typeof LearnSessionRequestSchema>;
 
@@ -101,6 +114,7 @@ export type LearnSessionPayload = {
   recipe: LearnRecipeOutput["recipe"];
   searchDecision: LearnRecipeOutput["searchDecision"];
   brainContext: LearnRecipeOutput["brainContext"];
+  sourceContext: LearnRecipeOutput["sourceContext"];
   learn: LearnSessionStructure;
   ideaMap: BrainSeedUiPayload["ideaMap"];
   explorationPaths: BrainSeedUiPayload["explorationPaths"];
@@ -196,6 +210,7 @@ export function buildLearnSessionPayload(
     recipe: recipeOutput.recipe,
     searchDecision: recipeOutput.searchDecision,
     brainContext: recipeOutput.brainContext,
+    sourceContext: recipeOutput.sourceContext,
     learn,
     ideaMap: seedPayload.ideaMap,
     explorationPaths: seedPayload.explorationPaths,
@@ -212,8 +227,10 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
   return {
     async create(input, request) {
       const context = resolveDevContext(request, input);
+      const sourceContext = buildLearningSourceContext(input);
+      const seedRawIdea = seedIdeaFromLearnInput(input, sourceContext);
       const seedInput: BrainSeedInput = {
-        rawIdea: input.rawIdea,
+        rawIdea: seedRawIdea,
         sessionId: input.sessionId ?? randomUUID(),
       };
       const provider = options.provider ?? createDefaultBrainSeedProvider();
@@ -229,7 +246,7 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
       const failSeedRun =
         options.failSeedRun ??
         ((prelude: BrainSeedPrelude, error: unknown, failOptions: { db?: PennyDatabase }) =>
-          failBrainSeedRun(requireRouteDb(failOptions.db), prelude, error));
+          failOptions.db ? failBrainSeedRun(failOptions.db, prelude, error) : Promise.resolve());
       const tickAutopilot =
         options.tickAutopilot ??
         (async (tickInput: { sessionId: EntityId; resume?: boolean; limit?: number }) => {
@@ -255,6 +272,13 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
             input: {
               rawIdea: seedInput.rawIdea,
               sessionId: seedInput.sessionId,
+              sourceMaterial: input.sourceMaterial
+                ? {
+                    kind: input.sourceMaterial.kind,
+                    fileName: input.sourceMaterial.fileName ?? null,
+                    textLength: input.sourceMaterial.extractedText.length,
+                  }
+                : null,
               source: "learn_session",
               searchDecision: brainSeedSearchDecision(seedInput),
             },
@@ -271,9 +295,10 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
           limit: input.autopilot.limit ?? 6,
         });
         const recipeOutput = await runLearnRecipe({
-          rawIdea: input.rawIdea,
+          rawIdea: seedRawIdea,
           seedPayload,
           nextMoves: learnSessionNextMoves(seedPayload, autopilot),
+          sourceContext,
         });
 
         await recordLearnRecipeTrace(db, persisted.brainRun.id, seed, recipeOutput);
@@ -288,6 +313,110 @@ function createDefaultLearnSessionService(options: LearnSessionRouteOptions): Le
       }
     },
   };
+}
+
+function seedIdeaFromLearnInput(input: LearnSessionRequest, sourceContext: LearningSourceContext | null): string {
+  const prompt = input.rawIdea.trim();
+
+  if (!sourceContext) {
+    return prompt;
+  }
+
+  const sourceLabel = sourceContext.fileName ?? `${sourceContext.kind} source`;
+  const clusterOutline = sourceContext.clusters
+    .slice(0, 5)
+    .map((cluster) => `${cluster.title}: ${cluster.summary}`)
+    .join("\n");
+  const requestedGoal = prompt || `Learn ${sourceLabel} as concise clustered lecture notes.`;
+
+  return clipText(
+    [
+      requestedGoal,
+      `Source file: ${sourceLabel}`,
+      `Main idea: ${sourceContext.mainIdea}`,
+      "Cluster outline:",
+      clusterOutline,
+    ].join("\n"),
+    450,
+  );
+}
+
+function buildLearningSourceContext(input: LearnSessionRequest): LearningSourceContext | null {
+  const material = input.sourceMaterial;
+
+  if (!material) {
+    return null;
+  }
+
+  const text = normalizeSourceText(material.extractedText);
+  const clusters = buildSourceClusters(text);
+  const fileName = material.fileName ?? null;
+
+  return {
+    kind: material.kind,
+    fileName,
+    mainIdea: summarizeText(text, 360) || input.rawIdea || fileName || "Uploaded source",
+    clusters,
+  };
+}
+
+function buildSourceClusters(text: string): LearningSourceContext["clusters"] {
+  const paragraphs = text
+    .split(/\n{2,}|(?=Slide\s+\d+[:\n])/i)
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter((paragraph) => paragraph.length >= 40);
+  const units = paragraphs.length >= 3 ? paragraphs : chunkBySentences(text);
+  const desiredCount = Math.min(7, Math.max(3, Math.ceil(units.length / 3)));
+  const clusterSize = Math.max(1, Math.ceil(units.length / desiredCount));
+  const clusters: LearningSourceContext["clusters"] = [];
+
+  for (let index = 0; index < desiredCount; index += 1) {
+    const chunk = units.slice(index * clusterSize, (index + 1) * clusterSize).join(" ");
+    const fallback = units[index % Math.max(1, units.length)] ?? text;
+    const body = chunk || fallback || "Source content needs review.";
+    const title = inferClusterTitle(body, index + 1);
+
+    clusters.push({
+      id: `source-cluster-${index + 1}`,
+      title,
+      summary: summarizeText(body, 300) || title,
+      sourceRange: `cluster ${index + 1} of ${desiredCount}`,
+    });
+  }
+
+  return clusters;
+}
+
+function chunkBySentences(text: string): string[] {
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const chunks: string[] = [];
+
+  for (let index = 0; index < sentences.length; index += 4) {
+    chunks.push(sentences.slice(index, index + 4).join(" "));
+  }
+
+  return chunks.length ? chunks : [text];
+}
+
+function inferClusterTitle(text: string, index: number): string {
+  const heading = text.match(/^(?:slide\s+\d+[:\s-]*)?([A-Z][^.!?\n:]{8,80})[:\n.]/i)?.[1]?.trim();
+
+  if (heading) {
+    return clipText(heading, 80);
+  }
+
+  return `Source cluster ${index}`;
+}
+
+function summarizeText(text: string, maxLength: number): string {
+  return clipText(text.replace(/\s+/g, " "), maxLength);
+}
+
+function normalizeSourceText(text: string): string {
+  return text.replace(/\u0000/g, " ").replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function learnClaim(claim: BrainSeedUiPayload["ideaMap"]["claims"][number]): LearnSessionClaim {
@@ -462,6 +591,7 @@ async function recordLearnRecipeTrace(
         recipe: recipeOutput.recipe,
         searchDecision: recipeOutput.searchDecision,
         brainContext: recipeOutput.brainContext,
+        sourceContext: recipeOutput.sourceContext,
       },
     })
     .where(eq(brainRuns.id, brainRunId));

@@ -1,13 +1,18 @@
-import { ArrowUp } from "lucide-react";
-import { type FormEvent, type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowUp, Upload } from "lucide-react";
+import { type ChangeEvent, type FormEvent, type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type PennyMode } from "../autopilotUx";
+import type { LearnSourceMaterialInput } from "../api/brainClient";
 import { PennyMark } from "./PennyMark";
 
 interface LandingPageProps {
   disabled: boolean;
   status: string;
   onModeSelect: (mode: PennyMode) => void;
-  onPromptSubmit: (mode: Extract<PennyMode, "Learn" | "Check">, rawIdea: string) => Promise<void>;
+  onPromptSubmit: (
+    mode: Extract<PennyMode, "Learn" | "Check">,
+    rawIdea: string,
+    sourceMaterial?: LearnSourceMaterialInput,
+  ) => Promise<void>;
   onQuickNote: (rawIdea: string) => Promise<void>;
 }
 
@@ -96,10 +101,12 @@ export function landingSubmitIntent(destination: LandingDestination | null, rawI
 
 export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, onQuickNote }: LandingPageProps) {
   const [rawIdea, setRawIdea] = useState("");
+  const [sourceMaterial, setSourceMaterial] = useState<LearnSourceMaterialInput | null>(null);
   const [isCtrlDown, setIsCtrlDown] = useState(false);
   const [activeShortcutKey, setActiveShortcutKey] = useState<string | null>(null);
   const [selectedShortcutKey, setSelectedShortcutKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const activeShortcutTimeoutRef = useRef<number | null>(null);
   const submitIntent = landingSubmitIntent(destinationForShortcutKey(selectedShortcutKey), rawIdea);
 
@@ -189,13 +196,32 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
     }
 
     setRawIdea("");
+    setSourceMaterial(null);
     setSelectedShortcutKey(null);
 
     if (intent.action === "quick-note") {
       await onQuickNote(intent.rawIdea);
     } else {
-      await onPromptSubmit(intent.mode, intent.rawIdea);
+      await onPromptSubmit(intent.mode, intent.rawIdea, intent.mode === "Learn" ? sourceMaterial ?? undefined : undefined);
     }
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const material = await sourceMaterialFromFile(file);
+    setSourceMaterial(material);
+    setSelectedShortcutKey("L");
+
+    if (!rawIdea.trim()) {
+      setRawIdea(`Teach me ${file.name} in concise clustered lesson steps.`);
+    }
+
+    event.target.value = "";
   }
 
   function handlePromptBoxClick(event: MouseEvent<HTMLDivElement>) {
@@ -277,6 +303,25 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
               <p id="landingStatus" className="sr-only">
                 {status}
               </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="sr-only"
+                accept=".txt,.md,.pdf,.ppt,.pptx,.doc,.docx,text/*,application/pdf"
+                onChange={(event) => {
+                  void handleFileChange(event);
+                }}
+              />
+              <button
+                type="button"
+                className={sourceMaterial ? "landing-file-button is-attached" : "landing-file-button"}
+                disabled={disabled}
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Attach source file for Learn"
+                title={sourceMaterial ? sourceMaterial.fileName : "Attach source file for Learn"}
+              >
+                <Upload size={17} strokeWidth={2.1} />
+              </button>
               <button
                 type="submit"
                 className={selectedShortcutKey === null ? "landing-submit-button" : "landing-submit-button is-visible"}
@@ -288,6 +333,15 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             </form>
 
             <div className="landing-prompt-actions">
+              {sourceMaterial ? (
+                <div className="landing-file-chip">
+                  <span>{sourceMaterial.kind.toUpperCase()}</span>
+                  <strong title={sourceMaterial.fileName}>{sourceMaterial.fileName}</strong>
+                  <button type="button" onClick={() => setSourceMaterial(null)} aria-label="Remove attached source">
+                    remove
+                  </button>
+                </div>
+              ) : null}
               <div className="landing-shortcuts" aria-label="Keyboard shortcuts">
                 {landingShortcuts.map((shortcut, index) => (
                   <div
@@ -337,4 +391,48 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
       </section>
     </main>
   );
+}
+
+async function sourceMaterialFromFile(file: File): Promise<LearnSourceMaterialInput> {
+  const extractedText = await extractFileText(file);
+
+  return {
+    kind: inferSourceKind(file),
+    fileName: file.name,
+    extractedText: extractedText.slice(0, 120_000),
+  };
+}
+
+async function extractFileText(file: File): Promise<string> {
+  if (file.type.startsWith("text/") || /\.(txt|md|csv|json)$/i.test(file.name)) {
+    return file.text();
+  }
+
+  const buffer = await file.arrayBuffer();
+  const decoded = new TextDecoder("utf-8", { fatal: false }).decode(buffer);
+
+  return decoded
+    .replace(/\(([^()\u0000-\u001f]{3,180})\)/g, " $1 ")
+    .replace(/[^\S\r\n]+/g, " ")
+    .replace(/[^\x09\x0a\x0d\x20-\x7e]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function inferSourceKind(file: File): LearnSourceMaterialInput["kind"] {
+  const name = file.name.toLowerCase();
+
+  if (name.endsWith(".pdf") || file.type === "application/pdf") {
+    return "pdf";
+  }
+
+  if (/\.(ppt|pptx)$/i.test(name)) {
+    return "slides";
+  }
+
+  if (/\.(doc|docx)$/i.test(name)) {
+    return "document";
+  }
+
+  return "text";
 }
