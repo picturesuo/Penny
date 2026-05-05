@@ -4468,18 +4468,20 @@
 
   .learn-goal-block {
     max-width: none;
-    min-height: 150px;
+    min-height: 106px;
     border-bottom: 2px solid #111111;
     padding-bottom: 12px;
   }
 
   .learn-goal-block h1 {
-    margin: 8px 0 0;
-    overflow-wrap: anywhere;
-    font-size: clamp(40px, 5vw, 72px);
+    margin: 10px 0 0;
+    overflow: hidden;
+    font-size: clamp(30px, 2.8vw, 40px);
     font-weight: 500;
     letter-spacing: 0;
-    line-height: 0.96;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .learn-step-header {
@@ -4501,18 +4503,18 @@
 
   .learn-step-header p {
     margin: 0;
-    max-width: 19ch;
+    max-width: 23ch;
     color: rgb(17 17 17 / 0.82);
-    font-size: clamp(30px, 3.5vw, 48px);
+    font-size: clamp(36px, 4vw, 58px);
     font-weight: 650;
     line-height: 1.08;
     text-align: left;
   }
 
   .learn-step-header .ask-penny-rendered {
-    max-width: 19ch;
+    max-width: 23ch;
     color: rgb(17 17 17 / 0.82);
-    font-size: clamp(30px, 3.5vw, 48px);
+    font-size: clamp(36px, 4vw, 58px);
     font-weight: 650;
     line-height: 1.08;
     text-align: left;
@@ -4647,7 +4649,7 @@
   .learn-bottom-nav {
     align-self: end;
     display: grid;
-    grid-template-columns: 180px minmax(360px, 520px);
+    grid-template-columns: clamp(150px, 20vw, 220px) clamp(270px, 47vw, 560px);
     justify-content: space-between;
     gap: 20px;
     border-top: 2px solid #111111;
@@ -4659,12 +4661,15 @@
     width: 100%;
     border: 1px solid #111111;
     border-radius: 0;
-    padding: 14px 18px;
+    padding: 14px 16px;
+    overflow: hidden;
     background: transparent;
     color: #111111;
-    font-size: 18px;
+    font-size: clamp(14px, 1.5vw, 18px);
     font-weight: 700;
     line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .learn-bottom-nav button:disabled {
@@ -5372,6 +5377,30 @@
     grid-column: 1;
     grid-row: 2;
     padding-inline: 0;
+  }
+
+  .learn-goal-block {
+    min-height: 86px;
+  }
+
+  .learn-goal-block h1 {
+    font-size: clamp(24px, 8vw, 32px);
+  }
+
+  .learn-step-header p,
+  .learn-step-header .ask-penny-rendered {
+    max-width: 18ch;
+    font-size: clamp(30px, 9vw, 42px);
+  }
+
+  .learn-bottom-nav {
+    grid-template-columns: clamp(104px, 32vw, 150px) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .learn-bottom-nav button {
+    padding: 12px 10px;
+    font-size: 13px;
   }
 
   .ask-penny-panel {
