@@ -195,6 +195,33 @@ test("POST /brain/learn/ask answers the derivative of a polynomial directly", as
   assert.doesNotMatch(payload.data.answer, /f'\(x\)=16/);
 });
 
+test("POST /brain/learn/ask handles expression-before-derivative phrasing", async () => {
+  const response = await handleAskPennyRequest(
+    request("http://localhost/brain/learn/ask", {
+      question: "4x^2y + 301498x derivative to x",
+      currentStepTitle: "Work the example",
+      localContext: "Goal: understand derivatives. Current step: Work the example.",
+    }),
+    {
+      provider: {
+        name: "anthropic",
+        model: "claude-test",
+        async generate() {
+          throw new InlineLearnProviderError("xAI Ask Penny request failed: Too Many Requests");
+        },
+      },
+    },
+  );
+  const payload = (await response.json()) as { data: { answer: string; provider: string; model: string | null } };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.provider, "heuristic");
+  assert.equal(payload.data.model, null);
+  assert.match(payload.data.answer, /f\(x\)=4x\^2y\+301498x/);
+  assert.match(payload.data.answer, /f'\(x\)=8xy\+301498/);
+  assert.match(payload.data.answer, /\\frac\{d\}\{dx\}\(4x\^2y\+301498x\)=8xy\+301498/);
+});
+
 test("POST /brain/learn/ask replaces provider scaffolding with a useful fallback", async () => {
   const response = await handleAskPennyRequest(
     request("http://localhost/brain/learn/ask", {
