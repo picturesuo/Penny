@@ -809,6 +809,12 @@ export interface SeedBrainResponse {
   data: BrainData;
 }
 
+export interface LearnSessionResponse {
+  data: BrainData & {
+    autopilot?: AutopilotTickData;
+  };
+}
+
 export interface FocusState {
   sessionId: string;
   mode: string;
