@@ -190,6 +190,31 @@ test("frontend Ask Penny local fallback differentiates full polynomial questions
   }
 });
 
+test("frontend Ask Penny local fallback differentiates with respect to the requested variable", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (): Promise<Response> => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  try {
+    const response = await askPenny({
+      question: "what is derivative of 172xy^2+y^2+129030y with respect to y?",
+      currentStepTitle: "Work the example",
+      localContext: "Goal: understand derivatives. Current step: Work the example.",
+    });
+
+    assert.equal(response.data.provider, "heuristic");
+    assert.equal(response.data.model, null);
+    assert.match(response.data.answer, /with respect to \$y\$/);
+    assert.match(response.data.answer, /f'\(y\)=344xy\+2y\+129030/);
+    assert.match(response.data.answer, /\\frac\{d\}\{dy\}\(172xy\^2\+y\^2\+129030y\)=344xy\+2y\+129030/);
+    assert.doesNotMatch(response.data.answer, /instantaneous rate of change:/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("frontend Ask Penny still uses the live API when it responds", async () => {
   const calls: FetchCall[] = [];
   const restoreFetch = mockFetch(calls, [
