@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   createChallengeBrief,
+  createLearnSession,
   fetchBrainHybridSearch,
   fetchBrainDocuments,
   fetchBrainRecents,
@@ -188,6 +189,54 @@ export function App() {
     }
   }
 
+  async function handleLearnSeed(rawIdea: string) {
+    setIsThinking(true);
+    setStatus("Building Learn path");
+
+    try {
+      const payload = await createLearnSession(rawIdea);
+      const learnData = payload.data;
+      setData(learnData);
+      setAutopilot(learnData.autopilot ?? null);
+      setChallengeResponse(null);
+      setLatestArtifact(null);
+      setBrainCanvasOpen(false);
+      setLearnFocusNode(null);
+      setRelatedBrainSearch(null);
+      setLandingVisible(false);
+      setActiveMode("Learn");
+      setFocusedWorkStructureStepId(learnData.workStructure?.activeStepId ?? null);
+      setFocusedClaimId(learnData.firstChallenge?.targetClaimId ?? learnData.ideaMap?.claims?.[0]?.id ?? null);
+      setStatus("Learn path created");
+
+      if (learnData.session?.id) {
+        const sessionId = learnData.session.id;
+        rememberActiveSession(sessionId);
+        setSelectedDocumentId(sessionId);
+        await refreshDocuments(sessionId);
+
+        try {
+          const cockpit = await refreshCockpit(sessionId, learnData);
+          setFocusedClaimId(
+            cockpit.autopilot.focusState?.focusedClaimId ??
+              cockpit.autopilot.suggestion?.targetClaimId ??
+              learnData.firstChallenge?.targetClaimId ??
+              learnData.ideaMap?.claims?.[0]?.id ??
+              null,
+          );
+          await refreshDocuments(sessionId);
+        } catch (followUpError) {
+          setStatus(`Learn path created; ${formatErrorMessage(followUpError)}`);
+        }
+      }
+    } catch (error) {
+      await refreshDocumentsAfterSeedFailure();
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsThinking(false);
+    }
+  }
+
   async function handleKeepRecentIdea(rawIdea: string) {
     setIsThinking(true);
     setStatus("Saving quick note");
@@ -266,6 +315,12 @@ export function App() {
   async function handleLandingPromptSubmit(mode: Extract<PennyMode, "Learn" | "Check">, rawIdea: string) {
     setLandingVisible(false);
     setActiveMode("Learn");
+
+    if (mode === "Learn") {
+      await handleLearnSeed(rawIdea);
+      return;
+    }
+
     await handleSeed(rawIdea);
     setActiveMode(mode);
   }
@@ -718,7 +773,11 @@ export function App() {
         setStatus("Quick note added to Brain");
         await refreshRecents();
       } else {
-        await handleSeed(recent.rawIdea);
+        if (action === "learn") {
+          await handleLearnSeed(recent.rawIdea);
+        } else {
+          await handleSeed(recent.rawIdea);
+        }
         setActiveMode(action === "check" ? "Check" : action === "learn" ? "Learn" : "Brain");
         setStatus(
           action === "check"
