@@ -1,13 +1,31 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Archive, BookOpen, FilePlus, Folder, FolderPlus, Send } from "lucide-react";
+import {
+  Archive,
+  BookOpen,
+  CircleHelp,
+  FilePlus,
+  FileText,
+  Folder,
+  FolderPlus,
+  Lightbulb,
+  Plus,
+  Search,
+  Send,
+  Sparkles,
+  X,
+} from "lucide-react";
 import type {
   AutopilotTickData,
   BrainClaim,
   BrainData,
+  BrainDocumentBlockData,
+  BrainDocumentCanvasEdge,
+  BrainDocumentCanvasNode,
   BrainDocumentGraphEdge,
   BrainDocumentGraphNode,
   BrainDocumentsData,
   BrainDocumentSummary,
+  BrainDocumentV2,
   BrainEdge,
   BrainGraphPath,
   BrainGraphPathNode,
@@ -71,6 +89,7 @@ interface GraphCardPoint extends GraphPoint {
 
 interface BrainHierarchySidebarProps {
   sidebar: BrainSidebarData | null;
+  documents: BrainDocumentSummary[];
   selectedSessionId: string | null;
   selectedQuickNoteId: string | null;
   recents?: BrainRecentIdea[];
@@ -100,6 +119,7 @@ export function BrainWorkspace({
   onSelectDocument,
   onBackToLibrary,
   onNewThought,
+  onSeed,
   onQuickNoteCreate,
   onQuickNoteAction,
   onClaimSelect,
@@ -122,6 +142,21 @@ export function BrainWorkspace({
   const quickNotes = useMemo(() => [...recents, ...archivedRecents], [recents, archivedRecents]);
   const selectedQuickNote = quickNotes.find((recent) => recent.id === selectedQuickNoteId) ?? null;
   const selectedQuickNoteArchived = archivedRecents.some((recent) => recent.id === selectedQuickNoteId);
+  const selectedSessionLoaded = !selectedDocument || data?.session?.id === selectedDocument.sessionId;
+  const documentV2Result = useMemo(
+    () =>
+      selectedDocument && selectedSessionLoaded
+        ? buildBrainDocumentV2({
+            document: selectedDocument,
+            data,
+            moves,
+            latestArtifact,
+            autopilot,
+            canvasData: initialCanvasData,
+          })
+        : null,
+    [autopilot, data, initialCanvasData, latestArtifact, moves, selectedDocument, selectedSessionLoaded],
+  );
 
   useEffect(() => {
     if (!selectedDocument || !focusedClaimId) {
@@ -186,6 +221,7 @@ export function BrainWorkspace({
     <main className={`brain-workspace-shell${selectedQuickNote ? " is-quick-note-doc" : ""}`}>
       <BrainHierarchySidebar
         sidebar={documentsData?.sidebar ?? null}
+        documents={documentsData?.documents ?? []}
         selectedSessionId={selectedDocument?.sessionId ?? null}
         selectedQuickNoteId={selectedQuickNoteId}
         recents={recents}
@@ -205,81 +241,634 @@ export function BrainWorkspace({
           onAction={handleQuickNoteAction}
         />
       ) : selectedDocument ? (
-        <>
-          <section className="brain-document-main" aria-label="Brain document">
-            <div className="brain-doc-toolbar">
-              <button type="button" className="text-command" onClick={handleBackToLibrary}>
-                All docs
-              </button>
-              <div className="brain-doc-actions">
-                <button type="button" className="text-command" disabled={isThinking} onClick={onReworkDocument}>
-                  Rework in Check
-                </button>
-                <button
-                  type="button"
-                  className={canvasOpen ? "primary-command" : "text-command"}
-                  disabled={isThinking}
-                  onClick={() => onCanvasOpenChange(!canvasOpen)}
-                >
-                  Canvas
-                </button>
-                <button type="button" className="primary-command" onClick={onNewThought}>
-                  New Thought
-                </button>
-              </div>
-            </div>
-            {canvasOpen ? (
-              <CanvasWorkspace
-                sessionId={selectedDocument.sessionId}
-                focusedClaimId={focusedClaimId}
-                {...(initialCanvasData ? { initialCanvasData } : {})}
-                disabled={isThinking}
-                onNodeAction={onCanvasNodeAction}
-              />
-            ) : (
-              <>
-                <DocumentHeader document={selectedDocument} workStructure={data?.workStructure ?? null} />
-                <FocusedGraphDetail
-                  focusedClaim={focusedClaim}
-                  detail={claimDetail}
-                  detailStatus={claimDetailStatus}
-                  detailError={claimDetailError}
-                  localClaims={claims}
-                  localEdges={edges}
-                  moves={moves}
-                />
-                <DocumentRundown document={selectedDocument} />
-                <WorkingNotes sessionId={selectedDocument.sessionId} title={selectedDocument.title} />
-              </>
-            )}
-          </section>
-          <aside className="brain-graph-quarter" aria-label="Brain graph and context">
-            <ConnectedGraphBoard
-              title="Graph Path"
-              graphPath={graphPath}
-              claims={claims}
-              edges={edges}
-              focusedClaimId={focusedClaimId}
-              suggestedClaimId={autopilot?.suggestion?.targetClaimId ?? null}
-              onClaimSelect={onClaimSelect}
-            />
-            <BrainDocumentAside
-              document={selectedDocument}
-              focusedClaim={focusedClaim}
-              claims={claims}
-              moves={moves}
-              latestArtifact={latestArtifact}
-            />
-          </aside>
-        </>
+        <BrainDocumentPage
+          document={selectedDocument}
+          buildResult={documentV2Result}
+          loading={!selectedSessionLoaded}
+          isThinking={isThinking}
+          status={status}
+          onBack={handleBackToLibrary}
+          onNewDocument={onNewThought}
+          onReworkDocument={onReworkDocument}
+          onRetry={() => handleSelectDocument(selectedDocument.sessionId)}
+          onAsk={onSeed}
+        />
       ) : (
-        <BrainRecordLog
+        <BrainDocumentsIndex
           documentsData={documentsData}
           onSelectDocument={handleSelectDocument}
         />
       )}
     </main>
   );
+}
+
+type BrainDocumentBuildResult =
+  | {
+      status: "ready";
+      document: BrainDocumentV2;
+    }
+  | {
+      status: "error";
+      message: string;
+      issues: string[];
+    };
+
+type BuildBrainDocumentV2Input = {
+  document: BrainDocumentSummary;
+  data: BrainData | null;
+  moves: BrainMove[];
+  latestArtifact: SessionCockpitData["latestArtifact"] | null;
+  autopilot: AutopilotTickData | null;
+  canvasData: SessionCanvasData | undefined;
+};
+
+function BrainDocumentPage({
+  document,
+  buildResult,
+  loading,
+  isThinking,
+  status,
+  onBack,
+  onNewDocument,
+  onReworkDocument,
+  onRetry,
+  onAsk,
+}: {
+  document: BrainDocumentSummary;
+  buildResult: BrainDocumentBuildResult | null;
+  loading: boolean;
+  isThinking: boolean;
+  status: string;
+  onBack: () => void;
+  onNewDocument: () => void;
+  onReworkDocument: () => Promise<void>;
+  onRetry: () => void;
+  onAsk: (rawIdea: string) => Promise<void>;
+}) {
+  const [askOpen, setAskOpen] = useState(false);
+
+  return (
+    <section className="brain-document-main" aria-label="Brain document">
+      <div className="brain-doc-toolbar">
+        <button type="button" className="text-command" onClick={onBack}>
+          All docs
+        </button>
+        <div className="brain-doc-actions">
+          <button type="button" className="text-command" disabled={isThinking} onClick={onReworkDocument}>
+            Rework in Check
+          </button>
+          <button type="button" className="text-command" disabled={isThinking} onClick={() => setAskOpen(true)}>
+            Ask Penny
+          </button>
+          <button type="button" className="primary-command" onClick={onNewDocument}>
+            New Document
+          </button>
+        </div>
+      </div>
+      {loading ? (
+        <article className="brain-document-loading">
+          <Sparkles size={18} aria-hidden="true" />
+          <strong>Opening structured document</strong>
+          <span>{status}</span>
+        </article>
+      ) : buildResult?.status === "ready" ? (
+        <>
+          <article className="brain-document-page">
+            <DocumentHero document={buildResult.document} />
+            <div className="brain-document-card-grid">
+              <InlineDocumentCard title="Mini summary" body={buildResult.document.miniSummary} />
+              <InlineDocumentCard title="Takeaways" values={buildResult.document.takeaways} />
+              <InlineDocumentCard title="Related ideas" values={buildResult.document.relatedIdeas} />
+            </div>
+            <div className="brain-document-blocks">
+              {buildResult.document.blocks.map((block) => (
+                <BrainDocumentBlock key={block.id} block={block} />
+              ))}
+            </div>
+            <InlineThinkingCanvas canvas={buildResult.document.canvas} />
+            <WorkingNotes sessionId={document.sessionId} title={document.title} />
+            <DocumentProvenance document={buildResult.document} rawDocument={document} />
+          </article>
+          <BrainAskDrawer
+            open={askOpen}
+            document={buildResult.document}
+            disabled={isThinking}
+            onClose={() => setAskOpen(false)}
+            onAsk={onAsk}
+          />
+        </>
+      ) : (
+        <BrainDocumentError
+          title={document.title}
+          message={buildResult?.message ?? "The structured document could not be generated from the current AI session state."}
+          issues={buildResult?.issues ?? ["The session has not finished loading."]}
+          disabled={isThinking}
+          onRetry={onRetry}
+        />
+      )}
+    </section>
+  );
+}
+
+function DocumentHero({ document }: { document: BrainDocumentV2 }) {
+  return (
+    <header className="brain-document-v2-hero">
+      <div className="brain-document-v2-kicker">
+        <span>Brain Document</span>
+        <span>{formatLabel(document.metadata.status)}</span>
+      </div>
+      <h1>{document.title}</h1>
+      <p>{document.subtitle}</p>
+      <div className="brain-document-v2-meta" aria-label="Document metadata">
+        <span>Created {formatDate(document.metadata.createdAt)}</span>
+        <span>Updated {formatDate(document.metadata.updatedAt)}</span>
+        <span>{document.metadata.claimCount} claims</span>
+        <span>{document.metadata.edgeCount} edges</span>
+        <span>{document.metadata.moveCount} moves</span>
+      </div>
+    </header>
+  );
+}
+
+function InlineDocumentCard({
+  title,
+  body,
+  values,
+}: {
+  title: string;
+  body?: string;
+  values?: string[];
+}) {
+  const cleanedValues = (values ?? []).map((value) => value.trim()).filter(Boolean);
+
+  return (
+    <section className="inline-document-card">
+      <h2>{title}</h2>
+      {cleanedValues.length > 0 ? (
+        <ul>
+          {cleanedValues.map((value, index) => (
+            <li key={`${title}-${index}`}>{value}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>{body}</p>
+      )}
+    </section>
+  );
+}
+
+function BrainDocumentBlock({ block }: { block: BrainDocumentBlockData }) {
+  const items = block.items?.map((item) => item.trim()).filter(Boolean) ?? [];
+
+  return (
+    <section className={`brain-document-block is-${block.kind}`}>
+      <span>{block.eyebrow}</span>
+      <h2>{block.title}</h2>
+      <p>{block.body}</p>
+      {items.length > 0 ? (
+        <ul>
+          {items.map((item, index) => (
+            <li key={`${block.id}-${index}`}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+function InlineThinkingCanvas({ canvas }: { canvas: BrainDocumentV2["canvas"] }) {
+  const nodeMap = new Map(canvas.nodes.map((node) => [node.id, node]));
+
+  return (
+    <section className="inline-thinking-canvas" aria-label="Inline thinking canvas">
+      <div className="inline-thinking-canvas-head">
+        <div>
+          <span>Thinking Canvas</span>
+          <h2>How this idea works</h2>
+        </div>
+        <small>{canvas.nodes.length} cards</small>
+      </div>
+      <div className="inline-thinking-canvas-board">
+        <svg viewBox="0 0 920 560" aria-hidden="true">
+          {canvas.edges.map((edge) => {
+            const source = nodeMap.get(edge.source);
+            const target = nodeMap.get(edge.target);
+
+            if (!source || !target) {
+              return null;
+            }
+
+            return (
+              <g key={edge.id}>
+                <path className="inline-canvas-edge" d={inlineCanvasEdgePath(source, target)} />
+                <text className="inline-canvas-edge-label" x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 8}>
+                  {edge.label}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+        {canvas.nodes.map((node) => (
+          <article
+            key={node.id}
+            className={`inline-canvas-node is-${node.kind.toLowerCase().replaceAll(" ", "-")}`}
+            style={{ left: `${node.x}px`, top: `${node.y}px` }}
+          >
+            <span>{node.kind}</span>
+            <strong>{node.title}</strong>
+            <p>{node.body}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BrainAskDrawer({
+  open,
+  document,
+  disabled,
+  onClose,
+  onAsk,
+}: {
+  open: boolean;
+  document: BrainDocumentV2;
+  disabled: boolean;
+  onClose: () => void;
+  onAsk: (rawIdea: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open) {
+    return null;
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const question = draft.trim();
+
+    if (!question) {
+      return;
+    }
+
+    setError(null);
+
+    try {
+      await onAsk(`In the Brain document "${document.title}", ${question}`);
+      setDraft("");
+      onClose();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+
+  return (
+    <div className="brain-ask-drawer" role="dialog" aria-modal="false" aria-label="Ask Penny about this document">
+      <form onSubmit={(event) => void handleSubmit(event)}>
+        <div className="brain-ask-drawer-head">
+          <div>
+            <span>Ask Penny</span>
+            <strong>{document.title}</strong>
+          </div>
+          <button type="button" aria-label="Close Ask Penny" onClick={onClose}>
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="Ask for a sharper claim, a missing assumption, or the next stress test."
+          rows={4}
+        />
+        {error ? <p>{error}</p> : null}
+        <button type="submit" className="primary-command" disabled={disabled || !draft.trim()}>
+          Send to Brain
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function DocumentProvenance({
+  document,
+  rawDocument,
+}: {
+  document: BrainDocumentV2;
+  rawDocument: BrainDocumentSummary;
+}) {
+  return (
+    <details className="brain-document-provenance">
+      <summary>Provenance</summary>
+      <dl>
+        <div>
+          <dt>Session</dt>
+          <dd>{document.metadata.sessionId}</dd>
+        </div>
+        <div>
+          <dt>Generated from</dt>
+          <dd>{formatLabel(document.metadata.generatedFrom)}</dd>
+        </div>
+        {rawDocument.latestArtifact ? (
+          <div>
+            <dt>Latest artifact</dt>
+            <dd>{rawDocument.latestArtifact.title}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </details>
+  );
+}
+
+function BrainDocumentError({
+  title,
+  message,
+  issues,
+  disabled,
+  onRetry,
+}: {
+  title: string;
+  message: string;
+  issues: string[];
+  disabled: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <article className="brain-document-error" role="alert">
+      <CircleHelp size={20} aria-hidden="true" />
+      <span>Structured document unavailable</span>
+      <h1>{title}</h1>
+      <p>{message}</p>
+      <ul>
+        {issues.map((issue) => (
+          <li key={issue}>{issue}</li>
+        ))}
+      </ul>
+      <button type="button" className="primary-command" disabled={disabled} onClick={onRetry}>
+        Retry
+      </button>
+    </article>
+  );
+}
+
+function buildBrainDocumentV2(input: BuildBrainDocumentV2Input): BrainDocumentBuildResult {
+  const { document, data, moves, latestArtifact, autopilot, canvasData } = input;
+  const claims = data?.ideaMap?.claims ?? [];
+  const claimById = new Map(claims.map((claim) => [claim.id, claim]));
+  const mainClaim = firstNonEmpty(document.mainClaim?.text, claims.find((claim) => claim.kind === "belief")?.text);
+  const originalIdea = firstNonEmpty(document.originalIdea, data?.source?.rawText);
+  const currentDirection = firstNonEmpty(
+    document.finalRecommendations[0],
+    document.nextActions[0],
+    latestArtifact?.summary,
+    autopilot?.suggestion?.why,
+  );
+  const assumptions = uniqueDocumentStrings([
+    ...claims.filter((claim) => claim.kind === "assumption").map((claim) => claim.text),
+    ...document.strongestOptions.filter((claim) => claim.kind === "assumption").map((claim) => claim.text),
+  ]).slice(0, 5);
+  const keyQuestions = uniqueDocumentStrings([
+    ...claims.filter((claim) => claim.kind === "question").map((claim) => claim.text),
+    ...document.todoLaterIdeas,
+    autopilot?.suggestion?.exitCriteria?.label,
+  ]).slice(0, 5);
+  const tensions = uniqueDocumentStrings([
+    ...document.rejectedOptions.map((claim) => claim.text),
+    autopilot?.suggestion?.why,
+    ...claims.filter((claim) => claim.status === "rejected").map((claim) => claim.text),
+  ]).slice(0, 5);
+  const evidence = uniqueDocumentStrings([
+    originalIdea ? `Source seed: ${originalIdea}` : null,
+    latestArtifact?.summary ? `Latest artifact: ${latestArtifact.summary}` : null,
+    document.latestArtifact?.summary ? `Saved artifact: ${document.latestArtifact.summary}` : null,
+  ]).slice(0, 4);
+  const notes = uniqueDocumentStrings([
+    ...moves.slice(-4).map((move) => move.summary),
+    document.lastMove?.summary,
+  ]).slice(0, 5);
+  const takeaways = uniqueDocumentStrings([
+    ...document.finalRecommendations,
+    latestArtifact?.summary,
+    document.latestArtifact?.summary,
+  ]).slice(0, 5);
+  const relatedIdeas = uniqueDocumentStrings([
+    ...document.strongestOptions.map((claim) => claim.text),
+    ...claims.filter((claim) => claim.kind === "concept").map((claim) => claim.text),
+  ]).slice(0, 5);
+  const miniSummary = firstNonEmpty(document.description, latestArtifact?.summary, takeaways[0]);
+  const subtitle = firstNonEmpty(document.description, miniSummary);
+  const summary = firstNonEmpty(latestArtifact?.summary, document.latestArtifact?.summary, document.description);
+  const missing = [
+    ["original idea", originalIdea],
+    ["main claim", mainClaim],
+    ["current direction", currentDirection],
+    ["assumptions", assumptions[0]],
+    ["evidence", evidence[0]],
+    ["questions", keyQuestions[0]],
+    ["notes", notes[0]],
+    ["takeaways", takeaways[0]],
+    ["related ideas", relatedIdeas[0]],
+    ["mini summary", miniSummary],
+  ]
+    .filter(([, value]) => !value)
+    .map(([label]) => `Missing ${label} from the AI/session projection.`);
+
+  if (missing.length > 0) {
+    return {
+      status: "error",
+      message: "Penny did not receive enough structured AI session content to render a complete document.",
+      issues: missing,
+    };
+  }
+
+  const canvas = buildInlineDocumentCanvas({
+    mainClaim,
+    assumptions,
+    evidence,
+    tensions,
+    keyQuestions,
+    currentDirection,
+    relatedIdeas,
+    claimById,
+    canvasData,
+  });
+  const blocks = documentBlocks({
+    originalIdea,
+    mainClaim,
+    currentDirection,
+    assumptions,
+    evidence,
+    keyQuestions,
+    notes,
+    tensions,
+  });
+
+  return {
+    status: "ready",
+    document: {
+      title: document.title,
+      subtitle,
+      summary,
+      originalIdea,
+      mainClaim,
+      currentDirection,
+      keyQuestions,
+      assumptions,
+      evidence,
+      tensions,
+      notes,
+      takeaways,
+      relatedIdeas,
+      miniSummary,
+      canvas,
+      metadata: {
+        sessionId: document.sessionId,
+        status: document.status,
+        createdAt: document.createdAt,
+        updatedAt: document.updatedAt,
+        claimCount: document.counts.claims,
+        edgeCount: document.counts.edges,
+        moveCount: document.counts.moves,
+        artifactCount: document.counts.artifacts,
+        generatedFrom: "ai_session_state",
+      },
+      blocks,
+    },
+  };
+}
+
+function documentBlocks(input: {
+  originalIdea: string;
+  mainClaim: string;
+  currentDirection: string;
+  assumptions: string[];
+  evidence: string[];
+  keyQuestions: string[];
+  notes: string[];
+  tensions: string[];
+}): BrainDocumentBlockData[] {
+  return [
+    documentBlock("original_idea", "Seed", "Original idea", input.originalIdea),
+    documentBlock("main_claim", "Claim", "Main claim", input.mainClaim),
+    documentBlock("current_direction", "Direction", "Current direction", input.currentDirection),
+    documentBlock("assumptions", "Structure", "Assumptions", "The idea currently depends on these claims.", input.assumptions),
+    documentBlock("evidence", "Grounding", "Evidence", "Penny is grounding this document in the available source and artifact trail.", input.evidence),
+    documentBlock("questions", "Open loops", "Questions", "These questions should shape the next review pass.", input.keyQuestions),
+    documentBlock("tensions", "Stress test", "Tensions", "These are the current contradictions, rejected options, or challenge pressure points.", input.tensions),
+    documentBlock("notes", "Moves", "Notes", "Recent session moves and saved notes keep this document connected to thinking history.", input.notes),
+  ];
+}
+
+function documentBlock(
+  kind: BrainDocumentBlockData["kind"],
+  eyebrow: string,
+  title: string,
+  body: string,
+  items?: string[],
+): BrainDocumentBlockData {
+  const cleanedItems = items?.map((item) => item.trim()).filter(Boolean);
+
+  return {
+    id: kind,
+    kind,
+    eyebrow,
+    title,
+    body,
+    ...(cleanedItems?.length ? { items: cleanedItems } : {}),
+  };
+}
+
+function buildInlineDocumentCanvas(input: {
+  mainClaim: string;
+  assumptions: string[];
+  evidence: string[];
+  tensions: string[];
+  keyQuestions: string[];
+  currentDirection: string;
+  relatedIdeas: string[];
+  claimById: Map<string, BrainClaim>;
+  canvasData: SessionCanvasData | undefined;
+}): BrainDocumentV2["canvas"] {
+  const graphConcept = input.canvasData?.nodes.find((node) => node.kind === "concept");
+  const graphClaim = input.canvasData?.nodes.find((node) => node.kind === "claim" || node.kind === "belief");
+  const graphAssumption = input.canvasData?.nodes.find((node) => node.kind === "assumption");
+  const graphQuestion = input.canvasData?.nodes.find((node) => node.kind === "question");
+  const nodes: BrainDocumentCanvasNode[] = [
+    inlineCanvasNode("concept", "Concept", graphConcept?.title ?? input.relatedIdeas[0], graphConcept?.summary ?? input.relatedIdeas[0], 70, 70),
+    inlineCanvasNode("claim", "Claim", graphClaim?.title ?? input.mainClaim, graphClaim?.summary ?? input.mainClaim, 360, 70),
+    inlineCanvasNode("assumption", "Assumption", graphAssumption?.title ?? input.assumptions[0], graphAssumption?.summary ?? input.assumptions[0], 650, 70),
+    inlineCanvasNode("evidence", "Evidence", "Available grounding", input.evidence[0], 110, 300),
+    inlineCanvasNode("tension", "Tension", "Pressure point", input.tensions[0], 360, 330),
+    inlineCanvasNode("question", "Question", graphQuestion?.title ?? input.keyQuestions[0], graphQuestion?.summary ?? input.keyQuestions[0], 620, 310),
+    inlineCanvasNode("next", "Next Move", "Next move", input.currentDirection, 365, 455),
+  ];
+  const edges: BrainDocumentCanvasEdge[] = [
+    { id: "edge-concept-claim", source: "concept", target: "claim", label: "frames" },
+    { id: "edge-claim-assumption", source: "claim", target: "assumption", label: "depends on" },
+    { id: "edge-evidence-claim", source: "evidence", target: "claim", label: "grounds" },
+    { id: "edge-assumption-tension", source: "assumption", target: "tension", label: "pressures" },
+    { id: "edge-tension-question", source: "tension", target: "question", label: "opens" },
+    { id: "edge-question-next", source: "question", target: "next", label: "drives" },
+  ];
+
+  return { nodes, edges };
+}
+
+function inlineCanvasNode(
+  id: string,
+  kind: BrainDocumentCanvasNode["kind"],
+  title: string | undefined,
+  body: string | undefined,
+  x: number,
+  y: number,
+): BrainDocumentCanvasNode {
+  return {
+    id,
+    kind,
+    title: firstNonEmpty(title, body),
+    body: firstNonEmpty(body, title),
+    x,
+    y,
+  };
+}
+
+function inlineCanvasEdgePath(source: BrainDocumentCanvasNode, target: BrainDocumentCanvasNode): string {
+  const sourceX = source.x + 88;
+  const sourceY = source.y + 62;
+  const targetX = target.x + 88;
+  const targetY = target.y + 62;
+  const controlY = sourceY + (targetY - sourceY) / 2;
+
+  return `M ${sourceX} ${sourceY} C ${sourceX} ${controlY}, ${targetX} ${controlY}, ${targetX} ${targetY}`;
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string {
+  return values.find((value) => value?.trim())?.trim() ?? "";
+}
+
+function uniqueDocumentStrings(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const output: string[] = [];
+
+  for (const value of values) {
+    const cleaned = value?.replace(/\s+/g, " ").trim();
+
+    if (!cleaned) {
+      continue;
+    }
+
+    const key = cleaned.toLowerCase();
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    output.push(cleaned);
+  }
+
+  return output;
 }
 
 function canvasDataFromBrainData(data: BrainData | null, focusedClaimId: string | null): SessionCanvasData | undefined {
@@ -654,6 +1243,7 @@ function StitchedReference({
 
 function BrainHierarchySidebar({
   sidebar,
+  documents,
   selectedSessionId,
   selectedQuickNoteId,
   recents = [],
@@ -665,6 +1255,7 @@ function BrainHierarchySidebar({
   onQuickNoteAction,
 }: BrainHierarchySidebarProps) {
   const folders = sidebar?.folders ?? [];
+  const [searchQuery, setSearchQuery] = useState("");
   const [localFolders, setLocalFolders] = useState<BrainHierarchyFolder[]>([]);
   const [folderLabelOverrides, setFolderLabelOverrides] = useState<Record<string, string>>({});
   const [documentFolderOverrides, setDocumentFolderOverrides] = useState<Record<string, string>>({});
@@ -681,6 +1272,27 @@ function BrainHierarchySidebar({
   const visibleFolders = useMemo(
     () => applyFolderLabelOverrides(mergeSidebarFolders(folders, localFolders, documentFolderOverrides), folderLabelOverrides),
     [folders, localFolders, documentFolderOverrides, folderLabelOverrides],
+  );
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) {
+      return [];
+    }
+
+    return documents
+      .filter((document) =>
+        [document.title, document.description, document.originalIdea, document.mainClaim?.text]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(query),
+      )
+      .slice(0, 6);
+  }, [documents, searchQuery]);
+  const recentDocuments = useMemo(
+    () => [...documents].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt)).slice(0, 6),
+    [documents],
   );
 
   useEffect(() => {
@@ -757,6 +1369,34 @@ function BrainHierarchySidebar({
 
   return (
     <aside className="brain-hierarchy-sidebar" aria-label="Brain sidebar">
+      <section className="brain-sidebar-search" aria-label="Search Brain">
+        <label htmlFor="brainSidebarSearch">
+          <Search size={15} aria-hidden="true" />
+          <span>Search Brain</span>
+        </label>
+        <input
+          id="brainSidebarSearch"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          type="search"
+          placeholder="Find a document or claim"
+        />
+        {searchResults.length > 0 ? (
+          <div className="brain-sidebar-search-results">
+            {searchResults.map((document) => (
+              <button
+                key={document.id}
+                type="button"
+                className="brain-sidebar-search-result"
+                onClick={() => onSelectDocument(document.sessionId)}
+              >
+                <FileText size={14} aria-hidden="true" />
+                <span title={document.title}>{truncateWords(document.title, 7)}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
       <section className="brain-sidebar-section" aria-label="Quick notes">
         <div className="brain-tree" role="tree" aria-label="Quick notes folder">
           <div className="brain-tree-folder" role="treeitem" aria-expanded="true">
@@ -808,7 +1448,7 @@ function BrainHierarchySidebar({
                   ))}
                 </div>
               ) : (
-                <p className="brain-sidebar-muted">No quick notes yet.</p>
+                <p className="brain-sidebar-muted">Quick notes start here.</p>
               )}
             </div>
           </div>
@@ -836,6 +1476,38 @@ function BrainHierarchySidebar({
             ) : null}
           </div>
         ) : null}
+      </section>
+      <section className="brain-sidebar-section" aria-label="Documents">
+        <div className="brain-sidebar-section-head">
+          <FileText size={15} aria-hidden="true" />
+          <strong>Documents</strong>
+          <button type="button" className="brain-sidebar-add-doc" onClick={onNewDocument}>
+            <Plus size={14} aria-hidden="true" />
+            <span>New Document</span>
+          </button>
+        </div>
+        {recentDocuments.length > 0 ? (
+          <div className="brain-sidebar-documents">
+            {recentDocuments.map((document) => {
+              const active = document.sessionId === selectedSessionId;
+
+              return (
+                <button
+                  key={document.id}
+                  type="button"
+                  className={`brain-sidebar-document-row${active ? " is-active" : ""}`}
+                  onClick={() => onSelectDocument(document.sessionId)}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <span title={document.title}>{truncateWords(document.title, 10)}</span>
+                  <small>{formatDate(document.updatedAt)}</small>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="brain-sidebar-muted">Create a document from a seed idea.</p>
+        )}
       </section>
       <section className="brain-sidebar-section" aria-label="Document folders">
         <div className="brain-sidebar-section-head">
@@ -1048,7 +1720,7 @@ function archiveMeta(recent: BrainRecentIdea): string {
   return `Archived until ${formatDate(recent.archiveExpiresAt)}`;
 }
 
-function BrainRecordLog({
+function BrainDocumentsIndex({
   documentsData,
   onSelectDocument,
 }: {
@@ -1120,7 +1792,7 @@ function BrainRecordLog({
             </div>
           ) : (
             <article className="document-empty-state">
-              <strong>No docs yet</strong>
+              <strong>Start a document</strong>
               <span>Start with a thought and Penny will create the first record.</span>
             </article>
           )}
@@ -1365,7 +2037,7 @@ function ConnectedGraphBoard({
         </svg>
       ) : (
         <div className="graph-empty-state">
-          <strong>No graph state yet</strong>
+          <strong>Graph state will render from saved claims</strong>
           <span>Seed an idea to create connected claims.</span>
         </div>
       )}
@@ -1420,7 +2092,7 @@ function DocumentMemoryGraph({ graph }: { graph: BrainDocumentsData["graph"] | n
         </svg>
       ) : (
         <div className="memory-empty-state">
-          <strong>No documents yet</strong>
+          <strong>Documents appear after saved thinking</strong>
           <span>The graph appears after the first thought is saved.</span>
         </div>
       )}
@@ -1431,8 +2103,8 @@ function DocumentMemoryGraph({ graph }: { graph: BrainDocumentsData["graph"] | n
 function DocumentRundown({ document }: { document: BrainDocumentSummary }) {
   return (
     <section className="document-rundown" aria-label="Doc rundown">
-      <RundownSection title="Original Idea" values={[document.originalIdea ?? "No original idea recorded."]} />
-      <RundownSection title="Main Claim" values={[document.mainClaim?.text ?? "No main claim yet."]} />
+      <RundownSection title="Original Idea" values={[document.originalIdea ?? "Original idea requires a completed AI projection."]} />
+      <RundownSection title="Main Claim" values={[document.mainClaim?.text ?? "Main claim requires a completed AI projection."]} />
       <RundownSection title="Current Direction" values={document.finalRecommendations} />
       <RundownSection title="Next Action" values={document.nextActions.slice(0, 1)} />
     </section>
@@ -1458,7 +2130,7 @@ function BrainDocumentAside({
     <aside className="brain-doc-aside" aria-label="Document context">
       <section>
         <h2 className="section-label">MOST IMPORTANT INSIGHT</h2>
-        <p>{focusedClaim?.text ?? document.mainClaim?.text ?? "No selected claim yet."}</p>
+        <p>{focusedClaim?.text ?? document.mainClaim?.text ?? "Selected claim requires a completed AI projection."}</p>
       </section>
       <section>
         <h2 className="section-label">RELATED CONCEPTS</h2>
@@ -1472,16 +2144,16 @@ function BrainDocumentAside({
             ))}
           </ul>
         ) : (
-          <p>No related concepts recorded yet.</p>
+          <p>Related concepts require a completed AI projection.</p>
         )}
       </section>
       <section>
         <h2 className="section-label">DOCUMENT SUMMARY</h2>
-        <p>{latestArtifact?.summary ?? document.finalRecommendations[0] ?? document.originalIdea ?? "No summary yet."}</p>
+        <p>{latestArtifact?.summary ?? document.finalRecommendations[0] ?? document.originalIdea ?? "Summary requires a completed AI projection."}</p>
       </section>
       <section>
         <h2 className="section-label">LAST SESSION</h2>
-        <p>{document.lastMove ? `${formatDate(document.lastMove.createdAt)}: ${document.lastMove.summary}` : "No moves recorded."}</p>
+        <p>{document.lastMove ? `${formatDate(document.lastMove.createdAt)}: ${document.lastMove.summary}` : "Move history requires a completed AI projection."}</p>
         <small>{moves.length} moves / {document.counts.versions} versions</small>
       </section>
     </aside>
