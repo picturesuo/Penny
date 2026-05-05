@@ -742,27 +742,106 @@ function localTechnicalAskPennyAnswer(question: string): string | null {
 }
 
 function derivativeOfLinearExpressionAnswer(compactQuestion: string): string | null {
-  const match = compactQuestion.match(
-    /\b(?:derivative|differentiate|derive|slope|rate of change)\b(?:\s+(?:of|for))?\s+(-?\d+(?:\.\d+)?)\s*\*?\s*x\b/,
-  );
+  const match = compactQuestion.match(/\b(?:derivative|differentiate|derive|slope|rate of change)\b(?:\s+(?:of|for))?\s+(.+)$/);
 
   if (!match) {
     return null;
   }
 
-  const coefficient = Number(match[1]);
+  const rawExpression = match[1];
 
-  if (!Number.isFinite(coefficient)) {
+  if (!rawExpression) {
     return null;
   }
 
-  const coefficientText = formatAskPennyNumber(coefficient);
+  const expression = parsePolynomialExpression(rawExpression);
+
+  if (!expression) {
+    return null;
+  }
+
+  const derivative = expression.terms
+    .map((term) => ({
+      coefficient: term.coefficient * term.power,
+      power: term.power - 1,
+    }))
+    .filter((term) => term.coefficient !== 0);
+  const derivativeText = formatPolynomial(derivative);
 
   return [
-    `For f(x) = ${coefficientText}x, the derivative is f'(x) = ${coefficientText}.`,
-    `Use the constant multiple rule: x has derivative 1, so the derivative of ${coefficientText}x is ${coefficientText} times 1, which is ${coefficientText}.`,
-    `In plain language, the line ${coefficientText}x changes by ${coefficientText} for every 1-unit increase in x.`,
+    `For $f(x)=${expression.display}$, the derivative is $f'(x)=${derivativeText}$.`,
+    "Use the power rule: $\\frac{d}{dx}(ax^n)=anx^{n-1}$, and differentiate each term separately.",
+    `So $\\frac{d}{dx}(${expression.display})=${derivativeText}$. That derivative tells you the slope, or instantaneous rate of change, at each value of $x$.`,
   ].join("\n\n");
+}
+
+type PolynomialTerm = {
+  coefficient: number;
+  power: number;
+};
+
+function parsePolynomialExpression(rawExpression: string): { display: string; terms: PolynomialTerm[] } | null {
+  const cleaned = rawExpression
+    .replace(/[?.!,;:]+$/g, "")
+    .replace(/\s+/g, "")
+    .replace(/\*\*/g, "^")
+    .replace(/[\u2212\u2013\u2014]/g, "-")
+    .toLowerCase();
+  const expression = cleaned.match(/^([+-]?(?:\d+(?:\.\d+)?|\.\d+)?\*?x(?:\^-?\d+)?(?:[+-](?:\d+(?:\.\d+)?|\.\d+)?\*?x(?:\^-?\d+)?)*)(?:\b.*)?$/)?.[1];
+
+  if (!expression || !expression.includes("x")) {
+    return null;
+  }
+
+  const terms = expression.match(/[+-]?[^+-]+/g) ?? [];
+  const parsedTerms = terms.map(parsePolynomialTerm);
+
+  if (!parsedTerms.length || parsedTerms.some((term) => !term)) {
+    return null;
+  }
+
+  return {
+    display: formatPolynomial(parsedTerms as PolynomialTerm[]),
+    terms: parsedTerms as PolynomialTerm[],
+  };
+}
+
+function parsePolynomialTerm(term: string): PolynomialTerm | null {
+  const match = term.match(/^([+-]?)(?:(\d+(?:\.\d+)?|\.\d+)\*?)?x(?:\^(-?\d+))?$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const sign = match[1] === "-" ? -1 : 1;
+  const coefficient = match[2] ? Number(match[2]) : 1;
+  const power = match[3] ? Number(match[3]) : 1;
+
+  if (!Number.isFinite(coefficient) || !Number.isInteger(power) || power < 1) {
+    return null;
+  }
+
+  return {
+    coefficient: sign * coefficient,
+    power,
+  };
+}
+
+function formatPolynomial(terms: PolynomialTerm[]): string {
+  if (!terms.length) {
+    return "0";
+  }
+
+  return terms
+    .map((term, index) => {
+      const sign = term.coefficient < 0 ? "-" : index === 0 ? "" : "+";
+      const absoluteCoefficient = Math.abs(term.coefficient);
+      const coefficient = term.power === 0 || absoluteCoefficient !== 1 ? formatAskPennyNumber(absoluteCoefficient) : "";
+      const variable = term.power === 0 ? "" : term.power === 1 ? "x" : `x^${term.power}`;
+
+      return `${sign}${coefficient}${variable}`;
+    })
+    .join("");
 }
 
 function clipAskPennyText(value: string, maxLength: number): string {

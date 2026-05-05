@@ -163,8 +163,36 @@ test("POST /brain/learn/ask answers the derivative of 4x directly", async () => 
   assert.equal(payload.data.model, null);
   assert.match(payload.data.answer, /f\(x\)=4x/);
   assert.match(payload.data.answer, /f'\(x\)=4/);
-  assert.match(payload.data.answer, /constant multiple rule/);
+  assert.match(payload.data.answer, /power rule/);
   assert.doesNotMatch(payload.data.answer, /x\^2/);
+});
+
+test("POST /brain/learn/ask answers the derivative of a polynomial directly", async () => {
+  const response = await handleAskPennyRequest(
+    request("http://localhost/brain/learn/ask", {
+      question: "how to do derivative of 16x^2+4x",
+      currentStepTitle: "Work the example",
+      localContext: "Goal: understand derivatives. Current step: Work the example.",
+    }),
+    {
+      provider: {
+        name: "anthropic",
+        model: "claude-test",
+        async generate() {
+          throw new InlineLearnProviderError("xAI Ask Penny request failed: Too Many Requests");
+        },
+      },
+    },
+  );
+  const payload = (await response.json()) as { data: { answer: string; provider: string; model: string | null } };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.provider, "heuristic");
+  assert.equal(payload.data.model, null);
+  assert.match(payload.data.answer, /f\(x\)=16x\^2\+4x/);
+  assert.match(payload.data.answer, /f'\(x\)=32x\+4/);
+  assert.match(payload.data.answer, /\\frac\{d\}\{dx\}\(16x\^2\+4x\)=32x\+4/);
+  assert.doesNotMatch(payload.data.answer, /f'\(x\)=16/);
 });
 
 test("POST /brain/learn/ask replaces provider scaffolding with a useful fallback", async () => {

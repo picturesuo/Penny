@@ -165,6 +165,31 @@ test("frontend Ask Penny local fallback gives worked LaTeX for technical questio
   }
 });
 
+test("frontend Ask Penny local fallback differentiates full polynomial questions", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (): Promise<Response> => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  try {
+    const response = await askPenny({
+      question: "how to do derivative of 16x^2+4x",
+      currentStepTitle: "Work the example",
+      localContext: "Goal: understand derivatives. Current step: Work the example.",
+    });
+
+    assert.equal(response.data.provider, "heuristic");
+    assert.equal(response.data.model, null);
+    assert.match(response.data.answer, /f\(x\)=16x\^2\+4x/);
+    assert.match(response.data.answer, /f'\(x\)=32x\+4/);
+    assert.match(response.data.answer, /\\frac\{d\}\{dx\}\(16x\^2\+4x\)=32x\+4/);
+    assert.doesNotMatch(response.data.answer, /f'\(x\)=16/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("frontend Ask Penny still uses the live API when it responds", async () => {
   const calls: FetchCall[] = [];
   const restoreFetch = mockFetch(calls, [

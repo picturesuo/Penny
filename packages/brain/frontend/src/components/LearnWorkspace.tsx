@@ -491,7 +491,7 @@ function LearnMainContent({
       </section>
 
       <section className="learn-step-header" aria-label="Current step">
-        <p>{directAnswerForLesson(currentStep)}</p>
+        <AskPennyRenderedText text={directAnswerForLesson(currentStep)} />
       </section>
 
       <nav className="learn-bottom-nav" aria-label="Step navigation">
