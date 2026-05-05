@@ -20,6 +20,7 @@ import type {
   BrainVerifyConfidenceDecisionResponse,
   BrainVerifyResponse,
   KeepBrainRecentIdeaResponse,
+  LearnSessionResponse,
   ManualNodeSelectionResponse,
   RespondToChallengeResponse,
   SaveBrainObjectResponse,
@@ -81,6 +82,22 @@ export async function seedBrain(rawIdea: string): Promise<SeedBrainResponse> {
   }
 
   return payload as SeedBrainResponse;
+}
+
+export async function createLearnSession(rawIdea: string): Promise<LearnSessionResponse> {
+  const response = await fetch("/api/learn/session", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify({ rawIdea, autopilot: { limit: 6 } }),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/learn/session failed with ${response.status}.`));
+  }
+
+  return payload as LearnSessionResponse;
 }
 
 export async function fetchBrainDocuments(): Promise<BrainDocumentsResponse> {
@@ -742,19 +759,13 @@ function localTechnicalAskPennyAnswer(question: string): string | null {
 }
 
 function derivativeOfPolynomialExpressionAnswer(compactQuestion: string): string | null {
-  const match = compactQuestion.match(/\b(?:derivative|differentiate|derive|slope|rate of change)\b(?:\s+(?:of|for))?\s+(.+)$/);
-
-  if (!match) {
-    return null;
-  }
-
-  const rawExpression = match[1];
+  const variable = derivativeVariable(compactQuestion);
+  const rawExpression = derivativeExpression(compactQuestion, variable);
 
   if (!rawExpression) {
     return null;
   }
 
-  const variable = derivativeVariable(compactQuestion);
   const expression = parsePolynomialExpression(rawExpression, variable);
 
   if (!expression) {
@@ -765,7 +776,8 @@ function derivativeOfPolynomialExpressionAnswer(compactQuestion: string): string
     .map((term) => ({
       coefficient: term.coefficient * term.power,
       power: term.power - 1,
-      symbolicFactor: term.symbolicFactor,
+      leftSymbolicFactor: term.leftSymbolicFactor,
+      rightSymbolicFactor: term.rightSymbolicFactor,
     }))
     .filter((term) => term.coefficient !== 0);
   const derivativeText = formatPolynomial(derivative, variable);
@@ -781,11 +793,40 @@ function derivativeOfPolynomialExpressionAnswer(compactQuestion: string): string
 type PolynomialTerm = {
   coefficient: number;
   power: number;
-  symbolicFactor: string;
+  leftSymbolicFactor: string;
+  rightSymbolicFactor: string;
 };
 
 function derivativeVariable(question: string): string {
-  return question.match(/\bwith respect to\s+([a-z])\b/)?.[1] ?? question.match(/\bd\/d([a-z])\b/)?.[1] ?? "x";
+  return (
+    question.match(/\bd\/d([a-z])\b/)?.[1] ??
+    question.match(/\b(?:with\s+respect\s+to|respect\s+to|wrt|to|by)\s+([a-z])\b/)?.[1] ??
+    "x"
+  );
+}
+
+function derivativeExpression(question: string, variable: string): string | null {
+  const keyword = "(?:derivative|differentiate|derive|slope|rate of change)";
+  const afterKeyword = question.match(new RegExp(`\\b${keyword}\\b(?:\\s+(?:of|for))?\\s+(.+)$`))?.[1] ?? null;
+  const beforeKeyword = question.match(new RegExp(`^(.+?)\\s+\\b${keyword}\\b`))?.[1] ?? null;
+  const rawExpression = expressionLike(afterKeyword, variable) ? afterKeyword : beforeKeyword;
+
+  if (!rawExpression) {
+    return null;
+  }
+
+  return rawExpression
+    .replace(new RegExp(`\\b(?:with\\s+respect\\s+to|respect\\s+to|wrt|to|by)\\s+${variable}\\b.*$`), "")
+    .replace(new RegExp(`\\bd/d${variable}\\b.*$`), "")
+    .trim();
+}
+
+function expressionLike(value: string | null, variable: string): value is string {
+  if (!value || /^\s*(?:with\s+respect\s+to|respect\s+to|wrt|to|by)\s+[a-z]\b/.test(value)) {
+    return false;
+  }
+
+  return new RegExp(`[0-9${variable}]`).test(value);
 }
 
 function parsePolynomialExpression(rawExpression: string, variable: string): { display: string; terms: PolynomialTerm[] } | null {
@@ -824,7 +865,6 @@ function parsePolynomialTerm(term: string, variable: string): PolynomialTerm | n
 
   const sign = match[1] === "-" ? -1 : 1;
   const coefficient = match[2] ? Number(match[2]) : 1;
-  const symbolicFactor = [match[3], match[5]].filter((factor) => factor && factor !== variable).join("");
   const power = match[4] ? Number(match[4]) : 1;
 
   if (!Number.isFinite(coefficient) || !Number.isInteger(power) || power < 1) {
@@ -834,7 +874,8 @@ function parsePolynomialTerm(term: string, variable: string): PolynomialTerm | n
   return {
     coefficient: sign * coefficient,
     power,
-    symbolicFactor,
+    leftSymbolicFactor: match[3] && match[3] !== variable ? match[3] : "",
+    rightSymbolicFactor: match[5] && match[5] !== variable ? match[5] : "",
   };
 }
 
@@ -848,10 +889,10 @@ function formatPolynomial(terms: PolynomialTerm[], variableName = "x"): string {
       const sign = term.coefficient < 0 ? "-" : index === 0 ? "" : "+";
       const absoluteCoefficient = Math.abs(term.coefficient);
       const numericCoefficient = term.power === 0 || absoluteCoefficient !== 1 ? formatAskPennyNumber(absoluteCoefficient) : "";
-      const coefficient = `${numericCoefficient}${term.symbolicFactor}`;
+      const coefficient = `${numericCoefficient}${term.leftSymbolicFactor}`;
       const variable = term.power === 0 ? "" : term.power === 1 ? variableName : `${variableName}^${term.power}`;
 
-      return `${sign}${coefficient}${variable}`;
+      return `${sign}${coefficient}${variable}${term.rightSymbolicFactor}`;
     })
     .join("");
 }
