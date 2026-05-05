@@ -5656,8 +5656,13 @@
 
   .learn-step-header p,
   .learn-step-header .ask-penny-rendered {
-    max-width: 18ch;
-    font-size: clamp(30px, 9vw, 42px);
+    max-width: 100%;
+    font-size: 24px;
+  }
+
+  .learn-check-head,
+  .learn-check-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .learn-bottom-nav {
