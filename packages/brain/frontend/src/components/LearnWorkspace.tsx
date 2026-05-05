@@ -494,6 +494,8 @@ function LearnMainContent({
         <AskPennyRenderedText text={directAnswerForLesson(currentStep)} />
       </section>
 
+      <LearnCheckWorksheet lesson={currentStep} />
+
       <nav className="learn-bottom-nav" aria-label="Step navigation">
         <div className="learn-nav-control learn-nav-control-previous">
           <button type="button" disabled={!canGoPrevious} onClick={onPrevious}>
@@ -510,6 +512,197 @@ function LearnMainContent({
       </nav>
     </article>
   );
+}
+
+type LearnCheckCategory = {
+  id: "positive" | "negative" | "curve" | "good-example" | "bad-example";
+  label: string;
+  prompt: string;
+  recommendations: string[];
+  placeholder: string;
+};
+
+function LearnCheckWorksheet({ lesson }: { lesson: LearnLesson }) {
+  const categories = useMemo(() => learnCheckCategoriesForLesson(lesson), [lesson]);
+  const [draftTabsByCategory, setDraftTabsByCategory] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(categories.map((category) => [category.id, ["Draft 1"]])),
+  );
+  const [activeDraftByCategory, setActiveDraftByCategory] = useState<Record<string, number>>(() =>
+    Object.fromEntries(categories.map((category) => [category.id, 0])),
+  );
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [finalAnswer, setFinalAnswer] = useState("");
+
+  useEffect(() => {
+    setDraftTabsByCategory(Object.fromEntries(categories.map((category) => [category.id, ["Draft 1"]])));
+    setActiveDraftByCategory(Object.fromEntries(categories.map((category) => [category.id, 0])));
+    setAnswers({});
+    setFinalAnswer("");
+  }, [categories]);
+
+  function addDraftTab(categoryId: string) {
+    setDraftTabsByCategory((current) => {
+      const currentTabs = current[categoryId] ?? ["Draft 1"];
+      return {
+        ...current,
+        [categoryId]: [...currentTabs, `Draft ${currentTabs.length + 1}`],
+      };
+    });
+    setActiveDraftByCategory((current) => ({
+      ...current,
+      [categoryId]: draftTabsByCategory[categoryId]?.length ?? 1,
+    }));
+  }
+
+  return (
+    <section className="learn-check-worksheet" aria-label="Learn check worksheet">
+      <div className="learn-check-head">
+        <div>
+          <span>STRUCTURE</span>
+          <h2>Fill in the check</h2>
+        </div>
+        <p>Use the recommendations, add drafts until the part is fleshed out, then type the finished version below.</p>
+      </div>
+
+      <div className="learn-check-grid">
+        {categories.map((category) => {
+          const draftTabs = draftTabsByCategory[category.id] ?? ["Draft 1"];
+          const activeDraftIndex = activeDraftByCategory[category.id] ?? 0;
+          const answerKey = `${category.id}:${activeDraftIndex}`;
+
+          return (
+            <section key={category.id} className="learn-check-card" aria-label={category.label}>
+              <header>
+                <div>
+                  <span>{category.label}</span>
+                  <h3>{category.prompt}</h3>
+                </div>
+              </header>
+
+              <ol className="learn-recommendation-list">
+                {category.recommendations.map((recommendation, index) => (
+                  <li key={`${category.id}-recommendation-${index}`}>{recommendation}</li>
+                ))}
+              </ol>
+
+              <div className="learn-draft-tabs" role="tablist" aria-label={`${category.label} drafts`}>
+                {draftTabs.map((tab, index) => (
+                  <button
+                    key={`${category.id}-${tab}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeDraftIndex === index}
+                    onClick={() => setActiveDraftByCategory((current) => ({ ...current, [category.id]: index }))}
+                  >
+                    {tab}
+                  </button>
+                ))}
+                <button type="button" className="learn-add-tab" onClick={() => addDraftTab(category.id)}>
+                  + Tab
+                </button>
+              </div>
+
+              <label>
+                <span>Type this part</span>
+                <textarea
+                  value={answers[answerKey] ?? ""}
+                  placeholder={category.placeholder}
+                  onChange={(event) => setAnswers((current) => ({ ...current, [answerKey]: event.target.value }))}
+                  rows={4}
+                />
+              </label>
+            </section>
+          );
+        })}
+      </div>
+
+      <label className="learn-final-answer">
+        <span>Final typed answer</span>
+        <textarea
+          value={finalAnswer}
+          placeholder="Write the full finished answer after the five parts are fleshed out..."
+          onChange={(event) => setFinalAnswer(event.target.value)}
+          rows={5}
+        />
+      </label>
+    </section>
+  );
+}
+
+function learnCheckCategoriesForLesson(lesson: LearnLesson): LearnCheckCategory[] {
+  const goodExample = lesson.example.lines[0] ?? lesson.example.description;
+  const badExample = lesson.misconceptions[0] ?? "A vague answer that sounds right but cannot be checked.";
+  const positive = lesson.coreIdea.bullets[0] ?? lesson.shortExplanation;
+  const negative = lesson.coreIdea.bullets[1] ?? "Name what this answer should not claim.";
+  const curve = lesson.coreIdea.bullets[2] ?? "Name the surprising turn or exception.";
+
+  return [
+    {
+      id: "positive",
+      label: "Positive",
+      prompt: "What is the strongest true version?",
+      recommendations: [
+        positive,
+        "Make the claim direct enough that someone can repeat it.",
+        "Tie it to the current step instead of the whole topic.",
+        "Use one concrete noun or action.",
+        "Keep only what helps the learner move forward.",
+      ],
+      placeholder: "Type the positive version here...",
+    },
+    {
+      id: "negative",
+      label: "Negative",
+      prompt: "What should this not mean?",
+      recommendations: [
+        negative,
+        "Name the tempting wrong interpretation.",
+        "Separate missing evidence from a false claim.",
+        "Avoid arguing with a weak version.",
+        "Turn the limit into a checkable boundary.",
+      ],
+      placeholder: "Type the negative boundary here...",
+    },
+    {
+      id: "curve",
+      label: "Curve",
+      prompt: "What twist changes the answer?",
+      recommendations: [
+        curve,
+        "Look for the exception that would change the advice.",
+        "Name the condition that makes this harder.",
+        "Keep the twist connected to the user's goal.",
+        "Write it as a useful warning, not trivia.",
+      ],
+      placeholder: "Type the curve or exception here...",
+    },
+    {
+      id: "good-example",
+      label: "Good example",
+      prompt: "What would a strong answer look like?",
+      recommendations: [
+        goodExample,
+        "Use a concrete person, object, decision, or event.",
+        "Show the move, not just the conclusion.",
+        "Make the example short enough to compare.",
+        "End with why the example works.",
+      ],
+      placeholder: "Type the good example here...",
+    },
+    {
+      id: "bad-example",
+      label: "Bad example",
+      prompt: "What would a weak answer look like?",
+      recommendations: [
+        badExample,
+        "Make the mistake realistic, not silly.",
+        "Show the missing evidence or hidden assumption.",
+        "Keep the wording close to what a user might actually write.",
+        "End with the specific reason it fails.",
+      ],
+      placeholder: "Type the bad example here...",
+    },
+  ];
 }
 
 function directAnswerForLesson(lesson: LearnLesson): string {
