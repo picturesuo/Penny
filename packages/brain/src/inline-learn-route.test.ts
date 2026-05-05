@@ -195,6 +195,34 @@ test("POST /brain/learn/ask answers the derivative of a polynomial directly", as
   assert.doesNotMatch(payload.data.answer, /f'\(x\)=16/);
 });
 
+test("POST /brain/learn/ask differentiates bare polynomial follow-ups inside derivative context", async () => {
+  const response = await handleAskPennyRequest(
+    request("http://localhost/brain/learn/ask", {
+      question: "what about 12x^2+12x",
+      currentStepTitle: "Use the power rule",
+      localContext: "Goal: understand derivatives. Current step: Use the power rule. Core moves: derivative, slope, rate of change.",
+    }),
+    {
+      provider: {
+        name: "anthropic",
+        model: "claude-test",
+        async generate() {
+          throw new InlineLearnProviderError("xAI Ask Penny request failed: Too Many Requests");
+        },
+      },
+    },
+  );
+  const payload = (await response.json()) as { data: { answer: string; provider: string; model: string | null } };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.provider, "heuristic");
+  assert.equal(payload.data.model, null);
+  assert.match(payload.data.answer, /f\(x\)=12x\^2\+12x/);
+  assert.match(payload.data.answer, /f'\(x\)=24x\+12/);
+  assert.match(payload.data.answer, /\\frac\{d\}\{dx\}\(12x\^2\+12x\)=24x\+12/);
+  assert.doesNotMatch(payload.data.answer, /Next step:/);
+});
+
 test("POST /brain/learn/ask handles expression-before-derivative phrasing", async () => {
   const response = await handleAskPennyRequest(
     request("http://localhost/brain/learn/ask", {
