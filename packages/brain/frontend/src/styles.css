@@ -2060,7 +2060,7 @@
 
   .learn-panel {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: minmax(150px, 22vh) minmax(0, 1fr) minmax(92px, auto);
     border-top: 0;
     min-height: 0;
     height: 100%;
@@ -4468,6 +4468,7 @@
 
   .learn-goal-block {
     max-width: none;
+    min-height: 150px;
     border-bottom: 2px solid #111111;
     padding-bottom: 12px;
   }
@@ -4506,6 +4507,19 @@
     font-weight: 650;
     line-height: 1.08;
     text-align: left;
+  }
+
+  .learn-step-header .ask-penny-rendered {
+    max-width: 19ch;
+    color: rgb(17 17 17 / 0.82);
+    font-size: clamp(30px, 3.5vw, 48px);
+    font-weight: 650;
+    line-height: 1.08;
+    text-align: left;
+  }
+
+  .learn-step-header .ask-penny-math {
+    font-size: 0.9em;
   }
 
   .learn-answer-section {
@@ -4632,7 +4646,8 @@
 
   .learn-bottom-nav {
     align-self: end;
-    display: flex;
+    display: grid;
+    grid-template-columns: 180px minmax(360px, 520px);
     justify-content: space-between;
     gap: 20px;
     border-top: 2px solid #111111;
@@ -4641,6 +4656,7 @@
   }
 
   .learn-bottom-nav button {
+    width: 100%;
     border: 1px solid #111111;
     border-radius: 0;
     padding: 14px 18px;
@@ -4658,6 +4674,7 @@
   .learn-bottom-nav .learn-nav-control {
     display: grid;
     gap: 7px;
+    width: 100%;
   }
 
   .learn-bottom-nav .learn-nav-control-previous {
