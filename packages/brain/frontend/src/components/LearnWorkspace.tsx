@@ -762,7 +762,7 @@ function learnStepTextDensity(text: string): "short" | "medium" | "long" {
     return "long";
   }
 
-  if (length > 320) {
+  if (length > 160) {
     return "medium";
   }
 
