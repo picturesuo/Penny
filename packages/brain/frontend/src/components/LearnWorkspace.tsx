@@ -490,6 +490,10 @@ function LearnMainContent({
         <h1>{currentStep.title}</h1>
       </section>
 
+      <section className="learn-step-header" aria-label="Current step">
+        <p>{directAnswerForLesson(currentStep)}</p>
+      </section>
+
       <nav className="learn-bottom-nav" aria-label="Step navigation">
         <div className="learn-nav-control learn-nav-control-previous">
           <button type="button" disabled={!canGoPrevious} onClick={onPrevious}>
@@ -504,10 +508,6 @@ function LearnMainContent({
           <small>Enter</small>
         </div>
       </nav>
-
-      <section className="learn-step-header" aria-label="Current step">
-        <p>{directAnswerForLesson(currentStep)}</p>
-      </section>
     </article>
   );
 }
