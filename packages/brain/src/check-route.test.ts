@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  createDemoCheckCycleProvider,
   createInMemoryCheckRouteService,
   handleCheckCycleCommitRequest,
   handleCheckCycleRequest,
@@ -13,7 +14,7 @@ import {
 } from "./check-route.ts";
 
 test("POST /api/check/session creates a structured Check project and exactly one active cycle", async () => {
-  const service = createInMemoryCheckRouteService();
+  const service = createTestCheckRouteService();
   const response = await handleCheckSessionCollectionRequest(
     jsonRequest("http://localhost/api/check/session", {
       rawText:
@@ -22,7 +23,7 @@ test("POST /api/check/session creates a structured Check project and exactly one
     { service },
   );
   const payload = await responsePayload(response);
-  const session = payload.data.session;
+  const session = payload.data.session as CheckSession;
 
   assert.equal(response.status, 201);
   assert.equal(session.sourceOfTruth, "check_projects_cycles_nodes_breakthroughs");
@@ -62,7 +63,7 @@ test("POST /api/check/session creates a structured Check project and exactly one
 });
 
 test("POST /api/check/session/:id/cycle reuses an unfinished cycle", async () => {
-  const service = createInMemoryCheckRouteService();
+  const service = createTestCheckRouteService();
   const created = await createCheckSession(service);
   const firstCycleId = created.cycles[0]?.id;
   const response = await handleCheckCycleRequest(jsonRequest(`http://localhost/api/check/session/${created.id}/cycle`, {}), created.id, {
@@ -77,7 +78,7 @@ test("POST /api/check/session/:id/cycle reuses an unfinished cycle", async () =>
 });
 
 test("POST /api/check/cycle/:id/commit requires a typed move and updates the project graph", async () => {
-  const service = createInMemoryCheckRouteService();
+  const service = createTestCheckRouteService();
   const created = await createCheckSession(service);
   const cycle = created.cycles[0];
 
@@ -115,7 +116,7 @@ test("POST /api/check/cycle/:id/commit requires a typed move and updates the pro
 });
 
 test("POST /api/check/cycle/:id/sprint completes the cycle only after commitment and returns synthesis", async () => {
-  const service = createInMemoryCheckRouteService();
+  const service = createTestCheckRouteService();
   const created = await createCheckSession(service);
   const cycle = created.cycles[0];
 
@@ -158,7 +159,7 @@ test("POST /api/check/cycle/:id/sprint completes the cycle only after commitment
 });
 
 test("POST /api/check/session/:id/node lets the user add a custom node at any time", async () => {
-  const service = createInMemoryCheckRouteService();
+  const service = createTestCheckRouteService();
   const created = await createCheckSession(service);
   const response = await handleCheckNodeRequest(
     jsonRequest(`http://localhost/api/check/session/${created.id}/node`, {
@@ -177,7 +178,7 @@ test("POST /api/check/session/:id/node lets the user add a custom node at any ti
 });
 
 test("GET /api/check/session/:id and save-to-brain expose the latest Check state", async () => {
-  const service = createInMemoryCheckRouteService();
+  const service = createTestCheckRouteService();
   const created = await createCheckSession(service);
   const getResponse = await handleCheckSessionRequest(new Request(`http://localhost/api/check/session/${created.id}`), created.id, {
     service,
@@ -199,7 +200,11 @@ test("GET /api/check/session/:id and save-to-brain expose the latest Check state
   assert.equal(savePayload.data.session.status, "saved");
 });
 
-async function createCheckSession(service = createInMemoryCheckRouteService()): Promise<CheckSession> {
+function createTestCheckRouteService() {
+  return createInMemoryCheckRouteService({ aiProvider: createDemoCheckCycleProvider() });
+}
+
+async function createCheckSession(service = createTestCheckRouteService()): Promise<CheckSession> {
   const response = await handleCheckSessionCollectionRequest(
     jsonRequest("http://localhost/api/check/session", {
       rawText:
