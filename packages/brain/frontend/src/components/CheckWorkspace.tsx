@@ -1,18 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { HelpCircle, RefreshCcw, Save, Send, Sparkles, X, Zap } from "lucide-react";
 import {
-  ChevronLeft,
-  ChevronRight,
-  FileUp,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  Save,
-  Send,
-  Sparkles,
-  Zap,
-} from "lucide-react";
-import {
-  addCheckNode,
+  askPenny as askPennyQuestion,
   commitCheckCycle,
   createCheckCycle,
   createCheckSession,
@@ -20,14 +9,13 @@ import {
   saveCheckToBrain,
 } from "../api/brainClient";
 import type {
+  AskPennyResponse,
   AutopilotTickData,
   BrainData,
   BrainDocumentsData,
   ChallengeResponseKind,
   CheckCommitStance,
   CheckCycle,
-  CheckNodeKind,
-  CheckProjectNode,
   CheckRecommendation,
   CheckSession,
   RespondToChallengeResponse,
@@ -35,6 +23,7 @@ import type {
   WorkStructureStep,
 } from "../types/brain";
 import { formatLabel } from "../lib/format";
+import { AskPennyRenderedText } from "./AskPennyRenderedText";
 
 interface CheckWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -70,22 +59,33 @@ interface CheckWorkspaceProps {
   onCreateChallengeBrief?: () => Promise<void>;
 }
 
-const CHECK_NODE_KINDS: CheckNodeKind[] = [
-  "claim",
-  "evidence",
-  "assumption",
-  "counterargument",
-  "tension",
-  "question",
-  "example",
-  "experiment",
-  "wild_idea",
-  "decision",
-  "task",
+type RetryableCheckAction = "create_session" | "next_cycle";
+
+type CheckFailure = {
+  action: RetryableCheckAction;
+  message: string;
+};
+
+type AskPennyMessage = {
+  role: "user" | "penny" | "system";
+  text: string;
+  provider?: AskPennyResponse["data"]["provider"];
+  model?: AskPennyResponse["data"]["model"];
+};
+
+const checkPathSteps = [
+  "Define the north star",
+  "State the core claim",
+  "Gather evidence",
+  "Surface assumptions",
+  "Find tensions",
+  "Choose the next move",
+  "Save breakthrough",
 ];
 
+const thinkingGraphNodes = ["North Star", "Claim", "Evidence", "Assumption", "Tension", "Next Move"];
+
 export function CheckWorkspace({
-  documentsData,
   data,
   status,
   isThinking,
@@ -93,24 +93,19 @@ export function CheckWorkspace({
   onInitialSeedConsumed,
   onStatusChange,
   onThinkingChange,
-  onSelectDocument,
   onOpenBrain,
 }: CheckWorkspaceProps) {
   const [checkSession, setCheckSession] = useState<CheckSession | null>(null);
   const [draftText, setDraftText] = useState("");
-  const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
   const [selectedRecommendationId, setSelectedRecommendationId] = useState<string | null>(null);
+  const [expandedRecommendationId, setExpandedRecommendationId] = useState<string | null>(null);
   const [commitmentText, setCommitmentText] = useState("");
   const [commitmentStance, setCommitmentStance] = useState<CheckCommitStance>("custom");
   const [sprintText, setSprintText] = useState("");
-  const [mapCollapsed, setMapCollapsed] = useState(false);
-  const [customNodeOpen, setCustomNodeOpen] = useState(false);
-  const [customNodeKind, setCustomNodeKind] = useState<CheckNodeKind>("question");
-  const [customNodeTitle, setCustomNodeTitle] = useState("");
-  const [customNodeBody, setCustomNodeBody] = useState("");
+  const [askPennyOpen, setAskPennyOpen] = useState(false);
+  const [checkFailure, setCheckFailure] = useState<CheckFailure | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
   const [localStatus, setLocalStatus] = useState("Check ready");
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const commitmentRef = useRef<HTMLTextAreaElement | null>(null);
   const bootstrappedTextRef = useRef<string | null>(null);
@@ -118,27 +113,33 @@ export function CheckWorkspace({
   const busy = localBusy || isThinking;
   const displayStatus = busy ? "Thinking" : localStatus || status;
   const activeCycle = useMemo(() => activeCheckCycle(checkSession), [checkSession]);
-  const recommendations = activeCycle ? [...activeCycle.recommendations, activeCycle.curveball] : [];
+  const normalRecommendations = activeCycle?.recommendations.slice(0, 5) ?? [];
+  const allRecommendations = activeCycle ? [...normalRecommendations, activeCycle.curveball] : [];
   const selectedRecommendation =
-    recommendations.find((recommendation) => recommendation.id === selectedRecommendationId) ?? recommendations[0] ?? null;
+    allRecommendations.find((recommendation) => recommendation.id === selectedRecommendationId) ??
+    normalRecommendations[0] ??
+    activeCycle?.curveball ??
+    null;
   const sourceText = initialSeedText?.trim() || data?.source?.rawText?.trim() || "";
-  const groupedNodes = useMemo(() => groupNodesByKind(checkSession?.project.nodes ?? []), [checkSession]);
+  const activePathIndex = checkPathIndex(checkSession, activeCycle);
 
   useEffect(() => {
     if (!activeCycle) {
       setSelectedRecommendationId(null);
+      setExpandedRecommendationId(null);
       return;
     }
 
-    const allRecommendations = [...activeCycle.recommendations, activeCycle.curveball];
     const stillValid = selectedRecommendationId
       ? allRecommendations.some((recommendation) => recommendation.id === selectedRecommendationId)
       : false;
 
     if (!stillValid) {
-      setSelectedRecommendationId(allRecommendations[0]?.id ?? null);
+      const firstRecommendation = normalRecommendations[0] ?? activeCycle.curveball;
+      setSelectedRecommendationId(firstRecommendation.id);
+      setExpandedRecommendationId(firstRecommendation.id);
     }
-  }, [activeCycle, selectedRecommendationId]);
+  }, [activeCycle, allRecommendations, normalRecommendations, selectedRecommendationId]);
 
   useEffect(() => {
     if (!sourceText || checkSession || bootstrappedTextRef.current === sourceText) {
@@ -148,7 +149,7 @@ export function CheckWorkspace({
     bootstrappedTextRef.current = sourceText;
     setDraftText(sourceText);
     onInitialSeedConsumed?.();
-    void handleCreateSession(sourceText, null);
+    void handleCreateSession(sourceText);
   }, [checkSession, onInitialSeedConsumed, sourceText]);
 
   function setStatus(nextStatus: string) {
@@ -161,67 +162,59 @@ export function CheckWorkspace({
     onThinkingChange?.(nextBusy);
   }
 
-  async function runCheckAction<T>(nextStatus: string, action: () => Promise<T>): Promise<T | null> {
+  async function runCheckAction<T>(
+    nextStatus: string,
+    action: () => Promise<T>,
+    retryableAction?: RetryableCheckAction,
+  ): Promise<T | null> {
     setBusy(true);
     setStatus(nextStatus);
+    setCheckFailure(null);
 
     try {
       return await action();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(message);
+
+      if (retryableAction) {
+        setCheckFailure({ action: retryableAction, message });
+      }
+
       return null;
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleCreateSession(textOverride?: string, fileNameOverride: string | null = attachedFileName) {
+  async function handleCreateSession(textOverride?: string) {
     const text = (textOverride ?? draftText).trim();
 
     if (!text) {
-      setStatus("Add text, a file, or a project description first");
+      setStatus("Write the project seed first");
       sourceTextareaRef.current?.focus();
       return;
     }
 
-    await runCheckAction("Structuring Check project", async () => {
-      const payload = await createCheckSession(
-        fileNameOverride
-          ? {
-              rawText: text,
-              sourceMaterial: {
-                kind: fileKind(fileNameOverride),
-                fileName: fileNameOverride,
-                extractedText: text,
-              },
-            }
-          : { rawText: text },
-      );
+    await runCheckAction(
+      "Generating Check cycle",
+      async () => {
+        const payload = await createCheckSession({ rawText: text });
 
-      setCheckSession(payload.data.session);
-      setCommitmentText("");
-      setSprintText("");
-      setSelectedRecommendationId(payload.data.session.cycles[0]?.recommendations[0]?.id ?? null);
-      setStatus("Check project ready");
-    });
-  }
-
-  async function handleFileChange(file: File | null) {
-    if (!file) {
-      return;
-    }
-
-    const text = await file.text();
-    setAttachedFileName(file.name);
-    setDraftText(text);
-    setStatus(`${file.name} loaded`);
+        setCheckSession(payload.data.session);
+        setCommitmentText("");
+        setSprintText("");
+        setSelectedRecommendationId(payload.data.session.cycles[0]?.recommendations[0]?.id ?? null);
+        setExpandedRecommendationId(payload.data.session.cycles[0]?.recommendations[0]?.id ?? null);
+        setStatus("Check cycle ready");
+      },
+      "create_session",
+    );
   }
 
   function handleRecommendationPick(recommendation: CheckRecommendation) {
     setSelectedRecommendationId(recommendation.id);
-    setCommitmentText(recommendation.action);
-    setCommitmentStance("accept");
-    requestAnimationFrame(() => commitmentRef.current?.focus());
+    setExpandedRecommendationId((current) => (current === recommendation.id ? null : recommendation.id));
   }
 
   function handleRecommendationStance(stance: CheckCommitStance) {
@@ -238,6 +231,8 @@ export function CheckWorkspace({
       setCommitmentText(`${selectedRecommendation.action} I will adjust it by: `);
     } else if (stance === "reject") {
       setCommitmentText(`I am not doing "${selectedRecommendation.action}" because `);
+    } else {
+      setCommitmentText("");
     }
 
     requestAnimationFrame(() => commitmentRef.current?.focus());
@@ -251,7 +246,7 @@ export function CheckWorkspace({
     const commitment = commitmentText.trim();
 
     if (!commitment) {
-      setStatus("Type your own move before committing");
+      setStatus("Type your move or accept an authored recommendation before committing");
       commitmentRef.current?.focus();
       return;
     }
@@ -260,7 +255,7 @@ export function CheckWorkspace({
       const payload = await commitCheckCycle(activeCycle.id, {
         commitment,
         stance: commitmentStance,
-        recommendationId: selectedRecommendation?.id ?? null,
+        recommendationId: commitmentStance === "custom" ? null : selectedRecommendation?.id ?? null,
       });
 
       setCheckSession(payload.data.session);
@@ -289,43 +284,20 @@ export function CheckWorkspace({
       return;
     }
 
-    await runCheckAction("Creating next Check cycle", async () => {
-      const payload = await createCheckCycle(checkSession.id);
+    await runCheckAction(
+      "Generating next Check cycle",
+      async () => {
+        const payload = await createCheckCycle(checkSession.id);
 
-      setCheckSession(payload.data.session);
-      setCommitmentText("");
-      setSprintText("");
-      setSelectedRecommendationId(payload.data.cycle.recommendations[0]?.id ?? null);
-      setStatus(payload.data.reusedActiveCycle ? "Active Check cycle resumed" : "Next Check cycle ready");
-    });
-  }
-
-  async function handleCustomNodeSubmit() {
-    if (!checkSession) {
-      setStatus("Create a Check project before adding nodes");
-      return;
-    }
-
-    const title = customNodeTitle.trim();
-
-    if (!title) {
-      setStatus("Custom node needs a title");
-      return;
-    }
-
-    await runCheckAction("Adding custom node", async () => {
-      const payload = await addCheckNode(checkSession.id, {
-        kind: customNodeKind,
-        title,
-        body: customNodeBody.trim(),
-      });
-
-      setCheckSession(payload.data.session);
-      setCustomNodeTitle("");
-      setCustomNodeBody("");
-      setCustomNodeOpen(false);
-      setStatus(`${formatNodeKind(payload.data.node.kind)} added`);
-    });
+        setCheckSession(payload.data.session);
+        setCommitmentText("");
+        setSprintText("");
+        setSelectedRecommendationId(payload.data.cycle.recommendations[0]?.id ?? null);
+        setExpandedRecommendationId(payload.data.cycle.recommendations[0]?.id ?? null);
+        setStatus(payload.data.reusedActiveCycle ? "Active Check cycle resumed" : "Next Check cycle ready");
+      },
+      "next_cycle",
+    );
   }
 
   async function handleSaveToBrain() {
@@ -342,405 +314,545 @@ export function CheckWorkspace({
     });
   }
 
-  function handleWorkspaceKeyDown(event: KeyboardEvent<HTMLElement>) {
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    const editing = target?.tagName === "TEXTAREA" || target?.tagName === "INPUT" || target?.tagName === "SELECT";
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-      setCustomNodeOpen(true);
+  function handleRetryFailure() {
+    if (checkFailure?.action === "next_cycle") {
+      void handleNextCycle();
       return;
     }
 
-    if (editing) {
-      return;
-    }
-
-    if (event.key === "Tab" && recommendations.length > 0) {
-      event.preventDefault();
-      selectAdjacentRecommendation(event.shiftKey ? -1 : 1);
-      return;
-    }
-
-    if (event.key.toLowerCase() === "c" && activeCycle) {
-      event.preventDefault();
-      setSelectedRecommendationId(activeCycle.curveball.id);
-      return;
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      if (customNodeOpen) {
-        setCustomNodeOpen(false);
-      } else if (activeCycle?.status === "committed") {
-        commitmentRef.current?.focus();
-      } else {
-        sourceTextareaRef.current?.focus();
-      }
-      return;
-    }
-
-    if (event.key === "Enter") {
-      event.preventDefault();
-      if (!checkSession) {
-        void handleCreateSession();
-      } else if (activeCycle?.status === "committed") {
-        void handleSprint();
-      } else {
-        commitmentRef.current?.focus();
-      }
-    }
+    void handleCreateSession(draftText);
   }
 
-  function selectAdjacentRecommendation(direction: number) {
-    if (!recommendations.length) {
-      return;
-    }
-
-    const currentIndex = recommendations.findIndex((recommendation) => recommendation.id === selectedRecommendationId);
-    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + direction + recommendations.length) % recommendations.length;
-    const nextRecommendation = recommendations[nextIndex];
-
-    if (nextRecommendation) {
-      setSelectedRecommendationId(nextRecommendation.id);
-    }
+  function handleEditProjectSeed() {
+    setCheckFailure(null);
+    setCheckSession(null);
+    setCommitmentText("");
+    setSprintText("");
+    requestAnimationFrame(() => sourceTextareaRef.current?.focus());
   }
+
+  const askPennyContext = checkSession && activeCycle
+    ? [
+        `Check focus: ${activeCycle.currentFocus}`,
+        `Diagnosis: ${activeCycle.diagnosis}`,
+        ...allRecommendations.map((recommendation) => `${formatSlotLabel(recommendation.slot)}: ${recommendation.action}`),
+      ].join("\n")
+    : draftText;
 
   return (
-    <main className="check-v2-shell" onKeyDown={handleWorkspaceKeyDown}>
-      <section className={`check-project-map${mapCollapsed ? " is-collapsed" : ""}`} aria-label="Project Map">
-        <div className="check-map-head">
-          <button
-            type="button"
-            className="check-icon-button"
-            title={mapCollapsed ? "Open Project Map" : "Collapse Project Map"}
-            aria-label={mapCollapsed ? "Open Project Map" : "Collapse Project Map"}
-            onClick={() => setMapCollapsed((current) => !current)}
-          >
-            {mapCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-          </button>
-          {!mapCollapsed ? (
-            <>
-              <span>Project Map</span>
-              <button
-                type="button"
-                className="check-icon-button"
-                title="Add custom node"
-                aria-label="Add custom node"
-                onClick={() => setCustomNodeOpen(true)}
-              >
-                <Plus size={16} />
-              </button>
-            </>
-          ) : null}
-        </div>
+    <main className="check-workspace-shell" aria-label="Check creative breakthrough workspace">
+      <CheckPathSidebar
+        activeIndex={activePathIndex}
+        status={displayStatus}
+        onAskPennyToggle={() => setAskPennyOpen((isOpen) => !isOpen)}
+      />
 
-        {!mapCollapsed ? (
-          checkSession ? (
-            <div className="check-map-body">
-              <div className="check-map-north-star">
-                <span>North Star</span>
-                <strong>{checkSession.project.northStar}</strong>
-              </div>
-              <div className="check-map-meta">
-                <span>{checkSession.project.audienceOrJudge}</span>
-                <span>{checkSession.project.successCriteria.length} criteria</span>
-                <span>{checkSession.project.nodes.length} nodes</span>
-              </div>
-              <div className="check-node-groups">
-                {CHECK_NODE_KINDS.map((kind) => (
-                  <CheckNodeGroup
-                    key={kind}
-                    kind={kind}
-                    nodes={groupedNodes.get(kind) ?? []}
-                    selectedRecommendation={selectedRecommendation}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : (
-            <CheckRecentIdeas
-              documentsData={documentsData}
-              {...(onSelectDocument ? { onSelectDocument } : {})}
-            />
-          )
-        ) : null}
-      </section>
-
-      <section className="check-active-stage" aria-label="Active Check">
-        <div className="check-stage-status">
-          <span>Check</span>
-          <strong>{displayStatus}</strong>
-        </div>
-
+      <section className="check-center-stage" aria-label="Active Check cycle">
         {checkSession && activeCycle ? (
-          <ActiveCheckCard
+          <CheckMainCycle
             session={checkSession}
             cycle={activeCycle}
-            selectedRecommendation={selectedRecommendation}
+            selectedRecommendationId={selectedRecommendationId}
+            expandedRecommendationId={expandedRecommendationId}
             commitmentText={commitmentText}
             commitmentStance={commitmentStance}
             sprintText={sprintText}
             busy={busy}
+            failure={checkFailure}
             commitmentRef={commitmentRef}
+            onRecommendationSelect={handleRecommendationPick}
             onCommitmentTextChange={setCommitmentText}
             onCommitmentStanceChange={setCommitmentStance}
+            onRecommendationStance={handleRecommendationStance}
             onCommit={handleCommit}
             onSprintTextChange={setSprintText}
             onSprint={handleSprint}
             onNextCycle={handleNextCycle}
             onSaveToBrain={handleSaveToBrain}
+            onRetryFailure={handleRetryFailure}
+            onEditProjectSeed={handleEditProjectSeed}
           />
         ) : (
           <CheckEntryCard
             draftText={draftText}
-            attachedFileName={attachedFileName}
             busy={busy}
+            failure={checkFailure}
             textareaRef={sourceTextareaRef}
-            fileInputRef={fileInputRef}
             onDraftTextChange={setDraftText}
-            onFileChange={handleFileChange}
             onCreateSession={() => handleCreateSession()}
+            onRetryFailure={handleRetryFailure}
+            onEditProjectSeed={handleEditProjectSeed}
           />
         )}
       </section>
 
-      <aside className="check-recommendation-rail" aria-label="Recommendation Stack">
-        {activeCycle ? (
-          <>
-            <div className="check-rec-head">
-              <span>Recommendation Stack</span>
-              <strong>5 + curveball</strong>
-            </div>
-            <div className="check-rec-list">
-              {activeCycle.recommendations.map((recommendation, index) => (
-                <RecommendationButton
-                  key={recommendation.id}
-                  recommendation={recommendation}
-                  index={index + 1}
-                  selected={selectedRecommendation?.id === recommendation.id}
-                  onSelect={handleRecommendationPick}
-                />
-              ))}
-              <RecommendationButton
-                recommendation={activeCycle.curveball}
-                index="C"
-                selected={selectedRecommendation?.id === activeCycle.curveball.id}
-                onSelect={handleRecommendationPick}
-                curveball
-              />
-            </div>
-            <div className="check-rec-actions" aria-label="Recommendation actions">
-              <button type="button" onClick={() => handleRecommendationStance("accept")} disabled={busy}>
-                Accept
-              </button>
-              <button type="button" onClick={() => handleRecommendationStance("modify")} disabled={busy}>
-                Modify
-              </button>
-              <button type="button" onClick={() => handleRecommendationStance("reject")} disabled={busy}>
-                Reject
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="check-rec-empty">
-            <Sparkles size={18} />
-            <strong>One focus at a time</strong>
-            <span>Start a Check project to get five moves and one curveball.</span>
-          </div>
-        )}
-      </aside>
-
-      {customNodeOpen ? (
-        <section className="check-custom-node" aria-label="Add custom node">
-          <div className="check-custom-node-panel">
-            <header>
-              <span>Add Node</span>
-              <button type="button" className="check-icon-button" onClick={() => setCustomNodeOpen(false)} aria-label="Close add node">
-                <ChevronRight size={16} />
-              </button>
-            </header>
-            <label>
-              <span>Kind</span>
-              <select value={customNodeKind} onChange={(event) => setCustomNodeKind(event.target.value as CheckNodeKind)}>
-                {CHECK_NODE_KINDS.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {formatNodeKind(kind)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Title</span>
-              <input value={customNodeTitle} onChange={(event) => setCustomNodeTitle(event.target.value)} />
-            </label>
-            <label>
-              <span>Body</span>
-              <textarea value={customNodeBody} onChange={(event) => setCustomNodeBody(event.target.value)} />
-            </label>
-            <button type="button" className="check-primary-button" onClick={handleCustomNodeSubmit} disabled={busy}>
-              <Plus size={15} />
-              Add node
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      <footer className="check-command-bar" aria-label="Check keyboard command bar">
-        <span>
-          <kbd>Enter</kbd> reveal / select / submit
-        </span>
-        <span>
-          <kbd>Tab</kbd> switch recommendations
-        </span>
-        <span>
-          <kbd>C</kbd> curveball
-        </span>
-        <span>
-          <kbd>Cmd/Ctrl K</kbd> add node
-        </span>
-        <span>
-          <kbd>Esc</kbd> previous
-        </span>
-      </footer>
+      <AskPennyDrawer
+        isOpen={askPennyOpen}
+        disabled={busy}
+        currentStepTitle={activeCycle?.currentFocus ?? "Project seed"}
+        localContext={askPennyContext}
+        onClose={() => setAskPennyOpen(false)}
+      />
     </main>
   );
 }
 
-function ActiveCheckCard({
+export function CheckPathSidebar({
+  activeIndex,
+  status,
+  onAskPennyToggle,
+}: {
+  activeIndex: number;
+  status: string;
+  onAskPennyToggle: () => void;
+}) {
+  return (
+    <aside className="check-path-sidebar" aria-label="Check Path">
+      <div className="check-path-head">
+        <div>
+          <span>CHECK PATH</span>
+          <strong>Creative breakthrough</strong>
+        </div>
+        <button type="button" className="check-ask-button" onClick={onAskPennyToggle}>
+          <HelpCircle size={15} />
+          Ask Penny
+        </button>
+      </div>
+
+      <ol className="check-path-list">
+        {checkPathSteps.map((step, index) => (
+          <li key={step} className={index === activeIndex ? "is-active" : ""}>
+            <span>{index + 1}</span>
+            <strong>{step}</strong>
+          </li>
+        ))}
+      </ol>
+
+      <section className="check-thinking-graph" aria-label="Thinking graph">
+        <div className="check-thinking-graph-head">
+          <span>CANVAS</span>
+          <strong>Thinking graph</strong>
+        </div>
+        <div className="check-thinking-graph-board">
+          {thinkingGraphNodes.map((node, index) => (
+            <article key={node} className={index === activeIndex || (activeIndex >= 5 && index === 5) ? "is-active" : ""}>
+              <span>{index + 1}</span>
+              <strong>{node}</strong>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <div className="check-path-status">
+        <span>Status</span>
+        <strong>{status}</strong>
+      </div>
+    </aside>
+  );
+}
+
+export function CheckMainCycle({
   session,
   cycle,
-  selectedRecommendation,
+  selectedRecommendationId,
+  expandedRecommendationId,
   commitmentText,
   commitmentStance,
   sprintText,
   busy,
+  failure,
   commitmentRef,
+  onRecommendationSelect,
   onCommitmentTextChange,
   onCommitmentStanceChange,
+  onRecommendationStance,
   onCommit,
   onSprintTextChange,
   onSprint,
   onNextCycle,
   onSaveToBrain,
+  onRetryFailure,
+  onEditProjectSeed,
 }: {
   session: CheckSession;
   cycle: CheckCycle;
-  selectedRecommendation: CheckRecommendation | null;
+  selectedRecommendationId: string | null;
+  expandedRecommendationId: string | null;
   commitmentText: string;
   commitmentStance: CheckCommitStance;
   sprintText: string;
   busy: boolean;
-  commitmentRef: React.RefObject<HTMLTextAreaElement | null>;
+  failure: CheckFailure | null;
+  commitmentRef: RefObject<HTMLTextAreaElement | null>;
+  onRecommendationSelect: (recommendation: CheckRecommendation) => void;
   onCommitmentTextChange: (value: string) => void;
   onCommitmentStanceChange: (value: CheckCommitStance) => void;
+  onRecommendationStance: (stance: CheckCommitStance) => void;
   onCommit: () => Promise<void>;
   onSprintTextChange: (value: string) => void;
   onSprint: () => Promise<void>;
   onNextCycle: () => Promise<void>;
   onSaveToBrain: () => Promise<void>;
+  onRetryFailure: () => void;
+  onEditProjectSeed: () => void;
 }) {
+  const cycleIndex = Math.max(
+    0,
+    session.cycles.findIndex((item) => item.id === cycle.id),
+  );
+  const cycleNumber = cycleIndex + 1;
+  const cycleTotal = Math.max(session.cycles.length, cycleNumber);
+  const selectedRecommendation =
+    [...cycle.recommendations.slice(0, 5), cycle.curveball].find((recommendation) => recommendation.id === selectedRecommendationId) ??
+    cycle.recommendations[0] ??
+    cycle.curveball;
+
   return (
-    <article className="check-card">
-      <header className="check-card-head">
-        <span>Active Focus</span>
+    <article className="check-main-cycle">
+      <header className="check-cycle-hero">
+        <span>
+          CHECK {cycleNumber} / {cycleTotal}
+        </span>
         <h1>{cycle.currentFocus}</h1>
         <p>{cycle.diagnosis}</p>
       </header>
 
-      <div className="check-project-brief">
-        <div>
-          <span>Current artifact</span>
-          <p>{session.project.currentArtifactSummary}</p>
-        </div>
-        <div>
-          <span>Success criteria</span>
-          <ul>
-            {session.project.successCriteria.map((criterion) => (
-              <li key={criterion}>{criterion}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
+      {failure ? <CheckFailurePanel failure={failure} onRetry={onRetryFailure} onEditProjectSeed={onEditProjectSeed} /> : null}
 
       {cycle.synthesis ? (
         <SynthesisCard session={session} cycle={cycle} busy={busy} onNextCycle={onNextCycle} onSaveToBrain={onSaveToBrain} />
       ) : cycle.status === "committed" && cycle.workSprint ? (
-        <section className="check-work-sprint">
-          <header>
-            <span>Work Sprint</span>
-            <strong>{cycle.workSprint.prompt}</strong>
-          </header>
-          <ol>
-            {cycle.workSprint.steps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-          <label>
-            <span>Sprint result</span>
-            <textarea
-              value={sprintText}
-              onChange={(event) => onSprintTextChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void onSprint();
-                }
-              }}
-              placeholder="Write what changed in the artifact, argument, plan, or next action."
-            />
-          </label>
-          <button type="button" className="check-primary-button" onClick={onSprint} disabled={busy}>
-            <Zap size={15} />
-            Finish sprint
-          </button>
-        </section>
+        <WorkSprintCard
+          cycle={cycle}
+          sprintText={sprintText}
+          busy={busy}
+          onSprintTextChange={onSprintTextChange}
+          onSprint={onSprint}
+        />
       ) : (
-        <section className="check-commitment">
-          <div className="check-selected-rec">
-            <span>{selectedRecommendation ? formatNodeKind(selectedRecommendation.slot) : "Own move"}</span>
-            <strong>{selectedRecommendation?.action ?? "Write your own move."}</strong>
-            {selectedRecommendation ? <p>{selectedRecommendation.whyItMatters}</p> : null}
-          </div>
-          <label>
-            <span>What do you want to do next?</span>
-            <textarea
-              ref={commitmentRef}
-              value={commitmentText}
-              onChange={(event) => {
-                onCommitmentTextChange(event.target.value);
-                onCommitmentStanceChange("custom");
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void onCommit();
-                }
-              }}
-              placeholder="Accept, modify, reject, or write your own move."
-            />
-          </label>
-          <div className="check-commitment-actions">
-            <div className="check-stance-pills">
-              {(["accept", "modify", "reject", "custom"] as CheckCommitStance[]).map((stance) => (
-                <button
-                  key={stance}
-                  type="button"
-                  className={commitmentStance === stance ? "is-active" : ""}
-                  onClick={() => onCommitmentStanceChange(stance)}
-                >
-                  {formatLabel(stance)}
-                </button>
-              ))}
-            </div>
-            <button type="button" className="check-primary-button" onClick={onCommit} disabled={busy}>
-              <Send size={15} />
-              Commit move
-            </button>
-          </div>
-        </section>
+        <>
+          <RecommendationBoard
+            recommendations={cycle.recommendations.slice(0, 5)}
+            curveball={cycle.curveball}
+            selectedRecommendationId={selectedRecommendationId}
+            expandedRecommendationId={expandedRecommendationId}
+            onRecommendationSelect={onRecommendationSelect}
+          />
+
+          <YourMoveBox
+            selectedRecommendation={selectedRecommendation}
+            commitmentText={commitmentText}
+            commitmentStance={commitmentStance}
+            busy={busy}
+            commitmentRef={commitmentRef}
+            onCommitmentTextChange={onCommitmentTextChange}
+            onCommitmentStanceChange={onCommitmentStanceChange}
+            onRecommendationStance={onRecommendationStance}
+            onCommit={onCommit}
+          />
+        </>
       )}
     </article>
+  );
+}
+
+export function RecommendationBoard({
+  recommendations,
+  curveball,
+  selectedRecommendationId,
+  expandedRecommendationId,
+  onRecommendationSelect,
+}: {
+  recommendations: CheckRecommendation[];
+  curveball: CheckRecommendation;
+  selectedRecommendationId: string | null;
+  expandedRecommendationId: string | null;
+  onRecommendationSelect: (recommendation: CheckRecommendation) => void;
+}) {
+  return (
+    <section className="check-recommendation-board" aria-label="Recommended moves">
+      <header>
+        <span>Recommended moves</span>
+        <strong>5 moves + 1 curveball</strong>
+      </header>
+      <div className="check-recommendation-list">
+        {recommendations.slice(0, 5).map((recommendation, index) => (
+          <RecommendationRow
+            key={recommendation.id}
+            recommendation={recommendation}
+            index={index + 1}
+            selected={recommendation.id === selectedRecommendationId}
+            expanded={recommendation.id === expandedRecommendationId}
+            onSelect={onRecommendationSelect}
+          />
+        ))}
+        <RecommendationRow
+          recommendation={curveball}
+          index="C"
+          selected={curveball.id === selectedRecommendationId}
+          expanded={curveball.id === expandedRecommendationId}
+          onSelect={onRecommendationSelect}
+          curveball
+        />
+      </div>
+    </section>
+  );
+}
+
+export function RecommendationRow({
+  recommendation,
+  index,
+  selected,
+  expanded,
+  curveball = false,
+  onSelect,
+}: {
+  recommendation: CheckRecommendation;
+  index: number | "C";
+  selected: boolean;
+  expanded: boolean;
+  curveball?: boolean;
+  onSelect: (recommendation: CheckRecommendation) => void;
+}) {
+  return (
+    <article className={`check-recommendation-row${selected ? " is-selected" : ""}${curveball ? " is-curveball" : ""}`}>
+      <button type="button" onClick={() => onSelect(recommendation)} aria-expanded={expanded}>
+        <span className="check-row-number">{index}</span>
+        <span className="check-row-lens">{curveball ? "Curveball" : formatSlotLabel(recommendation.slot)}</span>
+        <strong>{recommendation.action}</strong>
+        <span className="check-row-expand">{expanded ? "Close" : "Expand"}</span>
+      </button>
+      {expanded ? (
+        <div className="check-row-detail">
+          <p>{recommendation.whyItMatters}</p>
+          <span>{recommendation.effort} effort</span>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+export function YourMoveBox({
+  selectedRecommendation,
+  commitmentText,
+  commitmentStance,
+  busy,
+  commitmentRef,
+  onCommitmentTextChange,
+  onCommitmentStanceChange,
+  onRecommendationStance,
+  onCommit,
+}: {
+  selectedRecommendation: CheckRecommendation | null;
+  commitmentText: string;
+  commitmentStance: CheckCommitStance;
+  busy: boolean;
+  commitmentRef: RefObject<HTMLTextAreaElement | null>;
+  onCommitmentTextChange: (value: string) => void;
+  onCommitmentStanceChange: (value: CheckCommitStance) => void;
+  onRecommendationStance: (stance: CheckCommitStance) => void;
+  onCommit: () => Promise<void>;
+}) {
+  return (
+    <section className="check-your-move" aria-label="Your move">
+      <header>
+        <span>Your move</span>
+        <strong>{selectedRecommendation ? selectedRecommendation.action : "Write a custom move."}</strong>
+      </header>
+      <label>
+        <span>Author the move you will commit</span>
+        <textarea
+          ref={commitmentRef}
+          value={commitmentText}
+          onChange={(event) => {
+            onCommitmentTextChange(event.target.value);
+            onCommitmentStanceChange("custom");
+          }}
+        />
+      </label>
+      <div className="check-move-actions">
+        {(["accept", "modify", "reject", "custom"] as CheckCommitStance[]).map((stance) => (
+          <button
+            key={stance}
+            type="button"
+            className={commitmentStance === stance ? "is-active" : ""}
+            onClick={() => onRecommendationStance(stance)}
+            disabled={busy}
+          >
+            {formatLabel(stance)}
+          </button>
+        ))}
+        <button type="button" className="check-primary-button" onClick={onCommit} disabled={busy}>
+          <Send size={15} />
+          Commit move
+        </button>
+      </div>
+    </section>
+  );
+}
+
+export function AskPennyDrawer({
+  isOpen,
+  disabled,
+  currentStepTitle,
+  localContext,
+  onClose,
+}: {
+  isOpen: boolean;
+  disabled: boolean;
+  currentStepTitle: string;
+  localContext: string;
+  onClose: () => void;
+}) {
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState<AskPennyMessage[]>([
+    {
+      role: "system",
+      text: "context loaded: current Check cycle",
+    },
+  ]);
+  const [asking, setAsking] = useState(false);
+
+  async function handleAsk() {
+    const trimmed = question.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    setQuestion("");
+    setAsking(true);
+    setMessages((current) => [...current, { role: "user", text: trimmed }]);
+
+    try {
+      const response = await askPennyQuestion({
+        question: trimmed,
+        currentStepTitle,
+        localContext,
+      });
+
+      setMessages((current) => [
+        ...current,
+        {
+          role: "penny",
+          text: response.data.answer,
+          provider: response.data.provider,
+          model: response.data.model,
+        },
+      ]);
+    } catch (error) {
+      setMessages((current) => [...current, { role: "system", text: error instanceof Error ? error.message : String(error) }]);
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <section className="check-ask-drawer" aria-label="Ask Penny">
+      <header>
+        <div>
+          <span>Ask Penny</span>
+          <p>{currentStepTitle}</p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close Ask Penny">
+          <X size={18} />
+        </button>
+      </header>
+      <div className="check-ask-thread">
+        {messages.map((message, index) => (
+          <article key={`${message.role}-${index}`} className={`check-ask-message is-${message.role}`}>
+            <span>{message.role === "penny" ? "penny" : message.role}</span>
+            {message.role === "penny" ? <AskPennyRenderedText text={message.text} /> : <p>{message.text}</p>}
+            {message.provider ? <small>{message.model ? `${message.provider} ${message.model}` : message.provider}</small> : null}
+          </article>
+        ))}
+      </div>
+      <div className="check-ask-input">
+        <textarea value={question} onChange={(event) => setQuestion(event.target.value)} />
+        <button type="button" onClick={handleAsk} disabled={disabled || asking || !question.trim()} aria-label="Ask Penny">
+          <Send size={16} />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function CheckEntryCard({
+  draftText,
+  busy,
+  failure,
+  textareaRef,
+  onDraftTextChange,
+  onCreateSession,
+  onRetryFailure,
+  onEditProjectSeed,
+}: {
+  draftText: string;
+  busy: boolean;
+  failure: CheckFailure | null;
+  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  onDraftTextChange: (value: string) => void;
+  onCreateSession: () => Promise<void>;
+  onRetryFailure: () => void;
+  onEditProjectSeed: () => void;
+}) {
+  return (
+    <article className="check-entry-card-v3">
+      <header>
+        <span>CHECK 0 / 1</span>
+        <h1>Start with the project seed.</h1>
+        <p>Check will generate the focus, diagnosis, recommended moves, and curveball from the seed.</p>
+      </header>
+      {failure ? <CheckFailurePanel failure={failure} onRetry={onRetryFailure} onEditProjectSeed={onEditProjectSeed} /> : null}
+      <label>
+        <span>Project seed</span>
+        <textarea ref={textareaRef} value={draftText} onChange={(event) => onDraftTextChange(event.target.value)} />
+      </label>
+      <button type="button" className="check-primary-button" onClick={onCreateSession} disabled={busy}>
+        <Sparkles size={15} />
+        Generate Check cycle
+      </button>
+    </article>
+  );
+}
+
+function WorkSprintCard({
+  cycle,
+  sprintText,
+  busy,
+  onSprintTextChange,
+  onSprint,
+}: {
+  cycle: CheckCycle;
+  sprintText: string;
+  busy: boolean;
+  onSprintTextChange: (value: string) => void;
+  onSprint: () => Promise<void>;
+}) {
+  return (
+    <section className="check-work-sprint-v3">
+      <header>
+        <span>Work sprint</span>
+        <strong>{cycle.workSprint?.prompt}</strong>
+      </header>
+      <ol>
+        {cycle.workSprint?.steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      <label>
+        <span>Sprint result</span>
+        <textarea value={sprintText} onChange={(event) => onSprintTextChange(event.target.value)} />
+      </label>
+      <button type="button" className="check-primary-button" onClick={onSprint} disabled={busy}>
+        <Zap size={15} />
+        Finish sprint
+      </button>
+    </section>
   );
 }
 
@@ -764,33 +876,27 @@ function SynthesisCard({
   }
 
   return (
-    <section className="check-synthesis">
+    <section className="check-synthesis-v3">
       <header>
         <span>Synthesis</span>
-        <strong>{synthesis.possibleBreakthrough ? synthesis.possibleBreakthrough.title : "Cycle changed the graph"}</strong>
+        <strong>{synthesis.possibleBreakthrough?.title ?? "Cycle changed the work"}</strong>
       </header>
-      <div className="check-synthesis-grid">
-        <div>
-          <span>What changed</span>
-          <ul>
-            {synthesis.whatChanged.map((change) => (
-              <li key={change}>{change}</li>
-            ))}
-          </ul>
-        </div>
-        <div>
-          <span>Possible breakthrough</span>
-          <p>{synthesis.possibleBreakthrough?.summary ?? "No breakthrough yet. The project still gained a clearer next move."}</p>
-        </div>
-        <div>
-          <span>Next suggested check</span>
-          <p>{synthesis.nextSuggestedCheck}</p>
-        </div>
+      <div>
+        <span>What changed</span>
+        <ul>
+          {synthesis.whatChanged.map((change) => (
+            <li key={change}>{change}</li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <span>Next suggested check</span>
+        <p>{synthesis.nextSuggestedCheck}</p>
       </div>
       <div className="check-synthesis-actions">
         <button type="button" className="check-secondary-button" onClick={onNextCycle} disabled={busy}>
-          <ChevronRight size={15} />
-          Next check
+          <RefreshCcw size={15} />
+          Next Check
         </button>
         <button type="button" className="check-primary-button" onClick={onSaveToBrain} disabled={busy || session.status === "saved"}>
           <Save size={15} />
@@ -801,144 +907,31 @@ function SynthesisCard({
   );
 }
 
-function CheckEntryCard({
-  draftText,
-  attachedFileName,
-  busy,
-  textareaRef,
-  fileInputRef,
-  onDraftTextChange,
-  onFileChange,
-  onCreateSession,
+function CheckFailurePanel({
+  failure,
+  onRetry,
+  onEditProjectSeed,
 }: {
-  draftText: string;
-  attachedFileName: string | null;
-  busy: boolean;
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
-  onDraftTextChange: (value: string) => void;
-  onFileChange: (file: File | null) => Promise<void>;
-  onCreateSession: () => Promise<void>;
+  failure: CheckFailure;
+  onRetry: () => void;
+  onEditProjectSeed: () => void;
 }) {
   return (
-    <article className="check-entry-card">
-      <header>
-        <span>Creative Breakthrough Workspace</span>
-        <h1>Drop in the messy work.</h1>
-      </header>
-      <textarea
-        ref={textareaRef}
-        value={draftText}
-        onChange={(event) => onDraftTextChange(event.target.value)}
-        placeholder="Paste an argument, draft, research question, product idea, code plan, creative concept, or strategy."
-      />
-      <div className="check-entry-actions">
-        <input
-          ref={fileInputRef}
-          type="file"
-          hidden
-          onChange={(event) => void onFileChange(event.target.files?.[0] ?? null)}
-        />
-        <button type="button" className="check-secondary-button" onClick={() => fileInputRef.current?.click()} disabled={busy}>
-          <FileUp size={15} />
-          {attachedFileName ?? "Upload file"}
+    <section className="check-ai-failure" aria-label="Check AI failure">
+      <div>
+        <span>AI required</span>
+        <strong>{failure.message}</strong>
+      </div>
+      <div>
+        <button type="button" className="check-secondary-button" onClick={onRetry}>
+          <RefreshCcw size={15} />
+          Retry
         </button>
-        <button type="button" className="check-primary-button" onClick={onCreateSession} disabled={busy}>
-          <Sparkles size={15} />
-          Start Check
+        <button type="button" className="check-secondary-button" onClick={onEditProjectSeed}>
+          Edit project seed
         </button>
       </div>
-    </article>
-  );
-}
-
-function RecommendationButton({
-  recommendation,
-  index,
-  selected,
-  curveball = false,
-  onSelect,
-}: {
-  recommendation: CheckRecommendation;
-  index: number | string;
-  selected: boolean;
-  curveball?: boolean;
-  onSelect: (recommendation: CheckRecommendation) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`check-rec-card${selected ? " is-selected" : ""}${curveball ? " is-curveball" : ""}`}
-      onClick={() => onSelect(recommendation)}
-    >
-      <span className="check-rec-index">{index}</span>
-      <span className="check-rec-copy">
-        <strong>{formatNodeKind(recommendation.slot)}</strong>
-        <small>{recommendation.action}</small>
-        <em>{recommendation.whyItMatters}</em>
-      </span>
-      <span className="check-effort">{recommendation.effort}</span>
-    </button>
-  );
-}
-
-function CheckNodeGroup({
-  kind,
-  nodes,
-  selectedRecommendation,
-}: {
-  kind: CheckNodeKind;
-  nodes: CheckProjectNode[];
-  selectedRecommendation: CheckRecommendation | null;
-}) {
-  const visibleNodes = nodes.slice(0, 4);
-
-  return (
-    <section className="check-node-group">
-      <header>
-        <span>{formatNodeKind(kind)}</span>
-        <strong>{nodes.length}</strong>
-      </header>
-      {visibleNodes.length ? (
-        visibleNodes.map((node) => (
-          <article
-            key={node.id}
-            className={`check-node-row${node.id === selectedRecommendation?.targetNodeId ? " is-targeted" : ""}`}
-          >
-            <strong>{node.title}</strong>
-            <small>{node.body}</small>
-          </article>
-        ))
-      ) : (
-        <p>Empty</p>
-      )}
     </section>
-  );
-}
-
-function CheckRecentIdeas({
-  documentsData,
-  onSelectDocument,
-}: {
-  documentsData: BrainDocumentsData | null;
-  onSelectDocument?: (sessionId: string) => void;
-}) {
-  const documents = documentsData?.documents.slice(0, 5) ?? [];
-
-  return (
-    <div className="check-recent-ideas">
-      <span>Recent Brain docs</span>
-      {documents.length ? (
-        documents.map((document) => (
-          <button key={document.id} type="button" onClick={() => onSelectDocument?.(document.sessionId)}>
-            <strong>{document.title}</strong>
-            <small>{document.counts.claims} claims</small>
-          </button>
-        ))
-      ) : (
-        <p>No saved ideas yet.</p>
-      )}
-    </div>
   );
 }
 
@@ -954,42 +947,30 @@ function activeCheckCycle(session: CheckSession | null): CheckCycle | null {
   );
 }
 
-function groupNodesByKind(nodes: CheckProjectNode[]): Map<CheckNodeKind, CheckProjectNode[]> {
-  const grouped = new Map<CheckNodeKind, CheckProjectNode[]>();
-
-  for (const kind of CHECK_NODE_KINDS) {
-    grouped.set(kind, []);
+function checkPathIndex(session: CheckSession | null, cycle: CheckCycle | null): number {
+  if (!session || !cycle) {
+    return 0;
   }
 
-  for (const node of nodes) {
-    grouped.get(node.kind)?.push(node);
+  if (session.status === "saved") {
+    return 6;
   }
 
-  return grouped;
+  if (cycle.synthesis) {
+    return 5;
+  }
+
+  if (cycle.status === "committed") {
+    return 5;
+  }
+
+  return 1;
 }
 
-function formatNodeKind(kind: string): string {
-  return kind
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function fileKind(fileName: string): "text" | "pdf" | "slides" | "document" {
-  const lower = fileName.toLowerCase();
-
-  if (lower.endsWith(".pdf")) {
-    return "pdf";
+function formatSlotLabel(slot: string): string {
+  if (slot === "curveball") {
+    return "Curveball";
   }
 
-  if (lower.endsWith(".ppt") || lower.endsWith(".pptx") || lower.endsWith(".key")) {
-    return "slides";
-  }
-
-  if (lower.endsWith(".doc") || lower.endsWith(".docx")) {
-    return "document";
-  }
-
-  return "text";
+  return slot.charAt(0).toUpperCase() + slot.slice(1);
 }

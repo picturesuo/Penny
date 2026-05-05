@@ -78,6 +78,44 @@ test("POST /brain/learn/ask answers freeform step questions without a claim", as
   assert.match(payload.data.answer, /pricing rule/);
 });
 
+test("POST /brain/learn/ask uses active micro-lesson context for quick actions", async () => {
+  const response = await handleAskPennyRequest(
+    request("http://localhost/brain/learn/ask", {
+      question: "Explain this visual.",
+      quickAction: "explain_visual",
+      currentStepTitle: "Name the pricing signal",
+      localContext: "Goal: understand pricing. Current step: Name the pricing signal.",
+      activeLesson: {
+        lessonNumber: 2,
+        totalLessons: 6,
+        title: "Name the pricing signal",
+        explanation: "A pricing signal is an observed behavior that shows a buyer attaches budget to a value moment.",
+        visual: {
+          type: "comparison",
+          title: "Signal comparison",
+          description: "A comparison between buyer behavior and polite enthusiasm.",
+          body: "behavior | compliment",
+        },
+        quickCheck: "Which buyer behavior would prove budget exists?",
+        takeaway: "Behavior beats compliments when pricing is uncertain.",
+        sourceSpans: [
+          {
+            label: "Pricing interview",
+            text: "A founder asked to pay for fundraising prep this month.",
+            sourceRange: "cluster 1 of 3",
+          },
+        ],
+      },
+    }),
+  );
+  const payload = (await response.json()) as { data: { answer: string; provider: string } };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.provider, "heuristic");
+  assert.match(payload.data.answer, /Signal comparison/);
+  assert.match(payload.data.answer, /Behavior beats compliments/);
+});
+
 test("POST /brain/learn/ask answers simple direct questions before the provider", async () => {
   let providerCalled = false;
   const response = await handleAskPennyRequest(

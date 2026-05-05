@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { createXai } from "@ai-sdk/xai";
+import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 
 export type CheckNodeKind =
@@ -155,6 +157,57 @@ export type CheckRouteOptions = {
   service?: CheckRouteService;
 };
 
+export type CheckCycleProviderInput = {
+  rawText: string;
+  project: CheckProjectGraph;
+  completedCycles: CheckCycle[];
+  cycleNumber: number;
+};
+
+export type CheckCycleProviderRecommendation = {
+  slot: CheckRecommendationSlot;
+  action: string;
+  whyItMatters: string;
+  effort: "low" | "medium" | "high";
+};
+
+export type CheckCycleProviderCurveball = Omit<CheckCycleProviderRecommendation, "slot"> & {
+  slot: CheckCurveballSlot;
+};
+
+export type CheckCycleProviderOutput = {
+  currentFocus: string;
+  diagnosis: string;
+  recommendations: CheckCycleProviderRecommendation[];
+  curveball: CheckCycleProviderCurveball;
+};
+
+export type CheckCycleProvider = {
+  name: string;
+  generateCycle(input: CheckCycleProviderInput): Promise<unknown>;
+};
+
+export type CheckGenerateText = (request: {
+  model: LanguageModel;
+  system: string;
+  prompt: string;
+  output: typeof checkCycleOutputSpec;
+  maxRetries: number;
+  providerOptions: {
+    xai: {
+      store: false;
+    };
+  };
+}) => Promise<{ output: unknown }>;
+
+export type XaiCheckCycleProviderOptions = {
+  generateText?: CheckGenerateText;
+};
+
+export type CheckRouteServiceOptions = {
+  aiProvider?: CheckCycleProvider;
+};
+
 const CheckSourceMaterialSchema = z
   .object({
     kind: z.enum(["text", "pdf", "slides", "document"]).optional().default("text"),
@@ -216,6 +269,62 @@ const CheckSprintBodySchema = z
     outcome: z.string().trim().max(8_000).optional().default(""),
   })
   .strict();
+
+const CheckCycleProviderRecommendationSchema = z
+  .object({
+    slot: z.enum(["clarify", "strengthen", "challenge", "reframe", "advance"]),
+    action: z.string().trim().min(8).max(260),
+    whyItMatters: z.string().trim().min(8).max(560),
+    effort: z.enum(["low", "medium", "high"]),
+  })
+  .strict();
+
+const CheckCycleProviderCurveballSchema = CheckCycleProviderRecommendationSchema.extend({
+  slot: z.literal("curveball"),
+});
+
+export const CheckCycleProviderOutputSchema = z
+  .object({
+    currentFocus: z.string().trim().min(8).max(180),
+    diagnosis: z.string().trim().min(16).max(420),
+    recommendations: z.array(CheckCycleProviderRecommendationSchema).length(5),
+    curveball: CheckCycleProviderCurveballSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const expectedSlots: CheckRecommendationSlot[] = ["clarify", "strengthen", "challenge", "reframe", "advance"];
+    const slots = value.recommendations.map((recommendation) => recommendation.slot);
+
+    expectedSlots.forEach((slot, index) => {
+      if (slots[index] !== slot) {
+        context.addIssue({
+          code: "custom",
+          path: ["recommendations", index, "slot"],
+          message: `Recommendation ${index + 1} must use slot ${slot}.`,
+        });
+      }
+    });
+
+    for (const [index, recommendation] of [...value.recommendations, value.curveball].entries()) {
+      for (const field of ["action", "whyItMatters"] as const) {
+        if (placeholderLikeText(recommendation[field])) {
+          context.addIssue({
+            code: "custom",
+            path: index < 5 ? ["recommendations", index, field] : ["curveball", field],
+            message: "Check AI output must not contain placeholder, mock, TBD, or fake content.",
+          });
+        }
+      }
+    }
+  });
+
+const checkCycleOutputSpec = Output.object<CheckCycleProviderOutput>({
+  schema: CheckCycleProviderOutputSchema,
+  name: "penny_check_cycle",
+  description: "Penny Check cycle focus, diagnosis, five recommended moves, and one curveball.",
+});
+
+export const defaultXaiCheckModel = "grok-4.20-reasoning";
 
 const defaultCheckRouteService = createInMemoryCheckRouteService();
 
@@ -380,7 +489,160 @@ export class CheckRouteValidationError extends Error {
   }
 }
 
-export function createInMemoryCheckRouteService(): CheckRouteService {
+export class CheckAiProviderError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CheckAiProviderError";
+  }
+}
+
+export class CheckAiUnavailableError extends Error {
+  constructor(message = "Check needs an AI provider to generate the next cycle. Configure XAI_API_KEY or enable PENNY_CHECK_DEMO_MODE for demo content.") {
+    super(message);
+    this.name = "CheckAiUnavailableError";
+  }
+}
+
+export function createDefaultCheckCycleProvider(env: Record<string, string | undefined> = process.env): CheckCycleProvider {
+  if (env.XAI_API_KEY?.trim()) {
+    return createXaiCheckCycleProvider(env);
+  }
+
+  if (checkDemoModeEnabled(env)) {
+    return createDemoCheckCycleProvider();
+  }
+
+  return createUnavailableCheckCycleProvider();
+}
+
+export function createUnavailableCheckCycleProvider(): CheckCycleProvider {
+  return {
+    name: "unavailable",
+    async generateCycle() {
+      throw new CheckAiUnavailableError();
+    },
+  };
+}
+
+export function createDemoCheckCycleProvider(): CheckCycleProvider {
+  return {
+    name: "demo",
+    async generateCycle(input) {
+      const focusNode = chooseFocusNode(input.project);
+
+      return {
+        currentFocus: focusNode.title,
+        diagnosis: diagnosisForProject(input.project, focusNode),
+        recommendations: normalRecommendations(input.project, focusNode).map(providerRecommendationFromCheckRecommendation),
+        curveball: providerCurveballFromCheckRecommendation(curveballRecommendation(input.project, focusNode)),
+      } satisfies CheckCycleProviderOutput;
+    },
+  };
+}
+
+export function createXaiCheckCycleProvider(
+  env: Record<string, string | undefined> = process.env,
+  options: XaiCheckCycleProviderOptions = {},
+): CheckCycleProvider {
+  return {
+    name: "xai",
+    async generateCycle(input) {
+      const apiKey = env.XAI_API_KEY?.trim();
+
+      if (!apiKey) {
+        throw new CheckAiUnavailableError("XAI_API_KEY is required for the xAI Check provider.");
+      }
+
+      const xai = createXai(createXaiSettings(apiKey, env));
+      const callGenerateText = options.generateText ?? generateStructuredCheckCycle;
+
+      try {
+        const result = await callGenerateText({
+          model: xai.responses(resolveXaiCheckModel(env)),
+          system: buildCheckCycleSystemPrompt(),
+          prompt: buildCheckCyclePrompt(input),
+          output: checkCycleOutputSpec,
+          maxRetries: 1,
+          providerOptions: {
+            xai: {
+              store: false,
+            },
+          },
+        });
+
+        return result.output;
+      } catch (error) {
+        if (error instanceof CheckAiUnavailableError || error instanceof CheckAiProviderError) {
+          throw error;
+        }
+
+        throw new CheckAiProviderError(`xAI Check request failed: ${formatErrorMessage(error)}`);
+      }
+    },
+  };
+}
+
+export function resolveXaiCheckModel(env: Record<string, string | undefined> = process.env): string {
+  return env.XAI_CHECK_MODEL?.trim() || env.XAI_MODEL?.trim() || defaultXaiCheckModel;
+}
+
+export function buildCheckCycleSystemPrompt(): string {
+  return [
+    "You are Penny, a controllable thinking instrument enhanced by AI.",
+    "Generate one focused Check cycle for a creative breakthrough workspace.",
+    "The output must be specific to the user's project and must not contain placeholder, fake, mock, TBD, or generic filler content.",
+    "Return exactly five recommended moves in this order: clarify, strengthen, challenge, reframe, advance.",
+    "Return exactly one curveball that usefully breaks the frame without becoming random.",
+    "Each move must be a single clear action row that the user could accept, modify, reject, or turn into a custom authored move.",
+    "Do not invent external evidence, citations, metrics, or facts.",
+    "Return only the structured Check cycle.",
+  ].join("\n");
+}
+
+export function buildCheckCyclePrompt(input: CheckCycleProviderInput): string {
+  const openNodes = input.project.nodes
+    .slice(0, 14)
+    .map((node) => `- ${node.kind}: ${node.title} :: ${node.body}`)
+    .join("\n");
+  const previousCycles = input.completedCycles
+    .slice(-4)
+    .map((cycle, index) => {
+      const commitment = cycle.userCommitment?.text ? ` Commitment: ${cycle.userCommitment.text}` : "";
+      const synthesis = cycle.synthesis?.nextSuggestedCheck ? ` Next suggested check: ${cycle.synthesis.nextSuggestedCheck}` : "";
+
+      return `${index + 1}. Focus: ${cycle.currentFocus}.${commitment}${synthesis}`;
+    })
+    .join("\n");
+
+  return [
+    `Generate Check cycle ${input.cycleNumber}.`,
+    "",
+    "Project seed:",
+    input.rawText,
+    "",
+    `North star: ${input.project.northStar}`,
+    `Current artifact: ${input.project.currentArtifactSummary}`,
+    `Audience or judge: ${input.project.audienceOrJudge}`,
+    "",
+    "Current graph nodes:",
+    openNodes || "- No nodes yet.",
+    "",
+    "Previous Check cycles:",
+    previousCycles || "- None yet.",
+    "",
+    "Output requirements:",
+    "- currentFocus: a large, concrete focus title, not a generic label.",
+    "- diagnosis: 1 short paragraph naming the structural blockage.",
+    "- recommendations: exactly 5 rows in order: clarify, strengthen, challenge, reframe, advance.",
+    "- Each recommendation action must be one sentence and directly act on the project.",
+    "- curveball: exactly 1 useful frame-breaking move.",
+    "- whyItMatters should explain why the move could unlock progress in this project.",
+    "- No placeholder text, no fake content, no mock recommendations, no generic productivity advice.",
+  ].join("\n");
+}
+
+export function createInMemoryCheckRouteService(options: CheckRouteServiceOptions = {}): CheckRouteService {
+  const aiProvider = options.aiProvider ?? createDefaultCheckCycleProvider();
   const sessions = new Map<string, CheckSession>();
 
   function requireSession(sessionId: string): CheckSession {
@@ -435,7 +697,7 @@ export function createInMemoryCheckRouteService(): CheckRouteService {
         createdAt: now,
         updatedAt: now,
       };
-      const cycle = buildCycle(session, now);
+      const cycle = await buildCycle(session, now, aiProvider);
 
       session.cycles.push(cycle);
       session.activeCycleId = cycle.id;
@@ -457,7 +719,7 @@ export function createInMemoryCheckRouteService(): CheckRouteService {
       }
 
       const now = isoNow();
-      const cycle = buildCycle(session, now);
+      const cycle = await buildCycle(session, now, aiProvider);
 
       session.cycles.push(cycle);
       session.activeCycleId = cycle.id;
@@ -701,16 +963,27 @@ function buildProjectGraph(rawText: string, now: string): CheckProjectGraph {
   };
 }
 
-function buildCycle(session: CheckSession, now: string): CheckCycle {
+async function buildCycle(session: CheckSession, now: string, aiProvider: CheckCycleProvider): Promise<CheckCycle> {
   const focusNode = chooseFocusNode(session.project);
+  const providerOutput = await generateCheckCycleOutput(
+    {
+      rawText: session.input.rawText,
+      project: session.project,
+      completedCycles: session.cycles,
+      cycleNumber: session.cycles.length + 1,
+    },
+    aiProvider,
+  );
   const cycle: CheckCycle = {
     id: randomUUID(),
     sessionId: session.id,
     status: "active",
-    currentFocus: focusNode.title,
-    diagnosis: diagnosisForProject(session.project, focusNode),
-    recommendations: normalRecommendations(session.project, focusNode),
-    curveball: curveballRecommendation(session.project, focusNode),
+    currentFocus: providerOutput.currentFocus,
+    diagnosis: providerOutput.diagnosis,
+    recommendations: providerOutput.recommendations.map((recommendation) =>
+      checkRecommendationFromProviderRecommendation(recommendation, session.project, focusNode),
+    ),
+    curveball: checkCurveballFromProviderCurveball(providerOutput.curveball, session.project, focusNode),
     userCommitment: null,
     workSprint: null,
     synthesis: null,
@@ -720,6 +993,33 @@ function buildCycle(session: CheckSession, now: string): CheckCycle {
 
   validateCycleContract(cycle);
   return cycle;
+}
+
+async function generateCheckCycleOutput(
+  input: CheckCycleProviderInput,
+  aiProvider: CheckCycleProvider,
+): Promise<CheckCycleProviderOutput> {
+  let output: unknown;
+
+  try {
+    output = await aiProvider.generateCycle(input);
+  } catch (error) {
+    if (error instanceof CheckAiUnavailableError || error instanceof CheckAiProviderError) {
+      throw error;
+    }
+
+    throw new CheckAiProviderError(`${aiProvider.name} Check provider failed: ${formatErrorMessage(error)}`);
+  }
+
+  const parsed = CheckCycleProviderOutputSchema.safeParse(output);
+
+  if (!parsed.success) {
+    throw new CheckAiProviderError(
+      `Check provider output failed validation: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`,
+    );
+  }
+
+  return parsed.data;
 }
 
 function chooseFocusNode(project: CheckProjectGraph): CheckProjectNode {
@@ -789,6 +1089,80 @@ function curveballRecommendation(project: CheckProjectGraph, focusNode: CheckPro
     effort: "medium",
     targetNodeId: project.nodes.find((node) => node.kind === "wild_idea")?.id ?? focusNode.id,
   };
+}
+
+function providerRecommendationFromCheckRecommendation(
+  recommendation: CheckRecommendation,
+): CheckCycleProviderRecommendation {
+  if (recommendation.slot === "curveball") {
+    throw new CheckAiProviderError("Demo Check recommendation mapper received a curveball in a normal slot.");
+  }
+
+  return {
+    slot: recommendation.slot,
+    action: recommendation.action,
+    whyItMatters: recommendation.whyItMatters,
+    effort: recommendation.effort,
+  };
+}
+
+function providerCurveballFromCheckRecommendation(recommendation: CheckRecommendation): CheckCycleProviderCurveball {
+  return {
+    slot: "curveball",
+    action: recommendation.action,
+    whyItMatters: recommendation.whyItMatters,
+    effort: recommendation.effort,
+  };
+}
+
+function checkRecommendationFromProviderRecommendation(
+  recommendation: CheckCycleProviderRecommendation,
+  project: CheckProjectGraph,
+  focusNode: CheckProjectNode,
+): CheckRecommendation {
+  return {
+    id: randomUUID(),
+    slot: recommendation.slot,
+    action: recommendation.action,
+    whyItMatters: recommendation.whyItMatters,
+    effort: recommendation.effort,
+    targetNodeId: targetNodeIdForSlot(project, focusNode, recommendation.slot),
+  };
+}
+
+function checkCurveballFromProviderCurveball(
+  curveball: CheckCycleProviderCurveball,
+  project: CheckProjectGraph,
+  focusNode: CheckProjectNode,
+): CheckRecommendation {
+  return {
+    id: randomUUID(),
+    slot: "curveball",
+    action: curveball.action,
+    whyItMatters: curveball.whyItMatters,
+    effort: curveball.effort,
+    targetNodeId: targetNodeIdForSlot(project, focusNode, "curveball"),
+  };
+}
+
+function targetNodeIdForSlot(
+  project: CheckProjectGraph,
+  focusNode: CheckProjectNode,
+  slot: CheckRecommendationSlot | CheckCurveballSlot,
+): string {
+  switch (slot) {
+    case "clarify":
+    case "reframe":
+      return focusNode.id;
+    case "strengthen":
+      return project.nodes.find((node) => node.kind === "evidence")?.id ?? focusNode.id;
+    case "challenge":
+      return project.nodes.find((node) => node.kind === "counterargument")?.id ?? focusNode.id;
+    case "advance":
+      return project.nodes.find((node) => node.kind === "experiment" || node.kind === "task")?.id ?? focusNode.id;
+    case "curveball":
+      return project.nodes.find((node) => node.kind === "wild_idea")?.id ?? focusNode.id;
+  }
 }
 
 function validateCycleContract(cycle: CheckCycle): void {
@@ -1057,6 +1431,14 @@ function checkErrorResponse(error: unknown): Response {
     return jsonResponse({ error: { code: "check_invalid", message: error.message } }, 400);
   }
 
+  if (error instanceof CheckAiUnavailableError) {
+    return jsonResponse({ error: { code: "check_ai_required", message: error.message } }, 503);
+  }
+
+  if (error instanceof CheckAiProviderError) {
+    return jsonResponse({ error: { code: "check_ai_failed", message: error.message } }, 502);
+  }
+
   return jsonResponse({ error: { code: "check_failed", message: formatErrorMessage(error) } }, 500);
 }
 
@@ -1186,6 +1568,32 @@ function clipText(text: string, maxLength: number): string {
   }
 
   return `${clean.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+}
+
+async function generateStructuredCheckCycle(request: Parameters<CheckGenerateText>[0]): Promise<{ output: unknown }> {
+  const result = await generateText(request);
+
+  return { output: result.output };
+}
+
+function createXaiSettings(apiKey: string, env: Record<string, string | undefined>) {
+  const baseURL = env.XAI_BASE_URL?.trim();
+
+  if (!baseURL) {
+    return { apiKey };
+  }
+
+  return { apiKey, baseURL: baseURL.replace(/\/+$/, "") };
+}
+
+function checkDemoModeEnabled(env: Record<string, string | undefined>): boolean {
+  const value = env.PENNY_CHECK_DEMO_MODE?.trim() || env.PENNY_DEMO_MODE?.trim() || "";
+
+  return /^(1|true|yes|on)$/i.test(value);
+}
+
+function placeholderLikeText(text: string): boolean {
+  return /\b(?:placeholder|lorem ipsum|tbd|todo|mock|fake fallback|fake recommendation)\b/i.test(text);
 }
 
 function formatErrorMessage(error: unknown): string {

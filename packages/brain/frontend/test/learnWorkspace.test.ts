@@ -10,26 +10,34 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   );
 
   assert.match(markup, /Name the program/);
-  assert.match(markup, /YC is a three-month startup accelerator/);
+  assert.match(markup, /YC is not just an investor logo/);
   assert.match(markup, /Ask Penny/);
-  assert.match(markup, /penny@learn:~\$/);
-  assert.match(markup, /context loaded: current lesson step/);
+  assert.match(markup, /Current lesson context is loaded/);
   assert.match(markup, /LEARNING PATH/);
-  assert.match(markup, /STEP 1\.1 OF 15/);
-  assert.match(markup, /STRUCTURE/);
-  assert.match(markup, /Fill in the check/);
-  assert.match(markup, /Positive/);
-  assert.match(markup, /Negative/);
-  assert.match(markup, /Curve/);
-  assert.match(markup, /Good example/);
-  assert.match(markup, /Bad example/);
-  assert.match(markup, /Draft 1/);
-  assert.match(markup, /\+ Tab/);
-  assert.match(markup, /Final typed answer/);
-  assert.match(markup, /Type this part/);
+  assert.match(markup, /LESSON 1 \/ 15/);
+  assert.match(markup, /YC program loop/);
+  assert.match(markup, /Your turn/);
+  assert.match(markup, /Takeaway/);
+  assert.match(markup, /Explain visual/);
+  assert.match(markup, /Give another example/);
+  assert.match(markup, /Make simpler/);
+  assert.match(markup, /Quiz me/);
+  assert.match(markup, /Connect to previous/);
   assert.match(markup, /Esc/);
   assert.match(markup, /Enter/);
+  assert.doesNotMatch(markup, /penny@learn:~\$/);
   assert.doesNotMatch(markup, /Enter forward \/ Esc back/);
+  assert.doesNotMatch(markup, /STRUCTURE/);
+  assert.doesNotMatch(markup, /Fill in the check/);
+  assert.doesNotMatch(markup, /Positive/);
+  assert.doesNotMatch(markup, /Negative/);
+  assert.doesNotMatch(markup, /Curve/);
+  assert.doesNotMatch(markup, /Good example/);
+  assert.doesNotMatch(markup, /Bad example/);
+  assert.doesNotMatch(markup, /Draft 1/);
+  assert.doesNotMatch(markup, /\+ Tab/);
+  assert.doesNotMatch(markup, /Final typed answer/);
+  assert.doesNotMatch(markup, /Type this part/);
   assert.doesNotMatch(markup, /Definition/);
   assert.doesNotMatch(markup, /Application/);
   assert.doesNotMatch(markup, /Procedure/);
@@ -223,15 +231,17 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   assert.match(markup, /Iterate pricing/);
   assert.match(markup, /An expert starts by naming what the pricing decision must accomplish/);
   assert.match(markup, /Name the buyer/);
-  assert.match(markup, /What is the strongest true version/);
-  assert.match(markup, /What should this not mean/);
-  assert.match(markup, /What twist changes the answer/);
-  assert.match(markup, /What would a strong answer look like/);
-  assert.match(markup, /What would a weak answer look like/);
+  assert.match(markup, /Pricing value map/);
+  assert.match(markup, /Your turn/);
+  assert.match(markup, /Takeaway/);
+  assert.doesNotMatch(markup, /What is the strongest true version/);
+  assert.doesNotMatch(markup, /What should this not mean/);
+  assert.doesNotMatch(markup, /What twist changes the answer/);
+  assert.doesNotMatch(markup, /What would a strong answer look like/);
+  assert.doesNotMatch(markup, /What would a weak answer look like/);
   assert.doesNotMatch(markup, /Definition/);
   assert.doesNotMatch(markup, /MISCONCEPTIONS/);
   assert.doesNotMatch(markup, /A pricing expert teaching/);
-  assert.doesNotMatch(markup, /Pricing value map/);
 });
 
 test("LearnWorkspace exposes the whole learning path around the active step", () => {
@@ -342,6 +352,16 @@ function lesson(title: string, parentTitle: string, bullets: string[], exampleLi
     parentTitle,
     learningGoal: `Learn ${title}.`,
     shortExplanation: `${title} explanation.`,
+    visual: {
+      type: "diagram" as const,
+      title: `${title} visual`,
+      description: `${title} visual description.`,
+      body: bullets.join(" -> ") || exampleLine,
+      items: bullets.map((bullet, index) => ({ label: `Step ${index + 1}`, text: bullet })),
+    },
+    quickCheck: `Apply ${title} to the current source.`,
+    takeaway: `${title} takeaway.`,
+    sourceSpans: [{ sourceId: "source.raw_idea", label: "Source idea", text: exampleLine }],
     teachingSections: [
       { title: "Definition", body: bullets[0] ?? `${title} definition.` },
       { title: "Application", body: bullets[1] ?? `${title} application.` },

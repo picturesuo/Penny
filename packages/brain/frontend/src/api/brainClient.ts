@@ -31,6 +31,7 @@ import type {
   BrainVerifyResponse,
   KeepBrainRecentIdeaResponse,
   LearnSessionResponse,
+  LearnPageV2,
   ManualNodeSelectionResponse,
   RespondToChallengeResponse,
   SaveBrainObjectResponse,
@@ -698,6 +699,8 @@ export async function askPenny(input: {
   question: string;
   currentStepTitle: string;
   localContext: string;
+  quickAction?: "explain_visual" | "another_example" | "make_simpler" | "quiz_me" | "connect_previous";
+  activeLesson?: AskPennyActiveLessonInput;
 }): Promise<AskPennyResponse> {
   let response: Response;
 
@@ -730,6 +733,8 @@ async function askPennyViaApiOrigin(input: {
   question: string;
   currentStepTitle: string;
   localContext: string;
+  quickAction?: "explain_visual" | "another_example" | "make_simpler" | "quiz_me" | "connect_previous";
+  activeLesson?: AskPennyActiveLessonInput;
 }): Promise<AskPennyResponse> {
   const response = await fetch(`${askPennyApiOrigin()}/brain/learn/ask`, {
     method: "POST",
@@ -756,6 +761,8 @@ function localAskPennyResponse(
     question: string;
     currentStepTitle: string;
     localContext: string;
+    quickAction?: "explain_visual" | "another_example" | "make_simpler" | "quiz_me" | "connect_previous";
+    activeLesson?: AskPennyActiveLessonInput;
   },
   error: unknown,
 ): AskPennyResponse {
@@ -778,7 +785,15 @@ function localAskPennyAnswer(input: {
   question: string;
   currentStepTitle: string;
   localContext: string;
+  quickAction?: "explain_visual" | "another_example" | "make_simpler" | "quiz_me" | "connect_previous";
+  activeLesson?: AskPennyActiveLessonInput;
 }): string {
+  const quickActionAnswer = localAskPennyQuickActionAnswer(input);
+
+  if (quickActionAnswer) {
+    return quickActionAnswer;
+  }
+
   const question = input.question.trim();
   const compactQuestion = question.toLowerCase();
   const arithmetic = compactQuestion.match(
@@ -814,6 +829,47 @@ function localAskPennyAnswer(input: {
     `For this lesson, that sentence should stay focused on: ${focus}.`,
     "If the sentence still feels vague, add one specific example or source you could inspect next.",
   ].join("\n\n");
+}
+
+type AskPennyActiveLessonInput = {
+  lessonNumber: number;
+  totalLessons: number;
+  title: string;
+  explanation: string;
+  visual: Pick<LearnPageV2["visual"], "type" | "title" | "description" | "body">;
+  quickCheck: string;
+  takeaway: string;
+  sourceSpans: Array<{
+    label: string;
+    text: string;
+    sourceRange?: string;
+  }>;
+};
+
+function localAskPennyQuickActionAnswer(input: {
+  quickAction?: "explain_visual" | "another_example" | "make_simpler" | "quiz_me" | "connect_previous";
+  activeLesson?: AskPennyActiveLessonInput;
+}): string | null {
+  const lesson = input.activeLesson;
+
+  if (!lesson || !input.quickAction) {
+    return null;
+  }
+
+  switch (input.quickAction) {
+    case "explain_visual":
+      return `${lesson.visual.title}: ${lesson.visual.description}\n\nRead it as ${lesson.visual.body}.`;
+    case "another_example":
+      return lesson.sourceSpans[0]
+        ? `Another example: apply "${lesson.title}" to ${lesson.sourceSpans[0].text}. The same takeaway should still hold: ${lesson.takeaway}`
+        : `Another example: use the current idea as the case, then test whether "${lesson.takeaway}" still holds.`;
+    case "make_simpler":
+      return `Simpler: ${lesson.explanation.split(/[.!?]/)[0]?.trim() || lesson.title}. Remember: ${lesson.takeaway}`;
+    case "quiz_me":
+      return `Quick quiz: ${lesson.quickCheck}`;
+    case "connect_previous":
+      return `This page connects by adding "${lesson.title}" to the path. Keep the previous page as context, then carry forward: ${lesson.takeaway}`;
+  }
 }
 
 function formatAskPennyNumber(value: number): string {

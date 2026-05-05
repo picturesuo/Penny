@@ -305,6 +305,63 @@ test("frontend Ask Penny falls back locally when the request cannot reach the AP
   }
 });
 
+test("frontend Ask Penny sends active micro-lesson quick action context", async () => {
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse({ answer: "The visual compares signal with noise.", provider: "heuristic", model: null }),
+  ]);
+
+  try {
+    const response = await askPenny({
+      question: "Explain this visual.",
+      quickAction: "explain_visual",
+      currentStepTitle: "Read the signal",
+      localContext: "Goal: understand pricing. Current step: Read the signal.",
+      activeLesson: {
+        lessonNumber: 1,
+        totalLessons: 4,
+        title: "Read the signal",
+        explanation: "A signal is behavior that changes the pricing claim.",
+        visual: {
+          type: "comparison",
+          title: "Signal vs noise",
+          description: "A comparison of buyer behavior and compliments.",
+          body: "behavior | compliment",
+        },
+        quickCheck: "Which behavior proves budget?",
+        takeaway: "Behavior beats compliments.",
+        sourceSpans: [{ label: "Interview", text: "A buyer asked for pricing.", sourceRange: "cluster 1" }],
+      },
+    });
+
+    assert.equal(response.data.answer, "The visual compares signal with noise.");
+    assert.equal(calls[0]?.url, "/brain/learn/ask");
+    assert.deepEqual(calls[0]?.body, {
+      question: "Explain this visual.",
+      quickAction: "explain_visual",
+      currentStepTitle: "Read the signal",
+      localContext: "Goal: understand pricing. Current step: Read the signal.",
+      activeLesson: {
+        lessonNumber: 1,
+        totalLessons: 4,
+        title: "Read the signal",
+        explanation: "A signal is behavior that changes the pricing claim.",
+        visual: {
+          type: "comparison",
+          title: "Signal vs noise",
+          description: "A comparison of buyer behavior and compliments.",
+          body: "behavior | compliment",
+        },
+        quickCheck: "Which behavior proves budget?",
+        takeaway: "Behavior beats compliments.",
+        sourceSpans: [{ label: "Interview", text: "A buyer asked for pricing.", sourceRange: "cluster 1" }],
+      },
+    });
+  } finally {
+    restoreFetch();
+  }
+});
+
 test("frontend Ask Penny local fallback answers conversational arithmetic", async () => {
   const originalFetch = globalThis.fetch;
 

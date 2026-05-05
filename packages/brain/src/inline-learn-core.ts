@@ -92,6 +92,39 @@ export const AskPennyRequestSchema = z
     question: z.string().trim().min(1).max(1_000),
     currentStepTitle: z.string().trim().min(1).max(160),
     localContext: z.string().trim().min(1).max(4_000),
+    quickAction: z
+      .enum(["explain_visual", "another_example", "make_simpler", "quiz_me", "connect_previous"])
+      .optional(),
+    activeLesson: z
+      .object({
+        lessonNumber: z.number().int().min(1),
+        totalLessons: z.number().int().min(1),
+        title: z.string().trim().min(1).max(160),
+        explanation: z.string().trim().min(1).max(520),
+        visual: z
+          .object({
+            type: z.enum(["diagram", "latex", "image", "code", "comparison", "concept_map"]),
+            title: z.string().trim().min(1).max(120),
+            description: z.string().trim().min(1).max(320),
+            body: z.string().trim().min(1).max(720),
+          })
+          .strict(),
+        quickCheck: z.string().trim().min(1).max(260),
+        takeaway: z.string().trim().min(1).max(220),
+        sourceSpans: z
+          .array(
+            z
+              .object({
+                label: z.string().trim().min(1).max(120),
+                text: z.string().trim().min(1).max(320),
+                sourceRange: z.string().trim().min(1).max(120).optional(),
+              })
+              .strict(),
+          )
+          .max(3),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -646,6 +679,8 @@ export function buildAskPennySystemPrompt(): string {
     "Personalize the answer to the exact entities, variables, numbers, wording, and constraints in the user's question.",
     "Never answer with a generic template when the question contains a specific expression, claim, example, or situation.",
     "Use the current step and local lesson context only when it helps the answer.",
+    "The request may include an active micro-lesson with visual, quick check, takeaway, and source spans. Treat that as the current lesson context.",
+    "If quickAction is present, answer that action directly: explain_visual, another_example, make_simpler, quiz_me, or connect_previous.",
     "If the user asks a simple factual, arithmetic, or conversational question, answer it plainly before adding any lesson-specific note.",
     "Give the next useful step when the question is vague or conversational.",
     "Be concrete and brief. If the user asks for an example, give one compact example.",
@@ -659,12 +694,15 @@ export function buildAskPennyPrompt(input: AskPennyRequest): string {
   return [
     `Current step: ${input.currentStepTitle}`,
     `Local lesson context: ${input.localContext}`,
+    input.quickAction ? `Quick action: ${input.quickAction}` : "",
+    input.activeLesson ? `Active micro-lesson JSON: ${JSON.stringify(input.activeLesson)}` : "",
     `Question: ${input.question}`,
     "",
     "Answer the question itself. If it is answerable in one sentence, use one sentence.",
+    "Use the active lesson's visual, quick check, takeaway, and source spans when they are present.",
     "When the question includes a concrete expression, calculate or transform that expression directly before explaining the general rule.",
     "Answer in 1-3 short paragraphs or up to 3 bullets. Include only what the user needs to move forward.",
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 export function buildInlineLearnSystemPrompt(): string {
@@ -1088,6 +1126,12 @@ function buildHeuristicInlineLearnOutput(input: InlineLearnGenerationInput): Inl
 }
 
 function heuristicAskPennyAnswer(input: AskPennyRequest): string {
+  const quickActionAnswer = askPennyQuickActionAnswer(input);
+
+  if (quickActionAnswer) {
+    return quickActionAnswer;
+  }
+
   const factualAnswer = simpleFactualAnswer(input.question);
 
   if (factualAnswer) {
@@ -1122,6 +1166,36 @@ function heuristicAskPennyAnswer(input: AskPennyRequest): string {
     `For this lesson, that sentence should stay focused on: ${focus}.`,
     "If the sentence still feels vague, add one specific example or source you could inspect next.",
   ].join("\n\n");
+}
+
+function askPennyQuickActionAnswer(input: AskPennyRequest): string | null {
+  const lesson = input.activeLesson;
+
+  if (!lesson || !input.quickAction) {
+    return null;
+  }
+
+  switch (input.quickAction) {
+    case "explain_visual":
+      return [
+        `${lesson.visual.title} is the visual version of "${lesson.title}".`,
+        `Read it as: ${lesson.visual.body}`,
+        `The point is ${lesson.takeaway}`,
+      ].join("\n\n");
+    case "another_example":
+      return [
+        `Another example: take the same move from "${lesson.title}" and apply it to a nearby case from the source span.`,
+        lesson.sourceSpans[0]
+          ? `Use "${lesson.sourceSpans[0].text}" as the case, then ask whether the takeaway still holds.`
+          : `Use your current idea as the case, then check whether "${lesson.takeaway}" still holds.`,
+      ].join("\n\n");
+    case "make_simpler":
+      return `Simpler: ${lesson.explanation.split(/[.!?]/)[0]?.trim() || lesson.title}. The thing to remember is: ${lesson.takeaway}`;
+    case "quiz_me":
+      return `Quick quiz: ${lesson.quickCheck} After you answer, compare it with this takeaway: ${lesson.takeaway}`;
+    case "connect_previous":
+      return `Connect this page to the previous one by asking what changed. This page adds "${lesson.title}", and the reusable takeaway is: ${lesson.takeaway}`;
+  }
 }
 
 function shapedAskPennyAnswer(input: AskPennyRequest): string | null {

@@ -83,6 +83,17 @@ test("POST /api/learn/session structures a dropped idea and ticks Autopilot", as
   assert.match(payload.data.learn.learningPlan.groups[0]?.subgroups[0]?.oneLineGoal ?? "", /subsection/i);
   assert.equal(payload.data.learn.learningPlan.groups[0]?.subgroups[0]?.teachingSections.length, 3);
   assert.match(payload.data.learn.learningPlan.groups[2]?.subgroups[0]?.visualExample.description ?? "", /prompt|case|question/i);
+  assert.equal(payload.data.learn.sessionV2.version, "learn_session_v2");
+  assert.equal(payload.data.learn.sessionV2.sourceOfTruth, "ai_generated_learn_pages_validated_locally");
+  assert.ok(payload.data.learn.sessionV2.pages.length >= 12);
+  const firstPage = payload.data.learn.sessionV2.pages[0];
+  assert.ok(firstPage);
+  assert.equal(firstPage.lessonNumber, 1);
+  assert.ok(firstPage.explanation.length <= 360);
+  assert.ok(firstPage.quickCheck.length <= 220);
+  assert.ok(firstPage.takeaway.length <= 180);
+  assert.ok(["diagram", "latex", "image", "code", "comparison", "concept_map"].includes(firstPage.visual.type));
+  assert.ok(firstPage.sourceSpans.length >= 1);
   assert.deepEqual(
     payload.data.learn.nextMoves.map((move) => move.action),
     ["learn", "check", "verify", "save_to_brain"],
@@ -145,6 +156,8 @@ test("POST /api/learn/session turns uploaded source text into clustered lesson c
   assert.match(payload.data.learn.learningPlan.groups[0]?.id ?? "", /source-group/);
   assert.equal(payload.data.learn.learningPlan.groups[0]?.subgroups[0]?.sourceContext?.clusterId, "source-cluster-1");
   assert.match(payload.data.learn.learningPlan.groups[0]?.purpose ?? "", /scoped bite-sized lecture unit/i);
+  assert.equal(payload.data.learn.sessionV2.pages[0]?.sourceSpans[0]?.sourceId, "source-cluster-1");
+  assert.match(payload.data.learn.sessionV2.pages[0]?.sourceSpans[0]?.sourceRange ?? "", /cluster 1/);
 });
 
 function request(url: string, body: unknown): Request {

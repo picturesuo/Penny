@@ -508,6 +508,7 @@ export interface BrainData {
   learningPlan?: LearningPlan;
   learn?: {
     learningPlan?: LearningPlan;
+    sessionV2?: LearnSessionV2;
   };
   sourceContext?: {
     kind: "text" | "pdf" | "slides" | "document" | string;
@@ -563,6 +564,45 @@ export interface LearningPlanSubgroup {
   };
 }
 
+export type LearnVisualType = "diagram" | "latex" | "image" | "code" | "comparison" | "concept_map";
+
+export interface LearnSourceSpanV2 {
+  sourceId: string;
+  label: string;
+  text: string;
+  sourceRange?: string;
+}
+
+export interface LearnVisualV2 {
+  type: LearnVisualType;
+  title: string;
+  description: string;
+  body: string;
+  items?: Array<{
+    label: string;
+    text: string;
+  }>;
+}
+
+export interface LearnPageV2 {
+  id: string;
+  lessonNumber: number;
+  title: string;
+  explanation: string;
+  visual: LearnVisualV2;
+  quickCheck: string;
+  takeaway: string;
+  sourceSpans: LearnSourceSpanV2[];
+}
+
+export interface LearnSessionV2 {
+  version: "learn_session_v2";
+  goal: string;
+  pages: LearnPageV2[];
+  visualTypes: LearnVisualType[];
+  sourceOfTruth: "ai_generated_learn_pages_validated_locally";
+}
+
 export interface LearnSessionOutput {
   coreIdea: string;
   claims: BrainClaim[];
@@ -570,6 +610,7 @@ export interface LearnSessionOutput {
   questions: BrainClaim[];
   creativePotential: string[];
   learningPlan?: LearningPlan;
+  sessionV2?: LearnSessionV2;
   autopilotNextMove: AutopilotSuggestion | null;
 }
 

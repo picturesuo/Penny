@@ -2,7 +2,13 @@ import { z } from "zod";
 import { RecipeEngine, RecipeTraceSchema, type RecipeTrace } from "./recipe-engine.ts";
 import { shouldUseWebSearch, type SearchDecision } from "./search-decision-service.ts";
 import type { EntityId } from "./domain/types.ts";
-import { LearningPlanSchema, buildExpertLearningPlan, type LearningSourceContext } from "./learn-plan.ts";
+import {
+  LearnSessionV2Schema,
+  LearningPlanSchema,
+  buildExpertLearningPlan,
+  buildLearnSessionV2,
+  type LearningSourceContext,
+} from "./learn-plan.ts";
 
 const LearnRecipeStepNameSchema = z.enum([
   "structure_idea",
@@ -58,6 +64,7 @@ export const LearnRecipeOutputSchema = z
       })
       .nullable(),
     learningPlan: LearningPlanSchema,
+    learnSessionV2: LearnSessionV2Schema,
   })
   .strict();
 
@@ -238,19 +245,26 @@ export async function runLearnRecipe(input: LearnRecipeInput): Promise<LearnReci
     nextMoves: input.nextMoves,
     sourceContext: input.sourceContext ?? null,
   });
+  const learningPlan = buildExpertLearningPlan({
+    rawIdea: input.rawIdea,
+    keyInsight: input.seedPayload.ideaMap.keyInsight,
+    claims: input.seedPayload.ideaMap.claims,
+    learnCandidates: input.seedPayload.learnCandidates,
+    explorationPaths: input.seedPayload.explorationPaths,
+    sourceContext: input.sourceContext ?? null,
+  });
 
   return LearnRecipeOutputSchema.parse({
     recipe: result.trace,
     searchDecision: result.context.searchDecision,
     brainContext: result.context.brainContext,
     sourceContext: input.sourceContext ?? null,
-    learningPlan: buildExpertLearningPlan({
+    learningPlan,
+    learnSessionV2: buildLearnSessionV2({
+      plan: learningPlan,
+      sourceContext: input.sourceContext ?? null,
       rawIdea: input.rawIdea,
       keyInsight: input.seedPayload.ideaMap.keyInsight,
-      claims: input.seedPayload.ideaMap.claims,
-      learnCandidates: input.seedPayload.learnCandidates,
-      explorationPaths: input.seedPayload.explorationPaths,
-      sourceContext: input.sourceContext ?? null,
     }),
   });
 }

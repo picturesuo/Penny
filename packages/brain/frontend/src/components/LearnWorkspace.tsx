@@ -8,6 +8,9 @@ import type {
   BrainHybridSearchResponse,
   BrainRecentIdea,
   CanvasNode,
+  LearnPageV2,
+  LearnSessionV2,
+  LearnVisualType,
   LearningPlan,
   AskPennyResponse,
   LearnSessionOutput,
@@ -235,9 +238,12 @@ function LearnSessionView({
         onNext={goToNextLesson}
       />
 
-      <AskPennyPanel
+      <AskPennyDrawer
         askPenny={pageData.askPenny}
         contextKey={activeStep?.id ?? "step-1"}
+        activeLessonIndex={activeLessonIndex}
+        lessonCount={lessonPages.length}
+        lesson={activeLesson?.substep.lesson ?? pageData.currentStep}
         currentStepTitle={activeLesson?.substep.lesson.title ?? activeStep?.title ?? pageData.currentStep.title}
         localContext={askPennyContextForStep(pageData, activeStep, activeLesson?.substep.lesson ?? pageData.currentStep, sourceText)}
         isOpen={askPennyOpen}
@@ -273,6 +279,10 @@ type LearnLesson = {
   parentTitle: string;
   learningGoal: string;
   shortExplanation: string;
+  visual: LearnPageV2["visual"];
+  quickCheck: string;
+  takeaway: string;
+  sourceSpans: LearnPageV2["sourceSpans"];
   teachingSections: Array<{
     title: string;
     body: string;
@@ -488,25 +498,12 @@ function LearnMainContent({
   const activeSubstep = activeStep?.substeps.find((substep) => substep.id === activeSubstepId);
   const nextLesson = lessonPages[activeLessonIndex + 1];
   const currentStep = activeSubstep?.lesson ?? pageData.currentStep;
-  const currentStepText = directAnswerForLesson(currentStep);
-  const textDensity = learnStepTextDensity(currentStepText);
   const canGoPrevious = activeLessonIndex > 0;
   const canGoNext = activeLessonIndex < lessonPages.length - 1;
 
   return (
     <article className="learn-editorial-main" aria-label="Current learning step">
-      <section className="learn-goal-block" aria-label="Your goal">
-        <span>
-          STEP {currentStep.stepNumber}.{currentStep.substepNumber} OF {lessonPages.length}
-        </span>
-        <h1>{currentStep.title}</h1>
-      </section>
-
-      <section className={`learn-step-header is-${textDensity}`} aria-label="Current step">
-        <AskPennyRenderedText text={currentStepText} />
-      </section>
-
-      <LearnPracticalStep lesson={currentStep} activeLessonIndex={activeLessonIndex} lessonCount={lessonPages.length} />
+      <MicroLessonSlide lesson={currentStep} activeLessonIndex={activeLessonIndex} lessonCount={lessonPages.length} />
 
       <nav className="learn-bottom-nav" aria-label="Step navigation">
         <div className="learn-nav-control learn-nav-control-previous">
@@ -524,6 +521,121 @@ function LearnMainContent({
       </nav>
     </article>
   );
+}
+
+export function MicroLessonSlide({
+  lesson,
+  activeLessonIndex,
+  lessonCount,
+}: {
+  lesson: LearnLesson;
+  activeLessonIndex: number;
+  lessonCount: number;
+}) {
+  return (
+    <section className="micro-lesson-slide" aria-label={`Lesson ${activeLessonIndex + 1} of ${lessonCount}`}>
+      <header className="micro-lesson-head">
+        <span>
+          LESSON {activeLessonIndex + 1} / {lessonCount}
+        </span>
+        <h1>{lesson.title}</h1>
+      </header>
+
+      <div className="micro-lesson-grid">
+        <section className="micro-lesson-explanation" aria-label="Explanation">
+          <AskPennyRenderedText text={lesson.shortExplanation} />
+        </section>
+
+        <LearnVisualRenderer visual={lesson.visual} />
+      </div>
+
+      <footer className="micro-lesson-footer">
+        <section className="micro-lesson-check" aria-label="Quick check">
+          <span>Your turn</span>
+          <p>{lesson.quickCheck}</p>
+        </section>
+        <section className="micro-lesson-takeaway" aria-label="Takeaway">
+          <span>Takeaway</span>
+          <p>{lesson.takeaway}</p>
+        </section>
+      </footer>
+    </section>
+  );
+}
+
+export function LearnVisualRenderer({ visual }: { visual: LearnPageV2["visual"] }) {
+  switch (visual.type) {
+    case "latex":
+      return (
+        <figure className="learn-visual learn-visual-latex">
+          <figcaption>{visual.title}</figcaption>
+          <AskPennyRenderedText text={visual.body} />
+          <p>{visual.description}</p>
+        </figure>
+      );
+    case "code":
+      return (
+        <figure className="learn-visual learn-visual-code">
+          <figcaption>{visual.title}</figcaption>
+          <pre><code>{visual.body}</code></pre>
+          <p>{visual.description}</p>
+        </figure>
+      );
+    case "comparison":
+      return (
+        <figure className="learn-visual learn-visual-comparison">
+          <figcaption>{visual.title}</figcaption>
+          <div>
+            {(visual.items ?? []).slice(0, 2).map((item) => (
+              <article key={item.label}>
+                <span>{item.label}</span>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+          <p>{visual.description}</p>
+        </figure>
+      );
+    case "image":
+      return (
+        <figure className="learn-visual learn-visual-image">
+          <figcaption>{visual.title}</figcaption>
+          <div aria-label={visual.description}>{visual.body}</div>
+          <p>{visual.description}</p>
+        </figure>
+      );
+    case "concept_map":
+      return (
+        <figure className="learn-visual learn-visual-map">
+          <figcaption>{visual.title}</figcaption>
+          <ol>
+            {(visual.items ?? visual.body.split("->").map((text, index) => ({ label: `${index + 1}`, text }))).map((item) => (
+              <li key={`${item.label}-${item.text}`}>
+                <span>{item.label}</span>
+                <strong>{item.text}</strong>
+              </li>
+            ))}
+          </ol>
+          <p>{visual.description}</p>
+        </figure>
+      );
+    case "diagram":
+    default:
+      return (
+        <figure className="learn-visual learn-visual-diagram">
+          <figcaption>{visual.title}</figcaption>
+          <ol>
+            {(visual.items ?? visual.body.split("->").map((text, index) => ({ label: `${index + 1}`, text }))).map((item) => (
+              <li key={`${item.label}-${item.text}`}>
+                <span>{item.label}</span>
+                <strong>{item.text}</strong>
+              </li>
+            ))}
+          </ol>
+          <p>{visual.description}</p>
+        </figure>
+      );
+  }
 }
 
 function LearnPracticalStep({
@@ -923,9 +1035,12 @@ function compactGraphTitle(value: string, maxWords: number): string {
   return truncateWords(value.replace(/\s+/g, " ").trim(), maxWords);
 }
 
-function AskPennyPanel({
+export function AskPennyDrawer({
   askPenny,
   contextKey,
+  activeLessonIndex,
+  lessonCount,
+  lesson,
   currentStepTitle,
   localContext,
   isOpen,
@@ -936,6 +1051,9 @@ function AskPennyPanel({
 }: {
   askPenny: LearnPageData["askPenny"];
   contextKey: string;
+  activeLessonIndex: number;
+  lessonCount: number;
+  lesson: LearnLesson;
   currentStepTitle: string;
   localContext: string;
   isOpen: boolean;
@@ -946,11 +1064,23 @@ function AskPennyPanel({
 }) {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<AskPennyMessage[]>([
-    { role: "system", text: "context loaded: current lesson step" },
+    { role: "system", text: "Current lesson context is loaded." },
   ]);
   const [isRunning, setIsRunning] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const trimmedDraft = draft.trim();
+  const activeLessonPayload = askPennyActiveLessonPayload(lesson, activeLessonIndex, lessonCount);
+  const quickActions: Array<{
+    id: NonNullable<Parameters<typeof askPennyQuestion>[0]["quickAction"]>;
+    label: string;
+    question: string;
+  }> = [
+    { id: "explain_visual", label: "Explain visual", question: "Explain this visual." },
+    { id: "another_example", label: "Give another example", question: "Give another example for this lesson." },
+    { id: "make_simpler", label: "Make simpler", question: "Make this lesson simpler." },
+    { id: "quiz_me", label: "Quiz me", question: "Quiz me on this lesson." },
+    { id: "connect_previous", label: "Connect to previous", question: "Connect this to the previous lesson." },
+  ];
 
   useEffect(() => {
     if (!selectedQuestionSeed) {
@@ -967,7 +1097,7 @@ function AskPennyPanel({
   useEffect(() => {
     setDraft("");
     setMessages([
-      { role: "system", text: "context loaded: current category" },
+      { role: "system", text: "Current lesson context is loaded." },
     ]);
   }, [contextKey]);
 
@@ -982,7 +1112,7 @@ function AskPennyPanel({
     textarea.style.height = `${textarea.scrollHeight}px`;
   }, [draft]);
 
-  async function submitPrompt(question: string) {
+  async function submitPrompt(question: string, quickAction?: NonNullable<Parameters<typeof askPennyQuestion>[0]["quickAction"]>) {
     const trimmedQuestion = question.trim();
 
     if (!trimmedQuestion) {
@@ -999,6 +1129,8 @@ function AskPennyPanel({
         question: trimmedQuestion,
         currentStepTitle,
         localContext,
+        ...(quickAction ? { quickAction } : {}),
+        activeLesson: activeLessonPayload,
       });
 
       setMessages((current) => [
@@ -1024,21 +1156,42 @@ function AskPennyPanel({
   }
 
   return (
-    <aside className={`ask-penny-panel${isOpen ? " is-open" : ""}`} aria-label="Ask Penny" aria-hidden={!isOpen}>
+    <aside className={`ask-penny-panel ask-penny-drawer${isOpen ? " is-open" : ""}`} aria-label="Ask Penny" aria-hidden={!isOpen}>
       <header>
         <div>
           <span>Ask Penny</span>
-          <p>Ctrl + A to toggle</p>
+          <p>
+            Lesson {activeLessonIndex + 1} context: {lesson.title}
+          </p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close Ask Penny">
           ×
         </button>
       </header>
 
+      <div className="ask-penny-context-card" aria-label="Current lesson context">
+        <span>{lesson.visual.type.replace("_", " ")}</span>
+        <strong>{lesson.visual.title}</strong>
+        <p>{lesson.takeaway}</p>
+      </div>
+
+      <div className="ask-penny-quick-actions" aria-label="Ask Penny quick actions">
+        {quickActions.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            disabled={disabled || isRunning}
+            onClick={() => void submitPrompt(action.question, action.id)}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+
       <div className="ask-penny-thread" role="log" aria-live="polite">
         {messages.map((message, index) => (
           <div key={`${message.role}-${index}`} className={`ask-penny-message is-${message.role}`}>
-            <span className="ask-penny-terminal-label">{askPennyTerminalLabel(message)}</span>
+            <span className="ask-penny-terminal-label">{askPennyMessageLabel(message)}</span>
             {message.role === "user" ? (
               <code className="ask-penny-terminal-command">{message.text}</code>
             ) : (
@@ -1053,8 +1206,8 @@ function AskPennyPanel({
         ))}
         {isRunning ? (
           <div className="ask-penny-message is-system">
-            <span className="ask-penny-terminal-label">running</span>
-            <code className="ask-penny-terminal-command">POST /brain/learn/ask</code>
+            <span className="ask-penny-terminal-label">Thinking</span>
+            <code className="ask-penny-terminal-command">Reading this lesson</code>
           </div>
         ) : null}
       </div>
@@ -1063,12 +1216,11 @@ function AskPennyPanel({
         className="ask-penny-input"
         onSubmit={(event) => {
           event.preventDefault();
-          void submitPrompt(trimmedDraft);
+              void submitPrompt(trimmedDraft);
         }}
       >
         <label className="sr-only" htmlFor="askPennyInput">Ask Penny</label>
         <div className="ask-penny-input-shell">
-          <span aria-hidden="true">penny@learn:~$</span>
           <textarea
             ref={textareaRef}
             id="askPennyInput"
@@ -1093,12 +1245,34 @@ function AskPennyPanel({
   );
 }
 
-function askPennyTerminalLabel(message: AskPennyMessage): string {
+function askPennyActiveLessonPayload(lesson: LearnLesson, activeLessonIndex: number, lessonCount: number) {
+  return {
+    lessonNumber: activeLessonIndex + 1,
+    totalLessons: lessonCount,
+    title: lesson.title,
+    explanation: lesson.shortExplanation,
+    visual: {
+      type: lesson.visual.type,
+      title: lesson.visual.title,
+      description: lesson.visual.description,
+      body: lesson.visual.body,
+    },
+    quickCheck: lesson.quickCheck,
+    takeaway: lesson.takeaway,
+    sourceSpans: lesson.sourceSpans.map((span) => ({
+      label: span.label,
+      text: span.text,
+      ...(span.sourceRange ? { sourceRange: span.sourceRange } : {}),
+    })),
+  };
+}
+
+function askPennyMessageLabel(message: AskPennyMessage): string {
   if (message.role === "user") {
-    return "penny@learn:~$";
+    return "You";
   }
 
-  return message.role === "penny" ? "stdout" : "system";
+  return message.role === "penny" ? "Penny" : "Context";
 }
 
 function askPennyTerminalMeta(message: AskPennyMessage): string | null {
@@ -1124,6 +1298,11 @@ export function askPennyContextForStep(
     `Goal: ${pageData.goal}`,
     `Current category: ${category?.title ?? activeLesson.parentTitle}`,
     `Current step: ${activeLesson.title}`,
+    `Active lesson explanation: ${activeLesson.shortExplanation}`,
+    `Active lesson visual: ${activeLesson.visual.type} - ${activeLesson.visual.title} - ${activeLesson.visual.description} - ${activeLesson.visual.body}`,
+    `Active lesson quick check: ${activeLesson.quickCheck}`,
+    `Active lesson takeaway: ${activeLesson.takeaway}`,
+    `Active lesson source spans: ${activeLesson.sourceSpans.map((span) => `${span.label}${span.sourceRange ? ` (${span.sourceRange})` : ""}: ${span.text}`).join(" | ")}`,
     `Category purpose: ${activeLesson.example.whyThisMatters}`,
     `Category steps: ${categoryLessons.map((lesson) => lesson.title).join(" -> ")}`,
     `Core moves: ${categoryMoves.join(" ")}`,
@@ -1141,6 +1320,10 @@ function buildLearnPageData(
   focusedClaim: BrainClaim | null,
   focusNode: CanvasNode | null,
 ): LearnPageData {
+  if (output.sessionV2) {
+    return buildLearnPageDataFromSessionV2(output.sessionV2);
+  }
+
   if (output.learningPlan) {
     return buildLearnPageDataFromPlan(output.learningPlan, sourceText, output);
   }
@@ -1239,6 +1422,74 @@ function buildLearnPageData(
   };
 }
 
+function buildLearnPageDataFromSessionV2(sessionV2: LearnSessionV2): LearnPageData {
+  const steps = sessionV2.pages.map((page, index) => {
+    const lesson = learnLessonFromV2Page(page, sessionV2.pages.length);
+
+    return {
+      id: page.id,
+      title: page.title,
+      expanded: index === 0,
+      substeps: [
+        {
+          id: page.id,
+          title: page.title,
+          isActive: index === 0,
+          lesson,
+        },
+      ],
+    };
+  });
+
+  return {
+    goal: sessionV2.goal,
+    progressPercent: 0,
+    steps,
+    currentStep: steps[0]!.substeps[0]!.lesson,
+    askPenny: {
+      suggestedQuestions: [
+        "Explain this visual.",
+        "Give another example.",
+        "Make this simpler.",
+        "Quiz me on this lesson.",
+        "Connect this to the previous lesson.",
+      ],
+      placeholder: "Ask about this lesson...",
+    },
+  };
+}
+
+function learnLessonFromV2Page(page: LearnPageV2, totalLessons: number): LearnLesson {
+  return {
+    stepNumber: page.lessonNumber,
+    totalSteps: totalLessons,
+    substepNumber: 1,
+    totalSubsteps: 1,
+    title: page.title,
+    parentTitle: page.title,
+    learningGoal: page.title,
+    shortExplanation: page.explanation,
+    visual: page.visual,
+    quickCheck: page.quickCheck,
+    takeaway: page.takeaway,
+    sourceSpans: page.sourceSpans,
+    teachingSections: [],
+    misconceptions: [],
+    coreIdea: {
+      bullets: (page.visual.items ?? []).map((item) => item.text).slice(0, 4),
+      visualPlaceholderLabel: page.visual.title,
+    },
+    example: {
+      title: page.visual.title,
+      description: page.visual.description,
+      lines: [page.visual.body],
+      whyThisMatters: page.takeaway,
+      format: visualTypeToExampleFormat(page.visual.type),
+    },
+    nextStepTitle: "the next lesson",
+  };
+}
+
 function buildLearnPageDataFromPlan(
   plan: LearningPlan,
   sourceText: string,
@@ -1260,6 +1511,10 @@ function buildLearnPageDataFromPlan(
         parentTitle: group.title,
         learningGoal: subgroup.oneLineGoal ?? fallbackOneLineGoal(group.id, subgroup.title),
         shortExplanation: subgroup.teachingParagraph,
+        visual: legacyVisualFromSubgroup(subgroup, sourceText),
+        quickCheck: legacyQuickCheckFromSubgroup(subgroup, output.coreIdea),
+        takeaway: legacyTakeawayFromSubgroup(subgroup),
+        sourceSpans: legacySourceSpansFromSubgroup(subgroup, sourceText),
         teachingSections: normalizeTeachingSections(subgroup.teachingSections, subgroup.keyMoves, subgroup.teachingParagraph),
         misconceptions: normalizeMisconceptions(subgroup.misconceptions, subgroup.id),
         coreIdea: {
@@ -1417,6 +1672,10 @@ function buildSubstepLesson({
     parentTitle: step.title,
     learningGoal: `Learn ${substep.title.toLowerCase()} as the next subsection of ${step.title.toLowerCase()}.`,
     shortExplanation: substepExplanation(step.id, substep.id),
+    visual: fallbackVisualForLesson(step.id, substep.title, compactBullets),
+    quickCheck: `Your turn: apply "${compactBullets[0] ?? substep.title}" to "${claim}" in one sentence.`,
+    takeaway: `${substep.title}: ${compactBullets[0] ?? substepExplanation(step.id, substep.id)}`,
+    sourceSpans: [{ sourceId: "source.raw_idea", label: "Source idea", text: sourceText || output.coreIdea }],
     teachingSections: fallbackTeachingSections(compactBullets, substepExplanation(step.id, substep.id)),
     misconceptions: fallbackMisconceptions(step.id),
     coreIdea: {
@@ -1656,6 +1915,118 @@ function inferExampleFormat(text: string): LearnExampleFormat {
   return "generic";
 }
 
+function visualTypeToExampleFormat(type: LearnVisualType): LearnExampleFormat {
+  if (type === "code") {
+    return "code";
+  }
+
+  if (type === "latex") {
+    return "math";
+  }
+
+  return "generic";
+}
+
+function legacyVisualFromSubgroup(
+  subgroup: LearningPlan["groups"][number]["subgroups"][number],
+  sourceText: string,
+): LearnPageV2["visual"] {
+  const type = inferLegacyVisualType(`${subgroup.title} ${subgroup.teachingParagraph} ${subgroup.visualExample.description} ${sourceText}`);
+  const items = subgroup.keyMoves.slice(0, 4).map((move, index) => ({ label: `Step ${index + 1}`, text: move }));
+
+  return {
+    type,
+    title: subgroup.visualExample.title,
+    description: subgroup.visualExample.description,
+    body: legacyVisualBody(type, subgroup),
+    ...(items.length ? { items } : {}),
+  };
+}
+
+function fallbackVisualForLesson(stepId: string, title: string, bullets: string[]): LearnPageV2["visual"] {
+  const type: LearnVisualType = stepId === "step-3" ? "diagram" : stepId === "step-4" ? "comparison" : "concept_map";
+  const items = bullets.slice(0, 4).map((bullet, index) => ({ label: `Step ${index + 1}`, text: bullet }));
+
+  return {
+    type,
+    title,
+    description: lessonVisualLabel(stepId),
+    body: bullets.join(" -> "),
+    ...(items.length ? { items } : {}),
+  };
+}
+
+function inferLegacyVisualType(text: string): LearnVisualType {
+  const compact = text.toLowerCase();
+
+  if (/```|function\s|const\s|let\s|class\s|code|api/.test(compact)) {
+    return "code";
+  }
+
+  if (/[=∫∑]|derivative|equation|formula|calculate|probability|slope/.test(compact)) {
+    return "latex";
+  }
+
+  if (/\b(compare|versus|rather than|instead of|not the same|tradeoff)\b/.test(compact)) {
+    return "comparison";
+  }
+
+  if (/\b(image|photo|screenshot|slide)\b/.test(compact)) {
+    return "image";
+  }
+
+  if (/\b(loop|trace|flow|path|arrow|ladder|stack)\b/.test(compact)) {
+    return "diagram";
+  }
+
+  return "concept_map";
+}
+
+function legacyVisualBody(type: LearnVisualType, subgroup: LearningPlan["groups"][number]["subgroups"][number]): string {
+  switch (type) {
+    case "latex":
+      return "$$\\text{idea} \\rightarrow \\text{rule} \\rightarrow \\text{result}$$";
+    case "code":
+      return ["const lesson = currentIdea;", "const result = applyOneMove(lesson);", "check(result);"].join("\n");
+    case "comparison":
+      return `${subgroup.keyMoves[0] ?? subgroup.title} | ${subgroup.misconceptions?.[0] ?? "A weaker interpretation"}`;
+    case "image":
+      return subgroup.visualExample.description;
+    case "diagram":
+    case "concept_map":
+      return [subgroup.title, ...subgroup.keyMoves.slice(0, 3)].join(" -> ");
+  }
+}
+
+function legacyQuickCheckFromSubgroup(
+  subgroup: LearningPlan["groups"][number]["subgroups"][number],
+  coreIdea: string,
+): string {
+  return `Your turn: apply "${subgroup.keyMoves[0] ?? subgroup.title}" to "${truncateWords(coreIdea, 18)}" in one sentence.`;
+}
+
+function legacyTakeawayFromSubgroup(subgroup: LearningPlan["groups"][number]["subgroups"][number]): string {
+  return truncateWords(`${subgroup.title}: ${subgroup.workedExample}`, 24);
+}
+
+function legacySourceSpansFromSubgroup(
+  subgroup: LearningPlan["groups"][number]["subgroups"][number],
+  sourceText: string,
+): LearnPageV2["sourceSpans"] {
+  if (subgroup.sourceContext) {
+    return [
+      {
+        sourceId: subgroup.sourceContext.clusterId,
+        label: subgroup.sourceContext.clusterTitle,
+        text: subgroup.sourceContext.localSummary,
+        sourceRange: subgroup.sourceContext.sourceRange,
+      },
+    ];
+  }
+
+  return [{ sourceId: "source.raw_idea", label: "Source idea", text: truncateWords(sourceText, 34) }];
+}
+
 function LearnIdeaDrop({
   disabled,
   status,
@@ -1857,6 +2228,7 @@ function buildLearnSessionOutput(
     claims[0]?.text,
   );
   const learningPlan = data?.learningPlan ?? data?.learn?.learningPlan;
+  const sessionV2 = data?.learn?.sessionV2;
 
   return {
     coreIdea,
@@ -1865,6 +2237,7 @@ function buildLearnSessionOutput(
     questions,
     creativePotential: creativePotentialFrom(data, selectedDocument),
     ...(learningPlan ? { learningPlan } : {}),
+    ...(sessionV2 ? { sessionV2 } : {}),
     autopilotNextMove: autopilot?.suggestion ?? autopilot?.selectedCandidate ?? null,
   };
 }

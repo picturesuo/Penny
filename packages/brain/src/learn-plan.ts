@@ -80,6 +80,73 @@ export type LearningSourceContext = {
   clusters: LearningSourceCluster[];
 };
 
+export const LearnVisualTypeSchema = z.enum(["diagram", "latex", "image", "code", "comparison", "concept_map"]);
+
+export const LearnSourceSpanV2Schema = z
+  .object({
+    sourceId: z.string().trim().min(1),
+    label: z.string().trim().min(1).max(90),
+    text: z.string().trim().min(1).max(260),
+    sourceRange: z.string().trim().min(1).max(90).optional(),
+  })
+  .strict();
+
+export const LearnVisualV2Schema = z
+  .object({
+    type: LearnVisualTypeSchema,
+    title: z.string().trim().min(1).max(90),
+    description: z.string().trim().min(20).max(260),
+    body: z.string().trim().min(1).max(520),
+    items: z
+      .array(
+        z
+          .object({
+            label: z.string().trim().min(1).max(60),
+            text: z.string().trim().min(1).max(180),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(5)
+      .optional(),
+  })
+  .strict();
+
+export const LearnPageV2Schema = z
+  .object({
+    id: z.string().trim().min(1),
+    lessonNumber: z.number().int().min(1),
+    title: z.string().trim().min(1).max(90),
+    explanation: z.string().trim().min(40).max(360),
+    visual: LearnVisualV2Schema,
+    quickCheck: z.string().trim().min(20).max(220),
+    takeaway: z.string().trim().min(20).max(180),
+    sourceSpans: z.array(LearnSourceSpanV2Schema).max(3),
+  })
+  .strict();
+
+export const LearnSessionV2Schema = z
+  .object({
+    version: z.literal("learn_session_v2"),
+    goal: z.string().trim().min(12).max(260),
+    pages: z.array(LearnPageV2Schema).min(1).max(40),
+    visualTypes: z.array(LearnVisualTypeSchema).min(1).max(6),
+    sourceOfTruth: z.literal("ai_generated_learn_pages_validated_locally"),
+  })
+  .strict();
+
+export type LearnVisualType = z.infer<typeof LearnVisualTypeSchema>;
+export type LearnVisualV2 = z.infer<typeof LearnVisualV2Schema>;
+export type LearnPageV2 = z.infer<typeof LearnPageV2Schema>;
+export type LearnSessionV2 = z.infer<typeof LearnSessionV2Schema>;
+
+export type LearnSessionV2Input = {
+  plan: LearningPlan;
+  rawIdea: string;
+  keyInsight: string;
+  sourceContext?: LearningSourceContext | null;
+};
+
 export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan {
   const rawIdea = clipText(input.rawIdea, 220);
   const keyInsight = clipText(input.keyInsight || input.rawIdea, 220);
@@ -194,6 +261,281 @@ export function buildExpertLearningPlan(input: LearningPlanInput): LearningPlan 
     paragraphFit: "one_subgroup_per_page",
     groups,
   });
+}
+
+export function buildLearnSessionV2(input: LearnSessionV2Input): LearnSessionV2 {
+  const pages = repairAndSplitLearnPages(
+    input.plan.groups.flatMap((group, groupIndex) =>
+      group.subgroups.map((subgroup, subgroupIndex) =>
+        pageFromSubgroup({
+          group,
+          subgroup,
+          groupIndex,
+          subgroupIndex,
+          rawIdea: input.rawIdea,
+          keyInsight: input.keyInsight,
+          sourceContext: input.sourceContext ?? null,
+        }),
+      ),
+    ),
+  ).map((page, index) => ({ ...page, lessonNumber: index + 1 }));
+  const parsedPages = pages.map((page) => LearnPageV2Schema.parse(page));
+  const visualTypes = [...new Set(parsedPages.map((page) => page.visual.type))];
+
+  return LearnSessionV2Schema.parse({
+    version: "learn_session_v2",
+    goal: input.plan.goal,
+    pages: parsedPages,
+    visualTypes,
+    sourceOfTruth: "ai_generated_learn_pages_validated_locally",
+  });
+}
+
+function pageFromSubgroup({
+  group,
+  subgroup,
+  groupIndex,
+  subgroupIndex,
+  rawIdea,
+  keyInsight,
+  sourceContext,
+}: {
+  group: LearningPlan["groups"][number];
+  subgroup: LearningPlan["groups"][number]["subgroups"][number];
+  groupIndex: number;
+  subgroupIndex: number;
+  rawIdea: string;
+  keyInsight: string;
+  sourceContext: LearningSourceContext | null;
+}): LearnPageV2 {
+  const explanation = conciseExplanation(subgroup.teachingParagraph, subgroup.teachingSections);
+  const quickCheck = quickCheckForSubgroup(group, subgroup, rawIdea, keyInsight);
+  const takeaway = takeawayForSubgroup(subgroup, keyInsight);
+
+  return {
+    id: `lesson-${groupIndex + 1}-${subgroupIndex + 1}`,
+    lessonNumber: 1,
+    title: subgroup.title,
+    explanation,
+    visual: visualForSubgroup(subgroup, rawIdea),
+    quickCheck,
+    takeaway,
+    sourceSpans: sourceSpansForSubgroup(subgroup, sourceContext, rawIdea),
+  };
+}
+
+function repairAndSplitLearnPages(pages: LearnPageV2[]): LearnPageV2[] {
+  return pages.flatMap((page) => {
+    if (page.explanation.length <= 360) {
+      return [page];
+    }
+
+    const chunks = chunkSentences(page.explanation, 320);
+
+    return chunks.map((chunk, index) => ({
+      ...page,
+      id: `${page.id}-${index + 1}`,
+      title: index === 0 ? page.title : clipText(`${page.title} continued`, 90),
+      explanation: ensureMinimumLength(chunk, page.takeaway),
+      quickCheck: index === chunks.length - 1 ? page.quickCheck : `Before continuing: ${clipText(page.takeaway, 180)}`,
+      takeaway: index === chunks.length - 1 ? page.takeaway : clipText(page.takeaway, 180),
+    }));
+  });
+}
+
+function conciseExplanation(
+  teachingParagraph: string,
+  sections: LearningPlan["groups"][number]["subgroups"][number]["teachingSections"],
+): string {
+  const sectionText = sections.map((section) => `${section.title}: ${section.body}`).join(" ");
+  const firstPass = firstSentences(teachingParagraph, 2);
+  const candidate = firstPass.length >= 80 ? firstPass : firstSentences(`${teachingParagraph} ${sectionText}`, 3);
+
+  return ensureMinimumLength(clipText(candidate, 360), teachingParagraph);
+}
+
+function visualForSubgroup(
+  subgroup: LearningPlan["groups"][number]["subgroups"][number],
+  rawIdea: string,
+): LearnVisualV2 {
+  const visualText = `${subgroup.title} ${subgroup.teachingParagraph} ${subgroup.workedExample} ${subgroup.visualExample.title} ${subgroup.visualExample.description}`;
+  const type = inferVisualType(visualText, rawIdea);
+  const items = visualItemsForType(type, subgroup) ?? [];
+
+  return LearnVisualV2Schema.parse({
+    type,
+    title: subgroup.visualExample.title,
+    description: subgroup.visualExample.description,
+    body: visualBodyForType(type, subgroup),
+    ...(items.length ? { items } : {}),
+  });
+}
+
+function inferVisualType(text: string, rawIdea: string): LearnVisualType {
+  const compact = `${text} ${rawIdea}`.toLowerCase();
+
+  if (/```|function\s|const\s|let\s|class\s|import\s|def\s|api|code|algorithm/.test(compact)) {
+    return "code";
+  }
+
+  if (/[=∫∑]|derivative|equation|formula|calculate|probability|slope|integral|latex/.test(compact)) {
+    return "latex";
+  }
+
+  if (/\b(compare|versus|vs\.?|rather than|instead of|not the same|tradeoff)\b/.test(compact)) {
+    return "comparison";
+  }
+
+  if (/\b(image|photo|screenshot|diagram from source|slide)\b/.test(compact)) {
+    return "image";
+  }
+
+  if (/\b(loop|trace|flow|path|arrow|threshold|stack|sequence)\b/.test(compact)) {
+    return "diagram";
+  }
+
+  return "concept_map";
+}
+
+function visualItemsForType(
+  type: LearnVisualType,
+  subgroup: LearningPlan["groups"][number]["subgroups"][number],
+): NonNullable<LearnVisualV2["items"]> {
+  const moves = subgroup.keyMoves.slice(0, type === "comparison" ? 2 : 4);
+
+  if (type === "comparison") {
+    return [
+      { label: "Use", text: moves[0] ?? subgroup.workedExample },
+      { label: "Do not use", text: subgroup.misconceptions[0] ?? "A broad summary that hides the lesson's decision point." },
+    ];
+  }
+
+  if (type === "latex") {
+    return [
+      { label: "Variable", text: "Name what changes." },
+      { label: "Rule", text: "Write the formula or relationship." },
+      { label: "Meaning", text: subgroup.workedExample },
+    ];
+  }
+
+  return moves.map((move, index) => ({ label: `Step ${index + 1}`, text: move }));
+}
+
+function visualBodyForType(
+  type: LearnVisualType,
+  subgroup: LearningPlan["groups"][number]["subgroups"][number],
+): string {
+  switch (type) {
+    case "latex":
+      return "$$\\text{input} \\rightarrow \\text{rule} \\rightarrow \\text{interpreted result}$$";
+    case "code":
+      return [
+        "const input = currentLesson;",
+        "const output = applyOneMove(input);",
+        "return check(output);",
+      ].join("\n");
+    case "comparison":
+      return `${subgroup.keyMoves[0] ?? subgroup.title} | ${subgroup.misconceptions[0] ?? "A tempting but weak alternative"}`;
+    case "image":
+      return subgroup.visualExample.description;
+    case "diagram":
+      return `${subgroup.title} -> ${subgroup.keyMoves[0] ?? "apply"} -> ${clipText(subgroup.workedExample, 140)}`;
+    case "concept_map":
+      return [subgroup.title, ...subgroup.keyMoves.slice(0, 3)].join(" -> ");
+  }
+}
+
+function quickCheckForSubgroup(
+  group: LearningPlan["groups"][number],
+  subgroup: LearningPlan["groups"][number]["subgroups"][number],
+  rawIdea: string,
+  keyInsight: string,
+): string {
+  const subject = clipText(keyInsight || rawIdea, 120);
+  const move = subgroup.keyMoves[0] ?? subgroup.workedExample;
+
+  if (group.id.startsWith("source-group")) {
+    return clipText(`Your turn: explain how "${clipText(subgroup.title, 80)}" changes the source's main claim in one sentence.`, 220);
+  }
+
+  return clipText(`Your turn: apply "${clipText(move, 90)}" to "${subject}" in one sentence.`, 220);
+}
+
+function takeawayForSubgroup(
+  subgroup: LearningPlan["groups"][number]["subgroups"][number],
+  keyInsight: string,
+): string {
+  return clipText(`${subgroup.title}: ${subgroup.workedExample || subgroup.keyMoves[0] || keyInsight}`, 180);
+}
+
+function sourceSpansForSubgroup(
+  subgroup: LearningPlan["groups"][number]["subgroups"][number],
+  sourceContext: LearningSourceContext | null,
+  rawIdea: string,
+): LearnPageV2["sourceSpans"] {
+  if (subgroup.sourceContext) {
+    return [
+      {
+        sourceId: subgroup.sourceContext.clusterId,
+        label: clipText(subgroup.sourceContext.clusterTitle, 90),
+        text: clipText(subgroup.sourceContext.localSummary, 260),
+        sourceRange: clipText(subgroup.sourceContext.sourceRange, 90),
+      },
+    ];
+  }
+
+  if (sourceContext?.clusters[0]) {
+    const cluster = sourceContext.clusters[0];
+
+    return [{ sourceId: cluster.id, label: clipText(cluster.title, 90), text: clipText(cluster.summary, 260), sourceRange: clipText(cluster.sourceRange, 90) }];
+  }
+
+  return [{ sourceId: "source.raw_idea", label: "Source idea", text: clipText(rawIdea, 240) }];
+}
+
+function firstSentences(text: string, count: number): string {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+    .slice(0, count)
+    .join(" ");
+}
+
+function chunkSentences(text: string, maxLength: number): string[] {
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const sentence of sentences.length ? sentences : [text]) {
+    const next = current ? `${current} ${sentence}` : sentence;
+
+    if (next.length > maxLength && current) {
+      chunks.push(current);
+      current = sentence;
+    } else {
+      current = next;
+    }
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks.map((chunk) => clipText(chunk, maxLength)).filter(Boolean);
+}
+
+function ensureMinimumLength(value: string, fallback: string): string {
+  const compact = value.trim();
+
+  if (compact.length >= 40) {
+    return compact;
+  }
+
+  return clipText(`${compact} ${fallback}`.trim(), 360);
 }
 
 function sourceContextGroups(input: LearningPlanInput): LearningPlan["groups"] {
