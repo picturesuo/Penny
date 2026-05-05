@@ -37,7 +37,7 @@ Keep it current.
 - If a shared context file exists, use it as the durable task artifact for the current task.
 - Update only the sections or artifact IDs owned by your role.
 - Do not rewrite the whole shared context file.
-- Keep durable reusable knowledge in ; keep current-task state in the shared context file.
+- Keep durable reusable knowledge in `docs/knowledge.md`; keep current-task state in the shared context file.
 
 ## Working Rules
 - Keep scope tight.
