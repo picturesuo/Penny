@@ -489,14 +489,17 @@ function LearnMainContent({
       </section>
 
       <nav className="learn-bottom-nav" aria-label="Step navigation">
-        <button type="button" disabled={!canGoPrevious} onClick={onPrevious}>
-          Previous
-        </button>
-        <div>
+        <div className="learn-nav-control learn-nav-control-previous">
+          <button type="button" disabled={!canGoPrevious} onClick={onPrevious}>
+            Previous
+          </button>
+          <small>Esc</small>
+        </div>
+        <div className="learn-nav-control learn-nav-control-next">
           <button type="button" className="learn-next-step" disabled={!canGoNext} onClick={onNext}>
             Next: {nextLesson?.substep.title ?? currentStep.nextStepTitle} →
           </button>
-          <small>Enter forward / Esc back</small>
+          <small>Enter</small>
         </div>
       </nav>
     </article>
