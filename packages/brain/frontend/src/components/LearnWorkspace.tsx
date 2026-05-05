@@ -425,6 +425,10 @@ function LearnThinkingGraph({
       <div className="learn-thinking-graph-board">
         {activeStep ? (
           <div className="learn-thinking-graph-map">
+            <article className="learn-thinking-graph-root">
+              <span>Main topic</span>
+              <strong>{truncateWords(steps[0]?.substeps[0]?.lesson.learningGoal ?? activeStep.title, 10)}</strong>
+            </article>
             <article className="learn-thinking-graph-main is-selected">
               <span>SECTION {activeStepIndex + 1}</span>
               <strong>{activeStep.title}</strong>
@@ -1170,6 +1174,10 @@ function goalFrom(coreIdea: string): string {
 
   if (!trimmed) {
     return "I want to understand this idea clearly.";
+  }
+
+  if (/^teach\s+me\s+(about\s+|how\s+to\s+|how\s+|why\s+|what\s+)?/i.test(trimmed)) {
+    return trimmed.replace(/^teach\s+me\s+/i, "I want to understand ");
   }
 
   if (/^i\s+(want|need|would like|am trying)/i.test(trimmed)) {
