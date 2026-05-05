@@ -195,6 +195,86 @@ export interface BrainDocumentSummary {
   updatedAt: string;
 }
 
+export type BrainDocumentBlockKind =
+  | "original_idea"
+  | "main_claim"
+  | "current_direction"
+  | "assumptions"
+  | "evidence"
+  | "questions"
+  | "notes"
+  | "tensions"
+  | "takeaways"
+  | "related_ideas"
+  | "mini_summary";
+
+export interface BrainDocumentBlockData {
+  id: string;
+  kind: BrainDocumentBlockKind;
+  eyebrow: string;
+  title: string;
+  body: string;
+  items?: string[];
+}
+
+export type BrainDocumentCanvasNodeKind =
+  | "Concept"
+  | "Claim"
+  | "Assumption"
+  | "Evidence"
+  | "Tension"
+  | "Question"
+  | "Next Move";
+
+export interface BrainDocumentCanvasNode {
+  id: string;
+  kind: BrainDocumentCanvasNodeKind;
+  title: string;
+  body: string;
+  x: number;
+  y: number;
+}
+
+export interface BrainDocumentCanvasEdge {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+}
+
+export interface BrainDocumentV2 {
+  title: string;
+  subtitle: string;
+  summary: string;
+  originalIdea: string;
+  mainClaim: string;
+  currentDirection: string;
+  keyQuestions: string[];
+  assumptions: string[];
+  evidence: string[];
+  tensions: string[];
+  notes: string[];
+  takeaways: string[];
+  relatedIdeas: string[];
+  miniSummary: string;
+  canvas: {
+    nodes: BrainDocumentCanvasNode[];
+    edges: BrainDocumentCanvasEdge[];
+  };
+  metadata: {
+    sessionId: string;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+    claimCount: number;
+    edgeCount: number;
+    moveCount: number;
+    artifactCount: number;
+    generatedFrom: "ai_session_state";
+  };
+  blocks: BrainDocumentBlockData[];
+}
+
 export type BrainDocumentFileKind = "source" | "claim" | "artifact" | "moves" | string;
 
 export interface BrainDocumentFile {
