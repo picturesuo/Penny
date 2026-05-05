@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   askPenny,
   createChallengeBrief,
+  createLearnSession,
   decideVerifyConfidence,
   fetchBrainHybridSearch,
   fetchBrainRecents,
@@ -20,6 +21,45 @@ import {
   tickAutopilot,
   verifyClaim,
 } from "../src/api/brainClient";
+
+test("frontend brain client creates Learn sessions from landing prompts", async () => {
+  const sessionId = uuidAt(101);
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse({
+      session: { id: sessionId, status: "active" },
+      source: { kind: "raw_idea", rawText: "Teach me pricing strategy." },
+      ideaMap: { claims: [], edges: [], keyInsight: "Pricing needs a buyer, value unit, and test." },
+      explorationPaths: [],
+      firstChallenge: null,
+      learn: {
+        learningPlan: {
+          expertRole: "A pricing expert teaching through examples.",
+          goal: "I want to understand pricing strategy.",
+          paragraphFit: "one_subgroup_per_page",
+          groups: [],
+        },
+      },
+      autopilot: thinkingModeState(sessionId),
+    }),
+  ]);
+
+  try {
+    const response = await createLearnSession("Teach me pricing strategy.");
+
+    assert.equal(calls[0]?.url, "/api/learn/session");
+    assert.equal(calls[0]?.method, "POST");
+    assert.deepEqual(calls[0]?.body, {
+      rawIdea: "Teach me pricing strategy.",
+      autopilot: { limit: 6 },
+    });
+    assert.equal(response.data.session?.id, sessionId);
+    assert.equal(response.data.learn?.learningPlan?.goal, "I want to understand pricing strategy.");
+    assert.equal(response.data.autopilot?.selectedCandidate?.candidateId, "next_candidate");
+  } finally {
+    restoreFetch();
+  }
+});
 
 test("frontend brain client uses session-scoped Autopilot command routes", async () => {
   const sessionId = uuidAt(101);
@@ -210,6 +250,30 @@ test("frontend Ask Penny local fallback differentiates with respect to the reque
     assert.match(response.data.answer, /f'\(y\)=344xy\+2y\+129030/);
     assert.match(response.data.answer, /\\frac\{d\}\{dy\}\(172xy\^2\+y\^2\+129030y\)=344xy\+2y\+129030/);
     assert.doesNotMatch(response.data.answer, /instantaneous rate of change:/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("frontend Ask Penny local fallback handles expression-before-derivative phrasing", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (): Promise<Response> => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  try {
+    const response = await askPenny({
+      question: "4x^2y + 301498x derivative to x",
+      currentStepTitle: "Work the example",
+      localContext: "Goal: understand derivatives. Current step: Work the example.",
+    });
+
+    assert.equal(response.data.provider, "heuristic");
+    assert.equal(response.data.model, null);
+    assert.match(response.data.answer, /f\(x\)=4x\^2y\+301498x/);
+    assert.match(response.data.answer, /f'\(x\)=8xy\+301498/);
+    assert.match(response.data.answer, /\\frac\{d\}\{dx\}\(4x\^2y\+301498x\)=8xy\+301498/);
   } finally {
     globalThis.fetch = originalFetch;
   }
