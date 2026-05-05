@@ -4488,7 +4488,7 @@
     width: min(100%, 980px);
     min-height: 0;
     padding: clamp(18px, 3vw, 34px) 0;
-    place-items: center;
+    place-items: center start;
   }
 
   .learn-step-header strong {
@@ -4505,7 +4505,7 @@
     font-size: clamp(30px, 3.5vw, 48px);
     font-weight: 650;
     line-height: 1.08;
-    text-align: center;
+    text-align: left;
   }
 
   .learn-answer-section {
