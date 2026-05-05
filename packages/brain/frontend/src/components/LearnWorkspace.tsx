@@ -211,6 +211,16 @@ function LearnSessionView({
 
   return (
     <section className="learn-session-output" aria-label="Learn session output">
+      <LearningPathSidebar
+        steps={pageData.steps}
+        goal={pageData.goal}
+        activeMainStepId={activeMainStepId}
+        activeSubstepId={activeSubstepId}
+        progressPercent={currentProgressPercent}
+        onStepSelect={selectStep}
+        onAskPennyToggle={() => setAskPennyOpen((isOpen) => !isOpen)}
+      />
+
       <LearnMainContent
         pageData={pageData}
         activeStepIndex={activeStepIndex}
@@ -384,9 +394,10 @@ export function visibleLearningPathSteps(steps: LearnPageData["steps"], activeMa
     steps.findIndex((step) => step.id === activeMainStepId),
   );
 
-  return steps.slice(activeIndex, activeIndex + 5).map((step, offset) => ({
+  return steps.map((step, index) => ({
     step,
-    index: activeIndex + offset,
+    index,
+    isBeforeActive: index < activeIndex,
   }));
 }
 
