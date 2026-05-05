@@ -4073,7 +4073,6 @@
 
   .learn-path-kicker span,
   .learn-goal-block span,
-  .learn-step-header span,
   .learn-teaching-section span,
   .learn-misconception-copy span,
   .learn-example-copy span,
@@ -4548,6 +4547,7 @@
     gap: 12px;
     min-width: 0;
     min-height: 0;
+    max-height: 30dvh;
     overflow: auto;
     border-top: 2px solid #111111;
     padding-top: 12px;
