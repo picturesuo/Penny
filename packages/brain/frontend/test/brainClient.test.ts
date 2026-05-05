@@ -230,6 +230,31 @@ test("frontend Ask Penny local fallback differentiates full polynomial questions
   }
 });
 
+test("frontend Ask Penny local fallback differentiates bare polynomial follow-ups inside derivative context", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (): Promise<Response> => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  try {
+    const response = await askPenny({
+      question: "what about 12x^2+12x",
+      currentStepTitle: "Use the power rule",
+      localContext: "Goal: understand derivatives. Current step: Use the power rule. Core moves: derivative, slope, rate of change.",
+    });
+
+    assert.equal(response.data.provider, "heuristic");
+    assert.equal(response.data.model, null);
+    assert.match(response.data.answer, /f\(x\)=12x\^2\+12x/);
+    assert.match(response.data.answer, /f'\(x\)=24x\+12/);
+    assert.match(response.data.answer, /\\frac\{d\}\{dx\}\(12x\^2\+12x\)=24x\+12/);
+    assert.doesNotMatch(response.data.answer, /Next step:/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("frontend Ask Penny local fallback differentiates with respect to the requested variable", async () => {
   const originalFetch = globalThis.fetch;
 
