@@ -236,7 +236,7 @@ function ChallengeLoop({
         <div className="challenge-action-row">
           <span>
             <strong>{autopilotSuggestion?.primaryActionLabel ?? "No active challenge"}</strong>
-            {autopilotSuggestion?.why ?? "Autopilot will surface a challenge after Penny has a pressure point."}
+            {autopilotSuggestion?.why ?? "A challenge will surface after there is a pressure point."}
           </span>
           <button type="button" disabled={!canIssue} onClick={() => void onIssueChallenge()}>
             Issue
