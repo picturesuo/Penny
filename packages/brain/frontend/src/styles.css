@@ -6430,7 +6430,7 @@
     margin: 0;
     overflow: hidden;
     color: #111111;
-    font-size: clamp(32px, 4.4vw, 64px);
+    font-size: 52px;
     font-weight: 500;
     letter-spacing: 0;
     line-height: 0.95;
@@ -6459,7 +6459,7 @@
 
   .micro-lesson-explanation .ask-penny-rendered {
     color: #111111;
-    font-size: clamp(22px, 2.4vw, 34px);
+    font-size: 30px;
     font-weight: 600;
     line-height: 1.12;
   }
@@ -6519,7 +6519,7 @@
     margin: 0;
     overflow-wrap: anywhere;
     color: #111111;
-    font-size: clamp(15px, 1.4vw, 20px);
+    font-size: 18px;
     font-weight: 650;
     line-height: 1.15;
   }
@@ -6550,7 +6550,7 @@
 
   .learn-visual-code code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    font-size: clamp(13px, 1.2vw, 16px);
+    font-size: 14px;
     line-height: 1.4;
   }
 
@@ -6562,7 +6562,7 @@
     background: #ffffff;
     padding: 20px;
     color: #111111;
-    font-size: clamp(20px, 2.4vw, 34px);
+    font-size: 28px;
     line-height: 1.2;
   }
 
@@ -6587,7 +6587,7 @@
     color: #111111;
     padding: 18px;
     text-align: center;
-    font-size: clamp(18px, 2vw, 26px);
+    font-size: 22px;
     font-weight: 650;
     line-height: 1.1;
   }
@@ -6614,7 +6614,7 @@
     margin: 0;
     overflow-wrap: anywhere;
     color: #111111;
-    font-size: clamp(15px, 1.45vw, 20px);
+    font-size: 18px;
     font-weight: 650;
     line-height: 1.18;
   }
