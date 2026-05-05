@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { verifyClaim } from "../api/brainClient";
+import { decideVerifyConfidence, verifyClaim } from "../api/brainClient";
 import type {
   BrainClaim,
   BrainSearchTraceResult,
+  BrainVerifyConfidenceDecisionResponse,
   BrainVerifyEvidenceCard,
   BrainVerifyResult,
 } from "../types/brain";
@@ -27,12 +28,14 @@ export function VerifyPanel({
   onVerifyChanged,
 }: VerifyPanelProps) {
   const [result, setResult] = useState<BrainVerifyResult | null>(null);
+  const [decision, setDecision] = useState<BrainVerifyConfidenceDecisionResponse["data"] | null>(null);
   const [status, setStatus] = useState("Ready");
   const [isRunning, setIsRunning] = useState(false);
   const canVerify = Boolean(sessionId && claim) && !disabled && !isRunning;
 
   useEffect(() => {
     setResult(null);
+    setDecision(null);
     setStatus("Ready");
   }, [claim?.id, sessionId]);
 
@@ -51,7 +54,31 @@ export function VerifyPanel({
         currentClaimText: claim.text,
       });
       setResult(payload.data);
+      setDecision(null);
       setStatus("Evidence ready");
+      await onVerifyChanged?.();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
+  async function handleConfidenceDecision(nextDecision: "accept" | "reject") {
+    if (!result || isRunning) {
+      return;
+    }
+
+    setIsRunning(true);
+    setStatus(nextDecision === "accept" ? "Applying confidence" : "Rejecting confidence");
+
+    try {
+      const payload = await decideVerifyConfidence({
+        verifyMoveId: result.move.id,
+        decision: nextDecision,
+      });
+      setDecision(payload.data);
+      setStatus(nextDecision === "accept" ? "Confidence updated" : "Confidence unchanged");
       await onVerifyChanged?.();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -80,8 +107,10 @@ export function VerifyPanel({
       {result ? (
         <VerifyResultDetails
           result={result}
+          decision={decision}
           disabled={disabled}
           isRunning={isRunning}
+          onConfidenceDecision={handleConfidenceDecision}
         />
       ) : (
         <p className="verify-empty">
@@ -94,15 +123,23 @@ export function VerifyPanel({
 
 export function VerifyResultDetails({
   result,
+  decision,
   disabled,
   isRunning,
+  onConfidenceDecision,
 }: {
   result: BrainVerifyResult;
+  decision?: BrainVerifyConfidenceDecisionResponse["data"] | null;
   disabled: boolean;
   isRunning: boolean;
+  onConfidenceDecision?: (decision: "accept" | "reject") => void | Promise<void>;
 }) {
   const hasCitations = result.citationSources.length > 0 || result.citations.length > 0;
   const sourceItems = verifySourceItems(result);
+  const confidenceDecisionPending =
+    !decision &&
+    result.confidenceUpdate.decision === "pending_user_decision" &&
+    result.confidenceDeltaSuggestion !== 0;
 
   return (
     <>
@@ -120,6 +157,28 @@ export function VerifyResultDetails({
           {hasCitations ? "Evidence Saved" : "Save Evidence"}
         </button>
       </div>
+
+      {decision ? (
+        <div className="verify-confidence-note" aria-label="Confidence decision">
+          <strong>
+            Confidence moved from {decision.confidenceUpdate.previousConfidence}% to {decision.confidenceUpdate.currentConfidence}%
+          </strong>
+          <p>{decision.move.summary}</p>
+        </div>
+      ) : confidenceDecisionPending ? (
+        <div className="verify-confidence-suggestion" aria-label="Confidence suggestion">
+          <div>
+            <span>Confidence suggestion</span>
+            <strong>{formatSignedDelta(result.confidenceDeltaSuggestion)}</strong>
+          </div>
+          <button type="button" className="primary-command" disabled={disabled || isRunning} onClick={() => void onConfidenceDecision?.("accept")}>
+            Accept Confidence Change
+          </button>
+          <button type="button" className="text-command" disabled={disabled || isRunning} onClick={() => void onConfidenceDecision?.("reject")}>
+            Reject
+          </button>
+        </div>
+      ) : null}
 
       <div className="verify-evidence-list" aria-label="Evidence cards">
         {result.evidenceCards.map((card, index) => (
@@ -158,6 +217,10 @@ export function VerifyResultDetails({
       ) : null}
     </>
   );
+}
+
+function formatSignedDelta(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
 }
 
 function VerifySourceBar({ result }: { result: BrainVerifyResult }) {
