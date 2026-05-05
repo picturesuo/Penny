@@ -671,7 +671,7 @@ function localAskPennyAnswer(input: {
     }
   }
 
-  const technicalAnswer = localTechnicalAskPennyAnswer(question);
+  const technicalAnswer = localTechnicalAskPennyAnswer(question, input.localContext);
 
   if (technicalAnswer) {
     return technicalAnswer;
@@ -693,10 +693,19 @@ function formatAskPennyNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(10)));
 }
 
-function localTechnicalAskPennyAnswer(question: string): string | null {
+function localTechnicalAskPennyAnswer(question: string, localContext = ""): string | null {
   const compact = question.trim().toLowerCase();
+  const derivativeContext = localDerivativeContext(`${compact} ${localContext.toLowerCase()}`);
 
-  if (!/\b(math|physics|formula|equation|solve|derive|calculate|compute|derivative|integral|algebra|quadratic|probability|statistics|kinematic|velocity|acceleration|force|newton|energy|momentum|latex)\b/.test(compact)) {
+  if (derivativeContext) {
+    const derivativeAnswer = derivativeOfPolynomialExpressionAnswer(compact);
+
+    if (derivativeAnswer) {
+      return derivativeAnswer;
+    }
+  }
+
+  if (!localTechnicalQuestion(compact)) {
     return null;
   }
 
@@ -809,7 +818,14 @@ function derivativeExpression(question: string, variable: string): string | null
   const keyword = "(?:derivative|differentiate|derive|slope|rate of change)";
   const afterKeyword = question.match(new RegExp(`\\b${keyword}\\b(?:\\s+(?:of|for))?\\s+(.+)$`))?.[1] ?? null;
   const beforeKeyword = question.match(new RegExp(`^(.+?)\\s+\\b${keyword}\\b`))?.[1] ?? null;
-  const rawExpression = expressionLike(afterKeyword, variable) ? afterKeyword : beforeKeyword;
+  const followupExpression = derivativeFollowupExpression(question);
+  const rawExpression = expressionLike(afterKeyword, variable)
+    ? afterKeyword
+    : expressionLike(beforeKeyword, variable)
+      ? beforeKeyword
+      : expressionLike(followupExpression, variable)
+        ? followupExpression
+        : null;
 
   if (!rawExpression) {
     return null;
@@ -818,6 +834,13 @@ function derivativeExpression(question: string, variable: string): string | null
   return rawExpression
     .replace(new RegExp(`\\b(?:with\\s+respect\\s+to|respect\\s+to|wrt|to|by)\\s+${variable}\\b.*$`), "")
     .replace(new RegExp(`\\bd/d${variable}\\b.*$`), "")
+    .trim();
+}
+
+function derivativeFollowupExpression(question: string): string {
+  return question
+    .replace(/^(?:what\s+about|how\s+about|what\s+is|how\s+do\s+i\s+do|do|and|then|for)\s+/i, "")
+    .replace(/\b(?:please|also|too)\b/gi, "")
     .trim();
 }
 
@@ -895,6 +918,16 @@ function formatPolynomial(terms: PolynomialTerm[], variableName = "x"): string {
       return `${sign}${coefficient}${variable}${term.rightSymbolicFactor}`;
     })
     .join("");
+}
+
+function localTechnicalQuestion(compactQuestion: string): boolean {
+  return /\b(math|physics|formula|equation|solve|derive|calculate|compute|derivative|integral|algebra|quadratic|probability|statistics|kinematic|velocity|acceleration|force|newton|energy|momentum|latex)\b/.test(
+    compactQuestion,
+  );
+}
+
+function localDerivativeContext(compactText: string): boolean {
+  return /\b(derivative|differentiate|differentiation|slope|rate of change)\b/.test(compactText);
 }
 
 function clipAskPennyText(value: string, maxLength: number): string {
