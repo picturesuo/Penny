@@ -1,25 +1,28 @@
 # Thinking Mode Autopilot Test Plan
 
 Artifact ID: `AUTOPILOT-TEST-PLAN`
+Latency update: 2026-05-05
 
 ## Purpose
 
 This plan tracks the active Thinking Mode Autopilot verification surface without broadening the product into a chatbot, note app, wiki, or generic AI wrapper.
 
-The backend remains the source of canonical thinking state. Tests must verify Moves, ClaimVersions, graph focus, candidates, challenges, and artifacts through backend-owned contracts.
+The backend remains the source of canonical thinking state. Tests must verify Moves, ClaimVersions, graph focus, candidates, challenges, artifacts, and speed-critical local paths through backend-owned contracts.
 
 ## Goal
 
 - G1: Keep the Thinking Mode Autopilot test surface executable in the default repo test flow.
 - G2: Prove the MVP loop pieces that Autopilot touches: candidate ranking, accepted focus, manual override, challenge response handling, Canvas graph output, Verify source grounding, and Challenge Brief output.
 - G3: Keep coverage aligned with Penny's durable graph contract: Moves are append-only, ClaimVersions preserve revision history, and the frontend renders backend-owned state.
+- G4: Make latency part of correctness for the first loop: local graph/ranking paths must stay provider-free, provider-backed work must be bounded and observable, and demo gates must catch slow AI orchestration before a pitch.
 
 ## Scope
 
 - SP1: In scope: deterministic next-move engine tests, Thinking Mode service/route tests, Challenge service tests, Challenge Brief tests, frontend client tests that exercise backend-owned contracts, and the smoke script listed in this file.
 - SP2: In scope: documenting the minimum test mapping needed before a demo or contract-changing implementation.
-- SP3: Out of scope: new product surfaces, generic chat behavior, broad document ingestion, external provider quality, vector ranking quality, and UI polish unrelated to Autopilot contract correctness.
-- SP4: Out of scope for this documentation pass: adding new runtime behavior or changing product contracts beyond this test-plan artifact.
+- SP3: In scope: local-path latency gates, provider-route metadata checks, and a demo timing record that distinguishes local graph work from provider-backed generation.
+- SP4: Out of scope: new product surfaces, generic chat behavior, broad document ingestion, external provider quality, vector ranking quality, and UI polish unrelated to Autopilot contract correctness.
+- SP5: Out of scope for this documentation pass: adding new runtime behavior or changing product contracts beyond this test-plan artifact.
 
 ## Constraints
 
@@ -31,6 +34,8 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 - CT6: Require `DATABASE_URL` before `pnpm db:migrate` or DB-backed API smoke tests.
 - CT7: Backend state is canonical; tests must not validate frontend-invented graph edges or durable thinking state as source of truth.
 - CT8: Autopilot tick and focus tests must not silently mutate claim text, confidence, or edge truth.
+- CT9: Provider-backed tests must never be the only proof that the first loop works; local deterministic tests are the primary gate for speed-critical graph and next-move behavior.
+- CT10: Latency checks must report the command, environment, elapsed time, and whether a live provider was used.
 
 ## Success Criteria
 
@@ -45,6 +50,9 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 - SC9: Challenge Brief tests prove response outcome, revisions, open risks, and replaced ClaimVersions appear in the artifact.
 - SC10: Canvas and search/Verify tests prove downstream Brain context stays backend-derived and source-grounded where possible.
 - SC11: Demo gate commands are explicit and runnable by the next implementation or release pass.
+- SC12: Local fast-path tests prove next-move ranking, Autopilot tick, accepted focus, manual override, and post-response retick behavior run without live provider calls.
+- SC13: Provider-backed AI operation tests or smoke logs prove BrainRun metadata records latency, provider, model, route tier, fallback hops, repair attempt, usage, cost, and prompt/schema version where available.
+- SC14: Demo gate records elapsed time separately for local tests, frontend build, full smoke, and any live-provider smoke so a slow provider cannot hide inside a generic pass/fail result.
 
 ## Invariants
 
@@ -53,6 +61,8 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 - INV3: Claim text and confidence changes require explicit user action such as Revise.
 - INV4: Candidate suggestions are thinking actions with rationale and exit criteria, not mere graph navigation.
 - INV5: Backend-owned graph, focus, candidate, challenge, and artifact state remains the test source of truth.
+- INV6: Speed-critical Thinking Mode paths are local unless the contract explicitly labels them provider-backed.
+- INV7: Streaming or partial UI output can improve perceived latency, but only final validated structured output can write durable truth.
 
 ## Failure Modes
 
@@ -62,12 +72,18 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 - FM4: GET route coverage allows read paths to append Moves or mutate claim truth.
 - FM5: Frontend tests pass while inventing durable graph state that the backend did not return.
 - FM6: Demo gate omits the smoke script, build, or typecheck and gives a false sense of readiness.
+- FM7: Correctness tests pass while Autopilot waits on a live provider before returning local next-move candidates.
+- FM8: A fast provider route is enabled without timeout, context budget, reasoning-effort setting, or BrainRun latency metadata.
+- FM9: A demo claims Gemini-like speed while the measured path is actually a deterministic mock or cached response.
 
 ## Risks / Open Questions
 
 - R1: `scripts/smoke-thinking-mode.sh` may require local API/database setup that is not available in every developer environment.
 - R2: Live provider output can vary when provider credentials are enabled; deterministic contract tests should remain the primary gate.
+- R3: Wall-clock latency assertions can be flaky in CI; keep hard assertions focused on provider-free boundaries and record measured timings as release evidence.
+- R4: Adding Gemini or any other fast provider without streaming/structured-output parity could improve perceived speed while weakening validation.
 - Q1: Should DB-backed smoke setup get a dedicated fixture command so the smoke script is less environment-dependent?
+- Q2: Should the repo add a small `pnpm latency:autopilot` script that measures demo-seed local tick, challenge generation, and brief generation separately?
 
 ## Current Verification Surface
 
@@ -76,6 +92,8 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 - Typecheck: `pnpm typecheck`.
 - Local API: `pnpm dev:api`, serving `http://localhost:3000`.
 - DB setup: `DATABASE_URL` must be exported before `pnpm db:migrate` or DB-backed API smoke tests.
+- Current speed proof: next-move ranking and Thinking Mode service tests use local deterministic fixtures; they prove candidate ranking and focus writes do not require a live provider, but they do not yet enforce per-request wall-clock budgets.
+- Current provider metadata proof: `generateChallengeCritique` records `meta.latencyMs`, provider, model, route tier, fallback hops, repair attempt, usage, cost, prompt version, environment, and release; this plan still needs a focused latency/metadata regression before treating live AI speed as verified.
 - Removed gap: TODO-only skeleton tests were deleted; the remaining `test/brain` suite is real and runs in the default test script.
 - Smoke status: `scripts/smoke-thinking-mode.sh` is the current full mutating happy-path smoke, not a placeholder waiting for promotion.
 - Primary Autopilot routes: session-scoped `/api/sessions/:sessionId/autopilot/state`, `/api/sessions/:sessionId/autopilot/tick`, and `/api/sessions/:sessionId/next-move-candidates/:candidateId/start`.
@@ -101,6 +119,9 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 | TM14 | YC MVP loop reaches Autopilot, Brain, Canvas, and related context | `packages/brain/src/mvp-idea-drop-flow.test.ts` | The exact demo seed becomes Learn structure, a Check recommendation, a saved Brain result, Canvas structure, and searchable related context. |
 | TM15 | Route preservation protects active Autopilot paths | `packages/brain/src/p3-route-preservation.test.ts` | Session-scoped routes stay active while legacy compatibility aliases remain explicit and non-preferred. |
 | TM16 | Verify remains source-grounded where possible | `packages/brain/src/verify-route.test.ts` and `packages/brain/frontend/test/verifyPanel.test.ts` | Verify uses structured provider output, records search trace when available, and exposes evidence/confidence controls. |
+| TM17 | Fast path stays provider-free | `test/brain/nextMoveEngine.test.ts`, `packages/brain/src/thinking-mode-service.test.ts`, and `packages/brain/src/thinking-mode-routes.test.ts` | Ranking, tick, start focus, manual focus, and explicit retick are local contract paths and must not require live provider credentials. |
+| TM18 | Provider metadata covers latency | Add or keep focused tests around `server/ai/operations/generateChallengeCritique.ts` or its command bridge | Successful provider-backed generation records latency, provider, model, route tier, fallback hops, repair flag, usage/cost, prompt version, and validation result. |
+| TM19 | Demo timing is separated by phase | Manual release record until a script exists | Local tests, frontend build, smoke script, and optional live-provider smoke are timed separately so slow AI orchestration is visible. |
 
 ## Maintenance Path
 
@@ -110,22 +131,35 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 4. Keep default `pnpm test` free of TODO-only placeholders.
 5. Treat the smoke script as a demo/readiness gate for the full happy path, and keep focused service or route tests as the first proof for each new Move-backed behavior.
 6. Update this plan whenever a new test becomes the canonical guard for Autopilot candidate persistence, focus start, manual override, Canvas graph output, or Verify source grounding.
+7. Keep local-path tests independent of provider keys; live-provider tests may supplement release evidence but must not replace deterministic contract tests.
+8. When adding a fast provider such as Gemini Flash, add provider-route tests for timeout, context budget, reasoning-effort controls, structured-output validation, and BrainRun latency metadata before enabling it in demo mode.
 
 ## Demo Gate
 
-Before a demo against disposable local data or an isolated smoke database, run:
+Before a demo against disposable local data or an isolated smoke database, run and record elapsed time for each phase:
 
 ```sh
-pnpm typecheck
-pnpm test
-pnpm build:frontend
-./scripts/smoke-thinking-mode.sh
+time pnpm typecheck
+time pnpm test
+time pnpm build
+time ./scripts/smoke-thinking-mode.sh
 ```
 
 If `DATABASE_URL` is not configured for the smoke script, run the first three commands and record the smoke script as environment-blocked rather than silently skipping it.
+
+If a live provider is enabled for a demo, add a separate note for provider, model, operation, elapsed time, and BrainRun latency metadata. Do not describe the AI path as fast if the only passing gate used mock or deterministic fallback output.
+
+## Latency Gate
+
+- LG1: `test/brain/nextMoveEngine.test.ts` remains the first guard for provider-free ranking.
+- LG2: `packages/brain/src/thinking-mode-service.test.ts` remains the first guard for local tick, candidate persistence, accepted focus, and manual override.
+- LG3: `packages/brain/src/thinking-mode-routes.test.ts` remains the first guard that the client can explicitly retick after a challenge response instead of the frontend inventing the next state.
+- LG4: A future provider-route test should fail if an inline AI route lacks timeout, context budget, route tier, reasoning-effort policy, or latency metadata.
+- LG5: A future demo timing script should separate deterministic local time from provider generation time and should flag provider paths that exceed the latency class in `docs/thinking-mode-autopilot-spec.md`.
 
 ## Status
 
 - ST1: This artifact is initialized for the current Autopilot test-plan task.
 - ST2: This documentation pass changes documentation only; no runtime API, schema, or exported TypeScript contract changes are introduced.
 - ST3: Implementation should stop here until a later role takes a specific test or runtime gap from the Success Criteria or Test Mapping.
+- ST4: 2026-05-05 latency rewrite added fast-path, provider metadata, and demo timing gates to align the test plan with the Autopilot latency contract.
