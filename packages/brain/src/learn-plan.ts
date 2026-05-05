@@ -351,7 +351,7 @@ function conciseExplanation(
   const firstPass = firstSentences(teachingParagraph, 2);
   const candidate = firstPass.length >= 80 ? firstPass : firstSentences(`${teachingParagraph} ${sectionText}`, 3);
 
-  return ensureMinimumLength(clipText(candidate, 360), teachingParagraph);
+  return ensureMinimumLength(candidate, teachingParagraph);
 }
 
 function visualForSubgroup(
