@@ -4625,10 +4625,17 @@
     opacity: 0.38;
   }
 
-  .learn-bottom-nav > div {
+  .learn-bottom-nav .learn-nav-control {
     display: grid;
-    justify-items: end;
     gap: 7px;
+  }
+
+  .learn-bottom-nav .learn-nav-control-previous {
+    justify-items: start;
+  }
+
+  .learn-bottom-nav .learn-nav-control-next {
+    justify-items: end;
   }
 
   .learn-bottom-nav .learn-next-step {
