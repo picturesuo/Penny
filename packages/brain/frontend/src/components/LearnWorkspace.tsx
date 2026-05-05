@@ -9,6 +9,7 @@ import type {
   BrainRecentIdea,
   CanvasNode,
   LearningPlan,
+  AskPennyResponse,
   LearnSessionOutput,
 } from "../types/brain";
 import { askPenny as askPennyQuestion } from "../api/brainClient";
@@ -250,6 +251,13 @@ type LearnExampleFormat = "generic" | "math" | "code" | "writing" | "business";
 type AskPennySeed = {
   text: string;
   id: number;
+};
+
+type AskPennyMessage = {
+  role: "user" | "penny" | "system";
+  text: string;
+  provider?: AskPennyResponse["data"]["provider"];
+  model?: AskPennyResponse["data"]["model"];
 };
 
 type LearnLesson = {
@@ -824,8 +832,8 @@ function AskPennyPanel({
   onPromptSelect: (question: string) => void;
 }) {
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState<Array<{ role: "user" | "penny" | "system"; text: string }>>([
-    { role: "system", text: "Ask a question about this step. Penny will answer from the current lesson context." },
+  const [messages, setMessages] = useState<AskPennyMessage[]>([
+    { role: "system", text: "context loaded: current lesson step" },
   ]);
   const [isRunning, setIsRunning] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -842,7 +850,7 @@ function AskPennyPanel({
   useEffect(() => {
     setDraft("");
     setMessages([
-      { role: "system", text: "Ask a question about this category. Penny will answer from this category only." },
+      { role: "system", text: "context loaded: current category" },
     ]);
   }, [contextKey]);
 
@@ -876,7 +884,15 @@ function AskPennyPanel({
         localContext,
       });
 
-      setMessages((current) => [...current, { role: "penny", text: response.data.answer }]);
+      setMessages((current) => [
+        ...current,
+        {
+          role: "penny",
+          text: response.data.answer,
+          provider: response.data.provider,
+          model: response.data.model,
+        },
+      ]);
     } catch (error) {
       setMessages((current) => [
         ...current,
@@ -905,14 +921,23 @@ function AskPennyPanel({
       <div className="ask-penny-thread" role="log" aria-live="polite">
         {messages.map((message, index) => (
           <div key={`${message.role}-${index}`} className={`ask-penny-message is-${message.role}`}>
-            <span>{message.role === "penny" ? "Penny" : message.role === "user" ? "You" : "Ask Penny"}</span>
-            <AskPennyRenderedText text={message.text} />
+            <span className="ask-penny-terminal-label">{askPennyTerminalLabel(message)}</span>
+            {message.role === "user" ? (
+              <code className="ask-penny-terminal-command">{message.text}</code>
+            ) : (
+              <div className="ask-penny-terminal-output">
+                <AskPennyRenderedText text={message.text} />
+                {askPennyTerminalMeta(message) ? (
+                  <code className="ask-penny-terminal-meta">{askPennyTerminalMeta(message)}</code>
+                ) : null}
+              </div>
+            )}
           </div>
         ))}
         {isRunning ? (
           <div className="ask-penny-message is-system">
-            <span>Penny</span>
-            <AskPennyRenderedText text="Thinking..." />
+            <span className="ask-penny-terminal-label">running</span>
+            <code className="ask-penny-terminal-command">POST /brain/learn/ask</code>
           </div>
         ) : null}
       </div>
@@ -925,27 +950,46 @@ function AskPennyPanel({
         }}
       >
         <label className="sr-only" htmlFor="askPennyInput">Ask Penny</label>
-        <textarea
-          ref={textareaRef}
-          id="askPennyInput"
-          value={draft}
-          disabled={disabled || isRunning}
-          placeholder={askPenny.placeholder}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void submitPrompt(trimmedDraft);
-            }
-          }}
-          rows={1}
-        />
+        <div className="ask-penny-input-shell">
+          <span aria-hidden="true">penny@learn:~$</span>
+          <textarea
+            ref={textareaRef}
+            id="askPennyInput"
+            value={draft}
+            disabled={disabled || isRunning}
+            placeholder={askPenny.placeholder}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void submitPrompt(trimmedDraft);
+              }
+            }}
+            rows={1}
+          />
+        </div>
         <button type="submit" disabled={disabled || isRunning || !trimmedDraft} aria-label="Send question">
           →
         </button>
       </form>
     </aside>
   );
+}
+
+function askPennyTerminalLabel(message: AskPennyMessage): string {
+  if (message.role === "user") {
+    return "penny@learn:~$";
+  }
+
+  return message.role === "penny" ? "stdout" : "system";
+}
+
+function askPennyTerminalMeta(message: AskPennyMessage): string | null {
+  if (message.role !== "penny" || !message.provider) {
+    return null;
+  }
+
+  return `provider=${message.provider} model=${message.model ?? "local"}`;
 }
 
 export function askPennyContextForStep(
