@@ -2234,7 +2234,7 @@
   .brain-hierarchy-sidebar {
     min-width: 0;
     max-height: calc(100vh - 70px);
-    overflow: auto;
+    overflow-y: auto;
     border-right: 1px solid #d0d0d0;
     padding: 14px 14px 24px;
   }
@@ -4414,13 +4414,13 @@
     grid-column: 2;
     grid-row: 1;
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     align-items: start;
     min-width: 0;
     height: calc(100dvh - 92px);
     min-height: 0;
-    overflow: hidden;
-    max-width: 980px;
+    overflow: auto;
+    max-width: 1160px;
     margin: 0 auto;
     padding: clamp(18px, 3vw, 40px) clamp(18px, 4vw, 56px) clamp(18px, 3vw, 36px);
   }
@@ -4468,7 +4468,7 @@
 
   .learn-goal-block {
     max-width: none;
-    min-height: 106px;
+    min-height: 86px;
     border-bottom: 2px solid #111111;
     padding-bottom: 12px;
   }
@@ -4490,7 +4490,7 @@
     justify-self: center;
     width: min(100%, 980px);
     min-height: 0;
-    padding: clamp(18px, 3vw, 34px) 0;
+    padding: clamp(14px, 2vw, 24px) 0;
     place-items: center start;
   }
 
@@ -4512,16 +4512,193 @@
   }
 
   .learn-step-header .ask-penny-rendered {
-    max-width: 23ch;
+    max-width: 54ch;
     color: rgb(17 17 17 / 0.82);
-    font-size: clamp(36px, 4vw, 58px);
-    font-weight: 650;
-    line-height: 1.08;
+    font-size: clamp(22px, 2.4vw, 34px);
+    font-weight: 620;
+    line-height: 1.12;
     text-align: left;
   }
 
   .learn-step-header .ask-penny-math {
     font-size: 0.9em;
+  }
+
+  .learn-check-worksheet {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+    border-top: 2px solid #111111;
+    padding-top: 16px;
+  }
+
+  .learn-check-head {
+    display: grid;
+    grid-template-columns: minmax(0, 0.4fr) minmax(260px, 0.6fr);
+    gap: 18px;
+    align-items: end;
+    min-width: 0;
+  }
+
+  .learn-check-head span,
+  .learn-check-card header span,
+  .learn-check-card label span,
+  .learn-final-answer span {
+    color: rgb(17 17 17 / 0.62);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .learn-check-head h2 {
+    margin: 6px 0 0;
+    color: #111111;
+    font-size: clamp(24px, 2.4vw, 34px);
+    font-weight: 650;
+    letter-spacing: 0;
+    line-height: 1;
+  }
+
+  .learn-check-head p {
+    margin: 0;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 15px;
+    line-height: 1.28;
+  }
+
+  .learn-check-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .learn-check-card {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+    border: 1px solid #111111;
+    border-radius: 8px;
+    padding: 14px;
+    background: #fbfaf6;
+  }
+
+  .learn-check-card header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    border-bottom: 1px solid rgb(17 17 17 / 0.18);
+    padding-bottom: 10px;
+  }
+
+  .learn-check-card h3 {
+    margin: 6px 0 0;
+    color: #111111;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.12;
+  }
+
+  .learn-recommendation-list {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .learn-recommendation-list li {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 8px;
+    min-width: 0;
+    color: rgb(17 17 17 / 0.74);
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.24;
+  }
+
+  .learn-recommendation-list li::before {
+    content: counter(list-item);
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border: 1px solid #111111;
+    border-radius: 999px;
+    color: #111111;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .learn-draft-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .learn-draft-tabs button {
+    min-height: 30px;
+    border: 1px solid rgb(17 17 17 / 0.32);
+    border-radius: 4px;
+    background: #ffffff;
+    color: rgb(17 17 17 / 0.7);
+    padding: 0 9px;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .learn-draft-tabs button[aria-selected="true"] {
+    border-color: #111111;
+    background: var(--penny-highlight);
+    color: #111111;
+  }
+
+  .learn-draft-tabs .learn-add-tab {
+    border-style: dashed;
+    background: transparent;
+  }
+
+  .learn-check-card label,
+  .learn-final-answer {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .learn-check-card textarea,
+  .learn-final-answer textarea {
+    width: 100%;
+    min-width: 0;
+    resize: vertical;
+    border: 1px solid #111111;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #111111;
+    padding: 10px 11px;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .learn-check-card textarea::placeholder,
+  .learn-final-answer textarea::placeholder {
+    color: rgb(17 17 17 / 0.42);
+  }
+
+  .learn-final-answer {
+    border: 2px solid #111111;
+    border-radius: 8px;
+    padding: 14px;
+    background: #ffffff;
   }
 
   .learn-answer-section {
