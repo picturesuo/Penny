@@ -14,7 +14,9 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /Ask Penny/);
   assert.match(markup, /LEARNING PATH/);
   assert.match(markup, /STEP 1\.1 OF 15/);
-  assert.match(markup, /Enter forward \/ Esc back/);
+  assert.match(markup, /Esc/);
+  assert.match(markup, /Enter/);
+  assert.doesNotMatch(markup, /Enter forward \/ Esc back/);
   assert.doesNotMatch(markup, /Definition/);
   assert.doesNotMatch(markup, /Application/);
   assert.doesNotMatch(markup, /Procedure/);
