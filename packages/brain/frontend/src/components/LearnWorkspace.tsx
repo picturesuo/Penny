@@ -523,7 +523,7 @@ function LearnMainContent({
 }
 
 type LearnCheckCategory = {
-  id: "positive" | "negative" | "curve" | "good-example" | "bad-example";
+  id: "good-example" | "bad-example" | "positive" | "negative" | "curve" | "custom";
   label: string;
   prompt: string;
   recommendations: string[];
@@ -532,6 +532,8 @@ type LearnCheckCategory = {
 
 function LearnCheckWorksheet({ lesson }: { lesson: LearnLesson }) {
   const categories = useMemo(() => learnCheckCategoriesForLesson(lesson), [lesson]);
+  const [activeCategoryId, setActiveCategoryId] = useState<LearnCheckCategory["id"]>(categories[0]?.id ?? "good-example");
+  const [customPrompt, setCustomPrompt] = useState("");
   const [draftTabsByCategory, setDraftTabsByCategory] = useState<Record<string, string[]>>(() =>
     Object.fromEntries(categories.map((category) => [category.id, ["Draft 1"]])),
   );
@@ -540,12 +542,30 @@ function LearnCheckWorksheet({ lesson }: { lesson: LearnLesson }) {
   );
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [finalAnswer, setFinalAnswer] = useState("");
+  const customCategory = useMemo<LearnCheckCategory>(
+    () => ({
+      id: "custom",
+      label: "Custom",
+      prompt: customPrompt.trim() || "What else belongs in this structure?",
+      recommendations: [
+        "Name the exact piece this answer still needs.",
+        "Write it as part of the structure, not a side note.",
+        "Keep it checkable against the current lesson.",
+        "Add only one new piece at a time.",
+      ],
+      placeholder: "Type the extra structure piece here...",
+    }),
+    [customPrompt],
+  );
+  const structureOptions = useMemo(() => [...categories, customCategory], [categories, customCategory]);
+  const activeCategory = structureOptions.find((category) => category.id === activeCategoryId) ?? structureOptions[0] ?? customCategory;
 
   useEffect(() => {
     setDraftTabsByCategory(Object.fromEntries(categories.map((category) => [category.id, ["Draft 1"]])));
     setActiveDraftByCategory(Object.fromEntries(categories.map((category) => [category.id, 0])));
     setAnswers({});
     setFinalAnswer("");
+    setActiveCategoryId(categories[0]?.id ?? "good-example");
   }, [categories]);
 
   function addDraftTab(categoryId: string) {
@@ -572,56 +592,46 @@ function LearnCheckWorksheet({ lesson }: { lesson: LearnLesson }) {
         <p>Use the recommendations, add drafts until the part is fleshed out, then type the finished version below.</p>
       </div>
 
-      <div className="learn-check-grid">
-        {categories.map((category) => {
-          const draftTabs = draftTabsByCategory[category.id] ?? ["Draft 1"];
-          const activeDraftIndex = activeDraftByCategory[category.id] ?? 0;
-          const answerKey = `${category.id}:${activeDraftIndex}`;
+      <div className="learn-check-builder">
+        <aside className="learn-structure-sidebar" aria-label="Check structure pieces">
+          <div className="learn-structure-list" role="tablist" aria-label="Five check options plus custom">
+            {structureOptions.map((category, index) => (
+              <button
+                key={category.id}
+                type="button"
+                role="tab"
+                aria-selected={activeCategory.id === category.id}
+                onClick={() => setActiveCategoryId(category.id)}
+              >
+                <span>{category.id === "custom" ? "+" : index + 1}</span>
+                <strong>{category.label}</strong>
+                <small>{category.prompt}</small>
+              </button>
+            ))}
+          </div>
+          <label className="learn-custom-piece">
+            <span>Additional piece</span>
+            <textarea
+              value={customPrompt}
+              placeholder="Insert what you want this structure to include..."
+              onChange={(event) => setCustomPrompt(event.target.value)}
+              rows={4}
+            />
+          </label>
+        </aside>
 
-          return (
-            <section key={category.id} className="learn-check-card" aria-label={category.label}>
-              <header>
-                <div>
-                  <span>{category.label}</span>
-                  <h3>{category.prompt}</h3>
-                </div>
-              </header>
-
-              <ol className="learn-recommendation-list">
-                {category.recommendations.map((recommendation, index) => (
-                  <li key={`${category.id}-recommendation-${index}`}>{recommendation}</li>
-                ))}
-              </ol>
-
-              <div className="learn-draft-tabs" role="tablist" aria-label={`${category.label} drafts`}>
-                {draftTabs.map((tab, index) => (
-                  <button
-                    key={`${category.id}-${tab}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeDraftIndex === index}
-                    onClick={() => setActiveDraftByCategory((current) => ({ ...current, [category.id]: index }))}
-                  >
-                    {tab}
-                  </button>
-                ))}
-                <button type="button" className="learn-add-tab" onClick={() => addDraftTab(category.id)}>
-                  + Tab
-                </button>
-              </div>
-
-              <label>
-                <span>Type this part</span>
-                <textarea
-                  value={answers[answerKey] ?? ""}
-                  placeholder={category.placeholder}
-                  onChange={(event) => setAnswers((current) => ({ ...current, [answerKey]: event.target.value }))}
-                  rows={4}
-                />
-              </label>
-            </section>
-          );
-        })}
+        <LearnCheckCategoryEditor
+          category={activeCategory}
+          draftTabs={draftTabsByCategory[activeCategory.id] ?? ["Draft 1"]}
+          activeDraftIndex={activeDraftByCategory[activeCategory.id] ?? 0}
+          answer={answers[`${activeCategory.id}:${activeDraftByCategory[activeCategory.id] ?? 0}`] ?? ""}
+          onDraftSelect={(index) => setActiveDraftByCategory((current) => ({ ...current, [activeCategory.id]: index }))}
+          onDraftAdd={() => addDraftTab(activeCategory.id)}
+          onAnswerChange={(value) => {
+            const activeDraftIndex = activeDraftByCategory[activeCategory.id] ?? 0;
+            setAnswers((current) => ({ ...current, [`${activeCategory.id}:${activeDraftIndex}`]: value }));
+          }}
+        />
       </div>
 
       <label className="learn-final-answer">
@@ -637,6 +647,63 @@ function LearnCheckWorksheet({ lesson }: { lesson: LearnLesson }) {
   );
 }
 
+function LearnCheckCategoryEditor({
+  category,
+  draftTabs,
+  activeDraftIndex,
+  answer,
+  onDraftSelect,
+  onDraftAdd,
+  onAnswerChange,
+}: {
+  category: LearnCheckCategory;
+  draftTabs: string[];
+  activeDraftIndex: number;
+  answer: string;
+  onDraftSelect: (index: number) => void;
+  onDraftAdd: () => void;
+  onAnswerChange: (value: string) => void;
+}) {
+  return (
+    <section className="learn-check-card" aria-label={category.label}>
+      <header>
+        <div>
+          <span>{category.label}</span>
+          <h3>{category.prompt}</h3>
+        </div>
+      </header>
+
+      <ol className="learn-recommendation-list">
+        {category.recommendations.map((recommendation, index) => (
+          <li key={`${category.id}-recommendation-${index}`}>{recommendation}</li>
+        ))}
+      </ol>
+
+      <div className="learn-draft-tabs" role="tablist" aria-label={`${category.label} drafts`}>
+        {draftTabs.map((tab, index) => (
+          <button
+            key={`${category.id}-${tab}`}
+            type="button"
+            role="tab"
+            aria-selected={activeDraftIndex === index}
+            onClick={() => onDraftSelect(index)}
+          >
+            {tab}
+          </button>
+        ))}
+        <button type="button" className="learn-add-tab" onClick={onDraftAdd}>
+          + Tab
+        </button>
+      </div>
+
+      <label>
+        <span>Type this part</span>
+        <textarea value={answer} placeholder={category.placeholder} onChange={(event) => onAnswerChange(event.target.value)} rows={5} />
+      </label>
+    </section>
+  );
+}
+
 function learnCheckCategoriesForLesson(lesson: LearnLesson): LearnCheckCategory[] {
   const goodExample = lesson.example.lines[0] ?? lesson.example.description;
   const badExample = lesson.misconceptions[0] ?? "A vague answer that sounds right but cannot be checked.";
@@ -645,6 +712,32 @@ function learnCheckCategoriesForLesson(lesson: LearnLesson): LearnCheckCategory[
   const curve = lesson.coreIdea.bullets[2] ?? "Name the surprising turn or exception.";
 
   return [
+    {
+      id: "good-example",
+      label: "Good example",
+      prompt: "What would a strong answer look like?",
+      recommendations: [
+        goodExample,
+        "Use a concrete person, object, decision, or event.",
+        "Show the move, not just the conclusion.",
+        "Make the example short enough to compare.",
+        "End with why the example works.",
+      ],
+      placeholder: "Type the good example here...",
+    },
+    {
+      id: "bad-example",
+      label: "Bad example",
+      prompt: "What would a weak answer look like?",
+      recommendations: [
+        badExample,
+        "Make the mistake realistic, not silly.",
+        "Show the missing evidence or hidden assumption.",
+        "Keep the wording close to what a user might actually write.",
+        "End with the specific reason it fails.",
+      ],
+      placeholder: "Type the bad example here...",
+    },
     {
       id: "positive",
       label: "Positive",
@@ -683,32 +776,6 @@ function learnCheckCategoriesForLesson(lesson: LearnLesson): LearnCheckCategory[
         "Write it as a useful warning, not trivia.",
       ],
       placeholder: "Type the curve or exception here...",
-    },
-    {
-      id: "good-example",
-      label: "Good example",
-      prompt: "What would a strong answer look like?",
-      recommendations: [
-        goodExample,
-        "Use a concrete person, object, decision, or event.",
-        "Show the move, not just the conclusion.",
-        "Make the example short enough to compare.",
-        "End with why the example works.",
-      ],
-      placeholder: "Type the good example here...",
-    },
-    {
-      id: "bad-example",
-      label: "Bad example",
-      prompt: "What would a weak answer look like?",
-      recommendations: [
-        badExample,
-        "Make the mistake realistic, not silly.",
-        "Show the missing evidence or hidden assumption.",
-        "Keep the wording close to what a user might actually write.",
-        "End with the specific reason it fails.",
-      ],
-      placeholder: "Type the bad example here...",
     },
   ];
 }
