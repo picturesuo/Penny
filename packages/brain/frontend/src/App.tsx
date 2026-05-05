@@ -734,12 +734,6 @@ export function App() {
 
   async function handleQuickNoteAction(recent: BrainRecentIdea, action: QuickNoteAction) {
     if (action === "archive" || action === "restore") {
-      if (isBuiltInRecent(recent)) {
-        setRecents((current) => current.filter((item) => item.id !== recent.id));
-        setStatus("Mock learning event hidden");
-        return;
-      }
-
       await handleQuickNoteStatus(recent.id, action === "archive" ? "archived" : "active");
       return;
     }
