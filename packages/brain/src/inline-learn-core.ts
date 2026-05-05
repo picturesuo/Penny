@@ -1345,19 +1345,14 @@ function technicalAskPennyAnswer(question: string): string | null {
 }
 
 function derivativeOfLinearExpressionAnswer(compactQuestion: string): string | null {
-  const match = compactQuestion.match(/\b(?:derivative|differentiate|derive|slope|rate of change)\b(?:\s+(?:of|for))?\s+(.+)$/);
-
-  if (!match) {
-    return null;
-  }
-
-  const rawExpression = match[1];
+  const variable = derivativeVariable(compactQuestion);
+  const rawExpression = derivativeExpression(compactQuestion, variable);
 
   if (!rawExpression) {
     return null;
   }
 
-  const expression = parsePolynomialExpression(rawExpression);
+  const expression = parsePolynomialExpression(rawExpression, variable);
 
   if (!expression) {
     return null;
@@ -1367,50 +1362,88 @@ function derivativeOfLinearExpressionAnswer(compactQuestion: string): string | n
     .map((term) => ({
       coefficient: term.coefficient * term.power,
       power: term.power - 1,
+      leftSymbolicFactor: term.leftSymbolicFactor,
+      rightSymbolicFactor: term.rightSymbolicFactor,
     }))
     .filter((term) => term.coefficient !== 0);
-  const derivativeText = formatPolynomial(derivative);
+  const derivativeText = formatPolynomial(derivative, variable);
 
   return [
-    `For $f(x)=${expression.display}$, the derivative is $f'(x)=${derivativeText}$.`,
-    "Use the power rule: $\\frac{d}{dx}(ax^n)=anx^{n-1}$, and differentiate each term separately.",
-    `So $\\frac{d}{dx}(${expression.display})=${derivativeText}$. That derivative tells you the slope, or instantaneous rate of change, at each value of $x$.`,
+    `Treat every other letter as a constant because the derivative is with respect to $${variable}$.`,
+    `For $f(${variable})=${expression.display}$, the derivative is $f'(${variable})=${derivativeText}$.`,
+    `Use the power rule: $\\frac{d}{d${variable}}(a${variable}^n)=an${variable}^{n-1}$, and differentiate each term separately.`,
+    `So $\\frac{d}{d${variable}}(${expression.display})=${derivativeText}$. That derivative tells you the slope, or instantaneous rate of change, at each value of $${variable}$.`,
   ].join("\n\n");
 }
 
 type PolynomialTerm = {
   coefficient: number;
   power: number;
+  leftSymbolicFactor: string;
+  rightSymbolicFactor: string;
 };
 
-function parsePolynomialExpression(rawExpression: string): { display: string; terms: PolynomialTerm[] } | null {
+function derivativeVariable(question: string): string {
+  return (
+    question.match(/\bd\/d([a-z])\b/)?.[1] ??
+    question.match(/\b(?:with\s+respect\s+to|respect\s+to|wrt|to|by)\s+([a-z])\b/)?.[1] ??
+    "x"
+  );
+}
+
+function derivativeExpression(question: string, variable: string): string | null {
+  const keyword = "(?:derivative|differentiate|derive|slope|rate of change)";
+  const afterKeyword = question.match(new RegExp(`\\b${keyword}\\b(?:\\s+(?:of|for))?\\s+(.+)$`))?.[1] ?? null;
+  const beforeKeyword = question.match(new RegExp(`^(.+?)\\s+\\b${keyword}\\b`))?.[1] ?? null;
+  const rawExpression = expressionLike(afterKeyword, variable) ? afterKeyword : beforeKeyword;
+
+  if (!rawExpression) {
+    return null;
+  }
+
+  return rawExpression
+    .replace(new RegExp(`\\b(?:with\\s+respect\\s+to|respect\\s+to|wrt|to|by)\\s+${variable}\\b.*$`), "")
+    .replace(new RegExp(`\\bd/d${variable}\\b.*$`), "")
+    .trim();
+}
+
+function expressionLike(value: string | null, variable: string): value is string {
+  if (!value || /^\s*(?:with\s+respect\s+to|respect\s+to|wrt|to|by)\s+[a-z]\b/.test(value)) {
+    return false;
+  }
+
+  return new RegExp(`[0-9${variable}]`).test(value);
+}
+
+function parsePolynomialExpression(rawExpression: string, variable: string): { display: string; terms: PolynomialTerm[] } | null {
   const cleaned = rawExpression
     .replace(/[?.!,;:]+$/g, "")
     .replace(/\s+/g, "")
     .replace(/\*\*/g, "^")
     .replace(/[\u2212\u2013\u2014]/g, "-")
     .toLowerCase();
-  const expression = cleaned.match(/^([+-]?(?:\d+(?:\.\d+)?|\.\d+)?\*?x(?:\^-?\d+)?(?:[+-](?:\d+(?:\.\d+)?|\.\d+)?\*?x(?:\^-?\d+)?)*)(?:\b.*)?$/)?.[1];
+  const expression = cleaned.match(/^(.+?)(?:withrespectto|wrt|inrespectto|respectto|d\/d|$)/)?.[1];
 
-  if (!expression || !expression.includes("x")) {
+  if (!expression || !expression.includes(variable)) {
     return null;
   }
 
   const terms = expression.match(/[+-]?[^+-]+/g) ?? [];
-  const parsedTerms = terms.map(parsePolynomialTerm);
+  const parsedTerms = terms.map((term) => parsePolynomialTerm(term, variable));
 
   if (!parsedTerms.length || parsedTerms.some((term) => !term)) {
     return null;
   }
 
   return {
-    display: formatPolynomial(parsedTerms as PolynomialTerm[]),
+    display: formatPolynomial(parsedTerms as PolynomialTerm[], variable),
     terms: parsedTerms as PolynomialTerm[],
   };
 }
 
-function parsePolynomialTerm(term: string): PolynomialTerm | null {
-  const match = term.match(/^([+-]?)(?:(\d+(?:\.\d+)?|\.\d+)\*?)?x(?:\^(-?\d+))?$/);
+function parsePolynomialTerm(term: string, variable: string): PolynomialTerm | null {
+  const escapedVariable = variable.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = term.match(new RegExp(`^([+-]?)(?:(\\d+(?:\\.\\d+)?|\\.\\d+)\\*?)?([a-z])?${escapedVariable}(?:\\^(-?\\d+))?(?:\\*?([a-z]))?$`));
 
   if (!match) {
     return null;
@@ -1418,7 +1451,7 @@ function parsePolynomialTerm(term: string): PolynomialTerm | null {
 
   const sign = match[1] === "-" ? -1 : 1;
   const coefficient = match[2] ? Number(match[2]) : 1;
-  const power = match[3] ? Number(match[3]) : 1;
+  const power = match[4] ? Number(match[4]) : 1;
 
   if (!Number.isFinite(coefficient) || !Number.isInteger(power) || power < 1) {
     return null;
@@ -1427,10 +1460,12 @@ function parsePolynomialTerm(term: string): PolynomialTerm | null {
   return {
     coefficient: sign * coefficient,
     power,
+    leftSymbolicFactor: match[3] && match[3] !== variable ? match[3] : "",
+    rightSymbolicFactor: match[5] && match[5] !== variable ? match[5] : "",
   };
 }
 
-function formatPolynomial(terms: PolynomialTerm[]): string {
+function formatPolynomial(terms: PolynomialTerm[], variableName = "x"): string {
   if (!terms.length) {
     return "0";
   }
@@ -1440,9 +1475,9 @@ function formatPolynomial(terms: PolynomialTerm[]): string {
       const sign = term.coefficient < 0 ? "-" : index === 0 ? "" : "+";
       const absoluteCoefficient = Math.abs(term.coefficient);
       const coefficient = term.power === 0 || absoluteCoefficient !== 1 ? formatArithmeticNumber(absoluteCoefficient) : "";
-      const variable = term.power === 0 ? "" : term.power === 1 ? "x" : `x^${term.power}`;
+      const variable = term.power === 0 ? "" : term.power === 1 ? variableName : `${variableName}^${term.power}`;
 
-      return `${sign}${coefficient}${variable}`;
+      return `${sign}${coefficient}${term.leftSymbolicFactor}${variable}${term.rightSymbolicFactor}`;
     })
     .join("");
 }
