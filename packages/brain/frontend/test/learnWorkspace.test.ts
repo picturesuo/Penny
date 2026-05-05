@@ -12,6 +12,7 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /Name the program/);
   assert.match(markup, /YC is a three-month startup accelerator/);
   assert.match(markup, /Ask Penny/);
+  assert.match(markup, /LEARNING PATH/);
   assert.match(markup, /STEP 1\.1 OF 15/);
   assert.match(markup, /Enter forward \/ Esc back/);
   assert.doesNotMatch(markup, /Definition/);
@@ -21,7 +22,7 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.doesNotMatch(markup, /WRITE THIS DOWN/);
   assert.doesNotMatch(markup, /MISCONCEPTIONS/);
   assert.doesNotMatch(markup, /EXAMPLE/);
-  assert.doesNotMatch(markup, /Thinking graph/);
+  assert.match(markup, /Thinking graph/);
   assert.doesNotMatch(markup, /Use &quot;Name the program&quot; to answer what YC would actually evaluate/);
   assert.doesNotMatch(markup, /Do not treat investor interest as stronger than founder proof/);
   assert.doesNotMatch(markup, /What shall we think through/);
@@ -203,17 +204,17 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   );
 
   assert.match(markup, /Name the pricing goal/);
+  assert.match(markup, /Package pricing/);
+  assert.match(markup, /Iterate pricing/);
   assert.match(markup, /An expert starts by naming what the pricing decision must accomplish/);
   assert.doesNotMatch(markup, /Name the buyer/);
   assert.doesNotMatch(markup, /Definition/);
   assert.doesNotMatch(markup, /MISCONCEPTIONS/);
-  assert.doesNotMatch(markup, /Package pricing/);
-  assert.doesNotMatch(markup, /Iterate pricing/);
   assert.doesNotMatch(markup, /A pricing expert teaching/);
   assert.doesNotMatch(markup, /Pricing value map/);
 });
 
-test("LearnWorkspace keeps the active learning path at the top of a five-step window", () => {
+test("LearnWorkspace exposes the whole learning path around the active step", () => {
   const steps = Array.from({ length: 8 }, (_, index) => ({
     id: `step-${index + 1}`,
     title: `Step ${index + 1}`,
@@ -224,6 +225,11 @@ test("LearnWorkspace keeps the active learning path at the top of a five-step wi
   assert.deepEqual(
     visibleLearningPathSteps(steps, "step-6").map((item) => [item.index + 1, item.step.title]),
     [
+      [1, "Step 1"],
+      [2, "Step 2"],
+      [3, "Step 3"],
+      [4, "Step 4"],
+      [5, "Step 5"],
       [6, "Step 6"],
       [7, "Step 7"],
       [8, "Step 8"],
@@ -233,11 +239,14 @@ test("LearnWorkspace keeps the active learning path at the top of a five-step wi
   assert.deepEqual(
     visibleLearningPathSteps(steps, "step-2").map((item) => [item.index + 1, item.step.title]),
     [
+      [1, "Step 1"],
       [2, "Step 2"],
       [3, "Step 3"],
       [4, "Step 4"],
       [5, "Step 5"],
       [6, "Step 6"],
+      [7, "Step 7"],
+      [8, "Step 8"],
     ],
   );
 });
