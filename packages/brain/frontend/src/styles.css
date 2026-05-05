@@ -4971,13 +4971,14 @@
   .ask-penny-thread {
     display: grid;
     align-content: start;
-    gap: 10px;
+    gap: 0;
     min-height: 0;
     overflow: auto;
     border: 2px solid #111111;
-    padding: 12px;
-    background: var(--penny-paper);
-    color: #111111;
+    padding: 0;
+    background: #0f100d;
+    color: #f0eadf;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   }
 
   .ask-penny-message,
@@ -4988,21 +4989,62 @@
 
   .ask-penny-message {
     display: grid;
-    gap: 5px;
-    border-bottom: 1px solid rgb(17 17 17 / 0.2);
-    padding-bottom: 12px;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    border-bottom: 1px solid rgb(240 234 223 / 0.14);
+    padding: 11px 12px;
   }
 
   .ask-penny-message:last-child {
     border-bottom: 0;
-    padding-bottom: 0;
   }
 
-  .ask-penny-message > span {
-    color: rgb(17 17 17 / 0.58);
-    font-size: 11px;
+  .ask-penny-terminal-label {
+    color: #a8e071;
+    font-size: 12px;
     font-weight: 700;
-    line-height: 1;
+    line-height: 1.45;
+    white-space: nowrap;
+  }
+
+  .ask-penny-message.is-penny .ask-penny-terminal-label {
+    color: #80c7ff;
+  }
+
+  .ask-penny-message.is-system .ask-penny-terminal-label {
+    color: #f0cf7a;
+  }
+
+  .ask-penny-terminal-command {
+    min-width: 0;
+    color: #fffdf7;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .ask-penny-terminal-output {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .ask-penny-terminal-meta {
+    width: fit-content;
+    max-width: 100%;
+    border: 1px solid rgb(240 234 223 / 0.18);
+    border-radius: 3px;
+    padding: 3px 5px;
+    color: rgb(240 234 223 / 0.58);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
     text-transform: none;
   }
 
@@ -5015,48 +5057,54 @@
     line-height: 1.35;
   }
 
-  .ask-penny-rendered {
+  .ask-penny-terminal-output .ask-penny-rendered {
     display: grid;
-    gap: 12px;
+    gap: 8px;
     min-width: 0;
-    font-size: 18px;
-    line-height: 1.28;
+    color: #f0eadf;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.45;
   }
 
-  .ask-penny-rendered-line {
+  .ask-penny-terminal-output .ask-penny-rendered-line {
     min-width: 0;
     overflow-wrap: anywhere;
   }
 
-  .ask-penny-rendered-line.is-bullet {
+  .ask-penny-terminal-output .ask-penny-rendered-line.is-bullet {
     padding-left: 1.15em;
     text-indent: -0.85em;
   }
 
-  .ask-penny-math {
+  .ask-penny-terminal-output .ask-penny-math {
     display: inline-flex;
     align-items: center;
     max-width: 100%;
     margin: 0 0.1em;
-    border-radius: 4px;
-    background: rgb(255 255 255 / 0.56);
-    padding: 0 0.18em;
+    border: 1px solid rgb(240 234 223 / 0.14);
+    border-radius: 3px;
+    background: #191a16;
+    padding: 0.04em 0.22em;
+    color: #fffdf7;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     overflow-x: auto;
     overflow-y: hidden;
     vertical-align: middle;
     white-space: nowrap;
   }
 
-  .ask-penny-math.is-display {
+  .ask-penny-terminal-output .ask-penny-math.is-display {
     display: flex;
     justify-content: center;
     width: 100%;
     margin: 8px 0;
-    border: 1px solid rgb(17 17 17 / 0.16);
-    border-radius: 4px;
-    padding: 14px 10px;
-    background: rgb(255 255 255 / 0.62);
-    font-size: 0.92em;
+    border: 1px solid rgb(240 234 223 / 0.18);
+    border-radius: 3px;
+    padding: 10px;
+    background: #191a16;
+    font-size: 1em;
   }
 
   .ask-penny-frac {
@@ -5120,20 +5168,40 @@
     padding-top: 12px;
   }
 
-  .ask-penny-input textarea {
+  .ask-penny-input-shell {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: start;
+    gap: 9px;
     width: 100%;
     min-width: 0;
-    max-height: 40dvh;
     border: 1px solid #111111;
     border-radius: 0;
     padding: 10px;
-    background: #ffffff;
-    color: #111111;
-    font-family: Georgia, Cambria, "Times New Roman", Times, serif;
-    font-size: 14px;
+    background: #0f100d;
+    color: #f0eadf;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+    font-weight: 700;
     line-height: 1.28;
+  }
+
+  .ask-penny-input-shell textarea {
+    width: 100%;
+    min-width: 0;
+    max-height: 40dvh;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #fffdf7;
+    font: inherit;
     overflow-y: auto;
+    outline: none;
     resize: none;
+  }
+
+  .ask-penny-input-shell textarea::placeholder {
+    color: rgb(240 234 223 / 0.48);
   }
 
   .ask-penny-input button {
