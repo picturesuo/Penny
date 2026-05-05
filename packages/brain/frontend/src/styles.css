@@ -4040,7 +4040,7 @@
 
   .learn-path-middle {
     display: grid;
-    grid-template-rows: auto auto minmax(220px, 1fr);
+    grid-template-rows: auto auto minmax(280px, 1fr);
     gap: 10px;
     min-height: 0;
     overflow: auto;
@@ -4212,7 +4212,7 @@
 
   .learn-thinking-graph-board {
     position: relative;
-    min-height: 220px;
+    min-height: 280px;
     overflow: hidden;
     border: 1px solid #111111;
     border-radius: 8px;
@@ -4227,18 +4227,18 @@
     position: relative;
     display: grid;
     grid-template-rows: auto auto 1fr;
-    gap: 18px;
+    gap: 12px;
     height: 100%;
-    min-height: 220px;
-    padding: 16px 14px 14px;
+    min-height: 280px;
+    padding: 14px 12px 12px;
   }
 
   .learn-thinking-graph-map::before {
     content: "";
     position: absolute;
     left: 50%;
-    top: 68px;
-    bottom: 78px;
+    top: 62px;
+    bottom: 68px;
     border-left: 1px solid rgb(17 17 17 / 0.35);
     transform: translateX(-50%);
   }
@@ -4259,9 +4259,9 @@
 
   .learn-thinking-graph-root {
     justify-self: center;
-    width: min(92%, 300px);
-    min-height: 48px;
-    padding: 8px 10px;
+    width: min(94%, 300px);
+    min-height: 46px;
+    padding: 7px 9px;
   }
 
   .learn-thinking-graph-root::after {
@@ -4276,9 +4276,9 @@
 
   .learn-thinking-graph-main {
     justify-self: center;
-    width: min(86%, 250px);
-    min-height: 56px;
-    padding: 9px 10px;
+    width: min(90%, 260px);
+    min-height: 52px;
+    padding: 8px 9px;
   }
 
   .learn-thinking-graph-main::after {
@@ -4296,7 +4296,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
-    gap: 16px 18px;
+    gap: 12px 14px;
     margin: 0;
     padding: 0;
     list-style: none;
@@ -4307,21 +4307,21 @@
     position: absolute;
     left: 25%;
     right: 25%;
-    top: -13px;
+    top: -9px;
     border-top: 1px solid rgb(17 17 17 / 0.35);
   }
 
   .learn-thinking-graph-board li {
-    min-height: 52px;
-    padding: 8px 9px;
+    min-height: 48px;
+    padding: 7px 8px;
   }
 
   .learn-thinking-graph-board li::before {
     content: "";
     position: absolute;
     left: 50%;
-    top: -17px;
-    height: 16px;
+    top: -13px;
+    height: 12px;
     border-left: 1px solid rgb(17 17 17 / 0.35);
     transform: translateX(-50%);
   }
@@ -4348,10 +4348,10 @@
     display: -webkit-box;
     overflow: hidden;
     color: #111111;
-    font-size: 11px;
-    line-height: 1.14;
+    font-size: 10px;
+    line-height: 1.12;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
   }
 
   .learn-thinking-graph-empty {
@@ -4414,15 +4414,15 @@
     grid-column: 2;
     grid-row: 1;
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(132px, 0.56fr) minmax(0, 0.44fr) auto;
     align-items: start;
     min-width: 0;
     height: calc(100dvh - 92px);
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
     max-width: 1160px;
     margin: 0 auto;
-    padding: clamp(18px, 3vw, 40px) clamp(18px, 4vw, 56px) clamp(18px, 3vw, 36px);
+    padding: 34px 48px 30px;
   }
 
   .learn-editorial-main > section,
@@ -4476,7 +4476,7 @@
   .learn-goal-block h1 {
     margin: 10px 0 0;
     overflow: hidden;
-    font-size: clamp(30px, 2.8vw, 40px);
+    font-size: 40px;
     font-weight: 500;
     letter-spacing: 0;
     line-height: 1;
@@ -4486,11 +4486,12 @@
 
   .learn-step-header {
     display: grid;
-    align-self: center;
+    align-self: stretch;
     justify-self: center;
     width: min(100%, 980px);
     min-height: 0;
-    padding: clamp(14px, 2vw, 24px) 0;
+    overflow: auto;
+    padding: 20px 0;
     place-items: center start;
   }
 
@@ -4505,7 +4506,7 @@
     margin: 0;
     max-width: 23ch;
     color: rgb(17 17 17 / 0.82);
-    font-size: clamp(36px, 4vw, 58px);
+    font-size: 42px;
     font-weight: 650;
     line-height: 1.08;
     text-align: left;
@@ -4514,10 +4515,28 @@
   .learn-step-header .ask-penny-rendered {
     max-width: 54ch;
     color: rgb(17 17 17 / 0.82);
-    font-size: clamp(22px, 2.4vw, 34px);
+    font-size: 26px;
     font-weight: 620;
-    line-height: 1.12;
+    line-height: 1.16;
     text-align: left;
+  }
+
+  .learn-step-header.is-short .ask-penny-rendered {
+    max-width: 24ch;
+    font-size: 42px;
+    line-height: 1.08;
+  }
+
+  .learn-step-header.is-medium .ask-penny-rendered {
+    max-width: 46ch;
+    font-size: 24px;
+    line-height: 1.16;
+  }
+
+  .learn-step-header.is-long .ask-penny-rendered {
+    max-width: 62ch;
+    font-size: 18px;
+    line-height: 1.24;
   }
 
   .learn-step-header .ask-penny-math {
@@ -4526,10 +4545,12 @@
 
   .learn-check-worksheet {
     display: grid;
-    gap: 16px;
+    gap: 12px;
     min-width: 0;
+    min-height: 0;
+    overflow: auto;
     border-top: 2px solid #111111;
-    padding-top: 16px;
+    padding-top: 12px;
   }
 
   .learn-check-head {
@@ -4554,7 +4575,7 @@
   .learn-check-head h2 {
     margin: 6px 0 0;
     color: #111111;
-    font-size: clamp(24px, 2.4vw, 34px);
+    font-size: 26px;
     font-weight: 650;
     letter-spacing: 0;
     line-height: 1;
@@ -4563,25 +4584,25 @@
   .learn-check-head p {
     margin: 0;
     color: rgb(17 17 17 / 0.68);
-    font-size: 15px;
-    line-height: 1.28;
+    font-size: 13px;
+    line-height: 1.24;
   }
 
   .learn-check-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
+    gap: 10px;
     min-width: 0;
   }
 
   .learn-check-card {
     display: grid;
     align-content: start;
-    gap: 12px;
+    gap: 9px;
     min-width: 0;
     border: 1px solid #111111;
     border-radius: 8px;
-    padding: 14px;
+    padding: 10px;
     background: #fbfaf6;
   }
 
@@ -4598,7 +4619,7 @@
   .learn-check-card h3 {
     margin: 6px 0 0;
     color: #111111;
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 700;
     letter-spacing: 0;
     line-height: 1.12;
@@ -4606,7 +4627,7 @@
 
   .learn-recommendation-list {
     display: grid;
-    gap: 7px;
+    gap: 5px;
     margin: 0;
     padding: 0;
     list-style: none;
@@ -4618,7 +4639,7 @@
     gap: 8px;
     min-width: 0;
     color: rgb(17 17 17 / 0.74);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 650;
     line-height: 1.24;
   }
@@ -4678,15 +4699,17 @@
   .learn-final-answer textarea {
     width: 100%;
     min-width: 0;
-    resize: vertical;
+    min-height: 58px;
+    max-height: 120px;
+    resize: none;
     border: 1px solid #111111;
     border-radius: 6px;
     background: #ffffff;
     color: #111111;
     padding: 10px 11px;
     font: inherit;
-    font-size: 14px;
-    line-height: 1.35;
+    font-size: 13px;
+    line-height: 1.28;
   }
 
   .learn-check-card textarea::placeholder,
@@ -4842,7 +4865,7 @@
     overflow: hidden;
     background: transparent;
     color: #111111;
-    font-size: clamp(14px, 1.5vw, 18px);
+    font-size: 17px;
     font-weight: 700;
     line-height: 1;
     text-overflow: ellipsis;
@@ -4996,7 +5019,7 @@
     display: grid;
     gap: 12px;
     min-width: 0;
-    font-size: clamp(18px, 4.8vw, 25px);
+    font-size: 18px;
     line-height: 1.28;
   }
 
@@ -5651,13 +5674,25 @@
   }
 
   .learn-goal-block h1 {
-    font-size: clamp(24px, 8vw, 32px);
+    font-size: 32px;
   }
 
   .learn-step-header p,
   .learn-step-header .ask-penny-rendered {
     max-width: 100%;
-    font-size: 24px;
+    font-size: 22px;
+  }
+
+  .learn-step-header.is-short .ask-penny-rendered {
+    font-size: 30px;
+  }
+
+  .learn-step-header.is-medium .ask-penny-rendered {
+    font-size: 21px;
+  }
+
+  .learn-step-header.is-long .ask-penny-rendered {
+    font-size: 17px;
   }
 
   .learn-check-head,
