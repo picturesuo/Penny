@@ -90,6 +90,12 @@ fi
 PG_LOCATION=""
 if az postgres flexible-server show --resource-group "$RG" --name "$PG_NAME" >/dev/null 2>&1; then
   PG_LOCATION="$(az postgres flexible-server show --resource-group "$RG" --name "$PG_NAME" --query location --output tsv)"
+  echo "PostgreSQL server already exists in $PG_LOCATION. Resetting admin password to match App Service settings..."
+  az postgres flexible-server update \
+    --resource-group "$RG" \
+    --name "$PG_NAME" \
+    --admin-password "$DB_PASSWORD" \
+    --output none
 else
   for location in "${REGION_CANDIDATES[@]}"; do
     echo "Trying PostgreSQL Flexible Server in $location..."
