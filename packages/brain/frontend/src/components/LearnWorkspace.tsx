@@ -4,7 +4,6 @@ import type {
   BrainClaim,
   BrainData,
   BrainDocumentSummary,
-  BrainDocumentsData,
   BrainHybridSearchResponse,
   BrainRecentIdea,
   CanvasNode,
@@ -20,25 +19,13 @@ import { truncateWords } from "../lib/text";
 import { AskPennyRenderedText } from "./AskPennyRenderedText";
 
 interface LearnWorkspaceProps {
-  documentsData: BrainDocumentsData | null;
   selectedDocument: BrainDocumentSummary | null;
   data: BrainData | null;
   autopilot: AutopilotTickData | null;
-  recents: BrainRecentIdea[];
   focusedClaimId: string | null;
   focusNode: CanvasNode | null;
-  relatedBrainSearch: BrainHybridSearchResponse["data"] | null;
-  status: string;
   isThinking: boolean;
-  onSeed: (rawIdea: string) => Promise<void>;
-  onKeepRecent: (rawIdea: string) => Promise<void>;
-  onSelectDocument: (sessionId: string) => void;
-  onOpenBrain: () => void;
-  onOpenCanvas: () => void;
-  onOpenCheck: () => void;
-  onOpenVerify: () => void;
   onSearchBrainRelated: (query: string, claimId?: string | null) => Promise<BrainHybridSearchResponse["data"]>;
-  onVerifyChanged?: () => Promise<void>;
 }
 
 export function LearnWorkspace({

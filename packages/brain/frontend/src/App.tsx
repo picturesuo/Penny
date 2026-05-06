@@ -821,25 +821,13 @@ export function App() {
             />
             {activeMode === "Learn" ? (
           <LearnWorkspace
-            documentsData={documentsData}
             selectedDocument={selectedDocument}
             data={data}
             autopilot={autopilot}
-            recents={recents}
             focusedClaimId={focusedClaimId}
             focusNode={learnFocusNode}
-            relatedBrainSearch={relatedBrainSearch}
-            status={status}
             isThinking={isThinking}
-            onSeed={handleSeed}
-            onKeepRecent={handleKeepRecentIdea}
-            onSelectDocument={handleSelectDocument}
-            onOpenBrain={() => setActiveMode("Brain")}
-            onOpenCanvas={handleOpenCanvas}
-            onOpenCheck={() => setActiveMode("Check")}
-            onOpenVerify={() => setActiveMode("Check")}
             onSearchBrainRelated={handleBrainRelatedSearch}
-            onVerifyChanged={handleVerifyChanged}
           />
         ) : activeMode === "Brain" ? (
           <BrainWorkspace
