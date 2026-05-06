@@ -146,7 +146,7 @@ if ! az webapp show --resource-group "$RG" --name "$APP_NAME" >/dev/null 2>&1; t
     --resource-group "$RG" \
     --plan "$PLAN_NAME" \
     --name "$APP_NAME" \
-    --runtime "NODE:20-lts" \
+    --deployment-container-image-name mcr.microsoft.com/appsvc/staticsite:latest \
     --output none
 fi
 
