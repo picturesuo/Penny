@@ -13,24 +13,20 @@ interface LandingPageProps {
     rawIdea: string,
     sourceMaterial?: LearnSourceMaterialInput,
   ) => Promise<void>;
-  onQuickNote: (rawIdea: string) => Promise<void>;
 }
 
-type LandingDestination = Extract<PennyMode, "Learn" | "Check"> | "QuickNote";
+type LandingDestination = Extract<PennyMode, "Learn" | "Check">;
 
 type LandingShortcutIntent =
   | { action: "open-mode"; mode: PennyMode }
   | { action: "select-destination"; destination: LandingDestination };
 
-type LandingSubmitIntent =
-  | { action: "submit-prompt"; mode: Extract<PennyMode, "Learn" | "Check">; rawIdea: string }
-  | { action: "quick-note"; rawIdea: string };
+type LandingSubmitIntent = { action: "submit-prompt"; mode: Extract<PennyMode, "Learn" | "Check">; rawIdea: string };
 
 export const landingShortcuts: Array<{ key: string; label: string }> = [
   { key: "B", label: "for Brain" },
   { key: "C", label: "for Check" },
   { key: "L", label: "for Learn" },
-  { key: "Q", label: "for Quick note" },
 ];
 
 function destinationForShortcutKey(key: string | null): LandingDestination | null {
@@ -42,18 +38,10 @@ function destinationForShortcutKey(key: string | null): LandingDestination | nul
     return "Check";
   }
 
-  if (key === "Q") {
-    return "QuickNote";
-  }
-
   return null;
 }
 
 function labelForDestination(destination: LandingDestination): string {
-  if (destination === "QuickNote") {
-    return "Quick note";
-  }
-
   return destination;
 }
 
@@ -78,10 +66,6 @@ export function landingShortcutIntent(key: string): LandingShortcutIntent | null
     return { action: "select-destination", destination: "Check" };
   }
 
-  if (normalizedKey === "q") {
-    return { action: "select-destination", destination: "QuickNote" };
-  }
-
   return null;
 }
 
@@ -92,14 +76,10 @@ export function landingSubmitIntent(destination: LandingDestination | null, rawI
     return null;
   }
 
-  if (destination === "QuickNote") {
-    return { action: "quick-note", rawIdea: trimmedIdea };
-  }
-
   return { action: "submit-prompt", mode: destination, rawIdea: trimmedIdea };
 }
 
-export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, onQuickNote }: LandingPageProps) {
+export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit }: LandingPageProps) {
   const [rawIdea, setRawIdea] = useState("");
   const [sourceMaterial, setSourceMaterial] = useState<LearnSourceMaterialInput | null>(null);
   const [isCtrlDown, setIsCtrlDown] = useState(false);
@@ -199,11 +179,7 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
     setSourceMaterial(null);
     setSelectedShortcutKey(null);
 
-    if (intent.action === "quick-note") {
-      await onQuickNote(intent.rawIdea);
-    } else {
-      await onPromptSubmit(intent.mode, intent.rawIdea, intent.mode === "Learn" ? sourceMaterial ?? undefined : undefined);
-    }
+    await onPromptSubmit(intent.mode, intent.rawIdea, intent.mode === "Learn" ? sourceMaterial ?? undefined : undefined);
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
