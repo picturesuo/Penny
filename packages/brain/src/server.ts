@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile, stat } from "node:fs/promises";
@@ -91,12 +91,30 @@ const port = parsePort(process.env.PORT);
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 const migrationsDir = fileURLToPath(new URL("../../../drizzle", import.meta.url));
 const apiRateLimiter = createApiRateLimiter();
+const authFailureRateLimiter = createKeyedRateLimiter({
+  maxEnv: "PENNY_AUTH_FAILURE_RATE_LIMIT_MAX",
+  windowEnv: "PENNY_AUTH_FAILURE_RATE_LIMIT_WINDOW_MS",
+  fallbackMax: 20,
+  fallbackWindowMs: 60_000,
+});
+const sessionCookieName = "__Host-penny_session";
 
 export function createPennyServer(): ReturnType<typeof createServer> {
   return createServer(async (incoming, outgoing) => {
     try {
       let request = await toWebRequest(incoming);
       const url = new URL(request.url);
+
+      if (url.pathname === "/penny/login") {
+        await writeWebResponse(outgoing, await handleLoginRequest(request));
+        return;
+      }
+
+      if (url.pathname === "/penny/logout") {
+        await writeWebResponse(outgoing, logoutResponse());
+        return;
+      }
+
       const guard = guardApiRequest(request, url);
 
       applyResponseHeaders(outgoing, guard.headers);
@@ -739,6 +757,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
       return;
     }
 
+    if (requiresFrontendSession(request, url)) {
+      await writeWebResponse(outgoing, loginPageResponse());
+      return;
+    }
+
     const staticResponse = await readStaticAsset(url.pathname, request.method);
 
     if (staticResponse) {
@@ -890,8 +913,20 @@ function authenticateApiRequest(request: Request): { ok: true; value: ApiAuthRes
     }
 
     const presentedToken = requestBearerToken(request) ?? request.headers.get("x-penny-api-key")?.trim();
+    const session = authenticateSessionCookie(request);
 
-    if (!presentedToken || !safeTokenEquals(presentedToken, expectedToken)) {
+    if ((!presentedToken || !safeTokenEquals(presentedToken, expectedToken)) && !session) {
+      const rateLimit = authFailureRateLimiter.check(clientRateLimitKey(request));
+
+      if (!rateLimit.allowed) {
+        return {
+          ok: false,
+          response: jsonErrorResponse(429, "auth_rate_limited", "Too many failed Penny access attempts. Try again shortly.", {
+            "retry-after": String(rateLimit.retryAfterSeconds ?? 60),
+          }),
+        };
+      }
+
       return {
         ok: false,
         response: jsonErrorResponse(401, "unauthorized", "A valid Penny API token is required.", {
@@ -1002,6 +1037,200 @@ function requestBearerToken(request: Request): string | undefined {
   return token || undefined;
 }
 
+async function handleLoginRequest(request: Request): Promise<Response> {
+  if (resolveAuthMode() !== "token") {
+    return new Response(null, { status: 303, headers: { location: "/" } });
+  }
+
+  if (request.method === "GET" || request.method === "HEAD") {
+    return loginPageResponse();
+  }
+
+  if (request.method !== "POST") {
+    return jsonErrorResponse(405, "method_not_allowed", "Penny login only supports GET and POST.");
+  }
+
+  const rateLimit = authFailureRateLimiter.check(clientRateLimitKey(request));
+
+  if (!rateLimit.allowed) {
+    return loginPageResponse("Too many access attempts. Try again shortly.", 429, {
+      "retry-after": String(rateLimit.retryAfterSeconds ?? 60),
+    });
+  }
+
+  const expectedToken = process.env.PENNY_API_TOKEN?.trim();
+
+  if (!expectedToken) {
+    return jsonErrorResponse(500, "auth_not_configured", "PENNY_API_TOKEN is required when Penny token auth is enabled.");
+  }
+
+  const token = await loginTokenFromRequest(request);
+
+  if (!token || !safeTokenEquals(token, expectedToken)) {
+    return loginPageResponse("Access token was not accepted.", 401);
+  }
+
+  const maxAgeSeconds = parsePositiveInteger(process.env.PENNY_SESSION_MAX_AGE_SECONDS, 43_200);
+  const headers = new Headers({
+    location: "/",
+    "set-cookie": serializeSessionCookie(signSessionCookie(Date.now() + maxAgeSeconds * 1000), maxAgeSeconds),
+  });
+
+  return new Response(null, { status: 303, headers });
+}
+
+async function loginTokenFromRequest(request: Request): Promise<string | undefined> {
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+  const text = await request.text();
+
+  if (contentType.includes("application/json")) {
+    try {
+      const payload = JSON.parse(text) as { token?: unknown };
+
+      return typeof payload.token === "string" ? payload.token.trim() : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  const form = new URLSearchParams(text);
+  const token = form.get("token")?.trim();
+
+  return token || undefined;
+}
+
+function requiresFrontendSession(request: Request, url: URL): boolean {
+  return (
+    resolveAuthMode() === "token" &&
+    !isApiPath(url.pathname) &&
+    shouldServeFrontendFallback(url.pathname) &&
+    (request.method === "GET" || request.method === "HEAD") &&
+    !authenticateSessionCookie(request)
+  );
+}
+
+function authenticateSessionCookie(request: Request): boolean {
+  const cookie = cookieValue(request, sessionCookieName);
+
+  if (!cookie) {
+    return false;
+  }
+
+  const [encodedPayload, signature] = cookie.split(".");
+
+  if (!encodedPayload || !signature || !safeTokenEquals(signature, hmac(encodedPayload))) {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8")) as { exp?: unknown };
+
+    return typeof payload.exp === "number" && payload.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+function signSessionCookie(expiresAt: number): string {
+  const payload = Buffer.from(JSON.stringify({ exp: expiresAt, v: 1 })).toString("base64url");
+
+  return `${payload}.${hmac(payload)}`;
+}
+
+function serializeSessionCookie(value: string, maxAgeSeconds: number): string {
+  return [
+    `${sessionCookieName}=${value}`,
+    "Path=/",
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax",
+    `Max-Age=${maxAgeSeconds}`,
+  ].join("; ");
+}
+
+function logoutResponse(): Response {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      location: "/penny/login",
+      "set-cookie": `${sessionCookieName}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+    },
+  });
+}
+
+function loginPageResponse(message?: string, status = 200, extraHeaders: Record<string, string> = {}): Response {
+  const escapedMessage = message ? escapeHtml(message) : "";
+
+  return new Response(
+    `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Penny Access</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f6f4ef; color: #151515; }
+    main { width: min(420px, calc(100vw - 32px)); }
+    h1 { margin: 0 0 10px; font-size: 32px; letter-spacing: 0; }
+    p { margin: 0 0 22px; color: #55514a; line-height: 1.5; }
+    form { display: grid; gap: 14px; }
+    label { font-size: 13px; font-weight: 700; color: #3a362f; }
+    input { box-sizing: border-box; width: 100%; min-height: 46px; border: 1px solid #b8b0a3; border-radius: 6px; padding: 0 12px; font: inherit; background: #fff; color: #151515; }
+    button { min-height: 46px; border: 0; border-radius: 6px; background: #151515; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+    .error { margin: 0 0 14px; color: #a61b1b; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Penny</h1>
+    <p>Enter the private access token to open this workspace.</p>
+    ${escapedMessage ? `<p class="error">${escapedMessage}</p>` : ""}
+    <form method="post" action="/penny/login">
+      <label for="token">Access token</label>
+      <input id="token" name="token" type="password" autocomplete="current-password" required autofocus />
+      <button type="submit">Enter Penny</button>
+    </form>
+  </main>
+</body>
+</html>`,
+    {
+      status,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        ...extraHeaders,
+      },
+    },
+  );
+}
+
+function cookieValue(request: Request, name: string): string | undefined {
+  const cookie = request.headers.get("cookie");
+
+  if (!cookie) {
+    return undefined;
+  }
+
+  for (const part of cookie.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+
+    if (rawName === name) {
+      return rawValue.join("=");
+    }
+  }
+
+  return undefined;
+}
+
+function hmac(value: string): string {
+  return createHmac("sha256", sessionSecret()).update(value).digest("base64url");
+}
+
+function sessionSecret(): string {
+  return process.env.PENNY_SESSION_SECRET?.trim() || process.env.PENNY_API_TOKEN?.trim() || "penny-dev-session-secret";
+}
+
 function safeTokenEquals(presentedToken: string, expectedToken: string): boolean {
   const presented = Buffer.from(presentedToken);
   const expected = Buffer.from(expectedToken);
@@ -1011,6 +1240,10 @@ function safeTokenEquals(presentedToken: string, expectedToken: string): boolean
   }
 
   return timingSafeEqual(presented, expected);
+}
+
+function clientRateLimitKey(request: Request): string {
+  return request.headers.get("x-penny-client-ip")?.trim() || "unknown-client";
 }
 
 function firstPresentHeader(request: Request, names: string[]): string | undefined {
@@ -1115,19 +1348,38 @@ function preflightHeaders(headers: Headers): Headers {
 }
 
 function createApiRateLimiter(): { check: (auth: ApiAuthResult) => RateLimitResult } {
-  const buckets = new Map<string, { count: number; resetAt: number }>();
+  const limiter = createKeyedRateLimiter({
+    maxEnv: "PENNY_RATE_LIMIT_MAX",
+    windowEnv: "PENNY_RATE_LIMIT_WINDOW_MS",
+    fallbackMax: 120,
+    fallbackWindowMs: 60_000,
+  });
 
   return {
     check(auth: ApiAuthResult): RateLimitResult {
-      const max = parsePositiveInteger(process.env.PENNY_RATE_LIMIT_MAX, 120);
+      return limiter.check(auth.identityKey);
+    },
+  };
+}
+
+function createKeyedRateLimiter(input: {
+  maxEnv: string;
+  windowEnv: string;
+  fallbackMax: number;
+  fallbackWindowMs: number;
+}): { check: (key: string) => RateLimitResult } {
+  const buckets = new Map<string, { count: number; resetAt: number }>();
+
+  return {
+    check(key: string): RateLimitResult {
+      const max = parsePositiveInteger(process.env[input.maxEnv], input.fallbackMax);
 
       if (max <= 0) {
         return { allowed: true, headers: new Headers() };
       }
 
-      const windowMs = parsePositiveInteger(process.env.PENNY_RATE_LIMIT_WINDOW_MS, 60_000);
+      const windowMs = parsePositiveInteger(process.env[input.windowEnv], input.fallbackWindowMs);
       const now = Date.now();
-      const key = auth.identityKey;
       const existing = buckets.get(key);
       const bucket = existing && existing.resetAt > now ? existing : { count: 0, resetAt: now + windowMs };
 
@@ -1236,6 +1488,25 @@ function readEnvFlag(name: string, fallback: boolean): boolean {
   }
 
   return fallback;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return character;
+    }
+  });
 }
 
 function mergeHeaders(target: Headers, source: Headers): void {

@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { guardApiRequest } from "./server.ts";
+import { createPennyServer, guardApiRequest } from "./server.ts";
 
 const pennyEnvKeys = [
   "NODE_ENV",
   "PENNY_API_TOKEN",
   "PENNY_AUTH_MODE",
+  "PENNY_AUTH_FAILURE_RATE_LIMIT_MAX",
+  "PENNY_AUTH_FAILURE_RATE_LIMIT_WINDOW_MS",
   "PENNY_AUTH_PROJECT_ID",
   "PENNY_AUTH_SPHERE_ID",
   "PENNY_AUTH_USER_ID",
@@ -13,6 +15,8 @@ const pennyEnvKeys = [
   "PENNY_CORS_ORIGINS",
   "PENNY_RATE_LIMIT_MAX",
   "PENNY_RATE_LIMIT_WINDOW_MS",
+  "PENNY_SESSION_MAX_AGE_SECONDS",
+  "PENNY_SESSION_SECRET",
   "PENNY_TRUST_AUTH_HEADERS",
 ];
 
@@ -188,11 +192,107 @@ test("API rate limit is scoped to the authenticated identity", async () => {
   );
 });
 
+test("Penny login protects the frontend and creates an API session cookie", async () => {
+  await withPennyEnv(
+    {
+      NODE_ENV: "production",
+      PENNY_API_TOKEN: "secret",
+      PENNY_AUTH_MODE: "token",
+      PENNY_RATE_LIMIT_MAX: "0",
+      PENNY_AUTH_FAILURE_RATE_LIMIT_MAX: "0",
+      PENNY_SESSION_SECRET: "test-session-secret",
+    },
+    async () => {
+      await withTestServer(async (baseUrl) => {
+        const unauthenticated = await fetch(`${baseUrl}/`);
+        const unauthenticatedBody = await unauthenticated.text();
+
+        assert.equal(unauthenticated.status, 200);
+        assert.match(unauthenticatedBody, /Enter the private access token/);
+
+        const login = await fetch(`${baseUrl}/penny/login`, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ token: "secret" }),
+          redirect: "manual",
+        });
+        const sessionCookie = login.headers.get("set-cookie")?.split(";")[0];
+
+        assert.equal(login.status, 303);
+        assert.ok(sessionCookie?.startsWith("__Host-penny_session="));
+
+        const cookieHeader = sessionCookie;
+        assert.ok(cookieHeader);
+
+        const frontend = await fetch(`${baseUrl}/`, { headers: { cookie: cookieHeader } });
+
+        assert.equal(frontend.status, 200);
+        assert.doesNotMatch(await frontend.text(), /Enter the private access token/);
+
+        const apiRequestWithCookie = apiRequest({ cookie: cookieHeader });
+        const guard = guardApiRequest(apiRequestWithCookie, new URL(apiRequestWithCookie.url));
+
+        assert.equal(guard.response, undefined);
+      });
+    },
+  );
+});
+
+test("API guard rate limits failed token attempts by client address", async () => {
+  await withPennyEnv(
+    {
+      PENNY_API_TOKEN: "secret",
+      PENNY_AUTH_MODE: "token",
+      PENNY_AUTH_FAILURE_RATE_LIMIT_MAX: "1",
+      PENNY_AUTH_FAILURE_RATE_LIMIT_WINDOW_MS: "60000",
+      PENNY_RATE_LIMIT_MAX: "0",
+    },
+    async () => {
+      const first = guardApiRequest(apiRequest({ "x-penny-client-ip": "203.0.113.9" }), new URL("http://localhost/api/brain/documents"));
+      const second = guardApiRequest(apiRequest({ "x-penny-client-ip": "203.0.113.9" }), new URL("http://localhost/api/brain/documents"));
+      const otherClient = guardApiRequest(apiRequest({ "x-penny-client-ip": "203.0.113.10" }), new URL("http://localhost/api/brain/documents"));
+      const payload = await errorPayload(second.response);
+
+      assert.equal(first.response?.status, 401);
+      assert.equal(second.response?.status, 429);
+      assert.equal(second.response?.headers.get("retry-after"), "60");
+      assert.equal(payload.error.code, "auth_rate_limited");
+      assert.equal(otherClient.response?.status, 401);
+    },
+  );
+});
+
 function apiRequest(headers: HeadersInit = {}, method = "GET"): Request {
   return new Request("http://localhost/api/brain/documents", {
     method,
     headers,
   });
+}
+
+async function withTestServer(fn: (baseUrl: string) => Promise<void>): Promise<void> {
+  const testServer = createPennyServer();
+
+  await new Promise<void>((resolve) => {
+    testServer.listen(0, "127.0.0.1", resolve);
+  });
+
+  try {
+    const address = testServer.address();
+
+    assert.ok(address && typeof address === "object");
+    await fn(`http://127.0.0.1:${address.port}`);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      testServer.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  }
 }
 
 async function errorPayload(response: Response | undefined): Promise<{ error: { code: string; message: string } }> {
