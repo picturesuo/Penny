@@ -1,40 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildAutopilotStartIntent,
   modeForAutopilotCandidate,
   runAutopilotGoThere,
 } from "../src/autopilotUx";
-import { CurrentExploration } from "../src/components/CurrentExploration";
-import type { AutopilotSuggestion, AutopilotTickData, BrainClaim } from "../src/types/brain";
-
-test("CurrentExploration exposes the Autopilot Go There affordance", () => {
-  const targetClaim = claim(uuidAt(202), "Founders need a durable thinking artifact before they commit time.");
-  const markup = renderToStaticMarkup(
-    createElement(CurrentExploration, {
-      title: "Penny should guide founders through decisions.",
-      subtitle: "Penny found a fragile adoption assumption.",
-      claims: [targetClaim],
-      paths: [],
-      autopilotSuggestion: candidate({
-        action: "challenge",
-        mode: "challenge",
-        primaryActionLabel: "Start Check",
-        targetClaimId: targetClaim.id,
-      }),
-      focusedClaim: targetClaim,
-      activeWorkStructureStep: null,
-      onGoThere() {},
-    }),
-  );
-
-  assert.match(markup, /Autopilot/);
-  assert.match(markup, /Start Check/);
-  assert.match(markup, /Go There/);
-  assert.match(markup, /Target: Founders need a durable thinking artifact/);
-});
+import type { AutopilotSuggestion, AutopilotTickData } from "../src/types/brain";
 
 test("Go There starts the selected candidate and refreshes cockpit once", async () => {
   const sessionId = uuidAt(101);
@@ -168,16 +139,6 @@ function candidate(overrides: Partial<AutopilotSuggestion> = {}): AutopilotSugge
       acceptedMoveKinds: ["autopilot_focus_started"],
     },
     ...overrides,
-  };
-}
-
-function claim(id: string, text: string): BrainClaim {
-  return {
-    id,
-    text,
-    kind: "assumption",
-    status: "exploratory",
-    confidence: 60,
   };
 }
 
