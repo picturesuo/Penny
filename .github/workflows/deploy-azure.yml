@@ -38,6 +38,13 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Validate Penny access token secret
+        run: |
+          test -n "${{ secrets.PENNY_API_TOKEN }}" || {
+            echo "PENNY_API_TOKEN GitHub secret is required for production token auth."
+            exit 1
+          }
+
       - name: Point App Service at the latest image
         run: |
           az webapp config container set \
@@ -47,6 +54,16 @@ jobs:
             --docker-registry-server-url "https://${{ secrets.ACR_LOGIN_SERVER }}" \
             --docker-registry-server-user "${{ secrets.ACR_USERNAME }}" \
             --docker-registry-server-password "${{ secrets.ACR_PASSWORD }}"
+
+      - name: Apply Penny access token
+        run: |
+          az webapp config appsettings set \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ secrets.AZURE_WEBAPP_NAME }}" \
+            --settings \
+              PENNY_AUTH_MODE=token \
+              PENNY_API_TOKEN="${{ secrets.PENNY_API_TOKEN }}" \
+            --output none
 
       - name: Restart App Service
         run: |
