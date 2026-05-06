@@ -868,31 +868,14 @@ export function App() {
           />
         ) : activeMode === "Check" ? (
           <CheckWorkspace
-            documentsData={documentsData}
             data={data}
-            autopilot={autopilot}
-            challengeResponse={challengeResponse}
-            latestArtifact={latestArtifact ?? null}
-            focusedClaimId={focusedClaimId}
-            focusedWorkStructureStepId={focusedWorkStructureStepId}
             status={status}
             isThinking={isThinking}
             initialSeedText={checkInitialSeedText}
             onInitialSeedConsumed={() => setCheckInitialSeedText(null)}
             onStatusChange={setStatus}
             onThinkingChange={setIsThinking}
-            onSeed={handleSeed}
-            onSelectDocument={handleSelectDocument}
-            onGoThere={handleGoThere}
-            onOpenLearn={() => setActiveMode("Learn")}
             onOpenBrain={() => setActiveMode("Brain")}
-            onOpenVerify={() => setActiveMode("Check")}
-            onVerifyChanged={handleVerifyChanged}
-            onClaimSelect={handleManualClaimSelect}
-            onWorkStructureSelect={handleWorkStructureSelect}
-            onIssueChallenge={handleIssueChallenge}
-            onRespondChallenge={handleChallengeResponse}
-            onCreateChallengeBrief={handleCreateChallengeBrief}
           />
             ) : null}
           </>

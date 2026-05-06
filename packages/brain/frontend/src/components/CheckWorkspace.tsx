@@ -10,53 +10,24 @@ import {
 } from "../api/brainClient";
 import type {
   AskPennyResponse,
-  AutopilotTickData,
   BrainData,
-  BrainDocumentsData,
-  ChallengeResponseKind,
   CheckCommitStance,
   CheckCycle,
   CheckRecommendation,
   CheckSession,
-  RespondToChallengeResponse,
-  SessionCockpitData,
-  WorkStructureStep,
 } from "../types/brain";
 import { formatLabel } from "../lib/format";
 import { AskPennyRenderedText } from "./AskPennyRenderedText";
 
 interface CheckWorkspaceProps {
-  documentsData: BrainDocumentsData | null;
   data: BrainData | null;
-  autopilot?: AutopilotTickData | null;
-  challengeResponse?: RespondToChallengeResponse["data"] | null;
-  latestArtifact?: SessionCockpitData["latestArtifact"] | null;
-  focusedClaimId?: string | null;
-  focusedWorkStructureStepId?: string | null;
   status: string;
   isThinking: boolean;
   initialSeedText?: string | null;
   onInitialSeedConsumed?: () => void;
   onStatusChange?: (status: string) => void;
   onThinkingChange?: (isThinking: boolean) => void;
-  onSeed?: (rawIdea: string) => Promise<void>;
-  onSelectDocument?: (sessionId: string) => void;
-  onGoThere?: (candidateId?: string) => Promise<void>;
-  onOpenLearn?: () => void;
   onOpenBrain?: () => void;
-  onOpenVerify?: () => void;
-  onVerifyChanged?: () => Promise<void>;
-  onClaimSelect?: (claimId: string) => void;
-  onWorkStructureSelect?: (step: WorkStructureStep) => void;
-  onIssueChallenge?: () => Promise<void>;
-  onRespondChallenge?: (
-    challengeId: string,
-    draft:
-      | { response: "defend"; reasoning: string }
-      | { response: "revise"; revisedText: string; reasoning?: string }
-      | { response: "absorb"; reasoning?: string },
-  ) => Promise<void>;
-  onCreateChallengeBrief?: () => Promise<void>;
 }
 
 type RetryableCheckAction = "create_session" | "next_cycle";
