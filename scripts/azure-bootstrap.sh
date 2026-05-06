@@ -64,7 +64,13 @@ az provider register --namespace Microsoft.Web --output none
 az provider register --namespace Microsoft.ContainerRegistry --output none
 az provider register --namespace Microsoft.DBforPostgreSQL --output none
 
-az group create --name "$RG" --location "${REGION_CANDIDATES[0]}" --output none
+RG_LOCATION="$(az group show --name "$RG" --query location --output tsv 2>/dev/null || true)"
+if [[ -z "$RG_LOCATION" ]]; then
+  RG_LOCATION="${REGION_CANDIDATES[0]}"
+  az group create --name "$RG" --location "$RG_LOCATION" --output none
+else
+  echo "Resource group already exists in $RG_LOCATION."
+fi
 
 if ! az acr show --resource-group "$RG" --name "$ACR_NAME" >/dev/null 2>&1; then
   az acr create \
