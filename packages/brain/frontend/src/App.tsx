@@ -314,6 +314,15 @@ export function App() {
     setStatus("Preparing Check");
   }
 
+  async function handleLandingQuickNote(rawIdea: string) {
+    setLandingVisible(false);
+    setActiveMode("Learn");
+
+    if (rawIdea.trim()) {
+      await handleKeepRecentIdea(rawIdea);
+    }
+  }
+
   async function handleReworkDocument() {
     if (!data?.session?.id) {
       setStatus("Open a doc before reworking it");
@@ -799,6 +808,7 @@ export function App() {
             status={status}
             onModeSelect={handleLandingModeSelect}
             onPromptSubmit={handleLandingPromptSubmit}
+            onQuickNote={handleLandingQuickNote}
           />
         ) : (
           <>

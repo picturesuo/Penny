@@ -1,4 +1,4 @@
-import { ArrowUp, Upload } from "lucide-react";
+import { ArrowUp, StickyNote, Upload } from "lucide-react";
 import { type ChangeEvent, type FormEvent, type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type PennyMode } from "../autopilotUx";
 import type { LearnSourceMaterialInput } from "../api/brainClient";
@@ -13,15 +13,18 @@ interface LandingPageProps {
     rawIdea: string,
     sourceMaterial?: LearnSourceMaterialInput,
   ) => Promise<void>;
+  onQuickNote: (rawIdea: string) => Promise<void>;
 }
 
-type LandingDestination = Extract<PennyMode, "Learn" | "Check">;
+type LandingDestination = Extract<PennyMode, "Learn" | "Check"> | "QuickNote";
 
 type LandingShortcutIntent =
   | { action: "open-mode"; mode: PennyMode }
   | { action: "select-destination"; destination: LandingDestination };
 
-type LandingSubmitIntent = { action: "submit-prompt"; mode: Extract<PennyMode, "Learn" | "Check">; rawIdea: string };
+type LandingSubmitIntent =
+  | { action: "submit-prompt"; mode: Extract<PennyMode, "Learn" | "Check">; rawIdea: string }
+  | { action: "quick-note"; rawIdea: string };
 
 export const landingShortcuts: Array<{ key: string; label: string }> = [
   { key: "B", label: "for Brain" },
@@ -38,10 +41,18 @@ function destinationForShortcutKey(key: string | null): LandingDestination | nul
     return "Check";
   }
 
+  if (key === "Q") {
+    return "QuickNote";
+  }
+
   return null;
 }
 
 function labelForDestination(destination: LandingDestination): string {
+  if (destination === "QuickNote") {
+    return "Quick note";
+  }
+
   return destination;
 }
 
@@ -66,6 +77,10 @@ export function landingShortcutIntent(key: string): LandingShortcutIntent | null
     return { action: "select-destination", destination: "Check" };
   }
 
+  if (normalizedKey === "q") {
+    return { action: "select-destination", destination: "QuickNote" };
+  }
+
   return null;
 }
 
@@ -76,10 +91,14 @@ export function landingSubmitIntent(destination: LandingDestination | null, rawI
     return null;
   }
 
+  if (destination === "QuickNote") {
+    return { action: "quick-note", rawIdea: trimmedIdea };
+  }
+
   return { action: "submit-prompt", mode: destination, rawIdea: trimmedIdea };
 }
 
-export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit }: LandingPageProps) {
+export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, onQuickNote }: LandingPageProps) {
   const [rawIdea, setRawIdea] = useState("");
   const [sourceMaterial, setSourceMaterial] = useState<LearnSourceMaterialInput | null>(null);
   const [isCtrlDown, setIsCtrlDown] = useState(false);
@@ -128,14 +147,12 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit }: 
         return;
       }
 
-      const shortcut = landingShortcuts.find((item) => item.key.toLowerCase() === event.key.toLowerCase());
-
-      if (!shortcut) {
+      if (!landingShortcutIntent(event.key)) {
         return;
       }
 
       event.preventDefault();
-      void runShortcut(shortcut.key);
+      void runShortcut(event.key);
     }
 
     function handleKeyUp(event: KeyboardEvent) {
@@ -179,7 +196,11 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit }: 
     setSourceMaterial(null);
     setSelectedShortcutKey(null);
 
-    await onPromptSubmit(intent.mode, intent.rawIdea, intent.mode === "Learn" ? sourceMaterial ?? undefined : undefined);
+    if (intent.action === "quick-note") {
+      await onQuickNote(intent.rawIdea);
+    } else {
+      await onPromptSubmit(intent.mode, intent.rawIdea, intent.mode === "Learn" ? sourceMaterial ?? undefined : undefined);
+    }
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -297,6 +318,19 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit }: 
                 title={sourceMaterial ? sourceMaterial.fileName : "Attach source file for Learn"}
               >
                 <Upload size={17} strokeWidth={2.1} />
+              </button>
+              <button
+                type="button"
+                className={selectedShortcutKey === "Q" ? "landing-quick-note-button is-selected" : "landing-quick-note-button"}
+                disabled={disabled}
+                onClick={() => {
+                  void runShortcut("Q");
+                }}
+                aria-label="Save as quick note"
+                aria-pressed={selectedShortcutKey === "Q"}
+                title="Quick note"
+              >
+                <StickyNote size={16} strokeWidth={2.1} />
               </button>
               <button
                 type="submit"
