@@ -235,23 +235,6 @@
     background: #5b6d61 !important;
   }
 
-  .landing-quick-note-button {
-    position: absolute;
-    right: 100px;
-    bottom: 24px;
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
-    border-radius: 999px;
-    color: rgb(46 46 46 / 0.74) !important;
-    background: rgb(46 46 46 / 0.06) !important;
-  }
-
-  .landing-quick-note-button.is-selected {
-    color: #ffffff !important;
-    background: #303030 !important;
-  }
-
   .landing-submit-button.is-visible {
     transform: scale(1);
     opacity: 1;
@@ -5543,14 +5526,6 @@
 
   .landing-file-button {
     right: 56px;
-    bottom: 20px;
-    width: 28px;
-    min-width: 28px;
-    height: 28px;
-  }
-
-  .landing-quick-note-button {
-    right: 92px;
     bottom: 20px;
     width: 28px;
     min-width: 28px;

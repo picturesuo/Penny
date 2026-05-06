@@ -41,9 +41,9 @@ test("landing submit requires a selected destination and prompt", () => {
   });
 });
 
-test("landing shortcut row renders Brain, Check, Learn while Quick note uses the composer icon", () => {
+test("landing shortcuts render in Brain, Check, Learn, Quick note order", () => {
   assert.deepEqual(
     landingShortcuts.map((shortcut) => `${shortcut.key} ${shortcut.label}`),
-    ["B for Brain", "C for Check", "L for Learn"],
+    ["B for Brain", "C for Check", "L for Learn", "Q for Quick note"],
   );
 });

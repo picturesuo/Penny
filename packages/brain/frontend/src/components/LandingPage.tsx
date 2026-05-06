@@ -1,4 +1,4 @@
-import { ArrowUp, StickyNote, Upload } from "lucide-react";
+import { ArrowUp, Upload } from "lucide-react";
 import { type ChangeEvent, type FormEvent, type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type PennyMode } from "../autopilotUx";
 import type { LearnSourceMaterialInput } from "../api/brainClient";
@@ -30,6 +30,7 @@ export const landingShortcuts: Array<{ key: string; label: string }> = [
   { key: "B", label: "for Brain" },
   { key: "C", label: "for Check" },
   { key: "L", label: "for Learn" },
+  { key: "Q", label: "for Quick note" },
 ];
 
 function destinationForShortcutKey(key: string | null): LandingDestination | null {
@@ -309,29 +310,18 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
                   void handleFileChange(event);
                 }}
               />
-              <button
-                type="button"
-                className={sourceMaterial ? "landing-file-button is-attached" : "landing-file-button"}
-                disabled={disabled}
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Attach source file for Learn"
-                title={sourceMaterial ? sourceMaterial.fileName : "Attach source file for Learn"}
-              >
-                <Upload size={17} strokeWidth={2.1} />
-              </button>
-              <button
-                type="button"
-                className={selectedShortcutKey === "Q" ? "landing-quick-note-button is-selected" : "landing-quick-note-button"}
-                disabled={disabled}
-                onClick={() => {
-                  void runShortcut("Q");
-                }}
-                aria-label="Save as quick note"
-                aria-pressed={selectedShortcutKey === "Q"}
-                title="Quick note"
-              >
-                <StickyNote size={16} strokeWidth={2.1} />
-              </button>
+              {selectedShortcutKey === "L" ? (
+                <button
+                  type="button"
+                  className={sourceMaterial ? "landing-file-button is-attached" : "landing-file-button"}
+                  disabled={disabled}
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach source file for Learn"
+                  title={sourceMaterial ? sourceMaterial.fileName : "Attach source file for Learn"}
+                >
+                  <Upload size={17} strokeWidth={2.1} />
+                </button>
+              ) : null}
               <button
                 type="submit"
                 className={selectedShortcutKey === null ? "landing-submit-button" : "landing-submit-button is-visible"}
