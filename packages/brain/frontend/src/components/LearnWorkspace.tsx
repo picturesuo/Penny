@@ -1047,7 +1047,7 @@ export function AskPennyDrawer({
     label: string;
     question: string;
   }> = [
-    { id: "explain_visual", label: "Explain visual", question: "Explain this visual." },
+    { id: "explain_visual", label: "Explain this", question: "Explain this lesson focus." },
     { id: "another_example", label: "Give another example", question: "Give another example for this lesson." },
     { id: "make_simpler", label: "Make simpler", question: "Make this lesson simpler." },
     { id: "quiz_me", label: "Quiz me", question: "Quiz me on this lesson." },
@@ -1142,9 +1142,9 @@ export function AskPennyDrawer({
       </header>
 
       <div className="ask-penny-context-card" aria-label="Current lesson context">
-        <span>{lesson.visual.type.replace("_", " ")}</span>
-        <strong>{lesson.visual.title}</strong>
-        <p>{lesson.takeaway}</p>
+        <span>lesson focus</span>
+        <strong>{lesson.title}</strong>
+        <p>{lesson.shortExplanation}</p>
       </div>
 
       <div className="ask-penny-quick-actions" aria-label="Ask Penny quick actions">
