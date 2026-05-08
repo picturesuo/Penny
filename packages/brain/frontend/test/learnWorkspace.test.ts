@@ -15,10 +15,7 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.match(markup, /Current lesson context is loaded/);
   assert.match(markup, /LEARNING PATH/);
   assert.match(markup, /LESSON 1 \/ 15/);
-  assert.match(markup, /YC program loop/);
-  assert.match(markup, /Your turn/);
-  assert.match(markup, /Takeaway/);
-  assert.match(markup, /Explain visual/);
+  assert.match(markup, /Explain this/);
   assert.match(markup, /Give another example/);
   assert.match(markup, /Make simpler/);
   assert.match(markup, /Quiz me/);
@@ -57,6 +54,10 @@ test("LearnWorkspace first screen opens directly to the lesson view", () => {
   assert.doesNotMatch(markup, /Search\/Settings|Settings|Makes Cents|MAKES CENTS/);
   assert.doesNotMatch(markup, /FULLY FLESHED-OUT EXAMPLE/);
   assert.doesNotMatch(markup, /Visual placeholder/);
+  assert.doesNotMatch(markup, /YC program loop/);
+  assert.doesNotMatch(markup, /Your turn/);
+  assert.doesNotMatch(markup, /Takeaway/);
+  assert.doesNotMatch(markup, /Explain visual/);
   assert.doesNotMatch(markup, /NOTE/);
 });
 
@@ -230,10 +231,6 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   assert.match(markup, /Package pricing/);
   assert.match(markup, /Iterate pricing/);
   assert.match(markup, /An expert starts by naming what the pricing decision must accomplish/);
-  assert.match(markup, /Name the buyer/);
-  assert.match(markup, /Pricing value map/);
-  assert.match(markup, /Your turn/);
-  assert.match(markup, /Takeaway/);
   assert.doesNotMatch(markup, /What is the strongest true version/);
   assert.doesNotMatch(markup, /What should this not mean/);
   assert.doesNotMatch(markup, /What twist changes the answer/);
@@ -242,6 +239,10 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
   assert.doesNotMatch(markup, /Definition/);
   assert.doesNotMatch(markup, /MISCONCEPTIONS/);
   assert.doesNotMatch(markup, /A pricing expert teaching/);
+  assert.doesNotMatch(markup, /Name the buyer/);
+  assert.doesNotMatch(markup, /Pricing value map/);
+  assert.doesNotMatch(markup, /Your turn/);
+  assert.doesNotMatch(markup, /Takeaway/);
 });
 
 test("LearnWorkspace exposes the whole learning path around the active step", () => {
