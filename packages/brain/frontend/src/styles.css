@@ -1673,11 +1673,57 @@
   }
 
   .brain-search-panel,
+  .brain-document-seed,
   .brain-search-results,
   .brain-recent-claims,
   .brain-recent-documents {
     display: grid;
     gap: 12px;
+  }
+
+  .brain-document-seed {
+    border-bottom: 1px solid #d2d2d2;
+    padding-bottom: 18px;
+  }
+
+  .brain-document-seed label {
+    color: rgb(17 17 17 / 0.72);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .brain-document-seed-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 10px;
+  }
+
+  .brain-document-seed textarea {
+    width: 100%;
+    min-height: 92px;
+    resize: vertical;
+    border: 1px solid #cfcfcf;
+    border-radius: 8px;
+    background: #ffffff;
+    padding: 12px 14px;
+    color: #111111;
+    font: inherit;
+    font-size: 16px;
+    line-height: 1.28;
+  }
+
+  .brain-document-seed textarea::placeholder {
+    color: rgb(17 17 17 / 0.48);
+  }
+
+  .brain-document-seed button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 42px;
   }
 
   .brain-search-panel {
@@ -5816,6 +5862,15 @@
   .brain-document-main,
   .quick-note-document-main {
     border-bottom: 1px solid #d0d0d0;
+  }
+
+  .brain-document-seed-row {
+    grid-template-columns: 1fr;
+  }
+
+  .brain-document-seed button {
+    justify-content: center;
+    width: 100%;
   }
 
   .brain-document-page {

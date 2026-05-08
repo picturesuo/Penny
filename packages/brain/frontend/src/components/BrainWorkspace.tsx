@@ -256,6 +256,8 @@ export function BrainWorkspace({
       ) : (
         <BrainDocumentsIndex
           documentsData={documentsData}
+          disabled={isThinking}
+          onCreateDocument={onSeed}
           onSelectDocument={handleSelectDocument}
         />
       )}
@@ -1722,13 +1724,18 @@ function archiveMeta(recent: BrainRecentIdea): string {
 
 function BrainDocumentsIndex({
   documentsData,
+  disabled,
+  onCreateDocument,
   onSelectDocument,
 }: {
   documentsData: BrainDocumentsData | null;
+  disabled: boolean;
+  onCreateDocument: (rawIdea: string) => Promise<void>;
   onSelectDocument: (sessionId: string) => void;
 }) {
   const documents = documentsData?.documents ?? [];
   const [searchQuery, setSearchQuery] = useState("");
+  const [seedText, setSeedText] = useState("");
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const recentDocuments = useMemo(() => recentDocumentRows(documents), [documents]);
   const searchResults = useMemo(() => {
@@ -1739,6 +1746,19 @@ function BrainDocumentsIndex({
     return searchDocumentRows(documents, normalizedQuery);
   }, [documents, normalizedQuery]);
 
+  async function handleCreateDocument(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const rawIdea = seedText.trim();
+
+    if (!rawIdea || disabled) {
+      return;
+    }
+
+    setSeedText("");
+    await onCreateDocument(rawIdea);
+  }
+
   return (
     <section className="brain-library-panel" aria-label="Brain document library">
       <div className="brain-library-head">
@@ -1746,6 +1766,23 @@ function BrainDocumentsIndex({
           <h1>Documents</h1>
         </div>
       </div>
+      <form className="brain-document-seed" onSubmit={handleCreateDocument}>
+        <label htmlFor="brainDocumentSeed">Start a document</label>
+        <div className="brain-document-seed-row">
+          <textarea
+            id="brainDocumentSeed"
+            value={seedText}
+            onChange={(event) => setSeedText(event.target.value)}
+            placeholder="Write the thought you want Penny to structure."
+            rows={3}
+            disabled={disabled}
+          />
+          <button type="submit" className="primary-command" disabled={disabled || !seedText.trim()}>
+            <Send size={15} aria-hidden="true" />
+            <span>Create</span>
+          </button>
+        </div>
+      </form>
       <section className="brain-search-panel" aria-label="Search through your thinking">
         <label className="sr-only" htmlFor="brainDocumentSearch">
           Search through your thinking
