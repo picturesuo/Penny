@@ -528,24 +528,9 @@ export function MicroLessonSlide({
         <h1>{lesson.title}</h1>
       </header>
 
-      <div className="micro-lesson-grid">
-        <section className="micro-lesson-explanation" aria-label="Explanation">
-          <AskPennyRenderedText text={lesson.shortExplanation} />
-        </section>
-
-        <LearnVisualRenderer visual={lesson.visual} />
-      </div>
-
-      <footer className="micro-lesson-footer">
-        <section className="micro-lesson-check" aria-label="Quick check">
-          <span>Your turn</span>
-          <p>{lesson.quickCheck}</p>
-        </section>
-        <section className="micro-lesson-takeaway" aria-label="Takeaway">
-          <span>Takeaway</span>
-          <p>{lesson.takeaway}</p>
-        </section>
-      </footer>
+      <section className="micro-lesson-focus" aria-label="Lesson focus">
+        <p>{lesson.shortExplanation}</p>
+      </section>
     </section>
   );
 }
