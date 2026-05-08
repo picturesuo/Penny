@@ -4873,20 +4873,21 @@
     position: absolute;
     z-index: 3;
     top: 0;
-    right: 0;
+    left: clamp(210px, 13vw, 260px);
     display: grid;
     grid-template-rows: auto auto auto minmax(0, 1fr) auto;
     gap: 12px;
     min-width: 0;
-    width: min(420px, calc(100% - 24px));
+    width: min(420px, calc(100% - clamp(210px, 13vw, 260px) - 24px));
     height: 100%;
     max-height: 100%;
     min-height: 0;
     overflow: hidden;
+    border-right: 1px solid #111111;
     border-left: 1px solid #111111;
     background: var(--penny-paper);
     padding: 16px;
-    transform: translateX(calc(100% + 1px));
+    transform: translateX(calc(-100% - 1px));
     opacity: 0;
     transition:
       transform 220ms ease,
@@ -5782,6 +5783,7 @@
 
   .ask-penny-panel {
     position: absolute;
+    left: 0;
     width: min(420px, 100%);
     padding: 14px;
   }
