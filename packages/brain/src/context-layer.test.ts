@@ -107,6 +107,27 @@ test("processEphemeralContext extracts permissioned memory and deletes raw conte
   assert.equal(result.auditEvents.includes("chunk.deleted"), true);
 });
 
+test("processEphemeralContext blocks memory extraction for blocked sources", () => {
+  const result = processEphemeralContext({
+    provider: "manual",
+    sourceUri: "manual:blocked-source",
+    label: "Blocked source",
+    fetchedAt: "2026-05-08T12:00:00.000Z",
+    text: [
+      "Do not ingest: founder payroll export.",
+      "I think this should never become a Penny memory.",
+      "My goal is private and should be ignored for this source.",
+    ].join("\n"),
+  });
+
+  assert.equal(result.redaction.findings.some((finding) => finding.type === "blocked_source"), true);
+  assert.equal(result.memoryShards.length, 0);
+  assert.equal(result.brainNodes.length, 0);
+  assert.equal(result.brainEdges.length, 0);
+  assert.equal(result.auditEvents.includes("memory.blocked"), true);
+  assert.equal(result.chunk.rawDeleted, true);
+});
+
 test("rankMemoryShards returns the smallest useful provenance-backed set", () => {
   const results = rankMemoryShards(
     {
