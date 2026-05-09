@@ -405,6 +405,38 @@ test("POST /api/context/connectors/:id/sync queues selected Gmail and Calendar s
   assert.equal(calendarBody.error.code, "context_scope_not_allowed");
 });
 
+test("POST /api/context/connectors/:id/sync maps in-flight scope conflicts", async () => {
+  const response = await handleContextConnectorSyncRequest(
+    scopedRequest("http://localhost/api/context/connectors/conn-1/sync", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "gmail",
+        selection: {
+          provider: "gmail",
+          labels: ["Penny"],
+        },
+        items: [
+          {
+            id: "thread-1",
+            snippet: "Selected metadata snippet.",
+          },
+        ],
+      }),
+    }),
+    "conn-1",
+    {
+      async syncConnector() {
+        throw new Error("Connector sync is already in progress for this scope.");
+      },
+    },
+  );
+  const body = (await response.json()) as { error: { code: string; message: string } };
+
+  assert.equal(response.status, 409);
+  assert.equal(body.error.code, "connector_sync_failed");
+  assert.match(body.error.message, /already in progress/);
+});
+
 test("PUT /api/context/consent updates memory and training preferences explicitly", async () => {
   const response = await handleContextConsentRequest(
     scopedRequest("http://localhost/api/context/consent", {
