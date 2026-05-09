@@ -466,7 +466,7 @@ export function processEphemeralContext(input: EphemeralProcessInput): Ephemeral
   const blockedSource = initialRedaction.findings.some((finding) => finding.type === "blocked_source");
   const redaction = blockedSource ? { ...initialRedaction, text: "[REDACTED_BLOCKED_SOURCE]" } : initialRedaction;
   const chunkHash = hashText(`${input.provider}:${input.sourceUri}:${redaction.text}`);
-  const rawRetained = input.rawRetention === true;
+  const rawRetained = blockedSource ? false : input.rawRetention === true;
   const memoryShards = blockedSource
     ? []
     : extractMemoryShards({
