@@ -64,6 +64,12 @@ const reviewStatusByAction: Record<MemoryReviewAction, MemoryReviewStatus> = {
   deprioritize: "deprioritized",
 };
 
+export function contextMemoryAuditEvent(
+  processing: Pick<EphemeralProcessResult, "auditEvents">,
+): "memory.extracted" | "memory.blocked" {
+  return processing.auditEvents.includes("memory.blocked") ? "memory.blocked" : "memory.extracted";
+}
+
 export async function loadContextDashboard(
   db: PennyDatabase,
   scope: BrainScope,
@@ -400,6 +406,7 @@ export async function persistContextImport(
       shards: persistedShards,
       edges: input.processing.brainEdges,
     });
+    const memoryAuditEvent = contextMemoryAuditEvent(input.processing);
 
     for (const signal of checkSignals) {
       const matchingShard = persistedShards.find((shard) => signal.claim === shard.text) ?? persistedShards[0];
@@ -455,11 +462,16 @@ export async function persistContextImport(
       },
       {
         ...scope,
-        event: "memory.extracted",
+        event: memoryAuditEvent,
         actorUserId: scope.userId,
         connectorAccountId: account.id,
         sourceId: source.id,
-        details: { count: input.processing.memoryShards.length, digestId: digest.id },
+        details: {
+          count: input.processing.memoryShards.length,
+          digestId: digest.id,
+          blocked: memoryAuditEvent === "memory.blocked",
+          findings: input.processing.redaction.findings,
+        },
       },
       {
         ...scope,
