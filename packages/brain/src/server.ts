@@ -37,6 +37,7 @@ import {
   handleContextImportRequest,
   handleContextMemoryDeleteRequest,
   handleContextMemoryReviewRequest,
+  handleContextRetrievalRequest,
 } from "./context-layer-route.ts";
 import { createPennySql } from "./db/client.ts";
 import * as schema from "./db/schema.ts";
@@ -145,6 +146,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/context/import") {
       await writeWebResponse(outgoing, await handleContextImportRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/context/retrieve") {
+      await writeWebResponse(outgoing, await handleContextRetrievalRequest(request));
       return;
     }
 
