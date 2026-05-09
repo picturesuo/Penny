@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type { PennyDatabase } from "./db/client.ts";
 import {
@@ -21,8 +21,10 @@ import type {
   EphemeralProcessResult,
   MemoryReviewStatus,
   RetrievalShard,
+  RetrievalRequest,
+  RetrievalResult,
 } from "./context-layer.ts";
-import { checkMemoryGraph, createLearnCardsForShards } from "./context-layer.ts";
+import { checkMemoryGraph, createLearnCardsForShards, rankMemoryShards } from "./context-layer.ts";
 import type {
   ContextDashboardPayload,
   DeleteMemoryPayload,
@@ -275,6 +277,7 @@ export async function persistContextImport(
           consent: {
             visibility: shard.visibility,
             autoApproved: shard.reviewStatus === "auto_approved",
+            topicCluster: shard.topicCluster,
           },
           lastSeen: new Date(shard.lastSeen),
           visibility: shard.visibility,
@@ -457,6 +460,100 @@ export async function persistContextImport(
   });
 }
 
+export async function retrieveContextMemories(
+  db: PennyDatabase,
+  scope: BrainScope,
+  request: RetrievalRequest,
+): Promise<{ sourceOfTruth: "context_layer_memory_retrieval"; results: RetrievalResult[] }> {
+  const shardRows = await db
+    .select()
+    .from(memoryShards)
+    .where(scopeCondition(memoryShards, scope))
+    .orderBy(desc(memoryShards.lastSeen))
+    .limit(200);
+  const shardIds = shardRows.map((shard) => shard.id);
+  const pointerRows = shardIds.length
+    ? await db
+        .select()
+        .from(evidencePointers)
+        .where(and(scopeCondition(evidencePointers, scope), inArray(evidencePointers.shardId, shardIds)))
+    : [];
+  const sourceIds = [...new Set(pointerRows.map((pointer) => pointer.sourceId))];
+  const sourceRows = sourceIds.length
+    ? await db
+        .select()
+        .from(contextSources)
+        .where(and(scopeCondition(contextSources, scope), inArray(contextSources.id, sourceIds)))
+    : [];
+  const nodeRows = shardIds.length
+    ? await db
+        .select()
+        .from(brainNodes)
+        .where(and(scopeCondition(brainNodes, scope), inArray(brainNodes.memoryShardId, shardIds)))
+    : [];
+  const nodeIds = nodeRows.map((node) => node.id);
+  const edgeRows = nodeIds.length
+    ? await db
+        .select()
+        .from(brainEdges)
+        .where(
+          and(
+            scopeCondition(brainEdges, scope),
+            or(inArray(brainEdges.fromNode, nodeIds), inArray(brainEdges.toNode, nodeIds)),
+          ),
+        )
+    : [];
+  const sourceById = new Map(sourceRows.map((source) => [source.id, source]));
+  const pointersByShard = new Map<string, typeof pointerRows>();
+
+  for (const pointer of pointerRows) {
+    pointersByShard.set(pointer.shardId, [...(pointersByShard.get(pointer.shardId) ?? []), pointer]);
+  }
+
+  const graphDistanceByShard = new Map<string, number>();
+
+  for (const node of nodeRows) {
+    if (!node.memoryShardId) {
+      continue;
+    }
+
+    graphDistanceByShard.set(
+      node.memoryShardId,
+      edgeRows.some((edge) => edge.fromNode === node.id || edge.toNode === node.id) ? 1 : 3,
+    );
+  }
+
+  const retrievalShards: RetrievalShard[] = shardRows.map((shard) => {
+    const consent = asRecord(shard.consent);
+    const pointers = pointersByShard.get(shard.id) ?? [];
+
+    return {
+      id: shard.id,
+      text: shard.text,
+      type: shard.type,
+      sourceClass: shard.sourceClass,
+      confidence: shard.confidence,
+      decay: shard.decay,
+      lastSeen: shard.lastSeen.toISOString(),
+      topicCluster: typeof consent.topicCluster === "string" ? consent.topicCluster : shard.type,
+      graphDistance: graphDistanceByShard.get(shard.id) ?? 3,
+      projectRelevance: shard.visibility === "project" ? 0.85 : 0.5,
+      novelty: 0.5,
+      contradicted: shard.reviewStatus === "rejected",
+      evidence: pointers.map((pointer) => ({
+        sourceUri: sourceById.get(pointer.sourceId)?.sourceUri ?? pointer.sourceId,
+        locator: locatorFromValue(pointer.locator),
+        snippetPolicy: pointer.snippetPolicy,
+      })),
+    };
+  });
+
+  return {
+    sourceOfTruth: "context_layer_memory_retrieval",
+    results: rankMemoryShards(request, retrievalShards),
+  };
+}
+
 export async function reviewContextMemory(
   db: PennyDatabase,
   input: {
@@ -611,6 +708,23 @@ function scopesFromPlan(plan: ConnectorScopePlan): string[] {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function locatorFromValue(value: unknown): { chunkHash: string; line?: number; pattern?: string } {
+  const record = asRecord(value);
+  const locator: { chunkHash: string; line?: number; pattern?: string } = {
+    chunkHash: typeof record.chunkHash === "string" ? record.chunkHash : "unknown",
+  };
+
+  if (typeof record.line === "number") {
+    locator.line = record.line;
+  }
+
+  if (typeof record.pattern === "string") {
+    locator.pattern = record.pattern;
+  }
+
+  return locator;
 }
 
 function auditEventForReview(action: MemoryReviewAction) {
