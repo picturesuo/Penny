@@ -465,15 +465,18 @@ export function processEphemeralContext(input: EphemeralProcessInput): Ephemeral
   const redaction = redactPrivateText(input.text);
   const chunkHash = hashText(`${input.provider}:${input.sourceUri}:${redaction.text}`);
   const rawRetained = input.rawRetention === true;
-  const memoryShards = extractMemoryShards({
-    text: redaction.text,
-    provider: input.provider,
-    sourceUri: input.sourceUri,
-    sourceClass,
-    chunkHash,
-    autoApprove: input.autoApprove === true,
-    lastSeen: input.fetchedAt ?? new Date().toISOString(),
-  });
+  const blockedSource = redaction.findings.some((finding) => finding.type === "blocked_source");
+  const memoryShards = blockedSource
+    ? []
+    : extractMemoryShards({
+        text: redaction.text,
+        provider: input.provider,
+        sourceUri: input.sourceUri,
+        sourceClass,
+        chunkHash,
+        autoApprove: input.autoApprove === true,
+        lastSeen: input.fetchedAt ?? new Date().toISOString(),
+      });
   const digest = buildSourceDigest({
     text: redaction.text,
     provider: input.provider,
@@ -518,7 +521,7 @@ export function processEphemeralContext(input: EphemeralProcessInput): Ephemeral
     auditEvents: [
       "source.fetched",
       redaction.findings.length > 0 ? "chunk.redacted" : "chunk.checked",
-      "memory.extracted",
+      blockedSource ? "memory.blocked" : "memory.extracted",
       rawRetained ? "chunk.retained" : "chunk.deleted",
     ],
   };
