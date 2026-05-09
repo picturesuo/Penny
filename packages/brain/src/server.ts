@@ -35,6 +35,7 @@ import {
   handleContextArtifactsRequest,
   handleContextConnectorConnectRequest,
   handleContextConnectorFetchRequest,
+  handleContextConnectorRefreshRequest,
   handleContextConnectorRevokeRequest,
   handleContextConnectorSyncRequest,
   handleContextConsentRequest,
@@ -203,6 +204,16 @@ export function createPennyServer(): ReturnType<typeof createServer> {
       await writeWebResponse(
         outgoing,
         await handleContextConnectorFetchRequest(request, decodeURIComponent(contextConnectorFetchMatch[1] ?? "")),
+      );
+      return;
+    }
+
+    const contextConnectorRefreshMatch = /^\/api\/context\/connectors\/([^/]+)\/refresh$/.exec(url.pathname);
+
+    if (contextConnectorRefreshMatch) {
+      await writeWebResponse(
+        outgoing,
+        await handleContextConnectorRefreshRequest(request, decodeURIComponent(contextConnectorRefreshMatch[1] ?? "")),
       );
       return;
     }
