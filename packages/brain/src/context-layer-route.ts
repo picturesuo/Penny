@@ -10,13 +10,18 @@ import {
   type RetrievalRequest,
   type RetrievalResult,
 } from "./context-layer.ts";
+import type { ConnectorSyncItem, ConnectorTokenInput } from "./context-connector-service.ts";
 import {
+  connectContextConnector,
+  type ConnectContextConnectorPayload,
   deleteContextMemory,
   loadContextDashboard,
   persistContextImport,
   reviewContextMemory,
   retrieveContextMemories,
   revokeContextConnector,
+  syncContextConnector,
+  type SyncContextConnectorPayload,
 } from "./context-layer-repository.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { scopeValues, type BrainScope, type BrainScopeInput } from "./scope.ts";
@@ -65,6 +70,21 @@ export type ContextImportRequestBody = {
   autoApprove?: boolean;
   rawRetention?: boolean;
   connector?: ConnectorScopeSelection;
+};
+
+export type ContextConnectorConnectRequestBody = {
+  provider?: ContextProvider;
+  connector?: ConnectorScopeSelection;
+  token?: ConnectorTokenInput | null;
+};
+
+export type ContextConnectorSyncRequestBody = {
+  provider?: ContextProvider;
+  selection?: ConnectorScopeSelection;
+  items?: ConnectorSyncItem[];
+  fetchedAt?: string;
+  autoApprove?: boolean;
+  rawRetention?: boolean;
 };
 
 export type ContextImportPayload = {
@@ -117,7 +137,24 @@ export type RevokeConnectorPayload = {
 export type ContextLayerRouteOptions = {
   db?: PennyDatabase;
   databaseUrl?: string;
+  connectorTokenSecret?: string;
   loadDashboard?: (scope: BrainScope) => Promise<ContextDashboardPayload>;
+  connectConnector?: (input: {
+    scope: BrainScope;
+    provider: ContextProvider;
+    connectorPlan: ConnectorScopePlan;
+    token: ConnectorTokenInput | null;
+  }) => Promise<ConnectContextConnectorPayload>;
+  syncConnector?: (input: {
+    scope: BrainScope;
+    connectorAccountId: string;
+    provider: ContextProvider;
+    selection: ConnectorScopeSelection;
+    items: readonly ConnectorSyncItem[];
+    fetchedAt: string | undefined;
+    autoApprove: boolean | undefined;
+    rawRetention: boolean | undefined;
+  }) => Promise<SyncContextConnectorPayload>;
   persistImport?: (input: {
     scope: BrainScope;
     connectorPlan: ConnectorScopePlan;
@@ -229,6 +266,157 @@ export async function handleContextImportRequest(
   };
 
   return jsonResponse({ data: payload }, 201);
+}
+
+export async function handleContextConnectorConnectRequest(
+  request: Request,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/context/connectors requires the POST method.");
+  }
+
+  const body = await readJsonBody<ContextConnectorConnectRequestBody>(request);
+
+  if (!body.ok) {
+    return jsonResponse({ error: { code: "invalid_json", message: body.message } }, 400);
+  }
+
+  if (!isContextProvider(body.value.provider)) {
+    return jsonResponse({ error: { code: "invalid_provider", message: "Connector connection requires a supported provider." } }, 400);
+  }
+
+  const selection: ConnectorScopeSelection = {
+    ...(body.value.connector ?? {}),
+    provider: body.value.provider,
+  };
+  const connectorPlan = planConnectorScope(selection);
+
+  if (!connectorPlan.allowed) {
+    return jsonResponse(
+      {
+        error: {
+          code: "context_scope_not_allowed",
+          message: connectorPlan.warnings[0] ?? "Selected connector scope is not allowed.",
+          details: connectorPlan,
+        },
+      },
+      409,
+    );
+  }
+
+  const db = resolveContextDb(options, Boolean(options.connectConnector));
+  const connectConnector =
+    options.connectConnector ??
+    ((input: {
+      scope: BrainScope;
+      provider: ContextProvider;
+      connectorPlan: ConnectorScopePlan;
+      token: ConnectorTokenInput | null;
+    }) =>
+      connectContextConnector(
+        requireContextDb(db),
+        options.connectorTokenSecret === undefined
+          ? input
+          : {
+              ...input,
+              tokenSecret: options.connectorTokenSecret,
+            },
+      ));
+
+  return jsonResponse(
+    {
+      data: await connectConnector({
+        scope: scopeFromRequest(request),
+        provider: body.value.provider,
+        connectorPlan,
+        token: body.value.token ?? null,
+      }),
+    },
+    201,
+  );
+}
+
+export async function handleContextConnectorSyncRequest(
+  request: Request,
+  connectorAccountId: string,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/context/connectors/:connectorAccountId/sync requires the POST method.");
+  }
+
+  const normalizedConnectorAccountId = connectorAccountId.trim();
+
+  if (!normalizedConnectorAccountId) {
+    return jsonResponse(
+      { error: { code: "invalid_connector_account_id", message: "Connector sync requires an account id." } },
+      400,
+    );
+  }
+
+  const body = await readJsonBody<ContextConnectorSyncRequestBody>(request);
+
+  if (!body.ok) {
+    return jsonResponse({ error: { code: "invalid_json", message: body.message } }, 400);
+  }
+
+  if (!isContextProvider(body.value.provider)) {
+    return jsonResponse({ error: { code: "invalid_provider", message: "Connector sync requires a supported provider." } }, 400);
+  }
+
+  if (!Array.isArray(body.value.items)) {
+    return jsonResponse({ error: { code: "invalid_sync_items", message: "Connector sync requires an items array." } }, 400);
+  }
+
+  const selection: ConnectorScopeSelection = {
+    ...(body.value.selection ?? {}),
+    provider: body.value.provider,
+  };
+  const connectorPlan = planConnectorScope(selection);
+
+  if (!connectorPlan.allowed) {
+    return jsonResponse(
+      {
+        error: {
+          code: "context_scope_not_allowed",
+          message: connectorPlan.warnings[0] ?? "Selected connector scope is not allowed.",
+          details: connectorPlan,
+        },
+      },
+      409,
+    );
+  }
+
+  const db = resolveContextDb(options, Boolean(options.syncConnector));
+  const syncConnector =
+    options.syncConnector ??
+    ((input: {
+      scope: BrainScope;
+      connectorAccountId: string;
+      provider: ContextProvider;
+      selection: ConnectorScopeSelection;
+      items: readonly ConnectorSyncItem[];
+      fetchedAt: string | undefined;
+      autoApprove: boolean | undefined;
+      rawRetention: boolean | undefined;
+    }) => syncContextConnector(requireContextDb(db), compactSyncInput(input)));
+
+  return jsonResponse(
+    {
+      data: await syncConnector({
+        scope: scopeFromRequest(request),
+        connectorAccountId: normalizedConnectorAccountId,
+        provider: body.value.provider,
+        selection,
+        items: body.value.items,
+        fetchedAt: body.value.fetchedAt,
+        autoApprove: body.value.autoApprove,
+        rawRetention: body.value.rawRetention,
+      }),
+    },
+    202,
+  );
 }
 
 export async function handleContextMemoryReviewRequest(
@@ -503,6 +691,57 @@ function isContextProvider(value: unknown): value is ContextProvider {
 
 function isMemoryReviewAction(value: unknown): value is MemoryReviewAction {
   return value === "approve" || value === "reject" || value === "edit" || value === "merge" || value === "deprioritize";
+}
+
+function compactSyncInput(input: {
+  scope: BrainScope;
+  connectorAccountId: string;
+  provider: ContextProvider;
+  selection: ConnectorScopeSelection;
+  items: readonly ConnectorSyncItem[];
+  fetchedAt: string | undefined;
+  autoApprove: boolean | undefined;
+  rawRetention: boolean | undefined;
+}): {
+  scope: BrainScope;
+  connectorAccountId: string;
+  provider: ContextProvider;
+  selection: ConnectorScopeSelection;
+  items: readonly ConnectorSyncItem[];
+  fetchedAt?: string;
+  autoApprove?: boolean;
+  rawRetention?: boolean;
+} {
+  const output: {
+    scope: BrainScope;
+    connectorAccountId: string;
+    provider: ContextProvider;
+    selection: ConnectorScopeSelection;
+    items: readonly ConnectorSyncItem[];
+    fetchedAt?: string;
+    autoApprove?: boolean;
+    rawRetention?: boolean;
+  } = {
+    scope: input.scope,
+    connectorAccountId: input.connectorAccountId,
+    provider: input.provider,
+    selection: input.selection,
+    items: input.items,
+  };
+
+  if (input.fetchedAt !== undefined) {
+    output.fetchedAt = input.fetchedAt;
+  }
+
+  if (input.autoApprove !== undefined) {
+    output.autoApprove = input.autoApprove;
+  }
+
+  if (input.rawRetention !== undefined) {
+    output.rawRetention = input.rawRetention;
+  }
+
+  return output;
 }
 
 function isContextSourceClass(value: unknown): value is ContextSourceClass {
