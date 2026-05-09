@@ -34,6 +34,7 @@ import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import {
   handleContextArtifactsRequest,
   handleContextConnectorConnectRequest,
+  handleContextConnectorFetchRequest,
   handleContextConnectorRevokeRequest,
   handleContextConnectorSyncRequest,
   handleContextConsentRequest,
@@ -192,6 +193,16 @@ export function createPennyServer(): ReturnType<typeof createServer> {
       await writeWebResponse(
         outgoing,
         await handleContextConnectorSyncRequest(request, decodeURIComponent(contextConnectorSyncMatch[1] ?? "")),
+      );
+      return;
+    }
+
+    const contextConnectorFetchMatch = /^\/api\/context\/connectors\/([^/]+)\/fetch$/.exec(url.pathname);
+
+    if (contextConnectorFetchMatch) {
+      await writeWebResponse(
+        outgoing,
+        await handleContextConnectorFetchRequest(request, decodeURIComponent(contextConnectorFetchMatch[1] ?? "")),
       );
       return;
     }
