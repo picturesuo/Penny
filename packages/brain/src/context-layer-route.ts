@@ -20,7 +20,9 @@ import {
 import {
   connectContextConnector,
   type ConnectContextConnectorPayload,
+  type ContextArtifactsPayload,
   deleteContextMemory,
+  loadContextArtifacts,
   loadContextDashboard,
   persistContextImport,
   reviewContextMemory,
@@ -175,6 +177,7 @@ export type ContextLayerRouteOptions = {
   oauthStateSecret?: string;
   oauthTokenExchange?: ConnectorOAuthTokenExchange;
   loadDashboard?: (scope: BrainScope) => Promise<ContextDashboardPayload>;
+  loadArtifacts?: (input: { scope: BrainScope; limit: number }) => Promise<ContextArtifactsPayload>;
   startOAuth?: (input: {
     provider: Extract<ContextProvider, "gmail" | "calendar">;
     connector: ConnectorScopeSelection;
@@ -258,6 +261,34 @@ export async function handleContextDashboardRequest(
   const loadDashboard = options.loadDashboard ?? ((requestScope: BrainScope) => loadContextDashboard(requireContextDb(db), requestScope));
 
   return jsonResponse({ data: await loadDashboard(scope) }, 200);
+}
+
+export async function handleContextArtifactsRequest(
+  request: Request,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return methodNotAllowed("GET /api/context/artifacts requires the GET method.");
+  }
+
+  const url = new URL(request.url);
+  const limitValue = Number(url.searchParams.get("limit") ?? "25");
+  const limit = Number.isFinite(limitValue) ? limitValue : 25;
+  const boundedLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
+  const db = resolveContextDb(options, Boolean(options.loadArtifacts));
+  const loadArtifacts =
+    options.loadArtifacts ??
+    ((input: { scope: BrainScope; limit: number }) => loadContextArtifacts(requireContextDb(db), input.scope, { limit: input.limit }));
+
+  return jsonResponse(
+    {
+      data: await loadArtifacts({
+        scope: scopeFromRequest(request),
+        limit: boundedLimit,
+      }),
+    },
+    200,
+  );
 }
 
 export async function handleContextImportRequest(
