@@ -3238,7 +3238,8 @@
 
   .inline-thinking-canvas-board {
     position: relative;
-    min-height: 560px;
+    height: min(72vh, 760px);
+    min-height: 640px;
     overflow: auto;
     border: 1px solid #d1c5b2;
     border-radius: 8px;
@@ -3247,42 +3248,67 @@
       linear-gradient(90deg, rgb(77 65 47 / 0.08) 1px, transparent 1px),
       #fbf4e8;
     background-size: 28px 28px;
+    overscroll-behavior: contain;
+  }
+
+  .inline-thinking-canvas-plane {
+    position: relative;
+    min-width: 100%;
+    min-height: 100%;
   }
 
   .inline-thinking-canvas-board svg {
     position: absolute;
-    inset: 0;
-    width: 920px;
-    height: 560px;
+    top: 0;
+    left: 0;
+    overflow: visible;
     pointer-events: none;
+  }
+
+  #inline-canvas-arrow path {
+    fill: #5f5547;
   }
 
   .inline-canvas-edge {
     fill: none;
-    stroke: #827866;
-    stroke-width: 1.4;
-    stroke-dasharray: 5 7;
+    stroke: #5f5547;
+    stroke-linecap: round;
+    stroke-width: 2.2;
   }
 
   .inline-canvas-edge-label {
-    fill: rgb(17 17 17 / 0.52);
+    fill: rgb(17 17 17 / 0.68);
     font-family: Georgia, Cambria, "Times New Roman", Times, serif;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
+    paint-order: stroke;
+    stroke: #fbf4e8;
+    stroke-linejoin: round;
+    stroke-width: 7px;
     text-transform: uppercase;
   }
 
   .inline-canvas-node {
     position: absolute;
+    z-index: 1;
     display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
     gap: 7px;
-    width: 190px;
-    min-height: 118px;
+    overflow: hidden;
     border: 1px solid #111111;
     border-radius: 8px;
     background: #fffdf8;
     box-shadow: 0 10px 24px rgb(41 31 18 / 0.13);
     padding: 14px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .inline-canvas-node.is-dragging {
+    z-index: 5;
+    box-shadow: 0 18px 34px rgb(41 31 18 / 0.22);
+    cursor: grabbing;
   }
 
   .inline-canvas-node span {
@@ -3294,17 +3320,25 @@
   }
 
   .inline-canvas-node strong {
+    display: -webkit-box;
+    overflow: hidden;
     overflow-wrap: anywhere;
     font-size: 15px;
     line-height: 1.08;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
   }
 
   .inline-canvas-node p {
+    display: -webkit-box;
     margin: 0;
+    overflow: hidden;
     overflow-wrap: anywhere;
     color: rgb(17 17 17 / 0.68);
     font-size: 12px;
     line-height: 1.25;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
   }
 
   .inline-canvas-node.is-evidence {
