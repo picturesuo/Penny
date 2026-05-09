@@ -462,10 +462,11 @@ export function redactPrivateText(text: string): { text: string; findings: Redac
 
 export function processEphemeralContext(input: EphemeralProcessInput): EphemeralProcessResult {
   const sourceClass = sourceClassForProvider(input.provider);
-  const redaction = redactPrivateText(input.text);
+  const initialRedaction = redactPrivateText(input.text);
+  const blockedSource = initialRedaction.findings.some((finding) => finding.type === "blocked_source");
+  const redaction = blockedSource ? { ...initialRedaction, text: "[REDACTED_BLOCKED_SOURCE]" } : initialRedaction;
   const chunkHash = hashText(`${input.provider}:${input.sourceUri}:${redaction.text}`);
   const rawRetained = input.rawRetention === true;
-  const blockedSource = redaction.findings.some((finding) => finding.type === "blocked_source");
   const memoryShards = blockedSource
     ? []
     : extractMemoryShards({
@@ -485,6 +486,7 @@ export function processEphemeralContext(input: EphemeralProcessInput): Ephemeral
     sourceClass,
     chunkHash,
     rawRetained,
+    blockedSource,
   });
   const brainNodes = memoryShards.map((shard): BrainNodeDraft => {
     const node: BrainNodeDraft = {
@@ -732,7 +734,22 @@ function buildSourceDigest(input: {
   sourceClass: ContextSourceClass;
   chunkHash: string;
   rawRetained: boolean;
+  blockedSource: boolean;
 }): SourceDigestDraft {
+  if (input.blockedSource) {
+    return {
+      title: input.label || titleFromText(input.sourceUri),
+      summary: "Blocked source was not summarized or extracted.",
+      provenance: {
+        provider: input.provider,
+        sourceUri: input.sourceUri,
+        sourceClass: input.sourceClass,
+        chunkHash: input.chunkHash,
+        rawRetained: input.rawRetained,
+      },
+    };
+  }
+
   const sentences = input.text
     .split(/(?<=[.!?])\s+/)
     .map((line) => line.trim())
