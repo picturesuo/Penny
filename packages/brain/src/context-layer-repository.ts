@@ -2,10 +2,13 @@ import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   buildConnectorSyncPlan,
+  buildRefreshTokenUpdate,
   decryptConnectorToken,
   encryptConnectorTokens,
   fetchConnectorSyncItems,
+  refreshConnectorOAuthToken,
   type ConnectorFetchHttpClient,
+  type ConnectorOAuthRefreshExchange,
   type ConnectorSyncItem,
   type ConnectorTokenInput,
 } from "./context-connector-service.ts";
@@ -561,6 +564,98 @@ export type FetchContextConnectorPayload = {
   warnings: string[];
   auditEvent: "source.fetched";
 };
+
+export type RefreshContextConnectorPayload = {
+  connectorAccountId: string;
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  status: "active";
+  tokenExpiresAt: string | null;
+  refreshTokenRotated: boolean;
+  auditEvent: "connector.refreshed";
+};
+
+export async function refreshContextConnectorToken(
+  db: PennyDatabase,
+  input: {
+    scope: BrainScope;
+    connectorAccountId: string;
+    provider: Extract<ContextProvider, "gmail" | "calendar">;
+    clientId: string;
+    clientSecret: string;
+    tokenSecret?: string | null;
+    exchange: ConnectorOAuthRefreshExchange;
+  },
+): Promise<RefreshContextConnectorPayload> {
+  return db.transaction(async (tx) => {
+    const scope = scopeValues(input.scope);
+    const [account] = await tx
+      .select()
+      .from(connectorAccounts)
+      .where(and(eq(connectorAccounts.id, input.connectorAccountId), scopeCondition(connectorAccounts, scope)))
+      .limit(1);
+
+    if (!account || account.status !== "active") {
+      throw new Error("Active connector account was not found.");
+    }
+
+    if (account.provider !== input.provider) {
+      throw new Error("Connector account provider does not match refresh provider.");
+    }
+
+    if (!account.encryptedRefreshToken) {
+      throw new Error("Connector account does not have a refresh token.");
+    }
+
+    const tokenSecret = input.tokenSecret ?? process.env.PENNY_CONNECTOR_TOKEN_SECRET ?? "";
+    const existingRefreshToken = decryptConnectorToken(account.encryptedRefreshToken, tokenSecret);
+    const refreshedToken = await refreshConnectorOAuthToken({
+      provider: input.provider,
+      refreshToken: existingRefreshToken,
+      clientId: input.clientId,
+      clientSecret: input.clientSecret,
+      exchange: input.exchange,
+    });
+    const encryptedTokens = buildRefreshTokenUpdate(refreshedToken, tokenSecret);
+    const refreshedAt = new Date();
+    const [updated] = await tx
+      .update(connectorAccounts)
+      .set({
+        encryptedAccessToken: encryptedTokens.encryptedAccessToken,
+        encryptedRefreshToken: encryptedTokens.encryptedRefreshToken,
+        tokenExpiresAt: encryptedTokens.tokenExpiresAt,
+        updatedAt: refreshedAt,
+      })
+      .where(and(eq(connectorAccounts.id, input.connectorAccountId), scopeCondition(connectorAccounts, scope)))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Failed to refresh connector account token.");
+    }
+
+    const refreshTokenRotated = refreshedToken.refreshToken !== existingRefreshToken;
+
+    await tx.insert(contextAuditLogs).values({
+      ...scope,
+      event: "connector.refreshed",
+      actorUserId: scope.userId,
+      connectorAccountId: account.id,
+      details: {
+        provider: input.provider,
+        refreshTokenRotated,
+        tokenExpiresAt: updated.tokenExpiresAt?.toISOString() ?? null,
+      },
+    });
+
+    return {
+      connectorAccountId: updated.id,
+      provider: input.provider,
+      status: "active",
+      tokenExpiresAt: updated.tokenExpiresAt?.toISOString() ?? null,
+      refreshTokenRotated,
+      auditEvent: "connector.refreshed",
+    };
+  });
+}
 
 export async function fetchContextConnectorItems(
   db: PennyDatabase,
