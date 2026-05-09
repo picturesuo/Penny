@@ -66,6 +66,123 @@ export const brainEmbeddingObjectTypeEnum = pgEnum("brain_embedding_object_type"
   "brain_recent",
   "artifact",
 ]);
+export const contextProviderEnum = pgEnum("context_provider", [
+  "manual",
+  "chatgpt",
+  "gmail",
+  "calendar",
+  "slack",
+  "canvas",
+  "instagram",
+]);
+export const connectorAccountStatusEnum = pgEnum("connector_account_status", [
+  "active",
+  "paused",
+  "revoked",
+  "errored",
+]);
+export const connectorSyncJobStatusEnum = pgEnum("connector_sync_job_status", [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "canceled",
+]);
+export const contextChunkProcessingStatusEnum = pgEnum("context_chunk_processing_status", [
+  "ephemeral",
+  "redacted",
+  "extracted",
+  "deleted",
+  "retained",
+]);
+export const memoryShardTypeEnum = pgEnum("memory_shard_type", [
+  "claim",
+  "preference",
+  "goal",
+  "taste",
+  "style",
+  "idea_history",
+  "project",
+  "person",
+  "deadline",
+  "concept",
+]);
+export const memorySourceClassEnum = pgEnum("memory_source_class", [
+  "manual",
+  "private_export",
+  "email",
+  "calendar_event",
+  "chat",
+  "learning_platform",
+  "social",
+]);
+export const memoryVisibilityEnum = pgEnum("memory_visibility", ["private", "workspace", "project"]);
+export const memoryReviewStatusEnum = pgEnum("memory_review_status", [
+  "pending",
+  "approved",
+  "auto_approved",
+  "rejected",
+  "merged",
+  "deprioritized",
+]);
+export const evidenceSnippetPolicyEnum = pgEnum("evidence_snippet_policy", [
+  "metadata_only",
+  "redacted_snippet",
+  "full_snippet",
+  "blocked",
+]);
+export const brainNodeTypeEnum = pgEnum("brain_node_type", [
+  "claim",
+  "assumption",
+  "counterargument",
+  "concept",
+  "project",
+  "person",
+  "deadline",
+  "source_digest",
+  "memory_shard",
+]);
+export const brainNodeStatusEnum = pgEnum("brain_node_status", [
+  "active",
+  "needs_review",
+  "archived",
+  "invalid",
+]);
+export const brainEdgeTypeEnum = pgEnum("brain_edge_type", [
+  "supports",
+  "contradicts",
+  "inspired_by",
+  "depends_on",
+  "person_related",
+  "project_related",
+  "deadline_for",
+  "learned_from",
+  "checked_by",
+]);
+export const checkRiskEnum = pgEnum("check_risk", [
+  "contradiction",
+  "weak_evidence",
+  "stale_assumption",
+  "circular_reasoning",
+  "missing_user_goal",
+  "risky_decision",
+]);
+export const contextAuditEventEnum = pgEnum("context_audit_event", [
+  "connector.connected",
+  "connector.synced",
+  "connector.revoked",
+  "source.fetched",
+  "chunk.redacted",
+  "chunk.deleted",
+  "memory.extracted",
+  "memory.approved",
+  "memory.rejected",
+  "memory.edited",
+  "memory.merged",
+  "memory.deleted",
+  "consent.updated",
+  "training.preference.updated",
+]);
 export const nextMoveActionEnum = pgEnum("next_move_action", [
   "resume_open_challenge",
   "learn",
@@ -263,6 +380,355 @@ export const brainEmbeddings = pgTable(
     check("brain_embeddings_content_hash_present", sql`length(trim(${table.contentHash})) > 0`),
     check("brain_embeddings_embedding_model_present", sql`length(trim(${table.embeddingModel})) > 0`),
     check("brain_embeddings_embedding_text_present", sql`length(trim(${table.embeddingText})) > 0`),
+  ],
+);
+
+export const connectorAccounts = pgTable(
+  "connector_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    provider: contextProviderEnum("provider").notNull(),
+    scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
+    status: connectorAccountStatusEnum("status").notNull().default("active"),
+    encryptedAccessToken: text("encrypted_access_token"),
+    encryptedRefreshToken: text("encrypted_refresh_token"),
+    tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    lastSync: timestamp("last_sync", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("connector_accounts_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("connector_accounts_provider_idx").on(table.provider),
+    index("connector_accounts_status_idx").on(table.status),
+    index("connector_accounts_last_sync_idx").on(table.lastSync),
+  ],
+);
+
+export const connectorSyncJobs = pgTable(
+  "connector_sync_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    connectorAccountId: uuid("connector_account_id")
+      .notNull()
+      .references(() => connectorAccounts.id, { onDelete: "cascade" }),
+    provider: contextProviderEnum("provider").notNull(),
+    status: connectorSyncJobStatusEnum("status").notNull().default("queued"),
+    minimumScope: jsonb("minimum_scope").notNull().default({}),
+    rateLimitKey: text("rate_limit_key"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    error: jsonb("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("connector_sync_jobs_account_idx").on(table.connectorAccountId),
+    index("connector_sync_jobs_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("connector_sync_jobs_provider_status_idx").on(table.provider, table.status),
+    index("connector_sync_jobs_created_at_idx").on(table.createdAt),
+    check(
+      "connector_sync_jobs_completion_matches_status",
+      sql`(${table.status} IN ('succeeded', 'failed', 'canceled') AND ${table.completedAt} IS NOT NULL) OR (${table.status} IN ('queued', 'running') AND ${table.completedAt} IS NULL)`,
+    ),
+  ],
+);
+
+export const contextSources = pgTable(
+  "context_sources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    connectorAccountId: uuid("connector_account_id").references(() => connectorAccounts.id, { onDelete: "set null" }),
+    provider: contextProviderEnum("provider").notNull(),
+    sourceUri: text("source_uri").notNull(),
+    label: text("label").notNull(),
+    owner: text("owner"),
+    timeRange: jsonb("time_range").notNull().default({}),
+    permissions: jsonb("permissions").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("context_sources_provider_uri_scope_idx").on(table.provider, table.sourceUri, table.userId),
+    index("context_sources_account_idx").on(table.connectorAccountId),
+    index("context_sources_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("context_sources_provider_idx").on(table.provider),
+    check("context_sources_uri_present", sql`length(trim(${table.sourceUri})) > 0`),
+    check("context_sources_label_present", sql`length(trim(${table.label})) > 0`),
+  ],
+);
+
+export const contextChunks = pgTable(
+  "context_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => contextSources.id, { onDelete: "cascade" }),
+    hash: text("hash").notNull(),
+    retentionFlag: boolean("retention_flag").notNull().default(false),
+    processingStatus: contextChunkProcessingStatusEnum("processing_status").notNull().default("ephemeral"),
+    redactionSummary: jsonb("redaction_summary").notNull().default({}),
+    rawDeletedAt: timestamp("raw_deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("context_chunks_source_hash_idx").on(table.sourceId, table.hash),
+    index("context_chunks_source_id_idx").on(table.sourceId),
+    index("context_chunks_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("context_chunks_status_idx").on(table.processingStatus),
+    check("context_chunks_hash_present", sql`length(trim(${table.hash})) > 0`),
+    check(
+      "context_chunks_deleted_unless_retained",
+      sql`${table.retentionFlag} = true OR ${table.processingStatus} <> 'retained'`,
+    ),
+  ],
+);
+
+export const sourceDigests = pgTable(
+  "source_digests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => contextSources.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    extractedAt: timestamp("extracted_at", { withTimezone: true }).notNull().defaultNow(),
+    provenance: jsonb("provenance").notNull().default({}),
+  },
+  (table) => [
+    index("source_digests_source_id_idx").on(table.sourceId),
+    index("source_digests_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    check("source_digests_title_present", sql`length(trim(${table.title})) > 0`),
+    check("source_digests_summary_present", sql`length(trim(${table.summary})) > 0`),
+  ],
+);
+
+export const memoryShards = pgTable(
+  "memory_shards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    text: text("text").notNull(),
+    type: memoryShardTypeEnum("type").notNull(),
+    sourceClass: memorySourceClassEnum("source_class").notNull(),
+    confidence: integer("confidence").notNull().default(60),
+    decay: integer("decay").notNull().default(0),
+    reviewStatus: memoryReviewStatusEnum("review_status").notNull().default("pending"),
+    sourceDigestId: uuid("source_digest_id").references(() => sourceDigests.id, { onDelete: "set null" }),
+    consent: jsonb("consent").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeen: timestamp("last_seen", { withTimezone: true }).notNull().defaultNow(),
+    visibility: memoryVisibilityEnum("visibility").notNull().default("private"),
+  },
+  (table) => [
+    index("memory_shards_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("memory_shards_type_idx").on(table.type),
+    index("memory_shards_source_class_idx").on(table.sourceClass),
+    index("memory_shards_review_status_idx").on(table.reviewStatus),
+    index("memory_shards_last_seen_idx").on(table.lastSeen),
+    check("memory_shards_text_present", sql`length(trim(${table.text})) > 0`),
+    check("memory_shards_confidence_range", sql`${table.confidence} >= 0 AND ${table.confidence} <= 100`),
+    check("memory_shards_decay_range", sql`${table.decay} >= 0 AND ${table.decay} <= 100`),
+  ],
+);
+
+export const claimSuggestions = pgTable(
+  "claim_suggestions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    shardId: uuid("shard_id").references(() => memoryShards.id, { onDelete: "cascade" }),
+    claim: text("claim").notNull(),
+    kind: claimKindEnum("kind").notNull().default("belief"),
+    confidence: integer("confidence").notNull().default(60),
+    reviewStatus: memoryReviewStatusEnum("review_status").notNull().default("pending"),
+    rationale: text("rationale"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("claim_suggestions_shard_idx").on(table.shardId),
+    index("claim_suggestions_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("claim_suggestions_review_status_idx").on(table.reviewStatus),
+    check("claim_suggestions_claim_present", sql`length(trim(${table.claim})) > 0`),
+    check("claim_suggestions_confidence_range", sql`${table.confidence} >= 0 AND ${table.confidence} <= 100`),
+  ],
+);
+
+export const evidencePointers = pgTable(
+  "evidence_pointers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    shardId: uuid("shard_id")
+      .notNull()
+      .references(() => memoryShards.id, { onDelete: "cascade" }),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => contextSources.id, { onDelete: "cascade" }),
+    locator: jsonb("locator").notNull().default({}),
+    snippetPolicy: evidenceSnippetPolicyEnum("snippet_policy").notNull().default("redacted_snippet"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("evidence_pointers_shard_id_idx").on(table.shardId),
+    index("evidence_pointers_source_id_idx").on(table.sourceId),
+    index("evidence_pointers_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("evidence_pointers_snippet_policy_idx").on(table.snippetPolicy),
+  ],
+);
+
+export const brainNodes = pgTable(
+  "brain_nodes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    type: brainNodeTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    status: brainNodeStatusEnum("status").notNull().default("active"),
+    memoryShardId: uuid("memory_shard_id").references(() => memoryShards.id, { onDelete: "set null" }),
+    claimId: uuid("claim_id").references(() => claims.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_nodes_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_nodes_type_idx").on(table.type),
+    index("brain_nodes_status_idx").on(table.status),
+    index("brain_nodes_memory_shard_id_idx").on(table.memoryShardId),
+    index("brain_nodes_claim_id_idx").on(table.claimId),
+    check("brain_nodes_title_present", sql`length(trim(${table.title})) > 0`),
+    check("brain_nodes_summary_present", sql`length(trim(${table.summary})) > 0`),
+  ],
+);
+
+export const brainEdges = pgTable(
+  "brain_edges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    fromNode: uuid("from_node")
+      .notNull()
+      .references(() => brainNodes.id, { onDelete: "cascade" }),
+    toNode: uuid("to_node")
+      .notNull()
+      .references(() => brainNodes.id, { onDelete: "cascade" }),
+    type: brainEdgeTypeEnum("type").notNull(),
+    weight: integer("weight").notNull().default(50),
+    evidenceIds: jsonb("evidence_ids").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_edges_from_node_idx").on(table.fromNode),
+    index("brain_edges_to_node_idx").on(table.toNode),
+    index("brain_edges_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_edges_type_idx").on(table.type),
+    check("brain_edges_no_self_edge", sql`${table.fromNode} <> ${table.toNode}`),
+    check("brain_edges_weight_range", sql`${table.weight} >= 0 AND ${table.weight} <= 100`),
+  ],
+);
+
+export const checkResults = pgTable(
+  "check_results",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => brainNodes.id, { onDelete: "cascade" }),
+    claim: text("claim").notNull(),
+    risk: checkRiskEnum("risk").notNull(),
+    explanation: text("explanation").notNull(),
+    evidenceIds: jsonb("evidence_ids").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("check_results_node_id_idx").on(table.nodeId),
+    index("check_results_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("check_results_risk_idx").on(table.risk),
+    check("check_results_claim_present", sql`length(trim(${table.claim})) > 0`),
+    check("check_results_explanation_present", sql`length(trim(${table.explanation})) > 0`),
+  ],
+);
+
+export const learnCards = pgTable(
+  "learn_cards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => brainNodes.id, { onDelete: "cascade" }),
+    prompt: text("prompt").notNull(),
+    answerHint: text("answer_hint").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    strength: integer("strength").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("learn_cards_node_id_idx").on(table.nodeId),
+    index("learn_cards_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("learn_cards_due_at_idx").on(table.dueAt),
+    check("learn_cards_prompt_present", sql`length(trim(${table.prompt})) > 0`),
+    check("learn_cards_answer_hint_present", sql`length(trim(${table.answerHint})) > 0`),
+    check("learn_cards_strength_range", sql`${table.strength} >= 0 AND ${table.strength} <= 100`),
+  ],
+);
+
+export const consentSettings = pgTable(
+  "consent_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    memoryEnabled: boolean("memory_enabled").notNull().default(true),
+    referenceChatgptImport: boolean("reference_chatgpt_import").notNull().default(false),
+    referenceGmail: boolean("reference_gmail").notNull().default(false),
+    referenceCalendar: boolean("reference_calendar").notNull().default(false),
+    useForPrivateFineTune: boolean("use_for_private_fine_tune").notNull().default(false),
+    useToImproveSharedModels: boolean("use_to_improve_shared_models").notNull().default(false),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("consent_settings_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    check(
+      "consent_settings_shared_training_requires_memory",
+      sql`${table.memoryEnabled} = true OR ${table.useToImproveSharedModels} = false`,
+    ),
+  ],
+);
+
+export const contextAuditLogs = pgTable(
+  "context_audit_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...scopeColumns(),
+    event: contextAuditEventEnum("event").notNull(),
+    actorUserId: text("actor_user_id"),
+    connectorAccountId: uuid("connector_account_id").references(() => connectorAccounts.id, { onDelete: "set null" }),
+    sourceId: uuid("source_id").references(() => contextSources.id, { onDelete: "set null" }),
+    memoryShardId: uuid("memory_shard_id").references(() => memoryShards.id, { onDelete: "set null" }),
+    details: jsonb("details").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("context_audit_logs_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("context_audit_logs_event_idx").on(table.event),
+    index("context_audit_logs_connector_account_idx").on(table.connectorAccountId),
+    index("context_audit_logs_source_idx").on(table.sourceId),
+    index("context_audit_logs_memory_shard_idx").on(table.memoryShardId),
+    index("context_audit_logs_created_at_idx").on(table.createdAt),
   ],
 );
 
@@ -802,18 +1268,26 @@ export const commandIdempotencyKeys = pgTable(
 export const pennySchema = {
   artifacts,
   artifactKindEnum,
+  brainEdgeTypeEnum,
+  brainEdges,
   brainObjects,
   brainEmbeddingObjectTypeEnum,
   brainEmbeddings,
+  brainNodeStatusEnum,
+  brainNodeTypeEnum,
+  brainNodes,
   brainRecents,
   brainRunOperationEnum,
   brainRunStatusEnum,
   brainRuns,
+  checkResults,
+  checkRiskEnum,
   challengeFailureTypeEnum,
   challengeRoundResponseEnum,
   challengeRoundStatusEnum,
   challengeRounds,
   challengeStrengthEnum,
+  claimSuggestions,
   commandIdempotencyKeys,
   commandIdempotencyStatusEnum,
   claimEdgeKindEnum,
@@ -823,12 +1297,31 @@ export const pennySchema = {
   claims,
   claimStatusEnum,
   claimVersions,
+  connectorAccounts,
+  connectorAccountStatusEnum,
+  connectorSyncJobs,
+  connectorSyncJobStatusEnum,
+  consentSettings,
+  contextAuditEventEnum,
+  contextAuditLogs,
+  contextChunkProcessingStatusEnum,
+  contextChunks,
+  contextProviderEnum,
+  contextSources,
   derivedEffectKindEnum,
   derivedEffectStatusEnum,
   derivedEffects,
+  evidencePointers,
+  evidenceSnippetPolicyEnum,
   focusModeEnum,
   focusSourceEnum,
   focusStates,
+  learnCards,
+  memoryReviewStatusEnum,
+  memoryShardTypeEnum,
+  memoryShards,
+  memorySourceClassEnum,
+  memoryVisibilityEnum,
   moveKindEnum,
   moves,
   nextMoveActionEnum,
@@ -842,6 +1335,7 @@ export const pennySchema = {
   sessions,
   shapeStatusEnum,
   shapes,
+  sourceDigests,
   sourceKindEnum,
   sourceSpans,
   sources,
