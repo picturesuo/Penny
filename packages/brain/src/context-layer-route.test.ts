@@ -16,6 +16,7 @@ import {
   handleContextOAuthCallbackRequest,
   handleContextOAuthStartRequest,
   handleContextRetrievalRequest,
+  handleContextTrainingConsentDeleteRequest,
   type ContextDashboardPayload,
 } from "./context-layer-route.ts";
 import { planConnectorScope } from "./context-layer.ts";
@@ -486,6 +487,43 @@ test("PUT /api/context/consent updates memory and training preferences explicitl
   assert.equal(invalidBody.error.code, "invalid_consent_update");
 });
 
+test("DELETE /api/context/training-consent revokes training use without disabling memory", async () => {
+  const response = await handleContextTrainingConsentDeleteRequest(
+    scopedRequest("http://localhost/api/context/training-consent", { method: "DELETE" }),
+    {
+      async resetTrainingConsent(requestScope) {
+        assert.deepEqual(requestScope, scope);
+
+        return {
+          memoryEnabled: true,
+          referenceChatgptImport: true,
+          referenceGmail: true,
+          referenceCalendar: false,
+          useForPrivateFineTune: false,
+          useToImproveSharedModels: false,
+          auditEvent: "training.preference.updated",
+        };
+      },
+    },
+  );
+  const body = (await response.json()) as {
+    data: {
+      memoryEnabled: boolean;
+      referenceGmail: boolean;
+      useForPrivateFineTune: boolean;
+      useToImproveSharedModels: boolean;
+      auditEvent: string;
+    };
+  };
+
+  assert.equal(response.status, 200);
+  assert.equal(body.data.memoryEnabled, true);
+  assert.equal(body.data.referenceGmail, true);
+  assert.equal(body.data.useForPrivateFineTune, false);
+  assert.equal(body.data.useToImproveSharedModels, false);
+  assert.equal(body.data.auditEvent, "training.preference.updated");
+});
+
 test("POST /api/context/import runs the scoped ephemeral processing flow", async () => {
   const response = await handleContextImportRequest(
     scopedRequest("http://localhost/api/context/import", {
@@ -775,6 +813,9 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
     "conn-1",
   );
   const consent = await handleContextConsentRequest(new Request("http://localhost/api/context/consent"));
+  const trainingConsent = await handleContextTrainingConsentDeleteRequest(
+    new Request("http://localhost/api/context/training-consent", { method: "POST" }),
+  );
   const importer = await handleContextImportRequest(new Request("http://localhost/api/context/import"));
   const oauthStart = await handleContextOAuthStartRequest(new Request("http://localhost/api/context/oauth/start"));
   const oauthCallback = await handleContextOAuthCallbackRequest(new Request("http://localhost/api/context/oauth/callback"));
@@ -799,6 +840,7 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   assert.equal(fetch.status, 405);
   assert.equal(refresh.status, 405);
   assert.equal(consent.status, 405);
+  assert.equal(trainingConsent.status, 405);
   assert.equal(importer.status, 405);
   assert.equal(oauthStart.status, 405);
   assert.equal(oauthCallback.status, 405);
