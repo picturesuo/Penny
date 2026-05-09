@@ -4,6 +4,7 @@ import {
   handleContextArtifactsRequest,
   handleContextConnectorConnectRequest,
   handleContextConnectorFetchRequest,
+  handleContextConnectorRefreshRequest,
   handleContextConnectorRevokeRequest,
   handleContextConnectorSyncRequest,
   handleContextConsentRequest,
@@ -287,6 +288,59 @@ test("POST /api/context/connectors/:id/fetch delegates selected provider fetch",
   assert.equal(fetchedBody.data.auditEvent, "source.fetched");
   assert.equal(blocked.status, 409);
   assert.equal(blockedBody.error.code, "context_scope_not_allowed");
+});
+
+test("POST /api/context/connectors/:id/refresh delegates OAuth token refresh", async () => {
+  const refreshed = await handleContextConnectorRefreshRequest(
+    scopedRequest("http://localhost/api/context/connectors/conn-1/refresh", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "gmail",
+        clientId: "client-id",
+        clientSecret: "client-secret",
+      }),
+    }),
+    "conn-1",
+    {
+      async refreshConnector(input) {
+        assert.deepEqual(input.scope, scope);
+        assert.equal(input.connectorAccountId, "conn-1");
+        assert.equal(input.provider, "gmail");
+        assert.equal(input.clientId, "client-id");
+        assert.equal(input.clientSecret, "client-secret");
+
+        return {
+          connectorAccountId: input.connectorAccountId,
+          provider: input.provider,
+          status: "active",
+          tokenExpiresAt: "2026-05-09T13:00:00.000Z",
+          refreshTokenRotated: true,
+          auditEvent: "connector.refreshed",
+        };
+      },
+    },
+  );
+  const missingCredentials = await handleContextConnectorRefreshRequest(
+    scopedRequest("http://localhost/api/context/connectors/conn-1/refresh", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "calendar",
+        clientId: "client-id",
+      }),
+    }),
+    "conn-1",
+  );
+  const refreshedBody = (await refreshed.json()) as {
+    data: { connectorAccountId: string; refreshTokenRotated: boolean; auditEvent: string };
+  };
+  const missingCredentialsBody = (await missingCredentials.json()) as { error: { code: string } };
+
+  assert.equal(refreshed.status, 200);
+  assert.equal(refreshedBody.data.connectorAccountId, "conn-1");
+  assert.equal(refreshedBody.data.refreshTokenRotated, true);
+  assert.equal(refreshedBody.data.auditEvent, "connector.refreshed");
+  assert.equal(missingCredentials.status, 400);
+  assert.equal(missingCredentialsBody.error.code, "invalid_oauth_client");
 });
 
 test("POST /api/context/connectors/:id/sync queues selected Gmail and Calendar sync jobs", async () => {
@@ -684,6 +738,10 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   const connect = await handleContextConnectorConnectRequest(new Request("http://localhost/api/context/connectors"));
   const sync = await handleContextConnectorSyncRequest(new Request("http://localhost/api/context/connectors/conn-1/sync"), "conn-1");
   const fetch = await handleContextConnectorFetchRequest(new Request("http://localhost/api/context/connectors/conn-1/fetch"), "conn-1");
+  const refresh = await handleContextConnectorRefreshRequest(
+    new Request("http://localhost/api/context/connectors/conn-1/refresh"),
+    "conn-1",
+  );
   const consent = await handleContextConsentRequest(new Request("http://localhost/api/context/consent"));
   const importer = await handleContextImportRequest(new Request("http://localhost/api/context/import"));
   const oauthStart = await handleContextOAuthStartRequest(new Request("http://localhost/api/context/oauth/start"));
@@ -707,6 +765,7 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   assert.equal(connect.status, 405);
   assert.equal(sync.status, 405);
   assert.equal(fetch.status, 405);
+  assert.equal(refresh.status, 405);
   assert.equal(consent.status, 405);
   assert.equal(importer.status, 405);
   assert.equal(oauthStart.status, 405);
