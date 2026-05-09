@@ -18,8 +18,9 @@ const emptyCanvas: SessionCanvasData = {
 };
 
 const nodeWidth = 236;
-const nodeHeight = 132;
+const nodeHeight = 188;
 const canvasPadding = 150;
+const canvasNodeGap = 34;
 
 export function CanvasWorkspace({
   sessionId,
@@ -37,7 +38,16 @@ export function CanvasWorkspace({
   );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isPanning, setIsPanning] = useState(false);
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const panStartRef = useRef({ pointerId: 0, x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
+  const dragStartRef = useRef<{
+    pointerId: number;
+    nodeId: string;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!initialCanvasData) {
@@ -91,7 +101,8 @@ export function CanvasWorkspace({
     };
   }, [focusedClaimId, initialCanvasData, sessionId]);
 
-  const nodes = useMemo(() => layoutCanvasNodes(canvasData.nodes), [canvasData.nodes]);
+  const initialNodes = useMemo(() => layoutCanvasNodes(canvasData.nodes), [canvasData.nodes]);
+  const [nodes, setNodes] = useState(initialNodes);
   const canvasSize = useMemo(() => canvasContentSize(nodes), [nodes]);
   const recommendedPath = canvasData.recommendedPath ?? [];
   const recommendedNodes = recommendedPath
@@ -101,10 +112,16 @@ export function CanvasWorkspace({
   const isEmpty = loadState !== "loading" && nodes.length === 0;
   const selectedActions = selectedNode?.actions?.length ? selectedNode.actions : defaultCanvasActions;
 
+  useEffect(() => {
+    setNodes(initialNodes);
+    setDraggingNodeId(null);
+    dragStartRef.current = null;
+  }, [initialNodes]);
+
   function handleBoardPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     const target = event.target;
 
-    if (!(target instanceof Element) || target.closest("button, a, input, textarea, select")) {
+    if (!(target instanceof Element) || target.closest(".canvas-node-card, button, a, input, textarea, select")) {
       return;
     }
 
@@ -132,6 +149,66 @@ export function CanvasWorkspace({
     if (event.pointerId === panStartRef.current.pointerId) {
       setIsPanning(false);
     }
+  }
+
+  function handleNodeDragStart(event: React.PointerEvent<HTMLElement>, node: PositionedCanvasNode) {
+    const target = event.target;
+
+    if (
+      event.button !== 0 ||
+      (target instanceof Element && target.closest(".canvas-node-menu, .canvas-node-action"))
+    ) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStartRef.current = {
+      pointerId: event.pointerId,
+      nodeId: node.id,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: node.x,
+      originY: node.y,
+    };
+    setSelectedNodeId(node.id);
+    setDraggingNodeId(node.id);
+  }
+
+  function handleNodeDragMove(event: React.PointerEvent<HTMLElement>) {
+    const drag = dragStartRef.current;
+
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const nextX = drag.originX + event.clientX - drag.startX;
+    const nextY = drag.originY + event.clientY - drag.startY;
+
+    setNodes((current) => {
+      const moved = current.map((node) => {
+        if (node.id !== drag.nodeId) {
+          return node;
+        }
+
+        return {
+          ...node,
+          ...clampCanvasNodePosition(nextX, nextY),
+        };
+      });
+
+      return resolveCanvasNodeOverlaps(moved, drag.nodeId);
+    });
+  }
+
+  function stopNodeDrag(event: React.PointerEvent<HTMLElement>) {
+    const drag = dragStartRef.current;
+
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    dragStartRef.current = null;
+    setDraggingNodeId(null);
   }
 
   return (
@@ -199,8 +276,12 @@ export function CanvasWorkspace({
                   node={node}
                   selected={node.id === selectedNode?.id}
                   recommended={recommendedPath.includes(node.id)}
+                  dragging={node.id === draggingNodeId}
                   onSelect={setSelectedNodeId}
                   onAction={disabled ? () => undefined : onNodeAction}
+                  onDragStart={handleNodeDragStart}
+                  onDragMove={handleNodeDragMove}
+                  onDragEnd={stopNodeDrag}
                 />
               ))}
             </div>
@@ -302,24 +383,77 @@ function layoutCanvasNodes(nodes: CanvasNode[]): PositionedCanvasNode[] {
     height: nodeHeight,
   }));
 
-  if (positioned.length === 0) {
-    return positioned;
+  return resolveCanvasNodeOverlaps(normalizeCanvasOrigin(positioned));
+}
+
+function normalizeCanvasOrigin(nodes: PositionedCanvasNode[]): PositionedCanvasNode[] {
+  if (nodes.length === 0) {
+    return nodes;
   }
 
-  const minX = Math.min(...positioned.map((node) => node.x));
-  const minY = Math.min(...positioned.map((node) => node.y));
+  const minX = Math.min(...nodes.map((node) => node.x));
+  const minY = Math.min(...nodes.map((node) => node.y));
   const offsetX = minX < canvasPadding ? canvasPadding - minX : 0;
   const offsetY = minY < canvasPadding ? canvasPadding - minY : 0;
 
   if (offsetX === 0 && offsetY === 0) {
-    return positioned;
+    return nodes;
   }
 
-  return positioned.map((node) => ({
+  return nodes.map((node) => ({
     ...node,
     x: node.x + offsetX,
     y: node.y + offsetY,
   }));
+}
+
+function clampCanvasNodePosition(x: number, y: number): { x: number; y: number } {
+  return {
+    x: Math.max(48, x),
+    y: Math.max(48, y),
+  };
+}
+
+function resolveCanvasNodeOverlaps(
+  nodes: PositionedCanvasNode[],
+  preferredNodeId?: string,
+): PositionedCanvasNode[] {
+  const ordered = preferredNodeId
+    ? [
+        ...nodes.filter((node) => node.id === preferredNodeId),
+        ...nodes.filter((node) => node.id !== preferredNodeId),
+      ]
+    : nodes;
+  const placed: PositionedCanvasNode[] = [];
+
+  for (const node of ordered) {
+    const candidate = { ...node };
+    let guard = 0;
+
+    while (placed.some((placedNode) => canvasNodesOverlap(candidate, placedNode)) && guard < 80) {
+      const overlapping = placed.find((placedNode) => canvasNodesOverlap(candidate, placedNode));
+
+      if (!overlapping) {
+        break;
+      }
+
+      candidate.y = overlapping.y + overlapping.height + canvasNodeGap;
+      guard += 1;
+    }
+
+    placed.push(candidate);
+  }
+
+  return nodes.map((node) => placed.find((placedNode) => placedNode.id === node.id) ?? node);
+}
+
+function canvasNodesOverlap(first: PositionedCanvasNode, second: PositionedCanvasNode): boolean {
+  return !(
+    first.x + first.width + canvasNodeGap <= second.x ||
+    second.x + second.width + canvasNodeGap <= first.x ||
+    first.y + first.height + canvasNodeGap <= second.y ||
+    second.y + second.height + canvasNodeGap <= first.y
+  );
 }
 
 function gridPosition(index: number): { x: number; y: number } {
