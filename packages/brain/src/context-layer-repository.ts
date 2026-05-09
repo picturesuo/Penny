@@ -775,6 +775,23 @@ export async function syncContextConnector(
       throw new Error("Active connector account was not found.");
     }
 
+    const [inFlightJob] = await tx
+      .select()
+      .from(connectorSyncJobs)
+      .where(
+        and(
+          eq(connectorSyncJobs.connectorAccountId, account.id),
+          eq(connectorSyncJobs.rateLimitKey, syncPlan.syncJob.rateLimitKey),
+          scopeCondition(connectorSyncJobs, scope),
+          inArray(connectorSyncJobs.status, ["queued", "running"]),
+        ),
+      )
+      .limit(1);
+
+    if (inFlightJob) {
+      throw new Error("Connector sync is already in progress for this scope.");
+    }
+
     const startedAt = new Date();
     const [job] = await tx
       .insert(connectorSyncJobs)
