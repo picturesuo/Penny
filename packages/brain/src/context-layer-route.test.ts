@@ -41,6 +41,11 @@ test("POST /api/context/import runs the scoped ephemeral processing flow", async
         ].join("\n"),
       }),
     }),
+    {
+      async persistImport(input) {
+        return input.processing;
+      },
+    },
   );
   const body = (await response.json()) as {
     data: {
@@ -89,6 +94,18 @@ test("POST /api/context/memories/:id/review validates review actions", async () 
       body: JSON.stringify({ action: "edit" }),
     }),
     "mem-1",
+    {
+      async reviewMemory(input) {
+        return {
+          memoryId: input.memoryId,
+          action: input.action,
+          reviewStatus: "pending",
+          text: input.text,
+          mergeIntoMemoryId: input.mergeIntoMemoryId,
+          auditEvent: "memory.edited",
+        };
+      },
+    },
   );
   const approve = await handleContextMemoryReviewRequest(
     scopedRequest("http://localhost/api/context/memories/mem-1/review", {
@@ -96,6 +113,18 @@ test("POST /api/context/memories/:id/review validates review actions", async () 
       body: JSON.stringify({ action: "approve" }),
     }),
     "mem-1",
+    {
+      async reviewMemory(input) {
+        return {
+          memoryId: input.memoryId,
+          action: input.action,
+          reviewStatus: "approved",
+          text: input.text,
+          mergeIntoMemoryId: input.mergeIntoMemoryId,
+          auditEvent: "memory.approved",
+        };
+      },
+    },
   );
   const approveBody = (await approve.json()) as { data: { memoryId: string; reviewStatus: string; auditEvent: string } };
 
@@ -110,10 +139,29 @@ test("DELETE memory and revoke connector endpoints return audit-ready payloads",
   const deleteResponse = await handleContextMemoryDeleteRequest(
     scopedRequest("http://localhost/api/context/memories/mem-1", { method: "DELETE" }),
     "mem-1",
+    {
+      async deleteMemory(input) {
+        return {
+          memoryId: input.memoryId,
+          deleted: true,
+          rawDeleted: true,
+          auditEvent: "memory.deleted",
+        };
+      },
+    },
   );
   const revokeResponse = await handleContextConnectorRevokeRequest(
     scopedRequest("http://localhost/api/context/connectors/conn-1/revoke", { method: "POST" }),
     "conn-1",
+    {
+      async revokeConnector(input) {
+        return {
+          connectorAccountId: input.connectorAccountId,
+          revoked: true,
+          auditEvent: "connector.revoked",
+        };
+      },
+    },
   );
   const deleteBody = (await deleteResponse.json()) as { data: { deleted: boolean; rawDeleted: boolean; auditEvent: string } };
   const revokeBody = (await revokeResponse.json()) as { data: { revoked: boolean; auditEvent: string } };
