@@ -31,6 +31,13 @@ import {
   handleCheckSessionRequest,
 } from "./check-route.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
+import {
+  handleContextConnectorRevokeRequest,
+  handleContextDashboardRequest,
+  handleContextImportRequest,
+  handleContextMemoryDeleteRequest,
+  handleContextMemoryReviewRequest,
+} from "./context-layer-route.ts";
 import { createPennySql } from "./db/client.ts";
 import * as schema from "./db/schema.ts";
 import { handleAskPennyRequest, handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
@@ -128,6 +135,46 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/brain/seed") {
       await writeWebResponse(outgoing, await handleBrainSeedRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/context/dashboard") {
+      await writeWebResponse(outgoing, await handleContextDashboardRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/context/import") {
+      await writeWebResponse(outgoing, await handleContextImportRequest(request));
+      return;
+    }
+
+    const contextMemoryReviewMatch = /^\/api\/context\/memories\/([^/]+)\/review$/.exec(url.pathname);
+
+    if (contextMemoryReviewMatch) {
+      await writeWebResponse(
+        outgoing,
+        await handleContextMemoryReviewRequest(request, decodeURIComponent(contextMemoryReviewMatch[1] ?? "")),
+      );
+      return;
+    }
+
+    const contextMemoryDeleteMatch = /^\/api\/context\/memories\/([^/]+)$/.exec(url.pathname);
+
+    if (contextMemoryDeleteMatch) {
+      await writeWebResponse(
+        outgoing,
+        await handleContextMemoryDeleteRequest(request, decodeURIComponent(contextMemoryDeleteMatch[1] ?? "")),
+      );
+      return;
+    }
+
+    const contextConnectorRevokeMatch = /^\/api\/context\/connectors\/([^/]+)\/revoke$/.exec(url.pathname);
+
+    if (contextConnectorRevokeMatch) {
+      await writeWebResponse(
+        outgoing,
+        await handleContextConnectorRevokeRequest(request, decodeURIComponent(contextConnectorRevokeMatch[1] ?? "")),
+      );
       return;
     }
 
