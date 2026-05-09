@@ -8,6 +8,7 @@ import {
   encryptConnectorTokens,
   exchangeConnectorOAuthCallback,
   fetchConnectorSyncItems,
+  refreshConnectorOAuthToken,
   type ConnectorFetchHttpRequest,
 } from "./context-connector-service.ts";
 
@@ -317,6 +318,63 @@ test("exchangeConnectorOAuthCallback validates state and uses injected token exc
   assert.equal(callback.token.accessToken, "calendar-access-token");
   assert.equal(callback.token.refreshToken, "calendar-refresh-token");
   assert.ok(callback.token.expiresAt instanceof Date);
+});
+
+test("refreshConnectorOAuthToken updates access tokens and preserves refresh tokens when not rotated", async () => {
+  const refreshed = await refreshConnectorOAuthToken({
+    provider: "gmail",
+    refreshToken: "existing-refresh-token",
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    async exchange(request) {
+      assert.equal(request.tokenEndpoint, "https://oauth2.googleapis.com/token");
+      assert.equal(request.refreshToken, "existing-refresh-token");
+      assert.equal(request.clientId, "client-id");
+      assert.equal(request.clientSecret, "client-secret");
+
+      return {
+        accessToken: "new-access-token",
+        expiresInSeconds: 1800,
+      };
+    },
+  });
+
+  assert.equal(refreshed.accessToken, "new-access-token");
+  assert.equal(refreshed.refreshToken, "existing-refresh-token");
+  assert.ok(refreshed.expiresAt instanceof Date);
+});
+
+test("refreshConnectorOAuthToken stores rotated refresh tokens and rejects missing access tokens", async () => {
+  const rotated = await refreshConnectorOAuthToken({
+    provider: "calendar",
+    refreshToken: "old-refresh-token",
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    async exchange() {
+      return {
+        accessToken: "rotated-access-token",
+        refreshToken: "new-refresh-token",
+      };
+    },
+  });
+
+  assert.equal(rotated.accessToken, "rotated-access-token");
+  assert.equal(rotated.refreshToken, "new-refresh-token");
+  assert.equal(rotated.expiresAt, null);
+
+  await assert.rejects(
+    () =>
+      refreshConnectorOAuthToken({
+        provider: "calendar",
+        refreshToken: "old-refresh-token",
+        clientId: "client-id",
+        clientSecret: "client-secret",
+        async exchange() {
+          return { accessToken: "" };
+        },
+      }),
+    /OAuth refresh did not return an access token/,
+  );
 });
 
 test("exchangeConnectorOAuthCallback rejects tampered state", async () => {
