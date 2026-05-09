@@ -6,6 +6,7 @@ import {
   handleContextImportRequest,
   handleContextMemoryDeleteRequest,
   handleContextMemoryReviewRequest,
+  handleContextRetrievalRequest,
   type ContextDashboardPayload,
 } from "./context-layer-route.ts";
 import type { BrainScope } from "./scope.ts";
@@ -175,9 +176,70 @@ test("DELETE memory and revoke connector endpoints return audit-ready payloads",
   assert.equal(revokeBody.data.auditEvent, "connector.revoked");
 });
 
+test("GET /api/context/retrieve returns provenance-backed memory results", async () => {
+  const response = await handleContextRetrievalRequest(
+    scopedRequest("http://localhost/api/context/retrieve?q=founder%20memory&sourceClass=private_export&limit=2"),
+    {
+      async retrieveMemories(input) {
+        assert.equal(input.request.query, "founder memory");
+        assert.equal(input.request.sourceGroup, "private_export");
+        assert.equal(input.request.limit, 2);
+
+        return {
+          sourceOfTruth: "context_layer_memory_retrieval",
+          query: input.request.query,
+          results: [
+            {
+              id: "mem-1",
+              text: "Goal: build founder memory with provenance.",
+              type: "goal",
+              sourceClass: "private_export",
+              confidence: 88,
+              decay: 0,
+              lastSeen: "2026-05-08T12:00:00.000Z",
+              topicCluster: "founder_memory",
+              evidence: [
+                {
+                  sourceUri: "chatgpt-export:conversation-1",
+                  locator: { chunkHash: "hash-1" },
+                  snippetPolicy: "redacted_snippet",
+                },
+              ],
+              score: 0.91,
+              provenance: [
+                {
+                  sourceUri: "chatgpt-export:conversation-1",
+                  locator: { chunkHash: "hash-1" },
+                  snippetPolicy: "redacted_snippet",
+                },
+              ],
+              scoreBreakdown: {
+                lexical: 0.8,
+                graph: 0.5,
+                recency: 1,
+                confidence: 0.88,
+                novelty: 0.5,
+                project: 0.5,
+                decayPenalty: 0,
+                contradictionPenalty: 0,
+              },
+            },
+          ],
+        };
+      },
+    },
+  );
+  const body = (await response.json()) as { data: { sourceOfTruth: string; results: Array<{ provenance: unknown[] }> } };
+
+  assert.equal(response.status, 200);
+  assert.equal(body.data.sourceOfTruth, "context_layer_memory_retrieval");
+  assert.equal(body.data.results[0]?.provenance.length, 1);
+});
+
 test("context endpoints reject wrong HTTP methods before work", async () => {
   const dashboard = await handleContextDashboardRequest(new Request("http://localhost/api/context/dashboard", { method: "POST" }));
   const importer = await handleContextImportRequest(new Request("http://localhost/api/context/import"));
+  const retrieval = await handleContextRetrievalRequest(new Request("http://localhost/api/context/retrieve", { method: "POST" }));
   const review = await handleContextMemoryReviewRequest(
     new Request("http://localhost/api/context/memories/mem-1/review"),
     "mem-1",
@@ -189,6 +251,7 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
 
   assert.equal(dashboard.status, 405);
   assert.equal(importer.status, 405);
+  assert.equal(retrieval.status, 405);
   assert.equal(review.status, 405);
   assert.equal(deletion.status, 405);
 });
