@@ -1,5 +1,11 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import {
+  buildConnectorSyncPlan,
+  encryptConnectorTokens,
+  type ConnectorSyncItem,
+  type ConnectorTokenInput,
+} from "./context-connector-service.ts";
 import type { PennyDatabase } from "./db/client.ts";
 import {
   brainEdges,
@@ -7,6 +13,7 @@ import {
   checkResults,
   claimSuggestions,
   connectorAccounts,
+  connectorSyncJobs,
   consentSettings,
   contextAuditLogs,
   contextChunks,
@@ -19,12 +26,13 @@ import {
 import type {
   ConnectorScopePlan,
   EphemeralProcessResult,
+  ContextProvider,
   MemoryReviewStatus,
   RetrievalShard,
   RetrievalRequest,
   RetrievalResult,
 } from "./context-layer.ts";
-import { checkMemoryGraph, createLearnCardsForShards, rankMemoryShards } from "./context-layer.ts";
+import { checkMemoryGraph, createLearnCardsForShards, processEphemeralContext, rankMemoryShards } from "./context-layer.ts";
 import type {
   ContextDashboardPayload,
   DeleteMemoryPayload,
@@ -181,21 +189,26 @@ export async function persistContextImport(
     scope: BrainScope;
     connectorPlan: ConnectorScopePlan;
     processing: EphemeralProcessResult;
+    connectorAccountId?: string;
   },
 ): Promise<EphemeralProcessResult> {
   return db.transaction(async (tx) => {
     const scope = scopeValues(input.scope);
     const now = new Date();
-    const [account] = await tx
-      .insert(connectorAccounts)
-      .values({
-        ...scope,
-        provider: input.processing.source.provider,
-        scopes: scopesFromPlan(input.connectorPlan),
-        status: "active",
-        lastSync: now,
-      })
-      .returning();
+    const account = input.connectorAccountId
+      ? await touchConnectorAccount(tx, scope, input.connectorAccountId, now)
+      : (
+          await tx
+            .insert(connectorAccounts)
+            .values({
+              ...scope,
+              provider: input.processing.source.provider,
+              scopes: scopesFromPlan(input.connectorPlan),
+              status: "active",
+              lastSync: now,
+            })
+            .returning()
+        )[0];
 
     if (!account) {
       throw new Error("Failed to persist connector account.");
@@ -460,6 +473,194 @@ export async function persistContextImport(
   });
 }
 
+export type ConnectContextConnectorPayload = {
+  connectorAccountId: string;
+  provider: ContextProvider;
+  scopes: string[];
+  status: "active";
+  tokenExpiresAt: string | null;
+  auditEvent: "connector.connected";
+};
+
+export async function connectContextConnector(
+  db: PennyDatabase,
+  input: {
+    scope: BrainScope;
+    provider: ContextProvider;
+    connectorPlan: ConnectorScopePlan;
+    token?: ConnectorTokenInput | null;
+    tokenSecret?: string | null;
+  },
+): Promise<ConnectContextConnectorPayload> {
+  return db.transaction(async (tx) => {
+    const scope = scopeValues(input.scope);
+    const encryptedTokens = input.token
+      ? encryptConnectorTokens(input.token, input.tokenSecret ?? process.env.PENNY_CONNECTOR_TOKEN_SECRET ?? "")
+      : {
+          encryptedAccessToken: null,
+          encryptedRefreshToken: null,
+          tokenExpiresAt: null,
+        };
+    const [account] = await tx
+      .insert(connectorAccounts)
+      .values({
+        ...scope,
+        provider: input.provider,
+        scopes: scopesFromPlan(input.connectorPlan),
+        status: "active",
+        encryptedAccessToken: encryptedTokens.encryptedAccessToken,
+        encryptedRefreshToken: encryptedTokens.encryptedRefreshToken,
+        tokenExpiresAt: encryptedTokens.tokenExpiresAt,
+      })
+      .returning();
+
+    if (!account) {
+      throw new Error("Failed to connect context connector.");
+    }
+
+    await tx.insert(contextAuditLogs).values({
+      ...scope,
+      event: "connector.connected",
+      actorUserId: scope.userId,
+      connectorAccountId: account.id,
+      details: {
+        provider: input.provider,
+        scopes: account.scopes,
+        hasEncryptedAccessToken: Boolean(account.encryptedAccessToken),
+        hasEncryptedRefreshToken: Boolean(account.encryptedRefreshToken),
+      },
+    });
+
+    return {
+      connectorAccountId: account.id,
+      provider: account.provider,
+      scopes: account.scopes,
+      status: "active",
+      tokenExpiresAt: account.tokenExpiresAt?.toISOString() ?? null,
+      auditEvent: "connector.connected",
+    };
+  });
+}
+
+export type SyncContextConnectorPayload = {
+  syncJobId: string;
+  provider: ContextProvider;
+  status: "succeeded";
+  importsCreated: number;
+  warnings: string[];
+};
+
+export async function syncContextConnector(
+  db: PennyDatabase,
+  input: {
+    scope: BrainScope;
+    connectorAccountId: string;
+    provider: ContextProvider;
+    selection: Parameters<typeof buildConnectorSyncPlan>[0]["selection"];
+    items: readonly ConnectorSyncItem[];
+    fetchedAt?: string;
+    autoApprove?: boolean;
+    rawRetention?: boolean;
+  },
+): Promise<SyncContextConnectorPayload> {
+  const scope = scopeValues(input.scope);
+  const syncPlanInput: Parameters<typeof buildConnectorSyncPlan>[0] = {
+    provider: input.provider,
+    selection: input.selection,
+    items: input.items,
+  };
+
+  if (input.fetchedAt !== undefined) {
+    syncPlanInput.fetchedAt = input.fetchedAt;
+  }
+
+  if (input.autoApprove !== undefined) {
+    syncPlanInput.autoApprove = input.autoApprove;
+  }
+
+  if (input.rawRetention !== undefined) {
+    syncPlanInput.rawRetention = input.rawRetention;
+  }
+
+  const syncPlan = buildConnectorSyncPlan(syncPlanInput);
+
+  if (!syncPlan.connectorPlan.allowed) {
+    throw new Error(syncPlan.warnings[0] ?? "Connector sync scope is not allowed.");
+  }
+
+  const job = await db.transaction(async (tx) => {
+    const [account] = await tx
+      .select()
+      .from(connectorAccounts)
+      .where(and(eq(connectorAccounts.id, input.connectorAccountId), scopeCondition(connectorAccounts, scope)))
+      .limit(1);
+
+    if (!account || account.status !== "active") {
+      throw new Error("Active connector account was not found.");
+    }
+
+    const startedAt = new Date();
+    const [job] = await tx
+      .insert(connectorSyncJobs)
+      .values({
+        ...scope,
+        connectorAccountId: account.id,
+        provider: input.provider,
+        status: "running",
+        minimumScope: syncPlan.syncJob.minimumScope,
+        rateLimitKey: syncPlan.syncJob.rateLimitKey,
+        startedAt,
+      })
+      .returning();
+
+    if (!job) {
+      throw new Error("Failed to create connector sync job.");
+    }
+
+    return job;
+  });
+
+  try {
+    for (const importInput of syncPlan.imports) {
+      await persistContextImport(db, {
+        scope,
+        connectorPlan: syncPlan.connectorPlan,
+        processing: processEphemeralContext(importInput),
+        connectorAccountId: input.connectorAccountId,
+      });
+    }
+
+    await db
+      .update(connectorSyncJobs)
+      .set({
+        status: "succeeded",
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(connectorSyncJobs.id, job.id), scopeCondition(connectorSyncJobs, scope)));
+
+    return {
+      syncJobId: job.id,
+      provider: input.provider,
+      status: "succeeded",
+      importsCreated: syncPlan.imports.length,
+      warnings: syncPlan.warnings,
+    };
+  } catch (error) {
+    await db
+      .update(connectorSyncJobs)
+      .set({
+        status: "failed",
+        completedAt: new Date(),
+        updatedAt: new Date(),
+        error: { message: error instanceof Error ? error.message : String(error) },
+      })
+      .where(and(eq(connectorSyncJobs.id, job.id), scopeCondition(connectorSyncJobs, scope)));
+
+    throw error;
+  }
+}
+
 export async function retrieveContextMemories(
   db: PennyDatabase,
   scope: BrainScope,
@@ -708,6 +909,24 @@ function scopesFromPlan(plan: ConnectorScopePlan): string[] {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+async function touchConnectorAccount(
+  tx: Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0],
+  scope: BrainScope,
+  connectorAccountId: string,
+  lastSync: Date,
+): Promise<typeof connectorAccounts.$inferSelect | undefined> {
+  const [account] = await tx
+    .update(connectorAccounts)
+    .set({
+      lastSync,
+      updatedAt: lastSync,
+    })
+    .where(and(eq(connectorAccounts.id, connectorAccountId), scopeCondition(connectorAccounts, scope)))
+    .returning();
+
+  return account;
 }
 
 function locatorFromValue(value: unknown): { chunkHash: string; line?: number; pattern?: string } {
