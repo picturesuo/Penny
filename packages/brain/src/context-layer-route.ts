@@ -30,6 +30,7 @@ import {
   persistContextImport,
   refreshContextConnectorToken,
   type RefreshContextConnectorPayload,
+  resetContextTrainingConsent,
   reviewContextMemory,
   retrieveContextMemories,
   revokeContextConnector,
@@ -243,6 +244,7 @@ export type ContextLayerRouteOptions = {
     clientSecret: string;
   }) => Promise<RefreshContextConnectorPayload>;
   updateConsent?: (input: { scope: BrainScope; consent: ContextConsentUpdate }) => Promise<ContextConsentPayload>;
+  resetTrainingConsent?: (scope: BrainScope) => Promise<ContextConsentPayload>;
   persistImport?: (input: {
     scope: BrainScope;
     connectorPlan: ConnectorScopePlan;
@@ -928,6 +930,27 @@ export async function handleContextConsentRequest(
         scope: scopeFromRequest(request),
         consent: validation.consent,
       }),
+    },
+    200,
+  );
+}
+
+export async function handleContextTrainingConsentDeleteRequest(
+  request: Request,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "DELETE") {
+    return methodNotAllowed("DELETE /api/context/training-consent requires the DELETE method.");
+  }
+
+  const db = resolveContextDb(options, Boolean(options.resetTrainingConsent));
+  const resetTrainingConsent =
+    options.resetTrainingConsent ??
+    ((requestScope: BrainScope) => resetContextTrainingConsent(requireContextDb(db), requestScope));
+
+  return jsonResponse(
+    {
+      data: await resetTrainingConsent(scopeFromRequest(request)),
     },
     200,
   );
