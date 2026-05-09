@@ -7,6 +7,7 @@ import {
   handleContextConsentRequest,
   handleContextDashboardRequest,
   handleContextImportRequest,
+  handleContextMemoryCorrectRequest,
   handleContextMemoryDeleteRequest,
   handleContextMemoryReviewRequest,
   handleContextOAuthCallbackRequest,
@@ -393,6 +394,75 @@ test("POST /api/context/memories/:id/review validates review actions", async () 
   assert.equal(approveBody.data.auditEvent, "memory.approved");
 });
 
+test("POST /api/context/memories/:id/correct edits or deprioritizes answer memory", async () => {
+  const edit = await handleContextMemoryCorrectRequest(
+    scopedRequest("http://localhost/api/context/memories/mem-1/correct", {
+      method: "POST",
+      body: JSON.stringify({ text: "Corrected founder memory with the actual constraint." }),
+    }),
+    "mem-1",
+    {
+      async reviewMemory(input) {
+        assert.deepEqual(input.scope, scope);
+        assert.equal(input.memoryId, "mem-1");
+        assert.equal(input.action, "edit");
+        assert.equal(input.text, "Corrected founder memory with the actual constraint.");
+        assert.equal(input.mergeIntoMemoryId, null);
+
+        return {
+          memoryId: input.memoryId,
+          action: input.action,
+          reviewStatus: "pending",
+          text: input.text,
+          mergeIntoMemoryId: input.mergeIntoMemoryId,
+          auditEvent: "memory.edited",
+        };
+      },
+    },
+  );
+  const deprioritize = await handleContextMemoryCorrectRequest(
+    scopedRequest("http://localhost/api/context/memories/mem-1/correct", {
+      method: "POST",
+      body: JSON.stringify({ deprioritize: true }),
+    }),
+    "mem-1",
+    {
+      async reviewMemory(input) {
+        assert.equal(input.action, "deprioritize");
+
+        return {
+          memoryId: input.memoryId,
+          action: input.action,
+          reviewStatus: "deprioritized",
+          text: input.text,
+          mergeIntoMemoryId: input.mergeIntoMemoryId,
+          auditEvent: "memory.edited",
+        };
+      },
+    },
+  );
+  const empty = await handleContextMemoryCorrectRequest(
+    scopedRequest("http://localhost/api/context/memories/mem-1/correct", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+    "mem-1",
+  );
+  const editBody = (await edit.json()) as { data: { action: string; text: string; auditEvent: string } };
+  const deprioritizeBody = (await deprioritize.json()) as { data: { action: string; reviewStatus: string } };
+  const emptyBody = (await empty.json()) as { error: { code: string } };
+
+  assert.equal(edit.status, 200);
+  assert.equal(editBody.data.action, "edit");
+  assert.equal(editBody.data.text, "Corrected founder memory with the actual constraint.");
+  assert.equal(editBody.data.auditEvent, "memory.edited");
+  assert.equal(deprioritize.status, 200);
+  assert.equal(deprioritizeBody.data.action, "deprioritize");
+  assert.equal(deprioritizeBody.data.reviewStatus, "deprioritized");
+  assert.equal(empty.status, 400);
+  assert.equal(emptyBody.error.code, "empty_memory_correction");
+});
+
 test("DELETE memory and revoke connector endpoints return audit-ready payloads", async () => {
   const deleteResponse = await handleContextMemoryDeleteRequest(
     scopedRequest("http://localhost/api/context/memories/mem-1", { method: "DELETE" }),
@@ -506,6 +576,10 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
     new Request("http://localhost/api/context/memories/mem-1/review"),
     "mem-1",
   );
+  const correction = await handleContextMemoryCorrectRequest(
+    new Request("http://localhost/api/context/memories/mem-1/correct"),
+    "mem-1",
+  );
   const deletion = await handleContextMemoryDeleteRequest(
     new Request("http://localhost/api/context/memories/mem-1", { method: "POST" }),
     "mem-1",
@@ -520,6 +594,7 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   assert.equal(oauthCallback.status, 405);
   assert.equal(retrieval.status, 405);
   assert.equal(review.status, 405);
+  assert.equal(correction.status, 405);
   assert.equal(deletion.status, 405);
 });
 
