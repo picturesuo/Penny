@@ -22,6 +22,9 @@ import {
   revokeContextConnector,
   syncContextConnector,
   type SyncContextConnectorPayload,
+  type ContextConsentPayload,
+  type ContextConsentUpdate,
+  updateContextConsent,
 } from "./context-layer-repository.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { scopeValues, type BrainScope, type BrainScopeInput } from "./scope.ts";
@@ -86,6 +89,8 @@ export type ContextConnectorSyncRequestBody = {
   autoApprove?: boolean;
   rawRetention?: boolean;
 };
+
+export type ContextConsentRequestBody = ContextConsentUpdate;
 
 export type ContextImportPayload = {
   sourceOfTruth: "context_layer_ephemeral_processor";
@@ -155,6 +160,7 @@ export type ContextLayerRouteOptions = {
     autoApprove: boolean | undefined;
     rawRetention: boolean | undefined;
   }) => Promise<SyncContextConnectorPayload>;
+  updateConsent?: (input: { scope: BrainScope; consent: ContextConsentUpdate }) => Promise<ContextConsentPayload>;
   persistImport?: (input: {
     scope: BrainScope;
     connectorPlan: ConnectorScopePlan;
@@ -419,6 +425,43 @@ export async function handleContextConnectorSyncRequest(
   );
 }
 
+export async function handleContextConsentRequest(
+  request: Request,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "PUT") {
+    return methodNotAllowed("PUT /api/context/consent requires the PUT method.");
+  }
+
+  const body = await readJsonBody<ContextConsentRequestBody>(request);
+
+  if (!body.ok) {
+    return jsonResponse({ error: { code: "invalid_json", message: body.message } }, 400);
+  }
+
+  const validation = validateConsentBody(body.value);
+
+  if (!validation.ok) {
+    return jsonResponse({ error: { code: validation.code, message: validation.message } }, 400);
+  }
+
+  const db = resolveContextDb(options, Boolean(options.updateConsent));
+  const updateConsent =
+    options.updateConsent ??
+    ((input: { scope: BrainScope; consent: ContextConsentUpdate }) =>
+      updateContextConsent(requireContextDb(db), input));
+
+  return jsonResponse(
+    {
+      data: await updateConsent({
+        scope: scopeFromRequest(request),
+        consent: validation.consent,
+      }),
+    },
+    200,
+  );
+}
+
 export async function handleContextMemoryReviewRequest(
   request: Request,
   memoryId: string,
@@ -489,6 +532,32 @@ export async function handleContextMemoryReviewRequest(
   });
 
   return jsonResponse({ data: payload }, 200);
+}
+
+function validateConsentBody(
+  body: ContextConsentRequestBody,
+): { ok: true; consent: ContextConsentUpdate } | { ok: false; code: string; message: string } {
+  const allowedKeys = new Set([
+    "memoryEnabled",
+    "referenceChatgptImport",
+    "referenceGmail",
+    "referenceCalendar",
+    "useForPrivateFineTune",
+    "useToImproveSharedModels",
+  ]);
+  const entries = Object.entries(body ?? {});
+
+  if (entries.length === 0) {
+    return { ok: false, code: "empty_consent_update", message: "Consent update requires at least one setting." };
+  }
+
+  for (const [key, value] of entries) {
+    if (!allowedKeys.has(key) || typeof value !== "boolean") {
+      return { ok: false, code: "invalid_consent_update", message: "Consent settings must be known boolean fields." };
+    }
+  }
+
+  return { ok: true, consent: body };
 }
 
 export async function handleContextMemoryDeleteRequest(
