@@ -4,6 +4,7 @@ import {
   handleContextConnectorConnectRequest,
   handleContextConnectorRevokeRequest,
   handleContextConnectorSyncRequest,
+  handleContextConsentRequest,
   handleContextDashboardRequest,
   handleContextImportRequest,
   handleContextMemoryDeleteRequest,
@@ -145,6 +146,55 @@ test("POST /api/context/connectors/:id/sync queues selected Gmail and Calendar s
   assert.equal(gmailBody.data.importsCreated, 1);
   assert.equal(calendarBlocked.status, 409);
   assert.equal(calendarBody.error.code, "context_scope_not_allowed");
+});
+
+test("PUT /api/context/consent updates memory and training preferences explicitly", async () => {
+  const response = await handleContextConsentRequest(
+    scopedRequest("http://localhost/api/context/consent", {
+      method: "PUT",
+      body: JSON.stringify({
+        memoryEnabled: true,
+        referenceChatgptImport: true,
+        referenceGmail: false,
+        referenceCalendar: true,
+        useForPrivateFineTune: true,
+        useToImproveSharedModels: false,
+      }),
+    }),
+    {
+      async updateConsent(input) {
+        assert.equal(input.consent.memoryEnabled, true);
+        assert.equal(input.consent.useForPrivateFineTune, true);
+        assert.equal(input.consent.useToImproveSharedModels, false);
+
+        return {
+          memoryEnabled: true,
+          referenceChatgptImport: true,
+          referenceGmail: false,
+          referenceCalendar: true,
+          useForPrivateFineTune: true,
+          useToImproveSharedModels: false,
+          auditEvent: "training.preference.updated",
+        };
+      },
+    },
+  );
+  const invalid = await handleContextConsentRequest(
+    scopedRequest("http://localhost/api/context/consent", {
+      method: "PUT",
+      body: JSON.stringify({
+        useToImproveSharedModels: "yes",
+      }),
+    }),
+  );
+  const body = (await response.json()) as { data: { useForPrivateFineTune: boolean; auditEvent: string } };
+  const invalidBody = (await invalid.json()) as { error: { code: string } };
+
+  assert.equal(response.status, 200);
+  assert.equal(body.data.useForPrivateFineTune, true);
+  assert.equal(body.data.auditEvent, "training.preference.updated");
+  assert.equal(invalid.status, 400);
+  assert.equal(invalidBody.error.code, "invalid_consent_update");
 });
 
 test("POST /api/context/import runs the scoped ephemeral processing flow", async () => {
@@ -360,6 +410,7 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   const dashboard = await handleContextDashboardRequest(new Request("http://localhost/api/context/dashboard", { method: "POST" }));
   const connect = await handleContextConnectorConnectRequest(new Request("http://localhost/api/context/connectors"));
   const sync = await handleContextConnectorSyncRequest(new Request("http://localhost/api/context/connectors/conn-1/sync"), "conn-1");
+  const consent = await handleContextConsentRequest(new Request("http://localhost/api/context/consent"));
   const importer = await handleContextImportRequest(new Request("http://localhost/api/context/import"));
   const retrieval = await handleContextRetrievalRequest(new Request("http://localhost/api/context/retrieve", { method: "POST" }));
   const review = await handleContextMemoryReviewRequest(
@@ -374,6 +425,7 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   assert.equal(dashboard.status, 405);
   assert.equal(connect.status, 405);
   assert.equal(sync.status, 405);
+  assert.equal(consent.status, 405);
   assert.equal(importer.status, 405);
   assert.equal(retrieval.status, 405);
   assert.equal(review.status, 405);
