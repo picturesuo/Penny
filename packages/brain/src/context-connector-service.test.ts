@@ -7,6 +7,8 @@ import {
   decryptConnectorToken,
   encryptConnectorTokens,
   exchangeConnectorOAuthCallback,
+  fetchConnectorSyncItems,
+  type ConnectorFetchHttpRequest,
 } from "./context-connector-service.ts";
 
 test("connector token encryption stores opaque AES-GCM ciphertext", () => {
@@ -126,6 +128,124 @@ test("Calendar sync plan is read-only and extracts cadence, deadlines, and colla
   assert.equal(allowed.imports[0]?.text.includes("project cadence"), true);
   assert.equal(allowed.imports[0]?.text.includes("deadline or due"), true);
   assert.equal(allowed.imports[0]?.text.includes("recurring collaborators"), true);
+});
+
+test("fetchConnectorSyncItems fetches Gmail metadata and snippets without full bodies", async () => {
+  const requests: ConnectorFetchHttpRequest[] = [];
+  const result = await fetchConnectorSyncItems({
+    provider: "gmail",
+    accessToken: "gmail-access-token",
+    maxItems: 2,
+    fetchedAt: "2026-05-09T12:00:00.000Z",
+    selection: {
+      provider: "gmail",
+      labels: ["Label_123"],
+      senders: ["founder@example.com"],
+      searchQueries: ["newer_than:90d"],
+      metadataFirst: true,
+    },
+    async http(request) {
+      requests.push(request);
+      const url = new URL(request.url);
+
+      assert.equal(request.headers.authorization, "Bearer gmail-access-token");
+
+      if (url.pathname.endsWith("/messages")) {
+        assert.equal(url.searchParams.get("maxResults"), "2");
+        assert.equal(url.searchParams.get("q"), "newer_than:90d from:founder@example.com");
+        assert.deepEqual(url.searchParams.getAll("labelIds"), ["Label_123"]);
+
+        return {
+          status: 200,
+          body: {
+            messages: [{ id: "msg-1", threadId: "thread-1" }],
+          },
+        };
+      }
+
+      assert.equal(url.searchParams.get("format"), "metadata");
+      assert.deepEqual(url.searchParams.getAll("metadataHeaders"), ["From", "Subject", "Date"]);
+
+      return {
+        status: 200,
+        body: {
+          id: "msg-1",
+          threadId: "thread-1",
+          snippet: "Founder says Penny should remember launch constraints.",
+          payload: {
+            headers: [
+              { name: "From", value: "founder@example.com" },
+              { name: "Subject", value: "Launch constraints" },
+              { name: "Date", value: "Fri, 8 May 2026 12:00:00 -0400" },
+            ],
+          },
+        },
+      };
+    },
+  });
+
+  assert.equal(requests.length, 2);
+  assert.equal(result.connectorPlan.allowed, true);
+  assert.equal(result.fetchedAt, "2026-05-09T12:00:00.000Z");
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0]?.id, "thread-1");
+  assert.equal(result.items[0]?.label, "Gmail: Launch constraints");
+  assert.equal(result.items[0]?.snippet?.includes("launch constraints"), true);
+  assert.equal(result.items[0]?.metadata?.subject, "Launch constraints");
+});
+
+test("fetchConnectorSyncItems fetches Calendar events read-only across selected calendars", async () => {
+  const requests: ConnectorFetchHttpRequest[] = [];
+  const result = await fetchConnectorSyncItems({
+    provider: "calendar",
+    accessToken: "calendar-access-token",
+    maxItems: 1,
+    selection: {
+      provider: "calendar",
+      calendarIds: ["primary"],
+      readOnly: true,
+      dateRange: {
+        from: "2026-05-09T00:00:00.000Z",
+        to: "2026-05-16T00:00:00.000Z",
+      },
+    },
+    async http(request) {
+      requests.push(request);
+      const url = new URL(request.url);
+
+      assert.equal(request.headers.authorization, "Bearer calendar-access-token");
+      assert.equal(url.pathname, "/calendar/v3/calendars/primary/events");
+      assert.equal(url.searchParams.get("singleEvents"), "true");
+      assert.equal(url.searchParams.get("orderBy"), "startTime");
+      assert.equal(url.searchParams.get("maxResults"), "1");
+      assert.equal(url.searchParams.get("timeMin"), "2026-05-09T00:00:00.000Z");
+      assert.equal(url.searchParams.get("timeMax"), "2026-05-16T00:00:00.000Z");
+
+      return {
+        status: 200,
+        body: {
+          items: [
+            {
+              id: "event-1",
+              summary: "Penny context review",
+              description: "Weekly project cadence and deadline review.",
+              start: { dateTime: "2026-05-10T14:00:00.000Z" },
+              end: { dateTime: "2026-05-10T14:30:00.000Z" },
+              attendees: [{ email: "founder@example.com" }, { email: "builder@example.com" }],
+            },
+          ],
+        },
+      };
+    },
+  });
+
+  assert.equal(requests.length, 1);
+  assert.equal(result.connectorPlan.allowed, true);
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0]?.sourceUri, "calendar:event:primary:event-1");
+  assert.equal(result.items[0]?.label, "Penny context review");
+  assert.equal(result.items[0]?.start, "2026-05-10T14:00:00.000Z");
+  assert.deepEqual(result.items[0]?.attendees, ["founder@example.com", "builder@example.com"]);
 });
 
 test("buildConnectorOAuthStart creates signed Google authorization URLs for Gmail", () => {
