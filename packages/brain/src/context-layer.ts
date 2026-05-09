@@ -79,10 +79,12 @@ export type RedactionFindingType =
   | "email"
   | "phone"
   | "address"
+  | "sensitive_id"
   | "medical"
   | "legal"
   | "minor"
-  | "private_message";
+  | "private_message"
+  | "blocked_source";
 
 export type RedactionFinding = {
   type: RedactionFindingType;
@@ -265,6 +267,11 @@ const SENSITIVE_PATTERNS: Array<{
     replacement: "[REDACTED_ADDRESS]",
   },
   {
+    type: "sensitive_id",
+    pattern: /\b(?:driver'?s license|passport|taxpayer id|national id|student id|employee id|account id)\s*[:#=]?\s*[A-Za-z0-9-]{4,}\b/gi,
+    replacement: "[REDACTED_SENSITIVE_ID]",
+  },
+  {
     type: "medical",
     pattern: /\b(?:diagnosis|prescription|therapy|therapist|medical record|patient id)\b/gi,
     replacement: "[REDACTED_MEDICAL]",
@@ -283,6 +290,11 @@ const SENSITIVE_PATTERNS: Array<{
     type: "private_message",
     pattern: /\b(?:private message|confidential DM|do not share|off the record)\b/gi,
     replacement: "[REDACTED_PRIVATE_MESSAGE]",
+  },
+  {
+    type: "blocked_source",
+    pattern: /\b(?:blocked source|do not ingest|excluded source|no memory use)\s*[:=-]?\s*[^\n.]*/gi,
+    replacement: "[REDACTED_BLOCKED_SOURCE]",
   },
 ];
 
