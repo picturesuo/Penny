@@ -169,6 +169,7 @@ export const checkRiskEnum = pgEnum("check_risk", [
 ]);
 export const contextAuditEventEnum = pgEnum("context_audit_event", [
   "connector.connected",
+  "connector.refreshed",
   "connector.synced",
   "connector.revoked",
   "source.fetched",
