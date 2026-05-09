@@ -121,6 +121,8 @@ test("processEphemeralContext blocks memory extraction for blocked sources", () 
   });
 
   assert.equal(result.redaction.findings.some((finding) => finding.type === "blocked_source"), true);
+  assert.equal(result.redaction.text, "[REDACTED_BLOCKED_SOURCE]");
+  assert.equal(result.digest.summary, "Blocked source was not summarized or extracted.");
   assert.equal(result.memoryShards.length, 0);
   assert.equal(result.brainNodes.length, 0);
   assert.equal(result.brainEdges.length, 0);
