@@ -12,6 +12,12 @@ import {
 } from "./context-layer.ts";
 import type { ConnectorSyncItem, ConnectorTokenInput } from "./context-connector-service.ts";
 import {
+  buildConnectorOAuthStart,
+  exchangeConnectorOAuthCallback,
+  type ConnectorOAuthStart,
+  type ConnectorOAuthTokenExchange,
+} from "./context-connector-service.ts";
+import {
   connectContextConnector,
   type ConnectContextConnectorPayload,
   deleteContextMemory,
@@ -81,6 +87,23 @@ export type ContextConnectorConnectRequestBody = {
   token?: ConnectorTokenInput | null;
 };
 
+export type ContextOAuthStartRequestBody = {
+  provider?: ContextProvider;
+  connector?: ConnectorScopeSelection;
+  clientId?: string;
+  redirectUri?: string;
+  scopes?: string[];
+};
+
+export type ContextOAuthCallbackRequestBody = {
+  provider?: ContextProvider;
+  code?: string;
+  state?: string;
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri?: string;
+};
+
 export type ContextConnectorSyncRequestBody = {
   provider?: ContextProvider;
   selection?: ConnectorScopeSelection;
@@ -143,7 +166,25 @@ export type ContextLayerRouteOptions = {
   db?: PennyDatabase;
   databaseUrl?: string;
   connectorTokenSecret?: string;
+  oauthStateSecret?: string;
+  oauthTokenExchange?: ConnectorOAuthTokenExchange;
   loadDashboard?: (scope: BrainScope) => Promise<ContextDashboardPayload>;
+  startOAuth?: (input: {
+    provider: Extract<ContextProvider, "gmail" | "calendar">;
+    connector: ConnectorScopeSelection;
+    clientId: string;
+    redirectUri: string;
+    scopes?: string[];
+  }) => Promise<ConnectorOAuthStart>;
+  finishOAuth?: (input: {
+    scope: BrainScope;
+    provider: Extract<ContextProvider, "gmail" | "calendar">;
+    code: string;
+    state: string;
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+  }) => Promise<ConnectContextConnectorPayload>;
   connectConnector?: (input: {
     scope: BrainScope;
     provider: ContextProvider;
@@ -341,6 +382,185 @@ export async function handleContextConnectorConnectRequest(
     },
     201,
   );
+}
+
+export async function handleContextOAuthStartRequest(
+  request: Request,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/context/oauth/start requires the POST method.");
+  }
+
+  const body = await readJsonBody<ContextOAuthStartRequestBody>(request);
+
+  if (!body.ok) {
+    return jsonResponse({ error: { code: "invalid_json", message: body.message } }, 400);
+  }
+
+  if (!isOAuthProvider(body.value.provider)) {
+    return jsonResponse({ error: { code: "invalid_provider", message: "OAuth start supports Gmail and Calendar." } }, 400);
+  }
+
+  if (!body.value.clientId?.trim() || !body.value.redirectUri?.trim()) {
+    return jsonResponse(
+      { error: { code: "invalid_oauth_client", message: "OAuth start requires clientId and redirectUri." } },
+      400,
+    );
+  }
+
+  const connector: ConnectorScopeSelection = {
+    ...(body.value.connector ?? {}),
+    provider: body.value.provider,
+  };
+  const startInput: {
+    provider: Extract<ContextProvider, "gmail" | "calendar">;
+    connector: ConnectorScopeSelection;
+    clientId: string;
+    redirectUri: string;
+    scopes?: string[];
+  } = {
+    provider: body.value.provider,
+    connector,
+    clientId: body.value.clientId,
+    redirectUri: body.value.redirectUri,
+  };
+
+  if (body.value.scopes !== undefined) {
+    startInput.scopes = body.value.scopes;
+  }
+
+  const startOAuth =
+    options.startOAuth ??
+    ((input: {
+      provider: Extract<ContextProvider, "gmail" | "calendar">;
+      connector: ConnectorScopeSelection;
+      clientId: string;
+      redirectUri: string;
+      scopes?: string[];
+    }) =>
+      buildConnectorOAuthStart({
+        provider: input.provider,
+        clientId: input.clientId,
+        redirectUri: input.redirectUri,
+        stateSecret: options.oauthStateSecret ?? process.env.PENNY_OAUTH_STATE_SECRET ?? "",
+        selection: input.connector,
+        ...(input.scopes === undefined ? {} : { scopes: input.scopes }),
+      }));
+
+  try {
+    return jsonResponse(
+      {
+        data: await startOAuth(startInput),
+      },
+      200,
+    );
+  } catch (error) {
+    return jsonResponse(
+      {
+        error: {
+          code: "oauth_start_failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      400,
+    );
+  }
+}
+
+export async function handleContextOAuthCallbackRequest(
+  request: Request,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/context/oauth/callback requires the POST method.");
+  }
+
+  const body = await readJsonBody<ContextOAuthCallbackRequestBody>(request);
+
+  if (!body.ok) {
+    return jsonResponse({ error: { code: "invalid_json", message: body.message } }, 400);
+  }
+
+  if (!isOAuthProvider(body.value.provider)) {
+    return jsonResponse({ error: { code: "invalid_provider", message: "OAuth callback supports Gmail and Calendar." } }, 400);
+  }
+
+  if (
+    !body.value.code?.trim() ||
+    !body.value.state?.trim() ||
+    !body.value.clientId?.trim() ||
+    !body.value.clientSecret?.trim() ||
+    !body.value.redirectUri?.trim()
+  ) {
+    return jsonResponse(
+      { error: { code: "invalid_oauth_callback", message: "OAuth callback requires code, state, client credentials, and redirectUri." } },
+      400,
+    );
+  }
+
+  const db = resolveContextDb(options, Boolean(options.finishOAuth));
+  const finishOAuth =
+    options.finishOAuth ??
+    (async (input: {
+      scope: BrainScope;
+      provider: Extract<ContextProvider, "gmail" | "calendar">;
+      code: string;
+      state: string;
+      clientId: string;
+      clientSecret: string;
+      redirectUri: string;
+    }) => {
+      if (!options.oauthTokenExchange) {
+        throw new Error("OAuth token exchange client is required.");
+      }
+
+      const callback = await exchangeConnectorOAuthCallback({
+        provider: input.provider,
+        code: input.code,
+        state: input.state,
+        stateSecret: options.oauthStateSecret ?? process.env.PENNY_OAUTH_STATE_SECRET ?? "",
+        clientId: input.clientId,
+        clientSecret: input.clientSecret,
+        redirectUri: input.redirectUri,
+        exchange: options.oauthTokenExchange,
+      });
+
+      return connectContextConnector(requireContextDb(db), {
+        scope: input.scope,
+        provider: callback.provider,
+        connectorPlan: callback.connectorPlan,
+        token: callback.token,
+        tokenSecret: options.connectorTokenSecret ?? null,
+      });
+    });
+
+  try {
+    return jsonResponse(
+      {
+        data: await finishOAuth({
+          scope: scopeFromRequest(request),
+          provider: body.value.provider,
+          code: body.value.code,
+          state: body.value.state,
+          clientId: body.value.clientId,
+          clientSecret: body.value.clientSecret,
+          redirectUri: body.value.redirectUri,
+        }),
+      },
+      201,
+    );
+  } catch (error) {
+    return jsonResponse(
+      {
+        error: {
+          code: "oauth_callback_failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      400,
+    );
+  }
 }
 
 export async function handleContextConnectorSyncRequest(
@@ -756,6 +976,10 @@ function isContextProvider(value: unknown): value is ContextProvider {
     value === "canvas" ||
     value === "instagram"
   );
+}
+
+function isOAuthProvider(value: unknown): value is Extract<ContextProvider, "gmail" | "calendar"> {
+  return value === "gmail" || value === "calendar";
 }
 
 function isMemoryReviewAction(value: unknown): value is MemoryReviewAction {
