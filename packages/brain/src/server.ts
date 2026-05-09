@@ -38,6 +38,7 @@ import {
   handleContextConsentRequest,
   handleContextDashboardRequest,
   handleContextImportRequest,
+  handleContextMemoryCorrectRequest,
   handleContextMemoryDeleteRequest,
   handleContextMemoryReviewRequest,
   handleContextOAuthCallbackRequest,
@@ -195,6 +196,16 @@ export function createPennyServer(): ReturnType<typeof createServer> {
       await writeWebResponse(
         outgoing,
         await handleContextMemoryReviewRequest(request, decodeURIComponent(contextMemoryReviewMatch[1] ?? "")),
+      );
+      return;
+    }
+
+    const contextMemoryCorrectMatch = /^\/api\/context\/memories\/([^/]+)\/correct$/.exec(url.pathname);
+
+    if (contextMemoryCorrectMatch) {
+      await writeWebResponse(
+        outgoing,
+        await handleContextMemoryCorrectRequest(request, decodeURIComponent(contextMemoryCorrectMatch[1] ?? "")),
       );
       return;
     }
