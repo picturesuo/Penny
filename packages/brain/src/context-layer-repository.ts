@@ -2,7 +2,10 @@ import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   buildConnectorSyncPlan,
+  decryptConnectorToken,
   encryptConnectorTokens,
+  fetchConnectorSyncItems,
+  type ConnectorFetchHttpClient,
   type ConnectorSyncItem,
   type ConnectorTokenInput,
 } from "./context-connector-service.ts";
@@ -549,6 +552,84 @@ export type SyncContextConnectorPayload = {
   importsCreated: number;
   warnings: string[];
 };
+
+export type FetchContextConnectorPayload = {
+  connectorAccountId: string;
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  fetchedAt: string;
+  items: ConnectorSyncItem[];
+  warnings: string[];
+  auditEvent: "source.fetched";
+};
+
+export async function fetchContextConnectorItems(
+  db: PennyDatabase,
+  input: {
+    scope: BrainScope;
+    connectorAccountId: string;
+    provider: Extract<ContextProvider, "gmail" | "calendar">;
+    selection: Parameters<typeof fetchConnectorSyncItems>[0]["selection"];
+    maxItems?: number;
+    tokenSecret?: string | null;
+    fetchHttp?: ConnectorFetchHttpClient;
+  },
+): Promise<FetchContextConnectorPayload> {
+  const scope = scopeValues(input.scope);
+  const [account] = await db
+    .select()
+    .from(connectorAccounts)
+    .where(and(eq(connectorAccounts.id, input.connectorAccountId), scopeCondition(connectorAccounts, scope)))
+    .limit(1);
+
+  if (!account || account.status !== "active") {
+    throw new Error("Active connector account was not found.");
+  }
+
+  if (account.provider !== input.provider) {
+    throw new Error("Connector account provider does not match fetch provider.");
+  }
+
+  if (!account.encryptedAccessToken) {
+    throw new Error("Connector account does not have an access token.");
+  }
+
+  const fetchInput: Parameters<typeof fetchConnectorSyncItems>[0] = {
+    provider: input.provider,
+    selection: input.selection,
+    accessToken: decryptConnectorToken(
+      account.encryptedAccessToken,
+      input.tokenSecret ?? process.env.PENNY_CONNECTOR_TOKEN_SECRET ?? "",
+    ),
+    http: input.fetchHttp ?? defaultConnectorFetchHttp,
+  };
+
+  if (input.maxItems !== undefined) {
+    fetchInput.maxItems = input.maxItems;
+  }
+
+  const fetchResult = await fetchConnectorSyncItems(fetchInput);
+
+  await db.insert(contextAuditLogs).values({
+    ...scope,
+    event: "source.fetched",
+    actorUserId: scope.userId,
+    connectorAccountId: account.id,
+    details: {
+      provider: input.provider,
+      minimumScope: fetchResult.connectorPlan.minimumScope,
+      itemCount: fetchResult.items.length,
+    },
+  });
+
+  return {
+    connectorAccountId: account.id,
+    provider: input.provider,
+    fetchedAt: fetchResult.fetchedAt,
+    items: fetchResult.items,
+    warnings: fetchResult.warnings,
+    auditEvent: "source.fetched",
+  };
+}
 
 export async function syncContextConnector(
   db: PennyDatabase,
@@ -1112,3 +1193,22 @@ function auditEventForReview(action: MemoryReviewAction) {
       return "memory.edited";
   }
 }
+
+const defaultConnectorFetchHttp: ConnectorFetchHttpClient = async (request) => {
+  const response = await fetch(request.url, {
+    method: request.method,
+    headers: request.headers,
+  });
+  let body: unknown;
+
+  try {
+    body = await response.json();
+  } catch {
+    body = await response.text();
+  }
+
+  return {
+    status: response.status,
+    body,
+  };
+};
