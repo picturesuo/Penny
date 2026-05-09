@@ -197,6 +197,13 @@
       "when": 1778341200000,
       "tag": "0027_add_connector_refreshed_audit_event",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1778352517000,
+      "tag": "0028_add_memory_blocked_audit_event",
+      "breakpoints": true
     }
   ]
 }
