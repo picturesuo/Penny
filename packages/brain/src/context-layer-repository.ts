@@ -755,6 +755,92 @@ export async function retrieveContextMemories(
   };
 }
 
+export type ContextConsentUpdate = {
+  memoryEnabled?: boolean;
+  referenceChatgptImport?: boolean;
+  referenceGmail?: boolean;
+  referenceCalendar?: boolean;
+  useForPrivateFineTune?: boolean;
+  useToImproveSharedModels?: boolean;
+};
+
+export type ContextConsentPayload = {
+  memoryEnabled: boolean;
+  referenceChatgptImport: boolean;
+  referenceGmail: boolean;
+  referenceCalendar: boolean;
+  useForPrivateFineTune: boolean;
+  useToImproveSharedModels: boolean;
+  auditEvent: "consent.updated" | "training.preference.updated";
+};
+
+export async function updateContextConsent(
+  db: PennyDatabase,
+  input: {
+    scope: BrainScope;
+    consent: ContextConsentUpdate;
+  },
+): Promise<ContextConsentPayload> {
+  const scope = scopeValues(input.scope);
+  const nextConsent = {
+    memoryEnabled: input.consent.memoryEnabled ?? true,
+    referenceChatgptImport: input.consent.referenceChatgptImport ?? false,
+    referenceGmail: input.consent.referenceGmail ?? false,
+    referenceCalendar: input.consent.referenceCalendar ?? false,
+    useForPrivateFineTune: input.consent.useForPrivateFineTune ?? false,
+    useToImproveSharedModels:
+      input.consent.memoryEnabled === false ? false : input.consent.useToImproveSharedModels ?? false,
+  };
+  const auditEvent =
+    input.consent.useForPrivateFineTune !== undefined || input.consent.useToImproveSharedModels !== undefined
+      ? "training.preference.updated"
+      : "consent.updated";
+
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(consentSettings)
+      .values({
+        ...scope,
+        ...nextConsent,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [
+          consentSettings.userId,
+          consentSettings.workspaceId,
+          consentSettings.projectId,
+          consentSettings.sphereId,
+        ],
+        set: {
+          ...nextConsent,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    if (!row) {
+      throw new Error("Failed to update Context Layer consent settings.");
+    }
+
+    await tx.insert(contextAuditLogs).values({
+      ...scope,
+      event: auditEvent,
+      actorUserId: scope.userId,
+      details: nextConsent,
+    });
+
+    return {
+      memoryEnabled: row.memoryEnabled,
+      referenceChatgptImport: row.referenceChatgptImport,
+      referenceGmail: row.referenceGmail,
+      referenceCalendar: row.referenceCalendar,
+      useForPrivateFineTune: row.useForPrivateFineTune,
+      useToImproveSharedModels: row.useToImproveSharedModels,
+      auditEvent,
+    };
+  });
+}
+
 export async function reviewContextMemory(
   db: PennyDatabase,
   input: {
