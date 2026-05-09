@@ -2,6 +2,7 @@
 
 Artifact ID: `AUTOPILOT-TEST-PLAN`
 Latency update: 2026-05-05
+Repository completion update: 2026-05-08
 
 ## Purpose
 
@@ -93,11 +94,19 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 - Local API: `pnpm dev:api`, serving `http://localhost:3000`.
 - DB setup: `DATABASE_URL` must be exported before `pnpm db:migrate` or DB-backed API smoke tests.
 - Current speed proof: next-move ranking and Thinking Mode service tests use local deterministic fixtures; they prove candidate ranking and focus writes do not require a live provider, but they do not yet enforce per-request wall-clock budgets.
-- Current provider metadata proof: `generateChallengeCritique` records `meta.latencyMs`, provider, model, route tier, fallback hops, repair attempt, usage, cost, prompt version, environment, and release; this plan still needs a focused latency/metadata regression before treating live AI speed as verified.
+- Current provider audit proof: Challenge, Verify, Learn, seed, and artifact generation require a recorded BrainRun id before provider-backed generation. BrainRun rows record operation, provider, model, status, input, output, error, createdAt, and completedAt. Latency-specific route metadata remains a deferred regression item rather than a current repository-completion blocker.
 - Removed gap: TODO-only skeleton tests were deleted; the remaining `test/brain` suite is real and runs in the default test script.
 - Smoke status: `scripts/smoke-thinking-mode.sh` is the current full mutating happy-path smoke, not a placeholder waiting for promotion.
 - Primary Autopilot routes: session-scoped `/api/sessions/:sessionId/autopilot/state`, `/api/sessions/:sessionId/autopilot/tick`, and `/api/sessions/:sessionId/next-move-candidates/:candidateId/start`.
 - Compatibility routes: legacy `/autopilot/*` and `/api/brains/:brainId/autopilot/*` aliases are preservation surfaces, not the preferred MVP contract.
+
+## Repository Completion Snapshot
+
+- CS1: The current repository-completion gate for this artifact is documentation readiness, not adding runtime behavior.
+- CS2: The default test surface already includes backend route/service tests, frontend client tests, and the pure next-move engine test. This artifact should stay synchronized with that command rather than listing non-runnable placeholders.
+- CS3: The queue's cleanup audit is complete; this plan should not reopen archived frontend cleanup, generic ingestion, broad search, or chatbot scope.
+- CS4: Remaining latency work is intentionally deferred: add a focused provider metadata regression and optional timing script only when implementing latency instrumentation, not as part of this artifact completion pass.
+- CS5: Before a demo, the gate remains `pnpm typecheck`, `pnpm test`, `pnpm build`, and the smoke script when database/API setup is available.
 
 ## Test Mapping
 
@@ -120,8 +129,9 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 | TM15 | Route preservation protects active Autopilot paths | `packages/brain/src/p3-route-preservation.test.ts` | Session-scoped routes stay active while legacy compatibility aliases remain explicit and non-preferred. |
 | TM16 | Verify remains source-grounded where possible | `packages/brain/src/verify-route.test.ts` and `packages/brain/frontend/test/verifyPanel.test.ts` | Verify uses structured provider output, records search trace when available, and exposes evidence/confidence controls. |
 | TM17 | Fast path stays provider-free | `test/brain/nextMoveEngine.test.ts`, `packages/brain/src/thinking-mode-service.test.ts`, and `packages/brain/src/thinking-mode-routes.test.ts` | Ranking, tick, start focus, manual focus, and explicit retick are local contract paths and must not require live provider credentials. |
-| TM18 | Provider metadata covers latency | Add or keep focused tests around `server/ai/operations/generateChallengeCritique.ts` or its command bridge | Successful provider-backed generation records latency, provider, model, route tier, fallback hops, repair flag, usage/cost, prompt version, and validation result. |
-| TM19 | Demo timing is separated by phase | Manual release record until a script exists | Local tests, frontend build, smoke script, and optional live-provider smoke are timed separately so slow AI orchestration is visible. |
+| TM18 | Provider generation requires BrainRun audit rows | `packages/brain/src/challenge-route.test.ts`, `packages/brain/src/verify-route.test.ts`, `packages/brain/src/inline-learn-route.test.ts`, `packages/brain/src/artifact-route.test.ts`, and `packages/brain/src/seed.test.ts` | Provider-backed generation rejects missing BrainRun ids and records operation/provider/model/status/input/output through the service or route prelude. |
+| TM19 | Latency metadata is still deferred | Future provider metadata regression | A later implementation should fail if provider-backed inline routes lack timeout, context budget, route tier, reasoning-effort policy, latency fields, and validation result. |
+| TM20 | Demo timing is separated by phase | Manual release record until a script exists | Local tests, frontend build, smoke script, and optional live-provider smoke are timed separately so slow AI orchestration is visible. |
 
 ## Maintenance Path
 
@@ -154,8 +164,9 @@ If a live provider is enabled for a demo, add a separate note for provider, mode
 - LG1: `test/brain/nextMoveEngine.test.ts` remains the first guard for provider-free ranking.
 - LG2: `packages/brain/src/thinking-mode-service.test.ts` remains the first guard for local tick, candidate persistence, accepted focus, and manual override.
 - LG3: `packages/brain/src/thinking-mode-routes.test.ts` remains the first guard that the client can explicitly retick after a challenge response instead of the frontend inventing the next state.
-- LG4: A future provider-route test should fail if an inline AI route lacks timeout, context budget, route tier, reasoning-effort policy, or latency metadata.
+- LG4: Existing provider-backed generators must keep requiring a recorded BrainRun id before generation so AI output cannot affect truth without an audit row.
 - LG5: A future demo timing script should separate deterministic local time from provider generation time and should flag provider paths that exceed the latency class in `docs/thinking-mode-autopilot-spec.md`.
+- LG6: A future provider-route test should fail if an inline AI route lacks timeout, context budget, route tier, reasoning-effort policy, validation result, or latency metadata.
 
 ## Status
 
@@ -163,3 +174,4 @@ If a live provider is enabled for a demo, add a separate note for provider, mode
 - ST2: This documentation pass changes documentation only; no runtime API, schema, or exported TypeScript contract changes are introduced.
 - ST3: Implementation should stop here until a later role takes a specific test or runtime gap from the Success Criteria or Test Mapping.
 - ST4: 2026-05-05 latency rewrite added fast-path, provider metadata, and demo timing gates to align the test plan with the Autopilot latency contract.
+- ST5: 2026-05-08 repository completion update aligned the plan with the current default test command, BrainRun audit coverage, cleanup-audit queue status, and deferred latency instrumentation work.
