@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildConnectorSyncPlan,
+  buildConnectorOAuthStart,
   buildRefreshTokenUpdate,
   decryptConnectorToken,
   encryptConnectorTokens,
+  exchangeConnectorOAuthCallback,
 } from "./context-connector-service.ts";
 
 test("connector token encryption stores opaque AES-GCM ciphertext", () => {
@@ -124,4 +126,107 @@ test("Calendar sync plan is read-only and extracts cadence, deadlines, and colla
   assert.equal(allowed.imports[0]?.text.includes("project cadence"), true);
   assert.equal(allowed.imports[0]?.text.includes("deadline or due"), true);
   assert.equal(allowed.imports[0]?.text.includes("recurring collaborators"), true);
+});
+
+test("buildConnectorOAuthStart creates signed Google authorization URLs for Gmail", () => {
+  const start = buildConnectorOAuthStart({
+    provider: "gmail",
+    clientId: "client-id",
+    redirectUri: "https://penny.test/oauth/callback",
+    stateSecret: "state-secret",
+    nonce: "nonce-1",
+    now: "2026-05-09T12:00:00.000Z",
+    selection: {
+      provider: "gmail",
+      labels: ["Penny"],
+      searchQueries: ["from:founder@example.com"],
+    },
+  });
+  const url = new URL(start.authorizationUrl);
+
+  assert.equal(url.origin, "https://accounts.google.com");
+  assert.equal(url.searchParams.get("client_id"), "client-id");
+  assert.equal(url.searchParams.get("redirect_uri"), "https://penny.test/oauth/callback");
+  assert.equal(url.searchParams.get("response_type"), "code");
+  assert.equal(url.searchParams.get("access_type"), "offline");
+  assert.equal(url.searchParams.get("prompt"), "consent");
+  assert.equal(url.searchParams.get("scope"), "https://www.googleapis.com/auth/gmail.readonly");
+  assert.equal(url.searchParams.get("state"), start.state);
+  assert.equal(start.connectorPlan.allowed, true);
+  assert.equal(start.warnings.some((warning) => warning.includes("restricted scope")), true);
+});
+
+test("exchangeConnectorOAuthCallback validates state and uses injected token exchange", async () => {
+  const start = buildConnectorOAuthStart({
+    provider: "calendar",
+    clientId: "client-id",
+    redirectUri: "https://penny.test/oauth/callback",
+    stateSecret: "state-secret",
+    nonce: "nonce-1",
+    now: "2026-05-09T12:00:00.000Z",
+    selection: {
+      provider: "calendar",
+      calendarIds: ["primary"],
+      readOnly: true,
+    },
+  });
+  const callback = await exchangeConnectorOAuthCallback({
+    provider: "calendar",
+    code: "auth-code",
+    state: start.state,
+    stateSecret: "state-secret",
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    redirectUri: "https://penny.test/oauth/callback",
+    async exchange(request) {
+      assert.equal(request.tokenEndpoint, "https://oauth2.googleapis.com/token");
+      assert.equal(request.code, "auth-code");
+      assert.equal(request.clientId, "client-id");
+      assert.equal(request.clientSecret, "client-secret");
+
+      return {
+        accessToken: "calendar-access-token",
+        refreshToken: "calendar-refresh-token",
+        expiresInSeconds: 3600,
+      };
+    },
+  });
+
+  assert.equal(callback.provider, "calendar");
+  assert.equal(callback.connectorPlan.allowed, true);
+  assert.equal(callback.token.accessToken, "calendar-access-token");
+  assert.equal(callback.token.refreshToken, "calendar-refresh-token");
+  assert.ok(callback.token.expiresAt instanceof Date);
+});
+
+test("exchangeConnectorOAuthCallback rejects tampered state", async () => {
+  const start = buildConnectorOAuthStart({
+    provider: "calendar",
+    clientId: "client-id",
+    redirectUri: "https://penny.test/oauth/callback",
+    stateSecret: "state-secret",
+    selection: {
+      provider: "calendar",
+      readOnly: true,
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      exchangeConnectorOAuthCallback({
+        provider: "calendar",
+        code: "auth-code",
+        state: `${start.state}tampered`,
+        stateSecret: "state-secret",
+        clientId: "client-id",
+        clientSecret: "client-secret",
+        redirectUri: "https://penny.test/oauth/callback",
+        async exchange() {
+          return {
+            accessToken: "unused",
+          };
+        },
+      }),
+    /OAuth state signature is invalid/,
+  );
 });
