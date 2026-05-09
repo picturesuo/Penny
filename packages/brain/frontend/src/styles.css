@@ -3535,9 +3535,10 @@
   }
 
   .learn-session-output {
+    --learn-path-width: clamp(280px, 18vw, 320px);
     position: relative;
     display: grid;
-    grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+    grid-template-columns: var(--learn-path-width) minmax(0, 1fr);
     align-items: stretch;
     height: calc(100dvh - 92px);
     min-height: 0;
@@ -4873,12 +4874,12 @@
     position: absolute;
     z-index: 3;
     top: 0;
-    left: clamp(210px, 13vw, 260px);
+    left: var(--learn-path-width);
     display: grid;
     grid-template-rows: auto auto auto minmax(0, 1fr) auto;
     gap: 12px;
     min-width: 0;
-    width: min(420px, calc(100% - clamp(210px, 13vw, 260px) - 24px));
+    width: min(420px, calc(100% - var(--learn-path-width) - 24px));
     height: 100%;
     max-height: 100%;
     min-height: 0;
