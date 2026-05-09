@@ -4,14 +4,18 @@ import {
   type ConnectorScopePlan,
   type ConnectorScopeSelection,
   type ContextProvider,
+  type ContextSourceClass,
   type EphemeralProcessResult,
   type MemoryReviewStatus,
+  type RetrievalRequest,
+  type RetrievalResult,
 } from "./context-layer.ts";
 import {
   deleteContextMemory,
   loadContextDashboard,
   persistContextImport,
   reviewContextMemory,
+  retrieveContextMemories,
   revokeContextConnector,
 } from "./context-layer-repository.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
@@ -98,6 +102,12 @@ export type DeleteMemoryPayload = {
   auditEvent: "memory.deleted";
 };
 
+export type ContextRetrievalPayload = {
+  sourceOfTruth: "context_layer_memory_retrieval";
+  query: string;
+  results: RetrievalResult[];
+};
+
 export type RevokeConnectorPayload = {
   connectorAccountId: string;
   revoked: true;
@@ -121,6 +131,7 @@ export type ContextLayerRouteOptions = {
     mergeIntoMemoryId: string | null;
   }) => Promise<MemoryReviewPayload>;
   deleteMemory?: (input: { scope: BrainScope; memoryId: string }) => Promise<DeleteMemoryPayload>;
+  retrieveMemories?: (input: { scope: BrainScope; request: RetrievalRequest }) => Promise<ContextRetrievalPayload>;
   revokeConnector?: (input: { scope: BrainScope; connectorAccountId: string }) => Promise<RevokeConnectorPayload>;
 };
 
@@ -315,6 +326,61 @@ export async function handleContextMemoryDeleteRequest(
   return jsonResponse({ data: await deleteMemory({ scope: scopeFromRequest(request), memoryId: normalizedMemoryId }) }, 200);
 }
 
+export async function handleContextRetrievalRequest(
+  request: Request,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return methodNotAllowed("GET /api/context/retrieve requires the GET method.");
+  }
+
+  const url = new URL(request.url);
+  const query = url.searchParams.get("q")?.trim() ?? "";
+
+  if (!query) {
+    return jsonResponse({ error: { code: "invalid_query", message: "Context retrieval requires q." } }, 400);
+  }
+
+  const limitValue = Number(url.searchParams.get("limit") ?? "5");
+  const retrievalRequest: RetrievalRequest = {
+    query,
+    limit: Number.isFinite(limitValue) ? limitValue : 5,
+  };
+  const sourceGroup = url.searchParams.get("sourceClass")?.trim();
+  const topicCluster = url.searchParams.get("topicCluster")?.trim();
+
+  if (isContextSourceClass(sourceGroup)) {
+    retrievalRequest.sourceGroup = sourceGroup;
+  }
+
+  if (topicCluster) {
+    retrievalRequest.topicCluster = topicCluster;
+  }
+
+  const db = resolveContextDb(options, Boolean(options.retrieveMemories));
+  const retrieveMemories =
+    options.retrieveMemories ??
+    (async (input: { scope: BrainScope; request: RetrievalRequest }): Promise<ContextRetrievalPayload> => {
+      const retrieval = await retrieveContextMemories(requireContextDb(db), input.scope, input.request);
+
+      return {
+        sourceOfTruth: retrieval.sourceOfTruth,
+        query: input.request.query,
+        results: retrieval.results,
+      };
+    });
+
+  return jsonResponse(
+    {
+      data: await retrieveMemories({
+        scope: scopeFromRequest(request),
+        request: retrievalRequest,
+      }),
+    },
+    200,
+  );
+}
+
 export async function handleContextConnectorRevokeRequest(
   request: Request,
   connectorAccountId: string,
@@ -437,6 +503,18 @@ function isContextProvider(value: unknown): value is ContextProvider {
 
 function isMemoryReviewAction(value: unknown): value is MemoryReviewAction {
   return value === "approve" || value === "reject" || value === "edit" || value === "merge" || value === "deprioritize";
+}
+
+function isContextSourceClass(value: unknown): value is ContextSourceClass {
+  return (
+    value === "manual" ||
+    value === "private_export" ||
+    value === "email" ||
+    value === "calendar_event" ||
+    value === "chat" ||
+    value === "learning_platform" ||
+    value === "social"
+  );
 }
 
 function auditEventForReview(action: MemoryReviewAction): string {
