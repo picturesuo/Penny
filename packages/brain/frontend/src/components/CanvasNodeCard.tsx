@@ -7,8 +7,12 @@ interface CanvasNodeCardProps {
   node: PositionedCanvasNode;
   selected: boolean;
   recommended: boolean;
+  dragging?: boolean;
   onSelect: (nodeId: string) => void;
   onAction: (action: CanvasNodeAction, node: CanvasNode) => void;
+  onDragStart?: (event: React.PointerEvent<HTMLElement>, node: PositionedCanvasNode) => void;
+  onDragMove?: (event: React.PointerEvent<HTMLElement>) => void;
+  onDragEnd?: (event: React.PointerEvent<HTMLElement>) => void;
 }
 
 const nodeActions: Array<{
@@ -24,14 +28,24 @@ const nodeActions: Array<{
   { action: "related", label: "Related", title: "Find related Brain context", Icon: Network },
 ];
 
-export function CanvasNodeCard({ node, selected, recommended, onSelect, onAction }: CanvasNodeCardProps) {
+export function CanvasNodeCard({
+  node,
+  selected,
+  recommended,
+  dragging = false,
+  onSelect,
+  onAction,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+}: CanvasNodeCardProps) {
   const availableActions = node.actions?.length
     ? nodeActions.filter((item) => node.actions?.includes(item.action))
     : nodeActions;
 
   return (
     <article
-      className={`canvas-node-card is-${node.kind}${selected ? " is-selected" : ""}${recommended ? " is-recommended" : ""}`}
+      className={`canvas-node-card is-${node.kind}${selected ? " is-selected" : ""}${recommended ? " is-recommended" : ""}${dragging ? " is-dragging" : ""}`}
       style={{
         left: node.x,
         top: node.y,
@@ -39,6 +53,10 @@ export function CanvasNodeCard({ node, selected, recommended, onSelect, onAction
         minHeight: node.height,
       }}
       aria-label={`${node.kind} node ${node.title}`}
+      onPointerDown={(event) => onDragStart?.(event, node)}
+      onPointerMove={onDragMove}
+      onPointerUp={onDragEnd}
+      onPointerCancel={onDragEnd}
     >
       <button type="button" className="canvas-node-hitbox" onClick={() => onSelect(node.id)}>
         <span className="canvas-node-kind">{node.kind}</span>
