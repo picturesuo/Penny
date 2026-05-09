@@ -2495,26 +2495,32 @@
     pointer-events: none;
   }
 
+  #canvas-edge-arrow path {
+    fill: #4f473d;
+  }
+
   .canvas-edge path {
     fill: none;
-    stroke: rgb(17 17 17 / 0.26);
+    stroke: #6a5f50;
     stroke-linecap: round;
-    stroke-width: 2;
+    stroke-width: 2.35;
   }
 
   .canvas-edge text {
-    fill: rgb(17 17 17 / 0.58);
-    font-size: 11px;
+    fill: rgb(17 17 17 / 0.68);
+    font-size: 12px;
+    font-weight: 700;
     paint-order: stroke;
     stroke: #f8f7f1;
     stroke-linejoin: round;
-    stroke-width: 7px;
+    stroke-width: 8px;
+    text-transform: uppercase;
   }
 
   .canvas-edge.is-active path,
   .canvas-edge.is-recommended path {
     stroke: #111111;
-    stroke-width: 2.5;
+    stroke-width: 3;
   }
 
   .canvas-edge.is-challenges path,
@@ -2533,6 +2539,9 @@
     border-radius: 8px;
     background: #ffffff;
     box-shadow: 0 10px 0 rgb(17 17 17 / 0.06);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
   }
 
   .canvas-node-card.is-selected {
@@ -2544,6 +2553,12 @@
     box-shadow: 0 0 0 2px rgb(17 17 17 / 0.3), 0 10px 0 rgb(17 17 17 / 0.06);
   }
 
+  .canvas-node-card.is-dragging {
+    z-index: 5;
+    box-shadow: 0 0 0 3px #111111, 0 18px 24px rgb(17 17 17 / 0.18);
+    cursor: grabbing;
+  }
+
   .canvas-node-hitbox {
     display: grid;
     width: 100%;
@@ -2552,6 +2567,7 @@
     padding: 13px 14px;
     background: transparent;
     color: #111111;
+    cursor: inherit;
     text-align: left;
   }
 
