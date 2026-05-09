@@ -32,7 +32,9 @@ import {
 } from "./check-route.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import {
+  handleContextConnectorConnectRequest,
   handleContextConnectorRevokeRequest,
+  handleContextConnectorSyncRequest,
   handleContextDashboardRequest,
   handleContextImportRequest,
   handleContextMemoryDeleteRequest,
@@ -149,8 +151,23 @@ export function createPennyServer(): ReturnType<typeof createServer> {
       return;
     }
 
+    if (url.pathname === "/api/context/connectors") {
+      await writeWebResponse(outgoing, await handleContextConnectorConnectRequest(request));
+      return;
+    }
+
     if (url.pathname === "/api/context/retrieve") {
       await writeWebResponse(outgoing, await handleContextRetrievalRequest(request));
+      return;
+    }
+
+    const contextConnectorSyncMatch = /^\/api\/context\/connectors\/([^/]+)\/sync$/.exec(url.pathname);
+
+    if (contextConnectorSyncMatch) {
+      await writeWebResponse(
+        outgoing,
+        await handleContextConnectorSyncRequest(request, decodeURIComponent(contextConnectorSyncMatch[1] ?? "")),
+      );
       return;
     }
 
