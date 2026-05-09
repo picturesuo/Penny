@@ -115,6 +115,12 @@ export type ContextConnectorSyncRequestBody = {
 
 export type ContextConsentRequestBody = ContextConsentUpdate;
 
+export type ContextMemoryCorrectRequestBody = {
+  text?: string | null;
+  deprioritize?: boolean;
+  mergeIntoMemoryId?: string | null;
+};
+
 export type ContextImportPayload = {
   sourceOfTruth: "context_layer_ephemeral_processor";
   flow: readonly [
@@ -752,6 +758,72 @@ export async function handleContextMemoryReviewRequest(
   });
 
   return jsonResponse({ data: payload }, 200);
+}
+
+export async function handleContextMemoryCorrectRequest(
+  request: Request,
+  memoryId: string,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/context/memories/:memoryId/correct requires the POST method.");
+  }
+
+  const normalizedMemoryId = memoryId.trim();
+
+  if (!normalizedMemoryId) {
+    return jsonResponse({ error: { code: "invalid_memory_id", message: "Memory correction requires a memory id." } }, 400);
+  }
+
+  const body = await readJsonBody<ContextMemoryCorrectRequestBody>(request);
+
+  if (!body.ok) {
+    return jsonResponse({ error: { code: "invalid_json", message: body.message } }, 400);
+  }
+
+  const text = typeof body.value.text === "string" && body.value.text.trim() ? body.value.text.trim() : null;
+  const deprioritize = body.value.deprioritize === true;
+  const mergeIntoMemoryId =
+    typeof body.value.mergeIntoMemoryId === "string" && body.value.mergeIntoMemoryId.trim()
+      ? body.value.mergeIntoMemoryId.trim()
+      : null;
+
+  if (!text && !deprioritize && !mergeIntoMemoryId) {
+    return jsonResponse(
+      {
+        error: {
+          code: "empty_memory_correction",
+          message: "Memory correction requires replacement text, a merge target, or deprioritize=true.",
+        },
+      },
+      400,
+    );
+  }
+
+  const action: MemoryReviewAction = mergeIntoMemoryId ? "merge" : deprioritize ? "deprioritize" : "edit";
+  const db = resolveContextDb(options, Boolean(options.reviewMemory));
+  const reviewMemory =
+    options.reviewMemory ??
+    ((reviewInput: {
+      scope: BrainScope;
+      memoryId: string;
+      action: MemoryReviewAction;
+      text: string | null;
+      mergeIntoMemoryId: string | null;
+    }) => reviewContextMemory(requireContextDb(db), reviewInput));
+
+  return jsonResponse(
+    {
+      data: await reviewMemory({
+        scope: scopeFromRequest(request),
+        memoryId: normalizedMemoryId,
+        action,
+        text,
+        mergeIntoMemoryId,
+      }),
+    },
+    200,
+  );
 }
 
 function validateConsentBody(
