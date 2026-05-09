@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  handleContextConnectorConnectRequest,
   handleContextConnectorRevokeRequest,
+  handleContextConnectorSyncRequest,
   handleContextDashboardRequest,
   handleContextImportRequest,
   handleContextMemoryDeleteRequest,
@@ -25,6 +27,124 @@ test("GET /api/context/dashboard delegates with request scope", async () => {
   assert.equal(body.data.sourceOfTruth, "context_layer");
   assert.equal(body.data.sources[0]?.provider, "chatgpt");
   assert.deepEqual(observedScopes, [scope]);
+});
+
+test("POST /api/context/connectors validates scope and connects encrypted-token accounts", async () => {
+  const blocked = await handleContextConnectorConnectRequest(
+    scopedRequest("http://localhost/api/context/connectors", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "gmail",
+        connector: {
+          provider: "gmail",
+          sourceUri: "gmail:all-mail",
+        },
+      }),
+    }),
+  );
+  const connected = await handleContextConnectorConnectRequest(
+    scopedRequest("http://localhost/api/context/connectors", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "gmail",
+        connector: {
+          provider: "gmail",
+          labels: ["Penny"],
+          searchQueries: ["from:founder@example.com newer_than:90d"],
+        },
+        token: {
+          accessToken: "access-token",
+          refreshToken: "refresh-token",
+        },
+      }),
+    }),
+    {
+      async connectConnector(input) {
+        assert.equal(input.provider, "gmail");
+        assert.equal(input.connectorPlan.allowed, true);
+        assert.equal(input.token?.accessToken, "access-token");
+
+        return {
+          connectorAccountId: "conn-1",
+          provider: input.provider,
+          scopes: [],
+          status: "active",
+          tokenExpiresAt: null,
+          auditEvent: "connector.connected",
+        };
+      },
+    },
+  );
+  const blockedBody = (await blocked.json()) as { error: { code: string } };
+  const connectedBody = (await connected.json()) as { data: { connectorAccountId: string; auditEvent: string } };
+
+  assert.equal(blocked.status, 409);
+  assert.equal(blockedBody.error.code, "context_scope_not_allowed");
+  assert.equal(connected.status, 201);
+  assert.equal(connectedBody.data.connectorAccountId, "conn-1");
+  assert.equal(connectedBody.data.auditEvent, "connector.connected");
+});
+
+test("POST /api/context/connectors/:id/sync queues selected Gmail and Calendar sync jobs", async () => {
+  const gmailSync = await handleContextConnectorSyncRequest(
+    scopedRequest("http://localhost/api/context/connectors/conn-1/sync", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "gmail",
+        selection: {
+          provider: "gmail",
+          labels: ["Penny"],
+        },
+        items: [
+          {
+            id: "thread-1",
+            snippet: "I think Penny should remember founder goals.",
+            metadata: {
+              subject: "Founder goals",
+            },
+          },
+        ],
+      }),
+    }),
+    "conn-1",
+    {
+      async syncConnector(input) {
+        assert.equal(input.connectorAccountId, "conn-1");
+        assert.equal(input.provider, "gmail");
+        assert.equal(input.items.length, 1);
+
+        return {
+          syncJobId: "sync-1",
+          provider: input.provider,
+          status: "succeeded",
+          importsCreated: input.items.length,
+          warnings: [],
+        };
+      },
+    },
+  );
+  const calendarBlocked = await handleContextConnectorSyncRequest(
+    scopedRequest("http://localhost/api/context/connectors/conn-1/sync", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "calendar",
+        selection: {
+          provider: "calendar",
+          readOnly: false,
+        },
+        items: [],
+      }),
+    }),
+    "conn-1",
+  );
+  const gmailBody = (await gmailSync.json()) as { data: { syncJobId: string; importsCreated: number } };
+  const calendarBody = (await calendarBlocked.json()) as { error: { code: string } };
+
+  assert.equal(gmailSync.status, 202);
+  assert.equal(gmailBody.data.syncJobId, "sync-1");
+  assert.equal(gmailBody.data.importsCreated, 1);
+  assert.equal(calendarBlocked.status, 409);
+  assert.equal(calendarBody.error.code, "context_scope_not_allowed");
 });
 
 test("POST /api/context/import runs the scoped ephemeral processing flow", async () => {
@@ -238,6 +358,8 @@ test("GET /api/context/retrieve returns provenance-backed memory results", async
 
 test("context endpoints reject wrong HTTP methods before work", async () => {
   const dashboard = await handleContextDashboardRequest(new Request("http://localhost/api/context/dashboard", { method: "POST" }));
+  const connect = await handleContextConnectorConnectRequest(new Request("http://localhost/api/context/connectors"));
+  const sync = await handleContextConnectorSyncRequest(new Request("http://localhost/api/context/connectors/conn-1/sync"), "conn-1");
   const importer = await handleContextImportRequest(new Request("http://localhost/api/context/import"));
   const retrieval = await handleContextRetrievalRequest(new Request("http://localhost/api/context/retrieve", { method: "POST" }));
   const review = await handleContextMemoryReviewRequest(
@@ -250,6 +372,8 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   );
 
   assert.equal(dashboard.status, 405);
+  assert.equal(connect.status, 405);
+  assert.equal(sync.status, 405);
   assert.equal(importer.status, 405);
   assert.equal(retrieval.status, 405);
   assert.equal(review.status, 405);
