@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  handleContextArtifactsRequest,
   handleContextConnectorConnectRequest,
   handleContextConnectorRevokeRequest,
   handleContextConnectorSyncRequest,
@@ -32,6 +33,49 @@ test("GET /api/context/dashboard delegates with request scope", async () => {
   assert.equal(body.data.sourceOfTruth, "context_layer");
   assert.equal(body.data.sources[0]?.provider, "chatgpt");
   assert.deepEqual(observedScopes, [scope]);
+});
+
+test("GET /api/context/artifacts returns check risks and due Learn cards", async () => {
+  const response = await handleContextArtifactsRequest(scopedRequest("http://localhost/api/context/artifacts?limit=500"), {
+    async loadArtifacts(input) {
+      assert.deepEqual(input.scope, scope);
+      assert.equal(input.limit, 100);
+
+      return {
+        sourceOfTruth: "context_layer_artifacts",
+        checkResults: [
+          {
+            id: "check-1",
+            nodeId: "node-1",
+            claim: "This assumption has weak evidence.",
+            risk: "weak_evidence",
+            explanation: "The memory only has one redacted source.",
+            evidenceIds: ["evidence-1"],
+            createdAt: "2026-05-09T12:00:00.000Z",
+          },
+        ],
+        learnCards: [
+          {
+            id: "learn-1",
+            nodeId: "node-2",
+            prompt: "Teach back the decision premise.",
+            answerHint: "Name the goal and evidence.",
+            dueAt: "2026-05-10T12:00:00.000Z",
+            strength: 15,
+            createdAt: "2026-05-09T12:00:00.000Z",
+          },
+        ],
+      };
+    },
+  });
+  const body = (await response.json()) as {
+    data: { sourceOfTruth: string; checkResults: Array<{ risk: string }>; learnCards: Array<{ prompt: string }> };
+  };
+
+  assert.equal(response.status, 200);
+  assert.equal(body.data.sourceOfTruth, "context_layer_artifacts");
+  assert.equal(body.data.checkResults[0]?.risk, "weak_evidence");
+  assert.equal(body.data.learnCards[0]?.prompt, "Teach back the decision premise.");
 });
 
 test("POST /api/context/connectors validates scope and connects encrypted-token accounts", async () => {
@@ -565,6 +609,7 @@ test("GET /api/context/retrieve returns provenance-backed memory results", async
 
 test("context endpoints reject wrong HTTP methods before work", async () => {
   const dashboard = await handleContextDashboardRequest(new Request("http://localhost/api/context/dashboard", { method: "POST" }));
+  const artifacts = await handleContextArtifactsRequest(new Request("http://localhost/api/context/artifacts", { method: "POST" }));
   const connect = await handleContextConnectorConnectRequest(new Request("http://localhost/api/context/connectors"));
   const sync = await handleContextConnectorSyncRequest(new Request("http://localhost/api/context/connectors/conn-1/sync"), "conn-1");
   const consent = await handleContextConsentRequest(new Request("http://localhost/api/context/consent"));
@@ -586,6 +631,7 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   );
 
   assert.equal(dashboard.status, 405);
+  assert.equal(artifacts.status, 405);
   assert.equal(connect.status, 405);
   assert.equal(sync.status, 405);
   assert.equal(consent.status, 405);
