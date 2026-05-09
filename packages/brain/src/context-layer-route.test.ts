@@ -9,9 +9,12 @@ import {
   handleContextImportRequest,
   handleContextMemoryDeleteRequest,
   handleContextMemoryReviewRequest,
+  handleContextOAuthCallbackRequest,
+  handleContextOAuthStartRequest,
   handleContextRetrievalRequest,
   type ContextDashboardPayload,
 } from "./context-layer-route.ts";
+import { planConnectorScope } from "./context-layer.ts";
 import type { BrainScope } from "./scope.ts";
 
 test("GET /api/context/dashboard delegates with request scope", async () => {
@@ -84,6 +87,90 @@ test("POST /api/context/connectors validates scope and connects encrypted-token 
   assert.equal(connected.status, 201);
   assert.equal(connectedBody.data.connectorAccountId, "conn-1");
   assert.equal(connectedBody.data.auditEvent, "connector.connected");
+});
+
+test("POST /api/context/oauth/start delegates a scoped Gmail authorization request", async () => {
+  const response = await handleContextOAuthStartRequest(
+    scopedRequest("http://localhost/api/context/oauth/start", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "gmail",
+        connector: {
+          provider: "gmail",
+          labels: ["Penny"],
+          searchQueries: ["newer_than:90d"],
+        },
+        clientId: "client-id",
+        redirectUri: "http://localhost/oauth/callback",
+        scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+      }),
+    }),
+    {
+      async startOAuth(input) {
+        assert.equal(input.provider, "gmail");
+        assert.equal(input.clientId, "client-id");
+        assert.equal(input.redirectUri, "http://localhost/oauth/callback");
+        assert.deepEqual(input.connector.labels, ["Penny"]);
+        assert.deepEqual(input.scopes, ["https://www.googleapis.com/auth/gmail.readonly"]);
+
+        return {
+          provider: input.provider,
+          authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=signed-state",
+          state: "signed-state",
+          connectorPlan: planConnectorScope(input.connector),
+          warnings: [],
+        };
+      },
+    },
+  );
+  const body = (await response.json()) as { data: { provider: string; authorizationUrl: string; state: string } };
+
+  assert.equal(response.status, 200);
+  assert.equal(body.data.provider, "gmail");
+  assert.equal(body.data.authorizationUrl.includes("state=signed-state"), true);
+  assert.equal(body.data.state, "signed-state");
+});
+
+test("POST /api/context/oauth/callback delegates token exchange into connector connection", async () => {
+  const response = await handleContextOAuthCallbackRequest(
+    scopedRequest("http://localhost/api/context/oauth/callback", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "calendar",
+        code: "oauth-code",
+        state: "signed-state",
+        clientId: "client-id",
+        clientSecret: "client-secret",
+        redirectUri: "http://localhost/oauth/callback",
+      }),
+    }),
+    {
+      async finishOAuth(input) {
+        assert.deepEqual(input.scope, scope);
+        assert.equal(input.provider, "calendar");
+        assert.equal(input.code, "oauth-code");
+        assert.equal(input.state, "signed-state");
+        assert.equal(input.clientId, "client-id");
+        assert.equal(input.clientSecret, "client-secret");
+        assert.equal(input.redirectUri, "http://localhost/oauth/callback");
+
+        return {
+          connectorAccountId: "conn-calendar",
+          provider: input.provider,
+          scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
+          status: "active",
+          tokenExpiresAt: "2026-05-09T12:00:00.000Z",
+          auditEvent: "connector.connected",
+        };
+      },
+    },
+  );
+  const body = (await response.json()) as { data: { connectorAccountId: string; provider: string; auditEvent: string } };
+
+  assert.equal(response.status, 201);
+  assert.equal(body.data.connectorAccountId, "conn-calendar");
+  assert.equal(body.data.provider, "calendar");
+  assert.equal(body.data.auditEvent, "connector.connected");
 });
 
 test("POST /api/context/connectors/:id/sync queues selected Gmail and Calendar sync jobs", async () => {
@@ -412,6 +499,8 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   const sync = await handleContextConnectorSyncRequest(new Request("http://localhost/api/context/connectors/conn-1/sync"), "conn-1");
   const consent = await handleContextConsentRequest(new Request("http://localhost/api/context/consent"));
   const importer = await handleContextImportRequest(new Request("http://localhost/api/context/import"));
+  const oauthStart = await handleContextOAuthStartRequest(new Request("http://localhost/api/context/oauth/start"));
+  const oauthCallback = await handleContextOAuthCallbackRequest(new Request("http://localhost/api/context/oauth/callback"));
   const retrieval = await handleContextRetrievalRequest(new Request("http://localhost/api/context/retrieve", { method: "POST" }));
   const review = await handleContextMemoryReviewRequest(
     new Request("http://localhost/api/context/memories/mem-1/review"),
@@ -427,6 +516,8 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   assert.equal(sync.status, 405);
   assert.equal(consent.status, 405);
   assert.equal(importer.status, 405);
+  assert.equal(oauthStart.status, 405);
+  assert.equal(oauthCallback.status, 405);
   assert.equal(retrieval.status, 405);
   assert.equal(review.status, 405);
   assert.equal(deletion.status, 405);
