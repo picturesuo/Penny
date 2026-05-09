@@ -7,6 +7,14 @@ import {
   type EphemeralProcessResult,
   type MemoryReviewStatus,
 } from "./context-layer.ts";
+import {
+  deleteContextMemory,
+  loadContextDashboard,
+  persistContextImport,
+  reviewContextMemory,
+  revokeContextConnector,
+} from "./context-layer-repository.ts";
+import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { scopeValues, type BrainScope, type BrainScopeInput } from "./scope.ts";
 
 export type ContextDashboardPayload = {
@@ -97,6 +105,8 @@ export type RevokeConnectorPayload = {
 };
 
 export type ContextLayerRouteOptions = {
+  db?: PennyDatabase;
+  databaseUrl?: string;
   loadDashboard?: (scope: BrainScope) => Promise<ContextDashboardPayload>;
   persistImport?: (input: {
     scope: BrainScope;
@@ -143,7 +153,8 @@ export async function handleContextDashboardRequest(
   }
 
   const scope = scopeFromRequest(request);
-  const loadDashboard = options.loadDashboard ?? defaultDashboard;
+  const db = resolveContextDb(options, Boolean(options.loadDashboard));
+  const loadDashboard = options.loadDashboard ?? ((requestScope: BrainScope) => loadContextDashboard(requireContextDb(db), requestScope));
 
   return jsonResponse({ data: await loadDashboard(scope) }, 200);
 }
@@ -191,9 +202,14 @@ export async function handleContextImportRequest(
     autoApprove: validation.autoApprove,
     rawRetention: validation.rawRetention,
   });
+  const db = resolveContextDb(options, Boolean(options.persistImport));
   const persisted = options.persistImport
     ? await options.persistImport({ scope: scopeFromRequest(request), connectorPlan, processing })
-    : processing;
+    : await persistContextImport(requireContextDb(db), {
+        scope: scopeFromRequest(request),
+        connectorPlan,
+        processing,
+      });
   const payload: ContextImportPayload = {
     sourceOfTruth: "context_layer_ephemeral_processor",
     flow: contextFlow,
@@ -255,7 +271,16 @@ export async function handleContextMemoryReviewRequest(
     return jsonResponse({ error: { code: "missing_merge_target", message: "Merge review requires a target memory id." } }, 400);
   }
 
-  const reviewMemory = options.reviewMemory ?? defaultReviewMemory;
+  const db = resolveContextDb(options, Boolean(options.reviewMemory));
+  const reviewMemory =
+    options.reviewMemory ??
+    ((reviewInput: {
+      scope: BrainScope;
+      memoryId: string;
+      action: MemoryReviewAction;
+      text: string | null;
+      mergeIntoMemoryId: string | null;
+    }) => reviewContextMemory(requireContextDb(db), reviewInput));
   const payload = await reviewMemory({
     scope: scopeFromRequest(request),
     memoryId: normalizedMemoryId,
@@ -282,7 +307,10 @@ export async function handleContextMemoryDeleteRequest(
     return jsonResponse({ error: { code: "invalid_memory_id", message: "Memory deletion requires a memory id." } }, 400);
   }
 
-  const deleteMemory = options.deleteMemory ?? defaultDeleteMemory;
+  const db = resolveContextDb(options, Boolean(options.deleteMemory));
+  const deleteMemory =
+    options.deleteMemory ??
+    ((deleteInput: { scope: BrainScope; memoryId: string }) => deleteContextMemory(requireContextDb(db), deleteInput));
 
   return jsonResponse({ data: await deleteMemory({ scope: scopeFromRequest(request), memoryId: normalizedMemoryId }) }, 200);
 }
@@ -305,7 +333,11 @@ export async function handleContextConnectorRevokeRequest(
     );
   }
 
-  const revokeConnector = options.revokeConnector ?? defaultRevokeConnector;
+  const db = resolveContextDb(options, Boolean(options.revokeConnector));
+  const revokeConnector =
+    options.revokeConnector ??
+    ((revokeInput: { scope: BrainScope; connectorAccountId: string }) =>
+      revokeContextConnector(requireContextDb(db), revokeInput));
 
   return jsonResponse(
     {
@@ -407,61 +439,6 @@ function isMemoryReviewAction(value: unknown): value is MemoryReviewAction {
   return value === "approve" || value === "reject" || value === "edit" || value === "merge" || value === "deprioritize";
 }
 
-async function defaultDashboard(): Promise<ContextDashboardPayload> {
-  return {
-    sourceOfTruth: "context_layer",
-    sources: [],
-    reviewQueue: [],
-    consent: {
-      memoryEnabled: true,
-      referenceChatgptImport: false,
-      referenceGmail: false,
-      referenceCalendar: false,
-      useForPrivateFineTune: false,
-      useToImproveSharedModels: false,
-    },
-    auditSummary: {
-      lastAccessAt: null,
-      syncCount: 0,
-      extractedMemoryCount: 0,
-      deletionCount: 0,
-    },
-  };
-}
-
-async function defaultReviewMemory(input: {
-  memoryId: string;
-  action: MemoryReviewAction;
-  text: string | null;
-  mergeIntoMemoryId: string | null;
-}): Promise<MemoryReviewPayload> {
-  return {
-    memoryId: input.memoryId,
-    action: input.action,
-    reviewStatus: reviewStatusByAction[input.action],
-    text: input.text,
-    mergeIntoMemoryId: input.mergeIntoMemoryId,
-    auditEvent: auditEventForReview(input.action),
-  };
-}
-
-async function defaultDeleteMemory(input: { memoryId: string }): Promise<DeleteMemoryPayload> {
-  return {
-    memoryId: input.memoryId,
-    deleted: true,
-    rawDeleted: true,
-    auditEvent: "memory.deleted",
-  };
-}
-
-async function defaultRevokeConnector(input: { connectorAccountId: string }): Promise<RevokeConnectorPayload> {
-  return {
-    connectorAccountId: input.connectorAccountId,
-    revoked: true,
-    auditEvent: "connector.revoked",
-  };
-}
-
 function auditEventForReview(action: MemoryReviewAction): string {
   switch (action) {
     case "approve":
@@ -475,6 +452,26 @@ function auditEventForReview(action: MemoryReviewAction): string {
     case "deprioritize":
       return "memory.deprioritized";
   }
+}
+
+function resolveContextDb(options: ContextLayerRouteOptions, hasInjectedHandler: boolean): PennyDatabase | undefined {
+  if (options.db) {
+    return options.db;
+  }
+
+  if (hasInjectedHandler) {
+    return undefined;
+  }
+
+  return createPennyDb(options.databaseUrl);
+}
+
+function requireContextDb(db: PennyDatabase | undefined): PennyDatabase {
+  if (!db) {
+    throw new Error("A Penny database is required for Context Layer routes.");
+  }
+
+  return db;
 }
 
 function jsonResponse(body: unknown, status: number): Response {
