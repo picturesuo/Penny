@@ -14,6 +14,7 @@ import type { ConnectorSyncItem, ConnectorTokenInput } from "./context-connector
 import {
   buildConnectorOAuthStart,
   exchangeConnectorOAuthCallback,
+  type ConnectorOAuthRefreshExchange,
   type ConnectorOAuthStart,
   type ConnectorOAuthTokenExchange,
 } from "./context-connector-service.ts";
@@ -27,6 +28,8 @@ import {
   loadContextArtifacts,
   loadContextDashboard,
   persistContextImport,
+  refreshContextConnectorToken,
+  type RefreshContextConnectorPayload,
   reviewContextMemory,
   retrieveContextMemories,
   revokeContextConnector,
@@ -123,6 +126,12 @@ export type ContextConnectorFetchRequestBody = {
   maxItems?: number;
 };
 
+export type ContextConnectorRefreshRequestBody = {
+  provider?: ContextProvider;
+  clientId?: string;
+  clientSecret?: string;
+};
+
 export type ContextConsentRequestBody = ContextConsentUpdate;
 
 export type ContextMemoryCorrectRequestBody = {
@@ -184,6 +193,7 @@ export type ContextLayerRouteOptions = {
   connectorTokenSecret?: string;
   oauthStateSecret?: string;
   oauthTokenExchange?: ConnectorOAuthTokenExchange;
+  oauthRefreshExchange?: ConnectorOAuthRefreshExchange;
   loadDashboard?: (scope: BrainScope) => Promise<ContextDashboardPayload>;
   loadArtifacts?: (input: { scope: BrainScope; limit: number }) => Promise<ContextArtifactsPayload>;
   startOAuth?: (input: {
@@ -225,6 +235,13 @@ export type ContextLayerRouteOptions = {
     selection: ConnectorScopeSelection;
     maxItems: number | undefined;
   }) => Promise<FetchContextConnectorPayload>;
+  refreshConnector?: (input: {
+    scope: BrainScope;
+    connectorAccountId: string;
+    provider: Extract<ContextProvider, "gmail" | "calendar">;
+    clientId: string;
+    clientSecret: string;
+  }) => Promise<RefreshContextConnectorPayload>;
   updateConsent?: (input: { scope: BrainScope; consent: ContextConsentUpdate }) => Promise<ContextConsentPayload>;
   persistImport?: (input: {
     scope: BrainScope;
@@ -778,6 +795,93 @@ export async function handleContextConnectorFetchRequest(
     },
     200,
   );
+}
+
+export async function handleContextConnectorRefreshRequest(
+  request: Request,
+  connectorAccountId: string,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/context/connectors/:connectorAccountId/refresh requires the POST method.");
+  }
+
+  const normalizedConnectorAccountId = connectorAccountId.trim();
+
+  if (!normalizedConnectorAccountId) {
+    return jsonResponse(
+      { error: { code: "invalid_connector_account_id", message: "Connector refresh requires an account id." } },
+      400,
+    );
+  }
+
+  const body = await readJsonBody<ContextConnectorRefreshRequestBody>(request);
+
+  if (!body.ok) {
+    return jsonResponse({ error: { code: "invalid_json", message: body.message } }, 400);
+  }
+
+  if (!isOAuthProvider(body.value.provider)) {
+    return jsonResponse({ error: { code: "invalid_provider", message: "Connector refresh supports Gmail and Calendar." } }, 400);
+  }
+
+  if (!body.value.clientId?.trim() || !body.value.clientSecret?.trim()) {
+    return jsonResponse(
+      { error: { code: "invalid_oauth_client", message: "Connector refresh requires clientId and clientSecret." } },
+      400,
+    );
+  }
+
+  const db = resolveContextDb(options, Boolean(options.refreshConnector));
+  const refreshConnector =
+    options.refreshConnector ??
+    (async (input: {
+      scope: BrainScope;
+      connectorAccountId: string;
+      provider: Extract<ContextProvider, "gmail" | "calendar">;
+      clientId: string;
+      clientSecret: string;
+    }) => {
+      if (!options.oauthRefreshExchange) {
+        throw new Error("OAuth refresh exchange client is required.");
+      }
+
+      const refreshInput: Parameters<typeof refreshContextConnectorToken>[1] = {
+        ...input,
+        exchange: options.oauthRefreshExchange,
+      };
+
+      if (options.connectorTokenSecret !== undefined) {
+        refreshInput.tokenSecret = options.connectorTokenSecret;
+      }
+
+      return refreshContextConnectorToken(requireContextDb(db), refreshInput);
+    });
+
+  try {
+    return jsonResponse(
+      {
+        data: await refreshConnector({
+          scope: scopeFromRequest(request),
+          connectorAccountId: normalizedConnectorAccountId,
+          provider: body.value.provider,
+          clientId: body.value.clientId,
+          clientSecret: body.value.clientSecret,
+        }),
+      },
+      200,
+    );
+  } catch (error) {
+    return jsonResponse(
+      {
+        error: {
+          code: "connector_refresh_failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      400,
+    );
+  }
 }
 
 export async function handleContextConsentRequest(
