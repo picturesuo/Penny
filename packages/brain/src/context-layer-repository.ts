@@ -4,6 +4,7 @@ import type { PennyDatabase } from "./db/client.ts";
 import {
   brainEdges,
   brainNodes,
+  checkResults,
   claimSuggestions,
   connectorAccounts,
   consentSettings,
@@ -11,6 +12,7 @@ import {
   contextChunks,
   contextSources,
   evidencePointers,
+  learnCards,
   memoryShards,
   sourceDigests,
 } from "./db/schema.ts";
@@ -18,7 +20,9 @@ import type {
   ConnectorScopePlan,
   EphemeralProcessResult,
   MemoryReviewStatus,
+  RetrievalShard,
 } from "./context-layer.ts";
+import { checkMemoryGraph, createLearnCardsForShards } from "./context-layer.ts";
 import type {
   ContextDashboardPayload,
   DeleteMemoryPayload,
@@ -254,6 +258,7 @@ export async function persistContextImport(
 
     const shardIdMap = new Map<string, string>();
     const nodeIdMap = new Map<string, string>();
+    const persistedShards: RetrievalShard[] = [];
 
     for (const shard of input.processing.memoryShards) {
       const [row] = await tx
@@ -281,6 +286,17 @@ export async function persistContextImport(
       }
 
       shardIdMap.set(shard.id, row.id);
+      persistedShards.push({
+        id: row.id,
+        text: row.text,
+        type: row.type,
+        sourceClass: row.sourceClass,
+        confidence: row.confidence,
+        decay: row.decay,
+        lastSeen: row.lastSeen.toISOString(),
+        topicCluster: shard.topicCluster,
+        evidence: shard.evidence,
+      });
 
       await tx.insert(claimSuggestions).values({
         ...scope,
@@ -325,6 +341,21 @@ export async function persistContextImport(
       nodeIdMap.set(node.id, row.id);
     }
 
+    const nodeIdByShardId = new Map<string, string>();
+
+    for (const node of input.processing.brainNodes) {
+      if (!node.shardId) {
+        continue;
+      }
+
+      const persistedShardId = shardIdMap.get(node.shardId);
+      const persistedNodeId = nodeIdMap.get(node.id);
+
+      if (persistedShardId && persistedNodeId) {
+        nodeIdByShardId.set(persistedShardId, persistedNodeId);
+      }
+    }
+
     for (const edge of input.processing.brainEdges) {
       const fromNode = nodeIdMap.get(edge.fromNode);
       const toNode = nodeIdMap.get(edge.toNode);
@@ -340,6 +371,46 @@ export async function persistContextImport(
         type: edge.type,
         weight: edge.weight,
         evidenceIds: edge.evidenceIds,
+      });
+    }
+
+    const checkSignals = checkMemoryGraph({
+      shards: persistedShards,
+      edges: input.processing.brainEdges,
+    });
+
+    for (const signal of checkSignals) {
+      const matchingShard = persistedShards.find((shard) => signal.claim === shard.text) ?? persistedShards[0];
+      const nodeId = matchingShard ? nodeIdByShardId.get(matchingShard.id) : undefined;
+
+      if (!nodeId) {
+        continue;
+      }
+
+      await tx.insert(checkResults).values({
+        ...scope,
+        nodeId,
+        claim: signal.claim,
+        risk: signal.risk,
+        explanation: signal.explanation,
+        evidenceIds: signal.evidenceIds,
+      });
+    }
+
+    for (const card of createLearnCardsForShards(persistedShards)) {
+      const nodeId = nodeIdByShardId.get(card.nodeId.replace(/^node:/, ""));
+
+      if (!nodeId) {
+        continue;
+      }
+
+      await tx.insert(learnCards).values({
+        ...scope,
+        nodeId,
+        prompt: card.prompt,
+        answerHint: card.answerHint,
+        dueAt: new Date(card.dueAt),
+        strength: card.strength,
       });
     }
 
