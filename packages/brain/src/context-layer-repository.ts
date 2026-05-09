@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   buildConnectorSyncPlan,
@@ -752,6 +752,72 @@ export async function retrieveContextMemories(
   return {
     sourceOfTruth: "context_layer_memory_retrieval",
     results: rankMemoryShards(request, retrievalShards),
+  };
+}
+
+export type ContextArtifactsPayload = {
+  sourceOfTruth: "context_layer_artifacts";
+  checkResults: Array<{
+    id: string;
+    nodeId: string;
+    claim: string;
+    risk: string;
+    explanation: string;
+    evidenceIds: string[];
+    createdAt: string;
+  }>;
+  learnCards: Array<{
+    id: string;
+    nodeId: string;
+    prompt: string;
+    answerHint: string;
+    dueAt: string;
+    strength: number;
+    createdAt: string;
+  }>;
+};
+
+export async function loadContextArtifacts(
+  db: PennyDatabase,
+  scope: BrainScope,
+  input: { limit?: number } = {},
+): Promise<ContextArtifactsPayload> {
+  const boundedLimit = Math.min(Math.max(input.limit ?? 25, 1), 100);
+  const [checkRows, cardRows] = await Promise.all([
+    db
+      .select()
+      .from(checkResults)
+      .where(scopeCondition(checkResults, scope))
+      .orderBy(desc(checkResults.createdAt))
+      .limit(boundedLimit),
+    db
+      .select()
+      .from(learnCards)
+      .where(scopeCondition(learnCards, scope))
+      .orderBy(asc(learnCards.dueAt))
+      .limit(boundedLimit),
+  ]);
+
+  return {
+    sourceOfTruth: "context_layer_artifacts",
+    checkResults: checkRows.map((row) => ({
+      id: row.id,
+      nodeId: row.nodeId,
+      claim: row.claim,
+      risk: row.risk,
+      explanation: row.explanation,
+      evidenceIds: row.evidenceIds,
+      createdAt: row.createdAt.toISOString(),
+    })),
+    learnCards: cardRows.map((row) => ({
+      id: row.id,
+      nodeId: row.nodeId,
+      prompt: row.prompt,
+      answerHint: row.answerHint,
+      dueAt: row.dueAt.toISOString(),
+      strength: row.strength,
+      createdAt: row.createdAt.toISOString(),
+    })),
   };
 }
 
