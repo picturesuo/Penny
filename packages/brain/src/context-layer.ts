@@ -793,16 +793,16 @@ function shardTypeForLine(line: string): MemoryShardType | null {
     return "idea_history";
   }
 
+  if (/\b(?:deadline|due|by \d{4}-\d{2}-\d{2}|tomorrow|next week|calendar)\b/i.test(line)) {
+    return "deadline";
+  }
+
   if (/\b(?:project|launch|roadmap|milestone)\b/i.test(line)) {
     return "project";
   }
 
   if (/\b(?:with|met|meeting|collaborator|customer|founder|person)\b/i.test(line)) {
     return "person";
-  }
-
-  if (/\b(?:deadline|due|by \d{4}-\d{2}-\d{2}|tomorrow|next week|calendar)\b/i.test(line)) {
-    return "deadline";
   }
 
   if (/\b(?:learn|concept|understand|teach|lesson)\b/i.test(line)) {
