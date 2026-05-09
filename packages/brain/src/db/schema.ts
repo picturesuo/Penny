@@ -176,6 +176,7 @@ export const contextAuditEventEnum = pgEnum("context_audit_event", [
   "chunk.redacted",
   "chunk.deleted",
   "memory.extracted",
+  "memory.blocked",
   "memory.approved",
   "memory.rejected",
   "memory.edited",
