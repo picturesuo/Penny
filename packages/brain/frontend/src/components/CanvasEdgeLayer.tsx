@@ -29,6 +29,19 @@ export function CanvasEdgeLayer({ edges, nodes, selectedNodeId, recommendedPath,
       role="presentation"
       aria-hidden="true"
     >
+      <defs>
+        <marker
+          id="canvas-edge-arrow"
+          markerWidth="10"
+          markerHeight="10"
+          refX="8"
+          refY="5"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" />
+        </marker>
+      </defs>
       {edges.map((edge, index) => {
         const source = nodeById.get(edge.source);
         const target = nodeById.get(edge.target);
@@ -46,7 +59,7 @@ export function CanvasEdgeLayer({ edges, nodes, selectedNodeId, recommendedPath,
             key={edge.id}
             className={`canvas-edge is-${edge.kind}${active ? " is-active" : ""}${recommended ? " is-recommended" : ""}`}
           >
-            <path d={route.path} />
+            <path d={route.path} markerEnd="url(#canvas-edge-arrow)" />
             {edge.label ? (
               <text x={route.labelX} y={route.labelY} textAnchor="middle">
                 {shortEdgeLabel(edge.label)}
