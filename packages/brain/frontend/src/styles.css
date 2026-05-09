@@ -4056,23 +4056,29 @@
 
   .micro-lesson-focus {
     display: grid;
+    align-items: center;
     align-content: center;
+    justify-items: start;
     min-width: 0;
     min-height: 0;
     border: 1px solid #111111;
     background: #ffffff;
-    padding: clamp(28px, 5vw, 76px);
+    padding: clamp(24px, 4vw, 56px);
     overflow: hidden;
   }
 
   .micro-lesson-focus p {
-    max-width: 26ch;
+    width: min(100%, var(--micro-lesson-focus-max-chars, 40ch));
+    max-width: none;
     margin: 0;
     color: #111111;
-    font-size: clamp(44px, 6vw, 92px);
+    font-size: clamp(24px, min(var(--micro-lesson-focus-font-size, 40px), 5vw), 52px);
     font-weight: 650;
     letter-spacing: 0;
-    line-height: 0.98;
+    line-height: 1.08;
+    overflow-wrap: break-word;
+    text-align: left;
+    text-wrap: pretty;
   }
 
   .micro-lesson-grid {

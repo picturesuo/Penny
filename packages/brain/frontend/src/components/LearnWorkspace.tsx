@@ -519,6 +519,8 @@ export function MicroLessonSlide({
   activeLessonIndex: number;
   lessonCount: number;
 }) {
+  const focusFit = microLessonFocusFit(lesson.shortExplanation);
+
   return (
     <section className="micro-lesson-slide" aria-label={`Lesson ${activeLessonIndex + 1} of ${lessonCount}`}>
       <header className="micro-lesson-head">
@@ -529,10 +531,41 @@ export function MicroLessonSlide({
       </header>
 
       <section className="micro-lesson-focus" aria-label="Lesson focus">
-        <p>{lesson.shortExplanation}</p>
+        <p
+          data-focus-font-size={focusFit.fontSizePx}
+          data-focus-max-chars={focusFit.maxLineCharacters}
+          style={{
+            "--micro-lesson-focus-font-size": `${focusFit.fontSizePx}px`,
+            "--micro-lesson-focus-max-chars": `${focusFit.maxLineCharacters}ch`,
+          } as React.CSSProperties}
+        >
+          {lesson.shortExplanation}
+        </p>
       </section>
     </section>
   );
+}
+
+export function microLessonFocusFit(text: string) {
+  const characterCount = text.replace(/\s+/g, " ").trim().length;
+  const maxLineCharacters =
+    characterCount > 360 ? 68 :
+    characterCount > 240 ? 58 :
+    characterCount > 150 ? 48 :
+    characterCount > 90 ? 40 :
+    32;
+  const fontSizePx =
+    maxLineCharacters >= 68 ? 24 :
+    maxLineCharacters >= 58 ? 28 :
+    maxLineCharacters >= 48 ? 34 :
+    maxLineCharacters >= 40 ? 42 :
+    52;
+
+  return {
+    characterCount,
+    maxLineCharacters,
+    fontSizePx,
+  };
 }
 
 export function LearnVisualRenderer({ visual }: { visual: LearnPageV2["visual"] }) {
