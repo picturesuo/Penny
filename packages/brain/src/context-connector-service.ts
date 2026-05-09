@@ -52,6 +52,35 @@ export type ConnectorSyncPlan = {
   warnings: string[];
 };
 
+export type ConnectorFetchHttpRequest = {
+  url: string;
+  method: "GET";
+  headers: Record<string, string>;
+};
+
+export type ConnectorFetchHttpResponse = {
+  status: number;
+  body: unknown;
+};
+
+export type ConnectorFetchHttpClient = (request: ConnectorFetchHttpRequest) => Promise<ConnectorFetchHttpResponse>;
+
+export type ConnectorFetchInput = {
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  selection: ConnectorScopeSelection;
+  accessToken: string;
+  http: ConnectorFetchHttpClient;
+  maxItems?: number;
+  fetchedAt?: string;
+};
+
+export type ConnectorFetchResult = {
+  connectorPlan: ConnectorScopePlan;
+  items: ConnectorSyncItem[];
+  fetchedAt: string;
+  warnings: string[];
+};
+
 export type ConnectorOAuthProviderConfig = {
   provider: Extract<ContextProvider, "gmail" | "calendar">;
   authorizationEndpoint: string;
@@ -199,6 +228,32 @@ export function buildConnectorSyncPlan(input: ConnectorSyncPlanInput): Connector
   };
 }
 
+export async function fetchConnectorSyncItems(input: ConnectorFetchInput): Promise<ConnectorFetchResult> {
+  if (!input.accessToken.trim()) {
+    throw new Error("Connector fetch requires an access token.");
+  }
+
+  const connectorPlan = planConnectorScope({ ...input.selection, provider: input.provider });
+
+  if (!connectorPlan.allowed) {
+    throw new Error(connectorPlan.warnings[0] ?? "Selected connector scope is not allowed.");
+  }
+
+  const limit = Math.min(Math.max(input.maxItems ?? 25, 1), 100);
+  const fetchedAt = input.fetchedAt ?? new Date().toISOString();
+  const items =
+    input.provider === "gmail"
+      ? await fetchGmailMetadataFirst({ ...input, maxItems: limit })
+      : await fetchCalendarReadOnly({ ...input, maxItems: limit });
+
+  return {
+    connectorPlan,
+    items,
+    fetchedAt,
+    warnings: connectorPlan.warnings,
+  };
+}
+
 export function buildRefreshTokenUpdate(input: ConnectorTokenInput, secret: string): EncryptedConnectorTokens {
   return encryptConnectorTokens(input, secret);
 }
@@ -327,6 +382,71 @@ function gmailImports(input: ConnectorSyncPlanInput, connectorPlan: ConnectorSco
   });
 }
 
+async function fetchGmailMetadataFirst(input: ConnectorFetchInput & { maxItems: number }): Promise<ConnectorSyncItem[]> {
+  const labelIds = [...(input.selection.labels ?? [])];
+  const listUrl = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
+
+  listUrl.searchParams.set("maxResults", String(input.maxItems));
+
+  const query = gmailSearchQuery(input.selection);
+
+  if (query) {
+    listUrl.searchParams.set("q", query);
+  }
+
+  for (const labelId of labelIds) {
+    listUrl.searchParams.append("labelIds", labelId);
+  }
+
+  const listResponse = await requestJson(input.http, input.accessToken, listUrl.toString(), "Gmail message list");
+  const messages = arrayRecords(recordValue(listResponse).messages).slice(0, input.maxItems);
+  const items: ConnectorSyncItem[] = [];
+
+  for (const message of messages) {
+    const messageId = stringValue(message.id);
+
+    if (!messageId) {
+      continue;
+    }
+
+    const messageUrl = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}`);
+
+    messageUrl.searchParams.set("format", "metadata");
+    for (const header of ["From", "Subject", "Date"]) {
+      messageUrl.searchParams.append("metadataHeaders", header);
+    }
+
+    const messageResponse = recordValue(await requestJson(input.http, input.accessToken, messageUrl.toString(), "Gmail metadata"));
+    const threadId = stringValue(messageResponse.threadId) ?? stringValue(message.threadId) ?? messageId;
+    const headers = gmailHeaderMap(messageResponse.payload);
+    const subject = headers.get("subject") ?? null;
+    const from = headers.get("from") ?? null;
+    const date = headers.get("date") ?? null;
+    const item: ConnectorSyncItem = {
+      id: threadId,
+      sourceUri: `gmail:thread:${threadId}:message:${messageId}`,
+      label: subject ? `Gmail: ${subject}` : `Gmail thread ${threadId}`,
+      metadata: {
+        messageId,
+        threadId,
+        from,
+        subject,
+        date,
+        labels: labelIds,
+      },
+    };
+    const snippet = stringValue(messageResponse.snippet);
+
+    if (snippet) {
+      item.snippet = snippet;
+    }
+
+    items.push(item);
+  }
+
+  return items;
+}
+
 function calendarImports(input: ConnectorSyncPlanInput, connectorPlan: ConnectorScopePlan): EphemeralProcessInput[] {
   return input.items.map((item) => {
     const metadata = item.metadata ?? {};
@@ -354,6 +474,82 @@ function calendarImports(input: ConnectorSyncPlanInput, connectorPlan: Connector
   });
 }
 
+async function fetchCalendarReadOnly(input: ConnectorFetchInput & { maxItems: number }): Promise<ConnectorSyncItem[]> {
+  const calendarIds = input.selection.calendarIds?.length ? [...input.selection.calendarIds] : ["primary"];
+  const items: ConnectorSyncItem[] = [];
+
+  for (const calendarId of calendarIds) {
+    if (items.length >= input.maxItems) {
+      break;
+    }
+
+    const eventsUrl = new URL(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+    );
+
+    eventsUrl.searchParams.set("singleEvents", "true");
+    eventsUrl.searchParams.set("orderBy", "startTime");
+    eventsUrl.searchParams.set("maxResults", String(input.maxItems - items.length));
+
+    if (input.selection.dateRange?.from) {
+      eventsUrl.searchParams.set("timeMin", input.selection.dateRange.from);
+    }
+
+    if (input.selection.dateRange?.to) {
+      eventsUrl.searchParams.set("timeMax", input.selection.dateRange.to);
+    }
+
+    const eventsResponse = recordValue(await requestJson(input.http, input.accessToken, eventsUrl.toString(), "Calendar event list"));
+    const eventRows = arrayRecords(eventsResponse.items);
+
+    for (const eventRow of eventRows) {
+      if (items.length >= input.maxItems) {
+        break;
+      }
+
+      const eventId = stringValue(eventRow.id);
+
+      if (!eventId) {
+        continue;
+      }
+
+      const summary = stringValue(eventRow.summary) ?? `Calendar event ${eventId}`;
+      const start = dateTimeValue(eventRow.start);
+      const end = dateTimeValue(eventRow.end);
+      const item: ConnectorSyncItem = {
+        id: eventId,
+        sourceUri: `calendar:event:${calendarId}:${eventId}`,
+        label: summary,
+        attendees: arrayRecords(eventRow.attendees)
+          .map((attendee) => stringValue(attendee.email))
+          .filter((email): email is string => Boolean(email)),
+        metadata: {
+          calendarId,
+          summary,
+          recurringEventId: stringValue(eventRow.recurringEventId),
+        },
+      };
+      const snippet = stringValue(eventRow.description);
+
+      if (snippet) {
+        item.snippet = snippet;
+      }
+
+      if (start) {
+        item.start = start;
+      }
+
+      if (end) {
+        item.end = end;
+      }
+
+      items.push(item);
+    }
+  }
+
+  return items;
+}
+
 function genericImports(input: ConnectorSyncPlanInput, connectorPlan: ConnectorScopePlan): EphemeralProcessInput[] {
   return input.items.map((item) =>
     compactImport({
@@ -366,6 +562,69 @@ function genericImports(input: ConnectorSyncPlanInput, connectorPlan: ConnectorS
       rawRetention: connectorPlan.minimumScope.rawRetention === true,
     }),
   );
+}
+
+async function requestJson(
+  http: ConnectorFetchHttpClient,
+  accessToken: string,
+  url: string,
+  label: string,
+): Promise<unknown> {
+  const response = await http({
+    url,
+    method: "GET",
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      accept: "application/json",
+    },
+  });
+
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`${label} failed with status ${response.status}.`);
+  }
+
+  return response.body;
+}
+
+function gmailSearchQuery(selection: ConnectorScopeSelection): string {
+  const parts = [
+    ...(selection.searchQueries ?? []),
+    ...(selection.senders ?? []).map((sender) => `from:${sender}`),
+    selection.dateRange?.from ? `after:${selection.dateRange.from}` : null,
+    selection.dateRange?.to ? `before:${selection.dateRange.to}` : null,
+  ];
+
+  return parts.filter((part): part is string => Boolean(part?.trim())).join(" ");
+}
+
+function gmailHeaderMap(payload: unknown): Map<string, string> {
+  const headers = arrayRecords(recordValue(payload).headers);
+  const map = new Map<string, string>();
+
+  for (const header of headers) {
+    const name = stringValue(header.name);
+    const value = stringValue(header.value);
+
+    if (name && value) {
+      map.set(name.toLowerCase(), value);
+    }
+  }
+
+  return map;
+}
+
+function dateTimeValue(value: unknown): string | null {
+  const record = recordValue(value);
+
+  return stringValue(record.dateTime) ?? stringValue(record.date);
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function arrayRecords(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.map(recordValue).filter((entry) => Object.keys(entry).length > 0) : [];
 }
 
 function compactImport(input: {
