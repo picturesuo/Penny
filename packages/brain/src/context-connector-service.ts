@@ -119,6 +119,14 @@ export type ConnectorOAuthCallbackInput = {
   exchange: ConnectorOAuthTokenExchange;
 };
 
+export type ConnectorOAuthRefreshInput = {
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  refreshToken: string;
+  clientId: string;
+  clientSecret: string;
+  exchange: ConnectorOAuthRefreshExchange;
+};
+
 export type ConnectorOAuthCallback = {
   provider: Extract<ContextProvider, "gmail" | "calendar">;
   connectorPlan: ConnectorScopePlan;
@@ -131,6 +139,17 @@ export type ConnectorOAuthTokenExchange = (request: {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+}) => Promise<{
+  accessToken: string;
+  refreshToken?: string | null;
+  expiresInSeconds?: number | null;
+}>;
+
+export type ConnectorOAuthRefreshExchange = (request: {
+  tokenEndpoint: string;
+  refreshToken: string;
+  clientId: string;
+  clientSecret: string;
 }) => Promise<{
   accessToken: string;
   refreshToken?: string | null;
@@ -346,6 +365,37 @@ export async function exchangeConnectorOAuthCallback(
           ? new Date(Date.now() + tokenResponse.expiresInSeconds * 1000)
           : null,
     },
+  };
+}
+
+export async function refreshConnectorOAuthToken(input: ConnectorOAuthRefreshInput): Promise<ConnectorTokenInput> {
+  if (!input.refreshToken.trim()) {
+    throw new Error("OAuth refresh token is required.");
+  }
+
+  if (!input.clientId.trim() || !input.clientSecret.trim()) {
+    throw new Error("OAuth refresh requires client credentials.");
+  }
+
+  const config = oauthConfigs[input.provider];
+  const tokenResponse = await input.exchange({
+    tokenEndpoint: config.tokenEndpoint,
+    refreshToken: input.refreshToken,
+    clientId: input.clientId,
+    clientSecret: input.clientSecret,
+  });
+
+  if (!tokenResponse.accessToken.trim()) {
+    throw new Error("OAuth refresh did not return an access token.");
+  }
+
+  return {
+    accessToken: tokenResponse.accessToken,
+    refreshToken: tokenResponse.refreshToken?.trim() ? tokenResponse.refreshToken : input.refreshToken,
+    expiresAt:
+      tokenResponse.expiresInSeconds && tokenResponse.expiresInSeconds > 0
+        ? new Date(Date.now() + tokenResponse.expiresInSeconds * 1000)
+        : null,
   };
 }
 
