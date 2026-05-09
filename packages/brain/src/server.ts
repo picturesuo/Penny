@@ -47,6 +47,7 @@ import {
   handleContextOAuthCallbackRequest,
   handleContextOAuthStartRequest,
   handleContextRetrievalRequest,
+  handleContextTrainingConsentDeleteRequest,
 } from "./context-layer-route.ts";
 import { createPennySql } from "./db/client.ts";
 import * as schema from "./db/schema.ts";
@@ -180,6 +181,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/context/consent") {
       await writeWebResponse(outgoing, await handleContextConsentRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/context/training-consent") {
+      await writeWebResponse(outgoing, await handleContextTrainingConsentDeleteRequest(request));
       return;
     }
 
