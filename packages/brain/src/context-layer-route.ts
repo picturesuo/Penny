@@ -697,21 +697,33 @@ export async function handleContextConnectorSyncRequest(
       rawRetention: boolean | undefined;
     }) => syncContextConnector(requireContextDb(db), compactSyncInput(input)));
 
-  return jsonResponse(
-    {
-      data: await syncConnector({
-        scope: scopeFromRequest(request),
-        connectorAccountId: normalizedConnectorAccountId,
-        provider: body.value.provider,
-        selection,
-        items: body.value.items,
-        fetchedAt: body.value.fetchedAt,
-        autoApprove: body.value.autoApprove,
-        rawRetention: body.value.rawRetention,
-      }),
-    },
-    202,
-  );
+  try {
+    return jsonResponse(
+      {
+        data: await syncConnector({
+          scope: scopeFromRequest(request),
+          connectorAccountId: normalizedConnectorAccountId,
+          provider: body.value.provider,
+          selection,
+          items: body.value.items,
+          fetchedAt: body.value.fetchedAt,
+          autoApprove: body.value.autoApprove,
+          rawRetention: body.value.rawRetention,
+        }),
+      },
+      202,
+    );
+  } catch (error) {
+    return jsonResponse(
+      {
+        error: {
+          code: "connector_sync_failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+      409,
+    );
+  }
 }
 
 export async function handleContextConnectorFetchRequest(
