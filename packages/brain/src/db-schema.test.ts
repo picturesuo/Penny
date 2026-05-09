@@ -305,6 +305,7 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
   ]);
   assert.deepEqual(contextAuditEventEnum.enumValues, [
     "connector.connected",
+    "connector.refreshed",
     "connector.synced",
     "connector.revoked",
     "source.fetched",
