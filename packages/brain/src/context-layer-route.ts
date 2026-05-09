@@ -22,6 +22,8 @@ import {
   type ConnectContextConnectorPayload,
   type ContextArtifactsPayload,
   deleteContextMemory,
+  fetchContextConnectorItems,
+  type FetchContextConnectorPayload,
   loadContextArtifacts,
   loadContextDashboard,
   persistContextImport,
@@ -113,6 +115,12 @@ export type ContextConnectorSyncRequestBody = {
   fetchedAt?: string;
   autoApprove?: boolean;
   rawRetention?: boolean;
+};
+
+export type ContextConnectorFetchRequestBody = {
+  provider?: ContextProvider;
+  selection?: ConnectorScopeSelection;
+  maxItems?: number;
 };
 
 export type ContextConsentRequestBody = ContextConsentUpdate;
@@ -210,6 +218,13 @@ export type ContextLayerRouteOptions = {
     autoApprove: boolean | undefined;
     rawRetention: boolean | undefined;
   }) => Promise<SyncContextConnectorPayload>;
+  fetchConnector?: (input: {
+    scope: BrainScope;
+    connectorAccountId: string;
+    provider: Extract<ContextProvider, "gmail" | "calendar">;
+    selection: ConnectorScopeSelection;
+    maxItems: number | undefined;
+  }) => Promise<FetchContextConnectorPayload>;
   updateConsent?: (input: { scope: BrainScope; consent: ContextConsentUpdate }) => Promise<ContextConsentPayload>;
   persistImport?: (input: {
     scope: BrainScope;
@@ -682,6 +697,89 @@ export async function handleContextConnectorSyncRequest(
   );
 }
 
+export async function handleContextConnectorFetchRequest(
+  request: Request,
+  connectorAccountId: string,
+  options: ContextLayerRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/context/connectors/:connectorAccountId/fetch requires the POST method.");
+  }
+
+  const normalizedConnectorAccountId = connectorAccountId.trim();
+
+  if (!normalizedConnectorAccountId) {
+    return jsonResponse(
+      { error: { code: "invalid_connector_account_id", message: "Connector fetch requires an account id." } },
+      400,
+    );
+  }
+
+  const body = await readJsonBody<ContextConnectorFetchRequestBody>(request);
+
+  if (!body.ok) {
+    return jsonResponse({ error: { code: "invalid_json", message: body.message } }, 400);
+  }
+
+  if (!isOAuthProvider(body.value.provider)) {
+    return jsonResponse({ error: { code: "invalid_provider", message: "Connector fetch supports Gmail and Calendar." } }, 400);
+  }
+
+  const selection: ConnectorScopeSelection = {
+    ...(body.value.selection ?? {}),
+    provider: body.value.provider,
+  };
+  const connectorPlan = planConnectorScope(selection);
+
+  if (!connectorPlan.allowed) {
+    return jsonResponse(
+      {
+        error: {
+          code: "context_scope_not_allowed",
+          message: connectorPlan.warnings[0] ?? "Selected connector scope is not allowed.",
+          details: connectorPlan,
+        },
+      },
+      409,
+    );
+  }
+
+  const maxItems =
+    typeof body.value.maxItems === "number" && Number.isFinite(body.value.maxItems)
+      ? Math.min(Math.max(Math.trunc(body.value.maxItems), 1), 100)
+      : undefined;
+  const db = resolveContextDb(options, Boolean(options.fetchConnector));
+  const fetchConnector =
+    options.fetchConnector ??
+    ((input: {
+      scope: BrainScope;
+      connectorAccountId: string;
+      provider: Extract<ContextProvider, "gmail" | "calendar">;
+      selection: ConnectorScopeSelection;
+      maxItems: number | undefined;
+    }) =>
+      fetchContextConnectorItems(
+        requireContextDb(db),
+        compactFetchInput({
+          ...input,
+          tokenSecret: options.connectorTokenSecret,
+        }),
+      ));
+
+  return jsonResponse(
+    {
+      data: await fetchConnector({
+        scope: scopeFromRequest(request),
+        connectorAccountId: normalizedConnectorAccountId,
+        provider: body.value.provider,
+        selection,
+        maxItems,
+      }),
+    },
+    200,
+  );
+}
+
 export async function handleContextConsentRequest(
   request: Request,
   options: ContextLayerRouteOptions = {},
@@ -1135,6 +1233,46 @@ function compactSyncInput(input: {
 
   if (input.rawRetention !== undefined) {
     output.rawRetention = input.rawRetention;
+  }
+
+  return output;
+}
+
+function compactFetchInput(input: {
+  scope: BrainScope;
+  connectorAccountId: string;
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  selection: ConnectorScopeSelection;
+  maxItems: number | undefined;
+  tokenSecret: string | undefined;
+}): {
+  scope: BrainScope;
+  connectorAccountId: string;
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  selection: ConnectorScopeSelection;
+  maxItems?: number;
+  tokenSecret?: string;
+} {
+  const output: {
+    scope: BrainScope;
+    connectorAccountId: string;
+    provider: Extract<ContextProvider, "gmail" | "calendar">;
+    selection: ConnectorScopeSelection;
+    maxItems?: number;
+    tokenSecret?: string;
+  } = {
+    scope: input.scope,
+    connectorAccountId: input.connectorAccountId,
+    provider: input.provider,
+    selection: input.selection,
+  };
+
+  if (input.maxItems !== undefined) {
+    output.maxItems = input.maxItems;
+  }
+
+  if (input.tokenSecret !== undefined) {
+    output.tokenSecret = input.tokenSecret;
   }
 
   return output;
