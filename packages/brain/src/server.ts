@@ -40,6 +40,8 @@ import {
   handleContextImportRequest,
   handleContextMemoryDeleteRequest,
   handleContextMemoryReviewRequest,
+  handleContextOAuthCallbackRequest,
+  handleContextOAuthStartRequest,
   handleContextRetrievalRequest,
 } from "./context-layer-route.ts";
 import { createPennySql } from "./db/client.ts";
@@ -154,6 +156,16 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/context/connectors") {
       await writeWebResponse(outgoing, await handleContextConnectorConnectRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/context/oauth/start") {
+      await writeWebResponse(outgoing, await handleContextOAuthStartRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/context/oauth/callback") {
+      await writeWebResponse(outgoing, await handleContextOAuthCallbackRequest(request));
       return;
     }
 
