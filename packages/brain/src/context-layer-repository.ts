@@ -1100,6 +1100,64 @@ export async function updateContextConsent(
   });
 }
 
+export async function resetContextTrainingConsent(db: PennyDatabase, scopeInput: BrainScope): Promise<ContextConsentPayload> {
+  const scope = scopeValues(scopeInput);
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx.select().from(consentSettings).where(scopeCondition(consentSettings, scope)).limit(1);
+    const nextConsent = {
+      memoryEnabled: existing?.memoryEnabled ?? true,
+      referenceChatgptImport: existing?.referenceChatgptImport ?? false,
+      referenceGmail: existing?.referenceGmail ?? false,
+      referenceCalendar: existing?.referenceCalendar ?? false,
+      useForPrivateFineTune: false,
+      useToImproveSharedModels: false,
+      updatedAt: new Date(),
+    };
+    const [row] = await tx
+      .insert(consentSettings)
+      .values({
+        ...scope,
+        ...nextConsent,
+      })
+      .onConflictDoUpdate({
+        target: [
+          consentSettings.userId,
+          consentSettings.workspaceId,
+          consentSettings.projectId,
+          consentSettings.sphereId,
+        ],
+        set: nextConsent,
+      })
+      .returning();
+
+    if (!row) {
+      throw new Error("Failed to reset Context Layer training consent.");
+    }
+
+    await tx.insert(contextAuditLogs).values({
+      ...scope,
+      event: "training.preference.updated",
+      actorUserId: scope.userId,
+      details: {
+        reset: true,
+        useForPrivateFineTune: false,
+        useToImproveSharedModels: false,
+      },
+    });
+
+    return {
+      memoryEnabled: row.memoryEnabled,
+      referenceChatgptImport: row.referenceChatgptImport,
+      referenceGmail: row.referenceGmail,
+      referenceCalendar: row.referenceCalendar,
+      useForPrivateFineTune: row.useForPrivateFineTune,
+      useToImproveSharedModels: row.useToImproveSharedModels,
+      auditEvent: "training.preference.updated",
+    };
+  });
+}
+
 export async function reviewContextMemory(
   db: PennyDatabase,
   input: {
