@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   handleContextArtifactsRequest,
   handleContextConnectorConnectRequest,
+  handleContextConnectorFetchRequest,
   handleContextConnectorRevokeRequest,
   handleContextConnectorSyncRequest,
   handleContextConsentRequest,
@@ -216,6 +217,76 @@ test("POST /api/context/oauth/callback delegates token exchange into connector c
   assert.equal(body.data.connectorAccountId, "conn-calendar");
   assert.equal(body.data.provider, "calendar");
   assert.equal(body.data.auditEvent, "connector.connected");
+});
+
+test("POST /api/context/connectors/:id/fetch delegates selected provider fetch", async () => {
+  const fetched = await handleContextConnectorFetchRequest(
+    scopedRequest("http://localhost/api/context/connectors/conn-1/fetch", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "gmail",
+        selection: {
+          provider: "gmail",
+          labels: ["Penny"],
+          searchQueries: ["newer_than:90d"],
+        },
+        maxItems: 500,
+      }),
+    }),
+    "conn-1",
+    {
+      async fetchConnector(input) {
+        assert.deepEqual(input.scope, scope);
+        assert.equal(input.connectorAccountId, "conn-1");
+        assert.equal(input.provider, "gmail");
+        assert.equal(input.maxItems, 100);
+        assert.deepEqual(input.selection.labels, ["Penny"]);
+
+        return {
+          connectorAccountId: input.connectorAccountId,
+          provider: input.provider,
+          fetchedAt: "2026-05-09T12:00:00.000Z",
+          items: [
+            {
+              id: "thread-1",
+              sourceUri: "gmail:thread:thread-1:message:msg-1",
+              label: "Gmail: Launch constraints",
+              snippet: "Founder says Penny should remember launch constraints.",
+              metadata: {
+                subject: "Launch constraints",
+              },
+            },
+          ],
+          warnings: [],
+          auditEvent: "source.fetched",
+        };
+      },
+    },
+  );
+  const blocked = await handleContextConnectorFetchRequest(
+    scopedRequest("http://localhost/api/context/connectors/conn-1/fetch", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "gmail",
+        selection: {
+          provider: "gmail",
+          sourceUri: "gmail:all-mail",
+        },
+      }),
+    }),
+    "conn-1",
+  );
+  const fetchedBody = (await fetched.json()) as {
+    data: { connectorAccountId: string; items: Array<{ label: string }>; auditEvent: string };
+  };
+  const blockedBody = (await blocked.json()) as { error: { code: string } };
+
+  assert.equal(fetched.status, 200);
+  assert.equal(fetchedBody.data.connectorAccountId, "conn-1");
+  assert.equal(fetchedBody.data.items[0]?.label, "Gmail: Launch constraints");
+  assert.equal(fetchedBody.data.auditEvent, "source.fetched");
+  assert.equal(blocked.status, 409);
+  assert.equal(blockedBody.error.code, "context_scope_not_allowed");
 });
 
 test("POST /api/context/connectors/:id/sync queues selected Gmail and Calendar sync jobs", async () => {
@@ -612,6 +683,7 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   const artifacts = await handleContextArtifactsRequest(new Request("http://localhost/api/context/artifacts", { method: "POST" }));
   const connect = await handleContextConnectorConnectRequest(new Request("http://localhost/api/context/connectors"));
   const sync = await handleContextConnectorSyncRequest(new Request("http://localhost/api/context/connectors/conn-1/sync"), "conn-1");
+  const fetch = await handleContextConnectorFetchRequest(new Request("http://localhost/api/context/connectors/conn-1/fetch"), "conn-1");
   const consent = await handleContextConsentRequest(new Request("http://localhost/api/context/consent"));
   const importer = await handleContextImportRequest(new Request("http://localhost/api/context/import"));
   const oauthStart = await handleContextOAuthStartRequest(new Request("http://localhost/api/context/oauth/start"));
@@ -634,6 +706,7 @@ test("context endpoints reject wrong HTTP methods before work", async () => {
   assert.equal(artifacts.status, 405);
   assert.equal(connect.status, 405);
   assert.equal(sync.status, 405);
+  assert.equal(fetch.status, 405);
   assert.equal(consent.status, 405);
   assert.equal(importer.status, 405);
   assert.equal(oauthStart.status, 405);
