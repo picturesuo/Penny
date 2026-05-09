@@ -35,6 +35,7 @@ import {
   handleContextConnectorConnectRequest,
   handleContextConnectorRevokeRequest,
   handleContextConnectorSyncRequest,
+  handleContextConsentRequest,
   handleContextDashboardRequest,
   handleContextImportRequest,
   handleContextMemoryDeleteRequest,
@@ -153,6 +154,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/context/connectors") {
       await writeWebResponse(outgoing, await handleContextConnectorConnectRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/context/consent") {
+      await writeWebResponse(outgoing, await handleContextConsentRequest(request));
       return;
     }
 
