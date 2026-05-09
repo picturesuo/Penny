@@ -4,13 +4,20 @@ import { getTableName } from "drizzle-orm";
 import {
   artifactKindEnum,
   artifacts,
+  brainEdgeTypeEnum,
+  brainEdges,
   brainEmbeddingObjectTypeEnum,
   brainEmbeddings,
+  brainNodeStatusEnum,
+  brainNodeTypeEnum,
+  brainNodes,
   brainObjects,
   brainRecents,
   brainRunOperationEnum,
   brainRunStatusEnum,
   brainRuns,
+  checkResults,
+  checkRiskEnum,
   commandIdempotencyKeys,
   commandIdempotencyStatusEnum,
   challengeFailureTypeEnum,
@@ -18,18 +25,38 @@ import {
   challengeRoundStatusEnum,
   challengeRounds,
   challengeStrengthEnum,
+  claimSuggestions,
   claimEdgeKindEnum,
   claimEdgeStatusEnum,
   claimEdges,
   claimKindEnum,
   claimStatusEnum,
   claims,
+  connectorAccountStatusEnum,
+  connectorAccounts,
+  connectorSyncJobStatusEnum,
+  connectorSyncJobs,
+  consentSettings,
+  contextAuditEventEnum,
+  contextAuditLogs,
+  contextChunkProcessingStatusEnum,
+  contextChunks,
+  contextProviderEnum,
+  contextSources,
   derivedEffectKindEnum,
   derivedEffectStatusEnum,
   derivedEffects,
+  evidencePointers,
+  evidenceSnippetPolicyEnum,
   focusModeEnum,
   focusSourceEnum,
   focusStates,
+  learnCards,
+  memoryReviewStatusEnum,
+  memoryShardTypeEnum,
+  memoryShards,
+  memorySourceClassEnum,
+  memoryVisibilityEnum,
   moveKindEnum,
   nextMoveActionEnum,
   nextMoveCandidates,
@@ -44,6 +71,7 @@ import {
   sessions,
   shapeStatusEnum,
   shapes,
+  sourceDigests,
   sourceSpans,
   sources,
   wikiPages,
@@ -73,6 +101,20 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(artifacts), "artifacts");
   assert.equal(getTableName(wikiPages), "wiki_pages");
   assert.equal(getTableName(commandIdempotencyKeys), "command_idempotency_keys");
+  assert.equal(getTableName(connectorAccounts), "connector_accounts");
+  assert.equal(getTableName(connectorSyncJobs), "connector_sync_jobs");
+  assert.equal(getTableName(contextSources), "context_sources");
+  assert.equal(getTableName(contextChunks), "context_chunks");
+  assert.equal(getTableName(sourceDigests), "source_digests");
+  assert.equal(getTableName(memoryShards), "memory_shards");
+  assert.equal(getTableName(claimSuggestions), "claim_suggestions");
+  assert.equal(getTableName(evidencePointers), "evidence_pointers");
+  assert.equal(getTableName(brainNodes), "brain_nodes");
+  assert.equal(getTableName(brainEdges), "brain_edges");
+  assert.equal(getTableName(checkResults), "check_results");
+  assert.equal(getTableName(learnCards), "learn_cards");
+  assert.equal(getTableName(consentSettings), "consent_settings");
+  assert.equal(getTableName(contextAuditLogs), "context_audit_logs");
 });
 
 test("ClaimVersion schema tracks validity windows", () => {
@@ -103,6 +145,20 @@ test("Penny core tables persist user and workspace scope", () => {
     artifacts,
     wikiPages,
     commandIdempotencyKeys,
+    connectorAccounts,
+    connectorSyncJobs,
+    contextSources,
+    contextChunks,
+    sourceDigests,
+    memoryShards,
+    claimSuggestions,
+    evidencePointers,
+    brainNodes,
+    brainEdges,
+    checkResults,
+    learnCards,
+    consentSettings,
+    contextAuditLogs,
   ]) {
     assert.equal(table.userId.name, "user_id");
     assert.equal(table.workspaceId.name, "workspace_id");
@@ -155,6 +211,113 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
     "claim_version",
     "brain_recent",
     "artifact",
+  ]);
+  assert.deepEqual(contextProviderEnum.enumValues, [
+    "manual",
+    "chatgpt",
+    "gmail",
+    "calendar",
+    "slack",
+    "canvas",
+    "instagram",
+  ]);
+  assert.deepEqual(connectorAccountStatusEnum.enumValues, ["active", "paused", "revoked", "errored"]);
+  assert.deepEqual(connectorSyncJobStatusEnum.enumValues, [
+    "queued",
+    "running",
+    "succeeded",
+    "failed",
+    "canceled",
+  ]);
+  assert.deepEqual(contextChunkProcessingStatusEnum.enumValues, [
+    "ephemeral",
+    "redacted",
+    "extracted",
+    "deleted",
+    "retained",
+  ]);
+  assert.deepEqual(memoryShardTypeEnum.enumValues, [
+    "claim",
+    "preference",
+    "goal",
+    "taste",
+    "style",
+    "idea_history",
+    "project",
+    "person",
+    "deadline",
+    "concept",
+  ]);
+  assert.deepEqual(memorySourceClassEnum.enumValues, [
+    "manual",
+    "private_export",
+    "email",
+    "calendar_event",
+    "chat",
+    "learning_platform",
+    "social",
+  ]);
+  assert.deepEqual(memoryVisibilityEnum.enumValues, ["private", "workspace", "project"]);
+  assert.deepEqual(memoryReviewStatusEnum.enumValues, [
+    "pending",
+    "approved",
+    "auto_approved",
+    "rejected",
+    "merged",
+    "deprioritized",
+  ]);
+  assert.deepEqual(evidenceSnippetPolicyEnum.enumValues, [
+    "metadata_only",
+    "redacted_snippet",
+    "full_snippet",
+    "blocked",
+  ]);
+  assert.deepEqual(brainNodeTypeEnum.enumValues, [
+    "claim",
+    "assumption",
+    "counterargument",
+    "concept",
+    "project",
+    "person",
+    "deadline",
+    "source_digest",
+    "memory_shard",
+  ]);
+  assert.deepEqual(brainNodeStatusEnum.enumValues, ["active", "needs_review", "archived", "invalid"]);
+  assert.deepEqual(brainEdgeTypeEnum.enumValues, [
+    "supports",
+    "contradicts",
+    "inspired_by",
+    "depends_on",
+    "person_related",
+    "project_related",
+    "deadline_for",
+    "learned_from",
+    "checked_by",
+  ]);
+  assert.deepEqual(checkRiskEnum.enumValues, [
+    "contradiction",
+    "weak_evidence",
+    "stale_assumption",
+    "circular_reasoning",
+    "missing_user_goal",
+    "risky_decision",
+  ]);
+  assert.deepEqual(contextAuditEventEnum.enumValues, [
+    "connector.connected",
+    "connector.synced",
+    "connector.revoked",
+    "source.fetched",
+    "chunk.redacted",
+    "chunk.deleted",
+    "memory.extracted",
+    "memory.approved",
+    "memory.rejected",
+    "memory.edited",
+    "memory.merged",
+    "memory.deleted",
+    "consent.updated",
+    "training.preference.updated",
   ]);
   assert.deepEqual(challengeFailureTypeEnum.enumValues, [
     "weak_evidence",
@@ -214,8 +377,13 @@ test("Penny schema has a clean aggregate export surface", () => {
   assert.deepEqual(Object.keys(pennySchema).sort(), [
     "artifactKindEnum",
     "artifacts",
+    "brainEdgeTypeEnum",
+    "brainEdges",
     "brainEmbeddingObjectTypeEnum",
     "brainEmbeddings",
+    "brainNodeStatusEnum",
+    "brainNodeTypeEnum",
+    "brainNodes",
     "brainObjects",
     "brainRecents",
     "brainRunOperationEnum",
@@ -226,21 +394,43 @@ test("Penny schema has a clean aggregate export surface", () => {
     "challengeRoundStatusEnum",
     "challengeRounds",
     "challengeStrengthEnum",
+    "checkResults",
+    "checkRiskEnum",
     "claimEdgeKindEnum",
     "claimEdgeStatusEnum",
     "claimEdges",
     "claimKindEnum",
     "claimStatusEnum",
+    "claimSuggestions",
     "claimVersions",
     "claims",
     "commandIdempotencyKeys",
     "commandIdempotencyStatusEnum",
+    "connectorAccountStatusEnum",
+    "connectorAccounts",
+    "connectorSyncJobStatusEnum",
+    "connectorSyncJobs",
+    "consentSettings",
+    "contextAuditEventEnum",
+    "contextAuditLogs",
+    "contextChunkProcessingStatusEnum",
+    "contextChunks",
+    "contextProviderEnum",
+    "contextSources",
     "derivedEffectKindEnum",
     "derivedEffectStatusEnum",
     "derivedEffects",
+    "evidencePointers",
+    "evidenceSnippetPolicyEnum",
     "focusModeEnum",
     "focusSourceEnum",
     "focusStates",
+    "learnCards",
+    "memoryReviewStatusEnum",
+    "memoryShardTypeEnum",
+    "memoryShards",
+    "memorySourceClassEnum",
+    "memoryVisibilityEnum",
     "moveKindEnum",
     "moves",
     "nextMoveActionEnum",
@@ -254,6 +444,7 @@ test("Penny schema has a clean aggregate export surface", () => {
     "sessions",
     "shapeStatusEnum",
     "shapes",
+    "sourceDigests",
     "sourceKindEnum",
     "sourceSpans",
     "sources",
