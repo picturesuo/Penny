@@ -57,6 +57,7 @@ test("redactPrivateText blocks secrets, identity data, and sensitive message cla
       "Email founder@example.com at 415-555-1212.",
       "SSN 123-45-6789, card 4242 4242 4242 4242, 12 Market Street.",
       "Off the record therapy note about my child.",
+      "Passport AB1234567. Blocked source: payroll export.",
     ].join("\n"),
   );
 
@@ -64,11 +65,15 @@ test("redactPrivateText blocks secrets, identity data, and sensitive message cla
   assert.equal(redacted.text.includes("founder@example.com"), false);
   assert.equal(redacted.text.includes("123-45-6789"), false);
   assert.equal(redacted.text.includes("4242 4242"), false);
+  assert.equal(redacted.text.includes("AB1234567"), false);
+  assert.equal(redacted.text.includes("payroll export"), false);
   assert.equal(redacted.findings.some((finding) => finding.type === "api_key"), true);
   assert.equal(redacted.findings.some((finding) => finding.type === "password"), true);
   assert.equal(redacted.findings.some((finding) => finding.type === "private_message"), true);
   assert.equal(redacted.findings.some((finding) => finding.type === "medical"), true);
   assert.equal(redacted.findings.some((finding) => finding.type === "minor"), true);
+  assert.equal(redacted.findings.some((finding) => finding.type === "sensitive_id"), true);
+  assert.equal(redacted.findings.some((finding) => finding.type === "blocked_source"), true);
 });
 
 test("processEphemeralContext extracts permissioned memory and deletes raw content by default", () => {
