@@ -113,6 +113,7 @@ test("processEphemeralContext blocks memory extraction for blocked sources", () 
     sourceUri: "manual:blocked-source",
     label: "Blocked source",
     fetchedAt: "2026-05-08T12:00:00.000Z",
+    rawRetention: true,
     text: [
       "Do not ingest: founder payroll export.",
       "I think this should never become a Penny memory.",
@@ -127,6 +128,8 @@ test("processEphemeralContext blocks memory extraction for blocked sources", () 
   assert.equal(result.brainNodes.length, 0);
   assert.equal(result.brainEdges.length, 0);
   assert.equal(result.auditEvents.includes("memory.blocked"), true);
+  assert.equal(result.chunk.retentionFlag, false);
+  assert.equal(result.chunk.processingStatus, "deleted");
   assert.equal(result.chunk.rawDeleted, true);
 });
 
