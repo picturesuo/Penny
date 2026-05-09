@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   BookOpen,
@@ -440,7 +440,79 @@ function BrainDocumentBlock({ block }: { block: BrainDocumentBlockData }) {
 }
 
 function InlineThinkingCanvas({ canvas }: { canvas: BrainDocumentV2["canvas"] }) {
-  const nodeMap = new Map(canvas.nodes.map((node) => [node.id, node]));
+  const initialNodes = useMemo(() => layoutInlineCanvasNodes(canvas.nodes), [canvas.nodes]);
+  const [nodes, setNodes] = useState(initialNodes);
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    nodeId: string;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  const boardSize = inlineCanvasBoardSize(nodes);
+
+  useEffect(() => {
+    setNodes(initialNodes);
+    setDraggingNodeId(null);
+    dragRef.current = null;
+  }, [initialNodes]);
+
+  function handleNodePointerDown(event: React.PointerEvent<HTMLElement>, node: InlineCanvasPositionedNode) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      nodeId: node.id,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: node.x,
+      originY: node.y,
+    };
+    setDraggingNodeId(node.id);
+  }
+
+  function handleNodePointerMove(event: React.PointerEvent<HTMLElement>) {
+    const drag = dragRef.current;
+
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const nextX = drag.originX + event.clientX - drag.startX;
+    const nextY = drag.originY + event.clientY - drag.startY;
+
+    setNodes((current) => {
+      const moved = current.map((node) => {
+        if (node.id !== drag.nodeId) {
+          return node;
+        }
+
+        return {
+          ...node,
+          ...clampInlineCanvasPosition(node, nextX, nextY),
+        };
+      });
+
+      return resolveInlineCanvasOverlaps(moved, drag.nodeId);
+    });
+  }
+
+  function stopNodeDrag(event: React.PointerEvent<HTMLElement>) {
+    const drag = dragRef.current;
+
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    dragRef.current = null;
+    setDraggingNodeId(null);
+  }
 
   return (
     <section className="inline-thinking-canvas" aria-label="Inline thinking canvas">
@@ -452,36 +524,59 @@ function InlineThinkingCanvas({ canvas }: { canvas: BrainDocumentV2["canvas"] })
         <small>{canvas.nodes.length} cards</small>
       </div>
       <div className="inline-thinking-canvas-board">
-        <svg viewBox="0 0 920 560" aria-hidden="true">
-          {canvas.edges.map((edge) => {
-            const source = nodeMap.get(edge.source);
-            const target = nodeMap.get(edge.target);
+        <div className="inline-thinking-canvas-plane" style={{ width: boardSize.width, height: boardSize.height }}>
+          <svg viewBox={`0 0 ${boardSize.width} ${boardSize.height}`} aria-hidden="true">
+            <defs>
+              <marker
+                id="inline-canvas-arrow"
+                markerWidth="10"
+                markerHeight="10"
+                refX="8"
+                refY="5"
+                orient="auto"
+                markerUnits="strokeWidth"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" />
+              </marker>
+            </defs>
+            {canvas.edges.map((edge, index) => {
+              const source = nodeMap.get(edge.source);
+              const target = nodeMap.get(edge.target);
 
-            if (!source || !target) {
-              return null;
-            }
+              if (!source || !target) {
+                return null;
+              }
 
-            return (
-              <g key={edge.id}>
-                <path className="inline-canvas-edge" d={inlineCanvasEdgePath(source, target)} />
-                <text className="inline-canvas-edge-label" x={(source.x + target.x) / 2} y={(source.y + target.y) / 2 - 8}>
-                  {edge.label}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-        {canvas.nodes.map((node) => (
-          <article
-            key={node.id}
-            className={`inline-canvas-node is-${node.kind.toLowerCase().replaceAll(" ", "-")}`}
-            style={{ left: `${node.x}px`, top: `${node.y}px` }}
-          >
-            <span>{node.kind}</span>
-            <strong>{node.title}</strong>
-            <p>{node.body}</p>
-          </article>
-        ))}
+              const route = inlineCanvasEdgeRoute(source, target, index);
+
+              return (
+                <g key={edge.id}>
+                  <path className="inline-canvas-edge" d={route.path} markerEnd="url(#inline-canvas-arrow)" />
+                  <text className="inline-canvas-edge-label" x={route.labelX} y={route.labelY}>
+                    {edge.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+          {nodes.map((node) => (
+            <article
+              key={node.id}
+              className={`inline-canvas-node is-${node.kind.toLowerCase().replaceAll(" ", "-")}${draggingNodeId === node.id ? " is-dragging" : ""}`}
+              style={{ left: `${node.x}px`, top: `${node.y}px`, width: node.width, height: node.height }}
+              tabIndex={0}
+              aria-label={`${node.kind} card: ${node.title}`}
+              onPointerDown={(event) => handleNodePointerDown(event, node)}
+              onPointerMove={handleNodePointerMove}
+              onPointerUp={stopNodeDrag}
+              onPointerCancel={stopNodeDrag}
+            >
+              <span>{node.kind}</span>
+              <strong>{node.title}</strong>
+              <p>{node.body}</p>
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -835,14 +930,147 @@ function inlineCanvasNode(
   };
 }
 
-function inlineCanvasEdgePath(source: BrainDocumentCanvasNode, target: BrainDocumentCanvasNode): string {
-  const sourceX = source.x + 88;
-  const sourceY = source.y + 62;
-  const targetX = target.x + 88;
-  const targetY = target.y + 62;
-  const controlY = sourceY + (targetY - sourceY) / 2;
+type InlineCanvasPositionedNode = BrainDocumentCanvasNode & {
+  width: number;
+  height: number;
+};
 
-  return `M ${sourceX} ${sourceY} C ${sourceX} ${controlY}, ${targetX} ${controlY}, ${targetX} ${targetY}`;
+const inlineCanvasNodeWidth = 260;
+const inlineCanvasNodeHeight = 198;
+const inlineCanvasPadding = 72;
+const inlineCanvasGap = 42;
+const inlineCanvasMinWidth = 1240;
+const inlineCanvasMinHeight = 930;
+const inlineCanvasDefaultPositions: Record<string, { x: number; y: number }> = {
+  concept: { x: 72, y: 92 },
+  claim: { x: 490, y: 92 },
+  assumption: { x: 908, y: 92 },
+  evidence: { x: 72, y: 400 },
+  tension: { x: 490, y: 400 },
+  question: { x: 908, y: 400 },
+  next: { x: 490, y: 690 },
+};
+
+function layoutInlineCanvasNodes(nodes: BrainDocumentCanvasNode[]): InlineCanvasPositionedNode[] {
+  return resolveInlineCanvasOverlaps(
+    nodes.map((node, index) => {
+      const fallbackColumn = index % 3;
+      const fallbackRow = Math.floor(index / 3);
+      const defaultPosition = inlineCanvasDefaultPositions[node.id] ?? {
+        x: inlineCanvasPadding + fallbackColumn * (inlineCanvasNodeWidth + 158),
+        y: inlineCanvasPadding + fallbackRow * (inlineCanvasNodeHeight + 110),
+      };
+
+      return {
+        ...node,
+        ...defaultPosition,
+        width: inlineCanvasNodeWidth,
+        height: inlineCanvasNodeHeight,
+      };
+    }),
+  );
+}
+
+function inlineCanvasBoardSize(nodes: InlineCanvasPositionedNode[]): { width: number; height: number } {
+  if (nodes.length === 0) {
+    return { width: inlineCanvasMinWidth, height: inlineCanvasMinHeight };
+  }
+
+  return {
+    width: Math.max(inlineCanvasMinWidth, Math.ceil(Math.max(...nodes.map((node) => node.x + node.width)) + inlineCanvasPadding)),
+    height: Math.max(inlineCanvasMinHeight, Math.ceil(Math.max(...nodes.map((node) => node.y + node.height)) + inlineCanvasPadding)),
+  };
+}
+
+function clampInlineCanvasPosition(node: InlineCanvasPositionedNode, x: number, y: number): { x: number; y: number } {
+  return {
+    x: Math.max(inlineCanvasPadding, Math.min(x, inlineCanvasMinWidth - node.width - inlineCanvasPadding)),
+    y: Math.max(inlineCanvasPadding, y),
+  };
+}
+
+function resolveInlineCanvasOverlaps(
+  nodes: InlineCanvasPositionedNode[],
+  preferredNodeId?: string,
+): InlineCanvasPositionedNode[] {
+  const ordered = preferredNodeId
+    ? [
+        ...nodes.filter((node) => node.id === preferredNodeId),
+        ...nodes.filter((node) => node.id !== preferredNodeId),
+      ]
+    : nodes;
+  const placed: InlineCanvasPositionedNode[] = [];
+
+  for (const node of ordered) {
+    const candidate = { ...node };
+    let guard = 0;
+
+    while (placed.some((placedNode) => inlineCanvasNodesOverlap(candidate, placedNode)) && guard < 80) {
+      const overlapping = placed.find((placedNode) => inlineCanvasNodesOverlap(candidate, placedNode));
+
+      if (!overlapping) {
+        break;
+      }
+
+      candidate.y = overlapping.y + overlapping.height + inlineCanvasGap;
+      guard += 1;
+    }
+
+    placed.push(candidate);
+  }
+
+  return nodes.map((node) => placed.find((placedNode) => placedNode.id === node.id) ?? node);
+}
+
+function inlineCanvasNodesOverlap(first: InlineCanvasPositionedNode, second: InlineCanvasPositionedNode): boolean {
+  return !(
+    first.x + first.width + inlineCanvasGap <= second.x ||
+    second.x + second.width + inlineCanvasGap <= first.x ||
+    first.y + first.height + inlineCanvasGap <= second.y ||
+    second.y + second.height + inlineCanvasGap <= first.y
+  );
+}
+
+function inlineCanvasEdgeRoute(
+  source: InlineCanvasPositionedNode,
+  target: InlineCanvasPositionedNode,
+  index: number,
+): { path: string; labelX: number; labelY: number } {
+  const sourceCenterX = source.x + source.width / 2;
+  const sourceCenterY = source.y + source.height / 2;
+  const targetCenterX = target.x + target.width / 2;
+  const targetCenterY = target.y + target.height / 2;
+  const deltaX = targetCenterX - sourceCenterX;
+  const deltaY = targetCenterY - sourceCenterY;
+  const laneOffset = ((index % 3) - 1) * 22;
+
+  if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+    const direction = deltaX >= 0 ? 1 : -1;
+    const sourceX = direction > 0 ? source.x + source.width : source.x;
+    const targetX = direction > 0 ? target.x : target.x + target.width;
+    const sourceY = sourceCenterY + laneOffset;
+    const targetY = targetCenterY + laneOffset;
+    const controlDistance = Math.max(88, Math.abs(targetX - sourceX) * 0.42);
+
+    return {
+      path: `M ${sourceX} ${sourceY} C ${sourceX + direction * controlDistance} ${sourceY}, ${targetX - direction * controlDistance} ${targetY}, ${targetX} ${targetY}`,
+      labelX: (sourceX + targetX) / 2,
+      labelY: (sourceY + targetY) / 2 - 12,
+    };
+  }
+
+  const direction = deltaY >= 0 ? 1 : -1;
+  const sourceY = direction > 0 ? source.y + source.height : source.y;
+  const targetY = direction > 0 ? target.y : target.y + target.height;
+  const sourceX = sourceCenterX + laneOffset;
+  const targetX = targetCenterX + laneOffset;
+  const controlDistance = Math.max(84, Math.abs(targetY - sourceY) * 0.42);
+
+  return {
+    path: `M ${sourceX} ${sourceY} C ${sourceX} ${sourceY + direction * controlDistance}, ${targetX} ${targetY - direction * controlDistance}, ${targetX} ${targetY}`,
+    labelX: (sourceX + targetX) / 2,
+    labelY: (sourceY + targetY) / 2 - 12,
+  };
 }
 
 function firstNonEmpty(...values: Array<string | null | undefined>): string {
