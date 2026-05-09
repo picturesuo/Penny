@@ -312,6 +312,7 @@ test("Penny schema keeps core enum values narrow for the MVP", () => {
     "chunk.redacted",
     "chunk.deleted",
     "memory.extracted",
+    "memory.blocked",
     "memory.approved",
     "memory.rejected",
     "memory.edited",
