@@ -32,6 +32,7 @@ import {
 } from "./check-route.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import {
+  handleContextArtifactsRequest,
   handleContextConnectorConnectRequest,
   handleContextConnectorRevokeRequest,
   handleContextConnectorSyncRequest,
@@ -147,6 +148,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/context/dashboard") {
       await writeWebResponse(outgoing, await handleContextDashboardRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/context/artifacts") {
+      await writeWebResponse(outgoing, await handleContextArtifactsRequest(request));
       return;
     }
 
