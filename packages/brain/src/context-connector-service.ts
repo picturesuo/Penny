@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   planConnectorScope,
   type ConnectorScopePlan,
@@ -52,7 +52,81 @@ export type ConnectorSyncPlan = {
   warnings: string[];
 };
 
+export type ConnectorOAuthProviderConfig = {
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  defaultScopes: readonly string[];
+  restrictedScopeWarning?: string;
+};
+
+export type ConnectorOAuthStartInput = {
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  clientId: string;
+  redirectUri: string;
+  stateSecret: string;
+  selection: ConnectorScopeSelection;
+  scopes?: readonly string[];
+  now?: string;
+  nonce?: string;
+};
+
+export type ConnectorOAuthStart = {
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  authorizationUrl: string;
+  state: string;
+  connectorPlan: ConnectorScopePlan;
+  warnings: string[];
+};
+
+export type ConnectorOAuthCallbackInput = {
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  code: string;
+  state: string;
+  stateSecret: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  exchange: ConnectorOAuthTokenExchange;
+};
+
+export type ConnectorOAuthCallback = {
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  connectorPlan: ConnectorScopePlan;
+  token: ConnectorTokenInput;
+};
+
+export type ConnectorOAuthTokenExchange = (request: {
+  tokenEndpoint: string;
+  code: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}) => Promise<{
+  accessToken: string;
+  refreshToken?: string | null;
+  expiresInSeconds?: number | null;
+}>;
+
 const tokenPrefix = "v1";
+const oauthStateVersion = "ctx1";
+const googleAuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
+const googleTokenEndpoint = "https://oauth2.googleapis.com/token";
+const oauthConfigs: Record<Extract<ContextProvider, "gmail" | "calendar">, ConnectorOAuthProviderConfig> = {
+  gmail: {
+    provider: "gmail",
+    authorizationEndpoint: googleAuthorizationEndpoint,
+    tokenEndpoint: googleTokenEndpoint,
+    defaultScopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    restrictedScopeWarning: "Gmail readonly is a restricted scope and requires Google verification before public launch.",
+  },
+  calendar: {
+    provider: "calendar",
+    authorizationEndpoint: googleAuthorizationEndpoint,
+    tokenEndpoint: googleTokenEndpoint,
+    defaultScopes: ["https://www.googleapis.com/auth/calendar.readonly"],
+  },
+};
 
 export function encryptConnectorTokens(input: ConnectorTokenInput, secret: string): EncryptedConnectorTokens {
   if (!input.accessToken.trim()) {
@@ -127,6 +201,97 @@ export function buildConnectorSyncPlan(input: ConnectorSyncPlanInput): Connector
 
 export function buildRefreshTokenUpdate(input: ConnectorTokenInput, secret: string): EncryptedConnectorTokens {
   return encryptConnectorTokens(input, secret);
+}
+
+export function buildConnectorOAuthStart(input: ConnectorOAuthStartInput): ConnectorOAuthStart {
+  if (!input.clientId.trim()) {
+    throw new Error("OAuth client id is required.");
+  }
+
+  if (!input.redirectUri.trim()) {
+    throw new Error("OAuth redirect URI is required.");
+  }
+
+  const connectorPlan = planConnectorScope({ ...input.selection, provider: input.provider });
+
+  if (!connectorPlan.allowed) {
+    throw new Error(connectorPlan.warnings[0] ?? "Selected connector scope is not allowed.");
+  }
+
+  const config = oauthConfigs[input.provider];
+  const scopes = [...new Set([...(input.scopes ?? config.defaultScopes)])];
+  const state = signOAuthState(
+    {
+      provider: input.provider,
+      selection: { ...input.selection, provider: input.provider },
+      nonce: input.nonce ?? randomBytes(16).toString("base64url"),
+      issuedAt: input.now ?? new Date().toISOString(),
+    },
+    input.stateSecret,
+  );
+  const authorizationUrl = new URL(config.authorizationEndpoint);
+
+  authorizationUrl.searchParams.set("client_id", input.clientId);
+  authorizationUrl.searchParams.set("redirect_uri", input.redirectUri);
+  authorizationUrl.searchParams.set("response_type", "code");
+  authorizationUrl.searchParams.set("scope", scopes.join(" "));
+  authorizationUrl.searchParams.set("access_type", "offline");
+  authorizationUrl.searchParams.set("prompt", "consent");
+  authorizationUrl.searchParams.set("state", state);
+
+  return {
+    provider: input.provider,
+    authorizationUrl: authorizationUrl.toString(),
+    state,
+    connectorPlan,
+    warnings: [config.restrictedScopeWarning].filter((warning): warning is string => Boolean(warning)),
+  };
+}
+
+export async function exchangeConnectorOAuthCallback(
+  input: ConnectorOAuthCallbackInput,
+): Promise<ConnectorOAuthCallback> {
+  if (!input.code.trim()) {
+    throw new Error("OAuth callback code is required.");
+  }
+
+  const state = verifyOAuthState(input.state, input.stateSecret);
+
+  if (state.provider !== input.provider) {
+    throw new Error("OAuth callback provider does not match state.");
+  }
+
+  const connectorPlan = planConnectorScope(state.selection);
+
+  if (!connectorPlan.allowed) {
+    throw new Error(connectorPlan.warnings[0] ?? "Selected connector scope is not allowed.");
+  }
+
+  const config = oauthConfigs[input.provider];
+  const tokenResponse = await input.exchange({
+    tokenEndpoint: config.tokenEndpoint,
+    code: input.code,
+    clientId: input.clientId,
+    clientSecret: input.clientSecret,
+    redirectUri: input.redirectUri,
+  });
+
+  if (!tokenResponse.accessToken.trim()) {
+    throw new Error("OAuth token exchange did not return an access token.");
+  }
+
+  return {
+    provider: input.provider,
+    connectorPlan,
+    token: {
+      accessToken: tokenResponse.accessToken,
+      refreshToken: tokenResponse.refreshToken ?? null,
+      expiresAt:
+        tokenResponse.expiresInSeconds && tokenResponse.expiresInSeconds > 0
+          ? new Date(Date.now() + tokenResponse.expiresInSeconds * 1000)
+          : null,
+    },
+  };
 }
 
 function gmailImports(input: ConnectorSyncPlanInput, connectorPlan: ConnectorScopePlan): EphemeralProcessInput[] {
@@ -241,6 +406,68 @@ function encryptToken(value: string, secret: string): string {
   const tag = cipher.getAuthTag();
 
   return [tokenPrefix, iv.toString("base64url"), tag.toString("base64url"), encrypted.toString("base64url")].join(".");
+}
+
+function signOAuthState(
+  state: {
+    provider: Extract<ContextProvider, "gmail" | "calendar">;
+    selection: ConnectorScopeSelection;
+    nonce: string;
+    issuedAt: string;
+  },
+  secret: string,
+): string {
+  const payload = Buffer.from(stableStringify(state), "utf8").toString("base64url");
+  const signature = createHmac("sha256", oauthStateKey(secret)).update(payload).digest("base64url");
+
+  return [oauthStateVersion, payload, signature].join(".");
+}
+
+function verifyOAuthState(state: string, secret: string): {
+  provider: Extract<ContextProvider, "gmail" | "calendar">;
+  selection: ConnectorScopeSelection;
+  nonce: string;
+  issuedAt: string;
+} {
+  const [version, payload, signature] = state.split(".");
+
+  if (version !== oauthStateVersion || !payload || !signature) {
+    throw new Error("Unsupported OAuth state.");
+  }
+
+  const expected = createHmac("sha256", oauthStateKey(secret)).update(payload).digest("base64url");
+  const providedBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+
+  if (providedBuffer.length !== expectedBuffer.length || !timingSafeEqual(providedBuffer, expectedBuffer)) {
+    throw new Error("OAuth state signature is invalid.");
+  }
+
+  const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+    provider?: unknown;
+    selection?: unknown;
+    nonce?: unknown;
+    issuedAt?: unknown;
+  };
+
+  if ((parsed.provider !== "gmail" && parsed.provider !== "calendar") || !parsed.selection) {
+    throw new Error("OAuth state payload is invalid.");
+  }
+
+  return {
+    provider: parsed.provider,
+    selection: parsed.selection as ConnectorScopeSelection,
+    nonce: typeof parsed.nonce === "string" ? parsed.nonce : "",
+    issuedAt: typeof parsed.issuedAt === "string" ? parsed.issuedAt : "",
+  };
+}
+
+function oauthStateKey(secret: string): Buffer {
+  if (!secret.trim()) {
+    throw new Error("OAuth state secret is required.");
+  }
+
+  return createHash("sha256").update(`oauth:${secret}`).digest();
 }
 
 function encryptionKey(secret: string): Buffer {
