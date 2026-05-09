@@ -190,6 +190,7 @@ export async function loadContextDashboard(
       lastAccessAt: auditRows[0]?.createdAt.toISOString() ?? null,
       syncCount: auditRows.filter((row) => row.event === "connector.synced").length,
       extractedMemoryCount: auditRows.filter((row) => row.event === "memory.extracted").length,
+      blockedSourceCount: auditRows.filter((row) => row.event === "memory.blocked").length,
       deletionCount: auditRows.filter((row) => row.event === "memory.deleted" || row.event === "chunk.deleted").length,
     },
   };

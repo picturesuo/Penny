@@ -75,6 +75,7 @@ export type ContextDashboardPayload = {
     lastAccessAt: string | null;
     syncCount: number;
     extractedMemoryCount: number;
+    blockedSourceCount: number;
     deletionCount: number;
   };
 };

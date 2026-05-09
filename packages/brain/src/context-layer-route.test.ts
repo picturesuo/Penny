@@ -35,6 +35,7 @@ test("GET /api/context/dashboard delegates with request scope", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.data.sourceOfTruth, "context_layer");
   assert.equal(body.data.sources[0]?.provider, "chatgpt");
+  assert.equal(body.data.auditSummary.blockedSourceCount, 1);
   assert.deepEqual(observedScopes, [scope]);
 });
 
@@ -914,6 +915,7 @@ function dashboard(): ContextDashboardPayload {
       lastAccessAt: "2026-05-08T12:00:00.000Z",
       syncCount: 1,
       extractedMemoryCount: 3,
+      blockedSourceCount: 1,
       deletionCount: 0,
     },
   };
