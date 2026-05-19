@@ -33,6 +33,7 @@ import type {
   CheckSessionResponse,
   CheckSprintInput,
   CheckSprintResponse,
+  CreateProviderComparisonResponse,
   CreateNextInput,
   CreateNextResponse,
   ExportCodingPromptInput,
@@ -161,6 +162,22 @@ export async function createNext(input: CreateNextInput): Promise<CreateNextResp
   }
 
   return payload as CreateNextResponse;
+}
+
+export async function compareCreateProviders(input: CreateNextInput): Promise<CreateProviderComparisonResponse> {
+  const response = await fetch("/api/create/compare", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/create/compare failed with ${response.status}.`));
+  }
+
+  return payload as CreateProviderComparisonResponse;
 }
 
 export async function exportCodingPrompt(input: ExportCodingPromptInput): Promise<PromptExportResponse> {
