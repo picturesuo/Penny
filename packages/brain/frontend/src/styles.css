@@ -2256,6 +2256,37 @@
     color: rgb(17 17 17 / 0.62);
   }
 
+  .brain-memory-import-status {
+    display: grid;
+    gap: 4px;
+    border: 1px solid #d2d2d2;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 9px 11px;
+  }
+
+  .brain-memory-import-status.is-completed {
+    border-color: #111111;
+    background: #eff7d2;
+  }
+
+  .brain-memory-import-status.is-failed {
+    border-color: #111111;
+    background: #ffd8d0;
+  }
+
+  .brain-memory-import-status strong {
+    font-size: 12px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .brain-memory-import-status span {
+    color: rgb(17 17 17 / 0.68);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
   .brain-first-run-steps {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2472,6 +2503,26 @@
 
   .brain-memory-source button:disabled {
     opacity: 0.4;
+  }
+
+  .brain-memory-source-preview {
+    display: grid;
+    gap: 4px;
+    margin-top: 4px;
+    border-top: 1px dashed #d2d2d2;
+    padding-top: 7px;
+  }
+
+  .brain-memory-source-preview span {
+    color: rgb(17 17 17 / 0.62);
+    font-weight: 800;
+  }
+
+  .brain-memory-source-preview p {
+    margin: 0;
+    color: rgb(17 17 17 / 0.72);
+    font-size: 12px;
+    line-height: 1.35;
   }
 
   .brain-memory-signals {
