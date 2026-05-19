@@ -8,6 +8,13 @@ import {
   brainEdges,
   brainEmbeddingObjectTypeEnum,
   brainEmbeddings,
+  brainMemoryEdges,
+  brainMemoryIngestionJobs,
+  brainMemoryNodes,
+  brainMemoryProfileSignals,
+  brainMemoryRetrievalEvents,
+  brainMemorySourceChunks,
+  brainMemorySources,
   brainNodeStatusEnum,
   brainNodeTypeEnum,
   brainNodes,
@@ -90,6 +97,13 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(focusStates), "focus_states");
   assert.equal(getTableName(nextMoveCandidates), "next_move_candidates");
   assert.equal(getTableName(brainEmbeddings), "brain_embeddings");
+  assert.equal(getTableName(brainMemorySources), "brain_memory_sources");
+  assert.equal(getTableName(brainMemorySourceChunks), "brain_memory_source_chunks");
+  assert.equal(getTableName(brainMemoryNodes), "brain_memory_nodes");
+  assert.equal(getTableName(brainMemoryEdges), "brain_memory_edges");
+  assert.equal(getTableName(brainMemoryProfileSignals), "brain_memory_profile_signals");
+  assert.equal(getTableName(brainMemoryIngestionJobs), "brain_memory_ingestion_jobs");
+  assert.equal(getTableName(brainMemoryRetrievalEvents), "brain_memory_retrieval_events");
   assert.equal(getTableName(brainObjects), "brain_objects");
   assert.equal(getTableName(brainRecents), "brain_recents");
   assert.equal(getTableName(sessionNotes), "session_notes");
@@ -134,6 +148,13 @@ test("Penny core tables persist user and workspace scope", () => {
     focusStates,
     nextMoveCandidates,
     brainEmbeddings,
+    brainMemorySources,
+    brainMemorySourceChunks,
+    brainMemoryNodes,
+    brainMemoryEdges,
+    brainMemoryProfileSignals,
+    brainMemoryIngestionJobs,
+    brainMemoryRetrievalEvents,
     brainObjects,
     brainRecents,
     sessionNotes,
@@ -383,6 +404,13 @@ test("Penny schema has a clean aggregate export surface", () => {
     "brainEdges",
     "brainEmbeddingObjectTypeEnum",
     "brainEmbeddings",
+    "brainMemoryEdges",
+    "brainMemoryIngestionJobs",
+    "brainMemoryNodes",
+    "brainMemoryProfileSignals",
+    "brainMemoryRetrievalEvents",
+    "brainMemorySourceChunks",
+    "brainMemorySources",
     "brainNodeStatusEnum",
     "brainNodeTypeEnum",
     "brainNodes",
