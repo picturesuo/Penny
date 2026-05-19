@@ -123,8 +123,9 @@ export type UserProfileSignalKind =
   | "recurring_interest"
   | "active_idea_cluster"
   | "taste_signal"
+  | "common_frustration"
   | "preferred_build_style"
-  | "common_frustration";
+  | "repeated_rejected_direction";
 
 export type UserProfileSignal = {
   id: string;
@@ -191,8 +192,9 @@ export type BrainMemoryProfile = {
     recurringInterests: UserProfileSignal[];
     activeIdeaClusters: UserProfileSignal[];
     tasteSignals: UserProfileSignal[];
-    preferredBuildStyle: UserProfileSignal[];
     commonFrustrations: UserProfileSignal[];
+    preferredBuildStyle: UserProfileSignal[];
+    repeatedRejectedDirections: UserProfileSignal[];
     privacySafeSummary: string;
   };
   stats: {
@@ -1342,8 +1344,9 @@ function profileSignalKindValue(value: string): UserProfileSignalKind {
     "recurring_interest",
     "active_idea_cluster",
     "taste_signal",
-    "preferred_build_style",
     "common_frustration",
+    "preferred_build_style",
+    "repeated_rejected_direction",
   ];
 
   return allowed.includes(value) ? (value as UserProfileSignalKind) : "recurring_interest";
@@ -2060,13 +2063,14 @@ function rebuildProfileSignals(store: ScopeMemoryStore, now: string): void {
 
   addSignalsFromNodes(store, "active_idea_cluster", nodes.filter((node) => node.type === "idea" || node.type === "project" || node.type === "goal"), now);
   addSignalsFromNodes(store, "taste_signal", nodes.filter((node) => node.type === "preference"), now);
+  addSignalsFromNodes(store, "common_frustration", nodes.filter((node) => node.type === "frustration"), now);
   addSignalsFromNodes(
     store,
     "preferred_build_style",
     nodes.filter((node) => node.type === "preference" || node.type === "goal" || /\b(build|ship|mvp|prototype|small|test|verify|bold|simple)\b/i.test(node.text)),
     now,
   );
-  addSignalsFromNodes(store, "common_frustration", nodes.filter((node) => node.type === "frustration"), now);
+  addRejectedDirectionSignals(store, nodes.filter((node) => node.type === "rejected_direction"), now);
 }
 
 function addSignalsFromNodes(store: ScopeMemoryStore, kind: UserProfileSignalKind, nodes: MemoryNode[], now: string): void {
@@ -2085,6 +2089,39 @@ function addSignalsFromNodes(store: ScopeMemoryStore, kind: UserProfileSignalKin
 function addSignal(store: ScopeMemoryStore, input: Omit<UserProfileSignal, "id">): void {
   const id = stableId("profile-signal", input.kind, input.label, input.sourceNodeIds.join("|"));
   store.signals.set(id, { id, ...input });
+}
+
+function addRejectedDirectionSignals(store: ScopeMemoryStore, rejectedNodes: MemoryNode[], now: string): void {
+  if (!rejectedNodes.length) {
+    return;
+  }
+
+  const byTag = new Map<string, MemoryNode[]>();
+  for (const node of rejectedNodes) {
+    for (const tag of node.tags.slice(0, 4)) {
+      byTag.set(tag, [...(byTag.get(tag) ?? []), node]);
+    }
+  }
+
+  const repeated = [...byTag.entries()]
+    .filter(([, nodes]) => nodes.length >= 2)
+    .sort((left, right) => right[1].length - left[1].length || left[0].localeCompare(right[0]))
+    .slice(0, 4);
+
+  for (const [tag, nodes] of repeated) {
+    addSignal(store, {
+      kind: "repeated_rejected_direction",
+      label: `Avoid ${startCase(tag)}`,
+      summary: `Repeated rejected direction seen in ${nodes.length} memory node(s): ${clipText(nodes.map((node) => node.summary).join(" "), 320)}`,
+      weight: Math.min(1, 0.48 + nodes.length * 0.12),
+      sourceNodeIds: unique(nodes.map((node) => node.id)).slice(0, 8),
+      updatedAt: now,
+    });
+  }
+
+  if (!repeated.length) {
+    addSignalsFromNodes(store, "repeated_rejected_direction", rejectedNodes, now);
+  }
 }
 
 function retrieveFromStore(
@@ -2184,8 +2221,9 @@ function profileFromStore(scope: BrainScope, store: ScopeMemoryStore): BrainMemo
       recurringInterests: signals.filter((signal) => signal.kind === "recurring_interest").slice(0, 6),
       activeIdeaClusters: signals.filter((signal) => signal.kind === "active_idea_cluster").slice(0, 6),
       tasteSignals: signals.filter((signal) => signal.kind === "taste_signal").slice(0, 6),
-      preferredBuildStyle: signals.filter((signal) => signal.kind === "preferred_build_style").slice(0, 6),
       commonFrustrations: signals.filter((signal) => signal.kind === "common_frustration").slice(0, 6),
+      preferredBuildStyle: signals.filter((signal) => signal.kind === "preferred_build_style").slice(0, 6),
+      repeatedRejectedDirections: signals.filter((signal) => signal.kind === "repeated_rejected_direction").slice(0, 6),
       privacySafeSummary,
     },
     stats: {
