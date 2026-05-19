@@ -1058,6 +1058,8 @@
 
   .create-seed-panel,
   .create-brain-panel,
+  .create-provider-status,
+  .create-comparison-panel,
   .create-option-board,
   .create-judgment-panel,
   .create-artifact-panel,
@@ -1126,6 +1128,172 @@
     font-size: 11px;
     font-weight: 800;
     line-height: 1;
+  }
+
+  .create-provider-status {
+    grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+    align-items: center;
+    background: #f8f1e3;
+  }
+
+  .create-provider-status.is-model_backed {
+    border-color: rgb(47 92 82 / 0.42);
+    background: #eff7d2;
+  }
+
+  .create-provider-status.is-deterministic_fallback {
+    border-color: rgb(142 79 34 / 0.42);
+    background: #fff4dc;
+  }
+
+  .create-provider-status > div:first-child {
+    display: grid;
+    gap: 5px;
+  }
+
+  .create-provider-status span,
+  .create-provider-status dt,
+  .create-comparison-panel header span,
+  .create-comparison-arm header span,
+  .create-comparison-arm dt,
+  .create-comparison-options span {
+    color: rgb(17 17 17 / 0.56);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .create-provider-status strong {
+    font-size: 15px;
+    line-height: 1.2;
+  }
+
+  .create-provider-status dl,
+  .create-comparison-arm dl {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+    margin: 0;
+  }
+
+  .create-provider-status dl > div,
+  .create-comparison-arm dl > div {
+    display: grid;
+    gap: 4px;
+    border: 1px solid rgb(17 17 17 / 0.12);
+    border-radius: 7px;
+    padding: 8px;
+    background: rgb(255 255 255 / 0.62);
+  }
+
+  .create-provider-status dd,
+  .create-comparison-arm dd {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+
+  .create-provider-status p,
+  .create-comparison-panel p,
+  .create-comparison-arm p,
+  .create-comparison-arm small {
+    margin: 0;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 12px;
+    line-height: 1.32;
+    overflow-wrap: anywhere;
+  }
+
+  .create-comparison-panel {
+    background: #fffdf7;
+  }
+
+  .create-comparison-panel header,
+  .create-comparison-arm header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid rgb(17 17 17 / 0.12);
+    padding-bottom: 10px;
+  }
+
+  .create-comparison-panel header > div,
+  .create-comparison-arm header > div {
+    display: grid;
+    gap: 5px;
+  }
+
+  .create-comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .create-comparison-arm {
+    display: grid;
+    gap: 12px;
+    border: 1px solid rgb(17 17 17 / 0.14);
+    border-radius: 8px;
+    padding: 12px;
+    background: rgb(255 255 255 / 0.62);
+  }
+
+  .create-comparison-arm.is-model_backed {
+    border-color: rgb(47 92 82 / 0.36);
+  }
+
+  .create-comparison-arm.is-deterministic_fallback {
+    border-color: rgb(142 79 34 / 0.42);
+    background: #fff4dc;
+  }
+
+  .create-comparison-fallback {
+    border: 1px solid rgb(142 79 34 / 0.3);
+    border-radius: 7px;
+    padding: 9px;
+    background: rgb(255 255 255 / 0.56);
+    font-weight: 700;
+  }
+
+  .create-comparison-scores {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .create-comparison-scores span {
+    border: 1px solid rgb(17 17 17 / 0.12);
+    border-radius: 999px;
+    padding: 5px 8px;
+    background: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .create-comparison-options {
+    display: grid;
+    gap: 8px;
+  }
+
+  .create-comparison-options section {
+    display: grid;
+    gap: 5px;
+    border: 1px solid rgb(17 17 17 / 0.1);
+    border-radius: 7px;
+    padding: 9px;
+    background: #fffdf7;
+  }
+
+  .create-comparison-options strong {
+    font-size: 13px;
+    line-height: 1.16;
+    overflow-wrap: anywhere;
   }
 
   .create-seed-panel {
@@ -6691,11 +6859,13 @@
 
   .create-seed-panel,
   .create-brain-panel,
+  .create-provider-status,
   .create-output-grid {
     grid-template-columns: 1fr;
   }
 
-  .create-option-grid {
+  .create-option-grid,
+  .create-comparison-grid {
     grid-template-columns: 1fr;
   }
 
@@ -6704,6 +6874,8 @@
   }
 
   .create-option-board header,
+  .create-comparison-panel header,
+  .create-comparison-arm header,
   .create-judgment-panel header,
   .create-artifact-panel header,
   .create-verification-panel header,
@@ -6713,6 +6885,8 @@
   }
 
   .create-option-board header strong,
+  .create-comparison-panel header strong,
+  .create-comparison-arm header strong,
   .create-judgment-panel header strong,
   .create-artifact-panel header strong,
   .create-verification-panel header strong,
