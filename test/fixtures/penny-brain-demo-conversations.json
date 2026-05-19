@@ -1,0 +1,90 @@
+[
+  {
+    "title": "Penny memory-native Create direction",
+    "create_time": 1778850000,
+    "mapping": {
+      "root": {
+        "id": "root",
+        "message": null
+      },
+      "user-1": {
+        "id": "user-1",
+        "parent": "root",
+        "message": {
+          "author": { "role": "user" },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Project: Penny should turn rough product ideas into five memory-grounded directions, then let me pick a direction mix and export a coding-agent prompt."
+            ]
+          }
+        }
+      },
+      "assistant-1": {
+        "id": "assistant-1",
+        "parent": "user-1",
+        "message": {
+          "author": { "role": "assistant" },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "A strong product loop is rough idea, assumptions, thought map, exploration, challenge, Defend or Revise or Absorb, Learn, and a final Idea Map plus Challenge Brief."
+            ]
+          }
+        }
+      },
+      "user-2": {
+        "id": "user-2",
+        "parent": "assistant-1",
+        "message": {
+          "author": { "role": "user" },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "I prefer small reversible builds with explicit provenance, visible memory counts, source-backed claims, and a compact UI."
+            ]
+          }
+        }
+      },
+      "assistant-2": {
+        "id": "assistant-2",
+        "parent": "user-2",
+        "message": {
+          "author": { "role": "assistant" },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "Decision: Make Claim and ClaimVersion the stable truth model, keep Move append-only, and record every AI operation as a BrainRun."
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "title": "Personal creativity and coding prompt preferences",
+    "create_time": 1778936400,
+    "messages": [
+      {
+        "role": "user",
+        "content": "Goal: I want Create to feel like a controllable thinking instrument for creativity, not a prompt generator that hides why it chose an option."
+      },
+      {
+        "role": "assistant",
+        "content": "The strongest idea cluster is memory-native creativity: directions should cite memories, show uncertainty, and keep source refs available in the option drawer."
+      },
+      {
+        "role": "user",
+        "content": "Frustration: I hate when AI tools produce a polished wall of text with no implementation sequence, no acceptance tests, and no do-not-break list."
+      },
+      {
+        "role": "assistant",
+        "content": "For coding prompts, include product goal, user intent, personal context used, selected option history, UX, frontend, backend, data model, privacy, verification, implementation, acceptance tests, and do-not-break constraints."
+      },
+      {
+        "role": "user",
+        "content": "Avoid broad document ingestion and generic semantic memory until the seed to challenge to learn to artifact loop is undeniable."
+      }
+    ]
+  }
+]

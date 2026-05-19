@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   createInMemoryBrainMemoryService,
@@ -122,6 +123,46 @@ test("POST /api/brain/import parses ChatGPT-style conversations.json and retriev
   assert.ok(data.results.every((result) => result.sourceRef.sourceRange.startsWith("chunk ")));
   assert.ok(data.results.every((result) => result.permission.visibility === "private"));
   assert.ok(data.results.every((result) => result.permission.trainingUse === false));
+});
+
+test("POST /api/brain/import turns the Penny demo ChatGPT fixture into a useful Brain profile", async () => {
+  const service = createInMemoryBrainMemoryService();
+  const content = await readFile(new URL("../../../test/fixtures/penny-brain-demo-conversations.json", import.meta.url), "utf8");
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "chatgpt_export",
+      label: "Penny demo ChatGPT export",
+      fileName: "conversations.json",
+      content,
+    }),
+    { service },
+  );
+  const importPayload = await responsePayload(importResponse);
+  const profile = importPayload.data.profile as BrainMemoryProfile;
+
+  assert.equal(importResponse.status, 200);
+  assert.ok(profile.stats.memoryNodeCount >= 7);
+  assert.ok(profile.profile.recurringInterests.some((signal) => /penny|memory|create|prompt/i.test(signal.label)));
+  assert.ok(profile.profile.activeIdeaClusters.length >= 1);
+  assert.ok(profile.profile.tasteSignals.length >= 1);
+  assert.ok(profile.profile.commonFrustrations.length >= 1);
+  assert.ok(profile.recentMemoryNodes.some((node) => node.type === "preference" && /small reversible builds/i.test(node.summary)));
+  assert.ok(profile.recentMemoryNodes.some((node) => node.type === "rejected_direction" && /broad document ingestion/i.test(node.summary)));
+
+  const retrieveResponse = await handleBrainRetrieveRequest(
+    jsonRequest("http://localhost/api/brain/retrieve", {
+      query: "coding prompt acceptance tests do-not-break list memory-native creativity",
+      limit: 5,
+    }),
+    { service },
+  );
+  const retrievePayload = await responsePayload(retrieveResponse);
+  const retrieval = retrievePayload.data as BrainMemoryRetrieval;
+
+  assert.equal(retrieveResponse.status, 200);
+  assert.equal(retrieval.contextLight, false);
+  assert.ok(retrieval.results.some((result) => result.sourceRef.label === "Penny demo ChatGPT export"));
+  assert.ok(retrieval.results.some((result) => /coding prompt|acceptance tests|creativity/i.test(result.summary)));
 });
 
 test("Brain memory review can confirm, boost, weaken, and forget a memory", async () => {
