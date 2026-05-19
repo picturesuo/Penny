@@ -263,6 +263,213 @@ export const moveKindEnum = pgEnum("move_kind", [
 ]);
 export const artifactKindEnum = pgEnum("artifact_kind", ["idea_map", "challenge_brief", "idea_map_challenge_brief"]);
 
+export const brainMemorySources = pgTable(
+  "brain_memory_sources",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    kind: text("kind").notNull(),
+    label: text("label").notNull(),
+    privacy: jsonb("privacy").notNull().default({}),
+    permission: jsonb("permission").notNull().default({}),
+    textHash: text("text_hash").notNull(),
+    contentLength: integer("content_length").notNull(),
+    chunkCount: integer("chunk_count").notNull().default(0),
+    memoryNodeCount: integer("memory_node_count").notNull().default(0),
+    fileName: text("file_name"),
+    mimeType: text("mime_type"),
+    sourceUri: text("source_uri"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_memory_sources_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_memory_sources_kind_idx").on(table.kind),
+    index("brain_memory_sources_text_hash_idx").on(table.textHash),
+    index("brain_memory_sources_deleted_at_idx").on(table.deletedAt),
+    index("brain_memory_sources_updated_at_idx").on(table.updatedAt),
+    check("brain_memory_sources_kind_present", sql`length(trim(${table.kind})) > 0`),
+    check("brain_memory_sources_label_present", sql`length(trim(${table.label})) > 0`),
+    check("brain_memory_sources_hash_present", sql`length(trim(${table.textHash})) > 0`),
+    check("brain_memory_sources_content_length_nonnegative", sql`${table.contentLength} >= 0`),
+    check("brain_memory_sources_chunk_count_nonnegative", sql`${table.chunkCount} >= 0`),
+    check("brain_memory_sources_node_count_nonnegative", sql`${table.memoryNodeCount} >= 0`),
+  ],
+);
+
+export const brainMemorySourceChunks = pgTable(
+  "brain_memory_source_chunks",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => brainMemorySources.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    text: text("text").notNull(),
+    charStart: integer("char_start").notNull(),
+    charEnd: integer("char_end").notNull(),
+    tokenEstimate: integer("token_estimate").notNull(),
+    hash: text("hash").notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("brain_memory_chunks_source_index_idx").on(table.sourceId, table.chunkIndex),
+    index("brain_memory_chunks_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_memory_chunks_source_id_idx").on(table.sourceId),
+    index("brain_memory_chunks_hash_idx").on(table.hash),
+    index("brain_memory_chunks_deleted_at_idx").on(table.deletedAt),
+    check("brain_memory_chunks_text_present", sql`length(trim(${table.text})) > 0`),
+    check("brain_memory_chunks_hash_present", sql`length(trim(${table.hash})) > 0`),
+    check("brain_memory_chunks_index_nonnegative", sql`${table.chunkIndex} >= 0`),
+    check("brain_memory_chunks_start_nonnegative", sql`${table.charStart} >= 0`),
+    check("brain_memory_chunks_end_after_start", sql`${table.charEnd} >= ${table.charStart}`),
+    check("brain_memory_chunks_token_positive", sql`${table.tokenEstimate} > 0`),
+  ],
+);
+
+export const brainMemoryNodes = pgTable(
+  "brain_memory_nodes",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => brainMemorySources.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    text: text("text").notNull(),
+    chunkIds: jsonb("chunk_ids").$type<string[]>().notNull().default([]),
+    confidence: integer("confidence").notNull(),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    labels: jsonb("labels").$type<string[]>().notNull().default([]),
+    evidenceLevel: text("evidence_level").notNull().default("inferred"),
+    permission: jsonb("permission").notNull().default({}),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_memory_nodes_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_memory_nodes_source_id_idx").on(table.sourceId),
+    index("brain_memory_nodes_type_idx").on(table.type),
+    index("brain_memory_nodes_deleted_at_idx").on(table.deletedAt),
+    index("brain_memory_nodes_last_seen_at_idx").on(table.lastSeenAt),
+    check("brain_memory_nodes_type_present", sql`length(trim(${table.type})) > 0`),
+    check("brain_memory_nodes_title_present", sql`length(trim(${table.title})) > 0`),
+    check("brain_memory_nodes_summary_present", sql`length(trim(${table.summary})) > 0`),
+    check("brain_memory_nodes_text_present", sql`length(trim(${table.text})) > 0`),
+    check("brain_memory_nodes_confidence_range", sql`${table.confidence} >= 0 AND ${table.confidence} <= 100`),
+    check(
+      "brain_memory_nodes_evidence_level_valid",
+      sql`${table.evidenceLevel} IN ('user_confirmed', 'grounded', 'inferred')`,
+    ),
+  ],
+);
+
+export const brainMemoryEdges = pgTable(
+  "brain_memory_edges",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    kind: text("kind").notNull(),
+    fromNodeId: text("from_node_id")
+      .notNull()
+      .references(() => brainMemoryNodes.id, { onDelete: "cascade" }),
+    toNodeId: text("to_node_id")
+      .notNull()
+      .references(() => brainMemoryNodes.id, { onDelete: "cascade" }),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => brainMemorySources.id, { onDelete: "cascade" }),
+    weight: integer("weight").notNull().default(50),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_memory_edges_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_memory_edges_kind_idx").on(table.kind),
+    index("brain_memory_edges_from_node_idx").on(table.fromNodeId),
+    index("brain_memory_edges_to_node_idx").on(table.toNodeId),
+    index("brain_memory_edges_source_id_idx").on(table.sourceId),
+    index("brain_memory_edges_deleted_at_idx").on(table.deletedAt),
+    check("brain_memory_edges_kind_present", sql`length(trim(${table.kind})) > 0`),
+    check("brain_memory_edges_no_self_edge", sql`${table.fromNodeId} <> ${table.toNodeId}`),
+    check("brain_memory_edges_weight_range", sql`${table.weight} >= 0 AND ${table.weight} <= 100`),
+  ],
+);
+
+export const brainMemoryProfileSignals = pgTable(
+  "brain_memory_profile_signals",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    kind: text("kind").notNull(),
+    label: text("label").notNull(),
+    summary: text("summary").notNull(),
+    weight: integer("weight").notNull().default(50),
+    sourceNodeIds: jsonb("source_node_ids").$type<string[]>().notNull().default([]),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_memory_profile_signals_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_memory_profile_signals_kind_idx").on(table.kind),
+    index("brain_memory_profile_signals_deleted_at_idx").on(table.deletedAt),
+    index("brain_memory_profile_signals_updated_at_idx").on(table.updatedAt),
+    check("brain_memory_profile_signals_kind_present", sql`length(trim(${table.kind})) > 0`),
+    check("brain_memory_profile_signals_label_present", sql`length(trim(${table.label})) > 0`),
+    check("brain_memory_profile_signals_summary_present", sql`length(trim(${table.summary})) > 0`),
+    check("brain_memory_profile_signals_weight_range", sql`${table.weight} >= 0 AND ${table.weight} <= 100`),
+  ],
+);
+
+export const brainMemoryIngestionJobs = pgTable(
+  "brain_memory_ingestion_jobs",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    status: text("status").notNull(),
+    sourceId: text("source_id").references(() => brainMemorySources.id, { onDelete: "set null" }),
+    sourceImport: jsonb("source_import"),
+    errorMessages: jsonb("error_messages").$type<string[]>().notNull().default([]),
+    counts: jsonb("counts").notNull().default({}),
+    importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_memory_jobs_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_memory_jobs_status_idx").on(table.status),
+    index("brain_memory_jobs_source_id_idx").on(table.sourceId),
+    index("brain_memory_jobs_imported_at_idx").on(table.importedAt),
+    check("brain_memory_jobs_status_valid", sql`${table.status} IN ('completed', 'failed')`),
+  ],
+);
+
+export const brainMemoryRetrievalEvents = pgTable(
+  "brain_memory_retrieval_events",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    query: text("query").notNull(),
+    contextLight: boolean("context_light").notNull().default(false),
+    resultNodeIds: jsonb("result_node_ids").$type<string[]>().notNull().default([]),
+    resultSourceIds: jsonb("result_source_ids").$type<string[]>().notNull().default([]),
+    resultCount: integer("result_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_memory_retrieval_events_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_memory_retrieval_events_context_light_idx").on(table.contextLight),
+    index("brain_memory_retrieval_events_created_at_idx").on(table.createdAt),
+    check("brain_memory_retrieval_events_query_present", sql`length(trim(${table.query})) > 0`),
+    check("brain_memory_retrieval_events_result_count_nonnegative", sql`${table.resultCount} >= 0`),
+  ],
+);
+
 export const sessions = pgTable(
   "sessions",
   {
@@ -1275,6 +1482,13 @@ export const pennySchema = {
   brainObjects,
   brainEmbeddingObjectTypeEnum,
   brainEmbeddings,
+  brainMemoryEdges,
+  brainMemoryIngestionJobs,
+  brainMemoryNodes,
+  brainMemoryProfileSignals,
+  brainMemoryRetrievalEvents,
+  brainMemorySourceChunks,
+  brainMemorySources,
   brainNodeStatusEnum,
   brainNodeTypeEnum,
   brainNodes,
