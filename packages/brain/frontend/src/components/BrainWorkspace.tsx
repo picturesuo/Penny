@@ -2336,6 +2336,7 @@ export function BrainMemoryPanel({
         {profile?.profile.privacySafeSummary ??
           "No private user memory has been imported yet. Create will label suggestions context-light until sources are added."}
       </p>
+      {latestJob ? <BrainMemoryImportStatus job={latestJob} /> : null}
       <ol className="brain-first-run-steps" aria-label="Brain first-run flow">
         {firstRunSteps.map((step, index) => (
           <li key={step.label} className={`${step.done ? "is-done" : ""}${step.active ? " is-active" : ""}`.trim()}>
@@ -2452,6 +2453,23 @@ function BrainMemoryStatusPill({ status, latestJob }: { status: BrainMemoryStatu
   return <span className={`brain-memory-status is-${status}`}>{label}</span>;
 }
 
+function BrainMemoryImportStatus({ job }: { job: IngestionJob }) {
+  const failed = job.status === "failed";
+
+  return (
+    <div className={`brain-memory-import-status is-${job.status}`} aria-live="polite">
+      <strong>{failed ? "Last import failed" : "Last import completed"}</strong>
+      {failed ? (
+        <span>{job.errorMessages.join(" ") || "No usable text was imported."}</span>
+      ) : (
+        <span>
+          {job.counts.memoryNodes} memories from {job.counts.chunks} chunks · {job.sourceImport?.preview?.explanation ?? "Source parsed."}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function BrainMemorySourcesList({
   sources,
   disabled,
@@ -2477,6 +2495,17 @@ function BrainMemorySourcesList({
                   {source.kind} · {source.chunkCount} chunks · {source.memoryNodeCount} memories
                 </span>
                 <small>Private user memory · no global training · {formatDate(source.createdAt)}</small>
+                {source.preview ? (
+                  <div className="brain-memory-source-preview">
+                    <span>
+                      {formatLabel(source.preview.status)} · {source.preview.explanation}
+                    </span>
+                    {source.preview.excerpt ? <p>{truncateWords(source.preview.excerpt, 28)}</p> : null}
+                    {source.preview.warnings.length ? (
+                      <small>{source.preview.warnings.map((warning) => truncateWords(warning, 16)).join(" ")}</small>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <button
                 type="button"
