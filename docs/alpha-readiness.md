@@ -1,0 +1,137 @@
+# Private Alpha Readiness
+
+This is the current private-alpha operating checklist for Penny's Brain -> Create -> Export path.
+
+## Alpha Flow
+
+1. Open Brain.
+2. Import context in Second Brain memory:
+   - ChatGPT export ZIP.
+   - ChatGPT `conversations.json`.
+   - Claude JSON, CSV, markdown, or copied text.
+   - Plain text, markdown, CSV, copied docs text, copied canvas text.
+   - Already-extracted PDF text.
+3. Review the Brain profile:
+   - Confirm the source count and memory count.
+   - Read `Penny understood`.
+   - Mark memories correct, boost important memories, mark wrong memories, or forget memories.
+   - Confirm every memory shows source/evidence metadata and `no global training` copy.
+4. Start Create from Brain with `Use this Brain to create something`.
+5. Generate Create directions:
+   - Confirm five cards exist: Personal, Practical, Valuable, Critical, Weird.
+   - Check memory/source counts on cards.
+   - Open details to see why memories/sources were used.
+6. In dev/test only, run provider comparison:
+   - Compare deterministic vs model-backed/fallback cards.
+   - Inspect provider mode, schema validation, fallback reason, memory/source counts, verification scores, and prompt quality signals.
+7. Select multiple cards and add a judgment comment.
+8. Update the artifact.
+9. Export the coding-agent prompt.
+10. Confirm the export includes product goal, rough idea, user intent, personal context, source/memory evidence, selected option history, non-goals, UX/frontend/backend/data/privacy/verification requirements, implementation sequence, acceptance tests, do-not-break list, and definition of done.
+
+## Required Environment
+
+Local development:
+
+```sh
+DATABASE_URL=postgresql://127.0.0.1:5432/penny
+PENNY_AUTH_MODE=dev
+PENNY_CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://localhost:3000
+PENNY_CREATE_MODEL_BACKED=false
+```
+
+Private alpha or staging:
+
+```sh
+NODE_ENV=production
+DATABASE_URL=postgresql://<user>:<password>@<host>:5432/<database>?sslmode=require
+PENNY_AUTH_MODE=token
+PENNY_API_TOKEN=<long-random-token>
+PENNY_SESSION_SECRET=<long-random-secret>
+PENNY_CORS_ORIGINS=https://<alpha-host>
+PENNY_CREATE_MODEL_BACKED=false
+```
+
+Optional model-backed Create:
+
+```sh
+PENNY_CREATE_MODEL_BACKED=true
+XAI_API_KEY=<xai-key>
+XAI_CREATE_OPTION_MODEL=<optional-model-override>
+```
+
+`PENNY_CREATE_MODEL_BACKED` must stay false unless the model-backed path is intentionally being tested. When enabled, the provider uses `store: false`, strict local schema validation, deterministic fallback, and visible fallback/debug status.
+
+## Dev And Staging Flags
+
+- `PENNY_CREATE_MODEL_BACKED=true`: enables the xAI-backed Create option provider only when `XAI_API_KEY` is present.
+- `VITE_PENNY_CREATE_COMPARE=true`: exposes the Create comparison panel outside Vite dev/test if explicitly needed for a staging judge.
+- `PENNY_AUTO_MIGRATE=true`: runs Drizzle migrations at API startup. Default is enabled outside production and disabled in production unless set.
+- `PENNY_SKIP_DATABASE_PREP=true`: skips startup DB prep. Do not use for private alpha unless the deployment platform handles migrations and `DATABASE_URL` is still set.
+
+## Database Readiness
+
+Brain memory persistence is backed by the Drizzle schema and migrations. The alpha-critical Brain memory migration is `drizzle/0029_add_brain_memory_persistence.sql`.
+
+Private alpha must use Postgres. The API startup path requires `DATABASE_URL`; route-level Brain memory also refuses production in-memory fallback. In-memory Brain memory is for direct local dev/test only and is not durable.
+
+Run before deploy:
+
+```sh
+pnpm db:migrate
+pnpm test
+pnpm typecheck
+pnpm build
+```
+
+The Brain memory tables store scope columns on sources, chunks, nodes, edges, profile signals, ingestion jobs, and retrieval events. Route tests cover cross-user access attempts for jobs, profiles, retrieval, memory review, source deletion, Create memory retrieval, Create artifacts, judgments, option sets, and deleted-source Create behavior.
+
+## Privacy Checks
+
+- Imported sources are private to the authenticated Penny scope.
+- Source permissions default to `visibility=private`, `trainingUse=false`, and allowed uses `private_memory` plus `create_retrieval`.
+- Retrieval returns source references and memory references so the user can see why a memory was used.
+- Deleting a source removes related chunks, memory nodes, edges, and Create retrieval grounding.
+- Create must not invent Gmail, Slack, messages, OAuth, hidden memory, global training, or fake source claims.
+- Exported prompts must repeat the source/memory evidence actually used and must not imply broader ingestion.
+
+## Error And Empty States
+
+- No memory: Brain says no private user memory has been imported, and Create labels the run context-light.
+- Import failed: Brain shows the last failed import and the parser guidance.
+- Unsupported file: ZIP/PDF errors explain which text forms are supported.
+- Model-backed failed: Create shows deterministic fallback, schema status, schema errors, and fallback reason.
+- Deleted source: Brain shows that related source-backed memories were removed from retrieval and Create.
+- No relevant memory found: Create cards and details say context-light and only the rough idea is grounded.
+- Export failed: Create shows a retryable failure panel and keeps the current artifact visible.
+
+## Unsupported Imports
+
+Unsupported for private alpha:
+
+- Gmail, Slack, iMessage/messages, or broad OAuth connectors.
+- Raw scanned PDF/OCR.
+- Full document-ingestion pipelines.
+- Background global memory import.
+- Any source that cannot provide readable text or explicit user permission.
+
+For PDFs, paste selectable text or run OCR outside Penny and import the extracted text.
+
+## Known Limitations
+
+- Create persistence is still in-process for option sets, judgments, and artifacts; tests scope it by user/workspace, but durable Create tables are not yet implemented.
+- The comparison panel is a dev/test judge tool, not a normal user feature.
+- Model-backed Create is opt-in and should remain off for first private-alpha runs unless actively evaluated.
+- Brain import uses local parsing heuristics and strict file-size limits; very large exports should be reduced before import.
+- Search is Penny-native lexical/graph-oriented; embeddings and broad semantic memory remain post-MVP.
+
+## Acceptance Gate
+
+The private-alpha path is acceptable only when:
+
+- A user can complete Brain import -> profile review -> Start Create -> options -> judgment -> export.
+- Memory/source provenance is visible before export.
+- Cross-user and deleted-source leakage tests pass.
+- Production cannot silently use in-memory Brain memory.
+- Model-backed failures safely fall back and are visible.
+- `pnpm test`, `pnpm typecheck`, and `pnpm build` pass.
