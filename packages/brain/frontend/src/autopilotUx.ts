@@ -1,6 +1,6 @@
 import type { AutopilotSuggestion, AutopilotTickData, SessionCockpitData } from "./types/brain";
 
-export type PennyMode = "Learn" | "Brain" | "Check";
+export type PennyMode = "Learn" | "Brain" | "Create";
 
 export type AutopilotStartIntent =
   | {
@@ -110,12 +110,12 @@ export function modeForAutopilotCandidate(candidate: AutopilotSuggestion): Penny
     candidate.mode === "challenge" ||
     candidate.mode === "verify"
   ) {
-    return "Check";
+    return "Create";
   }
 
   if (candidate.action === "learn" || candidate.action === "clarify" || candidate.mode === "learn") {
     return "Learn";
   }
 
-  return "Check";
+  return "Create";
 }
