@@ -50,6 +50,8 @@ test("POST /api/brain/import stores private source chunks, memory nodes, edges, 
   assert.match(profile.profile.privacySafeSummary, /no private global training is claimed or enabled/i);
   assert.ok(profile.profile.recurringInterests.length >= 1);
   assert.ok(profile.profile.commonFrustrations.length >= 1);
+  assert.ok(profile.profile.preferredBuildStyle.length >= 1);
+  assert.ok(profile.profile.repeatedRejectedDirections.length >= 1);
   assert.ok(hasNodeType(profile, "goal"));
   assert.ok(hasNodeType(profile, "preference"));
   assert.ok(hasNodeType(profile, "frustration"));
@@ -241,6 +243,8 @@ test("POST /api/brain/import turns the Penny demo ChatGPT fixture into a useful 
   assert.ok(profile.profile.activeIdeaClusters.length >= 1);
   assert.ok(profile.profile.tasteSignals.length >= 1);
   assert.ok(profile.profile.commonFrustrations.length >= 1);
+  assert.ok(profile.profile.preferredBuildStyle.length >= 1);
+  assert.ok(profile.profile.repeatedRejectedDirections.some((signal) => /broad document ingestion|avoid|document/i.test(`${signal.label} ${signal.summary}`)));
   assert.ok(profile.recentMemoryNodes.some((node) => node.type === "preference" && /small reversible builds/i.test(node.summary)));
   assert.ok(profile.recentMemoryNodes.some((node) => node.type === "rejected_direction" && /broad document ingestion/i.test(node.summary)));
 
