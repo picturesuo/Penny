@@ -211,8 +211,13 @@ test("POST /api/create/export-coding-prompt returns a coding-agent ready prompt"
   assert.equal(exported.format, "coding_agent_prompt");
   assert.deepEqual(exported.targets, ["Codex", "Claude Code", "Cursor"]);
   assert.match(exported.text, /## Product Goal/);
+  assert.match(exported.text, /## Rough User Idea/);
+  assert.match(exported.text, /Create a compact frontend and backend kernel/i);
+  assert.match(exported.text, /## Non-Goals/);
+  assert.match(exported.text, /Do not build broad OAuth connectors/i);
   assert.match(exported.text, /## User Intent/);
   assert.match(exported.text, /## Personal Context Used/);
+  assert.match(exported.text, /## Source \/ Memory Evidence/);
   assert.match(exported.text, /Preference: Compact route contracts/);
   assert.match(exported.text, /Founder notes/);
   assert.match(exported.text, /## Selected Option History/);
