@@ -9,6 +9,7 @@ import {
   type CreateNextResult,
   type PromptExport,
 } from "./create-route.ts";
+import { handleBrainImportRequest } from "./brain-memory-route.ts";
 
 test("POST /api/create/next generates the five required Create directions", async () => {
   const service = createInMemoryCreateRouteService();
@@ -39,11 +40,54 @@ test("POST /api/create/next generates the five required Create directions", asyn
     assert.ok(option.title);
     assert.ok(option.oneLine);
     assert.ok(option.rationale);
+    assert.match(option.rationale, /Context-light/i);
     assert.ok(option.nextMove);
     assert.ok(option.risks.length >= 1);
     assert.ok(option.sourcesUsed.some((source) => source.kind === "rough_idea"));
     assert.equal(typeof option.scores.intentMatch, "number");
   }
+});
+
+test("POST /api/create/next uses retrieved Brain memory and source refs when imports exist", async () => {
+  const headers = requestHeaders({
+    "x-user-id": "create-memory-user",
+    "x-workspace-id": "create-memory-workspace",
+    "x-project-id": "create-memory-project",
+    "x-sphere-id": "create-memory-sphere",
+  });
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest(
+      "http://localhost/api/brain/import",
+      {
+        kind: "text",
+        label: "Founder workflow notes",
+        content:
+          "Project: Penny should help founders shape startup ideas without a generic chatbot sidebar. I prefer small reversible builds with explicit source provenance. Avoid fake connector claims before the MVP loop works.",
+      },
+      headers,
+    ),
+  );
+  const service = createInMemoryCreateRouteService();
+  const response = await handleCreateNextRequest(
+    jsonRequest(
+      "http://localhost/api/create/next",
+      {
+        rawIdea: "Build Penny Create for founders who need memory-grounded startup idea options without generic chatbot behavior.",
+      },
+      headers,
+    ),
+    { service },
+  );
+  const payload = await responsePayload(response);
+  const data = payload.data as CreateNextResult;
+
+  assert.equal(importResponse.status, 200);
+  assert.equal(response.status, 200);
+  assert.ok(data.optionSet.memoryUsed.some((memory) => /Founder|Penny|Preference|Project/i.test(memory.label)));
+  assert.ok(data.optionSet.sourcesUsed.some((source) => source.label === "Founder workflow notes"));
+  assert.ok(data.optionSet.options.some((option) => option.memoryUsed.length >= 1));
+  assert.ok(data.optionSet.options.every((option) => option.sourcesUsed.some((source) => source.label === "Founder workflow notes")));
+  assert.ok(data.optionSet.options.every((option) => !/Context-light/i.test(option.rationale)));
 });
 
 test("POST /api/create/next records multi-select judgment and updates the artifact", async () => {
@@ -139,18 +183,23 @@ function sectionBody(artifact: CodingPromptArtifact, title: string): string {
   return artifact.sections.find((section) => section.title === title)?.body ?? "";
 }
 
-function jsonRequest(url: string, body: unknown): Request {
+function jsonRequest(url: string, body: unknown, headers: HeadersInit = requestHeaders()): Request {
   return new Request(url, {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-user-id": "test-user",
-      "x-workspace-id": "test-workspace",
-      "x-project-id": "test-project",
-      "x-sphere-id": "test-sphere",
-    },
+    headers,
     body: JSON.stringify(body),
   });
+}
+
+function requestHeaders(overrides: Record<string, string> = {}): HeadersInit {
+  return {
+    "content-type": "application/json",
+    "x-user-id": "test-user",
+    "x-workspace-id": "test-workspace",
+    "x-project-id": "test-project",
+    "x-sphere-id": "test-sphere",
+    ...overrides,
+  };
 }
 
 async function responsePayload(response: Response): Promise<any> {
