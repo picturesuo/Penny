@@ -53,6 +53,7 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
       profile: memoryProfile(),
       status: "ready",
       error: null,
+      notice: "Source deleted. Related chunks and source-backed memories were removed from retrieval and Create.",
       disabled: false,
       onImport: async () => undefined,
       onDemoFixtureImport: async () => undefined,
@@ -83,6 +84,8 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Reinforced/);
   assert.match(markup, /Mark Preference - Small reversible builds correct/);
   assert.match(markup, /Supports ChatGPT export ZIPs/i);
+  assert.match(markup, /Memory updated/);
+  assert.match(markup, /Source deleted\. Related chunks and source-backed memories were removed from retrieval and Create/);
   assert.match(markup, /Delete Founder workflow notes/);
   assert.match(markup, /Use this Brain to create something/);
 });

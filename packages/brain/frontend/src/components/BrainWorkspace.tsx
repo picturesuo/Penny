@@ -168,6 +168,7 @@ export function BrainWorkspace({
   const [memoryProfile, setMemoryProfile] = useState<BrainMemoryProfileData | null>(null);
   const [memoryStatus, setMemoryStatus] = useState<BrainMemoryStatus>("idle");
   const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [memoryNotice, setMemoryNotice] = useState<string | null>(null);
   const [memoryReviewingId, setMemoryReviewingId] = useState<string | null>(null);
   const quickNotes = useMemo(() => [...recents, ...archivedRecents], [recents, archivedRecents]);
   const selectedQuickNote = quickNotes.find((recent) => recent.id === selectedQuickNoteId) ?? null;
@@ -274,6 +275,7 @@ export function BrainWorkspace({
   async function handleMemoryImport(input: BrainImportInput) {
     setMemoryStatus("importing");
     setMemoryError(null);
+    setMemoryNotice(null);
 
     try {
       const response = await importBrainSource(input);
@@ -286,6 +288,7 @@ export function BrainWorkspace({
       }
 
       setMemoryStatus("ready");
+      setMemoryNotice("Import completed. Review the memories below before starting Create.");
     } catch (error) {
       setMemoryStatus("error");
       setMemoryError(error instanceof Error ? error.message : String(error));
@@ -295,6 +298,7 @@ export function BrainWorkspace({
   async function handleMemoryDemoFixtureImport() {
     setMemoryStatus("importing");
     setMemoryError(null);
+    setMemoryNotice(null);
 
     try {
       const fixture = await fetchBrainDemoFixtureImport();
@@ -308,6 +312,7 @@ export function BrainWorkspace({
       }
 
       setMemoryStatus("ready");
+      setMemoryNotice("Demo fixture imported. Review the source-backed memories below before starting Create.");
     } catch (error) {
       setMemoryStatus("error");
       setMemoryError(error instanceof Error ? error.message : String(error));
@@ -317,11 +322,13 @@ export function BrainWorkspace({
   async function handleMemorySourceDelete(sourceId: string) {
     setMemoryStatus("deleting");
     setMemoryError(null);
+    setMemoryNotice(null);
 
     try {
       const response = await deleteBrainSource(sourceId);
       setMemoryProfile(response.data.profile);
       setMemoryStatus("ready");
+      setMemoryNotice("Source deleted. Related chunks and source-backed memories were removed from retrieval and Create.");
     } catch (error) {
       setMemoryStatus("error");
       setMemoryError(error instanceof Error ? error.message : String(error));
@@ -331,11 +338,13 @@ export function BrainWorkspace({
   async function handleMemoryReview(nodeId: string, action: MemoryReviewAction) {
     setMemoryReviewingId(nodeId);
     setMemoryError(null);
+    setMemoryNotice(null);
 
     try {
       const response = await reviewBrainMemory(nodeId, { action });
       setMemoryProfile(response.data.profile);
       setMemoryStatus("ready");
+      setMemoryNotice(memoryReviewNotice(action));
     } catch (error) {
       setMemoryStatus("error");
       setMemoryError(error instanceof Error ? error.message : String(error));
@@ -386,6 +395,7 @@ export function BrainWorkspace({
           memoryProfile={memoryProfile}
           memoryStatus={memoryStatus}
           memoryError={memoryError}
+          memoryNotice={memoryNotice}
           memoryReviewingId={memoryReviewingId}
           disabled={isThinking}
           onCreateDocument={onSeed}
@@ -2091,6 +2101,7 @@ function BrainDocumentsIndex({
   memoryProfile,
   memoryStatus,
   memoryError,
+  memoryNotice,
   memoryReviewingId,
   disabled,
   onCreateDocument,
@@ -2105,6 +2116,7 @@ function BrainDocumentsIndex({
   memoryProfile: BrainMemoryProfileData | null;
   memoryStatus: BrainMemoryStatus;
   memoryError: string | null;
+  memoryNotice: string | null;
   memoryReviewingId: string | null;
   disabled: boolean;
   onCreateDocument: (rawIdea: string) => Promise<void>;
@@ -2133,6 +2145,7 @@ function BrainDocumentsIndex({
       profile={memoryProfile}
       status={memoryStatus}
       error={memoryError}
+      notice={memoryNotice}
       reviewingId={memoryReviewingId}
       disabled={disabled}
       onImport={onMemoryImport}
@@ -2242,6 +2255,7 @@ export function BrainMemoryPanel({
   profile,
   status,
   error,
+  notice,
   reviewingId,
   disabled,
   onImport,
@@ -2254,6 +2268,7 @@ export function BrainMemoryPanel({
   profile: BrainMemoryProfileData | null;
   status: BrainMemoryStatus;
   error: string | null;
+  notice?: string | null;
   reviewingId?: string | null;
   disabled: boolean;
   onImport: (input: BrainImportInput) => Promise<void>;
@@ -2348,6 +2363,7 @@ export function BrainMemoryPanel({
           "No private user memory has been imported yet. Create will label suggestions context-light until sources are added."}
       </p>
       {latestJob ? <BrainMemoryImportStatus job={latestJob} /> : null}
+      {notice ? <BrainMemoryNotice message={notice} /> : null}
       <ol className="brain-first-run-steps" aria-label="Brain first-run flow">
         {firstRunSteps.map((step, index) => (
           <li key={step.label} className={`${step.done ? "is-done" : ""}${step.active ? " is-active" : ""}`.trim()}>
@@ -2448,6 +2464,15 @@ export function BrainMemoryPanel({
   );
 }
 
+function BrainMemoryNotice({ message }: { message: string }) {
+  return (
+    <div className="brain-memory-import-status is-completed" aria-live="polite">
+      <strong>Memory updated</strong>
+      <span>{message}</span>
+    </div>
+  );
+}
+
 function BrainMemoryStatusPill({ status, latestJob }: { status: BrainMemoryStatus; latestJob: IngestionJob | null }) {
   const label =
     status === "loading"
@@ -2467,6 +2492,19 @@ function BrainMemoryStatusPill({ status, latestJob }: { status: BrainMemoryStatu
               : "Context-light";
 
   return <span className={`brain-memory-status is-${status}`}>{label}</span>;
+}
+
+function memoryReviewNotice(action: MemoryReviewAction): string {
+  switch (action) {
+    case "correct":
+      return "Memory marked correct. Penny will treat it as confirmed personal context.";
+    case "boost":
+      return "Memory boosted. Penny will rank it higher when it matches Create requests.";
+    case "wrong":
+      return "Memory marked wrong. Penny will keep it out of normal retrieval unless reviewed again.";
+    case "forget":
+      return "Memory forgotten. It was removed from retrieval and Create grounding.";
+  }
 }
 
 function BrainMemoryImportStatus({ job }: { job: IngestionJob }) {
