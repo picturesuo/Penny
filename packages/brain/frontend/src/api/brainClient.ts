@@ -23,6 +23,9 @@ import type {
   CheckSessionResponse,
   CheckSprintInput,
   CheckSprintResponse,
+  CreateNextInput,
+  CreateNextResponse,
+  ExportCodingPromptInput,
   InlineLearnOutput,
   InlineLearnResponse,
   InlineLearnSaveResponse,
@@ -33,6 +36,7 @@ import type {
   LearnSessionResponse,
   LearnPageV2,
   ManualNodeSelectionResponse,
+  PromptExportResponse,
   RespondToChallengeResponse,
   SaveBrainObjectResponse,
   SeedBrainResponse,
@@ -131,6 +135,38 @@ export async function createCheckSession(input: CheckCreateSessionInput): Promis
   }
 
   return payload as CheckSessionResponse;
+}
+
+export async function createNext(input: CreateNextInput): Promise<CreateNextResponse> {
+  const response = await fetch("/api/create/next", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/create/next failed with ${response.status}.`));
+  }
+
+  return payload as CreateNextResponse;
+}
+
+export async function exportCodingPrompt(input: ExportCodingPromptInput): Promise<PromptExportResponse> {
+  const response = await fetch("/api/create/export-coding-prompt", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/create/export-coding-prompt failed with ${response.status}.`));
+  }
+
+  return payload as PromptExportResponse;
 }
 
 export async function fetchCheckSession(sessionId: string): Promise<CheckSessionResponse> {
