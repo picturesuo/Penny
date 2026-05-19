@@ -878,10 +878,19 @@ function buildPromptText(artifact: CodingPromptArtifact): string {
     "## Product Goal",
     section("Product goal"),
     "",
+    "## Rough User Idea",
+    artifact.rawIdea,
+    "",
+    "## Non-Goals",
+    buildNonGoalsText(artifact),
+    "",
     "## User Intent",
     mainUserIntent(userIntent),
     "",
     "## Personal Context Used",
+    personalContext,
+    "",
+    "## Source / Memory Evidence",
     personalContext,
     "",
     "## Selected Option History",
@@ -925,6 +934,15 @@ function buildPromptText(artifact: CodingPromptArtifact): string {
     "",
     "## Definition of Done",
     "Create is accessible; rough idea -> five directions -> multi-select judgment/comment -> JudgmentEvent -> updated CodingPromptArtifact -> VerificationSummary -> exported prompt works end to end; Brain and Learn remain intact; build, typecheck, and tests pass.",
+  ].join("\n");
+}
+
+function buildNonGoalsText(_artifact: CodingPromptArtifact): string {
+  return [
+    "- Do not build broad OAuth connectors, Gmail/Slack/messages ingestion, or background global memory import for this Create slice.",
+    "- Do not turn Create into a generic chatbot sidebar; every AI output must feed the typed option, judgment, artifact, verification, and export loop.",
+    "- Do not invent source, memory, connector, or global-training claims. Use only rough idea, session context, and provided Brain refs.",
+    "- Do not redesign Brain, Learn, navigation, or unrelated data models while implementing the requested Create flow.",
   ].join("\n");
 }
 
