@@ -2127,6 +2127,21 @@ function BrainDocumentsIndex({
 
     return searchDocumentRows(documents, normalizedQuery);
   }, [documents, normalizedQuery]);
+  const memoryFirstRunActive = (memoryProfile?.stats.sourceCount ?? 0) === 0;
+  const memoryPanel = (
+    <BrainMemoryPanel
+      profile={memoryProfile}
+      status={memoryStatus}
+      error={memoryError}
+      reviewingId={memoryReviewingId}
+      disabled={disabled}
+      onImport={onMemoryImport}
+      onDemoFixtureImport={onMemoryDemoFixtureImport}
+      onDeleteSource={onMemorySourceDelete}
+      onReviewMemory={onMemoryReview}
+      onStartCreateWithBrain={onStartCreateWithBrain}
+    />
+  );
 
   async function handleCreateDocument(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2148,6 +2163,7 @@ function BrainDocumentsIndex({
           <h1>Documents</h1>
         </div>
       </div>
+      {memoryFirstRunActive ? memoryPanel : null}
       <form className="brain-document-seed" onSubmit={handleCreateDocument}>
         <label htmlFor="brainDocumentSeed">Start a document</label>
         <div className="brain-document-seed-row">
@@ -2165,18 +2181,7 @@ function BrainDocumentsIndex({
           </button>
         </div>
       </form>
-      <BrainMemoryPanel
-        profile={memoryProfile}
-        status={memoryStatus}
-        error={memoryError}
-        reviewingId={memoryReviewingId}
-        disabled={disabled}
-        onImport={onMemoryImport}
-        onDemoFixtureImport={onMemoryDemoFixtureImport}
-        onDeleteSource={onMemorySourceDelete}
-        onReviewMemory={onMemoryReview}
-        onStartCreateWithBrain={onStartCreateWithBrain}
-      />
+      {memoryFirstRunActive ? null : memoryPanel}
       <section className="brain-search-panel" aria-label="Search through your thinking">
         <label className="sr-only" htmlFor="brainDocumentSearch">
           Search through your thinking
