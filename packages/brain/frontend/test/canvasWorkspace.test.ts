@@ -60,7 +60,7 @@ test("CanvasWorkspace renders nodes, connectors, selection, and action menu", ()
   assert.match(markup, /Canvas node actions/);
   assert.match(markup, /Open in Learn/);
   assert.match(markup, /Learn/);
-  assert.match(markup, /Check/);
+  assert.match(markup, /Create/);
   assert.match(markup, /Verify/);
   assert.match(markup, /Save/);
   assert.match(markup, /Related/);
