@@ -2315,7 +2315,13 @@ export function BrainMemoryPanel({
 
     setKind(nextKind);
 
-    if (nextKind === "zip" || nextKind === "pdf") {
+    if (nextKind === "zip") {
+      setDraft(arrayBufferToBase64(await file.arrayBuffer()));
+      event.target.value = "";
+      return;
+    }
+
+    if (nextKind === "pdf") {
       setDraft("");
       event.target.value = "";
       return;
@@ -2351,8 +2357,8 @@ export function BrainMemoryPanel({
         ))}
       </ol>
       <p className="brain-memory-import-hint">
-        Supports ChatGPT conversations.json, extracted ChatGPT files, Claude JSON/CSV/text, notes, markdown, CSV, and already-extracted PDF
-        text. ZIP parsing is not implemented yet; unzip exports and upload conversations.json.
+        Supports ChatGPT export ZIPs, conversations.json, extracted ChatGPT files, Claude JSON/CSV/text, notes, markdown, CSV, and
+        already-extracted PDF text.
       </p>
       {error ? <p className="brain-memory-error">{error}</p> : null}
       {demoFixtureVisible && onDemoFixtureImport ? (
@@ -2397,9 +2403,14 @@ export function BrainMemoryPanel({
           </label>
         </div>
         <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          value={kind === "zip" && fileName && draft ? `${fileName} is ready for import. Penny will extract conversations.json or readable text files.` : draft}
+          onChange={(event) => {
+            if (kind !== "zip") {
+              setDraft(event.target.value);
+            }
+          }}
           placeholder="Paste notes, markdown, ChatGPT conversations.json, Claude JSON/CSV/text, docs text, or canvas notes."
+          readOnly={kind === "zip" && Boolean(fileName && draft)}
           rows={4}
         />
         {importHint ? <p className="brain-memory-import-hint">{importHint}</p> : null}
@@ -2728,7 +2739,7 @@ function confidenceLabel(confidence: number): string {
 
 function importHintForKind(kind: SourceImportKind): string | null {
   if (kind === "zip") {
-    return "ZIP parsing is not implemented yet. Unzip the ChatGPT export locally, then choose or paste conversations.json.";
+    return "ZIP import will extract ChatGPT conversations.json first, then Claude JSON/CSV, markdown, or text files when present.";
   }
 
   if (kind === "pdf") {
@@ -2736,7 +2747,7 @@ function importHintForKind(kind: SourceImportKind): string | null {
   }
 
   if (kind === "chatgpt_export") {
-    return "For ChatGPT exports, upload the extracted conversations.json file from the export folder.";
+    return "For ChatGPT exports, upload conversations.json or choose the export ZIP with kind set to ZIP export.";
   }
 
   if (kind === "claude_export") {
@@ -2795,6 +2806,17 @@ function kindFromFile(file: File): SourceImportKind {
   }
 
   return "text";
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+
+  for (let index = 0; index < bytes.length; index += 1) {
+    binary += String.fromCharCode(bytes[index] ?? 0);
+  }
+
+  return btoa(binary);
 }
 
 interface SearchResult {
