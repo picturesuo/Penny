@@ -168,6 +168,68 @@ test("POST /api/brain/import follows realistic ChatGPT current_node branches and
   assert.ok(retrieval.results.some((result) => /source previews|global training/i.test(result.summary)));
 });
 
+test("POST /api/brain/import extracts conversations.json from ChatGPT ZIP exports", async () => {
+  const service = createInMemoryBrainMemoryService();
+  const archive = zipBase64({
+    "README.txt": "Your ChatGPT export contains account metadata.",
+    "conversations.json": JSON.stringify(chatGptExportFixture()),
+  });
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "zip",
+      label: "ChatGPT ZIP export",
+      fileName: "chatgpt-export.zip",
+      mimeType: "application/zip",
+      content: archive,
+    }),
+    { service },
+  );
+  const importPayload = await responsePayload(importResponse);
+  const job = importPayload.data.job as IngestionJob;
+  const profile = importPayload.data.profile as BrainMemoryProfile;
+
+  assert.equal(importResponse.status, 200);
+  assert.equal(job.status, "completed");
+  assert.equal(profile.sources[0]?.kind, "zip");
+  assert.equal(profile.sources[0]?.privacy.trainingUse, false);
+  assert.match(profile.sources[0]?.preview?.explanation ?? "", /ZIP archive|conversations\.json/i);
+  assert.ok(profile.recentMemoryNodes.some((node) => /generic chatbot sidebar|thinking graph|rejected directions/i.test(node.summary)));
+
+  const retrieveResponse = await handleBrainRetrieveRequest(
+    jsonRequest("http://localhost/api/brain/retrieve", {
+      query: "generic chatbot sidebars source-backed",
+      limit: 5,
+    }),
+    { service },
+  );
+  const retrievePayload = await responsePayload(retrieveResponse);
+  const retrieval = retrievePayload.data as BrainMemoryRetrieval;
+
+  assert.equal(retrieveResponse.status, 200);
+  assert.equal(retrieval.contextLight, false);
+  assert.ok(retrieval.results.every((result) => result.permission.trainingUse === false));
+  assert.ok(retrieval.results.some((result) => result.sourceRef.label === "ChatGPT ZIP export"));
+});
+
+test("POST /api/brain/import returns guidance when ZIP has no readable export text", async () => {
+  const service = createInMemoryBrainMemoryService();
+  const response = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "zip",
+      label: "Unsupported ZIP",
+      fileName: "images.zip",
+      content: zipBase64({ "images/screenshot.bin": "not readable text" }),
+    }),
+    { service },
+  );
+  const payload = await responsePayload(response);
+  const job = payload.data.job as IngestionJob;
+
+  assert.equal(response.status, 200);
+  assert.equal(job.status, "failed");
+  assert.match(job.errorMessages.join(" "), /conversations\.json|markdown|text files/i);
+});
+
 test("POST /api/brain/import parses Claude export chats and message content arrays", async () => {
   const service = createInMemoryBrainMemoryService();
   const importResponse = await handleBrainImportRequest(
@@ -536,6 +598,62 @@ function claudeExportFixture() {
 
 function hasNodeType(profile: BrainMemoryProfile, type: MemoryNodeType): boolean {
   return profile.recentMemoryNodes.some((node) => node.type === type);
+}
+
+function zipBase64(entries: Record<string, string>): string {
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let offset = 0;
+
+  for (const [name, text] of Object.entries(entries)) {
+    const nameBuffer = Buffer.from(name, "utf8");
+    const data = Buffer.from(text, "utf8");
+    const localHeader = Buffer.alloc(30);
+
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(0, 6);
+    localHeader.writeUInt16LE(0, 8);
+    localHeader.writeUInt32LE(0, 10);
+    localHeader.writeUInt32LE(0, 14);
+    localHeader.writeUInt32LE(data.length, 18);
+    localHeader.writeUInt32LE(data.length, 22);
+    localHeader.writeUInt16LE(nameBuffer.length, 26);
+    localHeader.writeUInt16LE(0, 28);
+
+    localParts.push(localHeader, nameBuffer, data);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0, 8);
+    centralHeader.writeUInt16LE(0, 10);
+    centralHeader.writeUInt32LE(0, 12);
+    centralHeader.writeUInt32LE(0, 16);
+    centralHeader.writeUInt32LE(data.length, 20);
+    centralHeader.writeUInt32LE(data.length, 24);
+    centralHeader.writeUInt16LE(nameBuffer.length, 28);
+    centralHeader.writeUInt16LE(0, 30);
+    centralHeader.writeUInt16LE(0, 32);
+    centralHeader.writeUInt32LE(0, 34);
+    centralHeader.writeUInt32LE(0, 38);
+    centralHeader.writeUInt32LE(offset, 42);
+    centralParts.push(centralHeader, nameBuffer);
+
+    offset += localHeader.length + nameBuffer.length + data.length;
+  }
+
+  const centralDirectory = Buffer.concat(centralParts);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(Object.keys(entries).length, 8);
+  end.writeUInt16LE(Object.keys(entries).length, 10);
+  end.writeUInt32LE(centralDirectory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  end.writeUInt16LE(0, 20);
+
+  return Buffer.concat([...localParts, centralDirectory, end]).toString("base64");
 }
 
 function jsonRequest(url: string, body: unknown): Request {
