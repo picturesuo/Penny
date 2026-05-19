@@ -7,8 +7,10 @@ import {
   createChallengeBrief,
   createCheckCycle,
   createCheckSession,
+  createNext,
   createLearnSession,
   decideVerifyConfidence,
+  exportCodingPrompt,
   fetchBrainHybridSearch,
   fetchBrainRecents,
   fetchCheckSession,
@@ -203,6 +205,109 @@ test("frontend brain client uses Check V2 session, cycle, commit, sprint, node, 
     });
     assert.equal(calls[6]?.url, `/api/check/session/${sessionId}/save-to-brain`);
     assert.deepEqual(calls[6]?.body, {});
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("frontend brain client uses Create next and coding prompt export routes", async () => {
+  const sessionId = uuidAt(101);
+  const optionSetId = "create-options-test";
+  const artifact = createArtifactPayload(sessionId);
+  const optionSet = createOptionSetPayload(sessionId, optionSetId);
+  const verification = {
+    id: "verification-test",
+    artifactId: artifact.id,
+    createdAt: "2026-05-05T12:00:00.000Z",
+    verdict: "ready",
+    checks: [
+      { key: "intent_match", label: "Intent match", status: "pass", summary: "Intent is visible." },
+      { key: "buildability", label: "Buildability", status: "pass", summary: "Buildable route and UI." },
+      { key: "source_context_grounding", label: "Source/context grounding", status: "pass", summary: "Grounded in rough idea." },
+      { key: "non_generic", label: "Not a GPT wrapper", status: "pass", summary: "Records judgment." },
+      { key: "missing_info", label: "Missing info", status: "pass", summary: "No blockers." },
+      { key: "risks", label: "Risks", status: "pass", summary: "Risks listed." },
+    ],
+    missingInfo: [],
+    risks: [],
+  };
+  const judgmentEvent = {
+    id: "judgment-test",
+    projectId: "project-test",
+    sessionId,
+    optionSetId,
+    selectedOptionIds: [optionSet.options[0].id, optionSet.options[3].id],
+    userComment: "Make the selected cards visibly update the artifact.",
+    inferredSignals: ["selected_personal", "selected_critical"],
+    artifactDelta: {
+      id: "delta-test",
+      updatedSectionIds: ["section-user-intent"],
+      selectedOptionIds: [optionSet.options[0].id, optionSet.options[3].id],
+      summary: "Updated artifact.",
+      createdAt: "2026-05-05T12:00:00.000Z",
+    },
+    createdAt: "2026-05-05T12:00:00.000Z",
+  };
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse({
+      sourceOfTruth: "create_options_judgments_artifacts_verification",
+      optionSet,
+      artifact,
+      verification,
+      judgmentEvent,
+      exportReady: true,
+    }),
+    jsonResponse({
+      export: {
+        id: "prompt-export-test",
+        artifactId: artifact.id,
+        format: "coding_agent_prompt",
+        targets: ["Codex", "Claude Code", "Cursor"],
+        text: "# Create prompt\n\n## Goal\nBuild Create.",
+        fileName: "create-prompt.md",
+        createdAt: "2026-05-05T12:00:01.000Z",
+      },
+    }),
+  ]);
+
+  try {
+    const next = await createNext({
+      rawIdea: "Build Penny Create.",
+      projectId: "project-test",
+      sessionId,
+      optionSetId,
+      selectedOptionIds: [optionSet.options[0].id, optionSet.options[3].id],
+      userComment: "Make the selected cards visibly update the artifact.",
+      artifact,
+    });
+    const exported = await exportCodingPrompt({
+      artifact: next.data.artifact,
+      verification: next.data.verification,
+      judgmentEvent: next.data.judgmentEvent,
+    });
+
+    assert.equal(next.data.optionSet.options.length, 5);
+    assert.equal(next.data.judgmentEvent?.userComment, "Make the selected cards visibly update the artifact.");
+    assert.equal(exported.data.export.format, "coding_agent_prompt");
+    assert.equal(calls[0]?.url, "/api/create/next");
+    assert.equal(calls[0]?.method, "POST");
+    assert.deepEqual(calls[0]?.body, {
+      rawIdea: "Build Penny Create.",
+      projectId: "project-test",
+      sessionId,
+      optionSetId,
+      selectedOptionIds: [optionSet.options[0].id, optionSet.options[3].id],
+      userComment: "Make the selected cards visibly update the artifact.",
+      artifact,
+    });
+    assert.equal(calls[1]?.url, "/api/create/export-coding-prompt");
+    assert.equal(calls[1]?.method, "POST");
+    assert.deepEqual(calls[1]?.body, {
+      artifact,
+      verification,
+      judgmentEvent,
+    });
   } finally {
     restoreFetch();
   }
@@ -1012,6 +1117,85 @@ function checkSessionPayload(sessionId: string, cycleId: string, recommendationI
     breakthroughs: [],
     savedBrainObject: null,
     createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function createOptionSetPayload(sessionId: string, optionSetId: string) {
+  const now = "2026-05-05T12:00:00.000Z";
+  const source = {
+    id: "source-rough-idea",
+    label: "Rough idea",
+    kind: "rough_idea",
+    excerpt: "Build Penny Create.",
+  };
+  const lenses = ["Personal", "Practical", "Valuable", "Critical", "Weird"] as const;
+
+  return {
+    id: optionSetId,
+    projectId: "project-test",
+    sessionId,
+    sourceOfTruth: "rough_idea_context_deterministic_create_lenses",
+    rawIdea: "Build Penny Create.",
+    memoryUsed: [],
+    sourcesUsed: [source],
+    createdAt: now,
+    options: lenses.map((lens, index) => ({
+      id: `create-option-${lens.toLowerCase()}`,
+      lens,
+      title: `${lens} direction`,
+      oneLine: `${lens} one-line direction.`,
+      rationale: `${lens} rationale.`,
+      nextMove: `${lens} next move.`,
+      risks: [`${lens} risk.`],
+      memoryUsed: [],
+      sourcesUsed: [source],
+      scores: {
+        intentMatch: 90 - index,
+        buildability: 80,
+        value: 80,
+        novelty: 70,
+        risk: 30 + index,
+      },
+    })),
+  };
+}
+
+function createArtifactPayload(sessionId: string) {
+  const now = "2026-05-05T12:00:00.000Z";
+  const titles = [
+    "Product goal",
+    "User intent",
+    "Target user",
+    "Core loop",
+    "UX requirements",
+    "Frontend requirements",
+    "Backend requirements",
+    "Data model",
+    "AI/memory orchestration",
+    "Privacy constraints",
+    "Verification constraints",
+    "Implementation plan",
+    "Acceptance tests",
+    "Do-not-break list",
+    "Final coding-agent prompt",
+  ] as const;
+
+  return {
+    id: "create-artifact-test",
+    projectId: "project-test",
+    sessionId,
+    title: "Create prompt: Build Penny Create",
+    version: 2,
+    rawIdea: "Build Penny Create.",
+    sections: titles.map((title) => ({
+      id: `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
+      title,
+      body: `${title} body for Build Penny Create.`,
+      status: title === "User intent" ? "updated" : "draft",
+    })),
+    sourceOptionSetIds: ["create-options-test"],
+    judgmentEventIds: ["judgment-test"],
     updatedAt: now,
   };
 }
