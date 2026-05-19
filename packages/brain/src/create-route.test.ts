@@ -7,6 +7,7 @@ import {
   type CandidateOption,
   type CodingPromptArtifact,
   type CreateNextResult,
+  type CreateOptionProvider,
   type MemoryRef,
   type PromptExport,
   type SourceRef,
@@ -126,6 +127,85 @@ test("POST /api/create/next personalizes the same rough idea for different Brain
   assert.match(optionText(field, "Critical"), /generic GPT-wrapper|fake connector claims|unsupported memory claims/i);
   assert.ok(optionsByLens(studio.optionSet.options, ["Personal"])[0]?.memoryUsed.some((memory) => /tactile|zine|studio/i.test(memory.summary)));
   assert.ok(optionsByLens(field.optionSet.options, ["Personal"])[0]?.memoryUsed.some((memory) => /offline|audit|field/i.test(memory.summary)));
+});
+
+test("POST /api/create/next can use a model-backed typed option provider without changing provenance", async () => {
+  let providerSawMemory = false;
+  const provider: CreateOptionProvider = {
+    name: "test",
+    async generateOptions(input) {
+      providerSawMemory = input.memoryUsed.some((memory) => /source-backed/i.test(memory.summary));
+
+      return {
+        options: modelBackedOptionDrafts("Model-backed source ledger"),
+      };
+    },
+  };
+  const service = createInMemoryCreateRouteService({ optionProvider: provider });
+  const result = await createNext(service, {
+    rawIdea: "Build a source-backed planning ledger for rough product notes.",
+    memory: [
+      {
+        id: "memory-model-1",
+        label: "Preference: source-backed planning",
+        kind: "preference",
+        summary: "The user prefers source-backed planning, compact acceptance tests, and visible memory evidence.",
+      },
+    ],
+    sources: [
+      {
+        id: "source-model-1",
+        label: "Planning notes",
+        kind: "source",
+        excerpt: "Use model-backed copy only when it preserves real source and memory refs.",
+        sourceRange: "chunk 1",
+      },
+    ],
+  });
+  const personal = optionsByLens(result.optionSet.options, ["Personal"])[0];
+
+  assert.equal(providerSawMemory, true);
+  assert.equal(result.optionSet.sourceOfTruth, "rough_idea_context_model_backed_create_lenses");
+  assert.match(personal?.title ?? "", /Model-backed source ledger Personal/i);
+  assert.ok(personal?.memoryUsed.some((memory) => memory.id === "memory-model-1"));
+  assert.ok(personal?.sourcesUsed.some((source) => source.id === "source-model-1"));
+  assert.match(personal?.rationale ?? "", /Grounded/i);
+  assert.ok(result.optionSet.options.every((option) => !/Gmail|Slack|global training/i.test(optionText(result, option.lens))));
+});
+
+test("POST /api/create/next rejects unsafe provider claims and falls back to deterministic options", async () => {
+  const provider: CreateOptionProvider = {
+    name: "test",
+    async generateOptions() {
+      const drafts = modelBackedOptionDrafts("Unsafe provider");
+
+      return {
+        options: drafts.map((draft) =>
+          draft.lens === "Personal"
+            ? {
+                ...draft,
+                oneLine: "Grounded in imported Gmail and Slack history that proves the user's hidden preferences.",
+              }
+            : draft,
+        ),
+      };
+    },
+  };
+  const service = createInMemoryCreateRouteService({ optionProvider: provider });
+  const result = await createNext(service, {
+    rawIdea: "Build Create options from real memory without fake connector claims.",
+    memory: [
+      {
+        id: "memory-safe-1",
+        label: "Preference: no fake memory",
+        kind: "preference",
+        summary: "The user wants real memory evidence and rejects fake connector or global-training claims.",
+      },
+    ],
+  });
+
+  assert.equal(result.optionSet.sourceOfTruth, "rough_idea_context_deterministic_create_lenses");
+  assert.ok(result.optionSet.options.every((option) => !/imported Gmail|Slack history|hidden preferences/i.test(optionText(result, option.lens))));
 });
 
 test("POST /api/create/next records multi-select judgment and updates the artifact", async () => {
@@ -259,6 +339,24 @@ function optionText(result: CreateNextResult, lens: CandidateOption["lens"]): st
   const option = optionsByLens(result.optionSet.options, [lens])[0];
 
   return [option?.title, option?.oneLine, option?.rationale, option?.nextMove, option?.risks.join(" ")].filter(Boolean).join("\n");
+}
+
+function modelBackedOptionDrafts(prefix: string) {
+  return (["Personal", "Practical", "Valuable", "Critical", "Weird"] satisfies CandidateOption["lens"][]).map((lens, index) => ({
+    lens,
+    title: `${prefix} ${lens}`,
+    oneLine: `Grounded ${lens.toLowerCase()} direction that uses real Penny memory evidence for the source ledger.`,
+    rationale: `Grounded in supplied memory and source refs. Inferred ${lens.toLowerCase()} move: sharpen the planning ledger without inventing connector or training claims.`,
+    nextMove: `Apply the ${lens.toLowerCase()} draft to the prompt artifact and keep the evidence references intact.`,
+    risks: [`${lens} can become generic if the artifact stops naming the supplied source evidence.`],
+    scores: {
+      intentMatch: 80 + index,
+      buildability: 76 + index,
+      value: 78 + index,
+      novelty: 64 + index,
+      risk: 34 + index,
+    },
+  }));
 }
 
 function studioBrainMemory(): MemoryRef[] {
