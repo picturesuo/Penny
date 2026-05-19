@@ -11,6 +11,13 @@ import { handleAssumptionResponseRequest } from "./assumption-response-route.ts"
 import { handleAutopilotTickRequest, handleManualNodeSelectedRequest } from "./autopilot-route.ts";
 import { handleBrainDocumentsRequest } from "./brain-documents-route.ts";
 import {
+  handleBrainImportJobRequest,
+  handleBrainImportRequest,
+  handleBrainMemoryProfileRequest,
+  handleBrainRetrieveRequest,
+  handleBrainSourceDeleteRequest,
+} from "./brain-memory-route.ts";
+import {
   handleBrainRecentRequest,
   handleBrainObjectsRequest,
   handleBrainRecentsRequest,
@@ -267,6 +274,35 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/brain/documents") {
       await writeWebResponse(outgoing, await handleBrainDocumentsRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/import") {
+      await writeWebResponse(outgoing, await handleBrainImportRequest(request));
+      return;
+    }
+
+    const brainImportJobMatch = /^\/api\/brain\/import\/([^/]+)$/.exec(url.pathname);
+
+    if (brainImportJobMatch) {
+      await writeWebResponse(outgoing, await handleBrainImportJobRequest(request, decodeURIComponent(brainImportJobMatch[1] ?? "")));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/memory/profile") {
+      await writeWebResponse(outgoing, await handleBrainMemoryProfileRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/retrieve") {
+      await writeWebResponse(outgoing, await handleBrainRetrieveRequest(request));
+      return;
+    }
+
+    const brainSourceDeleteMatch = /^\/api\/brain\/sources\/([^/]+)$/.exec(url.pathname);
+
+    if (brainSourceDeleteMatch) {
+      await writeWebResponse(outgoing, await handleBrainSourceDeleteRequest(request, decodeURIComponent(brainSourceDeleteMatch[1] ?? "")));
       return;
     }
 
