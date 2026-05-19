@@ -1,5 +1,17 @@
 import { createHash } from "node:crypto";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import { createPennyDb, type PennyDatabase } from "./db/client.ts";
+import {
+  brainMemoryEdges,
+  brainMemoryIngestionJobs,
+  brainMemoryNodes,
+  brainMemoryProfileSignals,
+  brainMemoryRetrievalEvents,
+  brainMemorySourceChunks,
+  brainMemorySources,
+} from "./db/schema.ts";
 import { scopeValues, type BrainScope } from "./scope.ts";
 
 export type SourceImportKind =
@@ -26,6 +38,8 @@ export type MemoryNodeType =
   | "rejected_direction";
 
 export type MemoryEdgeKind = "derived_from" | "related_to" | "same_cluster" | "supports" | "challenges" | "rejects";
+export type MemoryEvidenceLevel = "user_confirmed" | "grounded" | "inferred";
+export type MemoryLabel = "taste" | "preference" | "project" | "frustration";
 
 export type SourcePermission = {
   visibility: "private";
@@ -78,6 +92,8 @@ export type MemoryNode = {
   chunkIds: string[];
   confidence: number;
   tags: string[];
+  labels: MemoryLabel[];
+  evidenceLevel: MemoryEvidenceLevel;
   permission: SourcePermission;
   createdAt: string;
   lastSeenAt: string;
@@ -224,6 +240,16 @@ type ScopeMemoryStore = {
   signals: Map<string, UserProfileSignal>;
 };
 
+type ScopeColumn = AnyPgColumn;
+type ScopeTable = {
+  userId: ScopeColumn;
+  workspaceId: ScopeColumn;
+  projectId: ScopeColumn;
+  sphereId: ScopeColumn;
+};
+
+type BrainMemoryDb = PennyDatabase | Parameters<Parameters<PennyDatabase["transaction"]>[0]>[0];
+
 type ChunkDraft = {
   text: string;
   charStart: number;
@@ -290,8 +316,25 @@ const defaultPermission: SourcePermission = {
 };
 
 const defaultStores = new Map<string, ScopeMemoryStore>();
+let defaultBrainMemoryServiceCache: BrainMemoryRouteService | null = null;
 
-export const defaultBrainMemoryService = createInMemoryBrainMemoryService(defaultStores);
+export const defaultBrainMemoryService: BrainMemoryRouteService = {
+  async importSource(input, request) {
+    return resolveDefaultBrainMemoryService().importSource(input, request);
+  },
+  async getJob(jobId, request) {
+    return resolveDefaultBrainMemoryService().getJob(jobId, request);
+  },
+  async getProfile(request) {
+    return resolveDefaultBrainMemoryService().getProfile(request);
+  },
+  async retrieve(input, request) {
+    return resolveDefaultBrainMemoryService().retrieve(input, request);
+  },
+  async deleteSource(sourceId, request) {
+    return resolveDefaultBrainMemoryService().deleteSource(sourceId, request);
+  },
+};
 
 export async function handleBrainImportRequest(
   request: Request,
@@ -379,6 +422,289 @@ export async function handleBrainSourceDeleteRequest(
   }
 
   return jsonResponse({ data: result });
+}
+
+export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteService {
+  return {
+    async importSource(input, request) {
+      const scope = scopeFromRequest(request);
+      const now = isoNow();
+      const nowDate = new Date(now);
+      const content = input.content ?? input.text ?? "";
+      const baseLabel = input.label ?? input.fileName ?? labelForKind(input.kind);
+      const jobId = stableId("brain-import-job", scopeKey(scope), input.kind, baseLabel, content, now);
+
+      try {
+        if (input.kind === "zip") {
+          throw new BrainMemoryValidationError(
+            "ZIP archive parsing is not available in this kernel. Import the extracted conversations.json, CSV, markdown, or text file instead.",
+          );
+        }
+
+        const normalized = normalizeImportedText(input.kind, content);
+        const chunks = chunkText(normalized);
+
+        if (!normalized.trim() || chunks.length === 0) {
+          throw new BrainMemoryValidationError("Brain import did not contain usable text after normalization.");
+        }
+
+        const sourceId = stableId("brain-source", scopeKey(scope), input.kind, baseLabel, hashText(normalized));
+        const source: SourceImport = {
+          id: sourceId,
+          kind: input.kind,
+          label: baseLabel,
+          scope,
+          privacy: {
+            visibility: "private" as const,
+            trainingUse: false as const,
+            rawRetention: input.rawRetention,
+          },
+          permission: defaultPermission,
+          textHash: hashText(normalized),
+          contentLength: normalized.length,
+          chunkCount: chunks.length,
+          memoryNodeCount: 0,
+          createdAt: now,
+          updatedAt: now,
+          ...(input.fileName ? { fileName: input.fileName } : {}),
+          ...(input.mimeType ? { mimeType: input.mimeType } : {}),
+          ...(input.sourceUri ? { sourceUri: input.sourceUri } : {}),
+        };
+        const sourceChunks = chunks.map((chunk, index): SourceChunk => {
+          const chunkHash = hashText(`${sourceId}:${index}:${chunk.text}`);
+
+          return {
+            id: stableId("brain-chunk", sourceId, index, chunkHash),
+            sourceId,
+            index,
+            text: chunk.text,
+            charStart: chunk.charStart,
+            charEnd: chunk.charEnd,
+            tokenEstimate: estimateTokens(chunk.text),
+            hash: chunkHash,
+            createdAt: now,
+          };
+        });
+        const nodes = extractMemoryNodes(source, sourceChunks, now);
+        const edges = inferMemoryEdges(source.id, nodes, now);
+        const sourceWithCounts: SourceImport = {
+          ...source,
+          memoryNodeCount: nodes.length,
+          updatedAt: now,
+        };
+
+        const { job, profile } = await db.transaction(async (tx) => {
+          await removeDbSourceData(tx, scope, sourceId);
+          await tx.insert(brainMemorySources).values({
+            ...scope,
+            id: sourceWithCounts.id,
+            kind: sourceWithCounts.kind,
+            label: sourceWithCounts.label,
+            privacy: sourceWithCounts.privacy,
+            permission: sourceWithCounts.permission,
+            textHash: sourceWithCounts.textHash,
+            contentLength: sourceWithCounts.contentLength,
+            chunkCount: sourceWithCounts.chunkCount,
+            memoryNodeCount: sourceWithCounts.memoryNodeCount,
+            fileName: sourceWithCounts.fileName ?? null,
+            mimeType: sourceWithCounts.mimeType ?? null,
+            sourceUri: sourceWithCounts.sourceUri ?? null,
+            createdAt: nowDate,
+            updatedAt: nowDate,
+          });
+
+          if (sourceChunks.length) {
+            await tx.insert(brainMemorySourceChunks).values(
+              sourceChunks.map((chunk) => ({
+                ...scope,
+                id: chunk.id,
+                sourceId: chunk.sourceId,
+                chunkIndex: chunk.index,
+                text: chunk.text,
+                charStart: chunk.charStart,
+                charEnd: chunk.charEnd,
+                tokenEstimate: chunk.tokenEstimate,
+                hash: chunk.hash,
+                createdAt: nowDate,
+              })),
+            );
+          }
+
+          if (nodes.length) {
+            await tx.insert(brainMemoryNodes).values(
+              nodes.map((node) => ({
+                ...scope,
+                id: node.id,
+                sourceId: node.sourceId,
+                type: node.type,
+                title: node.title,
+                summary: node.summary,
+                text: node.text,
+                chunkIds: node.chunkIds,
+                confidence: confidenceToDb(node.confidence),
+                tags: node.tags,
+                labels: node.labels,
+                evidenceLevel: node.evidenceLevel,
+                permission: node.permission,
+                createdAt: nowDate,
+                lastSeenAt: nowDate,
+              })),
+            );
+          }
+
+          if (edges.length) {
+            await tx.insert(brainMemoryEdges).values(
+              edges.map((edge) => ({
+                ...scope,
+                id: edge.id,
+                kind: edge.kind,
+                fromNodeId: edge.fromNodeId,
+                toNodeId: edge.toNodeId,
+                sourceId: edge.sourceId,
+                weight: confidenceToDb(edge.weight),
+                createdAt: nowDate,
+              })),
+            );
+          }
+
+          const store = await loadDbMemoryStore(tx, scope);
+
+          rebuildProfileSignals(store, now);
+          await replaceDbProfileSignals(tx, scope, store.signals, nowDate);
+
+          const job: IngestionJob = {
+            id: jobId,
+            status: "completed",
+            sourceImport: sourceWithCounts,
+            sourceId,
+            errorMessages: [],
+            importedAt: now,
+            completedAt: now,
+            counts: {
+              sources: 1,
+              chunks: sourceChunks.length,
+              memoryNodes: nodes.length,
+              memoryEdges: edges.length,
+              profileSignals: store.signals.size,
+            },
+          };
+
+          await tx.insert(brainMemoryIngestionJobs).values({
+            ...scope,
+            id: job.id,
+            status: job.status,
+            sourceId: job.sourceId,
+            sourceImport: job.sourceImport,
+            errorMessages: job.errorMessages,
+            counts: job.counts,
+            importedAt: nowDate,
+            completedAt: nowDate,
+          });
+          store.jobs.set(job.id, job);
+
+          return { job, profile: profileFromStore(scope, store) };
+        });
+
+        return { job, profile };
+      } catch (error) {
+        const job: IngestionJob = {
+          id: jobId,
+          status: "failed",
+          sourceImport: null,
+          sourceId: null,
+          errorMessages: [formatErrorMessage(error)],
+          importedAt: now,
+          completedAt: now,
+          counts: {
+            sources: 0,
+            chunks: 0,
+            memoryNodes: 0,
+            memoryEdges: 0,
+            profileSignals: 0,
+          },
+        };
+
+        await db.insert(brainMemoryIngestionJobs).values({
+          ...scope,
+          id: job.id,
+          status: job.status,
+          sourceId: null,
+          sourceImport: null,
+          errorMessages: job.errorMessages,
+          counts: job.counts,
+          importedAt: nowDate,
+          completedAt: nowDate,
+        });
+
+        const store = await loadDbMemoryStore(db, scope);
+        store.jobs.set(job.id, job);
+
+        return { job, profile: profileFromStore(scope, store) };
+      }
+    },
+
+    async getJob(jobId, request) {
+      const scope = scopeFromRequest(request);
+      const [job] = await db
+        .select()
+        .from(brainMemoryIngestionJobs)
+        .where(and(eq(brainMemoryIngestionJobs.id, jobId), scopeCondition(brainMemoryIngestionJobs, scope)))
+        .limit(1);
+
+      return job ? jobFromDb(job) : null;
+    },
+
+    async getProfile(request) {
+      const scope = scopeFromRequest(request);
+      const now = isoNow();
+      const store = await loadDbMemoryStore(db, scope);
+
+      rebuildProfileSignals(store, now);
+      await replaceDbProfileSignals(db, scope, store.signals, new Date(now));
+
+      return profileFromStore(scope, store);
+    },
+
+    async retrieve(input, request) {
+      const scope = scopeFromRequest(request);
+      const store = await loadDbMemoryStore(db, scope);
+      const results = retrieveFromStore(store, input.query, input.limit, input.nodeTypes);
+      const retrieval: BrainMemoryRetrieval = {
+        sourceOfTruth: "private_user_memory_retrieval",
+        query: input.query,
+        contextLight: results.length === 0,
+        results,
+      };
+
+      await db.insert(brainMemoryRetrievalEvents).values({
+        ...scope,
+        id: stableId("brain-retrieval-event", scopeKey(scope), input.query, results.map((result) => result.id).join("|"), isoNow()),
+        query: input.query,
+        contextLight: retrieval.contextLight,
+        resultNodeIds: unique(results.map((result) => result.nodeId)),
+        resultSourceIds: unique(results.map((result) => result.sourceId)),
+        resultCount: results.length,
+      });
+
+      return retrieval;
+    },
+
+    async deleteSource(sourceId, request) {
+      const scope = scopeFromRequest(request);
+      const now = isoNow();
+      const deleted = await db.transaction(async (tx) => {
+        const removed = await removeDbSourceData(tx, scope, sourceId);
+        const store = await loadDbMemoryStore(tx, scope);
+
+        rebuildProfileSignals(store, now);
+        await replaceDbProfileSignals(tx, scope, store.signals, new Date(now));
+
+        return removed;
+      });
+
+      return { deleted, profile: profileFromStore(scope, await loadDbMemoryStore(db, scope)) };
+    },
+  };
 }
 
 export function createInMemoryBrainMemoryService(stores = new Map<string, ScopeMemoryStore>()): BrainMemoryRouteService {
@@ -568,19 +894,21 @@ export function createInMemoryBrainMemoryService(stores = new Map<string, ScopeM
   };
 }
 
-export function retrieveBrainMemoryForCreate(input: {
+export async function retrieveBrainMemoryForCreate(input: {
   scope: BrainScope;
   query: string;
   limit?: number;
-}): CreateMemoryRetrievalContext {
-  const store = defaultStores.get(scopeKey(input.scope));
-  const results = store ? retrieveFromStore(store, input.query, input.limit ?? 5, undefined) : [];
-  const retrieval: BrainMemoryRetrieval = {
-    sourceOfTruth: "private_user_memory_retrieval",
-    query: input.query,
-    contextLight: results.length === 0,
-    results,
-  };
+}): Promise<CreateMemoryRetrievalContext> {
+  const retrieval = await resolveDefaultBrainMemoryService().retrieve(
+    {
+      query: input.query,
+      limit: input.limit ?? 5,
+    },
+    new Request("http://localhost/internal/brain/retrieve", {
+      method: "POST",
+      headers: headersFromScope(input.scope),
+    }),
+  );
 
   return {
     contextLight: retrieval.results.length === 0,
@@ -588,6 +916,363 @@ export function retrieveBrainMemoryForCreate(input: {
     sourceRefs: uniqueById(retrieval.results.map((result) => result.sourceRef)).slice(0, 8),
     results: retrieval.results,
   };
+}
+
+function resolveDefaultBrainMemoryService(): BrainMemoryRouteService {
+  if (defaultBrainMemoryServiceCache) {
+    return defaultBrainMemoryServiceCache;
+  }
+
+  defaultBrainMemoryServiceCache = process.env.DATABASE_URL?.trim()
+    ? createDbBrainMemoryService(createPennyDb())
+    : createInMemoryBrainMemoryService(defaultStores);
+
+  return defaultBrainMemoryServiceCache;
+}
+
+async function loadDbMemoryStore(db: BrainMemoryDb, scope: BrainScope): Promise<ScopeMemoryStore> {
+  const [sourceRows, chunkRows, nodeRows, edgeRows, jobRows, signalRows] = await Promise.all([
+    db
+      .select()
+      .from(brainMemorySources)
+      .where(and(scopeCondition(brainMemorySources, scope), isNull(brainMemorySources.deletedAt)))
+      .orderBy(desc(brainMemorySources.updatedAt))
+      .limit(200),
+    db
+      .select()
+      .from(brainMemorySourceChunks)
+      .where(and(scopeCondition(brainMemorySourceChunks, scope), isNull(brainMemorySourceChunks.deletedAt)))
+      .orderBy(brainMemorySourceChunks.chunkIndex)
+      .limit(2_000),
+    db
+      .select()
+      .from(brainMemoryNodes)
+      .where(and(scopeCondition(brainMemoryNodes, scope), isNull(brainMemoryNodes.deletedAt)))
+      .orderBy(desc(brainMemoryNodes.lastSeenAt))
+      .limit(2_000),
+    db
+      .select()
+      .from(brainMemoryEdges)
+      .where(and(scopeCondition(brainMemoryEdges, scope), isNull(brainMemoryEdges.deletedAt)))
+      .orderBy(desc(brainMemoryEdges.createdAt))
+      .limit(2_000),
+    db
+      .select()
+      .from(brainMemoryIngestionJobs)
+      .where(scopeCondition(brainMemoryIngestionJobs, scope))
+      .orderBy(desc(brainMemoryIngestionJobs.importedAt))
+      .limit(50),
+    db
+      .select()
+      .from(brainMemoryProfileSignals)
+      .where(and(scopeCondition(brainMemoryProfileSignals, scope), isNull(brainMemoryProfileSignals.deletedAt)))
+      .orderBy(desc(brainMemoryProfileSignals.updatedAt))
+      .limit(200),
+  ]);
+  const store: ScopeMemoryStore = {
+    sources: new Map(),
+    chunks: new Map(),
+    nodes: new Map(),
+    edges: new Map(),
+    jobs: new Map(),
+    signals: new Map(),
+  };
+
+  for (const row of sourceRows) {
+    store.sources.set(row.id, sourceFromDb(row, scope));
+  }
+
+  for (const row of chunkRows) {
+    if (store.sources.has(row.sourceId)) {
+      store.chunks.set(row.id, chunkFromDb(row));
+    }
+  }
+
+  for (const row of nodeRows) {
+    if (store.sources.has(row.sourceId)) {
+      store.nodes.set(row.id, nodeFromDb(row));
+    }
+  }
+
+  for (const row of edgeRows) {
+    if (store.sources.has(row.sourceId) && store.nodes.has(row.fromNodeId) && store.nodes.has(row.toNodeId)) {
+      store.edges.set(row.id, edgeFromDb(row));
+    }
+  }
+
+  for (const row of jobRows) {
+    store.jobs.set(row.id, jobFromDb(row));
+  }
+
+  for (const row of signalRows) {
+    store.signals.set(row.id, signalFromDb(row));
+  }
+
+  return store;
+}
+
+async function replaceDbProfileSignals(
+  db: BrainMemoryDb,
+  scope: BrainScope,
+  signals: Map<string, UserProfileSignal>,
+  updatedAt: Date,
+): Promise<void> {
+  await db.delete(brainMemoryProfileSignals).where(scopeCondition(brainMemoryProfileSignals, scope));
+
+  const values = [...signals.values()].map((signal) => ({
+    ...scope,
+    id: signal.id,
+    kind: signal.kind,
+    label: signal.label,
+    summary: signal.summary,
+    weight: confidenceToDb(signal.weight),
+    sourceNodeIds: signal.sourceNodeIds,
+    updatedAt,
+  }));
+
+  if (values.length) {
+    await db.insert(brainMemoryProfileSignals).values(values);
+  }
+}
+
+async function removeDbSourceData(db: BrainMemoryDb, scope: BrainScope, sourceId: string): Promise<boolean> {
+  const [existing] = await db
+    .select({ id: brainMemorySources.id })
+    .from(brainMemorySources)
+    .where(and(eq(brainMemorySources.id, sourceId), scopeCondition(brainMemorySources, scope)))
+    .limit(1);
+
+  if (!existing) {
+    return false;
+  }
+
+  await db.delete(brainMemorySources).where(and(eq(brainMemorySources.id, sourceId), scopeCondition(brainMemorySources, scope)));
+  return true;
+}
+
+function sourceFromDb(row: typeof brainMemorySources.$inferSelect, scope: BrainScope): SourceImport {
+  return {
+    id: row.id,
+    kind: sourceImportKindValue(row.kind),
+    label: row.label,
+    scope,
+    privacy: privacyFromValue(row.privacy),
+    permission: permissionFromValue(row.permission),
+    textHash: row.textHash,
+    contentLength: row.contentLength,
+    chunkCount: row.chunkCount,
+    memoryNodeCount: row.memoryNodeCount,
+    createdAt: isoDate(row.createdAt),
+    updatedAt: isoDate(row.updatedAt),
+    ...(row.fileName ? { fileName: row.fileName } : {}),
+    ...(row.mimeType ? { mimeType: row.mimeType } : {}),
+    ...(row.sourceUri ? { sourceUri: row.sourceUri } : {}),
+  };
+}
+
+function chunkFromDb(row: typeof brainMemorySourceChunks.$inferSelect): SourceChunk {
+  return {
+    id: row.id,
+    sourceId: row.sourceId,
+    index: row.chunkIndex,
+    text: row.text,
+    charStart: row.charStart,
+    charEnd: row.charEnd,
+    tokenEstimate: row.tokenEstimate,
+    hash: row.hash,
+    createdAt: isoDate(row.createdAt),
+  };
+}
+
+function nodeFromDb(row: typeof brainMemoryNodes.$inferSelect): MemoryNode {
+  return {
+    id: row.id,
+    type: memoryNodeTypeValue(row.type),
+    title: row.title,
+    summary: row.summary,
+    text: row.text,
+    sourceId: row.sourceId,
+    chunkIds: stringArrayValue(row.chunkIds),
+    confidence: confidenceFromDb(row.confidence),
+    tags: stringArrayValue(row.tags),
+    labels: memoryLabelsFromValue(row.labels),
+    evidenceLevel: evidenceLevelValue(row.evidenceLevel),
+    permission: permissionFromValue(row.permission),
+    createdAt: isoDate(row.createdAt),
+    lastSeenAt: isoDate(row.lastSeenAt),
+  };
+}
+
+function edgeFromDb(row: typeof brainMemoryEdges.$inferSelect): MemoryEdge {
+  return {
+    id: row.id,
+    kind: memoryEdgeKindValue(row.kind),
+    fromNodeId: row.fromNodeId,
+    toNodeId: row.toNodeId,
+    sourceId: row.sourceId,
+    weight: confidenceFromDb(row.weight),
+    createdAt: isoDate(row.createdAt),
+  };
+}
+
+function signalFromDb(row: typeof brainMemoryProfileSignals.$inferSelect): UserProfileSignal {
+  return {
+    id: row.id,
+    kind: profileSignalKindValue(row.kind),
+    label: row.label,
+    summary: row.summary,
+    weight: confidenceFromDb(row.weight),
+    sourceNodeIds: stringArrayValue(row.sourceNodeIds),
+    updatedAt: isoDate(row.updatedAt),
+  };
+}
+
+function jobFromDb(row: typeof brainMemoryIngestionJobs.$inferSelect): IngestionJob {
+  const counts = countsFromValue(row.counts);
+
+  return {
+    id: row.id,
+    status: row.status === "completed" ? "completed" : "failed",
+    sourceImport: sourceImportFromValue(row.sourceImport),
+    sourceId: row.sourceId,
+    errorMessages: stringArrayValue(row.errorMessages),
+    importedAt: isoDate(row.importedAt),
+    completedAt: isoDate(row.completedAt),
+    counts,
+  };
+}
+
+function scopeCondition(table: ScopeTable, scope: BrainScope) {
+  return and(
+    nullableEq(table.userId, scope.userId),
+    nullableEq(table.workspaceId, scope.workspaceId),
+    nullableEq(table.projectId, scope.projectId),
+    nullableEq(table.sphereId, scope.sphereId),
+  );
+}
+
+function nullableEq(column: ScopeColumn, value: string | null) {
+  return value === null ? sql`${column} IS NULL` : eq(column, value);
+}
+
+function sourceImportKindValue(value: string): SourceImportKind {
+  return (sourceImportKinds as readonly string[]).includes(value) ? (value as SourceImportKind) : "text";
+}
+
+function memoryNodeTypeValue(value: string): MemoryNodeType {
+  return (memoryNodeTypes() as readonly string[]).includes(value) ? (value as MemoryNodeType) : "source_fact";
+}
+
+function memoryEdgeKindValue(value: string): MemoryEdgeKind {
+  const allowed: readonly string[] = ["derived_from", "related_to", "same_cluster", "supports", "challenges", "rejects"];
+
+  return allowed.includes(value) ? (value as MemoryEdgeKind) : "related_to";
+}
+
+function profileSignalKindValue(value: string): UserProfileSignalKind {
+  const allowed: readonly string[] = [
+    "recurring_interest",
+    "active_idea_cluster",
+    "taste_signal",
+    "preferred_build_style",
+    "common_frustration",
+  ];
+
+  return allowed.includes(value) ? (value as UserProfileSignalKind) : "recurring_interest";
+}
+
+function evidenceLevelValue(value: string): MemoryEvidenceLevel {
+  return value === "user_confirmed" || value === "grounded" || value === "inferred" ? value : "inferred";
+}
+
+function memoryLabelsFromValue(value: unknown): MemoryLabel[] {
+  const allowed = new Set<MemoryLabel>(["taste", "preference", "project", "frustration"]);
+
+  return stringArrayValue(value).filter((label): label is MemoryLabel => allowed.has(label as MemoryLabel));
+}
+
+function privacyFromValue(value: unknown): SourceImport["privacy"] {
+  const record = recordValue(value);
+
+  return {
+    visibility: "private",
+    trainingUse: false,
+    rawRetention: record?.rawRetention === true,
+  };
+}
+
+function permissionFromValue(value: unknown): SourcePermission {
+  const record = recordValue(value);
+  const allowedUses = stringArrayValue(record?.allowedUses).filter(
+    (item): item is SourcePermission["allowedUses"][number] => item === "private_memory" || item === "create_retrieval",
+  );
+
+  return {
+    visibility: "private",
+    trainingUse: false,
+    source: record?.source === "manual_import" ? "manual_import" : "user_upload",
+    allowedUses: allowedUses.length ? allowedUses : [...defaultPermission.allowedUses],
+  };
+}
+
+function sourceImportFromValue(value: unknown): SourceImport | null {
+  const record = recordValue(value);
+  const id = typeof record?.id === "string" ? record.id : null;
+  const label = typeof record?.label === "string" ? record.label : null;
+
+  if (!record || !id || !label) {
+    return null;
+  }
+
+  return {
+    id,
+    kind: sourceImportKindValue(typeof record.kind === "string" ? record.kind : "text"),
+    label,
+    scope: scopeValues(recordValue(record.scope) ?? {}),
+    privacy: privacyFromValue(record.privacy),
+    permission: permissionFromValue(record.permission),
+    textHash: typeof record.textHash === "string" ? record.textHash : "unknown",
+    contentLength: numberValue(record.contentLength),
+    chunkCount: numberValue(record.chunkCount),
+    memoryNodeCount: numberValue(record.memoryNodeCount),
+    createdAt: typeof record.createdAt === "string" ? record.createdAt : isoNow(),
+    updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : isoNow(),
+    ...(typeof record.fileName === "string" ? { fileName: record.fileName } : {}),
+    ...(typeof record.mimeType === "string" ? { mimeType: record.mimeType } : {}),
+    ...(typeof record.sourceUri === "string" ? { sourceUri: record.sourceUri } : {}),
+  };
+}
+
+function countsFromValue(value: unknown): IngestionJob["counts"] {
+  const record = recordValue(value);
+
+  return {
+    sources: numberValue(record?.sources),
+    chunks: numberValue(record?.chunks),
+    memoryNodes: numberValue(record?.memoryNodes),
+    memoryEdges: numberValue(record?.memoryEdges),
+    profileSignals: numberValue(record?.profileSignals),
+  };
+}
+
+function stringArrayValue(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function confidenceToDb(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value <= 1 ? value * 100 : value)));
+}
+
+function confidenceFromDb(value: number): number {
+  return Math.max(0, Math.min(1, Math.round(value) / 100));
+}
+
+function isoDate(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
 function normalizeImportedText(kind: SourceImportKind, content: string): string {
@@ -877,6 +1562,8 @@ function extractMemoryNodes(source: SourceImport, chunks: SourceChunk[], now: st
         chunkIds: [chunk.id],
         confidence: confidenceForType(candidate.type, candidate.text),
         tags,
+        labels: labelsForMemory(candidate.type, candidate.text),
+        evidenceLevel: evidenceLevelForMemory(candidate.type, candidate.text),
         permission: source.permission,
         createdAt: now,
         lastSeenAt: now,
@@ -1111,13 +1798,15 @@ function retrieveFromStore(
 }
 
 function scoreNode(node: MemoryNode, query: string, terms: string[]): number {
-  const haystack = [node.title, node.summary, node.text, node.type, ...node.tags].join(" ").toLowerCase();
+  const haystack = [node.title, node.summary, node.text, node.type, ...node.tags, ...node.labels].join(" ").toLowerCase();
   const queryLower = query.toLowerCase();
   const lexical = terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0);
   const directPhrase = queryLower.length > 12 && haystack.includes(queryLower.slice(0, 80)) ? 1.5 : 0;
   const typeBoost = node.type === "preference" || node.type === "goal" || node.type === "project" || node.type === "idea" ? 0.35 : 0.1;
   const tagOverlap = node.tags.filter((tag) => queryLower.includes(tag)).length * 0.45;
-  const score = lexical * 1.25 + directPhrase + tagOverlap + typeBoost + node.confidence * 0.25;
+  const labelBoost = node.labels.filter((label) => queryLower.includes(label)).length * 0.35;
+  const recency = recencyScore(node.lastSeenAt);
+  const score = lexical * 1.25 + directPhrase + tagOverlap + labelBoost + typeBoost + node.confidence * 0.25 + recency * 0.4;
 
   return Math.round(score * 100) / 100;
 }
@@ -1374,6 +2063,37 @@ function confidenceForType(type: MemoryNodeType, text: string): number {
   return Math.min(0.96, Math.round((base[type] + explicit) * 100) / 100);
 }
 
+function labelsForMemory(type: MemoryNodeType, text: string): MemoryLabel[] {
+  const labels: MemoryLabel[] = [];
+  const lower = text.toLowerCase();
+
+  if (type === "preference" || /\b(prefer|like|style|tone|voice|taste|aesthetic|should feel)\b/.test(lower)) {
+    labels.push(/\b(taste|aesthetic|visual|brand)\b/.test(lower) ? "taste" : "preference");
+  }
+
+  if (type === "project" || type === "goal" || /\b(project|product|app|startup|roadmap|mvp|prototype|launch)\b/.test(lower)) {
+    labels.push("project");
+  }
+
+  if (type === "frustration" || /\b(frustrat|annoy|hate|blocked|pain|struggle|stuck|slop)\b/.test(lower)) {
+    labels.push("frustration");
+  }
+
+  return unique(labels) as MemoryLabel[];
+}
+
+function evidenceLevelForMemory(type: MemoryNodeType, text: string): MemoryEvidenceLevel {
+  if (/\b(i|we|my|our)\s+(prefer|like|want|need|decided|chose|avoid|use|care)\b/i.test(text)) {
+    return "user_confirmed";
+  }
+
+  if (type === "source_fact" || /\b(source|confirmed|because|therefore|shows|proves|evidence)\b/i.test(text)) {
+    return "grounded";
+  }
+
+  return "inferred";
+}
+
 function labelForKind(kind: SourceImportKind): string {
   const labels: Record<SourceImportKind, string> = {
     text: "Text import",
@@ -1393,6 +2113,18 @@ function labelForKind(kind: SourceImportKind): string {
 
 function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function recencyScore(date: string): number {
+  const thenMs = Date.parse(date);
+
+  if (!Number.isFinite(thenMs)) {
+    return 0;
+  }
+
+  const ageDays = Math.max(0, (Date.now() - thenMs) / (24 * 60 * 60 * 1000));
+
+  return Math.round((1 / (1 + ageDays / 30)) * 100) / 100;
 }
 
 function importantWords(text: string): string[] {

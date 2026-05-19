@@ -312,7 +312,7 @@ export function createInMemoryCreateRouteService(): CreateRouteService {
       const now = isoNow();
       const projectId = input.projectId ?? input.artifact?.projectId ?? stableId("create-project", scope.projectId ?? "project", rawIdea);
       const sessionId = input.sessionId ?? input.artifact?.sessionId ?? stableId("create-session", scope.userId ?? "user", rawIdea);
-      const retrievedMemory = retrieveBrainMemoryForCreate({ scope, query: rawIdea, limit: 5 });
+      const retrievedMemory = await retrieveBrainMemoryForCreate({ scope, query: rawIdea, limit: 5 });
       const memoryUsed = normalizeMemoryRefs([...input.memory, ...retrievedMemory.memoryRefs], input.context, sessionId);
       const sourcesUsed = normalizeSourceRefs([...input.sources, ...retrievedMemory.sourceRefs], input.context, rawIdea);
       const existingOptionSet = input.optionSetId ? optionSets.get(input.optionSetId) ?? null : null;
