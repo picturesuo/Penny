@@ -1261,8 +1261,9 @@ export type UserProfileSignalKind =
   | "recurring_interest"
   | "active_idea_cluster"
   | "taste_signal"
+  | "common_frustration"
   | "preferred_build_style"
-  | "common_frustration";
+  | "repeated_rejected_direction";
 
 export interface UserProfileSignal {
   id: string;
@@ -1329,8 +1330,9 @@ export interface BrainMemoryProfileData {
     recurringInterests: UserProfileSignal[];
     activeIdeaClusters: UserProfileSignal[];
     tasteSignals: UserProfileSignal[];
-    preferredBuildStyle: UserProfileSignal[];
     commonFrustrations: UserProfileSignal[];
+    preferredBuildStyle: UserProfileSignal[];
+    repeatedRejectedDirections: UserProfileSignal[];
     privacySafeSummary: string;
   };
   stats: {
