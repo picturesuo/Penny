@@ -512,16 +512,27 @@ function buildInitialArtifact(input: {
 }): CodingPromptArtifact {
   const subject = subjectFromText(input.rawIdea);
   const audience = audienceFromText(input.rawIdea);
+  const personalContext = formatPersonalContext(input.optionSet.memoryUsed, input.optionSet.sourcesUsed);
   const sections = sectionMap({
     "Product goal": `Build a focused Create flow for ${subject.toLowerCase()} that turns a rough idea into judged options, a coding-prompt artifact, verification, and export.`,
-    "User intent": `The user wants Penny to develop this rough idea: ${input.rawIdea}`,
+    "User intent": [
+      `Rough idea: ${input.rawIdea}`,
+      "",
+      "User request: Turn this into memory-grounded Create directions and an exportable coding-agent prompt.",
+      "",
+      "Personal context used:",
+      personalContext,
+      "",
+      "Selected option history:",
+      "- No selected Create directions yet.",
+    ].join("\n"),
     "Target user": `${audience}. Keep this explicit until the user narrows it further.`,
     "Core loop": "Rough idea -> five Create directions -> multi-select judgment plus comment -> incremental artifact update -> verification -> coding-agent prompt export.",
     "UX requirements": "Keep the flow compact: one rough idea input, five cards, multi-select, comment box, artifact panel, verification summary, and export button.",
     "Frontend requirements": "Use the existing React/Vite workspace and preserve the editorial/newsprint style. Reuse current mode shell and client conventions.",
     "Backend requirements": "Expose deterministic POST /api/create/next and POST /api/create/export-coding-prompt routes with strict local validation and replaceable generation logic.",
     "Data model": "Represent CandidateOption, OptionSet, JudgmentEvent, CodingPromptArtifact, ArtifactSection, ArtifactDelta, VerificationSummary, MemoryRef, SourceRef, and PromptExport.",
-    "AI/memory orchestration": "Use available Penny memory/source/session context only when provided. Do not imply hidden memory. Store judgment as a durable signal for later model-backed generation.",
+    "AI/memory orchestration": `Use available Penny memory/source/session context only when provided. Do not imply hidden memory. Store judgment as a durable signal for later model-backed generation.\n\nPersonal context available now:\n${personalContext}`,
     "Privacy constraints": "Do not send data to a model in v0 placeholder mode. Keep source and memory references explicit so the UI never claims provenance it lacks.",
     "Verification constraints": "Check intent match, buildability, source/context grounding, non-generic GPT-wrapper risk, missing information, and implementation risks.",
     "Implementation plan": "1. Add contracts and route handlers. 2. Add client methods. 3. Render Create flow through the Check workspace wrapper. 4. Add focused tests. 5. Run build, typecheck, and tests.",
@@ -558,9 +569,24 @@ function updateArtifactFromJudgment(input: {
   const selectedTitles = selected.map((option) => `${option.lens}: ${option.title}`).join("; ");
   const risks = unique(selected.flatMap((option) => option.risks));
   const nextMoves = selected.map((option) => `- ${option.nextMove}`).join("\n");
+  const memoryUsed = uniqueById(selected.flatMap((option) => option.memoryUsed));
+  const sourcesUsed = uniqueById(selected.flatMap((option) => option.sourcesUsed));
+  const personalContext = formatPersonalContext(memoryUsed, sourcesUsed);
+  const selectedHistory = formatSelectedOptionHistory(selected, userComment);
   const updatedSectionIds = new Set<string>();
   const nextSections = input.artifact.sections.map((section) => {
-    const body = bodyForUpdatedSection(section.title, input.artifact, selected, selectedTitles, selectedLenses, userComment, risks, nextMoves);
+    const body = bodyForUpdatedSection({
+      title: section.title,
+      artifact: input.artifact,
+      selected,
+      selectedTitles,
+      selectedLenses,
+      userComment,
+      risks,
+      nextMoves,
+      personalContext,
+      selectedHistory,
+    });
 
     if (body === section.body) {
       return section;
@@ -588,30 +614,44 @@ function updateArtifactFromJudgment(input: {
   };
 }
 
-function bodyForUpdatedSection(
-  title: ArtifactSectionTitle,
-  artifact: CodingPromptArtifact,
-  selected: CandidateOption[],
-  selectedTitles: string,
-  selectedLenses: string,
-  userComment: string,
-  risks: string[],
-  nextMoves: string,
-): string {
-  const section = sectionByTitle(artifact, title);
-  const rawIdea = artifact.rawIdea;
+function bodyForUpdatedSection(input: {
+  title: ArtifactSectionTitle;
+  artifact: CodingPromptArtifact;
+  selected: CandidateOption[];
+  selectedTitles: string;
+  selectedLenses: string;
+  userComment: string;
+  risks: string[];
+  nextMoves: string;
+  personalContext: string;
+  selectedHistory: string;
+}): string {
+  const section = sectionByTitle(input.artifact, input.title);
+  const rawIdea = input.artifact.rawIdea;
 
-  switch (title) {
+  switch (input.title) {
     case "Product goal":
-      return `Build the Create kernel for: ${rawIdea}\n\nSelected direction mix: ${selectedTitles}.`;
+      return `Build the Create kernel for: ${rawIdea}\n\nSelected direction mix: ${input.selectedTitles}.`;
     case "User intent":
-      return `Rough idea: ${rawIdea}\n\nUser judgment/comment: ${userComment}\n\nInferred priority: ${selectedLenses}.`;
+      return [
+        `Rough idea: ${rawIdea}`,
+        "",
+        `User judgment/comment: ${input.userComment}`,
+        "",
+        `Inferred priority: ${input.selectedLenses}.`,
+        "",
+        "Personal context used:",
+        input.personalContext,
+        "",
+        "Selected option history:",
+        input.selectedHistory,
+      ].join("\n");
     case "Target user":
-      return `${section.body}\n\nRefine target user around the selected lenses: ${selectedLenses}.`;
+      return `${section.body}\n\nRefine target user around the selected lenses: ${input.selectedLenses}.`;
     case "Core loop":
       return "User enters a rough idea -> Penny shows Personal, Practical, Valuable, Critical, Weird -> user multi-selects and comments -> Penny records JudgmentEvent -> artifact updates -> verification summarizes readiness -> export produces a coding-agent prompt.";
     case "UX requirements":
-      return `Compact Create UI requirements:\n- Rough idea input remains visible.\n- Exactly five cards are shown: Personal, Practical, Valuable, Critical, Weird.\n- Cards support multi-select.\n- Comment textarea influences artifact updates.\n- Artifact and verification panels update on the same screen.\n- Export button returns a Codex/Claude Code/Cursor-ready prompt.\n\nSelected UX pressure: ${selected.map((option) => option.oneLine).join(" ")}`;
+      return `Compact Create UI requirements:\n- Rough idea input remains visible.\n- Exactly five cards are shown: Personal, Practical, Valuable, Critical, Weird.\n- Cards support multi-select.\n- Comment textarea influences artifact updates.\n- Artifact and verification panels update on the same screen.\n- Export button returns a Codex/Claude Code/Cursor-ready prompt.\n\nSelected UX pressure: ${input.selected.map((option) => option.oneLine).join(" ")}`;
     case "Frontend requirements":
       return "Use React/Vite, brainClient, existing mode shell, and newsprint styles. Keep Create accessible from current navigation while preserving Brain and Learn behavior.";
     case "Backend requirements":
@@ -619,19 +659,19 @@ function bodyForUpdatedSection(
     case "Data model":
       return "Use CandidateOption, OptionSet, JudgmentEvent, CodingPromptArtifact, ArtifactSection, ArtifactDelta, VerificationSummary, MemoryRef, SourceRef, and PromptExport. JudgmentEvent must include projectId, sessionId, optionSetId, selectedOptionIds, userComment, inferredSignals, artifactDelta, and createdAt.";
     case "AI/memory orchestration":
-      return "V0 may use deterministic generation, but the contract must be model-replaceable. Only cite memoryUsed and sourcesUsed that are actually supplied by Penny context or the rough idea. Do not fake durable memory.";
+      return `V0 may use deterministic generation, but the contract must be model-replaceable. Only cite memoryUsed and sourcesUsed that are actually supplied by Penny context or the rough idea. Do not fake durable memory.\n\nPersonal context used in this artifact:\n${input.personalContext}\n\nSelected option history:\n${input.selectedHistory}`;
     case "Privacy constraints":
       return "Keep v0 deterministic and local unless a provider is explicitly wired. Preserve provenance arrays so exported prompts do not contain unsupported source claims.";
     case "Verification constraints":
-      return `Verification must cover intent match, buildability, source/context grounding, non-generic/not-GPT-wrapper risk, missing info, and risks. Current selected risks: ${risks.join(" ") || "No selected-card risks."}`;
+      return `Verification must cover intent match, buildability, source/context grounding, non-generic/not-GPT-wrapper risk, missing info, and risks. Current selected risks: ${input.risks.join(" ") || "No selected-card risks."}`;
     case "Implementation plan":
-      return `Implementation sequence:\n${nextMoves}\n- Wire the compact UI through the existing Check workspace wrapper renamed as Create in copy.\n- Add focused tests for option generation, judgment, artifact update, verification, and export.\n- Run build, typecheck, and tests.`;
+      return `Implementation sequence:\n${input.nextMoves}\n- Wire the compact UI through the existing Check workspace wrapper renamed as Create in copy.\n- Add focused tests for option generation, judgment, artifact update, verification, and export.\n- Run build, typecheck, and tests.`;
     case "Acceptance tests":
       return "Acceptance tests: Create is accessible; rough idea input works; five named cards render; multi-select and comment create a JudgmentEvent; artifact updates onscreen; verification appears; export returns a usable prompt; Brain and Learn still work; build/typecheck/tests pass.";
     case "Do-not-break list":
       return "Do not break Brain, Learn, session recovery, current auth/session/tenant headers, canvas node actions, existing Check backend routes, or the editorial/newsprint visual language.";
     case "Final coding-agent prompt":
-      return buildPromptText({ ...artifact, sections: artifact.sections.filter((item) => item.title !== "Final coding-agent prompt") });
+      return buildPromptText({ ...input.artifact, sections: input.artifact.sections.filter((item) => item.title !== "Final coding-agent prompt") });
   }
 }
 
@@ -705,38 +745,54 @@ function verifyArtifact(
 
 function buildPromptText(artifact: CodingPromptArtifact): string {
   const section = (title: ArtifactSectionTitle) => sectionByTitle(artifact, title).body;
+  const userIntent = section("User intent");
+  const personalContext = extractNamedBlock(userIntent, "Personal context used") || extractNamedBlock(section("AI/memory orchestration"), "Personal context used in this artifact") || section("AI/memory orchestration");
+  const selectedHistory = extractNamedBlock(userIntent, "Selected option history") || "No selected Create directions were exported.";
 
   return [
     `# ${artifact.title}`,
     "",
-    "## Goal",
+    "## Product Goal",
     section("Product goal"),
     "",
-    "## Context",
-    section("User intent"),
+    "## User Intent",
+    mainUserIntent(userIntent),
     "",
+    "## Personal Context Used",
+    personalContext,
+    "",
+    "## Selected Option History",
+    selectedHistory,
+    "",
+    "## Target User",
     section("Target user"),
     "",
-    "## Requirements",
+    "## Core Loop",
     section("Core loop"),
     "",
+    "## UX Requirements",
     section("UX requirements"),
     "",
+    "## Frontend Requirements",
     section("Frontend requirements"),
     "",
+    "## Backend Requirements",
     section("Backend requirements"),
     "",
+    "## Data Model",
     section("Data model"),
     "",
+    "## AI / Memory Orchestration",
     section("AI/memory orchestration"),
+    "",
+    "## Privacy Constraints",
+    section("Privacy constraints"),
+    "",
+    "## Verification Constraints",
+    section("Verification constraints"),
     "",
     "## Implementation Sequence",
     section("Implementation plan"),
-    "",
-    "## Constraints",
-    section("Privacy constraints"),
-    "",
-    section("Verification constraints"),
     "",
     "## Acceptance Tests",
     section("Acceptance tests"),
@@ -747,6 +803,53 @@ function buildPromptText(artifact: CodingPromptArtifact): string {
     "## Definition of Done",
     "Create is accessible; rough idea -> five directions -> multi-select judgment/comment -> JudgmentEvent -> updated CodingPromptArtifact -> VerificationSummary -> exported prompt works end to end; Brain and Learn remain intact; build, typecheck, and tests pass.",
   ].join("\n");
+}
+
+function formatPersonalContext(memoryUsed: MemoryRef[], sourcesUsed: SourceRef[]): string {
+  const memoryLines = memoryUsed.length
+    ? memoryUsed.map((memory) => `- ${memory.label}: ${clipText(memory.summary, 260)}`)
+    : ["- No imported Penny memories matched this Create request."];
+  const sourceLines = sourcesUsed.length
+    ? sourcesUsed.map((source) => {
+        const range = source.sourceRange ? ` (${source.sourceRange})` : "";
+        return `- ${source.label}${range}: ${clipText(source.excerpt, 260)}`;
+      })
+    : ["- No source references beyond the rough idea were supplied."];
+
+  return ["Memories:", ...memoryLines, "", "Sources:", ...sourceLines].join("\n");
+}
+
+function formatSelectedOptionHistory(selected: CandidateOption[], userComment: string): string {
+  const optionLines = selected.length
+    ? selected.map((option) => `- ${option.lens}: ${option.title}. Next move: ${option.nextMove}`)
+    : ["- No selected Create directions yet."];
+  const comment = userComment === "No additional comment supplied." ? "No user comment supplied." : userComment;
+
+  return [...optionLines, `User comment: ${comment}`].join("\n");
+}
+
+function mainUserIntent(body: string): string {
+  const index = body.indexOf("\n\nPersonal context used:");
+
+  return (index >= 0 ? body.slice(0, index) : body).trim();
+}
+
+function extractNamedBlock(body: string, label: string): string {
+  const marker = `${label}:`;
+  const start = body.indexOf(marker);
+
+  if (start < 0) {
+    return "";
+  }
+
+  const rest = body.slice(start + marker.length).trim();
+  const nextSection = ["Personal context used:", "Personal context used in this artifact:", "Selected option history:"]
+    .filter((boundary) => boundary !== marker)
+    .map((boundary) => rest.indexOf(`\n\n${boundary}`))
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right)[0] ?? -1;
+
+  return (nextSection >= 0 ? rest.slice(0, nextSection) : rest).trim();
 }
 
 function sectionMap(bodies: Record<ArtifactSectionTitle, string>): ArtifactSection[] {

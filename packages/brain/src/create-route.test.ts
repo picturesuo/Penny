@@ -30,7 +30,8 @@ test("POST /api/create/next generates the five required Create directions", asyn
   );
   assert.equal(data.judgmentEvent, null);
   assert.equal(data.artifact.sections.length, 15);
-  assert.ok(data.artifact.sections.find((section) => section.title === "Final coding-agent prompt")?.body.includes("## Goal"));
+  assert.ok(data.artifact.sections.find((section) => section.title === "Final coding-agent prompt")?.body.includes("## Product Goal"));
+  assert.match(data.artifact.sections.find((section) => section.title === "Final coding-agent prompt")?.body ?? "", /## Personal Context Used/);
   assert.deepEqual(
     data.verification.checks.map((check) => check.key),
     ["intent_match", "buildability", "source_context_grounding", "non_generic", "missing_info", "risks"],
@@ -88,6 +89,8 @@ test("POST /api/create/next uses retrieved Brain memory and source refs when imp
   assert.ok(data.optionSet.options.some((option) => option.memoryUsed.length >= 1));
   assert.ok(data.optionSet.options.every((option) => option.sourcesUsed.some((source) => source.label === "Founder workflow notes")));
   assert.ok(data.optionSet.options.every((option) => !/Context-light/i.test(option.rationale)));
+  assert.match(sectionBody(data.artifact, "AI/memory orchestration"), /Founder workflow notes/);
+  assert.match(sectionBody(data.artifact, "User intent"), /Personal context used/);
 });
 
 test("POST /api/create/next records multi-select judgment and updates the artifact", async () => {
@@ -130,6 +133,23 @@ test("POST /api/create/export-coding-prompt returns a coding-agent ready prompt"
   const service = createInMemoryCreateRouteService();
   const first = await createNext(service, {
     rawIdea: "Create a compact frontend and backend kernel for Penny's Create mode.",
+    memory: [
+      {
+        id: "memory-demo-1",
+        label: "Preference: Compact route contracts",
+        kind: "preference",
+        summary: "The user prefers compact route contracts, visible provenance, and tests before polish.",
+      },
+    ],
+    sources: [
+      {
+        id: "source-demo-1",
+        label: "Founder notes",
+        kind: "source",
+        excerpt: "Prioritize route contracts, client methods, compact UI, and tests.",
+        sourceRange: "chunk 1",
+      },
+    ],
   });
   const practical = optionsByLens(first.optionSet.options, ["Practical", "Valuable"]);
   const refined = await createNext(service, {
@@ -155,8 +175,20 @@ test("POST /api/create/export-coding-prompt returns a coding-agent ready prompt"
   assert.equal(response.status, 200);
   assert.equal(exported.format, "coding_agent_prompt");
   assert.deepEqual(exported.targets, ["Codex", "Claude Code", "Cursor"]);
-  assert.match(exported.text, /## Goal/);
-  assert.match(exported.text, /## Requirements/);
+  assert.match(exported.text, /## Product Goal/);
+  assert.match(exported.text, /## User Intent/);
+  assert.match(exported.text, /## Personal Context Used/);
+  assert.match(exported.text, /Preference: Compact route contracts/);
+  assert.match(exported.text, /Founder notes/);
+  assert.match(exported.text, /## Selected Option History/);
+  assert.match(exported.text, /Practical:/);
+  assert.match(exported.text, /Valuable:/);
+  assert.match(exported.text, /## UX Requirements/);
+  assert.match(exported.text, /## Frontend Requirements/);
+  assert.match(exported.text, /## Backend Requirements/);
+  assert.match(exported.text, /## Data Model/);
+  assert.match(exported.text, /## Privacy Constraints/);
+  assert.match(exported.text, /## Verification Constraints/);
   assert.match(exported.text, /## Implementation Sequence/);
   assert.match(exported.text, /## Do-Not-Break List/);
   assert.match(exported.text, /## Definition of Done/);
