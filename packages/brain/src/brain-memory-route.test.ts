@@ -48,12 +48,45 @@ test("POST /api/brain/import stores private source chunks, memory nodes, edges, 
   assert.ok(hasNodeType(profile, "frustration"));
   assert.ok(hasNodeType(profile, "decision"));
   assert.ok(hasNodeType(profile, "rejected_direction"));
+  assert.ok(profile.recentMemoryNodes.some((node) => node.labels.includes("preference")));
+  assert.ok(profile.recentMemoryNodes.some((node) => node.labels.includes("frustration")));
+  assert.ok(profile.recentMemoryNodes.some((node) => node.evidenceLevel === "user_confirmed"));
 
   const jobResponse = await handleBrainImportJobRequest(getRequest(`http://localhost/api/brain/import/${job.id}`), job.id, { service });
   const jobPayload = await responsePayload(jobResponse);
 
   assert.equal(jobResponse.status, 200);
   assert.equal(jobPayload.data.job.id, job.id);
+});
+
+test("Brain memory retrieval survives service reload when the backing store is retained", async () => {
+  const backing = new Map() as Parameters<typeof createInMemoryBrainMemoryService>[0];
+  const importingService = createInMemoryBrainMemoryService(backing);
+  await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "text",
+      label: "Reloaded founder notes",
+      content:
+        "Project: Penny Create should use private memory to ground startup options. I prefer source-backed cards over generic suggestions.",
+    }),
+    { service: importingService },
+  );
+
+  const reloadedService = createInMemoryBrainMemoryService(backing);
+  const response = await handleBrainRetrieveRequest(
+    jsonRequest("http://localhost/api/brain/retrieve", {
+      query: "source-backed startup options",
+      limit: 3,
+    }),
+    { service: reloadedService },
+  );
+  const payload = await responsePayload(response);
+  const data = payload.data as BrainMemoryRetrieval;
+
+  assert.equal(response.status, 200);
+  assert.equal(data.contextLight, false);
+  assert.ok(data.results.some((result) => result.sourceRef.label === "Reloaded founder notes"));
+  assert.ok(data.results.some((result) => result.memoryRef.summary.includes("source-backed")));
 });
 
 test("POST /api/brain/import parses ChatGPT-style conversations.json and retrieval returns source-backed memory", async () => {
