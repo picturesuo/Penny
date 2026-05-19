@@ -1415,6 +1415,8 @@ export interface BrainSourceDeleteResponse {
 
 export type CreateLens = "Personal" | "Practical" | "Valuable" | "Critical" | "Weird";
 export type CreateCheckStatus = "pass" | "warn" | "fail";
+export type CreateProviderMode = "deterministic" | "model_backed" | "deterministic_fallback";
+export type CreateSchemaValidationStatus = "not_run" | "success" | "failure";
 
 export interface MemoryRef {
   id: string;
@@ -1451,11 +1453,46 @@ export interface CandidateOption {
   };
 }
 
+export interface PromptExportQualitySignals {
+  hasRoughIdea: boolean;
+  hasSelectedOptionHistory: boolean;
+  hasRelevantPersonalContext: boolean;
+  hasRepeatedRejectedDirections: boolean;
+  hasProductGoal: boolean;
+  hasNonGoals: boolean;
+  hasUxRequirements: boolean;
+  hasFrontendRequirements: boolean;
+  hasBackendRequirements: boolean;
+  hasDataModel: boolean;
+  hasPrivacyConstraints: boolean;
+  hasVerificationRequirements: boolean;
+  hasImplementationSequence: boolean;
+  hasAcceptanceTests: boolean;
+  hasDoNotBreakList: boolean;
+  promptCompletenessScore: number;
+  missing: string[];
+}
+
+export interface CreateObservability {
+  providerMode: CreateProviderMode;
+  providerName: "deterministic" | "xai" | "test" | "disabled";
+  schemaValidation: CreateSchemaValidationStatus;
+  schemaValidationErrors: string[];
+  fallbackReason: string | null;
+  memoryCountUsed: number;
+  sourceCountUsed: number;
+  rejectedDirectionsUsed: string[];
+  generatedLenses: CreateLens[];
+  selectedOptionIds: string[];
+  selectedLenses: CreateLens[];
+  exportQualitySignals: PromptExportQualitySignals;
+}
+
 export interface OptionSet {
   id: string;
   projectId: string;
   sessionId: string;
-  sourceOfTruth: "rough_idea_context_deterministic_create_lenses" | string;
+  sourceOfTruth: "rough_idea_context_deterministic_create_lenses" | "rough_idea_context_model_backed_create_lenses" | string;
   rawIdea: string;
   options: CandidateOption[];
   memoryUsed: MemoryRef[];
@@ -1525,10 +1562,27 @@ export interface VerificationSummary {
   artifactId: string;
   createdAt: string;
   verdict: "ready" | "needs_revision";
+  scores: {
+    intentMatch: number;
+    personalMemoryGrounding: number;
+    buildability: number;
+    nonGenericness: number;
+    userAutonomyPreserved: number;
+    fakeClaimRisk: number;
+    promptCompleteness: number;
+  };
   checks: Array<{
-    key: "intent_match" | "buildability" | "source_context_grounding" | "non_generic" | "missing_info" | "risks";
+    key:
+      | "intent_match"
+      | "personal_memory_grounding"
+      | "buildability"
+      | "non_genericness"
+      | "user_autonomy_preserved"
+      | "fake_claim_risk"
+      | "prompt_completeness";
     label: string;
     status: CreateCheckStatus;
+    score: number;
     summary: string;
   }>;
   missingInfo: string[];
@@ -1542,6 +1596,7 @@ export interface PromptExport {
   targets: Array<"Codex" | "Claude Code" | "Cursor">;
   text: string;
   fileName: string;
+  qualitySignals: PromptExportQualitySignals;
   createdAt: string;
 }
 
@@ -1570,7 +1625,28 @@ export interface CreateNextResponse {
     artifact: CodingPromptArtifact;
     verification: VerificationSummary;
     judgmentEvent: JudgmentEvent | null;
+    observability: CreateObservability;
     exportReady: boolean;
+  };
+}
+
+export interface CreateProviderComparisonArm {
+  label: "deterministic" | "model_backed";
+  providerUsed: CreateProviderMode;
+  fallbackReason: string | null;
+  optionSet: OptionSet;
+  artifact: CodingPromptArtifact;
+  verification: VerificationSummary;
+  promptExport: PromptExport;
+  observability: CreateObservability;
+}
+
+export interface CreateProviderComparisonResponse {
+  data: {
+    sourceOfTruth: "deterministic_model_backed_create_comparison" | string;
+    rawIdea: string;
+    deterministic: CreateProviderComparisonArm;
+    modelBacked: CreateProviderComparisonArm;
   };
 }
 
