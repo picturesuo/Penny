@@ -40,7 +40,7 @@ import {
   handleCheckSessionRequest,
 } from "./check-route.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
-import { handleCreateNextRequest, handleExportCodingPromptRequest } from "./create-route.ts";
+import { handleCreateCompareRequest, handleCreateNextRequest, handleExportCodingPromptRequest } from "./create-route.ts";
 import {
   handleContextArtifactsRequest,
   handleContextConnectorConnectRequest,
@@ -353,6 +353,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/create/next") {
       await writeWebResponse(outgoing, await handleCreateNextRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/create/compare") {
+      await writeWebResponse(outgoing, await handleCreateCompareRequest(request));
       return;
     }
 
