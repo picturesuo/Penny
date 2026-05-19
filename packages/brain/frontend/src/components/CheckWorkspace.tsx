@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
-import { createNext, exportCodingPrompt } from "../api/brainClient";
+import { compareCreateProviders, createNext, exportCodingPrompt } from "../api/brainClient";
 import type {
   BrainData,
   BrainMemoryProfileData,
   CandidateOption,
   CodingPromptArtifact,
+  CreateObservability,
   CreateLens,
   CreateNextInput,
+  CreateProviderComparisonResponse,
   JudgmentEvent,
   MemoryRef,
   OptionSet,
@@ -51,6 +53,8 @@ export function CheckWorkspace({
   const [artifact, setArtifact] = useState<CodingPromptArtifact | null>(null);
   const [verification, setVerification] = useState<VerificationSummary | null>(null);
   const [judgmentEvent, setJudgmentEvent] = useState<JudgmentEvent | null>(null);
+  const [observability, setObservability] = useState<CreateObservability | null>(null);
+  const [providerComparison, setProviderComparison] = useState<CreateProviderComparisonResponse["data"] | null>(null);
   const [promptExport, setPromptExport] = useState<PromptExport | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
   const [localStatus, setLocalStatus] = useState("Create ready");
@@ -120,6 +124,7 @@ export function CheckWorkspace({
       setSelectedOptionIds([]);
       setUserComment("");
       setJudgmentEvent(null);
+      setProviderComparison(null);
       setPromptExport(null);
       setStatus("Create directions ready");
     });
@@ -162,6 +167,26 @@ export function CheckWorkspace({
     });
   }
 
+  async function handleCompareProviders() {
+    const rawIdea = draftText.trim() || optionSet?.rawIdea.trim() || "";
+
+    if (!rawIdea) {
+      setStatus("Write the rough idea first");
+      seedRef.current?.focus();
+      return;
+    }
+
+    await runCreateAction("Comparing deterministic and model-backed Create", async () => {
+      const payload = await compareCreateProviders(buildCreateNextInput({ rawIdea, data, brainProfile }));
+      setProviderComparison(payload.data);
+      setStatus(
+        payload.data.modelBacked.fallbackReason
+          ? "Provider comparison ready with fallback"
+          : "Provider comparison ready",
+      );
+    });
+  }
+
   async function handleExportPrompt() {
     if (!artifact) {
       setStatus("Generate the artifact before exporting");
@@ -190,11 +215,13 @@ export function CheckWorkspace({
     artifact: CodingPromptArtifact;
     verification: VerificationSummary;
     judgmentEvent: JudgmentEvent | null;
+    observability?: CreateObservability;
   }) {
     setOptionSet(payload.optionSet);
     setArtifact(payload.artifact);
     setVerification(payload.verification);
     setJudgmentEvent(payload.judgmentEvent ?? judgmentEvent);
+    setObservability(payload.observability ?? null);
   }
 
   function toggleOption(optionId: string) {
@@ -221,6 +248,7 @@ export function CheckWorkspace({
           {failure ? <CreateFailurePanel failure={failure} onRetry={() => void handleGenerateDirections()} /> : null}
 
           <CreateBrainOnboardingPanel profile={brainProfile ?? null} />
+          <CreateProviderStatusPanel observability={observability} />
 
           <section className="create-seed-panel" aria-label="Rough idea input">
             <label>
@@ -239,6 +267,10 @@ export function CheckWorkspace({
           </section>
 
           <CreateOptionBoard options={options} selectedOptionIds={selectedOptionIds} busy={busy} onToggleOption={toggleOption} />
+
+          {isCreateComparisonDevMode() ? (
+            <CreateComparisonPanel comparison={providerComparison} busy={busy} onCompare={() => void handleCompareProviders()} />
+          ) : null}
 
           <section className="create-judgment-panel" aria-label="Create judgment">
             <header>
@@ -370,6 +402,138 @@ export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryPr
         ))}
       </ul>
     </section>
+  );
+}
+
+export function CreateProviderStatusPanel({ observability }: { observability: CreateObservability | null }) {
+  if (!observability) {
+    return (
+      <section className="create-provider-status" aria-label="Create provider status">
+        <div>
+          <span>Provider</span>
+          <strong>Not run yet</strong>
+        </div>
+        <p>Create will report whether the generated directions came from deterministic, model-backed, or fallback output.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className={`create-provider-status is-${observability.providerMode}`} aria-label="Create provider status">
+      <div>
+        <span>Provider</span>
+        <strong>{providerModeLabel(observability.providerMode)}</strong>
+      </div>
+      <dl>
+        <div>
+          <dt>Schema</dt>
+          <dd>{observability.schemaValidation}</dd>
+        </div>
+        <div>
+          <dt>Memory</dt>
+          <dd>{observability.memoryCountUsed}</dd>
+        </div>
+        <div>
+          <dt>Sources</dt>
+          <dd>{observability.sourceCountUsed}</dd>
+        </div>
+        <div>
+          <dt>Prompt</dt>
+          <dd>{observability.exportQualitySignals.promptCompletenessScore}%</dd>
+        </div>
+      </dl>
+      {observability.fallbackReason ? <p>{observability.fallbackReason}</p> : null}
+      {observability.schemaValidationErrors.length ? <p>{observability.schemaValidationErrors.join(" ")}</p> : null}
+    </section>
+  );
+}
+
+export function CreateComparisonPanel({
+  comparison,
+  busy,
+  onCompare,
+}: {
+  comparison: CreateProviderComparisonResponse["data"] | null;
+  busy: boolean;
+  onCompare: () => void;
+}) {
+  return (
+    <section className="create-comparison-panel" aria-label="Dev Create provider comparison">
+      <header>
+        <div>
+          <span>DEV COMPARISON</span>
+          <strong>Deterministic vs model-backed</strong>
+        </div>
+        <button type="button" className="check-secondary-button" onClick={onCompare} disabled={busy}>
+          Compare providers
+        </button>
+      </header>
+      {!comparison ? (
+        <p className="create-panel-empty">
+          Runs the same rough idea and Brain context through deterministic Create and the gated model-backed provider.
+        </p>
+      ) : (
+        <div className="create-comparison-grid">
+          <CreateComparisonArmPanel title="Deterministic" arm={comparison.deterministic} />
+          <CreateComparisonArmPanel title="Model-backed" arm={comparison.modelBacked} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CreateComparisonArmPanel({
+  title,
+  arm,
+}: {
+  title: string;
+  arm: CreateProviderComparisonResponse["data"]["deterministic"];
+}) {
+  return (
+    <article className={`create-comparison-arm is-${arm.providerUsed}`}>
+      <header>
+        <span>{title}</span>
+        <strong>{providerModeLabel(arm.providerUsed)}</strong>
+      </header>
+      <dl>
+        <div>
+          <dt>Schema</dt>
+          <dd>{arm.observability.schemaValidation}</dd>
+        </div>
+        <div>
+          <dt>Memory</dt>
+          <dd>{arm.observability.memoryCountUsed}</dd>
+        </div>
+        <div>
+          <dt>Sources</dt>
+          <dd>{arm.observability.sourceCountUsed}</dd>
+        </div>
+        <div>
+          <dt>Prompt</dt>
+          <dd>{arm.promptExport.qualitySignals.promptCompletenessScore}%</dd>
+        </div>
+      </dl>
+      {arm.fallbackReason ? <p className="create-comparison-fallback">{arm.fallbackReason}</p> : null}
+      <div className="create-comparison-scores" aria-label={`${title} verification scores`}>
+        {Object.entries(arm.verification.scores).map(([key, score]) => (
+          <span key={key}>
+            {scoreLabel(key)} {score}
+          </span>
+        ))}
+      </div>
+      <div className="create-comparison-options">
+        {sortCreateOptions(arm.optionSet.options).map((option) => (
+          <section key={option.id}>
+            <span>{option.lens}</span>
+            <strong>{option.title}</strong>
+            <p>{option.oneLine}</p>
+          </section>
+        ))}
+      </div>
+      <small>
+        Missing prompt signals: {arm.promptExport.qualitySignals.missing.length ? arm.promptExport.qualitySignals.missing.join(", ") : "none"}
+      </small>
+    </article>
   );
 }
 
@@ -753,6 +917,25 @@ function memoryKindFromNodeType(type: BrainMemoryProfileData["recentMemoryNodes"
   }
 
   return "brain";
+}
+
+export function isCreateComparisonDevMode(env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env): boolean {
+  return env?.DEV === true || env?.MODE === "test" || env?.VITE_PENNY_CREATE_COMPARE === "true";
+}
+
+function providerModeLabel(mode: CreateObservability["providerMode"]): string {
+  switch (mode) {
+    case "model_backed":
+      return "Model-backed";
+    case "deterministic_fallback":
+      return "Fallback";
+    case "deterministic":
+      return "Deterministic";
+  }
+}
+
+function scoreLabel(key: string): string {
+  return key.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`).replace(/^./, (letter) => letter.toUpperCase());
 }
 
 function uniqueStrings(values: string[]): string[] {
