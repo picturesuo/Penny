@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   BookOpen,
+  CheckCircle2,
   CircleHelp,
   Database,
   FilePlus,
@@ -16,6 +17,8 @@ import {
   Trash2,
   Upload,
   X,
+  XCircle,
+  Zap,
 } from "lucide-react";
 import type {
   AutopilotTickData,
@@ -38,6 +41,7 @@ import type {
   BrainRecentIdea,
   BrainSidebarData,
   IngestionJob,
+  MemoryReviewAction,
   MemoryNode,
   CanvasNode,
   CanvasNodeAction,
@@ -52,7 +56,15 @@ import type {
   UserProfileSignal,
   WorkStructure,
 } from "../types/brain";
-import { deleteBrainSource, fetchBrainMemoryProfile, fetchClaimDetail, fetchSessionNote, importBrainSource, saveSessionNote } from "../api/brainClient";
+import {
+  deleteBrainSource,
+  fetchBrainMemoryProfile,
+  fetchClaimDetail,
+  fetchSessionNote,
+  importBrainSource,
+  reviewBrainMemory,
+  saveSessionNote,
+} from "../api/brainClient";
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
 import { CanvasWorkspace } from "./CanvasWorkspace";
@@ -153,6 +165,7 @@ export function BrainWorkspace({
   const [memoryProfile, setMemoryProfile] = useState<BrainMemoryProfileData | null>(null);
   const [memoryStatus, setMemoryStatus] = useState<BrainMemoryStatus>("idle");
   const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [memoryReviewingId, setMemoryReviewingId] = useState<string | null>(null);
   const quickNotes = useMemo(() => [...recents, ...archivedRecents], [recents, archivedRecents]);
   const selectedQuickNote = quickNotes.find((recent) => recent.id === selectedQuickNoteId) ?? null;
   const selectedQuickNoteArchived = archivedRecents.some((recent) => recent.id === selectedQuickNoteId);
@@ -290,6 +303,22 @@ export function BrainWorkspace({
     }
   }
 
+  async function handleMemoryReview(nodeId: string, action: MemoryReviewAction) {
+    setMemoryReviewingId(nodeId);
+    setMemoryError(null);
+
+    try {
+      const response = await reviewBrainMemory(nodeId, { action });
+      setMemoryProfile(response.data.profile);
+      setMemoryStatus("ready");
+    } catch (error) {
+      setMemoryStatus("error");
+      setMemoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMemoryReviewingId(null);
+    }
+  }
+
   return (
     <main className={`brain-workspace-shell${selectedQuickNote ? " is-quick-note-doc" : ""}`}>
       <BrainSidebar
@@ -332,11 +361,13 @@ export function BrainWorkspace({
           memoryProfile={memoryProfile}
           memoryStatus={memoryStatus}
           memoryError={memoryError}
+          memoryReviewingId={memoryReviewingId}
           disabled={isThinking}
           onCreateDocument={onSeed}
           onSelectDocument={handleSelectDocument}
           onMemoryImport={handleMemoryImport}
           onMemorySourceDelete={handleMemorySourceDelete}
+          onMemoryReview={handleMemoryReview}
         />
       )}
     </main>
@@ -2033,21 +2064,25 @@ function BrainDocumentsIndex({
   memoryProfile,
   memoryStatus,
   memoryError,
+  memoryReviewingId,
   disabled,
   onCreateDocument,
   onSelectDocument,
   onMemoryImport,
   onMemorySourceDelete,
+  onMemoryReview,
 }: {
   documentsData: BrainDocumentsData | null;
   memoryProfile: BrainMemoryProfileData | null;
   memoryStatus: BrainMemoryStatus;
   memoryError: string | null;
+  memoryReviewingId: string | null;
   disabled: boolean;
   onCreateDocument: (rawIdea: string) => Promise<void>;
   onSelectDocument: (sessionId: string) => void;
   onMemoryImport: (input: BrainImportInput) => Promise<void>;
   onMemorySourceDelete: (sourceId: string) => Promise<void>;
+  onMemoryReview: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
 }) {
   const documents = documentsData?.documents ?? [];
   const [searchQuery, setSearchQuery] = useState("");
@@ -2103,9 +2138,11 @@ function BrainDocumentsIndex({
         profile={memoryProfile}
         status={memoryStatus}
         error={memoryError}
+        reviewingId={memoryReviewingId}
         disabled={disabled}
         onImport={onMemoryImport}
         onDeleteSource={onMemorySourceDelete}
+        onReviewMemory={onMemoryReview}
       />
       <section className="brain-search-panel" aria-label="Search through your thinking">
         <label className="sr-only" htmlFor="brainDocumentSearch">
@@ -2167,16 +2204,20 @@ export function BrainMemoryPanel({
   profile,
   status,
   error,
+  reviewingId,
   disabled,
   onImport,
   onDeleteSource,
+  onReviewMemory,
 }: {
   profile: BrainMemoryProfileData | null;
   status: BrainMemoryStatus;
   error: string | null;
+  reviewingId?: string | null;
   disabled: boolean;
   onImport: (input: BrainImportInput) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
+  onReviewMemory?: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
 }) {
   const [draft, setDraft] = useState("");
   const [label, setLabel] = useState("");
@@ -2186,9 +2227,9 @@ export function BrainMemoryPanel({
   const importing = status === "importing";
   const sources = profile?.sources ?? [];
   const recentNodes = profile?.recentMemoryNodes ?? [];
-  const signals = profile ? profileSignals(profile).slice(0, 8) : [];
   const latestJob = profile?.jobs[0] ?? null;
   const canImport = draft.trim().length > 0 && !disabled && !importing;
+  const importHint = importHintForKind(kind);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2222,7 +2263,16 @@ export function BrainMemoryPanel({
     setFileName(file.name);
     setMimeType(file.type || null);
     setLabel((current) => current || file.name.replace(/\.[^.]+$/, ""));
-    setKind(kindFromFile(file));
+    const nextKind = kindFromFile(file);
+
+    setKind(nextKind);
+
+    if (nextKind === "zip" || nextKind === "pdf") {
+      setDraft("");
+      event.target.value = "";
+      return;
+    }
+
     setDraft(await file.text());
     event.target.value = "";
   }
@@ -2242,6 +2292,10 @@ export function BrainMemoryPanel({
       <p className="brain-memory-summary">
         {profile?.profile.privacySafeSummary ??
           "No private user memory has been imported yet. Create will label suggestions context-light until sources are added."}
+      </p>
+      <p className="brain-memory-import-hint">
+        Supports ChatGPT conversations.json, extracted ChatGPT files, Claude JSON/CSV/text, notes, markdown, CSV, and already-extracted PDF
+        text. ZIP parsing is not implemented yet; unzip exports and upload conversations.json.
       </p>
       {error ? <p className="brain-memory-error">{error}</p> : null}
       <form className="brain-memory-import" onSubmit={handleSubmit}>
@@ -2278,6 +2332,7 @@ export function BrainMemoryPanel({
           placeholder="Paste notes, markdown, ChatGPT conversations.json, Claude JSON/CSV/text, docs text, or canvas notes."
           rows={4}
         />
+        {importHint ? <p className="brain-memory-import-hint">{importHint}</p> : null}
         <button type="submit" className="secondary-command" disabled={!canImport}>
           <FilePlus size={15} aria-hidden="true" />
           <span>{importing ? "Importing..." : "Import to Brain"}</span>
@@ -2285,7 +2340,13 @@ export function BrainMemoryPanel({
       </form>
       <div className="brain-memory-grid">
         <BrainMemorySourcesList sources={sources} disabled={disabled || status === "deleting"} onDeleteSource={onDeleteSource} />
-        <BrainMemoryProfileSummary profile={profile} signals={signals} recentNodes={recentNodes} />
+        <BrainMemoryProfileSummary
+          profile={profile}
+          recentNodes={recentNodes}
+          reviewingId={reviewingId ?? null}
+          disabled={disabled}
+          onReviewMemory={onReviewMemory}
+        />
       </div>
     </section>
   );
@@ -2360,51 +2421,183 @@ function BrainMemorySourcesList({
 
 function BrainMemoryProfileSummary({
   profile,
-  signals,
   recentNodes,
+  reviewingId,
+  disabled,
+  onReviewMemory,
 }: {
   profile: BrainMemoryProfileData | null;
-  signals: UserProfileSignal[];
   recentNodes: MemoryNode[];
+  reviewingId: string | null;
+  disabled: boolean;
+  onReviewMemory: ((nodeId: string, action: MemoryReviewAction) => Promise<void>) | undefined;
 }) {
+  const sourceById = new Map((profile?.sources ?? []).map((source) => [source.id, source]));
+  const sections = profile ? memoryProfileSections(profile, recentNodes) : [];
+
   return (
     <section className="brain-memory-card" aria-label="Memory profile summary">
       <div className="brain-memory-card-head">
-        <strong>Profile summary</strong>
+        <strong>Brain profile</strong>
         <span>{profile?.stats.memoryNodeCount ?? 0} nodes</span>
       </div>
-      {signals.length > 0 ? (
-        <div className="brain-memory-signals">
-          {signals.map((signal) => (
-            <span key={signal.id} title={signal.summary}>
-              {signal.label}
-            </span>
+      {sections.length > 0 ? (
+        <div className="brain-profile-section-list">
+          {sections.map((section) => (
+            <div key={section.title} className="brain-profile-section">
+              <strong>{section.title}</strong>
+              <div className="brain-memory-signals">
+                {section.items.map((item) => (
+                  <span key={item.id} title={item.summary}>
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       ) : (
         <p className="brain-memory-muted">Recurring interests and build-style signals appear after import.</p>
       )}
       <div className="brain-memory-node-list">
-        {recentNodes.slice(0, 4).map((node) => (
-          <article key={node.id} className="brain-memory-node">
-            <span>{formatLabel(node.type)}</span>
-            <strong title={node.title}>{truncateWords(node.title, 9)}</strong>
-            <p>{truncateWords(node.summary, 18)}</p>
-          </article>
-        ))}
+        <div className="brain-memory-node-list-head">
+          <strong>Recent memories</strong>
+          <span>{recentNodes.length}</span>
+        </div>
+        {recentNodes.slice(0, 6).map((node) => {
+          const source = sourceById.get(node.sourceId);
+          const busy = reviewingId === node.id;
+
+          return (
+            <article key={node.id} className="brain-memory-node">
+              <div className="brain-memory-node-topline">
+                <span>{formatLabel(node.type)}</span>
+                <span className={`brain-memory-evidence is-${node.evidenceLevel}`}>{evidenceLabel(node.evidenceLevel)}</span>
+              </div>
+              <strong title={node.title}>{truncateWords(node.title, 9)}</strong>
+              <p>{truncateWords(node.summary, 18)}</p>
+              <div className="brain-memory-quality">
+                <span>{confidenceLabel(node.confidence)}</span>
+                <span>{source ? truncateWords(source.label, 5) : "Unknown source"}</span>
+                <span>{node.chunkIds[0] ? `chunk ${shortId(node.chunkIds[0])}` : "source chunk"}</span>
+                <span>Reinforced {formatDate(node.lastSeenAt)}</span>
+              </div>
+              <div className="brain-memory-labels">
+                {(node.labels.length ? node.labels : [node.evidenceLevel === "inferred" ? "inferred" : "grounded"]).map((label) => (
+                  <span key={label}>{formatLabel(label)}</span>
+                ))}
+              </div>
+              <div className="brain-memory-review-actions" aria-label={`Review ${node.title}`}>
+                <button
+                  type="button"
+                  title="Mark correct"
+                  aria-label={`Mark ${node.title} correct`}
+                  disabled={disabled || busy || !onReviewMemory}
+                  onClick={() => {
+                    void onReviewMemory?.(node.id, "correct");
+                  }}
+                >
+                  <CheckCircle2 size={14} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  title="Boost importance"
+                  aria-label={`Boost ${node.title}`}
+                  disabled={disabled || busy || !onReviewMemory}
+                  onClick={() => {
+                    void onReviewMemory?.(node.id, "boost");
+                  }}
+                >
+                  <Zap size={14} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  title="Mark wrong"
+                  aria-label={`Mark ${node.title} wrong`}
+                  disabled={disabled || busy || !onReviewMemory}
+                  onClick={() => {
+                    void onReviewMemory?.(node.id, "wrong");
+                  }}
+                >
+                  <XCircle size={14} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  title="Forget memory"
+                  aria-label={`Forget ${node.title}`}
+                  disabled={disabled || busy || !onReviewMemory}
+                  onClick={() => {
+                    void onReviewMemory?.(node.id, "forget");
+                  }}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function profileSignals(profile: BrainMemoryProfileData): UserProfileSignal[] {
+type BrainProfileSectionItem = {
+  id: string;
+  label: string;
+  summary: string;
+};
+
+function memoryProfileSections(profile: BrainMemoryProfileData, recentNodes: MemoryNode[]): Array<{ title: string; items: BrainProfileSectionItem[] }> {
   return [
-    ...profile.profile.recurringInterests,
-    ...profile.profile.activeIdeaClusters,
-    ...profile.profile.tasteSignals,
-    ...profile.profile.preferredBuildStyle,
-    ...profile.profile.commonFrustrations,
-  ];
+    { title: "Recurring interests", items: signalItems(profile.profile.recurringInterests) },
+    { title: "Active projects", items: nodeItems(recentNodes.filter((node) => node.type === "project" || node.type === "goal")) },
+    { title: "Taste signals", items: signalItems(profile.profile.tasteSignals) },
+    { title: "Frustrations", items: signalItems(profile.profile.commonFrustrations) },
+    { title: "Build style", items: signalItems(profile.profile.preferredBuildStyle) },
+    { title: "Strongest idea clusters", items: signalItems(profile.profile.activeIdeaClusters) },
+  ].filter((section) => section.items.length > 0);
+}
+
+function signalItems(signals: UserProfileSignal[]): BrainProfileSectionItem[] {
+  return signals
+    .slice(0, 4)
+    .map((signal) => ({ id: signal.id, label: signal.label, summary: `${signal.summary} Confidence ${confidenceLabel(signal.weight)}.` }));
+}
+
+function nodeItems(nodes: MemoryNode[]): BrainProfileSectionItem[] {
+  return nodes.slice(0, 4).map((node) => ({ id: node.id, label: node.title, summary: node.summary }));
+}
+
+function evidenceLabel(level: MemoryNode["evidenceLevel"]): string {
+  if (level === "user_confirmed") {
+    return "User confirmed";
+  }
+
+  return level === "grounded" ? "Grounded" : "Inferred";
+}
+
+function confidenceLabel(confidence: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, confidence)) * 100)}% confidence`;
+}
+
+function importHintForKind(kind: SourceImportKind): string | null {
+  if (kind === "zip") {
+    return "ZIP parsing is not implemented yet. Unzip the ChatGPT export locally, then choose or paste conversations.json.";
+  }
+
+  if (kind === "pdf") {
+    return "PDF import expects extractable text. If the file is scanned or binary-only, paste OCR or copied PDF text here.";
+  }
+
+  if (kind === "chatgpt_export") {
+    return "For ChatGPT exports, upload the extracted conversations.json file from the export folder.";
+  }
+
+  if (kind === "claude_export") {
+    return "For Claude exports, JSON, CSV, copied text, and markdown notes are supported when the message text is present.";
+  }
+
+  return null;
 }
 
 const sourceImportKindOptions: Array<{ kind: SourceImportKind; label: string }> = [

@@ -67,6 +67,12 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /no global training/i);
   assert.match(markup, /Small reversible builds/);
   assert.match(markup, /Preference - Small reversible builds/);
+  assert.match(markup, /Grounded/);
+  assert.match(markup, /90% confidence/);
+  assert.match(markup, /chunk brain-ch/);
+  assert.match(markup, /Reinforced/);
+  assert.match(markup, /Mark Preference - Small reversible builds correct/);
+  assert.match(markup, /ZIP parsing is not implemented yet/i);
   assert.match(markup, /Delete Founder workflow notes/);
 });
 
@@ -209,6 +215,8 @@ function memoryProfile(): BrainMemoryProfileData {
         chunkIds: ["brain-chunk-1"],
         confidence: 0.9,
         tags: ["small", "reversible", "builds"],
+        labels: ["taste"],
+        evidenceLevel: "grounded",
         permission,
         createdAt: "2026-05-02T12:00:01.000Z",
         lastSeenAt: "2026-05-02T12:00:01.000Z",

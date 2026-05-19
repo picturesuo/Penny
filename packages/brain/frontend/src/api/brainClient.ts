@@ -9,6 +9,8 @@ import type {
   BrainImportJobResponse,
   BrainImportResponse,
   BrainMemoryProfileResponse,
+  BrainMemoryReviewInput,
+  BrainMemoryReviewResponse,
   BrainRecentsResponse,
   BrainRetrieveInput,
   BrainRetrieveResponse,
@@ -346,6 +348,22 @@ export async function retrieveBrainMemory(input: BrainRetrieveInput): Promise<Br
   }
 
   return payload as BrainRetrieveResponse;
+}
+
+export async function reviewBrainMemory(nodeId: string, input: BrainMemoryReviewInput): Promise<BrainMemoryReviewResponse> {
+  const response = await fetch(`/api/brain/memories/${encodeURIComponent(nodeId)}/review`, {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/brain/memories/${nodeId}/review failed with ${response.status}.`));
+  }
+
+  return payload as BrainMemoryReviewResponse;
 }
 
 export async function deleteBrainSource(sourceId: string): Promise<BrainSourceDeleteResponse> {

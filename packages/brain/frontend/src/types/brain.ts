@@ -1177,6 +1177,9 @@ export type MemoryNodeType =
   | "rejected_direction";
 
 export type MemoryEdgeKind = "derived_from" | "related_to" | "same_cluster" | "supports" | "challenges" | "rejects";
+export type MemoryEvidenceLevel = "user_confirmed" | "grounded" | "inferred";
+export type MemoryLabel = "taste" | "preference" | "project" | "frustration";
+export type MemoryReviewAction = "correct" | "wrong" | "forget" | "boost";
 
 export interface SourcePermission {
   visibility: "private";
@@ -1229,6 +1232,8 @@ export interface MemoryNode {
   chunkIds: string[];
   confidence: number;
   tags: string[];
+  labels: MemoryLabel[];
+  evidenceLevel: MemoryEvidenceLevel;
   permission: SourcePermission;
   createdAt: string;
   lastSeenAt: string;
@@ -1369,6 +1374,19 @@ export interface BrainRetrieveResponse {
     query: string;
     contextLight: boolean;
     results: RetrievalResult[];
+  };
+}
+
+export interface BrainMemoryReviewInput {
+  action: MemoryReviewAction;
+}
+
+export interface BrainMemoryReviewResponse {
+  data: {
+    reviewed: boolean;
+    action: MemoryReviewAction;
+    memory: MemoryNode | null;
+    profile: BrainMemoryProfileData;
   };
 }
 

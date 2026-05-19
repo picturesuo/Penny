@@ -2157,6 +2157,7 @@
 
   .brain-memory-summary,
   .brain-memory-error,
+  .brain-memory-import-hint,
   .brain-memory-muted,
   .brain-memory-node p {
     margin: 0;
@@ -2171,6 +2172,10 @@
     padding: 9px 11px;
     color: #111111;
     font-weight: 700;
+  }
+
+  .brain-memory-import-hint {
+    color: rgb(17 17 17 / 0.62);
   }
 
   .brain-memory-import {
@@ -2287,14 +2292,17 @@
   .brain-memory-card-head span,
   .brain-memory-source small,
   .brain-memory-source span,
-  .brain-memory-node span {
+  .brain-memory-node span,
+  .brain-memory-node-list-head span,
+  .brain-memory-quality span {
     color: rgb(17 17 17 / 0.58);
     font-size: 11px;
     line-height: 1.2;
   }
 
   .brain-memory-source-list,
-  .brain-memory-node-list {
+  .brain-memory-node-list,
+  .brain-profile-section-list {
     display: grid;
     gap: 8px;
   }
@@ -2341,6 +2349,19 @@
     gap: 7px;
   }
 
+  .brain-profile-section {
+    display: grid;
+    gap: 6px;
+  }
+
+  .brain-profile-section > strong,
+  .brain-memory-node-list-head strong {
+    color: rgb(17 17 17 / 0.7);
+    font-size: 11px;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
   .brain-memory-signals span {
     border: 1px solid #111111;
     border-radius: 999px;
@@ -2355,6 +2376,76 @@
     border-left: 3px solid #111111;
     background: #ffffff;
     padding: 9px 10px;
+  }
+
+  .brain-memory-node-list-head,
+  .brain-memory-node-topline,
+  .brain-memory-quality,
+  .brain-memory-labels,
+  .brain-memory-review-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .brain-memory-node-list-head {
+    justify-content: space-between;
+    border-top: 1px solid #e1ded6;
+    padding-top: 9px;
+  }
+
+  .brain-memory-node-topline {
+    justify-content: space-between;
+  }
+
+  .brain-memory-evidence,
+  .brain-memory-labels span {
+    border: 1px solid #d2d2d2;
+    border-radius: 999px;
+    background: #f6f6f6;
+    padding: 4px 6px;
+    font-size: 10px !important;
+    font-weight: 800;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .brain-memory-evidence.is-user_confirmed {
+    background: #eff7d2;
+    border-color: #111111;
+    color: #111111;
+  }
+
+  .brain-memory-evidence.is-grounded {
+    background: #e8f1ff;
+  }
+
+  .brain-memory-evidence.is-inferred {
+    background: #fff0b8;
+  }
+
+  .brain-memory-quality {
+    row-gap: 4px;
+  }
+
+  .brain-memory-review-actions {
+    justify-content: flex-end;
+  }
+
+  .brain-memory-review-actions button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid #111111;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #111111;
+  }
+
+  .brain-memory-review-actions button:disabled {
+    opacity: 0.42;
   }
 
   .brain-search-panel {
