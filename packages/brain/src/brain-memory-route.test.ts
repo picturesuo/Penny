@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   createInMemoryBrainMemoryService,
+  handleBrainDemoFixtureRequest,
   handleBrainImportJobRequest,
   handleBrainImportRequest,
   handleBrainMemoryProfileRequest,
@@ -163,6 +164,17 @@ test("POST /api/brain/import turns the Penny demo ChatGPT fixture into a useful 
   assert.equal(retrieval.contextLight, false);
   assert.ok(retrieval.results.some((result) => result.sourceRef.label === "Penny demo ChatGPT export"));
   assert.ok(retrieval.results.some((result) => /coding prompt|acceptance tests|creativity/i.test(result.summary)));
+});
+
+test("GET /api/brain/demo-fixture/penny returns the existing demo fixture as an import payload", async () => {
+  const response = await handleBrainDemoFixtureRequest(getRequest("http://localhost/api/brain/demo-fixture/penny"));
+  const payload = await responsePayload(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.importInput.kind, "chatgpt_export");
+  assert.equal(payload.data.importInput.label, "Penny demo ChatGPT export");
+  assert.equal(payload.data.importInput.fileName, "conversations.json");
+  assert.match(payload.data.importInput.content, /memory-native Create direction/);
 });
 
 test("Brain memory review can confirm, boost, weaken, and forget a memory", async () => {

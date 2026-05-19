@@ -58,6 +58,7 @@ import type {
 } from "../types/brain";
 import {
   deleteBrainSource,
+  fetchBrainDemoFixtureImport,
   fetchBrainMemoryProfile,
   fetchClaimDetail,
   fetchSessionNote,
@@ -97,6 +98,7 @@ interface BrainWorkspaceProps {
   onReworkDocument: () => Promise<void>;
   onCanvasOpenChange: (open: boolean) => void;
   onCanvasNodeAction: (action: CanvasNodeAction, node: CanvasNode) => void;
+  onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
 }
 
 interface GraphPoint {
@@ -149,6 +151,7 @@ export function BrainWorkspace({
   onReworkDocument,
   onCanvasOpenChange,
   onCanvasNodeAction,
+  onStartCreateWithBrain,
 }: BrainWorkspaceProps) {
   const claims = selectedDocument ? data?.ideaMap?.claims ?? [] : [];
   const edges = selectedDocument ? data?.ideaMap?.edges ?? [] : [];
@@ -289,6 +292,28 @@ export function BrainWorkspace({
     }
   }
 
+  async function handleMemoryDemoFixtureImport() {
+    setMemoryStatus("importing");
+    setMemoryError(null);
+
+    try {
+      const fixture = await fetchBrainDemoFixtureImport();
+      const response = await importBrainSource(fixture.data.importInput);
+      setMemoryProfile(response.data.profile);
+
+      if (response.data.job.status === "failed") {
+        setMemoryStatus("error");
+        setMemoryError(response.data.job.errorMessages.join(" ") || "Brain demo import failed.");
+        return;
+      }
+
+      setMemoryStatus("ready");
+    } catch (error) {
+      setMemoryStatus("error");
+      setMemoryError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function handleMemorySourceDelete(sourceId: string) {
     setMemoryStatus("deleting");
     setMemoryError(null);
@@ -366,8 +391,10 @@ export function BrainWorkspace({
           onCreateDocument={onSeed}
           onSelectDocument={handleSelectDocument}
           onMemoryImport={handleMemoryImport}
+          onMemoryDemoFixtureImport={handleMemoryDemoFixtureImport}
           onMemorySourceDelete={handleMemorySourceDelete}
           onMemoryReview={handleMemoryReview}
+          onStartCreateWithBrain={onStartCreateWithBrain}
         />
       )}
     </main>
@@ -2069,8 +2096,10 @@ function BrainDocumentsIndex({
   onCreateDocument,
   onSelectDocument,
   onMemoryImport,
+  onMemoryDemoFixtureImport,
   onMemorySourceDelete,
   onMemoryReview,
+  onStartCreateWithBrain,
 }: {
   documentsData: BrainDocumentsData | null;
   memoryProfile: BrainMemoryProfileData | null;
@@ -2081,8 +2110,10 @@ function BrainDocumentsIndex({
   onCreateDocument: (rawIdea: string) => Promise<void>;
   onSelectDocument: (sessionId: string) => void;
   onMemoryImport: (input: BrainImportInput) => Promise<void>;
+  onMemoryDemoFixtureImport: () => Promise<void>;
   onMemorySourceDelete: (sourceId: string) => Promise<void>;
   onMemoryReview: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
+  onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
 }) {
   const documents = documentsData?.documents ?? [];
   const [searchQuery, setSearchQuery] = useState("");
@@ -2141,8 +2172,10 @@ function BrainDocumentsIndex({
         reviewingId={memoryReviewingId}
         disabled={disabled}
         onImport={onMemoryImport}
+        onDemoFixtureImport={onMemoryDemoFixtureImport}
         onDeleteSource={onMemorySourceDelete}
         onReviewMemory={onMemoryReview}
+        onStartCreateWithBrain={onStartCreateWithBrain}
       />
       <section className="brain-search-panel" aria-label="Search through your thinking">
         <label className="sr-only" htmlFor="brainDocumentSearch">
@@ -2207,8 +2240,11 @@ export function BrainMemoryPanel({
   reviewingId,
   disabled,
   onImport,
+  onDemoFixtureImport,
   onDeleteSource,
   onReviewMemory,
+  onStartCreateWithBrain,
+  showDemoFixture,
 }: {
   profile: BrainMemoryProfileData | null;
   status: BrainMemoryStatus;
@@ -2216,8 +2252,11 @@ export function BrainMemoryPanel({
   reviewingId?: string | null;
   disabled: boolean;
   onImport: (input: BrainImportInput) => Promise<void>;
+  onDemoFixtureImport?: (() => Promise<void>) | undefined;
   onDeleteSource: (sourceId: string) => Promise<void>;
   onReviewMemory?: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
+  onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
+  showDemoFixture?: boolean | undefined;
 }) {
   const [draft, setDraft] = useState("");
   const [label, setLabel] = useState("");
@@ -2228,6 +2267,10 @@ export function BrainMemoryPanel({
   const sources = profile?.sources ?? [];
   const recentNodes = profile?.recentMemoryNodes ?? [];
   const latestJob = profile?.jobs[0] ?? null;
+  const profileSections = profile ? memoryProfileSections(profile, recentNodes) : [];
+  const firstRunSteps = brainFirstRunSteps({ profile, recentNodes, sections: profileSections });
+  const hasImportedMemories = (profile?.stats.memoryNodeCount ?? 0) > 0;
+  const demoFixtureVisible = showDemoFixture ?? isBrainDemoFixtureMode();
   const canImport = draft.trim().length > 0 && !disabled && !importing;
   const importHint = importHintForKind(kind);
 
@@ -2293,11 +2336,32 @@ export function BrainMemoryPanel({
         {profile?.profile.privacySafeSummary ??
           "No private user memory has been imported yet. Create will label suggestions context-light until sources are added."}
       </p>
+      <ol className="brain-first-run-steps" aria-label="Brain first-run flow">
+        {firstRunSteps.map((step, index) => (
+          <li key={step.label} className={`${step.done ? "is-done" : ""}${step.active ? " is-active" : ""}`.trim()}>
+            <span>{index + 1}</span>
+            <strong>{step.label}</strong>
+          </li>
+        ))}
+      </ol>
       <p className="brain-memory-import-hint">
         Supports ChatGPT conversations.json, extracted ChatGPT files, Claude JSON/CSV/text, notes, markdown, CSV, and already-extracted PDF
         text. ZIP parsing is not implemented yet; unzip exports and upload conversations.json.
       </p>
       {error ? <p className="brain-memory-error">{error}</p> : null}
+      {demoFixtureVisible && onDemoFixtureImport ? (
+        <button
+          type="button"
+          className="secondary-command brain-memory-demo-button"
+          disabled={disabled || importing}
+          onClick={() => {
+            void onDemoFixtureImport();
+          }}
+        >
+          <Sparkles size={15} aria-hidden="true" />
+          <span>Load Penny demo fixture</span>
+        </button>
+      ) : null}
       <form className="brain-memory-import" onSubmit={handleSubmit}>
         <div className="brain-memory-import-row">
           <label>
@@ -2343,11 +2407,26 @@ export function BrainMemoryPanel({
         <BrainMemoryProfileSummary
           profile={profile}
           recentNodes={recentNodes}
+          sections={profileSections}
           reviewingId={reviewingId ?? null}
           disabled={disabled}
           onReviewMemory={onReviewMemory}
         />
       </div>
+      {profile && hasImportedMemories && onStartCreateWithBrain ? (
+        <div className="brain-memory-next-step">
+          <div>
+            <strong>Ready for Create</strong>
+            <span>
+              {profile.stats.memoryNodeCount} memories from {profile.stats.sourceCount} sources will travel with the first Create request.
+            </span>
+          </div>
+          <button type="button" className="primary-command" disabled={disabled || importing} onClick={() => onStartCreateWithBrain(profile)}>
+            <Sparkles size={15} aria-hidden="true" />
+            <span>Use this Brain to create something</span>
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -2422,23 +2501,24 @@ function BrainMemorySourcesList({
 function BrainMemoryProfileSummary({
   profile,
   recentNodes,
+  sections,
   reviewingId,
   disabled,
   onReviewMemory,
 }: {
   profile: BrainMemoryProfileData | null;
   recentNodes: MemoryNode[];
+  sections: Array<{ title: string; items: BrainProfileSectionItem[] }>;
   reviewingId: string | null;
   disabled: boolean;
   onReviewMemory: ((nodeId: string, action: MemoryReviewAction) => Promise<void>) | undefined;
 }) {
   const sourceById = new Map((profile?.sources ?? []).map((source) => [source.id, source]));
-  const sections = profile ? memoryProfileSections(profile, recentNodes) : [];
 
   return (
     <section className="brain-memory-card" aria-label="Memory profile summary">
       <div className="brain-memory-card-head">
-        <strong>Brain profile</strong>
+        <strong>Penny understood</strong>
         <span>{profile?.stats.memoryNodeCount ?? 0} nodes</span>
       </div>
       {sections.length > 0 ? (
@@ -2547,15 +2627,46 @@ type BrainProfileSectionItem = {
   summary: string;
 };
 
+function brainFirstRunSteps({
+  profile,
+  recentNodes,
+  sections,
+}: {
+  profile: BrainMemoryProfileData | null;
+  recentNodes: MemoryNode[];
+  sections: Array<{ title: string; items: BrainProfileSectionItem[] }>;
+}): Array<{ label: string; done: boolean; active: boolean }> {
+  const imported = (profile?.stats.sourceCount ?? 0) > 0;
+  const understood = sections.length > 0;
+  const reviewed = recentNodes.some((node) => node.evidenceLevel === "user_confirmed" || node.confidence >= 0.95);
+  const baseSteps = [
+    { label: "Import context", done: imported },
+    { label: "Review Brain profile", done: understood },
+    { label: "Confirm/forget/boost memories", done: reviewed },
+    { label: "Start Create with this Brain", done: false },
+    { label: "Export coding prompt", done: false },
+  ];
+  const activeIndex = baseSteps.findIndex((step) => !step.done);
+
+  return baseSteps.map((step, index) => ({
+    ...step,
+    active: index === (activeIndex === -1 ? baseSteps.length - 1 : activeIndex),
+  }));
+}
+
 function memoryProfileSections(profile: BrainMemoryProfileData, recentNodes: MemoryNode[]): Array<{ title: string; items: BrainProfileSectionItem[] }> {
   return [
     { title: "Recurring interests", items: signalItems(profile.profile.recurringInterests) },
     { title: "Active projects", items: nodeItems(recentNodes.filter((node) => node.type === "project" || node.type === "goal")) },
     { title: "Taste signals", items: signalItems(profile.profile.tasteSignals) },
-    { title: "Frustrations", items: signalItems(profile.profile.commonFrustrations) },
-    { title: "Build style", items: signalItems(profile.profile.preferredBuildStyle) },
+    { title: "Common frustrations", items: signalItems(profile.profile.commonFrustrations) },
+    { title: "Preferred build style", items: signalItems(profile.profile.preferredBuildStyle) },
     { title: "Strongest idea clusters", items: signalItems(profile.profile.activeIdeaClusters) },
   ].filter((section) => section.items.length > 0);
+}
+
+export function isBrainDemoFixtureMode(env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env): boolean {
+  return env?.DEV === true || env?.MODE === "test";
 }
 
 function signalItems(signals: UserProfileSignal[]): BrainProfileSectionItem[] {

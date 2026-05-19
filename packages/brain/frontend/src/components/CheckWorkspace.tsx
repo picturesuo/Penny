@@ -3,13 +3,16 @@ import { CheckCircle2, Download, Info, RefreshCcw, Sparkles, X } from "lucide-re
 import { createNext, exportCodingPrompt } from "../api/brainClient";
 import type {
   BrainData,
+  BrainMemoryProfileData,
   CandidateOption,
   CodingPromptArtifact,
   CreateLens,
   CreateNextInput,
   JudgmentEvent,
+  MemoryRef,
   OptionSet,
   PromptExport,
+  SourceRef,
   VerificationSummary,
 } from "../types/brain";
 
@@ -17,6 +20,7 @@ interface CheckWorkspaceProps {
   data: BrainData | null;
   status: string;
   isThinking: boolean;
+  brainProfile?: BrainMemoryProfileData | null | undefined;
   initialSeedText?: string | null;
   onInitialSeedConsumed?: () => void;
   onStatusChange?: (status: string) => void;
@@ -32,6 +36,7 @@ export function CheckWorkspace({
   data,
   status,
   isThinking,
+  brainProfile,
   initialSeedText,
   onInitialSeedConsumed,
   onStatusChange,
@@ -110,7 +115,7 @@ export function CheckWorkspace({
     }
 
     await runCreateAction("Generating Create directions", async () => {
-      const payload = await createNext(buildCreateNextInput({ rawIdea, data }));
+      const payload = await createNext(buildCreateNextInput({ rawIdea, data, brainProfile }));
       applyCreatePayload(payload.data);
       setSelectedOptionIds([]);
       setUserComment("");
@@ -144,6 +149,7 @@ export function CheckWorkspace({
         buildCreateNextInput({
           rawIdea,
           data,
+          brainProfile,
           optionSet,
           selectedOptionIds,
           userComment,
@@ -213,6 +219,8 @@ export function CheckWorkspace({
           </header>
 
           {failure ? <CreateFailurePanel failure={failure} onRetry={() => void handleGenerateDirections()} /> : null}
+
+          <CreateBrainOnboardingPanel profile={brainProfile ?? null} />
 
           <section className="create-seed-panel" aria-label="Rough idea input">
             <label>
@@ -328,6 +336,40 @@ export function CreatePathSidebar({
         <strong>{status}</strong>
       </div>
     </aside>
+  );
+}
+
+export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryProfileData | null }) {
+  const memoryCount = profile?.stats.memoryNodeCount ?? 0;
+  const sourceCount = profile?.stats.sourceCount ?? 0;
+  const topSignals = profile ? topBrainProfileSignals(profile).slice(0, 3) : [];
+
+  if (!memoryCount) {
+    return (
+      <section className="create-brain-panel is-context-light" aria-label="Create Brain context">
+        <div>
+          <span>Context-light</span>
+          <strong>No imported Brain memories yet</strong>
+        </div>
+        <p>Create will use the rough idea and any open session context until private memory is imported.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="create-brain-panel is-using-brain" aria-label="Create Brain context">
+      <div>
+        <span>Using your Brain</span>
+        <strong>
+          {memoryCount} memories · {sourceCount} sources
+        </strong>
+      </div>
+      <ul>
+        {topSignals.map((signal) => (
+          <li key={signal}>{signal}</li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -568,9 +610,10 @@ function CreateFailurePanel({ failure, onRetry }: { failure: string; onRetry: ()
   );
 }
 
-function buildCreateNextInput(input: {
+export function buildCreateNextInput(input: {
   rawIdea: string;
   data: BrainData | null;
+  brainProfile?: BrainMemoryProfileData | null | undefined;
   optionSet?: OptionSet | null;
   selectedOptionIds?: string[];
   userComment?: string;
@@ -578,6 +621,7 @@ function buildCreateNextInput(input: {
 }): CreateNextInput {
   const body: CreateNextInput = { rawIdea: input.rawIdea };
   const context = createContextFromData(input.data);
+  const brainContext = createBrainProfileCreateContext(input.brainProfile ?? null);
   const sessionId = input.optionSet?.sessionId ?? input.artifact?.sessionId ?? input.data?.session?.id ?? null;
   const projectId = input.optionSet?.projectId ?? input.artifact?.projectId ?? null;
 
@@ -605,8 +649,25 @@ function buildCreateNextInput(input: {
     body.artifact = input.artifact;
   }
 
+  if (brainContext.memory.length) {
+    body.memory = brainContext.memory;
+  }
+
+  if (brainContext.sources.length) {
+    body.sources = brainContext.sources;
+  }
+
   if (context) {
-    body.context = context;
+    body.context = {
+      ...context,
+      ...(brainContext.summary
+        ? { summary: [context.summary, brainContext.summary].filter(Boolean).join(" ") }
+        : context.summary
+          ? { summary: context.summary }
+          : {}),
+    };
+  } else if (brainContext.summary) {
+    body.context = { summary: brainContext.summary };
   }
 
   return body;
@@ -635,6 +696,81 @@ function createContextFromData(data: BrainData | null): CreateNextInput["context
   }
 
   return Object.keys(context).length ? context : undefined;
+}
+
+function createBrainProfileCreateContext(profile: BrainMemoryProfileData | null): {
+  summary: string | null;
+  memory: MemoryRef[];
+  sources: SourceRef[];
+} {
+  if (!profile || profile.stats.memoryNodeCount === 0) {
+    return { summary: null, memory: [], sources: [] };
+  }
+
+  const topSignals = topBrainProfileSignals(profile).slice(0, 3);
+  const summary = [
+    `Using imported Brain context with ${profile.stats.memoryNodeCount} memories from ${profile.stats.sourceCount} sources.`,
+    topSignals.length ? `Top profile signals: ${topSignals.join("; ")}.` : profile.profile.privacySafeSummary,
+  ].join(" ");
+  const memory = profile.recentMemoryNodes.slice(0, 6).map<MemoryRef>((node) => ({
+    id: node.id,
+    label: node.title,
+    kind: memoryKindFromNodeType(node.type),
+    summary: node.summary,
+  }));
+  const sources = profile.sources.slice(0, 6).map<SourceRef>((source) => ({
+    id: source.id,
+    label: source.label,
+    kind: "source",
+    excerpt: `Imported ${source.kind} with ${source.memoryNodeCount} memories and ${source.chunkCount} chunks.`,
+    sourceRange: source.fileName ?? `source ${source.id.slice(0, 8)}`,
+  }));
+
+  return { summary, memory, sources };
+}
+
+export function topBrainProfileSignals(profile: BrainMemoryProfileData): string[] {
+  return uniqueStrings([
+    ...profile.profile.preferredBuildStyle.map((signal) => signal.label),
+    ...profile.profile.tasteSignals.map((signal) => signal.label),
+    ...profile.profile.recurringInterests.map((signal) => signal.label),
+    ...profile.profile.activeIdeaClusters.map((signal) => signal.label),
+    ...profile.profile.commonFrustrations.map((signal) => signal.label),
+    ...profile.recentMemoryNodes
+      .filter((node) => node.type === "preference" || node.type === "project" || node.type === "goal")
+      .map((node) => node.title),
+  ]);
+}
+
+function memoryKindFromNodeType(type: BrainMemoryProfileData["recentMemoryNodes"][number]["type"]): MemoryRef["kind"] {
+  if (type === "preference") {
+    return "preference";
+  }
+
+  if (type === "source_fact") {
+    return "context";
+  }
+
+  return "brain";
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const cleaned = value.replace(/\s+/g, " ").trim();
+    const key = cleaned.toLowerCase();
+
+    if (!cleaned || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(cleaned);
+  }
+
+  return result;
 }
 
 function sortCreateOptions(options: CandidateOption[]): CandidateOption[] {

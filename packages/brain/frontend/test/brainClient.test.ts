@@ -12,6 +12,7 @@ import {
   decideVerifyConfidence,
   deleteBrainSource,
   exportCodingPrompt,
+  fetchBrainDemoFixtureImport,
   fetchBrainImportJob,
   fetchBrainHybridSearch,
   fetchBrainMemoryProfile,
@@ -871,6 +872,31 @@ test("frontend brain client uses Brain memory import, profile, retrieval, and de
     assert.deepEqual(calls[4]?.body, { action: "correct" });
     assert.equal(calls[5]?.url, `/api/brain/sources/${source.id}`);
     assert.equal(calls[5]?.method, "DELETE");
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("frontend brain client loads the Brain demo fixture import payload", async () => {
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse({
+      importInput: {
+        kind: "chatgpt_export",
+        label: "Penny demo ChatGPT export",
+        fileName: "conversations.json",
+        content: "[]",
+      },
+    }),
+  ]);
+
+  try {
+    const fixture = await fetchBrainDemoFixtureImport();
+
+    assert.equal(fixture.data.importInput.kind, "chatgpt_export");
+    assert.equal(fixture.data.importInput.fileName, "conversations.json");
+    assert.equal(calls[0]?.url, "/api/brain/demo-fixture/penny");
+    assert.equal(calls[0]?.method, "GET");
   } finally {
     restoreFetch();
   }

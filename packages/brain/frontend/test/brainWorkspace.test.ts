@@ -55,16 +55,26 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
       error: null,
       disabled: false,
       onImport: async () => undefined,
+      onDemoFixtureImport: async () => undefined,
       onDeleteSource: async () => undefined,
+      onStartCreateWithBrain: () => undefined,
+      showDemoFixture: true,
     }),
   );
 
   assert.match(markup, /Second Brain memory/);
   assert.match(markup, /Private context for Create/);
+  assert.match(markup, /Import context/);
+  assert.match(markup, /Review Brain profile/);
+  assert.match(markup, /Confirm\/forget\/boost memories/);
+  assert.match(markup, /Start Create with this Brain/);
+  assert.match(markup, /Export coding prompt/);
+  assert.match(markup, /Load Penny demo fixture/);
   assert.match(markup, /Uploaded sources/);
   assert.match(markup, /Founder workflow notes/);
   assert.match(markup, /Private user memory/);
   assert.match(markup, /no global training/i);
+  assert.match(markup, /Penny understood/);
   assert.match(markup, /Small reversible builds/);
   assert.match(markup, /Preference - Small reversible builds/);
   assert.match(markup, /Grounded/);
@@ -74,6 +84,7 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Mark Preference - Small reversible builds correct/);
   assert.match(markup, /ZIP parsing is not implemented yet/i);
   assert.match(markup, /Delete Founder workflow notes/);
+  assert.match(markup, /Use this Brain to create something/);
 });
 
 function emptyDocumentsData(): BrainDocumentsData {

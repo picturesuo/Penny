@@ -3,6 +3,7 @@ import type {
   AskPennyResponse,
   AutopilotTickData,
   BrainClaim,
+  BrainDemoFixtureResponse,
   BrainDocumentsResponse,
   BrainHybridSearchResponse,
   BrainImportInput,
@@ -302,6 +303,21 @@ export async function importBrainSource(input: BrainImportInput): Promise<BrainI
   }
 
   return payload as BrainImportResponse;
+}
+
+export async function fetchBrainDemoFixtureImport(): Promise<BrainDemoFixtureResponse> {
+  const response = await fetch("/api/brain/demo-fixture/penny", {
+    method: "GET",
+    headers: requestHeaders(),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /api/brain/demo-fixture/penny failed with ${response.status}.`));
+  }
+
+  return payload as BrainDemoFixtureResponse;
 }
 
 export async function fetchBrainImportJob(jobId: string): Promise<BrainImportJobResponse> {

@@ -1352,6 +1352,12 @@ export interface BrainImportResponse {
   };
 }
 
+export interface BrainDemoFixtureResponse {
+  data: {
+    importInput: BrainImportInput;
+  };
+}
+
 export interface BrainImportJobResponse {
   data: {
     job: IngestionJob;

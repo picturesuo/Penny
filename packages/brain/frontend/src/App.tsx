@@ -30,6 +30,7 @@ import type {
   BrainData,
   BrainDocumentsData,
   BrainHybridSearchResponse,
+  BrainMemoryProfileData,
   BrainMove,
   BrainRecentIdea,
   CanvasNode,
@@ -77,6 +78,7 @@ export function App() {
   const [learnFocusNode, setLearnFocusNode] = useState<CanvasNode | null>(null);
   const [relatedBrainSearch, setRelatedBrainSearch] = useState<BrainRelatedSearchState | null>(null);
   const [checkInitialSeedText, setCheckInitialSeedText] = useState<string | null>(null);
+  const [createBrainProfile, setCreateBrainProfile] = useState<BrainMemoryProfileData | null>(null);
   const [activeMode, setActiveMode] = useState<PennyMode>("Learn");
   const [landingVisible, setLandingVisible] = useState(() => activeSessionId() === null);
   const [status, setStatus] = useState("Ready");
@@ -276,6 +278,7 @@ export function App() {
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
     setCheckInitialSeedText(null);
+    setCreateBrainProfile(null);
     setLandingVisible(true);
     forgetActiveSession();
     setStatus("Ready");
@@ -284,6 +287,10 @@ export function App() {
   function handleLandingModeSelect(mode: PennyMode) {
     setLandingVisible(false);
     setActiveMode(mode);
+
+    if (mode !== "Create") {
+      setCreateBrainProfile(null);
+    }
   }
 
   async function handleLandingPromptSubmit(
@@ -310,6 +317,7 @@ export function App() {
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
     setCheckInitialSeedText(sourceMaterial?.extractedText || rawIdea);
+    setCreateBrainProfile(null);
     setActiveMode("Create");
     setStatus("Preparing Create");
   }
@@ -338,6 +346,7 @@ export function App() {
       setFocusedClaimId(cockpit.autopilot.suggestion?.targetClaimId ?? cockpit.ideaMap.claims[0]?.id ?? null);
       await refreshDocuments(data.session.id);
       setActiveMode("Create");
+      setCreateBrainProfile(null);
       setStatus("Create ready");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -364,6 +373,9 @@ export function App() {
       });
       setFocusedClaimId(result.focusedClaimId);
       setActiveMode(result.nextMode);
+      if (result.nextMode === "Create") {
+        setCreateBrainProfile(null);
+      }
       setStatus("Autopilot focus started");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -770,6 +782,7 @@ export function App() {
           setLearnFocusNode(null);
           setRelatedBrainSearch(null);
           setCheckInitialSeedText(recent.rawIdea);
+          setCreateBrainProfile(null);
           setActiveMode("Create");
           setStatus("Quick note sent to Create");
         } else {
@@ -793,6 +806,26 @@ export function App() {
     } finally {
       setIsThinking(false);
     }
+  }
+
+  function handleStartCreateWithBrain(profile: BrainMemoryProfileData) {
+    setSelectedDocumentId(null);
+    setData(null);
+    setMoves([]);
+    setAutopilot(null);
+    setChallengeResponse(null);
+    setLatestArtifact(null);
+    setFocusedClaimId(null);
+    setFocusedWorkStructureStepId(null);
+    setBrainCanvasOpen(false);
+    setLearnFocusNode(null);
+    setRelatedBrainSearch(null);
+    setCheckInitialSeedText(null);
+    setCreateBrainProfile(profile);
+    setLandingVisible(false);
+    setActiveMode("Create");
+    forgetActiveSession();
+    setStatus(profile.stats.memoryNodeCount ? "Using your Brain in Create" : "Create opened context-light");
   }
 
   return (
@@ -853,12 +886,14 @@ export function App() {
             onReworkDocument={handleReworkDocument}
             onCanvasOpenChange={setBrainCanvasOpen}
             onCanvasNodeAction={handleCanvasNodeAction}
+            onStartCreateWithBrain={handleStartCreateWithBrain}
           />
         ) : activeMode === "Create" ? (
           <CheckWorkspace
             data={data}
             status={status}
             isThinking={isThinking}
+            brainProfile={createBrainProfile}
             initialSeedText={checkInitialSeedText}
             onInitialSeedConsumed={() => setCheckInitialSeedText(null)}
             onStatusChange={setStatus}

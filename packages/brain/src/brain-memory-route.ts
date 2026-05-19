@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -376,6 +377,26 @@ export async function handleBrainImportRequest(
   } catch (error) {
     return brainMemoryErrorResponse(error);
   }
+}
+
+export async function handleBrainDemoFixtureRequest(request: Request): Promise<Response> {
+  if (request.method !== "GET") {
+    return methodNotAllowed("GET /api/brain/demo-fixture/penny requires the GET method.", "GET");
+  }
+
+  const content = await readFile(new URL("../../../test/fixtures/penny-brain-demo-conversations.json", import.meta.url), "utf8");
+
+  return jsonResponse({
+    data: {
+      importInput: {
+        kind: "chatgpt_export",
+        label: "Penny demo ChatGPT export",
+        fileName: "conversations.json",
+        mimeType: "application/json",
+        content,
+      },
+    },
+  });
 }
 
 export async function handleBrainImportJobRequest(

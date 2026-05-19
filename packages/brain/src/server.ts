@@ -11,6 +11,7 @@ import { handleAssumptionResponseRequest } from "./assumption-response-route.ts"
 import { handleAutopilotTickRequest, handleManualNodeSelectedRequest } from "./autopilot-route.ts";
 import { handleBrainDocumentsRequest } from "./brain-documents-route.ts";
 import {
+  handleBrainDemoFixtureRequest,
   handleBrainImportJobRequest,
   handleBrainImportRequest,
   handleBrainMemoryProfileRequest,
@@ -280,6 +281,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/brain/import") {
       await writeWebResponse(outgoing, await handleBrainImportRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/brain/demo-fixture/penny") {
+      await writeWebResponse(outgoing, await handleBrainDemoFixtureRequest(request));
       return;
     }
 
