@@ -736,6 +736,7 @@ export function topBrainProfileSignals(profile: BrainMemoryProfileData): string[
     ...profile.profile.recurringInterests.map((signal) => signal.label),
     ...profile.profile.activeIdeaClusters.map((signal) => signal.label),
     ...profile.profile.commonFrustrations.map((signal) => signal.label),
+    ...(profile.profile.repeatedRejectedDirections ?? []).map((signal) => signal.label),
     ...profile.recentMemoryNodes
       .filter((node) => node.type === "preference" || node.type === "project" || node.type === "goal")
       .map((node) => node.title),
