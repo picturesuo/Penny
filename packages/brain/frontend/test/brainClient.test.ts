@@ -227,16 +227,41 @@ test("frontend brain client uses Create next and coding prompt export routes", a
     artifactId: artifact.id,
     createdAt: "2026-05-05T12:00:00.000Z",
     verdict: "ready",
+    scores: {
+      intentMatch: 92,
+      personalMemoryGrounding: 78,
+      buildability: 96,
+      nonGenericness: 91,
+      userAutonomyPreserved: 94,
+      fakeClaimRisk: 95,
+      promptCompleteness: 100,
+    },
     checks: [
-      { key: "intent_match", label: "Intent match", status: "pass", summary: "Intent is visible." },
-      { key: "buildability", label: "Buildability", status: "pass", summary: "Buildable route and UI." },
-      { key: "source_context_grounding", label: "Source/context grounding", status: "pass", summary: "Grounded in rough idea." },
-      { key: "non_generic", label: "Not a GPT wrapper", status: "pass", summary: "Records judgment." },
-      { key: "missing_info", label: "Missing info", status: "pass", summary: "No blockers." },
-      { key: "risks", label: "Risks", status: "pass", summary: "Risks listed." },
+      { key: "intent_match", label: "Intent match", status: "pass", score: 92, summary: "Intent is visible." },
+      { key: "personal_memory_grounding", label: "Personal memory grounding", status: "warn", score: 78, summary: "No durable memory was available." },
+      { key: "buildability", label: "Buildability", status: "pass", score: 96, summary: "Buildable route and UI." },
+      { key: "non_genericness", label: "Non-genericness", status: "pass", score: 91, summary: "Records judgment." },
+      { key: "user_autonomy_preserved", label: "User autonomy preserved", status: "pass", score: 94, summary: "User chooses cards." },
+      { key: "fake_claim_risk", label: "Fake claim risk", status: "pass", score: 95, summary: "No fake claims." },
+      { key: "prompt_completeness", label: "Prompt completeness", status: "pass", score: 100, summary: "All sections present." },
     ],
     missingInfo: [],
     risks: [],
+  };
+  const qualitySignals = createPromptQualitySignalsPayload();
+  const observability = {
+    providerMode: "deterministic",
+    providerName: "deterministic",
+    schemaValidation: "not_run",
+    schemaValidationErrors: [],
+    fallbackReason: null,
+    memoryCountUsed: 0,
+    sourceCountUsed: 1,
+    rejectedDirectionsUsed: [],
+    generatedLenses: ["Personal", "Practical", "Valuable", "Critical", "Weird"],
+    selectedOptionIds: [optionSet.options[0].id, optionSet.options[3].id],
+    selectedLenses: ["Personal", "Critical"],
+    exportQualitySignals: qualitySignals,
   };
   const judgmentEvent = {
     id: "judgment-test",
@@ -263,6 +288,7 @@ test("frontend brain client uses Create next and coding prompt export routes", a
       artifact,
       verification,
       judgmentEvent,
+      observability,
       exportReady: true,
     }),
     jsonResponse({
@@ -273,6 +299,7 @@ test("frontend brain client uses Create next and coding prompt export routes", a
         targets: ["Codex", "Claude Code", "Cursor"],
         text: "# Create prompt\n\n## Goal\nBuild Create.",
         fileName: "create-prompt.md",
+        qualitySignals,
         createdAt: "2026-05-05T12:00:01.000Z",
       },
     }),
@@ -1418,6 +1445,28 @@ function createArtifactPayload(sessionId: string) {
     sourceOptionSetIds: ["create-options-test"],
     judgmentEventIds: ["judgment-test"],
     updatedAt: now,
+  };
+}
+
+function createPromptQualitySignalsPayload() {
+  return {
+    hasRoughIdea: true,
+    hasSelectedOptionHistory: true,
+    hasRelevantPersonalContext: true,
+    hasRepeatedRejectedDirections: true,
+    hasProductGoal: true,
+    hasNonGoals: true,
+    hasUxRequirements: true,
+    hasFrontendRequirements: true,
+    hasBackendRequirements: true,
+    hasDataModel: true,
+    hasPrivacyConstraints: true,
+    hasVerificationRequirements: true,
+    hasImplementationSequence: true,
+    hasAcceptanceTests: true,
+    hasDoNotBreakList: true,
+    promptCompletenessScore: 100,
+    missing: [],
   };
 }
 
