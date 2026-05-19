@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { inflateRawSync } from "node:zlib";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -511,12 +512,6 @@ export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteS
       const jobId = stableId("brain-import-job", scopeKey(scope), input.kind, baseLabel, content, now);
 
       try {
-        if (input.kind === "zip") {
-          throw new BrainMemoryValidationError(
-            "ZIP archive parsing is not available in this kernel. Import the extracted conversations.json, CSV, markdown, or text file instead.",
-          );
-        }
-
         const normalized = normalizeImportedText(input.kind, content);
         const chunks = chunkText(normalized);
 
@@ -877,12 +872,6 @@ export function createInMemoryBrainMemoryService(stores = new Map<string, ScopeM
       const jobId = stableId("brain-import-job", scopeKey(scope), input.kind, baseLabel, content, now);
 
       try {
-        if (input.kind === "zip") {
-          throw new BrainMemoryValidationError(
-            "ZIP archive parsing is not available in this kernel. Import the exported conversations.json, CSV, markdown, or extracted text instead.",
-          );
-        }
-
         const normalized = normalizeImportedText(input.kind, content);
         const chunks = chunkText(normalized);
 
@@ -1492,13 +1481,13 @@ function normalizeImportedText(kind: SourceImportKind, content: string): string 
     case "text":
       return normalizeWhitespace(raw);
     case "zip":
-      throw new BrainMemoryValidationError("ZIP archive parsing is not available in this kernel.");
+      return normalizeWhitespace(extractZipText(content));
   }
 }
 
 function emptyImportMessage(kind: SourceImportKind): string {
   if (kind === "zip") {
-    return "ZIP archive parsing is not available in this kernel. Unzip the export and import conversations.json, CSV, markdown, or text.";
+    return "ZIP import needs the exported ZIP file content. Choose a ChatGPT export ZIP or unzip it and import conversations.json, CSV, markdown, or text.";
   }
 
   if (kind === "pdf") {
@@ -1506,7 +1495,7 @@ function emptyImportMessage(kind: SourceImportKind): string {
   }
 
   if (kind === "chatgpt_export") {
-    return "ChatGPT import needs the extracted conversations.json content, not the ZIP archive itself.";
+    return "ChatGPT import needs conversations.json content. You can also choose the ChatGPT export ZIP with kind set to ZIP export.";
   }
 
   if (kind === "claude_export") {
@@ -1526,6 +1515,169 @@ function extractPdfText(content: string): string {
   }
 
   return content;
+}
+
+type ZipTextEntry = {
+  name: string;
+  text: string;
+};
+
+function extractZipText(content: string): string {
+  const entries = extractZipTextEntries(content);
+  const preferred = entries.find((entry) => /(^|\/)conversations\.json$/i.test(entry.name))
+    ?? entries.find((entry) => /\b(chatgpt|conversation|claude|chat)\b/i.test(entry.name))
+    ?? entries[0];
+
+  if (!preferred) {
+    throw new BrainMemoryValidationError(
+      "ZIP import did not contain conversations.json, Claude JSON/CSV, markdown, or text files that Penny can read.",
+    );
+  }
+
+  if (/(^|\/)conversations\.json$/i.test(preferred.name) || /\bchatgpt\b/i.test(preferred.name)) {
+    return extractChatGptExportText(preferred.text);
+  }
+
+  if (/\bclaude\b/i.test(preferred.name)) {
+    return extractClaudeExportText(preferred.text);
+  }
+
+  const selected = entries
+    .filter((entry) => entry.name === preferred.name || !/(^|\/)conversations\.json$/i.test(preferred.name))
+    .slice(0, 6);
+
+  return selected.map((entry) => `Archive file: ${entry.name}\n${normalizeZipEntryText(entry.name, entry.text)}`).join("\n\n");
+}
+
+function extractZipTextEntries(content: string): ZipTextEntry[] {
+  const buffer = zipBufferFromContent(content);
+
+  if (buffer.length < 22 || buffer.readUInt32LE(0) !== 0x04034b50) {
+    throw new BrainMemoryValidationError("ZIP import needs a valid ZIP archive. Choose the original export ZIP or import extracted text.");
+  }
+
+  const endOfCentralDirectory = findLastZipSignature(buffer, 0x06054b50);
+  if (endOfCentralDirectory < 0) {
+    throw new BrainMemoryValidationError("ZIP import could not find the archive directory. Try unzipping locally and importing conversations.json.");
+  }
+
+  const centralDirectoryOffset = buffer.readUInt32LE(endOfCentralDirectory + 16);
+  const centralDirectorySize = buffer.readUInt32LE(endOfCentralDirectory + 12);
+  const centralDirectoryEnd = Math.min(buffer.length, centralDirectoryOffset + centralDirectorySize);
+  const entries: ZipTextEntry[] = [];
+  let offset = centralDirectoryOffset;
+
+  while (offset + 46 <= centralDirectoryEnd && buffer.readUInt32LE(offset) === 0x02014b50) {
+    const compressionMethod = buffer.readUInt16LE(offset + 10);
+    const compressedSize = buffer.readUInt32LE(offset + 20);
+    const fileNameLength = buffer.readUInt16LE(offset + 28);
+    const extraLength = buffer.readUInt16LE(offset + 30);
+    const commentLength = buffer.readUInt16LE(offset + 32);
+    const localHeaderOffset = buffer.readUInt32LE(offset + 42);
+    const nameStart = offset + 46;
+    const name = buffer.subarray(nameStart, nameStart + fileNameLength).toString("utf8");
+    offset = nameStart + fileNameLength + extraLength + commentLength;
+
+    if (!isReadableZipTextName(name) || name.endsWith("/")) {
+      continue;
+    }
+
+    const text = readZipEntryText(buffer, name, localHeaderOffset, compressedSize, compressionMethod);
+    if (text.trim()) {
+      entries.push({ name, text });
+    }
+  }
+
+  return entries.sort((left, right) => zipEntryPriority(left.name) - zipEntryPriority(right.name));
+}
+
+function zipBufferFromContent(content: string): Buffer {
+  const trimmed = content.trim();
+  const dataUrlMatch = /^data:[^,]+;base64,(?<data>[a-z0-9+/=\s]+)$/i.exec(trimmed);
+  const base64 = dataUrlMatch?.groups?.data ?? (/^[a-z0-9+/=\s]+$/i.test(trimmed) && !trimmed.startsWith("PK") ? trimmed : "");
+  const buffer = base64 ? Buffer.from(base64.replace(/\s+/g, ""), "base64") : Buffer.from(content, "binary");
+
+  return buffer;
+}
+
+function readZipEntryText(buffer: Buffer, name: string, localHeaderOffset: number, compressedSize: number, compressionMethod: number): string {
+  if (localHeaderOffset + 30 > buffer.length || buffer.readUInt32LE(localHeaderOffset) !== 0x04034b50) {
+    throw new BrainMemoryValidationError(`ZIP import could not read ${name}. Try extracting the archive locally.`);
+  }
+
+  const localFileNameLength = buffer.readUInt16LE(localHeaderOffset + 26);
+  const localExtraLength = buffer.readUInt16LE(localHeaderOffset + 28);
+  const dataStart = localHeaderOffset + 30 + localFileNameLength + localExtraLength;
+  const dataEnd = dataStart + compressedSize;
+  const compressed = buffer.subarray(dataStart, Math.min(dataEnd, buffer.length));
+
+  if (compressionMethod === 0) {
+    return compressed.toString("utf8");
+  }
+
+  if (compressionMethod === 8) {
+    return inflateRawSync(compressed).toString("utf8");
+  }
+
+  throw new BrainMemoryValidationError(`ZIP entry ${name} uses unsupported compression method ${compressionMethod}.`);
+}
+
+function isReadableZipTextName(name: string): boolean {
+  return /\.(json|csv|txt|md|markdown)$/i.test(name) && !/(^|\/)(__macosx|\.ds_store)\b/i.test(name);
+}
+
+function zipEntryPriority(name: string): number {
+  if (/(^|\/)conversations\.json$/i.test(name)) {
+    return 0;
+  }
+
+  if (/\bchatgpt\b/i.test(name)) {
+    return 1;
+  }
+
+  if (/\bclaude\b/i.test(name)) {
+    return 2;
+  }
+
+  if (/\.(md|markdown|txt)$/i.test(name)) {
+    return 3;
+  }
+
+  return 4;
+}
+
+function normalizeZipEntryText(name: string, text: string): string {
+  if (/\bclaude\b/i.test(name)) {
+    return extractClaudeExportText(text);
+  }
+
+  if (/\bchatgpt|conversation\b/i.test(name)) {
+    return extractChatGptExportText(text);
+  }
+
+  if (/\.json$/i.test(name)) {
+    return extractGenericJsonText(text);
+  }
+
+  if (/\.csv$/i.test(name)) {
+    return extractCsvText(text);
+  }
+
+  if (/\.(md|markdown)$/i.test(name)) {
+    return stripMarkdown(text);
+  }
+
+  return text;
+}
+
+function findLastZipSignature(buffer: Buffer, signature: number): number {
+  for (let offset = Math.max(0, buffer.length - 22); offset >= 0; offset -= 1) {
+    if (buffer.readUInt32LE(offset) === signature) {
+      return offset;
+    }
+  }
+
+  return -1;
 }
 
 function extractChatGptExportText(content: string): string {
@@ -2256,10 +2408,6 @@ function sourcePreviewFor(source: SourceImport, chunks: SourceChunk[], nodes: Me
     warnings.push("PDF import used already-extracted text only. Scanned or binary PDFs still need OCR or copied text before import.");
   }
 
-  if (source.kind === "zip") {
-    warnings.push("ZIP archive parsing is not available. Unzip the export and import conversations.json, CSV, markdown, or text.");
-  }
-
   if (nodes.length === 0) {
     warnings.push("No strong memory nodes were extracted. Add explicit goals, preferences, active projects, frustrations, or rejected directions.");
   }
@@ -2291,7 +2439,7 @@ function sourcePreviewExplanation(kind: SourceImportKind): string {
     case "canvas_text":
       return "Imported copied canvas text as private Brain context.";
     case "zip":
-      return "ZIP archives are not parsed directly.";
+      return "Parsed readable files from a ZIP archive, preferring ChatGPT conversations.json when present.";
     case "text":
       return "Imported plain text notes as private Brain context.";
   }
