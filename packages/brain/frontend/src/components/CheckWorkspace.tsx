@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Download, RefreshCcw, Sparkles } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
 import { createNext, exportCodingPrompt } from "../api/brainClient";
 import type {
   BrainData,
@@ -342,6 +342,15 @@ export function CreateOptionBoard({
   busy: boolean;
   onToggleOption: (optionId: string) => void;
 }) {
+  const [detailOptionId, setDetailOptionId] = useState<string | null>(null);
+  const activeDetailOption = detailOptionId ? options.find((option) => option.id === detailOptionId) ?? null : null;
+
+  useEffect(() => {
+    if (!options.length || (detailOptionId && !options.some((option) => option.id === detailOptionId))) {
+      setDetailOptionId(null);
+    }
+  }, [detailOptionId, options]);
+
   if (!options.length) {
     return (
       <section className="create-option-board is-empty" aria-label="Create directions">
@@ -363,19 +372,119 @@ export function CreateOptionBoard({
       <div className="create-option-grid">
         {options.map((option) => (
           <article key={option.id} className={`create-option-card${selectedOptionIds.includes(option.id) ? " is-selected" : ""}`}>
-            <button type="button" aria-pressed={selectedOptionIds.includes(option.id)} onClick={() => onToggleOption(option.id)} disabled={busy}>
+            <button
+              type="button"
+              className="create-option-select-button"
+              aria-pressed={selectedOptionIds.includes(option.id)}
+              onClick={() => onToggleOption(option.id)}
+              disabled={busy}
+            >
               <span>{option.lens}</span>
               <strong>{option.title}</strong>
               <p>{option.oneLine}</p>
             </button>
+            <div className="create-option-memory-meta" aria-label={`${option.lens} memory grounding`}>
+              <span>{option.memoryUsed.length} memories</span>
+              <span>{uniqueSourceCount(option)} sources</span>
+              {isContextLightOption(option) ? <span>Context-light</span> : null}
+            </div>
             <div>
               <p>{option.rationale}</p>
               <small>{option.nextMove}</small>
             </div>
+            <button type="button" className="create-option-detail-button" onClick={() => setDetailOptionId(option.id)}>
+              <Info size={14} />
+              Details
+            </button>
           </article>
         ))}
       </div>
+      {activeDetailOption ? <CreateOptionDetailsDrawer option={activeDetailOption} onClose={() => setDetailOptionId(null)} /> : null}
     </section>
+  );
+}
+
+export function CreateOptionDetailsDrawer({ option, onClose }: { option: CandidateOption; onClose: () => void }) {
+  const sourceRefs = uniqueById(option.sourcesUsed);
+  const memoryRefs = uniqueById(option.memoryUsed);
+  const importedSourceRefs = sourceRefs.filter((source) => source.kind === "source");
+  const groundedClaims = [
+    ...memoryRefs.map((memory) => memory.summary),
+    ...importedSourceRefs.map((source) => source.excerpt),
+  ].filter(Boolean);
+  const inferredClaims = [option.rationale, ...option.risks].filter(Boolean);
+
+  return (
+    <aside className="create-option-detail-drawer" aria-label={`${option.lens} option details`}>
+      <header>
+        <div>
+          <span>{option.lens} details</span>
+          <strong>{option.title}</strong>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close option details">
+          <X size={16} />
+        </button>
+      </header>
+
+      <section>
+        <span>Why suggested</span>
+        <p>{option.rationale}</p>
+        <small>{option.nextMove}</small>
+      </section>
+
+      <section>
+        <span>Memories used</span>
+        {memoryRefs.length ? (
+          <ul>
+            {memoryRefs.map((memory) => (
+              <li key={memory.id}>
+                <strong>{memory.label}</strong>
+                <p>{memory.summary}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>Context-light: no strong imported memory matched this direction.</p>
+        )}
+      </section>
+
+      <section>
+        <span>Sources used</span>
+        <ul>
+          {sourceRefs.map((source) => (
+            <li key={source.id}>
+              <strong>{source.label}</strong>
+              <p>{source.excerpt}</p>
+              {source.sourceRange ? <small>{source.sourceRange}</small> : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="create-option-claim-grounding">
+        <span>Grounding</span>
+        <div>
+          <strong>Grounded</strong>
+          {groundedClaims.length ? (
+            <ul>
+              {groundedClaims.slice(0, 4).map((claim) => (
+                <li key={claim}>{claim}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>Only the rough idea is grounded.</p>
+          )}
+        </div>
+        <div>
+          <strong>Inferred</strong>
+          <ul>
+            {inferredClaims.slice(0, 4).map((claim) => (
+              <li key={claim}>{claim}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    </aside>
   );
 }
 
@@ -530,6 +639,30 @@ function createContextFromData(data: BrainData | null): CreateNextInput["context
 
 function sortCreateOptions(options: CandidateOption[]): CandidateOption[] {
   return [...options].sort((left, right) => createLensOrder.indexOf(left.lens) - createLensOrder.indexOf(right.lens));
+}
+
+function isContextLightOption(option: CandidateOption): boolean {
+  return option.memoryUsed.length === 0;
+}
+
+function uniqueSourceCount(option: CandidateOption): number {
+  return uniqueById(option.sourcesUsed).length;
+}
+
+function uniqueById<T extends { id: string }>(values: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+
+  for (const value of values) {
+    if (seen.has(value.id)) {
+      continue;
+    }
+
+    seen.add(value.id);
+    result.push(value);
+  }
+
+  return result;
 }
 
 function createActiveStepIndex(input: {
