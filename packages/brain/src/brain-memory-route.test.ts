@@ -43,6 +43,9 @@ test("POST /api/brain/import stores private source chunks, memory nodes, edges, 
   assert.equal(profile.stats.chunkCount, job.counts.chunks);
   assert.equal(profile.sources[0]?.privacy.visibility, "private");
   assert.equal(profile.sources[0]?.privacy.trainingUse, false);
+  assert.equal(profile.sources[0]?.preview?.status, "ready");
+  assert.match(profile.sources[0]?.preview?.explanation ?? "", /markdown/i);
+  assert.match(profile.sources[0]?.preview?.excerpt ?? "", /Goal: I want Penny/i);
   assert.deepEqual(profile.sources[0]?.permission.allowedUses, ["private_memory", "create_retrieval"]);
   assert.match(profile.profile.privacySafeSummary, /no private global training is claimed or enabled/i);
   assert.ok(profile.profile.recurringInterests.length >= 1);
@@ -124,6 +127,97 @@ test("POST /api/brain/import parses ChatGPT-style conversations.json and retriev
   assert.ok(data.results.every((result) => result.sourceRef.sourceRange.startsWith("chunk ")));
   assert.ok(data.results.every((result) => result.permission.visibility === "private"));
   assert.ok(data.results.every((result) => result.permission.trainingUse === false));
+});
+
+test("POST /api/brain/import follows realistic ChatGPT current_node branches and returns source preview", async () => {
+  const service = createInMemoryBrainMemoryService();
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "chatgpt_export",
+      label: "Real ChatGPT export",
+      fileName: "conversations.json",
+      content: JSON.stringify(realisticChatGptBranchFixture()),
+    }),
+    { service },
+  );
+  const importPayload = await responsePayload(importResponse);
+  const profile = importPayload.data.profile as BrainMemoryProfile;
+
+  assert.equal(importResponse.status, 200);
+  assert.equal((importPayload.data.job as IngestionJob).status, "completed");
+  assert.equal(profile.sources[0]?.preview?.status, "ready");
+  assert.match(profile.sources[0]?.preview?.explanation ?? "", /ChatGPT conversation export/i);
+  assert.match(profile.sources[0]?.preview?.excerpt ?? "", /source previews/i);
+  assert.ok(!profile.recentMemoryNodes.some((node) => /enterprise CRM branch/i.test(node.summary)));
+  assert.ok(profile.recentMemoryNodes.some((node) => /source previews|global training/i.test(node.summary)));
+
+  const retrieveResponse = await handleBrainRetrieveRequest(
+    jsonRequest("http://localhost/api/brain/retrieve", {
+      query: "source previews fake global training",
+      limit: 5,
+    }),
+    { service },
+  );
+  const retrievePayload = await responsePayload(retrieveResponse);
+  const retrieval = retrievePayload.data as BrainMemoryRetrieval;
+
+  assert.equal(retrieveResponse.status, 200);
+  assert.equal(retrieval.contextLight, false);
+  assert.ok(retrieval.results.some((result) => /source previews|global training/i.test(result.summary)));
+});
+
+test("POST /api/brain/import parses Claude export chats and message content arrays", async () => {
+  const service = createInMemoryBrainMemoryService();
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "claude_export",
+      label: "Claude export",
+      fileName: "conversations.json",
+      content: JSON.stringify(claudeExportFixture()),
+    }),
+    { service },
+  );
+  const importPayload = await responsePayload(importResponse);
+  const profile = importPayload.data.profile as BrainMemoryProfile;
+
+  assert.equal(importResponse.status, 200);
+  assert.equal((importPayload.data.job as IngestionJob).status, "completed");
+  assert.equal(profile.sources[0]?.preview?.status, "ready");
+  assert.match(profile.sources[0]?.preview?.explanation ?? "", /Claude export/i);
+  assert.ok(profile.recentMemoryNodes.some((node) => node.type === "project" && /field ops command center/i.test(node.summary)));
+  assert.ok(profile.recentMemoryNodes.some((node) => node.type === "preference" && /audit trails/i.test(node.summary)));
+
+  const retrieveResponse = await handleBrainRetrieveRequest(
+    jsonRequest("http://localhost/api/brain/retrieve", { query: "field ops audit trails offline-first", limit: 5 }),
+    { service },
+  );
+  const retrievePayload = await responsePayload(retrieveResponse);
+  const retrieval = retrievePayload.data as BrainMemoryRetrieval;
+
+  assert.equal(retrieveResponse.status, 200);
+  assert.equal(retrieval.contextLight, false);
+  assert.ok(retrieval.results.some((result) => result.sourceRef.label === "Claude export"));
+});
+
+test("POST /api/brain/import returns a clear failed job for raw PDF binary", async () => {
+  const service = createInMemoryBrainMemoryService();
+  const response = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "pdf",
+      label: "Raw PDF",
+      fileName: "notes.pdf",
+      content: "%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\nxref\n0 1",
+    }),
+    { service },
+  );
+  const payload = await responsePayload(response);
+  const job = payload.data.job as IngestionJob;
+  const profile = payload.data.profile as BrainMemoryProfile;
+
+  assert.equal(response.status, 200);
+  assert.equal(job.status, "failed");
+  assert.match(job.errorMessages.join(" "), /raw PDF data|already been extracted|OCR/i);
+  assert.equal(profile.stats.sourceCount, 0);
 });
 
 test("POST /api/brain/import turns the Penny demo ChatGPT fixture into a useful Brain profile", async () => {
@@ -338,6 +432,102 @@ function chatGptExportFixture() {
       },
     },
   ];
+}
+
+function realisticChatGptBranchFixture() {
+  return [
+    {
+      title: "Import source previews",
+      current_node: "assistant2",
+      mapping: {
+        root: {
+          id: "root",
+          parent: null,
+          children: ["user1"],
+          message: null,
+        },
+        user1: {
+          id: "user1",
+          parent: "root",
+          children: ["assistant1"],
+          message: {
+            create_time: 1,
+            author: { role: "user" },
+            content: {
+              content_type: "text",
+              parts: ["Project: Penny import should turn realistic ChatGPT exports into source-backed Brain profile signals."],
+            },
+          },
+        },
+        assistant1: {
+          id: "assistant1",
+          parent: "user1",
+          children: ["altUser", "user2"],
+          message: {
+            create_time: 2,
+            author: { role: "assistant" },
+            content: { parts: ["The path should preserve selected branch order and source provenance."] },
+          },
+        },
+        altUser: {
+          id: "altUser",
+          parent: "assistant1",
+          children: [],
+          message: {
+            create_time: 3,
+            author: { role: "user" },
+            content: { parts: ["Project: This enterprise CRM branch should be ignored because it is not the current branch."] },
+          },
+        },
+        user2: {
+          id: "user2",
+          parent: "assistant1",
+          children: ["assistant2"],
+          message: {
+            create_time: 4,
+            author: { role: "user" },
+            content: {
+              parts: ["I prefer source previews, import status, and clear failed-import explanations. Avoid fake global training claims."],
+            },
+          },
+        },
+        assistant2: {
+          id: "assistant2",
+          parent: "user2",
+          children: [],
+          message: {
+            create_time: 5,
+            author: { role: "assistant" },
+            content: { parts: ["That should become grounded memory for Create options and prompt exports."] },
+          },
+        },
+      },
+    },
+  ];
+}
+
+function claudeExportFixture() {
+  return {
+    chats: [
+      {
+        name: "Field ops product work",
+        chat_messages: [
+          {
+            sender: "human",
+            text: "Project: Build a field ops command center that turns rough inspection notes into an implementation plan.",
+          },
+          {
+            sender: "assistant",
+            content: [{ type: "text", text: "The plan should preserve site evidence and make every AI claim traceable." }],
+          },
+          {
+            sender: "human",
+            content: [{ type: "text", text: "I prefer offline-first capture, audit trails, and source-backed cards over magic AI summaries." }],
+          },
+        ],
+      },
+    ],
+  };
 }
 
 function hasNodeType(profile: BrainMemoryProfile, type: MemoryNodeType): boolean {
