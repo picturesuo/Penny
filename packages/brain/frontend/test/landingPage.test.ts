@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { landingShortcutIntent, landingShortcuts, landingSubmitIntent } from "../src/components/LandingPage";
+import { LandingPage } from "../src/components/LandingPage";
 
 test("landing shortcuts either open Brain or select a composer destination", () => {
   assert.deepEqual(landingShortcutIntent("Q"), {
@@ -46,4 +49,18 @@ test("landing shortcuts render in Brain, Create, Learn, Quick note order", () =>
     landingShortcuts.map((shortcut) => `${shortcut.key} ${shortcut.label}`),
     ["B for Brain", "C for Create", "L for Learn", "Q for Quick note"],
   );
+});
+
+test("landing page exposes Start with your Brain first-run CTA", () => {
+  const markup = renderToStaticMarkup(
+    createElement(LandingPage, {
+      disabled: false,
+      status: "Ready",
+      onModeSelect: () => undefined,
+      onPromptSubmit: async () => undefined,
+      onQuickNote: async () => undefined,
+    }),
+  );
+
+  assert.match(markup, /Start with your Brain/);
 });

@@ -1,3 +1,4 @@
+import React from "react";
 import { ArrowUp, Upload } from "lucide-react";
 import { type ChangeEvent, type FormEvent, type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type PennyMode } from "../autopilotUx";
@@ -282,6 +283,10 @@ export function LandingPage({ disabled, status, onModeSelect, onPromptSubmit, on
             <div className="landing-rule" aria-hidden="true" />
             <p>FOR YOUR THOUGHTS</p>
           </div>
+
+          <button type="button" className="landing-brain-start-button" disabled={disabled} onClick={() => onModeSelect("Brain")}>
+            Start with your Brain
+          </button>
 
           <div className="landing-prompt-box" onClick={handlePromptBoxClick}>
             <form className="landing-composer" onSubmit={handleSubmit}>

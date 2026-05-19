@@ -1,3 +1,5 @@
+import React from "react";
+
 export function PennyMark() {
   return (
     <svg className="brand-mark" viewBox="18.7856 18.9914 51.6704 62.7809" aria-hidden="true" focusable="false">

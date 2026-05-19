@@ -140,6 +140,26 @@
     background: rgb(46 46 46 / 0.32);
   }
 
+  .landing-brain-start-button {
+    width: fit-content;
+    margin-bottom: 14px;
+    border: 1px solid #111111;
+    border-radius: 999px;
+    background: #eff7d2;
+    padding: 10px 14px;
+    color: #111111;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 850;
+    line-height: 1;
+    text-transform: uppercase;
+    box-shadow: 3px 3px 0 #111111;
+  }
+
+  .landing-brain-start-button:disabled {
+    opacity: 0.45;
+  }
+
   .landing-prompt-box {
     position: relative;
     display: grid;
