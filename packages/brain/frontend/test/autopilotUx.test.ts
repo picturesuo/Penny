@@ -42,7 +42,7 @@ test("Go There starts the selected candidate and refreshes cockpit once", async 
             suggestionMoveId: uuidAt(601),
             manualMoveId: null,
             paused: false,
-            reason: "Started Check.",
+            reason: "Started Create.",
             updatedAt: "2026-04-30T13:00:00.000Z",
           },
         },
@@ -53,13 +53,13 @@ test("Go There starts the selected candidate and refreshes cockpit once", async 
   assert.deepEqual(calls, [`start:${sessionId}:check-founder-risk`, `refresh:${sessionId}`]);
   assert.equal(calls.filter((call) => call.startsWith("refresh:")).length, 1);
   assert.equal(result.focusedClaimId, uuidAt(303));
-  assert.equal(result.nextMode, "Check");
+  assert.equal(result.nextMode, "Create");
 });
 
-test("Check candidates open Check after Go There", () => {
-  assert.equal(modeForAutopilotCandidate(candidate({ action: "challenge", mode: "challenge" })), "Check");
-  assert.equal(modeForAutopilotCandidate(candidate({ action: "resume_open_challenge", mode: "challenge" })), "Check");
-  assert.equal(modeForAutopilotCandidate(candidate({ action: "verify", mode: "verify" })), "Check");
+test("Challenge and verify candidates open Create after Go There", () => {
+  assert.equal(modeForAutopilotCandidate(candidate({ action: "challenge", mode: "challenge" })), "Create");
+  assert.equal(modeForAutopilotCandidate(candidate({ action: "resume_open_challenge", mode: "challenge" })), "Create");
+  assert.equal(modeForAutopilotCandidate(candidate({ action: "verify", mode: "verify" })), "Create");
 });
 
 test("Save candidates open the Brain save surface after Go There", () => {
