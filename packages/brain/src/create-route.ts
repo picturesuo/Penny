@@ -7,6 +7,8 @@ import { scopeValues, type BrainScope } from "./scope.ts";
 
 export type CreateLens = "Personal" | "Practical" | "Valuable" | "Critical" | "Weird";
 export type CreateCheckStatus = "pass" | "warn" | "fail";
+export type CreateProviderMode = "deterministic" | "model_backed" | "deterministic_fallback";
+export type CreateSchemaValidationStatus = "not_run" | "success" | "failure";
 
 export type MemoryRef = {
   id: string;
@@ -41,6 +43,41 @@ export type CandidateOption = {
     novelty: number;
     risk: number;
   };
+};
+
+export type PromptExportQualitySignals = {
+  hasRoughIdea: boolean;
+  hasSelectedOptionHistory: boolean;
+  hasRelevantPersonalContext: boolean;
+  hasRepeatedRejectedDirections: boolean;
+  hasProductGoal: boolean;
+  hasNonGoals: boolean;
+  hasUxRequirements: boolean;
+  hasFrontendRequirements: boolean;
+  hasBackendRequirements: boolean;
+  hasDataModel: boolean;
+  hasPrivacyConstraints: boolean;
+  hasVerificationRequirements: boolean;
+  hasImplementationSequence: boolean;
+  hasAcceptanceTests: boolean;
+  hasDoNotBreakList: boolean;
+  promptCompletenessScore: number;
+  missing: string[];
+};
+
+export type CreateObservability = {
+  providerMode: CreateProviderMode;
+  providerName: "deterministic" | CreateOptionProvider["name"];
+  schemaValidation: CreateSchemaValidationStatus;
+  schemaValidationErrors: string[];
+  fallbackReason: string | null;
+  memoryCountUsed: number;
+  sourceCountUsed: number;
+  rejectedDirectionsUsed: string[];
+  generatedLenses: CreateLens[];
+  selectedOptionIds: string[];
+  selectedLenses: CreateLens[];
+  exportQualitySignals: PromptExportQualitySignals;
 };
 
 export type OptionSet = {
@@ -100,10 +137,27 @@ export type VerificationSummary = {
   artifactId: string;
   createdAt: string;
   verdict: "ready" | "needs_revision";
+  scores: {
+    intentMatch: number;
+    personalMemoryGrounding: number;
+    buildability: number;
+    nonGenericness: number;
+    userAutonomyPreserved: number;
+    fakeClaimRisk: number;
+    promptCompleteness: number;
+  };
   checks: Array<{
-    key: "intent_match" | "buildability" | "source_context_grounding" | "non_generic" | "missing_info" | "risks";
+    key:
+      | "intent_match"
+      | "personal_memory_grounding"
+      | "buildability"
+      | "non_genericness"
+      | "user_autonomy_preserved"
+      | "fake_claim_risk"
+      | "prompt_completeness";
     label: string;
     status: CreateCheckStatus;
+    score: number;
     summary: string;
   }>;
   missingInfo: string[];
@@ -117,6 +171,7 @@ export type PromptExport = {
   targets: Array<"Codex" | "Claude Code" | "Cursor">;
   text: string;
   fileName: string;
+  qualitySignals: PromptExportQualitySignals;
   createdAt: string;
 };
 
@@ -129,12 +184,32 @@ export type CreateNextResult = {
   artifact: CodingPromptArtifact;
   verification: VerificationSummary;
   judgmentEvent: JudgmentEvent | null;
+  observability: CreateObservability;
   exportReady: boolean;
 };
 
 export type CreateRouteService = {
   next(input: CreateNextInput, request: Request): Promise<CreateNextResult>;
+  compare(input: CreateNextInput, request: Request): Promise<CreateProviderComparisonResult>;
   exportCodingPrompt(input: ExportCodingPromptInput, request: Request): Promise<{ export: PromptExport }>;
+};
+
+export type CreateProviderComparisonArm = {
+  label: "deterministic" | "model_backed";
+  providerUsed: CreateProviderMode;
+  fallbackReason: string | null;
+  optionSet: OptionSet;
+  artifact: CodingPromptArtifact;
+  verification: VerificationSummary;
+  promptExport: PromptExport;
+  observability: CreateObservability;
+};
+
+export type CreateProviderComparisonResult = {
+  sourceOfTruth: "deterministic_model_backed_create_comparison";
+  rawIdea: string;
+  deterministic: CreateProviderComparisonArm;
+  modelBacked: CreateProviderComparisonArm;
 };
 
 export type CreateRouteOptions = {
@@ -342,6 +417,24 @@ export async function handleCreateNextRequest(request: Request, options: CreateR
   }
 }
 
+export async function handleCreateCompareRequest(request: Request, options: CreateRouteOptions = {}): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/create/compare requires the POST method.", "POST");
+  }
+
+  const parsed = await parseJsonRequest(request, CreateNextBodySchema);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  try {
+    const service = options.service ?? defaultCreateRouteService;
+    return jsonResponse({ data: await service.compare(parsed.data, request) });
+  } catch (error) {
+    return createErrorResponse(error);
+  }
+}
+
 export async function handleExportCodingPromptRequest(
   request: Request,
   options: CreateRouteOptions = {},
@@ -376,8 +469,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
   const judgments = new Map<string, JudgmentEvent[]>();
   const optionProvider = options.optionProvider === undefined ? createDefaultCreateOptionProvider() : options.optionProvider;
 
-  return {
-    async next(input, request) {
+  async function runNext(input: CreateNextInput, request: Request, provider: CreateOptionProvider | null, persist: boolean): Promise<CreateNextResult> {
       const rawIdea = sourceTextFromCreateInput(input);
       if (!rawIdea) {
         throw new CreateRouteValidationError("Create needs a rough idea before it can generate directions.");
@@ -390,10 +482,14 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
       const retrievedMemory = await retrieveBrainMemoryForCreate({ scope, query: rawIdea, limit: 5 });
       const memoryUsed = normalizeMemoryRefs([...input.memory, ...retrievedMemory.memoryRefs], input.context, sessionId);
       const sourcesUsed = normalizeSourceRefs([...input.sources, ...retrievedMemory.sourceRefs], input.context, rawIdea);
-      const existingOptionSet = input.optionSetId ? optionSets.get(input.optionSetId) ?? null : null;
-      const optionSet =
-        existingOptionSet ??
-        (await buildOptionSetWithProvider({
+      const existingOptionSet = persist && input.optionSetId ? optionSets.get(input.optionSetId) ?? null : null;
+      const generated =
+        existingOptionSet
+          ? {
+              optionSet: existingOptionSet,
+              trace: deterministicProviderTrace(),
+            }
+          : await buildOptionSetWithProvider({
           projectId,
           sessionId,
           rawIdea,
@@ -401,8 +497,9 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
           sourcesUsed,
           contextLight: retrievedMemory.contextLight && input.memory.length === 0,
           now,
-          provider: optionProvider,
-        }));
+              provider,
+            });
+      const optionSet = generated.optionSet;
       const priorArtifact = input.artifact ?? artifacts.get(sessionId) ?? null;
       const selectedOptions = optionSet.options.filter((option) => input.selectedOptionIds.includes(option.id));
       const baseArtifact = priorArtifact ?? buildInitialArtifact({ projectId, sessionId, rawIdea, optionSet, now });
@@ -433,7 +530,9 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
           ...artifact,
           judgmentEventIds: unique([...artifact.judgmentEventIds, judgmentEvent.id]),
         };
-        judgments.set(sessionId, [...(judgments.get(sessionId) ?? []), judgmentEvent]);
+        if (persist) {
+          judgments.set(sessionId, [...(judgments.get(sessionId) ?? []), judgmentEvent]);
+        }
       }
 
       artifact = {
@@ -450,9 +549,17 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
         ),
       };
 
-      optionSets.set(optionSet.id, optionSet);
-      artifacts.set(sessionId, artifact);
+      if (persist) {
+        optionSets.set(optionSet.id, optionSet);
+        artifacts.set(sessionId, artifact);
+      }
       const verification = verifyArtifact(artifact, optionSet, judgmentEvent);
+      const observability = createObservability({
+        trace: generated.trace,
+        optionSet,
+        artifact,
+        selectedOptions,
+      });
 
       return {
         sourceOfTruth: "create_options_judgments_artifacts_verification",
@@ -460,29 +567,56 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
         artifact,
         verification,
         judgmentEvent,
+        observability,
         exportReady: verification.verdict === "ready",
+      };
+  }
+
+  return {
+    async next(input, request) {
+      return runNext(input, request, optionProvider, true);
+    },
+
+    async compare(input, request) {
+      const rawIdea = sourceTextFromCreateInput(input);
+      if (!rawIdea) {
+        throw new CreateRouteValidationError("Create needs a rough idea before it can compare providers.");
+      }
+
+      const comparisonInput = { ...input, optionSetId: null };
+      const deterministic = await runNext(comparisonInput, request, null, false);
+      const modelBackedBase = await runNext(comparisonInput, request, optionProvider, false);
+      const modelBacked = optionProvider ? modelBackedBase : withDisabledProviderFallback(modelBackedBase);
+
+      return {
+        sourceOfTruth: "deterministic_model_backed_create_comparison",
+        rawIdea,
+        deterministic: comparisonArm("deterministic", deterministic),
+        modelBacked: comparisonArm("model_backed", modelBacked),
       };
     },
 
     async exportCodingPrompt(input) {
       const artifact = input.artifact;
       const createdAt = isoNow();
-      const text = buildPromptText(artifact);
+      const promptExport = promptExportForArtifact(artifact, createdAt);
 
       return {
-        export: {
-          id: stableId("prompt-export", artifact.id, artifact.version, text),
-          artifactId: artifact.id,
-          format: "coding_agent_prompt",
-          targets: ["Codex", "Claude Code", "Cursor"],
-          text,
-          fileName: `${slugify(artifact.title)}-coding-prompt.md`,
-          createdAt,
-        },
+        export: promptExport,
       };
     },
   };
 }
+
+type ProviderGenerationTrace = Pick<
+  CreateObservability,
+  "providerMode" | "providerName" | "schemaValidation" | "schemaValidationErrors" | "fallbackReason"
+>;
+
+type ProviderGenerationResult = {
+  optionSet: OptionSet;
+  trace: ProviderGenerationTrace;
+};
 
 async function buildOptionSetWithProvider(input: {
   projectId: string;
@@ -493,11 +627,14 @@ async function buildOptionSetWithProvider(input: {
   contextLight: boolean;
   now: string;
   provider: CreateOptionProvider | null;
-}): Promise<OptionSet> {
+}): Promise<ProviderGenerationResult> {
   const baseline = buildOptionSet(input);
 
   if (!input.provider) {
-    return baseline;
+    return {
+      optionSet: baseline,
+      trace: deterministicProviderTrace(),
+    };
   }
 
   try {
@@ -509,10 +646,96 @@ async function buildOptionSetWithProvider(input: {
       baselineOptions: baseline.options,
     });
 
-    return optionSetFromProviderOutput(baseline, output);
-  } catch {
-    return baseline;
+    return {
+      optionSet: optionSetFromProviderOutput(baseline, output),
+      trace: {
+        providerMode: "model_backed",
+        providerName: input.provider.name,
+        schemaValidation: "success",
+        schemaValidationErrors: [],
+        fallbackReason: null,
+      },
+    };
+  } catch (error) {
+    return {
+      optionSet: baseline,
+      trace: {
+        providerMode: "deterministic_fallback",
+        providerName: input.provider.name,
+        schemaValidation: error instanceof CreateRouteValidationError ? "failure" : "not_run",
+        schemaValidationErrors: error instanceof CreateRouteValidationError ? [error.message] : [],
+        fallbackReason: `Model-backed Create provider fell back to deterministic options: ${formatErrorMessage(error)}`,
+      },
+    };
   }
+}
+
+function deterministicProviderTrace(): ProviderGenerationTrace {
+  return {
+    providerMode: "deterministic",
+    providerName: "deterministic",
+    schemaValidation: "not_run",
+    schemaValidationErrors: [],
+    fallbackReason: null,
+  };
+}
+
+function createObservability(input: {
+  trace: ProviderGenerationTrace;
+  optionSet: OptionSet;
+  artifact: CodingPromptArtifact;
+  selectedOptions: CandidateOption[];
+}): CreateObservability {
+  return {
+    ...input.trace,
+    memoryCountUsed: input.optionSet.memoryUsed.length,
+    sourceCountUsed: input.optionSet.sourcesUsed.length,
+    rejectedDirectionsUsed: repeatedRejectedDirections(input.optionSet.memoryUsed),
+    generatedLenses: input.optionSet.options.map((option) => option.lens),
+    selectedOptionIds: input.selectedOptions.map((option) => option.id),
+    selectedLenses: input.selectedOptions.map((option) => option.lens),
+    exportQualitySignals: promptExportQualitySignals(buildPromptText(input.artifact)),
+  };
+}
+
+function withDisabledProviderFallback(result: CreateNextResult): CreateNextResult {
+  return {
+    ...result,
+    observability: {
+      ...result.observability,
+      providerMode: "deterministic_fallback",
+      providerName: "disabled",
+      fallbackReason: "Model-backed Create provider is not configured; set PENNY_CREATE_MODEL_BACKED=true and XAI_API_KEY to compare.",
+    },
+  };
+}
+
+function comparisonArm(label: CreateProviderComparisonArm["label"], result: CreateNextResult): CreateProviderComparisonArm {
+  return {
+    label,
+    providerUsed: result.observability.providerMode,
+    fallbackReason: result.observability.fallbackReason,
+    optionSet: result.optionSet,
+    artifact: result.artifact,
+    verification: result.verification,
+    promptExport: promptExportForArtifact(result.artifact, isoNow()),
+    observability: result.observability,
+  };
+}
+
+function promptExportForArtifact(artifact: CodingPromptArtifact, createdAt: string): PromptExport {
+  const text = buildPromptText(artifact);
+
+  return {
+    id: stableId("prompt-export", artifact.id, artifact.version, text),
+    artifactId: artifact.id,
+    format: "coding_agent_prompt",
+    targets: ["Codex", "Claude Code", "Cursor"],
+    text,
+    fileName: `${slugify(artifact.title)}-coding-prompt.md`,
+    qualitySignals: promptExportQualitySignals(text),
+    createdAt,
+  };
 }
 
 function buildOptionSet(input: {
@@ -782,6 +1005,13 @@ function ensureGroundingLanguage(rationale: string, fallback: string): string {
 
 function hasUnsupportedConnectorClaim(text: string): boolean {
   return /\b(gmail|slack|messages?|oauth|global training|shared training|trained on your data|hidden memory|background import)\b/i.test(text);
+}
+
+function hasFakeProvenanceClaim(text: string): boolean {
+  return (
+    /\b(imported|connected|read|pulled from|synced|scanned|analyzed)\b.{0,80}\b(gmail|slack|messages?|oauth)\b/i.test(text)
+    || /\b(global training|shared training|trained on your data|hidden memory|background import|secret memory|private inbox)\b/i.test(text)
+  );
 }
 
 function flattenIssues(error: z.ZodError): string[] {
@@ -1077,7 +1307,8 @@ function verifyArtifact(
   optionSet: OptionSet,
   judgmentEvent: JudgmentEvent | null,
 ): VerificationSummary {
-  const fullText = artifact.sections.map((section) => section.body).join("\n").toLowerCase();
+  const promptText = buildPromptText(artifact);
+  const fullText = `${artifact.sections.map((section) => section.body).join("\n")}\n${promptText}`.toLowerCase();
   const ideaWords = importantWords(artifact.rawIdea);
   const intentHits = ideaWords.filter((word) => fullText.includes(word)).length;
   const selectedCount = judgmentEvent?.selectedOptionIds.length ?? 0;
@@ -1085,47 +1316,95 @@ function verifyArtifact(
   const selectedRisks = judgmentEvent
     ? optionSet.options.filter((option) => judgmentEvent.selectedOptionIds.includes(option.id)).flatMap((option) => option.risks)
     : optionSet.options.flatMap((option) => option.risks).slice(0, 2);
+  const qualitySignals = promptExportQualitySignals(promptText);
+  const personalOption = optionSet.options.find((option) => option.lens === "Personal") ?? null;
+  const hasMemoryEvidence = optionSet.memoryUsed.length
+    ? optionSet.memoryUsed.some((memory) => fullText.includes(memory.label.toLowerCase()) || fullText.includes(clipText(memory.summary, 48).toLowerCase()))
+    : /no imported penny memories|no durable penny memory/i.test(fullText);
+  const buildableSectionCount = ["Frontend requirements", "Backend requirements", "Data model", "Implementation plan", "Acceptance tests"].filter((title) =>
+    hasSections(artifact, [title as ArtifactSectionTitle]),
+  ).length;
+  const nonGenericSignals = [
+    /\bmemory\b/i.test(fullText),
+    /\bjudgmentevent|selected option history|multi-select judgment\b/i.test(fullText),
+    /\bnot-gpt-wrapper|generic gpt-wrapper|generic wrapper\b/i.test(fullText),
+    /\bsource\b/i.test(fullText),
+  ].filter(Boolean).length;
+  const autonomySignals = [
+    /\buser judgment|user comment|multi-select|selected option history\b/i.test(fullText),
+    /\bask the user|user can|user enters|user multi-selects\b/i.test(fullText),
+    !/\bmust accept|auto-approve|silently choose\b/i.test(fullText),
+  ].filter(Boolean).length;
+  const fakeClaimDetected = hasFakeProvenanceClaim(promptText);
+  const scores = {
+    intentMatch: ideaWords.length ? Math.round((intentHits / ideaWords.length) * 100) : 80,
+    personalMemoryGrounding: optionSet.memoryUsed.length
+      ? hasMemoryEvidence && (personalOption?.memoryUsed.length ?? 0) > 0
+        ? 92
+        : 48
+      : hasMemoryEvidence
+        ? 78
+        : 45,
+    buildability: Math.min(100, 20 + buildableSectionCount * 16),
+    nonGenericness: Math.min(100, 30 + nonGenericSignals * 17),
+    userAutonomyPreserved: Math.min(100, 40 + autonomySignals * 18),
+    fakeClaimRisk: fakeClaimDetected ? 20 : 95,
+    promptCompleteness: qualitySignals.promptCompletenessScore,
+  };
   const checks: VerificationSummary["checks"] = [
     {
       key: "intent_match",
       label: "Intent match",
-      status: intentHits >= Math.min(3, ideaWords.length) ? "pass" : "warn",
+      status: statusForScore(scores.intentMatch),
+      score: scores.intentMatch,
       summary: intentHits ? `Artifact keeps ${intentHits} rough-idea signal(s) visible.` : "Artifact needs more direct language from the rough idea.",
+    },
+    {
+      key: "personal_memory_grounding",
+      label: "Personal memory grounding",
+      status: statusForScore(scores.personalMemoryGrounding),
+      score: scores.personalMemoryGrounding,
+      summary: optionSet.memoryUsed.length
+        ? `Uses ${optionSet.memoryUsed.length} supplied or retrieved memory ref(s), including the Personal lens evidence.`
+        : "No durable memory was available, and the prompt says so instead of implying hidden context.",
     },
     {
       key: "buildability",
       label: "Buildability",
-      status: hasSections(artifact, ["Frontend requirements", "Backend requirements", "Data model", "Implementation plan", "Acceptance tests"]) ? "pass" : "fail",
+      status: statusForScore(scores.buildability),
+      score: scores.buildability,
       summary: "Prompt names frontend, backend, data, implementation, and test work.",
     },
     {
-      key: "source_context_grounding",
-      label: "Source/context grounding",
-      status: optionSet.sourcesUsed.length ? "pass" : "warn",
-      summary: optionSet.sourcesUsed.length
-        ? `Grounded in ${optionSet.sourcesUsed.map((source) => source.label).join(", ")}.`
-        : "Only unreferenced context is available; add sources or session context when possible.",
-    },
-    {
-      key: "non_generic",
-      label: "Not a GPT wrapper",
-      status: fullText.includes("memory") && fullText.includes("judgmentevent") && fullText.includes("not-gpt-wrapper") ? "pass" : "warn",
+      key: "non_genericness",
+      label: "Non-genericness",
+      status: statusForScore(scores.nonGenericness),
+      score: scores.nonGenericness,
       summary: "Checks for memory-native behavior, recorded judgment, and explicit wrapper risk.",
     },
     {
-      key: "missing_info",
-      label: "Missing info",
-      status: missingInfo.length <= 1 ? "pass" : "warn",
-      summary: missingInfo.length ? missingInfo.join(" ") : "No blocking missing info found for v0.",
+      key: "user_autonomy_preserved",
+      label: "User autonomy preserved",
+      status: statusForScore(scores.userAutonomyPreserved),
+      score: scores.userAutonomyPreserved,
+      summary: "The flow keeps user selection, comments, and judgment visible before export.",
     },
     {
-      key: "risks",
-      label: "Risks",
-      status: selectedRisks.length <= 4 ? "pass" : "warn",
-      summary: selectedRisks.length ? selectedRisks.join(" ") : "No material risks surfaced yet.",
+      key: "fake_claim_risk",
+      label: "Fake claim risk",
+      status: statusForScore(scores.fakeClaimRisk),
+      score: scores.fakeClaimRisk,
+      summary: fakeClaimDetected ? "Prompt contains an unsupported positive connector, source, or hidden-memory claim." : "No unsupported positive connector, source, or hidden-memory claim detected.",
+    },
+    {
+      key: "prompt_completeness",
+      label: "Prompt completeness",
+      status: statusForScore(scores.promptCompleteness),
+      score: scores.promptCompleteness,
+      summary: qualitySignals.missing.length ? `Missing export sections: ${qualitySignals.missing.join(", ")}.` : "Prompt export includes the required implementation sections.",
     },
   ];
-  const verdict = checks.some((check) => check.status === "fail") || checks.filter((check) => check.status === "warn").length > 2
+  const verdict = checks.some((check) => check.status === "fail") || checks.filter((check) => check.status === "warn").length > 2 || missingInfo.length > 2
     ? "needs_revision"
     : "ready";
 
@@ -1134,6 +1413,7 @@ function verifyArtifact(
     artifactId: artifact.id,
     createdAt: isoNow(),
     verdict,
+    scores,
     checks,
     missingInfo,
     risks: unique(selectedRisks),
@@ -1145,6 +1425,7 @@ function buildPromptText(artifact: CodingPromptArtifact): string {
   const userIntent = section("User intent");
   const personalContext = extractNamedBlock(userIntent, "Personal context used") || extractNamedBlock(section("AI/memory orchestration"), "Personal context used in this artifact") || section("AI/memory orchestration");
   const selectedHistory = extractNamedBlock(userIntent, "Selected option history") || "No selected Create directions were exported.";
+  const rejectedDirectionText = formatRepeatedRejectedDirectionsForPrompt(personalContext);
 
   return [
     `# ${artifact.title}`,
@@ -1169,6 +1450,9 @@ function buildPromptText(artifact: CodingPromptArtifact): string {
     "",
     "## Selected Option History",
     selectedHistory,
+    "",
+    "## Repeated Rejected Directions",
+    rejectedDirectionText,
     "",
     "## Target User",
     section("Target user"),
@@ -1211,6 +1495,68 @@ function buildPromptText(artifact: CodingPromptArtifact): string {
   ].join("\n");
 }
 
+function promptExportQualitySignals(text: string): PromptExportQualitySignals {
+  const signals = {
+    hasRoughIdea: hasPromptSection(text, "Rough User Idea"),
+    hasSelectedOptionHistory: hasPromptSection(text, "Selected Option History"),
+    hasRelevantPersonalContext: hasPromptSection(text, "Personal Context Used"),
+    hasRepeatedRejectedDirections: hasPromptSection(text, "Repeated Rejected Directions"),
+    hasProductGoal: hasPromptSection(text, "Product Goal"),
+    hasNonGoals: hasPromptSection(text, "Non-Goals"),
+    hasUxRequirements: hasPromptSection(text, "UX Requirements"),
+    hasFrontendRequirements: hasPromptSection(text, "Frontend Requirements"),
+    hasBackendRequirements: hasPromptSection(text, "Backend Requirements"),
+    hasDataModel: hasPromptSection(text, "Data Model"),
+    hasPrivacyConstraints: hasPromptSection(text, "Privacy Constraints"),
+    hasVerificationRequirements: hasPromptSection(text, "Verification Constraints"),
+    hasImplementationSequence: hasPromptSection(text, "Implementation Sequence"),
+    hasAcceptanceTests: hasPromptSection(text, "Acceptance Tests"),
+    hasDoNotBreakList: hasPromptSection(text, "Do-Not-Break List"),
+  };
+  const labels: Array<[keyof typeof signals, string]> = [
+    ["hasRoughIdea", "rough idea"],
+    ["hasSelectedOptionHistory", "selected option history"],
+    ["hasRelevantPersonalContext", "relevant personal context"],
+    ["hasRepeatedRejectedDirections", "repeated rejected directions"],
+    ["hasProductGoal", "product goal"],
+    ["hasNonGoals", "non-goals"],
+    ["hasUxRequirements", "UX requirements"],
+    ["hasFrontendRequirements", "frontend requirements"],
+    ["hasBackendRequirements", "backend requirements"],
+    ["hasDataModel", "data model"],
+    ["hasPrivacyConstraints", "privacy constraints"],
+    ["hasVerificationRequirements", "verification requirements"],
+    ["hasImplementationSequence", "implementation sequence"],
+    ["hasAcceptanceTests", "acceptance tests"],
+    ["hasDoNotBreakList", "do-not-break list"],
+  ];
+  const missing = labels.filter(([key]) => !signals[key]).map(([, label]) => label);
+
+  return {
+    ...signals,
+    promptCompletenessScore: Math.round(((labels.length - missing.length) / labels.length) * 100),
+    missing,
+  };
+}
+
+function hasPromptSection(text: string, title: string): boolean {
+  return promptSectionText(text, title).trim().length > 0;
+}
+
+function promptSectionText(text: string, title: string): string {
+  const marker = `## ${title}`;
+  const start = text.indexOf(marker);
+
+  if (start < 0) {
+    return "";
+  }
+
+  const rest = text.slice(start + marker.length).trim();
+  const next = rest.search(/\n##\s/u);
+
+  return next >= 0 ? rest.slice(0, next).trim() : rest.trim();
+}
+
 function buildNonGoalsText(_artifact: CodingPromptArtifact): string {
   return [
     "- Do not build broad OAuth connectors, Gmail/Slack/messages ingestion, or background global memory import for this Create slice.",
@@ -1218,6 +1564,26 @@ function buildNonGoalsText(_artifact: CodingPromptArtifact): string {
     "- Do not invent source, memory, connector, or global-training claims. Use only rough idea, session context, and provided Brain refs.",
     "- Do not redesign Brain, Learn, navigation, or unrelated data models while implementing the requested Create flow.",
   ].join("\n");
+}
+
+function repeatedRejectedDirections(memoryUsed: MemoryRef[]): string[] {
+  return memoryUsed
+    .filter((memory) => isRejectedDirectionText(`${memory.label} ${memory.summary}`))
+    .map((memory) => `${memory.label}: ${clipText(memory.summary, 180)}`)
+    .slice(0, 6);
+}
+
+function formatRepeatedRejectedDirectionsForPrompt(personalContext: string): string {
+  const lines = personalContext
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => isRejectedDirectionText(line));
+
+  return lines.length ? unique(lines).map((line) => (line.startsWith("-") ? line : `- ${line}`)).join("\n") : "- None supplied.";
+}
+
+function isRejectedDirectionText(text: string): boolean {
+  return /\b(rejected direction|reject|rejected|avoid|do not|don't|not a generic|no generic|skip|fake|wrapper)\b/i.test(text);
 }
 
 function formatPersonalContext(memoryUsed: MemoryRef[], sourcesUsed: SourceRef[]): string {
@@ -1362,6 +1728,14 @@ function missingInfoForArtifact(artifact: CodingPromptArtifact, selectedCount: n
 
 function hasSections(artifact: CodingPromptArtifact, titles: ArtifactSectionTitle[]): boolean {
   return titles.every((title) => sectionByTitle(artifact, title).body.trim().length > 20);
+}
+
+function statusForScore(score: number): CreateCheckStatus {
+  if (score >= 80) {
+    return "pass";
+  }
+
+  return score >= 55 ? "warn" : "fail";
 }
 
 function sourceTextFromCreateInput(input: {
