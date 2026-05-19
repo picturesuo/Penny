@@ -3,6 +3,7 @@ import {
   Archive,
   BookOpen,
   CircleHelp,
+  Database,
   FilePlus,
   FileText,
   Folder,
@@ -12,10 +13,14 @@ import {
   Search,
   Send,
   Sparkles,
+  Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import type {
   AutopilotTickData,
+  BrainImportInput,
+  BrainMemoryProfileData,
   BrainClaim,
   BrainData,
   BrainDocumentBlockData,
@@ -32,6 +37,8 @@ import type {
   BrainHierarchyFolder,
   BrainRecentIdea,
   BrainSidebarData,
+  IngestionJob,
+  MemoryNode,
   CanvasNode,
   CanvasNodeAction,
   BrainMove,
@@ -40,14 +47,18 @@ import type {
   ClaimDetailMove,
   SessionCanvasData,
   SessionCockpitData,
+  SourceImport,
+  SourceImportKind,
+  UserProfileSignal,
   WorkStructure,
 } from "../types/brain";
-import { fetchClaimDetail, fetchSessionNote, saveSessionNote } from "../api/brainClient";
+import { deleteBrainSource, fetchBrainMemoryProfile, fetchClaimDetail, fetchSessionNote, importBrainSource, saveSessionNote } from "../api/brainClient";
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
 import { CanvasWorkspace } from "./CanvasWorkspace";
 
 type ClaimDetailStatus = "idle" | "loading" | "ready" | "error";
+type BrainMemoryStatus = "idle" | "loading" | "ready" | "importing" | "deleting" | "error";
 
 interface BrainWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -139,6 +150,9 @@ export function BrainWorkspace({
   const [claimDetailStatus, setClaimDetailStatus] = useState<ClaimDetailStatus>("idle");
   const [claimDetailError, setClaimDetailError] = useState<string | null>(null);
   const [selectedQuickNoteId, setSelectedQuickNoteId] = useState<string | null>(null);
+  const [memoryProfile, setMemoryProfile] = useState<BrainMemoryProfileData | null>(null);
+  const [memoryStatus, setMemoryStatus] = useState<BrainMemoryStatus>("idle");
+  const [memoryError, setMemoryError] = useState<string | null>(null);
   const quickNotes = useMemo(() => [...recents, ...archivedRecents], [recents, archivedRecents]);
   const selectedQuickNote = quickNotes.find((recent) => recent.id === selectedQuickNoteId) ?? null;
   const selectedQuickNoteArchived = archivedRecents.some((recent) => recent.id === selectedQuickNoteId);
@@ -191,6 +205,30 @@ export function BrainWorkspace({
   }, [focusedClaimId, selectedDocument]);
 
   useEffect(() => {
+    let cancelled = false;
+    setMemoryStatus("loading");
+    setMemoryError(null);
+
+    fetchBrainMemoryProfile()
+      .then((response) => {
+        if (!cancelled) {
+          setMemoryProfile(response.data);
+          setMemoryStatus("ready");
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setMemoryStatus("error");
+          setMemoryError(error instanceof Error ? error.message : String(error));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (selectedQuickNoteId && !selectedQuickNote) {
       setSelectedQuickNoteId(null);
     }
@@ -214,6 +252,41 @@ export function BrainWorkspace({
 
     if (action === "archive" && recent.id === selectedQuickNoteId) {
       setSelectedQuickNoteId(null);
+    }
+  }
+
+  async function handleMemoryImport(input: BrainImportInput) {
+    setMemoryStatus("importing");
+    setMemoryError(null);
+
+    try {
+      const response = await importBrainSource(input);
+      setMemoryProfile(response.data.profile);
+
+      if (response.data.job.status === "failed") {
+        setMemoryStatus("error");
+        setMemoryError(response.data.job.errorMessages.join(" ") || "Brain import failed.");
+        return;
+      }
+
+      setMemoryStatus("ready");
+    } catch (error) {
+      setMemoryStatus("error");
+      setMemoryError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleMemorySourceDelete(sourceId: string) {
+    setMemoryStatus("deleting");
+    setMemoryError(null);
+
+    try {
+      const response = await deleteBrainSource(sourceId);
+      setMemoryProfile(response.data.profile);
+      setMemoryStatus("ready");
+    } catch (error) {
+      setMemoryStatus("error");
+      setMemoryError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -256,9 +329,14 @@ export function BrainWorkspace({
       ) : (
         <BrainDocumentsIndex
           documentsData={documentsData}
+          memoryProfile={memoryProfile}
+          memoryStatus={memoryStatus}
+          memoryError={memoryError}
           disabled={isThinking}
           onCreateDocument={onSeed}
           onSelectDocument={handleSelectDocument}
+          onMemoryImport={handleMemoryImport}
+          onMemorySourceDelete={handleMemorySourceDelete}
         />
       )}
     </main>
@@ -1952,14 +2030,24 @@ function archiveMeta(recent: BrainRecentIdea): string {
 
 function BrainDocumentsIndex({
   documentsData,
+  memoryProfile,
+  memoryStatus,
+  memoryError,
   disabled,
   onCreateDocument,
   onSelectDocument,
+  onMemoryImport,
+  onMemorySourceDelete,
 }: {
   documentsData: BrainDocumentsData | null;
+  memoryProfile: BrainMemoryProfileData | null;
+  memoryStatus: BrainMemoryStatus;
+  memoryError: string | null;
   disabled: boolean;
   onCreateDocument: (rawIdea: string) => Promise<void>;
   onSelectDocument: (sessionId: string) => void;
+  onMemoryImport: (input: BrainImportInput) => Promise<void>;
+  onMemorySourceDelete: (sourceId: string) => Promise<void>;
 }) {
   const documents = documentsData?.documents ?? [];
   const [searchQuery, setSearchQuery] = useState("");
@@ -2011,6 +2099,14 @@ function BrainDocumentsIndex({
           </button>
         </div>
       </form>
+      <BrainMemoryPanel
+        profile={memoryProfile}
+        status={memoryStatus}
+        error={memoryError}
+        disabled={disabled}
+        onImport={onMemoryImport}
+        onDeleteSource={onMemorySourceDelete}
+      />
       <section className="brain-search-panel" aria-label="Search through your thinking">
         <label className="sr-only" htmlFor="brainDocumentSearch">
           Search through your thinking
@@ -2065,6 +2161,301 @@ function BrainDocumentsIndex({
       )}
     </section>
   );
+}
+
+function BrainMemoryPanel({
+  profile,
+  status,
+  error,
+  disabled,
+  onImport,
+  onDeleteSource,
+}: {
+  profile: BrainMemoryProfileData | null;
+  status: BrainMemoryStatus;
+  error: string | null;
+  disabled: boolean;
+  onImport: (input: BrainImportInput) => Promise<void>;
+  onDeleteSource: (sourceId: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState("");
+  const [label, setLabel] = useState("");
+  const [kind, setKind] = useState<SourceImportKind>("text");
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string | null>(null);
+  const importing = status === "importing";
+  const sources = profile?.sources ?? [];
+  const recentNodes = profile?.recentMemoryNodes ?? [];
+  const signals = profile ? profileSignals(profile).slice(0, 8) : [];
+  const latestJob = profile?.jobs[0] ?? null;
+  const canImport = draft.trim().length > 0 && !disabled && !importing;
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const content = draft.trim();
+
+    if (!content || disabled || importing) {
+      return;
+    }
+
+    await onImport({
+      kind,
+      content,
+      ...(label.trim() ? { label: label.trim() } : {}),
+      ...(fileName ? { fileName } : {}),
+      ...(mimeType ? { mimeType } : {}),
+    });
+    setDraft("");
+    setLabel("");
+    setFileName(null);
+    setMimeType(null);
+    setKind("text");
+  }
+
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      return;
+    }
+
+    setFileName(file.name);
+    setMimeType(file.type || null);
+    setLabel((current) => current || file.name.replace(/\.[^.]+$/, ""));
+    setKind(kindFromFile(file));
+    setDraft(await file.text());
+    event.target.value = "";
+  }
+
+  return (
+    <section className="brain-memory-panel" aria-label="Second Brain memory">
+      <div className="brain-memory-panel-head">
+        <div>
+          <span>
+            <Database size={15} aria-hidden="true" />
+            Second Brain memory
+          </span>
+          <h2>Private context for Create</h2>
+        </div>
+        <BrainMemoryStatusPill status={status} latestJob={latestJob} />
+      </div>
+      <p className="brain-memory-summary">
+        {profile?.profile.privacySafeSummary ??
+          "No private user memory has been imported yet. Create will label suggestions context-light until sources are added."}
+      </p>
+      {error ? <p className="brain-memory-error">{error}</p> : null}
+      <form className="brain-memory-import" onSubmit={handleSubmit}>
+        <div className="brain-memory-import-row">
+          <label>
+            <span>Source label</span>
+            <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Product notes, conversations.json..." />
+          </label>
+          <label>
+            <span>Kind</span>
+            <select value={kind} onChange={(event) => setKind(event.target.value as SourceImportKind)}>
+              {sourceImportKindOptions.map((option) => (
+                <option key={option.kind} value={option.kind}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="brain-memory-file-button">
+            <Upload size={14} aria-hidden="true" />
+            <span>{fileName ? truncateWords(fileName, 4) : "Choose file"}</span>
+            <input
+              type="file"
+              accept=".txt,.md,.markdown,.json,.csv,.pdf,.zip,text/plain,text/markdown,application/json,text/csv,application/pdf,application/zip"
+              onChange={(event) => {
+                void handleFileChange(event);
+              }}
+            />
+          </label>
+        </div>
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="Paste notes, markdown, ChatGPT conversations.json, Claude JSON/CSV/text, docs text, or canvas notes."
+          rows={4}
+        />
+        <button type="submit" className="secondary-command" disabled={!canImport}>
+          <FilePlus size={15} aria-hidden="true" />
+          <span>{importing ? "Importing..." : "Import to Brain"}</span>
+        </button>
+      </form>
+      <div className="brain-memory-grid">
+        <BrainMemorySourcesList sources={sources} disabled={disabled || status === "deleting"} onDeleteSource={onDeleteSource} />
+        <BrainMemoryProfileSummary profile={profile} signals={signals} recentNodes={recentNodes} />
+      </div>
+    </section>
+  );
+}
+
+function BrainMemoryStatusPill({ status, latestJob }: { status: BrainMemoryStatus; latestJob: IngestionJob | null }) {
+  const label =
+    status === "loading"
+      ? "Loading"
+      : status === "importing"
+        ? "Importing"
+        : status === "deleting"
+          ? "Deleting"
+          : status === "error"
+            ? latestJob?.status === "failed"
+              ? "Import failed"
+              : "Needs attention"
+            : latestJob
+              ? latestJob.status === "completed"
+                ? `${latestJob.counts.memoryNodes} memories`
+                : "Import failed"
+              : "Context-light";
+
+  return <span className={`brain-memory-status is-${status}`}>{label}</span>;
+}
+
+function BrainMemorySourcesList({
+  sources,
+  disabled,
+  onDeleteSource,
+}: {
+  sources: SourceImport[];
+  disabled: boolean;
+  onDeleteSource: (sourceId: string) => Promise<void>;
+}) {
+  return (
+    <section className="brain-memory-card" aria-label="Uploaded sources">
+      <div className="brain-memory-card-head">
+        <strong>Uploaded sources</strong>
+        <span>{sources.length}</span>
+      </div>
+      {sources.length > 0 ? (
+        <div className="brain-memory-source-list">
+          {sources.slice(0, 6).map((source) => (
+            <article key={source.id} className="brain-memory-source">
+              <div>
+                <strong title={source.label}>{truncateWords(source.label, 8)}</strong>
+                <span>
+                  {source.kind} · {source.chunkCount} chunks · {source.memoryNodeCount} memories
+                </span>
+                <small>Private user memory · no global training · {formatDate(source.createdAt)}</small>
+              </div>
+              <button
+                type="button"
+                aria-label={`Delete ${source.label}`}
+                disabled={disabled}
+                onClick={() => {
+                  void onDeleteSource(source.id);
+                }}
+              >
+                <Trash2 size={14} aria-hidden="true" />
+              </button>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="brain-memory-muted">No imported sources yet.</p>
+      )}
+    </section>
+  );
+}
+
+function BrainMemoryProfileSummary({
+  profile,
+  signals,
+  recentNodes,
+}: {
+  profile: BrainMemoryProfileData | null;
+  signals: UserProfileSignal[];
+  recentNodes: MemoryNode[];
+}) {
+  return (
+    <section className="brain-memory-card" aria-label="Memory profile summary">
+      <div className="brain-memory-card-head">
+        <strong>Profile summary</strong>
+        <span>{profile?.stats.memoryNodeCount ?? 0} nodes</span>
+      </div>
+      {signals.length > 0 ? (
+        <div className="brain-memory-signals">
+          {signals.map((signal) => (
+            <span key={signal.id} title={signal.summary}>
+              {signal.label}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="brain-memory-muted">Recurring interests and build-style signals appear after import.</p>
+      )}
+      <div className="brain-memory-node-list">
+        {recentNodes.slice(0, 4).map((node) => (
+          <article key={node.id} className="brain-memory-node">
+            <span>{formatLabel(node.type)}</span>
+            <strong title={node.title}>{truncateWords(node.title, 9)}</strong>
+            <p>{truncateWords(node.summary, 18)}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function profileSignals(profile: BrainMemoryProfileData): UserProfileSignal[] {
+  return [
+    ...profile.profile.recurringInterests,
+    ...profile.profile.activeIdeaClusters,
+    ...profile.profile.tasteSignals,
+    ...profile.profile.preferredBuildStyle,
+    ...profile.profile.commonFrustrations,
+  ];
+}
+
+const sourceImportKindOptions: Array<{ kind: SourceImportKind; label: string }> = [
+  { kind: "text", label: "Plain text" },
+  { kind: "markdown", label: "Markdown" },
+  { kind: "pdf", label: "PDF text" },
+  { kind: "chatgpt_export", label: "ChatGPT JSON" },
+  { kind: "claude_export", label: "Claude export" },
+  { kind: "docs_text", label: "Docs text" },
+  { kind: "canvas_text", label: "Canvas text" },
+  { kind: "json", label: "Generic JSON" },
+  { kind: "csv", label: "CSV" },
+  { kind: "zip", label: "ZIP export" },
+];
+
+function kindFromFile(file: File): SourceImportKind {
+  const name = file.name.toLowerCase();
+
+  if (name.endsWith(".md") || name.endsWith(".markdown")) {
+    return "markdown";
+  }
+
+  if (name.endsWith(".json") && /conversation|chatgpt/.test(name)) {
+    return "chatgpt_export";
+  }
+
+  if (name.endsWith(".json") && /claude/.test(name)) {
+    return "claude_export";
+  }
+
+  if (name.endsWith(".json")) {
+    return "json";
+  }
+
+  if (name.endsWith(".csv") && /claude/.test(name)) {
+    return "claude_export";
+  }
+
+  if (name.endsWith(".csv")) {
+    return "csv";
+  }
+
+  if (name.endsWith(".pdf")) {
+    return "pdf";
+  }
+
+  if (name.endsWith(".zip")) {
+    return "zip";
+  }
+
+  return "text";
 }
 
 interface SearchResult {
