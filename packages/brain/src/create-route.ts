@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { retrieveBrainMemoryForCreate } from "./brain-memory-route.ts";
 import { scopeValues, type BrainScope } from "./scope.ts";
 
 export type CreateLens = "Personal" | "Practical" | "Valuable" | "Critical" | "Weird";
@@ -311,10 +312,21 @@ export function createInMemoryCreateRouteService(): CreateRouteService {
       const now = isoNow();
       const projectId = input.projectId ?? input.artifact?.projectId ?? stableId("create-project", scope.projectId ?? "project", rawIdea);
       const sessionId = input.sessionId ?? input.artifact?.sessionId ?? stableId("create-session", scope.userId ?? "user", rawIdea);
-      const memoryUsed = normalizeMemoryRefs(input.memory, input.context, sessionId);
-      const sourcesUsed = normalizeSourceRefs(input.sources, input.context, rawIdea);
+      const retrievedMemory = retrieveBrainMemoryForCreate({ scope, query: rawIdea, limit: 5 });
+      const memoryUsed = normalizeMemoryRefs([...input.memory, ...retrievedMemory.memoryRefs], input.context, sessionId);
+      const sourcesUsed = normalizeSourceRefs([...input.sources, ...retrievedMemory.sourceRefs], input.context, rawIdea);
       const existingOptionSet = input.optionSetId ? optionSets.get(input.optionSetId) ?? null : null;
-      const optionSet = existingOptionSet ?? buildOptionSet({ projectId, sessionId, rawIdea, memoryUsed, sourcesUsed, now });
+      const optionSet =
+        existingOptionSet ??
+        buildOptionSet({
+          projectId,
+          sessionId,
+          rawIdea,
+          memoryUsed,
+          sourcesUsed,
+          contextLight: retrievedMemory.contextLight && input.memory.length === 0,
+          now,
+        });
       const priorArtifact = input.artifact ?? artifacts.get(sessionId) ?? null;
       const selectedOptions = optionSet.options.filter((option) => input.selectedOptionIds.includes(option.id));
       const baseArtifact = priorArtifact ?? buildInitialArtifact({ projectId, sessionId, rawIdea, optionSet, now });
@@ -402,11 +414,14 @@ function buildOptionSet(input: {
   rawIdea: string;
   memoryUsed: MemoryRef[];
   sourcesUsed: SourceRef[];
+  contextLight: boolean;
   now: string;
 }): OptionSet {
   const subject = subjectFromText(input.rawIdea);
   const audience = audienceFromText(input.rawIdea);
-  const contextPhrase = input.memoryUsed.length
+  const contextPhrase = input.contextLight
+    ? "Context-light: no imported Penny memory matched this idea, so use only the rough idea and supplied session context."
+    : input.memoryUsed.length
     ? "Use the visible Penny context as constraints rather than inventing preferences."
     : "No durable Penny memory was provided; treat the rough idea as the only grounded source.";
   const sourceRefs = input.sourcesUsed;
@@ -430,7 +445,7 @@ function buildOptionSet(input: {
       lens: "Practical",
       title: `Ship the smallest usable ${subject.toLowerCase()} loop`,
       oneLine: "Prioritize the first buildable path: input, five directions, judgment, artifact update, verification, export.",
-      rationale: "This is the safest wedge because it makes the core loop testable without waiting for broad memory ingestion or advanced models.",
+      rationale: `${contextPhrase} This is the safest wedge because it makes the core loop testable without waiting for broad memory ingestion or advanced models.`,
       nextMove: "Implement the narrow route and UI state machine, then verify one complete happy path manually and with tests.",
       risks: ["May feel conservative if the artifact does not visibly improve after user judgment."],
       memoryUsed: memoryRefs.slice(0, 2),
@@ -442,7 +457,7 @@ function buildOptionSet(input: {
       lens: "Valuable",
       title: `Make ${audience.toLowerCase()} value obvious`,
       oneLine: "Shape the artifact around who benefits, what decision gets easier, and why this is better than generic generation.",
-      rationale: "The valuable direction forces the prompt artifact to name a real user, external payoff, and acceptance tests that prove usefulness.",
+      rationale: `${contextPhrase} The valuable direction forces the prompt artifact to name a real user, external payoff, and acceptance tests that prove usefulness.`,
       nextMove: "Rewrite the target user, core loop, and acceptance tests so the value can be judged outside Penny.",
       risks: ["Can drift into pitch language unless implementation constraints stay concrete."],
       memoryUsed: memoryRefs.slice(0, 2),
@@ -454,7 +469,7 @@ function buildOptionSet(input: {
       lens: "Critical",
       title: `De-bullshit the ${subject.toLowerCase()} promise`,
       oneLine: "Pressure-test whether the idea is truly memory-native or just a GPT wrapper with nicer furniture.",
-      rationale: "Friendly critique: the idea gets stronger if it names what Penny records, how judgment changes the artifact, and what must not be faked.",
+      rationale: `${contextPhrase} Friendly critique: the idea gets stronger if it names what Penny records, how judgment changes the artifact, and what must not be faked.`,
       nextMove: "Add explicit verification checks for source grounding, non-generic behavior, and missing information before export is allowed.",
       risks: ["If the critique dominates the UI, Create may feel punitive instead of generative."],
       memoryUsed: memoryRefs.slice(0, 1),
@@ -466,7 +481,7 @@ function buildOptionSet(input: {
       lens: "Weird",
       title: `Turn ${subject.toLowerCase()} into a creative instrument`,
       oneLine: "Treat the five directions as playable lenses that bend the artifact, not as static AI suggestions.",
-      rationale: "The weird direction keeps Penny from becoming a dashboard: selected lenses should leave visible traces in the prompt and verification brief.",
+      rationale: `${contextPhrase} The weird direction keeps Penny from becoming a dashboard: selected lenses should leave visible traces in the prompt and verification brief.`,
       nextMove: "Give each selected card a distinct artifact mutation so multi-select feels compositional and surprising.",
       risks: ["Could become decorative unless every weird move still updates the coding prompt."],
       memoryUsed: memoryRefs.slice(0, 2),
