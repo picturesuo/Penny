@@ -482,7 +482,8 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
       const retrievedMemory = await retrieveBrainMemoryForCreate({ scope, query: rawIdea, limit: 5 });
       const memoryUsed = normalizeMemoryRefs([...input.memory, ...retrievedMemory.memoryRefs], input.context, sessionId);
       const sourcesUsed = normalizeSourceRefs([...input.sources, ...retrievedMemory.sourceRefs], input.context, rawIdea);
-      const existingOptionSet = persist && input.optionSetId ? optionSets.get(input.optionSetId) ?? null : null;
+      const scopedSessionKey = createScopeStorageKey(scope, sessionId);
+      const existingOptionSet = persist && input.optionSetId ? optionSets.get(createScopeStorageKey(scope, input.optionSetId)) ?? null : null;
       const generated =
         existingOptionSet
           ? {
@@ -500,7 +501,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
               provider,
             });
       const optionSet = generated.optionSet;
-      const priorArtifact = input.artifact ?? artifacts.get(sessionId) ?? null;
+      const priorArtifact = input.artifact ?? artifacts.get(scopedSessionKey) ?? null;
       const selectedOptions = optionSet.options.filter((option) => input.selectedOptionIds.includes(option.id));
       const baseArtifact = priorArtifact ?? buildInitialArtifact({ projectId, sessionId, rawIdea, optionSet, now });
       let artifact = baseArtifact;
@@ -531,7 +532,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
           judgmentEventIds: unique([...artifact.judgmentEventIds, judgmentEvent.id]),
         };
         if (persist) {
-          judgments.set(sessionId, [...(judgments.get(sessionId) ?? []), judgmentEvent]);
+          judgments.set(scopedSessionKey, [...(judgments.get(scopedSessionKey) ?? []), judgmentEvent]);
         }
       }
 
@@ -550,8 +551,8 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
       };
 
       if (persist) {
-        optionSets.set(optionSet.id, optionSet);
-        artifacts.set(sessionId, artifact);
+        optionSets.set(createScopeStorageKey(scope, optionSet.id), optionSet);
+        artifacts.set(scopedSessionKey, artifact);
       }
       const verification = verifyArtifact(artifact, optionSet, judgmentEvent);
       const observability = createObservability({
@@ -1754,6 +1755,12 @@ function scopeFromRequest(request: Request): BrainScope {
     projectId: firstPresentHeader(request, ["x-project-id", "x-penny-project-id"]) ?? null,
     sphereId: firstPresentHeader(request, ["x-sphere-id", "x-penny-sphere-id"]) ?? null,
   });
+}
+
+function createScopeStorageKey(scope: BrainScope, id: string): string {
+  return [scope.userId, scope.workspaceId, scope.projectId, scope.sphereId, id]
+    .map((value) => value ?? "null")
+    .join("\u001f");
 }
 
 function firstPresentHeader(request: Request, names: string[]): string | undefined {

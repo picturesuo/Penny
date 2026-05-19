@@ -173,6 +173,59 @@ test("POST /api/create/next keeps Brain memory scoped and ignores deleted source
   assert.ok(!afterDelete.optionSet.sourcesUsed.some((source) => source.label === "Quartzline private notes"));
 });
 
+test("POST /api/create/next scopes persisted Create artifacts, judgments, and option sets by user", async () => {
+  const service = createInMemoryCreateRouteService();
+  const rawIdea = "Build a private-alpha Create export flow with scoped artifacts.";
+  const projectId = "shared-alpha-project";
+  const sessionId = "shared-alpha-session";
+  const userAHeaders = requestHeaders({
+    "x-user-id": "create-artifact-user-a",
+    "x-workspace-id": "create-artifact-workspace",
+    "x-project-id": "create-artifact-project",
+    "x-sphere-id": "create-artifact-sphere",
+  });
+  const userBHeaders = requestHeaders({
+    "x-user-id": "create-artifact-user-b",
+    "x-workspace-id": "create-artifact-workspace",
+    "x-project-id": "create-artifact-project",
+    "x-sphere-id": "create-artifact-sphere",
+  });
+  const first = await createNext(service, { rawIdea, projectId, sessionId }, userAHeaders);
+  const userASelected = optionsByLens(first.optionSet.options, ["Personal", "Critical"]);
+  const userARefined = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId,
+      sessionId,
+      optionSetId: first.optionSet.id,
+      selectedOptionIds: userASelected.map((option) => option.id),
+      userComment: "user-a-secret-alpha-comment",
+      artifact: first.artifact,
+    },
+    userAHeaders,
+  );
+  const replayedByUserB = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId,
+      sessionId,
+      optionSetId: first.optionSet.id,
+      selectedOptionIds: userASelected.map((option) => option.id),
+      userComment: "user-b-private-alpha-comment",
+    },
+    userBHeaders,
+  );
+  const userBText = replayedByUserB.artifact.sections.map((section) => section.body).join("\n");
+
+  assert.match(userARefined.artifact.sections.map((section) => section.body).join("\n"), /user-a-secret-alpha-comment/);
+  assert.doesNotMatch(userBText, /user-a-secret-alpha-comment/);
+  assert.match(userBText, /user-b-private-alpha-comment/);
+  assert.equal(replayedByUserB.artifact.version, 2);
+  assert.equal(replayedByUserB.judgmentEvent?.userComment, "user-b-private-alpha-comment");
+});
+
 test("POST /api/create/next personalizes the same rough idea for different Brain profiles", async () => {
   const rawIdea = "Build a memory-grounded app that turns rough project notes into an agent-ready implementation plan.";
   const studio = await createNext(createInMemoryCreateRouteService(), {
