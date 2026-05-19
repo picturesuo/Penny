@@ -1153,6 +1153,232 @@ export interface CheckSaveToBrainResponse {
   };
 }
 
+export type SourceImportKind =
+  | "text"
+  | "markdown"
+  | "pdf"
+  | "chatgpt_export"
+  | "claude_export"
+  | "docs_text"
+  | "canvas_text"
+  | "json"
+  | "csv"
+  | "zip";
+
+export type MemoryNodeType =
+  | "idea"
+  | "project"
+  | "preference"
+  | "goal"
+  | "frustration"
+  | "question"
+  | "source_fact"
+  | "decision"
+  | "rejected_direction";
+
+export type MemoryEdgeKind = "derived_from" | "related_to" | "same_cluster" | "supports" | "challenges" | "rejects";
+
+export interface SourcePermission {
+  visibility: "private";
+  trainingUse: false;
+  source: "user_upload" | "manual_import";
+  allowedUses: Array<"private_memory" | "create_retrieval">;
+}
+
+export interface SourceImport {
+  id: string;
+  kind: SourceImportKind;
+  label: string;
+  scope: BrainScope;
+  privacy: {
+    visibility: "private";
+    trainingUse: false;
+    rawRetention: boolean;
+  };
+  permission: SourcePermission;
+  textHash: string;
+  contentLength: number;
+  chunkCount: number;
+  memoryNodeCount: number;
+  createdAt: string;
+  updatedAt: string;
+  fileName?: string;
+  mimeType?: string;
+  sourceUri?: string;
+}
+
+export interface SourceChunk {
+  id: string;
+  sourceId: string;
+  index: number;
+  text: string;
+  charStart: number;
+  charEnd: number;
+  tokenEstimate: number;
+  hash: string;
+  createdAt: string;
+}
+
+export interface MemoryNode {
+  id: string;
+  type: MemoryNodeType;
+  title: string;
+  summary: string;
+  text: string;
+  sourceId: string;
+  chunkIds: string[];
+  confidence: number;
+  tags: string[];
+  permission: SourcePermission;
+  createdAt: string;
+  lastSeenAt: string;
+}
+
+export interface MemoryEdge {
+  id: string;
+  kind: MemoryEdgeKind;
+  fromNodeId: string;
+  toNodeId: string;
+  sourceId: string;
+  weight: number;
+  createdAt: string;
+}
+
+export type UserProfileSignalKind =
+  | "recurring_interest"
+  | "active_idea_cluster"
+  | "taste_signal"
+  | "preferred_build_style"
+  | "common_frustration";
+
+export interface UserProfileSignal {
+  id: string;
+  kind: UserProfileSignalKind;
+  label: string;
+  summary: string;
+  weight: number;
+  sourceNodeIds: string[];
+  updatedAt: string;
+}
+
+export interface IngestionJob {
+  id: string;
+  status: "completed" | "failed";
+  sourceImport: SourceImport | null;
+  sourceId: string | null;
+  errorMessages: string[];
+  importedAt: string;
+  completedAt: string;
+  counts: {
+    sources: number;
+    chunks: number;
+    memoryNodes: number;
+    memoryEdges: number;
+    profileSignals: number;
+  };
+}
+
+export interface RetrievalResult {
+  id: string;
+  nodeId: string;
+  sourceId: string;
+  chunkId: string;
+  type: MemoryNodeType;
+  title: string;
+  summary: string;
+  excerpt: string;
+  score: number;
+  memoryRef: {
+    id: string;
+    label: string;
+    kind: "brain" | "preference" | "context";
+    summary: string;
+  };
+  sourceRef: {
+    id: string;
+    label: string;
+    kind: "source";
+    excerpt: string;
+    sourceRange: string;
+    url?: string | null;
+  };
+  permission: SourcePermission;
+}
+
+export interface BrainMemoryProfileData {
+  sourceOfTruth: "private_user_memory_sources_chunks_nodes_edges_profile_signals" | string;
+  scope: BrainScope;
+  sources: SourceImport[];
+  jobs: IngestionJob[];
+  recentMemoryNodes: MemoryNode[];
+  memoryEdges: MemoryEdge[];
+  profile: {
+    recurringInterests: UserProfileSignal[];
+    activeIdeaClusters: UserProfileSignal[];
+    tasteSignals: UserProfileSignal[];
+    preferredBuildStyle: UserProfileSignal[];
+    commonFrustrations: UserProfileSignal[];
+    privacySafeSummary: string;
+  };
+  stats: {
+    sourceCount: number;
+    chunkCount: number;
+    memoryNodeCount: number;
+    memoryEdgeCount: number;
+    profileSignalCount: number;
+  };
+}
+
+export interface BrainImportInput {
+  kind?: SourceImportKind;
+  label?: string;
+  fileName?: string;
+  mimeType?: string;
+  sourceUri?: string;
+  content?: string;
+  text?: string;
+  rawRetention?: boolean;
+}
+
+export interface BrainImportResponse {
+  data: {
+    job: IngestionJob;
+    profile: BrainMemoryProfileData;
+  };
+}
+
+export interface BrainImportJobResponse {
+  data: {
+    job: IngestionJob;
+  };
+}
+
+export interface BrainMemoryProfileResponse {
+  data: BrainMemoryProfileData;
+}
+
+export interface BrainRetrieveInput {
+  query: string;
+  limit?: number;
+  nodeTypes?: MemoryNodeType[];
+}
+
+export interface BrainRetrieveResponse {
+  data: {
+    sourceOfTruth: "private_user_memory_retrieval" | string;
+    query: string;
+    contextLight: boolean;
+    results: RetrievalResult[];
+  };
+}
+
+export interface BrainSourceDeleteResponse {
+  data: {
+    deleted: boolean;
+    profile: BrainMemoryProfileData;
+  };
+}
+
 export type CreateLens = "Personal" | "Practical" | "Valuable" | "Critical" | "Weird";
 export type CreateCheckStatus = "pass" | "warn" | "fail";
 
