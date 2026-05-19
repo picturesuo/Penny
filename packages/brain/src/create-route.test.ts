@@ -14,7 +14,7 @@ import {
   type PromptExport,
   type SourceRef,
 } from "./create-route.ts";
-import { handleBrainImportRequest } from "./brain-memory-route.ts";
+import { handleBrainImportRequest, handleBrainSourceDeleteRequest, type IngestionJob } from "./brain-memory-route.ts";
 
 test("POST /api/create/next generates the five required Create directions", async () => {
   const service = createInMemoryCreateRouteService();
@@ -117,6 +117,60 @@ test("POST /api/create/next uses retrieved Brain memory and source refs when imp
   assert.match(sectionBody(data.artifact, "User intent"), /Personal context used/);
   assert.ok(data.observability.memoryCountUsed >= 1);
   assert.ok(data.observability.sourceCountUsed >= 2);
+});
+
+test("POST /api/create/next keeps Brain memory scoped and ignores deleted sources", async () => {
+  const rawIdea = "Build the quartzline Create demo from scoped private memory.";
+  const userAHeaders = requestHeaders({
+    "x-user-id": "create-scope-user-a",
+    "x-workspace-id": "create-scope-workspace",
+    "x-project-id": "create-scope-project",
+    "x-sphere-id": "create-scope-sphere",
+  });
+  const userBHeaders = requestHeaders({
+    "x-user-id": "create-scope-user-b",
+    "x-workspace-id": "create-scope-workspace",
+    "x-project-id": "create-scope-project",
+    "x-sphere-id": "create-scope-sphere",
+  });
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest(
+      "http://localhost/api/brain/import",
+      {
+        kind: "text",
+        label: "Quartzline private notes",
+        content:
+          "Project: The quartzline Create demo should use private memory only for its owner. I prefer source-backed cards and reject fake connector claims.",
+      },
+      userAHeaders,
+    ),
+  );
+  const importPayload = await responsePayload(importResponse);
+  const job = importPayload.data.job as IngestionJob;
+  assert.equal(importResponse.status, 200);
+  assert.equal(job.status, "completed");
+  assert.ok(job.sourceId);
+
+  const owned = await createNext(createInMemoryCreateRouteService(), { rawIdea }, userAHeaders);
+  const otherUser = await createNext(createInMemoryCreateRouteService(), { rawIdea }, userBHeaders);
+
+  assert.ok(owned.optionSet.memoryUsed.some((memory) => /quartzline|source-backed/i.test(memory.summary)));
+  assert.ok(owned.optionSet.sourcesUsed.some((source) => source.label === "Quartzline private notes"));
+  assert.equal(otherUser.observability.memoryCountUsed, 0);
+  assert.ok(!otherUser.optionSet.sourcesUsed.some((source) => source.label === "Quartzline private notes"));
+  assertNoFakePositiveClaims(optionText(owned, "Personal"));
+  assert.ok(owned.optionSet.memoryUsed.every((memory) => !/Gmail|Slack|OAuth/i.test(memory.summary)));
+
+  const deleteResponse = await handleBrainSourceDeleteRequest(
+    deleteRequest(`http://localhost/api/brain/sources/${job.sourceId}`, userAHeaders),
+    job.sourceId,
+    {},
+  );
+  assert.equal(deleteResponse.status, 200);
+
+  const afterDelete = await createNext(createInMemoryCreateRouteService(), { rawIdea }, userAHeaders);
+  assert.equal(afterDelete.observability.memoryCountUsed, 0);
+  assert.ok(!afterDelete.optionSet.sourcesUsed.some((source) => source.label === "Quartzline private notes"));
 });
 
 test("POST /api/create/next personalizes the same rough idea for different Brain profiles", async () => {
@@ -505,8 +559,12 @@ test("POST /api/create/export-coding-prompt returns a coding-agent ready prompt"
   assertNoFakePositiveClaims(exported.text);
 });
 
-async function createNext(service: ReturnType<typeof createInMemoryCreateRouteService>, body: Record<string, unknown>): Promise<CreateNextResult> {
-  const response = await handleCreateNextRequest(jsonRequest("http://localhost/api/create/next", body), { service });
+async function createNext(
+  service: ReturnType<typeof createInMemoryCreateRouteService>,
+  body: Record<string, unknown>,
+  headers: HeadersInit = requestHeaders(),
+): Promise<CreateNextResult> {
+  const response = await handleCreateNextRequest(jsonRequest("http://localhost/api/create/next", body, headers), { service });
   const payload = await responsePayload(response);
 
   assert.equal(response.status, 200);
@@ -641,6 +699,13 @@ function jsonRequest(url: string, body: unknown, headers: HeadersInit = requestH
     method: "POST",
     headers,
     body: JSON.stringify(body),
+  });
+}
+
+function deleteRequest(url: string, headers: HeadersInit = requestHeaders()): Request {
+  return new Request(url, {
+    method: "DELETE",
+    headers,
   });
 }
 
