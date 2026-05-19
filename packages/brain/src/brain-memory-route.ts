@@ -50,6 +50,13 @@ export type SourcePermission = {
   allowedUses: Array<"private_memory" | "create_retrieval">;
 };
 
+export type SourcePreview = {
+  status: "ready" | "partial";
+  excerpt: string;
+  explanation: string;
+  warnings: string[];
+};
+
 export type SourceImport = {
   id: string;
   kind: SourceImportKind;
@@ -70,6 +77,7 @@ export type SourceImport = {
   fileName?: string;
   mimeType?: string;
   sourceUri?: string;
+  preview?: SourcePreview;
 };
 
 export type SourceChunk = {
@@ -308,7 +316,7 @@ const BrainImportBodySchema = z
       context.addIssue({
         code: "custom",
         path: ["content"],
-        message: "Brain import needs text content. ZIP/PDF binary parsing is not available unless text has already been extracted.",
+        message: emptyImportMessage(value.kind),
       });
     }
   });
@@ -557,6 +565,7 @@ export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteS
           ...source,
           memoryNodeCount: nodes.length,
           updatedAt: now,
+          preview: sourcePreviewFor(source, sourceChunks, nodes),
         };
 
         const { job, profile } = await db.transaction(async (tx) => {
@@ -922,6 +931,7 @@ export function createInMemoryBrainMemoryService(stores = new Map<string, ScopeM
           ...source,
           memoryNodeCount: nodes.length,
           updatedAt: now,
+          preview: sourcePreviewFor(source, sourceChunks, nodes),
         };
 
         removeSourceData(store, sourceId);
@@ -1382,6 +1392,8 @@ function sourceImportFromValue(value: unknown): SourceImport | null {
     return null;
   }
 
+  const preview = sourcePreviewFromValue(record.preview);
+
   return {
     id,
     kind: sourceImportKindValue(typeof record.kind === "string" ? record.kind : "text"),
@@ -1398,6 +1410,29 @@ function sourceImportFromValue(value: unknown): SourceImport | null {
     ...(typeof record.fileName === "string" ? { fileName: record.fileName } : {}),
     ...(typeof record.mimeType === "string" ? { mimeType: record.mimeType } : {}),
     ...(typeof record.sourceUri === "string" ? { sourceUri: record.sourceUri } : {}),
+    ...(preview ? { preview } : {}),
+  };
+}
+
+function sourcePreviewFromValue(value: unknown): SourcePreview | null {
+  const record = recordValue(value);
+
+  if (!record) {
+    return null;
+  }
+
+  const excerpt = typeof record.excerpt === "string" ? record.excerpt : "";
+  const explanation = typeof record.explanation === "string" ? record.explanation : "";
+
+  if (!excerpt && !explanation) {
+    return null;
+  }
+
+  return {
+    status: record.status === "partial" ? "partial" : "ready",
+    excerpt,
+    explanation,
+    warnings: stringArrayValue(record.warnings),
   };
 }
 
@@ -1450,11 +1485,44 @@ function normalizeImportedText(kind: SourceImportKind, content: string): string 
     case "canvas_text":
       return normalizeWhitespace(stripMarkdown(raw));
     case "pdf":
+      return normalizeWhitespace(extractPdfText(raw));
     case "text":
       return normalizeWhitespace(raw);
     case "zip":
       throw new BrainMemoryValidationError("ZIP archive parsing is not available in this kernel.");
   }
+}
+
+function emptyImportMessage(kind: SourceImportKind): string {
+  if (kind === "zip") {
+    return "ZIP archive parsing is not available in this kernel. Unzip the export and import conversations.json, CSV, markdown, or text.";
+  }
+
+  if (kind === "pdf") {
+    return "PDF import needs already-extracted text. Copy selectable PDF text or run OCR, then paste or upload that text.";
+  }
+
+  if (kind === "chatgpt_export") {
+    return "ChatGPT import needs the extracted conversations.json content, not the ZIP archive itself.";
+  }
+
+  if (kind === "claude_export") {
+    return "Claude import needs exported JSON/CSV text or copied conversation text.";
+  }
+
+  return "Brain import needs text content. ZIP/PDF binary parsing is not available unless text has already been extracted.";
+}
+
+function extractPdfText(content: string): string {
+  const trimmed = content.trimStart();
+
+  if (/^%PDF-/i.test(trimmed) || /\/Type\s*\/Page\b|\/Catalog\b|endobj\b|xref\b/i.test(trimmed.slice(0, 4_000))) {
+    throw new BrainMemoryValidationError(
+      "PDF import received raw PDF data. Penny can import PDF text that has already been extracted; copy selectable text or run OCR, then paste/upload that text.",
+    );
+  }
+
+  return content;
 }
 
 function extractChatGptExportText(content: string): string {
@@ -1481,13 +1549,14 @@ function extractChatGptExportText(content: string): string {
 
     const mapping = recordValue(conversationRecord.mapping);
     if (mapping) {
-      for (const value of Object.values(mapping)) {
-        const node = recordValue(value);
+      const currentNodeId = stringValue(conversationRecord.current_node) ?? stringValue(conversationRecord.currentNode);
+
+      for (const node of orderedChatGptMappingNodes(mapping, currentNodeId)) {
         const message = recordValue(node?.message);
         const text = message ? messageContentText(message.content) : "";
         const role = stringValue(recordValue(message?.author)?.role) ?? "message";
 
-        if (text) {
+        if (text && role !== "system" && role !== "tool") {
           lines.push(`${role}: ${text}`);
         }
       }
@@ -1508,6 +1577,87 @@ function extractChatGptExportText(content: string): string {
   return lines.length ? lines.join("\n") : extractGenericJsonText(content);
 }
 
+function orderedChatGptMappingNodes(mapping: Record<string, unknown>, currentNodeId: string | undefined): Array<Record<string, unknown>> {
+  const entries = Object.entries(mapping)
+    .map(([id, value]) => {
+      const node = recordValue(value);
+
+      return node ? { id, node } : null;
+    })
+    .filter((entry): entry is { id: string; node: Record<string, unknown> } => Boolean(entry));
+  const byId = new Map(entries.map((entry) => [entry.id, entry.node]));
+
+  if (currentNodeId && byId.has(currentNodeId)) {
+    const path: Array<Record<string, unknown>> = [];
+    const seen = new Set<string>();
+    let cursor: string | undefined = currentNodeId;
+
+    while (cursor && byId.has(cursor) && !seen.has(cursor)) {
+      seen.add(cursor);
+      const node = byId.get(cursor);
+
+      if (!node) {
+        break;
+      }
+
+      path.push(node);
+      cursor = stringValue(node.parent) ?? undefined;
+    }
+
+    return path.reverse();
+  }
+
+  const visited = new Set<string>();
+  const ordered: Array<Record<string, unknown>> = [];
+  const roots = entries
+    .filter((entry) => {
+      const parent = stringValue(entry.node.parent);
+
+      return !parent || !byId.has(parent);
+    })
+    .sort((left, right) => chatGptNodeSortValue(left.node) - chatGptNodeSortValue(right.node));
+
+  function visit(id: string): void {
+    if (visited.has(id)) {
+      return;
+    }
+
+    const node = byId.get(id);
+    if (!node) {
+      return;
+    }
+
+    visited.add(id);
+    ordered.push(node);
+
+    for (const childId of stringArrayValue(node.children).sort((left, right) => {
+      const leftNode = byId.get(left);
+      const rightNode = byId.get(right);
+
+      return chatGptNodeSortValue(leftNode) - chatGptNodeSortValue(rightNode);
+    })) {
+      visit(childId);
+    }
+  }
+
+  for (const root of roots) {
+    visit(root.id);
+  }
+
+  for (const entry of entries.sort((left, right) => chatGptNodeSortValue(left.node) - chatGptNodeSortValue(right.node))) {
+    visit(entry.id);
+  }
+
+  return ordered;
+}
+
+function chatGptNodeSortValue(node: Record<string, unknown> | undefined): number {
+  const message = recordValue(node?.message);
+  const createTime = message?.create_time ?? node?.create_time;
+
+  return typeof createTime === "number" && Number.isFinite(createTime) ? createTime : Number.MAX_SAFE_INTEGER;
+}
+
 function extractClaudeExportText(content: string): string {
   const parsed = parseJsonOrNull(content);
 
@@ -1515,7 +1665,10 @@ function extractClaudeExportText(content: string): string {
     return extractCsvText(content);
   }
 
-  const conversations = Array.isArray(parsed) ? parsed : arrayValue(recordValue(parsed)?.conversations) ?? [parsed];
+  const root = recordValue(parsed);
+  const conversations = Array.isArray(parsed)
+    ? parsed
+    : arrayValue(root?.conversations) ?? arrayValue(root?.chats) ?? arrayValue(root?.data) ?? [parsed];
   const lines: string[] = [];
 
   for (const conversation of conversations) {
@@ -1530,10 +1683,16 @@ function extractClaudeExportText(content: string): string {
       lines.push(`Claude conversation: ${title}`);
     }
 
-    const messages = arrayValue(conversationRecord.chat_messages) ?? arrayValue(conversationRecord.messages) ?? [];
+    const messages = arrayValue(conversationRecord.chat_messages) ?? arrayValue(conversationRecord.messages) ?? arrayValue(conversationRecord.turns) ?? [];
     for (const messageValue of messages) {
       const message = recordValue(messageValue);
-      const text = message ? messageContentText(message.content) || stringValue(message.text) || stringValue(message.message) || "" : "";
+      const text = message
+        ? messageContentText(message.content) ||
+          messageContentText(message.attachments) ||
+          stringValue(message.text) ||
+          stringValue(message.message) ||
+          ""
+        : "";
       const sender = stringValue(message?.sender) ?? stringValue(message?.role) ?? "message";
 
       if (text) {
@@ -2008,7 +2167,9 @@ function profileFromStore(scope: BrainScope, store: ScopeMemoryStore): BrainMemo
     .filter((node) => usableNodeIds.has(node.id))
     .sort((left, right) => Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt))
     .slice(0, 16);
-  const sources = [...store.sources.values()].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+  const sources = [...store.sources.values()]
+    .map((source) => sourceWithPreview(source, store))
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
   const memoryEdges = [...store.edges.values()].filter((edge) => usableNodeIds.has(edge.fromNodeId) && usableNodeIds.has(edge.toNodeId));
   const privacySafeSummary = buildPrivacySafeSummary(sources, signals);
 
@@ -2035,6 +2196,67 @@ function profileFromStore(scope: BrainScope, store: ScopeMemoryStore): BrainMemo
       profileSignalCount: store.signals.size,
     },
   };
+}
+
+function sourceWithPreview(source: SourceImport, store: ScopeMemoryStore): SourceImport {
+  const chunks = [...store.chunks.values()]
+    .filter((chunk) => chunk.sourceId === source.id)
+    .sort((left, right) => left.index - right.index);
+  const nodes = [...store.nodes.values()].filter((node) => node.sourceId === source.id);
+
+  return {
+    ...source,
+    preview: source.preview ?? sourcePreviewFor(source, chunks, nodes),
+  };
+}
+
+function sourcePreviewFor(source: SourceImport, chunks: SourceChunk[], nodes: MemoryNode[]): SourcePreview {
+  const excerpt = clipText(chunks.map((chunk) => chunk.text).join("\n\n"), 520);
+  const warnings: string[] = [];
+
+  if (source.kind === "pdf") {
+    warnings.push("PDF import used already-extracted text only. Scanned or binary PDFs still need OCR or copied text before import.");
+  }
+
+  if (source.kind === "zip") {
+    warnings.push("ZIP archive parsing is not available. Unzip the export and import conversations.json, CSV, markdown, or text.");
+  }
+
+  if (nodes.length === 0) {
+    warnings.push("No strong memory nodes were extracted. Add explicit goals, preferences, active projects, frustrations, or rejected directions.");
+  }
+
+  return {
+    status: nodes.length > 0 ? "ready" : "partial",
+    excerpt,
+    explanation: sourcePreviewExplanation(source.kind),
+    warnings,
+  };
+}
+
+function sourcePreviewExplanation(kind: SourceImportKind): string {
+  switch (kind) {
+    case "chatgpt_export":
+      return "Parsed ChatGPT conversation export into private, normalized conversation text.";
+    case "claude_export":
+      return "Parsed Claude export/message text into private, normalized conversation text.";
+    case "markdown":
+      return "Imported markdown notes after removing formatting while preserving the note text.";
+    case "pdf":
+      return "Imported already-extracted PDF text. Penny does not parse raw or scanned PDF binary content in this flow.";
+    case "csv":
+      return "Imported text-like CSV columns such as title, prompt, message, response, summary, content, and text.";
+    case "json":
+      return "Imported text fields from generic JSON while skipping IDs, URLs, and timestamps.";
+    case "docs_text":
+      return "Imported copied document text as private Brain context.";
+    case "canvas_text":
+      return "Imported copied canvas text as private Brain context.";
+    case "zip":
+      return "ZIP archives are not parsed directly.";
+    case "text":
+      return "Imported plain text notes as private Brain context.";
+  }
 }
 
 function buildPrivacySafeSummary(sources: SourceImport[], signals: UserProfileSignal[]): string {
