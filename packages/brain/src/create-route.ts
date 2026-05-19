@@ -427,16 +427,25 @@ function buildOptionSet(input: {
   const sourceRefs = input.sourcesUsed;
   const memoryRefs = input.memoryUsed;
   const optionSeed = [input.projectId, input.sessionId, input.rawIdea].join("|");
+  const profile = createProfileInsights(input.rawIdea, memoryRefs, sourceRefs, input.contextLight);
   const options: CandidateOption[] = [
     {
       id: stableId("create-option-personal", optionSeed),
       lens: "Personal",
-      title: `Make ${subject.toLowerCase()} feel personally steered`,
-      oneLine: `Center the workflow on the user's own taste, context, and remembered constraints instead of a blank prompt box.`,
-      rationale: `${contextPhrase} The personal direction wins if the product feels like it knows why this user is making the thing.`,
-      nextMove: "List the user-specific constraints Penny should preserve before generating or revising the artifact.",
+      title: profile.hasMemory
+        ? `Make ${subject.toLowerCase()} honor ${profile.personalAnchor}`
+        : `Make ${subject.toLowerCase()} feel personally steered`,
+      oneLine: profile.hasMemory
+        ? `Center the first loop on this remembered signal: ${profile.personalEvidence}.`
+        : "Center the workflow on the rough idea and visibly mark that no durable Brain memory was used.",
+      rationale: profile.hasMemory
+        ? `${profile.groundedLine} Inferred move: shape Create around the user's own taste, active projects, and constraints instead of a blank prompt box.`
+        : `${contextPhrase} The personal direction should ask for more private context before implying Penny knows the user.`,
+      nextMove: profile.hasMemory
+        ? `Pin ${profile.personalAnchor} as a visible constraint before generating or revising the artifact.`
+        : "Ask the user which personal constraints Penny should preserve before generating or revising the artifact.",
       risks: ["Can overfit to weak or missing memory if the UI implies more context than Penny actually has."],
-      memoryUsed: memoryRefs,
+      memoryUsed: profile.personalMemory,
       sourcesUsed: sourceRefs,
       scores: { intentMatch: 91, buildability: 74, value: 82, novelty: 78, risk: 42 },
     },
@@ -444,23 +453,25 @@ function buildOptionSet(input: {
       id: stableId("create-option-practical", optionSeed),
       lens: "Practical",
       title: `Ship the smallest usable ${subject.toLowerCase()} loop`,
-      oneLine: "Prioritize the first buildable path: input, five directions, judgment, artifact update, verification, export.",
-      rationale: `${contextPhrase} This is the safest wedge because it makes the core loop testable without waiting for broad memory ingestion or advanced models.`,
-      nextMove: "Implement the narrow route and UI state machine, then verify one complete happy path manually and with tests.",
+      oneLine: `Prioritize the first buildable path in the user's preferred style: ${profile.buildStyleEvidence}.`,
+      rationale: `${contextPhrase} This is the safest wedge because it makes the core loop testable without waiting for broad memory ingestion or advanced models. Practical constraint: ${profile.buildStyleEvidence}.`,
+      nextMove: `Implement the narrow route and UI state machine, then verify the ${profile.buildStyleAnchor} path manually and with tests.`,
       risks: ["May feel conservative if the artifact does not visibly improve after user judgment."],
-      memoryUsed: memoryRefs.slice(0, 2),
+      memoryUsed: profile.practicalMemory,
       sourcesUsed: sourceRefs,
       scores: { intentMatch: 88, buildability: 94, value: 78, novelty: 58, risk: 28 },
     },
     {
       id: stableId("create-option-valuable", optionSeed),
       lens: "Valuable",
-      title: `Make ${audience.toLowerCase()} value obvious`,
-      oneLine: "Shape the artifact around who benefits, what decision gets easier, and why this is better than generic generation.",
-      rationale: `${contextPhrase} The valuable direction forces the prompt artifact to name a real user, external payoff, and acceptance tests that prove usefulness.`,
-      nextMove: "Rewrite the target user, core loop, and acceptance tests so the value can be judged outside Penny.",
+      title: profile.hasMemory ? `Make value obvious for ${profile.valueAnchor}` : `Make ${audience.toLowerCase()} value obvious`,
+      oneLine: `Shape the artifact around the decision that gets easier: ${profile.valueEvidence}.`,
+      rationale: profile.hasMemory
+        ? `${profile.groundedLine} Inferred move: translate that memory into a target user, external payoff, and acceptance tests that prove usefulness.`
+        : `${contextPhrase} The valuable direction forces the prompt artifact to name a real user, external payoff, and acceptance tests that prove usefulness.`,
+      nextMove: `Rewrite the target user, core loop, and acceptance tests around ${profile.valueAnchor}.`,
       risks: ["Can drift into pitch language unless implementation constraints stay concrete."],
-      memoryUsed: memoryRefs.slice(0, 2),
+      memoryUsed: profile.valuableMemory,
       sourcesUsed: sourceRefs,
       scores: { intentMatch: 86, buildability: 78, value: 94, novelty: 64, risk: 36 },
     },
@@ -468,23 +479,29 @@ function buildOptionSet(input: {
       id: stableId("create-option-critical", optionSeed),
       lens: "Critical",
       title: `De-bullshit the ${subject.toLowerCase()} promise`,
-      oneLine: "Pressure-test whether the idea is truly memory-native or just a GPT wrapper with nicer furniture.",
-      rationale: `${contextPhrase} Friendly critique: the idea gets stronger if it names what Penny records, how judgment changes the artifact, and what must not be faked.`,
-      nextMove: "Add explicit verification checks for source grounding, non-generic behavior, and missing information before export is allowed.",
-      risks: ["If the critique dominates the UI, Create may feel punitive instead of generative."],
-      memoryUsed: memoryRefs.slice(0, 1),
+      oneLine: profile.hasMemory
+        ? `Pressure-test generic GPT-wrapper risk against the user's remembered rejection: ${profile.criticalEvidence}.`
+        : "Pressure-test whether the idea is truly memory-native or just a GPT wrapper with nicer furniture.",
+      rationale: `${contextPhrase} Friendly critique: the idea gets stronger if it names what Penny records, how judgment changes the artifact, and what must not be faked. Treat generic GPT-wrapper behavior, fake connector claims, and unsupported memory claims as export blockers.`,
+      nextMove: `Add explicit verification checks for source grounding, non-generic behavior, missing information, and ${profile.criticalAnchor} before export is allowed.`,
+      risks: ["If the critique dominates the UI, Create may feel punitive instead of generative.", "A generic wrapper can still pass if memory evidence is attached but never changes the artifact."],
+      memoryUsed: profile.criticalMemory,
       sourcesUsed: sourceRefs,
       scores: { intentMatch: 89, buildability: 82, value: 86, novelty: 70, risk: 52 },
     },
     {
       id: stableId("create-option-weird", optionSeed),
       lens: "Weird",
-      title: `Turn ${subject.toLowerCase()} into a creative instrument`,
-      oneLine: "Treat the five directions as playable lenses that bend the artifact, not as static AI suggestions.",
-      rationale: `${contextPhrase} The weird direction keeps Penny from becoming a dashboard: selected lenses should leave visible traces in the prompt and verification brief.`,
-      nextMove: "Give each selected card a distinct artifact mutation so multi-select feels compositional and surprising.",
+      title: profile.hasMemory
+        ? `Make ${subject.toLowerCase()} weird in the user's own direction`
+        : `Turn ${subject.toLowerCase()} into a creative instrument`,
+      oneLine: `Use the unusual but still useful edge in the context: ${profile.weirdEvidence}.`,
+      rationale: profile.hasMemory
+        ? `${profile.groundedLine} Inferred move: bend the artifact through that taste signal while still producing implementation requirements and tests.`
+        : `${contextPhrase} The weird direction keeps Penny from becoming a dashboard: selected lenses should leave visible traces in the prompt and verification brief.`,
+      nextMove: `Give each selected card a distinct artifact mutation inspired by ${profile.weirdAnchor}, while keeping the coding prompt executable.`,
       risks: ["Could become decorative unless every weird move still updates the coding prompt."],
-      memoryUsed: memoryRefs.slice(0, 2),
+      memoryUsed: profile.weirdMemory,
       sourcesUsed: sourceRefs,
       scores: { intentMatch: 80, buildability: 68, value: 76, novelty: 94, risk: 58 },
     },
@@ -501,6 +518,112 @@ function buildOptionSet(input: {
     sourcesUsed: sourceRefs,
     createdAt: input.now,
   };
+}
+
+type CreateProfileInsights = {
+  hasMemory: boolean;
+  groundedLine: string;
+  personalAnchor: string;
+  personalEvidence: string;
+  buildStyleAnchor: string;
+  buildStyleEvidence: string;
+  valueAnchor: string;
+  valueEvidence: string;
+  criticalAnchor: string;
+  criticalEvidence: string;
+  weirdAnchor: string;
+  weirdEvidence: string;
+  personalMemory: MemoryRef[];
+  practicalMemory: MemoryRef[];
+  valuableMemory: MemoryRef[];
+  criticalMemory: MemoryRef[];
+  weirdMemory: MemoryRef[];
+};
+
+function createProfileInsights(
+  rawIdea: string,
+  memoryRefs: MemoryRef[],
+  sourceRefs: SourceRef[],
+  contextLight: boolean,
+): CreateProfileInsights {
+  const preferences = matchingMemoryRefs(memoryRefs, [
+    /\b(prefer|preference|style|taste|aesthetic|should feel|care about|like)\b/i,
+  ]);
+  const projects = matchingMemoryRefs(memoryRefs, [
+    /\b(project|product|app|startup|prototype|mvp|build|goal|active|launch|workflow)\b/i,
+  ]);
+  const frustrations = matchingMemoryRefs(memoryRefs, [
+    /\b(frustrat|annoy|hate|pain|stuck|blocked|generic|slop|paperwork|bottleneck|too much)\b/i,
+  ]);
+  const rejected = matchingMemoryRefs(memoryRefs, [
+    /\b(reject|rejected|avoid|instead of|do not|don't|not a generic|no generic|skip|fake|wrapper)\b/i,
+  ]);
+  const creative = matchingMemoryRefs(memoryRefs, [
+    /\b(weird|creative|play|instrument|tactile|visual|zine|studio|surprising|novel|field|offline)\b/i,
+  ]);
+  const hasMemory = memoryRefs.length > 0;
+  const firstMemory = memoryRefs[0] ?? null;
+  const firstSource = sourceRefs.find((source) => source.kind !== "rough_idea") ?? null;
+  const sourceEvidence = firstSource
+    ? `${firstSource.label}${firstSource.sourceRange ? ` ${firstSource.sourceRange}` : ""}`
+    : "the rough idea";
+  const groundedLine = hasMemory
+    ? `Grounded in ${memoryRefs.length} memory ref(s) and ${sourceEvidence}: ${evidencePhrase(firstMemory, rawIdea)}`
+    : contextLight
+      ? "Context-light: no imported Penny memory matched this idea, so only the rough idea is grounded."
+      : "Grounded only in supplied session context and the rough idea.";
+  const personalMemory = chooseMemoryRefs(memoryRefs, preferences, projects, creative);
+  const practicalMemory = chooseMemoryRefs(memoryRefs, preferences, projects);
+  const valuableMemory = chooseMemoryRefs(memoryRefs, projects, frustrations, preferences);
+  const criticalMemory = chooseMemoryRefs(memoryRefs, rejected, frustrations, preferences);
+  const weirdMemory = chooseMemoryRefs(memoryRefs, creative, preferences, projects);
+
+  return {
+    hasMemory,
+    groundedLine,
+    personalAnchor: anchorPhrase(personalMemory[0], "the user's actual context"),
+    personalEvidence: evidencePhrase(personalMemory[0] ?? firstMemory, "No personal memory was supplied."),
+    buildStyleAnchor: anchorPhrase(practicalMemory[0], "smallest usable loop"),
+    buildStyleEvidence: evidencePhrase(practicalMemory[0], "small route, UI, verification, and export loop"),
+    valueAnchor: anchorPhrase(valuableMemory[0], "the target user's real job"),
+    valueEvidence: evidencePhrase(valuableMemory[0], "who benefits, what decision gets easier, and why it beats generic generation"),
+    criticalAnchor: anchorPhrase(criticalMemory[0], "generic-wrapper risk"),
+    criticalEvidence: evidencePhrase(criticalMemory[0], "avoid generic wrapper behavior and fake provenance"),
+    weirdAnchor: anchorPhrase(weirdMemory[0], "a useful creative instrument"),
+    weirdEvidence: evidencePhrase(weirdMemory[0], "make the lenses surprising without making the prompt decorative"),
+    personalMemory,
+    practicalMemory,
+    valuableMemory,
+    criticalMemory,
+    weirdMemory,
+  };
+}
+
+function matchingMemoryRefs(memoryRefs: MemoryRef[], patterns: RegExp[]): MemoryRef[] {
+  return memoryRefs.filter((memory) => patterns.some((pattern) => pattern.test(`${memory.label} ${memory.summary}`)));
+}
+
+function chooseMemoryRefs(memoryRefs: MemoryRef[], ...groups: MemoryRef[][]): MemoryRef[] {
+  const preferred = uniqueById(groups.flat()).slice(0, 4);
+
+  return preferred.length ? preferred : memoryRefs.slice(0, 4);
+}
+
+function anchorPhrase(memory: MemoryRef | undefined, fallback: string): string {
+  if (!memory) {
+    return fallback;
+  }
+
+  const label = memory.label
+    .replace(/^(Preference|Project|Goal|Frustration|Decision|Rejected direction|Idea|Source fact|Question)\s*[:\-]\s*/i, "")
+    .replace(/^(Preference|Project|Goal|Frustration|Decision|Rejected direction|Idea|Source fact|Question)\s*[:\-]\s*/i, "")
+    .trim();
+
+  return clipText(label || memory.summary, 72).toLowerCase();
+}
+
+function evidencePhrase(memory: MemoryRef | null | undefined, fallback: string): string {
+  return memory ? clipText(memory.summary, 180) : fallback;
 }
 
 function buildInitialArtifact(input: {
