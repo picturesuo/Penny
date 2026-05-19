@@ -287,7 +287,7 @@ export function App() {
   }
 
   async function handleLandingPromptSubmit(
-    mode: Extract<PennyMode, "Learn" | "Check">,
+    mode: Extract<PennyMode, "Learn" | "Create">,
     rawIdea: string,
     sourceMaterial?: LearnSourceMaterialInput,
   ) {
@@ -310,8 +310,8 @@ export function App() {
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
     setCheckInitialSeedText(sourceMaterial?.extractedText || rawIdea);
-    setActiveMode("Check");
-    setStatus("Preparing Check");
+    setActiveMode("Create");
+    setStatus("Preparing Create");
   }
 
   async function handleLandingQuickNote(rawIdea: string) {
@@ -330,15 +330,15 @@ export function App() {
     }
 
     setIsThinking(true);
-    setStatus("Preparing Check");
+    setStatus("Preparing Create");
 
     try {
       await tickAutopilot(data.session.id, true);
       const cockpit = await refreshCockpit(data.session.id);
       setFocusedClaimId(cockpit.autopilot.suggestion?.targetClaimId ?? cockpit.ideaMap.claims[0]?.id ?? null);
       await refreshDocuments(data.session.id);
-      setActiveMode("Check");
-      setStatus("Check ready");
+      setActiveMode("Create");
+      setStatus("Create ready");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
@@ -576,11 +576,11 @@ export function App() {
         setStatus("Learn focused on canvas node");
         return;
       case "check":
-        setActiveMode("Check");
+        setActiveMode("Create");
         if (claimId) {
           await handleManualClaimSelect(claimId);
         } else {
-          setStatus("Check opened for canvas node");
+          setStatus("Create opened for canvas node");
         }
         return;
       case "verify":
@@ -599,7 +599,7 @@ export function App() {
 
   async function handleCanvasVerify(node: CanvasNode, claimId: string | null, currentClaimText: string) {
     if (!data?.session?.id || !claimId) {
-      setActiveMode("Check");
+      setActiveMode("Create");
       setStatus("Open a saved claim before running Verify");
       return;
     }
@@ -613,10 +613,10 @@ export function App() {
       await refreshDocuments(data.session.id);
       setFocusedClaimId(claimId ?? cockpit.autopilot.suggestion?.targetClaimId ?? null);
       setLearnFocusNode(node);
-      setActiveMode("Check");
+      setActiveMode("Create");
       setStatus("Verify completed");
     } catch (error) {
-      setActiveMode("Check");
+      setActiveMode("Create");
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
       setIsThinking(false);
@@ -770,15 +770,15 @@ export function App() {
           setLearnFocusNode(null);
           setRelatedBrainSearch(null);
           setCheckInitialSeedText(recent.rawIdea);
-          setActiveMode("Check");
-          setStatus("Quick note sent to Check");
+          setActiveMode("Create");
+          setStatus("Quick note sent to Create");
         } else {
           await handleSeed(recent.rawIdea);
           setActiveMode("Brain");
         }
         setStatus(
           action === "check"
-            ? "Quick note sent to Check"
+            ? "Quick note sent to Create"
             : action === "learn"
               ? "Quick note opened in Learn"
               : "Quick note built",
@@ -854,7 +854,7 @@ export function App() {
             onCanvasOpenChange={setBrainCanvasOpen}
             onCanvasNodeAction={handleCanvasNodeAction}
           />
-        ) : activeMode === "Check" ? (
+        ) : activeMode === "Create" ? (
           <CheckWorkspace
             data={data}
             status={status}
