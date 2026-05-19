@@ -9,26 +9,26 @@ interface LandingPageProps {
   status: string;
   onModeSelect: (mode: PennyMode) => void;
   onPromptSubmit: (
-    mode: Extract<PennyMode, "Learn" | "Check">,
+    mode: Extract<PennyMode, "Learn" | "Create">,
     rawIdea: string,
     sourceMaterial?: LearnSourceMaterialInput,
   ) => Promise<void>;
   onQuickNote: (rawIdea: string) => Promise<void>;
 }
 
-type LandingDestination = Extract<PennyMode, "Learn" | "Check"> | "QuickNote";
+type LandingDestination = Extract<PennyMode, "Learn" | "Create"> | "QuickNote";
 
 type LandingShortcutIntent =
   | { action: "open-mode"; mode: PennyMode }
   | { action: "select-destination"; destination: LandingDestination };
 
 type LandingSubmitIntent =
-  | { action: "submit-prompt"; mode: Extract<PennyMode, "Learn" | "Check">; rawIdea: string }
+  | { action: "submit-prompt"; mode: Extract<PennyMode, "Learn" | "Create">; rawIdea: string }
   | { action: "quick-note"; rawIdea: string };
 
 export const landingShortcuts: Array<{ key: string; label: string }> = [
   { key: "B", label: "for Brain" },
-  { key: "C", label: "for Check" },
+  { key: "C", label: "for Create" },
   { key: "L", label: "for Learn" },
   { key: "Q", label: "for Quick note" },
 ];
@@ -39,7 +39,7 @@ function destinationForShortcutKey(key: string | null): LandingDestination | nul
   }
 
   if (key === "C") {
-    return "Check";
+    return "Create";
   }
 
   if (key === "Q") {
@@ -75,7 +75,7 @@ export function landingShortcutIntent(key: string): LandingShortcutIntent | null
   }
 
   if (normalizedKey === "c") {
-    return { action: "select-destination", destination: "Check" };
+    return { action: "select-destination", destination: "Create" };
   }
 
   if (normalizedKey === "q") {
