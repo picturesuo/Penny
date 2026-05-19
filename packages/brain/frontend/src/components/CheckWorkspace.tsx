@@ -114,6 +114,7 @@ export function CheckWorkspace({
       applyCreatePayload(payload.data);
       setSelectedOptionIds([]);
       setUserComment("");
+      setJudgmentEvent(null);
       setPromptExport(null);
       setStatus("Create directions ready");
     });
@@ -542,11 +543,11 @@ function createActiveStepIndex(input: {
     return 5;
   }
 
-  if (input.verification) {
+  if (input.judgmentEvent && input.verification) {
     return 4;
   }
 
-  if (input.artifact && input.judgmentEvent) {
+  if (input.judgmentEvent && input.artifact) {
     return 3;
   }
 
