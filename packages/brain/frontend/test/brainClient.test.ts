@@ -10,8 +10,11 @@ import {
   createNext,
   createLearnSession,
   decideVerifyConfidence,
+  deleteBrainSource,
   exportCodingPrompt,
+  fetchBrainImportJob,
   fetchBrainHybridSearch,
+  fetchBrainMemoryProfile,
   fetchBrainRecents,
   fetchCheckSession,
   fetchClaimDetail,
@@ -20,6 +23,8 @@ import {
   fetchSessionNote,
   keepBrainRecentIdea,
   issueChallengeFromCandidate,
+  importBrainSource,
+  retrieveBrainMemory,
   respondToChallenge,
   runCheckSprint,
   saveBrainObject,
@@ -779,6 +784,91 @@ test("frontend brain client uses persisted recents and notes routes", async () =
   }
 });
 
+test("frontend brain client uses Brain memory import, profile, retrieval, and delete routes", async () => {
+  const profile = brainMemoryProfilePayload();
+  const job = profile.jobs[0];
+  const source = profile.sources[0];
+  assert.ok(job);
+  assert.ok(source);
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse({ job, profile }),
+    jsonResponse({ job }),
+    jsonResponse(profile),
+    jsonResponse({
+      sourceOfTruth: "private_user_memory_retrieval",
+      query: "small reversible builds",
+      contextLight: false,
+      results: [
+        {
+          id: "brain-retrieval-1",
+          nodeId: "memory-node-1",
+          sourceId: source.id,
+          chunkId: "brain-chunk-1",
+          type: "preference",
+          title: "Preference - Small reversible builds",
+          summary: "I prefer small reversible builds with explicit provenance.",
+          excerpt: "I prefer small reversible builds with explicit provenance.",
+          score: 4.2,
+          memoryRef: {
+            id: "memory-node-1",
+            label: "Preference: Small reversible builds",
+            kind: "preference",
+            summary: "I prefer small reversible builds with explicit provenance.",
+          },
+          sourceRef: {
+            id: source.id,
+            label: source.label,
+            kind: "source",
+            excerpt: "I prefer small reversible builds with explicit provenance.",
+            sourceRange: "chunk 1",
+          },
+          permission: source.permission,
+        },
+      ],
+    }),
+    jsonResponse({ deleted: true, profile: { ...profile, sources: [], recentMemoryNodes: [], stats: { ...profile.stats, sourceCount: 0 } } }),
+  ]);
+
+  try {
+    const imported = await importBrainSource({
+      kind: "markdown",
+      label: "Product notes",
+      fileName: "notes.md",
+      content: "I prefer small reversible builds with explicit provenance.",
+    });
+    const fetchedJob = await fetchBrainImportJob(job.id);
+    const fetchedProfile = await fetchBrainMemoryProfile();
+    const retrieved = await retrieveBrainMemory({ query: "small reversible builds", limit: 4, nodeTypes: ["preference"] });
+    const deleted = await deleteBrainSource(source.id);
+
+    assert.equal(imported.data.job.id, job.id);
+    assert.equal(fetchedJob.data.job.sourceId, source.id);
+    assert.equal(fetchedProfile.data.sources[0]?.label, "Product notes");
+    assert.equal(retrieved.data.contextLight, false);
+    assert.equal(retrieved.data.results[0]?.memoryRef.kind, "preference");
+    assert.equal(deleted.data.deleted, true);
+    assert.equal(calls[0]?.url, "/api/brain/import");
+    assert.equal(calls[0]?.method, "POST");
+    assert.deepEqual(calls[0]?.body, {
+      kind: "markdown",
+      label: "Product notes",
+      fileName: "notes.md",
+      content: "I prefer small reversible builds with explicit provenance.",
+    });
+    assert.equal(calls[1]?.url, `/api/brain/import/${job.id}`);
+    assert.equal(calls[1]?.method, "GET");
+    assert.equal(calls[2]?.url, "/api/brain/memory/profile");
+    assert.equal(calls[2]?.method, "GET");
+    assert.equal(calls[3]?.url, "/api/brain/retrieve");
+    assert.deepEqual(calls[3]?.body, { query: "small reversible builds", limit: 4, nodeTypes: ["preference"] });
+    assert.equal(calls[4]?.url, `/api/brain/sources/${source.id}`);
+    assert.equal(calls[4]?.method, "DELETE");
+  } finally {
+    restoreFetch();
+  }
+});
+
 test("frontend brain client uses session canvas, save object, and optional hybrid search contracts", async () => {
   const sessionId = uuidAt(101);
   const calls: FetchCall[] = [];
@@ -1017,6 +1107,102 @@ function jsonResponse(data: unknown): Response {
     status: 200,
     headers: { "content-type": "application/json" },
   });
+}
+
+function brainMemoryProfilePayload() {
+  const source = {
+    id: "brain-source-1",
+    kind: "markdown",
+    label: "Product notes",
+    scope: {
+      userId: "test-user",
+      workspaceId: "test-workspace",
+      projectId: "test-project",
+      sphereId: "test-sphere",
+    },
+    privacy: {
+      visibility: "private",
+      trainingUse: false,
+      rawRetention: false,
+    },
+    permission: {
+      visibility: "private",
+      trainingUse: false,
+      source: "user_upload",
+      allowedUses: ["private_memory", "create_retrieval"],
+    },
+    textHash: "hash-1",
+    contentLength: 64,
+    chunkCount: 1,
+    memoryNodeCount: 1,
+    createdAt: "2026-05-05T12:00:00.000Z",
+    updatedAt: "2026-05-05T12:00:00.000Z",
+    fileName: "notes.md",
+  };
+  const job = {
+    id: "brain-import-job-1",
+    status: "completed",
+    sourceImport: source,
+    sourceId: source.id,
+    errorMessages: [],
+    importedAt: "2026-05-05T12:00:00.000Z",
+    completedAt: "2026-05-05T12:00:01.000Z",
+    counts: {
+      sources: 1,
+      chunks: 1,
+      memoryNodes: 1,
+      memoryEdges: 0,
+      profileSignals: 1,
+    },
+  };
+  const signal = {
+    id: "profile-signal-1",
+    kind: "preferred_build_style",
+    label: "Small reversible builds",
+    summary: "I prefer small reversible builds with explicit provenance.",
+    weight: 0.88,
+    sourceNodeIds: ["memory-node-1"],
+    updatedAt: "2026-05-05T12:00:01.000Z",
+  };
+
+  return {
+    sourceOfTruth: "private_user_memory_sources_chunks_nodes_edges_profile_signals",
+    scope: source.scope,
+    sources: [source],
+    jobs: [job],
+    recentMemoryNodes: [
+      {
+        id: "memory-node-1",
+        type: "preference",
+        title: "Preference - Small reversible builds",
+        summary: "I prefer small reversible builds with explicit provenance.",
+        text: "I prefer small reversible builds with explicit provenance.",
+        sourceId: source.id,
+        chunkIds: ["brain-chunk-1"],
+        confidence: 0.88,
+        tags: ["small", "reversible", "builds", "provenance"],
+        permission: source.permission,
+        createdAt: "2026-05-05T12:00:01.000Z",
+        lastSeenAt: "2026-05-05T12:00:01.000Z",
+      },
+    ],
+    memoryEdges: [],
+    profile: {
+      recurringInterests: [],
+      activeIdeaClusters: [],
+      tasteSignals: [signal],
+      preferredBuildStyle: [signal],
+      commonFrustrations: [],
+      privacySafeSummary: "Private user memory from 1 imported source. No private global training is claimed or enabled.",
+    },
+    stats: {
+      sourceCount: 1,
+      chunkCount: 1,
+      memoryNodeCount: 1,
+      memoryEdgeCount: 0,
+      profileSignalCount: 1,
+    },
+  };
 }
 
 function checkSessionPayload(sessionId: string, cycleId: string, recommendationId: string) {
