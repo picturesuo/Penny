@@ -1153,6 +1153,179 @@ export interface CheckSaveToBrainResponse {
   };
 }
 
+export type CreateLens = "Personal" | "Practical" | "Valuable" | "Critical" | "Weird";
+export type CreateCheckStatus = "pass" | "warn" | "fail";
+
+export interface MemoryRef {
+  id: string;
+  label: string;
+  kind: "brain" | "session" | "preference" | "context";
+  summary: string;
+}
+
+export interface SourceRef {
+  id: string;
+  label: string;
+  kind: "rough_idea" | "session" | "source" | "user_comment";
+  excerpt: string;
+  url?: string | null;
+  sourceRange?: string | null;
+}
+
+export interface CandidateOption {
+  id: string;
+  lens: CreateLens;
+  title: string;
+  oneLine: string;
+  rationale: string;
+  nextMove: string;
+  risks: string[];
+  memoryUsed: MemoryRef[];
+  sourcesUsed: SourceRef[];
+  scores: {
+    intentMatch: number;
+    buildability: number;
+    value: number;
+    novelty: number;
+    risk: number;
+  };
+}
+
+export interface OptionSet {
+  id: string;
+  projectId: string;
+  sessionId: string;
+  sourceOfTruth: "rough_idea_context_deterministic_create_lenses" | string;
+  rawIdea: string;
+  options: CandidateOption[];
+  memoryUsed: MemoryRef[];
+  sourcesUsed: SourceRef[];
+  createdAt: string;
+}
+
+export type ArtifactSectionTitle =
+  | "Product goal"
+  | "User intent"
+  | "Target user"
+  | "Core loop"
+  | "UX requirements"
+  | "Frontend requirements"
+  | "Backend requirements"
+  | "Data model"
+  | "AI/memory orchestration"
+  | "Privacy constraints"
+  | "Verification constraints"
+  | "Implementation plan"
+  | "Acceptance tests"
+  | "Do-not-break list"
+  | "Final coding-agent prompt";
+
+export interface ArtifactSection {
+  id: string;
+  title: ArtifactSectionTitle;
+  body: string;
+  status: "draft" | "updated" | "needs_input";
+}
+
+export interface ArtifactDelta {
+  id: string;
+  updatedSectionIds: string[];
+  selectedOptionIds: string[];
+  summary: string;
+  createdAt: string;
+}
+
+export interface CodingPromptArtifact {
+  id: string;
+  projectId: string;
+  sessionId: string;
+  title: string;
+  version: number;
+  rawIdea: string;
+  sections: ArtifactSection[];
+  sourceOptionSetIds: string[];
+  judgmentEventIds: string[];
+  updatedAt: string;
+}
+
+export interface JudgmentEvent {
+  id: string;
+  projectId: string;
+  sessionId: string;
+  optionSetId: string;
+  selectedOptionIds: string[];
+  userComment: string;
+  inferredSignals: string[];
+  artifactDelta: ArtifactDelta;
+  createdAt: string;
+}
+
+export interface VerificationSummary {
+  id: string;
+  artifactId: string;
+  createdAt: string;
+  verdict: "ready" | "needs_revision";
+  checks: Array<{
+    key: "intent_match" | "buildability" | "source_context_grounding" | "non_generic" | "missing_info" | "risks";
+    label: string;
+    status: CreateCheckStatus;
+    summary: string;
+  }>;
+  missingInfo: string[];
+  risks: string[];
+}
+
+export interface PromptExport {
+  id: string;
+  artifactId: string;
+  format: "coding_agent_prompt";
+  targets: Array<"Codex" | "Claude Code" | "Cursor">;
+  text: string;
+  fileName: string;
+  createdAt: string;
+}
+
+export interface CreateNextInput {
+  rawIdea: string;
+  projectId?: string | null;
+  sessionId?: string | null;
+  optionSetId?: string | null;
+  selectedOptionIds?: string[];
+  userComment?: string;
+  artifact?: CodingPromptArtifact;
+  memory?: MemoryRef[];
+  sources?: SourceRef[];
+  context?: {
+    summary?: string;
+    sessionTitle?: string;
+    activeClaim?: string;
+    sourceText?: string;
+  };
+}
+
+export interface CreateNextResponse {
+  data: {
+    sourceOfTruth: "create_options_judgments_artifacts_verification" | string;
+    optionSet: OptionSet;
+    artifact: CodingPromptArtifact;
+    verification: VerificationSummary;
+    judgmentEvent: JudgmentEvent | null;
+    exportReady: boolean;
+  };
+}
+
+export interface ExportCodingPromptInput {
+  artifact: CodingPromptArtifact;
+  verification?: VerificationSummary;
+  judgmentEvent?: JudgmentEvent | null;
+}
+
+export interface PromptExportResponse {
+  data: {
+    export: PromptExport;
+  };
+}
+
 export interface FocusState {
   sessionId: string;
   mode: string;
