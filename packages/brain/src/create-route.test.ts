@@ -14,7 +14,15 @@ import {
   type PromptExport,
   type SourceRef,
 } from "./create-route.ts";
-import { handleBrainImportRequest, handleBrainSourceDeleteRequest, type IngestionJob } from "./brain-memory-route.ts";
+import {
+  handleBrainDemoFixtureRequest,
+  handleBrainImportRequest,
+  handleBrainMemoryProfileRequest,
+  handleBrainMemoryReviewRequest,
+  handleBrainSourceDeleteRequest,
+  type BrainMemoryProfile,
+  type IngestionJob,
+} from "./brain-memory-route.ts";
 
 test("POST /api/create/next generates the five required Create directions", async () => {
   const service = createInMemoryCreateRouteService();
@@ -224,6 +232,101 @@ test("POST /api/create/next scopes persisted Create artifacts, judgments, and op
   assert.match(userBText, /user-b-private-alpha-comment/);
   assert.equal(replayedByUserB.artifact.version, 2);
   assert.equal(replayedByUserB.judgmentEvent?.userComment, "user-b-private-alpha-comment");
+});
+
+test("alpha Brain to Create to export golden path uses reviewed personal context and selected history", async () => {
+  const headers = requestHeaders({
+    "x-user-id": "alpha-demo-user",
+    "x-workspace-id": "alpha-demo-workspace",
+    "x-project-id": "alpha-demo-project",
+    "x-sphere-id": "alpha-demo-sphere",
+  });
+  const fixtureResponse = await handleBrainDemoFixtureRequest(getRequest("http://localhost/api/brain/demo-fixture/penny", headers));
+  const fixturePayload = await responsePayload(fixtureResponse);
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", fixturePayload.data.importInput, headers),
+  );
+  const profileResponse = await handleBrainMemoryProfileRequest(getRequest("http://localhost/api/brain/memory/profile", headers));
+  const profilePayload = await responsePayload(profileResponse);
+  const importedProfile = profilePayload.data as BrainMemoryProfile;
+  const memoryToBoost = importedProfile.recentMemoryNodes.find((node) => /small reversible builds|source-backed|Create/i.test(node.summary));
+
+  assert.equal(fixtureResponse.status, 200);
+  assert.equal(importResponse.status, 200);
+  assert.equal(profileResponse.status, 200);
+  assert.ok(importedProfile.stats.sourceCount >= 1);
+  assert.ok(importedProfile.stats.memoryNodeCount >= 5);
+  assert.ok(memoryToBoost);
+
+  const reviewResponse = await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${memoryToBoost.id}/review`, { action: "boost" }, headers),
+    memoryToBoost.id,
+  );
+  const reviewPayload = await responsePayload(reviewResponse);
+  const reviewedProfile = reviewPayload.data.profile as BrainMemoryProfile;
+  const boostedMemory = reviewedProfile.recentMemoryNodes.find((node) => node.id === memoryToBoost.id);
+
+  assert.equal(reviewResponse.status, 200);
+  assert.ok((boostedMemory?.confidence ?? 0) >= memoryToBoost.confidence);
+
+  const service = createInMemoryCreateRouteService();
+  const rawIdea = "Use Penny's imported Brain context to make a private-alpha Create demo easier to judge and export.";
+  const first = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId: "alpha-demo-create-project",
+      sessionId: "alpha-demo-create-session",
+    },
+    headers,
+  );
+  const selected = optionsByLens(first.optionSet.options, ["Personal", "Practical", "Critical"]);
+  const refined = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId: first.optionSet.projectId,
+      sessionId: first.optionSet.sessionId,
+      optionSetId: first.optionSet.id,
+      selectedOptionIds: selected.map((option) => option.id),
+      userComment: "Keep the demo safe, source-backed, and easy to inspect before export.",
+      artifact: first.artifact,
+    },
+    headers,
+  );
+  const exportResponse = await handleExportCodingPromptRequest(
+    jsonRequest(
+      "http://localhost/api/create/export-coding-prompt",
+      {
+        artifact: refined.artifact,
+        verification: refined.verification,
+        judgmentEvent: refined.judgmentEvent,
+      },
+      headers,
+    ),
+    { service },
+  );
+  const exportPayload = await responsePayload(exportResponse);
+  const exported = exportPayload.data.export as PromptExport;
+
+  assert.equal(first.optionSet.options.length, 5);
+  assert.ok(first.optionSet.memoryUsed.length >= 1);
+  assert.ok(first.optionSet.sourcesUsed.some((source) => source.label === "Penny demo ChatGPT export"));
+  assert.ok(first.observability.memoryCountUsed >= 1);
+  assert.deepEqual(selected.map((option) => option.lens), ["Personal", "Practical", "Critical"]);
+  assert.ok(refined.judgmentEvent);
+  assert.match(sectionBody(refined.artifact, "User intent"), /safe, source-backed, and easy to inspect/i);
+  assert.equal(exportResponse.status, 200);
+  assert.match(exported.text, /## Personal Context Used/);
+  assert.match(exported.text, /Penny demo ChatGPT export|small reversible builds|source-backed/i);
+  assert.match(exported.text, /## Selected Option History/);
+  assert.match(exported.text, /Personal:/);
+  assert.match(exported.text, /Practical:/);
+  assert.match(exported.text, /Critical:/);
+  assert.equal(exported.qualitySignals.hasSelectedOptionHistory, true);
+  assert.equal(exported.qualitySignals.hasRelevantPersonalContext, true);
+  assert.equal(exported.qualitySignals.promptCompletenessScore, 100);
+  assertNoFakePositiveClaims(exported.text);
 });
 
 test("POST /api/create/next personalizes the same rough idea for different Brain profiles", async () => {
@@ -758,6 +861,13 @@ function jsonRequest(url: string, body: unknown, headers: HeadersInit = requestH
 function deleteRequest(url: string, headers: HeadersInit = requestHeaders()): Request {
   return new Request(url, {
     method: "DELETE",
+    headers,
+  });
+}
+
+function getRequest(url: string, headers: HeadersInit = requestHeaders()): Request {
+  return new Request(url, {
+    method: "GET",
     headers,
   });
 }
