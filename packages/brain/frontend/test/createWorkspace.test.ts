@@ -2,8 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { buildCreateNextInput, CreateBrainOnboardingPanel, CreateOptionBoard, CreateOptionDetailsDrawer } from "../src/components/CheckWorkspace";
-import type { BrainMemoryProfileData, CandidateOption } from "../src/types/brain";
+import {
+  buildCreateNextInput,
+  CreateBrainOnboardingPanel,
+  CreateComparisonPanel,
+  CreateOptionBoard,
+  CreateOptionDetailsDrawer,
+  CreateProviderStatusPanel,
+  isCreateComparisonDevMode,
+} from "../src/components/CheckWorkspace";
+import type { BrainMemoryProfileData, CandidateOption, CreateProviderComparisonResponse } from "../src/types/brain";
 
 test("CreateOptionBoard shows memory and source grounding counts on option cards", () => {
   const markup = renderToStaticMarkup(
@@ -65,6 +73,63 @@ test("buildCreateNextInput carries imported Brain profile memory and source evid
   assert.match(input.sources?.[0]?.excerpt ?? "", /1 memories and 1 chunks/);
   assert.match(input.context?.summary ?? "", /Using imported Brain context/);
   assert.match(input.context?.summary ?? "", /Small reversible builds/);
+});
+
+test("CreateProviderStatusPanel exposes provider mode, schema, counts, and fallback reason", () => {
+  const markup = renderToStaticMarkup(
+    createElement(CreateProviderStatusPanel, {
+      observability: {
+        providerMode: "deterministic_fallback",
+        providerName: "test",
+        schemaValidation: "failure",
+        schemaValidationErrors: ["options.4 missing"],
+        fallbackReason: "Model-backed Create provider fell back to deterministic options.",
+        memoryCountUsed: 3,
+        sourceCountUsed: 2,
+        rejectedDirectionsUsed: ["Rejected direction: generic chatbot"],
+        generatedLenses: ["Personal", "Practical", "Valuable", "Critical", "Weird"],
+        selectedOptionIds: [],
+        selectedLenses: [],
+        exportQualitySignals: promptQualitySignals(),
+      },
+    }),
+  );
+
+  assert.match(markup, /Fallback/);
+  assert.match(markup, /failure/);
+  assert.match(markup, /3/);
+  assert.match(markup, /2/);
+  assert.match(markup, /fell back to deterministic/);
+  assert.match(markup, /options\.4 missing/);
+});
+
+test("CreateComparisonPanel renders deterministic and model-backed options with quality signals", () => {
+  const comparison = createComparisonPayload();
+  const markup = renderToStaticMarkup(
+    createElement(CreateComparisonPanel, {
+      comparison,
+      busy: false,
+      onCompare: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /DEV COMPARISON/);
+  assert.match(markup, /Deterministic/);
+  assert.match(markup, /Model-backed/);
+  assert.match(markup, /Compare providers/);
+  assert.match(markup, /Schema/);
+  assert.match(markup, /Memory/);
+  assert.match(markup, /Prompt/);
+  assert.match(markup, /Personal model-backed direction/);
+  assert.match(markup, /Prompt completeness 100/);
+  assert.match(markup, /Missing prompt signals: none/);
+});
+
+test("isCreateComparisonDevMode only exposes comparison in dev, test, or explicit flag", () => {
+  assert.equal(isCreateComparisonDevMode({ DEV: true }), true);
+  assert.equal(isCreateComparisonDevMode({ MODE: "test" }), true);
+  assert.equal(isCreateComparisonDevMode({ VITE_PENNY_CREATE_COMPARE: "true" }), true);
+  assert.equal(isCreateComparisonDevMode({ DEV: false, MODE: "production" }), false);
 });
 
 function memoryGroundedOption(): CandidateOption {
@@ -203,5 +268,120 @@ function contextLightOption(): CandidateOption {
         excerpt: "Build memory-grounded Create.",
       },
     ],
+  };
+}
+
+function createComparisonPayload(): CreateProviderComparisonResponse["data"] {
+  const deterministicOptions = createOptionSet("deterministic").options;
+  const modelOptions = createOptionSet("model").options.map((option) => ({
+    ...option,
+    title: `${option.lens} model-backed direction`,
+    oneLine: `Grounded model-backed ${option.lens.toLowerCase()} direction.`,
+  }));
+
+  return {
+    sourceOfTruth: "deterministic_model_backed_create_comparison",
+    rawIdea: "Build memory-grounded Create.",
+    deterministic: createComparisonArm("deterministic", deterministicOptions),
+    modelBacked: createComparisonArm("model_backed", modelOptions),
+  };
+}
+
+function createComparisonArm(providerUsed: "deterministic" | "model_backed", options: CandidateOption[]): CreateProviderComparisonResponse["data"]["deterministic"] {
+  return {
+    label: providerUsed === "deterministic" ? "deterministic" : "model_backed",
+    providerUsed,
+    fallbackReason: null,
+    optionSet: createOptionSet(providerUsed, options),
+    artifact: {
+      id: `artifact-${providerUsed}`,
+      projectId: "project-test",
+      sessionId: "session-test",
+      title: "Create prompt",
+      version: 1,
+      rawIdea: "Build memory-grounded Create.",
+      sections: [],
+      sourceOptionSetIds: [`options-${providerUsed}`],
+      judgmentEventIds: [],
+      updatedAt: "2026-05-19T12:00:00.000Z",
+    },
+    verification: {
+      id: `verification-${providerUsed}`,
+      artifactId: `artifact-${providerUsed}`,
+      createdAt: "2026-05-19T12:00:00.000Z",
+      verdict: "ready",
+      scores: {
+        intentMatch: 90,
+        personalMemoryGrounding: 92,
+        buildability: 88,
+        nonGenericness: 91,
+        userAutonomyPreserved: 95,
+        fakeClaimRisk: 96,
+        promptCompleteness: 100,
+      },
+      checks: [],
+      missingInfo: [],
+      risks: [],
+    },
+    promptExport: {
+      id: `export-${providerUsed}`,
+      artifactId: `artifact-${providerUsed}`,
+      format: "coding_agent_prompt",
+      targets: ["Codex", "Claude Code", "Cursor"],
+      text: "# Create prompt",
+      fileName: "create-prompt.md",
+      qualitySignals: promptQualitySignals(),
+      createdAt: "2026-05-19T12:00:00.000Z",
+    },
+    observability: {
+      providerMode: providerUsed,
+      providerName: providerUsed === "deterministic" ? "deterministic" : "test",
+      schemaValidation: providerUsed === "deterministic" ? "not_run" : "success",
+      schemaValidationErrors: [],
+      fallbackReason: null,
+      memoryCountUsed: 2,
+      sourceCountUsed: 2,
+      rejectedDirectionsUsed: [],
+      generatedLenses: ["Personal", "Practical", "Valuable", "Critical", "Weird"],
+      selectedOptionIds: [],
+      selectedLenses: [],
+      exportQualitySignals: promptQualitySignals(),
+    },
+  };
+}
+
+function createOptionSet(id: string, options = [memoryGroundedOption(), contextLightOption()]): CreateProviderComparisonResponse["data"]["deterministic"]["optionSet"] {
+  return {
+    id: `options-${id}`,
+    projectId: "project-test",
+    sessionId: "session-test",
+    sourceOfTruth: id === "deterministic" ? "rough_idea_context_deterministic_create_lenses" : "rough_idea_context_model_backed_create_lenses",
+    rawIdea: "Build memory-grounded Create.",
+    options,
+    memoryUsed: memoryGroundedOption().memoryUsed,
+    sourcesUsed: memoryGroundedOption().sourcesUsed,
+    createdAt: "2026-05-19T12:00:00.000Z",
+  };
+}
+
+function promptQualitySignals() {
+  return {
+    hasRoughIdea: true,
+    hasSelectedOptionHistory: true,
+    hasRelevantPersonalContext: true,
+    hasRepeatedRejectedDirections: true,
+    hasProductGoal: true,
+    hasNonGoals: true,
+    hasUxRequirements: true,
+    hasFrontendRequirements: true,
+    hasBackendRequirements: true,
+    hasDataModel: true,
+    hasPrivacyConstraints: true,
+    hasVerificationRequirements: true,
+    hasImplementationSequence: true,
+    hasAcceptanceTests: true,
+    hasDoNotBreakList: true,
+    promptCompletenessScore: 100,
+    missing: [],
   };
 }
