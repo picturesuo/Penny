@@ -1188,6 +1188,13 @@ export interface SourcePermission {
   allowedUses: Array<"private_memory" | "create_retrieval">;
 }
 
+export interface SourcePreview {
+  status: "ready" | "partial";
+  excerpt: string;
+  explanation: string;
+  warnings: string[];
+}
+
 export interface SourceImport {
   id: string;
   kind: SourceImportKind;
@@ -1208,6 +1215,7 @@ export interface SourceImport {
   fileName?: string;
   mimeType?: string;
   sourceUri?: string;
+  preview?: SourcePreview;
 }
 
 export interface SourceChunk {
