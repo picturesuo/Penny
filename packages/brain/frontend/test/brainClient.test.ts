@@ -7,6 +7,7 @@ import {
   createChallengeBrief,
   createCheckCycle,
   createCheckSession,
+  compareCreateProviders,
   createNext,
   createLearnSession,
   decideVerifyConfidence,
@@ -303,6 +304,53 @@ test("frontend brain client uses Create next and coding prompt export routes", a
         createdAt: "2026-05-05T12:00:01.000Z",
       },
     }),
+    jsonResponse({
+      sourceOfTruth: "deterministic_model_backed_create_comparison",
+      rawIdea: "Build Penny Create.",
+      deterministic: {
+        label: "deterministic",
+        providerUsed: "deterministic",
+        fallbackReason: null,
+        optionSet,
+        artifact,
+        verification,
+        promptExport: {
+          id: "prompt-export-deterministic",
+          artifactId: artifact.id,
+          format: "coding_agent_prompt",
+          targets: ["Codex", "Claude Code", "Cursor"],
+          text: "# Deterministic prompt",
+          fileName: "deterministic.md",
+          qualitySignals,
+          createdAt: "2026-05-05T12:00:02.000Z",
+        },
+        observability,
+      },
+      modelBacked: {
+        label: "model_backed",
+        providerUsed: "deterministic_fallback",
+        fallbackReason: "Model-backed Create provider is not configured.",
+        optionSet,
+        artifact,
+        verification,
+        promptExport: {
+          id: "prompt-export-model",
+          artifactId: artifact.id,
+          format: "coding_agent_prompt",
+          targets: ["Codex", "Claude Code", "Cursor"],
+          text: "# Model prompt",
+          fileName: "model.md",
+          qualitySignals,
+          createdAt: "2026-05-05T12:00:02.000Z",
+        },
+        observability: {
+          ...observability,
+          providerMode: "deterministic_fallback",
+          providerName: "disabled",
+          fallbackReason: "Model-backed Create provider is not configured.",
+        },
+      },
+    }),
   ]);
 
   try {
@@ -320,10 +368,17 @@ test("frontend brain client uses Create next and coding prompt export routes", a
       verification: next.data.verification,
       judgmentEvent: next.data.judgmentEvent,
     });
+    const compared = await compareCreateProviders({
+      rawIdea: "Build Penny Create.",
+      projectId: "project-test",
+      sessionId,
+    });
 
     assert.equal(next.data.optionSet.options.length, 5);
     assert.equal(next.data.judgmentEvent?.userComment, "Make the selected cards visibly update the artifact.");
     assert.equal(exported.data.export.format, "coding_agent_prompt");
+    assert.equal(compared.data.deterministic.providerUsed, "deterministic");
+    assert.equal(compared.data.modelBacked.providerUsed, "deterministic_fallback");
     assert.equal(calls[0]?.url, "/api/create/next");
     assert.equal(calls[0]?.method, "POST");
     assert.deepEqual(calls[0]?.body, {
@@ -341,6 +396,13 @@ test("frontend brain client uses Create next and coding prompt export routes", a
       artifact,
       verification,
       judgmentEvent,
+    });
+    assert.equal(calls[2]?.url, "/api/create/compare");
+    assert.equal(calls[2]?.method, "POST");
+    assert.deepEqual(calls[2]?.body, {
+      rawIdea: "Build Penny Create.",
+      projectId: "project-test",
+      sessionId,
     });
   } finally {
     restoreFetch();
