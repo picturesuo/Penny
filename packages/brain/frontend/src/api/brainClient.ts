@@ -5,8 +5,15 @@ import type {
   BrainClaim,
   BrainDocumentsResponse,
   BrainHybridSearchResponse,
+  BrainImportInput,
+  BrainImportJobResponse,
+  BrainImportResponse,
+  BrainMemoryProfileResponse,
   BrainRecentsResponse,
+  BrainRetrieveInput,
+  BrainRetrieveResponse,
   BrainSessionNoteResponse,
+  BrainSourceDeleteResponse,
   AutopilotTickResponse,
   ChallengeBriefResponse,
   ChallengeResponseKind,
@@ -277,6 +284,83 @@ export async function fetchBrainDocuments(): Promise<BrainDocumentsResponse> {
   }
 
   return payload as BrainDocumentsResponse;
+}
+
+export async function importBrainSource(input: BrainImportInput): Promise<BrainImportResponse> {
+  const response = await fetch("/api/brain/import", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/brain/import failed with ${response.status}.`));
+  }
+
+  return payload as BrainImportResponse;
+}
+
+export async function fetchBrainImportJob(jobId: string): Promise<BrainImportJobResponse> {
+  const response = await fetch(`/api/brain/import/${encodeURIComponent(jobId)}`, {
+    method: "GET",
+    headers: requestHeaders(),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /api/brain/import/${jobId} failed with ${response.status}.`));
+  }
+
+  return payload as BrainImportJobResponse;
+}
+
+export async function fetchBrainMemoryProfile(): Promise<BrainMemoryProfileResponse> {
+  const response = await fetch("/api/brain/memory/profile", {
+    method: "GET",
+    headers: requestHeaders(),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /api/brain/memory/profile failed with ${response.status}.`));
+  }
+
+  return payload as BrainMemoryProfileResponse;
+}
+
+export async function retrieveBrainMemory(input: BrainRetrieveInput): Promise<BrainRetrieveResponse> {
+  const response = await fetch("/api/brain/retrieve", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/brain/retrieve failed with ${response.status}.`));
+  }
+
+  return payload as BrainRetrieveResponse;
+}
+
+export async function deleteBrainSource(sourceId: string): Promise<BrainSourceDeleteResponse> {
+  const response = await fetch(`/api/brain/sources/${encodeURIComponent(sourceId)}`, {
+    method: "DELETE",
+    headers: requestHeaders(),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `DELETE /api/brain/sources/${sourceId} failed with ${response.status}.`));
+  }
+
+  return payload as BrainSourceDeleteResponse;
 }
 
 export async function fetchBrainRecents(): Promise<BrainRecentsResponse> {
