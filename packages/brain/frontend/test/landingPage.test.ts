@@ -13,7 +13,7 @@ test("landing shortcuts either open Brain or select a composer destination", () 
   });
   assert.deepEqual(landingShortcutIntent("C"), {
     action: "select-destination",
-    destination: "Check",
+    destination: "Create",
   });
   assert.deepEqual(landingShortcutIntent("B"), {
     action: "open-mode",
@@ -30,9 +30,9 @@ test("landing submit requires a selected destination and prompt", () => {
     mode: "Learn",
     rawIdea: "Founder pricing risk",
   });
-  assert.deepEqual(landingSubmitIntent("Check", "  Founder pricing risk  "), {
+  assert.deepEqual(landingSubmitIntent("Create", "  Founder pricing risk  "), {
     action: "submit-prompt",
-    mode: "Check",
+    mode: "Create",
     rawIdea: "Founder pricing risk",
   });
   assert.deepEqual(landingSubmitIntent("QuickNote", "Founder pricing risk"), {
@@ -41,9 +41,9 @@ test("landing submit requires a selected destination and prompt", () => {
   });
 });
 
-test("landing shortcuts render in Brain, Check, Learn, Quick note order", () => {
+test("landing shortcuts render in Brain, Create, Learn, Quick note order", () => {
   assert.deepEqual(
     landingShortcuts.map((shortcut) => `${shortcut.key} ${shortcut.label}`),
-    ["B for Brain", "C for Check", "L for Learn", "Q for Quick note"],
+    ["B for Brain", "C for Create", "L for Learn", "Q for Quick note"],
   );
 });
