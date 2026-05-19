@@ -82,7 +82,7 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /chunk brain-ch/);
   assert.match(markup, /Reinforced/);
   assert.match(markup, /Mark Preference - Small reversible builds correct/);
-  assert.match(markup, /ZIP parsing is not implemented yet/i);
+  assert.match(markup, /Supports ChatGPT export ZIPs/i);
   assert.match(markup, /Delete Founder workflow notes/);
   assert.match(markup, /Use this Brain to create something/);
 });
