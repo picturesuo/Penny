@@ -321,7 +321,7 @@ export function CanvasWorkspace({
               </div>
             </>
           ) : (
-            <p>Select a graph node to open Learn, Check, Verify, Save, or Related actions.</p>
+            <p>Select a graph node to open Learn, Create, Verify, Save, or Related actions.</p>
           )}
         </aside>
       </div>
@@ -336,7 +336,7 @@ function canvasActionLabel(action: CanvasNodeAction): string {
     case "learn":
       return "Open in Learn";
     case "check":
-      return "Check";
+      return "Create";
     case "verify":
       return "Verify";
     case "save":
@@ -351,7 +351,7 @@ function canvasActionTitle(action: CanvasNodeAction): string {
     case "learn":
       return "Open Learn with this node as context";
     case "check":
-      return "Open Check focused on this node";
+      return "Open Create focused on this node";
     case "verify":
       return "Run Verify for this node";
     case "save":
