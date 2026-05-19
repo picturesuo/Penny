@@ -40,6 +40,7 @@ export type MemoryNodeType =
 export type MemoryEdgeKind = "derived_from" | "related_to" | "same_cluster" | "supports" | "challenges" | "rejects";
 export type MemoryEvidenceLevel = "user_confirmed" | "grounded" | "inferred";
 export type MemoryLabel = "taste" | "preference" | "project" | "frustration";
+export type MemoryReviewAction = "correct" | "wrong" | "forget" | "boost";
 
 export type SourcePermission = {
   visibility: "private";
@@ -201,6 +202,13 @@ export type BrainMemoryRetrieval = {
   results: RetrievalResult[];
 };
 
+export type BrainMemoryReviewResult = {
+  reviewed: boolean;
+  action: MemoryReviewAction;
+  memory: MemoryNode | null;
+  profile: BrainMemoryProfile;
+};
+
 export type CreateMemoryRetrievalContext = {
   contextLight: boolean;
   memoryRefs: Array<{
@@ -225,11 +233,13 @@ export type BrainMemoryRouteService = {
   getJob(jobId: string, request: Request): Promise<IngestionJob | null>;
   getProfile(request: Request): Promise<BrainMemoryProfile>;
   retrieve(input: BrainRetrieveInput, request: Request): Promise<BrainMemoryRetrieval>;
+  reviewMemory(nodeId: string, input: BrainMemoryReviewInput, request: Request): Promise<BrainMemoryReviewResult>;
   deleteSource(sourceId: string, request: Request): Promise<{ deleted: boolean; profile: BrainMemoryProfile }>;
 };
 
 type BrainImportInput = z.infer<typeof BrainImportBodySchema>;
 type BrainRetrieveInput = z.infer<typeof BrainRetrieveBodySchema>;
+type BrainMemoryReviewInput = z.infer<typeof BrainMemoryReviewBodySchema>;
 
 type ScopeMemoryStore = {
   sources: Map<string, SourceImport>;
@@ -275,6 +285,8 @@ const sourceImportKinds = [
 ] as const satisfies readonly SourceImportKind[];
 
 const SourceImportKindSchema = z.enum(sourceImportKinds);
+const MemoryReviewActionSchema = z.enum(["correct", "wrong", "forget", "boost"] satisfies MemoryReviewAction[]);
+const minimumUsableMemoryConfidence = 0.2;
 
 const BrainImportBodySchema = z
   .object({
@@ -308,6 +320,12 @@ const BrainRetrieveBodySchema = z
   })
   .strict();
 
+const BrainMemoryReviewBodySchema = z
+  .object({
+    action: MemoryReviewActionSchema,
+  })
+  .strict();
+
 const defaultPermission: SourcePermission = {
   visibility: "private",
   trainingUse: false,
@@ -330,6 +348,9 @@ export const defaultBrainMemoryService: BrainMemoryRouteService = {
   },
   async retrieve(input, request) {
     return resolveDefaultBrainMemoryService().retrieve(input, request);
+  },
+  async reviewMemory(nodeId, input, request) {
+    return resolveDefaultBrainMemoryService().reviewMemory(nodeId, input, request);
   },
   async deleteSource(sourceId, request) {
     return resolveDefaultBrainMemoryService().deleteSource(sourceId, request);
@@ -403,6 +424,30 @@ export async function handleBrainRetrieveRequest(
 
   const service = options.service ?? defaultBrainMemoryService;
   return jsonResponse({ data: await service.retrieve(parsed.data, request) });
+}
+
+export async function handleBrainMemoryReviewRequest(
+  request: Request,
+  nodeId: string,
+  options: { service?: BrainMemoryRouteService } = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/brain/memories/:nodeId/review requires the POST method.", "POST");
+  }
+
+  const parsed = await parseJsonRequest(request, BrainMemoryReviewBodySchema);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const service = options.service ?? defaultBrainMemoryService;
+  const result = await service.reviewMemory(nodeId, parsed.data, request);
+
+  if (!result.reviewed) {
+    return jsonResponse({ error: { code: "brain_memory_not_found", message: "No Brain memory matched that id." } }, 404);
+  }
+
+  return jsonResponse({ data: result });
 }
 
 export async function handleBrainSourceDeleteRequest(
@@ -689,6 +734,55 @@ export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteS
       return retrieval;
     },
 
+    async reviewMemory(nodeId, input, request) {
+      const scope = scopeFromRequest(request);
+      const now = isoNow();
+      const nowDate = new Date(now);
+
+      return db.transaction(async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(brainMemoryNodes)
+          .where(and(eq(brainMemoryNodes.id, nodeId), scopeCondition(brainMemoryNodes, scope), isNull(brainMemoryNodes.deletedAt)))
+          .limit(1);
+
+        if (!row) {
+          return { reviewed: false, action: input.action, memory: null, profile: profileFromStore(scope, await loadDbMemoryStore(tx, scope)) };
+        }
+
+        const existing = nodeFromDb(row);
+
+        if (input.action === "forget") {
+          await tx.delete(brainMemoryNodes).where(and(eq(brainMemoryNodes.id, nodeId), scopeCondition(brainMemoryNodes, scope)));
+          await updateDbSourceMemoryNodeCount(tx, scope, existing.sourceId, nowDate);
+        } else {
+          const reviewedMemory = applyMemoryReview(existing, input.action, now);
+
+          await tx
+            .update(brainMemoryNodes)
+            .set({
+              confidence: confidenceToDb(reviewedMemory.confidence),
+              labels: reviewedMemory.labels,
+              evidenceLevel: reviewedMemory.evidenceLevel,
+              lastSeenAt: nowDate,
+            })
+            .where(and(eq(brainMemoryNodes.id, nodeId), scopeCondition(brainMemoryNodes, scope), isNull(brainMemoryNodes.deletedAt)));
+        }
+
+        const store = await loadDbMemoryStore(tx, scope);
+
+        rebuildProfileSignals(store, now);
+        await replaceDbProfileSignals(tx, scope, store.signals, nowDate);
+
+        return {
+          reviewed: true,
+          action: input.action,
+          memory: input.action === "forget" ? null : (store.nodes.get(nodeId) ?? null),
+          profile: profileFromStore(scope, store),
+        };
+      });
+    },
+
     async deleteSource(sourceId, request) {
       const scope = scopeFromRequest(request);
       const now = isoNow();
@@ -880,6 +974,36 @@ export function createInMemoryBrainMemoryService(stores = new Map<string, ScopeM
       return retrievalForScope(scopeFromRequest(request), input);
     },
 
+    async reviewMemory(nodeId, input, request) {
+      const scope = scopeFromRequest(request);
+      const store = storeForScope(scope);
+      const existing = store.nodes.get(nodeId);
+
+      if (!existing) {
+        return { reviewed: false, action: input.action, memory: null, profile: profileFromStore(scope, store) };
+      }
+
+      const now = isoNow();
+      let reviewedMemory: MemoryNode | null = null;
+
+      if (input.action === "forget") {
+        forgetMemoryNode(store, nodeId);
+        refreshSourceMemoryNodeCount(store, existing.sourceId, now);
+      } else {
+        reviewedMemory = applyMemoryReview(existing, input.action, now);
+        store.nodes.set(nodeId, reviewedMemory);
+      }
+
+      rebuildProfileSignals(store, now);
+
+      return {
+        reviewed: true,
+        action: input.action,
+        memory: reviewedMemory,
+        profile: profileFromStore(scope, store),
+      };
+    },
+
     async deleteSource(sourceId, request) {
       const scope = scopeFromRequest(request);
       const store = storeForScope(scope);
@@ -1033,6 +1157,19 @@ async function replaceDbProfileSignals(
   if (values.length) {
     await db.insert(brainMemoryProfileSignals).values(values);
   }
+}
+
+async function updateDbSourceMemoryNodeCount(db: BrainMemoryDb, scope: BrainScope, sourceId: string, updatedAt: Date): Promise<void> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(brainMemoryNodes)
+    .where(and(eq(brainMemoryNodes.sourceId, sourceId), scopeCondition(brainMemoryNodes, scope), isNull(brainMemoryNodes.deletedAt)));
+  const memoryNodeCount = Number(row?.count ?? 0);
+
+  await db
+    .update(brainMemorySources)
+    .set({ memoryNodeCount, updatedAt })
+    .where(and(eq(brainMemorySources.id, sourceId), scopeCondition(brainMemorySources, scope), isNull(brainMemorySources.deletedAt)));
 }
 
 async function removeDbSourceData(db: BrainMemoryDb, scope: BrainScope, sourceId: string): Promise<boolean> {
@@ -1714,7 +1851,7 @@ function inferMemoryEdges(sourceId: string, nodes: MemoryNode[], now: string): M
 
 function rebuildProfileSignals(store: ScopeMemoryStore, now: string): void {
   store.signals.clear();
-  const nodes = [...store.nodes.values()];
+  const nodes = usableMemoryNodes(store);
   const tagCounts = new Map<string, { count: number; nodeIds: string[] }>();
 
   for (const node of nodes) {
@@ -1779,6 +1916,7 @@ function retrieveFromStore(
   const terms = importantWords(query);
   const allowedTypes = nodeTypes?.length ? new Set<MemoryNodeType>(nodeTypes) : null;
   const scored = [...store.nodes.values()]
+    .filter((node) => node.confidence >= minimumUsableMemoryConfidence)
     .filter((node) => !allowedTypes || allowedTypes.has(node.type))
     .map((node) => ({ node, score: scoreNode(node, query, terms) }))
     .filter(({ score }) => score > 0)
@@ -1844,8 +1982,13 @@ function retrievalResultFromNode(node: MemoryNode, source: SourceImport, chunk: 
 
 function profileFromStore(scope: BrainScope, store: ScopeMemoryStore): BrainMemoryProfile {
   const signals = [...store.signals.values()].sort((left, right) => right.weight - left.weight || left.label.localeCompare(right.label));
-  const recentMemoryNodes = [...store.nodes.values()].sort((left, right) => Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt)).slice(0, 16);
+  const usableNodeIds = new Set(usableMemoryNodes(store).map((node) => node.id));
+  const recentMemoryNodes = [...store.nodes.values()]
+    .filter((node) => usableNodeIds.has(node.id))
+    .sort((left, right) => Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt))
+    .slice(0, 16);
   const sources = [...store.sources.values()].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+  const memoryEdges = [...store.edges.values()].filter((edge) => usableNodeIds.has(edge.fromNodeId) && usableNodeIds.has(edge.toNodeId));
   const privacySafeSummary = buildPrivacySafeSummary(sources, signals);
 
   return {
@@ -1854,7 +1997,7 @@ function profileFromStore(scope: BrainScope, store: ScopeMemoryStore): BrainMemo
     sources,
     jobs: [...store.jobs.values()].sort((left, right) => Date.parse(right.importedAt) - Date.parse(left.importedAt)).slice(0, 20),
     recentMemoryNodes,
-    memoryEdges: [...store.edges.values()].slice(-40),
+    memoryEdges: memoryEdges.slice(-40),
     profile: {
       recurringInterests: signals.filter((signal) => signal.kind === "recurring_interest").slice(0, 6),
       activeIdeaClusters: signals.filter((signal) => signal.kind === "active_idea_cluster").slice(0, 6),
@@ -1911,6 +2054,62 @@ function removeSourceData(store: ScopeMemoryStore, sourceId: string): boolean {
   }
 
   return existed || removedNodeIds.size > 0;
+}
+
+function usableMemoryNodes(store: ScopeMemoryStore): MemoryNode[] {
+  return [...store.nodes.values()].filter((node) => node.confidence >= minimumUsableMemoryConfidence);
+}
+
+function applyMemoryReview(node: MemoryNode, action: Exclude<MemoryReviewAction, "forget">, now: string): MemoryNode {
+  switch (action) {
+    case "correct":
+      return {
+        ...node,
+        confidence: Math.max(node.confidence, 0.95),
+        evidenceLevel: "user_confirmed",
+        lastSeenAt: now,
+      };
+    case "boost":
+      return {
+        ...node,
+        confidence: Math.min(0.98, Math.max(node.confidence + 0.12, 0.72)),
+        lastSeenAt: now,
+      };
+    case "wrong":
+      return {
+        ...node,
+        confidence: 0.05,
+        labels: [],
+        evidenceLevel: "inferred",
+        lastSeenAt: now,
+      };
+  }
+}
+
+function forgetMemoryNode(store: ScopeMemoryStore, nodeId: string): boolean {
+  const existed = store.nodes.delete(nodeId);
+
+  for (const [edgeId, edge] of store.edges) {
+    if (edge.fromNodeId === nodeId || edge.toNodeId === nodeId) {
+      store.edges.delete(edgeId);
+    }
+  }
+
+  return existed;
+}
+
+function refreshSourceMemoryNodeCount(store: ScopeMemoryStore, sourceId: string, updatedAt: string): void {
+  const source = store.sources.get(sourceId);
+
+  if (!source) {
+    return;
+  }
+
+  store.sources.set(sourceId, {
+    ...source,
+    memoryNodeCount: [...store.nodes.values()].filter((node) => node.sourceId === sourceId).length,
+    updatedAt,
+  });
 }
 
 function scopeFromRequest(request: Request): BrainScope {

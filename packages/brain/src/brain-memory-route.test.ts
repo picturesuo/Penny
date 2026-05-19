@@ -5,9 +5,11 @@ import {
   handleBrainImportJobRequest,
   handleBrainImportRequest,
   handleBrainMemoryProfileRequest,
+  handleBrainMemoryReviewRequest,
   handleBrainRetrieveRequest,
   handleBrainSourceDeleteRequest,
   type BrainMemoryProfile,
+  type BrainMemoryReviewResult,
   type BrainMemoryRetrieval,
   type IngestionJob,
   type MemoryNodeType,
@@ -120,6 +122,87 @@ test("POST /api/brain/import parses ChatGPT-style conversations.json and retriev
   assert.ok(data.results.every((result) => result.sourceRef.sourceRange.startsWith("chunk ")));
   assert.ok(data.results.every((result) => result.permission.visibility === "private"));
   assert.ok(data.results.every((result) => result.permission.trainingUse === false));
+});
+
+test("Brain memory review can confirm, boost, weaken, and forget a memory", async () => {
+  const service = createInMemoryBrainMemoryService();
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "text",
+      label: "Memory review notes",
+      content: "Project: The frostline ledger app should convert field notes into source-backed coding prompts.",
+    }),
+    { service },
+  );
+  const importPayload = await responsePayload(importResponse);
+  const importedProfile = importPayload.data.profile as BrainMemoryProfile;
+  const memory = importedProfile.recentMemoryNodes.find((node) => /frostline/i.test(node.summary));
+
+  assert.ok(memory);
+
+  const correctResponse = await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "correct" }),
+    memory.id,
+    { service },
+  );
+  const correctPayload = await responsePayload(correctResponse);
+  const correctResult = correctPayload.data as BrainMemoryReviewResult;
+
+  assert.equal(correctResponse.status, 200);
+  assert.equal(correctResult.reviewed, true);
+  assert.equal(correctResult.memory?.evidenceLevel, "user_confirmed");
+  assert.ok((correctResult.memory?.confidence ?? 0) >= 0.95);
+
+  const boostResponse = await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "boost" }),
+    memory.id,
+    { service },
+  );
+  const boostPayload = await responsePayload(boostResponse);
+  const boostResult = boostPayload.data as BrainMemoryReviewResult;
+
+  assert.equal(boostResponse.status, 200);
+  assert.ok((boostResult.memory?.confidence ?? 0) >= (correctResult.memory?.confidence ?? 0));
+
+  const wrongResponse = await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "wrong" }),
+    memory.id,
+    { service },
+  );
+  const wrongPayload = await responsePayload(wrongResponse);
+  const wrongResult = wrongPayload.data as BrainMemoryReviewResult;
+
+  assert.equal(wrongResponse.status, 200);
+  assert.equal(wrongResult.memory?.confidence, 0.05);
+  assert.ok(!wrongResult.profile.recentMemoryNodes.some((node) => node.id === memory.id));
+
+  const retrieveResponse = await handleBrainRetrieveRequest(
+    jsonRequest("http://localhost/api/brain/retrieve", { query: "frostline ledger source-backed coding prompts", limit: 3 }),
+    { service },
+  );
+  const retrievePayload = await responsePayload(retrieveResponse);
+
+  assert.equal((retrievePayload.data as BrainMemoryRetrieval).contextLight, true);
+
+  const forgetResponse = await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "forget" }),
+    memory.id,
+    { service },
+  );
+  const forgetPayload = await responsePayload(forgetResponse);
+  const forgetResult = forgetPayload.data as BrainMemoryReviewResult;
+
+  assert.equal(forgetResponse.status, 200);
+  assert.equal(forgetResult.memory, null);
+  assert.equal(forgetResult.profile.sources[0]?.memoryNodeCount, 0);
+
+  const missingResponse = await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "boost" }),
+    memory.id,
+    { service },
+  );
+
+  assert.equal(missingResponse.status, 404);
 });
 
 test("Brain memory profile can delete an imported source and return to context-light retrieval", async () => {

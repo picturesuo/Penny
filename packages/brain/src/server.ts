@@ -14,6 +14,7 @@ import {
   handleBrainImportJobRequest,
   handleBrainImportRequest,
   handleBrainMemoryProfileRequest,
+  handleBrainMemoryReviewRequest,
   handleBrainRetrieveRequest,
   handleBrainSourceDeleteRequest,
 } from "./brain-memory-route.ts";
@@ -296,6 +297,13 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/brain/retrieve") {
       await writeWebResponse(outgoing, await handleBrainRetrieveRequest(request));
+      return;
+    }
+
+    const brainMemoryReviewMatch = /^\/api\/brain\/memories\/([^/]+)\/review$/.exec(url.pathname);
+
+    if (brainMemoryReviewMatch) {
+      await writeWebResponse(outgoing, await handleBrainMemoryReviewRequest(request, decodeURIComponent(brainMemoryReviewMatch[1] ?? "")));
       return;
     }
 
