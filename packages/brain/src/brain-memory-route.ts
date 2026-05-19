@@ -347,6 +347,7 @@ const defaultPermission: SourcePermission = {
 
 const defaultStores = new Map<string, ScopeMemoryStore>();
 let defaultBrainMemoryServiceCache: BrainMemoryRouteService | null = null;
+let defaultBrainMemoryServiceCacheKey: string | null = null;
 
 export const defaultBrainMemoryService: BrainMemoryRouteService = {
   async importSource(input, request) {
@@ -419,14 +420,18 @@ export async function handleBrainImportJobRequest(
     return methodNotAllowed("GET /api/brain/import/:jobId requires the GET method.", "GET");
   }
 
-  const service = options.service ?? defaultBrainMemoryService;
-  const job = await service.getJob(jobId, request);
+  try {
+    const service = options.service ?? defaultBrainMemoryService;
+    const job = await service.getJob(jobId, request);
 
-  if (!job) {
-    return jsonResponse({ error: { code: "brain_import_not_found", message: "No Brain import job matched that id." } }, 404);
+    if (!job) {
+      return jsonResponse({ error: { code: "brain_import_not_found", message: "No Brain import job matched that id." } }, 404);
+    }
+
+    return jsonResponse({ data: { job } });
+  } catch (error) {
+    return brainMemoryErrorResponse(error);
   }
-
-  return jsonResponse({ data: { job } });
 }
 
 export async function handleBrainMemoryProfileRequest(
@@ -437,8 +442,12 @@ export async function handleBrainMemoryProfileRequest(
     return methodNotAllowed("GET /api/brain/memory/profile requires the GET method.", "GET");
   }
 
-  const service = options.service ?? defaultBrainMemoryService;
-  return jsonResponse({ data: await service.getProfile(request) });
+  try {
+    const service = options.service ?? defaultBrainMemoryService;
+    return jsonResponse({ data: await service.getProfile(request) });
+  } catch (error) {
+    return brainMemoryErrorResponse(error);
+  }
 }
 
 export async function handleBrainRetrieveRequest(
@@ -454,8 +463,12 @@ export async function handleBrainRetrieveRequest(
     return parsed.response;
   }
 
-  const service = options.service ?? defaultBrainMemoryService;
-  return jsonResponse({ data: await service.retrieve(parsed.data, request) });
+  try {
+    const service = options.service ?? defaultBrainMemoryService;
+    return jsonResponse({ data: await service.retrieve(parsed.data, request) });
+  } catch (error) {
+    return brainMemoryErrorResponse(error);
+  }
 }
 
 export async function handleBrainMemoryReviewRequest(
@@ -472,14 +485,18 @@ export async function handleBrainMemoryReviewRequest(
     return parsed.response;
   }
 
-  const service = options.service ?? defaultBrainMemoryService;
-  const result = await service.reviewMemory(nodeId, parsed.data, request);
+  try {
+    const service = options.service ?? defaultBrainMemoryService;
+    const result = await service.reviewMemory(nodeId, parsed.data, request);
 
-  if (!result.reviewed) {
-    return jsonResponse({ error: { code: "brain_memory_not_found", message: "No Brain memory matched that id." } }, 404);
+    if (!result.reviewed) {
+      return jsonResponse({ error: { code: "brain_memory_not_found", message: "No Brain memory matched that id." } }, 404);
+    }
+
+    return jsonResponse({ data: result });
+  } catch (error) {
+    return brainMemoryErrorResponse(error);
   }
-
-  return jsonResponse({ data: result });
 }
 
 export async function handleBrainSourceDeleteRequest(
@@ -491,14 +508,18 @@ export async function handleBrainSourceDeleteRequest(
     return methodNotAllowed("DELETE /api/brain/sources/:sourceId requires the DELETE method.", "DELETE");
   }
 
-  const service = options.service ?? defaultBrainMemoryService;
-  const result = await service.deleteSource(sourceId, request);
+  try {
+    const service = options.service ?? defaultBrainMemoryService;
+    const result = await service.deleteSource(sourceId, request);
 
-  if (!result.deleted) {
-    return jsonResponse({ error: { code: "brain_source_not_found", message: "No Brain source matched that id." } }, 404);
+    if (!result.deleted) {
+      return jsonResponse({ error: { code: "brain_source_not_found", message: "No Brain source matched that id." } }, 404);
+    }
+
+    return jsonResponse({ data: result });
+  } catch (error) {
+    return brainMemoryErrorResponse(error);
   }
-
-  return jsonResponse({ data: result });
 }
 
 export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteService {
@@ -1065,15 +1086,33 @@ export async function retrieveBrainMemoryForCreate(input: {
 }
 
 function resolveDefaultBrainMemoryService(): BrainMemoryRouteService {
-  if (defaultBrainMemoryServiceCache) {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  const cacheKey = databaseUrl ? `db:${databaseUrl}` : `memory:${brainMemoryRuntimeKind()}`;
+
+  if (defaultBrainMemoryServiceCache && defaultBrainMemoryServiceCacheKey === cacheKey) {
     return defaultBrainMemoryServiceCache;
   }
 
-  defaultBrainMemoryServiceCache = process.env.DATABASE_URL?.trim()
-    ? createDbBrainMemoryService(createPennyDb())
-    : createInMemoryBrainMemoryService(defaultStores);
+  if (databaseUrl) {
+    defaultBrainMemoryServiceCache = createDbBrainMemoryService(createPennyDb(databaseUrl));
+    defaultBrainMemoryServiceCacheKey = cacheKey;
+    return defaultBrainMemoryServiceCache;
+  }
+
+  if (brainMemoryRuntimeKind() !== "dev-test") {
+    throw new Error(
+      "DATABASE_URL is required for Brain memory in production. In-memory Brain memory is only for local dev/test and must not be used for private alpha, staging, or production.",
+    );
+  }
+
+  defaultBrainMemoryServiceCache = createInMemoryBrainMemoryService(defaultStores);
+  defaultBrainMemoryServiceCacheKey = cacheKey;
 
   return defaultBrainMemoryServiceCache;
+}
+
+function brainMemoryRuntimeKind(): "dev-test" | "production" {
+  return process.env.NODE_ENV === "production" ? "production" : "dev-test";
 }
 
 async function loadDbMemoryStore(db: BrainMemoryDb, scope: BrainScope): Promise<ScopeMemoryStore> {

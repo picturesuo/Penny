@@ -98,6 +98,90 @@ test("Brain memory retrieval survives service reload when the backing store is r
   assert.ok(data.results.some((result) => result.memoryRef.summary.includes("source-backed")));
 });
 
+test("default Brain memory service refuses production in-memory fallback", async () => {
+  await withEnv({ NODE_ENV: "production", DATABASE_URL: undefined }, async () => {
+    const response = await handleBrainMemoryProfileRequest(getRequest("http://localhost/api/brain/memory/profile"));
+    const payload = await responsePayload(response);
+
+    assert.equal(response.status, 500);
+    assert.equal(payload.error.code, "brain_memory_failed");
+    assert.match(payload.error.message, /DATABASE_URL is required for Brain memory in production/i);
+    assert.match(payload.error.message, /in-memory Brain memory is only for local dev\/test/i);
+  });
+});
+
+test("Brain memory jobs, reviews, retrieval, and source deletion are scoped by user", async () => {
+  const service = createInMemoryBrainMemoryService();
+  const userAHeaders = requestHeaders({
+    "x-user-id": "brain-route-user-a",
+    "x-workspace-id": "brain-route-workspace",
+    "x-project-id": "brain-route-project",
+    "x-sphere-id": "brain-route-sphere",
+  });
+  const userBHeaders = requestHeaders({
+    "x-user-id": "brain-route-user-b",
+    "x-workspace-id": "brain-route-workspace",
+    "x-project-id": "brain-route-project",
+    "x-sphere-id": "brain-route-sphere",
+  });
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest(
+      "http://localhost/api/brain/import",
+      {
+        kind: "text",
+        label: "Scoped source notes",
+        content:
+          "Project: The scoped source should only be visible to user A. I prefer private source-backed memory with no global training claims.",
+      },
+      userAHeaders,
+    ),
+    { service },
+  );
+  const importPayload = await responsePayload(importResponse);
+  const job = importPayload.data.job as IngestionJob;
+  const userAProfile = importPayload.data.profile as BrainMemoryProfile;
+  const memory = userAProfile.recentMemoryNodes[0];
+
+  assert.equal(importResponse.status, 200);
+  assert.ok(job.sourceId);
+  assert.ok(memory);
+
+  const otherJobResponse = await handleBrainImportJobRequest(getRequest(`http://localhost/api/brain/import/${job.id}`, userBHeaders), job.id, {
+    service,
+  });
+  const otherRetrieveResponse = await handleBrainRetrieveRequest(
+    jsonRequest("http://localhost/api/brain/retrieve", { query: "scoped source private", limit: 5 }, userBHeaders),
+    { service },
+  );
+  const otherReviewResponse = await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${memory.id}/review`, { action: "boost" }, userBHeaders),
+    memory.id,
+    { service },
+  );
+  const otherDeleteResponse = await handleBrainSourceDeleteRequest(deleteRequest(`http://localhost/api/brain/sources/${job.sourceId}`, userBHeaders), job.sourceId, {
+    service,
+  });
+  const otherProfileResponse = await handleBrainMemoryProfileRequest(getRequest("http://localhost/api/brain/memory/profile", userBHeaders), {
+    service,
+  });
+  const ownerProfileResponse = await handleBrainMemoryProfileRequest(getRequest("http://localhost/api/brain/memory/profile", userAHeaders), {
+    service,
+  });
+  const otherRetrieval = (await responsePayload(otherRetrieveResponse)).data as BrainMemoryRetrieval;
+  const otherProfile = (await responsePayload(otherProfileResponse)).data as BrainMemoryProfile;
+  const ownerProfile = (await responsePayload(ownerProfileResponse)).data as BrainMemoryProfile;
+
+  assert.equal(otherJobResponse.status, 404);
+  assert.equal(otherReviewResponse.status, 404);
+  assert.equal(otherDeleteResponse.status, 404);
+  assert.equal(otherRetrieveResponse.status, 200);
+  assert.equal(otherRetrieval.contextLight, true);
+  assert.equal(otherRetrieval.results.length, 0);
+  assert.equal(otherProfile.stats.sourceCount, 0);
+  assert.equal(ownerProfile.stats.sourceCount, 1);
+  assert.ok(ownerProfile.sources.some((source) => source.id === job.sourceId));
+});
+
 test("POST /api/brain/import parses ChatGPT-style conversations.json and retrieval returns source-backed memory", async () => {
   const service = createInMemoryBrainMemoryService();
   await handleBrainImportRequest(
@@ -656,38 +740,63 @@ function zipBase64(entries: Record<string, string>): string {
   return Buffer.concat([...localParts, centralDirectory, end]).toString("base64");
 }
 
-function jsonRequest(url: string, body: unknown): Request {
+function jsonRequest(url: string, body: unknown, headers: HeadersInit = requestHeaders()): Request {
   return new Request(url, {
     method: "POST",
-    headers: requestHeaders(),
+    headers,
     body: JSON.stringify(body),
   });
 }
 
-function getRequest(url: string): Request {
+function getRequest(url: string, headers: HeadersInit = requestHeaders()): Request {
   return new Request(url, {
     method: "GET",
-    headers: requestHeaders(),
+    headers,
   });
 }
 
-function deleteRequest(url: string): Request {
+function deleteRequest(url: string, headers: HeadersInit = requestHeaders()): Request {
   return new Request(url, {
     method: "DELETE",
-    headers: requestHeaders(),
+    headers,
   });
 }
 
-function requestHeaders(): HeadersInit {
+function requestHeaders(overrides: Record<string, string> = {}): HeadersInit {
   return {
     "content-type": "application/json",
     "x-user-id": "test-user",
     "x-workspace-id": "test-workspace",
     "x-project-id": "test-project",
     "x-sphere-id": "test-sphere",
+    ...overrides,
   };
 }
 
 async function responsePayload(response: Response): Promise<any> {
   return response.json();
+}
+
+async function withEnv(env: Record<string, string | undefined>, fn: () => Promise<void>): Promise<void> {
+  const previous = new Map(Object.keys(env).map((key) => [key, process.env[key]]));
+
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  try {
+    await fn();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
 }
