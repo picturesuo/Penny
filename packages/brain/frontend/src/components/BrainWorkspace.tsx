@@ -2163,7 +2163,7 @@ function BrainDocumentsIndex({
   );
 }
 
-function BrainMemoryPanel({
+export function BrainMemoryPanel({
   profile,
   status,
   error,
