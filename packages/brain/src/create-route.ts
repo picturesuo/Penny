@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { createXai } from "@ai-sdk/xai";
+import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { retrieveBrainMemoryForCreate } from "./brain-memory-route.ts";
 import { scopeValues, type BrainScope } from "./scope.ts";
@@ -45,7 +47,7 @@ export type OptionSet = {
   id: string;
   projectId: string;
   sessionId: string;
-  sourceOfTruth: "rough_idea_context_deterministic_create_lenses";
+  sourceOfTruth: "rough_idea_context_deterministic_create_lenses" | "rough_idea_context_model_backed_create_lenses";
   rawIdea: string;
   options: CandidateOption[];
   memoryUsed: MemoryRef[];
@@ -139,6 +141,43 @@ export type CreateRouteOptions = {
   service?: CreateRouteService;
 };
 
+export type CreateOptionGenerationInput = {
+  rawIdea: string;
+  memoryUsed: MemoryRef[];
+  sourcesUsed: SourceRef[];
+  contextLight: boolean;
+  baselineOptions: CandidateOption[];
+};
+
+export type CreateOptionProviderDraft = z.infer<typeof CreateOptionProviderDraftSchema>;
+export type CreateOptionProviderOutput = z.infer<typeof CreateOptionProviderOutputSchema>;
+
+export type CreateOptionProvider = {
+  name: "xai" | "test" | "disabled";
+  generateOptions(input: CreateOptionGenerationInput): Promise<unknown>;
+};
+
+export type CreateGenerateText = (request: {
+  model: LanguageModel;
+  system: string;
+  prompt: string;
+  output: typeof createOptionOutputSpec;
+  maxRetries: number;
+  providerOptions: {
+    xai: {
+      store: false;
+    };
+  };
+}) => Promise<{ output: unknown }>;
+
+export type XaiCreateOptionProviderOptions = {
+  generateText?: CreateGenerateText;
+};
+
+export type CreateRouteServiceOptions = {
+  optionProvider?: CreateOptionProvider | null;
+};
+
 type ArtifactSectionTitle = (typeof artifactSectionTitles)[number];
 
 const artifactSectionTitles = [
@@ -160,6 +199,7 @@ const artifactSectionTitles = [
 ] as const;
 
 const lensOrder: CreateLens[] = ["Personal", "Practical", "Valuable", "Critical", "Weird"];
+export const defaultXaiCreateOptionModel = "grok-4.20-reasoning";
 
 const MemoryRefSchema = z
   .object({
@@ -180,6 +220,40 @@ const SourceRefSchema = z
     sourceRange: z.string().trim().max(160).nullable().optional(),
   })
   .strict();
+
+const CreateScoresSchema = z
+  .object({
+    intentMatch: z.number().int().min(0).max(100),
+    buildability: z.number().int().min(0).max(100),
+    value: z.number().int().min(0).max(100),
+    novelty: z.number().int().min(0).max(100),
+    risk: z.number().int().min(0).max(100),
+  })
+  .strict();
+
+const CreateOptionProviderDraftSchema = z
+  .object({
+    lens: z.enum(lensOrder),
+    title: z.string().trim().min(8).max(120),
+    oneLine: z.string().trim().min(16).max(240),
+    rationale: z.string().trim().min(24).max(700),
+    nextMove: z.string().trim().min(12).max(260),
+    risks: z.array(z.string().trim().min(8).max(220)).min(1).max(4),
+    scores: CreateScoresSchema.optional(),
+  })
+  .strict();
+
+const CreateOptionProviderOutputSchema = z
+  .object({
+    options: z.array(CreateOptionProviderDraftSchema).length(lensOrder.length),
+  })
+  .strict();
+
+const createOptionOutputSpec = Output.object<CreateOptionProviderOutput>({
+  schema: CreateOptionProviderOutputSchema,
+  name: "penny_create_options",
+  description: "Penny Create option copy for exactly the Personal, Practical, Valuable, Critical, and Weird lenses.",
+});
 
 const ArtifactSectionSchema: z.ZodType<ArtifactSection> = z
   .object({
@@ -296,10 +370,11 @@ export class CreateRouteValidationError extends Error {
   }
 }
 
-export function createInMemoryCreateRouteService(): CreateRouteService {
+export function createInMemoryCreateRouteService(options: CreateRouteServiceOptions = {}): CreateRouteService {
   const optionSets = new Map<string, OptionSet>();
   const artifacts = new Map<string, CodingPromptArtifact>();
   const judgments = new Map<string, JudgmentEvent[]>();
+  const optionProvider = options.optionProvider === undefined ? createDefaultCreateOptionProvider() : options.optionProvider;
 
   return {
     async next(input, request) {
@@ -318,7 +393,7 @@ export function createInMemoryCreateRouteService(): CreateRouteService {
       const existingOptionSet = input.optionSetId ? optionSets.get(input.optionSetId) ?? null : null;
       const optionSet =
         existingOptionSet ??
-        buildOptionSet({
+        (await buildOptionSetWithProvider({
           projectId,
           sessionId,
           rawIdea,
@@ -326,7 +401,8 @@ export function createInMemoryCreateRouteService(): CreateRouteService {
           sourcesUsed,
           contextLight: retrievedMemory.contextLight && input.memory.length === 0,
           now,
-        });
+          provider: optionProvider,
+        }));
       const priorArtifact = input.artifact ?? artifacts.get(sessionId) ?? null;
       const selectedOptions = optionSet.options.filter((option) => input.selectedOptionIds.includes(option.id));
       const baseArtifact = priorArtifact ?? buildInitialArtifact({ projectId, sessionId, rawIdea, optionSet, now });
@@ -406,6 +482,37 @@ export function createInMemoryCreateRouteService(): CreateRouteService {
       };
     },
   };
+}
+
+async function buildOptionSetWithProvider(input: {
+  projectId: string;
+  sessionId: string;
+  rawIdea: string;
+  memoryUsed: MemoryRef[];
+  sourcesUsed: SourceRef[];
+  contextLight: boolean;
+  now: string;
+  provider: CreateOptionProvider | null;
+}): Promise<OptionSet> {
+  const baseline = buildOptionSet(input);
+
+  if (!input.provider) {
+    return baseline;
+  }
+
+  try {
+    const output = await input.provider.generateOptions({
+      rawIdea: input.rawIdea,
+      memoryUsed: input.memoryUsed,
+      sourcesUsed: input.sourcesUsed,
+      contextLight: input.contextLight,
+      baselineOptions: baseline.options,
+    });
+
+    return optionSetFromProviderOutput(baseline, output);
+  } catch {
+    return baseline;
+  }
 }
 
 function buildOptionSet(input: {
@@ -518,6 +625,173 @@ function buildOptionSet(input: {
     sourcesUsed: sourceRefs,
     createdAt: input.now,
   };
+}
+
+export function createDefaultCreateOptionProvider(env: Record<string, string | undefined> = process.env): CreateOptionProvider | null {
+  if (env.PENNY_CREATE_MODEL_BACKED?.trim() === "true" && env.XAI_API_KEY?.trim()) {
+    return createXaiCreateOptionProvider(env);
+  }
+
+  return null;
+}
+
+export function createXaiCreateOptionProvider(
+  env: Record<string, string | undefined> = process.env,
+  options: XaiCreateOptionProviderOptions = {},
+): CreateOptionProvider {
+  return {
+    name: "xai",
+    async generateOptions(input) {
+      const apiKey = env.XAI_API_KEY?.trim();
+
+      if (!apiKey) {
+        throw new CreateRouteValidationError("XAI_API_KEY is required for the xAI Create option provider.");
+      }
+
+      const xai = createXai({ apiKey });
+      const callGenerateText = options.generateText ?? generateStructuredCreateOptions;
+      const result = await callGenerateText({
+        model: xai.responses(resolveXaiCreateOptionModel(env)),
+        system: buildCreateOptionSystemPrompt(),
+        prompt: buildCreateOptionPrompt(input),
+        output: createOptionOutputSpec,
+        maxRetries: 1,
+        providerOptions: {
+          xai: {
+            store: false,
+          },
+        },
+      });
+
+      return result.output;
+    },
+  };
+}
+
+export function resolveXaiCreateOptionModel(env: Record<string, string | undefined> = process.env): string {
+  return env.XAI_CREATE_OPTION_MODEL?.trim() || env.XAI_MODEL?.trim() || defaultXaiCreateOptionModel;
+}
+
+export function optionSetFromProviderOutput(baseline: OptionSet, output: unknown): OptionSet {
+  const parsed = parseCreateOptionProviderOutput(output);
+  const draftsByLens = new Map(parsed.options.map((option) => [option.lens, option]));
+  const options = baseline.options.map((baselineOption) => {
+    const draft = draftsByLens.get(baselineOption.lens);
+
+    if (!draft) {
+      return baselineOption;
+    }
+
+    return {
+      ...baselineOption,
+      title: draft.title,
+      oneLine: draft.oneLine,
+      rationale: ensureGroundingLanguage(draft.rationale, baselineOption.rationale),
+      nextMove: draft.nextMove,
+      risks: draft.risks,
+      scores: draft.scores ?? baselineOption.scores,
+    };
+  });
+
+  return {
+    ...baseline,
+    sourceOfTruth: "rough_idea_context_model_backed_create_lenses",
+    options,
+  };
+}
+
+export function parseCreateOptionProviderOutput(output: unknown): CreateOptionProviderOutput {
+  const parsed = CreateOptionProviderOutputSchema.safeParse(output);
+
+  if (!parsed.success) {
+    throw new CreateRouteValidationError(`Create option provider output failed validation: ${flattenIssues(parsed.error).join("; ")}`);
+  }
+
+  const lenses = parsed.data.options.map((option) => option.lens);
+  const missing = lensOrder.filter((lens) => !lenses.includes(lens));
+  const duplicates = lenses.filter((lens, index) => lenses.indexOf(lens) !== index);
+
+  if (missing.length || duplicates.length) {
+    throw new CreateRouteValidationError(
+      `Create option provider output must include exactly one option per lens. Missing: ${missing.join(", ") || "none"}. Duplicate: ${unique(duplicates).join(", ") || "none"}.`,
+    );
+  }
+
+  const unsafeText = parsed.data.options
+    .map((option) => [option.title, option.oneLine, option.rationale, option.nextMove, ...option.risks].join(" "))
+    .join("\n");
+
+  if (hasUnsupportedConnectorClaim(unsafeText)) {
+    throw new CreateRouteValidationError("Create option provider output invented unsupported connector, OAuth, or global-training claims.");
+  }
+
+  return parsed.data;
+}
+
+export function buildCreateOptionSystemPrompt(): string {
+  return [
+    "You are Penny's Create option copywriter.",
+    "Return only the structured output schema.",
+    "Write exactly five concise, differentiated options for Personal, Practical, Valuable, Critical, and Weird.",
+    "Use only the supplied rough idea, memory refs, source refs, and baseline options.",
+    "Do not invent Gmail, Slack, messages, OAuth, connector, global-training, hidden-memory, or external-source claims.",
+    "Do not add broad new product modes. Keep Create focused on rough idea -> directions -> judgment -> artifact -> verification -> export.",
+    "Preserve source grounding by naming grounded context separately from inferred moves.",
+  ].join("\n");
+}
+
+export function buildCreateOptionPrompt(input: CreateOptionGenerationInput): string {
+  return [
+    "Refine this deterministic Penny Create option set.",
+    "",
+    `Rough idea: ${input.rawIdea}`,
+    `Context-light: ${String(input.contextLight)}`,
+    "",
+    "Memory refs:",
+    input.memoryUsed.length ? input.memoryUsed.map((memory) => `- ${memory.id} | ${memory.label}: ${memory.summary}`).join("\n") : "- none",
+    "",
+    "Source refs:",
+    input.sourcesUsed.map((source) => `- ${source.id} | ${source.label}${source.sourceRange ? ` (${source.sourceRange})` : ""}: ${source.excerpt}`).join("\n"),
+    "",
+    "Baseline options to improve without changing lenses, source refs, or memory refs:",
+    JSON.stringify(
+      input.baselineOptions.map((option) => ({
+        lens: option.lens,
+        title: option.title,
+        oneLine: option.oneLine,
+        rationale: option.rationale,
+        nextMove: option.nextMove,
+        risks: option.risks,
+        scores: option.scores,
+      })),
+      null,
+      2,
+    ),
+  ].join("\n");
+}
+
+function ensureGroundingLanguage(rationale: string, fallback: string): string {
+  if (/\b(grounded|inferred|context-light|memory|source)\b/i.test(rationale)) {
+    return rationale;
+  }
+
+  const groundingSentence = fallback.split(/(?<=[.!?])\s+/u).find((sentence) => /\b(grounded|context-light|memory|source)\b/i.test(sentence));
+
+  return groundingSentence ? `${groundingSentence} ${rationale}` : rationale;
+}
+
+function hasUnsupportedConnectorClaim(text: string): boolean {
+  return /\b(gmail|slack|messages?|oauth|global training|shared training|trained on your data|hidden memory|background import)\b/i.test(text);
+}
+
+function flattenIssues(error: z.ZodError): string[] {
+  return error.issues.map((issue) => `${issue.path.length ? `${issue.path.join(".")}: ` : ""}${issue.message}`);
+}
+
+async function generateStructuredCreateOptions(request: Parameters<CreateGenerateText>[0]): Promise<{ output: unknown }> {
+  const result = await generateText(request);
+
+  return { output: result.output };
 }
 
 type CreateProfileInsights = {
