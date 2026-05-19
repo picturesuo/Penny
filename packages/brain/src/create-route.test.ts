@@ -363,6 +363,7 @@ test("POST /api/create/compare returns deterministic and model-backed outputs si
   assert.equal(data.deterministic.optionSet.sourceOfTruth, "rough_idea_context_deterministic_create_lenses");
   assert.equal(data.modelBacked.optionSet.sourceOfTruth, "rough_idea_context_model_backed_create_lenses");
   assert.match(data.modelBacked.optionSet.options[0]?.title ?? "", /Compared model-backed Personal/);
+  assert.ok(optionSetQualityScore(data.modelBacked.optionSet.options) > optionSetQualityScore(data.deterministic.optionSet.options));
   assert.equal(data.deterministic.verification.checks.length, 7);
   assert.equal(data.modelBacked.verification.scores.promptCompleteness, 100);
   assert.match(data.deterministic.promptExport.text, /## Rough User Idea/);
@@ -533,6 +534,18 @@ function optionText(result: CreateNextResult, lens: CandidateOption["lens"]): st
 function assertNoFakePositiveClaims(text: string): void {
   assert.doesNotMatch(text, /\b(imported|connected|read|pulled from|synced|scanned|analyzed)\b.{0,80}\b(gmail|slack|messages?|oauth)\b/i);
   assert.doesNotMatch(text, /\b(global training|shared training|trained on your data|hidden memory|background import|secret memory|private inbox)\b/i);
+}
+
+function optionSetQualityScore(options: CandidateOption[]): number {
+  return options.reduce((score, option) => {
+    const text = [option.title, option.oneLine, option.rationale, option.nextMove, option.risks.join(" ")].join(" ");
+
+    return score
+      + (/\bgrounded\b/i.test(text) ? 2 : 0)
+      + (/\bsource|memory|evidence\b/i.test(text) ? 2 : 0)
+      + (!/\bgeneric chatbot sidebar|generic wrapper\b/i.test(text) || option.lens === "Critical" ? 1 : 0)
+      + (option.title.length <= 80 ? 1 : 0);
+  }, 0);
 }
 
 function modelBackedOptionDrafts(prefix: string) {
