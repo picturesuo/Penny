@@ -7,7 +7,9 @@ import {
   type CandidateOption,
   type CodingPromptArtifact,
   type CreateNextResult,
+  type MemoryRef,
   type PromptExport,
+  type SourceRef,
 } from "./create-route.ts";
 import { handleBrainImportRequest } from "./brain-memory-route.ts";
 
@@ -91,6 +93,39 @@ test("POST /api/create/next uses retrieved Brain memory and source refs when imp
   assert.ok(data.optionSet.options.every((option) => !/Context-light/i.test(option.rationale)));
   assert.match(sectionBody(data.artifact, "AI/memory orchestration"), /Founder workflow notes/);
   assert.match(sectionBody(data.artifact, "User intent"), /Personal context used/);
+});
+
+test("POST /api/create/next personalizes the same rough idea for different Brain profiles", async () => {
+  const rawIdea = "Build a memory-grounded app that turns rough project notes into an agent-ready implementation plan.";
+  const studio = await createNext(createInMemoryCreateRouteService(), {
+    rawIdea,
+    projectId: "studio-project",
+    sessionId: "studio-session",
+    memory: studioBrainMemory(),
+    sources: studioBrainSources(),
+  });
+  const field = await createNext(createInMemoryCreateRouteService(), {
+    rawIdea,
+    projectId: "field-project",
+    sessionId: "field-session",
+    memory: fieldBrainMemory(),
+    sources: fieldBrainSources(),
+  });
+
+  for (const lens of ["Personal", "Valuable", "Weird"] satisfies CandidateOption["lens"][]) {
+    assert.notEqual(optionText(studio, lens), optionText(field, lens), `${lens} should change when Brain memory changes`);
+  }
+
+  assert.match(optionText(studio, "Personal"), /tactile|visual|zine|studio/i);
+  assert.match(optionText(field, "Personal"), /offline|field|audit|low-connectivity/i);
+  assert.match(optionText(studio, "Valuable"), /maker|workshop|cohort/i);
+  assert.match(optionText(field, "Valuable"), /inspection|field|paperwork/i);
+  assert.match(optionText(studio, "Weird"), /tactile|visual|zine|studio/i);
+  assert.match(optionText(field, "Weird"), /offline|field|rugged|low-connectivity/i);
+  assert.match(optionText(studio, "Critical"), /generic GPT-wrapper|fake connector claims|unsupported memory claims/i);
+  assert.match(optionText(field, "Critical"), /generic GPT-wrapper|fake connector claims|unsupported memory claims/i);
+  assert.ok(optionsByLens(studio.optionSet.options, ["Personal"])[0]?.memoryUsed.some((memory) => /tactile|zine|studio/i.test(memory.summary)));
+  assert.ok(optionsByLens(field.optionSet.options, ["Personal"])[0]?.memoryUsed.some((memory) => /offline|audit|field/i.test(memory.summary)));
 });
 
 test("POST /api/create/next records multi-select judgment and updates the artifact", async () => {
@@ -213,6 +248,82 @@ function optionsByLens(options: CandidateOption[], lenses: CandidateOption["lens
 
 function sectionBody(artifact: CodingPromptArtifact, title: string): string {
   return artifact.sections.find((section) => section.title === title)?.body ?? "";
+}
+
+function optionText(result: CreateNextResult, lens: CandidateOption["lens"]): string {
+  const option = optionsByLens(result.optionSet.options, [lens])[0];
+
+  return [option?.title, option?.oneLine, option?.rationale, option?.nextMove, option?.risks.join(" ")].filter(Boolean).join("\n");
+}
+
+function studioBrainMemory(): MemoryRef[] {
+  return [
+    {
+      id: "studio-pref",
+      label: "Preference: tactile studio tools",
+      kind: "preference",
+      summary: "The user prefers tactile, visual studio tools with zine-like pacing, handmade samples, and playful critique.",
+    },
+    {
+      id: "studio-project",
+      label: "Project: maker cohort prompt kit",
+      kind: "brain",
+      summary: "They are building a workshop prompt kit for independent makers who need cohort exercises and visible creative constraints.",
+    },
+    {
+      id: "studio-frustration",
+      label: "Frustration: bland SaaS dashboards",
+      kind: "brain",
+      summary: "They dislike bland SaaS dashboards, enterprise CRM workflows, and generic chatbot sidebars.",
+    },
+  ];
+}
+
+function studioBrainSources(): SourceRef[] {
+  return [
+    {
+      id: "studio-source",
+      label: "Studio workshop notes",
+      kind: "source",
+      excerpt: "Use tactile zine pacing, visual critique, maker cohort exercises, and visible constraints.",
+      sourceRange: "chunk 2",
+    },
+  ];
+}
+
+function fieldBrainMemory(): MemoryRef[] {
+  return [
+    {
+      id: "field-pref",
+      label: "Preference: offline-first field tools",
+      kind: "preference",
+      summary: "The user prefers rugged offline-first workflows, audit trails, and low-connectivity field capture over polished studio interactions.",
+    },
+    {
+      id: "field-project",
+      label: "Project: inspection ledger",
+      kind: "brain",
+      summary: "They are building an inspection ledger for field teams that turns messy site notes into implementation-ready plans.",
+    },
+    {
+      id: "field-frustration",
+      label: "Frustration: paperwork bottleneck",
+      kind: "brain",
+      summary: "They are frustrated by paperwork bottlenecks, missing audit evidence, and AI magic claims that cannot be verified on site.",
+    },
+  ];
+}
+
+function fieldBrainSources(): SourceRef[] {
+  return [
+    {
+      id: "field-source",
+      label: "Field inspection notes",
+      kind: "source",
+      excerpt: "Prioritize offline capture, audit trails, rugged field workflows, and verifiable site evidence.",
+      sourceRange: "chunk 4",
+    },
+  ];
 }
 
 function jsonRequest(url: string, body: unknown, headers: HeadersInit = requestHeaders()): Request {
