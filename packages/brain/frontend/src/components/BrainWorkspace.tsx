@@ -318,7 +318,7 @@ function BrainDocumentPage({
         </button>
         <div className="brain-doc-actions">
           <button type="button" className="text-command" disabled={isThinking} onClick={onReworkDocument}>
-            Rework in Check
+            Rework in Create
           </button>
           <button type="button" className="text-command" disabled={isThinking} onClick={() => setAskOpen(true)}>
             Ask Penny
@@ -1234,7 +1234,7 @@ function QuickNoteDocumentView({
                 disabled={disabled}
                 onClick={() => void onAction(recent, "check")}
               >
-                Check
+                Create
               </button>
               <button
                 type="button"
