@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createInMemoryCreateRouteService,
+  handleCreateCompareRequest,
   handleCreateNextRequest,
   handleExportCodingPromptRequest,
   type CandidateOption,
   type CodingPromptArtifact,
   type CreateNextResult,
   type CreateOptionProvider,
+  type CreateProviderComparisonResult,
   type MemoryRef,
   type PromptExport,
   type SourceRef,
@@ -37,8 +39,24 @@ test("POST /api/create/next generates the five required Create directions", asyn
   assert.match(data.artifact.sections.find((section) => section.title === "Final coding-agent prompt")?.body ?? "", /## Personal Context Used/);
   assert.deepEqual(
     data.verification.checks.map((check) => check.key),
-    ["intent_match", "buildability", "source_context_grounding", "non_generic", "missing_info", "risks"],
+    [
+      "intent_match",
+      "personal_memory_grounding",
+      "buildability",
+      "non_genericness",
+      "user_autonomy_preserved",
+      "fake_claim_risk",
+      "prompt_completeness",
+    ],
   );
+  assert.equal(data.observability.providerMode, "deterministic");
+  assert.equal(data.observability.schemaValidation, "not_run");
+  assert.equal(data.observability.memoryCountUsed, 0);
+  assert.equal(data.observability.sourceCountUsed, 1);
+  assert.deepEqual(data.observability.generatedLenses, ["Personal", "Practical", "Valuable", "Critical", "Weird"]);
+  assert.equal(data.observability.exportQualitySignals.hasRoughIdea, true);
+  assert.equal(data.observability.exportQualitySignals.hasImplementationSequence, true);
+  assert.equal(typeof data.verification.scores.promptCompleteness, "number");
 
   for (const option of data.optionSet.options) {
     assert.ok(option.title);
@@ -49,6 +67,9 @@ test("POST /api/create/next generates the five required Create directions", asyn
     assert.ok(option.risks.length >= 1);
     assert.ok(option.sourcesUsed.some((source) => source.kind === "rough_idea"));
     assert.equal(typeof option.scores.intentMatch, "number");
+  }
+  for (const check of data.verification.checks) {
+    assert.equal(typeof check.score, "number");
   }
 });
 
@@ -94,6 +115,8 @@ test("POST /api/create/next uses retrieved Brain memory and source refs when imp
   assert.ok(data.optionSet.options.every((option) => !/Context-light/i.test(option.rationale)));
   assert.match(sectionBody(data.artifact, "AI/memory orchestration"), /Founder workflow notes/);
   assert.match(sectionBody(data.artifact, "User intent"), /Personal context used/);
+  assert.ok(data.observability.memoryCountUsed >= 1);
+  assert.ok(data.observability.sourceCountUsed >= 2);
 });
 
 test("POST /api/create/next personalizes the same rough idea for different Brain profiles", async () => {
@@ -127,6 +150,73 @@ test("POST /api/create/next personalizes the same rough idea for different Brain
   assert.match(optionText(field, "Critical"), /generic GPT-wrapper|fake connector claims|unsupported memory claims/i);
   assert.ok(optionsByLens(studio.optionSet.options, ["Personal"])[0]?.memoryUsed.some((memory) => /tactile|zine|studio/i.test(memory.summary)));
   assert.ok(optionsByLens(field.optionSet.options, ["Personal"])[0]?.memoryUsed.some((memory) => /offline|audit|field/i.test(memory.summary)));
+});
+
+test("POST /api/create/next uses repeated rejected directions to change suggestions and exports", async () => {
+  const rawIdea = "Build a memory-grounded app that turns rough project notes into an agent-ready implementation plan.";
+  const service = createInMemoryCreateRouteService();
+  const baseline = await createNext(service, {
+    rawIdea,
+    projectId: "reject-base-project",
+    sessionId: "reject-base-session",
+    memory: [
+      {
+        id: "memory-base-style",
+        label: "Preference: compact planning",
+        kind: "preference",
+        summary: "The user prefers compact planning artifacts and explicit implementation tests.",
+      },
+    ],
+  });
+  const withRejected = await createNext(service, {
+    rawIdea,
+    projectId: "reject-project",
+    sessionId: "reject-session",
+    memory: [
+      {
+        id: "memory-reject-crm",
+        label: "Rejected direction: enterprise CRM dashboards",
+        kind: "brain",
+        summary: "The user repeatedly rejected enterprise CRM dashboards, generic chatbot sidebars, and fake connector claims.",
+      },
+      {
+        id: "memory-reject-style",
+        label: "Preference: compact planning",
+        kind: "preference",
+        summary: "The user prefers compact planning artifacts and explicit implementation tests.",
+      },
+    ],
+  });
+
+  assert.notEqual(optionText(baseline, "Critical"), optionText(withRejected, "Critical"));
+  assert.match(optionText(withRejected, "Critical"), /enterprise CRM dashboards|generic chatbot sidebars|fake connector claims/i);
+  assert.ok(withRejected.observability.rejectedDirectionsUsed.some((direction) => /enterprise CRM dashboards/i.test(direction)));
+
+  const critical = optionsByLens(withRejected.optionSet.options, ["Critical"]);
+  const refined = await createNext(service, {
+    rawIdea,
+    projectId: withRejected.optionSet.projectId,
+    sessionId: withRejected.optionSet.sessionId,
+    optionSetId: withRejected.optionSet.id,
+    selectedOptionIds: critical.map((option) => option.id),
+    userComment: "Keep the rejected enterprise CRM direction visible in the exported prompt.",
+    artifact: withRejected.artifact,
+  });
+  const response = await handleExportCodingPromptRequest(
+    jsonRequest("http://localhost/api/create/export-coding-prompt", {
+      artifact: refined.artifact,
+      verification: refined.verification,
+      judgmentEvent: refined.judgmentEvent,
+    }),
+    { service },
+  );
+  const payload = await responsePayload(response);
+  const exported = payload.data.export as PromptExport;
+
+  assert.match(exported.text, /## Repeated Rejected Directions/);
+  assert.match(exported.text, /enterprise CRM dashboards|generic chatbot sidebars|fake connector claims/i);
+  assert.equal(exported.qualitySignals.hasRepeatedRejectedDirections, true);
+  assertNoFakePositiveClaims(exported.text);
 });
 
 test("POST /api/create/next can use a model-backed typed option provider without changing provenance", async () => {
@@ -166,11 +256,16 @@ test("POST /api/create/next can use a model-backed typed option provider without
 
   assert.equal(providerSawMemory, true);
   assert.equal(result.optionSet.sourceOfTruth, "rough_idea_context_model_backed_create_lenses");
+  assert.equal(result.observability.providerMode, "model_backed");
+  assert.equal(result.observability.providerName, "test");
+  assert.equal(result.observability.schemaValidation, "success");
+  assert.equal(result.observability.fallbackReason, null);
+  assert.deepEqual(result.observability.generatedLenses, ["Personal", "Practical", "Valuable", "Critical", "Weird"]);
   assert.match(personal?.title ?? "", /Model-backed source ledger Personal/i);
   assert.ok(personal?.memoryUsed.some((memory) => memory.id === "memory-model-1"));
   assert.ok(personal?.sourcesUsed.some((source) => source.id === "source-model-1"));
   assert.match(personal?.rationale ?? "", /Grounded/i);
-  assert.ok(result.optionSet.options.every((option) => !/Gmail|Slack|global training/i.test(optionText(result, option.lens))));
+  assertNoFakePositiveClaims(result.optionSet.options.map((option) => optionText(result, option.lens)).join("\n"));
 });
 
 test("POST /api/create/next rejects unsafe provider claims and falls back to deterministic options", async () => {
@@ -205,7 +300,74 @@ test("POST /api/create/next rejects unsafe provider claims and falls back to det
   });
 
   assert.equal(result.optionSet.sourceOfTruth, "rough_idea_context_deterministic_create_lenses");
+  assert.equal(result.observability.providerMode, "deterministic_fallback");
+  assert.equal(result.observability.providerName, "test");
+  assert.equal(result.observability.schemaValidation, "failure");
+  assert.match(result.observability.fallbackReason ?? "", /fell back to deterministic/i);
   assert.ok(result.optionSet.options.every((option) => !/imported Gmail|Slack history|hidden preferences/i.test(optionText(result, option.lens))));
+});
+
+test("POST /api/create/next falls back with a clear trace when provider schema validation fails", async () => {
+  const provider: CreateOptionProvider = {
+    name: "test",
+    async generateOptions() {
+      return {
+        options: modelBackedOptionDrafts("Malformed provider").slice(0, 2),
+      };
+    },
+  };
+  const service = createInMemoryCreateRouteService({ optionProvider: provider });
+  const result = await createNext(service, {
+    rawIdea: "Build safer Create provider rollout checks.",
+  });
+
+  assert.equal(result.optionSet.sourceOfTruth, "rough_idea_context_deterministic_create_lenses");
+  assert.equal(result.observability.providerMode, "deterministic_fallback");
+  assert.equal(result.observability.schemaValidation, "failure");
+  assert.ok(result.observability.schemaValidationErrors.some((error) => /failed validation|Too small|expected array to contain/i.test(error)));
+  assert.match(result.observability.fallbackReason ?? "", /fell back to deterministic/i);
+});
+
+test("POST /api/create/compare returns deterministic and model-backed outputs side by side", async () => {
+  const provider: CreateOptionProvider = {
+    name: "test",
+    async generateOptions() {
+      return {
+        options: modelBackedOptionDrafts("Compared model-backed"),
+      };
+    },
+  };
+  const service = createInMemoryCreateRouteService({ optionProvider: provider });
+  const response = await handleCreateCompareRequest(
+    jsonRequest("http://localhost/api/create/compare", {
+      rawIdea: "Build a model-backed Create rollout comparison that proves output quality before defaulting it.",
+      memory: [
+        {
+          id: "memory-compare-1",
+          label: "Preference: rollout evidence",
+          kind: "preference",
+          summary: "The user wants side-by-side deterministic and model-backed Create evidence before changing defaults.",
+        },
+      ],
+    }),
+    { service },
+  );
+  const payload = await responsePayload(response);
+  const data = payload.data as CreateProviderComparisonResult;
+
+  assert.equal(response.status, 200);
+  assert.equal(data.sourceOfTruth, "deterministic_model_backed_create_comparison");
+  assert.equal(data.deterministic.providerUsed, "deterministic");
+  assert.equal(data.modelBacked.providerUsed, "model_backed");
+  assert.equal(data.modelBacked.fallbackReason, null);
+  assert.equal(data.deterministic.optionSet.sourceOfTruth, "rough_idea_context_deterministic_create_lenses");
+  assert.equal(data.modelBacked.optionSet.sourceOfTruth, "rough_idea_context_model_backed_create_lenses");
+  assert.match(data.modelBacked.optionSet.options[0]?.title ?? "", /Compared model-backed Personal/);
+  assert.equal(data.deterministic.verification.checks.length, 7);
+  assert.equal(data.modelBacked.verification.scores.promptCompleteness, 100);
+  assert.match(data.deterministic.promptExport.text, /## Rough User Idea/);
+  assert.match(data.modelBacked.promptExport.text, /## Product Goal/);
+  assert.equal(data.modelBacked.promptExport.qualitySignals.hasAcceptanceTests, true);
 });
 
 test("POST /api/create/next records multi-select judgment and updates the artifact", async () => {
@@ -255,6 +417,12 @@ test("POST /api/create/export-coding-prompt returns a coding-agent ready prompt"
         kind: "preference",
         summary: "The user prefers compact route contracts, visible provenance, and tests before polish.",
       },
+      {
+        id: "memory-demo-2",
+        label: "Rejected direction: broad connectors",
+        kind: "brain",
+        summary: "The user repeatedly rejects broad OAuth connectors, fake imported memory, and generic chatbot sidebars before the Create loop works.",
+      },
     ],
     sources: [
       {
@@ -299,10 +467,13 @@ test("POST /api/create/export-coding-prompt returns a coding-agent ready prompt"
   assert.match(exported.text, /## Personal Context Used/);
   assert.match(exported.text, /## Source \/ Memory Evidence/);
   assert.match(exported.text, /Preference: Compact route contracts/);
+  assert.match(exported.text, /Rejected direction: broad connectors/);
   assert.match(exported.text, /Founder notes/);
   assert.match(exported.text, /## Selected Option History/);
   assert.match(exported.text, /Practical:/);
   assert.match(exported.text, /Valuable:/);
+  assert.match(exported.text, /## Repeated Rejected Directions/);
+  assert.match(exported.text, /broad OAuth connectors|generic chatbot sidebars/i);
   assert.match(exported.text, /## UX Requirements/);
   assert.match(exported.text, /## Frontend Requirements/);
   assert.match(exported.text, /## Backend Requirements/);
@@ -313,6 +484,24 @@ test("POST /api/create/export-coding-prompt returns a coding-agent ready prompt"
   assert.match(exported.text, /## Do-Not-Break List/);
   assert.match(exported.text, /## Definition of Done/);
   assert.match(exported.text, /route contracts, client methods, compact UI, and tests/i);
+  assert.equal(exported.qualitySignals.hasRoughIdea, true);
+  assert.equal(exported.qualitySignals.hasSelectedOptionHistory, true);
+  assert.equal(exported.qualitySignals.hasRelevantPersonalContext, true);
+  assert.equal(exported.qualitySignals.hasRepeatedRejectedDirections, true);
+  assert.equal(exported.qualitySignals.hasProductGoal, true);
+  assert.equal(exported.qualitySignals.hasNonGoals, true);
+  assert.equal(exported.qualitySignals.hasUxRequirements, true);
+  assert.equal(exported.qualitySignals.hasFrontendRequirements, true);
+  assert.equal(exported.qualitySignals.hasBackendRequirements, true);
+  assert.equal(exported.qualitySignals.hasDataModel, true);
+  assert.equal(exported.qualitySignals.hasPrivacyConstraints, true);
+  assert.equal(exported.qualitySignals.hasVerificationRequirements, true);
+  assert.equal(exported.qualitySignals.hasImplementationSequence, true);
+  assert.equal(exported.qualitySignals.hasAcceptanceTests, true);
+  assert.equal(exported.qualitySignals.hasDoNotBreakList, true);
+  assert.equal(exported.qualitySignals.promptCompletenessScore, 100);
+  assert.deepEqual(exported.qualitySignals.missing, []);
+  assertNoFakePositiveClaims(exported.text);
 });
 
 async function createNext(service: ReturnType<typeof createInMemoryCreateRouteService>, body: Record<string, unknown>): Promise<CreateNextResult> {
@@ -339,6 +528,11 @@ function optionText(result: CreateNextResult, lens: CandidateOption["lens"]): st
   const option = optionsByLens(result.optionSet.options, [lens])[0];
 
   return [option?.title, option?.oneLine, option?.rationale, option?.nextMove, option?.risks.join(" ")].filter(Boolean).join("\n");
+}
+
+function assertNoFakePositiveClaims(text: string): void {
+  assert.doesNotMatch(text, /\b(imported|connected|read|pulled from|synced|scanned|analyzed)\b.{0,80}\b(gmail|slack|messages?|oauth)\b/i);
+  assert.doesNotMatch(text, /\b(global training|shared training|trained on your data|hidden memory|background import|secret memory|private inbox)\b/i);
 }
 
 function modelBackedOptionDrafts(prefix: string) {
