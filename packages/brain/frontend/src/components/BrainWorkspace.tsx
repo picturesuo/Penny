@@ -2690,6 +2690,7 @@ function memoryProfileSections(profile: BrainMemoryProfileData, recentNodes: Mem
     { title: "Taste signals", items: signalItems(profile.profile.tasteSignals) },
     { title: "Common frustrations", items: signalItems(profile.profile.commonFrustrations) },
     { title: "Preferred build style", items: signalItems(profile.profile.preferredBuildStyle) },
+    { title: "Repeated rejected directions", items: signalItems(profile.profile.repeatedRejectedDirections ?? []) },
     { title: "Strongest idea clusters", items: signalItems(profile.profile.activeIdeaClusters) },
   ].filter((section) => section.items.length > 0);
 }
