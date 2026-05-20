@@ -432,6 +432,85 @@ export async function deleteBrainSource(sourceId: string): Promise<BrainSourceDe
   return payload as BrainSourceDeleteResponse;
 }
 
+export interface GoogleConnectorScopeView {
+  id: string;
+  surface: string;
+  scope: string | null;
+  sensitivity: string;
+  whyPennyNeedsIt: string;
+  userExplanation: string;
+  gated: boolean;
+  gatedStatus: string | null;
+  productionAllowed: boolean;
+}
+
+export interface GoogleConnectorSurfaceView {
+  id: string;
+  label: string;
+  status: string;
+  sourceKinds: string[];
+  scopes: GoogleConnectorScopeView[];
+  whyPennyCanUseThis: string;
+  userExplanation: string;
+  supportedNow: string[];
+  notFaked: string[];
+}
+
+export interface GoogleConnectorProviderView {
+  id: "google";
+  label: "Google";
+  adapter: "nango";
+  status: string;
+  configured: boolean;
+  configurationLabel: string;
+  surfaces: GoogleConnectorSurfaceView[];
+  missingConfig: string[];
+}
+
+export interface GoogleConnectorProviderResponse {
+  data: {
+    sourceOfTruth: "google_connector_registry";
+    provider: GoogleConnectorProviderView;
+  };
+}
+
+export interface GoogleConnectorConnectSessionResponse {
+  data: {
+    token: string;
+    expiresAt: string;
+    connectLink: string;
+  };
+}
+
+export async function fetchGoogleConnectorProvider(): Promise<GoogleConnectorProviderResponse> {
+  const response = await fetch("/api/connectors/google", {
+    method: "GET",
+    headers: requestHeaders(),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /api/connectors/google failed with ${response.status}.`));
+  }
+
+  return payload as GoogleConnectorProviderResponse;
+}
+
+export async function createGoogleConnectorConnectSession(): Promise<GoogleConnectorConnectSessionResponse> {
+  const response = await fetch("/api/connectors/google/connect-session", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify({}),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/connectors/google/connect-session failed with ${response.status}.`));
+  }
+
+  return payload as GoogleConnectorConnectSessionResponse;
+}
+
 export async function fetchBrainRecents(): Promise<BrainRecentsResponse> {
   const response = await fetch("/api/brain/recents", {
     method: "GET",
