@@ -1426,6 +1426,40 @@ export const artifacts = pgTable(
   ],
 );
 
+export const createExportFeedback = pgTable(
+  "create_export_feedback",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    createProjectId: text("create_project_id").notNull(),
+    createSessionId: text("create_session_id").notNull(),
+    artifactId: text("artifact_id").notNull(),
+    exportId: text("export_id").notNull(),
+    rating: text("rating").notNull(),
+    reasons: jsonb("reasons").$type<string[]>().notNull().default([]),
+    comment: text("comment"),
+    promptCompletenessScore: integer("prompt_completeness_score"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("create_export_feedback_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("create_export_feedback_artifact_idx").on(table.artifactId),
+    index("create_export_feedback_export_idx").on(table.exportId),
+    index("create_export_feedback_rating_idx").on(table.rating),
+    index("create_export_feedback_created_at_idx").on(table.createdAt),
+    check("create_export_feedback_project_present", sql`length(trim(${table.createProjectId})) > 0`),
+    check("create_export_feedback_session_present", sql`length(trim(${table.createSessionId})) > 0`),
+    check("create_export_feedback_artifact_present", sql`length(trim(${table.artifactId})) > 0`),
+    check("create_export_feedback_export_present", sql`length(trim(${table.exportId})) > 0`),
+    check("create_export_feedback_rating_valid", sql`${table.rating} IN ('useful', 'not_useful')`),
+    check("create_export_feedback_comment_max", sql`${table.comment} IS NULL OR length(${table.comment}) <= 1000`),
+    check(
+      "create_export_feedback_score_range",
+      sql`${table.promptCompletenessScore} IS NULL OR (${table.promptCompletenessScore} >= 0 AND ${table.promptCompletenessScore} <= 100)`,
+    ),
+  ],
+);
+
 export const wikiPages = pgTable(
   "wiki_pages",
   {
@@ -1524,6 +1558,7 @@ export const pennySchema = {
   contextChunks,
   contextProviderEnum,
   contextSources,
+  createExportFeedback,
   derivedEffectKindEnum,
   derivedEffectStatusEnum,
   derivedEffects,

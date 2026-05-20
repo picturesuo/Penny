@@ -211,6 +211,13 @@
       "when": 1779168000000,
       "tag": "0029_add_brain_memory_persistence",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1779254400000,
+      "tag": "0030_add_create_export_feedback",
+      "breakpoints": true
     }
   ]
 }

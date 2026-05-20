@@ -447,6 +447,7 @@ test("Penny schema has a clean aggregate export surface", () => {
     "contextChunks",
     "contextProviderEnum",
     "contextSources",
+    "createExportFeedback",
     "derivedEffectKindEnum",
     "derivedEffectStatusEnum",
     "derivedEffects",
