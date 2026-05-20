@@ -1275,6 +1275,27 @@ export interface UserProfileSignal {
   updatedAt: string;
 }
 
+export interface BrainProfileIdeaCluster {
+  id: string;
+  label: string;
+  summary: string;
+  memoryNodeIds: string[];
+  currentMemoryNodeId: string | null;
+  supersededMemoryNodeIds: string[];
+  weight: number;
+  updatedAt: string;
+}
+
+export interface BrainProfileRecentActivity {
+  id: string;
+  kind: "source_imported" | "memory_extracted" | "memory_confirmed" | "memory_boosted";
+  label: string;
+  summary: string;
+  occurredAt: string;
+  sourceId: string | null;
+  memoryNodeIds: string[];
+}
+
 export interface IngestionJob {
   id: string;
   status: "completed" | "failed";
@@ -1332,10 +1353,16 @@ export interface BrainMemoryProfileData {
   profile: {
     recurringInterests: UserProfileSignal[];
     activeIdeaClusters: UserProfileSignal[];
+    activeProjects?: UserProfileSignal[];
     tasteSignals: UserProfileSignal[];
     commonFrustrations: UserProfileSignal[];
     preferredBuildStyle: UserProfileSignal[];
     repeatedRejectedDirections: UserProfileSignal[];
+    ideaClusters?: BrainProfileIdeaCluster[];
+    highValueMemories?: MemoryNode[];
+    staleMemories?: MemoryNode[];
+    supersededMemories?: MemoryNode[];
+    recentMeaningfulActivity?: BrainProfileRecentActivity[];
     privacySafeSummary: string;
   };
   stats: {
