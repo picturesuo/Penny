@@ -23,7 +23,8 @@ export type PennyLogEvent = {
 
 type PennyLogSink = (event: PennyLogEvent) => void;
 
-const blockedPayloadKeyPattern = /\b(content|raw|text|excerpt|summary|prompt|comment|query|token|secret|password)\b/i;
+const blockedPayloadKeyPattern = /(content|raw|text|excerpt|summary|prompt|comment|query|token|secret|password)/i;
+const explicitlySafePayloadKeyPattern = /^(contentLength|contentHash|contentCount)$/i;
 let testSink: PennyLogSink | null = null;
 
 export function emitPennyLog(
@@ -68,7 +69,7 @@ export function safeLogPayload(payload: PennyLogPayload): PennyLogPayload {
   const safe: PennyLogPayload = {};
 
   for (const [key, value] of Object.entries(payload)) {
-    if (value === undefined || blockedPayloadKeyPattern.test(key)) {
+    if (value === undefined || isBlockedPayloadKey(key)) {
       continue;
     }
 
@@ -76,6 +77,10 @@ export function safeLogPayload(payload: PennyLogPayload): PennyLogPayload {
   }
 
   return safe;
+}
+
+function isBlockedPayloadKey(key: string): boolean {
+  return !explicitlySafePayloadKeyPattern.test(key) && blockedPayloadKeyPattern.test(key);
 }
 
 function pennyLogsEnabled(env: NodeJS.ProcessEnv): boolean {
