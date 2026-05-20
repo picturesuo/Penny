@@ -26,6 +26,12 @@ import {
   type BrainMemoryProfile,
   type IngestionJob,
 } from "./brain-memory-route.ts";
+import {
+  handleGoogleConnectorSourceDeleteRequest,
+  handleGoogleConnectorSyncCompleteRequest,
+} from "./google-connector-route.ts";
+import { initializeGoogleConnectorConnection } from "./google-connector.ts";
+import { createInMemoryGoogleConnectorStateStore } from "./google-connector-state-store.ts";
 import type { BrainRankerRecorder, RecordBrainDevelopmentEventInput, RecordBrainRankerRunInput } from "./brain-ranker-persistence.ts";
 
 test("POST /api/create/next generates the five required Create directions", async () => {
@@ -394,6 +400,171 @@ test("alpha Brain to Create to export golden path uses reviewed personal context
   assert.equal(exported.qualitySignals.hasRelevantPersonalContext, true);
   assert.equal(exported.qualitySignals.promptCompletenessScore, 100);
   assertNoFakePositiveClaims(exported.text);
+});
+
+test("Google sync feeds private Brain memory into Create ranking, export, and deletion", async () => {
+  const headers = requestHeaders({
+    "x-user-id": "google-create-user",
+    "x-workspace-id": "google-create-workspace",
+    "x-project-id": "google-create-project",
+    "x-sphere-id": "google-create-sphere",
+  });
+  const scope = {
+    userId: "google-create-user",
+    workspaceId: "google-create-workspace",
+    projectId: "google-create-project",
+    sphereId: "google-create-sphere",
+  };
+  const connectorState = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-create-1",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-create-1",
+      endUserId: "google-create-user",
+    },
+    surfaces: ["google_drive"],
+    scopes: ["https://www.googleapis.com/auth/drive.file"],
+    now: "2026-05-20T12:00:00.000Z",
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore(connectorState);
+  const syncResponse = await handleGoogleConnectorSyncCompleteRequest(
+    jsonRequest(
+      "http://localhost/api/connectors/google/sync-complete",
+      {
+        connectionId: "nango-google-create-1",
+        providerConfigKey: "google",
+        jobId: connectorState.syncJobs[0]?.id,
+        surface: "google_drive",
+        cursor: "drive-create-cursor-2",
+        nextSyncAt: "2026-05-20T18:05:00.000Z",
+        now: "2026-05-20T12:05:00.000Z",
+        sources: [
+          {
+            surface: "google_drive",
+            kind: "google_doc",
+            externalId: "doc-create-1",
+            sourceUri: "google-drive:file:doc-create-1",
+            label: "Google Create strategy doc",
+            url: "https://docs.google.com/document/d/doc-create-1",
+            content:
+              "Project: Penny Create should turn selected Google Drive strategy docs into personal Create options. Preference: use private source-backed memory and visible evidence. Rejected direction: no generic chatbot sidebar or fake Gmail claims.",
+          },
+        ],
+      },
+      headers,
+    ),
+    { stateStore },
+  );
+  const syncPayload = await responsePayload(syncResponse);
+  const profileResponse = await handleBrainMemoryProfileRequest(getRequest("http://localhost/api/brain/memory/profile", headers));
+  const profilePayload = await responsePayload(profileResponse);
+  const profile = profilePayload.data as BrainMemoryProfile;
+  const service = createInMemoryCreateRouteService();
+  const rawIdea = "Build Create from selected Google Drive strategy docs without fake connector claims.";
+  const first = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId: "google-create-project",
+      sessionId: "google-create-session",
+    },
+    headers,
+  );
+  const selected = optionsByLens(first.optionSet.options, ["Personal", "Critical", "Weird"]);
+  const refined = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId: first.optionSet.projectId,
+      sessionId: first.optionSet.sessionId,
+      optionSetId: first.optionSet.id,
+      selectedOptionIds: selected.map((option) => option.id),
+      userComment: "Keep the Google evidence private, useful, and explicit in the coding prompt.",
+      artifact: first.artifact,
+    },
+    headers,
+  );
+  const exportResponse = await handleExportCodingPromptRequest(
+    jsonRequest(
+      "http://localhost/api/create/export-coding-prompt",
+      {
+        artifact: refined.artifact,
+        verification: refined.verification,
+        judgmentEvent: refined.judgmentEvent,
+      },
+      headers,
+    ),
+    { service },
+  );
+  const exportPayload = await responsePayload(exportResponse);
+  const exported = exportPayload.data.export as PromptExport;
+  const connectorSourceId = syncPayload.data.state.sources[0]?.id ?? "";
+  const deleteResponse = await handleGoogleConnectorSourceDeleteRequest(
+    jsonRequest(
+      "http://localhost/api/connectors/google/source-delete",
+      {
+        sourceId: connectorSourceId,
+        now: "2026-05-20T12:10:00.000Z",
+      },
+      headers,
+    ),
+    { stateStore },
+  );
+  const deletePayload = await responsePayload(deleteResponse);
+  const afterDelete = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId: "google-create-project-after-delete",
+      sessionId: "google-create-session-after-delete",
+    },
+    headers,
+  );
+
+  assert.equal(syncResponse.status, 200);
+  assert.equal(syncPayload.data.importedSources.length, 1);
+  assert.ok(syncPayload.data.importedSources[0]?.memoryNodeCount >= 3);
+  assert.equal(syncPayload.data.state.connections[0]?.sourceCounts.google_doc, 1);
+  assert.equal(syncPayload.data.state.cursors[0]?.cursor, "drive-create-cursor-2");
+  assert.equal(syncPayload.data.state.sources[0]?.privacy.trainingUse, false);
+  assert.equal(syncPayload.data.state.sources[0]?.privacy.rawContentStored, false);
+  assert.equal(syncPayload.data.state.sources[0]?.privacy.retrievalAccess, "enabled");
+  assert.equal(syncPayload.data.state.sources[0]?.provenance.credentialRef, "nango:google:nango-google-create-1");
+  assert.equal(profileResponse.status, 200);
+  assert.equal(profile.sources[0]?.privacy.rawRetention, false);
+  assert.equal(profile.sources[0]?.privacy.trainingUse, false);
+  assert.equal(profile.sources[0]?.sourceUri, "google-drive:file:doc-create-1");
+  assert.ok(profile.profile.recentMeaningfulActivity.some((activity) => activity.kind === "source_synced" && activity.label === "Synced Google Create strategy doc"));
+  assert.equal(first.optionSet.nextBestMove.grounded, true);
+  assert.deepEqual(first.optionSet.options.map((option) => option.lens), ["Personal", "Practical", "Valuable", "Critical", "Weird"]);
+  assert.ok(first.optionSet.memoryUsed.some((memory) => /Google Drive strategy docs|source-backed memory/i.test(memory.summary)));
+  assert.ok(first.optionSet.sourcesUsed.some((source) => source.label === "Google Create strategy doc"));
+  assert.match(optionText(first, "Personal"), /Google Drive strategy docs|source-backed memory|visible evidence/i);
+  assert.match(optionText(first, "Critical"), /generic chatbot sidebar|fake Gmail claims|rejected/i);
+  assert.match(optionText(first, "Weird"), /Google Drive strategy docs|Create|source-backed/i);
+  assert.ok(first.optionSet.options.every((option) => option.memoryCount >= 1 && option.sourceCount >= 1));
+  assert.ok(first.optionSet.options.every((option) => option.grounding === "grounded"));
+  assert.ok(first.optionSet.options.every((option) => !/Context-light/i.test(option.rationale)));
+  assert.ok(refined.judgmentEvent);
+  assert.match(sectionBody(refined.artifact, "User intent"), /Google evidence private, useful, and explicit/i);
+  assert.equal(exportResponse.status, 200);
+  assert.match(exported.text, /## Rough User Idea/);
+  assert.match(exported.text, /## Selected Option History/);
+  assert.match(exported.text, /## Personal Context Used/);
+  assert.match(exported.text, /## Source \/ Memory Evidence/);
+  assert.match(exported.text, /Google Create strategy doc|Google Drive strategy docs|source-backed memory/i);
+  assert.match(exported.text, /## Privacy Constraints/);
+  assert.match(exported.text, /## Acceptance Tests/);
+  assert.match(exported.text, /## Definition of Done/);
+  assertNoFakePositiveClaims(exported.text);
+  assert.equal(deleteResponse.status, 200);
+  assert.equal(deletePayload.data.brainSourceDeleted, true);
+  assert.equal(deletePayload.data.state.sources[0]?.privacy.retrievalAccess, "deleted");
+  assert.equal(afterDelete.observability.memoryCountUsed, 0);
+  assert.ok(!afterDelete.optionSet.sourcesUsed.some((source) => source.label === "Google Create strategy doc"));
 });
 
 test("POST /api/create/next personalizes the same rough idea for different Brain profiles", async () => {
