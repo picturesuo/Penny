@@ -254,6 +254,95 @@ test("POST /api/create/next keeps Brain memory scoped and ignores deleted source
   assert.ok(!afterDelete.optionSet.sourcesUsed.some((source) => source.label === "Quartzline private notes"));
 });
 
+test("POST /api/create/next excludes wrong and forgotten Brain memories", async () => {
+  const rawIdea = "Build the ObsidianMoss Create planner from private Brain memory.";
+  const wrongHeaders = requestHeaders({
+    "x-user-id": "create-wrong-memory-user",
+    "x-workspace-id": "create-review-workspace",
+    "x-project-id": "create-review-project",
+    "x-sphere-id": "create-review-sphere",
+  });
+  const forgetHeaders = requestHeaders({
+    "x-user-id": "create-forgotten-memory-user",
+    "x-workspace-id": "create-review-workspace",
+    "x-project-id": "create-review-project",
+    "x-sphere-id": "create-review-sphere",
+  });
+  const wrongImport = await handleBrainImportRequest(
+    jsonRequest(
+      "http://localhost/api/brain/import",
+      {
+        kind: "text",
+        label: "ObsidianMoss wrong notes",
+        content:
+          "Project: ObsidianMoss should use a private source-backed Create planner. Preference: I prefer ObsidianMoss acceptance tests before polish.",
+      },
+      wrongHeaders,
+    ),
+  );
+  const forgetImport = await handleBrainImportRequest(
+    jsonRequest(
+      "http://localhost/api/brain/import",
+      {
+        kind: "text",
+        label: "ObsidianMoss forgotten notes",
+        content:
+          "Project: ObsidianMoss should use a private source-backed Create planner. Preference: I prefer ObsidianMoss acceptance tests before polish.",
+      },
+      forgetHeaders,
+    ),
+  );
+  const wrongProfile = (await responsePayload(wrongImport)).data.profile as BrainMemoryProfile;
+  const forgetProfile = (await responsePayload(forgetImport)).data.profile as BrainMemoryProfile;
+
+  assert.ok(wrongProfile.recentMemoryNodes.length >= 1);
+  assert.ok(forgetProfile.recentMemoryNodes.length >= 1);
+
+  for (const node of wrongProfile.recentMemoryNodes) {
+    const reviewResponse = await handleBrainMemoryReviewRequest(
+      jsonRequest(`http://localhost/api/brain/memories/${node.id}/review`, { action: "wrong" }, wrongHeaders),
+      node.id,
+    );
+
+    assert.equal(reviewResponse.status, 200);
+  }
+
+  for (const node of forgetProfile.recentMemoryNodes) {
+    const reviewResponse = await handleBrainMemoryReviewRequest(
+      jsonRequest(`http://localhost/api/brain/memories/${node.id}/review`, { action: "forget" }, forgetHeaders),
+      node.id,
+    );
+
+    assert.equal(reviewResponse.status, 200);
+  }
+
+  const afterWrong = await createNext(
+    createInMemoryCreateRouteService(),
+    {
+      rawIdea,
+      projectId: "create-wrong-memory-project",
+      sessionId: "create-wrong-memory-session",
+    },
+    wrongHeaders,
+  );
+  const afterForget = await createNext(
+    createInMemoryCreateRouteService(),
+    {
+      rawIdea,
+      projectId: "create-forgotten-memory-project",
+      sessionId: "create-forgotten-memory-session",
+    },
+    forgetHeaders,
+  );
+
+  assert.equal(afterWrong.observability.memoryCountUsed, 0);
+  assert.equal(afterWrong.optionSet.nextBestMove.grounded, false);
+  assert.ok(!afterWrong.optionSet.sourcesUsed.some((source) => source.label === "ObsidianMoss wrong notes"));
+  assert.equal(afterForget.observability.memoryCountUsed, 0);
+  assert.equal(afterForget.optionSet.nextBestMove.grounded, false);
+  assert.ok(!afterForget.optionSet.sourcesUsed.some((source) => source.label === "ObsidianMoss forgotten notes"));
+});
+
 test("POST /api/create/next scopes persisted Create artifacts, judgments, and option sets by user", async () => {
   const service = createInMemoryCreateRouteService();
   const rawIdea = "Build a private-alpha Create export flow with scoped artifacts.";
