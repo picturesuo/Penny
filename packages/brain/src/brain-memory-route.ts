@@ -153,7 +153,7 @@ export type BrainProfileIdeaCluster = {
 
 export type BrainProfileRecentActivity = {
   id: string;
-  kind: "source_imported" | "memory_extracted" | "memory_confirmed" | "memory_boosted";
+  kind: "source_imported" | "source_synced" | "memory_extracted" | "memory_confirmed" | "memory_boosted";
   label: string;
   summary: string;
   occurredAt: string;
@@ -1305,22 +1305,32 @@ async function recordMemoryImportDevelopmentEvents(
     occurredAt: string;
   },
 ): Promise<void> {
+  const sourceEventKind = isSyncedSourceImport(input.source) ? "source_synced" : "source_imported";
+  const sourceEventPayload: Record<string, unknown> = {
+    sourceId: input.source.id,
+    sourceKind: input.source.kind,
+    chunkCount: input.source.chunkCount,
+    memoryNodeCount: input.nodes.length,
+    rawRetention: input.source.privacy.rawRetention,
+  };
+
+  if (input.source.sourceUri) {
+    sourceEventPayload.sourceUri = input.source.sourceUri;
+  }
+
   await rankerRecorder.recordDevelopmentEvent({
     scope: input.scope,
-    kind: "source_imported",
-    explicitness: "explicit",
-    weight: 0.9,
+    kind: sourceEventKind,
+    explicitness: sourceEventKind === "source_synced" ? "implicit" : "explicit",
+    weight: sourceEventKind === "source_synced" ? 0.82 : 0.9,
     memoryNodeIds: input.nodes.map((node) => node.id),
     sourceReferenceIds: [input.source.id],
-    summary: `User imported ${input.source.label} into private Brain memory.`,
+    summary:
+      sourceEventKind === "source_synced"
+        ? `Brain synced ${input.source.label} into private Brain memory.`
+        : `User imported ${input.source.label} into private Brain memory.`,
     occurredAt: input.occurredAt,
-    payload: {
-      sourceId: input.source.id,
-      sourceKind: input.source.kind,
-      chunkCount: input.source.chunkCount,
-      memoryNodeCount: input.nodes.length,
-      rawRetention: input.source.privacy.rawRetention,
-    },
+    payload: sourceEventPayload,
   });
 
   for (const node of input.nodes) {
@@ -1372,6 +1382,18 @@ async function recordMemoryReviewDevelopmentEvent(
       evidenceLevel: input.memory?.evidenceLevel ?? null,
     },
   });
+}
+
+function isSyncedSourceImport(source: Pick<SourceImport, "sourceUri">): boolean {
+  const sourceUri = source.sourceUri?.trim().toLowerCase();
+
+  return Boolean(
+    sourceUri &&
+      (sourceUri.startsWith("google-") ||
+        sourceUri.startsWith("google:") ||
+        sourceUri.startsWith("chrome-") ||
+        sourceUri.startsWith("chrome:")),
+  );
 }
 
 function memoryReviewEventFor(action: MemoryReviewAction): Pick<RecordBrainDevelopmentEventInput, "kind" | "weight"> & {
@@ -2850,15 +2872,19 @@ function staleProfileMemories(usableNodes: MemoryNode[]): MemoryNode[] {
 }
 
 function recentMeaningfulActivity(store: ScopeMemoryStore, usableNodes: MemoryNode[]): BrainProfileRecentActivity[] {
-  const sourceActivities = [...store.sources.values()].map((source) => ({
-    id: stableId("brain-profile-activity", "source_imported", source.id, source.createdAt),
-    kind: "source_imported" as const,
-    label: `Imported ${source.label}`,
-    summary: `${source.memoryNodeCount} memory node(s) extracted from ${source.kind}.`,
-    occurredAt: source.createdAt,
-    sourceId: source.id,
-    memoryNodeIds: usableNodes.filter((node) => node.sourceId === source.id).map((node) => node.id).slice(0, 12),
-  }));
+  const sourceActivities = [...store.sources.values()].map((source) => {
+    const kind = isSyncedSourceImport(source) ? "source_synced" : "source_imported";
+
+    return {
+      id: stableId("brain-profile-activity", kind, source.id, source.createdAt),
+      kind,
+      label: `${kind === "source_synced" ? "Synced" : "Imported"} ${source.label}`,
+      summary: `${source.memoryNodeCount} memory node(s) extracted from ${source.kind}.`,
+      occurredAt: source.createdAt,
+      sourceId: source.id,
+      memoryNodeIds: usableNodes.filter((node) => node.sourceId === source.id).map((node) => node.id).slice(0, 12),
+    };
+  });
   const memoryActivities: BrainProfileRecentActivity[] = usableNodes.map((node) => {
     const kind: BrainProfileRecentActivity["kind"] = node.evidenceLevel === "user_confirmed"
       ? "memory_confirmed"
