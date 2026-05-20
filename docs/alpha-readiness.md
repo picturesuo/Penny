@@ -93,9 +93,9 @@ pnpm typecheck
 pnpm build
 ```
 
-The Brain memory tables store scope columns on sources, chunks, nodes, edges, profile signals, ingestion jobs, and retrieval events. Route tests cover cross-user access attempts for jobs, profiles, retrieval, memory review, source deletion, Create memory retrieval, Create artifacts, judgments, option sets, and deleted-source Create behavior.
+The Brain memory tables store scope columns on sources, chunks, nodes, edges, profile signals, ingestion jobs, and retrieval events. Brain Ranker persistence adds scoped `brain_ranker_runs`, `brain_ranked_candidates`, and `brain_development_events` for Create ranker output and learning events. Route tests cover cross-user access attempts for jobs, profiles, retrieval, memory review, source deletion, Create memory retrieval, Create artifacts, judgments, option sets, and deleted-source Create behavior.
 
-Create uses the backend Brain Ranker progress engine. The ranker accepts retrieved Brain memory and source refs, privately scores relevance/progress dimensions, and returns one next-best move plus five ranked Create candidates. Normal user surfaces show memory/source counts, top reasons, grounding labels, and uncertainty; raw ranker scores are not shown. Context-light runs are labeled `context-light/search-needed/inferred` instead of inventing memory.
+Create uses the backend Brain Ranker progress engine. The ranker accepts retrieved Brain memory and source refs, privately scores relevance/progress dimensions, and returns one next-best move plus five ranked Create candidates. Normal user surfaces show memory/source counts, top reasons, grounding labels, and uncertainty; raw ranker scores are not shown. Context-light runs are labeled `context-light/search-needed/inferred` instead of inventing memory. Brain profile now surfaces active projects, idea clusters, high-value memories, stale/superseded memories, and recent meaningful activity alongside recurring interests, taste, build style, frustrations, and rejected directions.
 
 ## Privacy Checks
 
@@ -103,6 +103,7 @@ Create uses the backend Brain Ranker progress engine. The ranker accepts retriev
 - Source permissions default to `visibility=private`, `trainingUse=false`, and allowed uses `private_memory` plus `create_retrieval`.
 - Retrieval returns source references and memory references so the user can see why a memory was used.
 - Brain Ranker reasons cite only supplied or retrieved memory/source refs.
+- Development events record source imports, memory extraction/review, memory used in Create, option selection/rejection, prompt exports, export feedback, and direction changes; explicit user actions weigh above implicit extraction or use.
 - Deleting a source removes related chunks, memory nodes, edges, and Create retrieval grounding.
 - Create must not invent Gmail, Slack, messages, OAuth, hidden memory, global training, or fake source claims.
 - Exported prompts must repeat the source/memory evidence actually used and must not imply broader ingestion.
