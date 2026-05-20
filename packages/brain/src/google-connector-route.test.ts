@@ -5,8 +5,10 @@ import {
   handleGoogleConnectorConnectSessionRequest,
   handleGoogleConnectorProviderRequest,
   handleGoogleConnectorRevokeRequest,
+  handleGoogleConnectorSyncCompleteRequest,
   handleGoogleConnectorSyncNowRequest,
 } from "./google-connector-route.ts";
+import { createInMemoryBrainMemoryService } from "./brain-memory-route.ts";
 import { initializeGoogleConnectorConnection } from "./google-connector.ts";
 import type { ConnectorCredentialRef, NangoAdapter, NangoConnectSessionInput, NangoStartSyncInput } from "./google-connector.ts";
 import { createInMemoryGoogleConnectorStateStore } from "./google-connector-state-store.ts";
@@ -364,6 +366,115 @@ test("POST /api/connectors/google/revoke marks persisted connection revoked", as
   assert.equal(payload.data.revoked, true);
   assert.equal(payload.data.state.connections[0]?.status, "revoked");
   assert.equal(payload.data.state.connections[0]?.nextSyncAt, null);
+});
+
+test("POST /api/connectors/google/sync-complete imports Google records into private Brain memory", async () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const state = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-1",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-1",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_drive"],
+    scopes: ["https://www.googleapis.com/auth/drive.file"],
+    now: "2026-05-20T12:00:00.000Z",
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore(state);
+  const brainMemoryService = createInMemoryBrainMemoryService();
+  const response = await handleGoogleConnectorSyncCompleteRequest(
+    new Request("http://localhost/api/connectors/google/sync-complete", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        connectionId: "nango-google-1",
+        providerConfigKey: "google",
+        jobId: state.syncJobs[0]?.id,
+        surface: "google_drive",
+        cursor: "drive-cursor-2",
+        nextSyncAt: "2026-05-20T18:05:00.000Z",
+        now: "2026-05-20T12:05:00.000Z",
+        sources: [
+          {
+            surface: "google_drive",
+            kind: "google_doc",
+            externalId: "doc-1",
+            sourceUri: "google-drive:file:doc-1",
+            label: "Strategy doc",
+            url: "https://docs.google.com/document/d/doc-1",
+            content:
+              "Project: Penny should use selected Google Docs as private source-backed memory. Preference: keep connector claims honest and provenance visible.",
+          },
+        ],
+      }),
+    }),
+    { stateStore, brainMemoryService },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      importedSources: Array<{ brainSourceId: string; memoryNodeCount: number }>;
+      state: {
+        connections: Array<{ lastSyncedAt: string | null; sourceCounts: Record<string, number> }>;
+        sources: Array<{ brainSourceId: string | null; brainNodeIds: string[]; privacy: { retrievalAccess: string } }>;
+      };
+    };
+  };
+  const profile = await brainMemoryService.getProfile(
+    new Request("http://localhost/api/brain/memory/profile", {
+      headers: {
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.importedSources.length, 1);
+  assert.equal(payload.data.state.connections[0]?.lastSyncedAt, "2026-05-20T12:05:00.000Z");
+  assert.equal(payload.data.state.connections[0]?.sourceCounts.google_doc, 1);
+  assert.equal(payload.data.state.sources[0]?.brainSourceId, payload.data.importedSources[0]?.brainSourceId);
+  assert.equal(payload.data.state.sources[0]?.privacy.retrievalAccess, "enabled");
+  assert.equal(profile.sources.some((source) => source.sourceUri === "google-drive:file:doc-1"), true);
+});
+
+test("POST /api/connectors/google/sync-complete rejects source refs without content", async () => {
+  const response = await handleGoogleConnectorSyncCompleteRequest(
+    new Request("http://localhost/api/connectors/google/sync-complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        connectionId: "nango-google-1",
+        providerConfigKey: "google",
+        jobId: "sync-1",
+        surface: "google_drive",
+        nextSyncAt: "2026-05-20T18:05:00.000Z",
+        sources: [
+          {
+            surface: "google_drive",
+            kind: "google_doc",
+            externalId: "doc-1",
+            sourceUri: "google-drive:file:doc-1",
+            label: "Strategy doc",
+            content: "",
+          },
+        ],
+      }),
+    }),
+    { stateStore: createInMemoryGoogleConnectorStateStore(), brainMemoryService: createInMemoryBrainMemoryService() },
+  );
+  const payload = (await response.json()) as { error: { code: string; message: string } };
+
+  assert.equal(response.status, 400);
+  assert.equal(payload.error.code, "invalid_request");
+  assert.match(payload.error.message, /content/i);
 });
 
 function fakeAdapter(overrides: Partial<NangoAdapter>): NangoAdapter {

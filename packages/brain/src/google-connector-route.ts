@@ -1,5 +1,11 @@
 import {
+  defaultBrainMemoryService,
+  type BrainMemoryRouteService,
+} from "./brain-memory-route.ts";
+import {
   buildGoogleConnectorProvider,
+  completeGoogleConnectorSync,
+  connectorSourceToBrainImport,
   createNangoAdapter,
   googleScopeRegistry,
   initializeGoogleConnectorConnection,
@@ -9,7 +15,9 @@ import {
   type ConnectorAdapterResult,
   type ConnectorConnection,
   type ConnectorStateScope,
+  type ConnectorSource,
   type GoogleConnectorState,
+  type GoogleConnectorSourceDraft,
   type GoogleSurfaceId,
   type NangoAdapter,
   type NangoCallbackInput,
@@ -29,6 +37,7 @@ export type GoogleConnectorRouteOptions = {
   env?: Record<string, string | undefined>;
   adapter?: NangoAdapter;
   stateStore?: GoogleConnectorStateStore;
+  brainMemoryService?: BrainMemoryRouteService;
 };
 
 export type GoogleConnectSessionRequestBody = Partial<NangoConnectSessionInput>;
@@ -49,6 +58,19 @@ export type GoogleConnectorSyncRequestBody = Partial<NangoStartSyncInput> & {
 };
 
 export type GoogleConnectorSyncStatusRequestBody = Partial<NangoSyncStatusInput>;
+
+export type GoogleConnectorSyncCompleteSourceInput = GoogleConnectorSourceDraft & {
+  content: string;
+};
+
+export type GoogleConnectorSyncCompleteRequestBody = Partial<NangoConnectionInput> & {
+  jobId?: string;
+  surface?: GoogleSurfaceId;
+  cursor?: string | null;
+  nextSyncAt?: string;
+  now?: string;
+  sources?: GoogleConnectorSyncCompleteSourceInput[];
+};
 
 const defaultGoogleSyncNames = ["google-drive-files", "google-calendar-events"] as const;
 
@@ -377,6 +399,113 @@ export async function handleGoogleConnectorSyncStatusRequest(
   );
 }
 
+export async function handleGoogleConnectorSyncCompleteRequest(
+  request: Request,
+  options: GoogleConnectorRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/connectors/google/sync-complete requires the POST method.", "POST");
+  }
+
+  const body = await readJsonBody<GoogleConnectorSyncCompleteRequestBody>(request);
+
+  if (!body.ok) {
+    return invalidJson(body.message);
+  }
+
+  const input = connectionInput(body.value);
+
+  if (!input.ok) {
+    return input.response;
+  }
+
+  if (!body.value.jobId || !body.value.surface || !isGoogleSurfaceId(body.value.surface) || !body.value.nextSyncAt) {
+    return invalidRequest("Google connector sync completion requires jobId, surface, and nextSyncAt.", [
+      "jobId",
+      "surface",
+      "nextSyncAt",
+    ]);
+  }
+
+  const sourceInputs = body.value.sources ?? [];
+
+  if (!Array.isArray(sourceInputs)) {
+    return invalidRequest("Google connector sync completion sources must be an array.", ["sources"]);
+  }
+
+  for (const source of sourceInputs) {
+    if (!source.content?.trim()) {
+      return invalidRequest("Google connector sync completion sources require content for Brain import.", ["sources.content"]);
+    }
+  }
+
+  const scope = scopeFromRequest(request);
+  const currentState = await loadGoogleConnectorState(options, scope);
+  const connection = findRouteConnection(currentState, input.value.connectionId);
+
+  if (!connection) {
+    return jsonResponse(
+      { error: { code: "connector_connection_not_found", message: "No Google connector connection matched this scope." } },
+      404,
+    );
+  }
+
+  const now = body.value.now ?? new Date().toISOString();
+  const importedSources = await Promise.all(
+    sourceInputs.map(async (source) => {
+      const importResult = await resolveBrainMemoryService(options).importSource(
+        connectorSourceToBrainImport(
+          pendingConnectorSource({
+            connection,
+            source,
+            now,
+            cursor: body.value.cursor ?? null,
+          }),
+          source.content,
+        ),
+        request,
+      );
+
+      return {
+        source: {
+          ...source,
+          brainSourceId: importResult.job.sourceId,
+          brainNodeIds: importResult.profile.recentMemoryNodes
+            .filter((node) => node.sourceId === importResult.job.sourceId)
+            .map((node) => node.id),
+        },
+        brainSourceId: importResult.job.sourceId,
+        memoryNodeCount: importResult.job.counts.memoryNodes,
+      };
+    }),
+  );
+  const nextState = completeGoogleConnectorSync({
+    state: currentState,
+    scope,
+    connectionId: connection.id,
+    jobId: body.value.jobId,
+    surface: body.value.surface,
+    now,
+    cursor: body.value.cursor ?? null,
+    nextSyncAt: body.value.nextSyncAt,
+    sources: importedSources.map((result) => result.source),
+  });
+  const state = await saveGoogleConnectorState(options, scope, nextState);
+
+  return jsonResponse(
+    {
+      data: {
+        importedSources: importedSources.map((result) => ({
+          brainSourceId: result.brainSourceId,
+          memoryNodeCount: result.memoryNodeCount,
+        })),
+        state,
+      },
+    },
+    200,
+  );
+}
+
 export async function handleGoogleConnectorRefreshRequest(
   request: Request,
   options: GoogleConnectorRouteOptions = {},
@@ -452,6 +581,10 @@ function resolveAdapter(options: GoogleConnectorRouteOptions): NangoAdapter {
   return options.adapter ?? createNangoAdapter(readGoogleConnectorRuntimeConfig(options.env));
 }
 
+function resolveBrainMemoryService(options: GoogleConnectorRouteOptions): BrainMemoryRouteService {
+  return options.brainMemoryService ?? defaultBrainMemoryService;
+}
+
 async function loadGoogleConnectorState(
   options: GoogleConnectorRouteOptions,
   scope: ConnectorStateScope,
@@ -479,6 +612,42 @@ function findRouteConnection(state: GoogleConnectorState, connectionId: string):
       (connection) => connection.id === connectionId || connection.credential.connectionId === connectionId,
     ) ?? null
   );
+}
+
+function pendingConnectorSource(input: {
+  connection: ConnectorConnection;
+  source: GoogleConnectorSyncCompleteSourceInput;
+  now: string;
+  cursor: string | null;
+}): ConnectorSource {
+  return {
+    id: `pending:${input.connection.id}:${input.source.sourceUri}`,
+    connectionId: input.connection.id,
+    providerId: "google",
+    surface: input.source.surface,
+    kind: input.source.kind,
+    sourceUri: input.source.sourceUri,
+    label: input.source.label,
+    metadata: input.source.metadata ?? {},
+    sourceRef: {
+      providerId: "google",
+      surface: input.source.surface,
+      externalId: input.source.externalId,
+      url: input.source.url ?? null,
+    },
+    provenance: {
+      credentialRef: input.connection.credential.credentialRef,
+      fetchedAt: input.now,
+      cursor: input.cursor ?? input.source.cursor ?? null,
+    },
+    privacy: {
+      trainingUse: false,
+      visibility: "private_user_memory",
+      rawContentStored: false,
+      productionLogSafe: false,
+      retrievalAccess: "enabled",
+    },
+  };
 }
 
 function scopeFromRequest(request: Request): ConnectorStateScope {
