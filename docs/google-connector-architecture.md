@@ -8,6 +8,9 @@ Penny's connector foundation starts with Google and stays separate from Brain ra
 - Docs, Sheets, and Slides through selected Drive files/export where feasible.
 - Calendar read-only sync for deadlines, cadence, and collaborator context.
 - Nango-style connection, credential, revoke, refresh, sync trigger, and sync-status adapter seam.
+- Scoped connector persistence for connections, sync cursors, sync runs, source refs, and permission audits.
+- Sync completion into private Brain imports for connector-provided Drive/Docs/Calendar records.
+- Connector source deletion that removes retrieval access and deletes the linked Brain source when present.
 - Manual import guidance statuses for Google Takeout and My Activity.
 - Chrome extension-required status for browser/search history.
 
@@ -66,7 +69,7 @@ After consent, Penny should create:
 - `ConnectorSyncCursor` per surface/model so resync is incremental.
 - `lastSyncedAt`, `nextSyncAt`, error, and revoked state.
 
-If push/webhooks are not ready, scheduled sync is the default. `Sync now` triggers a one-off Nango sync and updates the local sync job/cursor after records are processed.
+If push/webhooks are not ready, scheduled sync is the default. `Sync now` triggers a one-off Nango sync and updates local sync runs to `running`. The `sync-complete` seam accepts explicit connector records plus content from Nango/Google fetch workers, imports them into Brain with `rawRetention=false`, and then stores connector source refs with Brain source IDs and memory node IDs.
 
 ## Privacy Model
 
@@ -88,12 +91,16 @@ Current committed foundation:
 - Contracts and statuses: `ConnectorProvider`, `ConnectorConnection`, `ConnectorSurface`, `ConnectorScope`, `ConnectorCredentialRef`, `ConnectorSyncJob`, `ConnectorSyncCursor`, `ConnectorSource`, `ConnectorPermissionAudit`, `ConnectorError`, `ConnectorEvent`, `BrainSourceKind`.
 - Google surface registry with honest states for Drive, Docs/Sheets/Slides, Calendar, Gmail, YouTube, Takeout, My Activity, and Chrome extension history.
 - Nango adapter seam and config validation.
-- Focused tests for config, statuses, scope gating, Gmail production blocking, and Nango connect sessions.
+- Database migration/schema for connector connections, cursors, sync runs, source refs, and permission audits.
+- In-memory and DB-backed connector state store, with production requiring `DATABASE_URL`.
+- API routes for provider overview, connect session, callback, connections, credentials, sync now, sync complete, sync status, refresh, revoke, and source delete.
+- Brain Control Center UI for Google connection state, connected surfaces, scopes, sync status, last/next sync, source counts, Sync now, Revoke, Delete source, gated Gmail, and extension-required browser/search state.
+- Sync completion imports Google connector records into private Brain source nodes/chunks/memory notes/source refs and links connector source refs to Brain source IDs.
+- Focused tests for config, statuses, scope gating, Gmail production blocking, Nango connect sessions, route persistence, sync lifecycle, source deletion, and cross-user scoped connector state.
 
 Remaining integration work:
 
-- Persist the new connector contracts in database tables/migrations.
-- Add API routes for provider overview, connect session, callback, sync now, revoke, delete source, and sync status.
-- Wire Brain Control Center UI to the new Google states.
-- Convert Nango records/Google fetches into private Brain source nodes, chunks, memory notes, source refs, and profile signals.
-- Add cross-user leakage, revoke/delete, sync lifecycle, and Brain/Create/Learn regression tests.
+- Implement the actual background fetch worker/Nango record reader that calls `sync-complete` after Nango syncs finish.
+- Add production OAuth callback hardening and signed callback state validation before public demo use.
+- Add push/webhook handling when Nango/Google push paths are ready; keep scheduled sync as the fallback.
+- Broaden full Brain/Create/Learn regression coverage around connector-imported memory once the worker is live.
