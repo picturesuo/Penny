@@ -5,7 +5,7 @@ Seed idea: `Penny is the most consistently efficient way to evoke creativity and
 
 ## Goal
 
-Show one reliable loop: Learn structures a raw idea, Autopilot recommends the next move, the user can Check or Verify, the result can be saved to Brain, Canvas shows the structure, and related Brain context can be found again.
+Show one reliable loop: Learn structures a raw idea, Autopilot recommends the next move, the user can use Create to challenge or verify it, the result can be saved to Brain, Canvas shows the structure, and related Brain context can be found again.
 
 ## Demo Script
 
@@ -20,9 +20,9 @@ Show one reliable loop: Learn structures a raw idea, Autopilot recommends the ne
    - questions
    - Learn concepts such as `source-grounded thinking` and `structured creativity`
 5. Point out Autopilot's next move.
-   Expected: Check or Verify should be the highest-leverage next action because the seed contains a load-bearing creativity mechanism and a source-grounding claim.
-6. Click `Check` or `Verify`.
-   Expected: the app moves into the Check surface or Verify panel without losing the session.
+   Expected: a Create challenge or Verify move should be the highest-leverage next action because the seed contains a load-bearing creativity mechanism and a source-grounding claim.
+6. Click the Create or Verify recommendation.
+   Expected: the app moves into the Create surface or Verify panel without losing the session.
 7. Save the Learn output to Brain.
    Expected: Brain stores a saved object tied to the session.
 8. Open Brain.
@@ -35,7 +35,7 @@ Show one reliable loop: Learn structures a raw idea, Autopilot recommends the ne
 
 ## What To Say
 
-- Penny is not a chatbot. The visible product is the thinking structure: Learn, Check, Brain, and Canvas over the same state.
+- Penny is not a chatbot. The visible product is the thinking structure: Learn, Create, Brain, and Canvas over the same state.
 - The first win is not prose. It is converting an ambitious claim into claims, assumptions, questions, a next move, and durable Brain context.
 - Autopilot is useful when it chooses the next thinking action, not merely the next graph node.
 - Brain is the durable store. Canvas and Learn are projections over Brain-owned objects.
@@ -45,7 +45,7 @@ Show one reliable loop: Learn structures a raw idea, Autopilot recommends the ne
 
 - `Learn` is the first top-level mode.
 - The exact demo seed produces useful structured output without live AI credentials through the heuristic fallback.
-- Autopilot recommends Check or Verify for the demo seed's fragile mechanism/source-grounding claim.
+- Autopilot recommends a Create challenge or Verify move for the demo seed's fragile mechanism/source-grounding claim.
 - Save to Brain creates a saved object.
 - Canvas exposes claim/source/Brain-object/next-move structure.
 - Brain search can find related saved context.
