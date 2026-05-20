@@ -166,6 +166,9 @@ export type RetrievalResult = {
   summary: string;
   excerpt: string;
   score: number;
+  confidence: number;
+  evidenceLevel: MemoryEvidenceLevel;
+  lastSeenAt: string;
   memoryRef: {
     id: string;
     label: string;
@@ -2474,6 +2477,9 @@ function retrievalResultFromNode(node: MemoryNode, source: SourceImport, chunk: 
     summary: node.summary,
     excerpt: excerptAround(chunk.text, node.text),
     score,
+    confidence: node.confidence,
+    evidenceLevel: node.evidenceLevel,
+    lastSeenAt: node.lastSeenAt,
     memoryRef: {
       id: node.id,
       label: `${startCase(node.type)}: ${node.title}`,
