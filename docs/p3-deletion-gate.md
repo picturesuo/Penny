@@ -10,8 +10,8 @@ Date: 2026-05-01
 | --- | --- | --- | --- |
 | Visible Search placeholder | DELETE NOW | Top-level `Search` is already absent from `navItems`; search now exists as Brain/Learn/Verify capability through `/api/brain/search` and related panels. | Remove only leftover top-level Search placeholder code or copy. Do not remove `BrainWorkspace` Research, Learn related Brain search, Verify search trace, or `/api/brain/search`. |
 | Visible Settings placeholder | DELETE NOW | Top-level `Settings` is already absent from `navItems` and has no MVP route contract. | Remove only leftover visible Settings placeholder code/copy if found. Do not add a replacement settings surface in P3. |
-| Old Cents naming | RESOLVED | `InsightRail` is no longer part of the active frontend import graph, and the visible MVP modes are Brain, Check, and Learn. | Keep future copy on Learn terminology; do not reintroduce a Cents panel. |
-| Unused challenge props | RESOLVED | `CheckWorkspace` no longer renders `InsightRail`, and its unused frontend-only props were removed after `pnpm typecheck` and focused frontend tests. | Do not touch backend challenge contracts when doing future frontend-only prop cleanup. |
+| Old Cents naming | RESOLVED | `InsightRail` is no longer part of the active frontend import graph, and the visible MVP modes are Brain, Create, and Learn. | Keep future copy on Learn terminology; do not reintroduce a Cents panel. |
+| Unused challenge props | RESOLVED | `CreateWorkspace` no longer renders `InsightRail`, and its unused frontend-only props were removed after `pnpm typecheck` and focused frontend tests. | Do not touch backend challenge contracts when doing future frontend-only prop cleanup. |
 | Unused autopilot props | KEEP | `autopilotSuggestion`, candidates, focused claim, Go There, and mode routing are still product-critical. | Keep Autopilot props unless a local component proves a prop is unused by TypeScript and tests. |
 | Duplicate cockpit refresh | KEEP | `runAutopilotGoThere` already has a regression test proving exactly one cockpit refresh after Go There. Other refreshes occur after distinct writes: seed, issue challenge, challenge response, brief, verify, manual focus. | Do not remove refreshes without a focused test proving the same state is updated after the write. |
 | Legacy `/autopilot` aliases | DEPRECATE ONLY | They are compatibility-only and not the active demo path, but existing tests still cover them. | Keep until active clients and smoke scripts are confirmed off them; then delete `autopilot-route.ts`, its server registrations, and compatibility tests in one PR. |
@@ -38,6 +38,6 @@ Protect these routes during P3 cleanup:
 ## Terminal Instructions
 
 - Terminal 1: do not remove backend route registrations unless `packages/brain/src/p3-route-preservation.test.ts` is updated with the replacement route and all affected route tests pass.
-- Terminal 2: safe frontend-only deletions are limited to top-level Search/Settings placeholder remnants and provably unused props. Keep Learn, Brain, Check, Brain search, Verify search trace, and Autopilot Go There intact.
+- Terminal 2: safe frontend-only deletions are limited to top-level Search/Settings placeholder remnants and provably unused props. Keep Learn, Brain, Create, Brain search, Verify search trace, and Autopilot Go There intact.
 - Terminal 3: keep canvas and Brain search routes stable while removing visual placeholders. Do not replace backend-owned graph/canvas/search state with frontend mock data.
 - Terminal 4: rerun route preservation, focused route tests, frontend tests, `pnpm typecheck`, and `pnpm test` before approving deletion merges.
