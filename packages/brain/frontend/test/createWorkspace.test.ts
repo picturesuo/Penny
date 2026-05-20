@@ -4,12 +4,14 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildCreateNextInput,
+  CreateArtifactPanel,
   CreateBrainOnboardingPanel,
   CreateComparisonPanel,
   CreateExportFeedbackPanel,
   CreateOptionBoard,
   CreateOptionDetailsDrawer,
   CreateProviderStatusPanel,
+  CreateVerificationPanel,
   isCreateComparisonDevMode,
 } from "../src/components/CreateWorkspace";
 import type { BrainMemoryProfileData, CandidateOption, CreateProviderComparisonResponse } from "../src/types/brain";
@@ -154,6 +156,105 @@ test("CreateExportFeedbackPanel renders rating, reason, and save controls", () =
   assert.match(markup, /Too generic/);
   assert.match(markup, /Missing constraints/);
   assert.match(markup, /Save feedback/);
+  assert.match(markup, /Feedback saved/);
+});
+
+test("Create UI smoke covers Brain state, five options, evidence, verification, and export feedback", () => {
+  const options = (["Personal", "Practical", "Valuable", "Critical", "Weird"] satisfies CandidateOption["lens"][]).map(optionForLens);
+  const artifact = createComparisonArm("deterministic", options).artifact;
+  const promptExport = createComparisonArm("deterministic", options).promptExport;
+  const markup = renderToStaticMarkup(
+    createElement("div", null, [
+      createElement(CreateBrainOnboardingPanel, { key: "brain", profile: brainProfile() }),
+      createElement(CreateOptionBoard, {
+        key: "board",
+        options,
+        nextBestMove: nextBestMove(),
+        selectedOptionIds: ["create-option-personal", "create-option-critical"],
+        busy: false,
+        onToggleOption: () => undefined,
+      }),
+      createElement(CreateOptionDetailsDrawer, {
+        key: "drawer",
+        option: optionForLens("Personal"),
+        onClose: () => undefined,
+      }),
+      createElement(CreateArtifactPanel, {
+        key: "artifact",
+        artifact: {
+          ...artifact,
+          sections: [
+            {
+              id: "artifact-section-final",
+              title: "Final coding-agent prompt",
+              body: "## Source / Memory Evidence\nFounder workflow notes\n## Acceptance Tests\nThe export preserves memory evidence.",
+              status: "updated",
+            },
+          ],
+        },
+      }),
+      createElement(CreateVerificationPanel, {
+        key: "verification",
+        verification: {
+          id: "verification-1",
+          artifactId: artifact.id,
+          createdAt: "2026-05-20T12:00:00.000Z",
+          verdict: "ready",
+          scores: {
+            intentMatch: 90,
+            personalMemoryGrounding: 88,
+            buildability: 86,
+            nonGenericness: 91,
+            userAutonomyPreserved: 95,
+            fakeClaimRisk: 96,
+            promptCompleteness: 100,
+          },
+          checks: [
+            {
+              key: "personal_memory_grounding",
+              label: "Personal memory grounding",
+              status: "pass",
+              score: 88,
+              summary: "Memory/source evidence is visible on the selected options and prompt artifact.",
+            },
+          ],
+          missingInfo: [],
+          risks: [],
+        },
+      }),
+      createElement(CreateExportFeedbackPanel, {
+        key: "feedback",
+        artifact,
+        promptExport,
+        busy: false,
+        rating: "useful",
+        reasons: ["ready_to_ship"],
+        comment: "The export includes the selected evidence.",
+        status: "Feedback saved",
+        onRatingChange: () => undefined,
+        onReasonToggle: () => undefined,
+        onCommentChange: () => undefined,
+        onSubmit: () => undefined,
+      }),
+    ]),
+  );
+
+  assert.match(markup, /Using your Brain/);
+  assert.match(markup, /Next-best move/);
+  assert.match(markup, /Personal/);
+  assert.match(markup, /Practical/);
+  assert.match(markup, /Valuable/);
+  assert.match(markup, /Critical/);
+  assert.match(markup, /Weird/);
+  assert.match(markup, /Memories used/);
+  assert.match(markup, /Sources used/);
+  assert.match(markup, /Grounded/);
+  assert.match(markup, /Inferred/);
+  assert.match(markup, /Final coding-agent prompt/);
+  assert.match(markup, /Source \/ Memory Evidence/);
+  assert.match(markup, /Verification/);
+  assert.match(markup, /Personal memory grounding/);
+  assert.match(markup, /Export feedback/);
   assert.match(markup, /Feedback saved/);
 });
 
@@ -314,6 +415,26 @@ function contextLightOption(): CandidateOption {
         excerpt: "Build memory-grounded Create.",
       },
     ],
+  };
+}
+
+function optionForLens(lens: CandidateOption["lens"]): CandidateOption {
+  const base = memoryGroundedOption();
+
+  return {
+    ...base,
+    id: `create-option-${lens.toLowerCase()}`,
+    lens,
+    title: `${lens}: source-backed Create direction`,
+    oneLine: `${lens} option grounded in private Brain memory and source evidence.`,
+    topReason:
+      lens === "Critical"
+        ? "This catches genericness or rejected-direction risk: avoid generic chatbot sidebars."
+        : base.topReason,
+    rationale:
+      lens === "Weird"
+        ? "Expand the idea through a distinctive source-backed angle without ignoring the Create export intent."
+        : base.rationale,
   };
 }
 
