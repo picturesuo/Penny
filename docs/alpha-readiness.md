@@ -19,8 +19,10 @@ This is the current private-alpha operating checklist for Penny's Brain -> Creat
 4. Start Create from Brain with `Use this Brain to create something`.
 5. Generate Create directions:
    - Confirm five cards exist: Personal, Practical, Valuable, Critical, Weird.
+   - Confirm one Brain Ranker next-best move appears above the cards.
    - Check memory/source counts on cards.
-   - Open details to see why memories/sources were used.
+   - Confirm each card shows a plain-language top reason and grounding label.
+   - Open details to see why memories/sources were used and what is uncertain.
 6. In dev/test only, run provider comparison:
    - Compare deterministic vs model-backed/fallback cards.
    - Inspect provider mode, schema validation, fallback reason, memory/source counts, verification scores, and prompt quality signals.
@@ -93,11 +95,14 @@ pnpm build
 
 The Brain memory tables store scope columns on sources, chunks, nodes, edges, profile signals, ingestion jobs, and retrieval events. Route tests cover cross-user access attempts for jobs, profiles, retrieval, memory review, source deletion, Create memory retrieval, Create artifacts, judgments, option sets, and deleted-source Create behavior.
 
+Create uses the backend Brain Ranker progress engine. The ranker accepts retrieved Brain memory and source refs, privately scores relevance/progress dimensions, and returns one next-best move plus five ranked Create candidates. Normal user surfaces show memory/source counts, top reasons, grounding labels, and uncertainty; raw ranker scores are not shown. Context-light runs are labeled `context-light/search-needed/inferred` instead of inventing memory.
+
 ## Privacy Checks
 
 - Imported sources are private to the authenticated Penny scope.
 - Source permissions default to `visibility=private`, `trainingUse=false`, and allowed uses `private_memory` plus `create_retrieval`.
 - Retrieval returns source references and memory references so the user can see why a memory was used.
+- Brain Ranker reasons cite only supplied or retrieved memory/source refs.
 - Deleting a source removes related chunks, memory nodes, edges, and Create retrieval grounding.
 - Create must not invent Gmail, Slack, messages, OAuth, hidden memory, global training, or fake source claims.
 - Exported prompts must repeat the source/memory evidence actually used and must not imply broader ingestion.

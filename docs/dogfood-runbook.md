@@ -56,11 +56,12 @@ Strict startup validation should fail fast if private-alpha auth, CORS, rate lim
 4. Review at least two memories: mark one correct or boost it, and mark one wrong or forget it if appropriate.
 5. Start Create from Brain.
 6. Generate the five Create directions.
-7. Open one direction detail and confirm the memory/source evidence matches imported context.
-8. Select two directions, add a judgment comment, and update the artifact.
-9. Export the coding-agent prompt.
-10. Save export feedback as Useful or Not useful with at least one reason tag.
-11. Confirm logs contain `brain.import`, `brain.retrieve`, `create.generate`, and `create.prompt_export` events without raw private text.
+7. Confirm the Brain Ranker next-best move is visible and does not include raw scores.
+8. Open one direction detail and confirm the memory/source evidence, top reason, grounding label, and uncertainty match imported context.
+9. Select two directions, add a judgment comment, and update the artifact.
+10. Export the coding-agent prompt.
+11. Save export feedback as Useful or Not useful with at least one reason tag.
+12. Confirm logs contain `brain.import`, `brain.retrieve`, `create.generate`, and `create.prompt_export` events without raw private text.
 
 ## Import Limits
 
@@ -81,6 +82,7 @@ Stop the run and record the issue if:
 - Startup validation can be bypassed in private-alpha mode.
 - Any log includes imported source text, retrieval query text, prompt text, token values, comments, or excerpts.
 - Create claims hidden Gmail/Slack/messages/OAuth/global training access.
+- Brain Ranker shows raw score dimensions to normal users.
 - A deleted source still appears in Create grounding.
 - Export feedback is not persisted or is visible across scopes.
 - `pnpm test`, `pnpm typecheck`, or `pnpm build` fails after the run.

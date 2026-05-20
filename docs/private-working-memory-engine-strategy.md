@@ -277,6 +277,51 @@ Retrieve across strata:
 
 Retrieval should return the smallest useful set of shards, source digests, evidence pointers, and graph neighbors for the current work.
 
+## Brain Ranker And Progress Engine
+
+Brain retrieval is not enough by itself. Create should call a backend Brain Ranker that turns retrieved memory into forward motion for the current task.
+
+The current backend ranker works over these model concepts:
+
+| Concept | Meaning |
+| --- | --- |
+| `SourceNode` / `SourceChunk` / `SourceReference` | Bounded provenance for imported or rough-idea context. |
+| `MemoryNote` / `MemoryNode` / `MemoryEdge` | Durable private memory, its class, confidence, source refs, and relationships. |
+| `ProfileSignal` | Recurring interest, active project, taste signal, frustration, build style, or rejected direction. |
+| `BrainCluster` | Same-topic memory group where newer or stronger notes can supersede older notes. |
+| `BrainDevelopmentEvent` | Append-only learning/use event such as memory used in Create, option selected/rejected, prompt exported, feedback, or direction changed. |
+| `BrainRankedCandidate` | A public ranked Create candidate with memory/source counts, plain-language reasons, grounding label, and uncertainty. |
+| `NextBestMove` | One recommended next action; Penny optimizes progress, the user owns direction. |
+
+Memory classes:
+
+- `semantic`: facts, interests, beliefs, preferences.
+- `episodic`: what the user read, chose, built, rejected, or exported.
+- `procedural`: how the user works, decides, builds, and verifies.
+- `emotional_taste`: what excites, frustrates, drains, or activates the user.
+
+The ranker scores privately across intent fit, source grounding, recency, confidence, user confirmation, boosted memory, repeated use, taste match, project relevance, novelty, buildability, external value, emotional resonance, rejected-direction penalty, genericness risk, privacy risk, and progress value. Normal user surfaces show reasons, counts, grounding labels, and uncertainty rather than raw score dimensions.
+
+Create must receive:
+
+- one `NextBestMove`;
+- exactly five ranked options: Personal, Practical, Valuable, Critical, Weird;
+- why the recommended move matters;
+- context used;
+- uncertainty or missing info.
+
+Memory growth rules:
+
+- Do not globally auto-decay old memories.
+- New activity can supersede older memory inside the same cluster.
+- Confirmed or boosted memory ranks higher than inferred behavior.
+- Wrong, forgotten, and deleted memory is excluded.
+- Stale memory remains available but ranks lower unless it is relevant.
+- Rejected directions penalize similar future options unless the user explicitly asks for them.
+- Explicit actions weigh more than implicit behavior.
+
+Search fallback stays a seam, not a product jump. If no relevant Brain memory exists, Create labels the run `context-light`, `search-needed`, and `inferred`; broad external or connector search is still out of scope before Penny-native lexical/graph memory proves insufficient.
+
 Penny should state memory strength in plain language:
 
 > This is medium confidence from 3 old emails and 2 ChatGPT threads.
