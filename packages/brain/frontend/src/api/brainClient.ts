@@ -23,16 +23,6 @@ import type {
   ClaimDetailResponse,
   SessionCanvasResponse,
   BrainMove,
-  CheckAddNodeInput,
-  CheckCommitInput,
-  CheckCommitResponse,
-  CheckCreateSessionInput,
-  CheckCycleResponse,
-  CheckNodeResponse,
-  CheckSaveToBrainResponse,
-  CheckSessionResponse,
-  CheckSprintInput,
-  CheckSprintResponse,
   CreateExportFeedbackInput,
   CreateExportFeedbackResponse,
   CreateProviderComparisonResponse,
@@ -134,22 +124,6 @@ export async function createLearnSession(rawIdea: string, sourceMaterial?: Learn
   return payload as LearnSessionResponse;
 }
 
-export async function createCheckSession(input: CheckCreateSessionInput): Promise<CheckSessionResponse> {
-  const response = await fetch("/api/check/session", {
-    method: "POST",
-    headers: requestHeaders(),
-    body: JSON.stringify(input),
-  });
-
-  const payload = await readJson(response);
-
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, `POST /api/check/session failed with ${response.status}.`));
-  }
-
-  return payload as CheckSessionResponse;
-}
-
 export async function createNext(input: CreateNextInput): Promise<CreateNextResponse> {
   const response = await fetch("/api/create/next", {
     method: "POST",
@@ -212,101 +186,6 @@ export async function submitCreateExportFeedback(input: CreateExportFeedbackInpu
   }
 
   return payload as CreateExportFeedbackResponse;
-}
-
-export async function fetchCheckSession(sessionId: string): Promise<CheckSessionResponse> {
-  const response = await fetch(`/api/check/session/${encodeURIComponent(sessionId)}`, {
-    method: "GET",
-    headers: requestHeaders(),
-  });
-
-  const payload = await readJson(response);
-
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, `GET /api/check/session/${sessionId} failed with ${response.status}.`));
-  }
-
-  return payload as CheckSessionResponse;
-}
-
-export async function createCheckCycle(sessionId: string): Promise<CheckCycleResponse> {
-  const response = await fetch(`/api/check/session/${encodeURIComponent(sessionId)}/cycle`, {
-    method: "POST",
-    headers: requestHeaders(),
-    body: JSON.stringify({}),
-  });
-
-  const payload = await readJson(response);
-
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, `POST /api/check/session/${sessionId}/cycle failed with ${response.status}.`));
-  }
-
-  return payload as CheckCycleResponse;
-}
-
-export async function commitCheckCycle(cycleId: string, input: CheckCommitInput): Promise<CheckCommitResponse> {
-  const response = await fetch(`/api/check/cycle/${encodeURIComponent(cycleId)}/commit`, {
-    method: "POST",
-    headers: requestHeaders(),
-    body: JSON.stringify(input),
-  });
-
-  const payload = await readJson(response);
-
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, `POST /api/check/cycle/${cycleId}/commit failed with ${response.status}.`));
-  }
-
-  return payload as CheckCommitResponse;
-}
-
-export async function runCheckSprint(cycleId: string, input: CheckSprintInput): Promise<CheckSprintResponse> {
-  const response = await fetch(`/api/check/cycle/${encodeURIComponent(cycleId)}/sprint`, {
-    method: "POST",
-    headers: requestHeaders(),
-    body: JSON.stringify(input),
-  });
-
-  const payload = await readJson(response);
-
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, `POST /api/check/cycle/${cycleId}/sprint failed with ${response.status}.`));
-  }
-
-  return payload as CheckSprintResponse;
-}
-
-export async function addCheckNode(sessionId: string, input: CheckAddNodeInput): Promise<CheckNodeResponse> {
-  const response = await fetch(`/api/check/session/${encodeURIComponent(sessionId)}/node`, {
-    method: "POST",
-    headers: requestHeaders(),
-    body: JSON.stringify(input),
-  });
-
-  const payload = await readJson(response);
-
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, `POST /api/check/session/${sessionId}/node failed with ${response.status}.`));
-  }
-
-  return payload as CheckNodeResponse;
-}
-
-export async function saveCheckToBrain(sessionId: string): Promise<CheckSaveToBrainResponse> {
-  const response = await fetch(`/api/check/session/${encodeURIComponent(sessionId)}/save-to-brain`, {
-    method: "POST",
-    headers: requestHeaders(),
-    body: JSON.stringify({}),
-  });
-
-  const payload = await readJson(response);
-
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, `POST /api/check/session/${sessionId}/save-to-brain failed with ${response.status}.`));
-  }
-
-  return payload as CheckSaveToBrainResponse;
 }
 
 export async function fetchBrainDocuments(): Promise<BrainDocumentsResponse> {

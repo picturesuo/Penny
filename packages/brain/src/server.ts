@@ -30,15 +30,6 @@ import { handleBrainSearchRequest } from "./brain-search-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
 import { handleChallengeBriefRequest } from "./routes/challenge-brief-routes.ts";
-import {
-  handleCheckCycleCommitRequest,
-  handleCheckCycleRequest,
-  handleCheckCycleSprintRequest,
-  handleCheckNodeRequest,
-  handleCheckSaveToBrainRequest,
-  handleCheckSessionCollectionRequest,
-  handleCheckSessionRequest,
-} from "./check-route.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import {
   handleCreateCompareRequest,
@@ -474,95 +465,6 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/create/export-feedback") {
       await writeWebResponse(outgoing, await handleCreateExportFeedbackRequest(request));
-      return;
-    }
-
-    if (url.pathname === "/api/check/session") {
-      await writeWebResponse(outgoing, await handleCheckSessionCollectionRequest(request));
-      return;
-    }
-
-    const checkSessionCycleMatch = /^\/api\/check\/session\/([^/]+)\/cycle$/.exec(url.pathname);
-
-    if (checkSessionCycleMatch) {
-      const sessionId = checkSessionCycleMatch[1];
-
-      if (!sessionId) {
-        await writeWebResponse(outgoing, invalidPathResponse("invalid_check_session_id", "Check cycle requires a session id."));
-        return;
-      }
-
-      await writeWebResponse(outgoing, await handleCheckCycleRequest(request, decodeURIComponent(sessionId)));
-      return;
-    }
-
-    const checkSessionNodeMatch = /^\/api\/check\/session\/([^/]+)\/node$/.exec(url.pathname);
-
-    if (checkSessionNodeMatch) {
-      const sessionId = checkSessionNodeMatch[1];
-
-      if (!sessionId) {
-        await writeWebResponse(outgoing, invalidPathResponse("invalid_check_session_id", "Check node requires a session id."));
-        return;
-      }
-
-      await writeWebResponse(outgoing, await handleCheckNodeRequest(request, decodeURIComponent(sessionId)));
-      return;
-    }
-
-    const checkSaveToBrainMatch = /^\/api\/check\/session\/([^/]+)\/save-to-brain$/.exec(url.pathname);
-
-    if (checkSaveToBrainMatch) {
-      const sessionId = checkSaveToBrainMatch[1];
-
-      if (!sessionId) {
-        await writeWebResponse(outgoing, invalidPathResponse("invalid_check_session_id", "Saving Check to Brain requires a session id."));
-        return;
-      }
-
-      await writeWebResponse(outgoing, await handleCheckSaveToBrainRequest(request, decodeURIComponent(sessionId)));
-      return;
-    }
-
-    const checkSessionMatch = /^\/api\/check\/session\/([^/]+)$/.exec(url.pathname);
-
-    if (checkSessionMatch) {
-      const sessionId = checkSessionMatch[1];
-
-      if (!sessionId) {
-        await writeWebResponse(outgoing, invalidPathResponse("invalid_check_session_id", "Check session requires a session id."));
-        return;
-      }
-
-      await writeWebResponse(outgoing, await handleCheckSessionRequest(request, decodeURIComponent(sessionId)));
-      return;
-    }
-
-    const checkCycleCommitMatch = /^\/api\/check\/cycle\/([^/]+)\/commit$/.exec(url.pathname);
-
-    if (checkCycleCommitMatch) {
-      const cycleId = checkCycleCommitMatch[1];
-
-      if (!cycleId) {
-        await writeWebResponse(outgoing, invalidPathResponse("invalid_check_cycle_id", "Check commitment requires a cycle id."));
-        return;
-      }
-
-      await writeWebResponse(outgoing, await handleCheckCycleCommitRequest(request, decodeURIComponent(cycleId)));
-      return;
-    }
-
-    const checkCycleSprintMatch = /^\/api\/check\/cycle\/([^/]+)\/sprint$/.exec(url.pathname);
-
-    if (checkCycleSprintMatch) {
-      const cycleId = checkCycleSprintMatch[1];
-
-      if (!cycleId) {
-        await writeWebResponse(outgoing, invalidPathResponse("invalid_check_cycle_id", "Check sprint requires a cycle id."));
-        return;
-      }
-
-      await writeWebResponse(outgoing, await handleCheckCycleSprintRequest(request, decodeURIComponent(cycleId)));
       return;
     }
 

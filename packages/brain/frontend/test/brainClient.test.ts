@@ -2,11 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   askPenny,
-  addCheckNode,
-  commitCheckCycle,
   createChallengeBrief,
-  createCheckCycle,
-  createCheckSession,
   compareCreateProviders,
   createNext,
   createLearnSession,
@@ -18,7 +14,6 @@ import {
   fetchBrainHybridSearch,
   fetchBrainMemoryProfile,
   fetchBrainRecents,
-  fetchCheckSession,
   fetchClaimDetail,
   fetchSessionCanvas,
   fetchSessionCockpit,
@@ -29,9 +24,7 @@ import {
   retrieveBrainMemory,
   reviewBrainMemory,
   respondToChallenge,
-  runCheckSprint,
   saveBrainObject,
-  saveCheckToBrain,
   saveSessionNote,
   selectAutopilotNode,
   startAutopilotCandidate,
@@ -109,111 +102,6 @@ test("frontend brain client sends source material for Learn file drops", async (
       },
       autopilot: { limit: 6 },
     });
-  } finally {
-    restoreFetch();
-  }
-});
-
-test("frontend brain client uses Check V2 session, cycle, commit, sprint, node, and save routes", async () => {
-  const sessionId = uuidAt(151);
-  const cycleId = uuidAt(251);
-  const recommendationId = uuidAt(351);
-  const checkSession = checkSessionPayload(sessionId, cycleId, recommendationId);
-  const calls: FetchCall[] = [];
-  const restoreFetch = mockFetch(calls, [
-    jsonResponse({ session: checkSession }),
-    jsonResponse({ session: checkSession }),
-    jsonResponse({ session: checkSession, cycle: checkSession.cycles[0], reusedActiveCycle: true }),
-    jsonResponse({
-      session: checkSession,
-      node: {
-        id: uuidAt(451),
-        kind: "question",
-        title: "What would break first?",
-        body: "Find the first objection.",
-        status: "open",
-        createdAt: "2026-05-05T12:00:00.000Z",
-        updatedAt: "2026-05-05T12:00:00.000Z",
-      },
-    }),
-    jsonResponse({
-      session: checkSession,
-      cycle: { ...checkSession.cycles[0], status: "committed" },
-      breakthrough: null,
-    }),
-    jsonResponse({
-      session: checkSession,
-      cycle: { ...checkSession.cycles[0], status: "completed" },
-      synthesis: {
-        whatChanged: ["The claim got sharper."],
-        possibleBreakthrough: null,
-        nextSuggestedCheck: "Pressure-test the objection.",
-        saveToBrain: { recommended: true, label: "Save Check synthesis to Brain" },
-      },
-    }),
-    jsonResponse({
-      session: { ...checkSession, status: "saved" },
-      savedObject: {
-        id: uuidAt(551),
-        objectType: "check_breakthrough",
-        title: "Check: Penny pitch",
-        summary: "Sharper claim.",
-        createdAt: "2026-05-05T12:00:00.000Z",
-      },
-    }),
-  ]);
-
-  try {
-    const created = await createCheckSession({ rawText: "Penny needs a sharper investor pitch." });
-    const fetched = await fetchCheckSession(sessionId);
-    const cycle = await createCheckCycle(sessionId);
-    const node = await addCheckNode(sessionId, {
-      kind: "question",
-      title: "What would break first?",
-      body: "Find the first objection.",
-    });
-    const committed = await commitCheckCycle(cycleId, {
-      commitment: "Rewrite the claim around investor readiness.",
-      recommendationId,
-      stance: "modify",
-    });
-    const sprint = await runCheckSprint(cycleId, {
-      sprintText: "The new claim names one investor-readiness decision.",
-    });
-    const saved = await saveCheckToBrain(sessionId);
-
-    assert.equal(created.data.session.id, sessionId);
-    assert.equal(fetched.data.session.id, sessionId);
-    assert.equal(cycle.data.reusedActiveCycle, true);
-    assert.equal(node.data.node.kind, "question");
-    assert.equal(committed.data.cycle.status, "committed");
-    assert.equal(sprint.data.synthesis.whatChanged[0], "The claim got sharper.");
-    assert.equal(saved.data.savedObject.objectType, "check_breakthrough");
-    assert.equal(calls[0]?.url, "/api/check/session");
-    assert.equal(calls[0]?.method, "POST");
-    assert.deepEqual(calls[0]?.body, { rawText: "Penny needs a sharper investor pitch." });
-    assert.equal(calls[1]?.url, `/api/check/session/${sessionId}`);
-    assert.equal(calls[1]?.method, "GET");
-    assert.equal(calls[2]?.url, `/api/check/session/${sessionId}/cycle`);
-    assert.deepEqual(calls[2]?.body, {});
-    assert.equal(calls[3]?.url, `/api/check/session/${sessionId}/node`);
-    assert.deepEqual(calls[3]?.body, {
-      kind: "question",
-      title: "What would break first?",
-      body: "Find the first objection.",
-    });
-    assert.equal(calls[4]?.url, `/api/check/cycle/${cycleId}/commit`);
-    assert.deepEqual(calls[4]?.body, {
-      commitment: "Rewrite the claim around investor readiness.",
-      recommendationId,
-      stance: "modify",
-    });
-    assert.equal(calls[5]?.url, `/api/check/cycle/${cycleId}/sprint`);
-    assert.deepEqual(calls[5]?.body, {
-      sprintText: "The new claim names one investor-readiness decision.",
-    });
-    assert.equal(calls[6]?.url, `/api/check/session/${sessionId}/save-to-brain`);
-    assert.deepEqual(calls[6]?.body, {});
   } finally {
     restoreFetch();
   }
@@ -1363,108 +1251,6 @@ function brainMemoryProfilePayload() {
       memoryEdgeCount: 0,
       profileSignalCount: 1,
     },
-  };
-}
-
-function checkSessionPayload(sessionId: string, cycleId: string, recommendationId: string) {
-  const now = "2026-05-05T12:00:00.000Z";
-  const focusNode = {
-    id: uuidAt(251),
-    kind: "claim",
-    title: "Penny needs a sharper investor pitch",
-    body: "Penny needs a sharper investor pitch.",
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-  };
-  const cycle = {
-    id: cycleId,
-    sessionId,
-    status: "active",
-    currentFocus: focusNode.title,
-    diagnosis: "The proof is still implicit.",
-    recommendations: [
-      {
-        id: recommendationId,
-        slot: "clarify",
-        action: "Rewrite the claim.",
-        whyItMatters: "The claim gives the work a target.",
-        effort: "low",
-        targetNodeId: focusNode.id,
-      },
-      {
-        id: uuidAt(352),
-        slot: "strengthen",
-        action: "Add one proof point.",
-        whyItMatters: "Evidence makes the claim inspectable.",
-        effort: "medium",
-        targetNodeId: focusNode.id,
-      },
-      {
-        id: uuidAt(353),
-        slot: "challenge",
-        action: "Write the objection.",
-        whyItMatters: "The objection tests the idea.",
-        effort: "medium",
-        targetNodeId: focusNode.id,
-      },
-      {
-        id: uuidAt(354),
-        slot: "reframe",
-        action: "Restate for investors.",
-        whyItMatters: "The audience frame exposes stakes.",
-        effort: "low",
-        targetNodeId: focusNode.id,
-      },
-      {
-        id: uuidAt(355),
-        slot: "advance",
-        action: "Draft the next artifact.",
-        whyItMatters: "The work changes only when the artifact changes.",
-        effort: "high",
-        targetNodeId: focusNode.id,
-      },
-    ],
-    curveball: {
-      id: uuidAt(356),
-      slot: "curveball",
-      action: "Invert the premise.",
-      whyItMatters: "The inversion can reveal a better constraint.",
-      effort: "medium",
-      targetNodeId: focusNode.id,
-    },
-    userCommitment: null,
-    workSprint: null,
-    synthesis: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  return {
-    id: sessionId,
-    sourceOfTruth: "check_projects_cycles_nodes_breakthroughs",
-    status: "open",
-    input: {
-      kind: "text",
-      title: "Penny pitch",
-      rawText: "Penny needs a sharper investor pitch.",
-      fileName: null,
-    },
-    project: {
-      id: uuidAt(150),
-      northStar: "Make the pitch clear enough for investors to judge.",
-      currentArtifactSummary: "Penny needs a sharper investor pitch.",
-      audienceOrJudge: "Investors",
-      successCriteria: ["One clear claim."],
-      nodes: [focusNode],
-      edges: [],
-    },
-    cycles: [cycle],
-    activeCycleId: cycleId,
-    breakthroughs: [],
-    savedBrainObject: null,
-    createdAt: now,
-    updatedAt: now,
   };
 }
 
