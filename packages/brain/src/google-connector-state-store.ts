@@ -548,7 +548,7 @@ function cloneAudit(audit: ScopedConnectorPermissionAudit): ScopedConnectorPermi
 function cloneConnectorError(error: ConnectorError): ConnectorError {
   return {
     ...error,
-    details: error.details ? { ...error.details } : undefined,
+    ...(error.details ? { details: { ...error.details } } : {}),
   };
 }
 
