@@ -14,6 +14,6 @@
 - [ ] No blockers recorded.
 
 ## Discovered While Working
-- [x] Removed unused frontend components, stale tests, dead CSS, and unused Check/Learn props.
+- [x] Removed unused frontend components, stale tests, dead CSS, and unused Create/Learn props.
 - [x] Refreshed committed public frontend bundles after source and style changes.
 - [x] Updated `docs/p3-deletion-gate.md` so resolved cleanup status matches the current code.
