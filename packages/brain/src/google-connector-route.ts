@@ -43,7 +43,7 @@ export async function handleGoogleConnectorProviderRequest(
     {
       data: {
         sourceOfTruth: "google_connector_registry",
-        provider: buildGoogleConnectorProvider({ env: options.env }),
+        provider: buildGoogleConnectorProvider(options.env ? { env: options.env } : {}),
       },
     },
     200,
@@ -159,12 +159,13 @@ export async function handleGoogleConnectorListConnectionsRequest(
     request.headers.get("x-workspace-id"),
     request.headers.get("x-penny-workspace-id"),
   );
+  const connectionId = url.searchParams.get("connectionId")?.trim();
   const limitValue = url.searchParams.get("limit");
   const pageValue = url.searchParams.get("page");
 
   return adapterResponse(
     await resolveAdapter(options).listConnections({
-      ...(url.searchParams.get("connectionId") ? { connectionId: url.searchParams.get("connectionId") ?? undefined } : {}),
+      ...(connectionId ? { connectionId } : {}),
       ...(endUserId ? { endUserId } : {}),
       ...(organizationId ? { organizationId } : {}),
       ...(limitValue ? { limit: boundedPositiveInt(limitValue, 50) } : {}),
@@ -245,9 +246,11 @@ export async function handleGoogleConnectorSyncStatusRequest(
 
   if (request.method === "GET") {
     const url = new URL(request.url);
+    const connectionId = url.searchParams.get("connectionId")?.trim();
+    const providerConfigKey = url.searchParams.get("providerConfigKey")?.trim();
     const input = connectionInput({
-      connectionId: url.searchParams.get("connectionId") ?? undefined,
-      providerConfigKey: url.searchParams.get("providerConfigKey") ?? undefined,
+      ...(connectionId ? { connectionId } : {}),
+      ...(providerConfigKey ? { providerConfigKey } : {}),
     });
 
     if (!input.ok) {
