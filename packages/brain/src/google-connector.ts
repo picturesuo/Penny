@@ -146,6 +146,8 @@ export type ConnectorSource = {
     fetchedAt: string;
     cursor: string | null;
   };
+  brainSourceId?: string | null;
+  brainNodeIds?: string[];
   privacy: {
     trainingUse: false;
     visibility: "private_user_memory";
@@ -201,7 +203,15 @@ export type ConnectorEvent =
     }
   | {
       id: string;
-      type: "connector.sync_started" | "connector.sync_status_checked";
+      type: "connector.sync_started" | "connector.sync_completed" | "connector.sync_status_checked";
+      providerId: "google";
+      connectionId: string;
+      createdAt: string;
+      payload: Record<string, unknown>;
+    }
+  | {
+      id: string;
+      type: "connector.source_indexed" | "connector.source_deleted";
       providerId: "google";
       connectionId: string;
       createdAt: string;
@@ -227,6 +237,106 @@ export type GoogleConnectorRuntimeConfig = {
   enableGmailConnector: boolean;
   missingConfig: string[];
   configured: boolean;
+};
+
+export type ConnectorStateScope = {
+  userId: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
+  sphereId: string | null;
+};
+
+export type ScopedConnectorConnection = ConnectorConnection & {
+  scope: ConnectorStateScope;
+};
+
+export type ScopedConnectorSyncCursor = ConnectorSyncCursor & {
+  scope: ConnectorStateScope;
+};
+
+export type ScopedConnectorSyncJob = ConnectorSyncJob & {
+  scope: ConnectorStateScope;
+};
+
+export type ScopedConnectorSource = ConnectorSource & {
+  scope: ConnectorStateScope;
+};
+
+export type ScopedConnectorPermissionAudit = ConnectorPermissionAudit & {
+  scope: ConnectorStateScope;
+};
+
+export type GoogleConnectorState = {
+  connections: ScopedConnectorConnection[];
+  cursors: ScopedConnectorSyncCursor[];
+  syncJobs: ScopedConnectorSyncJob[];
+  sources: ScopedConnectorSource[];
+  audits: ScopedConnectorPermissionAudit[];
+};
+
+export type GoogleConnectorSourceDraft = {
+  surface: GoogleSurfaceId;
+  kind: BrainSourceKind;
+  externalId: string;
+  sourceUri: string;
+  label: string;
+  url?: string | null;
+  metadata?: Record<string, unknown>;
+  cursor?: string | null;
+  brainSourceId?: string | null;
+  brainNodeIds?: readonly string[];
+  rawContentStored?: boolean;
+};
+
+export type ConnectorBrainImport = {
+  kind: "text" | "docs_text" | "csv";
+  label: string;
+  sourceUri: string;
+  content: string;
+  rawRetention: false;
+};
+
+export type InitializeGoogleConnectionInput = {
+  scope: ConnectorStateScope;
+  credential: ConnectorCredentialRef;
+  surfaces: readonly GoogleSurfaceId[];
+  scopes: readonly string[];
+  now: string;
+  syncIntervalHours?: number;
+};
+
+export type StartGoogleSyncInput = {
+  state: GoogleConnectorState;
+  scope: ConnectorStateScope;
+  connectionId: string;
+  surface: GoogleSurfaceId;
+  now: string;
+};
+
+export type CompleteGoogleSyncInput = {
+  state: GoogleConnectorState;
+  scope: ConnectorStateScope;
+  connectionId: string;
+  jobId: string;
+  surface: GoogleSurfaceId;
+  now: string;
+  cursor: string | null;
+  nextSyncAt: string;
+  sources: readonly GoogleConnectorSourceDraft[];
+};
+
+export type RevokeGoogleConnectionInput = {
+  state: GoogleConnectorState;
+  scope: ConnectorStateScope;
+  connectionId: string;
+  now: string;
+};
+
+export type DeleteGoogleSourceInput = {
+  state: GoogleConnectorState;
+  scope: ConnectorStateScope;
+  sourceId: string;
+  now: string;
 };
 
 export type GoogleConnectorProviderInput = {
@@ -662,6 +772,329 @@ export function planGoogleScopeRequest(input: GoogleScopeRequest): GoogleScopeRe
   };
 }
 
+export function initializeGoogleConnectorConnection(input: InitializeGoogleConnectionInput): GoogleConnectorState {
+  const syncIntervalHours = input.syncIntervalHours ?? 6;
+  const connectionId = connectorConnectionId(input.credential);
+  const nextSyncAt = addHours(input.now, syncIntervalHours);
+  const connection: ScopedConnectorConnection = {
+    id: connectionId,
+    scope: scopeValue(input.scope),
+    providerId: "google",
+    adapter: "nango",
+    credential: input.credential,
+    status: "connected",
+    surfaces: [...input.surfaces],
+    scopes: [...input.scopes],
+    lastSyncedAt: null,
+    nextSyncAt: input.now,
+    revokedAt: null,
+    sourceCounts: {},
+    error: null,
+  };
+  const cursors = input.surfaces.map((surface): ScopedConnectorSyncCursor => ({
+    id: connectorCursorId(connectionId, surface),
+    scope: scopeValue(input.scope),
+    connectionId,
+    providerId: "google",
+    surface,
+    cursor: null,
+    lastSyncedAt: null,
+    nextSyncAt: input.now,
+    updatedAt: input.now,
+  }));
+  const syncJobs = input.surfaces.map((surface): ScopedConnectorSyncJob => ({
+    id: connectorSyncJobId(connectionId, surface, input.now, "initial"),
+    scope: scopeValue(input.scope),
+    connectionId,
+    providerId: "google",
+    surface,
+    status: "queued",
+    cursorBefore: cursors.find((cursor) => cursor.surface === surface) ?? null,
+    cursorAfter: null,
+    requestedAt: input.now,
+    startedAt: null,
+    completedAt: null,
+    sourceCounts: {},
+    error: null,
+  }));
+  const audits: ScopedConnectorPermissionAudit[] = [
+    {
+      id: connectorAuditId(connectionId, "connector.connected", input.now),
+      scope: scopeValue(input.scope),
+      providerId: "google",
+      connectionId,
+      sourceId: null,
+      actorUserId: input.scope.userId,
+      event: "connector.connected",
+      details: {
+        surfaces: [...input.surfaces],
+        scopes: [...input.scopes],
+        credentialRef: input.credential.credentialRef,
+        nextSyncAt,
+      },
+      createdAt: input.now,
+    },
+  ];
+
+  return {
+    connections: [connection],
+    cursors,
+    syncJobs,
+    sources: [],
+    audits,
+  };
+}
+
+export function startGoogleConnectorSync(input: StartGoogleSyncInput): GoogleConnectorState {
+  const connection = findScopedConnection(input.state, input.scope, input.connectionId);
+
+  if (!connection) {
+    throw new Error("Google connector connection was not found for this scope.");
+  }
+
+  if (connection.status === "revoked") {
+    throw new Error("Revoked Google connector connections cannot sync.");
+  }
+
+  const cursorBefore = input.state.cursors.find(
+    (cursor) => scopeMatches(cursor.scope, input.scope) && cursor.connectionId === input.connectionId && cursor.surface === input.surface,
+  ) ?? null;
+  const job: ScopedConnectorSyncJob = {
+    id: connectorSyncJobId(input.connectionId, input.surface, input.now, "manual"),
+    scope: scopeValue(input.scope),
+    connectionId: input.connectionId,
+    providerId: "google",
+    surface: input.surface,
+    status: "running",
+    cursorBefore,
+    cursorAfter: null,
+    requestedAt: input.now,
+    startedAt: input.now,
+    completedAt: null,
+    sourceCounts: {},
+    error: null,
+  };
+
+  return {
+    ...input.state,
+    connections: input.state.connections.map((candidate) =>
+      candidate.id === input.connectionId && scopeMatches(candidate.scope, input.scope)
+        ? { ...candidate, status: "syncing", error: null }
+        : candidate,
+    ),
+    syncJobs: [...input.state.syncJobs, job],
+    audits: [
+      ...input.state.audits,
+      {
+        id: connectorAuditId(input.connectionId, "connector.sync_started", input.now),
+        scope: scopeValue(input.scope),
+        providerId: "google",
+        connectionId: input.connectionId,
+        sourceId: null,
+        actorUserId: input.scope.userId,
+        event: "connector.sync_started",
+        details: { surface: input.surface, jobId: job.id },
+        createdAt: input.now,
+      },
+    ],
+  };
+}
+
+export function completeGoogleConnectorSync(input: CompleteGoogleSyncInput): GoogleConnectorState {
+  const connection = findScopedConnection(input.state, input.scope, input.connectionId);
+
+  if (!connection) {
+    throw new Error("Google connector connection was not found for this scope.");
+  }
+
+  if (connection.status === "revoked") {
+    throw new Error("Revoked Google connector connections cannot complete sync.");
+  }
+
+  const nextCursor: ScopedConnectorSyncCursor = {
+    id: connectorCursorId(input.connectionId, input.surface),
+    scope: scopeValue(input.scope),
+    connectionId: input.connectionId,
+    providerId: "google",
+    surface: input.surface,
+    cursor: input.cursor,
+    lastSyncedAt: input.now,
+    nextSyncAt: input.nextSyncAt,
+    updatedAt: input.now,
+  };
+  const sourceRefs = input.sources.map((source) =>
+    connectorSourceFromDraft({
+      scope: input.scope,
+      connection,
+      source,
+      fetchedAt: input.now,
+      cursor: input.cursor,
+    }),
+  );
+  const sourceCounts = countSources(sourceRefs);
+  const mergedSources = mergeSources(input.state.sources, sourceRefs);
+  const nextSourceCounts = countSources(
+    mergedSources.filter((source) => scopeMatches(source.scope, input.scope) && source.connectionId === input.connectionId),
+  );
+
+  return {
+    ...input.state,
+    connections: input.state.connections.map((candidate) =>
+      candidate.id === input.connectionId && scopeMatches(candidate.scope, input.scope)
+        ? {
+            ...candidate,
+            status: "connected",
+            lastSyncedAt: input.now,
+            nextSyncAt: input.nextSyncAt,
+            sourceCounts: nextSourceCounts,
+            error: null,
+          }
+        : candidate,
+    ),
+    cursors: upsertCursor(input.state.cursors, nextCursor),
+    syncJobs: input.state.syncJobs.map((job) =>
+      job.id === input.jobId && scopeMatches(job.scope, input.scope)
+        ? {
+            ...job,
+            status: "succeeded",
+            completedAt: input.now,
+            cursorAfter: nextCursor,
+            sourceCounts,
+            error: null,
+          }
+        : job,
+    ),
+    sources: mergedSources,
+    audits: [
+      ...input.state.audits,
+      {
+        id: connectorAuditId(input.connectionId, "connector.sync_completed", input.now),
+        scope: scopeValue(input.scope),
+        providerId: "google",
+        connectionId: input.connectionId,
+        sourceId: null,
+        actorUserId: input.scope.userId,
+        event: "connector.sync_completed",
+        details: { surface: input.surface, jobId: input.jobId, sourceCounts },
+        createdAt: input.now,
+      },
+      ...sourceRefs.map((source) => ({
+        id: connectorAuditId(source.id, "connector.source_indexed", input.now),
+        scope: scopeValue(input.scope),
+        providerId: "google" as const,
+        connectionId: input.connectionId,
+        sourceId: source.id,
+        actorUserId: input.scope.userId,
+        event: "connector.source_indexed" as const,
+        details: { sourceUri: source.sourceUri, kind: source.kind, retrievalAccess: source.privacy.retrievalAccess },
+        createdAt: input.now,
+      })),
+    ],
+  };
+}
+
+export function revokeGoogleConnectorAccess(input: RevokeGoogleConnectionInput): GoogleConnectorState {
+  const connection = findScopedConnection(input.state, input.scope, input.connectionId);
+
+  if (!connection) {
+    throw new Error("Google connector connection was not found for this scope.");
+  }
+
+  return {
+    ...input.state,
+    connections: input.state.connections.map((candidate) =>
+      candidate.id === input.connectionId && scopeMatches(candidate.scope, input.scope)
+        ? {
+            ...candidate,
+            status: "revoked",
+            nextSyncAt: null,
+            revokedAt: input.now,
+            error: null,
+          }
+        : candidate,
+    ),
+    cursors: input.state.cursors.map((cursor) =>
+      cursor.connectionId === input.connectionId && scopeMatches(cursor.scope, input.scope)
+        ? { ...cursor, nextSyncAt: null, updatedAt: input.now }
+        : cursor,
+    ),
+    syncJobs: input.state.syncJobs.map((job) =>
+      job.connectionId === input.connectionId && scopeMatches(job.scope, input.scope) && (job.status === "queued" || job.status === "running")
+        ? { ...job, status: "canceled", completedAt: input.now }
+        : job,
+    ),
+    sources: input.state.sources.map((source) =>
+      source.connectionId === input.connectionId && scopeMatches(source.scope, input.scope)
+        ? { ...source, privacy: { ...source.privacy, retrievalAccess: "revoked" } }
+        : source,
+    ),
+    audits: [
+      ...input.state.audits,
+      {
+        id: connectorAuditId(input.connectionId, "connector.revoked", input.now),
+        scope: scopeValue(input.scope),
+        providerId: "google",
+        connectionId: input.connectionId,
+        sourceId: null,
+        actorUserId: input.scope.userId,
+        event: "connector.revoked",
+        details: { retrievalAccess: "revoked" },
+        createdAt: input.now,
+      },
+    ],
+  };
+}
+
+export function deleteGoogleConnectorSourceAccess(input: DeleteGoogleSourceInput): GoogleConnectorState {
+  const source = input.state.sources.find((candidate) => candidate.id === input.sourceId && scopeMatches(candidate.scope, input.scope));
+
+  if (!source) {
+    throw new Error("Google connector source was not found for this scope.");
+  }
+
+  return {
+    ...input.state,
+    sources: input.state.sources.map((candidate) =>
+      candidate.id === input.sourceId && scopeMatches(candidate.scope, input.scope)
+        ? { ...candidate, privacy: { ...candidate.privacy, retrievalAccess: "deleted" } }
+        : candidate,
+    ),
+    audits: [
+      ...input.state.audits,
+      {
+        id: connectorAuditId(input.sourceId, "connector.source_deleted", input.now),
+        scope: scopeValue(input.scope),
+        providerId: "google",
+        connectionId: source.connectionId,
+        sourceId: input.sourceId,
+        actorUserId: input.scope.userId,
+        event: "connector.source_deleted",
+        details: { sourceUri: source.sourceUri, retrievalAccess: "deleted" },
+        createdAt: input.now,
+      },
+    ],
+  };
+}
+
+export function visibleConnectorSourcesForScope(
+  state: GoogleConnectorState,
+  scope: ConnectorStateScope,
+): ScopedConnectorSource[] {
+  return state.sources.filter((source) => scopeMatches(source.scope, scope) && source.privacy.retrievalAccess === "enabled");
+}
+
+export function connectorSourceToBrainImport(source: ConnectorSource, content: string): ConnectorBrainImport {
+  const kind = source.kind === "google_sheet" ? "csv" : source.kind === "google_calendar_event" ? "text" : "docs_text";
+
+  return {
+    kind,
+    label: source.label,
+    sourceUri: source.sourceUri,
+    content,
+    rawRetention: false,
+  };
+}
+
 export function createNangoAdapter(
   config: GoogleConnectorRuntimeConfig = readGoogleConnectorRuntimeConfig(),
   http: NangoHttpClient = defaultNangoHttpClient,
@@ -1049,6 +1482,155 @@ function providerStatus(config: GoogleConnectorRuntimeConfig, surfaces: readonly
   }
 
   return "available";
+}
+
+function connectorConnectionId(credential: ConnectorCredentialRef): string {
+  return stableConnectorId("connector", credential.providerConfigKey, credential.connectionId);
+}
+
+function connectorCursorId(connectionId: string, surface: GoogleSurfaceId): string {
+  return stableConnectorId("cursor", connectionId, surface);
+}
+
+function connectorSyncJobId(connectionId: string, surface: GoogleSurfaceId, now: string, reason: string): string {
+  return stableConnectorId("sync", connectionId, surface, reason, now);
+}
+
+function connectorAuditId(subjectId: string, event: ConnectorEvent["type"], now: string): string {
+  return stableConnectorId("audit", subjectId, event, now);
+}
+
+function connectorSourceId(connectionId: string, sourceUri: string): string {
+  return stableConnectorId("source", connectionId, sourceUri);
+}
+
+function stableConnectorId(prefix: string, ...parts: readonly string[]): string {
+  return `${prefix}:${parts.map((part) => encodeURIComponent(part)).join(":")}`;
+}
+
+function addHours(iso: string, hours: number): string {
+  const date = new Date(iso);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Connector sync timestamp must be a valid ISO date.");
+  }
+
+  return new Date(date.getTime() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function scopeValue(scope: ConnectorStateScope): ConnectorStateScope {
+  return {
+    userId: scope.userId ?? null,
+    workspaceId: scope.workspaceId ?? null,
+    projectId: scope.projectId ?? null,
+    sphereId: scope.sphereId ?? null,
+  };
+}
+
+function scopeMatches(left: ConnectorStateScope, right: ConnectorStateScope): boolean {
+  const normalizedLeft = scopeValue(left);
+  const normalizedRight = scopeValue(right);
+
+  return (
+    normalizedLeft.userId === normalizedRight.userId &&
+    normalizedLeft.workspaceId === normalizedRight.workspaceId &&
+    normalizedLeft.projectId === normalizedRight.projectId &&
+    normalizedLeft.sphereId === normalizedRight.sphereId
+  );
+}
+
+function findScopedConnection(
+  state: GoogleConnectorState,
+  scope: ConnectorStateScope,
+  connectionId: string,
+): ScopedConnectorConnection | null {
+  return state.connections.find((connection) => connection.id === connectionId && scopeMatches(connection.scope, scope)) ?? null;
+}
+
+function connectorSourceFromDraft(input: {
+  scope: ConnectorStateScope;
+  connection: ScopedConnectorConnection;
+  source: GoogleConnectorSourceDraft;
+  fetchedAt: string;
+  cursor: string | null;
+}): ScopedConnectorSource {
+  const source: ScopedConnectorSource = {
+    id: connectorSourceId(input.connection.id, input.source.sourceUri),
+    scope: scopeValue(input.scope),
+    connectionId: input.connection.id,
+    providerId: "google",
+    surface: input.source.surface,
+    kind: input.source.kind,
+    sourceUri: input.source.sourceUri,
+    label: input.source.label,
+    metadata: input.source.metadata ?? {},
+    sourceRef: {
+      providerId: "google",
+      surface: input.source.surface,
+      externalId: input.source.externalId,
+      url: input.source.url ?? null,
+    },
+    provenance: {
+      credentialRef: input.connection.credential.credentialRef,
+      fetchedAt: input.fetchedAt,
+      cursor: input.cursor ?? input.source.cursor ?? null,
+    },
+    privacy: {
+      trainingUse: false,
+      visibility: "private_user_memory",
+      rawContentStored: input.source.rawContentStored === true,
+      productionLogSafe: false,
+      retrievalAccess: "enabled",
+    },
+  };
+
+  if (input.source.brainSourceId !== undefined) {
+    source.brainSourceId = input.source.brainSourceId;
+  }
+
+  if (input.source.brainNodeIds !== undefined) {
+    source.brainNodeIds = [...input.source.brainNodeIds];
+  }
+
+  return source;
+}
+
+function mergeSources(
+  existingSources: readonly ScopedConnectorSource[],
+  nextSources: readonly ScopedConnectorSource[],
+): ScopedConnectorSource[] {
+  const byId = new Map(existingSources.map((source) => [source.id, source]));
+
+  for (const source of nextSources) {
+    byId.set(source.id, source);
+  }
+
+  return [...byId.values()];
+}
+
+function upsertCursor(
+  existingCursors: readonly ScopedConnectorSyncCursor[],
+  nextCursor: ScopedConnectorSyncCursor,
+): ScopedConnectorSyncCursor[] {
+  const updated = existingCursors.map((cursor) =>
+    cursor.id === nextCursor.id && scopeMatches(cursor.scope, nextCursor.scope) ? nextCursor : cursor,
+  );
+
+  if (updated.some((cursor) => cursor.id === nextCursor.id && scopeMatches(cursor.scope, nextCursor.scope))) {
+    return updated;
+  }
+
+  return [...updated, nextCursor];
+}
+
+function countSources(sources: readonly ConnectorSource[]): Partial<Record<BrainSourceKind, number>> {
+  const counts: Partial<Record<BrainSourceKind, number>> = {};
+
+  for (const source of sources) {
+    counts[source.kind] = (counts[source.kind] ?? 0) + 1;
+  }
+
+  return counts;
 }
 
 function blockedScopeReason(

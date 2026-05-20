@@ -2,9 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildGoogleConnectorProvider,
+  completeGoogleConnectorSync,
+  connectorSourceToBrainImport,
   createNangoAdapter,
+  deleteGoogleConnectorSourceAccess,
+  initializeGoogleConnectorConnection,
   planGoogleScopeRequest,
   readGoogleConnectorRuntimeConfig,
+  revokeGoogleConnectorAccess,
+  startGoogleConnectorSync,
+  visibleConnectorSourcesForScope,
   type NangoHttpRequest,
 } from "./google-connector.ts";
 
@@ -164,4 +171,196 @@ test("Nango adapter creates connect sessions with Google integration tags", asyn
     assert.equal(result.data.token, "session-token");
     assert.equal(result.data.connectLink, "https://connect.nango.test/session-token");
   }
+});
+
+test("Google connector sync lifecycle creates cursors, private source refs, and source counts", () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const otherScope = { ...scope, userId: "user-2" };
+  const initial = initializeGoogleConnectorConnection({
+    scope,
+    now: "2026-05-20T12:00:00.000Z",
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-1",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-1",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_drive", "google_calendar"],
+    scopes: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/calendar.readonly"],
+  });
+  const connectionId = initial.connections[0]?.id ?? "";
+  const running = startGoogleConnectorSync({
+    state: initial,
+    scope,
+    connectionId,
+    surface: "google_drive",
+    now: "2026-05-20T12:01:00.000Z",
+  });
+  const runningJob = running.syncJobs.find((job) => job.status === "running" && job.surface === "google_drive");
+
+  assert.equal(initial.connections[0]?.nextSyncAt, "2026-05-20T12:00:00.000Z");
+  assert.equal(initial.syncJobs.length, 2);
+  assert.equal(running.connections[0]?.status, "syncing");
+  assert.ok(runningJob);
+
+  const completed = completeGoogleConnectorSync({
+    state: running,
+    scope,
+    connectionId,
+    jobId: runningJob?.id ?? "",
+    surface: "google_drive",
+    now: "2026-05-20T12:02:00.000Z",
+    cursor: "drive-cursor-2",
+    nextSyncAt: "2026-05-20T18:02:00.000Z",
+    sources: [
+      {
+        surface: "google_drive",
+        kind: "google_doc",
+        externalId: "doc-1",
+        sourceUri: "google-drive:file:doc-1",
+        label: "Strategy doc",
+        url: "https://docs.google.com/document/d/doc-1",
+        metadata: { mimeType: "application/vnd.google-apps.document" },
+        brainSourceId: "brain-source-doc-1",
+        brainNodeIds: ["memory-node-1"],
+      },
+      {
+        surface: "google_drive",
+        kind: "google_sheet",
+        externalId: "sheet-1",
+        sourceUri: "google-drive:file:sheet-1",
+        label: "Research sheet",
+        metadata: { mimeType: "application/vnd.google-apps.spreadsheet" },
+      },
+    ],
+  });
+
+  assert.equal(completed.connections[0]?.status, "connected");
+  assert.equal(completed.connections[0]?.lastSyncedAt, "2026-05-20T12:02:00.000Z");
+  assert.equal(completed.connections[0]?.nextSyncAt, "2026-05-20T18:02:00.000Z");
+  assert.deepEqual(completed.connections[0]?.sourceCounts, { google_doc: 1, google_sheet: 1 });
+  assert.equal(completed.cursors.find((cursor) => cursor.surface === "google_drive")?.cursor, "drive-cursor-2");
+  assert.equal(completed.syncJobs.find((job) => job.id === runningJob?.id)?.status, "succeeded");
+  assert.equal(completed.sources.every((source) => source.privacy.trainingUse === false), true);
+  assert.equal(completed.sources.every((source) => source.privacy.visibility === "private_user_memory"), true);
+  assert.equal(completed.sources.every((source) => source.privacy.productionLogSafe === false), true);
+  assert.equal(visibleConnectorSourcesForScope(completed, scope).length, 2);
+  assert.equal(visibleConnectorSourcesForScope(completed, otherScope).length, 0);
+  assert.equal(completed.audits.some((audit) => audit.event === "connector.sync_completed"), true);
+
+  const docSource = completed.sources.find((source) => source.kind === "google_doc");
+  assert.equal(docSource?.brainSourceId, "brain-source-doc-1");
+  assert.deepEqual(docSource?.brainNodeIds, ["memory-node-1"]);
+});
+
+test("Google connector revoke and source delete remove retrieval access without cross-user leakage", () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const initial = initializeGoogleConnectorConnection({
+    scope,
+    now: "2026-05-20T12:00:00.000Z",
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-1",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-1",
+    },
+    surfaces: ["google_calendar"],
+    scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
+  });
+  const connectionId = initial.connections[0]?.id ?? "";
+  const running = startGoogleConnectorSync({
+    state: initial,
+    scope,
+    connectionId,
+    surface: "google_calendar",
+    now: "2026-05-20T12:01:00.000Z",
+  });
+  const job = running.syncJobs.find((candidate) => candidate.status === "running");
+  const completed = completeGoogleConnectorSync({
+    state: running,
+    scope,
+    connectionId,
+    jobId: job?.id ?? "",
+    surface: "google_calendar",
+    now: "2026-05-20T12:02:00.000Z",
+    cursor: "calendar-cursor-1",
+    nextSyncAt: "2026-05-20T18:02:00.000Z",
+    sources: [
+      {
+        surface: "google_calendar",
+        kind: "google_calendar_event",
+        externalId: "event-1",
+        sourceUri: "google-calendar:event:primary:event-1",
+        label: "Penny planning review",
+      },
+    ],
+  });
+  const sourceId = completed.sources[0]?.id ?? "";
+  const deleted = deleteGoogleConnectorSourceAccess({
+    state: completed,
+    scope,
+    sourceId,
+    now: "2026-05-20T12:03:00.000Z",
+  });
+  const revoked = revokeGoogleConnectorAccess({
+    state: completed,
+    scope,
+    connectionId,
+    now: "2026-05-20T12:04:00.000Z",
+  });
+
+  assert.equal(deleted.sources[0]?.privacy.retrievalAccess, "deleted");
+  assert.equal(visibleConnectorSourcesForScope(deleted, scope).length, 0);
+  assert.equal(deleted.audits.some((audit) => audit.event === "connector.source_deleted"), true);
+  assert.equal(revoked.connections[0]?.status, "revoked");
+  assert.equal(revoked.connections[0]?.nextSyncAt, null);
+  assert.equal(revoked.sources[0]?.privacy.retrievalAccess, "revoked");
+  assert.equal(revoked.cursors[0]?.nextSyncAt, null);
+  assert.equal(visibleConnectorSourcesForScope(revoked, scope).length, 0);
+  assert.equal(revoked.audits.some((audit) => audit.event === "connector.revoked"), true);
+});
+
+test("connectorSourceToBrainImport preserves provenance and private raw-retention defaults", () => {
+  const importInput = connectorSourceToBrainImport(
+    {
+      id: "source-1",
+      connectionId: "conn-1",
+      providerId: "google",
+      surface: "google_docs_sheets_slides",
+      kind: "google_doc",
+      sourceUri: "google-drive:file:doc-1",
+      label: "Strategy doc",
+      metadata: {},
+      sourceRef: {
+        providerId: "google",
+        surface: "google_docs_sheets_slides",
+        externalId: "doc-1",
+        url: "https://docs.google.com/document/d/doc-1",
+      },
+      provenance: {
+        credentialRef: "nango:google:conn-1",
+        fetchedAt: "2026-05-20T12:00:00.000Z",
+        cursor: "cursor-1",
+      },
+      privacy: {
+        trainingUse: false,
+        visibility: "private_user_memory",
+        rawContentStored: false,
+        productionLogSafe: false,
+        retrievalAccess: "enabled",
+      },
+    },
+    "Penny should use this document as private Brain context.",
+  );
+
+  assert.deepEqual(importInput, {
+    kind: "docs_text",
+    label: "Strategy doc",
+    sourceUri: "google-drive:file:doc-1",
+    content: "Penny should use this document as private Brain context.",
+    rawRetention: false,
+  });
 });
