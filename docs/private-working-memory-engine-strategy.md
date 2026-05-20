@@ -293,6 +293,12 @@ The current backend ranker works over these model concepts:
 | `BrainRankedCandidate` | A public ranked Create candidate with memory/source counts, plain-language reasons, grounding label, and uncertainty. |
 | `NextBestMove` | One recommended next action; Penny optimizes progress, the user owns direction. |
 
+Current durable ranker storage is backend-owned:
+
+- `brain_ranker_runs` stores scoped Create ranker runs, raw idea hash, context-light flag, next-best move, candidate ids, high-value memory ids, clusters, and development-event ids.
+- `brain_ranked_candidates` stores the five public Create candidates with plain-language reasons, grounding, memory/source counts, references, uncertainty, and next-best move copy.
+- `brain_development_events` stores scoped source import, memory extraction/review, memory-used, option selected/rejected, prompt export, export feedback, and direction-change events.
+
 Memory classes:
 
 - `semantic`: facts, interests, beliefs, preferences.
@@ -319,6 +325,12 @@ Memory growth rules:
 - Stale memory remains available but ranks lower unless it is relevant.
 - Rejected directions penalize similar future options unless the user explicitly asks for them.
 - Explicit actions weigh more than implicit behavior.
+
+Brain profile should show progress-engine sections, not just raw recent rows:
+
+- recurring interests, active projects, taste signals, preferred build style, frustrations, and rejected directions;
+- idea clusters with current and superseded memory ids;
+- high-value memories, stale memories, superseded memories, and recent meaningful activity.
 
 Search fallback stays a seam, not a product jump. If no relevant Brain memory exists, Create labels the run `context-light`, `search-needed`, and `inferred`; broad external or connector search is still out of scope before Penny-native lexical/graph memory proves insufficient.
 
