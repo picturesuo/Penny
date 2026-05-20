@@ -232,6 +232,13 @@
       "when": 1779427200000,
       "tag": "0032_add_connector_persistence",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1779489600000,
+      "tag": "0033_add_codebase_brain",
+      "breakpoints": true
     }
   ]
 }

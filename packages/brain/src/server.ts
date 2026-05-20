@@ -165,6 +165,16 @@ export const requiredPennySchemaTables = [
   "connector_source_refs",
   "connector_permission_audits",
   "command_idempotency_keys",
+  "codebase_scan_runs",
+  "code_files",
+  "code_chunks",
+  "code_symbols",
+  "code_imports",
+  "code_routes",
+  "code_tests",
+  "code_docs",
+  "code_findings",
+  "code_memory_notes",
 ] as const;
 
 loadPennyEnv();

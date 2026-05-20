@@ -228,6 +228,404 @@ export const commandIdempotencyStatusEnum = pgEnum("command_idempotency_status",
   "succeeded",
   "failed",
 ]);
+
+export const codebaseScanRuns = pgTable(
+  "codebase_scan_runs",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    repoRoot: text("repo_root").notNull(),
+    gitCommit: text("git_commit"),
+    status: text("status").notNull().default("running"),
+    fileCount: integer("file_count").notNull().default(0),
+    chunkCount: integer("chunk_count").notNull().default(0),
+    symbolCount: integer("symbol_count").notNull().default(0),
+    importCount: integer("import_count").notNull().default(0),
+    routeCount: integer("route_count").notNull().default(0),
+    testCount: integer("test_count").notNull().default(0),
+    docCount: integer("doc_count").notNull().default(0),
+    findingCount: integer("finding_count").notNull().default(0),
+    memoryNoteCount: integer("memory_note_count").notNull().default(0),
+    changedFileCount: integer("changed_file_count").notNull().default(0),
+    staleFileCount: integer("stale_file_count").notNull().default(0),
+    excludedCount: integer("excluded_count").notNull().default(0),
+    error: jsonb("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("codebase_scan_runs_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("codebase_scan_runs_status_idx").on(table.status),
+    index("codebase_scan_runs_started_at_idx").on(table.startedAt),
+    check("codebase_scan_runs_repo_root_present", sql`length(trim(${table.repoRoot})) > 0`),
+    check("codebase_scan_runs_status_valid", sql`${table.status} IN ('running', 'completed', 'failed')`),
+    check("codebase_scan_runs_file_count_nonnegative", sql`${table.fileCount} >= 0`),
+    check("codebase_scan_runs_chunk_count_nonnegative", sql`${table.chunkCount} >= 0`),
+    check("codebase_scan_runs_symbol_count_nonnegative", sql`${table.symbolCount} >= 0`),
+    check("codebase_scan_runs_changed_count_nonnegative", sql`${table.changedFileCount} >= 0`),
+    check("codebase_scan_runs_stale_count_nonnegative", sql`${table.staleFileCount} >= 0`),
+  ],
+);
+
+export const codeFiles = pgTable(
+  "code_files",
+  {
+    id: text("id").primaryKey(),
+    scanRunId: text("scan_run_id")
+      .notNull()
+      .references(() => codebaseScanRuns.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    path: text("path").notNull(),
+    hash: text("hash").notNull(),
+    previousHash: text("previous_hash"),
+    size: integer("size").notNull(),
+    language: text("language").notNull(),
+    sourceKind: text("source_kind").notNull(),
+    lineCount: integer("line_count").notNull(),
+    chunkCount: integer("chunk_count").notNull().default(0),
+    symbolCount: integer("symbol_count").notNull().default(0),
+    importCount: integer("import_count").notNull().default(0),
+    routeCount: integer("route_count").notNull().default(0),
+    testCount: integer("test_count").notNull().default(0),
+    docCount: integer("doc_count").notNull().default(0),
+    metadata: jsonb("metadata").notNull().default({}),
+    lastModifiedAt: timestamp("last_modified_at", { withTimezone: true }),
+    indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("code_files_scope_path_idx").on(table.id, table.path),
+    index("code_files_scan_run_idx").on(table.scanRunId),
+    index("code_files_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("code_files_path_idx").on(table.path),
+    index("code_files_hash_idx").on(table.hash),
+    index("code_files_source_kind_idx").on(table.sourceKind),
+    index("code_files_language_idx").on(table.language),
+    index("code_files_indexed_at_idx").on(table.indexedAt),
+    check("code_files_path_present", sql`length(trim(${table.path})) > 0`),
+    check("code_files_hash_present", sql`length(trim(${table.hash})) > 0`),
+    check("code_files_size_nonnegative", sql`${table.size} >= 0`),
+    check("code_files_line_count_nonnegative", sql`${table.lineCount} >= 0`),
+  ],
+);
+
+export const codeChunks = pgTable(
+  "code_chunks",
+  {
+    id: text("id").primaryKey(),
+    fileId: text("file_id")
+      .notNull()
+      .references(() => codeFiles.id, { onDelete: "cascade" }),
+    scanRunId: text("scan_run_id")
+      .notNull()
+      .references(() => codebaseScanRuns.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    path: text("path").notNull(),
+    hash: text("hash").notNull(),
+    fileHash: text("file_hash").notNull(),
+    size: integer("size").notNull(),
+    language: text("language").notNull(),
+    sourceKind: text("source_kind").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    chunkKind: text("chunk_kind").notNull(),
+    title: text("title").notNull(),
+    text: text("text").notNull(),
+    charStart: integer("char_start").notNull(),
+    charEnd: integer("char_end").notNull(),
+    lineStart: integer("line_start").notNull(),
+    lineEnd: integer("line_end").notNull(),
+    tokenEstimate: integer("token_estimate").notNull(),
+    symbolNames: jsonb("symbol_names").$type<string[]>().notNull().default([]),
+    metadata: jsonb("metadata").notNull().default({}),
+    indexedAt: timestamp("indexed_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("code_chunks_file_index_idx").on(table.fileId, table.chunkIndex),
+    index("code_chunks_scan_run_idx").on(table.scanRunId),
+    index("code_chunks_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("code_chunks_path_idx").on(table.path),
+    index("code_chunks_kind_idx").on(table.chunkKind),
+    index("code_chunks_hash_idx").on(table.hash),
+    check("code_chunks_path_present", sql`length(trim(${table.path})) > 0`),
+    check("code_chunks_hash_present", sql`length(trim(${table.hash})) > 0`),
+    check("code_chunks_title_present", sql`length(trim(${table.title})) > 0`),
+    check("code_chunks_text_present", sql`length(trim(${table.text})) > 0`),
+    check("code_chunks_index_nonnegative", sql`${table.chunkIndex} >= 0`),
+    check("code_chunks_size_nonnegative", sql`${table.size} >= 0`),
+    check("code_chunks_end_after_start", sql`${table.charEnd} >= ${table.charStart}`),
+    check("code_chunks_line_end_after_start", sql`${table.lineEnd} >= ${table.lineStart}`),
+    check("code_chunks_token_positive", sql`${table.tokenEstimate} > 0`),
+  ],
+);
+
+export const codeSymbols = pgTable(
+  "code_symbols",
+  {
+    id: text("id").primaryKey(),
+    fileId: text("file_id")
+      .notNull()
+      .references(() => codeFiles.id, { onDelete: "cascade" }),
+    chunkId: text("chunk_id").references(() => codeChunks.id, { onDelete: "cascade" }),
+    scanRunId: text("scan_run_id")
+      .notNull()
+      .references(() => codebaseScanRuns.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    path: text("path").notNull(),
+    hash: text("hash").notNull(),
+    size: integer("size").notNull(),
+    language: text("language").notNull(),
+    sourceKind: text("source_kind").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind").notNull(),
+    exported: boolean("exported").notNull().default(false),
+    signature: text("signature"),
+    lineStart: integer("line_start").notNull(),
+    lineEnd: integer("line_end").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("code_symbols_scan_run_idx").on(table.scanRunId),
+    index("code_symbols_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("code_symbols_file_idx").on(table.fileId),
+    index("code_symbols_name_idx").on(table.name),
+    index("code_symbols_kind_idx").on(table.kind),
+    check("code_symbols_path_present", sql`length(trim(${table.path})) > 0`),
+    check("code_symbols_hash_present", sql`length(trim(${table.hash})) > 0`),
+    check("code_symbols_name_present", sql`length(trim(${table.name})) > 0`),
+    check("code_symbols_kind_present", sql`length(trim(${table.kind})) > 0`),
+    check("code_symbols_size_nonnegative", sql`${table.size} >= 0`),
+  ],
+);
+
+export const codeImports = pgTable(
+  "code_imports",
+  {
+    id: text("id").primaryKey(),
+    fileId: text("file_id")
+      .notNull()
+      .references(() => codeFiles.id, { onDelete: "cascade" }),
+    scanRunId: text("scan_run_id")
+      .notNull()
+      .references(() => codebaseScanRuns.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    path: text("path").notNull(),
+    hash: text("hash").notNull(),
+    size: integer("size").notNull(),
+    language: text("language").notNull(),
+    sourceKind: text("source_kind").notNull(),
+    importSource: text("import_source").notNull(),
+    importedPath: text("imported_path"),
+    specifiers: jsonb("specifiers").$type<string[]>().notNull().default([]),
+    importKind: text("import_kind").notNull().default("static"),
+    lineStart: integer("line_start").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("code_imports_scan_run_idx").on(table.scanRunId),
+    index("code_imports_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("code_imports_file_idx").on(table.fileId),
+    index("code_imports_source_idx").on(table.importSource),
+    index("code_imports_imported_path_idx").on(table.importedPath),
+    check("code_imports_path_present", sql`length(trim(${table.path})) > 0`),
+    check("code_imports_hash_present", sql`length(trim(${table.hash})) > 0`),
+    check("code_imports_source_present", sql`length(trim(${table.importSource})) > 0`),
+    check("code_imports_size_nonnegative", sql`${table.size} >= 0`),
+  ],
+);
+
+export const codeRoutes = pgTable(
+  "code_routes",
+  {
+    id: text("id").primaryKey(),
+    fileId: text("file_id")
+      .notNull()
+      .references(() => codeFiles.id, { onDelete: "cascade" }),
+    chunkId: text("chunk_id").references(() => codeChunks.id, { onDelete: "cascade" }),
+    scanRunId: text("scan_run_id")
+      .notNull()
+      .references(() => codebaseScanRuns.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    path: text("path").notNull(),
+    hash: text("hash").notNull(),
+    size: integer("size").notNull(),
+    language: text("language").notNull(),
+    sourceKind: text("source_kind").notNull(),
+    method: text("method").notNull(),
+    routePath: text("route_path").notNull(),
+    handler: text("handler"),
+    lineStart: integer("line_start").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("code_routes_scan_run_idx").on(table.scanRunId),
+    index("code_routes_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("code_routes_file_idx").on(table.fileId),
+    index("code_routes_path_idx").on(table.routePath),
+    index("code_routes_method_idx").on(table.method),
+    check("code_routes_path_present", sql`length(trim(${table.path})) > 0`),
+    check("code_routes_hash_present", sql`length(trim(${table.hash})) > 0`),
+    check("code_routes_route_present", sql`length(trim(${table.routePath})) > 0`),
+    check("code_routes_method_present", sql`length(trim(${table.method})) > 0`),
+    check("code_routes_size_nonnegative", sql`${table.size} >= 0`),
+  ],
+);
+
+export const codeTests = pgTable(
+  "code_tests",
+  {
+    id: text("id").primaryKey(),
+    fileId: text("file_id")
+      .notNull()
+      .references(() => codeFiles.id, { onDelete: "cascade" }),
+    chunkId: text("chunk_id").references(() => codeChunks.id, { onDelete: "cascade" }),
+    scanRunId: text("scan_run_id")
+      .notNull()
+      .references(() => codebaseScanRuns.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    path: text("path").notNull(),
+    hash: text("hash").notNull(),
+    size: integer("size").notNull(),
+    language: text("language").notNull(),
+    sourceKind: text("source_kind").notNull(),
+    name: text("name").notNull(),
+    testKind: text("test_kind").notNull().default("node_test"),
+    subjectPath: text("subject_path"),
+    lineStart: integer("line_start").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("code_tests_scan_run_idx").on(table.scanRunId),
+    index("code_tests_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("code_tests_file_idx").on(table.fileId),
+    index("code_tests_subject_path_idx").on(table.subjectPath),
+    check("code_tests_path_present", sql`length(trim(${table.path})) > 0`),
+    check("code_tests_hash_present", sql`length(trim(${table.hash})) > 0`),
+    check("code_tests_name_present", sql`length(trim(${table.name})) > 0`),
+    check("code_tests_size_nonnegative", sql`${table.size} >= 0`),
+  ],
+);
+
+export const codeDocs = pgTable(
+  "code_docs",
+  {
+    id: text("id").primaryKey(),
+    fileId: text("file_id")
+      .notNull()
+      .references(() => codeFiles.id, { onDelete: "cascade" }),
+    chunkId: text("chunk_id").references(() => codeChunks.id, { onDelete: "cascade" }),
+    scanRunId: text("scan_run_id")
+      .notNull()
+      .references(() => codebaseScanRuns.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    path: text("path").notNull(),
+    hash: text("hash").notNull(),
+    size: integer("size").notNull(),
+    language: text("language").notNull(),
+    sourceKind: text("source_kind").notNull(),
+    title: text("title").notNull(),
+    section: text("section"),
+    references: jsonb("references").$type<string[]>().notNull().default([]),
+    lineStart: integer("line_start").notNull(),
+    lineEnd: integer("line_end").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("code_docs_scan_run_idx").on(table.scanRunId),
+    index("code_docs_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("code_docs_file_idx").on(table.fileId),
+    index("code_docs_path_idx").on(table.path),
+    check("code_docs_path_present", sql`length(trim(${table.path})) > 0`),
+    check("code_docs_hash_present", sql`length(trim(${table.hash})) > 0`),
+    check("code_docs_title_present", sql`length(trim(${table.title})) > 0`),
+    check("code_docs_size_nonnegative", sql`${table.size} >= 0`),
+    check("code_docs_line_end_after_start", sql`${table.lineEnd} >= ${table.lineStart}`),
+  ],
+);
+
+export const codeFindings = pgTable(
+  "code_findings",
+  {
+    id: text("id").primaryKey(),
+    scanRunId: text("scan_run_id")
+      .notNull()
+      .references(() => codebaseScanRuns.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    path: text("path"),
+    hash: text("hash"),
+    size: integer("size").notNull().default(0),
+    language: text("language").notNull().default("unknown"),
+    sourceKind: text("source_kind").notNull().default("unknown"),
+    severity: text("severity").notNull(),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    message: text("message").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("code_findings_scan_run_idx").on(table.scanRunId),
+    index("code_findings_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("code_findings_severity_idx").on(table.severity),
+    index("code_findings_path_idx").on(table.path),
+    check("code_findings_severity_valid", sql`${table.severity} IN ('info', 'warning', 'error')`),
+    check("code_findings_kind_present", sql`length(trim(${table.kind})) > 0`),
+    check("code_findings_title_present", sql`length(trim(${table.title})) > 0`),
+    check("code_findings_message_present", sql`length(trim(${table.message})) > 0`),
+  ],
+);
+
+export const codeMemoryNotes = pgTable(
+  "code_memory_notes",
+  {
+    id: text("id").primaryKey(),
+    fileId: text("file_id").references(() => codeFiles.id, { onDelete: "cascade" }),
+    chunkId: text("chunk_id").references(() => codeChunks.id, { onDelete: "cascade" }),
+    scanRunId: text("scan_run_id")
+      .notNull()
+      .references(() => codebaseScanRuns.id, { onDelete: "cascade" }),
+    ...scopeColumns(),
+    path: text("path").notNull(),
+    hash: text("hash").notNull(),
+    size: integer("size").notNull(),
+    language: text("language").notNull(),
+    sourceKind: text("source_kind").notNull(),
+    title: text("title").notNull(),
+    noteKind: text("note_kind").notNull().default("memory"),
+    text: text("text").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("code_memory_notes_scan_run_idx").on(table.scanRunId),
+    index("code_memory_notes_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("code_memory_notes_path_idx").on(table.path),
+    index("code_memory_notes_hash_idx").on(table.hash),
+    check("code_memory_notes_path_present", sql`length(trim(${table.path})) > 0`),
+    check("code_memory_notes_hash_present", sql`length(trim(${table.hash})) > 0`),
+    check("code_memory_notes_title_present", sql`length(trim(${table.title})) > 0`),
+    check("code_memory_notes_text_present", sql`length(trim(${table.text})) > 0`),
+    check("code_memory_notes_size_nonnegative", sql`${table.size} >= 0`),
+  ],
+);
+
 export const moveKindEnum = pgEnum("move_kind", [
   "seed_claim_created",
   "assumptions_extracted",
@@ -1827,6 +2225,16 @@ export const pennySchema = {
   claims,
   claimStatusEnum,
   claimVersions,
+  codeChunks,
+  codeDocs,
+  codeFiles,
+  codeFindings,
+  codeImports,
+  codeMemoryNotes,
+  codeRoutes,
+  codeSymbols,
+  codeTests,
+  codebaseScanRuns,
   connectorAccounts,
   connectorAccountStatusEnum,
   connectorConnections,
