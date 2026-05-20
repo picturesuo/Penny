@@ -368,6 +368,26 @@ test("POST /api/brain/import returns a clear failed job for raw PDF binary", asy
   assert.equal(profile.stats.sourceCount, 0);
 });
 
+test("POST /api/brain/import returns a failed job for oversized normalized imports", async () => {
+  const service = createInMemoryBrainMemoryService();
+  const response = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "text",
+      label: "Oversized notes",
+      content: "Project: Penny dogfood import guard should reject oversized source-backed memory.\n".repeat(10_000),
+    }),
+    { service },
+  );
+  const payload = await responsePayload(response);
+  const job = payload.data.job as IngestionJob;
+  const profile = payload.data.profile as BrainMemoryProfile;
+
+  assert.equal(response.status, 200);
+  assert.equal(job.status, "failed");
+  assert.match(job.errorMessages.join(" "), /too large after normalization|Split it into smaller files/i);
+  assert.equal(profile.stats.sourceCount, 0);
+});
+
 test("POST /api/brain/import turns the Penny demo ChatGPT fixture into a useful Brain profile", async () => {
   const service = createInMemoryBrainMemoryService();
   const content = await readFile(new URL("../../../test/fixtures/penny-brain-demo-conversations.json", import.meta.url), "utf8");

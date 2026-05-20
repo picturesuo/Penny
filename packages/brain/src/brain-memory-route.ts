@@ -300,6 +300,12 @@ const sourceImportKinds = [
 const SourceImportKindSchema = z.enum(sourceImportKinds);
 const MemoryReviewActionSchema = z.enum(["correct", "wrong", "forget", "boost"] satisfies MemoryReviewAction[]);
 const minimumUsableMemoryConfidence = 0.2;
+const maxImportContentLength = 2_000_000;
+const maxNormalizedImportLength = 650_000;
+const maxImportChunkCount = 450;
+const defaultChunkMaxChars = 1_400;
+const maxZipEntryCount = 200;
+const maxZipEntryTextLength = 650_000;
 
 const BrainImportBodySchema = z
   .object({
@@ -308,8 +314,8 @@ const BrainImportBodySchema = z
     fileName: z.string().trim().min(1).max(240).optional(),
     mimeType: z.string().trim().min(1).max(160).optional(),
     sourceUri: z.string().trim().min(1).max(1_000).optional(),
-    content: z.string().max(2_000_000).optional(),
-    text: z.string().max(2_000_000).optional(),
+    content: z.string().max(maxImportContentLength).optional(),
+    text: z.string().max(maxImportContentLength).optional(),
     rawRetention: z.boolean().optional().default(false),
   })
   .strict()
@@ -604,6 +610,8 @@ export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteS
         if (!normalized.trim() || chunks.length === 0) {
           throw new BrainMemoryValidationError("Brain import did not contain usable text after normalization.");
         }
+
+        validateImportSize(normalized, chunks);
 
         const sourceId = stableId("brain-source", scopeKey(scope), input.kind, baseLabel, hashText(normalized));
         const source: SourceImport = {
@@ -964,6 +972,8 @@ export function createInMemoryBrainMemoryService(stores = new Map<string, ScopeM
         if (!normalized.trim() || chunks.length === 0) {
           throw new BrainMemoryValidationError("Brain import did not contain usable text after normalization.");
         }
+
+        validateImportSize(normalized, chunks);
 
         const sourceId = stableId("brain-source", scopeKey(scope), input.kind, baseLabel, hashText(normalized));
         const source: SourceImport = {
@@ -1670,8 +1680,16 @@ function extractZipTextEntries(content: string): ZipTextEntry[] {
   const centralDirectoryEnd = Math.min(buffer.length, centralDirectoryOffset + centralDirectorySize);
   const entries: ZipTextEntry[] = [];
   let offset = centralDirectoryOffset;
+  let inspectedEntryCount = 0;
 
   while (offset + 46 <= centralDirectoryEnd && buffer.readUInt32LE(offset) === 0x02014b50) {
+    inspectedEntryCount += 1;
+    if (inspectedEntryCount > maxZipEntryCount) {
+      throw new BrainMemoryValidationError(
+        `ZIP import has too many files for this dogfood import path. Split the export into smaller archives with ${maxZipEntryCount} files or fewer.`,
+      );
+    }
+
     const compressionMethod = buffer.readUInt16LE(offset + 10);
     const compressedSize = buffer.readUInt32LE(offset + 20);
     const fileNameLength = buffer.readUInt16LE(offset + 28);
@@ -1714,16 +1732,23 @@ function readZipEntryText(buffer: Buffer, name: string, localHeaderOffset: numbe
   const dataStart = localHeaderOffset + 30 + localFileNameLength + localExtraLength;
   const dataEnd = dataStart + compressedSize;
   const compressed = buffer.subarray(dataStart, Math.min(dataEnd, buffer.length));
+  let text = "";
 
   if (compressionMethod === 0) {
-    return compressed.toString("utf8");
+    text = compressed.toString("utf8");
+  } else if (compressionMethod === 8) {
+    text = inflateRawSync(compressed).toString("utf8");
+  } else {
+    throw new BrainMemoryValidationError(`ZIP entry ${name} uses unsupported compression method ${compressionMethod}.`);
   }
 
-  if (compressionMethod === 8) {
-    return inflateRawSync(compressed).toString("utf8");
+  if (text.length > maxZipEntryTextLength) {
+    throw new BrainMemoryValidationError(
+      `ZIP entry ${name} is too large for this dogfood import path. Import a smaller extracted text file instead.`,
+    );
   }
 
-  throw new BrainMemoryValidationError(`ZIP entry ${name} uses unsupported compression method ${compressionMethod}.`);
+  return text;
 }
 
 function isReadableZipTextName(name: string): boolean {
@@ -2074,7 +2099,7 @@ function normalizeWhitespace(text: string): string {
     .trim();
 }
 
-function chunkText(text: string, maxChars = 1_400): ChunkDraft[] {
+function chunkText(text: string, maxChars = defaultChunkMaxChars): ChunkDraft[] {
   const chunks: ChunkDraft[] = [];
   let position = 0;
 
@@ -2105,6 +2130,20 @@ function chunkText(text: string, maxChars = 1_400): ChunkDraft[] {
   }
 
   return chunks;
+}
+
+function validateImportSize(normalized: string, chunks: ChunkDraft[]): void {
+  if (normalized.length > maxNormalizedImportLength) {
+    throw new BrainMemoryValidationError(
+      `Brain import is too large after normalization (${normalized.length} characters). Split it into files under ${maxNormalizedImportLength} characters for dogfood import.`,
+    );
+  }
+
+  if (chunks.length > maxImportChunkCount) {
+    throw new BrainMemoryValidationError(
+      `Brain import would create ${chunks.length} chunks. Split it into smaller files with ${maxImportChunkCount} chunks or fewer for dogfood import.`,
+    );
+  }
 }
 
 function extractMemoryNodes(source: SourceImport, chunks: SourceChunk[], now: string): MemoryNode[] {
