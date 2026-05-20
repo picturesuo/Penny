@@ -2897,14 +2897,24 @@ function brainFirstRunSteps({
 }
 
 function memoryProfileSections(profile: BrainMemoryProfileData, recentNodes: MemoryNode[]): Array<{ title: string; items: BrainProfileSectionItem[] }> {
+  const activeProjects = signalItems(profile.profile.activeProjects ?? []);
+  const ideaClusters = clusterItems(profile.profile.ideaClusters ?? []);
+
   return [
     { title: "Recurring interests", items: signalItems(profile.profile.recurringInterests) },
-    { title: "Active projects", items: nodeItems(recentNodes.filter((node) => node.type === "project" || node.type === "goal")) },
+    {
+      title: "Active projects",
+      items: activeProjects.length ? activeProjects : nodeItems(recentNodes.filter((node) => node.type === "project" || node.type === "goal")),
+    },
+    { title: "High-value memories", items: nodeItems(profile.profile.highValueMemories ?? []) },
     { title: "Taste signals", items: signalItems(profile.profile.tasteSignals) },
     { title: "Common frustrations", items: signalItems(profile.profile.commonFrustrations) },
     { title: "Preferred build style", items: signalItems(profile.profile.preferredBuildStyle) },
     { title: "Repeated rejected directions", items: signalItems(profile.profile.repeatedRejectedDirections ?? []) },
-    { title: "Strongest idea clusters", items: signalItems(profile.profile.activeIdeaClusters) },
+    { title: "Idea clusters", items: ideaClusters.length ? ideaClusters : signalItems(profile.profile.activeIdeaClusters) },
+    { title: "Stale memories", items: nodeItems(profile.profile.staleMemories ?? []) },
+    { title: "Superseded memories", items: nodeItems(profile.profile.supersededMemories ?? []) },
+    { title: "Recent meaningful activity", items: activityItems(profile.profile.recentMeaningfulActivity ?? []) },
   ].filter((section) => section.items.length > 0);
 }
 
@@ -2920,6 +2930,22 @@ function signalItems(signals: UserProfileSignal[]): BrainProfileSectionItem[] {
 
 function nodeItems(nodes: MemoryNode[]): BrainProfileSectionItem[] {
   return nodes.slice(0, 4).map((node) => ({ id: node.id, label: node.title, summary: node.summary }));
+}
+
+function clusterItems(clusters: NonNullable<BrainMemoryProfileData["profile"]["ideaClusters"]>): BrainProfileSectionItem[] {
+  return clusters.slice(0, 4).map((cluster) => ({
+    id: cluster.id,
+    label: cluster.label,
+    summary: `${cluster.summary} Current ${cluster.currentMemoryNodeId ?? "none"}; superseded ${cluster.supersededMemoryNodeIds.length}.`,
+  }));
+}
+
+function activityItems(activities: NonNullable<BrainMemoryProfileData["profile"]["recentMeaningfulActivity"]>): BrainProfileSectionItem[] {
+  return activities.slice(0, 4).map((activity) => ({
+    id: activity.id,
+    label: activity.label,
+    summary: `${formatLabel(activity.kind)} on ${formatDate(activity.occurredAt)}. ${activity.summary}`,
+  }));
 }
 
 function evidenceLabel(level: MemoryNode["evidenceLevel"]): string {
