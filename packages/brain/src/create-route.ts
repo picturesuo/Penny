@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
+import { rankBrainForCreate, type BrainGroundingLabel, type BrainRankedCandidate, type BrainRankerResult, type NextBestMove } from "./brain-ranker.ts";
 import { retrieveBrainMemoryForCreate } from "./brain-memory-route.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import { createExportFeedback as createExportFeedbackTable } from "./db/schema.ts";
@@ -45,6 +46,13 @@ export type CandidateOption = {
   oneLine: string;
   rationale: string;
   nextMove: string;
+  topReason: string;
+  grounding: BrainGroundingLabel;
+  contextLabel: string;
+  memoryCount: number;
+  sourceCount: number;
+  rankReasons: string[];
+  uncertainty: string[];
   risks: string[];
   memoryUsed: MemoryRef[];
   sourcesUsed: SourceRef[];
@@ -99,6 +107,8 @@ export type OptionSet = {
   sourceOfTruth: "rough_idea_context_deterministic_create_lenses" | "rough_idea_context_model_backed_create_lenses";
   rawIdea: string;
   options: CandidateOption[];
+  nextBestMove: NextBestMove;
+  rankedCandidates: BrainRankedCandidate[];
   memoryUsed: MemoryRef[];
   sourcesUsed: SourceRef[];
   createdAt: string;
@@ -253,6 +263,8 @@ export type CreateOptionGenerationInput = {
   memoryUsed: MemoryRef[];
   sourcesUsed: SourceRef[];
   contextLight: boolean;
+  nextBestMove: NextBestMove;
+  rankedCandidates: BrainRankedCandidate[];
   baselineOptions: CandidateOption[];
 };
 
@@ -627,6 +639,13 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
       const retrievedMemory = await retrieveBrainMemoryForCreate({ scope, query: rawIdea, limit: 5 });
       const memoryUsed = normalizeMemoryRefs([...input.memory, ...retrievedMemory.memoryRefs], input.context, sessionId);
       const sourcesUsed = normalizeSourceRefs([...input.sources, ...retrievedMemory.sourceRefs], input.context, rawIdea);
+      const brainRank = rankBrainForCreate({
+        rawIdea,
+        memoryRefs: memoryUsed,
+        sourceRefs: sourcesUsed,
+        retrievalResults: retrievedMemory.results,
+        now,
+      });
       const scopedSessionKey = createScopeStorageKey(scope, sessionId);
       const existingOptionSet = persist && input.optionSetId ? optionSets.get(createScopeStorageKey(scope, input.optionSetId)) ?? null : null;
       const generated =
@@ -642,6 +661,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
           memoryUsed,
           sourcesUsed,
           contextLight: retrievedMemory.contextLight && input.memory.length === 0,
+          brainRank,
           now,
               provider,
             });
@@ -869,6 +889,7 @@ async function buildOptionSetWithProvider(input: {
   memoryUsed: MemoryRef[];
   sourcesUsed: SourceRef[];
   contextLight: boolean;
+  brainRank: BrainRankerResult;
   now: string;
   provider: CreateOptionProvider | null;
 }): Promise<ProviderGenerationResult> {
@@ -887,6 +908,8 @@ async function buildOptionSetWithProvider(input: {
       memoryUsed: input.memoryUsed,
       sourcesUsed: input.sourcesUsed,
       contextLight: input.contextLight,
+      nextBestMove: input.brainRank.nextBestMove,
+      rankedCandidates: input.brainRank.rankedCandidates,
       baselineOptions: baseline.options,
     });
 
@@ -989,6 +1012,7 @@ function buildOptionSet(input: {
   memoryUsed: MemoryRef[];
   sourcesUsed: SourceRef[];
   contextLight: boolean;
+  brainRank: BrainRankerResult;
   now: string;
 }): OptionSet {
   const subject = subjectFromText(input.rawIdea);
@@ -1002,6 +1026,14 @@ function buildOptionSet(input: {
   const memoryRefs = input.memoryUsed;
   const optionSeed = [input.projectId, input.sessionId, input.rawIdea].join("|");
   const profile = createProfileInsights(input.rawIdea, memoryRefs, sourceRefs, input.contextLight);
+  const rankByLens = new Map(input.brainRank.rankedCandidates.map((candidate) => [candidate.lens, candidate]));
+  const rankedMemory = (lens: CreateLens, fallback: MemoryRef[]) => {
+    const candidateMemory = rankByLens.get(lens)?.memoryRefs ?? [];
+
+    return candidateMemory.length ? candidateMemory : fallback;
+  };
+  const rankedMeta = (lens: CreateLens, fallbackMemory: MemoryRef[]) =>
+    rankMetadataForLens(rankByLens.get(lens), rankedMemory(lens, fallbackMemory), sourceRefs, input.contextLight);
   const options: CandidateOption[] = [
     {
       id: stableId("create-option-personal", optionSeed),
@@ -1018,8 +1050,9 @@ function buildOptionSet(input: {
       nextMove: profile.hasMemory
         ? `Pin ${profile.personalAnchor} as a visible constraint before generating or revising the artifact.`
         : "Ask the user which personal constraints Penny should preserve before generating or revising the artifact.",
+      ...rankedMeta("Personal", profile.personalMemory),
       risks: ["Can overfit to weak or missing memory if the UI implies more context than Penny actually has."],
-      memoryUsed: profile.personalMemory,
+      memoryUsed: rankedMemory("Personal", profile.personalMemory),
       sourcesUsed: sourceRefs,
       scores: { intentMatch: 91, buildability: 74, value: 82, novelty: 78, risk: 42 },
     },
@@ -1030,8 +1063,9 @@ function buildOptionSet(input: {
       oneLine: `Prioritize the first buildable path in the user's preferred style: ${profile.buildStyleEvidence}.`,
       rationale: `${contextPhrase} This is the safest wedge because it makes the core loop testable without waiting for broad memory ingestion or advanced models. Practical constraint: ${profile.buildStyleEvidence}.`,
       nextMove: `Implement the narrow route and UI state machine, then verify the ${profile.buildStyleAnchor} path manually and with tests.`,
+      ...rankedMeta("Practical", profile.practicalMemory),
       risks: ["May feel conservative if the artifact does not visibly improve after user judgment."],
-      memoryUsed: profile.practicalMemory,
+      memoryUsed: rankedMemory("Practical", profile.practicalMemory),
       sourcesUsed: sourceRefs,
       scores: { intentMatch: 88, buildability: 94, value: 78, novelty: 58, risk: 28 },
     },
@@ -1044,8 +1078,9 @@ function buildOptionSet(input: {
         ? `${profile.groundedLine} Inferred move: translate that memory into a target user, external payoff, and acceptance tests that prove usefulness.`
         : `${contextPhrase} The valuable direction forces the prompt artifact to name a real user, external payoff, and acceptance tests that prove usefulness.`,
       nextMove: `Rewrite the target user, core loop, and acceptance tests around ${profile.valueAnchor}.`,
+      ...rankedMeta("Valuable", profile.valuableMemory),
       risks: ["Can drift into pitch language unless implementation constraints stay concrete."],
-      memoryUsed: profile.valuableMemory,
+      memoryUsed: rankedMemory("Valuable", profile.valuableMemory),
       sourcesUsed: sourceRefs,
       scores: { intentMatch: 86, buildability: 78, value: 94, novelty: 64, risk: 36 },
     },
@@ -1058,8 +1093,9 @@ function buildOptionSet(input: {
         : "Pressure-test whether the idea is truly memory-native or just a GPT wrapper with nicer furniture.",
       rationale: `${contextPhrase} Friendly critique: the idea gets stronger if it names what Penny records, how judgment changes the artifact, and what must not be faked. Treat generic GPT-wrapper behavior, fake connector claims, and unsupported memory claims as export blockers.`,
       nextMove: `Add explicit verification checks for source grounding, non-generic behavior, missing information, and ${profile.criticalAnchor} before export is allowed.`,
+      ...rankedMeta("Critical", profile.criticalMemory),
       risks: ["If the critique dominates the UI, Create may feel punitive instead of generative.", "A generic wrapper can still pass if memory evidence is attached but never changes the artifact."],
-      memoryUsed: profile.criticalMemory,
+      memoryUsed: rankedMemory("Critical", profile.criticalMemory),
       sourcesUsed: sourceRefs,
       scores: { intentMatch: 89, buildability: 82, value: 86, novelty: 70, risk: 52 },
     },
@@ -1074,8 +1110,9 @@ function buildOptionSet(input: {
         ? `${profile.groundedLine} Inferred move: bend the artifact through that taste signal while still producing implementation requirements and tests.`
         : `${contextPhrase} The weird direction keeps Penny from becoming a dashboard: selected lenses should leave visible traces in the prompt and verification brief.`,
       nextMove: `Give each selected card a distinct artifact mutation inspired by ${profile.weirdAnchor}, while keeping the coding prompt executable.`,
+      ...rankedMeta("Weird", profile.weirdMemory),
       risks: ["Could become decorative unless every weird move still updates the coding prompt."],
-      memoryUsed: profile.weirdMemory,
+      memoryUsed: rankedMemory("Weird", profile.weirdMemory),
       sourcesUsed: sourceRefs,
       scores: { intentMatch: 80, buildability: 68, value: 76, novelty: 94, risk: 58 },
     },
@@ -1088,9 +1125,42 @@ function buildOptionSet(input: {
     sourceOfTruth: "rough_idea_context_deterministic_create_lenses",
     rawIdea: input.rawIdea,
     options,
+    nextBestMove: input.brainRank.nextBestMove,
+    rankedCandidates: input.brainRank.rankedCandidates,
     memoryUsed: memoryRefs,
     sourcesUsed: sourceRefs,
     createdAt: input.now,
+  };
+}
+
+function rankMetadataForLens(
+  candidate: BrainRankedCandidate | undefined,
+  memoryUsed: MemoryRef[],
+  sourceRefs: SourceRef[],
+  contextLight: boolean,
+): Pick<CandidateOption, "topReason" | "grounding" | "contextLabel" | "memoryCount" | "sourceCount" | "rankReasons" | "uncertainty"> {
+  if (!candidate) {
+    return {
+      topReason: contextLight
+        ? "Context-light: no relevant Brain memory matched this task."
+        : "Ranker used the supplied rough idea and session context.",
+      grounding: contextLight ? "context_light" : memoryUsed.length ? "grounded" : "inferred",
+      contextLabel: contextLight ? "Context-light / search-needed / inferred" : memoryUsed.length ? "Grounded in Brain memory" : "Inferred from light context",
+      memoryCount: memoryUsed.length,
+      sourceCount: sourceRefs.length,
+      rankReasons: [],
+      uncertainty: contextLight ? ["No relevant Brain memory matched strongly."] : [],
+    };
+  }
+
+  return {
+    topReason: candidate.topReason,
+    grounding: candidate.grounding,
+    contextLabel: candidate.contextLabel,
+    memoryCount: candidate.memoryCount,
+    sourceCount: candidate.sourceCount,
+    rankReasons: candidate.reasons,
+    uncertainty: candidate.uncertainty,
   };
 }
 
@@ -1219,6 +1289,17 @@ export function buildCreateOptionPrompt(input: CreateOptionGenerationInput): str
     "",
     "Source refs:",
     input.sourcesUsed.map((source) => `- ${source.id} | ${source.label}${source.sourceRange ? ` (${source.sourceRange})` : ""}: ${source.excerpt}`).join("\n"),
+    "",
+    "Brain Ranker next-best move:",
+    `- ${input.nextBestMove.title}: ${input.nextBestMove.action}`,
+    `- Why it matters: ${input.nextBestMove.whyItMatters}`,
+    "",
+    "Brain Ranker candidates:",
+    input.rankedCandidates
+      .map((candidate) =>
+        `- ${candidate.lens} | ${candidate.contextLabel} | ${candidate.memoryCount} memories | ${candidate.sourceCount} sources | ${candidate.topReason}`,
+      )
+      .join("\n"),
     "",
     "Baseline options to improve without changing lenses, source refs, or memory refs:",
     JSON.stringify(
@@ -1394,6 +1475,10 @@ function buildInitialArtifact(input: {
       "Personal context used:",
       personalContext,
       "",
+      "Brain next-best move:",
+      `- ${input.optionSet.nextBestMove.title}: ${input.optionSet.nextBestMove.action}`,
+      `- Why it matters: ${input.optionSet.nextBestMove.whyItMatters}`,
+      "",
       "Selected option history:",
       "- No selected Create directions yet.",
     ].join("\n"),
@@ -1403,7 +1488,7 @@ function buildInitialArtifact(input: {
     "Frontend requirements": "Use the existing React/Vite workspace and preserve the editorial/newsprint style. Reuse current mode shell and client conventions.",
     "Backend requirements": "Expose deterministic POST /api/create/next and POST /api/create/export-coding-prompt routes with strict local validation and replaceable generation logic.",
     "Data model": "Represent CandidateOption, OptionSet, JudgmentEvent, CodingPromptArtifact, ArtifactSection, ArtifactDelta, VerificationSummary, MemoryRef, SourceRef, and PromptExport.",
-    "AI/memory orchestration": `Use available Penny memory/source/session context only when provided. Do not imply hidden memory. Store judgment as a durable signal for later model-backed generation.\n\nPersonal context available now:\n${personalContext}`,
+    "AI/memory orchestration": `Use available Penny memory/source/session context only when provided. Do not imply hidden memory. Store judgment as a durable signal for later model-backed generation.\n\nBrain next-best move:\n- ${input.optionSet.nextBestMove.title}: ${input.optionSet.nextBestMove.action}\n- ${input.optionSet.nextBestMove.whyItMatters}\n\nPersonal context available now:\n${personalContext}`,
     "Privacy constraints": "Do not send data to a model in v0 placeholder mode. Keep source and memory references explicit so the UI never claims provenance it lacks.",
     "Verification constraints": "Check intent match, buildability, source/context grounding, non-generic GPT-wrapper risk, missing information, and implementation risks.",
     "Implementation plan": "1. Add contracts and route handlers. 2. Add client methods. 3. Render Create flow through the Check workspace wrapper. 4. Add focused tests. 5. Run build, typecheck, and tests.",

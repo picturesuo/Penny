@@ -46,6 +46,13 @@ test("POST /api/create/next generates the five required Create directions", asyn
   );
   assert.equal(data.judgmentEvent, null);
   assert.equal(data.artifact.sections.length, 15);
+  assert.equal(data.optionSet.nextBestMove.grounded, false);
+  assert.match(data.optionSet.nextBestMove.title, /Collect one concrete Brain signal/i);
+  assert.equal(data.optionSet.rankedCandidates.length, 5);
+  assert.deepEqual(
+    data.optionSet.rankedCandidates.map((candidate) => candidate.lens),
+    ["Personal", "Practical", "Valuable", "Critical", "Weird"],
+  );
   assert.ok(data.artifact.sections.find((section) => section.title === "Final coding-agent prompt")?.body.includes("## Product Goal"));
   assert.match(data.artifact.sections.find((section) => section.title === "Final coding-agent prompt")?.body ?? "", /## Personal Context Used/);
   assert.deepEqual(
@@ -74,6 +81,13 @@ test("POST /api/create/next generates the five required Create directions", asyn
     assert.ok(option.oneLine);
     assert.ok(option.rationale);
     assert.match(option.rationale, /Context-light/i);
+    assert.ok(option.topReason);
+    assert.equal(option.grounding, "context_light");
+    assert.match(option.contextLabel, /Context-light|search-needed|inferred/i);
+    assert.equal(option.memoryCount, 0);
+    assert.ok(option.sourceCount >= 1);
+    assert.ok(option.rankReasons.length >= 1);
+    assert.ok(option.uncertainty.length >= 1);
     assert.ok(option.nextMove);
     assert.ok(option.risks.length >= 1);
     assert.ok(option.sourcesUsed.some((source) => source.kind === "rough_idea"));
@@ -121,9 +135,16 @@ test("POST /api/create/next uses retrieved Brain memory and source refs when imp
   assert.equal(response.status, 200);
   assert.ok(data.optionSet.memoryUsed.some((memory) => /Founder|Penny|Preference|Project/i.test(memory.label)));
   assert.ok(data.optionSet.sourcesUsed.some((source) => source.label === "Founder workflow notes"));
+  assert.equal(data.optionSet.nextBestMove.grounded, true);
+  assert.match(data.optionSet.nextBestMove.whyItMatters, /remembered|buildable|payoff|risk|signal/i);
   assert.ok(data.optionSet.options.some((option) => option.memoryUsed.length >= 1));
   assert.ok(data.optionSet.options.every((option) => option.sourcesUsed.some((source) => source.label === "Founder workflow notes")));
   assert.ok(data.optionSet.options.every((option) => !/Context-light/i.test(option.rationale)));
+  assert.ok(data.optionSet.options.every((option) => option.topReason.length > 10));
+  assert.ok(data.optionSet.options.every((option) => option.grounding === "grounded"));
+  assert.ok(data.optionSet.options.every((option) => option.contextLabel === "Grounded in Brain memory"));
+  assert.ok(data.optionSet.options.every((option) => option.memoryCount >= 1));
+  assert.ok(data.optionSet.options.every((option) => option.sourceCount >= 1));
   assert.match(sectionBody(data.artifact, "AI/memory orchestration"), /Founder workflow notes/);
   assert.match(sectionBody(data.artifact, "User intent"), /Personal context used/);
   assert.ok(data.observability.memoryCountUsed >= 1);
