@@ -76,7 +76,57 @@ import { CanvasWorkspace } from "./CanvasWorkspace";
 
 type ClaimDetailStatus = "idle" | "loading" | "ready" | "error";
 type BrainMemoryStatus = "idle" | "loading" | "ready" | "importing" | "deleting" | "error";
-type GoogleConnectorUiStatus = "idle" | "loading" | "ready" | "connecting" | "error";
+type GoogleConnectorUiStatus = "idle" | "loading" | "ready" | "connecting" | "syncing" | "revoking" | "error";
+
+type GoogleConnectorConnectionView = {
+  id: string;
+  status: string;
+  surfaces: string[];
+  scopes: string[];
+  lastSyncedAt: string | null;
+  nextSyncAt: string | null;
+  revokedAt: string | null;
+  sourceCounts: Record<string, number>;
+  credential: {
+    connectionId: string;
+    providerConfigKey: string;
+  };
+};
+
+type GoogleConnectorSyncJobView = {
+  id: string;
+  connectionId: string;
+  surface: string;
+  status: string;
+  requestedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+type GoogleConnectorSourceView = {
+  id: string;
+  connectionId: string;
+  kind: string;
+  label: string;
+  sourceUri: string;
+  brainSourceId?: string | null;
+  privacy: {
+    retrievalAccess: string;
+  };
+};
+
+type GoogleConnectorStateView = {
+  connections: GoogleConnectorConnectionView[];
+  syncJobs: GoogleConnectorSyncJobView[];
+  sources: GoogleConnectorSourceView[];
+};
+
+type GoogleConnectorProviderStateResponse = {
+  data: {
+    provider: GoogleConnectorProviderView;
+    state?: GoogleConnectorStateView;
+  };
+};
 
 interface BrainWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -2289,6 +2339,7 @@ export function BrainMemoryPanel({
   const [fileName, setFileName] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string | null>(null);
   const [googleProvider, setGoogleProvider] = useState<GoogleConnectorProviderView | null>(null);
+  const [googleConnectorState, setGoogleConnectorState] = useState<GoogleConnectorStateView>(emptyGoogleConnectorStateView());
   const [googleStatus, setGoogleStatus] = useState<GoogleConnectorUiStatus>("idle");
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [googleConnectLink, setGoogleConnectLink] = useState<string | null>(null);
@@ -2303,6 +2354,11 @@ export function BrainMemoryPanel({
   const canImport = draft.trim().length > 0 && !disabled && !importing;
   const importHint = importHintForKind(kind);
 
+  function applyGoogleConnectorResponse(response: GoogleConnectorProviderStateResponse) {
+    setGoogleProvider(response.data.provider);
+    setGoogleConnectorState(normalizeGoogleConnectorState(response.data.state));
+  }
+
   useEffect(() => {
     let canceled = false;
 
@@ -2314,7 +2370,7 @@ export function BrainMemoryPanel({
           return;
         }
 
-        setGoogleProvider(response.data.provider);
+        applyGoogleConnectorResponse(response as unknown as GoogleConnectorProviderStateResponse);
         setGoogleStatus("ready");
       })
       .catch((error) => {
@@ -2406,6 +2462,68 @@ export function BrainMemoryPanel({
     }
   }
 
+  async function refreshGoogleConnector() {
+    const response = await fetchGoogleConnectorProvider();
+
+    applyGoogleConnectorResponse(response as unknown as GoogleConnectorProviderStateResponse);
+  }
+
+  async function handleGoogleSyncNow() {
+    const connection = currentGoogleConnection(googleConnectorState);
+
+    if (!connection || disabled || importing || googleStatus === "syncing") {
+      return;
+    }
+
+    setGoogleStatus("syncing");
+    setGoogleError(null);
+
+    try {
+      const response = await postGoogleConnectorAction("/api/connectors/google/sync-now", {
+        connectionId: connection.credential.connectionId,
+        providerConfigKey: connection.credential.providerConfigKey,
+      });
+
+      if (response.data.state) {
+        setGoogleConnectorState(response.data.state);
+      }
+
+      await refreshGoogleConnector();
+      setGoogleStatus("ready");
+    } catch (error) {
+      setGoogleStatus("error");
+      setGoogleError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function handleGoogleRevoke() {
+    const connection = currentGoogleConnection(googleConnectorState);
+
+    if (!connection || disabled || importing || googleStatus === "revoking") {
+      return;
+    }
+
+    setGoogleStatus("revoking");
+    setGoogleError(null);
+
+    try {
+      const response = await postGoogleConnectorAction("/api/connectors/google/revoke", {
+        connectionId: connection.credential.connectionId,
+        providerConfigKey: connection.credential.providerConfigKey,
+      });
+
+      if (response.data.state) {
+        setGoogleConnectorState(response.data.state);
+      }
+
+      await refreshGoogleConnector();
+      setGoogleStatus("ready");
+    } catch (error) {
+      setGoogleStatus("error");
+      setGoogleError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <section className="brain-memory-panel" aria-label="Second Brain memory">
       <div className="brain-memory-panel-head">
@@ -2438,11 +2556,14 @@ export function BrainMemoryPanel({
       </p>
       <GoogleConnectorControl
         provider={googleProvider}
+        connectorState={googleConnectorState}
         status={googleStatus}
         error={googleError}
         connectLink={googleConnectLink}
         disabled={disabled || importing}
         onConnect={handleGoogleConnect}
+        onSyncNow={handleGoogleSyncNow}
+        onRevoke={handleGoogleRevoke}
       />
       {error ? <p className="brain-memory-error">{error}</p> : null}
       {demoFixtureVisible && onDemoFixtureImport ? (
@@ -2534,35 +2655,60 @@ export function BrainMemoryPanel({
 
 function GoogleConnectorControl({
   provider,
+  connectorState,
   status,
   error,
   connectLink,
   disabled,
   onConnect,
+  onSyncNow,
+  onRevoke,
 }: {
   provider: GoogleConnectorProviderView | null;
+  connectorState: GoogleConnectorStateView;
   status: GoogleConnectorUiStatus;
   error: string | null;
   connectLink: string | null;
   disabled: boolean;
   onConnect: () => Promise<void>;
+  onSyncNow: () => Promise<void>;
+  onRevoke: () => Promise<void>;
 }) {
   const visibleSurfaces = provider?.surfaces ?? [];
   const gmail = visibleSurfaces.find((surface) => surface.id === "google_gmail");
   const extension = visibleSurfaces.find((surface) => surface.id === "chrome_extension_history");
-  const canConnect = Boolean(provider?.configured) && status !== "connecting" && !disabled;
+  const connection = currentGoogleConnection(connectorState);
+  const latestJob = latestGoogleSyncJob(connectorState);
+  const enabledSources = connectorState.sources.filter((source) => source.privacy.retrievalAccess === "enabled");
+  const sourceCount = Object.values(connection?.sourceCounts ?? {}).reduce((total, count) => total + count, 0);
+  const canConnect = Boolean(provider?.configured) && !connection && status !== "connecting" && !disabled;
+  const canSync = Boolean(connection && connection.status !== "revoked") && status !== "syncing" && !disabled;
+  const canRevoke = Boolean(connection && connection.status !== "revoked") && status !== "revoking" && !disabled;
 
   return (
     <section className="brain-memory-card" aria-label="Google connector">
       <div className="brain-memory-card-head">
         <strong>Google</strong>
-        <span>{provider ? formatLabel(provider.configurationLabel) : formatLabel(status)}</span>
+        <span>{connection ? formatLabel(connection.status) : provider ? formatLabel(provider.configurationLabel) : formatLabel(status)}</span>
       </div>
       <p className="brain-memory-muted">
-        {provider?.configured
+        {connection
+          ? `${connection.surfaces.map(formatLabel).join(", ")} connected for private Brain sources.`
+          : provider?.configured
           ? "Drive, Docs, Calendar, and gated Google surfaces are registered for private Brain sources."
           : "Google connector is not configured for this environment."}
       </p>
+      {connection ? (
+        <div className="brain-memory-import-status is-completed">
+          <strong>
+            {sourceCount} source{sourceCount === 1 ? "" : "s"} indexed
+          </strong>
+          <span>
+            Last synced {formatNullableDate(connection.lastSyncedAt)} · Next sync {formatNullableDate(connection.nextSyncAt)}
+          </span>
+          {latestJob ? <span>{`${formatLabel(latestJob.surface)} ${formatLabel(latestJob.status)}`}</span> : null}
+        </div>
+      ) : null}
       {provider?.missingConfig.length ? (
         <p className="brain-memory-import-hint">Missing config: {provider.missingConfig.join(", ")}</p>
       ) : null}
@@ -2583,17 +2729,26 @@ function GoogleConnectorControl({
         </div>
         <button type="button" className="primary-command" disabled={!canConnect} onClick={() => void onConnect()}>
           <FolderPlus size={15} aria-hidden="true" />
-          <span>{status === "connecting" ? "Connecting..." : "Connect Google"}</span>
+          <span>{status === "connecting" ? "Connecting..." : connection ? "Connected" : "Connect Google"}</span>
         </button>
-        <button type="button" className="secondary-command" disabled>
+        <button type="button" className="secondary-command" disabled={!canSync} onClick={() => void onSyncNow()}>
           <Zap size={15} aria-hidden="true" />
-          <span>Sync now</span>
+          <span>{status === "syncing" ? "Syncing..." : "Sync now"}</span>
         </button>
-        <button type="button" className="secondary-command" disabled>
+        <button type="button" className="secondary-command" disabled={!canRevoke} onClick={() => void onRevoke()}>
           <XCircle size={15} aria-hidden="true" />
-          <span>Revoke</span>
+          <span>{status === "revoking" ? "Revoking..." : "Revoke"}</span>
         </button>
-        <button type="button" className="secondary-command" disabled>
+        <button
+          type="button"
+          className="secondary-command"
+          disabled
+          title={
+            enabledSources.length
+              ? "Connector source deletion is handled by Brain source deletion until the source-delete route is enabled."
+              : undefined
+          }
+        >
           <Trash2 size={15} aria-hidden="true" />
           <span>Delete source</span>
         </button>
@@ -2621,6 +2776,109 @@ function GoogleConnectorSurfaceRow({ surface }: { surface: GoogleConnectorSurfac
       </div>
     </article>
   );
+}
+
+function emptyGoogleConnectorStateView(): GoogleConnectorStateView {
+  return {
+    connections: [],
+    syncJobs: [],
+    sources: [],
+  };
+}
+
+function normalizeGoogleConnectorState(state: GoogleConnectorStateView | undefined): GoogleConnectorStateView {
+  return {
+    connections: state?.connections ?? [],
+    syncJobs: state?.syncJobs ?? [],
+    sources: state?.sources ?? [],
+  };
+}
+
+function currentGoogleConnection(state: GoogleConnectorStateView): GoogleConnectorConnectionView | null {
+  return (
+    state.connections.find((connection) => connection.status !== "revoked") ??
+    state.connections.find((connection) => connection.status === "revoked") ??
+    null
+  );
+}
+
+function latestGoogleSyncJob(state: GoogleConnectorStateView): GoogleConnectorSyncJobView | null {
+  return [...state.syncJobs].sort((left, right) => Date.parse(right.requestedAt) - Date.parse(left.requestedAt))[0] ?? null;
+}
+
+async function postGoogleConnectorAction(
+  path: "/api/connectors/google/sync-now" | "/api/connectors/google/revoke",
+  body: Record<string, unknown>,
+): Promise<{ data: { state?: GoogleConnectorStateView } & Record<string, unknown> }> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: googleConnectorRequestHeaders(),
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(googleConnectorErrorMessage(payload, `POST ${path} failed with ${response.status}.`));
+  }
+
+  return payload as { data: { state?: GoogleConnectorStateView } & Record<string, unknown> };
+}
+
+function googleConnectorRequestHeaders(): HeadersInit {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  const token = frontendRuntimeEnv("VITE_PENNY_API_TOKEN");
+
+  if (token) {
+    headers.authorization = `Bearer ${token}`;
+  }
+
+  addFrontendRuntimeHeader(headers, "x-user-id", "VITE_PENNY_USER_ID");
+  addFrontendRuntimeHeader(headers, "x-workspace-id", "VITE_PENNY_WORKSPACE_ID");
+  addFrontendRuntimeHeader(headers, "x-project-id", "VITE_PENNY_PROJECT_ID");
+  addFrontendRuntimeHeader(headers, "x-sphere-id", "VITE_PENNY_SPHERE_ID");
+
+  return headers;
+}
+
+function addFrontendRuntimeHeader(headers: Record<string, string>, headerName: string, envName: string) {
+  const value = frontendRuntimeEnv(envName);
+
+  if (value) {
+    headers[headerName] = value;
+  }
+}
+
+function frontendRuntimeEnv(name: string): string | undefined {
+  const env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env;
+  const value = env?.[name];
+
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function googleConnectorErrorMessage(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === "object" && "error" in payload) {
+    const error = (payload as { error?: { message?: unknown } }).error;
+
+    if (typeof error?.message === "string" && error.message.trim()) {
+      return error.message;
+    }
+  }
+
+  return fallback;
+}
+
+function formatNullableDate(value: string | null): string {
+  if (!value) {
+    return "not yet";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "unknown";
+  }
+
+  return date.toLocaleString();
 }
 
 function BrainMemoryNotice({ message }: { message: string }) {
