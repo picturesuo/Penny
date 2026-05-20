@@ -26,6 +26,7 @@ import {
   type BrainMemoryProfile,
   type IngestionJob,
 } from "./brain-memory-route.ts";
+import type { BrainRankerRecorder, RecordBrainDevelopmentEventInput, RecordBrainRankerRunInput } from "./brain-ranker-persistence.ts";
 
 test("POST /api/create/next generates the five required Create directions", async () => {
   const service = createInMemoryCreateRouteService();
@@ -639,6 +640,99 @@ test("POST /api/create/next records multi-select judgment and updates the artifa
   assert.ok(data.artifact.judgmentEventIds.includes(data.judgmentEvent?.id ?? "missing"));
   assert.match(sectionBody(data.artifact, "User intent"), /visibly mutate the artifact/i);
   assert.match(sectionBody(data.artifact, "Verification constraints"), /not-GPT-wrapper/i);
+});
+
+test("Create records Brain Ranker runs and development events", async () => {
+  const runs: RecordBrainRankerRunInput[] = [];
+  const events: RecordBrainDevelopmentEventInput[] = [];
+  const rankerRecorder: BrainRankerRecorder = {
+    async recordCreateRankerRun(input) {
+      runs.push(input);
+    },
+    async recordDevelopmentEvent(input) {
+      events.push(input);
+    },
+  };
+  const service = createInMemoryCreateRouteService({ rankerRecorder });
+  const rawIdea = "Build a source-backed Create loop that learns from selected and rejected directions.";
+  const first = await createNext(service, {
+    rawIdea,
+    projectId: "ranker-project",
+    sessionId: "ranker-session",
+    memory: [
+      {
+        id: "memory-ranker-preference",
+        label: "Preference: source-backed Create",
+        kind: "preference",
+        summary: "The user prefers source-backed Create cards with visible memory evidence and compact implementation plans.",
+      },
+      {
+        id: "memory-ranker-rejected",
+        label: "Rejected direction: generic chatbot sidebar",
+        kind: "brain",
+        summary: "The user repeatedly rejected generic chatbot sidebars and fake connector claims.",
+      },
+    ],
+    sources: [
+      {
+        id: "source-ranker-notes",
+        label: "Ranker notes",
+        kind: "source",
+        excerpt: "Record selected directions, rejected directions, prompt exports, and feedback as Brain development events.",
+        sourceRange: "chunk 1",
+      },
+    ],
+  });
+  const selected = optionsByLens(first.optionSet.options, ["Personal", "Critical"]);
+  const refined = await createNext(service, {
+    rawIdea,
+    projectId: first.optionSet.projectId,
+    sessionId: first.optionSet.sessionId,
+    optionSetId: first.optionSet.id,
+    selectedOptionIds: selected.map((option) => option.id),
+    userComment: "Pivot toward source-backed critique and keep generic sidebars rejected.",
+    artifact: first.artifact,
+  });
+  const exportResponse = await handleExportCodingPromptRequest(
+    jsonRequest("http://localhost/api/create/export-coding-prompt", {
+      artifact: refined.artifact,
+      verification: refined.verification,
+      judgmentEvent: refined.judgmentEvent,
+    }),
+    { service },
+  );
+  const exportPayload = await responsePayload(exportResponse);
+  const exported = exportPayload.data.export as PromptExport;
+  const feedbackService = createInMemoryCreateExportFeedbackService(new Map(), rankerRecorder);
+  const feedbackResponse = await handleCreateExportFeedbackRequest(
+    jsonRequest("http://localhost/api/create/export-feedback", {
+      projectId: refined.artifact.projectId,
+      sessionId: refined.artifact.sessionId,
+      artifactId: refined.artifact.id,
+      exportId: exported.id,
+      rating: "not_useful",
+      reasons: ["too_generic"],
+      comment: "Make the source-backed critique sharper.",
+      promptCompletenessScore: exported.qualitySignals.promptCompletenessScore,
+    }),
+    { feedbackService },
+  );
+
+  assert.equal(exportResponse.status, 200);
+  assert.equal(feedbackResponse.status, 201);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0]?.createProjectId, first.optionSet.projectId);
+  assert.equal(runs[0]?.createSessionId, first.optionSet.sessionId);
+  assert.equal(runs[0]?.optionSetId, first.optionSet.id);
+  assert.equal(runs[0]?.result.sourceOfTruth, "private_brain_ranker_progress_engine");
+  assert.equal(runs[0]?.result.rankedCandidates.length, 5);
+  assert.ok(runs[0]?.result.developmentEvents.some((event) => event.kind === "memory_used_in_create"));
+  assert.ok(events.some((event) => event.kind === "option_selected" && event.explicitness === "explicit" && event.weight > 0.9));
+  assert.ok(events.some((event) => event.kind === "option_rejected" && event.explicitness === "implicit" && event.weight < 0.5));
+  assert.ok(events.some((event) => event.kind === "user_changed_direction" && event.explicitness === "explicit"));
+  assert.ok(events.some((event) => event.kind === "prompt_exported" && event.artifactId === refined.artifact.id));
+  assert.ok(events.some((event) => event.kind === "export_feedback" && event.exportId === exported.id));
+  assert.ok(events.every((event) => !("rawScore" in (event.payload ?? {}))));
 });
 
 test("POST /api/create/export-coding-prompt returns a coding-agent ready prompt", async () => {

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
+import { resolveDefaultBrainRankerRecorder, type BrainRankerRecorder, type RecordBrainDevelopmentEventInput } from "./brain-ranker-persistence.ts";
 import { rankBrainForCreate, type BrainGroundingLabel, type BrainRankedCandidate, type BrainRankerResult, type NextBestMove } from "./brain-ranker.ts";
 import { retrieveBrainMemoryForCreate } from "./brain-memory-route.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
@@ -295,6 +296,7 @@ export type XaiCreateOptionProviderOptions = {
 
 export type CreateRouteServiceOptions = {
   optionProvider?: CreateOptionProvider | null;
+  rankerRecorder?: BrainRankerRecorder | null;
 };
 
 type ArtifactSectionTitle = (typeof artifactSectionTitles)[number];
@@ -625,6 +627,7 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
   const artifacts = new Map<string, CodingPromptArtifact>();
   const judgments = new Map<string, JudgmentEvent[]>();
   const optionProvider = options.optionProvider === undefined ? createDefaultCreateOptionProvider() : options.optionProvider;
+  const rankerRecorder = options.rankerRecorder === undefined ? resolveDefaultBrainRankerRecorder() : options.rankerRecorder;
 
   async function runNext(input: CreateNextInput, request: Request, provider: CreateOptionProvider | null, persist: boolean): Promise<CreateNextResult> {
       const rawIdea = sourceTextFromCreateInput(input);
@@ -666,6 +669,18 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
               provider,
             });
       const optionSet = generated.optionSet;
+      if (persist && !existingOptionSet && rankerRecorder) {
+        await rankerRecorder.recordCreateRankerRun({
+          scope,
+          createProjectId: projectId,
+          createSessionId: sessionId,
+          optionSetId: optionSet.id,
+          rawIdea,
+          result: brainRank,
+          occurredAt: now,
+        });
+      }
+
       const priorArtifact = input.artifact ?? artifacts.get(scopedSessionKey) ?? null;
       const selectedOptions = optionSet.options.filter((option) => input.selectedOptionIds.includes(option.id));
       const baseArtifact = priorArtifact ?? buildInitialArtifact({ projectId, sessionId, rawIdea, optionSet, now });
@@ -698,6 +713,17 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
         };
         if (persist) {
           judgments.set(scopedSessionKey, [...(judgments.get(scopedSessionKey) ?? []), judgmentEvent]);
+        }
+        if (persist && rankerRecorder) {
+          await recordCreateJudgmentDevelopmentEvents(rankerRecorder, {
+            scope,
+            projectId,
+            sessionId,
+            optionSet,
+            selectedOptions,
+            userComment: input.userComment.trim(),
+            occurredAt: now,
+          });
         }
       }
 
@@ -762,10 +788,29 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
       };
     },
 
-    async exportCodingPrompt(input) {
+    async exportCodingPrompt(input, request) {
       const artifact = input.artifact;
       const createdAt = isoNow();
       const promptExport = promptExportForArtifact(artifact, createdAt);
+      if (rankerRecorder) {
+        await rankerRecorder.recordDevelopmentEvent({
+          scope: scopeFromRequest(request),
+          kind: "prompt_exported",
+          explicitness: "explicit",
+          weight: 0.88,
+          createProjectId: artifact.projectId,
+          createSessionId: artifact.sessionId,
+          artifactId: artifact.id,
+          exportId: promptExport.id,
+          summary: `Prompt exported for ${artifact.title}.`,
+          occurredAt: createdAt,
+          payload: {
+            targetCount: promptExport.targets.length,
+            promptCompletenessScore: promptExport.qualitySignals.promptCompletenessScore,
+            missingCount: promptExport.qualitySignals.missing.length,
+          },
+        });
+      }
 
       return {
         export: promptExport,
@@ -776,18 +821,25 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
 
 export function createInMemoryCreateExportFeedbackService(
   store = new Map<string, CreateExportFeedback>(),
+  rankerRecorder: BrainRankerRecorder | null = null,
 ): CreateExportFeedbackService {
   return {
     async submit(input, request) {
       const feedback = createExportFeedbackFromInput(input, request);
       store.set(createScopeStorageKey(scopeFromRequest(request), feedback.id), feedback);
+      if (rankerRecorder) {
+        await recordExportFeedbackDevelopmentEvent(rankerRecorder, feedback, scopeFromRequest(request));
+      }
 
       return { feedback };
     },
   };
 }
 
-export function createDbCreateExportFeedbackService(db: PennyDatabase): CreateExportFeedbackService {
+export function createDbCreateExportFeedbackService(
+  db: PennyDatabase,
+  rankerRecorder: BrainRankerRecorder | null = null,
+): CreateExportFeedbackService {
   return {
     async submit(input, request) {
       const feedback = createExportFeedbackFromInput(input, request);
@@ -806,6 +858,9 @@ export function createDbCreateExportFeedbackService(db: PennyDatabase): CreateEx
         promptCompletenessScore: feedback.promptCompletenessScore,
         createdAt: new Date(feedback.createdAt),
       });
+      if (rankerRecorder) {
+        await recordExportFeedbackDevelopmentEvent(rankerRecorder, feedback, scope);
+      }
 
       return { feedback };
     },
@@ -821,7 +876,10 @@ function resolveDefaultCreateExportFeedbackService(): CreateExportFeedbackServic
   }
 
   if (databaseUrl) {
-    defaultCreateExportFeedbackServiceCache = createDbCreateExportFeedbackService(createPennyDb(databaseUrl));
+    defaultCreateExportFeedbackServiceCache = createDbCreateExportFeedbackService(
+      createPennyDb(databaseUrl),
+      resolveDefaultBrainRankerRecorder(),
+    );
     defaultCreateExportFeedbackServiceCacheKey = cacheKey;
     return defaultCreateExportFeedbackServiceCache;
   }
@@ -870,6 +928,129 @@ function createExportFeedbackFromInput(input: CreateExportFeedbackInput, request
     promptCompletenessScore: input.promptCompletenessScore ?? null,
     createdAt,
   };
+}
+
+async function recordCreateJudgmentDevelopmentEvents(
+  rankerRecorder: BrainRankerRecorder,
+  input: {
+    scope: BrainScope;
+    projectId: string;
+    sessionId: string;
+    optionSet: OptionSet;
+    selectedOptions: CandidateOption[];
+    userComment: string;
+    occurredAt: string;
+  },
+): Promise<void> {
+  const selectedIds = new Set(input.selectedOptions.map((option) => option.id));
+  const events: RecordBrainDevelopmentEventInput[] = [];
+
+  for (const option of input.selectedOptions) {
+    const refs = optionEventRefs(option);
+    events.push({
+      scope: input.scope,
+      kind: "option_selected",
+      explicitness: "explicit",
+      weight: 0.95,
+      createProjectId: input.projectId,
+      createSessionId: input.sessionId,
+      optionSetId: input.optionSet.id,
+      memoryNodeIds: refs.memoryNodeIds,
+      sourceReferenceIds: refs.sourceReferenceIds,
+      summary: `User selected the ${option.lens} Create option: ${option.title}.`,
+      occurredAt: input.occurredAt,
+      payload: {
+        optionId: option.id,
+        lens: option.lens,
+        topReason: option.topReason,
+      },
+    });
+  }
+
+  if (selectedIds.size > 0) {
+    for (const option of input.optionSet.options.filter((item) => !selectedIds.has(item.id))) {
+      const refs = optionEventRefs(option);
+      events.push({
+        scope: input.scope,
+        kind: "option_rejected",
+        explicitness: "implicit",
+        weight: 0.45,
+        createProjectId: input.projectId,
+        createSessionId: input.sessionId,
+        optionSetId: input.optionSet.id,
+        memoryNodeIds: refs.memoryNodeIds,
+        sourceReferenceIds: refs.sourceReferenceIds,
+        summary: `User left the ${option.lens} Create option unselected: ${option.title}.`,
+        occurredAt: input.occurredAt,
+        payload: {
+          optionId: option.id,
+          lens: option.lens,
+          selectedOptionIds: [...selectedIds],
+        },
+      });
+    }
+  }
+
+  if (isDirectionChangeComment(input.userComment)) {
+    events.push({
+      scope: input.scope,
+      kind: "user_changed_direction",
+      explicitness: "explicit",
+      weight: 0.86,
+      createProjectId: input.projectId,
+      createSessionId: input.sessionId,
+      optionSetId: input.optionSet.id,
+      memoryNodeIds: unique(input.selectedOptions.flatMap((option) => option.memoryUsed.map((memory) => memory.id))),
+      sourceReferenceIds: unique(input.selectedOptions.flatMap((option) => option.sourcesUsed.map((source) => source.id))),
+      summary: "User changed direction during Create judgment.",
+      occurredAt: input.occurredAt,
+      payload: {
+        commentLength: input.userComment.length,
+        selectedOptionIds: [...selectedIds],
+        selectedLenses: input.selectedOptions.map((option) => option.lens),
+      },
+    });
+  }
+
+  for (const event of events) {
+    await rankerRecorder.recordDevelopmentEvent(event);
+  }
+}
+
+async function recordExportFeedbackDevelopmentEvent(
+  rankerRecorder: BrainRankerRecorder,
+  feedback: CreateExportFeedback,
+  scope: BrainScope,
+): Promise<void> {
+  await rankerRecorder.recordDevelopmentEvent({
+    scope,
+    kind: "export_feedback",
+    explicitness: "explicit",
+    weight: feedback.rating === "not_useful" ? 0.92 : 0.82,
+    createProjectId: feedback.projectId,
+    createSessionId: feedback.sessionId,
+    artifactId: feedback.artifactId,
+    exportId: feedback.exportId,
+    summary: `User marked exported prompt as ${feedback.rating.replace("_", " ")}.`,
+    occurredAt: feedback.createdAt,
+    payload: {
+      rating: feedback.rating,
+      reasons: feedback.reasons,
+      hasComment: Boolean(feedback.comment),
+      promptCompletenessScore: feedback.promptCompletenessScore,
+    },
+  });
+}
+
+function optionEventRefs(option: CandidateOption): Pick<RecordBrainDevelopmentEventInput, "memoryNodeIds" | "sourceReferenceIds"> {
+  return {
+    memoryNodeIds: unique(option.memoryUsed.map((memory) => memory.id)),
+    sourceReferenceIds: unique(option.sourcesUsed.map((source) => source.id)),
+  };
+}
+
+function isDirectionChangeComment(comment: string): boolean {
+  return /\b(pivot|instead|change|revise|cut|combine|sharpen|keep|drop|avoid|prefer|focus|more|less|not)\b/i.test(comment);
 }
 
 type ProviderGenerationTrace = Pick<
