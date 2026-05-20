@@ -597,6 +597,7 @@ test("POST /api/connectors/google/sync-complete imports Google records into priv
   assert.equal(profile.sources.some((source) => source.sourceUri === "google-drive:file:doc-1"), true);
   assert.equal(profile.sources.find((source) => source.sourceUri === "google-drive:file:doc-1")?.privacy.rawRetention, false);
   assert.equal(profile.sources.find((source) => source.sourceUri === "google-drive:file:doc-1")?.privacy.trainingUse, false);
+  assert.ok((profile.sources.find((source) => source.sourceUri === "google-drive:file:doc-1")?.chunkCount ?? 0) >= 1);
   assert.ok(profile.recentMemoryNodes.some((node) => node.sourceId === payload.data.importedSources[0]?.brainSourceId));
   assert.ok(profile.profile.recentMeaningfulActivity.some((activity) => activity.kind === "source_synced" && activity.label === "Synced Strategy doc"));
   assert.ok(events.some((event) => event.kind === "source_synced" && event.payload?.sourceUri === "google-drive:file:doc-1"));
