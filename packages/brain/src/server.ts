@@ -29,6 +29,13 @@ import {
 import { handleBrainSearchRequest } from "./brain-search-route.ts";
 import { handleBrainSeedRequest } from "./brain-seed-route.ts";
 import { handleChallengeRequest, handleChallengeRespondRequest } from "./challenge-route.ts";
+import {
+  handleCodebaseAuditRequest,
+  handleCodebaseContextRequest,
+  handleCodebaseIngestRequest,
+  handleCodebaseScanRequest,
+  handleCodebaseSearchRequest,
+} from "./codebase-route.ts";
 import { handleChallengeBriefRequest } from "./routes/challenge-brief-routes.ts";
 import { handleClaimDetailRequest } from "./claim-detail-route.ts";
 import {
@@ -462,6 +469,33 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/brain/search") {
       await writeWebResponse(outgoing, await handleBrainSearchRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/codebase/ingest") {
+      await writeWebResponse(outgoing, await handleCodebaseIngestRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/codebase/search") {
+      await writeWebResponse(outgoing, await handleCodebaseSearchRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/codebase/context") {
+      await writeWebResponse(outgoing, await handleCodebaseContextRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/codebase/audit") {
+      await writeWebResponse(outgoing, await handleCodebaseAuditRequest(request));
+      return;
+    }
+
+    const codebaseScanMatch = /^\/api\/codebase\/scan\/([^/]+)$/.exec(url.pathname);
+
+    if (codebaseScanMatch) {
+      await writeWebResponse(outgoing, await handleCodebaseScanRequest(request, decodeURIComponent(codebaseScanMatch[1] ?? "")));
       return;
     }
 
