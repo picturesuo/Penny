@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createInMemoryCreateRouteService,
+  createInMemoryCreateExportFeedbackService,
   handleCreateCompareRequest,
+  handleCreateExportFeedbackRequest,
   handleCreateNextRequest,
   handleExportCodingPromptRequest,
   type CandidateOption,
   type CodingPromptArtifact,
   type CreateNextResult,
+  type CreateExportFeedback,
   type CreateOptionProvider,
   type CreateProviderComparisonResult,
   type MemoryRef,
@@ -713,6 +716,45 @@ test("POST /api/create/export-coding-prompt returns a coding-agent ready prompt"
   assert.equal(exported.qualitySignals.promptCompletenessScore, 100);
   assert.deepEqual(exported.qualitySignals.missing, []);
   assertNoFakePositiveClaims(exported.text);
+});
+
+test("POST /api/create/export-feedback captures scoped dogfood feedback", async () => {
+  const feedbackService = createInMemoryCreateExportFeedbackService();
+  const response = await handleCreateExportFeedbackRequest(
+    jsonRequest(
+      "http://localhost/api/create/export-feedback",
+      {
+        projectId: "create-project-1",
+        sessionId: "create-session-1",
+        artifactId: "artifact-1",
+        exportId: "export-1",
+        rating: "not_useful",
+        reasons: ["too_generic", "not_personal_enough", "too_generic"],
+        comment: "Needs the memory-backed constraints to be sharper.",
+        promptCompletenessScore: 72,
+      },
+      {
+        ...requestHeaders(),
+        "x-user-id": "dogfood-user",
+        "x-workspace-id": "dogfood-workspace",
+      },
+    ),
+    { feedbackService },
+  );
+  const payload = await responsePayload(response);
+  const feedback = payload.data.feedback as CreateExportFeedback;
+
+  assert.equal(response.status, 201);
+  assert.equal(feedback.sourceOfTruth, "create_export_feedback");
+  assert.equal(feedback.projectId, "create-project-1");
+  assert.equal(feedback.sessionId, "create-session-1");
+  assert.equal(feedback.artifactId, "artifact-1");
+  assert.equal(feedback.exportId, "export-1");
+  assert.equal(feedback.rating, "not_useful");
+  assert.deepEqual(feedback.reasons, ["too_generic", "not_personal_enough"]);
+  assert.equal(feedback.comment, "Needs the memory-backed constraints to be sharper.");
+  assert.equal(feedback.promptCompletenessScore, 72);
+  assert.ok(feedback.id.startsWith("create-export-feedback-"));
 });
 
 async function createNext(

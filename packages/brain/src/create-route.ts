@@ -3,6 +3,8 @@ import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { retrieveBrainMemoryForCreate } from "./brain-memory-route.ts";
+import { createPennyDb, type PennyDatabase } from "./db/client.ts";
+import { createExportFeedback as createExportFeedbackTable } from "./db/schema.ts";
 import { emitPennyLog } from "./observability.ts";
 import { scopeValues, type BrainScope } from "./scope.ts";
 
@@ -10,6 +12,15 @@ export type CreateLens = "Personal" | "Practical" | "Valuable" | "Critical" | "W
 export type CreateCheckStatus = "pass" | "warn" | "fail";
 export type CreateProviderMode = "deterministic" | "model_backed" | "deterministic_fallback";
 export type CreateSchemaValidationStatus = "not_run" | "success" | "failure";
+export type CreateExportFeedbackRating = "useful" | "not_useful";
+export type CreateExportFeedbackReason =
+  | "strong_output"
+  | "too_generic"
+  | "too_complex"
+  | "not_personal_enough"
+  | "wrong_memory"
+  | "missing_constraints"
+  | "ready_to_ship";
 
 export type MemoryRef = {
   id: string;
@@ -176,8 +187,23 @@ export type PromptExport = {
   createdAt: string;
 };
 
+export type CreateExportFeedback = {
+  sourceOfTruth: "create_export_feedback";
+  id: string;
+  projectId: string;
+  sessionId: string;
+  artifactId: string;
+  exportId: string;
+  rating: CreateExportFeedbackRating;
+  reasons: CreateExportFeedbackReason[];
+  comment: string | null;
+  promptCompletenessScore: number | null;
+  createdAt: string;
+};
+
 export type CreateNextInput = z.infer<typeof CreateNextBodySchema>;
 export type ExportCodingPromptInput = z.infer<typeof ExportCodingPromptBodySchema>;
+export type CreateExportFeedbackInput = z.infer<typeof CreateExportFeedbackBodySchema>;
 
 export type CreateNextResult = {
   sourceOfTruth: "create_options_judgments_artifacts_verification";
@@ -193,6 +219,10 @@ export type CreateRouteService = {
   next(input: CreateNextInput, request: Request): Promise<CreateNextResult>;
   compare(input: CreateNextInput, request: Request): Promise<CreateProviderComparisonResult>;
   exportCodingPrompt(input: ExportCodingPromptInput, request: Request): Promise<{ export: PromptExport }>;
+};
+
+export type CreateExportFeedbackService = {
+  submit(input: CreateExportFeedbackInput, request: Request): Promise<{ feedback: CreateExportFeedback }>;
 };
 
 export type CreateProviderComparisonArm = {
@@ -215,6 +245,7 @@ export type CreateProviderComparisonResult = {
 
 export type CreateRouteOptions = {
   service?: CreateRouteService;
+  feedbackService?: CreateExportFeedbackService;
 };
 
 export type CreateOptionGenerationInput = {
@@ -398,7 +429,33 @@ const ExportCodingPromptBodySchema = z
   })
   .strict();
 
+const createExportFeedbackReasons = [
+  "strong_output",
+  "too_generic",
+  "too_complex",
+  "not_personal_enough",
+  "wrong_memory",
+  "missing_constraints",
+  "ready_to_ship",
+] as const;
+
+const CreateExportFeedbackBodySchema = z
+  .object({
+    projectId: z.string().trim().min(1).max(160),
+    sessionId: z.string().trim().min(1).max(160),
+    artifactId: z.string().trim().min(1).max(160),
+    exportId: z.string().trim().min(1).max(160),
+    rating: z.enum(["useful", "not_useful"]),
+    reasons: z.array(z.enum(createExportFeedbackReasons)).max(8).optional().default([]),
+    comment: z.string().trim().max(1_000).optional().default(""),
+    promptCompletenessScore: z.number().int().min(0).max(100).nullable().optional().default(null),
+  })
+  .strict();
+
 const defaultCreateRouteService = createInMemoryCreateRouteService();
+const defaultCreateExportFeedbackStore = new Map<string, CreateExportFeedback>();
+let defaultCreateExportFeedbackServiceCache: CreateExportFeedbackService | null = null;
+let defaultCreateExportFeedbackServiceCacheKey: string | null = null;
 
 export async function handleCreateNextRequest(request: Request, options: CreateRouteOptions = {}): Promise<Response> {
   if (request.method !== "POST") {
@@ -469,6 +526,29 @@ export async function handleExportCodingPromptRequest(
     return jsonResponse({ data: result });
   } catch (error) {
     emitPennyLog("create.prompt_export", { status: "error" }, { level: "error" });
+    return createErrorResponse(error);
+  }
+}
+
+export async function handleCreateExportFeedbackRequest(
+  request: Request,
+  options: CreateRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/create/export-feedback requires the POST method.", "POST");
+  }
+
+  const parsed = await parseJsonRequest(request, CreateExportFeedbackBodySchema);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  try {
+    const service = options.feedbackService ?? resolveDefaultCreateExportFeedbackService();
+    const result = await service.submit(parsed.data, request);
+
+    return jsonResponse({ data: result }, 201);
+  } catch (error) {
     return createErrorResponse(error);
   }
 }
@@ -671,6 +751,104 @@ export function createInMemoryCreateRouteService(options: CreateRouteServiceOpti
         export: promptExport,
       };
     },
+  };
+}
+
+export function createInMemoryCreateExportFeedbackService(
+  store = new Map<string, CreateExportFeedback>(),
+): CreateExportFeedbackService {
+  return {
+    async submit(input, request) {
+      const feedback = createExportFeedbackFromInput(input, request);
+      store.set(createScopeStorageKey(scopeFromRequest(request), feedback.id), feedback);
+
+      return { feedback };
+    },
+  };
+}
+
+export function createDbCreateExportFeedbackService(db: PennyDatabase): CreateExportFeedbackService {
+  return {
+    async submit(input, request) {
+      const feedback = createExportFeedbackFromInput(input, request);
+      const scope = scopeFromRequest(request);
+
+      await db.insert(createExportFeedbackTable).values({
+        ...scope,
+        id: feedback.id,
+        createProjectId: feedback.projectId,
+        createSessionId: feedback.sessionId,
+        artifactId: feedback.artifactId,
+        exportId: feedback.exportId,
+        rating: feedback.rating,
+        reasons: feedback.reasons,
+        comment: feedback.comment,
+        promptCompletenessScore: feedback.promptCompletenessScore,
+        createdAt: new Date(feedback.createdAt),
+      });
+
+      return { feedback };
+    },
+  };
+}
+
+function resolveDefaultCreateExportFeedbackService(): CreateExportFeedbackService {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  const cacheKey = databaseUrl ? `db:${databaseUrl}` : `memory:${createRuntimeKind()}`;
+
+  if (defaultCreateExportFeedbackServiceCache && defaultCreateExportFeedbackServiceCacheKey === cacheKey) {
+    return defaultCreateExportFeedbackServiceCache;
+  }
+
+  if (databaseUrl) {
+    defaultCreateExportFeedbackServiceCache = createDbCreateExportFeedbackService(createPennyDb(databaseUrl));
+    defaultCreateExportFeedbackServiceCacheKey = cacheKey;
+    return defaultCreateExportFeedbackServiceCache;
+  }
+
+  if (createRuntimeKind() !== "dev-test") {
+    throw new Error(
+      "DATABASE_URL is required for Create export feedback in production. In-memory feedback is only for local dev/test.",
+    );
+  }
+
+  defaultCreateExportFeedbackServiceCache = createInMemoryCreateExportFeedbackService(defaultCreateExportFeedbackStore);
+  defaultCreateExportFeedbackServiceCacheKey = cacheKey;
+
+  return defaultCreateExportFeedbackServiceCache;
+}
+
+function createExportFeedbackFromInput(input: CreateExportFeedbackInput, request: Request): CreateExportFeedback {
+  const scope = scopeFromRequest(request);
+  const createdAt = isoNow();
+  const reasons = unique(input.reasons).filter((reason): reason is CreateExportFeedbackReason =>
+    createExportFeedbackReasons.includes(reason as CreateExportFeedbackReason),
+  );
+  const comment = clipText(input.comment.trim(), 1_000);
+
+  return {
+    sourceOfTruth: "create_export_feedback",
+    id: stableId(
+      "create-export-feedback",
+      scope.userId,
+      scope.workspaceId,
+      scope.projectId,
+      scope.sphereId,
+      input.exportId,
+      input.rating,
+      reasons.join("|"),
+      comment,
+      createdAt,
+    ),
+    projectId: input.projectId,
+    sessionId: input.sessionId,
+    artifactId: input.artifactId,
+    exportId: input.exportId,
+    rating: input.rating,
+    reasons,
+    comment: comment || null,
+    promptCompletenessScore: input.promptCompletenessScore ?? null,
+    createdAt,
   };
 }
 
@@ -1826,6 +2004,10 @@ function createScopeStorageKey(scope: BrainScope, id: string): string {
   return [scope.userId, scope.workspaceId, scope.projectId, scope.sphereId, id]
     .map((value) => value ?? "null")
     .join("\u001f");
+}
+
+function createRuntimeKind(): "dev-test" | "production" {
+  return process.env.NODE_ENV === "production" ? "production" : "dev-test";
 }
 
 function firstPresentHeader(request: Request, names: string[]): string | undefined {
