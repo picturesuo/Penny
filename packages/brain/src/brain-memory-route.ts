@@ -14,6 +14,7 @@ import {
   brainMemorySourceChunks,
   brainMemorySources,
 } from "./db/schema.ts";
+import { emitPennyLog } from "./observability.ts";
 import { scopeValues, type BrainScope } from "./scope.ts";
 
 export type SourceImportKind =
@@ -385,8 +386,26 @@ export async function handleBrainImportRequest(
 
   try {
     const service = options.service ?? defaultBrainMemoryService;
-    return jsonResponse({ data: await service.importSource(parsed.data, request) });
+    const result = await service.importSource(parsed.data, request);
+    emitPennyLog(
+      "brain.import",
+      {
+        status: result.job.status,
+        sourceId: result.job.sourceId,
+        sourceKind: result.job.sourceImport?.kind ?? parsed.data.kind,
+        sourceCount: result.job.counts.sources,
+        chunkCount: result.job.counts.chunks,
+        memoryNodeCount: result.job.counts.memoryNodes,
+        memoryEdgeCount: result.job.counts.memoryEdges,
+        profileSignalCount: result.job.counts.profileSignals,
+        errorCount: result.job.errorMessages.length,
+      },
+      { level: result.job.status === "failed" ? "warn" : "info" },
+    );
+
+    return jsonResponse({ data: result });
   } catch (error) {
+    emitPennyLog("brain.import", { status: "error" }, { level: "error" });
     return brainMemoryErrorResponse(error);
   }
 }
@@ -465,8 +484,17 @@ export async function handleBrainRetrieveRequest(
 
   try {
     const service = options.service ?? defaultBrainMemoryService;
-    return jsonResponse({ data: await service.retrieve(parsed.data, request) });
+    const result = await service.retrieve(parsed.data, request);
+    emitPennyLog("brain.retrieve", {
+      status: "completed",
+      contextLight: result.contextLight,
+      resultCount: result.results.length,
+      requestedLimit: parsed.data.limit ?? null,
+    });
+
+    return jsonResponse({ data: result });
   } catch (error) {
+    emitPennyLog("brain.retrieve", { status: "error" }, { level: "error" });
     return brainMemoryErrorResponse(error);
   }
 }
@@ -490,11 +518,30 @@ export async function handleBrainMemoryReviewRequest(
     const result = await service.reviewMemory(nodeId, parsed.data, request);
 
     if (!result.reviewed) {
+      emitPennyLog(
+        "brain.memory_review",
+        {
+          status: "not_found",
+          nodeId,
+          action: parsed.data.action,
+          reviewed: false,
+        },
+        { level: "warn" },
+      );
       return jsonResponse({ error: { code: "brain_memory_not_found", message: "No Brain memory matched that id." } }, 404);
     }
 
+    emitPennyLog("brain.memory_review", {
+      status: "completed",
+      nodeId,
+      action: result.action,
+      reviewed: result.reviewed,
+      hasMemory: Boolean(result.memory),
+    });
+
     return jsonResponse({ data: result });
   } catch (error) {
+    emitPennyLog("brain.memory_review", { status: "error", nodeId }, { level: "error" });
     return brainMemoryErrorResponse(error);
   }
 }
@@ -513,11 +560,29 @@ export async function handleBrainSourceDeleteRequest(
     const result = await service.deleteSource(sourceId, request);
 
     if (!result.deleted) {
+      emitPennyLog(
+        "brain.source_delete",
+        {
+          status: "not_found",
+          sourceId,
+          deleted: false,
+        },
+        { level: "warn" },
+      );
       return jsonResponse({ error: { code: "brain_source_not_found", message: "No Brain source matched that id." } }, 404);
     }
 
+    emitPennyLog("brain.source_delete", {
+      status: "completed",
+      sourceId,
+      deleted: result.deleted,
+      remainingSourceCount: result.profile.stats.sourceCount,
+      remainingMemoryNodeCount: result.profile.stats.memoryNodeCount,
+    });
+
     return jsonResponse({ data: result });
   } catch (error) {
+    emitPennyLog("brain.source_delete", { status: "error", sourceId }, { level: "error" });
     return brainMemoryErrorResponse(error);
   }
 }
