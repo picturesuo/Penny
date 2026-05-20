@@ -1088,7 +1088,7 @@ export interface BrainProfileIdeaCluster {
 
 export interface BrainProfileRecentActivity {
   id: string;
-  kind: "source_imported" | "memory_extracted" | "memory_confirmed" | "memory_boosted";
+  kind: "source_imported" | "source_synced" | "memory_extracted" | "memory_confirmed" | "memory_boosted";
   label: string;
   summary: string;
   occurredAt: string;
