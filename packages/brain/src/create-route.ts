@@ -3,6 +3,7 @@ import { createXai } from "@ai-sdk/xai";
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { retrieveBrainMemoryForCreate } from "./brain-memory-route.ts";
+import { emitPennyLog } from "./observability.ts";
 import { scopeValues, type BrainScope } from "./scope.ts";
 
 export type CreateLens = "Personal" | "Practical" | "Valuable" | "Critical" | "Weird";
@@ -411,8 +412,12 @@ export async function handleCreateNextRequest(request: Request, options: CreateR
 
   try {
     const service = options.service ?? defaultCreateRouteService;
-    return jsonResponse({ data: await service.next(parsed.data, request) });
+    const result = await service.next(parsed.data, request);
+    emitCreateNextLogs(result);
+
+    return jsonResponse({ data: result });
   } catch (error) {
+    emitPennyLog("create.generate", { status: "error" }, { level: "error" });
     return createErrorResponse(error);
   }
 }
@@ -450,9 +455,69 @@ export async function handleExportCodingPromptRequest(
 
   try {
     const service = options.service ?? defaultCreateRouteService;
-    return jsonResponse({ data: await service.exportCodingPrompt(parsed.data, request) });
+    const result = await service.exportCodingPrompt(parsed.data, request);
+    emitPennyLog("create.prompt_export", {
+      status: "completed",
+      artifactId: result.export.artifactId,
+      exportId: result.export.id,
+      format: result.export.format,
+      targetCount: result.export.targets.length,
+      completenessScore: result.export.qualitySignals.promptCompletenessScore,
+      missingCount: result.export.qualitySignals.missing.length,
+    });
+
+    return jsonResponse({ data: result });
   } catch (error) {
+    emitPennyLog("create.prompt_export", { status: "error" }, { level: "error" });
     return createErrorResponse(error);
+  }
+}
+
+function emitCreateNextLogs(result: CreateNextResult): void {
+  const observability = result.observability;
+
+  emitPennyLog("create.generate", {
+    status: "completed",
+    optionSetId: result.optionSet.id,
+    artifactId: result.artifact.id,
+    providerMode: observability.providerMode,
+    providerName: observability.providerName,
+    schemaValidation: observability.schemaValidation,
+    schemaValidationErrorCount: observability.schemaValidationErrors.length,
+    memoryCountUsed: observability.memoryCountUsed,
+    sourceCountUsed: observability.sourceCountUsed,
+    rejectedDirectionCount: observability.rejectedDirectionsUsed.length,
+    generatedLensCount: observability.generatedLenses.length,
+    selectedOptionCount: observability.selectedOptionIds.length,
+    exportReady: result.exportReady,
+    completenessScore: observability.exportQualitySignals.promptCompletenessScore,
+    missingCount: observability.exportQualitySignals.missing.length,
+  });
+
+  if (observability.providerMode === "deterministic_fallback") {
+    emitPennyLog(
+      "create.model_fallback",
+      {
+        status: "fallback",
+        optionSetId: result.optionSet.id,
+        providerName: observability.providerName,
+        schemaValidation: observability.schemaValidation,
+      },
+      { level: "warn" },
+    );
+  }
+
+  if (observability.schemaValidation === "failure") {
+    emitPennyLog(
+      "create.schema_validation_failure",
+      {
+        status: "failed",
+        optionSetId: result.optionSet.id,
+        providerName: observability.providerName,
+        schemaValidationErrorCount: observability.schemaValidationErrors.length,
+      },
+      { level: "warn" },
+    );
   }
 }
 
