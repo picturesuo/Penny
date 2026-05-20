@@ -17,9 +17,18 @@ model-backed Create with deterministic fallback, and Learn kept working without 
 - import-reachability scan from `packages/brain/src/server.ts` and `packages/brain/frontend/src/main.tsx`
 - targeted reads of root instructions, package scripts, server route registrations, frontend mode shell, Create workspace, route tests, mode contracts, and P3 route gate
 
-Current tracked inventory is 267 files. `apps/` and `packages/shared/` exist only as ignored local directories in this checkout; they have no tracked files to audit. `packages/brain/public/assets/*` are tracked generated build assets and must only change through `pnpm build`.
+Current tracked inventory is 270 files. `apps/` and `packages/shared/` exist only as ignored local directories in this checkout; they have no tracked files to audit. `packages/brain/public/assets/*` are tracked generated build assets and must only change through `pnpm build`.
 
 Brain Ranker persistence is now tracked in `packages/brain/src/brain-ranker-persistence.ts` and wired through Create route tests. Keep it as part of the protected private-memory/Create progress path.
+
+Completed during this cleanup pass:
+
+- Refactored the visible MVP mode contract from `Check` to `Create` while keeping internal challenge/verify semantics.
+- Renamed the active frontend workspace component/imports from `CheckWorkspace` to `CreateWorkspace`.
+- Removed the old `/api/check` backend route stack, matching frontend client methods/types, and stale URL assertions.
+- Focused route/client tests passed after the `/api/check` deletion: `pnpm exec tsx --test packages/brain/frontend/test/brainClient.test.ts packages/brain/src/server.test.ts packages/brain/src/p3-route-preservation.test.ts`.
+- Frontend typecheck passed after the deletion: `pnpm exec tsc --noEmit --pretty false -p packages/brain/frontend/tsconfig.json`.
+- Root `pnpm exec tsc --noEmit --pretty false` currently fails in unrelated Google connector files: `packages/brain/src/google-connector-route.test.ts` and `packages/brain/src/google-connector-state-store.ts`.
 
 ## File Inventory Inspected
 
@@ -78,8 +87,8 @@ Scripts and fixtures:
 Frontend active app:
 
 - `packages/brain/frontend/index.html` - keep
-- `packages/brain/frontend/src/App.tsx` - refactor internal `checkInitialSeedText` naming to Create and keep active modes Brain/Create/Learn
-- `packages/brain/frontend/src/api/brainClient.ts` - delete/refactor unused legacy Check client methods if the matching backend `/api/check` route stack is removed; keep Create, Brain memory, Learn, Verify, Challenge response, and scoped headers
+- `packages/brain/frontend/src/App.tsx` - keep; internal Create naming is aligned and active modes are Brain/Create/Learn
+- `packages/brain/frontend/src/api/brainClient.ts` - keep; legacy `/api/check` client methods were removed, while Create, Brain memory, Learn, Verify, Challenge response, and scoped headers remain
 - `packages/brain/frontend/src/autopilotUx.ts` - keep; maps challenge/verify candidates into visible Create
 - `packages/brain/frontend/src/components/AskPennyRenderedText.css` - keep
 - `packages/brain/frontend/src/components/AskPennyRenderedText.tsx` - keep
@@ -87,7 +96,7 @@ Frontend active app:
 - `packages/brain/frontend/src/components/CanvasEdgeLayer.tsx` - keep
 - `packages/brain/frontend/src/components/CanvasNodeCard.tsx` - keep
 - `packages/brain/frontend/src/components/CanvasWorkspace.tsx` - keep; internal `check` action label already renders as Create
-- `packages/brain/frontend/src/components/CheckWorkspace.tsx` - refactor file/component name to CreateWorkspace; keep CSS class names until a safe selector migration is proven
+- `packages/brain/frontend/src/components/CreateWorkspace.tsx` - keep; component/import name is aligned, while `.check-*` CSS class names remain deferred implementation selectors
 - `packages/brain/frontend/src/components/Header.tsx` - keep; visible nav is already Brain/Create/Learn
 - `packages/brain/frontend/src/components/LandingPage.tsx` - keep; first-run Brain/Create/Learn entry is protected
 - `packages/brain/frontend/src/components/LearnWorkspace.tsx` - keep; "quick check" and lesson-check language is educational, not stale Check mode copy
@@ -96,7 +105,7 @@ Frontend active app:
 - `packages/brain/frontend/src/lib/text.ts` - keep
 - `packages/brain/frontend/src/main.tsx` - keep
 - `packages/brain/frontend/src/styles.css` - keep/defer; many `.check-*` selectors are implementation names still used by the Create workspace, so do not trim them until component selector names are migrated and built
-- `packages/brain/frontend/src/types/brain.ts` - delete/refactor legacy Check route types if `/api/check` is removed; keep Create, Brain memory, Learn, Verify, canvas, and scope types
+- `packages/brain/frontend/src/types/brain.ts` - keep; legacy `/api/check` route types were removed, while Create, Brain memory, Learn, Verify, canvas, and scope types remain
 - `packages/brain/frontend/tsconfig.json` - keep
 - `packages/brain/frontend/vite.config.ts` - keep
 
@@ -104,10 +113,10 @@ Frontend tests:
 
 - `packages/brain/frontend/test/askPennyRenderedText.test.ts` - keep
 - `packages/brain/frontend/test/autopilotUx.test.ts` - keep
-- `packages/brain/frontend/test/brainClient.test.ts` - refactor/delete old `/api/check` client assertions if legacy Check client methods are removed
+- `packages/brain/frontend/test/brainClient.test.ts` - keep; old `/api/check` client assertions were removed
 - `packages/brain/frontend/test/brainWorkspace.test.ts` - keep
 - `packages/brain/frontend/test/canvasWorkspace.test.ts` - keep
-- `packages/brain/frontend/test/createWorkspace.test.ts` - refactor import path when `CheckWorkspace.tsx` becomes `CreateWorkspace.tsx`
+- `packages/brain/frontend/test/createWorkspace.test.ts` - keep; imports `CreateWorkspace`
 - `packages/brain/frontend/test/landingPage.test.ts` - keep
 - `packages/brain/frontend/test/learnWorkspace.test.ts` - keep
 - `packages/brain/frontend/test/modeLabels.test.ts` - keep; already asserts Brain/Create/Learn
@@ -141,19 +150,19 @@ Backend production source:
 - `packages/brain/src/challenge-commands.ts` - keep
 - `packages/brain/src/challenge-core.ts` - keep
 - `packages/brain/src/challenge-route.ts` - keep/defer; legacy direct LLM route is P3 deprecate-only
-- `packages/brain/src/check-route.ts` - delete candidate; old `/api/check` project/cycle stack is not used by the active Create frontend and duplicates the new Create flow
+- `packages/brain/src/check-route.ts` - deleted; old `/api/check` project/cycle stack was not used by the active Create frontend and duplicated the new Create flow
 - `packages/brain/src/claim-detail-route.ts` - keep
 - `packages/brain/src/command-idempotency.ts` - keep; protects write idempotency
 - `packages/brain/src/context-connector-service.ts` - keep
 - `packages/brain/src/context-layer-repository.ts` - keep
 - `packages/brain/src/context-layer-route.ts` - keep
 - `packages/brain/src/context-layer.ts` - keep
-- `packages/brain/src/create-route.ts` - refactor stale "Check workspace wrapper" and "existing Check backend routes" generated artifact copy; keep model-backed Create plus deterministic fallback
+- `packages/brain/src/create-route.ts` - keep; stale Check wrapper/backend generated artifact copy was removed, while model-backed Create plus deterministic fallback remain
 - `packages/brain/src/db/client.ts` - keep
 - `packages/brain/src/db/schema.ts` - keep; do not weaken scope/privacy schema
 - `packages/brain/src/domain/engine.ts` - keep; next-move ranking still recommends stress-test/verify/learn/save
 - `packages/brain/src/domain/repository.ts` - keep; scope filters and row-in-scope checks protect privacy
-- `packages/brain/src/domain/types.ts` - refactor only if `MvpMode` becomes Create
+- `packages/brain/src/domain/types.ts` - keep; `MvpMode` is aligned to Brain/Create/Learn
 - `packages/brain/src/embedding-provider.ts` - keep/defer; embeddings are present but Penny-native search is also implemented
 - `packages/brain/src/google-connector-route.ts` - keep; current connector support is privacy/scoping relevant
 - `packages/brain/src/google-connector.ts` - keep
@@ -165,9 +174,9 @@ Backend production source:
 - `packages/brain/src/learn-plan.ts` - keep
 - `packages/brain/src/learn-recipe.ts` - keep
 - `packages/brain/src/learn-session-output.ts` - keep
-- `packages/brain/src/learn-session-route.ts` - refactor visible mode contract labels from Check to Create, but keep action enum if broader route semantics still rely on `check`
+- `packages/brain/src/learn-session-route.ts` - keep; visible mode labels are aligned while internal check/action semantics remain where needed
 - `packages/brain/src/lens-snapshot.ts` - keep
-- `packages/brain/src/modes.ts` - refactor visible MVP mode from Check to Create
+- `packages/brain/src/modes.ts` - keep; visible MVP mode is Create, with challenge/verify/artifact mapped under Create
 - `packages/brain/src/move-payloads.ts` - keep
 - `packages/brain/src/next-move-engine.ts` - keep/defer; not production-reachable from server but imported by external root test fixture
 - `packages/brain/src/observability.ts` - keep
@@ -176,17 +185,17 @@ Backend production source:
 - `packages/brain/src/recipe-engine.ts` - keep
 - `packages/brain/src/routes/challenge-brief-routes.ts` - keep
 - `packages/brain/src/routes/session-cockpit-routes.ts` - keep
-- `packages/brain/src/routes/thinking-mode-routes.ts` - refactor visible mode contract labels from Check to Create
+- `packages/brain/src/routes/thinking-mode-routes.ts` - keep; visible mode contract labels are Create-aligned
 - `packages/brain/src/schema.ts` - keep
 - `packages/brain/src/scope.ts` - keep
 - `packages/brain/src/search-broker.ts` - keep
 - `packages/brain/src/search-decision-service.ts` - keep
 - `packages/brain/src/seed-persistence.ts` - keep
 - `packages/brain/src/seed.ts` - keep
-- `packages/brain/src/server.ts` - remove `/api/check` registrations only if the full old Check route stack is deleted and tests pass; keep auth/rate/scope protections
+- `packages/brain/src/server.ts` - keep; `/api/check` registrations were removed, while auth/rate/scope protections remain
 - `packages/brain/src/services/challenge-brief-service.ts` - keep
 - `packages/brain/src/services/challenge-service.ts` - keep
-- `packages/brain/src/services/thinking-mode-service.ts` - refactor visible mode contract labels from Check to Create
+- `packages/brain/src/services/thinking-mode-service.ts` - keep; visible mode contract labels are Create-aligned
 - `packages/brain/src/session-canvas-route.ts` - keep
 - `packages/brain/src/session-graph-route.ts` - keep
 - `packages/brain/src/session-moves-route.ts` - keep
@@ -196,7 +205,7 @@ Backend production source:
 - `packages/brain/src/tools/internal-tool-registry.ts` - keep/defer; not production-reachable but tested as a tool contract
 - `packages/brain/src/verify-ai.ts` - keep
 - `packages/brain/src/verify-commands.ts` - keep
-- `packages/brain/src/verify-core.ts` - refactor stale system prompt from "Penny Check" to "Penny Verify"; keep verification logic
+- `packages/brain/src/verify-core.ts` - keep; system prompt now says "Penny Verify" and verification logic remains
 - `packages/brain/src/verify-recipe.ts` - keep
 - `packages/brain/src/verify-route.ts` - keep
 - `packages/brain/src/wiki-route.ts` - keep; compiled WikiPage view remains not source of truth
@@ -205,59 +214,62 @@ Backend tests:
 
 - Keep tests for Brain, Create, Learn, challenge/verify, memory, privacy/scope, search, connectors, command idempotency, schema, and server auth.
 - Refactor tests that assert visible `Check` mode labels to `Create`.
-- Delete `packages/brain/src/check-route.test.ts` only with `check-route.ts` deletion.
+- `packages/brain/src/check-route.test.ts` was deleted with `check-route.ts`.
 - Keep compatibility tests named in the P3 gate unless their target route is explicitly removed with replacement coverage.
 
 ## Risky Items And Decisions
 
 ### Old `/api/check` route stack
 
-Classification: delete candidate.
+Classification: completed deletion.
 
 Evidence:
 
-- `packages/brain/src/check-route.ts` is registered in `server.ts` under `/api/check/*`.
-- The active Create workspace imports `createNext`, `compareCreateProviders`, `exportCodingPrompt`, and `submitCreateExportFeedback`, not the Check client methods.
-- Frontend `brainClient.ts` still exports old Check client methods, and `brainClient.test.ts` tests only their URLs.
+- `packages/brain/src/check-route.ts` was registered in `server.ts` under `/api/check/*`.
+- The active Create workspace imports `createNext`, `compareCreateProviders`, `exportCodingPrompt`, and `submitCreateExportFeedback`, not the old Check client methods.
+- Frontend `brainClient.ts` exported old Check client methods, and `brainClient.test.ts` tested only their URLs.
 - P3 route preservation does not list `/api/check/*` as a protected compatibility route.
 - The old stack duplicates the new Create path with project/cycle/check language and can confuse onboarding.
 
-Proposed change:
+Completed change:
 
 - Remove `packages/brain/src/check-route.ts`.
 - Remove `/api/check/*` imports and registrations from `packages/brain/src/server.ts`.
 - Remove old Check route tests.
 - Remove unused Check client methods/types and their URL assertions from the frontend.
-- Run `pnpm typecheck`, focused tests, and full `pnpm test` before considering the deletion safe.
+- Verified no remaining code references with `rg` across backend source, frontend source, and frontend tests.
+- Focused route/client tests and frontend typecheck passed.
+- Full root typecheck is still blocked by unrelated Google connector exact-optional-property errors.
 
 ### Visible mode label `Check`
 
-Classification: refactor.
+Classification: completed refactor.
 
 Evidence:
 
 - Frontend nav already exposes `Brain`, `Create`, `Learn`.
-- Backend `modes.ts` still exposes `["Learn", "Check", "Brain"]`.
-- Thinking-mode service payloads and tests still return `mvpMode: "Check"` for challenge/verify/artifact candidates.
+- Backend `modes.ts` exposed `["Learn", "Check", "Brain"]`.
+- Thinking-mode service payloads and tests returned `mvpMode: "Check"` for challenge/verify/artifact candidates.
 
-Proposed change:
+Completed change:
 
 - Change `MvpMode` visible values to `["Learn", "Create", "Brain"]`.
 - Map `challenge`, `verify`, and `artifact` thinking modes to `Create`.
-- Update backend route/service/tool tests and docs.
+- Update backend route/service/tool tests.
 - Keep internal action names such as `challenge`, `verify`, and `check` where they model stress-test behavior or educational quick checks.
+- Remaining work is doc copy where old visible Check wording still appears.
 
 ### `CheckWorkspace` name and `.check-*` selectors
 
-Classification: refactor/defer split.
+Classification: completed/defer split.
 
 Evidence:
 
-- The visible UI copy in `CheckWorkspace.tsx` is already Create-oriented.
-- The component/file name is stale.
+- The visible UI copy in `CreateWorkspace.tsx` is Create-oriented.
+- The component/file name has been aligned.
 - Many `.check-*` CSS selectors are still actively used by the Create workspace.
 
-Proposed change:
+Completed/deferred change:
 
 - Rename the component/file/import path to `CreateWorkspace`.
 - Leave `.check-*` class selectors for a later focused CSS migration unless all selector references are renamed and `pnpm build` proves generated assets are consistent.
@@ -334,14 +346,14 @@ Proposed change:
 
 ## Cleanup Order
 
-1. Commit this audit.
-2. Refactor visible mode contract from Check to Create.
-3. Update stale user-facing Check docs and generated Create artifact copy.
-4. Rename `CheckWorkspace` to `CreateWorkspace` without changing behavior.
-5. Remove the old `/api/check` backend/client stack if focused typecheck/tests pass after deletion.
-6. Rebuild public assets if frontend source changed.
-7. Run `pnpm lint` if available, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
-8. Re-run `rg` checks for visible stale Check wording, dead `/api/check` references, and generic-chatbot/wrapper risks.
+1. Done: commit this audit.
+2. Done: refactor visible mode contract from Check to Create.
+3. Partly done: update stale user-facing Check docs and generated Create artifact copy. Source copy is fixed; broader docs remain.
+4. Done: rename `CheckWorkspace` to `CreateWorkspace` without changing behavior.
+5. Done: remove the old `/api/check` backend/client stack after focused tests and frontend typecheck passed.
+6. Pending: rebuild public assets once the unrelated dirty BrainWorkspace/Google connector work is settled or intentionally included.
+7. Pending: run full `pnpm test` and `pnpm build`; root `pnpm exec tsc --noEmit --pretty false` currently fails in unrelated Google connector files.
+8. Partly done: dead `/api/check` code references are gone; stale Check wording in docs remains.
 
 ## Current Proposed Changes By Classification
 
@@ -349,17 +361,21 @@ Keep:
 
 - Brain memory import/profile/review, Brain recents, private memory schema, context-layer scope checks, connector provenance/privacy, command idempotency, BrainRun guard, Create route/provider/fallback, Brain Ranker, Create export feedback, Learn routes/workspace, challenge/verify services, session cockpit/canvas/search, auth/rate limiting, migrations, generated public assets, package scripts.
 
-Refactor:
+Completed:
 
 - Visible backend MVP mode label `Check` -> `Create`.
-- Docs that describe visible modes or demo steps as Brain/Check/Learn -> Brain/Create/Learn.
-- `create-route.ts` artifact copy that still says "Check workspace wrapper" or "existing Check backend routes".
-- `verify-core.ts` system prompt that calls Verify "Penny Check".
+- `create-route.ts` artifact copy that said "Check workspace wrapper" or "existing Check backend routes".
+- `verify-core.ts` system prompt that called Verify "Penny Check".
 - Frontend `CheckWorkspace` component/file/import name to `CreateWorkspace`.
+- Old `/api/check` route stack and matching frontend client/types/tests.
+
+Refactor:
+
+- Docs that describe visible modes or demo steps as Brain/Check/Learn -> Brain/Create/Learn.
 
 Delete:
 
-- Old `/api/check` route stack and matching frontend client/types/tests, if direct tests and full gates prove no active dependency.
+- No additional delete candidates are safe yet.
 
 Defer:
 
