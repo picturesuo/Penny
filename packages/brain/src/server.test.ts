@@ -4,13 +4,16 @@ import {
   assertValidPennyStartupEnvironment,
   createPennyServer,
   guardApiRequest,
+  missingPennySchemaTables,
   PennyEnvironmentValidationError,
+  requiredPennySchemaTables,
   validatePennyStartupEnvironment,
 } from "./server.ts";
 
 const pennyEnvKeys = [
   "NODE_ENV",
   "DATABASE_URL",
+  "PENNY_AUTO_MIGRATE",
   "PENNY_DEPLOY_ENV",
   "PENNY_API_TOKEN",
   "PENNY_AUTH_MODE",
@@ -25,6 +28,8 @@ const pennyEnvKeys = [
   "PENNY_RATE_LIMIT_WINDOW_MS",
   "PENNY_SESSION_MAX_AGE_SECONDS",
   "PENNY_SESSION_SECRET",
+  "PENNY_SKIP_DATABASE_PREP",
+  "PENNY_STRUCTURED_LOGS",
   "PENNY_TRUST_AUTH_HEADERS",
   "PENNY_CREATE_MODEL_BACKED",
   "XAI_API_KEY",
@@ -316,6 +321,24 @@ test("startup env validation accepts staged token auth with remote Postgres and 
   assert.equal(result.deployTarget, "staging");
   assert.equal(result.strict, true);
   assert.deepEqual(result.issues, []);
+});
+
+test("startup env validation rejects database prep bypass in strict deploys", () => {
+  const result = validatePennyStartupEnvironment({
+    ...validStrictEnv(),
+    PENNY_SKIP_DATABASE_PREP: "true",
+  });
+
+  assert.equal(result.strict, true);
+  assert.ok(result.issues.some((issue) => issue.code === "database_prep_skip_forbidden"));
+});
+
+test("missingPennySchemaTables reports dogfood-critical migration gaps", () => {
+  assert.deepEqual(missingPennySchemaTables(requiredPennySchemaTables), []);
+  assert.deepEqual(
+    missingPennySchemaTables(requiredPennySchemaTables.filter((table) => table !== "create_export_feedback")),
+    ["create_export_feedback"],
+  );
 });
 
 test("startup env validation keeps local dev warnings explicit", () => {

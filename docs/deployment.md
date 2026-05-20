@@ -102,7 +102,8 @@ Startup migration behavior:
 - `PENNY_AUTO_MIGRATE=true`: run migrations at API startup.
 - `PENNY_AUTO_MIGRATE=false`: skip startup migrations; deploy must run `pnpm db:migrate` separately.
 - Production defaults to no auto-migrate unless `PENNY_AUTO_MIGRATE=true`.
-- `PENNY_SKIP_DATABASE_PREP=true` skips startup prep. Do not use it to bypass `DATABASE_URL` for private alpha.
+- Startup verifies the required Penny tables after migrations or separate prep. If the schema is missing Brain memory or Create feedback tables, startup fails with a `pnpm db:migrate` instruction.
+- `PENNY_SKIP_DATABASE_PREP=true` skips startup prep in local/dev only. Strict deployments reject it because it bypasses the schema readiness check.
 
 The Brain memory persistence migration is `drizzle/0029_add_brain_memory_persistence.sql`. Create export feedback is stored by `drizzle/0030_add_create_export_feedback.sql`.
 

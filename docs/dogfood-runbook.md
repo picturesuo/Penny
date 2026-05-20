@@ -46,7 +46,7 @@ pnpm build
 pnpm start
 ```
 
-Strict startup validation should fail fast if private-alpha auth, CORS, rate limit, Postgres, session secret, or model provider settings are unsafe.
+Strict startup validation should fail fast if private-alpha auth, CORS, rate limit, Postgres, session secret, schema readiness, or model provider settings are unsafe.
 
 ## Dogfood Script
 

@@ -64,7 +64,7 @@ import {
   handleContextRetrievalRequest,
   handleContextTrainingConsentDeleteRequest,
 } from "./context-layer-route.ts";
-import { createPennySql } from "./db/client.ts";
+import { createPennySql, type PennySqlClient } from "./db/client.ts";
 import * as schema from "./db/schema.ts";
 import { handleAskPennyRequest, handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleLearnSessionRequest } from "./learn-session-route.ts";
@@ -132,6 +132,31 @@ export type PennyEnvironmentValidationResult = {
   issues: PennyEnvironmentValidationIssue[];
   warnings: PennyEnvironmentValidationIssue[];
 };
+
+type PennySchemaTableRow = {
+  table_name: string;
+};
+
+export const requiredPennySchemaTables = [
+  "sessions",
+  "sources",
+  "claims",
+  "claim_versions",
+  "claim_edges",
+  "source_spans",
+  "moves",
+  "brain_runs",
+  "artifacts",
+  "brain_memory_sources",
+  "brain_memory_source_chunks",
+  "brain_memory_nodes",
+  "brain_memory_edges",
+  "brain_memory_profile_signals",
+  "brain_memory_ingestion_jobs",
+  "brain_memory_retrieval_events",
+  "create_export_feedback",
+  "command_idempotency_keys",
+] as const;
 
 loadPennyEnv();
 
@@ -1179,6 +1204,13 @@ export function validatePennyStartupEnvironment(
       });
     }
 
+    if (readEnvFlagFrom(env, "PENNY_SKIP_DATABASE_PREP", false)) {
+      issues.push({
+        code: "database_prep_skip_forbidden",
+        message: "Strict deployments must not set PENNY_SKIP_DATABASE_PREP=true; run migrations and let startup verify the schema.",
+      });
+    }
+
     if (parsePositiveInteger(env.PENNY_RATE_LIMIT_MAX, 120) <= 0) {
       issues.push({
         code: "rate_limit_required",
@@ -1886,16 +1918,38 @@ async function prepareDatabase(): Promise<void> {
     );
   }
 
-  if (!readEnvFlag("PENNY_AUTO_MIGRATE", process.env.NODE_ENV !== "production")) {
-    return;
-  }
-
+  const autoMigrate = readEnvFlag("PENNY_AUTO_MIGRATE", process.env.NODE_ENV !== "production");
   const sql = createPennySql(databaseUrl);
 
   try {
-    await migrate(drizzle(sql, { schema }), { migrationsFolder: migrationsDir });
+    if (autoMigrate) {
+      await migrate(drizzle(sql, { schema }), { migrationsFolder: migrationsDir });
+    }
+
+    await assertPennyDatabaseSchemaReady(sql);
   } finally {
     await sql.end({ timeout: 5 });
+  }
+}
+
+export function missingPennySchemaTables(existingTables: Iterable<string>): string[] {
+  const existing = new Set(Array.from(existingTables, (table) => table.trim().toLowerCase()).filter(Boolean));
+
+  return requiredPennySchemaTables.filter((table) => !existing.has(table));
+}
+
+async function assertPennyDatabaseSchemaReady(sql: PennySqlClient): Promise<void> {
+  const rows = await sql<PennySchemaTableRow[]>`
+    select table_name
+    from information_schema.tables
+    where table_schema = 'public'
+  `;
+  const missingTables = missingPennySchemaTables(rows.map((row) => row.table_name));
+
+  if (missingTables.length) {
+    throw new Error(
+      `Penny database schema is missing required tables: ${missingTables.join(", ")}. Run DATABASE_URL=<postgres-url> pnpm db:migrate before starting the API.`,
+    );
   }
 }
 

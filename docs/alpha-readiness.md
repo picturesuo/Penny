@@ -71,14 +71,14 @@ XAI_CREATE_OPTION_MODEL=<optional-model-override>
 - `PENNY_CREATE_MODEL_BACKED=true`: enables the xAI-backed Create option provider only when `XAI_API_KEY` is present.
 - `VITE_PENNY_CREATE_COMPARE=true`: exposes the Create comparison panel outside Vite dev/test if explicitly needed for a staging judge.
 - `PENNY_AUTO_MIGRATE=true`: runs Drizzle migrations at API startup. Default is enabled outside production and disabled in production unless set.
-- `PENNY_SKIP_DATABASE_PREP=true`: skips startup DB prep. Do not use for private alpha unless the deployment platform handles migrations and `DATABASE_URL` is still set.
+- `PENNY_SKIP_DATABASE_PREP=true`: skips startup DB prep in local/dev only. Strict deployments reject it because it bypasses schema readiness checks.
 - `PENNY_STRUCTURED_LOGS=true`: emits safe JSON logs for auth failures, Brain import/retrieve/review/delete, Create generation/fallback/schema failures, and prompt export.
 
-Strict startup validation is active when `NODE_ENV=production` or `PENNY_DEPLOY_ENV` is `staging`, `private-alpha`, or `production`. It blocks dev auth, weak or missing token/session secrets, wildcard CORS, local or non-Postgres database URLs, disabled rate limits, trusted auth headers, and model-backed Create without `XAI_API_KEY`.
+Strict startup validation is active when `NODE_ENV=production` or `PENNY_DEPLOY_ENV` is `staging`, `private-alpha`, or `production`. It blocks dev auth, weak or missing token/session secrets, wildcard CORS, local or non-Postgres database URLs, disabled rate limits, skipped database prep, trusted auth headers, and model-backed Create without `XAI_API_KEY`.
 
 ## Database Readiness
 
-Brain memory persistence is backed by the Drizzle schema and migrations. The alpha-critical Brain memory migration is `drizzle/0029_add_brain_memory_persistence.sql`. Export feedback persistence is `drizzle/0030_add_create_export_feedback.sql`.
+Brain memory persistence is backed by the Drizzle schema and migrations. The alpha-critical Brain memory migration is `drizzle/0029_add_brain_memory_persistence.sql`. Export feedback persistence is `drizzle/0030_add_create_export_feedback.sql`. API startup verifies the required Penny tables after migrations or separate prep and fails with a `pnpm db:migrate` instruction if the schema is incomplete.
 
 Private alpha must use Postgres. The API startup path requires `DATABASE_URL`; route-level Brain memory also refuses production in-memory fallback. In-memory Brain memory is for direct local dev/test only and is not durable.
 
