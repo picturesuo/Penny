@@ -218,6 +218,13 @@
       "when": 1779254400000,
       "tag": "0030_add_create_export_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1779340800000,
+      "tag": "0031_add_brain_ranker_persistence",
+      "breakpoints": true
     }
   ]
 }

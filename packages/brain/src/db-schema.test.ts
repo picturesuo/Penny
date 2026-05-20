@@ -4,6 +4,7 @@ import { getTableName } from "drizzle-orm";
 import {
   artifactKindEnum,
   artifacts,
+  brainDevelopmentEvents,
   brainEdgeTypeEnum,
   brainEdges,
   brainEmbeddingObjectTypeEnum,
@@ -18,6 +19,8 @@ import {
   brainNodeStatusEnum,
   brainNodeTypeEnum,
   brainNodes,
+  brainRankedCandidates,
+  brainRankerRuns,
   brainObjects,
   brainRecents,
   brainRunOperationEnum,
@@ -104,6 +107,9 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(brainMemoryProfileSignals), "brain_memory_profile_signals");
   assert.equal(getTableName(brainMemoryIngestionJobs), "brain_memory_ingestion_jobs");
   assert.equal(getTableName(brainMemoryRetrievalEvents), "brain_memory_retrieval_events");
+  assert.equal(getTableName(brainRankerRuns), "brain_ranker_runs");
+  assert.equal(getTableName(brainRankedCandidates), "brain_ranked_candidates");
+  assert.equal(getTableName(brainDevelopmentEvents), "brain_development_events");
   assert.equal(getTableName(brainObjects), "brain_objects");
   assert.equal(getTableName(brainRecents), "brain_recents");
   assert.equal(getTableName(sessionNotes), "session_notes");
@@ -155,6 +161,9 @@ test("Penny core tables persist user and workspace scope", () => {
     brainMemoryProfileSignals,
     brainMemoryIngestionJobs,
     brainMemoryRetrievalEvents,
+    brainRankerRuns,
+    brainRankedCandidates,
+    brainDevelopmentEvents,
     brainObjects,
     brainRecents,
     sessionNotes,
@@ -400,6 +409,7 @@ test("Penny schema has a clean aggregate export surface", () => {
   assert.deepEqual(Object.keys(pennySchema).sort(), [
     "artifactKindEnum",
     "artifacts",
+    "brainDevelopmentEvents",
     "brainEdgeTypeEnum",
     "brainEdges",
     "brainEmbeddingObjectTypeEnum",
@@ -415,6 +425,8 @@ test("Penny schema has a clean aggregate export surface", () => {
     "brainNodeTypeEnum",
     "brainNodes",
     "brainObjects",
+    "brainRankedCandidates",
+    "brainRankerRuns",
     "brainRecents",
     "brainRunOperationEnum",
     "brainRunStatusEnum",

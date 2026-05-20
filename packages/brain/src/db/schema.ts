@@ -470,6 +470,111 @@ export const brainMemoryRetrievalEvents = pgTable(
   ],
 );
 
+export const brainRankerRuns = pgTable(
+  "brain_ranker_runs",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    createProjectId: text("create_project_id").notNull(),
+    createSessionId: text("create_session_id").notNull(),
+    optionSetId: text("option_set_id"),
+    rawIdeaHash: text("raw_idea_hash").notNull(),
+    contextLight: boolean("context_light").notNull().default(false),
+    nextBestMove: jsonb("next_best_move").notNull().default({}),
+    rankedCandidateIds: jsonb("ranked_candidate_ids").$type<string[]>().notNull().default([]),
+    highValueMemoryNodeIds: jsonb("high_value_memory_node_ids").$type<string[]>().notNull().default([]),
+    clusters: jsonb("clusters").notNull().default([]),
+    developmentEventIds: jsonb("development_event_ids").$type<string[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_ranker_runs_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_ranker_runs_create_session_idx").on(table.createProjectId, table.createSessionId),
+    index("brain_ranker_runs_option_set_idx").on(table.optionSetId),
+    index("brain_ranker_runs_context_light_idx").on(table.contextLight),
+    index("brain_ranker_runs_created_at_idx").on(table.createdAt),
+    check("brain_ranker_runs_project_present", sql`length(trim(${table.createProjectId})) > 0`),
+    check("brain_ranker_runs_session_present", sql`length(trim(${table.createSessionId})) > 0`),
+    check("brain_ranker_runs_raw_idea_hash_present", sql`length(trim(${table.rawIdeaHash})) > 0`),
+  ],
+);
+
+export const brainRankedCandidates = pgTable(
+  "brain_ranked_candidates",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    rankerRunId: text("ranker_run_id")
+      .notNull()
+      .references(() => brainRankerRuns.id, { onDelete: "cascade" }),
+    lens: text("lens").notNull(),
+    title: text("title").notNull(),
+    topReason: text("top_reason").notNull(),
+    grounding: text("grounding").notNull(),
+    contextLabel: text("context_label").notNull(),
+    memoryClass: text("memory_class").notNull(),
+    memoryCount: integer("memory_count").notNull().default(0),
+    sourceCount: integer("source_count").notNull().default(0),
+    reasons: jsonb("reasons").$type<string[]>().notNull().default([]),
+    uncertainty: jsonb("uncertainty").$type<string[]>().notNull().default([]),
+    memoryRefs: jsonb("memory_refs").notNull().default([]),
+    sourceReferences: jsonb("source_references").notNull().default([]),
+    nextBestMove: text("next_best_move").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_ranked_candidates_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_ranked_candidates_run_idx").on(table.rankerRunId),
+    index("brain_ranked_candidates_lens_idx").on(table.lens),
+    index("brain_ranked_candidates_grounding_idx").on(table.grounding),
+    check("brain_ranked_candidates_lens_valid", sql`${table.lens} IN ('Personal', 'Practical', 'Valuable', 'Critical', 'Weird')`),
+    check("brain_ranked_candidates_title_present", sql`length(trim(${table.title})) > 0`),
+    check("brain_ranked_candidates_reason_present", sql`length(trim(${table.topReason})) > 0`),
+    check("brain_ranked_candidates_grounding_valid", sql`${table.grounding} IN ('grounded', 'inferred', 'context_light')`),
+    check(
+      "brain_ranked_candidates_memory_class_valid",
+      sql`${table.memoryClass} IN ('semantic', 'episodic', 'procedural', 'emotional_taste')`,
+    ),
+    check("brain_ranked_candidates_memory_count_nonnegative", sql`${table.memoryCount} >= 0`),
+    check("brain_ranked_candidates_source_count_nonnegative", sql`${table.sourceCount} >= 0`),
+    check("brain_ranked_candidates_next_move_present", sql`length(trim(${table.nextBestMove})) > 0`),
+  ],
+);
+
+export const brainDevelopmentEvents = pgTable(
+  "brain_development_events",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    kind: text("kind").notNull(),
+    explicitness: text("explicitness").notNull().default("implicit"),
+    weight: integer("weight").notNull().default(50),
+    createProjectId: text("create_project_id"),
+    createSessionId: text("create_session_id"),
+    optionSetId: text("option_set_id"),
+    artifactId: text("artifact_id"),
+    exportId: text("export_id"),
+    memoryNodeIds: jsonb("memory_node_ids").$type<string[]>().notNull().default([]),
+    sourceReferenceIds: jsonb("source_reference_ids").$type<string[]>().notNull().default([]),
+    payload: jsonb("payload").notNull().default({}),
+    summary: text("summary").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("brain_development_events_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("brain_development_events_kind_idx").on(table.kind),
+    index("brain_development_events_explicitness_idx").on(table.explicitness),
+    index("brain_development_events_create_session_idx").on(table.createProjectId, table.createSessionId),
+    index("brain_development_events_option_set_idx").on(table.optionSetId),
+    index("brain_development_events_occurred_at_idx").on(table.occurredAt),
+    check("brain_development_events_kind_present", sql`length(trim(${table.kind})) > 0`),
+    check("brain_development_events_explicitness_valid", sql`${table.explicitness} IN ('explicit', 'implicit')`),
+    check("brain_development_events_weight_range", sql`${table.weight} >= 0 AND ${table.weight} <= 100`),
+    check("brain_development_events_summary_present", sql`length(trim(${table.summary})) > 0`),
+  ],
+);
+
 export const sessions = pgTable(
   "sessions",
   {
@@ -643,6 +748,178 @@ export const connectorSyncJobs = pgTable(
       "connector_sync_jobs_completion_matches_status",
       sql`(${table.status} IN ('succeeded', 'failed', 'canceled') AND ${table.completedAt} IS NOT NULL) OR (${table.status} IN ('queued', 'running') AND ${table.completedAt} IS NULL)`,
     ),
+  ],
+);
+
+export const connectorConnections = pgTable(
+  "connector_connections",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    providerId: text("provider_id").notNull(),
+    adapter: text("adapter").notNull().default("nango"),
+    providerConfigKey: text("provider_config_key").notNull(),
+    externalConnectionId: text("external_connection_id").notNull(),
+    credentialRef: jsonb("credential_ref").notNull().default({}),
+    status: text("status").notNull().default("connected"),
+    surfaces: jsonb("surfaces").$type<string[]>().notNull().default([]),
+    scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    nextSyncAt: timestamp("next_sync_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    sourceCounts: jsonb("source_counts").notNull().default({}),
+    error: jsonb("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("connector_connections_provider_external_scope_idx").on(
+      table.providerId,
+      table.externalConnectionId,
+      table.userId,
+      table.workspaceId,
+    ),
+    index("connector_connections_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("connector_connections_provider_status_idx").on(table.providerId, table.status),
+    index("connector_connections_external_idx").on(table.externalConnectionId),
+    index("connector_connections_next_sync_idx").on(table.nextSyncAt),
+    check("connector_connections_provider_valid", sql`${table.providerId} IN ('google')`),
+    check("connector_connections_adapter_valid", sql`${table.adapter} IN ('nango')`),
+    check(
+      "connector_connections_status_valid",
+      sql`${table.status} IN ('available', 'connected', 'syncing', 'failed', 'revoked', 'unsupported', 'manual_import_only', 'gated_verification_required', 'extension_required')`,
+    ),
+    check("connector_connections_provider_config_present", sql`length(trim(${table.providerConfigKey})) > 0`),
+    check("connector_connections_external_present", sql`length(trim(${table.externalConnectionId})) > 0`),
+  ],
+);
+
+export const connectorSyncCursors = pgTable(
+  "connector_sync_cursors",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => connectorConnections.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull(),
+    surface: text("surface").notNull(),
+    cursor: text("cursor"),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    nextSyncAt: timestamp("next_sync_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("connector_sync_cursors_connection_surface_idx").on(table.connectionId, table.surface),
+    index("connector_sync_cursors_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("connector_sync_cursors_provider_surface_idx").on(table.providerId, table.surface),
+    index("connector_sync_cursors_next_sync_idx").on(table.nextSyncAt),
+    check("connector_sync_cursors_provider_valid", sql`${table.providerId} IN ('google')`),
+    check("connector_sync_cursors_surface_present", sql`length(trim(${table.surface})) > 0`),
+  ],
+);
+
+export const connectorSyncRuns = pgTable(
+  "connector_sync_runs",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => connectorConnections.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull(),
+    surface: text("surface").notNull(),
+    status: text("status").notNull().default("queued"),
+    cursorBefore: jsonb("cursor_before"),
+    cursorAfter: jsonb("cursor_after"),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    sourceCounts: jsonb("source_counts").notNull().default({}),
+    error: jsonb("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("connector_sync_runs_connection_idx").on(table.connectionId),
+    index("connector_sync_runs_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("connector_sync_runs_provider_status_idx").on(table.providerId, table.status),
+    index("connector_sync_runs_requested_at_idx").on(table.requestedAt),
+    check("connector_sync_runs_provider_valid", sql`${table.providerId} IN ('google')`),
+    check("connector_sync_runs_surface_present", sql`length(trim(${table.surface})) > 0`),
+    check("connector_sync_runs_status_valid", sql`${table.status} IN ('queued', 'running', 'succeeded', 'failed', 'canceled')`),
+    check(
+      "connector_sync_runs_completion_matches_status",
+      sql`(${table.status} IN ('succeeded', 'failed', 'canceled') AND ${table.completedAt} IS NOT NULL) OR (${table.status} IN ('queued', 'running') AND ${table.completedAt} IS NULL)`,
+    ),
+  ],
+);
+
+export const connectorSourceRefs = pgTable(
+  "connector_source_refs",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    connectionId: text("connection_id")
+      .notNull()
+      .references(() => connectorConnections.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull(),
+    surface: text("surface").notNull(),
+    kind: text("kind").notNull(),
+    sourceUri: text("source_uri").notNull(),
+    label: text("label").notNull(),
+    externalId: text("external_id").notNull(),
+    url: text("url"),
+    metadata: jsonb("metadata").notNull().default({}),
+    provenance: jsonb("provenance").notNull().default({}),
+    privacy: jsonb("privacy").notNull().default({}),
+    retrievalAccess: text("retrieval_access").notNull().default("enabled"),
+    brainSourceId: text("brain_source_id").references(() => brainMemorySources.id, { onDelete: "set null" }),
+    brainNodeIds: jsonb("brain_node_ids").$type<string[]>().notNull().default([]),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("connector_source_refs_connection_uri_idx").on(table.connectionId, table.sourceUri),
+    index("connector_source_refs_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("connector_source_refs_connection_idx").on(table.connectionId),
+    index("connector_source_refs_provider_surface_idx").on(table.providerId, table.surface),
+    index("connector_source_refs_brain_source_idx").on(table.brainSourceId),
+    index("connector_source_refs_retrieval_idx").on(table.retrievalAccess),
+    check("connector_source_refs_provider_valid", sql`${table.providerId} IN ('google')`),
+    check("connector_source_refs_surface_present", sql`length(trim(${table.surface})) > 0`),
+    check("connector_source_refs_kind_present", sql`length(trim(${table.kind})) > 0`),
+    check("connector_source_refs_uri_present", sql`length(trim(${table.sourceUri})) > 0`),
+    check("connector_source_refs_label_present", sql`length(trim(${table.label})) > 0`),
+    check("connector_source_refs_external_present", sql`length(trim(${table.externalId})) > 0`),
+    check("connector_source_refs_retrieval_valid", sql`${table.retrievalAccess} IN ('enabled', 'revoked', 'deleted')`),
+  ],
+);
+
+export const connectorPermissionAudits = pgTable(
+  "connector_permission_audits",
+  {
+    id: text("id").primaryKey(),
+    ...scopeColumns(),
+    providerId: text("provider_id").notNull(),
+    connectionId: text("connection_id").references(() => connectorConnections.id, { onDelete: "set null" }),
+    sourceRefId: text("source_ref_id").references(() => connectorSourceRefs.id, { onDelete: "set null" }),
+    actorUserId: text("actor_user_id"),
+    event: text("event").notNull(),
+    details: jsonb("details").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("connector_permission_audits_scope_idx").on(table.userId, table.workspaceId, table.projectId, table.sphereId),
+    index("connector_permission_audits_connection_idx").on(table.connectionId),
+    index("connector_permission_audits_source_ref_idx").on(table.sourceRefId),
+    index("connector_permission_audits_event_idx").on(table.event),
+    index("connector_permission_audits_created_at_idx").on(table.createdAt),
+    check("connector_permission_audits_provider_valid", sql`${table.providerId} IN ('google')`),
+    check("connector_permission_audits_event_present", sql`length(trim(${table.event})) > 0`),
   ],
 );
 
@@ -1513,6 +1790,7 @@ export const pennySchema = {
   artifactKindEnum,
   brainEdgeTypeEnum,
   brainEdges,
+  brainDevelopmentEvents,
   brainObjects,
   brainEmbeddingObjectTypeEnum,
   brainEmbeddings,
@@ -1526,6 +1804,8 @@ export const pennySchema = {
   brainNodeStatusEnum,
   brainNodeTypeEnum,
   brainNodes,
+  brainRankedCandidates,
+  brainRankerRuns,
   brainRecents,
   brainRunOperationEnum,
   brainRunStatusEnum,
