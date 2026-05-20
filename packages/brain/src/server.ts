@@ -113,6 +113,20 @@ export type RateLimitResult = {
   retryAfterSeconds?: number;
 };
 
+export type PennyDeployTarget = "local" | "development" | "staging" | "production" | "private-alpha";
+
+export type PennyEnvironmentValidationIssue = {
+  code: string;
+  message: string;
+};
+
+export type PennyEnvironmentValidationResult = {
+  deployTarget: PennyDeployTarget;
+  strict: boolean;
+  issues: PennyEnvironmentValidationIssue[];
+  warnings: PennyEnvironmentValidationIssue[];
+};
+
 loadPennyEnv();
 
 const port = parsePort(process.env.PORT);
@@ -1012,6 +1026,7 @@ export const server = createPennyServer();
 
 if (isMainModule()) {
   try {
+    assertValidPennyStartupEnvironment();
     await prepareDatabase();
     server.listen(port, () => {
       console.log(`Penny cockpit listening on http://localhost:${port}`);
@@ -1036,6 +1051,196 @@ function parsePort(value: string | undefined): number {
   }
 
   return 3000;
+}
+
+export class PennyEnvironmentValidationError extends Error {
+  readonly issues: PennyEnvironmentValidationIssue[];
+
+  constructor(result: PennyEnvironmentValidationResult) {
+    super(`Unsafe Penny startup configuration: ${result.issues.map((issue) => issue.message).join(" ")}`);
+    this.name = "PennyEnvironmentValidationError";
+    this.issues = result.issues;
+  }
+}
+
+export function assertValidPennyStartupEnvironment(
+  env: NodeJS.ProcessEnv = process.env,
+): PennyEnvironmentValidationResult {
+  const result = validatePennyStartupEnvironment(env);
+
+  if (result.issues.length) {
+    throw new PennyEnvironmentValidationError(result);
+  }
+
+  return result;
+}
+
+export function validatePennyStartupEnvironment(
+  env: NodeJS.ProcessEnv = process.env,
+): PennyEnvironmentValidationResult {
+  const deployTarget = pennyDeployTarget(env);
+  const strict = isStrictDeployTarget(deployTarget) || env.NODE_ENV?.trim() === "production";
+  const issues: PennyEnvironmentValidationIssue[] = [];
+  const warnings: PennyEnvironmentValidationIssue[] = [];
+  const databaseUrl = env.DATABASE_URL?.trim() ?? "";
+  const configuredAuthMode = env.PENNY_AUTH_MODE?.trim().toLowerCase() ?? "";
+  const authMode = (configuredAuthMode === "strict" ? "token" : configuredAuthMode || (env.PENNY_API_TOKEN?.trim() || strict ? "token" : "dev")) as AuthMode;
+  const corsOrigins = env.PENNY_CORS_ORIGINS?.trim() ?? "";
+  const modelBackedValue = env.PENNY_CREATE_MODEL_BACKED?.trim().toLowerCase();
+
+  if (!databaseUrl) {
+    issues.push({
+      code: "database_url_required",
+      message: "DATABASE_URL is required before starting Penny.",
+    });
+  } else if (!isPostgresDatabaseUrl(databaseUrl)) {
+    issues.push({
+      code: "database_url_invalid",
+      message: "DATABASE_URL must be a valid postgres:// or postgresql:// URL.",
+    });
+  } else if (strict && isLocalDatabaseUrl(databaseUrl)) {
+    issues.push({
+      code: "database_url_local_in_strict_deploy",
+      message: "Strict deployments must not point DATABASE_URL at localhost or loopback Postgres.",
+    });
+  }
+
+  if (configuredAuthMode && !["dev", "token", "strict"].includes(configuredAuthMode)) {
+    issues.push({
+      code: "auth_mode_invalid",
+      message: "PENNY_AUTH_MODE must be dev or token.",
+    });
+  }
+
+  if (strict && authMode !== "token") {
+    issues.push({
+      code: "auth_mode_token_required",
+      message: "Strict deployments must use PENNY_AUTH_MODE=token.",
+    });
+  }
+
+  if (authMode === "token") {
+    const apiToken = env.PENNY_API_TOKEN?.trim() ?? "";
+
+    if (!apiToken) {
+      issues.push({
+        code: "api_token_required",
+        message: "PENNY_API_TOKEN is required when token auth is enabled.",
+      });
+    } else if (strict && apiToken.length < 32) {
+      issues.push({
+        code: "api_token_too_short",
+        message: "Strict deployments require a PENNY_API_TOKEN of at least 32 characters.",
+      });
+    }
+  }
+
+  if (strict) {
+    const sessionSecret = env.PENNY_SESSION_SECRET?.trim() ?? "";
+
+    if (sessionSecret.length < 32) {
+      issues.push({
+        code: "session_secret_required",
+        message: "Strict deployments require PENNY_SESSION_SECRET of at least 32 characters.",
+      });
+    }
+
+    if (!corsOrigins) {
+      issues.push({
+        code: "cors_origins_required",
+        message: "Strict deployments require PENNY_CORS_ORIGINS with the exact frontend origin.",
+      });
+    } else if (corsOrigins.split(",").some((origin) => origin.trim() === "*")) {
+      issues.push({
+        code: "cors_wildcard_forbidden",
+        message: "Strict deployments must not use PENNY_CORS_ORIGINS=*.",
+      });
+    }
+
+    if (readEnvFlagFrom(env, "PENNY_TRUST_AUTH_HEADERS", false)) {
+      issues.push({
+        code: "trust_auth_headers_forbidden",
+        message: "Strict deployments must not trust caller scope headers unless a reviewed reverse-proxy integration is added.",
+      });
+    }
+
+    if (parsePositiveInteger(env.PENNY_RATE_LIMIT_MAX, 120) <= 0) {
+      issues.push({
+        code: "rate_limit_required",
+        message: "Strict deployments must keep PENNY_RATE_LIMIT_MAX above zero.",
+      });
+    }
+  } else if (authMode === "dev") {
+    warnings.push({
+      code: "dev_auth_enabled",
+      message: "Development auth trusts caller scope headers and is not safe for staging or production.",
+    });
+  }
+
+  if (modelBackedValue && !["0", "1", "true", "false", "yes", "no", "on", "off"].includes(modelBackedValue)) {
+    issues.push({
+      code: "model_backed_flag_invalid",
+      message: "PENNY_CREATE_MODEL_BACKED must be true or false.",
+    });
+  }
+
+  if (readEnvFlagFrom(env, "PENNY_CREATE_MODEL_BACKED", false) && !env.XAI_API_KEY?.trim()) {
+    issues.push({
+      code: "model_backed_missing_key",
+      message: "PENNY_CREATE_MODEL_BACKED=true requires XAI_API_KEY.",
+    });
+  }
+
+  return { deployTarget, strict, issues, warnings };
+}
+
+function pennyDeployTarget(env: NodeJS.ProcessEnv): PennyDeployTarget {
+  const configured = env.PENNY_DEPLOY_ENV?.trim().toLowerCase() ?? "";
+
+  switch (configured) {
+    case "production":
+    case "prod":
+      return "production";
+    case "staging":
+    case "stage":
+      return "staging";
+    case "private-alpha":
+    case "private_alpha":
+    case "alpha":
+      return "private-alpha";
+    case "development":
+    case "dev":
+      return "development";
+    case "local":
+    case "":
+      return env.NODE_ENV?.trim() === "production" ? "production" : "local";
+    default:
+      return env.NODE_ENV?.trim() === "production" ? "production" : "local";
+  }
+}
+
+function isStrictDeployTarget(target: PennyDeployTarget): boolean {
+  return target === "production" || target === "staging" || target === "private-alpha";
+}
+
+function isPostgresDatabaseUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+
+    return parsed.protocol === "postgres:" || parsed.protocol === "postgresql:";
+  } catch {
+    return false;
+  }
+}
+
+function isLocalDatabaseUrl(value: string): boolean {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+
+    return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(hostname);
+  } catch {
+    return false;
+  }
 }
 
 export function guardApiRequest(request: Request, url: URL): ApiGuardResult {
@@ -1672,7 +1877,11 @@ function loadPennyEnv(): void {
 }
 
 function readEnvFlag(name: string, fallback: boolean): boolean {
-  const value = process.env[name]?.trim().toLowerCase();
+  return readEnvFlagFrom(process.env, name, fallback);
+}
+
+function readEnvFlagFrom(env: NodeJS.ProcessEnv, name: string, fallback: boolean): boolean {
+  const value = env[name]?.trim().toLowerCase();
 
   if (!value) {
     return fallback;
