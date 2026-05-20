@@ -24,6 +24,23 @@ const configuredEnv = {
   GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
 };
 
+test("Google connector provider shows an honest disabled state when the connector flag is off", () => {
+  const provider = buildGoogleConnectorProvider({
+    env: {
+      ...configuredEnv,
+      ENABLE_GOOGLE_CONNECTOR: "false",
+    },
+  });
+
+  assert.equal(provider.status, "unsupported");
+  assert.equal(provider.configured, false);
+  assert.equal(provider.configurationLabel, "disabled");
+  assert.equal(provider.surfaces.every((surface) => surface.status === "unsupported"), true);
+  assert.ok(provider.surfaces.find((surface) => surface.id === "google_gmail")?.notFaked.some((claim) => /No hidden Gmail import/i.test(claim)));
+  assert.ok(provider.surfaces.find((surface) => surface.id === "google_my_activity")?.notFaked.some((claim) => /No direct Google Search history/i.test(claim)));
+  assert.ok(provider.surfaces.find((surface) => surface.id === "chrome_extension_history")?.notFaked.some((claim) => /No browser history access/i.test(claim)));
+});
+
 test("Google connector provider shows not configured when env is incomplete", () => {
   const provider = buildGoogleConnectorProvider({
     env: {
