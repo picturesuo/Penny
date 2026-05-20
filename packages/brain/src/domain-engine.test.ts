@@ -103,7 +103,7 @@ test("rankNextMoveCandidates recommends Learn when a dropped idea has concept co
   assert.match(selected.whyPennyRecommendsThis, /Why Penny recommends this/);
 });
 
-test("rankNextMoveCandidates recommends Check when a dropped idea has fragile assumptions", () => {
+test("rankNextMoveCandidates recommends a pressure test when a dropped idea has fragile assumptions", () => {
   const seed = sampleClaim(1201, "belief", "Create a calm planning surface for personal projects.", 78, ["seed"]);
   const assumption = sampleClaim(
     1202,
@@ -127,7 +127,7 @@ test("rankNextMoveCandidates recommends Check when a dropped idea has fragile as
   assert.match(selected.whyPennyRecommendsThis, /Why Penny recommends this/);
 });
 
-test("rankNextMoveCandidates recommends Check for the YC demo idea's load-bearing creativity assumption", () => {
+test("rankNextMoveCandidates recommends a pressure test for the YC demo idea's load-bearing creativity assumption", () => {
   const seed = sampleClaim(
     1801,
     "belief",

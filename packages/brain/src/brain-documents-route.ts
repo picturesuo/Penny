@@ -525,7 +525,7 @@ function nextActions(
   if (openChallenge) {
     const target = claimsForSession.find((claim) => claim.id === openChallenge.toClaimId);
 
-    return [`Send to Check: ${target?.text ?? "open challenge"}`];
+    return [`Send to Create: ${target?.text ?? "open challenge"}`];
   }
 
   const nextAssumption = claimsForSession

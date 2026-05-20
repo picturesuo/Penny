@@ -807,7 +807,7 @@ export function buildChallengePrompt(input: ChallengeGenerationInput): string {
     "- Use confirmed shapes as durable priors about how this user thinks.",
     "- Treat candidate shapes as tentative: let them influence critique selection, but do not assert them as facts.",
     "- Pending effects can suggest unresolved risks, stale artifacts, or next moves worth pressure-testing.",
-    "- Use Check retrieval to find prior shapes, mistakes, misconceptions, and graph neighbors before selecting the critique.",
+    "- Use Penny retrieval to find prior shapes, mistakes, misconceptions, and graph neighbors before selecting the critique.",
     "- Retrieval context is internal Brain memory, not external evidence.",
     "",
     `Target claim id: ${input.targetClaimId}`,

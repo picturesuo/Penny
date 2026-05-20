@@ -294,7 +294,7 @@ function resumeOpenChallengeCandidates(graph: ThinkingGraphSnapshot): CandidateD
           score: sumScore(scoreBreakdown),
           reason: `Resume the open challenge on "${clipText(target.text)}" before starting new work.`,
           whyPennyRecommendsThis: whyPennyRecommendsThis(
-            "there is already an unanswered Check in progress, and resolving it keeps the reasoning loop coherent.",
+            "there is already an unanswered challenge in progress, and resolving it keeps the reasoning loop coherent.",
           ),
           reasonCodes: ["open_challenge", "defend_revise_absorb_required", ...tagReasonCodes(target)],
           exitCriteria: {
@@ -350,7 +350,7 @@ function challengeCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
         action: "challenge",
         mode: "challenge",
         score: sumScore(scoreBreakdown),
-        reason: `Check "${clipText(claim.text)}" because it is an unresolved, load-bearing risk in the map.`,
+        reason: `Pressure-test "${clipText(claim.text)}" because it is an unresolved, load-bearing risk in the map.`,
         whyPennyRecommendsThis: whyPennyRecommendsThis(
           "the idea depends on a fragile assumption, so Penny should pressure-test it before building on top of it.",
         ),
@@ -450,7 +450,7 @@ function clarifyCandidates(graph: ThinkingGraphSnapshot): CandidateDraft[] {
         score: sumScore(scoreBreakdown),
         reason: `Clarify "${clipText(claim.text)}" so the map has a sharper question or claim before deeper work.`,
         whyPennyRecommendsThis: whyPennyRecommendsThis(
-          "the current wording is still ambiguous, and a sharper node will make Learn, Check, Verify, or Save more useful.",
+          "the current wording is still ambiguous, and a sharper node will make Learn, Create, Verify, or Save more useful.",
         ),
         reasonCodes: claim.kind === "question" ? ["open_question", "needs_clarification"] : ["ambiguous_claim", "needs_clarification"],
         exitCriteria: {

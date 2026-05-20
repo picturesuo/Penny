@@ -487,7 +487,7 @@ function nextMoveForAction(
     case "check":
       return {
         action,
-        label: "Check the weakest assumption",
+        label: "Pressure-test weakest assumption",
         reason: seedPayload.firstChallenge.challenge,
         source: "learn_session",
         candidateId: null,
@@ -552,7 +552,7 @@ function learnSessionCandidateBrainObjects(seedPayload: BrainSeedUiPayload): Can
       title: "Concepts to learn",
       summary: seedPayload.learnCandidates.map((candidate) => candidate.term).join(", "),
       content: conceptList.join("\n") || "No concepts were generated.",
-      suggestedSaveReason: "Save if these concepts will keep shaping Learn, Check, or Verify.",
+      suggestedSaveReason: "Save if these concepts will keep shaping Learn, Create, or Verify.",
       source: "learn" as const,
       refs: {
         sessionId: seedPayload.session.id,

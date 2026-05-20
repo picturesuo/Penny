@@ -180,7 +180,7 @@ function hasExternalFactSignal(text: string): boolean {
 function namedEntitiesNotInBrain(text: string, context: SearchDecisionContext): string[] {
   const brainText = `${context.brainContext ?? ""}\n${(context.knownBrainEntities ?? []).join("\n")}`.toLowerCase();
   const matches = text.match(/\b[A-Z][A-Za-z0-9&.-]*(?:\s+[A-Z][A-Za-z0-9&.-]*){0,4}\b/g) ?? [];
-  const stop = new Set(["Penny", "Brain", "Learn", "Check", "Verify", "Search", "Autopilot", "I"]);
+  const stop = new Set(["Penny", "Brain", "Create", "Learn", "Check", "Verify", "Search", "Autopilot", "I"]);
 
   return [...new Set(matches.map((value) => value.trim()).filter((value) => value.length > 2 && !stop.has(value)))]
     .filter((entity) => !brainText.includes(entity.toLowerCase()))

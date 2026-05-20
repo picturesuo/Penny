@@ -448,9 +448,9 @@ function whyPennyExplanationFor(candidate: Pick<PersistedNextMoveCandidate, "act
 
       return "Why Penny recommends this: the idea contains a concept or gap that should be understood before the next reasoning step.";
     case "clarify":
-      return "Why Penny recommends this: the current node needs sharper wording before Learn, Check, Verify, or Save will be useful.";
+      return "Why Penny recommends this: the current node needs sharper wording before Learn, Create, Verify, or Save will be useful.";
     case "resume_open_challenge":
-      return "Why Penny recommends this: an open Check is already in progress and should be resolved before starting new work.";
+      return "Why Penny recommends this: an open challenge is already in progress and should be resolved before starting new work.";
     case "challenge":
       if (candidate.reasonCodes.includes("assumption_fragility_high")) {
         return "Why Penny recommends this: the idea depends on a fragile assumption, so Penny should pressure-test it before building on top of it.";
@@ -573,9 +573,9 @@ function candidateLabel(action: NextMoveCandidate["action"]): string {
     case "clarify":
       return "Learn what needs sharpening";
     case "resume_open_challenge":
-      return "Check the open challenge";
+      return "Resume open challenge";
     case "challenge":
-      return "Check the weakest claim";
+      return "Pressure-test weakest claim";
     case "verify":
       return "Verify with evidence";
     case "save_to_brain":
@@ -590,9 +590,9 @@ function primaryActionLabel(action: NextMoveCandidate["action"]): string {
     case "clarify":
       return "Clarify";
     case "resume_open_challenge":
-      return "Resume Check";
+      return "Resume Create";
     case "challenge":
-      return "Start Check";
+      return "Start Create";
     case "verify":
       return "Start Verify";
     case "save_to_brain":

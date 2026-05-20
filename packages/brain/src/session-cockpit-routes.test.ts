@@ -51,7 +51,7 @@ test("buildSessionCockpitPayload composes graph, moves, autopilot, active challe
   assert.equal(payload.moves[0]?.kind, "challenge_issued");
   assert.equal(payload.autopilot.selectedCandidate?.candidateId, "next_candidate");
   assert.equal(payload.autopilot.selectedCandidate?.action, "challenge");
-  assert.equal(payload.autopilot.selectedCandidate?.title, "Check the weakest claim");
+  assert.equal(payload.autopilot.selectedCandidate?.title, "Pressure-test weakest claim");
   assert.equal(payload.autopilot.selectedCandidate?.reason, "Challenge the paid founder workflow assumption.");
   assert.equal(payload.autopilot.selectedCandidate?.target.claimId, uuidAt(201));
   assert.equal(payload.autopilot.selectedCandidate?.targetObject.id, `claim:${uuidAt(201)}`);
@@ -59,9 +59,9 @@ test("buildSessionCockpitPayload composes graph, moves, autopilot, active challe
   assert.equal(payload.autopilot.selectedCandidate?.targetClaim?.id, uuidAt(201));
   assert.equal(payload.autopilot.selectedCandidate?.priority.normalized, 92);
   assert.equal(payload.autopilot.selectedCandidate?.confidence, 92);
-  assert.equal(payload.autopilot.selectedCandidate?.ctaLabel, "Start Check");
-  assert.deepEqual(payload.modeContract.validModes, ["Learn", "Check", "Brain"]);
-  assert.equal(payload.modeContract.activeMode, "Check");
+  assert.equal(payload.autopilot.selectedCandidate?.ctaLabel, "Start Create");
+  assert.deepEqual(payload.modeContract.validModes, ["Learn", "Create", "Brain"]);
+  assert.equal(payload.modeContract.activeMode, "Create");
   assert.equal(payload.activeChallenge?.id, uuidAt(701));
   assert.equal(payload.activeChallenge?.targetClaim?.id, uuidAt(201));
   assert.equal(payload.activeChallenge?.critiqueClaim?.id, uuidAt(202));
@@ -425,7 +425,7 @@ function autopilotState(sessionId: string) {
     brainId: sessionId,
     sessionId,
     focusState: focusState(sessionId, "autopilot_suggestion", false),
-    modeContract: modeContract("Check"),
+    modeContract: modeContract("Create"),
     candidates: [candidate],
     selectedCandidate: candidate,
   };
@@ -446,7 +446,7 @@ function startResponse(sessionId: string, candidateId: string) {
     brainId: sessionId,
     sessionId,
     focusState: focusState(sessionId, "autopilot_started", false),
-    modeContract: modeContract("Check"),
+    modeContract: modeContract("Create"),
     selectedCandidate: {
       ...candidateDto(sessionId),
       candidateId,
@@ -481,7 +481,7 @@ function candidateDto(sessionId: string) {
     candidateId: "next_candidate",
     fingerprint: "fingerprint_123",
     rank: 1,
-    title: "Check the weakest claim",
+    title: "Pressure-test weakest claim",
     targetClaimId: uuidAt(201),
     targetEdgeId: uuidAt(301),
     target: {
@@ -493,10 +493,10 @@ function candidateDto(sessionId: string) {
     action: "challenge" as const,
     userAction: "check" as const,
     mode: "challenge" as const,
-    mvpMode: "Check" as const,
-    label: "Check the weakest claim",
-    ctaLabel: "Start Check",
-    primaryActionLabel: "Start Check",
+    mvpMode: "Create" as const,
+    label: "Pressure-test weakest claim",
+    ctaLabel: "Start Create",
+    primaryActionLabel: "Start Create",
     score: 920,
     priority: {
       rank: 1,
@@ -539,9 +539,9 @@ function candidateDto(sessionId: string) {
   };
 }
 
-function modeContract(activeMode: "Learn" | "Check" | "Brain") {
+function modeContract(activeMode: "Learn" | "Create" | "Brain") {
   return {
-    validModes: ["Learn", "Check", "Brain"] as const,
+    validModes: ["Learn", "Create", "Brain"] as const,
     activeMode,
   };
 }

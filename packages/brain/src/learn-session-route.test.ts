@@ -104,7 +104,7 @@ test("POST /api/learn/session structures a dropped idea and ticks Autopilot", as
   assert.equal(payload.data.candidateBrainObjects[0]?.objectType, "learn_session");
   assert.equal(payload.data.candidateBrainObjects[0]?.source, "learn");
   assert.equal(payload.data.autopilot.selectedCandidate?.userAction, "check");
-  assert.equal(payload.data.modeContract.activeMode, "Check");
+  assert.equal(payload.data.modeContract.activeMode, "Create");
 });
 
 test("POST /api/learn/session turns uploaded source text into clustered lesson context", async () => {
@@ -328,7 +328,7 @@ function move(seedId: string, kind: PersistedBrainSeed["moves"][number]["kind"],
 }
 
 function autopilotResponse(sessionId: string): ThinkingModeTickResponse {
-  const selectedCandidate = candidate(sessionId, "check", "challenge", "Check the weakest claim");
+  const selectedCandidate = candidate(sessionId, "check", "challenge", "Pressure-test weakest claim");
 
   return {
     status: "ready",
@@ -343,12 +343,12 @@ function autopilotResponse(sessionId: string): ThinkingModeTickResponse {
       suggestionMoveId: uuidAt(601),
       manualMoveId: null,
       paused: false,
-      reason: "Check the weakest claim.",
+      reason: "Pressure-test weakest claim.",
       updatedAt: "2026-04-30T00:00:01.000Z",
     },
     modeContract: {
-      validModes: ["Learn", "Check", "Brain"],
-      activeMode: "Check",
+      validModes: ["Learn", "Create", "Brain"],
+      activeMode: "Create",
     },
     candidates: [
       selectedCandidate,
@@ -399,7 +399,7 @@ function candidate(
     action,
     userAction,
     mode,
-    mvpMode: mode === "learn" ? "Learn" : "Check",
+    mvpMode: mode === "learn" ? "Learn" : "Create",
     label,
     ctaLabel: label,
     primaryActionLabel: label,

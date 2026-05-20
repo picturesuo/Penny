@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const mvpModeValues = ["Learn", "Check", "Brain"] as const;
+export const mvpModeValues = ["Learn", "Create", "Brain"] as const;
 export type MvpMode = (typeof mvpModeValues)[number];
 
 export const thinkingModeValues = ["brain", "challenge", "verify", "learn", "artifact"] as const;
@@ -20,7 +20,7 @@ export function mvpModeForThinkingMode(mode: ThinkingMode): MvpMode {
     case "challenge":
     case "verify":
     case "artifact":
-      return "Check";
+      return "Create";
     case "brain":
       return "Brain";
   }
@@ -30,7 +30,7 @@ export function thinkingModeForMvpMode(mode: MvpMode): ThinkingMode {
   switch (mode) {
     case "Learn":
       return "learn";
-    case "Check":
+    case "Create":
       return "challenge";
     case "Brain":
       return "brain";

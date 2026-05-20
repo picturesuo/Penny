@@ -1671,8 +1671,8 @@ function buildInitialArtifact(input: {
     "Data model": "Represent CandidateOption, OptionSet, JudgmentEvent, CodingPromptArtifact, ArtifactSection, ArtifactDelta, VerificationSummary, MemoryRef, SourceRef, and PromptExport.",
     "AI/memory orchestration": `Use available Penny memory/source/session context only when provided. Do not imply hidden memory. Store judgment as a durable signal for later model-backed generation.\n\nBrain next-best move:\n- ${input.optionSet.nextBestMove.title}: ${input.optionSet.nextBestMove.action}\n- ${input.optionSet.nextBestMove.whyItMatters}\n\nPersonal context available now:\n${personalContext}`,
     "Privacy constraints": "Do not send data to a model in v0 placeholder mode. Keep source and memory references explicit so the UI never claims provenance it lacks.",
-    "Verification constraints": "Check intent match, buildability, source/context grounding, non-generic GPT-wrapper risk, missing information, and implementation risks.",
-    "Implementation plan": "1. Add contracts and route handlers. 2. Add client methods. 3. Render Create flow through the Check workspace wrapper. 4. Add focused tests. 5. Run build, typecheck, and tests.",
+    "Verification constraints": "Verify intent match, buildability, source/context grounding, non-generic GPT-wrapper risk, missing information, and implementation risks.",
+    "Implementation plan": "1. Add contracts and route handlers. 2. Add client methods. 3. Render the Create workspace. 4. Add focused tests. 5. Run build, typecheck, and tests.",
     "Acceptance tests": "A user can enter a rough idea, see Personal/Practical/Valuable/Critical/Weird cards, select multiple, comment, see the artifact update, review verification, and export a usable prompt.",
     "Do-not-break list": "Do not break Brain, Learn, session recovery, existing auth/session/tenant headers, canvas actions, or current visual language.",
     "Final coding-agent prompt": "Generate directions first, then select options and update the artifact before exporting the final prompt.",
@@ -1802,11 +1802,11 @@ function bodyForUpdatedSection(input: {
     case "Verification constraints":
       return `Verification must cover intent match, buildability, source/context grounding, non-generic/not-GPT-wrapper risk, missing info, and risks. Current selected risks: ${input.risks.join(" ") || "No selected-card risks."}`;
     case "Implementation plan":
-      return `Implementation sequence:\n${input.nextMoves}\n- Wire the compact UI through the existing Check workspace wrapper renamed as Create in copy.\n- Add focused tests for option generation, judgment, artifact update, verification, and export.\n- Run build, typecheck, and tests.`;
+      return `Implementation sequence:\n${input.nextMoves}\n- Wire the compact UI through the existing Create workspace.\n- Add focused tests for option generation, judgment, artifact update, verification, and export.\n- Run build, typecheck, and tests.`;
     case "Acceptance tests":
       return "Acceptance tests: Create is accessible; rough idea input works; five named cards render; multi-select and comment create a JudgmentEvent; artifact updates onscreen; verification appears; export returns a usable prompt; Brain and Learn still work; build/typecheck/tests pass.";
     case "Do-not-break list":
-      return "Do not break Brain, Learn, session recovery, current auth/session/tenant headers, canvas node actions, existing Check backend routes, or the editorial/newsprint visual language.";
+      return "Do not break Brain, Create, Learn, session recovery, current auth/session/tenant headers, canvas node actions, or the editorial/newsprint visual language.";
     case "Final coding-agent prompt":
       return buildPromptText({ ...input.artifact, sections: input.artifact.sections.filter((item) => item.title !== "Final coding-agent prompt") });
   }

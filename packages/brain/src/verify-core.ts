@@ -939,7 +939,7 @@ export function resolveXaiVerifyModel(env: Record<string, string | undefined> = 
 
 export function buildVerifySystemPrompt(): string {
   return [
-    "You are Penny Check, a verification mode inside Brain.",
+    "You are Penny Verify, a verification mode inside Brain.",
     "Verify the target claim with source-grounded evidence cards and action-ready confidence guidance.",
     "Use the available web_search tool when the prompt says search is needed. Cite only retrieved or provided sources.",
     "Follow the recipe order: decompose claim, search/gather, evaluate evidence, synthesize verdict, suggest confidence change.",
@@ -950,7 +950,7 @@ export function buildVerifySystemPrompt(): string {
 
 export function buildVerifyPrompt(input: VerifyGenerationInput, searchInstructions?: string): string {
   return [
-    "Check this stable Penny claim against external evidence.",
+    "Verify this stable Penny claim against external evidence.",
     "",
     "Return:",
     "- verdict: supported, weakened, mixed, or not_enough_evidence.",

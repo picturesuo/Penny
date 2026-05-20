@@ -178,7 +178,7 @@ function fakeServices(calls: string[]): PennyInternalToolServices {
           brainId: input.brainId,
           sessionId: input.sessionId,
           focusState: focusState(input.sessionId, "autopilot_started", false),
-          modeContract: modeContract("Check"),
+          modeContract: modeContract("Create"),
           selectedCandidate: candidate(),
           move: thinkingMove("autopilot_focus_started"),
         };
@@ -193,7 +193,7 @@ function fakeServices(calls: string[]): PennyInternalToolServices {
           brainId: input.brainId,
           sessionId: input.sessionId,
           focusState: focusState(input.sessionId, "manual_selection", true),
-          modeContract: modeContract("Check"),
+          modeContract: modeContract("Create"),
           focusClaim: {
             id: input.claimId,
             versionId: uuidAt(301),
@@ -240,7 +240,7 @@ function thinkingStateResponse(brainId: string, sessionId: string): ThinkingMode
     brainId,
     sessionId,
     focusState: focusState(sessionId, "autopilot_suggestion", false),
-    modeContract: modeContract("Check"),
+    modeContract: modeContract("Create"),
     candidates: [selectedCandidate],
     selectedCandidate,
   };
@@ -267,7 +267,7 @@ function candidate(): ThinkingModeCandidateDto {
     candidateId: "candidate-1",
     fingerprint: "fingerprint-1",
     rank: 1,
-    title: "Check the weakest claim",
+    title: "Pressure-test weakest claim",
     targetClaimId: uuidAt(201),
     targetEdgeId: null,
     target: {
@@ -279,10 +279,10 @@ function candidate(): ThinkingModeCandidateDto {
     action: "challenge",
     userAction: "check",
     mode: "challenge",
-    mvpMode: "Check",
-    label: "Check the weakest claim",
-    ctaLabel: "Start Check",
-    primaryActionLabel: "Start Check",
+    mvpMode: "Create",
+    label: "Pressure-test weakest claim",
+    ctaLabel: "Start Create",
+    primaryActionLabel: "Start Create",
     score: 900,
     priority: {
       rank: 1,
@@ -325,9 +325,9 @@ function candidate(): ThinkingModeCandidateDto {
   };
 }
 
-function modeContract(activeMode: "Learn" | "Check" | "Brain") {
+function modeContract(activeMode: "Learn" | "Create" | "Brain") {
   return {
-    validModes: ["Learn", "Check", "Brain"] as const,
+    validModes: ["Learn", "Create", "Brain"] as const,
     activeMode,
   };
 }

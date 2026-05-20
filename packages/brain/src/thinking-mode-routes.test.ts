@@ -58,7 +58,7 @@ test("GET /api/brains/:brainId/autopilot/state covers invalid, empty, and seeded
           brainId: requestBrainId,
           sessionId: requestSessionId,
           focusState: focusState(requestSessionId, "autopilot_suggestion", false),
-          modeContract: modeContract("Check"),
+          modeContract: modeContract("Create"),
           candidates: [candidate],
           selectedCandidate: candidate,
         };
@@ -846,7 +846,7 @@ function smokeRouteService(brainId: string, sessionId: string): ThinkingModeRout
         brainId,
         sessionId,
         focusState: currentFocusState,
-        modeContract: modeContract("Check"),
+        modeContract: modeContract("Create"),
         candidates,
         selectedCandidate,
       };
@@ -869,7 +869,7 @@ function smokeRouteService(brainId: string, sessionId: string): ThinkingModeRout
         brainId,
         sessionId,
         focusState: currentFocusState,
-        modeContract: modeContract("Check"),
+        modeContract: modeContract("Create"),
         candidates,
         selectedCandidate,
         graphHash: selectedCandidate.graphHash,
@@ -903,7 +903,7 @@ function smokeRouteService(brainId: string, sessionId: string): ThinkingModeRout
         brainId,
         sessionId,
         focusState: currentFocusState,
-        modeContract: modeContract("Check"),
+        modeContract: modeContract("Create"),
         selectedCandidate: candidate,
         move,
       };
@@ -927,7 +927,7 @@ function smokeRouteService(brainId: string, sessionId: string): ThinkingModeRout
         brainId,
         sessionId,
         focusState: currentFocusState,
-        modeContract: modeContract("Check"),
+        modeContract: modeContract("Create"),
         focusClaim: {
           id: input.claimId,
           versionId: uuidAt(702),
@@ -970,7 +970,7 @@ function stateResponse(brainId: string, sessionId: string) {
     brainId,
     sessionId,
     focusState: focusState(sessionId, "none", false),
-    modeContract: modeContract("Check"),
+    modeContract: modeContract("Create"),
     candidates: [],
     selectedCandidate: null,
   };
@@ -984,7 +984,7 @@ function tickResponse(brainId: string, sessionId: string) {
     brainId,
     sessionId,
     focusState: focusState(sessionId, "autopilot_suggestion", false),
-    modeContract: modeContract("Check"),
+    modeContract: modeContract("Create"),
     candidates: [candidate],
     selectedCandidate: candidate,
     graphHash: "graph_hash",
@@ -999,7 +999,7 @@ function startResponse(brainId: string, sessionId: string, candidateId: string) 
     brainId,
     sessionId,
     focusState: focusState(sessionId, "autopilot_started", false),
-    modeContract: modeContract("Check"),
+    modeContract: modeContract("Create"),
     selectedCandidate: {
       ...candidateDto(sessionId),
       candidateId,
@@ -1014,7 +1014,7 @@ function manualResponse(brainId: string, sessionId: string, claimId: string) {
     brainId,
     sessionId,
     focusState: focusState(sessionId, "manual_selection", true),
-    modeContract: modeContract("Check"),
+    modeContract: modeContract("Create"),
     focusClaim: {
       id: claimId,
       versionId: uuidAt(702),
@@ -1033,7 +1033,7 @@ function candidateDto(sessionId: string) {
     candidateId: "next_candidate",
     fingerprint: "fingerprint_123",
     rank: 1,
-    title: "Check the weakest claim",
+    title: "Pressure-test weakest claim",
     targetClaimId: uuidAt(202),
     targetEdgeId: uuidAt(302),
     target: {
@@ -1045,10 +1045,10 @@ function candidateDto(sessionId: string) {
     action: "challenge" as const,
     userAction: "check" as const,
     mode: "challenge" as const,
-    mvpMode: "Check" as const,
-    label: "Check the weakest claim",
-    ctaLabel: "Start Check",
-    primaryActionLabel: "Start Check",
+    mvpMode: "Create" as const,
+    label: "Pressure-test weakest claim",
+    ctaLabel: "Start Create",
+    primaryActionLabel: "Start Create",
     score: 920,
     priority: {
       rank: 1,
@@ -1092,9 +1092,9 @@ function candidateDto(sessionId: string) {
   };
 }
 
-function modeContract(activeMode: "Learn" | "Check" | "Brain") {
+function modeContract(activeMode: "Learn" | "Create" | "Brain") {
   return {
-    validModes: ["Learn", "Check", "Brain"] as const,
+    validModes: ["Learn", "Create", "Brain"] as const,
     activeMode,
   };
 }

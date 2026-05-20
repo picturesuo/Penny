@@ -154,7 +154,7 @@ test("LearnWorkspace renders backend expert learning plan subgroups", () => {
                   id: "pricing-challenge-next",
                   title: "Choose next pricing test",
                   teachingParagraph:
-                    "The next test should be small enough to run and strong enough to change the claim. This gives Check or Verify a real target.",
+                    "The next test should be small enough to run and strong enough to change the claim. This gives Create or Verify a real target.",
                   keyMoves: ["Pick one test.", "Set a threshold.", "Connect it to the graph."],
                   workedExample: "Ask five target founders what decision they would pay to improve this month.",
                   visualExample: {

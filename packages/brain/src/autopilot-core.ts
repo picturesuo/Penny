@@ -457,8 +457,8 @@ function confidenceVerificationCandidates(state: AutopilotState, claims: Autopil
       return {
         action: "verify_confidence",
         mode: "verify",
-        title: highConfidence ? "Verify high confidence" : "Check low confidence",
-        rationale: `Check whether "${clipText(claim.text, 140)}" still deserves ${claim.confidence}% confidence.`,
+        title: highConfidence ? "Verify high confidence" : "Test low confidence",
+        rationale: `Test whether "${clipText(claim.text, 140)}" still deserves ${claim.confidence}% confidence.`,
         whyChosen: [
           "Autopilot may suggest confidence work, but it may not silently mutate confidence.",
           "Any confidence change still requires explicit user acceptance.",

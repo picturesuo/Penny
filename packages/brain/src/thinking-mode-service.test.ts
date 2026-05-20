@@ -14,7 +14,7 @@ test("ThinkingModeService GET state is read-only", async () => {
 
   assert.equal(state.status, "empty");
   assert.equal(state.focusState.source, "none");
-  assert.deepEqual(state.modeContract.validModes, ["Learn", "Check", "Brain"]);
+  assert.deepEqual(state.modeContract.validModes, ["Learn", "Create", "Brain"]);
   assert.equal(state.modeContract.activeMode, "Brain");
   assert.equal(repository.writes.length, 0);
 });
@@ -28,17 +28,17 @@ test("ThinkingModeService tick recomputes and persists candidates without mutati
   assert.equal(result.candidates.length, 3);
   assert.equal(result.selectedCandidate?.action, "challenge");
   assert.equal(result.selectedCandidate?.userAction, "check");
-  assert.equal(result.selectedCandidate?.title, "Check the weakest claim");
-  assert.equal(result.selectedCandidate?.label, "Check the weakest claim");
-  assert.equal(result.selectedCandidate?.ctaLabel, "Start Check");
-  assert.equal(result.selectedCandidate?.primaryActionLabel, "Start Check");
+  assert.equal(result.selectedCandidate?.title, "Pressure-test weakest claim");
+  assert.equal(result.selectedCandidate?.label, "Pressure-test weakest claim");
+  assert.equal(result.selectedCandidate?.ctaLabel, "Start Create");
+  assert.equal(result.selectedCandidate?.primaryActionLabel, "Start Create");
   assert.equal(result.selectedCandidate?.mode, "challenge");
-  assert.equal(result.selectedCandidate?.mvpMode, "Check");
+  assert.equal(result.selectedCandidate?.mvpMode, "Create");
   assert.equal(result.selectedCandidate?.target.type, "claim");
   assert.equal(result.selectedCandidate?.target.claimId, result.selectedCandidate?.targetClaimId);
   assert.equal(result.selectedCandidate?.priority.rank, 1);
   assert.equal(result.selectedCandidate?.priority.normalized, result.selectedCandidate?.confidence);
-  assert.equal(result.modeContract.activeMode, "Check");
+  assert.equal(result.modeContract.activeMode, "Create");
   assert.equal(result.move?.kind, "next_move_recomputed");
   assert.ok(result.move);
   const recomputedMove = result.move;
@@ -78,7 +78,7 @@ test("ThinkingModeService startCandidate creates autopilot_focus_started and upd
   assert.equal(started.move.kind, "autopilot_focus_started");
   assert.equal(started.focusState.source, "autopilot_started");
   assert.equal(started.focusState.paused, false);
-  assert.equal(started.modeContract.activeMode, "Check");
+  assert.equal(started.modeContract.activeMode, "Create");
 });
 
 test("ThinkingModeService manualFocus creates manual_node_selected and pauses autopilot", async () => {

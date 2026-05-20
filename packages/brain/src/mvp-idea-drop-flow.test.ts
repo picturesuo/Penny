@@ -298,7 +298,7 @@ test("P2 smoke: idea drop, canvas fetch, recipe trace, and Brain context stay co
   assert.match(brainBody.data.objects[0]?.preview ?? "", /fragile|thinking artifacts|launch/i);
 });
 
-test("YC MVP demo smoke: exact idea reaches Check, Brain, Canvas, and related context", async () => {
+test("YC MVP demo smoke: exact idea reaches Create, Brain, Canvas, and related context", async () => {
   const idea =
     "Penny is the most consistently efficient way to evoke creativity and turn it into structured, source-grounded thinking.";
   const brainObjects = new MemoryBrainObjectsService();
@@ -341,7 +341,7 @@ test("YC MVP demo smoke: exact idea reaches Check, Brain, Canvas, and related co
     ["source-grounded thinking", "structured creativity"],
   );
   assert.equal(learnBody.data.autopilot.selectedCandidate?.userAction, "check");
-  assert.equal(learnBody.data.autopilot.selectedCandidate?.mvpMode, "Check");
+  assert.equal(learnBody.data.autopilot.selectedCandidate?.mvpMode, "Create");
   assert.ok(saveCandidate);
 
   const kept = await handleBrainRecentsRequest(scopedJsonRequest("http://localhost/api/brain/recents", {
@@ -397,7 +397,7 @@ test("YC MVP demo smoke: exact idea reaches Check, Brain, Canvas, and related co
           }),
           canvasNode("evidence", "Source grounding", "Verify or Brain context should ground the claim before the demo overstates it.", {}),
           {
-            ...canvasNode("artifact", "Next move", "Check the creativity mechanism, then save the useful result.", {}),
+            ...canvasNode("artifact", "Next move", "Pressure-test creativity mechanism, then save the useful result.", {}),
             actions: ["check", "verify", "save", "related"],
           },
         ],
@@ -594,7 +594,7 @@ function demoSeedOutput(rawIdea: string, sessionId: string): BrainSeedOutput {
         text: "A short Learn pass can make the first confusing concept usable.",
         confidence: 62,
         pressure: "medium",
-        whyItMatters: "Learn must produce useful structure before Check or Brain can preserve it.",
+        whyItMatters: "Learn must produce useful structure before Create or Brain can preserve it.",
       },
       {
         id: "claim.assumption.3",
@@ -803,7 +803,7 @@ function demoAutopilotTick(sessionId: string, targetClaimId: string): ThinkingMo
       updatedAt: now,
     },
     modeContract: {
-      validModes: ["Learn", "Check", "Brain"],
+      validModes: ["Learn", "Create", "Brain"],
       activeMode: "Learn",
     },
     candidates: [candidate],
@@ -835,12 +835,12 @@ function demoCheckAutopilotTick(sessionId: string, targetClaimId: string): Think
     action: "challenge",
     userAction: "check",
     mode: "challenge",
-    mvpMode: "Check",
-    title: "Check the creativity mechanism",
-    label: "Check the creativity mechanism",
-    ctaLabel: "Start Check",
-    primaryActionLabel: "Start Check",
-    reason: "Check whether Penny reliably evokes creativity through structure, provenance, and next-move pressure.",
+    mvpMode: "Create",
+    title: "Pressure-test creativity mechanism",
+    label: "Pressure-test creativity mechanism",
+    ctaLabel: "Start Create",
+    primaryActionLabel: "Start Create",
+    reason: "Pressure-test whether Penny reliably evokes creativity through structure, provenance, and next-move pressure.",
     whyNow: "The demo promise depends on a named creativity mechanism, not just a broad efficiency claim.",
     whyPennyRecommendsThis:
       "Why Penny recommends this: the core claim is ambitious and source-grounded, so the next move should pressure-test the mechanism.",
@@ -860,14 +860,14 @@ function demoCheckAutopilotTick(sessionId: string, targetClaimId: string): Think
       reason: candidate.reason,
     },
     modeContract: {
-      validModes: ["Learn", "Check", "Brain"],
-      activeMode: "Check",
+      validModes: ["Learn", "Create", "Brain"],
+      activeMode: "Create",
     },
     candidates: [candidate],
     selectedCandidate: candidate,
     move: {
       ...move,
-      summary: "Recomputed next moves and selected Check.",
+      summary: "Recomputed next moves and selected Create.",
     },
   };
 }
