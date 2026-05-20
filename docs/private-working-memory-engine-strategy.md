@@ -12,7 +12,7 @@ The product gives users more of their own working memory. It pulls ideas, questi
 
 Do not pitch Penny as "AI uses your private data." Pitch:
 
-> Penny is a thinking graph that turns scattered context into sharper ideas, checks, learning loops, and creative momentum.
+> Penny is a thinking graph that turns scattered context into sharper ideas, challenge loops, learning loops, and creative momentum.
 
 The product should feel like a controllable thinking instrument, not a generic chatbot, note app, or data-ingestion wrapper. Memory is only valuable when it changes the quality of the user's current thinking and remains traceable, correctable, and user-owned.
 
@@ -21,7 +21,7 @@ The product should feel like a controllable thinking instrument, not a generic c
 Penny's durable identity:
 
 - Brain is the persistent thinking graph where the user's ideas, claims, projects, assumptions, artifacts, questions, people, decisions, and lessons become linked working context.
-- Check / Challenge / Verify turns graph context into sharper critique by finding weak claims, contradictions, stale assumptions, missing evidence, and idea-risk blind spots.
+- Create / Challenge / Verify turns graph context into sharper critique by finding weak claims, contradictions, stale assumptions, missing evidence, and idea-risk blind spots.
 - Learn / Makes Cents turns graph context into active recall, spaced review, project-specific lessons, teach-back prompts, and creative drills.
 - Connectors feed the graph selectively. They do not create a blind warehouse of private data.
 - Retrieval returns the smallest useful set of memory shards and evidence pointers needed for the current work.
@@ -124,9 +124,9 @@ Use:
 
 Avoid turning calendar into a transcript or surveillance surface. Calendar should primarily strengthen temporal context, project awareness, deadline recall, and review cadence.
 
-### 5. Check System
+### 5. Create Critique System
 
-Check challenges the graph.
+Create's Challenge / Verify path challenges the graph.
 
 It should find:
 
@@ -139,7 +139,7 @@ It should find:
 - unsupported high-confidence claims
 - heavily depended-on foundation claims that need review
 
-Check should use connector memory only when it is relevant and traceable. A challenge should say whether it is grounded in prior ChatGPT threads, selected emails, calendar patterns, source uploads, graph structure, shapes, or user-authored moves.
+The Challenge / Verify path should use connector memory only when it is relevant and traceable. A challenge should say whether it is grounded in prior ChatGPT threads, selected emails, calendar patterns, source uploads, graph structure, shapes, or user-authored moves.
 
 ### 6. Learn System
 
@@ -237,7 +237,7 @@ Build toward these modules together as the long-term product architecture:
 2. ChatGPT import
 3. Gmail selective import
 4. Calendar context
-5. Check
+5. Create critique
 6. Learn
 7. Graph
 
@@ -368,7 +368,7 @@ The user should never have to wonder whether Penny invented private context.
 Use:
 
 - "Penny gives you more of your own working memory."
-- "Penny turns scattered context into sharper ideas, checks, learning loops, and creative momentum."
+- "Penny turns scattered context into sharper ideas, challenge loops, learning loops, and creative momentum."
 - "Penny helps new thinking stem from your previous thinking."
 - "Penny is a thinking graph for founders and creative people."
 - "Penny can show why it thinks something and lets you correct it."
@@ -386,7 +386,7 @@ Avoid:
 
 A connector or memory feature belongs in Penny only if it satisfies all of these:
 
-- It strengthens Brain, Check, Learn, or the artifact loop.
+- It strengthens Brain, Create, Learn, or the artifact loop.
 - It creates or updates explicit graph objects rather than hidden prompt context.
 - It stores raw snippets only when necessary and user-visible.
 - It labels source class and source scope.
