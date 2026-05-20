@@ -1,8 +1,11 @@
 import {
   buildGoogleConnectorProvider,
   createNangoAdapter,
+  googleScopeRegistry,
+  initializeGoogleConnectorConnection,
   readGoogleConnectorRuntimeConfig,
   type ConnectorAdapterResult,
+  type GoogleSurfaceId,
   type NangoAdapter,
   type NangoCallbackInput,
   type NangoConnectSessionInput,
@@ -19,7 +22,11 @@ export type GoogleConnectorRouteOptions = {
 
 export type GoogleConnectSessionRequestBody = Partial<NangoConnectSessionInput>;
 
-export type GoogleConnectorCallbackRequestBody = Partial<NangoCallbackInput>;
+export type GoogleConnectorCallbackRequestBody = Partial<NangoCallbackInput> & {
+  surfaces?: GoogleSurfaceId[];
+  now?: string;
+  syncIntervalHours?: number;
+};
 
 export type GoogleConnectorConnectionRequestBody = Partial<NangoConnectionInput>;
 
@@ -132,14 +139,41 @@ export async function handleGoogleConnectorCallbackRequest(
     ]);
   }
 
-  return adapterResponse(
-    await resolveAdapter(options).handleCallback({
-      connectionId: body.value.connectionId,
-      providerConfigKey: body.value.providerConfigKey,
-      ...(body.value.accountId ? { accountId: body.value.accountId } : {}),
-      ...(body.value.endUserId ? { endUserId: body.value.endUserId } : {}),
-      ...(body.value.scopes ? { scopes: body.value.scopes } : {}),
-    }),
+  const surfaces = callbackSurfaces(body.value);
+
+  if (!surfaces.length) {
+    return invalidRequest("Google connector callback requires explicit surfaces or recognizable Google scopes.", [
+      "surfaces",
+      "scopes",
+    ]);
+  }
+
+  const callback = await resolveAdapter(options).handleCallback({
+    connectionId: body.value.connectionId,
+    providerConfigKey: body.value.providerConfigKey,
+    ...(body.value.accountId ? { accountId: body.value.accountId } : {}),
+    ...(body.value.endUserId ? { endUserId: body.value.endUserId } : {}),
+    ...(body.value.scopes ? { scopes: body.value.scopes } : {}),
+  });
+
+  if (!callback.ok) {
+    return adapterResponse(callback, 200);
+  }
+
+  return jsonResponse(
+    {
+      data: {
+        credential: callback.data,
+        state: initializeGoogleConnectorConnection({
+          scope: scopeFromRequest(request),
+          credential: callback.data,
+          surfaces,
+          scopes: body.value.scopes ?? [],
+          now: body.value.now ?? new Date().toISOString(),
+          ...(body.value.syncIntervalHours !== undefined ? { syncIntervalHours: body.value.syncIntervalHours } : {}),
+        }),
+      },
+    },
     200,
   );
 }
@@ -337,6 +371,42 @@ export async function handleGoogleConnectorRevokeRequest(
 
 function resolveAdapter(options: GoogleConnectorRouteOptions): NangoAdapter {
   return options.adapter ?? createNangoAdapter(readGoogleConnectorRuntimeConfig(options.env));
+}
+
+function scopeFromRequest(request: Request) {
+  return {
+    userId: request.headers.get("x-user-id") ?? request.headers.get("x-penny-user-id"),
+    workspaceId: request.headers.get("x-workspace-id") ?? request.headers.get("x-penny-workspace-id"),
+    projectId: request.headers.get("x-project-id") ?? request.headers.get("x-penny-project-id"),
+    sphereId: request.headers.get("x-sphere-id") ?? request.headers.get("x-penny-sphere-id"),
+  };
+}
+
+function callbackSurfaces(input: GoogleConnectorCallbackRequestBody): GoogleSurfaceId[] {
+  const explicitSurfaces = (input.surfaces ?? []).filter(isGoogleSurfaceId);
+
+  if (explicitSurfaces.length > 0) {
+    return [...new Set(explicitSurfaces)];
+  }
+
+  const surfaces = (input.scopes ?? []).flatMap((scope) =>
+    googleScopeRegistry.filter((entry) => entry.scope === scope).map((entry) => entry.surface),
+  );
+
+  return [...new Set(surfaces)];
+}
+
+function isGoogleSurfaceId(value: unknown): value is GoogleSurfaceId {
+  return (
+    value === "google_drive" ||
+    value === "google_docs_sheets_slides" ||
+    value === "google_calendar" ||
+    value === "google_gmail" ||
+    value === "google_youtube" ||
+    value === "google_takeout" ||
+    value === "google_my_activity" ||
+    value === "chrome_extension_history"
+  );
 }
 
 function connectionInput(

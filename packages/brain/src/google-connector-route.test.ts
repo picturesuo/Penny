@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  handleGoogleConnectorCallbackRequest,
   handleGoogleConnectorConnectSessionRequest,
   handleGoogleConnectorProviderRequest,
   handleGoogleConnectorSyncNowRequest,
 } from "./google-connector-route.ts";
-import type { NangoAdapter, NangoConnectSessionInput, NangoStartSyncInput } from "./google-connector.ts";
+import type { ConnectorCredentialRef, NangoAdapter, NangoConnectSessionInput, NangoStartSyncInput } from "./google-connector.ts";
 
 const configuredEnv = {
   ENABLE_GOOGLE_CONNECTOR: "true",
@@ -96,6 +97,92 @@ test("POST /api/connectors/google/connect-session returns not configured when en
   assert.equal(response.status, 503);
   assert.equal(payload.error.code, "not_configured");
   assert.match(payload.error.message, /NANGO_SECRET_KEY/);
+});
+
+test("POST /api/connectors/google/callback returns initialized connection and initial sync state", async () => {
+  let captured: ConnectorCredentialRef | null = null;
+  const adapter = fakeAdapter({
+    async handleCallback(input) {
+      const credential: ConnectorCredentialRef = {
+        providerId: "google",
+        adapter: "nango",
+        connectionId: input.connectionId,
+        providerConfigKey: input.providerConfigKey,
+        credentialRef: `nango:${input.providerConfigKey}:${input.connectionId}`,
+        endUserId: input.endUserId,
+      };
+
+      captured = credential;
+
+      return { ok: true, data: credential };
+    },
+  });
+  const response = await handleGoogleConnectorCallbackRequest(
+    new Request("http://localhost/api/connectors/google/callback", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        connectionId: "nango-google-1",
+        providerConfigKey: "google",
+        endUserId: "user-1",
+        scopes: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/calendar.readonly"],
+        now: "2026-05-20T12:00:00.000Z",
+      }),
+    }),
+    { adapter },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      credential: ConnectorCredentialRef;
+      state: {
+        connections: Array<{ id: string; status: string; surfaces: string[]; nextSyncAt: string | null }>;
+        cursors: Array<{ surface: string; nextSyncAt: string | null }>;
+        syncJobs: Array<{ surface: string; status: string }>;
+        audits: Array<{ event: string }>;
+      };
+    };
+  };
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload.data.credential, captured);
+  assert.deepEqual(payload.data.state.connections[0]?.surfaces, [
+    "google_drive",
+    "google_docs_sheets_slides",
+    "google_calendar",
+  ]);
+  assert.equal(payload.data.state.connections[0]?.status, "connected");
+  assert.equal(payload.data.state.connections[0]?.nextSyncAt, "2026-05-20T12:00:00.000Z");
+  assert.deepEqual(payload.data.state.cursors.map((cursor) => cursor.surface), [
+    "google_drive",
+    "google_docs_sheets_slides",
+    "google_calendar",
+  ]);
+  assert.equal(payload.data.state.syncJobs.length, 3);
+  assert.equal(payload.data.state.syncJobs.every((job) => job.status === "queued"), true);
+  assert.equal(payload.data.state.audits.some((audit) => audit.event === "connector.connected"), true);
+});
+
+test("POST /api/connectors/google/callback rejects missing surfaces instead of faking access", async () => {
+  const response = await handleGoogleConnectorCallbackRequest(
+    new Request("http://localhost/api/connectors/google/callback", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        connectionId: "nango-google-1",
+        providerConfigKey: "google",
+      }),
+    }),
+    { adapter: fakeAdapter({}) },
+  );
+  const payload = (await response.json()) as { error: { code: string; message: string } };
+
+  assert.equal(response.status, 400);
+  assert.equal(payload.error.code, "invalid_request");
+  assert.match(payload.error.message, /explicit surfaces|recognizable Google scopes/i);
 });
 
 test("POST /api/connectors/google/sync-now triggers default Google sync names", async () => {
