@@ -76,7 +76,7 @@ import { CanvasWorkspace } from "./CanvasWorkspace";
 
 type ClaimDetailStatus = "idle" | "loading" | "ready" | "error";
 type BrainMemoryStatus = "idle" | "loading" | "ready" | "importing" | "deleting" | "error";
-type GoogleConnectorUiStatus = "idle" | "loading" | "ready" | "connecting" | "syncing" | "revoking" | "error";
+type GoogleConnectorUiStatus = "idle" | "loading" | "ready" | "connecting" | "syncing" | "revoking" | "deleting" | "error";
 
 type GoogleConnectorConnectionView = {
   id: string;
@@ -390,6 +390,29 @@ export function BrainWorkspace({
     }
   }
 
+  async function handleGoogleConnectorSourceDelete(sourceId: string) {
+    setMemoryStatus("deleting");
+    setMemoryError(null);
+    setMemoryNotice(null);
+
+    try {
+      const response = await postGoogleConnectorAction("/api/connectors/google/source-delete", { sourceId });
+
+      if (isBrainMemoryProfileData(response.data.profile)) {
+        setMemoryProfile(response.data.profile);
+      } else {
+        const profileResponse = await fetchBrainMemoryProfile();
+        setMemoryProfile(profileResponse.data);
+      }
+
+      setMemoryStatus("ready");
+      setMemoryNotice("Google source deleted. Connector retrieval access and linked Brain source access were removed.");
+    } catch (error) {
+      setMemoryStatus("error");
+      setMemoryError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function handleMemoryReview(nodeId: string, action: MemoryReviewAction) {
     setMemoryReviewingId(nodeId);
     setMemoryError(null);
@@ -458,6 +481,7 @@ export function BrainWorkspace({
           onMemoryImport={handleMemoryImport}
           onMemoryDemoFixtureImport={handleMemoryDemoFixtureImport}
           onMemorySourceDelete={handleMemorySourceDelete}
+          onGoogleConnectorSourceDelete={handleGoogleConnectorSourceDelete}
           onMemoryReview={handleMemoryReview}
           onStartCreateWithBrain={onStartCreateWithBrain}
         />
@@ -2164,6 +2188,7 @@ function BrainDocumentsIndex({
   onMemoryImport,
   onMemoryDemoFixtureImport,
   onMemorySourceDelete,
+  onGoogleConnectorSourceDelete,
   onMemoryReview,
   onStartCreateWithBrain,
 }: {
@@ -2179,6 +2204,7 @@ function BrainDocumentsIndex({
   onMemoryImport: (input: BrainImportInput) => Promise<void>;
   onMemoryDemoFixtureImport: () => Promise<void>;
   onMemorySourceDelete: (sourceId: string) => Promise<void>;
+  onGoogleConnectorSourceDelete: (sourceId: string) => Promise<void>;
   onMemoryReview: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
   onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
 }) {
@@ -2206,6 +2232,7 @@ function BrainDocumentsIndex({
       onImport={onMemoryImport}
       onDemoFixtureImport={onMemoryDemoFixtureImport}
       onDeleteSource={onMemorySourceDelete}
+      onConnectorSourceDelete={onGoogleConnectorSourceDelete}
       onReviewMemory={onMemoryReview}
       onStartCreateWithBrain={onStartCreateWithBrain}
     />
@@ -2316,6 +2343,7 @@ export function BrainMemoryPanel({
   onImport,
   onDemoFixtureImport,
   onDeleteSource,
+  onConnectorSourceDelete,
   onReviewMemory,
   onStartCreateWithBrain,
   showDemoFixture,
@@ -2329,6 +2357,7 @@ export function BrainMemoryPanel({
   onImport: (input: BrainImportInput) => Promise<void>;
   onDemoFixtureImport?: (() => Promise<void>) | undefined;
   onDeleteSource: (sourceId: string) => Promise<void>;
+  onConnectorSourceDelete: (sourceId: string) => Promise<void>;
   onReviewMemory?: (nodeId: string, action: MemoryReviewAction) => Promise<void>;
   onStartCreateWithBrain?: ((profile: BrainMemoryProfileData) => void) | undefined;
   showDemoFixture?: boolean | undefined;
@@ -2524,6 +2553,24 @@ export function BrainMemoryPanel({
     }
   }
 
+  async function handleGoogleDeleteSource(sourceId: string) {
+    if (disabled || importing || googleStatus === "deleting") {
+      return;
+    }
+
+    setGoogleStatus("deleting");
+    setGoogleError(null);
+
+    try {
+      await onConnectorSourceDelete(sourceId);
+      await refreshGoogleConnector();
+      setGoogleStatus("ready");
+    } catch (error) {
+      setGoogleStatus("error");
+      setGoogleError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <section className="brain-memory-panel" aria-label="Second Brain memory">
       <div className="brain-memory-panel-head">
@@ -2564,6 +2611,7 @@ export function BrainMemoryPanel({
         onConnect={handleGoogleConnect}
         onSyncNow={handleGoogleSyncNow}
         onRevoke={handleGoogleRevoke}
+        onDeleteSource={handleGoogleDeleteSource}
       />
       {error ? <p className="brain-memory-error">{error}</p> : null}
       {demoFixtureVisible && onDemoFixtureImport ? (
@@ -2663,6 +2711,7 @@ function GoogleConnectorControl({
   onConnect,
   onSyncNow,
   onRevoke,
+  onDeleteSource,
 }: {
   provider: GoogleConnectorProviderView | null;
   connectorState: GoogleConnectorStateView;
@@ -2673,6 +2722,7 @@ function GoogleConnectorControl({
   onConnect: () => Promise<void>;
   onSyncNow: () => Promise<void>;
   onRevoke: () => Promise<void>;
+  onDeleteSource: (sourceId: string) => Promise<void>;
 }) {
   const visibleSurfaces = provider?.surfaces ?? [];
   const gmail = visibleSurfaces.find((surface) => surface.id === "google_gmail");
@@ -2680,10 +2730,12 @@ function GoogleConnectorControl({
   const connection = currentGoogleConnection(connectorState);
   const latestJob = latestGoogleSyncJob(connectorState);
   const enabledSources = connectorState.sources.filter((source) => source.privacy.retrievalAccess === "enabled");
+  const deleteSource = enabledSources[0] ?? null;
   const sourceCount = Object.values(connection?.sourceCounts ?? {}).reduce((total, count) => total + count, 0);
   const canConnect = Boolean(provider?.configured) && !connection && status !== "connecting" && !disabled;
   const canSync = Boolean(connection && connection.status !== "revoked") && status !== "syncing" && !disabled;
   const canRevoke = Boolean(connection && connection.status !== "revoked") && status !== "revoking" && !disabled;
+  const canDelete = Boolean(deleteSource) && status !== "deleting" && !disabled;
 
   return (
     <section className="brain-memory-card" aria-label="Google connector">
@@ -2742,15 +2794,15 @@ function GoogleConnectorControl({
         <button
           type="button"
           className="secondary-command"
-          disabled
-          title={
-            enabledSources.length
-              ? "Connector source deletion is handled by Brain source deletion until the source-delete route is enabled."
-              : undefined
-          }
+          disabled={!canDelete}
+          onClick={() => {
+            if (deleteSource) {
+              void onDeleteSource(deleteSource.id);
+            }
+          }}
         >
           <Trash2 size={15} aria-hidden="true" />
-          <span>Delete source</span>
+          <span>{status === "deleting" ? "Deleting..." : "Delete source"}</span>
         </button>
       </div>
     </section>
@@ -2807,7 +2859,7 @@ function latestGoogleSyncJob(state: GoogleConnectorStateView): GoogleConnectorSy
 }
 
 async function postGoogleConnectorAction(
-  path: "/api/connectors/google/sync-now" | "/api/connectors/google/revoke",
+  path: "/api/connectors/google/sync-now" | "/api/connectors/google/revoke" | "/api/connectors/google/source-delete",
   body: Record<string, unknown>,
 ): Promise<{ data: { state?: GoogleConnectorStateView } & Record<string, unknown> }> {
   const response = await fetch(path, {
@@ -2865,6 +2917,10 @@ function googleConnectorErrorMessage(payload: unknown, fallback: string): string
   }
 
   return fallback;
+}
+
+function isBrainMemoryProfileData(value: unknown): value is BrainMemoryProfileData {
+  return Boolean(value && typeof value === "object" && "stats" in value && "sources" in value);
 }
 
 function formatNullableDate(value: string | null): string {
