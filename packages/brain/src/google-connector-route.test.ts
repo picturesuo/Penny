@@ -5,6 +5,7 @@ import {
   handleGoogleConnectorConnectSessionRequest,
   handleGoogleConnectorProviderRequest,
   handleGoogleConnectorRevokeRequest,
+  handleGoogleConnectorSourceDeleteRequest,
   handleGoogleConnectorSyncCompleteRequest,
   handleGoogleConnectorSyncNowRequest,
 } from "./google-connector-route.ts";
@@ -158,7 +159,7 @@ test("POST /api/connectors/google/callback returns initialized connection and in
         connectionId: input.connectionId,
         providerConfigKey: input.providerConfigKey,
         credentialRef: `nango:${input.providerConfigKey}:${input.connectionId}`,
-        endUserId: input.endUserId,
+        ...(input.endUserId ? { endUserId: input.endUserId } : {}),
       };
 
       captured = credential;
@@ -475,6 +476,86 @@ test("POST /api/connectors/google/sync-complete rejects source refs without cont
   assert.equal(response.status, 400);
   assert.equal(payload.error.code, "invalid_request");
   assert.match(payload.error.message, /content/i);
+});
+
+test("POST /api/connectors/google/source-delete removes connector and Brain retrieval access", async () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const state = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-1",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-1",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_drive"],
+    scopes: ["https://www.googleapis.com/auth/drive.file"],
+    now: "2026-05-20T12:00:00.000Z",
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore(state);
+  const brainMemoryService = createInMemoryBrainMemoryService();
+  const completeResponse = await handleGoogleConnectorSyncCompleteRequest(
+    new Request("http://localhost/api/connectors/google/sync-complete", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        connectionId: "nango-google-1",
+        providerConfigKey: "google",
+        jobId: state.syncJobs[0]?.id,
+        surface: "google_drive",
+        nextSyncAt: "2026-05-20T18:05:00.000Z",
+        sources: [
+          {
+            surface: "google_drive",
+            kind: "google_doc",
+            externalId: "doc-1",
+            sourceUri: "google-drive:file:doc-1",
+            label: "Strategy doc",
+            content:
+              "Project: Penny should delete connector-linked Brain sources when users remove Google retrieval access.",
+          },
+        ],
+      }),
+    }),
+    { stateStore, brainMemoryService },
+  );
+  const completePayload = (await completeResponse.json()) as { data: { state: { sources: Array<{ id: string }> } } };
+  const sourceId = completePayload.data.state.sources[0]?.id ?? "";
+  const deleteResponse = await handleGoogleConnectorSourceDeleteRequest(
+    new Request("http://localhost/api/connectors/google/source-delete", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        sourceId,
+        now: "2026-05-20T12:06:00.000Z",
+      }),
+    }),
+    { stateStore, brainMemoryService },
+  );
+  const deletePayload = (await deleteResponse.json()) as {
+    data: {
+      deleted: boolean;
+      brainSourceDeleted: boolean;
+      profile: { stats: { sourceCount: number } };
+      state: { sources: Array<{ privacy: { retrievalAccess: string } }> };
+    };
+  };
+
+  assert.equal(deleteResponse.status, 200);
+  assert.equal(deletePayload.data.deleted, true);
+  assert.equal(deletePayload.data.brainSourceDeleted, true);
+  assert.equal(deletePayload.data.profile.stats.sourceCount, 0);
+  assert.equal(deletePayload.data.state.sources[0]?.privacy.retrievalAccess, "deleted");
 });
 
 function fakeAdapter(overrides: Partial<NangoAdapter>): NangoAdapter {

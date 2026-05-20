@@ -7,6 +7,7 @@ import {
   completeGoogleConnectorSync,
   connectorSourceToBrainImport,
   createNangoAdapter,
+  deleteGoogleConnectorSourceAccess,
   googleScopeRegistry,
   initializeGoogleConnectorConnection,
   readGoogleConnectorRuntimeConfig,
@@ -70,6 +71,11 @@ export type GoogleConnectorSyncCompleteRequestBody = Partial<NangoConnectionInpu
   nextSyncAt?: string;
   now?: string;
   sources?: GoogleConnectorSyncCompleteSourceInput[];
+};
+
+export type GoogleConnectorSourceDeleteRequestBody = {
+  sourceId?: string;
+  now?: string;
 };
 
 const defaultGoogleSyncNames = ["google-drive-files", "google-calendar-events"] as const;
@@ -527,6 +533,64 @@ export async function handleGoogleConnectorRefreshRequest(
   }
 
   return adapterResponse(await resolveAdapter(options).refreshConnection(input.value), 200);
+}
+
+export async function handleGoogleConnectorSourceDeleteRequest(
+  request: Request,
+  options: GoogleConnectorRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/connectors/google/source-delete requires the POST method.", "POST");
+  }
+
+  const body = await readJsonBody<GoogleConnectorSourceDeleteRequestBody>(request);
+
+  if (!body.ok) {
+    return invalidJson(body.message);
+  }
+
+  const sourceId = body.value.sourceId?.trim();
+
+  if (!sourceId) {
+    return invalidRequest("Google connector source deletion requires sourceId.", ["sourceId"]);
+  }
+
+  const scope = scopeFromRequest(request);
+  const currentState = await loadGoogleConnectorState(options, scope);
+  const source = currentState.sources.find((candidate) => candidate.id === sourceId);
+
+  if (!source) {
+    return jsonResponse(
+      { error: { code: "connector_source_not_found", message: "No Google connector source matched this scope." } },
+      404,
+    );
+  }
+
+  const brainDelete = source.brainSourceId
+    ? await resolveBrainMemoryService(options).deleteSource(source.brainSourceId, request)
+    : null;
+  const state = await saveGoogleConnectorState(
+    options,
+    scope,
+    deleteGoogleConnectorSourceAccess({
+      state: currentState,
+      scope,
+      sourceId,
+      now: body.value.now ?? new Date().toISOString(),
+    }),
+  );
+
+  return jsonResponse(
+    {
+      data: {
+        deleted: true,
+        brainSourceDeleted: brainDelete?.deleted ?? false,
+        ...(brainDelete ? { profile: brainDelete.profile } : {}),
+        state,
+      },
+    },
+    200,
+  );
 }
 
 export async function handleGoogleConnectorRevokeRequest(

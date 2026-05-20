@@ -65,6 +65,7 @@ import {
   handleGoogleConnectorProviderRequest,
   handleGoogleConnectorRefreshRequest,
   handleGoogleConnectorRevokeRequest,
+  handleGoogleConnectorSourceDeleteRequest,
   handleGoogleConnectorSyncCompleteRequest,
   handleGoogleConnectorSyncNowRequest,
   handleGoogleConnectorSyncStatusRequest,
@@ -289,6 +290,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/connectors/google/sync-complete") {
       await writeWebResponse(outgoing, await handleGoogleConnectorSyncCompleteRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/source-delete") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorSourceDeleteRequest(request));
       return;
     }
 
