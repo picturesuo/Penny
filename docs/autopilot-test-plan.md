@@ -2,7 +2,8 @@
 
 Artifact ID: `AUTOPILOT-TEST-PLAN`
 Latency update: 2026-05-05
-Repository completion update: 2026-05-08
+Repository completion update: 2026-05-20
+Smoke gate update: 2026-05-20
 
 ## Purpose
 
@@ -52,7 +53,7 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 - SC10: Canvas and search/Verify tests prove downstream Brain context stays backend-derived and source-grounded where possible.
 - SC11: Demo gate commands are explicit and runnable by the next implementation or release pass.
 - SC12: Local fast-path tests prove next-move ranking, Autopilot tick, accepted focus, manual override, and post-response retick behavior run without live provider calls.
-- SC13: Provider-backed AI operation tests or smoke logs prove BrainRun metadata records latency, provider, model, route tier, fallback hops, repair attempt, usage, cost, and prompt/schema version where available.
+- SC13: Current provider-backed AI operation tests prove BrainRun guard coverage for operation, provider, model, status, input, output, error, createdAt, and completedAt; latency-specific route metadata remains deferred to TM19 and LG6.
 - SC14: Demo gate records elapsed time separately for local tests, frontend build, full smoke, and any live-provider smoke so a slow provider cannot hide inside a generic pass/fail result.
 
 ## Invariants
@@ -79,7 +80,7 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 
 ## Risks / Open Questions
 
-- R1: `scripts/smoke-thinking-mode.sh` may require local API/database setup that is not available in every developer environment.
+- R1: The bare `scripts/smoke-thinking-mode.sh` command is environment-sensitive: it requires usable local API/database setup and an auth mode compatible with the script's unauthenticated API calls. Use the isolated dev-auth command in the Demo Gate for reproducible release evidence.
 - R2: Live provider output can vary when provider credentials are enabled; deterministic contract tests should remain the primary gate.
 - R3: Wall-clock latency assertions can be flaky in CI; keep hard assertions focused on provider-free boundaries and record measured timings as release evidence.
 - R4: Adding Gemini or any other fast provider without streaming/structured-output parity could improve perceived speed while weakening validation.
@@ -89,14 +90,14 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 ## Current Verification Surface
 
 - Test framework: Node built-in test runner through `tsx --test`.
-- Current suite: `pnpm test`, which runs `packages/brain/src/*.test.ts`, `packages/brain/frontend/test/*.test.ts`, and `test/brain/nextMoveEngine.test.ts`.
+- Current suite: `pnpm test`, which runs `packages/brain/src/*.test.ts`, `packages/brain/frontend/test/*.test.ts`, and `test/brain/nextMoveEngine.test.ts`. As of 2026-05-20, that glob also exercises the expanded Create, context-layer, memory, deployment-readiness, recipe, and graph/search test surface; those tests strengthen repository readiness without broadening this Autopilot artifact's scope.
 - Typecheck: `pnpm typecheck`.
 - Local API: `pnpm dev:api`, serving `http://localhost:3000`.
 - DB setup: `DATABASE_URL` must be exported before `pnpm db:migrate` or DB-backed API smoke tests.
 - Current speed proof: next-move ranking and Thinking Mode service tests use local deterministic fixtures; they prove candidate ranking and focus writes do not require a live provider, but they do not yet enforce per-request wall-clock budgets.
 - Current provider audit proof: Challenge, Verify, Learn, seed, and artifact generation require a recorded BrainRun id before provider-backed generation. BrainRun rows record operation, provider, model, status, input, output, error, createdAt, and completedAt. Latency-specific route metadata remains a deferred regression item rather than a current repository-completion blocker.
 - Removed gap: TODO-only skeleton tests were deleted; the remaining `test/brain` suite is real and runs in the default test script.
-- Smoke status: `scripts/smoke-thinking-mode.sh` is the current full mutating happy-path smoke, not a placeholder waiting for promotion.
+- Smoke status: `scripts/smoke-thinking-mode.sh` is the current full mutating happy-path smoke, not a placeholder waiting for promotion. For reproducible local release evidence, run it with `SMOKE_ISOLATED_DB=1` and `PENNY_AUTH_MODE=dev` on an unused local port so token-auth private deployments do not make the unauthenticated smoke requests fail.
 - Primary Autopilot routes: session-scoped `/api/sessions/:sessionId/autopilot/state`, `/api/sessions/:sessionId/autopilot/tick`, and `/api/sessions/:sessionId/next-move-candidates/:candidateId/start`.
 - Compatibility routes: legacy `/autopilot/*` and `/api/brains/:brainId/autopilot/*` aliases are preservation surfaces, not the preferred MVP contract.
 
@@ -106,7 +107,8 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 - CS2: The default test surface already includes backend route/service tests, frontend client tests, and the pure next-move engine test. This artifact should stay synchronized with that command rather than listing non-runnable placeholders.
 - CS3: The queue's cleanup audit is complete; this plan should not reopen archived frontend cleanup, generic ingestion, broad search, or chatbot scope.
 - CS4: Remaining latency work is intentionally deferred: add a focused provider metadata regression and optional timing script only when implementing latency instrumentation, not as part of this artifact completion pass.
-- CS5: Before a demo, the gate remains `pnpm typecheck`, `pnpm test`, `pnpm build`, and the smoke script when database/API setup is available.
+- CS5: Before a demo, the gate remains `pnpm typecheck`, `pnpm test`, `pnpm build`, and the isolated dev-auth smoke script when PostgreSQL tooling is available.
+- CS6: As of 2026-05-20, repository completion for this artifact means the plan is synchronized with the current default test command and expanded matching test files while still treating latency instrumentation as future work.
 
 ## Test Mapping
 
@@ -152,10 +154,10 @@ Before a demo against disposable local data or an isolated smoke database, run a
 time pnpm typecheck
 time pnpm test
 time pnpm build
-time ./scripts/smoke-thinking-mode.sh
+time SMOKE_ISOLATED_DB=1 PENNY_AUTH_MODE=dev BASE_URL=http://localhost:3017 PORT=3017 ./scripts/smoke-thinking-mode.sh
 ```
 
-If `DATABASE_URL` is not configured for the smoke script, run the first three commands and record the smoke script as environment-blocked rather than silently skipping it.
+Use a different unused `BASE_URL` and `PORT` pair if port `3017` is already occupied. The bare `time ./scripts/smoke-thinking-mode.sh` command is only a convenience for a local environment that already has a migrated database and dev-compatible auth; in token-auth or missing-database environments, record the bare command as environment-blocked rather than silently skipping the isolated smoke gate.
 
 If a live provider is enabled for a demo, add a separate note for provider, model, operation, elapsed time, and BrainRun latency metadata. Do not describe the AI path as fast if the only passing gate used mock or deterministic fallback output.
 
@@ -175,3 +177,5 @@ If a live provider is enabled for a demo, add a separate note for provider, mode
 - ST3: Implementation should stop here until a later role takes a specific test or runtime gap from the Success Criteria or Test Mapping.
 - ST4: 2026-05-05 latency rewrite added fast-path, provider metadata, and demo timing gates to align the test plan with the Autopilot latency contract.
 - ST5: 2026-05-08 repository completion update aligned the plan with the current default test command, BrainRun audit coverage, cleanup-audit queue status, and deferred latency instrumentation work.
+- ST6: 2026-05-20 debugger update documented the reproducible isolated dev-auth smoke command after the bare smoke command reproduced as environment-blocked locally and the isolated smoke passed.
+- ST7: 2026-05-20 backend refresh corrected SC13 so the current BrainRun audit proof no longer claims deferred latency metadata, and noted that the default test glob now covers the broader repository readiness surface.
