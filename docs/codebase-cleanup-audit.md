@@ -19,7 +19,7 @@ model-backed Create with deterministic fallback, and Learn kept working without 
 
 Current tracked inventory is 267 files. `apps/` and `packages/shared/` exist only as ignored local directories in this checkout; they have no tracked files to audit. `packages/brain/public/assets/*` are tracked generated build assets and must only change through `pnpm build`.
 
-There is one local untracked file not covered by `git ls-files`: `packages/brain/src/brain-ranker-persistence.ts`. It is a plausible unfinished persistence adapter for the already committed Brain Ranker schema, but it is not imported by production code or tests. Do not silently delete it as part of tracked-file cleanup; either integrate it with tests or leave it documented as local/deferred work.
+Brain Ranker persistence is now tracked in `packages/brain/src/brain-ranker-persistence.ts` and wired through Create route tests. Keep it as part of the protected private-memory/Create progress path.
 
 ## File Inventory Inspected
 
@@ -131,6 +131,7 @@ Backend production source:
 - `packages/brain/src/brain-documents-route.ts` - keep
 - `packages/brain/src/brain-memory-route.ts` - keep; protected private memory import/profile/review path
 - `packages/brain/src/brain-objects-route.ts` - keep
+- `packages/brain/src/brain-ranker-persistence.ts` - keep; records Create ranker runs and development events against scoped Brain Ranker tables
 - `packages/brain/src/brain-ranker.ts` - keep; supports Personal/Practical/Valuable/Critical/Weird Create ranking
 - `packages/brain/src/brain-run-guard.ts` - keep
 - `packages/brain/src/brain-search-route.ts` - keep; Penny-native lexical/graph/hybrid search is allowed
@@ -317,21 +318,19 @@ Proposed change:
 - Never hand-edit these files.
 - If frontend source changes, run `pnpm build` and commit generated asset changes as a separate generated-build change.
 
-### Untracked `brain-ranker-persistence.ts`
+### Brain Ranker persistence
 
-Classification: defer.
+Classification: keep.
 
 Evidence:
 
-- It is not in `git ls-files`.
-- Import-reachability found it is not imported by production entrypoints.
-- Search found no importer besides itself.
 - It writes to Brain Ranker tables that are already in the committed schema.
+- It is now tracked and tested through Create route persistence coverage.
+- It supports the protected Create path by preserving which private-memory signals shaped option cards.
 
 Proposed change:
 
-- Do not delete silently.
-- Either integrate it into `create-route.ts` with focused tests and scope guarantees, or remove it only after deciding it is abandoned local work.
+- Keep it and avoid weakening its scope fields or idempotent write behavior.
 
 ## Cleanup Order
 
@@ -367,5 +366,5 @@ Defer:
 - Autopilot route/alias deletion, because P3 explicitly says deprecate only.
 - Broad challenge/verify route deletion, because they protect stress-test/verification.
 - `.check-*` CSS selector migration until a focused rename can be verified by build and screenshot/runtime checks.
-- Untracked `brain-ranker-persistence.ts` until integrated or explicitly removed as local work.
+- Any in-flight local connector/profile changes until they are either committed by their owner or deliberately included in a focused cleanup batch.
 - Any migration/schema rewrite.
