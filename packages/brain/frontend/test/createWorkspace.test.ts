@@ -35,6 +35,7 @@ test("CreateOptionBoard shows memory and source grounding counts on option cards
   assert.match(markup, /1 sources/);
   assert.match(markup, /Context-light/);
   assert.match(markup, /Details/);
+  assert.doesNotMatch(markup, /intentMatch|buildability|novelty|rawScores/i);
 });
 
 test("CreateOptionDetailsDrawer renders rationale, memories, sources, and grounding details", () => {
