@@ -26,6 +26,7 @@ Completed during this cleanup pass:
 - Refactored the visible MVP mode contract from `Check` to `Create` while keeping internal challenge/verify semantics.
 - Renamed the active frontend workspace component/imports from `CheckWorkspace` to `CreateWorkspace`.
 - Removed the old `/api/check` backend route stack, matching frontend client methods/types, and stale URL assertions.
+- Updated stale user-facing docs from visible Check-mode wording to Create/Challenge/Verify wording.
 - Focused route/client tests passed after the `/api/check` deletion: `pnpm exec tsx --test packages/brain/frontend/test/brainClient.test.ts packages/brain/src/server.test.ts packages/brain/src/p3-route-preservation.test.ts`.
 - Frontend typecheck passed after the deletion: `pnpm exec tsc --noEmit --pretty false -p packages/brain/frontend/tsconfig.json`.
 - Root `pnpm exec tsc --noEmit --pretty false` currently fails in unrelated Google connector files: `packages/brain/src/google-connector-route.test.ts` and `packages/brain/src/google-connector-state-store.ts`.
@@ -51,25 +52,25 @@ Root and workflow/config:
 Docs:
 
 - `docs/agent-workflow.md` - keep
-- `docs/alpha-demo-golden-path.md` - refactor stale user-facing Check wording where it means Create
-- `docs/alpha-readiness.md` - refactor stale Check/demo wording where it means Create; keep source-count readiness checks
-- `docs/autopilot-test-plan.md` - refactor stale visible mode wording from Brain/Check/Learn to Brain/Create/Learn; keep Autopilot as internal next-move test coverage for now
+- `docs/alpha-demo-golden-path.md` - keep; remaining "Check" usages are ordinary verification instructions
+- `docs/alpha-readiness.md` - keep; remaining "Check" usage is an ordinary verification instruction
+- `docs/autopilot-test-plan.md` - keep; visible mode wording is Brain/Create/Learn and Autopilot remains internal next-move test coverage
 - `docs/azure-deploy.md` - keep
 - `docs/challenge-brief-spec.md` - keep; challenge brief remains a protected artifact concept
 - `docs/challenge-loop-spec.md` - keep; challenge semantics still protect stress-test quality and Defend/Revise/Absorb
-- `docs/demo-runbook.md` - refactor stale visible Check flow wording where it now means Create
+- `docs/demo-runbook.md` - keep
 - `docs/deployment.md` - keep
-- `docs/dogfood-runbook.md` - refactor stale Brain/Check/Learn visible wording where it now means Create
+- `docs/dogfood-runbook.md` - keep
 - `docs/google-connector-architecture.md` - keep; it protects provenance/privacy for connector-backed context
 - `docs/knowledge.md` - keep; durable shared knowledge
 - `docs/move-taxonomy.md` - keep; append-only Move taxonomy remains product truth
-- `docs/p3-deletion-gate.md` - refactor stale "visible MVP modes are Brain, Check, and Learn" copy to Create; keep route-preservation policy
-- `docs/penny-mvp.md` - refactor old mode naming to describe Brain/Create/Learn while preserving Challenge/Verify as stress-test capabilities
+- `docs/p3-deletion-gate.md` - keep; visible MVP modes are Brain/Create/Learn and route-preservation policy remains
+- `docs/penny-mvp.md` - keep; old mode naming no longer appears in the stale-doc scan
 - `docs/private-working-memory-engine-strategy.md` - keep; aligns with persistent private memory
-- `docs/queue.md` - refactor completed status notes if they still say Check as a visible mode
+- `docs/queue.md` - keep; completed cleanup note now says Create/Learn props
 - `docs/thinking-mode-autopilot-spec.md` - keep/defer; internal Autopilot/focus contract is still tested, but the visible mode label should be Create if emitted to users
-- `docs/yc-demo-script.md` - refactor stale visible Check wording where it means Create
-- `docs/yc-mvp-demo.md` - refactor stale visible Check flow wording to Create
+- `docs/yc-demo-script.md` - keep
+- `docs/yc-mvp-demo.md` - keep; visible flow now points to Create challenge or Verify recommendations
 
 Drizzle and schema history:
 
@@ -257,7 +258,7 @@ Completed change:
 - Map `challenge`, `verify`, and `artifact` thinking modes to `Create`.
 - Update backend route/service/tool tests.
 - Keep internal action names such as `challenge`, `verify`, and `check` where they model stress-test behavior or educational quick checks.
-- Remaining work is doc copy where old visible Check wording still appears.
+- Stale visible-mode doc copy has been updated; remaining `Check` hits are ordinary verbs, Learn quick-check copy, or historical/internal critique context.
 
 ### `CheckWorkspace` name and `.check-*` selectors
 
@@ -348,12 +349,12 @@ Proposed change:
 
 1. Done: commit this audit.
 2. Done: refactor visible mode contract from Check to Create.
-3. Partly done: update stale user-facing Check docs and generated Create artifact copy. Source copy is fixed; broader docs remain.
+3. Done: update stale user-facing Check docs and generated Create artifact copy.
 4. Done: rename `CheckWorkspace` to `CreateWorkspace` without changing behavior.
 5. Done: remove the old `/api/check` backend/client stack after focused tests and frontend typecheck passed.
 6. Pending: rebuild public assets once the unrelated dirty BrainWorkspace/Google connector work is settled or intentionally included.
 7. Pending: run full `pnpm test` and `pnpm build`; root `pnpm exec tsc --noEmit --pretty false` currently fails in unrelated Google connector files.
-8. Partly done: dead `/api/check` code references are gone; stale Check wording in docs remains.
+8. Done: dead `/api/check` code references are gone; remaining doc/code `Check` hits are ordinary verbs, Learn quick-check copy, or internal critique semantics rather than visible mode labels.
 
 ## Current Proposed Changes By Classification
 
@@ -371,7 +372,7 @@ Completed:
 
 Refactor:
 
-- Docs that describe visible modes or demo steps as Brain/Check/Learn -> Brain/Create/Learn.
+- No visible Check-mode docs remain from this pass.
 
 Delete:
 
