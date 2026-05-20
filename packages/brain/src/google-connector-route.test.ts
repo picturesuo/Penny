@@ -418,6 +418,78 @@ test("POST /api/connectors/google/revoke marks persisted connection revoked", as
   assert.equal(payload.data.state.connections[0]?.nextSyncAt, null);
 });
 
+test("POST /api/connectors/google/sync-now refuses revoked scoped connections before Nango", async () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const state = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-1",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-1",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_drive"],
+    scopes: ["https://www.googleapis.com/auth/drive.file"],
+    now: "2026-05-20T12:00:00.000Z",
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore(state);
+  const revokeResponse = await handleGoogleConnectorRevokeRequest(
+    new Request("http://localhost/api/connectors/google/revoke", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        connectionId: "nango-google-1",
+        providerConfigKey: "google",
+      }),
+    }),
+    {
+      stateStore,
+      adapter: fakeAdapter({
+        async revokeConnection() {
+          return { ok: true, data: { revoked: true } };
+        },
+      }),
+    },
+  );
+  let adapterCalled = false;
+  const syncResponse = await handleGoogleConnectorSyncNowRequest(
+    new Request("http://localhost/api/connectors/google/sync-now", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        connectionId: "nango-google-1",
+        providerConfigKey: "google",
+      }),
+    }),
+    {
+      stateStore,
+      adapter: fakeAdapter({
+        async startSync() {
+          adapterCalled = true;
+          return { ok: true, data: { started: true } };
+        },
+      }),
+    },
+  );
+  const payload = (await syncResponse.json()) as { error: { code: string; message: string } };
+
+  assert.equal(revokeResponse.status, 200);
+  assert.equal(syncResponse.status, 409);
+  assert.equal(payload.error.code, "connector_revoked");
+  assert.match(payload.error.message, /cannot be synced/i);
+  assert.equal(adapterCalled, false);
+});
+
 test("POST /api/connectors/google/sync-complete imports Google records into private Brain memory", async () => {
   const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
   const state = initializeGoogleConnectorConnection({
