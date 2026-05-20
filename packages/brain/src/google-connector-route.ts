@@ -4,7 +4,12 @@ import {
   googleScopeRegistry,
   initializeGoogleConnectorConnection,
   readGoogleConnectorRuntimeConfig,
+  revokeGoogleConnectorAccess,
+  startGoogleConnectorSync,
   type ConnectorAdapterResult,
+  type ConnectorConnection,
+  type ConnectorStateScope,
+  type GoogleConnectorState,
   type GoogleSurfaceId,
   type NangoAdapter,
   type NangoCallbackInput,
@@ -14,10 +19,16 @@ import {
   type NangoStartSyncInput,
   type NangoSyncStatusInput,
 } from "./google-connector.ts";
+import {
+  mergeGoogleConnectorStates,
+  resolveDefaultGoogleConnectorStateStore,
+  type GoogleConnectorStateStore,
+} from "./google-connector-state-store.ts";
 
 export type GoogleConnectorRouteOptions = {
   env?: Record<string, string | undefined>;
   adapter?: NangoAdapter;
+  stateStore?: GoogleConnectorStateStore;
 };
 
 export type GoogleConnectSessionRequestBody = Partial<NangoConnectSessionInput>;
@@ -32,7 +43,10 @@ export type GoogleConnectorConnectionRequestBody = Partial<NangoConnectionInput>
 
 export type GoogleConnectorCredentialsRequestBody = Partial<NangoCredentialsInput>;
 
-export type GoogleConnectorSyncRequestBody = Partial<NangoStartSyncInput>;
+export type GoogleConnectorSyncRequestBody = Partial<NangoStartSyncInput> & {
+  surface?: GoogleSurfaceId;
+  now?: string;
+};
 
 export type GoogleConnectorSyncStatusRequestBody = Partial<NangoSyncStatusInput>;
 
@@ -46,11 +60,18 @@ export async function handleGoogleConnectorProviderRequest(
     return methodNotAllowed("GET /api/connectors/google requires the GET method.", "GET");
   }
 
+  const scope = scopeFromRequest(request);
+  const state = await loadGoogleConnectorState(options, scope);
+
   return jsonResponse(
     {
       data: {
-        sourceOfTruth: "google_connector_registry",
-        provider: buildGoogleConnectorProvider(options.env ? { env: options.env } : {}),
+        sourceOfTruth: "google_connector_registry_and_state",
+        provider: buildGoogleConnectorProvider({
+          ...(options.env ? { env: options.env } : {}),
+          connections: state.connections,
+        }),
+        state,
       },
     },
     200,
@@ -160,18 +181,25 @@ export async function handleGoogleConnectorCallbackRequest(
     return adapterResponse(callback, 200);
   }
 
+  const initializedState = initializeGoogleConnectorConnection({
+    scope: scopeFromRequest(request),
+    credential: callback.data,
+    surfaces,
+    scopes: body.value.scopes ?? [],
+    now: body.value.now ?? new Date().toISOString(),
+    ...(body.value.syncIntervalHours !== undefined ? { syncIntervalHours: body.value.syncIntervalHours } : {}),
+  });
+  const state = await saveGoogleConnectorState(
+    options,
+    initializedState.connections[0]?.scope ?? scopeFromRequest(request),
+    initializedState,
+  );
+
   return jsonResponse(
     {
       data: {
         credential: callback.data,
-        state: initializeGoogleConnectorConnection({
-          scope: scopeFromRequest(request),
-          credential: callback.data,
-          surfaces,
-          scopes: body.value.scopes ?? [],
-          now: body.value.now ?? new Date().toISOString(),
-          ...(body.value.syncIntervalHours !== undefined ? { syncIntervalHours: body.value.syncIntervalHours } : {}),
-        }),
+        state,
       },
     },
     200,
@@ -259,15 +287,41 @@ export async function handleGoogleConnectorSyncNowRequest(
     return input.response;
   }
 
-  return adapterResponse(
-    await resolveAdapter(options).startSync({
-      ...input.value,
-      syncNames: body.value.syncNames?.length ? body.value.syncNames : defaultGoogleSyncNames,
-      ...(body.value.reset !== undefined ? { reset: body.value.reset } : {}),
-      ...(body.value.emptyCache !== undefined ? { emptyCache: body.value.emptyCache } : {}),
-    }),
-    202,
+  const adapterResult = await resolveAdapter(options).startSync({
+    ...input.value,
+    syncNames: body.value.syncNames?.length ? body.value.syncNames : defaultGoogleSyncNames,
+    ...(body.value.reset !== undefined ? { reset: body.value.reset } : {}),
+    ...(body.value.emptyCache !== undefined ? { emptyCache: body.value.emptyCache } : {}),
+  });
+
+  if (!adapterResult.ok) {
+    return adapterResponse(adapterResult, 202);
+  }
+
+  const scope = scopeFromRequest(request);
+  const currentState = await loadGoogleConnectorState(options, scope);
+  const connection = findRouteConnection(currentState, input.value.connectionId);
+
+  if (!connection) {
+    return jsonResponse({ data: adapterResult.data }, 202);
+  }
+
+  const now = body.value.now ?? new Date().toISOString();
+  const surfaces = body.value.surface ? [body.value.surface].filter(isGoogleSurfaceId) : connection.surfaces;
+  const nextState = surfaces.reduce(
+    (state, surface) =>
+      startGoogleConnectorSync({
+        state,
+        scope,
+        connectionId: connection.id,
+        surface,
+        now,
+      }),
+    currentState,
   );
+  const state = await saveGoogleConnectorState(options, scope, nextState);
+
+  return jsonResponse({ data: { ...adapterResult.data, state } }, 202);
 }
 
 export async function handleGoogleConnectorSyncStatusRequest(
@@ -366,14 +420,68 @@ export async function handleGoogleConnectorRevokeRequest(
     return input.response;
   }
 
-  return adapterResponse(await resolveAdapter(options).revokeConnection(input.value), 200);
+  const adapterResult = await resolveAdapter(options).revokeConnection(input.value);
+
+  if (!adapterResult.ok) {
+    return adapterResponse(adapterResult, 200);
+  }
+
+  const scope = scopeFromRequest(request);
+  const currentState = await loadGoogleConnectorState(options, scope);
+  const connection = findRouteConnection(currentState, input.value.connectionId);
+
+  if (!connection) {
+    return jsonResponse({ data: adapterResult.data }, 200);
+  }
+
+  const state = await saveGoogleConnectorState(
+    options,
+    scope,
+    revokeGoogleConnectorAccess({
+      state: currentState,
+      scope,
+      connectionId: connection.id,
+      now: new Date().toISOString(),
+    }),
+  );
+
+  return jsonResponse({ data: { ...adapterResult.data, state } }, 200);
 }
 
 function resolveAdapter(options: GoogleConnectorRouteOptions): NangoAdapter {
   return options.adapter ?? createNangoAdapter(readGoogleConnectorRuntimeConfig(options.env));
 }
 
-function scopeFromRequest(request: Request) {
+async function loadGoogleConnectorState(
+  options: GoogleConnectorRouteOptions,
+  scope: ConnectorStateScope,
+): Promise<GoogleConnectorState> {
+  return (options.stateStore ?? resolveDefaultGoogleConnectorStateStore(options.env)).load(scope);
+}
+
+async function saveGoogleConnectorState(
+  options: GoogleConnectorRouteOptions,
+  scope: ConnectorStateScope,
+  state: GoogleConnectorState,
+): Promise<GoogleConnectorState> {
+  const store = options.stateStore ?? resolveDefaultGoogleConnectorStateStore(options.env);
+  const current = await store.load(scope);
+  const merged = mergeGoogleConnectorStates(current, state);
+
+  await store.save(merged);
+
+  return merged;
+}
+
+function findRouteConnection(state: GoogleConnectorState, connectionId: string): ConnectorConnection | null {
+  return (
+    state.connections.find(
+      (connection) => connection.id === connectionId || connection.credential.connectionId === connectionId,
+    ) ?? null
+  );
+}
+
+function scopeFromRequest(request: Request): ConnectorStateScope {
   return {
     userId: request.headers.get("x-user-id") ?? request.headers.get("x-penny-user-id"),
     workspaceId: request.headers.get("x-workspace-id") ?? request.headers.get("x-penny-workspace-id"),

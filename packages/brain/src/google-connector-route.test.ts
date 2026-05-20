@@ -4,9 +4,12 @@ import {
   handleGoogleConnectorCallbackRequest,
   handleGoogleConnectorConnectSessionRequest,
   handleGoogleConnectorProviderRequest,
+  handleGoogleConnectorRevokeRequest,
   handleGoogleConnectorSyncNowRequest,
 } from "./google-connector-route.ts";
+import { initializeGoogleConnectorConnection } from "./google-connector.ts";
 import type { ConnectorCredentialRef, NangoAdapter, NangoConnectSessionInput, NangoStartSyncInput } from "./google-connector.ts";
+import { createInMemoryGoogleConnectorStateStore } from "./google-connector-state-store.ts";
 
 const configuredEnv = {
   ENABLE_GOOGLE_CONNECTOR: "true",
@@ -20,7 +23,7 @@ const configuredEnv = {
 test("GET /api/connectors/google returns provider status without Nango calls", async () => {
   const response = await handleGoogleConnectorProviderRequest(
     new Request("http://localhost/api/connectors/google", { method: "GET" }),
-    { env: configuredEnv },
+    { env: configuredEnv, stateStore: createInMemoryGoogleConnectorStateStore() },
   );
   const payload = (await response.json()) as {
     data: {
@@ -30,14 +33,57 @@ test("GET /api/connectors/google returns provider status without Nango calls", a
         configured: boolean;
         surfaces: Array<{ id: string; status: string }>;
       };
+      state: { connections: unknown[] };
     };
   };
 
   assert.equal(response.status, 200);
-  assert.equal(payload.data.sourceOfTruth, "google_connector_registry");
+  assert.equal(payload.data.sourceOfTruth, "google_connector_registry_and_state");
   assert.equal(payload.data.provider.id, "google");
   assert.equal(payload.data.provider.configured, true);
+  assert.equal(payload.data.state.connections.length, 0);
   assert.equal(payload.data.provider.surfaces.some((surface) => surface.id === "google_gmail" && surface.status === "gated_verification_required"), true);
+});
+
+test("GET /api/connectors/google shows persisted connected surface state", async () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const state = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-1",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-1",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_drive", "google_calendar"],
+    scopes: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/calendar.readonly"],
+    now: "2026-05-20T12:00:00.000Z",
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore(state);
+  const response = await handleGoogleConnectorProviderRequest(
+    new Request("http://localhost/api/connectors/google", {
+      method: "GET",
+      headers: {
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+    }),
+    { env: configuredEnv, stateStore },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      provider: { status: string; surfaces: Array<{ id: string; status: string }> };
+      state: { connections: Array<{ status: string; surfaces: string[] }> };
+    };
+  };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.provider.status, "connected");
+  assert.equal(payload.data.provider.surfaces.find((surface) => surface.id === "google_drive")?.status, "connected");
+  assert.equal(payload.data.provider.surfaces.find((surface) => surface.id === "google_calendar")?.status, "connected");
+  assert.deepEqual(payload.data.state.connections[0]?.surfaces, ["google_drive", "google_calendar"]);
 });
 
 test("POST /api/connectors/google/connect-session uses scoped headers as Nango tags", async () => {
@@ -101,6 +147,7 @@ test("POST /api/connectors/google/connect-session returns not configured when en
 
 test("POST /api/connectors/google/callback returns initialized connection and initial sync state", async () => {
   let captured: ConnectorCredentialRef | null = null;
+  const stateStore = createInMemoryGoogleConnectorStateStore();
   const adapter = fakeAdapter({
     async handleCallback(input) {
       const credential: ConnectorCredentialRef = {
@@ -133,7 +180,7 @@ test("POST /api/connectors/google/callback returns initialized connection and in
         now: "2026-05-20T12:00:00.000Z",
       }),
     }),
-    { adapter },
+    { adapter, stateStore },
   );
   const payload = (await response.json()) as {
     data: {
@@ -164,6 +211,9 @@ test("POST /api/connectors/google/callback returns initialized connection and in
   assert.equal(payload.data.state.syncJobs.length, 3);
   assert.equal(payload.data.state.syncJobs.every((job) => job.status === "queued"), true);
   assert.equal(payload.data.state.audits.some((audit) => audit.event === "connector.connected"), true);
+
+  const persisted = await stateStore.load({ userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null });
+  assert.deepEqual(persisted.connections[0]?.surfaces, payload.data.state.connections[0]?.surfaces);
 });
 
 test("POST /api/connectors/google/callback rejects missing surfaces instead of faking access", async () => {
@@ -176,7 +226,7 @@ test("POST /api/connectors/google/callback rejects missing surfaces instead of f
         providerConfigKey: "google",
       }),
     }),
-    { adapter: fakeAdapter({}) },
+    { adapter: fakeAdapter({}), stateStore: createInMemoryGoogleConnectorStateStore() },
   );
   const payload = (await response.json()) as { error: { code: string; message: string } };
 
@@ -203,7 +253,7 @@ test("POST /api/connectors/google/sync-now triggers default Google sync names", 
         providerConfigKey: "google",
       }),
     }),
-    { adapter },
+    { adapter, stateStore: createInMemoryGoogleConnectorStateStore() },
   );
   const payload = (await response.json()) as { data: { started: boolean } };
 
@@ -214,6 +264,106 @@ test("POST /api/connectors/google/sync-now triggers default Google sync names", 
     providerConfigKey: "google",
     syncNames: ["google-drive-files", "google-calendar-events"],
   });
+});
+
+test("POST /api/connectors/google/sync-now marks persisted surfaces as syncing", async () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const state = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-1",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-1",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_drive", "google_calendar"],
+    scopes: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/calendar.readonly"],
+    now: "2026-05-20T12:00:00.000Z",
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore(state);
+  const response = await handleGoogleConnectorSyncNowRequest(
+    new Request("http://localhost/api/connectors/google/sync-now", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        connectionId: "nango-google-1",
+        providerConfigKey: "google",
+        surface: "google_drive",
+        now: "2026-05-20T12:10:00.000Z",
+      }),
+    }),
+    {
+      stateStore,
+      adapter: fakeAdapter({
+        async startSync() {
+          return { ok: true, data: { started: true } };
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as {
+    data: { started: boolean; state: { connections: Array<{ status: string }>; syncJobs: Array<{ surface: string; status: string }> } };
+  };
+
+  assert.equal(response.status, 202);
+  assert.equal(payload.data.started, true);
+  assert.equal(payload.data.state.connections[0]?.status, "syncing");
+  assert.equal(payload.data.state.syncJobs.some((job) => job.surface === "google_drive" && job.status === "running"), true);
+});
+
+test("POST /api/connectors/google/revoke marks persisted connection revoked", async () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const state = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-1",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-1",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_calendar"],
+    scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
+    now: "2026-05-20T12:00:00.000Z",
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore(state);
+  const response = await handleGoogleConnectorRevokeRequest(
+    new Request("http://localhost/api/connectors/google/revoke", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        connectionId: "nango-google-1",
+        providerConfigKey: "google",
+      }),
+    }),
+    {
+      stateStore,
+      adapter: fakeAdapter({
+        async revokeConnection() {
+          return { ok: true, data: { revoked: true } };
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as {
+    data: { revoked: boolean; state: { connections: Array<{ status: string; nextSyncAt: string | null }> } };
+  };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.revoked, true);
+  assert.equal(payload.data.state.connections[0]?.status, "revoked");
+  assert.equal(payload.data.state.connections[0]?.nextSyncAt, null);
 });
 
 function fakeAdapter(overrides: Partial<NangoAdapter>): NangoAdapter {
