@@ -166,6 +166,11 @@ export const requiredPennySchemaTables = [
   "brain_memory_ingestion_jobs",
   "brain_memory_retrieval_events",
   "create_export_feedback",
+  "connector_connections",
+  "connector_sync_cursors",
+  "connector_sync_runs",
+  "connector_source_refs",
+  "connector_permission_audits",
   "command_idempotency_keys",
 ] as const;
 

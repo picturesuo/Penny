@@ -44,8 +44,13 @@ import {
   claims,
   connectorAccountStatusEnum,
   connectorAccounts,
+  connectorConnections,
+  connectorPermissionAudits,
+  connectorSourceRefs,
+  connectorSyncCursors,
   connectorSyncJobStatusEnum,
   connectorSyncJobs,
+  connectorSyncRuns,
   consentSettings,
   contextAuditEventEnum,
   contextAuditLogs,
@@ -123,6 +128,11 @@ test("Penny schema exports the minimum Wave 2 tables", () => {
   assert.equal(getTableName(commandIdempotencyKeys), "command_idempotency_keys");
   assert.equal(getTableName(connectorAccounts), "connector_accounts");
   assert.equal(getTableName(connectorSyncJobs), "connector_sync_jobs");
+  assert.equal(getTableName(connectorConnections), "connector_connections");
+  assert.equal(getTableName(connectorSyncCursors), "connector_sync_cursors");
+  assert.equal(getTableName(connectorSyncRuns), "connector_sync_runs");
+  assert.equal(getTableName(connectorSourceRefs), "connector_source_refs");
+  assert.equal(getTableName(connectorPermissionAudits), "connector_permission_audits");
   assert.equal(getTableName(contextSources), "context_sources");
   assert.equal(getTableName(contextChunks), "context_chunks");
   assert.equal(getTableName(sourceDigests), "source_digests");
@@ -177,6 +187,11 @@ test("Penny core tables persist user and workspace scope", () => {
     commandIdempotencyKeys,
     connectorAccounts,
     connectorSyncJobs,
+    connectorConnections,
+    connectorSyncCursors,
+    connectorSyncRuns,
+    connectorSourceRefs,
+    connectorPermissionAudits,
     contextSources,
     contextChunks,
     sourceDigests,
@@ -450,8 +465,13 @@ test("Penny schema has a clean aggregate export surface", () => {
     "commandIdempotencyStatusEnum",
     "connectorAccountStatusEnum",
     "connectorAccounts",
+    "connectorConnections",
+    "connectorPermissionAudits",
+    "connectorSourceRefs",
+    "connectorSyncCursors",
     "connectorSyncJobStatusEnum",
     "connectorSyncJobs",
+    "connectorSyncRuns",
     "consentSettings",
     "contextAuditEventEnum",
     "contextAuditLogs",
