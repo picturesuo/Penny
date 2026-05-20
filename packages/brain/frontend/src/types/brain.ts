@@ -1302,6 +1302,9 @@ export interface RetrievalResult {
   summary: string;
   excerpt: string;
   score: number;
+  confidence: number;
+  evidenceLevel: MemoryEvidenceLevel;
+  lastSeenAt: string;
   memoryRef: {
     id: string;
     label: string;
@@ -1417,6 +1420,51 @@ export type CreateLens = "Personal" | "Practical" | "Valuable" | "Critical" | "W
 export type CreateCheckStatus = "pass" | "warn" | "fail";
 export type CreateProviderMode = "deterministic" | "model_backed" | "deterministic_fallback";
 export type CreateSchemaValidationStatus = "not_run" | "success" | "failure";
+export type BrainGroundingLabel = "grounded" | "inferred" | "context_light";
+
+export interface BrainRankedCandidate {
+  id: string;
+  lens: CreateLens;
+  title: string;
+  topReason: string;
+  reasons: string[];
+  memoryClass: "semantic" | "episodic" | "procedural" | "emotional_taste";
+  grounding: BrainGroundingLabel;
+  contextLabel: string;
+  memoryCount: number;
+  sourceCount: number;
+  memoryRefs: MemoryRef[];
+  sourceReferences: Array<{
+    id: string;
+    sourceNode: {
+      id: string;
+      label: string;
+      kind: SourceRef["kind"];
+      excerpt: string;
+      url?: string | null;
+    };
+    chunk: {
+      id: string;
+      sourceNodeId: string;
+      range: string;
+      excerpt: string;
+    } | null;
+    grounded: boolean;
+  }>;
+  uncertainty: string[];
+  nextBestMove: string;
+}
+
+export interface NextBestMove {
+  id: string;
+  title: string;
+  action: string;
+  whyItMatters: string;
+  contextUsed: string[];
+  uncertainty: string[];
+  grounded: boolean;
+  createdAt: string;
+}
 
 export interface MemoryRef {
   id: string;
@@ -1441,6 +1489,13 @@ export interface CandidateOption {
   oneLine: string;
   rationale: string;
   nextMove: string;
+  topReason: string;
+  grounding: BrainGroundingLabel;
+  contextLabel: string;
+  memoryCount: number;
+  sourceCount: number;
+  rankReasons: string[];
+  uncertainty: string[];
   risks: string[];
   memoryUsed: MemoryRef[];
   sourcesUsed: SourceRef[];
@@ -1495,6 +1550,8 @@ export interface OptionSet {
   sourceOfTruth: "rough_idea_context_deterministic_create_lenses" | "rough_idea_context_model_backed_create_lenses" | string;
   rawIdea: string;
   options: CandidateOption[];
+  nextBestMove: NextBestMove;
+  rankedCandidates: BrainRankedCandidate[];
   memoryUsed: MemoryRef[];
   sourcesUsed: SourceRef[];
   createdAt: string;

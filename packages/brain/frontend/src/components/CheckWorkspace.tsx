@@ -14,6 +14,7 @@ import type {
   CreateProviderComparisonResponse,
   JudgmentEvent,
   MemoryRef,
+  NextBestMove,
   OptionSet,
   PromptExport,
   SourceRef,
@@ -324,7 +325,13 @@ export function CheckWorkspace({
             </button>
           </section>
 
-          <CreateOptionBoard options={options} selectedOptionIds={selectedOptionIds} busy={busy} onToggleOption={toggleOption} />
+          <CreateOptionBoard
+            options={options}
+            nextBestMove={optionSet?.nextBestMove ?? null}
+            selectedOptionIds={selectedOptionIds}
+            busy={busy}
+            onToggleOption={toggleOption}
+          />
 
           {isCreateComparisonDevMode() ? (
             <CreateComparisonPanel comparison={providerComparison} busy={busy} onCompare={() => void handleCompareProviders()} />
@@ -694,11 +701,13 @@ function CreateComparisonArmPanel({
 
 export function CreateOptionBoard({
   options,
+  nextBestMove,
   selectedOptionIds,
   busy,
   onToggleOption,
 }: {
   options: CandidateOption[];
+  nextBestMove?: NextBestMove | null;
   selectedOptionIds: string[];
   busy: boolean;
   onToggleOption: (optionId: string) => void;
@@ -730,6 +739,14 @@ export function CreateOptionBoard({
         <span>Directions</span>
         <strong>Choose the mix Penny should build from</strong>
       </header>
+      {nextBestMove ? (
+        <section className={`create-next-best-move${nextBestMove.grounded ? " is-grounded" : " is-context-light"}`}>
+          <span>Next-best move</span>
+          <strong>{nextBestMove.title}</strong>
+          <p>{nextBestMove.action}</p>
+          <small>{nextBestMove.whyItMatters}</small>
+        </section>
+      ) : null}
       <div className="create-option-grid">
         {options.map((option) => (
           <article key={option.id} className={`create-option-card${selectedOptionIds.includes(option.id) ? " is-selected" : ""}`}>
@@ -745,11 +762,12 @@ export function CreateOptionBoard({
               <p>{option.oneLine}</p>
             </button>
             <div className="create-option-memory-meta" aria-label={`${option.lens} memory grounding`}>
-              <span>{option.memoryUsed.length} memories</span>
-              <span>{uniqueSourceCount(option)} sources</span>
-              {isContextLightOption(option) ? <span>Context-light</span> : null}
+              <span>{option.memoryCount} memories</span>
+              <span>{option.sourceCount} sources</span>
+              <span>{option.contextLabel}</span>
             </div>
             <div>
+              <p>{option.topReason}</p>
               <p>{option.rationale}</p>
               <small>{option.nextMove}</small>
             </div>
@@ -789,8 +807,19 @@ export function CreateOptionDetailsDrawer({ option, onClose }: { option: Candida
 
       <section>
         <span>Why suggested</span>
+        <p>{option.topReason}</p>
         <p>{option.rationale}</p>
         <small>{option.nextMove}</small>
+      </section>
+
+      <section>
+        <span>Rank reasons</span>
+        <ul>
+          {(option.rankReasons.length ? option.rankReasons : [option.topReason]).map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+        <small>{option.contextLabel}</small>
       </section>
 
       <section>
@@ -844,6 +873,15 @@ export function CreateOptionDetailsDrawer({ option, onClose }: { option: Candida
             ))}
           </ul>
         </div>
+      </section>
+
+      <section>
+        <span>Uncertainty</span>
+        <ul>
+          {(option.uncertainty.length ? option.uncertainty : ["No major missing Brain context detected for this lens."]).map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
       </section>
     </aside>
   );
@@ -1114,14 +1152,6 @@ function uniqueStrings(values: string[]): string[] {
 
 function sortCreateOptions(options: CandidateOption[]): CandidateOption[] {
   return [...options].sort((left, right) => createLensOrder.indexOf(left.lens) - createLensOrder.indexOf(right.lens));
-}
-
-function isContextLightOption(option: CandidateOption): boolean {
-  return option.memoryUsed.length === 0;
-}
-
-function uniqueSourceCount(option: CandidateOption): number {
-  return uniqueById(option.sourcesUsed).length;
 }
 
 function uniqueById<T extends { id: string }>(values: T[]): T[] {

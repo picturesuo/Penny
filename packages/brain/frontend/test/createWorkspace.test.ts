@@ -18,12 +18,15 @@ test("CreateOptionBoard shows memory and source grounding counts on option cards
   const markup = renderToStaticMarkup(
     createElement(CreateOptionBoard, {
       options: [memoryGroundedOption(), contextLightOption()],
+      nextBestMove: nextBestMove(),
       selectedOptionIds: [],
       busy: false,
       onToggleOption: () => undefined,
     }),
   );
 
+  assert.match(markup, /Next-best move/);
+  assert.match(markup, /Advance through Personal/);
   assert.match(markup, /2 memories/);
   assert.match(markup, /2 sources/);
   assert.match(markup, /0 memories/);
@@ -41,10 +44,12 @@ test("CreateOptionDetailsDrawer renders rationale, memories, sources, and ground
   );
 
   assert.match(markup, /Why suggested/);
+  assert.match(markup, /Rank reasons/);
   assert.match(markup, /Memories used/);
   assert.match(markup, /Sources used/);
   assert.match(markup, /Grounded/);
   assert.match(markup, /Inferred/);
+  assert.match(markup, /Uncertainty/);
   assert.match(markup, /Founder workflow notes/);
   assert.match(markup, /Prefers source-backed cards/);
 });
@@ -167,6 +172,13 @@ function memoryGroundedOption(): CandidateOption {
     oneLine: "Ground options in private memory.",
     rationale: "Use remembered preferences as constraints rather than inventing context.",
     nextMove: "Keep source-backed cards visible.",
+    topReason: "This uses a remembered personal signal: Prefers source-backed cards over generic suggestions.",
+    grounding: "grounded",
+    contextLabel: "Grounded in Brain memory",
+    memoryCount: 2,
+    sourceCount: 2,
+    rankReasons: ["This uses a remembered personal signal: Prefers source-backed cards over generic suggestions."],
+    uncertainty: ["No major missing Brain context detected for this lens."],
     risks: ["Could imply more memory than Penny has."],
     memoryUsed: [
       {
@@ -286,6 +298,13 @@ function contextLightOption(): CandidateOption {
     lens: "Practical",
     title: "Ship the smallest Create loop",
     rationale: "Context-light: no imported Penny memory matched this idea.",
+    topReason: "Context-light: no relevant Brain memory matched this task.",
+    grounding: "context_light",
+    contextLabel: "Context-light / search-needed / inferred",
+    memoryCount: 0,
+    sourceCount: 1,
+    rankReasons: ["Practical is inferred from the rough idea because no relevant durable Brain memory matched."],
+    uncertainty: ["No relevant Brain memory matched strongly."],
     memoryUsed: [],
     sourcesUsed: [
       {
@@ -385,8 +404,23 @@ function createOptionSet(id: string, options = [memoryGroundedOption(), contextL
     sourceOfTruth: id === "deterministic" ? "rough_idea_context_deterministic_create_lenses" : "rough_idea_context_model_backed_create_lenses",
     rawIdea: "Build memory-grounded Create.",
     options,
+    nextBestMove: nextBestMove(),
+    rankedCandidates: [],
     memoryUsed: memoryGroundedOption().memoryUsed,
     sourcesUsed: memoryGroundedOption().sourcesUsed,
+    createdAt: "2026-05-19T12:00:00.000Z",
+  };
+}
+
+function nextBestMove() {
+  return {
+    id: "next-best-personal",
+    title: "Advance through Personal",
+    action: "Pin the source-backed cards preference as a visible Create constraint.",
+    whyItMatters: "This uses confirmed Brain context rather than inventing personalization.",
+    contextUsed: ["2 memory ref(s)", "2 source ref(s)", "Grounded in Brain memory"],
+    uncertainty: ["No major missing Brain context detected for this lens."],
+    grounded: true,
     createdAt: "2026-05-19T12:00:00.000Z",
   };
 }
