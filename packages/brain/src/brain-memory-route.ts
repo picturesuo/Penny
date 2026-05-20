@@ -2872,8 +2872,8 @@ function staleProfileMemories(usableNodes: MemoryNode[]): MemoryNode[] {
 }
 
 function recentMeaningfulActivity(store: ScopeMemoryStore, usableNodes: MemoryNode[]): BrainProfileRecentActivity[] {
-  const sourceActivities = [...store.sources.values()].map((source) => {
-    const kind = isSyncedSourceImport(source) ? "source_synced" : "source_imported";
+  const sourceActivities: BrainProfileRecentActivity[] = [...store.sources.values()].map((source) => {
+    const kind: BrainProfileRecentActivity["kind"] = isSyncedSourceImport(source) ? "source_synced" : "source_imported";
 
     return {
       id: stableId("brain-profile-activity", kind, source.id, source.createdAt),
