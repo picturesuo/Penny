@@ -57,14 +57,18 @@ import type {
   WorkStructure,
 } from "../types/brain";
 import {
+  createGoogleConnectorConnectSession,
   deleteBrainSource,
   fetchBrainDemoFixtureImport,
   fetchBrainMemoryProfile,
+  fetchGoogleConnectorProvider,
   fetchClaimDetail,
   fetchSessionNote,
   importBrainSource,
   reviewBrainMemory,
   saveSessionNote,
+  type GoogleConnectorProviderView,
+  type GoogleConnectorSurfaceView,
 } from "../api/brainClient";
 import { formatLabel, shortId } from "../lib/format";
 import { truncateWords } from "../lib/text";
@@ -72,6 +76,7 @@ import { CanvasWorkspace } from "./CanvasWorkspace";
 
 type ClaimDetailStatus = "idle" | "loading" | "ready" | "error";
 type BrainMemoryStatus = "idle" | "loading" | "ready" | "importing" | "deleting" | "error";
+type GoogleConnectorUiStatus = "idle" | "loading" | "ready" | "connecting" | "error";
 
 interface BrainWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -2283,6 +2288,10 @@ export function BrainMemoryPanel({
   const [kind, setKind] = useState<SourceImportKind>("text");
   const [fileName, setFileName] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string | null>(null);
+  const [googleProvider, setGoogleProvider] = useState<GoogleConnectorProviderView | null>(null);
+  const [googleStatus, setGoogleStatus] = useState<GoogleConnectorUiStatus>("idle");
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleConnectLink, setGoogleConnectLink] = useState<string | null>(null);
   const importing = status === "importing";
   const sources = profile?.sources ?? [];
   const recentNodes = profile?.recentMemoryNodes ?? [];
@@ -2293,6 +2302,34 @@ export function BrainMemoryPanel({
   const demoFixtureVisible = showDemoFixture ?? isBrainDemoFixtureMode();
   const canImport = draft.trim().length > 0 && !disabled && !importing;
   const importHint = importHintForKind(kind);
+
+  useEffect(() => {
+    let canceled = false;
+
+    setGoogleStatus("loading");
+    setGoogleError(null);
+    fetchGoogleConnectorProvider()
+      .then((response) => {
+        if (canceled) {
+          return;
+        }
+
+        setGoogleProvider(response.data.provider);
+        setGoogleStatus("ready");
+      })
+      .catch((error) => {
+        if (canceled) {
+          return;
+        }
+
+        setGoogleStatus("error");
+        setGoogleError(error instanceof Error ? error.message : String(error));
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2346,6 +2383,29 @@ export function BrainMemoryPanel({
     event.target.value = "";
   }
 
+  async function handleGoogleConnect() {
+    if (disabled || googleStatus === "connecting") {
+      return;
+    }
+
+    setGoogleStatus("connecting");
+    setGoogleError(null);
+
+    try {
+      const response = await createGoogleConnectorConnectSession();
+
+      setGoogleConnectLink(response.data.connectLink);
+      setGoogleStatus("ready");
+
+      if (typeof window !== "undefined") {
+        window.location.assign(response.data.connectLink);
+      }
+    } catch (error) {
+      setGoogleStatus("error");
+      setGoogleError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   return (
     <section className="brain-memory-panel" aria-label="Second Brain memory">
       <div className="brain-memory-panel-head">
@@ -2376,6 +2436,14 @@ export function BrainMemoryPanel({
         Supports ChatGPT export ZIPs, conversations.json, extracted ChatGPT files, Claude JSON/CSV/text, notes, markdown, CSV, and
         already-extracted PDF text.
       </p>
+      <GoogleConnectorControl
+        provider={googleProvider}
+        status={googleStatus}
+        error={googleError}
+        connectLink={googleConnectLink}
+        disabled={disabled || importing}
+        onConnect={handleGoogleConnect}
+      />
       {error ? <p className="brain-memory-error">{error}</p> : null}
       {demoFixtureVisible && onDemoFixtureImport ? (
         <button
@@ -2461,6 +2529,97 @@ export function BrainMemoryPanel({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function GoogleConnectorControl({
+  provider,
+  status,
+  error,
+  connectLink,
+  disabled,
+  onConnect,
+}: {
+  provider: GoogleConnectorProviderView | null;
+  status: GoogleConnectorUiStatus;
+  error: string | null;
+  connectLink: string | null;
+  disabled: boolean;
+  onConnect: () => Promise<void>;
+}) {
+  const visibleSurfaces = provider?.surfaces ?? [];
+  const gmail = visibleSurfaces.find((surface) => surface.id === "google_gmail");
+  const extension = visibleSurfaces.find((surface) => surface.id === "chrome_extension_history");
+  const canConnect = Boolean(provider?.configured) && status !== "connecting" && !disabled;
+
+  return (
+    <section className="brain-memory-card" aria-label="Google connector">
+      <div className="brain-memory-card-head">
+        <strong>Google</strong>
+        <span>{provider ? formatLabel(provider.configurationLabel) : formatLabel(status)}</span>
+      </div>
+      <p className="brain-memory-muted">
+        {provider?.configured
+          ? "Drive, Docs, Calendar, and gated Google surfaces are registered for private Brain sources."
+          : "Google connector is not configured for this environment."}
+      </p>
+      {provider?.missingConfig.length ? (
+        <p className="brain-memory-import-hint">Missing config: {provider.missingConfig.join(", ")}</p>
+      ) : null}
+      {error ? <p className="brain-memory-error">{error}</p> : null}
+      {connectLink ? <p className="brain-memory-import-hint">Connect session created. Redirecting to Google consent.</p> : null}
+      <div className="brain-memory-source-list">
+        {visibleSurfaces.slice(0, 8).map((surface) => (
+          <GoogleConnectorSurfaceRow key={surface.id} surface={surface} />
+        ))}
+      </div>
+      <div className="brain-memory-next-step">
+        <div>
+          <strong>Google source controls</strong>
+          <span>
+            {gmail ? `Gmail: ${formatLabel(gmail.status)}. ` : ""}
+            {extension ? `Browser/search: ${formatLabel(extension.status)}.` : ""}
+          </span>
+        </div>
+        <button type="button" className="primary-command" disabled={!canConnect} onClick={() => void onConnect()}>
+          <FolderPlus size={15} aria-hidden="true" />
+          <span>{status === "connecting" ? "Connecting..." : "Connect Google"}</span>
+        </button>
+        <button type="button" className="secondary-command" disabled>
+          <Zap size={15} aria-hidden="true" />
+          <span>Sync now</span>
+        </button>
+        <button type="button" className="secondary-command" disabled>
+          <XCircle size={15} aria-hidden="true" />
+          <span>Revoke</span>
+        </button>
+        <button type="button" className="secondary-command" disabled>
+          <Trash2 size={15} aria-hidden="true" />
+          <span>Delete source</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function GoogleConnectorSurfaceRow({ surface }: { surface: GoogleConnectorSurfaceView }) {
+  const productionScopes = surface.scopes.filter((scope) => scope.productionAllowed && scope.scope).map((scope) => scope.scope);
+  const gatedScopes = surface.scopes.filter((scope) => scope.gated).map((scope) => scope.id);
+
+  return (
+    <article className="brain-memory-source">
+      <div>
+        <strong title={surface.label}>{surface.label}</strong>
+        <span>
+          {formatLabel(surface.status)} · {surface.sourceKinds.map(formatLabel).join(", ")}
+        </span>
+        <small>{surface.whyPennyCanUseThis}</small>
+        <small>{surface.userExplanation}</small>
+        {productionScopes.length ? <small>Scopes: {productionScopes.join(", ")}</small> : null}
+        {gatedScopes.length ? <small>Gated: {gatedScopes.join(", ")}</small> : null}
+        {surface.notFaked.length ? <small>{surface.notFaked.join(" ")}</small> : null}
+      </div>
+    </article>
   );
 }
 
