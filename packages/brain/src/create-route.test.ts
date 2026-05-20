@@ -152,6 +152,48 @@ test("POST /api/create/next uses retrieved Brain memory and source refs when imp
   assert.ok(data.observability.sourceCountUsed >= 2);
 });
 
+test("POST /api/create/next includes relevant Brain profile signals in ranker context", async () => {
+  const headers = requestHeaders({
+    "x-user-id": "create-profile-signal-user",
+    "x-workspace-id": "create-profile-signal-workspace",
+    "x-project-id": "create-profile-signal-project",
+    "x-sphere-id": "create-profile-signal-sphere",
+  });
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest(
+      "http://localhost/api/brain/import",
+      {
+        kind: "text",
+        label: "Profile signal notes",
+        content:
+          "Preference: I prefer source-backed build style with compact verification. Project: Penny Create should use profile signals to steer ranked options.",
+      },
+      headers,
+    ),
+  );
+  const service = createInMemoryCreateRouteService();
+  const response = await handleCreateNextRequest(
+    jsonRequest(
+      "http://localhost/api/create/next",
+      {
+        rawIdea: "Shape a source-backed build style for Penny Create options and verification.",
+      },
+      headers,
+    ),
+    { service },
+  );
+  const payload = await responsePayload(response);
+  const data = payload.data as CreateNextResult;
+  const profileSignalMemory = data.optionSet.memoryUsed.find((memory) => /^Profile signal:/i.test(memory.label));
+
+  assert.equal(importResponse.status, 200);
+  assert.equal(response.status, 200);
+  assert.ok(profileSignalMemory);
+  assert.match(profileSignalMemory.summary, /source-backed|build style|profile signals|verification/i);
+  assert.ok(data.optionSet.rankedCandidates.some((candidate) => candidate.memoryRefs.some((memory) => memory.id === profileSignalMemory.id)));
+  assert.ok(data.optionSet.options.some((option) => option.memoryUsed.some((memory) => memory.id === profileSignalMemory.id)));
+});
+
 test("POST /api/create/next keeps Brain memory scoped and ignores deleted sources", async () => {
   const rawIdea = "Build the quartzline Create demo from scoped private memory.";
   const userAHeaders = requestHeaders({

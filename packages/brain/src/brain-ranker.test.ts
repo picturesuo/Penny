@@ -55,6 +55,48 @@ test("Brain Ranker weights explicit confirmed memory above implicit memory", () 
   assert.ok(personal?.reasons.some((reason) => /User-confirmed memory/i.test(reason)));
 });
 
+test("Brain Ranker weights boosted memory above weaker matching memory", () => {
+  const result = rankBrainForCreate({
+    rawIdea: "Build source-backed Create cards with compact verification.",
+    memoryRefs: [
+      memory("memory-weaker", "Preference: source-backed Create", "The user likes source-backed Create cards."),
+      memory("memory-boosted", "Preference: source-backed Create boosted", "The user prefers source-backed Create cards with compact verification."),
+    ],
+    sourceRefs: sourceRefs(),
+    retrievalResults: [
+      retrieval("memory-weaker", "preference", 0.64, "grounded"),
+      retrieval("memory-boosted", "preference", 0.96, "grounded"),
+    ],
+    now: "2026-05-20T12:00:00.000Z",
+  });
+  const practical = result.rankedCandidates.find((candidate) => candidate.lens === "Practical");
+
+  assert.equal(practical?.memoryRefs[0]?.id, "memory-boosted");
+  assert.ok(practical?.reasons.some((reason) => /High-confidence or boosted memory/i.test(reason)));
+});
+
+test("Brain Ranker supersedes older memory in the same cluster without global decay", () => {
+  const result = rankBrainForCreate({
+    rawIdea: "Build source-backed Create cards with compact verification.",
+    memoryRefs: [
+      memory("memory-old", "Preference: source-backed Create", "I prefer source-backed Create cards with compact verification."),
+      memory("memory-new", "Preference: source-backed Create", "I prefer source-backed Create cards with compact verification."),
+    ],
+    sourceRefs: sourceRefs(),
+    retrievalResults: [
+      retrieval("memory-old", "preference", 0.72, "grounded", "2026-01-01T12:00:00.000Z"),
+      retrieval("memory-new", "preference", 0.92, "user_confirmed", "2026-05-20T11:00:00.000Z"),
+    ],
+    now: "2026-05-20T12:00:00.000Z",
+  });
+  const cluster = result.clusters.find((item) => item.memoryNodeIds.includes("memory-old") && item.memoryNodeIds.includes("memory-new"));
+
+  assert.equal(cluster?.currentNodeId, "memory-new");
+  assert.ok(cluster?.supersededNodeIds.includes("memory-old"));
+  assert.ok(result.highValueMemories.some((node) => node.id === "memory-new"));
+  assert.ok(!result.rankedCandidates.some((candidate) => candidate.memoryRefs.some((memoryRef) => memoryRef.id === "memory-old")));
+});
+
 test("Brain Ranker labels context-light runs without inventing memory", () => {
   const result = rankBrainForCreate({
     rawIdea: "Build a planning tool for rough notes.",
@@ -110,6 +152,7 @@ function retrieval(
   type: RetrievalResult["type"],
   confidence: number,
   evidenceLevel: RetrievalResult["evidenceLevel"],
+  lastSeenAt = "2026-05-20T11:00:00.000Z",
 ): RetrievalResult {
   return {
     id: `retrieval-${nodeId}`,
@@ -123,7 +166,7 @@ function retrieval(
     score: 8,
     confidence,
     evidenceLevel,
-    lastSeenAt: "2026-05-20T11:00:00.000Z",
+    lastSeenAt,
     memoryRef: {
       id: nodeId,
       label: nodeId,

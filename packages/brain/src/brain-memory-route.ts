@@ -1216,23 +1216,84 @@ export async function retrieveBrainMemoryForCreate(input: {
   query: string;
   limit?: number;
 }): Promise<CreateMemoryRetrievalContext> {
-  const retrieval = await resolveDefaultBrainMemoryService().retrieve(
-    {
-      query: input.query,
-      limit: input.limit ?? 5,
-    },
-    new Request("http://localhost/internal/brain/retrieve", {
-      method: "POST",
-      headers: headersFromScope(input.scope),
-    }),
-  );
+  const service = resolveDefaultBrainMemoryService();
+  const retrievalRequest = new Request("http://localhost/internal/brain/retrieve", {
+    method: "POST",
+    headers: headersFromScope(input.scope),
+  });
+  const profileRequest = new Request("http://localhost/internal/brain/memory/profile", {
+    method: "GET",
+    headers: headersFromScope(input.scope),
+  });
+  const [retrieval, profile] = await Promise.all([
+    service.retrieve(
+      {
+        query: input.query,
+        limit: input.limit ?? 5,
+      },
+      retrievalRequest,
+    ),
+    service.getProfile(profileRequest),
+  ]);
+  const profileSignalRefs = profileSignalMemoryRefsForCreate(profile, input.query, 4);
+  const memoryRefs = uniqueById([...retrieval.results.map((result) => result.memoryRef), ...profileSignalRefs]).slice(0, 8);
 
   return {
-    contextLight: retrieval.results.length === 0,
-    memoryRefs: uniqueById(retrieval.results.map((result) => result.memoryRef)).slice(0, 8),
+    contextLight: memoryRefs.length === 0,
+    memoryRefs,
     sourceRefs: uniqueById(retrieval.results.map((result) => result.sourceRef)).slice(0, 8),
     results: retrieval.results,
   };
+}
+
+function profileSignalMemoryRefsForCreate(profile: BrainMemoryProfile, query: string, limit: number): CreateMemoryRetrievalContext["memoryRefs"] {
+  const terms = importantWords(query);
+  const signals = [
+    ...profile.profile.preferredBuildStyle,
+    ...profile.profile.tasteSignals,
+    ...profile.profile.recurringInterests,
+    ...profile.profile.activeProjects,
+    ...profile.profile.activeIdeaClusters,
+    ...profile.profile.commonFrustrations,
+    ...profile.profile.repeatedRejectedDirections,
+  ];
+
+  return signals
+    .map((signal) => ({ signal, match: profileSignalMatchForCreate(signal, query, terms) }))
+    .filter(({ match }) => match.matched && match.score >= 0.35)
+    .sort((left, right) => right.match.score - left.match.score || right.signal.weight - left.signal.weight || left.signal.label.localeCompare(right.signal.label))
+    .slice(0, limit)
+    .map(({ signal }) => ({
+      id: stableId("profile-signal-memory", signal.id),
+      label: `Profile signal: ${signal.label}`,
+      kind: profileSignalMemoryKind(signal.kind),
+      summary: signal.summary,
+    }));
+}
+
+function profileSignalMatchForCreate(signal: UserProfileSignal, query: string, terms: string[]): { matched: boolean; score: number } {
+  const haystack = `${signal.label} ${signal.summary} ${signal.kind}`.toLowerCase();
+  const termHits = terms.filter((term) => haystack.includes(term)).length;
+  const directPhrase = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word.length > 5)
+    .some((word) => haystack.includes(word))
+    ? 0.25
+    : 0;
+
+  return {
+    matched: termHits > 0 || directPhrase > 0,
+    score: Math.round((termHits / Math.max(terms.length, 1) + directPhrase + signal.weight * 0.35) * 100) / 100,
+  };
+}
+
+function profileSignalMemoryKind(kind: UserProfileSignalKind): CreateMemoryRetrievalContext["memoryRefs"][number]["kind"] {
+  if (kind === "taste_signal" || kind === "preferred_build_style") {
+    return "preference";
+  }
+
+  return "brain";
 }
 
 async function recordMemoryImportDevelopmentEvents(
