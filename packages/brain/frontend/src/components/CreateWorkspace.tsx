@@ -21,7 +21,7 @@ import type {
   VerificationSummary,
 } from "../types/brain";
 
-interface CheckWorkspaceProps {
+interface CreateWorkspaceProps {
   data: BrainData | null;
   status: string;
   isThinking: boolean;
@@ -46,7 +46,7 @@ const createExportFeedbackReasons: Array<{ reason: CreateExportFeedbackReason; l
   { reason: "ready_to_ship", label: "Ready to ship" },
 ];
 
-export function CheckWorkspace({
+export function CreateWorkspace({
   data,
   status,
   isThinking,
@@ -56,7 +56,7 @@ export function CheckWorkspace({
   onStatusChange,
   onThinkingChange,
   onOpenBrain,
-}: CheckWorkspaceProps) {
+}: CreateWorkspaceProps) {
   const sourceText = initialSeedText?.trim() || data?.source?.rawText?.trim() || "";
   const [draftText, setDraftText] = useState(sourceText);
   const [optionSet, setOptionSet] = useState<OptionSet | null>(null);

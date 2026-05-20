@@ -20,7 +20,7 @@ import {
 } from "./api/brainClient";
 import { buildAutopilotStartIntent, runAutopilotGoThere, type PennyMode } from "./autopilotUx";
 import { BrainWorkspace } from "./components/BrainWorkspace";
-import { CheckWorkspace } from "./components/CheckWorkspace";
+import { CreateWorkspace } from "./components/CreateWorkspace";
 import { Header } from "./components/Header";
 import { LandingPage } from "./components/LandingPage";
 import { LearnWorkspace } from "./components/LearnWorkspace";
@@ -77,7 +77,7 @@ export function App() {
   const [brainCanvasOpen, setBrainCanvasOpen] = useState(false);
   const [learnFocusNode, setLearnFocusNode] = useState<CanvasNode | null>(null);
   const [relatedBrainSearch, setRelatedBrainSearch] = useState<BrainRelatedSearchState | null>(null);
-  const [checkInitialSeedText, setCheckInitialSeedText] = useState<string | null>(null);
+  const [createInitialSeedText, setCreateInitialSeedText] = useState<string | null>(null);
   const [createBrainProfile, setCreateBrainProfile] = useState<BrainMemoryProfileData | null>(null);
   const [activeMode, setActiveMode] = useState<PennyMode>("Learn");
   const [landingVisible, setLandingVisible] = useState(() => activeSessionId() === null);
@@ -277,7 +277,7 @@ export function App() {
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
-    setCheckInitialSeedText(null);
+    setCreateInitialSeedText(null);
     setCreateBrainProfile(null);
     setLandingVisible(true);
     forgetActiveSession();
@@ -316,7 +316,7 @@ export function App() {
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
-    setCheckInitialSeedText(sourceMaterial?.extractedText || rawIdea);
+    setCreateInitialSeedText(sourceMaterial?.extractedText || rawIdea);
     setCreateBrainProfile(null);
     setActiveMode("Create");
     setStatus("Preparing Create");
@@ -781,7 +781,7 @@ export function App() {
           setBrainCanvasOpen(false);
           setLearnFocusNode(null);
           setRelatedBrainSearch(null);
-          setCheckInitialSeedText(recent.rawIdea);
+          setCreateInitialSeedText(recent.rawIdea);
           setCreateBrainProfile(null);
           setActiveMode("Create");
           setStatus("Quick note sent to Create");
@@ -820,7 +820,7 @@ export function App() {
     setBrainCanvasOpen(false);
     setLearnFocusNode(null);
     setRelatedBrainSearch(null);
-    setCheckInitialSeedText(null);
+    setCreateInitialSeedText(null);
     setCreateBrainProfile(profile);
     setLandingVisible(false);
     setActiveMode("Create");
@@ -889,13 +889,13 @@ export function App() {
             onStartCreateWithBrain={handleStartCreateWithBrain}
           />
         ) : activeMode === "Create" ? (
-          <CheckWorkspace
+          <CreateWorkspace
             data={data}
             status={status}
             isThinking={isThinking}
             brainProfile={createBrainProfile}
-            initialSeedText={checkInitialSeedText}
-            onInitialSeedConsumed={() => setCheckInitialSeedText(null)}
+            initialSeedText={createInitialSeedText}
+            onInitialSeedConsumed={() => setCreateInitialSeedText(null)}
             onStatusChange={setStatus}
             onThinkingChange={setIsThinking}
             onOpenBrain={() => setActiveMode("Brain")}

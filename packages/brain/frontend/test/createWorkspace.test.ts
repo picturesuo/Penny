@@ -11,7 +11,7 @@ import {
   CreateOptionDetailsDrawer,
   CreateProviderStatusPanel,
   isCreateComparisonDevMode,
-} from "../src/components/CheckWorkspace";
+} from "../src/components/CreateWorkspace";
 import type { BrainMemoryProfileData, CandidateOption, CreateProviderComparisonResponse } from "../src/types/brain";
 
 test("CreateOptionBoard shows memory and source grounding counts on option cards", () => {
