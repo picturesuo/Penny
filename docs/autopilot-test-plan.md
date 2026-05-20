@@ -177,5 +177,6 @@ If a live provider is enabled for a demo, add a separate note for provider, mode
 - ST3: Implementation should stop here until a later role takes a specific test or runtime gap from the Success Criteria or Test Mapping.
 - ST4: 2026-05-05 latency rewrite added fast-path, provider metadata, and demo timing gates to align the test plan with the Autopilot latency contract.
 - ST5: 2026-05-08 repository completion update aligned the plan with the current default test command, BrainRun audit coverage, cleanup-audit queue status, and deferred latency instrumentation work.
-- ST6: 2026-05-20 debugger update documented the reproducible isolated dev-auth smoke command after the bare smoke command reproduced as environment-blocked locally and the isolated smoke passed.
-- ST7: 2026-05-20 backend refresh corrected SC13 so the current BrainRun audit proof no longer claims deferred latency metadata, and noted that the default test glob now covers the broader repository readiness surface.
+- ST6: 2026-05-20 smoke gate update documented the previously verified isolated dev-auth smoke command and clarified when the bare smoke command is environment-blocked.
+- ST7: 2026-05-20 repository refresh corrected SC13 so the current BrainRun audit proof no longer claims deferred latency metadata, and noted that the default test glob now covers the broader repository readiness surface.
+- ST8: 2026-05-20 verification passed: `git diff --check -- docs/autopilot-test-plan.md`, `pnpm typecheck`, `pnpm test` with 405 passing tests, and `pnpm build` with no generated asset diff.
