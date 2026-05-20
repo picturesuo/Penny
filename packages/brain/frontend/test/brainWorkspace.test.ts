@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BrainMemoryPanel, BrainWorkspace } from "../src/components/BrainWorkspace";
+import { BrainMemoryPanel, BrainWorkspace, GoogleConnectorControl } from "../src/components/BrainWorkspace";
 import type { BrainDocumentsData, BrainMemoryProfileData, BrainRecentIdea } from "../src/types/brain";
 
 test("BrainWorkspace renders persisted quick notes as the first sidebar folder", () => {
@@ -95,6 +95,87 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Use this Brain to create something/);
 });
 
+test("GoogleConnectorControl renders statuses, scopes, sync counts, and honest gated messaging", () => {
+  const markup = renderToStaticMarkup(
+    createElement(GoogleConnectorControl, {
+      provider: googleProviderView(),
+      connectorState: {
+        connections: [
+          {
+            id: "connector-google-1",
+            status: "connected",
+            surfaces: ["google_drive", "google_calendar"],
+            scopes: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/calendar.readonly"],
+            lastSyncedAt: "2026-05-20T12:05:00.000Z",
+            nextSyncAt: "2026-05-20T18:05:00.000Z",
+            revokedAt: null,
+            sourceCounts: { google_doc: 2, google_calendar_event: 1 },
+            credential: {
+              connectionId: "nango-google-1",
+              providerConfigKey: "google",
+            },
+          },
+        ],
+        syncJobs: [
+          {
+            id: "sync-google-drive-1",
+            connectionId: "connector-google-1",
+            surface: "google_drive",
+            status: "succeeded",
+            requestedAt: "2026-05-20T12:01:00.000Z",
+            startedAt: "2026-05-20T12:01:05.000Z",
+            completedAt: "2026-05-20T12:05:00.000Z",
+          },
+        ],
+        sources: [
+          {
+            id: "connector-source-1",
+            connectionId: "connector-google-1",
+            kind: "google_doc",
+            label: "Google Create strategy doc",
+            sourceUri: "google-drive:file:doc-1",
+            brainSourceId: "brain-source-1",
+            privacy: {
+              retrievalAccess: "enabled",
+            },
+          },
+        ],
+      },
+      status: "ready",
+      error: null,
+      connectLink: null,
+      disabled: false,
+      onConnect: async () => undefined,
+      onSyncNow: async () => undefined,
+      onRevoke: async () => undefined,
+      onDeleteSource: async () => undefined,
+    }),
+  );
+
+  assert.match(markup, /Google/);
+  assert.match(markup, /Connected/);
+  assert.match(markup, /Google Drive, Google Calendar connected for private Brain sources/);
+  assert.match(markup, /3 sources indexed/);
+  assert.match(markup, /Google Drive Succeeded/);
+  assert.match(markup, /Drive/);
+  assert.match(markup, /Available · Google Drive File/);
+  assert.match(markup, /Scopes: https:\/\/www\.googleapis\.com\/auth\/drive\.file/);
+  assert.match(markup, /Gmail/);
+  assert.match(markup, /Gated Verification Required/);
+  assert.match(markup, /Gated: google\.gmail\.metadata/);
+  assert.match(markup, /No hidden Gmail import/);
+  assert.match(markup, /Google Takeout/);
+  assert.match(markup, /Manual Import Only/);
+  assert.match(markup, /My Activity/);
+  assert.match(markup, /No direct Google Search history access/);
+  assert.match(markup, /Chrome extension seam/);
+  assert.match(markup, /Extension Required/);
+  assert.match(markup, /Browser\/search: Extension Required/);
+  assert.match(markup, /Sync now/);
+  assert.match(markup, /Revoke/);
+  assert.match(markup, /Delete source/);
+});
+
 function emptyDocumentsData(): BrainDocumentsData {
   const document = documentSummary();
 
@@ -116,6 +197,105 @@ function emptyDocumentsData(): BrainDocumentsData {
       claimCount: 0,
       edgeCount: 0,
     },
+  };
+}
+
+function googleProviderView() {
+  const driveScope = {
+    id: "google.drive.file",
+    surface: "google_drive",
+    scope: "https://www.googleapis.com/auth/drive.file",
+    sensitivity: "non_sensitive",
+    whyPennyNeedsIt: "Let the user choose specific Drive files that Penny may index and resync.",
+    userExplanation: "Penny can read only the Drive files you select or share with Penny.",
+    gated: false,
+    gatedStatus: null,
+    productionAllowed: true,
+    requiredEnvGate: null,
+  };
+  const gmailScope = {
+    id: "google.gmail.metadata",
+    surface: "google_gmail",
+    scope: "https://www.googleapis.com/auth/gmail.metadata",
+    sensitivity: "restricted",
+    whyPennyNeedsIt: "Read Gmail labels and headers without message bodies for selective, metadata-first memory.",
+    userExplanation: "Penny will not request Gmail scopes unless Gmail and restricted-scope gates are enabled.",
+    gated: true,
+    gatedStatus: "gated_verification_required",
+    productionAllowed: false,
+    requiredEnvGate: "ENABLE_GMAIL_CONNECTOR,ENABLE_RESTRICTED_GOOGLE_SCOPES",
+  };
+
+  return {
+    id: "google",
+    label: "Google",
+    adapter: "nango",
+    status: "connected",
+    configured: true,
+    configurationLabel: "configured",
+    missingConfig: [],
+    surfaces: [
+      {
+        id: "google_drive",
+        providerId: "google",
+        label: "Drive",
+        status: "available",
+        sourceKinds: ["google_drive_file"],
+        scopes: [driveScope],
+        whyPennyCanUseThis: "Drive files can become private Brain source nodes when the user chooses files.",
+        userExplanation: "Connect selected Drive files so Brain can remember what you actually work from.",
+        supportedNow: ["Selected-file metadata and source refs"],
+        notFaked: ["No account-wide Drive crawl without restricted-scope verification"],
+      },
+      {
+        id: "google_gmail",
+        providerId: "google",
+        label: "Gmail",
+        status: "gated_verification_required",
+        sourceKinds: ["google_gmail_message"],
+        scopes: [gmailScope],
+        whyPennyCanUseThis: "Email can be useful context only with metadata-first selection and approval.",
+        userExplanation: "Gmail is gated.",
+        supportedNow: ["Gated metadata-first scaffold"],
+        notFaked: ["No hidden Gmail import", "No unrestricted mailbox scan", "No message-body access by default"],
+      },
+      {
+        id: "google_takeout",
+        providerId: "google",
+        label: "Google Takeout",
+        status: "manual_import_only",
+        sourceKinds: ["google_takeout_import"],
+        scopes: [],
+        whyPennyCanUseThis: "Takeout is a manual import path for user-provided archives.",
+        userExplanation: "Penny can guide a manual import, but it cannot fetch Takeout archives for you.",
+        supportedNow: ["Manual import guidance"],
+        notFaked: ["No automatic Takeout API access"],
+      },
+      {
+        id: "google_my_activity",
+        providerId: "google",
+        label: "My Activity",
+        status: "manual_import_only",
+        sourceKinds: ["google_my_activity_import"],
+        scopes: [],
+        whyPennyCanUseThis: "My Activity can only enter Penny through an explicit user-provided export.",
+        userExplanation: "Penny will not claim direct Google Search history access.",
+        supportedNow: ["Manual import guidance"],
+        notFaked: ["No direct Google Search history access"],
+      },
+      {
+        id: "chrome_extension_history",
+        providerId: "google",
+        label: "Chrome extension seam",
+        status: "extension_required",
+        sourceKinds: ["browser_history_extension"],
+        scopes: [],
+        whyPennyCanUseThis: "Browser and search history need explicit extension permissions.",
+        userExplanation: "Browser history is future extension work, not part of Google OAuth.",
+        supportedNow: ["Extension-required status only"],
+        notFaked: ["No browser history access from backend OAuth"],
+      },
+    ],
   };
 }
 
