@@ -33,6 +33,8 @@ import type {
   CheckSessionResponse,
   CheckSprintInput,
   CheckSprintResponse,
+  CreateExportFeedbackInput,
+  CreateExportFeedbackResponse,
   CreateProviderComparisonResponse,
   CreateNextInput,
   CreateNextResponse,
@@ -194,6 +196,22 @@ export async function exportCodingPrompt(input: ExportCodingPromptInput): Promis
   }
 
   return payload as PromptExportResponse;
+}
+
+export async function submitCreateExportFeedback(input: CreateExportFeedbackInput): Promise<CreateExportFeedbackResponse> {
+  const response = await fetch("/api/create/export-feedback", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/create/export-feedback failed with ${response.status}.`));
+  }
+
+  return payload as CreateExportFeedbackResponse;
 }
 
 export async function fetchCheckSession(sessionId: string): Promise<CheckSessionResponse> {

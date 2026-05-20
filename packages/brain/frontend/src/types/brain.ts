@@ -1600,6 +1600,31 @@ export interface PromptExport {
   createdAt: string;
 }
 
+export type CreateExportFeedbackRating = "useful" | "not_useful";
+
+export type CreateExportFeedbackReason =
+  | "strong_output"
+  | "too_generic"
+  | "too_complex"
+  | "not_personal_enough"
+  | "wrong_memory"
+  | "missing_constraints"
+  | "ready_to_ship";
+
+export interface CreateExportFeedback {
+  sourceOfTruth: "create_export_feedback";
+  id: string;
+  projectId: string;
+  sessionId: string;
+  artifactId: string;
+  exportId: string;
+  rating: CreateExportFeedbackRating;
+  reasons: CreateExportFeedbackReason[];
+  comment: string | null;
+  promptCompletenessScore: number | null;
+  createdAt: string;
+}
+
 export interface CreateNextInput {
   rawIdea: string;
   projectId?: string | null;
@@ -1659,6 +1684,23 @@ export interface ExportCodingPromptInput {
 export interface PromptExportResponse {
   data: {
     export: PromptExport;
+  };
+}
+
+export interface CreateExportFeedbackInput {
+  projectId: string;
+  sessionId: string;
+  artifactId: string;
+  exportId: string;
+  rating: CreateExportFeedbackRating;
+  reasons?: CreateExportFeedbackReason[];
+  comment?: string;
+  promptCompletenessScore?: number | null;
+}
+
+export interface CreateExportFeedbackResponse {
+  data: {
+    feedback: CreateExportFeedback;
   };
 }
 

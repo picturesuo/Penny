@@ -35,6 +35,7 @@ import {
   saveSessionNote,
   selectAutopilotNode,
   startAutopilotCandidate,
+  submitCreateExportFeedback,
   tickAutopilot,
   verifyClaim,
 } from "../src/api/brainClient";
@@ -351,6 +352,21 @@ test("frontend brain client uses Create next and coding prompt export routes", a
         },
       },
     }),
+    jsonResponse({
+      feedback: {
+        sourceOfTruth: "create_export_feedback",
+        id: "feedback-1",
+        projectId: "project-test",
+        sessionId,
+        artifactId: artifact.id,
+        exportId: "prompt-export-1",
+        rating: "useful",
+        reasons: ["strong_output"],
+        comment: null,
+        promptCompletenessScore: 100,
+        createdAt: "2026-05-05T12:00:03.000Z",
+      },
+    }),
   ]);
 
   try {
@@ -373,12 +389,22 @@ test("frontend brain client uses Create next and coding prompt export routes", a
       projectId: "project-test",
       sessionId,
     });
+    const feedback = await submitCreateExportFeedback({
+      projectId: "project-test",
+      sessionId,
+      artifactId: artifact.id,
+      exportId: exported.data.export.id,
+      rating: "useful",
+      reasons: ["strong_output"],
+      promptCompletenessScore: exported.data.export.qualitySignals.promptCompletenessScore,
+    });
 
     assert.equal(next.data.optionSet.options.length, 5);
     assert.equal(next.data.judgmentEvent?.userComment, "Make the selected cards visibly update the artifact.");
     assert.equal(exported.data.export.format, "coding_agent_prompt");
     assert.equal(compared.data.deterministic.providerUsed, "deterministic");
     assert.equal(compared.data.modelBacked.providerUsed, "deterministic_fallback");
+    assert.equal(feedback.data.feedback.rating, "useful");
     assert.equal(calls[0]?.url, "/api/create/next");
     assert.equal(calls[0]?.method, "POST");
     assert.deepEqual(calls[0]?.body, {
@@ -403,6 +429,17 @@ test("frontend brain client uses Create next and coding prompt export routes", a
       rawIdea: "Build Penny Create.",
       projectId: "project-test",
       sessionId,
+    });
+    assert.equal(calls[3]?.url, "/api/create/export-feedback");
+    assert.equal(calls[3]?.method, "POST");
+    assert.deepEqual(calls[3]?.body, {
+      projectId: "project-test",
+      sessionId,
+      artifactId: artifact.id,
+      exportId: "prompt-export-test",
+      rating: "useful",
+      reasons: ["strong_output"],
+      promptCompletenessScore: 100,
     });
   } finally {
     restoreFetch();

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Download, Info, RefreshCcw, Sparkles, X } from "lucide-react";
-import { compareCreateProviders, createNext, exportCodingPrompt } from "../api/brainClient";
+import { compareCreateProviders, createNext, exportCodingPrompt, submitCreateExportFeedback } from "../api/brainClient";
 import type {
   BrainData,
   BrainMemoryProfileData,
   CandidateOption,
   CodingPromptArtifact,
+  CreateExportFeedbackRating,
+  CreateExportFeedbackReason,
   CreateObservability,
   CreateLens,
   CreateNextInput,
@@ -33,6 +35,15 @@ interface CheckWorkspaceProps {
 export const createLensOrder: CreateLens[] = ["Personal", "Practical", "Valuable", "Critical", "Weird"];
 
 const createPathSteps = ["Rough idea", "Five directions", "Judgment", "Prompt artifact", "Verification", "Export"];
+const createExportFeedbackReasons: Array<{ reason: CreateExportFeedbackReason; label: string }> = [
+  { reason: "strong_output", label: "Strong output" },
+  { reason: "too_generic", label: "Too generic" },
+  { reason: "too_complex", label: "Too complex" },
+  { reason: "not_personal_enough", label: "Not personal enough" },
+  { reason: "wrong_memory", label: "Wrong memory" },
+  { reason: "missing_constraints", label: "Missing constraints" },
+  { reason: "ready_to_ship", label: "Ready to ship" },
+];
 
 export function CheckWorkspace({
   data,
@@ -56,6 +67,10 @@ export function CheckWorkspace({
   const [observability, setObservability] = useState<CreateObservability | null>(null);
   const [providerComparison, setProviderComparison] = useState<CreateProviderComparisonResponse["data"] | null>(null);
   const [promptExport, setPromptExport] = useState<PromptExport | null>(null);
+  const [exportFeedbackRating, setExportFeedbackRating] = useState<CreateExportFeedbackRating | null>(null);
+  const [exportFeedbackReasons, setExportFeedbackReasons] = useState<CreateExportFeedbackReason[]>([]);
+  const [exportFeedbackComment, setExportFeedbackComment] = useState("");
+  const [exportFeedbackStatus, setExportFeedbackStatus] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
   const [localStatus, setLocalStatus] = useState("Create ready");
   const [failure, setFailure] = useState<string | null>(null);
@@ -126,6 +141,7 @@ export function CheckWorkspace({
       setJudgmentEvent(null);
       setProviderComparison(null);
       setPromptExport(null);
+      resetExportFeedback();
       setStatus("Create directions ready");
     });
   }
@@ -163,6 +179,7 @@ export function CheckWorkspace({
       );
       applyCreatePayload(payload.data);
       setPromptExport(null);
+      resetExportFeedback();
       setStatus(payload.data.judgmentEvent ? "Judgment recorded; artifact verified" : "Artifact verified");
     });
   }
@@ -206,7 +223,35 @@ export function CheckWorkspace({
 
       const payload = await exportCodingPrompt(exportInput);
       setPromptExport(payload.data.export);
+      resetExportFeedback();
       setStatus("Coding-agent prompt exported");
+    });
+  }
+
+  async function handleSubmitExportFeedback() {
+    if (!artifact || !promptExport) {
+      setExportFeedbackStatus("Export the prompt first");
+      return;
+    }
+
+    if (!exportFeedbackRating) {
+      setExportFeedbackStatus("Choose useful or not useful first");
+      return;
+    }
+
+    await runCreateAction("Saving export feedback", async () => {
+      await submitCreateExportFeedback({
+        projectId: artifact.projectId,
+        sessionId: artifact.sessionId,
+        artifactId: artifact.id,
+        exportId: promptExport.id,
+        rating: exportFeedbackRating,
+        reasons: exportFeedbackReasons,
+        comment: exportFeedbackComment,
+        promptCompletenessScore: promptExport.qualitySignals.promptCompletenessScore,
+      });
+      setExportFeedbackStatus("Feedback saved");
+      setStatus("Export feedback saved");
     });
   }
 
@@ -228,6 +273,19 @@ export function CheckWorkspace({
     setSelectedOptionIds((current) =>
       current.includes(optionId) ? current.filter((id) => id !== optionId) : [...current, optionId],
     );
+  }
+
+  function toggleExportFeedbackReason(reason: CreateExportFeedbackReason) {
+    setExportFeedbackReasons((current) =>
+      current.includes(reason) ? current.filter((item) => item !== reason) : [...current, reason],
+    );
+  }
+
+  function resetExportFeedback() {
+    setExportFeedbackRating(null);
+    setExportFeedbackReasons([]);
+    setExportFeedbackComment("");
+    setExportFeedbackStatus(null);
   }
 
   return (
@@ -309,10 +367,107 @@ export function CheckWorkspace({
               Export prompt
             </button>
             {promptExport ? <textarea readOnly value={promptExport.text} aria-label="Exported coding-agent prompt" /> : null}
+            <CreateExportFeedbackPanel
+              artifact={artifact}
+              promptExport={promptExport}
+              busy={busy}
+              rating={exportFeedbackRating}
+              reasons={exportFeedbackReasons}
+              comment={exportFeedbackComment}
+              status={exportFeedbackStatus}
+              onRatingChange={setExportFeedbackRating}
+              onReasonToggle={toggleExportFeedbackReason}
+              onCommentChange={setExportFeedbackComment}
+              onSubmit={() => void handleSubmitExportFeedback()}
+            />
           </section>
         </article>
       </section>
     </main>
+  );
+}
+
+export function CreateExportFeedbackPanel({
+  artifact,
+  promptExport,
+  busy,
+  rating,
+  reasons,
+  comment,
+  status,
+  onRatingChange,
+  onReasonToggle,
+  onCommentChange,
+  onSubmit,
+}: {
+  artifact: CodingPromptArtifact | null;
+  promptExport: PromptExport | null;
+  busy: boolean;
+  rating: CreateExportFeedbackRating | null;
+  reasons: CreateExportFeedbackReason[];
+  comment: string;
+  status: string | null;
+  onRatingChange: (rating: CreateExportFeedbackRating) => void;
+  onReasonToggle: (reason: CreateExportFeedbackReason) => void;
+  onCommentChange: (comment: string) => void;
+  onSubmit: () => void;
+}) {
+  if (!artifact || !promptExport) {
+    return null;
+  }
+
+  return (
+    <div className="create-export-feedback" aria-label="Export feedback">
+      <div className="create-export-feedback-rating" role="group" aria-label="Export usefulness">
+        <button
+          type="button"
+          className={rating === "useful" ? "is-selected" : ""}
+          onClick={() => onRatingChange("useful")}
+          disabled={busy}
+        >
+          <CheckCircle2 size={15} />
+          Useful
+        </button>
+        <button
+          type="button"
+          className={rating === "not_useful" ? "is-selected" : ""}
+          onClick={() => onRatingChange("not_useful")}
+          disabled={busy}
+        >
+          <X size={15} />
+          Not useful
+        </button>
+      </div>
+      <div className="create-export-feedback-reasons" aria-label="Feedback reasons">
+        {createExportFeedbackReasons.map((item) => (
+          <label key={item.reason}>
+            <input
+              type="checkbox"
+              checked={reasons.includes(item.reason)}
+              onChange={() => onReasonToggle(item.reason)}
+              disabled={busy}
+            />
+            <span>{item.label}</span>
+          </label>
+        ))}
+      </div>
+      <label className="create-export-feedback-comment">
+        <span>Note</span>
+        <textarea
+          value={comment}
+          onChange={(event) => onCommentChange(event.target.value)}
+          maxLength={1000}
+          placeholder="What should change before the next export?"
+          disabled={busy}
+        />
+      </label>
+      <div className="create-action-row">
+        <button type="button" className="check-secondary-button" onClick={onSubmit} disabled={busy || !rating}>
+          Save feedback
+        </button>
+        {status ? <span>{status}</span> : null}
+      </div>
+    </div>
   );
 }
 

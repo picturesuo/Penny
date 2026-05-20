@@ -6,6 +6,7 @@ import {
   buildCreateNextInput,
   CreateBrainOnboardingPanel,
   CreateComparisonPanel,
+  CreateExportFeedbackPanel,
   CreateOptionBoard,
   CreateOptionDetailsDrawer,
   CreateProviderStatusPanel,
@@ -123,6 +124,32 @@ test("CreateComparisonPanel renders deterministic and model-backed options with 
   assert.match(markup, /Personal model-backed direction/);
   assert.match(markup, /Prompt completeness 100/);
   assert.match(markup, /Missing prompt signals: none/);
+});
+
+test("CreateExportFeedbackPanel renders rating, reason, and save controls", () => {
+  const arm = createComparisonArm("deterministic", createOptionSet("deterministic").options);
+  const markup = renderToStaticMarkup(
+    createElement(CreateExportFeedbackPanel, {
+      artifact: arm.artifact,
+      promptExport: arm.promptExport,
+      busy: false,
+      rating: "not_useful",
+      reasons: ["too_generic"],
+      comment: "Needs sharper memory constraints.",
+      status: "Feedback saved",
+      onRatingChange: () => undefined,
+      onReasonToggle: () => undefined,
+      onCommentChange: () => undefined,
+      onSubmit: () => undefined,
+    }),
+  );
+
+  assert.match(markup, /Useful/);
+  assert.match(markup, /Not useful/);
+  assert.match(markup, /Too generic/);
+  assert.match(markup, /Missing constraints/);
+  assert.match(markup, /Save feedback/);
+  assert.match(markup, /Feedback saved/);
 });
 
 test("isCreateComparisonDevMode only exposes comparison in dev, test, or explicit flag", () => {

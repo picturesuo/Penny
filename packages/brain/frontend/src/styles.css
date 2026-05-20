@@ -1302,7 +1302,8 @@
   }
 
   .create-seed-panel label,
-  .create-judgment-panel label {
+  .create-judgment-panel label,
+  .create-export-feedback-comment {
     display: grid;
     gap: 8px;
   }
@@ -1314,6 +1315,7 @@
   .create-artifact-panel header span,
   .create-verification-panel header span,
   .create-export-panel header span,
+  .create-export-feedback-comment span,
   .create-option-select-button > span,
   .create-option-memory-meta span,
   .create-option-detail-drawer header span,
@@ -1356,6 +1358,55 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     font-size: 12px;
     line-height: 1.45;
+  }
+
+  .create-export-feedback {
+    display: grid;
+    gap: 10px;
+    border-top: 1px solid rgb(17 17 17 / 0.12);
+    padding-top: 12px;
+  }
+
+  .create-export-feedback-rating,
+  .create-export-feedback-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .create-export-feedback-rating button,
+  .create-export-feedback-reasons label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    border: 1px solid rgb(17 17 17 / 0.14);
+    border-radius: 7px;
+    padding: 7px 10px;
+    background: rgb(255 255 255 / 0.64);
+    color: #111111;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .create-export-feedback-rating button.is-selected,
+  .create-export-feedback-reasons label:has(input:checked) {
+    border-color: #111111;
+    background: #eff7d2;
+  }
+
+  .create-export-feedback-reasons input {
+    width: 14px;
+    height: 14px;
+    accent-color: #2f5c52;
+  }
+
+  .create-export-feedback-comment textarea {
+    min-height: 74px;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.35;
   }
 
   .create-seed-panel textarea:focus,
