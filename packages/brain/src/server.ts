@@ -66,6 +66,17 @@ import {
 } from "./context-layer-route.ts";
 import { createPennySql, type PennySqlClient } from "./db/client.ts";
 import * as schema from "./db/schema.ts";
+import {
+  handleGoogleConnectorCallbackRequest,
+  handleGoogleConnectorConnectSessionRequest,
+  handleGoogleConnectorCredentialsRequest,
+  handleGoogleConnectorListConnectionsRequest,
+  handleGoogleConnectorProviderRequest,
+  handleGoogleConnectorRefreshRequest,
+  handleGoogleConnectorRevokeRequest,
+  handleGoogleConnectorSyncNowRequest,
+  handleGoogleConnectorSyncStatusRequest,
+} from "./google-connector-route.ts";
 import { handleAskPennyRequest, handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleLearnSessionRequest } from "./learn-session-route.ts";
 import { emitPennyLog } from "./observability.ts";
@@ -246,6 +257,51 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/context/retrieve") {
       await writeWebResponse(outgoing, await handleContextRetrievalRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorProviderRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/connect-session") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorConnectSessionRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/callback") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorCallbackRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/connections") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorListConnectionsRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/credentials") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorCredentialsRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/sync-now") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorSyncNowRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/sync-status") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorSyncStatusRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/refresh") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorRefreshRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/revoke") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorRevokeRequest(request));
       return;
     }
 
