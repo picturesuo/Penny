@@ -63,6 +63,7 @@ import { createPennySql } from "./db/client.ts";
 import * as schema from "./db/schema.ts";
 import { handleAskPennyRequest, handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleLearnSessionRequest } from "./learn-session-route.ts";
+import { emitPennyLog } from "./observability.ts";
 import { handleSessionCanvasRequest } from "./session-canvas-route.ts";
 import { handleSessionGraphRequest } from "./session-graph-route.ts";
 import { handleSessionMovesRequest } from "./session-moves-route.ts";
@@ -1259,6 +1260,7 @@ export function guardApiRequest(request: Request, url: URL): ApiGuardResult {
   }
 
   if (!cors.allowed) {
+    emitAuthFailureLog(request, "cors_origin_not_allowed", 403);
     return {
       request,
       headers: cors.headers,
@@ -1288,6 +1290,7 @@ export function guardApiRequest(request: Request, url: URL): ApiGuardResult {
   mergeHeaders(cors.headers, rateLimit.headers);
 
   if (!rateLimit.allowed) {
+    emitAuthFailureLog(request, "rate_limited", 429, auth.value.mode);
     return {
       request,
       headers: cors.headers,
@@ -1310,6 +1313,7 @@ function authenticateApiRequest(request: Request): { ok: true; value: ApiAuthRes
     const expectedToken = process.env.PENNY_API_TOKEN?.trim();
 
     if (!expectedToken) {
+      emitAuthFailureLog(request, "auth_not_configured", 500, mode);
       return {
         ok: false,
         response: jsonErrorResponse(
@@ -1327,6 +1331,7 @@ function authenticateApiRequest(request: Request): { ok: true; value: ApiAuthRes
       const rateLimit = authFailureRateLimiter.check(clientRateLimitKey(request));
 
       if (!rateLimit.allowed) {
+        emitAuthFailureLog(request, "auth_rate_limited", 429, mode);
         return {
           ok: false,
           response: jsonErrorResponse(429, "auth_rate_limited", "Too many failed Penny access attempts. Try again shortly.", {
@@ -1335,6 +1340,7 @@ function authenticateApiRequest(request: Request): { ok: true; value: ApiAuthRes
         };
       }
 
+      emitAuthFailureLog(request, "unauthorized", 401, mode);
       return {
         ok: false,
         response: jsonErrorResponse(401, "unauthorized", "A valid Penny API token is required.", {
@@ -1354,6 +1360,25 @@ function authenticateApiRequest(request: Request): { ok: true; value: ApiAuthRes
       scope,
     },
   };
+}
+
+function emitAuthFailureLog(request: Request, reason: string, status: number, mode?: AuthMode): void {
+  const url = new URL(request.url);
+
+  emitPennyLog(
+    "auth.failure",
+    {
+      reason,
+      status,
+      method: request.method,
+      path: url.pathname,
+      mode: mode ?? null,
+      hasAuthorization: Boolean(request.headers.get("authorization")),
+      hasApiKeyHeader: Boolean(request.headers.get("x-penny-api-key")),
+      hasSessionCookie: request.headers.get("cookie")?.includes(`${sessionCookieName}=`) ?? false,
+    },
+    { level: status >= 500 ? "error" : "warn" },
+  );
 }
 
 function requestWithServerScope(request: Request, scope: ServerScope): Request {
