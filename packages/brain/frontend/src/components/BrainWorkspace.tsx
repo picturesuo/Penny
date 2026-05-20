@@ -2701,7 +2701,7 @@ export function BrainMemoryPanel({
   );
 }
 
-function GoogleConnectorControl({
+export function GoogleConnectorControl({
   provider,
   connectorState,
   status,
