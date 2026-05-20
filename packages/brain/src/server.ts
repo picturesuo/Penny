@@ -1085,6 +1085,7 @@ export function validatePennyStartupEnvironment(
   const databaseUrl = env.DATABASE_URL?.trim() ?? "";
   const configuredAuthMode = env.PENNY_AUTH_MODE?.trim().toLowerCase() ?? "";
   const authMode = (configuredAuthMode === "strict" ? "token" : configuredAuthMode || (env.PENNY_API_TOKEN?.trim() || strict ? "token" : "dev")) as AuthMode;
+  const apiToken = env.PENNY_API_TOKEN?.trim() ?? "";
   const corsOrigins = env.PENNY_CORS_ORIGINS?.trim() ?? "";
   const modelBackedValue = env.PENNY_CREATE_MODEL_BACKED?.trim().toLowerCase();
 
@@ -1120,8 +1121,6 @@ export function validatePennyStartupEnvironment(
   }
 
   if (authMode === "token") {
-    const apiToken = env.PENNY_API_TOKEN?.trim() ?? "";
-
     if (!apiToken) {
       issues.push({
         code: "api_token_required",
@@ -1133,6 +1132,11 @@ export function validatePennyStartupEnvironment(
         message: "Strict deployments require a PENNY_API_TOKEN of at least 32 characters.",
       });
     }
+  } else if (strict && apiToken && apiToken.length < 32) {
+    issues.push({
+      code: "api_token_too_short",
+      message: "Strict deployments require a PENNY_API_TOKEN of at least 32 characters.",
+    });
   }
 
   if (strict) {
