@@ -315,6 +315,17 @@ export async function handleGoogleConnectorSyncNowRequest(
     return input.response;
   }
 
+  const scope = scopeFromRequest(request);
+  const currentState = await loadGoogleConnectorState(options, scope);
+  const connection = findRouteConnection(currentState, input.value.connectionId);
+
+  if (connection?.status === "revoked") {
+    return jsonResponse(
+      { error: { code: "connector_revoked", message: "Revoked Google connector connections cannot be synced." } },
+      409,
+    );
+  }
+
   const adapterResult = await resolveAdapter(options).startSync({
     ...input.value,
     syncNames: body.value.syncNames?.length ? body.value.syncNames : defaultGoogleSyncNames,
@@ -325,10 +336,6 @@ export async function handleGoogleConnectorSyncNowRequest(
   if (!adapterResult.ok) {
     return adapterResponse(adapterResult, 202);
   }
-
-  const scope = scopeFromRequest(request);
-  const currentState = await loadGoogleConnectorState(options, scope);
-  const connection = findRouteConnection(currentState, input.value.connectionId);
 
   if (!connection) {
     return jsonResponse({ data: adapterResult.data }, 202);
