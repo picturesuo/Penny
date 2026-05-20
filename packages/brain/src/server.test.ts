@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createPennyServer, guardApiRequest } from "./server.ts";
+import {
+  assertValidPennyStartupEnvironment,
+  createPennyServer,
+  guardApiRequest,
+  PennyEnvironmentValidationError,
+  validatePennyStartupEnvironment,
+} from "./server.ts";
 
 const pennyEnvKeys = [
   "NODE_ENV",
+  "DATABASE_URL",
+  "PENNY_DEPLOY_ENV",
   "PENNY_API_TOKEN",
   "PENNY_AUTH_MODE",
   "PENNY_AUTH_FAILURE_RATE_LIMIT_MAX",
@@ -18,6 +26,8 @@ const pennyEnvKeys = [
   "PENNY_SESSION_MAX_AGE_SECONDS",
   "PENNY_SESSION_SECRET",
   "PENNY_TRUST_AUTH_HEADERS",
+  "PENNY_CREATE_MODEL_BACKED",
+  "XAI_API_KEY",
 ];
 
 test("API guard trusts scope headers in dev mode and mirrors Penny scope aliases", async () => {
@@ -262,6 +272,66 @@ test("API guard rate limits failed token attempts by client address", async () =
   );
 });
 
+test("startup env validation rejects unsafe strict deployment config", () => {
+  const result = validatePennyStartupEnvironment({
+    NODE_ENV: "production",
+    PENNY_DEPLOY_ENV: "staging",
+    DATABASE_URL: "postgresql://127.0.0.1:5432/penny",
+    PENNY_AUTH_MODE: "dev",
+    PENNY_API_TOKEN: "short",
+    PENNY_SESSION_SECRET: "short",
+    PENNY_CORS_ORIGINS: "*",
+    PENNY_TRUST_AUTH_HEADERS: "true",
+    PENNY_RATE_LIMIT_MAX: "0",
+    PENNY_CREATE_MODEL_BACKED: "true",
+  });
+
+  assert.equal(result.strict, true);
+  assert.deepEqual(
+    result.issues.map((issue) => issue.code).sort(),
+    [
+      "api_token_too_short",
+      "auth_mode_token_required",
+      "cors_wildcard_forbidden",
+      "database_url_local_in_strict_deploy",
+      "model_backed_missing_key",
+      "rate_limit_required",
+      "session_secret_required",
+      "trust_auth_headers_forbidden",
+    ],
+  );
+  assert.throws(() => assertValidPennyStartupEnvironment({
+    ...validStrictEnv(),
+    DATABASE_URL: "not-a-url",
+  }), PennyEnvironmentValidationError);
+});
+
+test("startup env validation accepts staged token auth with remote Postgres and model config", () => {
+  const result = assertValidPennyStartupEnvironment({
+    ...validStrictEnv(),
+    PENNY_CREATE_MODEL_BACKED: "true",
+    XAI_API_KEY: "xai-test-key",
+  });
+
+  assert.equal(result.deployTarget, "staging");
+  assert.equal(result.strict, true);
+  assert.deepEqual(result.issues, []);
+});
+
+test("startup env validation keeps local dev warnings explicit", () => {
+  const result = validatePennyStartupEnvironment({
+    NODE_ENV: "development",
+    DATABASE_URL: "postgresql://127.0.0.1:5432/penny",
+    PENNY_AUTH_MODE: "dev",
+    PENNY_CREATE_MODEL_BACKED: "false",
+  });
+
+  assert.equal(result.deployTarget, "local");
+  assert.equal(result.strict, false);
+  assert.deepEqual(result.issues, []);
+  assert.ok(result.warnings.some((warning) => warning.code === "dev_auth_enabled"));
+});
+
 function apiRequest(headers: HeadersInit = {}, method = "GET"): Request {
   return new Request("http://localhost/api/brain/documents", {
     method,
@@ -299,6 +369,19 @@ async function errorPayload(response: Response | undefined): Promise<{ error: { 
   assert.ok(response);
 
   return (await response.json()) as { error: { code: string; message: string } };
+}
+
+function validStrictEnv(): NodeJS.ProcessEnv {
+  return {
+    NODE_ENV: "production",
+    PENNY_DEPLOY_ENV: "staging",
+    DATABASE_URL: "postgresql://penny:secret@db.example.com:5432/penny?sslmode=require",
+    PENNY_AUTH_MODE: "token",
+    PENNY_API_TOKEN: "penny-api-token-with-at-least-32-chars",
+    PENNY_SESSION_SECRET: "penny-session-secret-with-at-least-32-chars",
+    PENNY_CORS_ORIGINS: "https://penny-alpha.example.com",
+    PENNY_CREATE_MODEL_BACKED: "false",
+  };
 }
 
 async function withPennyEnv(env: Record<string, string>, fn: () => Promise<void>): Promise<void> {
