@@ -333,6 +333,20 @@ test("startup env validation rejects database prep bypass in strict deploys", ()
   assert.ok(result.issues.some((issue) => issue.code === "database_prep_skip_forbidden"));
 });
 
+test("startup env validation allows explicit local in-memory startup without a database", () => {
+  const result = assertValidPennyStartupEnvironment({
+    NODE_ENV: "development",
+    PENNY_DEPLOY_ENV: "local",
+    DATABASE_URL: "",
+    PENNY_AUTH_MODE: "dev",
+    PENNY_SKIP_DATABASE_PREP: "true",
+  });
+
+  assert.equal(result.strict, false);
+  assert.deepEqual(result.issues, []);
+  assert.ok(result.warnings.some((warning) => warning.code === "database_url_missing_dev_fallback"));
+});
+
 test("missingPennySchemaTables reports dogfood-critical migration gaps", () => {
   assert.deepEqual(missingPennySchemaTables(requiredPennySchemaTables), []);
   assert.deepEqual(

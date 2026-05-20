@@ -1058,21 +1058,6 @@ export function createPennyServer(): ReturnType<typeof createServer> {
   });
 }
 
-export const server = createPennyServer();
-
-if (isMainModule()) {
-  try {
-    assertValidPennyStartupEnvironment();
-    await prepareDatabase();
-    server.listen(port, () => {
-      console.log(`Penny cockpit listening on http://localhost:${port}`);
-    });
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
-  }
-}
-
 function isMainModule(): boolean {
   const entrypoint = process.argv[1];
 
@@ -1111,6 +1096,21 @@ export function assertValidPennyStartupEnvironment(
   return result;
 }
 
+export const server = createPennyServer();
+
+if (isMainModule()) {
+  try {
+    assertValidPennyStartupEnvironment();
+    await prepareDatabase();
+    server.listen(port, () => {
+      console.log(`Penny cockpit listening on http://localhost:${port}`);
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
 export function validatePennyStartupEnvironment(
   env: NodeJS.ProcessEnv = process.env,
 ): PennyEnvironmentValidationResult {
@@ -1124,12 +1124,20 @@ export function validatePennyStartupEnvironment(
   const apiToken = env.PENNY_API_TOKEN?.trim() ?? "";
   const corsOrigins = env.PENNY_CORS_ORIGINS?.trim() ?? "";
   const modelBackedValue = env.PENNY_CREATE_MODEL_BACKED?.trim().toLowerCase();
+  const skipDatabasePrep = readEnvFlagFrom(env, "PENNY_SKIP_DATABASE_PREP", false);
 
   if (!databaseUrl) {
-    issues.push({
-      code: "database_url_required",
-      message: "DATABASE_URL is required before starting Penny.",
-    });
+    if (strict || !skipDatabasePrep) {
+      issues.push({
+        code: "database_url_required",
+        message: "DATABASE_URL is required before starting Penny.",
+      });
+    } else {
+      warnings.push({
+        code: "database_url_missing_dev_fallback",
+        message: "DATABASE_URL is not set; local dev will use in-memory services where available.",
+      });
+    }
   } else if (!isPostgresDatabaseUrl(databaseUrl)) {
     issues.push({
       code: "database_url_invalid",
@@ -1204,7 +1212,7 @@ export function validatePennyStartupEnvironment(
       });
     }
 
-    if (readEnvFlagFrom(env, "PENNY_SKIP_DATABASE_PREP", false)) {
+    if (skipDatabasePrep) {
       issues.push({
         code: "database_prep_skip_forbidden",
         message: "Strict deployments must not set PENNY_SKIP_DATABASE_PREP=true; run migrations and let startup verify the schema.",
