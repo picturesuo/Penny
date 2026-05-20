@@ -4,6 +4,7 @@ import { inflateRawSync } from "node:zlib";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import { createDbBrainRankerRecorder, type BrainRankerRecorder, type RecordBrainDevelopmentEventInput } from "./brain-ranker-persistence.ts";
 import { createPennyDb, type PennyDatabase } from "./db/client.ts";
 import {
   brainMemoryEdges,
@@ -623,7 +624,10 @@ export async function handleBrainSourceDeleteRequest(
   }
 }
 
-export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteService {
+export function createDbBrainMemoryService(
+  db: PennyDatabase,
+  rankerRecorder: BrainRankerRecorder | null = null,
+): BrainMemoryRouteService {
   return {
     async importSource(input, request) {
       const scope = scopeFromRequest(request);
@@ -801,6 +805,15 @@ export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteS
           return { job, profile: profileFromStore(scope, store) };
         });
 
+        if (rankerRecorder) {
+          await recordMemoryImportDevelopmentEvents(rankerRecorder, {
+            scope,
+            source: sourceWithCounts,
+            nodes,
+            occurredAt: now,
+          });
+        }
+
         return { job, profile };
       } catch (error) {
         const job: IngestionJob = {
@@ -890,7 +903,7 @@ export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteS
       const now = isoNow();
       const nowDate = new Date(now);
 
-      return db.transaction(async (tx) => {
+      const result = await db.transaction(async (tx) => {
         const [row] = await tx
           .select()
           .from(brainMemoryNodes)
@@ -932,6 +945,17 @@ export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteS
           profile: profileFromStore(scope, store),
         };
       });
+      if (result.reviewed && rankerRecorder) {
+        await recordMemoryReviewDevelopmentEvent(rankerRecorder, {
+          scope,
+          action: input.action,
+          nodeId,
+          memory: result.memory,
+          occurredAt: now,
+        });
+      }
+
+      return result;
     },
 
     async deleteSource(sourceId, request) {
@@ -952,7 +976,10 @@ export function createDbBrainMemoryService(db: PennyDatabase): BrainMemoryRouteS
   };
 }
 
-export function createInMemoryBrainMemoryService(stores = new Map<string, ScopeMemoryStore>()): BrainMemoryRouteService {
+export function createInMemoryBrainMemoryService(
+  stores = new Map<string, ScopeMemoryStore>(),
+  rankerRecorder: BrainRankerRecorder | null = null,
+): BrainMemoryRouteService {
   function storeForScope(scope: BrainScope): ScopeMemoryStore {
     const key = scopeKey(scope);
     const existing = stores.get(key);
@@ -1082,6 +1109,15 @@ export function createInMemoryBrainMemoryService(stores = new Map<string, ScopeM
         };
 
         store.jobs.set(job.id, job);
+        if (rankerRecorder) {
+          await recordMemoryImportDevelopmentEvents(rankerRecorder, {
+            scope,
+            source: sourceWithCounts,
+            nodes,
+            occurredAt: now,
+          });
+        }
+
         return { job, profile: profileFromStore(scope, store) };
       } catch (error) {
         const job: IngestionJob = {
@@ -1143,6 +1179,15 @@ export function createInMemoryBrainMemoryService(stores = new Map<string, ScopeM
       }
 
       rebuildProfileSignals(store, now);
+      if (rankerRecorder) {
+        await recordMemoryReviewDevelopmentEvent(rankerRecorder, {
+          scope,
+          action: input.action,
+          nodeId,
+          memory: reviewedMemory,
+          occurredAt: now,
+        });
+      }
 
       return {
         reviewed: true,
@@ -1190,6 +1235,99 @@ export async function retrieveBrainMemoryForCreate(input: {
   };
 }
 
+async function recordMemoryImportDevelopmentEvents(
+  rankerRecorder: BrainRankerRecorder,
+  input: {
+    scope: BrainScope;
+    source: SourceImport;
+    nodes: MemoryNode[];
+    occurredAt: string;
+  },
+): Promise<void> {
+  await rankerRecorder.recordDevelopmentEvent({
+    scope: input.scope,
+    kind: "source_imported",
+    explicitness: "explicit",
+    weight: 0.9,
+    memoryNodeIds: input.nodes.map((node) => node.id),
+    sourceReferenceIds: [input.source.id],
+    summary: `User imported ${input.source.label} into private Brain memory.`,
+    occurredAt: input.occurredAt,
+    payload: {
+      sourceId: input.source.id,
+      sourceKind: input.source.kind,
+      chunkCount: input.source.chunkCount,
+      memoryNodeCount: input.nodes.length,
+      rawRetention: input.source.privacy.rawRetention,
+    },
+  });
+
+  for (const node of input.nodes) {
+    await rankerRecorder.recordDevelopmentEvent({
+      scope: input.scope,
+      kind: "memory_extracted",
+      explicitness: "implicit",
+      weight: Math.max(0.35, Math.min(0.82, node.confidence)),
+      memoryNodeIds: [node.id],
+      sourceReferenceIds: [node.sourceId, ...node.chunkIds],
+      summary: `Brain extracted ${startCase(node.type)} memory: ${node.title}.`,
+      occurredAt: input.occurredAt,
+      payload: {
+        memoryType: node.type,
+        confidence: node.confidence,
+        evidenceLevel: node.evidenceLevel,
+        labelCount: node.labels.length,
+        tagCount: node.tags.length,
+      },
+    });
+  }
+}
+
+async function recordMemoryReviewDevelopmentEvent(
+  rankerRecorder: BrainRankerRecorder,
+  input: {
+    scope: BrainScope;
+    action: MemoryReviewAction;
+    nodeId: string;
+    memory: MemoryNode | null;
+    occurredAt: string;
+  },
+): Promise<void> {
+  const event = memoryReviewEventFor(input.action);
+
+  await rankerRecorder.recordDevelopmentEvent({
+    scope: input.scope,
+    kind: event.kind,
+    explicitness: "explicit",
+    weight: event.weight,
+    memoryNodeIds: [input.nodeId],
+    sourceReferenceIds: input.memory ? [input.memory.sourceId, ...input.memory.chunkIds] : [],
+    summary: input.memory ? `${event.summaryPrefix}: ${input.memory.title}.` : `${event.summaryPrefix}.`,
+    occurredAt: input.occurredAt,
+    payload: {
+      action: input.action,
+      memoryType: input.memory?.type ?? null,
+      confidence: input.memory?.confidence ?? null,
+      evidenceLevel: input.memory?.evidenceLevel ?? null,
+    },
+  });
+}
+
+function memoryReviewEventFor(action: MemoryReviewAction): Pick<RecordBrainDevelopmentEventInput, "kind" | "weight"> & {
+  summaryPrefix: string;
+} {
+  switch (action) {
+    case "correct":
+      return { kind: "memory_confirmed", weight: 0.96, summaryPrefix: "User confirmed Brain memory" };
+    case "boost":
+      return { kind: "memory_boosted", weight: 0.9, summaryPrefix: "User boosted Brain memory" };
+    case "wrong":
+      return { kind: "memory_wrong", weight: 0.96, summaryPrefix: "User marked Brain memory wrong" };
+    case "forget":
+      return { kind: "memory_forgotten", weight: 0.96, summaryPrefix: "User forgot Brain memory" };
+  }
+}
+
 function resolveDefaultBrainMemoryService(): BrainMemoryRouteService {
   const databaseUrl = process.env.DATABASE_URL?.trim();
   const cacheKey = databaseUrl ? `db:${databaseUrl}` : `memory:${brainMemoryRuntimeKind()}`;
@@ -1199,7 +1337,9 @@ function resolveDefaultBrainMemoryService(): BrainMemoryRouteService {
   }
 
   if (databaseUrl) {
-    defaultBrainMemoryServiceCache = createDbBrainMemoryService(createPennyDb(databaseUrl));
+    const db = createPennyDb(databaseUrl);
+
+    defaultBrainMemoryServiceCache = createDbBrainMemoryService(db, createDbBrainRankerRecorder(db));
     defaultBrainMemoryServiceCacheKey = cacheKey;
     return defaultBrainMemoryServiceCache;
   }

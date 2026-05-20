@@ -16,6 +16,7 @@ import {
   type IngestionJob,
   type MemoryNodeType,
 } from "./brain-memory-route.ts";
+import type { BrainRankerRecorder, RecordBrainDevelopmentEventInput } from "./brain-ranker-persistence.ts";
 
 test("POST /api/brain/import stores private source chunks, memory nodes, edges, and profile signals", async () => {
   const service = createInMemoryBrainMemoryService();
@@ -118,6 +119,59 @@ test("Brain memory profile exposes high-value, stale, superseded, and activity s
   assert.ok(profile.profile.supersededMemories.some((node) => node.id === older.id));
   assert.ok(profile.profile.ideaClusters.some((cluster) => cluster.currentMemoryNodeId === newer.id && cluster.supersededMemoryNodeIds.includes(older.id)));
   assert.ok(profile.profile.recentMeaningfulActivity.some((activity) => activity.kind === "memory_confirmed" && activity.memoryNodeIds.includes(newer.id)));
+});
+
+test("Brain memory import and review actions record development events", async () => {
+  const events: RecordBrainDevelopmentEventInput[] = [];
+  const rankerRecorder: BrainRankerRecorder = {
+    async recordCreateRankerRun() {
+      throw new Error("Brain memory should not record Create ranker runs.");
+    },
+    async recordDevelopmentEvent(input) {
+      events.push(input);
+    },
+  };
+  const service = createInMemoryBrainMemoryService(new Map(), rankerRecorder);
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "text",
+      label: "Development event notes",
+      content:
+        "Project: Penny should record source imports and memory reviews. Preference: I prefer explicit review actions to weigh more than implicit extraction. Rejected direction: Avoid generic chatbot sidebars.",
+    }),
+    { service },
+  );
+  const importPayload = await responsePayload(importResponse);
+  const profile = importPayload.data.profile as BrainMemoryProfile;
+  const firstMemory = profile.recentMemoryNodes[0];
+  const secondMemory = profile.recentMemoryNodes[1];
+
+  assert.equal(importResponse.status, 200);
+  assert.ok(firstMemory);
+  assert.ok(secondMemory);
+  assert.ok(events.some((event) => event.kind === "source_imported" && event.explicitness === "explicit" && event.weight > 0.85));
+  assert.ok(events.some((event) => event.kind === "memory_extracted" && event.explicitness === "implicit" && event.weight < 0.85));
+
+  await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${firstMemory.id}/review`, { action: "boost" }),
+    firstMemory.id,
+    { service },
+  );
+  await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${firstMemory.id}/review`, { action: "wrong" }),
+    firstMemory.id,
+    { service },
+  );
+  await handleBrainMemoryReviewRequest(
+    jsonRequest(`http://localhost/api/brain/memories/${secondMemory.id}/review`, { action: "forget" }),
+    secondMemory.id,
+    { service },
+  );
+
+  assert.ok(events.some((event) => event.kind === "memory_boosted" && event.explicitness === "explicit" && event.weight > 0.85));
+  assert.ok(events.some((event) => event.kind === "memory_wrong" && event.explicitness === "explicit" && event.memoryNodeIds?.includes(firstMemory.id)));
+  assert.ok(events.some((event) => event.kind === "memory_forgotten" && event.explicitness === "explicit" && event.memoryNodeIds?.includes(secondMemory.id)));
+  assert.ok(events.every((event) => !("rawScore" in (event.payload ?? {}))));
 });
 
 test("Brain memory retrieval survives service reload when the backing store is retained", async () => {
