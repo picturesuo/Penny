@@ -8,10 +8,12 @@ import {
   handleGoogleConnectorSourceDeleteRequest,
   handleGoogleConnectorSyncCompleteRequest,
   handleGoogleConnectorSyncNowRequest,
+  handleGoogleConnectorSyncStatusRequest,
 } from "./google-connector-route.ts";
 import { createInMemoryBrainMemoryService } from "./brain-memory-route.ts";
 import { initializeGoogleConnectorConnection } from "./google-connector.ts";
 import type { ConnectorCredentialRef, NangoAdapter, NangoConnectSessionInput, NangoStartSyncInput } from "./google-connector.ts";
+import type { BrainRankerRecorder, RecordBrainDevelopmentEventInput } from "./brain-ranker-persistence.ts";
 import { createInMemoryGoogleConnectorStateStore } from "./google-connector-state-store.ts";
 
 const configuredEnv = {
@@ -320,6 +322,53 @@ test("POST /api/connectors/google/sync-now marks persisted surfaces as syncing",
   assert.equal(payload.data.state.syncJobs.some((job) => job.surface === "google_drive" && job.status === "running"), true);
 });
 
+test("GET /api/connectors/google/sync-status returns mocked Nango sync status", async () => {
+  let captured: { connectionId: string; providerConfigKey: string; syncNames?: readonly string[] } | null = null;
+  const adapter = fakeAdapter({
+    async getSyncStatus(input) {
+      captured = input;
+
+      return {
+        ok: true,
+        data: {
+          syncs: [
+            {
+              id: "sync-drive",
+              name: "google-drive-files",
+              status: "syncing",
+              finishedAt: null,
+              nextScheduledSyncAt: "2026-05-20T18:10:00.000Z",
+              recordCount: { google_doc: 2 },
+            },
+          ],
+        },
+      };
+    },
+  });
+  const response = await handleGoogleConnectorSyncStatusRequest(
+    new Request(
+      "http://localhost/api/connectors/google/sync-status?connectionId=nango-google-1&providerConfigKey=google&syncNames=google-drive-files",
+      {
+        method: "GET",
+      },
+    ),
+    { adapter, stateStore: createInMemoryGoogleConnectorStateStore() },
+  );
+  const payload = (await response.json()) as {
+    data: { syncs: Array<{ name: string; status: string; recordCount: Record<string, number> }> };
+  };
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(captured, {
+    connectionId: "nango-google-1",
+    providerConfigKey: "google",
+    syncNames: ["google-drive-files"],
+  });
+  assert.equal(payload.data.syncs[0]?.name, "google-drive-files");
+  assert.equal(payload.data.syncs[0]?.status, "syncing");
+  assert.equal(payload.data.syncs[0]?.recordCount.google_doc, 2);
+});
+
 test("POST /api/connectors/google/revoke marks persisted connection revoked", async () => {
   const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
   const state = initializeGoogleConnectorConnection({
@@ -386,7 +435,16 @@ test("POST /api/connectors/google/sync-complete imports Google records into priv
     now: "2026-05-20T12:00:00.000Z",
   });
   const stateStore = createInMemoryGoogleConnectorStateStore(state);
-  const brainMemoryService = createInMemoryBrainMemoryService();
+  const events: RecordBrainDevelopmentEventInput[] = [];
+  const rankerRecorder: BrainRankerRecorder = {
+    async recordCreateRankerRun() {
+      throw new Error("Google connector sync should not record Create ranker runs.");
+    },
+    async recordDevelopmentEvent(input) {
+      events.push(input);
+    },
+  };
+  const brainMemoryService = createInMemoryBrainMemoryService(new Map(), rankerRecorder);
   const response = await handleGoogleConnectorSyncCompleteRequest(
     new Request("http://localhost/api/connectors/google/sync-complete", {
       method: "POST",
@@ -424,7 +482,16 @@ test("POST /api/connectors/google/sync-complete imports Google records into priv
       importedSources: Array<{ brainSourceId: string; memoryNodeCount: number }>;
       state: {
         connections: Array<{ lastSyncedAt: string | null; sourceCounts: Record<string, number> }>;
-        sources: Array<{ brainSourceId: string | null; brainNodeIds: string[]; privacy: { retrievalAccess: string } }>;
+        sources: Array<{
+          brainSourceId: string | null;
+          brainNodeIds: string[];
+          privacy: { retrievalAccess: string; trainingUse: boolean; rawContentStored: boolean };
+          provenance: { credentialRef: string; cursor: string | null };
+          sourceRef: { providerId: string; surface: string; externalId: string; url: string | null };
+        }>;
+        cursors: Array<{ surface: string; cursor: string | null; lastSyncedAt: string | null; nextSyncAt: string | null }>;
+        syncJobs: Array<{ id: string; status: string; sourceCounts: Record<string, number> }>;
+        audits: Array<{ event: string; sourceId: string | null }>;
       };
     };
   };
@@ -442,8 +509,26 @@ test("POST /api/connectors/google/sync-complete imports Google records into priv
   assert.equal(payload.data.state.connections[0]?.lastSyncedAt, "2026-05-20T12:05:00.000Z");
   assert.equal(payload.data.state.connections[0]?.sourceCounts.google_doc, 1);
   assert.equal(payload.data.state.sources[0]?.brainSourceId, payload.data.importedSources[0]?.brainSourceId);
+  assert.ok((payload.data.state.sources[0]?.brainNodeIds.length ?? 0) >= 1);
+  assert.equal(payload.data.state.sources[0]?.privacy.trainingUse, false);
+  assert.equal(payload.data.state.sources[0]?.privacy.rawContentStored, false);
   assert.equal(payload.data.state.sources[0]?.privacy.retrievalAccess, "enabled");
+  assert.equal(payload.data.state.sources[0]?.provenance.credentialRef, "nango:google:nango-google-1");
+  assert.equal(payload.data.state.sources[0]?.provenance.cursor, "drive-cursor-2");
+  assert.equal(payload.data.state.sources[0]?.sourceRef.providerId, "google");
+  assert.equal(payload.data.state.sources[0]?.sourceRef.externalId, "doc-1");
+  assert.equal(payload.data.state.cursors.find((cursor) => cursor.surface === "google_drive")?.cursor, "drive-cursor-2");
+  assert.equal(payload.data.state.syncJobs.find((job) => job.id === state.syncJobs[0]?.id)?.status, "succeeded");
+  assert.equal(payload.data.state.syncJobs.find((job) => job.id === state.syncJobs[0]?.id)?.sourceCounts.google_doc, 1);
+  assert.ok(payload.data.state.audits.some((audit) => audit.event === "connector.sync_completed"));
+  assert.ok(payload.data.state.audits.some((audit) => audit.event === "connector.source_indexed" && audit.sourceId));
   assert.equal(profile.sources.some((source) => source.sourceUri === "google-drive:file:doc-1"), true);
+  assert.equal(profile.sources.find((source) => source.sourceUri === "google-drive:file:doc-1")?.privacy.rawRetention, false);
+  assert.equal(profile.sources.find((source) => source.sourceUri === "google-drive:file:doc-1")?.privacy.trainingUse, false);
+  assert.ok(profile.recentMemoryNodes.some((node) => node.sourceId === payload.data.importedSources[0]?.brainSourceId));
+  assert.ok(profile.profile.recentMeaningfulActivity.some((activity) => activity.kind === "source_synced" && activity.label === "Synced Strategy doc"));
+  assert.ok(events.some((event) => event.kind === "source_synced" && event.payload?.sourceUri === "google-drive:file:doc-1"));
+  assert.equal(events.some((event) => event.kind === "source_imported"), false);
 });
 
 test("POST /api/connectors/google/sync-complete rejects source refs without content", async () => {
