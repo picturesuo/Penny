@@ -174,6 +174,39 @@ test("Brain memory import and review actions record development events", async (
   assert.ok(events.every((event) => !("rawScore" in (event.payload ?? {}))));
 });
 
+test("Brain memory sync imports record source synced development events", async () => {
+  const events: RecordBrainDevelopmentEventInput[] = [];
+  const rankerRecorder: BrainRankerRecorder = {
+    async recordCreateRankerRun() {
+      throw new Error("Brain memory should not record Create ranker runs.");
+    },
+    async recordDevelopmentEvent(input) {
+      events.push(input);
+    },
+  };
+  const service = createInMemoryBrainMemoryService(new Map(), rankerRecorder);
+  const response = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "docs_text",
+      label: "Strategy doc",
+      sourceUri: "google-drive:file:doc-1",
+      content:
+        "Project: Penny should use selected Google Docs as private source-backed memory. Preference: keep connector claims honest and provenance visible.",
+    }),
+    { service },
+  );
+  const payload = await responsePayload(response);
+  const profile = payload.data.profile as BrainMemoryProfile;
+  const syncedEvent = events.find((event) => event.kind === "source_synced");
+
+  assert.equal(response.status, 200);
+  assert.ok(syncedEvent);
+  assert.equal(syncedEvent.explicitness, "implicit");
+  assert.equal(syncedEvent.payload?.sourceUri, "google-drive:file:doc-1");
+  assert.equal(events.some((event) => event.kind === "source_imported"), false);
+  assert.ok(profile.profile.recentMeaningfulActivity.some((activity) => activity.kind === "source_synced" && activity.label === "Synced Strategy doc"));
+});
+
 test("Brain memory retrieval survives service reload when the backing store is retained", async () => {
   const backing = new Map() as Parameters<typeof createInMemoryBrainMemoryService>[0];
   const importingService = createInMemoryBrainMemoryService(backing);
