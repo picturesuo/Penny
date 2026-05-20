@@ -25,6 +25,7 @@
 - Durable project fact: export has an open JSON, Markdown, and CSV schema with a portability guarantee for user-owned data.
 - Durable project fact: speed-critical AI workflow should keep local graph/ranking paths provider-free, give every provider-backed operation a latency class, context budget, timeout, and BrainRun speed metadata, and treat Gemini-style streaming or reasoning controls as provider-route details behind schema validation.
 - Durable product fact: `docs/private-working-memory-engine-strategy.md` is the current strategy spec for Penny as a private working-memory engine. Connector, memory, retrieval, privacy, and training work should follow that spec while preserving the MVP guardrail against broad ingestion before the seed-to-challenge-to-learn-to-artifact loop works end to end.
+- Durable deployment fact: dogfood/private-alpha deployments require strict env validation, safe structured logs, scoped Create export feedback capture, and Brain import size caps before use with real private material.
 
 ## Supermemory Understanding
 - Last updated: 2026-04-27.

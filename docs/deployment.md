@@ -57,13 +57,19 @@ Private alpha or production-like staging:
 
 ```sh
 NODE_ENV=production
+PENNY_DEPLOY_ENV=private-alpha
 DATABASE_URL=postgresql://<user>:<password>@<host>:5432/<database>?sslmode=require
 PENNY_AUTH_MODE=token
-PENNY_API_TOKEN=<long-random-token>
-PENNY_SESSION_SECRET=<long-random-secret>
+PENNY_API_TOKEN=<32+-character-random-token>
+PENNY_SESSION_SECRET=<32+-character-random-secret>
 PENNY_CORS_ORIGINS=https://<alpha-host>
+PENNY_RATE_LIMIT_MAX=120
+PENNY_TRUST_AUTH_HEADERS=false
+PENNY_STRUCTURED_LOGS=true
 PENNY_CREATE_MODEL_BACKED=false
 ```
+
+Startup validation is strict when `NODE_ENV=production` or `PENNY_DEPLOY_ENV` is `staging`, `production`, or `private-alpha`. Strict startup refuses dev auth, missing/short tokens, missing/short session secrets, wildcard CORS, local/non-Postgres database URLs, disabled rate limits, trusted auth headers, and model-backed Create without `XAI_API_KEY`.
 
 Optional provider environment:
 
@@ -98,7 +104,7 @@ Startup migration behavior:
 - Production defaults to no auto-migrate unless `PENNY_AUTO_MIGRATE=true`.
 - `PENNY_SKIP_DATABASE_PREP=true` skips startup prep. Do not use it to bypass `DATABASE_URL` for private alpha.
 
-The Brain memory persistence migration is `drizzle/0029_add_brain_memory_persistence.sql`.
+The Brain memory persistence migration is `drizzle/0029_add_brain_memory_persistence.sql`. Create export feedback is stored by `drizzle/0030_add_create_export_feedback.sql`.
 
 ## Auth And CORS
 
@@ -113,6 +119,27 @@ PENNY_SESSION_SECRET=<long-random-secret>
 `PENNY_TRUST_AUTH_HEADERS=true` should stay off unless a trusted reverse proxy owns user/workspace identity. In token mode, caller-supplied scope headers are ignored unless this flag is explicitly enabled.
 
 Set `PENNY_CORS_ORIGINS` to the exact frontend origin for staging/production. Avoid `*` for private alpha.
+
+## Observability And Privacy
+
+Structured JSON logs are enabled by default for `PENNY_DEPLOY_ENV=staging`, `private-alpha`, or `production`, and can be forced with `PENNY_STRUCTURED_LOGS=true`.
+
+Logged events intentionally keep raw private text out of payloads:
+
+- `auth.failure`
+- `brain.import`, `brain.retrieve`, `brain.memory_review`, `brain.source_delete`
+- `create.generate`, `create.model_fallback`, `create.schema_validation_failure`, `create.prompt_export`
+
+Operational payloads include status, ids, counts, provider mode, schema status, and export quality counts. They do not include imported source text, retrieval queries, prompt text, token values, comments, or excerpts.
+
+Brain import dogfood limits:
+
+- Request body text fields are capped at 2,000,000 characters.
+- Normalized import text is capped at 650,000 characters.
+- Imports that would create more than 450 chunks return a failed import job with guidance.
+- ZIP imports inspect at most 200 files and reject a readable entry above 650,000 characters.
+
+Post-export Create feedback is scoped and durable in `create_export_feedback`. It stores artifact/export ids, rating, reason tags, optional clipped comment, prompt completeness score, and scope columns.
 
 ## Production Blockers
 
@@ -138,4 +165,6 @@ After deploy:
 6. Generate five cards.
 7. Select two or more cards, add a comment, and update the artifact.
 8. Export the coding-agent prompt.
-9. Confirm the exported prompt includes personal context, source/memory evidence, selected option history, acceptance tests, do-not-break list, and definition of done.
+9. Save Useful or Not useful export feedback with reason tags.
+10. Confirm the exported prompt includes personal context, source/memory evidence, selected option history, acceptance tests, do-not-break list, and definition of done.
+11. Confirm structured logs show the import, Create generation, prompt export, and auth failure events without raw private content.
