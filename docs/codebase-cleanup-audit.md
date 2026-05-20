@@ -28,8 +28,9 @@ Completed during this cleanup pass:
 - Removed the old `/api/check` backend route stack, matching frontend client methods/types, and stale URL assertions.
 - Updated stale user-facing docs from visible Check-mode wording to Create/Challenge/Verify wording.
 - Focused route/client tests passed after the `/api/check` deletion: `pnpm exec tsx --test packages/brain/frontend/test/brainClient.test.ts packages/brain/src/server.test.ts packages/brain/src/p3-route-preservation.test.ts`.
-- Frontend typecheck passed after the deletion: `pnpm exec tsc --noEmit --pretty false -p packages/brain/frontend/tsconfig.json`.
-- Root `pnpm exec tsc --noEmit --pretty false` currently fails in unrelated Google connector files: `packages/brain/src/google-connector-route.test.ts` and `packages/brain/src/google-connector-state-store.ts`.
+- Full `pnpm typecheck` passed after the cleanup and connector follow-up commits landed.
+- Full `pnpm test` passed with 433 tests.
+- `pnpm build` passed and refreshed the tracked frontend bundle.
 
 ## File Inventory Inspected
 
@@ -126,7 +127,7 @@ Generated frontend build:
 
 - `packages/brain/public/index.html` - keep generated
 - `packages/brain/public/assets/index-5JCTnHvx.css` - keep generated, do not hand-edit
-- `packages/brain/public/assets/index-SBu5XnJ3.js` - keep generated, do not hand-edit
+- `packages/brain/public/assets/index-Bvp6x9vC.js` - keep generated, do not hand-edit
 
 Backend production source:
 
@@ -240,7 +241,7 @@ Completed change:
 - Remove unused Check client methods/types and their URL assertions from the frontend.
 - Verified no remaining code references with `rg` across backend source, frontend source, and frontend tests.
 - Focused route/client tests and frontend typecheck passed.
-- Full root typecheck is still blocked by unrelated Google connector exact-optional-property errors.
+- Full `pnpm typecheck`, `pnpm test`, and `pnpm build` passed after the cleanup and connector follow-up commits landed.
 
 ### Visible mode label `Check`
 
@@ -352,8 +353,8 @@ Proposed change:
 3. Done: update stale user-facing Check docs and generated Create artifact copy.
 4. Done: rename `CheckWorkspace` to `CreateWorkspace` without changing behavior.
 5. Done: remove the old `/api/check` backend/client stack after focused tests and frontend typecheck passed.
-6. Pending: rebuild public assets once the unrelated dirty BrainWorkspace/Google connector work is settled or intentionally included.
-7. Pending: run full `pnpm test` and `pnpm build`; root `pnpm exec tsc --noEmit --pretty false` currently fails in unrelated Google connector files.
+6. Done: rebuilt public assets and committed the generated bundle refresh.
+7. Done: full `pnpm typecheck`, `pnpm test`, and `pnpm build` pass.
 8. Done: dead `/api/check` code references are gone; remaining doc/code `Check` hits are ordinary verbs, Learn quick-check copy, or internal critique semantics rather than visible mode labels.
 
 ## Current Proposed Changes By Classification
