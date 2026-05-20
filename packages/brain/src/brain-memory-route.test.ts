@@ -52,6 +52,10 @@ test("POST /api/brain/import stores private source chunks, memory nodes, edges, 
   assert.ok(profile.profile.commonFrustrations.length >= 1);
   assert.ok(profile.profile.preferredBuildStyle.length >= 1);
   assert.ok(profile.profile.repeatedRejectedDirections.length >= 1);
+  assert.ok(profile.profile.activeProjects.length >= 1);
+  assert.ok(profile.profile.ideaClusters.length >= 1);
+  assert.ok(profile.profile.highValueMemories.length >= 1);
+  assert.ok(profile.profile.recentMeaningfulActivity.some((activity) => activity.kind === "source_imported"));
   assert.ok(hasNodeType(profile, "goal"));
   assert.ok(hasNodeType(profile, "preference"));
   assert.ok(hasNodeType(profile, "frustration"));
@@ -66,6 +70,54 @@ test("POST /api/brain/import stores private source chunks, memory nodes, edges, 
 
   assert.equal(jobResponse.status, 200);
   assert.equal(jobPayload.data.job.id, job.id);
+});
+
+test("Brain memory profile exposes high-value, stale, superseded, and activity sections", async () => {
+  const backing = new Map() as NonNullable<Parameters<typeof createInMemoryBrainMemoryService>[0]>;
+  const service = createInMemoryBrainMemoryService(backing);
+  const importResponse = await handleBrainImportRequest(
+    jsonRequest("http://localhost/api/brain/import", {
+      kind: "text",
+      label: "Profile ranker notes",
+      content:
+        "Preference: I prefer source-backed Create cards with visible proof. Preference: I prefer source-backed Create cards before polish. Project: Penny Create should rank memory into one next-best move. Rejected direction: Avoid generic chatbot sidebars.",
+    }),
+    { service },
+  );
+  const importPayload = await responsePayload(importResponse);
+  const importedProfile = importPayload.data.profile as BrainMemoryProfile;
+  const store = [...backing.values()][0];
+  const sourceBackedNodes = [...(store?.nodes.values() ?? [])].filter((node) => /source-backed Create cards/i.test(node.summary));
+
+  assert.equal(importResponse.status, 200);
+  assert.ok(importedProfile.profile.highValueMemories.length >= 1);
+  assert.ok(store);
+  assert.ok(sourceBackedNodes.length >= 2);
+
+  const older = sourceBackedNodes[0]!;
+  const newer = sourceBackedNodes[1]!;
+  store.nodes.set(older.id, {
+    ...older,
+    confidence: 0.62,
+    lastSeenAt: "2025-01-01T00:00:00.000Z",
+  });
+  store.nodes.set(newer.id, {
+    ...newer,
+    confidence: 0.97,
+    evidenceLevel: "user_confirmed",
+    lastSeenAt: "2026-05-20T12:00:00.000Z",
+  });
+
+  const response = await handleBrainMemoryProfileRequest(getRequest("http://localhost/api/brain/memory/profile"), { service });
+  const payload = await responsePayload(response);
+  const profile = payload.data as BrainMemoryProfile;
+
+  assert.equal(response.status, 200);
+  assert.ok(profile.profile.highValueMemories.some((node) => node.id === newer.id));
+  assert.ok(profile.profile.staleMemories.some((node) => node.id === older.id));
+  assert.ok(profile.profile.supersededMemories.some((node) => node.id === older.id));
+  assert.ok(profile.profile.ideaClusters.some((cluster) => cluster.currentMemoryNodeId === newer.id && cluster.supersededMemoryNodeIds.includes(older.id)));
+  assert.ok(profile.profile.recentMeaningfulActivity.some((activity) => activity.kind === "memory_confirmed" && activity.memoryNodeIds.includes(newer.id)));
 });
 
 test("Brain memory retrieval survives service reload when the backing store is retained", async () => {

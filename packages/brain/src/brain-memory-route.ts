@@ -139,6 +139,27 @@ export type UserProfileSignal = {
   updatedAt: string;
 };
 
+export type BrainProfileIdeaCluster = {
+  id: string;
+  label: string;
+  summary: string;
+  memoryNodeIds: string[];
+  currentMemoryNodeId: string | null;
+  supersededMemoryNodeIds: string[];
+  weight: number;
+  updatedAt: string;
+};
+
+export type BrainProfileRecentActivity = {
+  id: string;
+  kind: "source_imported" | "memory_extracted" | "memory_confirmed" | "memory_boosted";
+  label: string;
+  summary: string;
+  occurredAt: string;
+  sourceId: string | null;
+  memoryNodeIds: string[];
+};
+
 export type IngestionJob = {
   id: string;
   status: "completed" | "failed";
@@ -196,10 +217,16 @@ export type BrainMemoryProfile = {
   profile: {
     recurringInterests: UserProfileSignal[];
     activeIdeaClusters: UserProfileSignal[];
+    activeProjects: UserProfileSignal[];
     tasteSignals: UserProfileSignal[];
     commonFrustrations: UserProfileSignal[];
     preferredBuildStyle: UserProfileSignal[];
     repeatedRejectedDirections: UserProfileSignal[];
+    ideaClusters: BrainProfileIdeaCluster[];
+    highValueMemories: MemoryNode[];
+    staleMemories: MemoryNode[];
+    supersededMemories: MemoryNode[];
+    recentMeaningfulActivity: BrainProfileRecentActivity[];
     privacySafeSummary: string;
   };
   stats: {
@@ -2500,7 +2527,11 @@ function retrievalResultFromNode(node: MemoryNode, source: SourceImport, chunk: 
 
 function profileFromStore(scope: BrainScope, store: ScopeMemoryStore): BrainMemoryProfile {
   const signals = [...store.signals.values()].sort((left, right) => right.weight - left.weight || left.label.localeCompare(right.label));
-  const usableNodeIds = new Set(usableMemoryNodes(store).map((node) => node.id));
+  const usableNodes = usableMemoryNodes(store);
+  const usableNodeIds = new Set(usableNodes.map((node) => node.id));
+  const memoryEdges = [...store.edges.values()].filter((edge) => usableNodeIds.has(edge.fromNodeId) && usableNodeIds.has(edge.toNodeId));
+  const ideaClusters = profileIdeaClusters(usableNodes, memoryEdges);
+  const supersededMemoryNodeIds = new Set(ideaClusters.flatMap((cluster) => cluster.supersededMemoryNodeIds));
   const recentMemoryNodes = [...store.nodes.values()]
     .filter((node) => usableNodeIds.has(node.id))
     .sort((left, right) => Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt))
@@ -2508,7 +2539,6 @@ function profileFromStore(scope: BrainScope, store: ScopeMemoryStore): BrainMemo
   const sources = [...store.sources.values()]
     .map((source) => sourceWithPreview(source, store))
     .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
-  const memoryEdges = [...store.edges.values()].filter((edge) => usableNodeIds.has(edge.fromNodeId) && usableNodeIds.has(edge.toNodeId));
   const privacySafeSummary = buildPrivacySafeSummary(sources, signals);
 
   return {
@@ -2521,10 +2551,19 @@ function profileFromStore(scope: BrainScope, store: ScopeMemoryStore): BrainMemo
     profile: {
       recurringInterests: signals.filter((signal) => signal.kind === "recurring_interest").slice(0, 6),
       activeIdeaClusters: signals.filter((signal) => signal.kind === "active_idea_cluster").slice(0, 6),
+      activeProjects: signals.filter((signal) => signal.kind === "active_idea_cluster" && projectSignalSource(signal, store)).slice(0, 6),
       tasteSignals: signals.filter((signal) => signal.kind === "taste_signal").slice(0, 6),
       commonFrustrations: signals.filter((signal) => signal.kind === "common_frustration").slice(0, 6),
       preferredBuildStyle: signals.filter((signal) => signal.kind === "preferred_build_style").slice(0, 6),
       repeatedRejectedDirections: signals.filter((signal) => signal.kind === "repeated_rejected_direction").slice(0, 6),
+      ideaClusters,
+      highValueMemories: highValueProfileMemories(usableNodes, supersededMemoryNodeIds),
+      staleMemories: staleProfileMemories(usableNodes),
+      supersededMemories: usableNodes
+        .filter((node) => supersededMemoryNodeIds.has(node.id))
+        .sort(compareMemoryCurrency)
+        .slice(0, 12),
+      recentMeaningfulActivity: recentMeaningfulActivity(store, usableNodes),
       privacySafeSummary,
     },
     stats: {
@@ -2535,6 +2574,141 @@ function profileFromStore(scope: BrainScope, store: ScopeMemoryStore): BrainMemo
       profileSignalCount: store.signals.size,
     },
   };
+}
+
+function profileIdeaClusters(usableNodes: MemoryNode[], memoryEdges: MemoryEdge[]): BrainProfileIdeaCluster[] {
+  const byKey = new Map<string, MemoryNode[]>();
+
+  for (const node of usableNodes) {
+    const keys = profileClusterKeys(node);
+    for (const key of keys) {
+      byKey.set(key, [...(byKey.get(key) ?? []), node]);
+    }
+  }
+
+  for (const edge of memoryEdges.filter((item) => item.kind === "same_cluster" || item.kind === "related_to")) {
+    const left = usableNodes.find((node) => node.id === edge.fromNodeId);
+    const right = usableNodes.find((node) => node.id === edge.toNodeId);
+
+    if (!left || !right) {
+      continue;
+    }
+
+    const key = profileClusterKeys(left).find((candidate) => profileClusterKeys(right).includes(candidate)) ?? profileClusterKeys(left)[0];
+    if (!key) {
+      continue;
+    }
+
+    byKey.set(key, uniqueById([...(byKey.get(key) ?? []), left, right]));
+  }
+
+  return [...byKey.entries()]
+    .map(([key, nodes]) => {
+      const sorted = uniqueById(nodes).sort(compareMemoryCurrency);
+      const current = sorted[0] ?? null;
+      const projectLikeCount = sorted.filter((node) => node.type === "idea" || node.type === "project" || node.type === "goal").length;
+
+      return {
+        id: stableId("brain-profile-cluster", key),
+        label: startCase(key),
+        summary: `Cluster with ${sorted.length} memory node(s)${projectLikeCount ? ` and ${projectLikeCount} active project/idea signal(s)` : ""}.`,
+        memoryNodeIds: sorted.map((node) => node.id),
+        currentMemoryNodeId: current?.id ?? null,
+        supersededMemoryNodeIds: sorted.slice(1).map((node) => node.id),
+        weight: Math.min(1, sorted.reduce((sum, node) => sum + node.confidence, 0) / Math.max(sorted.length, 1)),
+        updatedAt: current?.lastSeenAt ?? current?.createdAt ?? new Date(0).toISOString(),
+      };
+    })
+    .filter((cluster) => cluster.memoryNodeIds.length >= 2 || cluster.summary.includes("active project/idea"))
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt) || right.weight - left.weight || left.label.localeCompare(right.label))
+    .slice(0, 12);
+}
+
+function profileClusterKeys(node: MemoryNode): string[] {
+  const typeKey = node.type === "idea" || node.type === "project" || node.type === "goal" ? "project" : node.type;
+  const tags = node.tags.filter((tag) => tag.length >= 4).slice(0, 3);
+
+  return tags.length ? tags.map((tag) => `${typeKey}:${tag}`) : [`${typeKey}:${clusterSafeKey(node.title).slice(0, 48) || node.id}`];
+}
+
+function highValueProfileMemories(usableNodes: MemoryNode[], supersededMemoryNodeIds: Set<string>): MemoryNode[] {
+  return usableNodes
+    .filter((node) => !supersededMemoryNodeIds.has(node.id))
+    .sort((left, right) => profileMemoryValue(right) - profileMemoryValue(left) || compareMemoryCurrency(left, right))
+    .slice(0, 10);
+}
+
+function staleProfileMemories(usableNodes: MemoryNode[]): MemoryNode[] {
+  const now = Date.now();
+  const ninetyDaysMs = 90 * 24 * 60 * 60 * 1_000;
+
+  return usableNodes
+    .filter((node) => now - Date.parse(node.lastSeenAt) >= ninetyDaysMs)
+    .sort((left, right) => Date.parse(left.lastSeenAt) - Date.parse(right.lastSeenAt) || left.title.localeCompare(right.title))
+    .slice(0, 12);
+}
+
+function recentMeaningfulActivity(store: ScopeMemoryStore, usableNodes: MemoryNode[]): BrainProfileRecentActivity[] {
+  const sourceActivities = [...store.sources.values()].map((source) => ({
+    id: stableId("brain-profile-activity", "source_imported", source.id, source.createdAt),
+    kind: "source_imported" as const,
+    label: `Imported ${source.label}`,
+    summary: `${source.memoryNodeCount} memory node(s) extracted from ${source.kind}.`,
+    occurredAt: source.createdAt,
+    sourceId: source.id,
+    memoryNodeIds: usableNodes.filter((node) => node.sourceId === source.id).map((node) => node.id).slice(0, 12),
+  }));
+  const memoryActivities: BrainProfileRecentActivity[] = usableNodes.map((node) => {
+    const kind: BrainProfileRecentActivity["kind"] = node.evidenceLevel === "user_confirmed"
+      ? "memory_confirmed"
+      : node.confidence >= 0.9
+        ? "memory_boosted"
+        : "memory_extracted";
+
+    return {
+      id: stableId("brain-profile-activity", kind, node.id, node.lastSeenAt),
+      kind,
+      label: `${startCase(node.type)}: ${node.title}`,
+      summary: node.summary,
+      occurredAt: node.lastSeenAt,
+      sourceId: node.sourceId,
+      memoryNodeIds: [node.id],
+    };
+  });
+
+  return [...sourceActivities, ...memoryActivities]
+    .sort((left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt) || left.label.localeCompare(right.label))
+    .slice(0, 16);
+}
+
+function projectSignalSource(signal: UserProfileSignal, store: ScopeMemoryStore): boolean {
+  return signal.sourceNodeIds.some((nodeId) => {
+    const node = store.nodes.get(nodeId);
+
+    return node?.type === "idea" || node?.type === "project" || node?.type === "goal";
+  });
+}
+
+function clusterSafeKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function profileMemoryValue(node: MemoryNode): number {
+  const evidence = node.evidenceLevel === "user_confirmed" ? 0.35 : node.evidenceLevel === "grounded" ? 0.18 : 0.05;
+  const typeBoost = node.type === "preference" || node.type === "goal" || node.type === "project" || node.type === "rejected_direction" ? 0.18 : 0.08;
+  const recency = recencyScore(node.lastSeenAt) * 0.18;
+  const signalDensity = Math.min(0.18, (node.tags.length + node.labels.length) * 0.025);
+
+  return node.confidence * 0.46 + evidence + typeBoost + recency + signalDensity;
+}
+
+function compareMemoryCurrency(left: MemoryNode, right: MemoryNode): number {
+  return (
+    Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt)
+    || right.confidence - left.confidence
+    || Date.parse(right.createdAt) - Date.parse(left.createdAt)
+    || left.title.localeCompare(right.title)
+  );
 }
 
 function sourceWithPreview(source: SourceImport, store: ScopeMemoryStore): SourceImport {
