@@ -52,7 +52,7 @@ Strict startup validation should fail fast if private-alpha auth, CORS, rate lim
 
 1. Log in with the private access token.
 2. Open Brain and import one small text, markdown, ChatGPT, Claude, or already-extracted PDF-text source.
-3. Confirm the import job completes and the Brain profile shows source count, memory count, provenance, and `trainingUse=false` posture.
+3. Confirm the import job completes and the Brain profile shows source count, memory count, provenance, `trainingUse=false` posture, high-value memories, idea clusters, stale/superseded memory sections when present, and recent meaningful activity.
 4. Review at least two memories: mark one correct or boost it, and mark one wrong or forget it if appropriate.
 5. Start Create from Brain.
 6. Generate the five Create directions.
@@ -62,6 +62,7 @@ Strict startup validation should fail fast if private-alpha auth, CORS, rate lim
 10. Export the coding-agent prompt.
 11. Save export feedback as Useful or Not useful with at least one reason tag.
 12. Confirm logs contain `brain.import`, `brain.retrieve`, `create.generate`, and `create.prompt_export` events without raw private text.
+13. Confirm `brain_development_events` contains source import, memory extraction/review, memory-used-in-Create, option selection/rejection, prompt export, export feedback, and direction-change rows for the run.
 
 ## Import Limits
 
@@ -83,6 +84,8 @@ Stop the run and record the issue if:
 - Any log includes imported source text, retrieval query text, prompt text, token values, comments, or excerpts.
 - Create claims hidden Gmail/Slack/messages/OAuth/global training access.
 - Brain Ranker shows raw score dimensions to normal users.
+- Brain profile hides high-value, stale/superseded, or recent activity sections after meaningful import/review/Create actions.
+- `brain_development_events` does not record explicit review, judgment, export, or feedback actions.
 - A deleted source still appears in Create grounding.
 - Export feedback is not persisted or is visible across scopes.
 - `pnpm test`, `pnpm typecheck`, or `pnpm build` fails after the run.
