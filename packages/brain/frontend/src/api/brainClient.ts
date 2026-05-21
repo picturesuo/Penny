@@ -361,6 +361,10 @@ export interface GoogleConnectorConnectSessionResponse {
     token: string;
     expiresAt: string;
     connectLink: string;
+    requestedSurfaceIds: string[];
+    requestableSurfaceIds: string[];
+    requestableScopeUrls: string[];
+    warnings: string[];
   };
 }
 
@@ -382,7 +386,7 @@ export async function createGoogleConnectorConnectSession(): Promise<GoogleConne
   const response = await fetch("/api/connectors/google/connect-session", {
     method: "POST",
     headers: requestHeaders(),
-    body: JSON.stringify({}),
+    body: JSON.stringify({ workspaceBundle: true }),
   });
   const payload = await readJson(response);
 
