@@ -475,6 +475,23 @@ export type NangoHttpClient = (request: NangoHttpRequest) => Promise<NangoHttpRe
 const defaultNangoBaseUrl = "https://api.nango.dev";
 const googleProviderConfigKey = "google";
 
+export const googleWorkspaceSurfaceIds = [
+  "google_gmail",
+  "google_drive",
+  "google_docs_sheets_slides",
+  "google_calendar",
+] as const satisfies readonly GoogleSurfaceId[];
+
+export const googleConnectorTagKeys = {
+  bundle: "penny_google_bundle",
+  surfaces: "penny_google_surfaces",
+  scopes: "penny_google_scopes",
+  userId: "penny_user_id",
+  workspaceId: "penny_workspace_id",
+  projectId: "penny_project_id",
+  sphereId: "penny_sphere_id",
+} as const;
+
 const baseGoogleScopeRegistry = [
   {
     id: "google.drive.file",
@@ -770,6 +787,40 @@ export function planGoogleScopeRequest(input: GoogleScopeRequest): GoogleScopeRe
     blockedScopes,
     warnings,
   };
+}
+
+export function googleSyncNamesForSurfaces(surfaceIds: readonly GoogleSurfaceId[]): string[] {
+  const syncNames: string[] = [];
+
+  for (const surfaceId of surfaceIds) {
+    switch (surfaceId) {
+      case "google_drive":
+      case "google_docs_sheets_slides":
+        syncNames.push("google-drive-files");
+        break;
+      case "google_calendar":
+        syncNames.push("google-calendar-events");
+        break;
+      case "google_gmail":
+        syncNames.push("google-gmail-messages");
+        break;
+      case "google_youtube":
+      case "google_takeout":
+      case "google_my_activity":
+      case "chrome_extension_history":
+        break;
+    }
+  }
+
+  return [...new Set(syncNames)];
+}
+
+export function googleSurfaceIdsForScopes(scopeUrls: readonly string[]): GoogleSurfaceId[] {
+  const surfaces = scopeUrls.flatMap((scopeUrl) =>
+    googleScopeRegistry.filter((scope) => scope.scope === scopeUrl).map((scope) => scope.surface),
+  );
+
+  return [...new Set(surfaces)];
 }
 
 export function initializeGoogleConnectorConnection(input: InitializeGoogleConnectionInput): GoogleConnectorState {
@@ -1084,7 +1135,12 @@ export function visibleConnectorSourcesForScope(
 }
 
 export function connectorSourceToBrainImport(source: ConnectorSource, content: string): ConnectorBrainImport {
-  const kind = source.kind === "google_sheet" ? "csv" : source.kind === "google_calendar_event" ? "text" : "docs_text";
+  const kind =
+    source.kind === "google_sheet"
+      ? "csv"
+      : source.kind === "google_calendar_event" || source.kind === "google_gmail_message"
+        ? "text"
+        : "docs_text";
 
   return {
     kind,
