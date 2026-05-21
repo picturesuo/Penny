@@ -2739,6 +2739,23 @@
     padding: 10px;
   }
 
+  .brain-memory-source:has(> input[type="radio"]) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    cursor: pointer;
+  }
+
+  .brain-memory-source:has(> input[type="radio"]) input {
+    margin: 2px 0 0;
+  }
+
+  .brain-memory-source.is-selected {
+    border-color: #111111;
+    background: #f8fbec;
+  }
+
   .brain-memory-source > div,
   .brain-memory-node {
     min-width: 0;
