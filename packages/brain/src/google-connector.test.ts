@@ -20,8 +20,6 @@ const configuredEnv = {
   ENABLE_GOOGLE_CONNECTOR: "true",
   NANGO_SECRET_KEY: "nango-secret",
   NANGO_BASE_URL: "https://api.nango.test",
-  GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
-  GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
 };
 
 test("Google connector provider shows an honest disabled state when the connector flag is off", () => {
@@ -45,17 +43,13 @@ test("Google connector provider shows not configured when env is incomplete", ()
   const provider = buildGoogleConnectorProvider({
     env: {
       ENABLE_GOOGLE_CONNECTOR: "true",
-      NANGO_SECRET_KEY: "nango-secret",
     },
   });
 
   assert.equal(provider.status, "unsupported");
   assert.equal(provider.configured, false);
   assert.equal(provider.configurationLabel, "not configured");
-  assert.deepEqual(provider.missingConfig, [
-    "GOOGLE_OAUTH_CLIENT_ID",
-    "GOOGLE_OAUTH_CLIENT_SECRET",
-  ]);
+  assert.deepEqual(provider.missingConfig, ["NANGO_SECRET_KEY"]);
   assert.equal(provider.surfaces.every((surface) => surface.status === "unsupported"), true);
 });
 

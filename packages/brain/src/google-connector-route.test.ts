@@ -22,8 +22,6 @@ const configuredEnv = {
   ENABLE_GOOGLE_CONNECTOR: "true",
   NANGO_SECRET_KEY: "nango-secret",
   NANGO_BASE_URL: "https://api.nango.test",
-  GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
-  GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
 };
 
 test("GET /api/connectors/google returns provider status without Nango calls", async () => {
