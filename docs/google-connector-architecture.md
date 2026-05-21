@@ -42,8 +42,6 @@ Required environment placeholders:
 
 - `NANGO_SECRET_KEY`
 - `NANGO_BASE_URL`
-- `GOOGLE_OAUTH_CLIENT_ID`
-- `GOOGLE_OAUTH_CLIENT_SECRET`
 - `ENABLE_GOOGLE_CONNECTOR`
 - `ENABLE_RESTRICTED_GOOGLE_SCOPES`
 - `ENABLE_GMAIL_CONNECTOR`
@@ -51,6 +49,7 @@ Required environment placeholders:
 Nango setup requirements:
 
 - The Google integration key must be `google`.
+- Google OAuth client ID and secret are configured inside Nango's Google integration, not Penny's `.env.local`.
 - The Google integration should request the scopes Penny needs for the Workspace bundle, starting with `gmail.readonly`, `drive.file`, and `calendar.readonly`.
 - The Nango environment webhook URL should point to Penny's `/api/connectors/google/nango-webhook` endpoint.
 - Webhook signature verification uses the `X-Nango-Hmac-Sha256` header and `NANGO_SECRET_KEY`.
