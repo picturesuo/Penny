@@ -90,6 +90,11 @@ type GoogleConnectorConnectionView = {
   credential: {
     connectionId: string;
     providerConfigKey: string;
+    credentialRef?: string;
+    accountId?: string;
+    accountEmail?: string;
+    accountLabel?: string;
+    endUserId?: string;
   };
 };
 
@@ -2501,8 +2506,8 @@ export function BrainMemoryPanel({
     applyGoogleConnectorResponse(response as unknown as GoogleConnectorProviderStateResponse);
   }
 
-  async function handleGoogleSyncNow() {
-    const connection = currentGoogleConnection(googleConnectorState);
+  async function handleGoogleSyncNow(connectionId: string) {
+    const connection = findGoogleConnection(googleConnectorState, connectionId);
 
     if (!connection || disabled || importing || googleStatus === "syncing") {
       return;
@@ -2530,8 +2535,8 @@ export function BrainMemoryPanel({
     }
   }
 
-  async function handleGoogleRevoke() {
-    const connection = currentGoogleConnection(googleConnectorState);
+  async function handleGoogleRevoke(connectionId: string) {
+    const connection = findGoogleConnection(googleConnectorState, connectionId);
 
     if (!connection || disabled || importing || googleStatus === "revoking") {
       return;
@@ -2730,21 +2735,26 @@ export function GoogleConnectorControl({
   connectLink: string | null;
   disabled: boolean;
   onConnect: () => Promise<void>;
-  onSyncNow: () => Promise<void>;
-  onRevoke: () => Promise<void>;
+  onSyncNow: (connectionId: string) => Promise<void>;
+  onRevoke: (connectionId: string) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
 }) {
   const visibleSurfaces = provider?.surfaces ?? [];
   const gmail = visibleSurfaces.find((surface) => surface.id === "google_gmail");
   const extension = visibleSurfaces.find((surface) => surface.id === "chrome_extension_history");
-  const connection = currentGoogleConnection(connectorState);
-  const latestJob = latestGoogleSyncJob(connectorState);
-  const enabledSources = connectorState.sources.filter((source) => source.privacy.retrievalAccess === "enabled");
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const connection = selectedGoogleConnection(connectorState, selectedConnectionId);
+  const latestJob = latestGoogleSyncJob(connectorState, connection?.id ?? null);
+  const enabledSources = connectorState.sources.filter(
+    (source) => source.privacy.retrievalAccess === "enabled" && (!connection || source.connectionId === connection.id),
+  );
   const deleteSource = enabledSources[0] ?? null;
-  const sourceCount = Object.values(connection?.sourceCounts ?? {}).reduce((total, count) => total + count, 0);
+  const sourceCount = connection ? googleConnectionSourceCount(connection) : 0;
+  const activeConnectionCount = connectorState.connections.filter((candidate) => candidate.status !== "revoked").length;
   const gmailReady = !gmail || gmail.status === "available" || gmail.status === "connected";
-  const canConnect = Boolean(provider?.configured) && !connection && status !== "connecting" && !disabled;
-  const connectLabel = gmailReady ? "Connect Google Workspace" : "Connect available Google";
+  const canConnect = Boolean(provider?.configured) && status !== "connecting" && !disabled;
+  const connectLabel =
+    connectorState.connections.length > 0 ? "Add Google account" : gmailReady ? "Connect Google Workspace" : "Connect available Google";
   const canSync = Boolean(connection && connection.status !== "revoked") && status !== "syncing" && !disabled;
   const canRevoke = Boolean(connection && connection.status !== "revoked") && status !== "revoking" && !disabled;
   const canDelete = Boolean(deleteSource) && status !== "deleting" && !disabled;
@@ -2753,13 +2763,19 @@ export function GoogleConnectorControl({
     <section className="brain-memory-card" aria-label="Google Workspace connector">
       <div className="brain-memory-card-head">
         <strong>Google Workspace</strong>
-        <span>{connection ? formatLabel(connection.status) : provider ? formatLabel(provider.configurationLabel) : formatLabel(status)}</span>
+        <span>
+          {connectorState.connections.length
+            ? `${activeConnectionCount} active`
+            : provider
+              ? formatLabel(provider.configurationLabel)
+              : formatLabel(status)}
+        </span>
       </div>
       <p className="brain-memory-muted">
         {connection
-          ? `${connection.surfaces.map(formatLabel).join(", ")} connected for private Brain sources.`
+          ? `${googleConnectionAccountLabel(connection)}: ${connection.surfaces.map(formatLabel).join(", ")} connected for private Brain sources.`
           : provider?.configured
-          ? "One Google consent flow can connect Gmail, Drive files, Docs, and Calendar for private Brain sources."
+          ? "Connect one or more Google accounts for private Brain sources."
           : "Google connector is not configured for this environment."}
       </p>
       {connection ? (
@@ -2771,6 +2787,33 @@ export function GoogleConnectorControl({
             Last synced {formatNullableDate(connection.lastSyncedAt)} · Next sync {formatNullableDate(connection.nextSyncAt)}
           </span>
           {latestJob ? <span>{`${formatLabel(latestJob.surface)} ${formatLabel(latestJob.status)}`}</span> : null}
+        </div>
+      ) : null}
+      {connectorState.connections.length ? (
+        <div className="brain-memory-source-list" aria-label="Connected Google accounts">
+          {connectorState.connections.map((candidate) => {
+            const selected = connection?.id === candidate.id;
+            const candidateSourceCount = googleConnectionSourceCount(candidate);
+
+            return (
+              <label key={candidate.id} className={`brain-memory-source${selected ? " is-selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="google-connector-connection"
+                  checked={selected}
+                  disabled={disabled}
+                  onChange={() => setSelectedConnectionId(candidate.id)}
+                />
+                <div>
+                  <strong>{googleConnectionAccountLabel(candidate)}</strong>
+                  <span>
+                    {formatLabel(candidate.status)} · {candidateSourceCount} source{candidateSourceCount === 1 ? "" : "s"}
+                  </span>
+                  <small>{candidate.credential.connectionId}</small>
+                </div>
+              </label>
+            );
+          })}
         </div>
       ) : null}
       {provider?.missingConfig.length ? (
@@ -2794,13 +2837,31 @@ export function GoogleConnectorControl({
         </div>
         <button type="button" className="primary-command" disabled={!canConnect} onClick={() => void onConnect()}>
           <FolderPlus size={15} aria-hidden="true" />
-          <span>{status === "connecting" ? "Connecting..." : connection ? "Connected" : connectLabel}</span>
+          <span>{status === "connecting" ? "Connecting..." : connectLabel}</span>
         </button>
-        <button type="button" className="secondary-command" disabled={!canSync} onClick={() => void onSyncNow()}>
+        <button
+          type="button"
+          className="secondary-command"
+          disabled={!canSync}
+          onClick={() => {
+            if (connection) {
+              void onSyncNow(connection.id);
+            }
+          }}
+        >
           <Zap size={15} aria-hidden="true" />
           <span>{status === "syncing" ? "Syncing..." : "Sync now"}</span>
         </button>
-        <button type="button" className="secondary-command" disabled={!canRevoke} onClick={() => void onRevoke()}>
+        <button
+          type="button"
+          className="secondary-command"
+          disabled={!canRevoke}
+          onClick={() => {
+            if (connection) {
+              void onRevoke(connection.id);
+            }
+          }}
+        >
           <XCircle size={15} aria-hidden="true" />
           <span>{status === "revoking" ? "Revoking..." : "Revoke"}</span>
         </button>
@@ -2859,16 +2920,38 @@ function normalizeGoogleConnectorState(state: GoogleConnectorStateView | undefin
   };
 }
 
-function currentGoogleConnection(state: GoogleConnectorStateView): GoogleConnectorConnectionView | null {
+function selectedGoogleConnection(state: GoogleConnectorStateView, selectedConnectionId: string | null): GoogleConnectorConnectionView | null {
+  const selected = selectedConnectionId ? findGoogleConnection(state, selectedConnectionId) : null;
+
+  return selected ?? state.connections.find((connection) => connection.status !== "revoked") ?? state.connections[0] ?? null;
+}
+
+function findGoogleConnection(state: GoogleConnectorStateView, connectionId: string): GoogleConnectorConnectionView | null {
   return (
-    state.connections.find((connection) => connection.status !== "revoked") ??
-    state.connections.find((connection) => connection.status === "revoked") ??
-    null
+    state.connections.find(
+      (connection) => connection.id === connectionId || connection.credential.connectionId === connectionId,
+    ) ?? null
   );
 }
 
-function latestGoogleSyncJob(state: GoogleConnectorStateView): GoogleConnectorSyncJobView | null {
-  return [...state.syncJobs].sort((left, right) => Date.parse(right.requestedAt) - Date.parse(left.requestedAt))[0] ?? null;
+function latestGoogleSyncJob(state: GoogleConnectorStateView, connectionId: string | null): GoogleConnectorSyncJobView | null {
+  const jobs = connectionId ? state.syncJobs.filter((job) => job.connectionId === connectionId) : state.syncJobs;
+
+  return [...jobs].sort((left, right) => Date.parse(right.requestedAt) - Date.parse(left.requestedAt))[0] ?? null;
+}
+
+function googleConnectionSourceCount(connection: GoogleConnectorConnectionView): number {
+  return Object.values(connection.sourceCounts ?? {}).reduce((total, count) => total + count, 0);
+}
+
+function googleConnectionAccountLabel(connection: GoogleConnectorConnectionView): string {
+  return (
+    connection.credential.accountEmail?.trim() ||
+    connection.credential.accountLabel?.trim() ||
+    connection.credential.accountId?.trim() ||
+    connection.credential.endUserId?.trim() ||
+    connection.credential.connectionId
+  );
 }
 
 async function postGoogleConnectorAction(
