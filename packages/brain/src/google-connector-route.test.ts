@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import test from "node:test";
 import {
   handleGoogleConnectorCallbackRequest,
   handleGoogleConnectorConnectSessionRequest,
+  handleGoogleConnectorNangoWebhookRequest,
   handleGoogleConnectorProviderRequest,
   handleGoogleConnectorRevokeRequest,
   handleGoogleConnectorSourceDeleteRequest,
@@ -11,7 +13,7 @@ import {
   handleGoogleConnectorSyncStatusRequest,
 } from "./google-connector-route.ts";
 import { createInMemoryBrainMemoryService } from "./brain-memory-route.ts";
-import { initializeGoogleConnectorConnection } from "./google-connector.ts";
+import { googleConnectorTagKeys, initializeGoogleConnectorConnection } from "./google-connector.ts";
 import type { ConnectorCredentialRef, NangoAdapter, NangoConnectSessionInput, NangoStartSyncInput } from "./google-connector.ts";
 import type { BrainRankerRecorder, RecordBrainDevelopmentEventInput } from "./brain-ranker-persistence.ts";
 import { createInMemoryGoogleConnectorStateStore } from "./google-connector-state-store.ts";
@@ -119,15 +121,27 @@ test("POST /api/connectors/google/connect-session uses scoped headers as Nango t
     }),
     { adapter },
   );
-  const payload = (await response.json()) as { data: { token: string; connectLink: string } };
+  const payload = (await response.json()) as { data: { token: string; connectLink: string; requestableSurfaceIds: string[] } };
 
   assert.equal(response.status, 201);
   assert.equal(payload.data.token, "session-token");
   assert.equal(payload.data.connectLink, "https://connect.nango.test/session-token");
+  assert.deepEqual(payload.data.requestableSurfaceIds, [
+    "google_drive",
+    "google_docs_sheets_slides",
+    "google_calendar",
+  ]);
   assert.deepEqual(captured, {
     endUserId: "user-1",
     organizationId: "workspace-1",
     endUserEmail: "user@example.com",
+    tags: {
+      [googleConnectorTagKeys.bundle]: "workspace",
+      [googleConnectorTagKeys.surfaces]: "google_drive,google_docs_sheets_slides,google_calendar",
+      [googleConnectorTagKeys.scopes]: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.readonly",
+      [googleConnectorTagKeys.userId]: "user-1",
+      [googleConnectorTagKeys.workspaceId]: "workspace-1",
+    },
   });
 });
 
@@ -240,6 +254,100 @@ test("POST /api/connectors/google/callback rejects missing surfaces instead of f
   assert.match(payload.error.message, /explicit surfaces|recognizable Google scopes/i);
 });
 
+test("POST /api/connectors/google/nango-webhook records Workspace connection and starts sync", async () => {
+  let capturedCallback: { connectionId: string; providerConfigKey: string; scopes?: readonly string[] } | null = null;
+  let capturedSync: NangoStartSyncInput | null = null;
+  const adapter = fakeAdapter({
+    async handleCallback(input) {
+      capturedCallback = input;
+
+      return {
+        ok: true,
+        data: {
+          providerId: "google",
+          adapter: "nango",
+          connectionId: input.connectionId,
+          providerConfigKey: input.providerConfigKey,
+          credentialRef: `nango:${input.providerConfigKey}:${input.connectionId}`,
+          ...(input.endUserId ? { endUserId: input.endUserId } : {}),
+        },
+      };
+    },
+    async startSync(input) {
+      capturedSync = input;
+
+      return { ok: true, data: { started: true } };
+    },
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore();
+  const rawBody = JSON.stringify({
+    type: "auth",
+    operation: "creation",
+    success: true,
+    connectionId: "nango-google-1",
+    providerConfigKey: "google",
+    provider: "google",
+    tags: {
+      end_user_id: "user-1",
+      organization_id: "workspace-1",
+      [googleConnectorTagKeys.bundle]: "workspace",
+      [googleConnectorTagKeys.surfaces]: "google_gmail,google_drive,google_docs_sheets_slides,google_calendar",
+      [googleConnectorTagKeys.scopes]:
+        "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.readonly",
+    },
+  });
+  const signature = createHmac("sha256", configuredEnv.NANGO_SECRET_KEY).update(rawBody).digest("hex");
+  const response = await handleGoogleConnectorNangoWebhookRequest(
+    new Request("http://localhost/api/connectors/google/nango-webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-nango-hmac-sha256": signature,
+      },
+      body: rawBody,
+    }),
+    {
+      env: {
+        ...configuredEnv,
+        ENABLE_RESTRICTED_GOOGLE_SCOPES: "true",
+        ENABLE_GMAIL_CONNECTOR: "true",
+      },
+      adapter,
+      stateStore,
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      state: { connections: Array<{ surfaces: string[]; status: string }>; syncJobs: Array<{ status: string; surface: string }> };
+      autoSync: { attempted: boolean; started: boolean; syncNames: string[] };
+    };
+  };
+
+  assert.equal(response.status, 200);
+  assert.equal(capturedCallback?.connectionId, "nango-google-1");
+  assert.deepEqual(capturedCallback?.scopes, [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/calendar.readonly",
+  ]);
+  assert.deepEqual(capturedSync?.syncNames, [
+    "google-gmail-messages",
+    "google-drive-files",
+    "google-calendar-events",
+  ]);
+  assert.deepEqual(payload.data.state.connections[0]?.surfaces, [
+    "google_gmail",
+    "google_drive",
+    "google_docs_sheets_slides",
+    "google_calendar",
+  ]);
+  assert.equal(payload.data.autoSync.started, true);
+  assert.equal(payload.data.state.syncJobs.some((job) => job.surface === "google_gmail" && job.status === "running"), true);
+
+  const persisted = await stateStore.load({ userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null });
+  assert.equal(persisted.connections[0]?.status, "syncing");
+});
+
 test("POST /api/connectors/google/sync-now triggers default Google sync names", async () => {
   let captured: NangoStartSyncInput | null = null;
   const adapter = fakeAdapter({
@@ -267,7 +375,7 @@ test("POST /api/connectors/google/sync-now triggers default Google sync names", 
   assert.deepEqual(captured, {
     connectionId: "conn-1",
     providerConfigKey: "google",
-    syncNames: ["google-drive-files", "google-calendar-events"],
+    syncNames: ["google-gmail-messages", "google-drive-files", "google-calendar-events"],
   });
 });
 
