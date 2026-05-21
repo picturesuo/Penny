@@ -69,6 +69,7 @@ import {
   handleGoogleConnectorConnectSessionRequest,
   handleGoogleConnectorCredentialsRequest,
   handleGoogleConnectorListConnectionsRequest,
+  handleGoogleConnectorNangoWebhookRequest,
   handleGoogleConnectorProviderRequest,
   handleGoogleConnectorRefreshRequest,
   handleGoogleConnectorRevokeRequest,
@@ -287,6 +288,11 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/connectors/google/callback") {
       await writeWebResponse(outgoing, await handleGoogleConnectorCallbackRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/nango-webhook") {
+      await writeWebResponse(outgoing, await handleGoogleConnectorNangoWebhookRequest(request));
       return;
     }
 
