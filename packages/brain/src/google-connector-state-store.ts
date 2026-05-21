@@ -555,6 +555,8 @@ function cloneConnectorError(error: ConnectorError): ConnectorError {
 function credentialRef(value: unknown, connectionId: string, providerConfigKey: string): ConnectorCredentialRef {
   const record = recordValue(value);
   const accountId = stringValue(record.accountId);
+  const accountEmail = stringValue(record.accountEmail);
+  const accountLabel = stringValue(record.accountLabel);
   const endUserId = stringValue(record.endUserId);
 
   return {
@@ -564,6 +566,8 @@ function credentialRef(value: unknown, connectionId: string, providerConfigKey: 
     providerConfigKey: stringValue(record.providerConfigKey) ?? providerConfigKey,
     credentialRef: stringValue(record.credentialRef) ?? `nango:${providerConfigKey}:${connectionId}`,
     ...(accountId ? { accountId } : {}),
+    ...(accountEmail ? { accountEmail } : {}),
+    ...(accountLabel ? { accountLabel } : {}),
     ...(endUserId ? { endUserId } : {}),
   };
 }
@@ -592,9 +596,19 @@ function connectorCursor(value: unknown): ConnectorSyncJob["cursorBefore"] {
 
 function connectorSourceProvenance(value: unknown): ConnectorSource["provenance"] {
   const record = recordValue(value);
+  const connectionId = stringValue(record.connectionId);
+  const providerConfigKey = stringValue(record.providerConfigKey);
+  const connectionLabel = stringValue(record.connectionLabel);
+  const accountEmail = stringValue(record.accountEmail);
+  const accountLabel = stringValue(record.accountLabel);
 
   return {
     credentialRef: stringValue(record.credentialRef) ?? "nango:google:unknown",
+    ...(connectionId ? { connectionId } : {}),
+    ...(providerConfigKey ? { providerConfigKey } : {}),
+    ...(connectionLabel ? { connectionLabel } : {}),
+    ...(accountEmail ? { accountEmail } : {}),
+    ...(accountLabel ? { accountLabel } : {}),
     fetchedAt: stringValue(record.fetchedAt) ?? new Date().toISOString(),
     cursor: stringValue(record.cursor),
   };
