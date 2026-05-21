@@ -348,6 +348,107 @@ test("POST /api/connectors/google/nango-webhook records Workspace connection and
   assert.equal(persisted.connections[0]?.status, "syncing");
 });
 
+test("POST /api/connectors/google/nango-webhook labels and syncs the new connection when multiple accounts exist", async () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const existing = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-old",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-old",
+      accountEmail: "old@example.com",
+    },
+    surfaces: ["google_drive"],
+    scopes: ["https://www.googleapis.com/auth/drive.file"],
+    now: "2026-05-20T11:00:00.000Z",
+  });
+  const capturedSyncs: NangoStartSyncInput[] = [];
+  const adapter = fakeAdapter({
+    async handleCallback(input) {
+      return {
+        ok: true,
+        data: {
+          providerId: "google",
+          adapter: "nango",
+          connectionId: input.connectionId,
+          providerConfigKey: input.providerConfigKey,
+          credentialRef: `nango:${input.providerConfigKey}:${input.connectionId}`,
+        },
+      };
+    },
+    async listConnections() {
+      return {
+        ok: true,
+        data: [
+          {
+            connectionId: "nango-google-new",
+            providerConfigKey: "google",
+            provider: "google",
+            createdAt: null,
+            updatedAt: null,
+            tags: {},
+            metadata: { email: "new@example.com", name: "New Google" },
+            status: "connected",
+            errors: [],
+          },
+        ],
+      };
+    },
+    async startSync(input) {
+      capturedSyncs.push(input);
+
+      return { ok: true, data: { started: true } };
+    },
+  });
+  const rawBody = JSON.stringify({
+    type: "auth",
+    operation: "creation",
+    success: true,
+    connectionId: "nango-google-new",
+    providerConfigKey: "google",
+    provider: "google",
+    tags: {
+      end_user_id: "user-1",
+      organization_id: "workspace-1",
+      [googleConnectorTagKeys.bundle]: "workspace",
+      [googleConnectorTagKeys.surfaces]: "google_drive",
+      [googleConnectorTagKeys.scopes]: "https://www.googleapis.com/auth/drive.file",
+    },
+  });
+  const signature = createHmac("sha256", configuredEnv.NANGO_SECRET_KEY).update(rawBody).digest("hex");
+  const stateStore = createInMemoryGoogleConnectorStateStore(existing);
+  const response = await handleGoogleConnectorNangoWebhookRequest(
+    new Request("http://localhost/api/connectors/google/nango-webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-nango-hmac-sha256": signature,
+      },
+      body: rawBody,
+    }),
+    { env: configuredEnv, adapter, stateStore },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      state: {
+        connections: Array<{ id: string; credential: { connectionId: string; accountEmail?: string; accountLabel?: string } }>;
+        syncJobs: Array<{ connectionId: string; status: string }>;
+      };
+    };
+  };
+  const oldConnection = payload.data.state.connections.find((connection) => connection.credential.connectionId === "nango-google-old");
+  const newConnection = payload.data.state.connections.find((connection) => connection.credential.connectionId === "nango-google-new");
+
+  assert.equal(response.status, 200);
+  assert.equal(capturedSyncs[0]?.connectionId, "nango-google-new");
+  assert.equal(newConnection?.credential.accountEmail, "new@example.com");
+  assert.equal(newConnection?.credential.accountLabel, "New Google");
+  assert.equal(payload.data.state.syncJobs.some((job) => job.connectionId === newConnection?.id && job.status === "running"), true);
+  assert.equal(payload.data.state.syncJobs.some((job) => job.connectionId === oldConnection?.id && job.status === "running"), false);
+});
+
 test("POST /api/connectors/google/sync-now triggers default Google sync names", async () => {
   let captured: NangoStartSyncInput | null = null;
   const adapter = fakeAdapter({
