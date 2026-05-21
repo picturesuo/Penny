@@ -6,6 +6,7 @@ import {
   connectorSourceToBrainImport,
   createNangoAdapter,
   deleteGoogleConnectorSourceAccess,
+  googleConnectorCredentialWithAccountDetails,
   initializeGoogleConnectorConnection,
   planGoogleScopeRequest,
   readGoogleConnectorRuntimeConfig,
@@ -380,4 +381,63 @@ test("connectorSourceToBrainImport preserves provenance and private raw-retentio
     content: "Penny should use this document as private Brain context.",
     rawRetention: false,
   });
+});
+
+test("Google connector account metadata labels source provenance and Brain imports", () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const credential = googleConnectorCredentialWithAccountDetails(
+    {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-google-work",
+      providerConfigKey: "google",
+      credentialRef: "nango:google:nango-google-work",
+    },
+    {
+      metadata: { email: "work@example.com", name: "Work Google" },
+      tags: { end_user_id: "user-1" },
+    },
+  );
+  const initial = initializeGoogleConnectorConnection({
+    scope,
+    now: "2026-05-20T12:00:00.000Z",
+    credential,
+    surfaces: ["google_drive"],
+    scopes: ["https://www.googleapis.com/auth/drive.file"],
+  });
+  const running = startGoogleConnectorSync({
+    state: initial,
+    scope,
+    connectionId: initial.connections[0]?.id ?? "",
+    surface: "google_drive",
+    now: "2026-05-20T12:01:00.000Z",
+  });
+  const job = running.syncJobs.find((candidate) => candidate.status === "running");
+  const completed = completeGoogleConnectorSync({
+    state: running,
+    scope,
+    connectionId: initial.connections[0]?.id ?? "",
+    jobId: job?.id ?? "",
+    surface: "google_drive",
+    now: "2026-05-20T12:02:00.000Z",
+    cursor: "drive-cursor-1",
+    nextSyncAt: "2026-05-20T18:02:00.000Z",
+    sources: [
+      {
+        surface: "google_drive",
+        kind: "google_doc",
+        externalId: "doc-1",
+        sourceUri: "google-drive:file:doc-1",
+        label: "Strategy doc",
+      },
+    ],
+  });
+  const source = completed.sources[0];
+
+  assert.equal(credential.accountEmail, "work@example.com");
+  assert.equal(credential.accountLabel, "Work Google");
+  assert.equal(source?.provenance.accountEmail, "work@example.com");
+  assert.equal(source?.provenance.accountLabel, "Work Google");
+  assert.equal(source?.provenance.connectionLabel, "Work Google");
+  assert.equal(connectorSourceToBrainImport(source!, "Private context.").label, "Strategy doc (work@example.com)");
 });
