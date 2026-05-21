@@ -85,7 +85,7 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Mark Preference - Small reversible builds correct/);
   assert.match(markup, /Supports ChatGPT export ZIPs/i);
   assert.match(markup, /Google/);
-  assert.match(markup, /Connect Google/);
+  assert.match(markup, /Connect Gmail/);
   assert.match(markup, /Sync now/);
   assert.match(markup, /Revoke/);
   assert.match(markup, /Delete source/);
@@ -184,9 +184,11 @@ test("GoogleConnectorControl renders statuses, scopes, sync counts, and honest g
   assert.match(markup, /work@example\.com/);
   assert.match(markup, /personal@example\.com/);
   assert.match(markup, /Add Google account/);
+  assert.match(markup, /Google connected/);
   assert.match(markup, /Connected/);
-  assert.match(markup, /Google Drive, Google Calendar connected for private Brain sources/);
+  assert.match(markup, /work@example\.com is selected for Google Drive, Google Calendar/);
   assert.match(markup, /3 sources indexed/);
+  assert.match(markup, /Google source coverage/);
   assert.match(markup, /Google Drive Succeeded/);
   assert.match(markup, /Drive/);
   assert.match(markup, /Available · Google Drive File/);
