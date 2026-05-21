@@ -41,7 +41,6 @@ The adapter uses Nango's connect-session, connections, sync-trigger, and sync-st
 Required environment placeholders:
 
 - `NANGO_SECRET_KEY`
-- `NANGO_PUBLIC_KEY`
 - `NANGO_BASE_URL`
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
