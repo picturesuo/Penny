@@ -236,8 +236,6 @@ export type ConnectorEvent =
 export type GoogleConnectorRuntimeConfig = {
   nangoSecretKey: string | null;
   nangoBaseUrl: string;
-  googleOAuthClientId: string | null;
-  googleOAuthClientSecret: string | null;
   enableGoogleConnector: boolean;
   enableRestrictedGoogleScopes: boolean;
   enableGmailConnector: boolean;
@@ -728,21 +726,15 @@ export function readGoogleConnectorRuntimeConfig(
   env: Record<string, string | undefined> = process.env,
 ): GoogleConnectorRuntimeConfig {
   const nangoSecretKey = readEnv(env, "NANGO_SECRET_KEY");
-  const googleOAuthClientId = readEnv(env, "GOOGLE_OAUTH_CLIENT_ID");
-  const googleOAuthClientSecret = readEnv(env, "GOOGLE_OAUTH_CLIENT_SECRET");
   const nangoBaseUrl = readEnv(env, "NANGO_BASE_URL") ?? defaultNangoBaseUrl;
   const enableGoogleConnector = readFlag(env, "ENABLE_GOOGLE_CONNECTOR");
   const missingConfig = [
     nangoSecretKey ? null : "NANGO_SECRET_KEY",
-    googleOAuthClientId ? null : "GOOGLE_OAUTH_CLIENT_ID",
-    googleOAuthClientSecret ? null : "GOOGLE_OAUTH_CLIENT_SECRET",
   ].filter((value): value is string => Boolean(value));
 
   return {
     nangoSecretKey,
     nangoBaseUrl,
-    googleOAuthClientId,
-    googleOAuthClientSecret,
     enableGoogleConnector,
     enableRestrictedGoogleScopes: readFlag(env, "ENABLE_RESTRICTED_GOOGLE_SCOPES"),
     enableGmailConnector: readFlag(env, "ENABLE_GMAIL_CONNECTOR"),
