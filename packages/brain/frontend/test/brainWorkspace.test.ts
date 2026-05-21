@@ -113,6 +113,22 @@ test("GoogleConnectorControl renders statuses, scopes, sync counts, and honest g
             credential: {
               connectionId: "nango-google-1",
               providerConfigKey: "google",
+              accountEmail: "work@example.com",
+            },
+          },
+          {
+            id: "connector-google-2",
+            status: "connected",
+            surfaces: ["google_drive"],
+            scopes: ["https://www.googleapis.com/auth/drive.file"],
+            lastSyncedAt: "2026-05-20T13:05:00.000Z",
+            nextSyncAt: "2026-05-20T19:05:00.000Z",
+            revokedAt: null,
+            sourceCounts: { google_doc: 1 },
+            credential: {
+              connectionId: "nango-google-2",
+              providerConfigKey: "google",
+              accountEmail: "personal@example.com",
             },
           },
         ],
@@ -139,6 +155,17 @@ test("GoogleConnectorControl renders statuses, scopes, sync counts, and honest g
               retrievalAccess: "enabled",
             },
           },
+          {
+            id: "connector-source-2",
+            connectionId: "connector-google-2",
+            kind: "google_doc",
+            label: "Personal research doc",
+            sourceUri: "google-drive:file:doc-2",
+            brainSourceId: "brain-source-2",
+            privacy: {
+              retrievalAccess: "enabled",
+            },
+          },
         ],
       },
       status: "ready",
@@ -153,6 +180,10 @@ test("GoogleConnectorControl renders statuses, scopes, sync counts, and honest g
   );
 
   assert.match(markup, /Google/);
+  assert.match(markup, /2 active/);
+  assert.match(markup, /work@example\.com/);
+  assert.match(markup, /personal@example\.com/);
+  assert.match(markup, /Add Google account/);
   assert.match(markup, /Connected/);
   assert.match(markup, /Google Drive, Google Calendar connected for private Brain sources/);
   assert.match(markup, /3 sources indexed/);
