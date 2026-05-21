@@ -447,6 +447,104 @@ export interface BrainHybridSearchResponse {
   };
 }
 
+export interface CodebaseScanSummary {
+  scanId: string;
+  repoRoot: string;
+  gitCommit: string | null;
+  status: "running" | "completed" | "failed";
+  startedAt: string;
+  completedAt: string | null;
+  fileCount: number;
+  chunkCount: number;
+  symbolCount: number;
+  importCount: number;
+  routeCount: number;
+  testCount: number;
+  docCount: number;
+  findingCount: number;
+  memoryNoteCount: number;
+  changedFileCount: number;
+  staleFileCount: number;
+  excludedCount: number;
+}
+
+export interface CodebaseScanDetail extends CodebaseScanSummary {
+  changedFiles: Array<{ path: string; previousHash: string; hash: string }>;
+  staleFiles: string[];
+  files: Array<{
+    path: string;
+    hash: string;
+    previousHash: string | null;
+    size: number;
+    language: string;
+    sourceKind: string;
+    chunkCount: number;
+    symbolCount: number;
+    routeCount: number;
+    testCount: number;
+    docCount: number;
+  }>;
+}
+
+export interface CodebaseSearchResult {
+  chunkId: string;
+  fileId: string;
+  path: string;
+  title: string;
+  chunkKind: string;
+  language: string;
+  sourceKind: string;
+  lineStart: number;
+  lineEnd: number;
+  score: number;
+  reasons: string[];
+  snippet: string;
+  symbols: string[];
+  routes: Array<{ method: string; routePath: string }>;
+  tests: Array<{ name: string; subjectPath: string | null }>;
+  docs: Array<{ title: string; references: string[] }>;
+}
+
+export interface CodebaseFinding {
+  id: string;
+  path: string | null;
+  hash: string | null;
+  size: number;
+  language: string;
+  sourceKind: string;
+  severity: "info" | "warning" | "error";
+  kind: string;
+  title: string;
+  message: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface CodebaseAuditResponse {
+  data: {
+    sourceOfTruth: "codebase_db_index";
+    latestScan: CodebaseScanSummary | null;
+    staleFiles: string[];
+    changedFiles: Array<{ path: string; previousHash: string; hash: string }>;
+    topFindings: CodebaseFinding[];
+  };
+}
+
+export interface CodebaseSearchResponse {
+  data: {
+    sourceOfTruth: "codebase_db_index";
+    strategy: "bm25_dependency_adjacency";
+    query: string;
+    results: CodebaseSearchResult[];
+    meta: {
+      resultCount: number;
+    };
+  };
+}
+
+export interface CodebaseIngestResponse {
+  data: CodebaseScanDetail;
+}
+
 export interface BrainRecentIdea {
   id: string;
   rawIdea: string;
