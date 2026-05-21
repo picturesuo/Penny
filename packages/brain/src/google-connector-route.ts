@@ -308,8 +308,8 @@ export async function handleGoogleConnectorCallbackRequest(
     accountEmail: body.value.accountEmail ?? null,
     accountLabel: body.value.accountLabel ?? null,
     endUserId: body.value.endUserId ?? null,
-    metadata: body.value.metadata,
-    tags: body.value.tags,
+    ...(body.value.metadata ? { metadata: body.value.metadata } : {}),
+    ...(body.value.tags ? { tags: body.value.tags } : {}),
   });
   const initializedState = initializeGoogleConnectorConnection({
     scope: scopeFromRequest(request),
