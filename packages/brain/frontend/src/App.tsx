@@ -81,7 +81,7 @@ export function App() {
   const [createInitialSeedText, setCreateInitialSeedText] = useState<string | null>(null);
   const [createBrainProfile, setCreateBrainProfile] = useState<BrainMemoryProfileData | null>(null);
   const [activeMode, setActiveMode] = useState<PennyMode>("Learn");
-  const [landingVisible, setLandingVisible] = useState(() => activeSessionId() === null);
+  const [landingVisible, setLandingVisible] = useState(true);
   const [status, setStatus] = useState("Ready");
   const [isThinking, setIsThinking] = useState(false);
   const codebaseBrainPanelVisible = isCodebaseBrainPanelRoute();
@@ -120,8 +120,11 @@ export function App() {
           return;
         }
 
-        setLandingVisible(false);
         await loadSession(sessionId, null);
+
+        if (!cancelled) {
+          setLandingVisible(false);
+        }
       } catch (error) {
         if (!cancelled) {
           forgetActiveSession();
