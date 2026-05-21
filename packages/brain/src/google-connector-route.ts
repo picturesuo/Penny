@@ -9,6 +9,8 @@ import {
   connectorSourceToBrainImport,
   createNangoAdapter,
   deleteGoogleConnectorSourceAccess,
+  googleConnectorCredentialLabel,
+  googleConnectorCredentialWithAccountDetails,
   googleConnectorTagKeys,
   googleScopeRegistry,
   googleSurfaceIdsForScopes,
@@ -55,6 +57,8 @@ export type GoogleConnectSessionRequestBody = Partial<NangoConnectSessionInput> 
 
 export type GoogleConnectorCallbackRequestBody = Partial<NangoCallbackInput> & {
   surfaces?: GoogleSurfaceId[];
+  metadata?: Record<string, unknown>;
+  tags?: Record<string, string>;
   now?: string;
   syncIntervalHours?: number;
 };
@@ -71,7 +75,12 @@ export type GoogleConnectorNangoWebhookRequestBody = {
   endUser?: {
     endUserId?: string;
     organizationId?: string;
+    email?: string;
+    emailAddress?: string;
+    displayName?: string;
+    name?: string;
   };
+  metadata?: Record<string, unknown>;
   environment?: string;
 };
 
@@ -277,10 +286,13 @@ export async function handleGoogleConnectorCallbackRequest(
     ]);
   }
 
-  const callback = await resolveAdapter(options).handleCallback({
+  const adapter = resolveAdapter(options);
+  const callback = await adapter.handleCallback({
     connectionId: body.value.connectionId,
     providerConfigKey: body.value.providerConfigKey,
     ...(body.value.accountId ? { accountId: body.value.accountId } : {}),
+    ...(body.value.accountEmail ? { accountEmail: body.value.accountEmail } : {}),
+    ...(body.value.accountLabel ? { accountLabel: body.value.accountLabel } : {}),
     ...(body.value.endUserId ? { endUserId: body.value.endUserId } : {}),
     ...(body.value.scopes ? { scopes: body.value.scopes } : {}),
   });
@@ -289,9 +301,19 @@ export async function handleGoogleConnectorCallbackRequest(
     return adapterResponse(callback, 200);
   }
 
+  const credential = await enrichGoogleConnectorCredential(adapter, callback.data, {
+    connectionId: body.value.connectionId,
+    providerConfigKey: body.value.providerConfigKey,
+    accountId: body.value.accountId ?? null,
+    accountEmail: body.value.accountEmail ?? null,
+    accountLabel: body.value.accountLabel ?? null,
+    endUserId: body.value.endUserId ?? null,
+    metadata: body.value.metadata,
+    tags: body.value.tags,
+  });
   const initializedState = initializeGoogleConnectorConnection({
     scope: scopeFromRequest(request),
-    credential: callback.data,
+    credential,
     surfaces,
     scopes: body.value.scopes ?? [],
     now: body.value.now ?? new Date().toISOString(),
@@ -306,7 +328,7 @@ export async function handleGoogleConnectorCallbackRequest(
   return jsonResponse(
     {
       data: {
-        credential: callback.data,
+        credential,
         state,
       },
     },
@@ -378,7 +400,8 @@ export async function handleGoogleConnectorNangoWebhookRequest(
     ]);
   }
 
-  const callback = await resolveAdapter(options).handleCallback({
+  const adapter = resolveAdapter(options);
+  const callback = await adapter.handleCallback({
     connectionId,
     providerConfigKey,
     endUserId: scope.userId,
@@ -390,13 +413,28 @@ export async function handleGoogleConnectorNangoWebhookRequest(
   }
 
   const now = new Date().toISOString();
+  const credential = await enrichGoogleConnectorCredential(adapter, callback.data, {
+    connectionId,
+    providerConfigKey,
+    accountEmail: firstNonEmpty(tags.end_user_email, tags.email, stringValue(endUser.email), stringValue(endUser.emailAddress)),
+    accountLabel: firstNonEmpty(
+      tags.end_user_display_name,
+      tags.display_name,
+      stringValue(endUser.displayName),
+      stringValue(endUser.name),
+    ),
+    endUserId: scope.userId,
+    metadata: recordValue(body.metadata),
+    tags,
+  });
   const initializedState = initializeGoogleConnectorConnection({
     scope,
-    credential: callback.data,
+    credential,
     surfaces,
     scopes,
     now,
   });
+  const scopedConnectionId = initializedState.connections[0]?.id ?? connectionId;
   let state = await saveGoogleConnectorState(options, scope, initializedState);
   const syncNames = googleSyncNamesForSurfaces(surfaces);
   let autoSync:
@@ -408,7 +446,7 @@ export async function handleGoogleConnectorNangoWebhookRequest(
   };
 
   if (syncNames.length) {
-    const syncResult = await resolveAdapter(options).startSync({
+    const syncResult = await adapter.startSync({
       connectionId,
       providerConfigKey,
       syncNames,
@@ -425,7 +463,7 @@ export async function handleGoogleConnectorNangoWebhookRequest(
               startGoogleConnectorSync({
                 state: nextState,
                 scope,
-                connectionId: state.connections[0]?.id ?? connectionId,
+                connectionId: scopedConnectionId,
                 surface,
                 now,
               }),
@@ -441,7 +479,7 @@ export async function handleGoogleConnectorNangoWebhookRequest(
   return jsonResponse(
     {
       data: {
-        credential: callback.data,
+        credential,
         state,
         autoSync,
       },
@@ -909,6 +947,44 @@ function findRouteConnection(state: GoogleConnectorState, connectionId: string):
   );
 }
 
+async function enrichGoogleConnectorCredential(
+  adapter: NangoAdapter,
+  credential: ConnectorConnection["credential"],
+  input: NangoConnectionInput & {
+    metadata?: Record<string, unknown>;
+    tags?: Record<string, string>;
+    accountId?: string | null;
+    accountEmail?: string | null;
+    accountLabel?: string | null;
+    endUserId?: string | null;
+  },
+): Promise<ConnectorConnection["credential"]> {
+  let enriched = googleConnectorCredentialWithAccountDetails(credential, input);
+
+  try {
+    const listed = await adapter.listConnections({ connectionId: input.connectionId });
+
+    if (listed.ok) {
+      const match =
+        listed.data.find(
+          (connection) =>
+            connection.connectionId === input.connectionId && connection.providerConfigKey === input.providerConfigKey,
+        ) ?? listed.data.find((connection) => connection.connectionId === input.connectionId);
+
+      if (match) {
+        enriched = googleConnectorCredentialWithAccountDetails(enriched, {
+          metadata: match.metadata,
+          tags: match.tags,
+        });
+      }
+    }
+  } catch {
+    // Account labels are useful provenance, but missing Nango metadata should not block a successful consent callback.
+  }
+
+  return enriched;
+}
+
 function pendingConnectorSource(input: {
   connection: ConnectorConnection;
   source: GoogleConnectorSyncCompleteSourceInput;
@@ -932,6 +1008,11 @@ function pendingConnectorSource(input: {
     },
     provenance: {
       credentialRef: input.connection.credential.credentialRef,
+      connectionId: input.connection.credential.connectionId,
+      providerConfigKey: input.connection.credential.providerConfigKey,
+      connectionLabel: googleConnectorCredentialLabel(input.connection.credential),
+      ...(input.connection.credential.accountEmail ? { accountEmail: input.connection.credential.accountEmail } : {}),
+      ...(input.connection.credential.accountLabel ? { accountLabel: input.connection.credential.accountLabel } : {}),
       fetchedAt: input.now,
       cursor: input.cursor ?? input.source.cursor ?? null,
     },
