@@ -842,8 +842,8 @@ export class DrizzleCodebaseMemoryRepository implements CodebaseMemoryRepository
       updatedAt: new Date(file.indexedAt),
     }));
 
-    if (fileRows.length > 0) {
-      await this.db.insert(codeFiles).values(fileRows);
+    for (const batch of batches(fileRows, 200)) {
+      await this.db.insert(codeFiles).values(batch);
     }
 
     const chunkRows: Array<typeof codeChunks.$inferInsert> = index.chunks.map((chunk) => ({
@@ -873,8 +873,8 @@ export class DrizzleCodebaseMemoryRepository implements CodebaseMemoryRepository
       updatedAt: new Date(index.scannedAt),
     }));
 
-    if (chunkRows.length > 0) {
-      await this.db.insert(codeChunks).values(chunkRows);
+    for (const batch of batches(chunkRows, 200)) {
+      await this.db.insert(codeChunks).values(batch);
     }
 
     const symbolRows: Array<typeof codeSymbols.$inferInsert> = index.symbols.map((symbol) => ({
@@ -899,8 +899,8 @@ export class DrizzleCodebaseMemoryRepository implements CodebaseMemoryRepository
       updatedAt: new Date(index.scannedAt),
     }));
 
-    if (symbolRows.length > 0) {
-      await this.db.insert(codeSymbols).values(symbolRows);
+    for (const batch of batches(symbolRows, 200)) {
+      await this.db.insert(codeSymbols).values(batch);
     }
 
     const importRows: Array<typeof codeImports.$inferInsert> = index.imports.map((item) => ({
@@ -923,8 +923,8 @@ export class DrizzleCodebaseMemoryRepository implements CodebaseMemoryRepository
       updatedAt: new Date(index.scannedAt),
     }));
 
-    if (importRows.length > 0) {
-      await this.db.insert(codeImports).values(importRows);
+    for (const batch of batches(importRows, 200)) {
+      await this.db.insert(codeImports).values(batch);
     }
 
     const routeRows: Array<typeof codeRoutes.$inferInsert> = index.routes.map((route) => ({
@@ -947,8 +947,8 @@ export class DrizzleCodebaseMemoryRepository implements CodebaseMemoryRepository
       updatedAt: new Date(index.scannedAt),
     }));
 
-    if (routeRows.length > 0) {
-      await this.db.insert(codeRoutes).values(routeRows);
+    for (const batch of batches(routeRows, 200)) {
+      await this.db.insert(codeRoutes).values(batch);
     }
 
     const testRows: Array<typeof codeTests.$inferInsert> = index.tests.map((item) => ({
@@ -971,8 +971,8 @@ export class DrizzleCodebaseMemoryRepository implements CodebaseMemoryRepository
       updatedAt: new Date(index.scannedAt),
     }));
 
-    if (testRows.length > 0) {
-      await this.db.insert(codeTests).values(testRows);
+    for (const batch of batches(testRows, 200)) {
+      await this.db.insert(codeTests).values(batch);
     }
 
     const docRows: Array<typeof codeDocs.$inferInsert> = index.docs.map((doc) => ({
@@ -996,8 +996,8 @@ export class DrizzleCodebaseMemoryRepository implements CodebaseMemoryRepository
       updatedAt: new Date(index.scannedAt),
     }));
 
-    if (docRows.length > 0) {
-      await this.db.insert(codeDocs).values(docRows);
+    for (const batch of batches(docRows, 200)) {
+      await this.db.insert(codeDocs).values(batch);
     }
 
     const findingRows: Array<typeof codeFindings.$inferInsert> = index.findings.map((finding) => ({
@@ -1018,8 +1018,8 @@ export class DrizzleCodebaseMemoryRepository implements CodebaseMemoryRepository
       updatedAt: new Date(index.scannedAt),
     }));
 
-    if (findingRows.length > 0) {
-      await this.db.insert(codeFindings).values(findingRows);
+    for (const batch of batches(findingRows, 200)) {
+      await this.db.insert(codeFindings).values(batch);
     }
 
     const memoryRows: Array<typeof codeMemoryNotes.$inferInsert> = index.memoryNotes.map((note) => ({
@@ -1041,8 +1041,8 @@ export class DrizzleCodebaseMemoryRepository implements CodebaseMemoryRepository
       updatedAt: new Date(index.scannedAt),
     }));
 
-    if (memoryRows.length > 0) {
-      await this.db.insert(codeMemoryNotes).values(memoryRows);
+    for (const batch of batches(memoryRows, 200)) {
+      await this.db.insert(codeMemoryNotes).values(batch);
     }
   }
 
@@ -2393,6 +2393,16 @@ function dedupeBy<T>(values: T[], key: (value: T) => string): T[] {
 
     seen.add(itemKey);
     result.push(value);
+  }
+
+  return result;
+}
+
+function batches<T>(values: T[], size: number): T[][] {
+  const result: T[][] = [];
+
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
   }
 
   return result;
