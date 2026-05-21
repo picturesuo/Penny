@@ -255,11 +255,11 @@ test("POST /api/connectors/google/callback rejects missing surfaces instead of f
 });
 
 test("POST /api/connectors/google/nango-webhook records Workspace connection and starts sync", async () => {
-  let capturedCallback: { connectionId: string; providerConfigKey: string; scopes?: readonly string[] } | null = null;
-  let capturedSync: NangoStartSyncInput | null = null;
+  const capturedCallbacks: Array<{ connectionId: string; providerConfigKey: string; scopes?: readonly string[] }> = [];
+  const capturedSyncs: NangoStartSyncInput[] = [];
   const adapter = fakeAdapter({
     async handleCallback(input) {
-      capturedCallback = input;
+      capturedCallbacks.push(input);
 
       return {
         ok: true,
@@ -274,7 +274,7 @@ test("POST /api/connectors/google/nango-webhook records Workspace connection and
       };
     },
     async startSync(input) {
-      capturedSync = input;
+      capturedSyncs.push(input);
 
       return { ok: true, data: { started: true } };
     },
@@ -324,13 +324,13 @@ test("POST /api/connectors/google/nango-webhook records Workspace connection and
   };
 
   assert.equal(response.status, 200);
-  assert.equal(capturedCallback?.connectionId, "nango-google-1");
-  assert.deepEqual(capturedCallback?.scopes, [
+  assert.equal(capturedCallbacks[0]?.connectionId, "nango-google-1");
+  assert.deepEqual(capturedCallbacks[0]?.scopes, [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/calendar.readonly",
   ]);
-  assert.deepEqual(capturedSync?.syncNames, [
+  assert.deepEqual(capturedSyncs[0]?.syncNames, [
     "google-gmail-messages",
     "google-drive-files",
     "google-calendar-events",
