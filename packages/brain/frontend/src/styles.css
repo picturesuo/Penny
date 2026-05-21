@@ -2703,6 +2703,80 @@
     padding: 12px;
   }
 
+  .google-connector-card {
+    gap: 12px;
+    border-color: #c9d4d9;
+    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  }
+
+  .google-connector-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border-bottom: 1px solid #d8e1e5;
+    padding-bottom: 12px;
+  }
+
+  .google-connector-hero-main {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+
+  .google-connector-mark {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid #111111;
+    border-radius: 8px;
+    background: #e9f3ff;
+    color: #111111;
+    box-shadow: 2px 2px 0 #111111;
+  }
+
+  .google-connector-title-row,
+  .google-connector-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .google-connector-title-row strong {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .google-connector-title-row span,
+  .google-connector-chips span {
+    border: 1px solid #b8c8cf;
+    border-radius: 999px;
+    background: #ffffff;
+    padding: 5px 7px;
+    color: rgb(17 17 17 / 0.68);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .google-connector-hero p {
+    margin: 6px 0 8px;
+    color: rgb(17 17 17 / 0.72);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .google-connector-primary {
+    flex: 0 0 auto;
+    min-height: 42px;
+    white-space: nowrap;
+  }
+
   .brain-memory-card-head {
     border-bottom: 1px solid #d2d2d2;
     padding-bottom: 8px;
@@ -2754,6 +2828,52 @@
   .brain-memory-source.is-selected {
     border-color: #111111;
     background: #f8fbec;
+  }
+
+  .google-account-list {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  }
+
+  .google-account-row {
+    border-radius: 8px;
+    transition:
+      border-color 120ms ease,
+      background-color 120ms ease,
+      transform 120ms ease;
+  }
+
+  .google-account-row:hover {
+    transform: translateY(-1px);
+  }
+
+  .google-account-row small {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .google-connector-details {
+    border-top: 1px solid #d8e1e5;
+    padding-top: 8px;
+  }
+
+  .google-connector-details summary {
+    cursor: pointer;
+    color: rgb(17 17 17 / 0.7);
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .google-connector-details .brain-memory-source-list {
+    margin-top: 8px;
+  }
+
+  .google-connector-card .brain-memory-next-step {
+    border-color: #c6d4bd;
+    background: #f4fae8;
   }
 
   .brain-memory-source > div,
@@ -7248,6 +7368,15 @@
 
   .brain-memory-file-button,
   .secondary-command {
+    width: 100%;
+  }
+
+  .google-connector-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .google-connector-primary {
     width: 100%;
   }
 
