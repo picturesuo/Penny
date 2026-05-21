@@ -6,6 +6,9 @@ import type {
   BrainDemoFixtureResponse,
   BrainDocumentsResponse,
   BrainHybridSearchResponse,
+  CodebaseAuditResponse,
+  CodebaseIngestResponse,
+  CodebaseSearchResponse,
   BrainImportInput,
   BrainImportJobResponse,
   BrainImportResponse,
@@ -537,6 +540,51 @@ export async function fetchBrainHybridSearch(input: {
   }
 
   return normalizeBrainHybridSearch(payload, input.query);
+}
+
+export async function ingestCodebase(): Promise<CodebaseIngestResponse> {
+  const response = await fetch("/api/codebase/ingest", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify({}),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/codebase/ingest failed with ${response.status}.`));
+  }
+
+  return payload as CodebaseIngestResponse;
+}
+
+export async function fetchCodebaseAudit(): Promise<CodebaseAuditResponse> {
+  const response = await fetch("/api/codebase/audit", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify({}),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/codebase/audit failed with ${response.status}.`));
+  }
+
+  return payload as CodebaseAuditResponse;
+}
+
+export async function searchCodebase(query: string): Promise<CodebaseSearchResponse> {
+  const response = await fetch("/api/codebase/search", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify({ query, limit: 8, includeDependencies: true }),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/codebase/search failed with ${response.status}.`));
+  }
+
+  return payload as CodebaseSearchResponse;
 }
 
 function normalizeSessionCanvas(payload: unknown): SessionCanvasResponse {
