@@ -27,6 +27,7 @@ import {
   type ConnectorSource,
   type GoogleConnectorState,
   type GoogleConnectorSourceDraft,
+  type GoogleScopeRequestPlan,
   type GoogleSurfaceId,
   type NangoAdapter,
   type NangoCallbackInput,
@@ -166,10 +167,11 @@ export async function handleGoogleConnectorConnectSessionRequest(
     mode: googleScopeRequestMode(options.env),
     config: readGoogleConnectorRuntimeConfig(options.env),
   });
-  const requestableSurfaceIds = googleSurfaceIdsForScopes(scopePlan.requestableScopeUrls).filter((surfaceId) =>
+  const requestableScopeIds = preferredGoogleScopeIdsForSurfaces(requestedSurfaceIds, scopePlan);
+  const requestableScopeUrls = googleScopeUrlsForIds(requestableScopeIds);
+  const requestableSurfaceIds = googleSurfaceIdsForScopes(requestableScopeUrls).filter((surfaceId) =>
     requestedSurfaceIds.includes(surfaceId),
   );
-  const requestableScopeIds = googleScopeIdsForUrls(scopePlan.requestableScopeUrls);
 
   if (!requestableSurfaceIds.length) {
     return jsonResponse(
@@ -247,7 +249,7 @@ export async function handleGoogleConnectorConnectSessionRequest(
         ...result.data,
         requestedSurfaceIds,
         requestableSurfaceIds,
-        requestableScopeUrls: scopePlan.requestableScopeUrls,
+        requestableScopeUrls,
         warnings: scopePlan.warnings,
       },
     },
@@ -1101,12 +1103,36 @@ function googleScopeRequestMode(env: Record<string, string | undefined> | undefi
     : "development";
 }
 
-function googleScopeIdsForUrls(scopeUrls: readonly string[]): string[] {
-  const requested = new Set(scopeUrls);
+const preferredGoogleScopeIdsBySurface = {
+  google_drive: ["google.drive.file"],
+  google_docs_sheets_slides: ["google.docs.drive_file_export"],
+  google_calendar: ["google.calendar.readonly"],
+  google_gmail: ["google.gmail.readonly"],
+  google_youtube: ["google.youtube.readonly"],
+  google_takeout: [],
+  google_my_activity: [],
+  chrome_extension_history: [],
+} as const satisfies Record<GoogleSurfaceId, readonly string[]>;
 
-  return googleScopeRegistry
-    .filter((scope) => scope.scope && requested.has(scope.scope))
-    .map((scope) => scope.id);
+function preferredGoogleScopeIdsForSurfaces(
+  surfaceIds: readonly GoogleSurfaceId[],
+  scopePlan: GoogleScopeRequestPlan,
+): string[] {
+  const requestableScopeUrls = new Set(scopePlan.requestableScopeUrls);
+  const scopeById = new Map(scopePlan.scopes.map((scope) => [scope.id, scope]));
+  const scopeIds: string[] = [];
+
+  for (const surfaceId of surfaceIds) {
+    for (const scopeId of preferredGoogleScopeIdsBySurface[surfaceId]) {
+      const scope = scopeById.get(scopeId);
+
+      if (scope?.scope && requestableScopeUrls.has(scope.scope)) {
+        scopeIds.push(scopeId);
+      }
+    }
+  }
+
+  return [...new Set(scopeIds)];
 }
 
 function googleScopeUrlsForIds(scopeIds: readonly string[]): string[] {

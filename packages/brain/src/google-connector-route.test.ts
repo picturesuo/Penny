@@ -135,12 +135,12 @@ test("POST /api/connectors/google/connect-session uses scoped headers as Nango t
     tags: {
       [googleConnectorTagKeys.bundle]: "workspace",
       [googleConnectorTagKeys.surfaces]: "google_drive,google_docs_sheets_slides,google_calendar",
-      [googleConnectorTagKeys.scopeIds]: "google.drive.file,google.docs.drive_file_export,google.calendar.readonly",
+      [googleConnectorTagKeys.scopeIds]: "google.drive.file,google.calendar.readonly",
     },
   });
 });
 
-test("POST /api/connectors/google/connect-session stores compact scope ids for restricted Workspace scopes", async () => {
+test("POST /api/connectors/google/connect-session stores compact default Workspace scope ids", async () => {
   let captured: NangoConnectSessionInput | null = null;
   const adapter = fakeAdapter({
     async createConnectSession(input) {
@@ -186,20 +186,20 @@ test("POST /api/connectors/google/connect-session stores compact scope ids for r
     "google_calendar",
     "google_gmail",
   ]);
-  assert.equal(payload.data.requestableScopeUrls.join(" ").length > 255, true);
+  assert.deepEqual(payload.data.requestableScopeUrls, [
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/gmail.readonly",
+  ]);
   assert.ok(captured);
   const capturedInput = captured as NangoConnectSessionInput;
   assert.equal(capturedInput.tags?.[googleConnectorTagKeys.scopes], undefined);
   assert.equal(
     capturedInput.tags?.[googleConnectorTagKeys.scopeIds],
     [
-      "google.drive.file",
-      "google.drive.metadata.readonly",
-      "google.drive.readonly",
-      "google.docs.drive_file_export",
-      "google.calendar.readonly",
-      "google.gmail.metadata",
       "google.gmail.readonly",
+      "google.drive.file",
+      "google.calendar.readonly",
     ].join(","),
   );
   assert.equal(capturedInput.tags?.[googleConnectorTagKeys.userId], undefined);
