@@ -21,7 +21,6 @@ import { createInMemoryGoogleConnectorStateStore } from "./google-connector-stat
 const configuredEnv = {
   ENABLE_GOOGLE_CONNECTOR: "true",
   NANGO_SECRET_KEY: "nango-secret",
-  NANGO_PUBLIC_KEY: "nango-public",
   NANGO_BASE_URL: "https://api.nango.test",
   GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
   GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
