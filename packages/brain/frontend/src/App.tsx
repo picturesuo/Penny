@@ -120,10 +120,14 @@ export function App() {
           return;
         }
 
-        await loadSession(sessionId, null);
+        const cockpit = await loadSession(sessionId, null);
 
         if (!cancelled) {
-          setLandingVisible(false);
+          if (isRestorableSession(cockpit)) {
+            setLandingVisible(false);
+          } else {
+            resetToLandingAfterUnrestorableSession();
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -695,6 +699,23 @@ export function App() {
     return cockpit;
   }
 
+  function resetToLandingAfterUnrestorableSession() {
+    forgetActiveSession();
+    setSelectedDocumentId(null);
+    setData(null);
+    setMoves([]);
+    setAutopilot(null);
+    setChallengeResponse(null);
+    setLatestArtifact(null);
+    setFocusedClaimId(null);
+    setFocusedWorkStructureStepId(null);
+    setBrainCanvasOpen(false);
+    setLearnFocusNode(null);
+    setRelatedBrainSearch(null);
+    setLandingVisible(true);
+    setStatus("Ready");
+  }
+
   async function refreshCockpit(sessionId: string, fallbackData: BrainData | null = data): Promise<SessionCockpitData> {
     const cockpit = await fetchSessionCockpit(sessionId);
     const cockpitData = cockpit.data;
@@ -944,6 +965,10 @@ function mergeCockpitData(cockpit: SessionCockpitData, current: BrainData | null
     ...(current?.learn ? { learn: current.learn } : {}),
     ...(firstChallenge ? { firstChallenge } : {}),
   };
+}
+
+function isRestorableSession(cockpit: SessionCockpitData): boolean {
+  return cockpit.ideaMap.claims.length > 0 || cockpit.ideaMap.edges.length > 0 || cockpit.moves.length > 0;
 }
 
 function mergeRecentIdeas(recent: BrainRecentIdea, existing: BrainRecentIdea[]): BrainRecentIdea[] {
