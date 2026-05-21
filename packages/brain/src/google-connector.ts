@@ -235,7 +235,6 @@ export type ConnectorEvent =
 
 export type GoogleConnectorRuntimeConfig = {
   nangoSecretKey: string | null;
-  nangoPublicKey: string | null;
   nangoBaseUrl: string;
   googleOAuthClientId: string | null;
   googleOAuthClientSecret: string | null;
@@ -729,21 +728,18 @@ export function readGoogleConnectorRuntimeConfig(
   env: Record<string, string | undefined> = process.env,
 ): GoogleConnectorRuntimeConfig {
   const nangoSecretKey = readEnv(env, "NANGO_SECRET_KEY");
-  const nangoPublicKey = readEnv(env, "NANGO_PUBLIC_KEY");
   const googleOAuthClientId = readEnv(env, "GOOGLE_OAUTH_CLIENT_ID");
   const googleOAuthClientSecret = readEnv(env, "GOOGLE_OAUTH_CLIENT_SECRET");
   const nangoBaseUrl = readEnv(env, "NANGO_BASE_URL") ?? defaultNangoBaseUrl;
   const enableGoogleConnector = readFlag(env, "ENABLE_GOOGLE_CONNECTOR");
   const missingConfig = [
     nangoSecretKey ? null : "NANGO_SECRET_KEY",
-    nangoPublicKey ? null : "NANGO_PUBLIC_KEY",
     googleOAuthClientId ? null : "GOOGLE_OAUTH_CLIENT_ID",
     googleOAuthClientSecret ? null : "GOOGLE_OAUTH_CLIENT_SECRET",
   ].filter((value): value is string => Boolean(value));
 
   return {
     nangoSecretKey,
-    nangoPublicKey,
     nangoBaseUrl,
     googleOAuthClientId,
     googleOAuthClientSecret,
