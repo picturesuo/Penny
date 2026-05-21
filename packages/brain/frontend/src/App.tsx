@@ -20,6 +20,7 @@ import {
 } from "./api/brainClient";
 import { buildAutopilotStartIntent, runAutopilotGoThere, type PennyMode } from "./autopilotUx";
 import { BrainWorkspace } from "./components/BrainWorkspace";
+import { CodebaseBrainPanel } from "./components/CodebaseBrainPanel";
 import { CreateWorkspace } from "./components/CreateWorkspace";
 import { Header } from "./components/Header";
 import { LandingPage } from "./components/LandingPage";
@@ -83,6 +84,7 @@ export function App() {
   const [landingVisible, setLandingVisible] = useState(() => activeSessionId() === null);
   const [status, setStatus] = useState("Ready");
   const [isThinking, setIsThinking] = useState(false);
+  const codebaseBrainPanelVisible = isCodebaseBrainPanelRoute();
 
   const selectedDocument = documentsData?.documents.find((document) => document.sessionId === selectedDocumentId) ?? null;
   const workStructure = data?.workStructure ?? null;
@@ -91,6 +93,10 @@ export function App() {
     : `${documentsData?.meta.documentCount ?? 0} docs`;
 
   useEffect(() => {
+    if (codebaseBrainPanelVisible) {
+      return;
+    }
+
     const sessionId = activeSessionId();
     let cancelled = false;
 
@@ -134,7 +140,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [codebaseBrainPanelVisible]);
 
   async function handleSeed(rawIdea: string) {
     setIsThinking(true);
@@ -828,6 +834,10 @@ export function App() {
     setStatus(profile.stats.memoryNodeCount ? "Using your Brain in Create" : "Create opened context-light");
   }
 
+  if (codebaseBrainPanelVisible) {
+    return <CodebaseBrainPanel />;
+  }
+
   return (
     <div className="min-h-screen bg-white text-[#111]">
       <div
@@ -965,6 +975,10 @@ function activeSessionId(): string | null {
   }
 
   return window.localStorage.getItem(ACTIVE_SESSION_KEY);
+}
+
+function isCodebaseBrainPanelRoute(): boolean {
+  return typeof window !== "undefined" && window.location.pathname === "/dev/codebase";
 }
 
 function rememberActiveSession(sessionId: string): void {
