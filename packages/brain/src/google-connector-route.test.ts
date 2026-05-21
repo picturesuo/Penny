@@ -135,11 +135,75 @@ test("POST /api/connectors/google/connect-session uses scoped headers as Nango t
     tags: {
       [googleConnectorTagKeys.bundle]: "workspace",
       [googleConnectorTagKeys.surfaces]: "google_drive,google_docs_sheets_slides,google_calendar",
-      [googleConnectorTagKeys.scopes]: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.readonly",
-      [googleConnectorTagKeys.userId]: "user-1",
-      [googleConnectorTagKeys.workspaceId]: "workspace-1",
+      [googleConnectorTagKeys.scopeIds]: "google.drive.file,google.docs.drive_file_export,google.calendar.readonly",
     },
   });
+});
+
+test("POST /api/connectors/google/connect-session stores compact scope ids for restricted Workspace scopes", async () => {
+  let captured: NangoConnectSessionInput | null = null;
+  const adapter = fakeAdapter({
+    async createConnectSession(input) {
+      captured = input;
+
+      return {
+        ok: true,
+        data: {
+          token: "session-token",
+          expiresAt: "2026-05-20T12:00:00Z",
+          connectLink: "https://connect.nango.test/session-token",
+        },
+      };
+    },
+  });
+  const response = await handleGoogleConnectorConnectSessionRequest(
+    new Request("http://localhost/api/connectors/google/connect-session", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+        "x-project-id": "project-1",
+        "x-sphere-id": "sphere-1",
+      },
+      body: JSON.stringify({ workspaceBundle: true }),
+    }),
+    {
+      env: {
+        ...configuredEnv,
+        ENABLE_RESTRICTED_GOOGLE_SCOPES: "true",
+        ENABLE_GMAIL_CONNECTOR: "true",
+      },
+      adapter,
+    },
+  );
+  const payload = (await response.json()) as { data: { requestableSurfaceIds: string[]; requestableScopeUrls: string[] } };
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(payload.data.requestableSurfaceIds, [
+    "google_drive",
+    "google_docs_sheets_slides",
+    "google_calendar",
+    "google_gmail",
+  ]);
+  assert.equal(payload.data.requestableScopeUrls.join(" ").length > 255, true);
+  assert.ok(captured);
+  const capturedInput = captured as NangoConnectSessionInput;
+  assert.equal(capturedInput.tags?.[googleConnectorTagKeys.scopes], undefined);
+  assert.equal(
+    capturedInput.tags?.[googleConnectorTagKeys.scopeIds],
+    [
+      "google.drive.file",
+      "google.drive.metadata.readonly",
+      "google.drive.readonly",
+      "google.docs.drive_file_export",
+      "google.calendar.readonly",
+      "google.gmail.metadata",
+      "google.gmail.readonly",
+    ].join(","),
+  );
+  assert.equal(capturedInput.tags?.[googleConnectorTagKeys.userId], undefined);
+  assert.equal(capturedInput.tags?.[googleConnectorTagKeys.workspaceId], undefined);
 });
 
 test("POST /api/connectors/google/connect-session returns not configured when env is incomplete", async () => {
@@ -343,6 +407,60 @@ test("POST /api/connectors/google/nango-webhook records Workspace connection and
 
   const persisted = await stateStore.load({ userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null });
   assert.equal(persisted.connections[0]?.status, "syncing");
+});
+
+test("POST /api/connectors/google/nango-webhook resolves compact scope id tags", async () => {
+  const capturedCallbacks: Array<{ connectionId: string; providerConfigKey: string; scopes?: readonly string[] }> = [];
+  const adapter = fakeAdapter({
+    async handleCallback(input) {
+      capturedCallbacks.push(input);
+
+      return {
+        ok: true,
+        data: {
+          providerId: "google",
+          adapter: "nango",
+          connectionId: input.connectionId,
+          providerConfigKey: input.providerConfigKey,
+          credentialRef: `nango:${input.providerConfigKey}:${input.connectionId}`,
+          ...(input.endUserId ? { endUserId: input.endUserId } : {}),
+        },
+      };
+    },
+    async startSync() {
+      return { ok: true, data: { started: true } };
+    },
+  });
+  const rawBody = JSON.stringify({
+    type: "auth",
+    operation: "creation",
+    success: true,
+    connectionId: "nango-google-scope-ids",
+    providerConfigKey: "google",
+    provider: "google",
+    tags: {
+      end_user_id: "user-1",
+      organization_id: "workspace-1",
+      [googleConnectorTagKeys.bundle]: "workspace",
+      [googleConnectorTagKeys.surfaces]: "google_drive",
+      [googleConnectorTagKeys.scopeIds]: "google.drive.file",
+    },
+  });
+  const signature = createHmac("sha256", configuredEnv.NANGO_SECRET_KEY).update(rawBody).digest("hex");
+  const response = await handleGoogleConnectorNangoWebhookRequest(
+    new Request("http://localhost/api/connectors/google/nango-webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-nango-hmac-sha256": signature,
+      },
+      body: rawBody,
+    }),
+    { env: configuredEnv, adapter, stateStore: createInMemoryGoogleConnectorStateStore() },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(capturedCallbacks[0]?.scopes, ["https://www.googleapis.com/auth/drive.file"]);
 });
 
 test("POST /api/connectors/google/nango-webhook labels and syncs the new connection when multiple accounts exist", async () => {

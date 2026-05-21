@@ -76,7 +76,7 @@ After consent, Penny should create:
 - `ConnectorSyncCursor` per surface/model so resync is incremental.
 - `lastSyncedAt`, `nextSyncAt`, error, and revoked state.
 
-Nango auth webhooks are the default way to turn a successful Google approval into a Penny connector connection. After the webhook is verified, Penny records the connection, preserves the surfaces/scopes tagged on the connect session, and starts the matching Nango syncs (`google-gmail-messages`, `google-drive-files`, and `google-calendar-events`) where configured. `Sync now` also triggers a one-off Nango sync and updates local sync runs to `running`. The `sync-complete` seam accepts explicit connector records plus content from Nango/Google fetch workers, imports them into Brain with `rawRetention=false`, and then stores connector source refs with Brain source IDs and memory node IDs.
+Nango auth webhooks are the default way to turn a successful Google approval into a Penny connector connection. After the webhook is verified, Penny records the connection, preserves the surfaces and compact scope IDs tagged on the connect session, and starts the matching Nango syncs (`google-gmail-messages`, `google-drive-files`, and `google-calendar-events`) where configured. Penny does not tag long OAuth scope URL lists because Nango tag values are size-limited. `Sync now` also triggers a one-off Nango sync and updates local sync runs to `running`. The `sync-complete` seam accepts explicit connector records plus content from Nango/Google fetch workers, imports them into Brain with `rawRetention=false`, and then stores connector source refs with Brain source IDs and memory node IDs.
 
 ## Privacy Model
 

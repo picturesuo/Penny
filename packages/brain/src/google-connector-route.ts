@@ -169,6 +169,7 @@ export async function handleGoogleConnectorConnectSessionRequest(
   const requestableSurfaceIds = googleSurfaceIdsForScopes(scopePlan.requestableScopeUrls).filter((surfaceId) =>
     requestedSurfaceIds.includes(surfaceId),
   );
+  const requestableScopeIds = googleScopeIdsForUrls(scopePlan.requestableScopeUrls);
 
   if (!requestableSurfaceIds.length) {
     return jsonResponse(
@@ -221,9 +222,7 @@ export async function handleGoogleConnectorConnectSessionRequest(
     ...(input.tags ?? {}),
     [googleConnectorTagKeys.bundle]: body.value.workspaceBundle === false ? "custom" : "workspace",
     [googleConnectorTagKeys.surfaces]: requestableSurfaceIds.join(","),
-    [googleConnectorTagKeys.scopes]: scopePlan.requestableScopeUrls.join(" "),
-    [googleConnectorTagKeys.userId]: endUserId,
-    ...(scope.workspaceId ? { [googleConnectorTagKeys.workspaceId]: scope.workspaceId } : {}),
+    ...(requestableScopeIds.length ? { [googleConnectorTagKeys.scopeIds]: requestableScopeIds.join(",") } : {}),
     ...(scope.projectId ? { [googleConnectorTagKeys.projectId]: scope.projectId } : {}),
     ...(scope.sphereId ? { [googleConnectorTagKeys.sphereId]: scope.sphereId } : {}),
   };
@@ -389,9 +388,13 @@ export async function handleGoogleConnectorNangoWebhookRequest(
     return invalidRequest("Nango auth webhook requires a tagged end user id.", ["tags.end_user_id"]);
   }
 
-  const scopes = parseList(tags[googleConnectorTagKeys.scopes]);
+  const taggedScopes = parseList(tags[googleConnectorTagKeys.scopes]);
+  const taggedScopeIds = parseList(tags[googleConnectorTagKeys.scopeIds]);
+  const scopesFromIds = googleScopeUrlsForIds(taggedScopeIds);
+  const scopesFromTags = taggedScopes.length ? taggedScopes : scopesFromIds;
   const surfacesFromTags = parseSurfaceList(tags[googleConnectorTagKeys.surfaces]);
-  const surfaces = surfacesFromTags.length ? surfacesFromTags : googleSurfaceIdsForScopes(scopes);
+  const surfaces = surfacesFromTags.length ? surfacesFromTags : googleSurfaceIdsForScopes(scopesFromTags);
+  const scopes = scopesFromTags.length ? scopesFromTags : googleScopeUrlsForSurfaces(surfaces, options.env);
 
   if (!surfaces.length) {
     return invalidRequest("Nango auth webhook requires Penny Google surfaces or recognizable scopes.", [
@@ -1096,6 +1099,39 @@ function googleScopeRequestMode(env: Record<string, string | undefined> | undefi
   return nodeEnv === "production" || deployEnv === "production" || deployEnv === "staging" || deployEnv === "private-alpha"
     ? "production"
     : "development";
+}
+
+function googleScopeIdsForUrls(scopeUrls: readonly string[]): string[] {
+  const requested = new Set(scopeUrls);
+
+  return googleScopeRegistry
+    .filter((scope) => scope.scope && requested.has(scope.scope))
+    .map((scope) => scope.id);
+}
+
+function googleScopeUrlsForIds(scopeIds: readonly string[]): string[] {
+  const requested = new Set(scopeIds);
+  const urls = googleScopeRegistry
+    .filter((scope) => scope.scope && requested.has(scope.id))
+    .map((scope) => scope.scope)
+    .filter((scope): scope is string => Boolean(scope));
+
+  return [...new Set(urls)];
+}
+
+function googleScopeUrlsForSurfaces(
+  surfaceIds: readonly GoogleSurfaceId[],
+  env: Record<string, string | undefined> | undefined,
+): string[] {
+  if (!surfaceIds.length) {
+    return [];
+  }
+
+  return planGoogleScopeRequest({
+    surfaceIds,
+    mode: googleScopeRequestMode(env),
+    config: readGoogleConnectorRuntimeConfig(env),
+  }).requestableScopeUrls;
 }
 
 function connectionInput(

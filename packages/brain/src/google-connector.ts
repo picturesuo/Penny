@@ -501,6 +501,7 @@ export const googleConnectorTagKeys = {
   bundle: "penny_google_bundle",
   surfaces: "penny_google_surfaces",
   scopes: "penny_google_scopes",
+  scopeIds: "penny_google_scope_ids",
   userId: "penny_user_id",
   workspaceId: "penny_workspace_id",
   projectId: "penny_project_id",
@@ -1895,9 +1896,28 @@ function nangoSyncStatus(status: string | null): ConnectorStatus {
 function nangoErrorMessage(body: unknown, status: number): string {
   const record = recordValue(body);
   const nestedError = recordValue(record.error);
-  const message = stringValue(nestedError.message) ?? stringValue(record.message);
+  const message = stringValue(nestedError.message) ?? stringValue(record.message) ?? stringValue(record.error);
+  const validationMessages = [...nangoValidationMessages(nestedError), ...nangoValidationMessages(record)];
 
-  return message ?? `Nango request failed with status ${status}.`;
+  return [message, ...validationMessages].filter(Boolean).join(" ") || `Nango request failed with status ${status}.`;
+}
+
+function nangoValidationMessages(record: Record<string, unknown>): string[] {
+  return arrayRecords(record.errors)
+    .map((error) => {
+      const message = stringValue(error.message);
+
+      if (!message) {
+        return null;
+      }
+
+      const path = Array.isArray(error.path)
+        ? error.path.map((part) => String(part).trim()).filter(Boolean).join(".")
+        : stringValue(error.path);
+
+      return path ? `${path}: ${message}` : message;
+    })
+    .filter((message): message is string => Boolean(message));
 }
 
 function readEnv(env: Record<string, string | undefined>, key: string): string | null {
