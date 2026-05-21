@@ -2371,6 +2371,7 @@ export function BrainMemoryPanel({
   const [googleConnectorState, setGoogleConnectorState] = useState<GoogleConnectorStateView>(emptyGoogleConnectorStateView());
   const [googleStatus, setGoogleStatus] = useState<GoogleConnectorUiStatus>("idle");
   const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleWarning, setGoogleWarning] = useState<string | null>(null);
   const [googleConnectLink, setGoogleConnectLink] = useState<string | null>(null);
   const importing = status === "importing";
   const sources = profile?.sources ?? [];
@@ -2393,6 +2394,7 @@ export function BrainMemoryPanel({
 
     setGoogleStatus("loading");
     setGoogleError(null);
+    setGoogleWarning(null);
     fetchGoogleConnectorProvider()
       .then((response) => {
         if (canceled) {
@@ -2475,11 +2477,13 @@ export function BrainMemoryPanel({
 
     setGoogleStatus("connecting");
     setGoogleError(null);
+    setGoogleWarning(null);
 
     try {
       const response = await createGoogleConnectorConnectSession();
 
       setGoogleConnectLink(response.data.connectLink);
+      setGoogleWarning(response.data.warnings.length ? response.data.warnings.join(" ") : null);
       setGoogleStatus("ready");
 
       if (typeof window !== "undefined") {
@@ -2506,6 +2510,7 @@ export function BrainMemoryPanel({
 
     setGoogleStatus("syncing");
     setGoogleError(null);
+    setGoogleWarning(null);
 
     try {
       const response = await postGoogleConnectorAction("/api/connectors/google/sync-now", {
@@ -2534,6 +2539,7 @@ export function BrainMemoryPanel({
 
     setGoogleStatus("revoking");
     setGoogleError(null);
+    setGoogleWarning(null);
 
     try {
       const response = await postGoogleConnectorAction("/api/connectors/google/revoke", {
@@ -2560,6 +2566,7 @@ export function BrainMemoryPanel({
 
     setGoogleStatus("deleting");
     setGoogleError(null);
+    setGoogleWarning(null);
 
     try {
       await onConnectorSourceDelete(sourceId);
@@ -2606,6 +2613,7 @@ export function BrainMemoryPanel({
         connectorState={googleConnectorState}
         status={googleStatus}
         error={googleError}
+        warning={googleWarning}
         connectLink={googleConnectLink}
         disabled={disabled || importing}
         onConnect={handleGoogleConnect}
@@ -2706,6 +2714,7 @@ export function GoogleConnectorControl({
   connectorState,
   status,
   error,
+  warning,
   connectLink,
   disabled,
   onConnect,
@@ -2717,6 +2726,7 @@ export function GoogleConnectorControl({
   connectorState: GoogleConnectorStateView;
   status: GoogleConnectorUiStatus;
   error: string | null;
+  warning: string | null;
   connectLink: string | null;
   disabled: boolean;
   onConnect: () => Promise<void>;
@@ -2732,22 +2742,24 @@ export function GoogleConnectorControl({
   const enabledSources = connectorState.sources.filter((source) => source.privacy.retrievalAccess === "enabled");
   const deleteSource = enabledSources[0] ?? null;
   const sourceCount = Object.values(connection?.sourceCounts ?? {}).reduce((total, count) => total + count, 0);
+  const gmailReady = !gmail || gmail.status === "available" || gmail.status === "connected";
   const canConnect = Boolean(provider?.configured) && !connection && status !== "connecting" && !disabled;
+  const connectLabel = gmailReady ? "Connect Google Workspace" : "Connect available Google";
   const canSync = Boolean(connection && connection.status !== "revoked") && status !== "syncing" && !disabled;
   const canRevoke = Boolean(connection && connection.status !== "revoked") && status !== "revoking" && !disabled;
   const canDelete = Boolean(deleteSource) && status !== "deleting" && !disabled;
 
   return (
-    <section className="brain-memory-card" aria-label="Google connector">
+    <section className="brain-memory-card" aria-label="Google Workspace connector">
       <div className="brain-memory-card-head">
-        <strong>Google</strong>
+        <strong>Google Workspace</strong>
         <span>{connection ? formatLabel(connection.status) : provider ? formatLabel(provider.configurationLabel) : formatLabel(status)}</span>
       </div>
       <p className="brain-memory-muted">
         {connection
           ? `${connection.surfaces.map(formatLabel).join(", ")} connected for private Brain sources.`
           : provider?.configured
-          ? "Drive, Docs, Calendar, and gated Google surfaces are registered for private Brain sources."
+          ? "One Google consent flow can connect Gmail, Drive files, Docs, and Calendar for private Brain sources."
           : "Google connector is not configured for this environment."}
       </p>
       {connection ? (
@@ -2765,7 +2777,8 @@ export function GoogleConnectorControl({
         <p className="brain-memory-import-hint">Missing config: {provider.missingConfig.join(", ")}</p>
       ) : null}
       {error ? <p className="brain-memory-error">{error}</p> : null}
-      {connectLink ? <p className="brain-memory-import-hint">Connect session created. Redirecting to Google consent.</p> : null}
+      {warning ? <p className="brain-memory-import-hint">{warning}</p> : null}
+      {connectLink ? <p className="brain-memory-import-hint">Connect session created. Redirecting to Google consent for Workspace scopes.</p> : null}
       <div className="brain-memory-source-list">
         {visibleSurfaces.slice(0, 8).map((surface) => (
           <GoogleConnectorSurfaceRow key={surface.id} surface={surface} />
@@ -2781,7 +2794,7 @@ export function GoogleConnectorControl({
         </div>
         <button type="button" className="primary-command" disabled={!canConnect} onClick={() => void onConnect()}>
           <FolderPlus size={15} aria-hidden="true" />
-          <span>{status === "connecting" ? "Connecting..." : connection ? "Connected" : "Connect Google"}</span>
+          <span>{status === "connecting" ? "Connecting..." : connection ? "Connected" : connectLabel}</span>
         </button>
         <button type="button" className="secondary-command" disabled={!canSync} onClick={() => void onSyncNow()}>
           <Zap size={15} aria-hidden="true" />
