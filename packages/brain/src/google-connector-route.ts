@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   defaultBrainMemoryService,
   type BrainMemoryRouteService,
@@ -8,8 +9,13 @@ import {
   connectorSourceToBrainImport,
   createNangoAdapter,
   deleteGoogleConnectorSourceAccess,
+  googleConnectorTagKeys,
   googleScopeRegistry,
+  googleSurfaceIdsForScopes,
+  googleSyncNamesForSurfaces,
+  googleWorkspaceSurfaceIds,
   initializeGoogleConnectorConnection,
+  planGoogleScopeRequest,
   readGoogleConnectorRuntimeConfig,
   revokeGoogleConnectorAccess,
   startGoogleConnectorSync,
@@ -27,6 +33,7 @@ import {
   type NangoCredentialsInput,
   type NangoStartSyncInput,
   type NangoSyncStatusInput,
+  type ScopeRequestMode,
 } from "./google-connector.ts";
 import {
   mergeGoogleConnectorStates,
@@ -41,12 +48,31 @@ export type GoogleConnectorRouteOptions = {
   brainMemoryService?: BrainMemoryRouteService;
 };
 
-export type GoogleConnectSessionRequestBody = Partial<NangoConnectSessionInput>;
+export type GoogleConnectSessionRequestBody = Partial<NangoConnectSessionInput> & {
+  surfaceIds?: GoogleSurfaceId[];
+  workspaceBundle?: boolean;
+};
 
 export type GoogleConnectorCallbackRequestBody = Partial<NangoCallbackInput> & {
   surfaces?: GoogleSurfaceId[];
   now?: string;
   syncIntervalHours?: number;
+};
+
+export type GoogleConnectorNangoWebhookRequestBody = {
+  type?: string;
+  operation?: string;
+  success?: boolean;
+  connectionId?: string;
+  providerConfigKey?: string;
+  provider?: string;
+  authMode?: string;
+  tags?: Record<string, string>;
+  endUser?: {
+    endUserId?: string;
+    organizationId?: string;
+  };
+  environment?: string;
 };
 
 export type GoogleConnectorConnectionRequestBody = Partial<NangoConnectionInput>;
@@ -77,8 +103,6 @@ export type GoogleConnectorSourceDeleteRequestBody = {
   sourceId?: string;
   now?: string;
 };
-
-const defaultGoogleSyncNames = ["google-drive-files", "google-calendar-events"] as const;
 
 export async function handleGoogleConnectorProviderRequest(
   request: Request,
@@ -126,6 +150,34 @@ export async function handleGoogleConnectorConnectSessionRequest(
     return invalidRequest("Google connect session requires an end user id.", ["endUserId"]);
   }
 
+  const scope = scopeFromRequest(request);
+  const requestedSurfaceIds = requestedConnectSurfaceIds(body.value.surfaceIds);
+  const scopePlan = planGoogleScopeRequest({
+    surfaceIds: requestedSurfaceIds,
+    mode: googleScopeRequestMode(options.env),
+    config: readGoogleConnectorRuntimeConfig(options.env),
+  });
+  const requestableSurfaceIds = googleSurfaceIdsForScopes(scopePlan.requestableScopeUrls).filter((surfaceId) =>
+    requestedSurfaceIds.includes(surfaceId),
+  );
+
+  if (!requestableSurfaceIds.length) {
+    return jsonResponse(
+      {
+        error: {
+          code: "google_workspace_scopes_blocked",
+          message: "No requested Google Workspace scopes are currently requestable.",
+          details: {
+            requestedSurfaceIds,
+            warnings: scopePlan.warnings,
+            blockedScopes: scopePlan.blockedScopes.map((blockedScope) => blockedScope.id),
+          },
+        },
+      },
+      409,
+    );
+  }
+
   const input: NangoConnectSessionInput = {
     endUserId,
   };
@@ -156,6 +208,17 @@ export async function handleGoogleConnectorConnectSessionRequest(
     input.tags = body.value.tags;
   }
 
+  input.tags = {
+    ...(input.tags ?? {}),
+    [googleConnectorTagKeys.bundle]: body.value.workspaceBundle === false ? "custom" : "workspace",
+    [googleConnectorTagKeys.surfaces]: requestableSurfaceIds.join(","),
+    [googleConnectorTagKeys.scopes]: scopePlan.requestableScopeUrls.join(" "),
+    [googleConnectorTagKeys.userId]: endUserId,
+    ...(scope.workspaceId ? { [googleConnectorTagKeys.workspaceId]: scope.workspaceId } : {}),
+    ...(scope.projectId ? { [googleConnectorTagKeys.projectId]: scope.projectId } : {}),
+    ...(scope.sphereId ? { [googleConnectorTagKeys.sphereId]: scope.sphereId } : {}),
+  };
+
   if (body.value.integrationsConfigDefaults) {
     input.integrationsConfigDefaults = body.value.integrationsConfigDefaults;
   }
@@ -164,7 +227,24 @@ export async function handleGoogleConnectorConnectSessionRequest(
     input.overrides = body.value.overrides;
   }
 
-  return adapterResponse(await resolveAdapter(options).createConnectSession(input), 201);
+  const result = await resolveAdapter(options).createConnectSession(input);
+
+  if (!result.ok) {
+    return adapterResponse(result, 201);
+  }
+
+  return jsonResponse(
+    {
+      data: {
+        ...result.data,
+        requestedSurfaceIds,
+        requestableSurfaceIds,
+        requestableScopeUrls: scopePlan.requestableScopeUrls,
+        warnings: scopePlan.warnings,
+      },
+    },
+    201,
+  );
 }
 
 export async function handleGoogleConnectorCallbackRequest(
@@ -228,6 +308,142 @@ export async function handleGoogleConnectorCallbackRequest(
       data: {
         credential: callback.data,
         state,
+      },
+    },
+    200,
+  );
+}
+
+export async function handleGoogleConnectorNangoWebhookRequest(
+  request: Request,
+  options: GoogleConnectorRouteOptions = {},
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return methodNotAllowed("POST /api/connectors/google/nango-webhook requires the POST method.", "POST");
+  }
+
+  const rawBody = await request.text();
+  const signatureError = verifyNangoWebhookSignature(rawBody, request, options.env);
+
+  if (signatureError) {
+    return signatureError;
+  }
+
+  const parsed = parseJson<GoogleConnectorNangoWebhookRequestBody>(rawBody);
+
+  if (!parsed.ok) {
+    return invalidJson(parsed.message);
+  }
+
+  const body = parsed.value;
+
+  if (body.type !== "auth") {
+    return jsonResponse({ data: { ignored: true, reason: "unsupported_webhook_type" } }, 200);
+  }
+
+  if (body.operation !== "creation" && body.operation !== "override") {
+    return jsonResponse({ data: { ignored: true, reason: "unsupported_auth_operation" } }, 200);
+  }
+
+  if (body.success !== true) {
+    return jsonResponse({ data: { ignored: true, reason: "auth_not_successful" } }, 200);
+  }
+
+  const tags = stringRecord(body.tags);
+  const endUser = recordValue(body.endUser);
+  const connectionId = firstNonEmpty(body.connectionId, stringValue((body as Record<string, unknown>).connection_id));
+  const providerConfigKey = firstNonEmpty(body.providerConfigKey, stringValue((body as Record<string, unknown>).provider_config_key));
+
+  if (!connectionId || !providerConfigKey) {
+    return invalidRequest("Nango auth webhook requires connectionId and providerConfigKey.", [
+      "connectionId",
+      "providerConfigKey",
+    ]);
+  }
+
+  const scope = scopeFromNangoWebhook(tags, endUser);
+
+  if (!scope.userId) {
+    return invalidRequest("Nango auth webhook requires a tagged end user id.", ["tags.end_user_id"]);
+  }
+
+  const scopes = parseList(tags[googleConnectorTagKeys.scopes]);
+  const surfacesFromTags = parseSurfaceList(tags[googleConnectorTagKeys.surfaces]);
+  const surfaces = surfacesFromTags.length ? surfacesFromTags : googleSurfaceIdsForScopes(scopes);
+
+  if (!surfaces.length) {
+    return invalidRequest("Nango auth webhook requires Penny Google surfaces or recognizable scopes.", [
+      googleConnectorTagKeys.surfaces,
+      googleConnectorTagKeys.scopes,
+    ]);
+  }
+
+  const callback = await resolveAdapter(options).handleCallback({
+    connectionId,
+    providerConfigKey,
+    endUserId: scope.userId,
+    scopes,
+  });
+
+  if (!callback.ok) {
+    return adapterResponse(callback, 200);
+  }
+
+  const now = new Date().toISOString();
+  const initializedState = initializeGoogleConnectorConnection({
+    scope,
+    credential: callback.data,
+    surfaces,
+    scopes,
+    now,
+  });
+  let state = await saveGoogleConnectorState(options, scope, initializedState);
+  const syncNames = googleSyncNamesForSurfaces(surfaces);
+  let autoSync:
+    | { attempted: false; syncNames: string[] }
+    | { attempted: true; started: true; syncNames: string[] }
+    | { attempted: true; started: false; syncNames: string[]; error: unknown } = {
+    attempted: false,
+    syncNames,
+  };
+
+  if (syncNames.length) {
+    const syncResult = await resolveAdapter(options).startSync({
+      connectionId,
+      providerConfigKey,
+      syncNames,
+    });
+
+    if (syncResult.ok) {
+      state = await saveGoogleConnectorState(
+        options,
+        scope,
+        surfaces
+          .filter((surface) => googleSyncNamesForSurfaces([surface]).length > 0)
+          .reduce(
+            (nextState, surface) =>
+              startGoogleConnectorSync({
+                state: nextState,
+                scope,
+                connectionId: state.connections[0]?.id ?? connectionId,
+                surface,
+                now,
+              }),
+            state,
+          ),
+      );
+      autoSync = { attempted: true, started: true, syncNames };
+    } else {
+      autoSync = { attempted: true, started: false, syncNames, error: syncResult.error };
+    }
+  }
+
+  return jsonResponse(
+    {
+      data: {
+        credential: callback.data,
+        state,
+        autoSync,
       },
     },
     200,
@@ -328,7 +544,15 @@ export async function handleGoogleConnectorSyncNowRequest(
 
   const adapterResult = await resolveAdapter(options).startSync({
     ...input.value,
-    syncNames: body.value.syncNames?.length ? body.value.syncNames : defaultGoogleSyncNames,
+    syncNames: body.value.syncNames?.length
+      ? body.value.syncNames
+      : googleSyncNamesForSurfaces(
+          body.value.surface && isGoogleSurfaceId(body.value.surface)
+            ? [body.value.surface]
+            : connection?.surfaces.length
+              ? connection.surfaces
+              : googleWorkspaceSurfaceIds,
+        ),
     ...(body.value.reset !== undefined ? { reset: body.value.reset } : {}),
     ...(body.value.emptyCache !== undefined ? { emptyCache: body.value.emptyCache } : {}),
   });
@@ -730,6 +954,26 @@ function scopeFromRequest(request: Request): ConnectorStateScope {
   };
 }
 
+function scopeFromNangoWebhook(tags: Record<string, string>, endUser: Record<string, unknown>): ConnectorStateScope {
+  return {
+    userId: firstNonEmpty(
+      tags[googleConnectorTagKeys.userId],
+      tags.end_user_id,
+      stringValue(endUser.endUserId),
+      stringValue(endUser.end_user_id),
+    ),
+    workspaceId: firstNonEmpty(
+      tags[googleConnectorTagKeys.workspaceId],
+      tags.workspace_id,
+      tags.organization_id,
+      stringValue(endUser.organizationId),
+      stringValue(endUser.organization_id),
+    ),
+    projectId: firstNonEmpty(tags[googleConnectorTagKeys.projectId], tags.project_id),
+    sphereId: firstNonEmpty(tags[googleConnectorTagKeys.sphereId], tags.sphere_id),
+  };
+}
+
 function callbackSurfaces(input: GoogleConnectorCallbackRequestBody): GoogleSurfaceId[] {
   const explicitSurfaces = (input.surfaces ?? []).filter(isGoogleSurfaceId);
 
@@ -757,6 +1001,22 @@ function isGoogleSurfaceId(value: unknown): value is GoogleSurfaceId {
   );
 }
 
+function requestedConnectSurfaceIds(values: readonly GoogleSurfaceId[] | undefined): GoogleSurfaceId[] {
+  const explicit = (values ?? []).filter(isGoogleSurfaceId);
+
+  return explicit.length ? [...new Set(explicit)] : [...googleWorkspaceSurfaceIds];
+}
+
+function googleScopeRequestMode(env: Record<string, string | undefined> | undefined): ScopeRequestMode {
+  const source = env ?? process.env;
+  const nodeEnv = source.NODE_ENV?.trim().toLowerCase();
+  const deployEnv = source.PENNY_DEPLOY_ENV?.trim().toLowerCase();
+
+  return nodeEnv === "production" || deployEnv === "production" || deployEnv === "staging" || deployEnv === "private-alpha"
+    ? "production"
+    : "development";
+}
+
 function connectionInput(
   input: Partial<NangoConnectionInput>,
 ): { ok: true; value: NangoConnectionInput } | { ok: false; response: Response } {
@@ -777,6 +1037,106 @@ function connectionInput(
       providerConfigKey: input.providerConfigKey,
     },
   };
+}
+
+function verifyNangoWebhookSignature(
+  rawBody: string,
+  request: Request,
+  env: Record<string, string | undefined> | undefined,
+): Response | null {
+  const secret = readGoogleConnectorRuntimeConfig(env).nangoSecretKey;
+
+  if (!secret) {
+    return jsonResponse(
+      {
+        error: {
+          code: "not_configured",
+          message: "Google connector Nango webhook verification requires NANGO_SECRET_KEY.",
+          retryable: false,
+          details: { missingConfig: ["NANGO_SECRET_KEY"] },
+        },
+      },
+      503,
+    );
+  }
+
+  const signature = request.headers.get("x-nango-hmac-sha256")?.trim();
+
+  if (!signature) {
+    return jsonResponse(
+      {
+        error: {
+          code: "invalid_webhook_signature",
+          message: "Nango webhook signature is required.",
+        },
+      },
+      401,
+    );
+  }
+
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+  const providedBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+
+  if (providedBuffer.length !== expectedBuffer.length || !timingSafeEqual(providedBuffer, expectedBuffer)) {
+    return jsonResponse(
+      {
+        error: {
+          code: "invalid_webhook_signature",
+          message: "Nango webhook signature is invalid.",
+        },
+      },
+      401,
+    );
+  }
+
+  return null;
+}
+
+function parseJson<T>(value: string): { ok: true; value: T } | { ok: false; message: string } {
+  try {
+    return { ok: true, value: JSON.parse(value) as T };
+  } catch {
+    return { ok: false, message: "Request body must be valid JSON." };
+  }
+}
+
+function parseList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => stringValue(item)).filter((item): item is string => Boolean(item));
+  }
+
+  return stringValue(value)
+    ?.split(/[,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean) ?? [];
+}
+
+function parseSurfaceList(value: unknown): GoogleSurfaceId[] {
+  return parseList(value).filter(isGoogleSurfaceId);
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  const record = recordValue(value);
+  const output: Record<string, string> = {};
+
+  for (const [key, entry] of Object.entries(record)) {
+    const stringEntry = stringValue(entry);
+
+    if (stringEntry) {
+      output[key] = stringEntry;
+    }
+  }
+
+  return output;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function adapterResponse<T>(result: ConnectorAdapterResult<T>, successStatus: number): Response {
