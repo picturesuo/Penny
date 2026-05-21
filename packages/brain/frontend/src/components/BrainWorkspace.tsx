@@ -10,6 +10,7 @@ import {
   Folder,
   FolderPlus,
   Lightbulb,
+  Mail,
   Plus,
   Search,
   Send,
@@ -2751,33 +2752,48 @@ export function GoogleConnectorControl({
   const deleteSource = enabledSources[0] ?? null;
   const sourceCount = connection ? googleConnectionSourceCount(connection) : 0;
   const activeConnectionCount = connectorState.connections.filter((candidate) => candidate.status !== "revoked").length;
-  const gmailReady = !gmail || gmail.status === "available" || gmail.status === "connected";
+  const gmailConnectable = !gmail || gmail.status === "available" || gmail.status === "connected" || gmail.status === "syncing";
+  const selectedHasGmail = connection?.surfaces.includes("google_gmail") ?? false;
   const canConnect = Boolean(provider?.configured) && status !== "connecting" && !disabled;
   const connectLabel =
-    connectorState.connections.length > 0 ? "Add Google account" : gmailReady ? "Connect Google Workspace" : "Connect available Google";
+    connectorState.connections.length > 0 ? (gmailConnectable ? "Add Gmail account" : "Add Google account") : gmailConnectable ? "Connect Gmail" : "Connect Google";
   const canSync = Boolean(connection && connection.status !== "revoked") && status !== "syncing" && !disabled;
   const canRevoke = Boolean(connection && connection.status !== "revoked") && status !== "revoking" && !disabled;
   const canDelete = Boolean(deleteSource) && status !== "deleting" && !disabled;
 
   return (
-    <section className="brain-memory-card" aria-label="Google Workspace connector">
-      <div className="brain-memory-card-head">
-        <strong>Google Workspace</strong>
-        <span>
-          {connectorState.connections.length
-            ? `${activeConnectionCount} active`
-            : provider
-              ? formatLabel(provider.configurationLabel)
-              : formatLabel(status)}
-        </span>
+    <section className="brain-memory-card google-connector-card" aria-label="Google Workspace connector">
+      <div className="google-connector-hero">
+        <div className="google-connector-hero-main">
+          <span className="google-connector-mark" aria-hidden="true">
+            <Mail size={20} />
+          </span>
+          <div>
+            <div className="google-connector-title-row">
+              <strong>Gmail</strong>
+              <span>{connection ? (selectedHasGmail ? "Gmail connected" : "Google connected") : formatLabel(gmail?.status ?? provider?.configurationLabel ?? status)}</span>
+            </div>
+            <p>
+              {connection
+                ? `${googleConnectionAccountLabel(connection)} is selected for ${connection.surfaces.map(formatLabel).join(", ")}.`
+                : provider?.configured
+                  ? gmailConnectable
+                    ? "Bring Gmail and Google Workspace into private Brain context."
+                    : "Gmail is waiting on restricted-scope approval; Google Workspace is available."
+                  : "Google connector is not configured for this environment."}
+            </p>
+            <div className="google-connector-chips" aria-label="Google connector status">
+              <span>{connectorState.connections.length ? `${activeConnectionCount} active` : formatLabel(provider?.configurationLabel ?? status)}</span>
+              {gmail ? <span>Gmail {formatLabel(gmail.status)}</span> : null}
+              {connection ? <span>{sourceCount} indexed</span> : null}
+            </div>
+          </div>
+        </div>
+        <button type="button" className="primary-command google-connector-primary" disabled={!canConnect} onClick={() => void onConnect()}>
+          <Mail size={15} aria-hidden="true" />
+          <span>{status === "connecting" ? "Connecting..." : connectLabel}</span>
+        </button>
       </div>
-      <p className="brain-memory-muted">
-        {connection
-          ? `${googleConnectionAccountLabel(connection)}: ${connection.surfaces.map(formatLabel).join(", ")} connected for private Brain sources.`
-          : provider?.configured
-          ? "Connect one or more Google accounts for private Brain sources."
-          : "Google connector is not configured for this environment."}
-      </p>
       {connection ? (
         <div className="brain-memory-import-status is-completed">
           <strong>
@@ -2790,13 +2806,13 @@ export function GoogleConnectorControl({
         </div>
       ) : null}
       {connectorState.connections.length ? (
-        <div className="brain-memory-source-list" aria-label="Connected Google accounts">
+        <div className="brain-memory-source-list google-account-list" aria-label="Connected Google accounts">
           {connectorState.connections.map((candidate) => {
             const selected = connection?.id === candidate.id;
             const candidateSourceCount = googleConnectionSourceCount(candidate);
 
             return (
-              <label key={candidate.id} className={`brain-memory-source${selected ? " is-selected" : ""}`}>
+              <label key={candidate.id} className={`brain-memory-source google-account-row${selected ? " is-selected" : ""}`}>
                 <input
                   type="radio"
                   name="google-connector-connection"
@@ -2822,23 +2838,22 @@ export function GoogleConnectorControl({
       {error ? <p className="brain-memory-error">{error}</p> : null}
       {warning ? <p className="brain-memory-import-hint">{warning}</p> : null}
       {connectLink ? <p className="brain-memory-import-hint">Connect session created. Redirecting to Google consent for Workspace scopes.</p> : null}
-      <div className="brain-memory-source-list">
-        {visibleSurfaces.slice(0, 8).map((surface) => (
-          <GoogleConnectorSurfaceRow key={surface.id} surface={surface} />
-        ))}
-      </div>
+      <details className="google-connector-details">
+        <summary>Google source coverage</summary>
+        <div className="brain-memory-source-list">
+          {visibleSurfaces.slice(0, 8).map((surface) => (
+            <GoogleConnectorSurfaceRow key={surface.id} surface={surface} />
+          ))}
+        </div>
+      </details>
       <div className="brain-memory-next-step">
         <div>
-          <strong>Google source controls</strong>
+          <strong>Selected account</strong>
           <span>
             {gmail ? `Gmail: ${formatLabel(gmail.status)}. ` : ""}
             {extension ? `Browser/search: ${formatLabel(extension.status)}.` : ""}
           </span>
         </div>
-        <button type="button" className="primary-command" disabled={!canConnect} onClick={() => void onConnect()}>
-          <FolderPlus size={15} aria-hidden="true" />
-          <span>{status === "connecting" ? "Connecting..." : connectLabel}</span>
-        </button>
         <button
           type="button"
           className="secondary-command"
