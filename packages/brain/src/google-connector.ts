@@ -58,6 +58,8 @@ export type ConnectorCredentialRef = {
   providerConfigKey: string;
   credentialRef: string;
   accountId?: string;
+  accountEmail?: string;
+  accountLabel?: string;
   endUserId?: string;
 };
 
@@ -143,6 +145,11 @@ export type ConnectorSource = {
   };
   provenance: {
     credentialRef: string;
+    connectionId?: string;
+    providerConfigKey?: string;
+    connectionLabel?: string;
+    accountEmail?: string;
+    accountLabel?: string;
     fetchedAt: string;
     cursor: string | null;
   };
@@ -381,6 +388,8 @@ export type NangoCallbackInput = {
   providerConfigKey: string;
   endUserId?: string;
   accountId?: string;
+  accountEmail?: string;
+  accountLabel?: string;
   scopes?: readonly string[];
 };
 
@@ -417,6 +426,15 @@ export type NangoListConnectionsInput = {
 export type NangoConnectionInput = {
   connectionId: string;
   providerConfigKey: string;
+};
+
+export type GoogleConnectorAccountDetails = {
+  metadata?: Record<string, unknown>;
+  tags?: Record<string, string>;
+  accountId?: string | null;
+  accountEmail?: string | null;
+  accountLabel?: string | null;
+  endUserId?: string | null;
 };
 
 export type NangoCredentialsInput = NangoConnectionInput & {
@@ -881,6 +899,9 @@ export function initializeGoogleConnectorConnection(input: InitializeGoogleConne
         surfaces: [...input.surfaces],
         scopes: [...input.scopes],
         credentialRef: input.credential.credentialRef,
+        connectionLabel: googleConnectorCredentialLabel(input.credential),
+        ...(input.credential.accountEmail ? { accountEmail: input.credential.accountEmail } : {}),
+        ...(input.credential.accountLabel ? { accountLabel: input.credential.accountLabel } : {}),
         nextSyncAt,
       },
       createdAt: input.now,
@@ -1141,14 +1162,88 @@ export function connectorSourceToBrainImport(source: ConnectorSource, content: s
       : source.kind === "google_calendar_event" || source.kind === "google_gmail_message"
         ? "text"
         : "docs_text";
+  const accountLabel = sourceProvenanceAccountLabel(source);
 
   return {
     kind,
-    label: source.label,
+    label: accountLabel && !source.label.includes(accountLabel) ? `${source.label} (${accountLabel})` : source.label,
     sourceUri: source.sourceUri,
     content,
     rawRetention: false,
   };
+}
+
+export function googleConnectorCredentialWithAccountDetails(
+  credential: ConnectorCredentialRef,
+  details: GoogleConnectorAccountDetails,
+): ConnectorCredentialRef {
+  const metadata = details.metadata ?? {};
+  const tags = details.tags ?? {};
+  const account = recordValue(metadata.account);
+  const user = recordValue(metadata.user);
+  const profile = recordValue(metadata.profile);
+  const accountEmail = firstConnectorString(
+    details.accountEmail,
+    credential.accountEmail,
+    tags.end_user_email,
+    tags.email,
+    tags.account_email,
+    metadata.email,
+    metadata.account_email,
+    metadata.accountEmail,
+    metadata.google_email,
+    account.email,
+    user.email,
+    profile.email,
+  );
+  const accountLabel = firstConnectorString(
+    details.accountLabel,
+    credential.accountLabel,
+    tags.end_user_display_name,
+    tags.display_name,
+    tags.account_label,
+    metadata.name,
+    metadata.display_name,
+    metadata.displayName,
+    metadata.account_name,
+    metadata.accountLabel,
+    account.name,
+    user.name,
+    profile.name,
+    accountEmail,
+  );
+  const accountId = firstConnectorString(
+    details.accountId,
+    credential.accountId,
+    metadata.account_id,
+    metadata.accountId,
+    metadata.id,
+    metadata.sub,
+    account.id,
+    user.id,
+    profile.id,
+  );
+  const endUserId = firstConnectorString(details.endUserId, credential.endUserId, tags.end_user_id, tags[googleConnectorTagKeys.userId]);
+
+  return {
+    ...credential,
+    ...(accountId ? { accountId } : {}),
+    ...(accountEmail ? { accountEmail } : {}),
+    ...(accountLabel ? { accountLabel } : {}),
+    ...(endUserId ? { endUserId } : {}),
+  };
+}
+
+export function googleConnectorCredentialLabel(credential: ConnectorCredentialRef): string {
+  return (
+    firstConnectorString(
+      credential.accountLabel,
+      credential.accountEmail,
+      credential.accountId,
+      credential.endUserId,
+      credential.connectionId,
+    ) ?? credential.connectionId
+  );
 }
 
 export function createNangoAdapter(
@@ -1215,6 +1310,8 @@ export function createNangoAdapter(
           providerConfigKey: input.providerConfigKey,
           credentialRef: `nango:${input.providerConfigKey}:${input.connectionId}`,
           ...(input.accountId ? { accountId: input.accountId } : {}),
+          ...(input.accountEmail ? { accountEmail: input.accountEmail } : {}),
+          ...(input.accountLabel ? { accountLabel: input.accountLabel } : {}),
           ...(input.endUserId ? { endUserId: input.endUserId } : {}),
         },
       };
@@ -1628,6 +1725,11 @@ function connectorSourceFromDraft(input: {
     },
     provenance: {
       credentialRef: input.connection.credential.credentialRef,
+      connectionId: input.connection.credential.connectionId,
+      providerConfigKey: input.connection.credential.providerConfigKey,
+      connectionLabel: googleConnectorCredentialLabel(input.connection.credential),
+      ...(input.connection.credential.accountEmail ? { accountEmail: input.connection.credential.accountEmail } : {}),
+      ...(input.connection.credential.accountLabel ? { accountLabel: input.connection.credential.accountLabel } : {}),
       fetchedAt: input.fetchedAt,
       cursor: input.cursor ?? input.source.cursor ?? null,
     },
@@ -1687,6 +1789,10 @@ function countSources(sources: readonly ConnectorSource[]): Partial<Record<Brain
   }
 
   return counts;
+}
+
+function sourceProvenanceAccountLabel(source: ConnectorSource): string | null {
+  return firstConnectorString(source.provenance.accountEmail, source.provenance.accountLabel);
 }
 
 function blockedScopeReason(
@@ -1849,4 +1955,16 @@ function stringRecord(value: unknown): Record<string, string> {
 
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function firstConnectorString(...values: readonly unknown[]): string | null {
+  for (const value of values) {
+    const string = stringValue(value);
+
+    if (string) {
+      return string;
+    }
+  }
+
+  return null;
 }
