@@ -37,6 +37,7 @@ const confirmMutations = envFlag("GMAIL_SMOKE_CONFIRM_MUTATIONS");
 const confirmDelete = envFlag("GMAIL_SMOKE_CONFIRM_DELETE");
 const stagingRunId = env("GMAIL_STAGING_RUN_ID", env("GMAIL_SMOKE_STAGING_RUN_ID", ""));
 const evidenceFile = env("GMAIL_SMOKE_EVIDENCE_FILE", "");
+const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
 
 const evidence = {
   baseUrl,
@@ -44,7 +45,7 @@ const evidence = {
   workspaceId,
   projectId,
   sphereId,
-  ...(stagingRunId ? { stagingRunId } : {}),
+  ...stagingRunIdEvidence(),
   connectPreflightEnabled: connectPreflight,
   connectPreflightOnly,
   destructiveRevokeEnabled: confirmMutations,
@@ -54,6 +55,7 @@ const evidence = {
 };
 
 try {
+  assertSafeStagingRunId();
   const selector = connectionSelector();
   const initialStatus = await request("GET", "/api/connectors/google/gmail/status");
   assert(initialStatus.data?.configured === true, "Gmail is not configured.");
@@ -1003,6 +1005,22 @@ function brainProfileSourcePrivacySummary(sources, sourceUris) {
 
 function hasUniqueValues(values) {
   return new Set(values).size === values.length;
+}
+
+function assertSafeStagingRunId() {
+  if (!stagingRunId) {
+    return;
+  }
+
+  assert(isSafeStagingRunId(stagingRunId), "GMAIL_STAGING_RUN_ID must be a safe opaque slug for Gmail staging smoke.");
+}
+
+function stagingRunIdEvidence() {
+  return isSafeStagingRunId(stagingRunId) ? { stagingRunId: stagingRunId.trim() } : {};
+}
+
+function isSafeStagingRunId(value) {
+  return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
 }
 
 function sameStringSet(left, right) {
