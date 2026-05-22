@@ -253,6 +253,17 @@ test("Gmail smoke evidence verifier rejects unsafe run ids without echoing them"
   assert.doesNotMatch(failure, /staged-account@example\.com/);
 });
 
+test("Gmail smoke evidence verifier rejects unsafe scope ids without echoing them", () => {
+  const evidence = validEvidence();
+
+  evidence.userId = "staged-account@example.com";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Smoke evidence userId must be a safe opaque scope id/);
+  assert.doesNotMatch(failure, /staged-account@example\.com/);
+});
+
 test("Gmail smoke evidence verifier rejects unknown smoke step rows", () => {
   const evidence = validEvidence();
 
@@ -499,6 +510,10 @@ function runVerifierExpectingFailure(evidence: Record<string, unknown>, args = v
 function validEvidence(): Record<string, unknown> & { steps: Array<Record<string, unknown>> } {
   return {
     baseUrl: "http://localhost:3000",
+    userId: "gmail-smoke-user",
+    workspaceId: "gmail-smoke-workspace",
+    projectId: "gmail-smoke-project",
+    sphereId: "gmail-smoke-sphere",
     startedAt: "2026-05-22T12:00:00.000Z",
     completedAt: "2026-05-22T12:01:00.000Z",
     steps: [
@@ -680,6 +695,10 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
 function connectPreflightOnlyEvidence(): Record<string, unknown> & { steps: Array<Record<string, unknown>> } {
   return {
     baseUrl: "http://localhost:3000",
+    userId: "gmail-smoke-user",
+    workspaceId: "gmail-smoke-workspace",
+    projectId: "gmail-smoke-project",
+    sphereId: "gmail-smoke-sphere",
     startedAt: "2026-05-22T12:00:00.000Z",
     completedAt: "2026-05-22T12:00:10.000Z",
     steps: [
