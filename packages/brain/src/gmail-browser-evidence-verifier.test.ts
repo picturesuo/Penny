@@ -117,12 +117,24 @@ test("Gmail browser evidence verifier rejects raw Gmail, token, and score data",
   const semantic = evidence.checks.find((check) => check.name === "brain.gmailSemanticResults") as Record<string, unknown>;
 
   semantic.score = 0.91;
-  evidence.notes = "Copied row included plainTextBody and https://connect.nango.dev/session-token";
+  evidence.notes = "Copied row included plainTextBody, https://connect.nango.dev/session-token, and global training.";
 
   const failure = runVerifierExpectingFailure(evidence);
 
   assert.match(failure, /score must not be present/);
   assert.match(failure, /raw Gmail, credential, connect, or token data/);
+  assert.match(failure, /unsafe Gmail privacy claim/);
+});
+
+test("Gmail browser evidence verifier rejects weak Create export privacy proof", () => {
+  const evidence = validBrowserEvidence();
+  const exported = evidence.checks.find((check) => check.name === "create.gmailExport") as Record<string, unknown>;
+
+  exported.unsafePrivacyClaimAbsent = false;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Export evidence must prove unsafe Gmail privacy claims are absent/);
 });
 
 function runVerifierExpectingFailure(evidence: Record<string, unknown>, ...args: string[]): string {
@@ -256,6 +268,7 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
         selectorTargetsPresent: true,
         exportVisible: true,
         gmailContextOnlyWhenUsed: true,
+        unsafePrivacyClaimAbsent: true,
         rawEmailBodyAbsent: true,
         secretOrConnectTokenAbsent: true,
         unsupportedHumanReviewClaimAbsent: true,
