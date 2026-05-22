@@ -88,6 +88,36 @@ test("Gmail staging readiness checker rejects unsafe run ids without writing the
   }
 });
 
+test("Gmail staging readiness checker rejects unsafe scope ids without writing them", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-readiness-"));
+  const evidenceFile = join(tmp, "unsafe-scope-id-evidence.json");
+  const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
+  const unsafeUserId = "staged-account@example.com";
+
+  try {
+    const result = await runReadiness({
+      routes: readinessRoutes(),
+      requests,
+      env: readyStrictEnv({
+        GMAIL_READINESS_USER_ID: unsafeUserId,
+        GMAIL_READINESS_EVIDENCE_FILE: evidenceFile,
+      }),
+    });
+    const evidenceText = await readFile(evidenceFile, "utf8");
+    const evidence = JSON.parse(evidenceText) as { ok: boolean; userId?: string; error?: string };
+
+    assert.equal(result.status, 1);
+    assert.equal(requests.length, 0);
+    assert.equal(evidence.ok, false);
+    assert.equal(evidence.userId, undefined);
+    assert.match(evidence.error ?? "", /GMAIL_READINESS_USER_ID must be a safe opaque slug/);
+    assert.doesNotMatch(result.stderr, new RegExp(unsafeUserId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.doesNotMatch(evidenceText, new RegExp(unsafeUserId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging readiness checker rejects missing NANGO_GMAIL_INTEGRATION_ID before API calls", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-readiness-"));
   const evidenceFile = join(tmp, "missing-integration-evidence.json");
