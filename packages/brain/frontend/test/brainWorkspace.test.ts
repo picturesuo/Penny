@@ -217,6 +217,63 @@ test("GoogleConnectorControl renders statuses, scopes, sync counts, and honest g
   assert.match(markup, /Delete Gmail source/);
 });
 
+test("GoogleConnectorControl disables Gmail source deletion when only non-Gmail sources exist", () => {
+  const markup = renderToStaticMarkup(
+    createElement(GoogleConnectorControl, {
+      provider: googleProviderView(),
+      connectorState: {
+        connections: [
+          {
+            id: "connector-google-1",
+            status: "connected",
+            surfaces: ["google_drive", "google_gmail"],
+            scopes: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/gmail.readonly"],
+            lastSyncedAt: "2026-05-20T12:05:00.000Z",
+            nextSyncAt: "2026-05-20T18:05:00.000Z",
+            revokedAt: null,
+            sourceCounts: { google_doc: 1 },
+            credential: {
+              connectionId: "nango-google-1",
+              providerConfigKey: "google",
+              accountEmail: "work@example.com",
+            },
+          },
+        ],
+        syncJobs: [],
+        sources: [
+          {
+            id: "connector-source-drive-1",
+            connectionId: "connector-google-1",
+            kind: "google_doc",
+            label: "Drive source that must not be deleted by Gmail control",
+            sourceUri: "google-drive:file:doc-1",
+            brainSourceId: "brain-source-1",
+            privacy: {
+              retrievalAccess: "enabled",
+            },
+          },
+        ],
+      },
+      status: "ready",
+      error: null,
+      warning: null,
+      connectLink: null,
+      disabled: false,
+      onConnect: async () => undefined,
+      onSyncNow: async () => undefined,
+      onRevoke: async () => undefined,
+      onDeleteSource: async () => undefined,
+    }),
+  );
+  const labelIndex = markup.indexOf("<span>Delete Gmail source</span>");
+  const buttonStart = markup.lastIndexOf("<button", labelIndex);
+  const buttonEnd = markup.indexOf("</button>", labelIndex);
+  const buttonMarkup = markup.slice(buttonStart, buttonEnd);
+
+  assert.notEqual(labelIndex, -1);
+  assert.match(buttonMarkup, /disabled=""/);
+});
+
 function emptyDocumentsData(): BrainDocumentsData {
   const document = documentSummary();
 
