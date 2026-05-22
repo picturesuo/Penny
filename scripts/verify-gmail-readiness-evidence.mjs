@@ -36,6 +36,9 @@ if (evidence?.ok === false) {
   assert(allowFailure, "Failed readiness evidence is only valid with --allow-failure.");
   assert(typeof evidence?.failedAt === "string" && evidence.failedAt.length > 0, "Failed readiness evidence must include failedAt.");
   assert(typeof evidence?.error === "string" && evidence.error.length > 0, "Failed readiness evidence must include an error message.");
+  if (checks.has("env.requiredPresence")) {
+    assertRequiredPresence(checks.get("env.requiredPresence"), { successful: false });
+  }
   printResult({
     readinessOk: false,
     strictStagingVerified: false,
@@ -48,6 +51,9 @@ assert(evidence?.ok === true, "Readiness evidence must include ok=true.");
 assert(typeof evidence?.checkedAt === "string" && evidence.checkedAt.length > 0, "Readiness evidence must include checkedAt.");
 assert(checks.size > 0, "Successful readiness evidence must include checks.");
 assert(checks.has("env.requiredPresence"), "Successful readiness evidence must include env.requiredPresence.");
+
+const requiredPresence = requireCheck("env.requiredPresence");
+assertRequiredPresence(requiredPresence, { successful: true });
 
 const envGmail = requireCheck("env.gmail");
 assert(envGmail.enableGoogleConnector === true, "env.gmail must report ENABLE_GOOGLE_CONNECTOR=true.");
@@ -170,6 +176,61 @@ function assertReadinessChecks(value, options) {
 
   if (options.successful) {
     assert(seen.has("env.requiredPresence"), "Successful readiness evidence must include env.requiredPresence.");
+  }
+}
+
+function assertRequiredPresence(check, options) {
+  const booleanFields = [
+    "envFileConfigured",
+    "envFileLoaded",
+    "envFileLoadErrorPresent",
+    "requireStaging",
+    "connectPreflight",
+    "enableGoogleConnector",
+    "enableGmailConnector",
+    "enableRestrictedGoogleScopes",
+    "nangoSecretPresent",
+    "nangoPublicPresent",
+    "nangoBaseUrlPresent",
+    "nangoGmailIntegrationIdPresent",
+    "databaseUrlPresent",
+    "pennyAuthModePresent",
+    "apiTokenPresent",
+    "sessionSecretPresent",
+    "corsOriginsPresent",
+    "rateLimitPresent",
+    "trustAuthHeadersPresent",
+    "databasePrepBypass",
+  ];
+
+  for (const field of booleanFields) {
+    assert(typeof check?.[field] === "boolean", `env.requiredPresence must include boolean ${field}.`);
+  }
+
+  if (!options.successful) {
+    return;
+  }
+
+  assert(check.envFileLoadErrorPresent === false, "env.requiredPresence must report envFileLoadErrorPresent=false for successful readiness.");
+  assert(check.requireStaging === evidence.requireStaging, "env.requiredPresence requireStaging must match readiness evidence.");
+  assert(check.connectPreflight === evidence.connectPreflight, "env.requiredPresence connectPreflight must match readiness evidence.");
+  assert(check.enableGoogleConnector === true, "env.requiredPresence must report ENABLE_GOOGLE_CONNECTOR present and true.");
+  assert(check.enableGmailConnector === true, "env.requiredPresence must report ENABLE_GMAIL_CONNECTOR present and true.");
+  assert(check.enableRestrictedGoogleScopes === true, "env.requiredPresence must report ENABLE_RESTRICTED_GOOGLE_SCOPES present and true.");
+  assert(check.nangoSecretPresent === true, "env.requiredPresence must report NANGO_SECRET_KEY present.");
+  assert(check.nangoPublicPresent === true, "env.requiredPresence must report NANGO_PUBLIC_KEY present.");
+  assert(check.nangoBaseUrlPresent === true, "env.requiredPresence must report NANGO_BASE_URL present.");
+  assert(check.nangoGmailIntegrationIdPresent === true, "env.requiredPresence must report NANGO_GMAIL_INTEGRATION_ID present.");
+  assert(check.databasePrepBypass === false, "env.requiredPresence must report databasePrepBypass=false.");
+
+  if (requireStrictStaging || evidence.requireStaging === true) {
+    assert(check.databaseUrlPresent === true, "env.requiredPresence must report DATABASE_URL present for strict staging readiness.");
+    assert(check.pennyAuthModePresent === true, "env.requiredPresence must report PENNY_AUTH_MODE present for strict staging readiness.");
+    assert(check.apiTokenPresent === true, "env.requiredPresence must report PENNY_API_TOKEN present for strict staging readiness.");
+    assert(check.sessionSecretPresent === true, "env.requiredPresence must report PENNY_SESSION_SECRET present for strict staging readiness.");
+    assert(check.corsOriginsPresent === true, "env.requiredPresence must report PENNY_CORS_ORIGINS present for strict staging readiness.");
+    assert(check.rateLimitPresent === true, "env.requiredPresence must report PENNY_RATE_LIMIT_MAX present for strict staging readiness.");
+    assert(check.trustAuthHeadersPresent === true, "env.requiredPresence must report PENNY_TRUST_AUTH_HEADERS present for strict staging readiness.");
   }
 }
 
