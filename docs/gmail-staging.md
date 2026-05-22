@@ -304,7 +304,7 @@ node scripts/verify-gmail-browser-evidence.mjs tmp/gmail-browser-evidence.json -
 node scripts/verify-gmail-browser-evidence.mjs tmp/gmail-browser-evidence.json
 ```
 
-The JSON evidence must include `baseUrl`, `userId`, `workspaceId`, `projectId`, `sphereId`, `capturedAt`, and `checks`. The full staged browser evidence must include these check names:
+The JSON evidence must include `baseUrl`, `userId`, `workspaceId`, `projectId`, `sphereId`, `capturedAt`, `checks`, and at least one sanitized proof artifact in `screenshots`, `notes`, or `proofs`. Each proof artifact must include a `proves` array listing the check names it supports. The full staged browser evidence must include and prove these check names:
 
 - `brain.gmailPanel.preOAuth`
 - `brain.gmailKeywordFilters`
@@ -315,7 +315,7 @@ The JSON evidence must include `baseUrl`, `userId`, `workspaceId`, `projectId`, 
 - `create.gmailExport`
 - `brain.gmailPostRevokeDelete`
 
-Each check records only booleans or safe field names, such as whether the Gmail card, keyword filters, message/source counts, safe refs, semantic grounding labels, Create evidence drawer, export prompt, selector targets, and post-revoke/delete absence were visible. Every required check must set `selectorTargetsPresent=true` after confirming the relevant stable selector target is present. Store screenshot filenames or labels if helpful, but do not paste raw Gmail rows, connect links, tokens, or body text into the JSON.
+Each check records only booleans or safe field names, such as whether the Gmail card, keyword filters, message/source counts, safe refs, semantic grounding labels, Create evidence drawer, export prompt, selector targets, and post-revoke/delete absence were visible. Every required check must set `selectorTargetsPresent=true` after confirming the relevant stable selector target is present. Store screenshot filenames or labels if helpful, but do not paste raw Gmail rows, connect links, tokens, or body text into the JSON. The verifier rejects browser evidence when no proof artifact covers a required check.
 
 When the browser evidence only covers the local pre-OAuth path, record it as a UI preflight only. The actual staging proof still requires OAuth, sync, keyword search, semantic search, Gmail evidence in Create, export, revoke, and delete against a staged Gmail account.
 

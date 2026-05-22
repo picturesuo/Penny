@@ -11,12 +11,13 @@ test("Gmail browser evidence verifier accepts complete manual browser proof", ()
     encoding: "utf8",
     input: JSON.stringify(validBrowserEvidence()),
   });
-  const payload = JSON.parse(output) as { ok: boolean; browserEvidenceVerified: boolean; preOAuthOnly: boolean; checkCount: number };
+  const payload = JSON.parse(output) as { ok: boolean; browserEvidenceVerified: boolean; preOAuthOnly: boolean; checkCount: number; proofArtifactCount: number };
 
   assert.equal(payload.ok, true);
   assert.equal(payload.browserEvidenceVerified, true);
   assert.equal(payload.preOAuthOnly, false);
   assert.equal(payload.checkCount, 8);
+  assert.equal(payload.proofArtifactCount, 3);
 });
 
 test("Gmail browser evidence verifier accepts pre-OAuth UI preflight proof", () => {
@@ -25,11 +26,12 @@ test("Gmail browser evidence verifier accepts pre-OAuth UI preflight proof", () 
     encoding: "utf8",
     input: JSON.stringify(preOAuthEvidence()),
   });
-  const payload = JSON.parse(output) as { ok: boolean; preOAuthOnly: boolean; checkCount: number };
+  const payload = JSON.parse(output) as { ok: boolean; preOAuthOnly: boolean; checkCount: number; proofArtifactCount: number };
 
   assert.equal(payload.ok, true);
   assert.equal(payload.preOAuthOnly, true);
   assert.equal(payload.checkCount, 3);
+  assert.equal(payload.proofArtifactCount, 1);
 });
 
 test("Gmail browser evidence verifier rejects missing post-OAuth surfaces by default", () => {
@@ -51,6 +53,23 @@ test("Gmail browser evidence verifier rejects missing stable selector proof", ()
   const failure = runVerifierExpectingFailure(evidence);
 
   assert.match(failure, /stable connected Gmail selector targets/);
+});
+
+test("Gmail browser evidence verifier rejects missing proof artifact coverage", () => {
+  const evidence = validBrowserEvidence();
+
+  evidence.screenshots = [
+    {
+      label: "Incomplete browser proof",
+      file: "screenshots/incomplete.png",
+      proves: ["brain.gmailPanel.preOAuth"],
+    },
+  ];
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /proof artifacts must cover brain\.gmailKeywordFilters/);
+  assert.match(failure, /proof artifacts must cover create\.gmailExport/);
 });
 
 test("Gmail browser evidence verifier rejects raw Gmail, token, and score data", () => {
@@ -95,7 +114,7 @@ function preOAuthEvidence(): Record<string, unknown> & { checks: Array<Record<st
       {
         label: "Brain Gmail pre-OAuth",
         file: "screenshots/gmail-pre-oauth.png",
-        proves: ["brain.gmailPanel.preOAuth", "brain.gmailKeywordFilters"],
+        proves: ["brain.gmailPanel.preOAuth", "brain.gmailKeywordFilters", "create.contextLightSurface"],
       },
     ],
     checks: [
@@ -135,9 +154,19 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
     ...preOAuthEvidence(),
     screenshots: [
       {
-        label: "Brain Gmail full smoke",
-        file: "screenshots/gmail-full-smoke.png",
-        proves: ["brain.gmailConnectedResults", "brain.gmailSemanticResults", "create.gmailEvidenceDrawer", "create.gmailExport"],
+        label: "Brain Gmail pre-OAuth",
+        file: "screenshots/gmail-pre-oauth.png",
+        proves: ["brain.gmailPanel.preOAuth", "brain.gmailKeywordFilters", "create.contextLightSurface"],
+      },
+      {
+        label: "Brain Gmail connected results",
+        file: "screenshots/gmail-connected-results.png",
+        proves: ["brain.gmailConnectedResults", "brain.gmailSemanticResults"],
+      },
+      {
+        label: "Create Gmail evidence and post-delete absence",
+        file: "screenshots/gmail-create-export-post-delete.png",
+        proves: ["create.gmailEvidenceDrawer", "create.gmailExport", "brain.gmailPostRevokeDelete"],
       },
     ],
     checks: [

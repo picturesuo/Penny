@@ -494,9 +494,19 @@ function validBrowserEvidence(): Record<string, unknown> {
     mode: "manual",
     screenshots: [
       {
-        label: "Gmail browser staging proof",
-        file: "screenshots/gmail-browser-proof.png",
-        proves: ["brain.gmailConnectedResults", "brain.gmailSemanticResults", "create.gmailEvidenceDrawer", "create.gmailExport"],
+        label: "Brain Gmail pre-OAuth",
+        file: "screenshots/gmail-pre-oauth.png",
+        proves: ["brain.gmailPanel.preOAuth", "brain.gmailKeywordFilters", "create.contextLightSurface"],
+      },
+      {
+        label: "Brain Gmail connected results",
+        file: "screenshots/gmail-connected-results.png",
+        proves: ["brain.gmailConnectedResults", "brain.gmailSemanticResults"],
+      },
+      {
+        label: "Create Gmail evidence and post-delete absence",
+        file: "screenshots/gmail-create-export-post-delete.png",
+        proves: ["create.gmailEvidenceDrawer", "create.gmailExport", "brain.gmailPostRevokeDelete"],
       },
     ],
     checks: [

@@ -14,6 +14,21 @@ if (!file || args.includes("--help") || args.includes("-h")) {
 
 const evidence = safeJson(file === "-" ? await readStdin() : await readFile(file, "utf8"));
 const checks = new Map(Array.isArray(evidence?.checks) ? evidence.checks.map((check) => [check.name, check]) : []);
+const requiredCheckNames = [
+  "brain.gmailPanel.preOAuth",
+  "brain.gmailKeywordFilters",
+  "create.contextLightSurface",
+  ...(preOAuthOnly
+    ? []
+    : [
+        "brain.gmailConnectedResults",
+        "brain.gmailSemanticResults",
+        "create.gmailEvidenceDrawer",
+        "create.gmailExport",
+        "brain.gmailPostRevokeDelete",
+      ]),
+];
+const proofArtifacts = collectProofArtifacts(evidence);
 
 assert(Boolean(evidence), "Browser evidence must be valid JSON.");
 assert(evidence?.ok !== false, "Browser evidence must not be failed evidence.");
@@ -25,6 +40,7 @@ assert(typeof evidence?.sphereId === "string" && evidence.sphereId.length > 0, "
 assert(typeof evidence?.capturedAt === "string" && evidence.capturedAt.length > 0, "Browser evidence must include capturedAt.");
 assert(Array.isArray(evidence?.checks), "Browser evidence must include checks.");
 assertNoUnsafeEvidence(evidence);
+assertProofArtifacts(proofArtifacts, requiredCheckNames);
 
 assertPreOAuthPanel(requireCheck("brain.gmailPanel.preOAuth"));
 assertKeywordFilters(requireCheck("brain.gmailKeywordFilters"));
@@ -49,6 +65,7 @@ if (errors.length) {
         browserEvidenceVerified: true,
         preOAuthOnly,
         checkCount: evidence.checks.length,
+        proofArtifactCount: proofArtifacts.length,
       },
       null,
       2,
@@ -62,6 +79,34 @@ function requireCheck(name) {
   assert(Boolean(check), `Browser evidence must include ${name}.`);
 
   return check ?? {};
+}
+
+function collectProofArtifacts(value) {
+  return ["screenshots", "notes", "proofs"]
+    .flatMap((key) => (Array.isArray(value?.[key]) ? value[key] : []))
+    .filter((item) => item && typeof item === "object" && !Array.isArray(item));
+}
+
+function assertProofArtifacts(artifacts, requiredNames) {
+  const proved = new Set();
+
+  for (const artifact of artifacts) {
+    if (!Array.isArray(artifact.proves)) {
+      continue;
+    }
+
+    for (const name of artifact.proves) {
+      if (typeof name === "string") {
+        proved.add(name);
+      }
+    }
+  }
+
+  assert(artifacts.length > 0, "Browser evidence must include sanitized screenshots, notes, or proofs with proves lists.");
+
+  for (const name of requiredNames) {
+    assert(proved.has(name), `Browser evidence proof artifacts must cover ${name}.`);
+  }
 }
 
 function assertPreOAuthPanel(check) {
