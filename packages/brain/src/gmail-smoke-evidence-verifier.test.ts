@@ -16,7 +16,7 @@ test("Gmail smoke evidence verifier accepts sanitized non-destructive evidence",
 
   assert.equal(payload.ok, true);
   assert.equal(payload.connectPreflightVerified, true);
-  assert.equal(payload.stepCount, 11);
+  assert.equal(payload.stepCount, 12);
 });
 
 test("Gmail smoke evidence verifier accepts expected sanitized partial failure evidence", () => {
@@ -29,7 +29,7 @@ test("Gmail smoke evidence verifier accepts expected sanitized partial failure e
 
   assert.equal(payload.ok, true);
   assert.equal(payload.connectPreflightVerified, true);
-  assert.equal(payload.stepCount, 11);
+  assert.equal(payload.stepCount, 12);
 });
 
 test("Gmail smoke evidence verifier can require full keyword filter coverage", () => {
@@ -165,6 +165,39 @@ test("Gmail smoke evidence verifier rejects weak Create Gmail evidence", () => {
   assert.match(failure, /Create must include Gmail evidence in source refs/);
   assert.match(failure, /Create Personal option must include the expected Gmail evidence text/);
   assert.match(failure, /Create Critical option must include the expected Gmail evidence text/);
+});
+
+test("Gmail smoke evidence verifier rejects weak Create refinement evidence", () => {
+  const evidence = validEvidence();
+  const refined = evidence.steps.find((step) => step.step === "create.refined") as Record<string, unknown>;
+
+  refined.artifactPresent = false;
+  refined.verificationPresent = false;
+  refined.judgmentEventPresent = false;
+  refined.selectedOptionCount = 1;
+  refined.selectedLenses = ["Personal"];
+  refined.selectedOptionsMatched = false;
+  refined.gmailMemoryEvidencePresent = false;
+  refined.gmailSourceEvidencePresent = false;
+  refined.artifactExpectedEvidencePresent = false;
+  refined.rawEmailBodyAbsent = false;
+  refined.secretOrConnectTokenAbsent = false;
+  refined.unsupportedHumanReviewClaimAbsent = false;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Create refinement must include an artifact/);
+  assert.match(failure, /Create refinement must include verification/);
+  assert.match(failure, /Create refinement must include a judgment event/);
+  assert.match(failure, /Create refinement must select both Personal and Critical options/);
+  assert.match(failure, /Create selectedLenses must include Critical/);
+  assert.match(failure, /Create refinement must preserve the selected Gmail option ids/);
+  assert.match(failure, /Create refinement must include Gmail evidence in memory refs/);
+  assert.match(failure, /Create refinement must include Gmail evidence in source refs/);
+  assert.match(failure, /Create refinement artifact must include the expected Gmail evidence text/);
+  assert.match(failure, /Create refinement must not include raw Gmail body markers/);
+  assert.match(failure, /Create refinement must not include connect\/session\/token values/);
+  assert.match(failure, /Create refinement must not include unsupported human-review claims/);
 });
 
 test("Gmail smoke evidence verifier rejects weak Create export privacy evidence", () => {
@@ -360,6 +393,22 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         personalOptionExpectedEvidencePresent: true,
         criticalOptionExpectedEvidencePresent: true,
         expectedEvidencePresent: true,
+      },
+      {
+        step: "create.refined",
+        artifactPresent: true,
+        verificationPresent: true,
+        judgmentEventPresent: true,
+        selectedOptionCount: 2,
+        selectedLenses: ["Critical", "Personal"],
+        selectedOptionsMatched: true,
+        gmailMemoryEvidencePresent: true,
+        gmailSourceEvidencePresent: true,
+        expectedEvidencePresent: true,
+        artifactExpectedEvidencePresent: true,
+        rawEmailBodyAbsent: true,
+        secretOrConnectTokenAbsent: true,
+        unsupportedHumanReviewClaimAbsent: true,
       },
       {
         step: "create.export",
