@@ -119,6 +119,12 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         scoreReasonPresent?: boolean;
         rawScoreHidden?: boolean;
         expectedEvidencePresent?: boolean;
+        artifactExpectedEvidencePresent?: boolean;
+        artifactPresent?: boolean;
+        verificationPresent?: boolean;
+        judgmentEventPresent?: boolean;
+        selectedOptionCount?: number;
+        selectedOptionsMatched?: boolean;
         personalOptionPresent?: boolean;
         criticalOptionPresent?: boolean;
         gmailMemoryEvidencePresent?: boolean;
@@ -143,6 +149,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     const semantic = evidence.steps.find((step) => step.step === "semanticSearch");
     const repeat = evidence.steps.find((step) => step.step === "sync.repeat");
     const createFirst = evidence.steps.find((step) => step.step === "create.first");
+    const createRefined = evidence.steps.find((step) => step.step === "create.refined");
     const createExport = evidence.steps.find((step) => step.step === "create.export");
 
     assert.equal(result.status, 0);
@@ -157,6 +164,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         "keywordSearch.syncExplicit",
         "semanticSearch",
         "create.first",
+        "create.refined",
         "create.export",
         "revoke.delete.skipped",
       ],
@@ -197,12 +205,25 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(createFirst?.criticalOptionPresent, true);
     assert.equal(createFirst?.gmailMemoryEvidencePresent, true);
     assert.equal(createFirst?.gmailSourceEvidencePresent, true);
+    assert.equal(createRefined?.artifactPresent, true);
+    assert.equal(createRefined?.verificationPresent, true);
+    assert.equal(createRefined?.judgmentEventPresent, true);
+    assert.equal(createRefined?.selectedOptionCount, 2);
+    assert.deepEqual(createRefined?.selectedLenses, ["Critical", "Personal"]);
+    assert.equal(createRefined?.selectedOptionsMatched, true);
+    assert.equal(createRefined?.gmailMemoryEvidencePresent, true);
+    assert.equal(createRefined?.gmailSourceEvidencePresent, true);
+    assert.equal(createRefined?.expectedEvidencePresent, true);
+    assert.equal(createRefined?.artifactExpectedEvidencePresent, true);
+    assert.equal(createRefined?.rawEmailBodyAbsent, true);
+    assert.equal(createRefined?.secretOrConnectTokenAbsent, true);
+    assert.equal(createRefined?.unsupportedHumanReviewClaimAbsent, true);
     assert.equal(createExport?.expectedEvidencePresent, true);
     assert.equal(createExport?.rawEmailBodyAbsent, true);
     assert.equal(createExport?.secretOrConnectTokenAbsent, true);
     assert.equal(createExport?.unsupportedHumanReviewClaimAbsent, true);
     assert.equal(verified.ok, true);
-    assert.equal(verified.stepCount, 10);
+    assert.equal(verified.stepCount, 11);
     assert.equal(state.syncCalls, 2);
     assert.equal(state.searchCalls, 2);
     assert.equal(state.semanticCalls, 1);
@@ -813,7 +834,13 @@ function postOauthRouteFor(
             id: "verification-gmail-smoke",
             verdict: "ready",
           },
-          judgmentEvent: state.createCalls === 1 ? null : { id: "judgment-gmail-smoke" },
+          judgmentEvent: state.createCalls === 1
+            ? null
+            : {
+                id: "judgment-gmail-smoke",
+                selectedOptionIds: ["create-option-personal", "create-option-critical"],
+                userComment: "Staging smoke: use the real Gmail evidence and keep privacy constraints explicit.",
+              },
         },
       },
     };
