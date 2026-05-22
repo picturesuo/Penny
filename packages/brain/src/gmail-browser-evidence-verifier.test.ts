@@ -95,6 +95,19 @@ test("Gmail browser evidence verifier rejects missing stable selector proof", ()
   assert.match(failure, /stable connected Gmail selector targets/);
 });
 
+test("Gmail browser evidence verifier rejects missing OAuth and Nango webhook proof", () => {
+  const evidence = validBrowserEvidence();
+  const connectedResults = evidence.checks.find((check) => check.name === "brain.gmailConnectedResults") as Record<string, unknown>;
+
+  delete connectedResults.oauthCompleted;
+  connectedResults.nangoAuthWebhookVerified = false;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /OAuth completed for the staged Gmail account/);
+  assert.match(failure, /Nango delivered and Penny accepted the Gmail auth webhook/);
+});
+
 test("Gmail browser evidence verifier rejects missing proof artifact coverage", () => {
   const evidence = validBrowserEvidence();
 
@@ -233,6 +246,8 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
       {
         name: "brain.gmailConnectedResults",
         selectorTargetsPresent: true,
+        oauthCompleted: true,
+        nangoAuthWebhookVerified: true,
         connectedStateVisible: true,
         gmailReadonlyVisible: true,
         messageCountVisible: true,
