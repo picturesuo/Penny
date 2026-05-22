@@ -24,7 +24,7 @@ export type PennyLogEvent = {
 type PennyLogSink = (event: PennyLogEvent) => void;
 
 const blockedPayloadKeyPattern =
-  /(accountEmail|body|cc|comment|content|email|excerpt|from|password|prompt|query|raw|recipient|secret|sender|snippet|subject|text|to|token)/i;
+  /(accountEmail|body|cc|comment|content|email|excerpt|from|headers|html|metadata|password|payload|prompt|provenance|query|raw|recipient|secret|sender|snippet|subject|text|to|token)/i;
 const explicitlySafePayloadKeyPattern = /^(contentLength|contentHash|contentCount)$/i;
 let testSink: PennyLogSink | null = null;
 
