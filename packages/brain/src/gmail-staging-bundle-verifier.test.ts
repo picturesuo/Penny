@@ -676,6 +676,7 @@ function validBrowserEvidence(): Record<string, unknown> {
         selectorTargetsPresent: true,
         exportVisible: true,
         gmailContextOnlyWhenUsed: true,
+        unsafePrivacyClaimAbsent: true,
         rawEmailBodyAbsent: true,
         secretOrConnectTokenAbsent: true,
         unsupportedHumanReviewClaimAbsent: true,
