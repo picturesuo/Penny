@@ -369,6 +369,39 @@ try {
     userComment: "Staging smoke: use the real Gmail evidence and keep privacy constraints explicit.",
     artifact: createFirst.data.artifact,
   });
+  const createRefinedText = JSON.stringify(createRefined.data);
+  const refinedGmailMemoryEvidencePresent = hasCreateMemoryEvidence(createRefined.data, createEvidenceNeedle);
+  const refinedGmailSourceEvidencePresent = hasCreateSourceEvidence(createRefined.data, createEvidenceNeedle);
+  const refinedSelectedOptionsMatched = sameStringSet(createRefined.data?.judgmentEvent?.selectedOptionIds, selectedOptions);
+  const refinedArtifactExpectedEvidencePresent = includesNeedle(JSON.stringify(createRefined.data?.artifact ?? {}), createEvidenceNeedle);
+  const refinedPrivacySafety = inspectExportPrivacySafety(createRefinedText);
+  assert(createRefined.data?.artifact, "Create refinement did not return an artifact.");
+  assert(createRefined.data?.verification, "Create refinement did not return verification.");
+  assert(createRefined.data?.judgmentEvent, "Create refinement did not return a judgment event.");
+  assert(refinedSelectedOptionsMatched, "Create refinement did not preserve the selected Gmail option ids.");
+  assert(includesNeedle(createRefinedText, createEvidenceNeedle), "Create refinement did not include expected Gmail evidence text.");
+  assert(refinedGmailMemoryEvidencePresent, "Create refinement did not include expected Gmail evidence in memory refs.");
+  assert(refinedGmailSourceEvidencePresent, "Create refinement did not include expected Gmail evidence in source refs.");
+  assert(refinedArtifactExpectedEvidencePresent, "Create refinement artifact did not include expected Gmail evidence text.");
+  assert(
+    refinedPrivacySafety.safe,
+    `Create refinement included unsafe Gmail privacy content: ${refinedPrivacySafety.failedChecks.join(", ")}.`,
+  );
+  record("create.refined", {
+    artifactPresent: Boolean(createRefined.data?.artifact),
+    verificationPresent: Boolean(createRefined.data?.verification),
+    judgmentEventPresent: Boolean(createRefined.data?.judgmentEvent),
+    selectedOptionCount: selectedOptions.length,
+    selectedLenses,
+    selectedOptionsMatched: refinedSelectedOptionsMatched,
+    gmailMemoryEvidencePresent: refinedGmailMemoryEvidencePresent,
+    gmailSourceEvidencePresent: refinedGmailSourceEvidencePresent,
+    expectedEvidencePresent: includesNeedle(createRefinedText, createEvidenceNeedle),
+    artifactExpectedEvidencePresent: refinedArtifactExpectedEvidencePresent,
+    rawEmailBodyAbsent: refinedPrivacySafety.rawEmailBodyAbsent,
+    secretOrConnectTokenAbsent: refinedPrivacySafety.secretOrConnectTokenAbsent,
+    unsupportedHumanReviewClaimAbsent: refinedPrivacySafety.unsupportedHumanReviewClaimAbsent,
+  });
   const exportResult = await request("POST", "/api/create/export-coding-prompt", {
     artifact: createRefined.data.artifact,
     verification: createRefined.data.verification,
@@ -852,6 +885,17 @@ function gmailSourceUris(sources, connectionId) {
 
 function hasUniqueValues(values) {
   return new Set(values).size === values.length;
+}
+
+function sameStringSet(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right)) {
+    return false;
+  }
+
+  const normalizedLeft = left.filter((item) => typeof item === "string").sort();
+  const normalizedRight = right.filter((item) => typeof item === "string").sort();
+
+  return normalizedLeft.length === normalizedRight.length && normalizedLeft.every((item, index) => item === normalizedRight[index]);
 }
 
 function inspectExportPrivacySafety(text) {
