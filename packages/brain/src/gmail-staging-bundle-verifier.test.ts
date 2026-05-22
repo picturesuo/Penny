@@ -648,6 +648,8 @@ function validBrowserEvidence(): Record<string, unknown> {
       {
         name: "brain.gmailConnectedResults",
         selectorTargetsPresent: true,
+        oauthCompleted: true,
+        nangoAuthWebhookVerified: true,
         connectedStateVisible: true,
         gmailReadonlyVisible: true,
         messageCountVisible: true,
