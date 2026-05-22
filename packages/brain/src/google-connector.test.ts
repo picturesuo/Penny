@@ -193,6 +193,34 @@ test("Nango adapter creates connect sessions with Google integration tags", asyn
   }
 });
 
+test("Nango adapter redacts upstream failure bodies from error details", async () => {
+  const adapter = createNangoAdapter(readGoogleConnectorRuntimeConfig(configuredEnv), async () => ({
+    status: 400,
+    body: {
+      message: "Nango validation failed.",
+      rawBody: "Private Gmail body",
+      accessToken: "secret-token",
+      errors: [{ path: "tags.end_user_email", message: "Invalid value." }],
+    },
+  }));
+
+  const result = await adapter.listConnections({ endUserId: "user-1" });
+
+  assert.equal(result.ok, false);
+
+  if (!result.ok) {
+    assert.equal(result.error.code, "nango_request_failed");
+    assert.equal(result.error.retryable, false);
+    assert.deepEqual(result.error.details, { status: 400 });
+    const serializedDetails = JSON.stringify(result.error.details);
+
+    assert.equal(serializedDetails.includes("Private Gmail body"), false);
+    assert.equal(serializedDetails.includes("secret-token"), false);
+    assert.equal(serializedDetails.includes("rawBody"), false);
+    assert.equal(serializedDetails.includes("accessToken"), false);
+  }
+});
+
 test("Google connector sync lifecycle creates cursors, private source refs, and source counts", () => {
   const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
   const otherScope = { ...scope, userId: "user-2" };
