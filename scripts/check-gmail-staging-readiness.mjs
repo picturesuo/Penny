@@ -256,6 +256,7 @@ function checkStrictStagingEnv() {
   const sessionSecret = requiredEnv("PENNY_SESSION_SECRET");
   const corsOrigins = parseCorsOrigins(requiredEnv("PENNY_CORS_ORIGINS"));
   const rateLimitMax = positiveInt(requiredEnv("PENNY_RATE_LIMIT_MAX"), "PENNY_RATE_LIMIT_MAX");
+  const trustAuthHeaders = requiredEnv("PENNY_TRUST_AUTH_HEADERS");
   const base = parsedUrl(baseUrl, "BASE_URL");
 
   assert(requiredEnv("DATABASE_URL"), "DATABASE_URL must be set for strict Gmail staging readiness.");
@@ -275,7 +276,7 @@ function checkStrictStagingEnv() {
   );
   assert(rateLimitMax >= 1 && rateLimitMax <= 1000, "PENNY_RATE_LIMIT_MAX must be between 1 and 1000 for strict Gmail staging readiness.");
   assert(
-    env("PENNY_TRUST_AUTH_HEADERS", "false").toLowerCase() === "false",
+    trustAuthHeaders.toLowerCase() === "false",
     "PENNY_TRUST_AUTH_HEADERS must be false for strict Gmail staging readiness.",
   );
 
