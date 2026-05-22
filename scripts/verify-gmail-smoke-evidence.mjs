@@ -70,11 +70,13 @@ assert(repeat.selectedSourceCountUnchanged === true, "Repeated sync must leave s
 assert(repeat.duplicateSourceRefsAbsent === true, "Repeated sync must not create duplicate source refs.");
 
 const keyword = requireStep("keywordSearch");
+assert(typeof keyword.query === "string" && keyword.query.trim().length > 0, "Keyword search evidence must include the Gmail q query.");
 assert(keyword.stored === false, "Keyword search must not store results unless sync=true.");
 assert(numberValue(keyword.resultCount) >= 1, "Keyword search must return at least one result.");
 assert(keyword.memoryCountUnchanged === true, "Keyword search without sync=true must not change Gmail memory count.");
 
 const keywordSync = requireStep("keywordSearch.syncExplicit");
+assert(typeof keywordSync.query === "string" && keywordSync.query.trim().length > 0, "Keyword search sync evidence must include the Gmail q query.");
 assert(keywordSync.stored === true, "Keyword search with sync=true must report stored=true.");
 assert(numberValue(keywordSync.resultCount) >= 1, "Keyword search with sync=true must return at least one result.");
 assert(keywordSync.partialFailureCount === 0, "Keyword search with sync=true must have zero partial failures.");
