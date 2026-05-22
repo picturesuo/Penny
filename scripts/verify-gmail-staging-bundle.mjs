@@ -191,8 +191,21 @@ function assertUiPreflightEvidence(evidence) {
 
   const providerCheck = checks.find((check) => check?.name === "google.provider");
   const gmailCheck = checks.find((check) => check?.name === "gmail.status");
+  const documentsCheck = checks.find((check) => check?.name === "brain.documents");
+  const memoryProfileCheck = checks.find((check) => check?.name === "brain.memoryProfile");
+  const recentsCheck = checks.find((check) => check?.name === "brain.recents");
 
+  assert(numberValue(documentsCheck?.documentCount) >= 0, "UI preflight Brain documents check must include documentCount.");
+  assert(numberValue(memoryProfileCheck?.sourceCount) >= 0, "UI preflight Brain memory profile check must include sourceCount.");
+  assert(numberValue(memoryProfileCheck?.memoryNodeCount) >= 0, "UI preflight Brain memory profile check must include memoryNodeCount.");
+  assert(numberValue(recentsCheck?.recentCount) >= 0, "UI preflight Brain recents check must include recentCount.");
   assert(providerCheck?.configured === true, "UI preflight Google provider check must be configured.");
+  assert(numberValue(providerCheck?.surfaceCount) >= 1, "UI preflight Google provider check must include at least one surface.");
+  assert(typeof providerCheck?.gmailStatus === "string" && providerCheck.gmailStatus.length > 0, "UI preflight Google provider check must include gmailStatus.");
+  assert(typeof gmailCheck?.status === "string" && gmailCheck.status.length > 0, "UI preflight Gmail status check must include status.");
+  assert(numberValue(gmailCheck?.connectionCount) >= 0, "UI preflight Gmail status check must include connectionCount.");
+  assert(numberValue(gmailCheck?.sourceCount) >= 0, "UI preflight Gmail status check must include sourceCount.");
+  assert(numberValue(gmailCheck?.messageCount) >= 0, "UI preflight Gmail status check must include messageCount.");
   assert(providerCheck?.providerStatePrivacySafe === true, "UI preflight Google provider check must be privacy-safe.");
   assert(gmailCheck?.restrictedScope === true, "UI preflight Gmail status must report restrictedScope=true.");
   assert(gmailCheck?.gated === true, "UI preflight Gmail status must report gated=true.");
@@ -343,6 +356,10 @@ function evidenceSummary(file, evidence) {
     stepCount: Array.isArray(evidence?.steps) ? evidence.steps.length : null,
     checkCount: Array.isArray(evidence?.checks) ? evidence.checks.length : null,
   };
+}
+
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : Number.NaN;
 }
 
 function optionValue(name) {
