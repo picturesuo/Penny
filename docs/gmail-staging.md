@@ -385,7 +385,7 @@ The default smoke verifies:
 - By default, sync has zero partial failures. When `GMAIL_SMOKE_EXPECT_PARTIAL_FAILURE_STAGE=message_oversized` is set, sync proves the oversized message was skipped through a sanitized `stage=message_oversized` partial-failure summary while still importing the safe message slice.
 - Repeating the same scoped sync does not change the Gmail source count or create duplicate source refs.
 - Keyword search uses the Gmail API, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
-- Semantic search returns only synced Gmail memory and hides raw numeric scores.
+- Semantic search returns only synced Gmail memory, hides raw numeric scores, and records safe shape evidence for Gmail source refs, Brain memory refs, grounded/inferred labels, and score reasons.
 - Create uses the synced Gmail evidence.
 - Prompt export includes the Gmail-derived context only after Create uses it.
 
@@ -470,7 +470,7 @@ Before marking Gmail staging ready, attach or record:
 - Gmail status response before and after OAuth.
 - Sync and repeated-sync responses showing imported count, cursor/historyId, stable source counts, and no duplicate source refs.
 - Keyword search responses proving Gmail `q` search, default no-store behavior, and explicit `sync=true` storage.
-- Semantic search response proving synced Penny memory retrieval and no raw numeric score in normal UI.
+- Semantic search response proving synced Penny memory retrieval, safe result shape, Gmail source refs, Brain memory refs, grounded/inferred labels, score reasons, and no raw numeric score in normal UI.
 - Create export prompt showing real Gmail evidence only when selected and used.
 - Revoke response and post-revoke sync, keyword search, and semantic search failure.
 - Source delete result and post-delete Brain profile, `/api/brain/retrieve`, semantic search, and Create retrieval absence.
