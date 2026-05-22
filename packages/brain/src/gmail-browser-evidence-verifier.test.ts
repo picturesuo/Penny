@@ -434,6 +434,29 @@ test("Gmail browser evidence verifier rejects stale proof names for pre-OAuth ev
   assert.match(failure, /proof artifact 1 proves entry 4 must match a required browser check/);
 });
 
+test("Gmail browser evidence verifier rejects unknown browser check rows", () => {
+  const evidence = validBrowserEvidence();
+
+  evidence.checks.push({
+    name: "brain.gmailLegacyResultPanel",
+    selectorTargetsPresent: true,
+  });
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Browser evidence check 9 name must match a required browser check/);
+});
+
+test("Gmail browser evidence verifier rejects duplicate browser check rows", () => {
+  const evidence = validBrowserEvidence();
+
+  evidence.checks.push({ ...evidence.checks[0] });
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Browser evidence must include brain\.gmailPanel\.preOAuth only once/);
+});
+
 test("Gmail browser evidence verifier rejects raw Gmail, token, and score data", () => {
   const evidence = validBrowserEvidence();
   const semantic = evidence.checks.find((check) => check.name === "brain.gmailSemanticResults") as Record<string, unknown>;
