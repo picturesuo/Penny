@@ -381,7 +381,7 @@ test("Gmail staging bundle verifier rejects UI preflight raw body phrase values"
     const gmailCheck = uiPreflight.checks.find((check) => check.name === "gmail.status");
 
     assert.ok(gmailCheck);
-    gmailCheck.operatorNote = "Copied setup note mentioned raw Gmail body marker without the body.";
+    gmailCheck.operatorNote = "Copied setup note mentioned raw email body marker without the body.";
 
     const files = await writeBundleFiles(tmp, {
       uiPreflight,
