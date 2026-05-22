@@ -17,6 +17,7 @@ test("Gmail readiness evidence verifier accepts sanitized strict connect preflig
     readinessOk: boolean;
     strictStagingVerified: boolean;
     connectPreflightVerified: boolean;
+    missingRequirementKeys: string[];
     checkCount: number;
   };
 
@@ -24,6 +25,7 @@ test("Gmail readiness evidence verifier accepts sanitized strict connect preflig
   assert.equal(payload.readinessOk, true);
   assert.equal(payload.strictStagingVerified, true);
   assert.equal(payload.connectPreflightVerified, true);
+  assert.deepEqual(payload.missingRequirementKeys, []);
   assert.equal(payload.checkCount, 6);
 });
 
@@ -33,10 +35,11 @@ test("Gmail readiness evidence verifier accepts sanitized failure evidence only 
     encoding: "utf8",
     input: JSON.stringify(failedReadinessEvidence()),
   });
-  const payload = JSON.parse(output) as { ok: boolean; readinessOk: boolean; checkCount: number };
+  const payload = JSON.parse(output) as { ok: boolean; readinessOk: boolean; missingRequirementKeys: string[]; checkCount: number };
 
   assert.equal(payload.ok, true);
   assert.equal(payload.readinessOk, false);
+  assert.deepEqual(payload.missingRequirementKeys, ["NANGO_PUBLIC_KEY"]);
   assert.equal(payload.checkCount, 1);
 
   const failure = runVerifierExpectingFailure(failedReadinessEvidence());
