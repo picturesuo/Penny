@@ -22,6 +22,7 @@ test("Gmail staging bundle verifier accepts matching readiness, smoke, and destr
         `--destructive-smoke=${files.destructive}`,
         "--readiness-connect-preflight",
         "--smoke-connect-preflight",
+        "--require-keyword-filters",
         "--require-destructive",
         "--min-messages=1",
       ],
@@ -35,9 +36,11 @@ test("Gmail staging bundle verifier accepts matching readiness, smoke, and destr
       readiness: { checkCount: number };
       smoke: { stepCount: number };
       destructive: { stepCount: number } | null;
+      keywordFilterCoverageRequired: boolean;
     };
 
     assert.equal(payload.ok, true);
+    assert.equal(payload.keywordFilterCoverageRequired, true);
     assert.equal(payload.readiness.checkCount, 5);
     assert.equal(payload.smoke.stepCount, 11);
     assert.equal(payload.destructive?.stepCount, 12);
@@ -248,6 +251,8 @@ function validSmokeEvidence(): Record<string, unknown> {
         step: "keywordSearch",
         query: '"launch partner evidence"',
         stored: false,
+        filtersUsed: keywordFilters(),
+        maxResultsUsed: 5,
         resultCount: 1,
         memoryCountUnchanged: true,
       },
@@ -255,6 +260,8 @@ function validSmokeEvidence(): Record<string, unknown> {
         step: "keywordSearch.syncExplicit",
         query: '"launch partner evidence"',
         stored: true,
+        filtersUsed: keywordFilters(),
+        maxResultsUsed: 5,
         resultCount: 1,
         partialFailureCount: 0,
         duplicateSourceRefsAbsent: true,
@@ -281,6 +288,18 @@ function validSmokeEvidence(): Record<string, unknown> {
         reason: "non destructive",
       },
     ],
+  };
+}
+
+function keywordFilters() {
+  return {
+    from: "alice@example.com",
+    to: "bob@example.com",
+    subject: "Launch plan",
+    label: "inbox",
+    after: "2026-05-01",
+    before: "2026-05-22",
+    hasAttachment: true,
   };
 }
 
