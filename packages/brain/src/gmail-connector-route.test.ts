@@ -570,6 +570,83 @@ test("Gmail revoke removes retrieval access for synced Gmail sources", async () 
   assert.equal(searchAfterRevoke.status, 409);
 });
 
+test("Gmail source delete still removes Brain retrieval after revoke", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  const syncResponse = await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: gmailProxyAdapter(proxyCalls),
+    },
+  );
+  const syncPayload = (await syncResponse.json()) as {
+    data: {
+      state: {
+        sources: Array<{ id: string; sourceUri: string; brainSourceId: string | null; privacy: { retrievalAccess: string } }>;
+      };
+    };
+  };
+  const source = syncPayload.data.state.sources.find((candidate) => candidate.sourceUri === "gmail:message:msg-1");
+
+  assert.equal(syncResponse.status, 200);
+  assert.ok(source?.id);
+  assert.ok(source.brainSourceId);
+
+  await handleGoogleGmailRevokeRequest(
+    gmailRequest("/api/connectors/google/gmail/revoke", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+    }),
+    {
+      stateStore,
+      adapter: fakeAdapter({
+        async revokeConnection() {
+          return { ok: true, data: { revoked: true } };
+        },
+      }),
+    },
+  );
+  const profileAfterRevoke = await brainMemoryService.getProfile(gmailRequest("/api/brain/memory/profile", {}, "GET"));
+  const deleteResponse = await handleGoogleConnectorSourceDeleteRequest(
+    gmailRequest("/api/connectors/google/source-delete", {
+      sourceId: source.id,
+      now: "2026-05-22T12:45:00.000Z",
+    }),
+    { stateStore, brainMemoryService },
+  );
+  const deletePayload = (await deleteResponse.json()) as {
+    data: {
+      brainSourceDeleted: boolean;
+      profile: { stats: { sourceCount: number; memoryNodeCount: number } };
+      state: { sources: Array<{ sourceUri: string; privacy: { retrievalAccess: string } }> };
+    };
+  };
+  const semanticAfterDelete = await handleGoogleGmailSemanticSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/semantic-search", {
+      query: "launch partner private email evidence",
+      limit: 5,
+    }),
+    { stateStore, brainMemoryService },
+  );
+
+  assert.equal(profileAfterRevoke.sources.some((profileSource) => profileSource.id === source.brainSourceId), true);
+  assert.equal(deleteResponse.status, 200);
+  assert.equal(deletePayload.data.brainSourceDeleted, true);
+  assert.equal(deletePayload.data.profile.stats.sourceCount, 0);
+  assert.equal(deletePayload.data.profile.stats.memoryNodeCount, 0);
+  assert.equal(
+    deletePayload.data.state.sources.find((stateSource) => stateSource.sourceUri === "gmail:message:msg-1")?.privacy.retrievalAccess,
+    "deleted",
+  );
+  assert.equal(semanticAfterDelete.status, 409);
+});
+
 test("Gmail source delete removes Brain retrieval access and semantic results", async () => {
   const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
   const syncResponse = await handleGoogleGmailSyncRequest(
