@@ -405,6 +405,9 @@ test("GoogleConnectorControl renders connected Gmail smoke controls enabled", ()
   );
 
   assert.match(markup, /Gmail connected/);
+  assert.match(markup, /data-testid="gmail-connector-card"/);
+  assert.match(markup, /data-testid="gmail-connect-button"/);
+  assert.match(markup, /data-testid="gmail-privacy-copy"/);
   assert.match(markup, /staged-gmail@example\.com is selected for Google Gmail/);
   assert.match(markup, /1 source indexed/);
   assert.match(markup, /Scopes: https:\/\/www\.googleapis\.com\/auth\/gmail\.readonly/);
@@ -412,6 +415,9 @@ test("GoogleConnectorControl renders connected Gmail smoke controls enabled", ()
   assert.match(markup, /trainingUse=false/);
   assert.match(markup, /Google Gmail Succeeded/);
   assert.match(markup, /Google source coverage/);
+  assert.match(markup, /data-testid="gmail-sync-button"/);
+  assert.match(markup, /data-testid="gmail-revoke-button"/);
+  assert.match(markup, /data-testid="gmail-delete-source-button"/);
   assert.doesNotMatch(buttonMarkupForLabel(markup, "Sync now"), /disabled=""/);
   assert.doesNotMatch(buttonMarkupForLabel(markup, "Revoke"), /disabled=""/);
   assert.doesNotMatch(buttonMarkupForLabel(markup, "Delete Gmail source"), /disabled=""/);
@@ -445,6 +451,18 @@ test("GoogleConnectorControl renders Gmail keyword search filters for staging sm
   );
 
   assert.match(markup, /Filters/);
+  assert.match(markup, /data-testid="gmail-keyword-search-form"/);
+  assert.match(markup, /data-testid="gmail-keyword-filters"/);
+  assert.match(markup, /data-testid="gmail-keyword-search-button"/);
+  assert.match(markup, /data-testid="gmail-semantic-search-form"/);
+  assert.match(markup, /data-testid="gmail-semantic-search-button"/);
+  assert.match(markup, /data-testid="gmail-filter-from"/);
+  assert.match(markup, /data-testid="gmail-filter-to"/);
+  assert.match(markup, /data-testid="gmail-filter-subject"/);
+  assert.match(markup, /data-testid="gmail-filter-label"/);
+  assert.match(markup, /data-testid="gmail-filter-after"/);
+  assert.match(markup, /data-testid="gmail-filter-before"/);
+  assert.match(markup, /data-testid="gmail-filter-has-attachment"/);
   assert.match(markup, /From/);
   assert.match(markup, /To/);
   assert.match(markup, /Subject/);
@@ -514,10 +532,17 @@ test("Gmail result rows expose safe refs without raw bodies or scores", () => {
   const combined = `${keywordMarkup}\n${semanticMarkup}`;
 
   assert.match(keywordMarkup, /Launch partner follow-up/);
+  assert.match(keywordMarkup, /data-testid="gmail-keyword-results"/);
+  assert.match(keywordMarkup, /data-testid="gmail-keyword-result"/);
+  assert.match(keywordMarkup, /data-gmail-message-id="msg-1"/);
   assert.match(keywordMarkup, /Safe Gmail snippet for launch partner evidence/);
   assert.match(keywordMarkup, /msg-1/);
   assert.match(keywordMarkup, /thread-1/);
   assert.match(keywordMarkup, /gmail:message:msg-1/);
+  assert.match(semanticMarkup, /data-testid="gmail-semantic-results"/);
+  assert.match(semanticMarkup, /data-testid="gmail-semantic-result"/);
+  assert.match(semanticMarkup, /data-gmail-message-id="msg-1"/);
+  assert.match(semanticMarkup, /data-brain-memory-id="memory-gmail-1"/);
   assert.match(semanticMarkup, /grounded · Alice &lt;alice@example\.com&gt;/);
   assert.match(semanticMarkup, /Safe synced-memory excerpt for launch partner evidence/);
   assert.match(semanticMarkup, /grounded match from synced Gmail memory/);

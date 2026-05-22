@@ -2914,7 +2914,7 @@ export function GoogleConnectorControl({
   }
 
   return (
-    <section className="brain-memory-card google-connector-card" aria-label="Google Workspace connector">
+    <section className="brain-memory-card google-connector-card" aria-label="Google Workspace connector" data-testid="gmail-connector-card">
       <div className="google-connector-hero">
         <div className="google-connector-hero-main">
           <span className="google-connector-mark" aria-hidden="true">
@@ -2943,7 +2943,13 @@ export function GoogleConnectorControl({
             </div>
           </div>
         </div>
-        <button type="button" className="primary-command google-connector-primary" disabled={!canConnect} onClick={() => void onConnect()}>
+        <button
+          type="button"
+          className="primary-command google-connector-primary"
+          disabled={!canConnect}
+          onClick={() => void onConnect()}
+          data-testid="gmail-connect-button"
+        >
           <Mail size={15} aria-hidden="true" />
           <span>{status === "connecting" ? "Connecting..." : connectLabel}</span>
         </button>
@@ -2995,7 +3001,7 @@ export function GoogleConnectorControl({
       {error ? <p className="brain-memory-error">{error}</p> : null}
       {warning ? <p className="brain-memory-import-hint">{warning}</p> : null}
       {connectLink ? <p className="brain-memory-import-hint">Connect session created. Redirecting to Google consent for Gmail.</p> : null}
-      <section className="gmail-connector-privacy" aria-label="Gmail privacy">
+      <section className="gmail-connector-privacy" aria-label="Gmail privacy" data-testid="gmail-privacy-copy">
         <span>{gmailStatus?.privacy.copy ?? "Penny reads Gmail only after consent. No human review. trainingUse=false. Delete/revoke removes retrieval access."}</span>
         <small>Scopes: {gmailScopes.join(", ") || "gmail.readonly gated"}</small>
         <small>Reason: {gmailStatus?.scopeAuditReason ?? "read email for private Brain memory and email search."}</small>
@@ -3005,59 +3011,100 @@ export function GoogleConnectorControl({
       </section>
       {gmailMessageCount === 0 ? <p className="brain-memory-import-hint">Sync Gmail first.</p> : null}
       <div className="gmail-search-grid">
-        <form className="gmail-search-form" onSubmit={(event) => void handleKeywordSubmit(event)}>
+        <form className="gmail-search-form" onSubmit={(event) => void handleKeywordSubmit(event)} data-testid="gmail-keyword-search-form">
           <label>
             <span>Search email</span>
             <input value={keywordDraft} onChange={(event) => setKeywordDraft(event.target.value)} placeholder="Exact words" />
           </label>
-          <details className="google-connector-details gmail-filter-details">
+          <details className="google-connector-details gmail-filter-details" data-testid="gmail-keyword-filters">
             <summary>Filters</summary>
             <div className="gmail-filter-grid">
               <label>
                 <span>From</span>
-                <input value={keywordFilters.from} onChange={(event) => setKeywordFilter("from", event.target.value)} placeholder="alice@example.com" />
+                <input
+                  value={keywordFilters.from}
+                  onChange={(event) => setKeywordFilter("from", event.target.value)}
+                  placeholder="alice@example.com"
+                  data-testid="gmail-filter-from"
+                />
               </label>
               <label>
                 <span>To</span>
-                <input value={keywordFilters.to} onChange={(event) => setKeywordFilter("to", event.target.value)} placeholder="bob@example.com" />
+                <input
+                  value={keywordFilters.to}
+                  onChange={(event) => setKeywordFilter("to", event.target.value)}
+                  placeholder="bob@example.com"
+                  data-testid="gmail-filter-to"
+                />
               </label>
               <label>
                 <span>Subject</span>
-                <input value={keywordFilters.subject} onChange={(event) => setKeywordFilter("subject", event.target.value)} placeholder="Launch plan" />
+                <input
+                  value={keywordFilters.subject}
+                  onChange={(event) => setKeywordFilter("subject", event.target.value)}
+                  placeholder="Launch plan"
+                  data-testid="gmail-filter-subject"
+                />
               </label>
               <label>
                 <span>Label</span>
-                <input value={keywordFilters.label} onChange={(event) => setKeywordFilter("label", event.target.value)} placeholder="inbox" />
+                <input
+                  value={keywordFilters.label}
+                  onChange={(event) => setKeywordFilter("label", event.target.value)}
+                  placeholder="inbox"
+                  data-testid="gmail-filter-label"
+                />
               </label>
               <label>
                 <span>After</span>
-                <input type="date" value={keywordFilters.after} onChange={(event) => setKeywordFilter("after", event.target.value)} />
+                <input
+                  type="date"
+                  value={keywordFilters.after}
+                  onChange={(event) => setKeywordFilter("after", event.target.value)}
+                  data-testid="gmail-filter-after"
+                />
               </label>
               <label>
                 <span>Before</span>
-                <input type="date" value={keywordFilters.before} onChange={(event) => setKeywordFilter("before", event.target.value)} />
+                <input
+                  type="date"
+                  value={keywordFilters.before}
+                  onChange={(event) => setKeywordFilter("before", event.target.value)}
+                  data-testid="gmail-filter-before"
+                />
               </label>
               <label className="gmail-checkbox-field">
                 <input
                   type="checkbox"
                   checked={keywordFilters.hasAttachment}
                   onChange={(event) => setKeywordFilter("hasAttachment", event.target.checked)}
+                  data-testid="gmail-filter-has-attachment"
                 />
                 <span>Has attachment</span>
               </label>
             </div>
           </details>
-          <button type="submit" className="secondary-command" disabled={!canSearchGmail || !keywordSearchReady || !onKeywordSearch}>
+          <button
+            type="submit"
+            className="secondary-command"
+            disabled={!canSearchGmail || !keywordSearchReady || !onKeywordSearch}
+            data-testid="gmail-keyword-search-button"
+          >
             <Search size={15} aria-hidden="true" />
             <span>Search email</span>
           </button>
         </form>
-        <form className="gmail-search-form" onSubmit={(event) => void handleSemanticSubmit(event)}>
+        <form className="gmail-search-form" onSubmit={(event) => void handleSemanticSubmit(event)} data-testid="gmail-semantic-search-form">
           <label>
             <span>Semantic search</span>
             <input value={semanticDraft} onChange={(event) => setSemanticDraft(event.target.value)} placeholder="Meaning" />
           </label>
-          <button type="submit" className="secondary-command" disabled={!canSearchGmail || !semanticDraft.trim() || !onSemanticSearch}>
+          <button
+            type="submit"
+            className="secondary-command"
+            disabled={!canSearchGmail || !semanticDraft.trim() || !onSemanticSearch}
+            data-testid="gmail-semantic-search-button"
+          >
             <Search size={15} aria-hidden="true" />
             <span>Semantic search</span>
           </button>
@@ -3091,6 +3138,7 @@ export function GoogleConnectorControl({
               void onSyncNow(connection.id);
             }
           }}
+          data-testid="gmail-sync-button"
         >
           <Zap size={15} aria-hidden="true" />
           <span>{status === "syncing" ? "Syncing..." : "Sync now"}</span>
@@ -3104,6 +3152,7 @@ export function GoogleConnectorControl({
               void onRevoke(connection.id);
             }
           }}
+          data-testid="gmail-revoke-button"
         >
           <XCircle size={15} aria-hidden="true" />
           <span>{status === "revoking" ? "Revoking..." : "Revoke"}</span>
@@ -3117,6 +3166,7 @@ export function GoogleConnectorControl({
               void onDeleteSource(deleteSource.id);
             }
           }}
+          data-testid="gmail-delete-source-button"
         >
           <Trash2 size={15} aria-hidden="true" />
           <span>{status === "deleting" ? "Deleting..." : "Delete Gmail source"}</span>
@@ -3128,9 +3178,9 @@ export function GoogleConnectorControl({
 
 export function GmailKeywordResults({ results }: { results: GmailKeywordSearchData["results"] }) {
   return (
-    <div className="gmail-results-list" aria-label="Gmail keyword results">
+    <div className="gmail-results-list" aria-label="Gmail keyword results" data-testid="gmail-keyword-results">
       {results.slice(0, 5).map((result) => (
-        <article key={result.messageId}>
+        <article key={result.messageId} data-testid="gmail-keyword-result" data-gmail-message-id={result.messageId}>
           <strong>{result.subject}</strong>
           <span>{result.sender}</span>
           <p>{result.snippet}</p>
@@ -3147,9 +3197,14 @@ export function GmailKeywordResults({ results }: { results: GmailKeywordSearchDa
 
 export function GmailSemanticResults({ results }: { results: GmailSemanticSearchData["results"] }) {
   return (
-    <div className="gmail-results-list" aria-label="Gmail semantic results">
+    <div className="gmail-results-list" aria-label="Gmail semantic results" data-testid="gmail-semantic-results">
       {results.slice(0, 5).map((result) => (
-        <article key={`${result.messageId}-${result.memoryRef.id}`}>
+        <article
+          key={`${result.messageId}-${result.memoryRef.id}`}
+          data-testid="gmail-semantic-result"
+          data-gmail-message-id={result.messageId}
+          data-brain-memory-id={result.memoryRef.id}
+        >
           <strong>{result.subject}</strong>
           <span>
             {result.grounding} · {result.sender}
