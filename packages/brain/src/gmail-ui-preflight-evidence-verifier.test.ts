@@ -110,6 +110,18 @@ test("Gmail UI preflight evidence verifier rejects raw connect, token, and body 
   assert.match(failure, /raw connect\/session\/token or Gmail body value/);
 });
 
+test("Gmail UI preflight evidence verifier rejects raw body markers in harmless-looking values", () => {
+  const evidence = validUiPreflightEvidence();
+  const gmailCheck = evidence.checks.find((check) => check.name === "gmail.status");
+
+  assert.ok(gmailCheck);
+  gmailCheck.operatorNote = "Copied route output mentioned plainTextBody in a sanitized note.";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /raw connect\/session\/token or Gmail body value/);
+});
+
 function runVerifierExpectingFailure(evidence: Record<string, unknown>, ...args: string[]): string {
   try {
     execFileSync(process.execPath, [...verifier, ...args], {
