@@ -129,6 +129,10 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         criticalOptionPresent?: boolean;
         gmailMemoryEvidencePresent?: boolean;
         gmailSourceEvidencePresent?: boolean;
+        rankedCandidateCount?: number;
+        nextBestMoveGrounded?: boolean;
+        rankedCandidateGmailMemoryEvidencePresent?: boolean;
+        rankedCandidateGmailSourceEvidencePresent?: boolean;
         selectedLenses?: string[];
         rawEmailBodyAbsent?: boolean;
         secretOrConnectTokenAbsent?: boolean;
@@ -224,6 +228,10 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(createFirst?.criticalOptionPresent, true);
     assert.equal(createFirst?.gmailMemoryEvidencePresent, true);
     assert.equal(createFirst?.gmailSourceEvidencePresent, true);
+    assert.equal(createFirst?.rankedCandidateCount, 5);
+    assert.equal(createFirst?.nextBestMoveGrounded, true);
+    assert.equal(createFirst?.rankedCandidateGmailMemoryEvidencePresent, true);
+    assert.equal(createFirst?.rankedCandidateGmailSourceEvidencePresent, true);
     assert.equal(createRefined?.artifactPresent, true);
     assert.equal(createRefined?.verificationPresent, true);
     assert.equal(createRefined?.judgmentEventPresent, true);
@@ -812,6 +820,10 @@ function postOauthRouteFor(
             id: "create-option-set-1",
             projectId: "gmail-smoke-project",
             sessionId: "gmail-smoke-session",
+            nextBestMove: {
+              grounded: true,
+            },
+            rankedCandidates: rankedGmailCandidates(),
             options: [
               {
                 id: "create-option-personal",
@@ -1042,6 +1054,34 @@ function fullGmailSource() {
       retrievalAccess: "enabled",
     },
   };
+}
+
+function rankedGmailCandidates() {
+  return ["Personal", "Practical", "Valuable", "Critical", "Weird"].map((lens) => ({
+    id: `ranked-${lens.toLowerCase()}`,
+    lens,
+    title: `${lens} Gmail evidence candidate`,
+    memoryRefs: [
+      {
+        id: "memory-gmail-1",
+        summary: "launch partner evidence from synced Gmail memory.",
+      },
+    ],
+    sourceReferences: [
+      {
+        id: "source-ref-gmail-1",
+        sourceNode: {
+          id: "connector-source-gmail-1",
+          label: "Launch plan",
+          excerpt: "launch partner evidence",
+        },
+        chunk: {
+          id: "chunk-gmail-1",
+          excerpt: "launch partner evidence",
+        },
+      },
+    ],
+  }));
 }
 
 function safePartialFailure(stage: string) {
