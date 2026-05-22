@@ -183,6 +183,7 @@ GMAIL_SMOKE_KEYWORD_HAS_ATTACHMENT=true
 ```
 
 The evidence file records the Gmail `q` string and the filters used, while still checking that keyword results are not stored unless `sync=true` is explicitly requested.
+Smoke evidence intentionally omits raw HTTP response bodies and raw email content; failure records use route/status/error-code summaries so the evidence file can be shared without exposing mailbox text.
 
 If staging uses token auth, also pass:
 
