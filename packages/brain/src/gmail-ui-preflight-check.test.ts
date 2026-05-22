@@ -48,6 +48,32 @@ test("Gmail UI preflight checker writes sanitized evidence when requested", asyn
   }
 });
 
+test("Gmail UI preflight checker rejects unsafe run ids without writing them", async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), "penny-gmail-ui-preflight-"));
+  const evidenceFile = join(tempDir, "unsafe-run-id-evidence.json");
+  const unsafeRunId = "staged-account@example.com";
+
+  try {
+    const result = await runPreflight(routesReadyForUiPreflight(), {
+      GMAIL_UI_PREFLIGHT_EVIDENCE_FILE: evidenceFile,
+      GMAIL_STAGING_RUN_ID: unsafeRunId,
+    });
+    const evidenceText = await readFile(evidenceFile, "utf8");
+    const evidence = JSON.parse(evidenceText) as { ok: boolean; stagingRunId?: string; error?: string; checks: unknown[] };
+    const unsafeRunIdPattern = new RegExp(unsafeRunId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+    assert.equal(result.status, 1);
+    assert.equal(evidence.ok, false);
+    assert.equal(evidence.stagingRunId, undefined);
+    assert.deepEqual(evidence.checks, []);
+    assert.match(evidence.error ?? "", /GMAIL_STAGING_RUN_ID must be a safe opaque slug/);
+    assert.doesNotMatch(result.stderr, unsafeRunIdPattern);
+    assert.doesNotMatch(evidenceText, unsafeRunIdPattern);
+  } finally {
+    await rm(tempDir, { force: true, recursive: true });
+  }
+});
+
 test("Gmail UI preflight checker rejects missing migrated database routes", async () => {
   const result = await runPreflight({
     "/api/brain/documents": {
