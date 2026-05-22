@@ -65,7 +65,7 @@ Penny does not:
 
 Gmail import sets `rawRetention=false`. The connector imports normalized content into private Brain memory but does not intentionally keep raw source files or raw email blobs as retained user uploads.
 
-Connector source refs keep enough provenance to explain retrieval and support delete/revoke. Production logs must not include raw email body text. Logs may include safe operational facts such as counts, source ids, job ids, status, and error codes.
+Connector source refs keep enough provenance to explain retrieval and support delete/revoke. Production logs must not include raw email body text, Gmail API payloads, headers, HTML, metadata/provenance blobs, snippets, subjects, sender/recipient fields, or token-shaped values. Logs may include safe operational facts such as counts, source ids, job ids, status, and error codes.
 
 Create prompt export must not include raw Gmail body markers, connect links, session tokens, hidden-access claims, global-training claims, or human-review claims beyond the allowed `No human review` privacy copy.
 
