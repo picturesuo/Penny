@@ -312,7 +312,7 @@ node scripts/verify-gmail-browser-evidence.mjs tmp/gmail-browser-evidence.json \
   --require-artifact-files
 ```
 
-The JSON evidence must include `baseUrl`, `userId`, `workspaceId`, `projectId`, `sphereId`, `capturedAt`, `checks`, and at least one sanitized proof artifact in `screenshots`, `notes`, or `proofs`. Full staged browser evidence used in the final bundle must also include the same `stagingRunId` recorded by the readiness, UI preflight, and smoke evidence files. Each proof artifact must include a `proves` array listing the check names it supports. The full staged browser evidence must include and prove these check names:
+The JSON evidence must include `baseUrl`, `userId`, `workspaceId`, `projectId`, `sphereId`, `capturedAt`, `checks`, and at least one sanitized proof artifact in `screenshots`, `notes`, or `proofs`. Full staged browser evidence must include the same safe opaque `stagingRunId` recorded by the readiness, UI preflight, and smoke evidence files; the standalone browser verifier rejects full proof when this run id is missing or unsafe. Each proof artifact must include a `proves` array listing the check names it supports. The full staged browser evidence must include and prove these check names:
 
 - `brain.gmailPanel.preOAuth`
 - `brain.gmailKeywordFilters`
