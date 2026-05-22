@@ -65,6 +65,7 @@ function requireCheck(name) {
 }
 
 function assertPreOAuthPanel(check) {
+  assert(check.selectorTargetsPresent === true, "Pre-OAuth browser evidence must prove stable Gmail panel selector targets are present.");
   assert(check.gmailCardVisible === true, "Pre-OAuth browser evidence must show the Gmail card.");
   assert(check.gmailReadonlyVisible === true, "Pre-OAuth browser evidence must show gmail.readonly.");
   assert(check.restrictedPrivateCopyVisible === true, "Pre-OAuth browser evidence must show restricted/private Gmail copy.");
@@ -80,6 +81,7 @@ function assertKeywordFilters(check) {
   const required = ["from", "to", "subject", "label", "after", "before", "hasAttachment"];
   const fields = Array.isArray(check.fieldsVisible) ? new Set(check.fieldsVisible) : new Set();
 
+  assert(check.selectorTargetsPresent === true, "Browser evidence must prove stable Gmail keyword filter selector targets are present.");
   assert(check.disclosureOpen === true, "Browser evidence must show the Gmail keyword filter disclosure open.");
   for (const field of required) {
     assert(fields.has(field), `Browser evidence must show the Gmail ${field} keyword filter.`);
@@ -87,6 +89,7 @@ function assertKeywordFilters(check) {
 }
 
 function assertCreateSurface(check) {
+  assert(check.selectorTargetsPresent === true, "Browser evidence must prove stable Create surface selector targets are present.");
   assert(check.createSurfaceVisible === true, "Browser evidence must show the Create surface.");
   assert(check.contextLightStateVisible === true, "Browser evidence must show the context-light Create state before Gmail memory.");
   assert(check.detailsButtonsVisible === true, "Browser evidence must show Create details controls.");
@@ -94,6 +97,7 @@ function assertCreateSurface(check) {
 }
 
 function assertConnectedKeywordResults(check) {
+  assert(check.selectorTargetsPresent === true, "Post-OAuth browser evidence must prove stable connected Gmail selector targets are present.");
   assert(check.connectedStateVisible === true, "Post-OAuth browser evidence must show Gmail connected state.");
   assert(check.gmailReadonlyVisible === true, "Post-OAuth browser evidence must show gmail.readonly.");
   assert(check.messageCountVisible === true, "Post-OAuth browser evidence must show message count.");
@@ -108,6 +112,7 @@ function assertConnectedKeywordResults(check) {
 }
 
 function assertSemanticResults(check) {
+  assert(check.selectorTargetsPresent === true, "Browser evidence must prove stable Gmail semantic result selector targets are present.");
   assert(check.resultVisible === true, "Browser evidence must show a Gmail semantic result row.");
   assert(check.groundingLabelVisible === true, "Browser evidence must show a semantic grounding label.");
   assert(check.scoreReasonVisible === true, "Browser evidence must show a semantic score reason.");
@@ -117,6 +122,7 @@ function assertSemanticResults(check) {
 }
 
 function assertCreateEvidenceDrawer(check) {
+  assert(check.selectorTargetsPresent === true, "Create evidence must prove stable evidence drawer selector targets are present.");
   assert(check.drawerVisible === true, "Browser evidence must show the Create evidence/details drawer.");
   assert(check.realGmailRefsOnlyWhenUsed === true, "Create evidence must show Gmail refs only when the option actually used them.");
   assert(
@@ -126,6 +132,7 @@ function assertCreateEvidenceDrawer(check) {
 }
 
 function assertCreateExport(check) {
+  assert(check.selectorTargetsPresent === true, "Export evidence must prove stable export selector targets are present.");
   assert(check.exportVisible === true, "Browser evidence must show the exported prompt.");
   assert(check.gmailContextOnlyWhenUsed === true, "Export evidence must prove Gmail context appears only when used.");
   assert(check.rawEmailBodyAbsent === true, "Export evidence must prove raw Gmail body markers are absent.");
@@ -134,6 +141,7 @@ function assertCreateExport(check) {
 }
 
 function assertPostRevokeDelete(check) {
+  assert(check.selectorTargetsPresent === true, "Post-revoke/delete evidence must prove stable Gmail state selector targets are present.");
   assert(check.postRevokeStateVisible === true, "Browser evidence must show post-revoke state.");
   assert(check.syncBlockedAfterRevoke === true, "Browser evidence must prove sync stops after revoke.");
   assert(check.searchBlockedAfterRevoke === true, "Browser evidence must prove keyword search stops after revoke.");

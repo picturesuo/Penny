@@ -502,6 +502,7 @@ function validBrowserEvidence(): Record<string, unknown> {
     checks: [
       {
         name: "brain.gmailPanel.preOAuth",
+        selectorTargetsPresent: true,
         gmailCardVisible: true,
         gmailReadonlyVisible: true,
         restrictedPrivateCopyVisible: true,
@@ -514,11 +515,13 @@ function validBrowserEvidence(): Record<string, unknown> {
       },
       {
         name: "brain.gmailKeywordFilters",
+        selectorTargetsPresent: true,
         disclosureOpen: true,
         fieldsVisible: ["from", "to", "subject", "label", "after", "before", "hasAttachment"],
       },
       {
         name: "create.contextLightSurface",
+        selectorTargetsPresent: true,
         createSurfaceVisible: true,
         contextLightStateVisible: true,
         detailsButtonsVisible: true,
@@ -526,6 +529,7 @@ function validBrowserEvidence(): Record<string, unknown> {
       },
       {
         name: "brain.gmailConnectedResults",
+        selectorTargetsPresent: true,
         connectedStateVisible: true,
         gmailReadonlyVisible: true,
         messageCountVisible: true,
@@ -540,6 +544,7 @@ function validBrowserEvidence(): Record<string, unknown> {
       },
       {
         name: "brain.gmailSemanticResults",
+        selectorTargetsPresent: true,
         resultVisible: true,
         groundingLabelVisible: true,
         scoreReasonVisible: true,
@@ -549,6 +554,7 @@ function validBrowserEvidence(): Record<string, unknown> {
       },
       {
         name: "create.gmailEvidenceDrawer",
+        selectorTargetsPresent: true,
         drawerVisible: true,
         realGmailRefsOnlyWhenUsed: true,
         gmailSourceRefVisible: true,
@@ -556,6 +562,7 @@ function validBrowserEvidence(): Record<string, unknown> {
       },
       {
         name: "create.gmailExport",
+        selectorTargetsPresent: true,
         exportVisible: true,
         gmailContextOnlyWhenUsed: true,
         rawEmailBodyAbsent: true,
@@ -564,6 +571,7 @@ function validBrowserEvidence(): Record<string, unknown> {
       },
       {
         name: "brain.gmailPostRevokeDelete",
+        selectorTargetsPresent: true,
         postRevokeStateVisible: true,
         syncBlockedAfterRevoke: true,
         searchBlockedAfterRevoke: true,

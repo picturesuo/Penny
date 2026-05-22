@@ -42,6 +42,17 @@ test("Gmail browser evidence verifier rejects missing post-OAuth surfaces by def
   assert.match(failure, /Browser evidence must include brain\.gmailPostRevokeDelete/);
 });
 
+test("Gmail browser evidence verifier rejects missing stable selector proof", () => {
+  const evidence = validBrowserEvidence();
+  const connectedResults = evidence.checks.find((check) => check.name === "brain.gmailConnectedResults") as Record<string, unknown>;
+
+  delete connectedResults.selectorTargetsPresent;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /stable connected Gmail selector targets/);
+});
+
 test("Gmail browser evidence verifier rejects raw Gmail, token, and score data", () => {
   const evidence = validBrowserEvidence();
   const semantic = evidence.checks.find((check) => check.name === "brain.gmailSemanticResults") as Record<string, unknown>;
@@ -90,6 +101,7 @@ function preOAuthEvidence(): Record<string, unknown> & { checks: Array<Record<st
     checks: [
       {
         name: "brain.gmailPanel.preOAuth",
+        selectorTargetsPresent: true,
         gmailCardVisible: true,
         gmailReadonlyVisible: true,
         restrictedPrivateCopyVisible: true,
@@ -102,11 +114,13 @@ function preOAuthEvidence(): Record<string, unknown> & { checks: Array<Record<st
       },
       {
         name: "brain.gmailKeywordFilters",
+        selectorTargetsPresent: true,
         disclosureOpen: true,
         fieldsVisible: ["from", "to", "subject", "label", "after", "before", "hasAttachment"],
       },
       {
         name: "create.contextLightSurface",
+        selectorTargetsPresent: true,
         createSurfaceVisible: true,
         contextLightStateVisible: true,
         detailsButtonsVisible: true,
@@ -130,6 +144,7 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
       ...preOAuthEvidence().checks,
       {
         name: "brain.gmailConnectedResults",
+        selectorTargetsPresent: true,
         connectedStateVisible: true,
         gmailReadonlyVisible: true,
         messageCountVisible: true,
@@ -144,6 +159,7 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
       },
       {
         name: "brain.gmailSemanticResults",
+        selectorTargetsPresent: true,
         resultVisible: true,
         groundingLabelVisible: true,
         scoreReasonVisible: true,
@@ -153,6 +169,7 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
       },
       {
         name: "create.gmailEvidenceDrawer",
+        selectorTargetsPresent: true,
         drawerVisible: true,
         realGmailRefsOnlyWhenUsed: true,
         gmailSourceRefVisible: true,
@@ -160,6 +177,7 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
       },
       {
         name: "create.gmailExport",
+        selectorTargetsPresent: true,
         exportVisible: true,
         gmailContextOnlyWhenUsed: true,
         rawEmailBodyAbsent: true,
@@ -168,6 +186,7 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
       },
       {
         name: "brain.gmailPostRevokeDelete",
+        selectorTargetsPresent: true,
         postRevokeStateVisible: true,
         syncBlockedAfterRevoke: true,
         searchBlockedAfterRevoke: true,
