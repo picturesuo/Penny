@@ -2828,10 +2828,11 @@ export function GoogleConnectorControl({
   const canConnect = Boolean(gmailStatus?.configured ?? provider?.configured) && status !== "connecting" && !disabled;
   const connectLabel =
     connectorState.connections.length > 0 ? (gmailConnectable ? "Add Gmail account" : "Add Google account") : "Connect Gmail";
-  const canSync = Boolean(connection && connection.status !== "revoked") && status !== "syncing" && !disabled;
-  const canRevoke = Boolean(connection && connection.status !== "revoked") && status !== "revoking" && !disabled;
+  const canUseGmailConnection = isActiveGmailConnection({ connection, disabled });
+  const canSync = canUseGmailConnection && status !== "syncing";
+  const canRevoke = canUseGmailConnection && status !== "revoking";
   const canDelete = Boolean(deleteSource) && status !== "deleting" && !disabled;
-  const canSearchGmail = isGmailSearchAvailable({ connection, disabled });
+  const canSearchGmail = canUseGmailConnection;
   const gmailMessageCount = gmailStatus?.messageCount ?? enabledSources.filter((source) => source.kind === "google_gmail_message").length;
   const gmailLastSyncAt = gmailStatus?.lastSyncAt ?? connection?.lastSyncedAt ?? null;
   const gmailScopes = gmailStatus?.scopes.length ? gmailStatus.scopes : gmail?.scopes.map((scope) => scope.scope).filter((scope): scope is string => Boolean(scope)) ?? [];
@@ -3209,11 +3210,18 @@ function selectedGoogleConnection(state: GoogleConnectorStateView, selectedConne
   return selected ?? state.connections.find((connection) => connection.status !== "revoked") ?? state.connections[0] ?? null;
 }
 
-export function isGmailSearchAvailable(input: {
+export function isActiveGmailConnection(input: {
   connection: GmailSearchConnectionCandidate | null | undefined;
   disabled?: boolean;
 }): boolean {
   return Boolean(input.connection?.surfaces.includes("google_gmail") && input.connection.status !== "revoked" && input.disabled !== true);
+}
+
+export function isGmailSearchAvailable(input: {
+  connection: GmailSearchConnectionCandidate | null | undefined;
+  disabled?: boolean;
+}): boolean {
+  return isActiveGmailConnection(input);
 }
 
 function findGoogleConnection(state: GoogleConnectorStateView, connectionId: string): GoogleConnectorConnectionView | null {
