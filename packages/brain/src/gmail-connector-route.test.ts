@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createInMemoryBrainMemoryService } from "./brain-memory-route.ts";
+import { createInMemoryBrainMemoryService, handleBrainRetrieveRequest } from "./brain-memory-route.ts";
 import { handleGoogleConnectorSourceDeleteRequest } from "./google-connector-route.ts";
 import {
   buildGmailSearchQuery,
@@ -700,10 +700,11 @@ test("Gmail source delete removes Brain retrieval access and semantic results", 
   const syncPayload = (await syncResponse.json()) as {
     data: {
       state: {
-        sources: Array<{ id: string; sourceUri: string; privacy: { retrievalAccess: string } }>;
+        sources: Array<{ id: string; sourceUri: string; brainSourceId: string | null; privacy: { retrievalAccess: string } }>;
       };
     };
   };
+  const source = syncPayload.data.state.sources.find((candidate) => candidate.sourceUri === "gmail:message:msg-1");
   const semanticBeforeDelete = await handleGoogleGmailSemanticSearchRequest(
     gmailRequest("/api/connectors/google/gmail/semantic-search", {
       query: "launch partner private email evidence",
@@ -711,7 +712,17 @@ test("Gmail source delete removes Brain retrieval access and semantic results", 
     }),
     { stateStore, brainMemoryService },
   );
-  const sourceId = syncPayload.data.state.sources.find((source) => source.sourceUri === "gmail:message:msg-1")?.id ?? "";
+  const brainRetrieveBeforeDelete = await handleBrainRetrieveRequest(
+    gmailRequest("/api/brain/retrieve", {
+      query: "launch partner private email evidence",
+      limit: 5,
+    }),
+    { service: brainMemoryService },
+  );
+  const brainRetrieveBeforePayload = (await brainRetrieveBeforeDelete.json()) as {
+    data: { results: Array<{ sourceId: string; sourceRef: { url?: string | null } }> };
+  };
+  const sourceId = source?.id ?? "";
   const deleteResponse = await handleGoogleConnectorSourceDeleteRequest(
     gmailRequest("/api/connectors/google/source-delete", {
       sourceId,
@@ -739,10 +750,28 @@ test("Gmail source delete removes Brain retrieval access and semantic results", 
     { stateStore, brainMemoryService },
   );
   const semanticAfterPayload = (await semanticAfterDelete.json()) as { error: { code: string; message: string } };
+  const brainRetrieveAfterDelete = await handleBrainRetrieveRequest(
+    gmailRequest("/api/brain/retrieve", {
+      query: "launch partner private email evidence",
+      limit: 5,
+    }),
+    { service: brainMemoryService },
+  );
+  const brainRetrieveAfterPayload = (await brainRetrieveAfterDelete.json()) as {
+    data: { results: Array<{ sourceId: string; sourceRef: { url?: string | null } }> };
+  };
 
   assert.equal(syncResponse.status, 200);
   assert.equal(semanticBeforeDelete.status, 200);
   assert.ok(sourceId);
+  assert.ok(source?.brainSourceId);
+  assert.equal(brainRetrieveBeforeDelete.status, 200);
+  assert.equal(
+    brainRetrieveBeforePayload.data.results.some(
+      (result) => result.sourceId === source.brainSourceId || result.sourceRef.url === "gmail:message:msg-1",
+    ),
+    true,
+  );
   assert.equal(deleteResponse.status, 200);
   assert.equal(deletePayload.data.brainSourceDeleted, true);
   assert.equal(deletePayload.data.profile.stats.sourceCount, 0);
@@ -756,6 +785,13 @@ test("Gmail source delete removes Brain retrieval access and semantic results", 
   assert.equal(semanticAfterDelete.status, 409);
   assert.equal(semanticAfterPayload.error.code, "gmail_not_synced");
   assert.equal(semanticAfterPayload.error.message, "Sync Gmail first.");
+  assert.equal(brainRetrieveAfterDelete.status, 200);
+  assert.equal(
+    brainRetrieveAfterPayload.data.results.some(
+      (result) => result.sourceId === source.brainSourceId || result.sourceRef.url === "gmail:message:msg-1",
+    ),
+    false,
+  );
 });
 
 test("buildGmailSearchQuery omits unsupported send/modify scopes and formats exact Gmail search terms", () => {
