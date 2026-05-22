@@ -60,6 +60,9 @@ try {
   assert(initialStatus.data?.privacy?.trainingUse === false, "Gmail privacy did not report trainingUse=false.");
   assert(initialStatus.data?.privacy?.rawRetentionDefault === false, "Gmail privacy did not report rawRetentionDefault=false.");
   assert(initialStatus.data?.privacy?.noHumanReview === true, "Gmail privacy did not report noHumanReview=true.");
+  assertConnectorStatePrivacy(initialStatus.data, "Initial Gmail status");
+  const initialProvider = await request("GET", "/api/connectors/google");
+  assertConnectorStatePrivacy(initialProvider.data, "Initial Google provider state");
   assert((initialStatus.data?.connections ?? []).some((connection) => connection.status === "connected"), "Connect Gmail first.");
   const connectedTargets = (initialStatus.data?.connections ?? []).filter((connection) => connection.status === "connected");
   const targetedConnection = connectedTargets.find((connection) => matchesConnectionSelector(connection, selector));
@@ -79,6 +82,8 @@ try {
     private: initialStatus.data.private,
     rawRetentionDefault: initialStatus.data.privacy.rawRetentionDefault,
     noHumanReview: initialStatus.data.privacy.noHumanReview,
+    statusStatePrivacySafe: true,
+    providerStatePrivacySafe: true,
   });
 
   const syncInput = keywordSearchInput();
@@ -101,6 +106,9 @@ try {
 
   const statusAfterSync = await request("GET", "/api/connectors/google/gmail/status");
   assert(statusAfterSync.data?.messageCount >= minMessages, "Gmail status did not show synced message count.");
+  assertConnectorStatePrivacy(statusAfterSync.data, "Gmail status after sync");
+  const providerAfterSync = await request("GET", "/api/connectors/google");
+  assertConnectorStatePrivacy(providerAfterSync.data, "Google provider state after sync");
   let firstSource = statusAfterSync.data?.sources?.[0] ?? sync.data?.state?.sources?.[0] ?? null;
   let firstSourceId = firstSource?.id ?? "";
   let firstBrainSourceId = firstSource?.brainSourceId ?? "";
@@ -110,6 +118,8 @@ try {
     messageCount: statusAfterSync.data.messageCount,
     sourceCount: statusAfterSync.data.sources.length,
     firstSourceIdPresent: Boolean(firstSourceId),
+    statusStatePrivacySafe: true,
+    providerStatePrivacySafe: true,
   });
 
   const sourceUrisAfterSync = gmailSourceUris(statusAfterSync.data?.sources, targetConnectorConnectionId);
@@ -121,6 +131,7 @@ try {
   });
   assert(repeatSync.data?.partialFailureCount === 0, "Repeated Gmail sync reported partial failures.");
   const statusAfterRepeatSync = await request("GET", "/api/connectors/google/gmail/status");
+  assertConnectorStatePrivacy(statusAfterRepeatSync.data, "Gmail status after repeated sync");
   const sourceUrisAfterRepeatSync = gmailSourceUris(statusAfterRepeatSync.data?.sources, targetConnectorConnectionId);
   assert(
     statusAfterRepeatSync.data?.messageCount === statusAfterSync.data.messageCount,
@@ -149,6 +160,7 @@ try {
   assert(Array.isArray(keyword.data?.results) && keyword.data.results.length > 0, "Keyword search returned no Gmail results.");
   assert(keyword.data.results.every(hasKeywordResultShape), "Keyword search returned an unexpected result shape.");
   const statusAfterKeyword = await request("GET", "/api/connectors/google/gmail/status");
+  assertConnectorStatePrivacy(statusAfterKeyword.data, "Gmail status after keyword search");
   assert(statusAfterKeyword.data?.messageCount === beforeKeywordCount, "Keyword search changed Gmail memory count without sync=true.");
   record("keywordSearch", {
     query: keyword.data.query,
@@ -170,6 +182,7 @@ try {
   assert(keywordSync.data.results.every(hasKeywordResultShape), "Keyword search with sync=true returned an unexpected result shape.");
   assert(keywordSync.data?.sync?.partialFailureCount === 0, "Keyword search with sync=true reported partial sync failures.");
   const statusAfterKeywordSync = await request("GET", "/api/connectors/google/gmail/status");
+  assertConnectorStatePrivacy(statusAfterKeywordSync.data, "Gmail status after keyword search sync");
   const sourceUrisAfterKeywordSync = gmailSourceUris(statusAfterKeywordSync.data?.sources, targetConnectorConnectionId);
   assert(
     statusAfterKeywordSync.data?.messageCount === beforeKeywordSyncCount,
@@ -515,6 +528,62 @@ function hasSemanticResultShape(result) {
 
 function hasNoRawEmailFields(result) {
   return !["body", "plainTextBody", "raw", "rawBody", "html", "payload", "score"].some((field) => field in result);
+}
+
+function assertConnectorStatePrivacy(data, label) {
+  const state = data?.state;
+
+  assertNoUnsafeSourceFields(data?.sources, `${label}.sources`);
+  assertNoUnsafeSourceFields(state?.sources, `${label}.state.sources`);
+  assertNoUnsafeConnectionFields(data?.connections, `${label}.connections`);
+  assertNoUnsafeConnectionFields(state?.connections, `${label}.state.connections`);
+  assertNoUnsafeSyncJobFields(state?.syncJobs, `${label}.state.syncJobs`);
+
+  for (const field of ["cursors", "audits"]) {
+    assert(!(state && field in state), `${label}.state exposed ${field}.`);
+  }
+}
+
+function assertNoUnsafeSourceFields(sources, label) {
+  if (!Array.isArray(sources)) {
+    return;
+  }
+
+  for (const source of sources) {
+    for (const field of ["metadata", "provenance", "sourceRef", "scope", "trainingUse", "rawContentStored", "rawRetention", "brainNodeIds"]) {
+      assert(!(field in source), `${label} exposed ${field}.`);
+    }
+    for (const field of ["trainingUse", "rawContentStored", "productionLogSafe", "visibility"]) {
+      assert(!(field in (source.privacy ?? {})), `${label}.privacy exposed ${field}.`);
+    }
+    assert(hasNoRawEmailFields(source), `${label} exposed a raw email field.`);
+  }
+}
+
+function assertNoUnsafeConnectionFields(connections, label) {
+  if (!Array.isArray(connections)) {
+    return;
+  }
+
+  for (const connection of connections) {
+    const credential = connection?.credential ?? {};
+
+    for (const field of ["credentialRef", "accessToken", "refreshToken", "token", "encryptedToken", "encryptedRefreshToken"]) {
+      assert(!(field in credential), `${label}.credential exposed ${field}.`);
+    }
+  }
+}
+
+function assertNoUnsafeSyncJobFields(syncJobs, label) {
+  if (!Array.isArray(syncJobs)) {
+    return;
+  }
+
+  for (const job of syncJobs) {
+    for (const field of ["cursorBefore", "cursorAfter", "sourceCounts", "error", "scope"]) {
+      assert(!(field in job), `${label} exposed ${field}.`);
+    }
+  }
 }
 
 function gmailSourceUris(sources, connectionId) {
