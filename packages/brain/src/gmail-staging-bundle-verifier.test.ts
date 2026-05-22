@@ -66,6 +66,54 @@ test("Gmail staging bundle verifier accepts matching readiness, smoke, and destr
   }
 });
 
+test("Gmail staging bundle verifier accepts final staging mode", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const files = await writeBundleFiles(tmp);
+    await writeBrowserArtifacts(tmp);
+    const output = execFileSync(
+      process.execPath,
+      [
+        "scripts/verify-gmail-staging-bundle.mjs",
+        `--readiness=${files.readiness}`,
+        `--smoke=${files.smoke}`,
+        `--destructive-smoke=${files.destructive}`,
+        `--ui-preflight=${files.uiPreflight}`,
+        `--browser-evidence=${files.browserEvidence}`,
+        `--browser-artifact-root=${tmp}`,
+        "--final-staging",
+        "--min-messages=1",
+      ],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+      },
+    );
+    const payload = JSON.parse(output) as {
+      ok: boolean;
+      finalStaging: boolean;
+      readinessConnectPreflightRequired: boolean;
+      keywordFilterCoverageRequired: boolean;
+      destructiveRequired: boolean;
+      uiPreflightRequired: boolean;
+      browserEvidenceRequired: boolean;
+      browserArtifactFilesRequired: boolean;
+    };
+
+    assert.equal(payload.ok, true);
+    assert.equal(payload.finalStaging, true);
+    assert.equal(payload.readinessConnectPreflightRequired, true);
+    assert.equal(payload.keywordFilterCoverageRequired, true);
+    assert.equal(payload.destructiveRequired, true);
+    assert.equal(payload.uiPreflightRequired, true);
+    assert.equal(payload.browserEvidenceRequired, true);
+    assert.equal(payload.browserArtifactFilesRequired, true);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging bundle verifier rejects mismatched scope evidence", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
 
@@ -83,6 +131,23 @@ test("Gmail staging bundle verifier rejects mismatched scope evidence", async ()
     ]);
 
     assert.match(failure, /smoke evidence workspaceId must match readiness evidence/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Gmail staging bundle verifier final staging mode requires the full bundle", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const files = await writeBundleFiles(tmp);
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      "--final-staging",
+    ]);
+
+    assert.match(failure, /Usage: node scripts\/verify-gmail-staging-bundle\.mjs/);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
