@@ -13,12 +13,13 @@ Penny's connector foundation starts with Google and stays separate from Brain ra
 - Workspace-bundle connect sessions that tag Nango connections with Gmail, Drive/Docs, and Calendar surfaces.
 - Nango auth webhook reconciliation at `/api/connectors/google/nango-webhook`, with automatic sync trigger after a successful Google approval.
 - Connector source deletion that removes retrieval access and deletes the linked Brain source when present.
+- Gmail read-only status, connect, sync, keyword search, semantic search, revoke, and source-delete paths behind explicit restricted-scope gates.
 - Manual import guidance statuses for Google Takeout and My Activity.
 - Chrome extension-required status for browser/search history.
 
 ## Gated Or Future
 
-- Gmail is scaffolded but gated behind `ENABLE_GMAIL_CONNECTOR=true` and `ENABLE_RESTRICTED_GOOGLE_SCOPES=true`. Production still blocks Gmail restricted scopes until Google verification and security documentation are complete.
+- Gmail read-only is implemented but remains gated behind `ENABLE_GMAIL_CONNECTOR=true` and `ENABLE_RESTRICTED_GOOGLE_SCOPES=true`. Production still blocks public Gmail restricted-scope use until Google verification and security documentation are complete.
 - Broad Drive metadata/read access is restricted and not production-allowed by default.
 - YouTube supports only explicit API resources such as channel or playlist metadata. Penny does not claim YouTube watch history.
 - Google Search history, browser history, messages, and Takeout archives are not fetched by OAuth. My Activity and Takeout require user-provided imports; browser/search history requires a future extension.
@@ -48,7 +49,7 @@ Required environment placeholders:
 
 Nango setup requirements:
 
-- The Google integration key must be `google`.
+- The default Google Workspace integration key is `google`; dedicated Gmail staging can use `NANGO_GMAIL_INTEGRATION_ID` such as `google-gmail-staging`.
 - Google OAuth client ID and secret are configured inside Nango's Google integration, not Penny's `.env.local`.
 - The Google integration should request the scopes Penny needs for the Workspace bundle, starting with `gmail.readonly`, `drive.file`, and `calendar.readonly`.
 - The Nango environment webhook URL should point to Penny's `/api/connectors/google/nango-webhook` endpoint.
@@ -103,7 +104,7 @@ Current committed foundation:
 - API routes for provider overview, connect session, callback, connections, credentials, sync now, sync complete, sync status, refresh, revoke, and source delete.
 - Brain Control Center UI for Google connection state, connected surfaces, scopes, sync status, last/next sync, source counts, Sync now, Revoke, Delete source, gated Gmail, and extension-required browser/search state.
 - Sync completion imports Google connector records into private Brain source nodes/chunks/memory notes/source refs and links connector source refs to Brain source IDs.
-- Focused tests for config, statuses, scope gating, Gmail production blocking, Nango connect sessions, route persistence, sync lifecycle, source deletion, and cross-user scoped connector state.
+- Focused tests for config, statuses, scope gating, Gmail production blocking, Nango connect sessions, route persistence, sync lifecycle, source deletion, Gmail keyword/semantic search, Create evidence use, and cross-user scoped connector state.
 
 Remaining integration work:
 
