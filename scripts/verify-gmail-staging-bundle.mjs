@@ -20,6 +20,7 @@ const requireUiPreflight = finalStaging || args.includes("--require-ui-preflight
 const requireBrowserEvidence = finalStaging || args.includes("--require-browser-evidence");
 const requireBrowserArtifactFiles = finalStaging || args.includes("--require-browser-artifact-files");
 const minMessages = optionInt("--min-messages", 1);
+const maxEvidenceWindowHours = optionInt("--max-evidence-window-hours", 24);
 const errors = [];
 
 if (
@@ -111,6 +112,19 @@ if (smoke && destructive) {
   assertMatchingScope(smoke, destructive, "destructive smoke");
 }
 
+if (finalStaging) {
+  assertFinalEvidenceWindow(
+    [
+      ["readiness", readiness],
+      ["smoke", smoke],
+      ["destructive smoke", destructive],
+      ["UI preflight", uiPreflight],
+      ["browser", browserEvidence],
+    ],
+    maxEvidenceWindowHours,
+  );
+}
+
 if (errors.length) {
   printErrors();
 } else {
@@ -132,6 +146,7 @@ if (errors.length) {
         browserArtifactFilesRequired: requireBrowserArtifactFiles,
         finalStaging,
         minMessages,
+        maxEvidenceWindowHours,
       },
       null,
       2,
@@ -202,6 +217,49 @@ function assertMatchingScope(left, right, label) {
   }
 }
 
+function assertFinalEvidenceWindow(entries, maxHours) {
+  const timestamps = [];
+
+  for (const [label, evidence] of entries) {
+    if (!evidence) {
+      continue;
+    }
+
+    const fields = timestampFields(evidence);
+
+    assert(fields.length > 0, `Final staging ${label} evidence must include a timestamp.`);
+
+    for (const [field, value] of fields) {
+      const parsed = Date.parse(value);
+
+      assert(Number.isFinite(parsed), `Final staging ${label} evidence ${field} must be a valid ISO timestamp.`);
+
+      if (Number.isFinite(parsed)) {
+        timestamps.push({ label, field, value: parsed });
+      }
+    }
+  }
+
+  if (timestamps.length < 2) {
+    return;
+  }
+
+  const earliest = timestamps.reduce((oldest, item) => (item.value < oldest.value ? item : oldest), timestamps[0]);
+  const latest = timestamps.reduce((newest, item) => (item.value > newest.value ? item : newest), timestamps[0]);
+  const windowMs = latest.value - earliest.value;
+
+  assert(
+    windowMs <= maxHours * 60 * 60 * 1000,
+    `Final staging evidence timestamps must be within ${maxHours} hour(s); earliest ${earliest.label}.${earliest.field}, latest ${latest.label}.${latest.field}.`,
+  );
+}
+
+function timestampFields(evidence) {
+  return ["checkedAt", "startedAt", "completedAt", "capturedAt"]
+    .map((field) => [field, evidence?.[field]])
+    .filter(([, value]) => typeof value === "string" && value.length > 0);
+}
+
 function evidenceSummary(file, evidence) {
   return {
     file: basename(file),
@@ -247,6 +305,6 @@ function printErrors() {
 
 function printUsage() {
   console.error(
-    "Usage: node scripts/verify-gmail-staging-bundle.mjs --readiness=<readiness.json> --smoke=<smoke.json> [--destructive-smoke=<smoke-full.json>] [--ui-preflight=<ui-preflight.json>] [--browser-evidence=<browser-evidence.json>] [--browser-artifact-root=<dir>] [--final-staging] [--require-destructive] [--require-ui-preflight] [--require-browser-evidence] [--require-browser-artifact-files] [--readiness-connect-preflight] [--smoke-connect-preflight] [--require-keyword-filters] [--min-messages=N]",
+    "Usage: node scripts/verify-gmail-staging-bundle.mjs --readiness=<readiness.json> --smoke=<smoke.json> [--destructive-smoke=<smoke-full.json>] [--ui-preflight=<ui-preflight.json>] [--browser-evidence=<browser-evidence.json>] [--browser-artifact-root=<dir>] [--final-staging] [--require-destructive] [--require-ui-preflight] [--require-browser-evidence] [--require-browser-artifact-files] [--readiness-connect-preflight] [--smoke-connect-preflight] [--require-keyword-filters] [--min-messages=N] [--max-evidence-window-hours=N]",
   );
 }
