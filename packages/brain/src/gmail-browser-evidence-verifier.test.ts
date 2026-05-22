@@ -186,6 +186,23 @@ test("Gmail browser evidence verifier rejects mismatched proof artifact file kin
   }
 });
 
+test("Gmail browser evidence verifier rejects unsafe proof artifact metadata without local files", () => {
+  const evidence = validBrowserEvidence();
+  const screenshots = evidence.screenshots as Array<Record<string, unknown>>;
+  const firstScreenshot = screenshots[0];
+  const secondScreenshot = screenshots[1];
+
+  assert.ok(firstScreenshot);
+  assert.ok(secondScreenshot);
+  firstScreenshot.file = "../gmail-pre-oauth.png";
+  secondScreenshot.file = "screenshots/gmail-connected-results.md";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /\.\.\/gmail-pre-oauth\.png must not include parent-directory segments/);
+  assert.match(failure, /screenshots\/gmail-connected-results\.md is listed under screenshots and must be a png, jpg, or webp image/);
+});
+
 test("Gmail browser evidence verifier rejects missing post-OAuth surfaces by default", () => {
   const failure = runVerifierExpectingFailure(preOAuthEvidence());
 
