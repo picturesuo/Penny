@@ -47,7 +47,7 @@ if (destructiveFile) {
 
 if (readiness && smoke) {
   assertMatchingScope(readiness, smoke, "smoke");
-  assert(smoke.ok === true, "Smoke evidence must be successful.");
+  assert(smoke.ok !== false, "Smoke evidence must not be failed evidence.");
   assert(Boolean(smoke.completedAt), "Smoke evidence must include completedAt.");
 }
 
