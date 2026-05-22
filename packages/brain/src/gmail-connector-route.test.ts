@@ -663,7 +663,7 @@ test("Gmail semantic search asks the user to sync before memory exists", async (
     gmailRequest("/api/connectors/google/gmail/semantic-search", {
       query: "launch partner private email evidence",
     }),
-    { stateStore, brainMemoryService },
+    { env: configuredEnv, stateStore, brainMemoryService },
   );
   const payload = (await response.json()) as { error: { code: string; message: string } };
 
@@ -694,7 +694,7 @@ test("Gmail semantic search ranks synced email memory without leaking raw scores
       query: "launch partner private email evidence",
       limit: 5,
     }),
-    { stateStore, brainMemoryService },
+    { env: configuredEnv, stateStore, brainMemoryService },
   );
   const payload = (await response.json()) as {
     data: {
@@ -713,7 +713,7 @@ test("Gmail semantic search ranks synced email memory without leaking raw scores
       },
       body: JSON.stringify({ query: "launch partner private email evidence" }),
     }),
-    { stateStore, brainMemoryService },
+    { env: configuredEnv, stateStore, brainMemoryService },
   );
 
   assert.equal(response.status, 200);
@@ -825,7 +825,7 @@ test("Gmail semantic search can target one selected Gmail connection", async () 
       query: "private Gmail evidence launch partners",
       limit: 5,
     }),
-    { stateStore, brainMemoryService },
+    { env: configuredEnv, stateStore, brainMemoryService },
   );
   const selectedPayload = (await selectedResponse.json()) as { data: { results: Array<{ messageId: string; sender: string }> } };
   const missingResponse = await handleGoogleGmailSemanticSearchRequest(
@@ -835,7 +835,7 @@ test("Gmail semantic search can target one selected Gmail connection", async () 
       query: "private Gmail evidence launch partners",
       limit: 5,
     }),
-    { stateStore, brainMemoryService },
+    { env: configuredEnv, stateStore, brainMemoryService },
   );
 
   assert.equal(selectedResponse.status, 200);
@@ -920,7 +920,7 @@ test("Gmail revoke removes retrieval access for synced Gmail sources", async () 
       query: "launch partner private email evidence",
       limit: 5,
     }),
-    { stateStore, brainMemoryService },
+    { env: configuredEnv, stateStore, brainMemoryService },
   );
 
   assert.equal(syncAfterRevoke.status, 409);
@@ -976,7 +976,7 @@ test("Gmail source delete still removes Brain retrieval after revoke", async () 
       sourceId: source.id,
       now: "2026-05-22T12:45:00.000Z",
     }),
-    { stateStore, brainMemoryService },
+    { env: configuredEnv, stateStore, brainMemoryService },
   );
   const deletePayload = (await deleteResponse.json()) as {
     data: {
@@ -990,7 +990,7 @@ test("Gmail source delete still removes Brain retrieval after revoke", async () 
       query: "launch partner private email evidence",
       limit: 5,
     }),
-    { stateStore, brainMemoryService },
+    { env: configuredEnv, stateStore, brainMemoryService },
   );
 
   assert.equal(profileAfterRevoke.sources.some((profileSource) => profileSource.id === source.brainSourceId), true);
@@ -1033,7 +1033,7 @@ test("Gmail source delete removes Brain retrieval access and semantic results", 
       query: "launch partner private email evidence",
       limit: 5,
     }),
-    { stateStore, brainMemoryService },
+    { env: configuredEnv, stateStore, brainMemoryService },
   );
   const brainRetrieveBeforeDelete = await handleBrainRetrieveRequest(
     gmailRequest("/api/brain/retrieve", {
