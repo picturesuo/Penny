@@ -38,13 +38,11 @@ const confirmDelete = envFlag("GMAIL_SMOKE_CONFIRM_DELETE");
 const stagingRunId = env("GMAIL_STAGING_RUN_ID", env("GMAIL_SMOKE_STAGING_RUN_ID", ""));
 const evidenceFile = env("GMAIL_SMOKE_EVIDENCE_FILE", "");
 const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
+const safeEvidenceScopeIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 const evidence = {
   baseUrl,
-  userId,
-  workspaceId,
-  projectId,
-  sphereId,
+  ...safeScopeEvidence(),
   ...stagingRunIdEvidence(),
   connectPreflightEnabled: connectPreflight,
   connectPreflightOnly,
@@ -56,6 +54,7 @@ const evidence = {
 
 try {
   assertSafeStagingRunId();
+  assertSafeEvidenceScopeIds();
   const selector = connectionSelector();
   const initialStatus = await request("GET", "/api/connectors/google/gmail/status");
   assert(initialStatus.data?.configured === true, "Gmail is not configured.");
@@ -1183,6 +1182,33 @@ function stagingRunIdEvidence() {
 
 function isSafeStagingRunId(value) {
   return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
+}
+
+function assertSafeEvidenceScopeIds() {
+  for (const [field, name, value] of scopeIdEntries()) {
+    assert(isSafeEvidenceScopeId(value), `${name} must be a safe opaque slug for Gmail staging smoke.`);
+  }
+}
+
+function safeScopeEvidence() {
+  return Object.fromEntries(
+    scopeIdEntries()
+      .filter(([, , value]) => isSafeEvidenceScopeId(value))
+      .map(([field, , value]) => [field, value.trim()]),
+  );
+}
+
+function scopeIdEntries() {
+  return [
+    ["userId", "GMAIL_SMOKE_USER_ID", userId],
+    ["workspaceId", "GMAIL_SMOKE_WORKSPACE_ID", workspaceId],
+    ["projectId", "GMAIL_SMOKE_PROJECT_ID", projectId],
+    ["sphereId", "GMAIL_SMOKE_SPHERE_ID", sphereId],
+  ];
+}
+
+function isSafeEvidenceScopeId(value) {
+  return typeof value === "string" && safeEvidenceScopeIdPattern.test(value.trim());
 }
 
 function sameStringSet(left, right) {
