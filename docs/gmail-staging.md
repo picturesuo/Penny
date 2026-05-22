@@ -101,7 +101,7 @@ Quick API readiness check:
 curl -sS http://localhost:3000/api/connectors/google/gmail/status | jq .
 ```
 
-Expected when configured: `configured=true`, `scopes=["https://www.googleapis.com/auth/gmail.readonly"]`, `private=true`, `privacy.trainingUse=false`.
+Expected when configured: `configured=true`, `scopes=["https://www.googleapis.com/auth/gmail.readonly"]`, `restrictedScope=true`, `gated=true`, `private=true`, `privacy.trainingUse=false`, `privacy.rawRetentionDefault=false`, and `privacy.noHumanReview=true`.
 
 Expected when env is incomplete: `Gmail not configured.`
 
@@ -203,7 +203,7 @@ When a selector is provided, the automated smoke uses it for sync, keyword searc
 
 The default smoke verifies:
 
-- Gmail status is configured, connected, private, and `gmail.readonly`.
+- Gmail status is configured, connected, restricted-scope gated, private, `gmail.readonly`, `trainingUse=false`, `rawRetentionDefault=false`, and `noHumanReview=true`.
 - Sync imports at least one message from the staged safe-message query/filter set and returns cursor/history evidence.
 - Repeating the same scoped sync does not change the Gmail source count or create duplicate source refs.
 - Keyword search uses the Gmail API, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
