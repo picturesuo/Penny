@@ -2816,9 +2816,11 @@ export function GoogleConnectorControl({
   const [gmailSearchStatus, setGmailSearchStatus] = useState<string | null>(null);
   const connection = selectedGoogleConnection(connectorState, selectedConnectionId);
   const latestJob = latestGoogleSyncJob(connectorState, connection?.id ?? null);
-  const enabledSources = connectorState.sources.filter(
-    (source) => source.privacy.retrievalAccess === "enabled" && (!connection || source.connectionId === connection.id),
-  );
+  const enabledSources = connection
+    ? connectorState.sources.filter(
+        (source) => source.privacy.retrievalAccess === "enabled" && source.connectionId === connection.id,
+      )
+    : [];
   const deleteSource = enabledSources.find((source) => source.kind === "google_gmail_message") ?? null;
   const sourceCount = connection ? googleConnectionSourceCount(connection) : 0;
   const activeConnectionCount = connectorState.connections.filter((candidate) => candidate.status !== "revoked").length;
