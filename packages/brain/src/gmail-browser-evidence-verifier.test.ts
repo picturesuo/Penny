@@ -191,6 +191,19 @@ test("Gmail browser evidence verifier rejects missing downstream action proof", 
   assert.match(failure, /Gmail source delete completed/);
 });
 
+test("Gmail browser evidence verifier rejects missing post-delete state proof", () => {
+  const evidence = validBrowserEvidence();
+  const postRevokeDelete = evidence.checks.find((check) => check.name === "brain.gmailPostRevokeDelete") as Record<string, unknown>;
+
+  delete postRevokeDelete.revokedStateVisible;
+  delete postRevokeDelete.deletedSourceCountZero;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Gmail connection revoked state/);
+  assert.match(failure, /Gmail source count is zero after delete/);
+});
+
 test("Gmail browser evidence verifier rejects missing Create option evidence proof", () => {
   const evidence = validBrowserEvidence();
   const createEvidence = evidence.checks.find((check) => check.name === "create.gmailEvidenceDrawer") as Record<string, unknown>;
@@ -433,6 +446,8 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
         revokeCompleted: true,
         deleteCompleted: true,
         postRevokeStateVisible: true,
+        revokedStateVisible: true,
+        deletedSourceCountZero: true,
         syncBlockedAfterRevoke: true,
         searchBlockedAfterRevoke: true,
         semanticBlockedAfterRevoke: true,
