@@ -489,6 +489,93 @@ test("Gmail revoke is scoped and cannot revoke another user's connection", async
   assert.equal(ownerPayload.data.connections[0]?.status, "connected");
 });
 
+test("Gmail sync, search, and revoke reject ambiguous account selection before Nango access", async () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const firstState = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      credentialRef: "nango:google-gmail:nango-gmail-1",
+      accountEmail: "first@example.com",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_gmail"],
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    now: "2026-05-22T11:00:00.000Z",
+  });
+  const secondState = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-gmail-2",
+      providerConfigKey: "google-gmail",
+      credentialRef: "nango:google-gmail:nango-gmail-2",
+      accountEmail: "second@example.com",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_gmail"],
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    now: "2026-05-22T11:00:00.000Z",
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore(mergeGoogleConnectorStates(firstState, secondState));
+  const brainMemoryService = createInMemoryBrainMemoryService();
+  let proxyCalled = false;
+  let revokeCalled = false;
+  const adapter = fakeAdapter({
+    async proxy() {
+      proxyCalled = true;
+
+      throw new Error("Ambiguous Gmail account selection must not reach the proxy.");
+    },
+    async revokeConnection() {
+      revokeCalled = true;
+
+      return { ok: true, data: { revoked: true } };
+    },
+  });
+  const options = { env: configuredEnv, stateStore, brainMemoryService, adapter };
+  const syncResponse = await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+    }),
+    options,
+  );
+  const searchResponse = await handleGoogleGmailSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/search", {
+      providerConfigKey: "google-gmail",
+      text: "launch partners",
+    }),
+    options,
+  );
+  const revokeResponse = await handleGoogleGmailRevokeRequest(
+    gmailRequest("/api/connectors/google/gmail/revoke", {
+      providerConfigKey: "google-gmail",
+    }),
+    options,
+  );
+  const syncPayload = (await syncResponse.json()) as { error: { code: string; message: string; retryable: boolean } };
+  const searchPayload = (await searchResponse.json()) as { error: { code: string; message: string; retryable: boolean } };
+  const revokePayload = (await revokeResponse.json()) as { error: { code: string; message: string; retryable: boolean } };
+
+  for (const response of [syncResponse, searchResponse, revokeResponse]) {
+    assert.equal(response.status, 409);
+  }
+  for (const payload of [syncPayload, searchPayload, revokePayload]) {
+    assert.deepEqual(payload.error, {
+      code: "gmail_connection_ambiguous",
+      message: "Select one Gmail connection before sync, search, or revoke.",
+      retryable: false,
+    });
+  }
+  assert.equal(proxyCalled, false);
+  assert.equal(revokeCalled, false);
+});
+
 test("Gmail sync reports partial message detail failures without failing the whole sync", async () => {
   const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
   const response = await handleGoogleGmailSyncRequest(
