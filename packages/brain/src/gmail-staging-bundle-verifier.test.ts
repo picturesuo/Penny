@@ -275,6 +275,54 @@ test("Gmail staging bundle verifier rejects mismatched UI preflight scope", asyn
   }
 });
 
+test("Gmail staging bundle verifier rejects unknown UI preflight check rows", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const uiPreflight = validUiPreflightEvidence() as { checks: Array<Record<string, unknown>> };
+    const files = await writeBundleFiles(tmp, {
+      uiPreflight: {
+        checks: [...uiPreflight.checks, { name: "legacy.uiReady", ok: true }],
+      },
+    });
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--ui-preflight=${files.uiPreflight}`,
+    ]);
+
+    assert.match(failure, /UI preflight evidence check 6 name must match an allowed UI preflight check/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Gmail staging bundle verifier rejects duplicate UI preflight check rows", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const uiPreflight = validUiPreflightEvidence() as { checks: Array<Record<string, unknown>> };
+    const firstCheck = uiPreflight.checks[0];
+
+    assert.ok(firstCheck);
+
+    const files = await writeBundleFiles(tmp, {
+      uiPreflight: {
+        checks: [...uiPreflight.checks, { ...firstCheck }],
+      },
+    });
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--ui-preflight=${files.uiPreflight}`,
+    ]);
+
+    assert.match(failure, /UI preflight evidence must include brain\.documents only once/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging bundle verifier requires browser evidence when requested", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
 
