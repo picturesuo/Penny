@@ -643,6 +643,82 @@ test("POST /api/connectors/google/nango-webhook records Gmail from endUser scope
   assert.equal(persisted.syncJobs.some((job) => job.surface === "google_gmail" && job.status === "running"), true);
 });
 
+test("POST /api/connectors/google/nango-webhook verifies a dedicated signing key before the API secret", async () => {
+  let callbackCount = 0;
+  const adapter = fakeAdapter({
+    async handleCallback(input) {
+      callbackCount += 1;
+
+      return {
+        ok: true,
+        data: {
+          providerId: "google",
+          adapter: "nango",
+          connectionId: input.connectionId,
+          providerConfigKey: input.providerConfigKey,
+          credentialRef: `nango:${input.providerConfigKey}:${input.connectionId}`,
+          ...(input.endUserId ? { endUserId: input.endUserId } : {}),
+        },
+      };
+    },
+    async startSync() {
+      return { ok: true, data: { started: true } };
+    },
+  });
+  const env = {
+    ...configuredEnv,
+    ENABLE_RESTRICTED_GOOGLE_SCOPES: "true",
+    ENABLE_GMAIL_CONNECTOR: "true",
+    NANGO_SECRET_KEY: "nango-api-secret",
+    NANGO_WEBHOOK_SIGNING_KEY: "nango-webhook-signing-key",
+  };
+  const rawBody = JSON.stringify({
+    type: "auth",
+    operation: "creation",
+    success: true,
+    connectionId: "nango-gmail-dedicated-signing-key",
+    providerConfigKey: "google-gmail",
+    provider: "google",
+    endUser: {
+      endUserId: "gmail-user",
+      organizationId: "gmail-workspace",
+    },
+    tags: {
+      [googleConnectorTagKeys.bundle]: "gmail",
+      [googleConnectorTagKeys.surfaces]: "google_gmail",
+      [googleConnectorTagKeys.scopeIds]: "google.gmail.readonly",
+    },
+  });
+  const apiSecretSignature = createHmac("sha256", env.NANGO_SECRET_KEY).update(rawBody).digest("hex");
+  const wrongSecretResponse = await handleGoogleConnectorNangoWebhookRequest(
+    new Request("http://localhost/api/connectors/google/nango-webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-nango-hmac-sha256": apiSecretSignature,
+      },
+      body: rawBody,
+    }),
+    { env, adapter, stateStore: createInMemoryGoogleConnectorStateStore() },
+  );
+  const webhookSignature = createHmac("sha256", env.NANGO_WEBHOOK_SIGNING_KEY).update(rawBody).digest("hex");
+  const response = await handleGoogleConnectorNangoWebhookRequest(
+    new Request("http://localhost/api/connectors/google/nango-webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-nango-hmac-sha256": webhookSignature,
+      },
+      body: rawBody,
+    }),
+    { env, adapter, stateStore: createInMemoryGoogleConnectorStateStore() },
+  );
+
+  assert.equal(wrongSecretResponse.status, 401);
+  assert.equal(response.status, 200);
+  assert.equal(callbackCount, 1);
+});
+
 test("POST /api/connectors/google/nango-webhook labels and syncs the new connection when multiple accounts exist", async () => {
   const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
   const existing = initializeGoogleConnectorConnection({
