@@ -157,7 +157,7 @@ For a failed setup gate that you need to attach as blocker evidence, verify only
 node scripts/verify-gmail-readiness-evidence.mjs tmp/gmail-readiness-evidence.json --allow-failure
 ```
 
-The verifier summary includes the same safe `missingRequirementKeys` array from `env.requiredPresence`, so staging logs can name missing requirements such as `NANGO_PUBLIC_KEY` or `PENNY_SESSION_SECRET` without printing secret values.
+The verifier summary includes the same safe `missingRequirementKeys` array from `env.requiredPresence`, so staging logs can name missing requirements such as `NANGO_WEBHOOK_SIGNING_KEY`, `NANGO_PUBLIC_KEY`, or `PENNY_SESSION_SECRET` without printing secret values.
 
 ## Local Staging Run
 
@@ -256,6 +256,7 @@ ENABLE_GOOGLE_CONNECTOR=true \
 ENABLE_GMAIL_CONNECTOR=true \
 ENABLE_RESTRICTED_GOOGLE_SCOPES=true \
 NANGO_SECRET_KEY=nango-secret \
+NANGO_WEBHOOK_SIGNING_KEY=nango-webhook-signing-key \
 NANGO_PUBLIC_KEY=nango-public \
 NANGO_BASE_URL=https://api.nango.test \
 NANGO_GMAIL_INTEGRATION_ID=google-gmail \
