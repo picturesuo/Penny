@@ -405,7 +405,8 @@ function assertNoUnsafeEvidence(value) {
     "token",
   ]);
   const allowedKeys = new Set(["connectlinkhost", "connectlinkpresent", "rawretentiondefault", "rawscorehidden", "tokenpresent"]);
-  const unsafeValuePattern = /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token)/i;
+  const unsafeValuePattern =
+    /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token|plainTextBody|rawBody|private raw Gmail body|raw Gmail body)/i;
 
   walk(value, "$", (item, path) => {
     if (item && typeof item === "object" && !Array.isArray(item)) {
