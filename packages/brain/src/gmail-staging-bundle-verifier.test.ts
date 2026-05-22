@@ -170,6 +170,34 @@ test("Gmail staging bundle verifier final staging mode rejects mismatched run id
   }
 });
 
+test("Gmail staging bundle verifier final staging mode rejects unsafe run ids", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const files = await writeBundleFiles(tmp, {
+      readiness: {
+        stagingRunId: "staged-account@example.com",
+      },
+    });
+    await writeBrowserArtifacts(tmp);
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--destructive-smoke=${files.destructive}`,
+      `--ui-preflight=${files.uiPreflight}`,
+      `--browser-evidence=${files.browserEvidence}`,
+      `--browser-artifact-root=${tmp}`,
+      "--final-staging",
+      "--min-messages=1",
+    ]);
+
+    assert.match(failure, /readiness evidence stagingRunId must be a safe opaque slug/);
+    assert.doesNotMatch(failure, /staged-account@example\.com/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging bundle verifier rejects mismatched scope evidence", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
 
