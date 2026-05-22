@@ -187,6 +187,11 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         rawEmailBodyAbsent?: boolean;
         secretOrConnectTokenAbsent?: boolean;
         unsupportedHumanReviewClaimAbsent?: boolean;
+        selectedOptionHistoryPresent?: boolean;
+        personalContextSectionPresent?: boolean;
+        sourceMemoryEvidenceSectionPresent?: boolean;
+        personalContextExpectedEvidencePresent?: boolean;
+        sourceMemoryEvidenceExpectedEvidencePresent?: boolean;
         syncedSourceCount?: number;
         syncedSourceTrainingUseFalse?: boolean;
         syncedSourceRawContentStoredFalse?: boolean;
@@ -321,6 +326,11 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(createRefined?.secretOrConnectTokenAbsent, true);
     assert.equal(createRefined?.unsupportedHumanReviewClaimAbsent, true);
     assert.equal(createExport?.expectedEvidencePresent, true);
+    assert.equal(createExport?.selectedOptionHistoryPresent, true);
+    assert.equal(createExport?.personalContextSectionPresent, true);
+    assert.equal(createExport?.sourceMemoryEvidenceSectionPresent, true);
+    assert.equal(createExport?.personalContextExpectedEvidencePresent, true);
+    assert.equal(createExport?.sourceMemoryEvidenceExpectedEvidencePresent, true);
     assert.equal(createExport?.rawEmailBodyAbsent, true);
     assert.equal(createExport?.secretOrConnectTokenAbsent, true);
     assert.equal(createExport?.unsupportedHumanReviewClaimAbsent, true);
@@ -1101,7 +1111,19 @@ function postOauthSmokeState(options: { partialFailureStage?: string; exportText
     revoked: false,
     deleted: false,
     partialFailureStage: options.partialFailureStage ?? null,
-    exportText: options.exportText ?? "Build with launch partner evidence from synced Gmail memory. No human review. trainingUse=false.",
+    exportText: options.exportText ?? [
+      "# Gmail smoke Create artifact",
+      "",
+      "## Personal Context Used",
+      "Use launch partner evidence from synced Gmail memory. No human review. trainingUse=false.",
+      "",
+      "## Source / Memory Evidence",
+      "Launch plan: launch partner evidence from synced Gmail memory.",
+      "",
+      "## Selected Option History",
+      "- Personal: Use launch partner evidence.",
+      "- Critical: Challenge generic CRM drift with launch partner evidence.",
+    ].join("\n"),
   };
 }
 
