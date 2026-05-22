@@ -326,6 +326,89 @@ test("GoogleConnectorControl disables Gmail sync and revoke for Drive-only conne
   assert.match(buttonMarkupForLabel(markup, "Delete Gmail source"), /disabled=""/);
 });
 
+test("GoogleConnectorControl renders connected Gmail smoke controls enabled", () => {
+  const markup = renderToStaticMarkup(
+    createElement(GoogleConnectorControl, {
+      provider: googleProviderView(),
+      connectorState: {
+        connections: [
+          {
+            id: "connector-gmail-1",
+            status: "connected",
+            surfaces: ["google_gmail"],
+            scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+            lastSyncedAt: "2026-05-22T12:05:00.000Z",
+            nextSyncAt: "2026-05-22T18:05:00.000Z",
+            revokedAt: null,
+            sourceCounts: { google_gmail_message: 1 },
+            credential: {
+              connectionId: "nango-gmail-1",
+              providerConfigKey: "google-gmail",
+              accountEmail: "staged-gmail@example.com",
+            },
+          },
+        ],
+        syncJobs: [
+          {
+            id: "sync-gmail-1",
+            connectionId: "connector-gmail-1",
+            surface: "google_gmail",
+            status: "succeeded",
+            requestedAt: "2026-05-22T12:00:00.000Z",
+            startedAt: "2026-05-22T12:00:01.000Z",
+            completedAt: "2026-05-22T12:05:00.000Z",
+          },
+        ],
+        sources: [
+          {
+            id: "connector-source-gmail-1",
+            connectionId: "connector-gmail-1",
+            kind: "google_gmail_message",
+            label: "Launch partner follow-up",
+            sourceUri: "gmail:message:msg-1",
+            brainSourceId: "brain-source-gmail-1",
+            privacy: {
+              retrievalAccess: "enabled",
+            },
+          },
+        ],
+      },
+      status: "ready",
+      error: null,
+      warning: null,
+      connectLink: null,
+      disabled: false,
+      onConnect: async () => undefined,
+      onSyncNow: async () => undefined,
+      onRevoke: async () => undefined,
+      onDeleteSource: async () => undefined,
+      onKeywordSearch: async () => ({
+        sourceOfTruth: "gmail_api_search_via_nango",
+        query: "\"launch partner evidence\"",
+        stored: false,
+        results: [],
+      }),
+      onSemanticSearch: async () => ({
+        sourceOfTruth: "synced_private_gmail_brain_memory",
+        contextLight: false,
+        results: [],
+      }),
+    }),
+  );
+
+  assert.match(markup, /Gmail connected/);
+  assert.match(markup, /staged-gmail@example\.com is selected for Google Gmail/);
+  assert.match(markup, /1 source indexed/);
+  assert.match(markup, /Scopes: https:\/\/www\.googleapis\.com\/auth\/gmail\.readonly/);
+  assert.match(markup, /Penny reads Gmail only after consent/);
+  assert.match(markup, /trainingUse=false/);
+  assert.match(markup, /Google Gmail Succeeded/);
+  assert.match(markup, /Google source coverage/);
+  assert.doesNotMatch(buttonMarkupForLabel(markup, "Sync now"), /disabled=""/);
+  assert.doesNotMatch(buttonMarkupForLabel(markup, "Revoke"), /disabled=""/);
+  assert.doesNotMatch(buttonMarkupForLabel(markup, "Delete Gmail source"), /disabled=""/);
+});
+
 test("GoogleConnectorControl renders Gmail keyword search filters for staging smoke", () => {
   const markup = renderToStaticMarkup(
     createElement(GoogleConnectorControl, {
