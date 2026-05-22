@@ -325,6 +325,13 @@ try {
   assert(semanticResultShapeVerified, "Semantic Gmail search returned an unexpected result shape.");
   assert(semanticRawScoreHidden, "Semantic Gmail search exposed a raw score.");
   assert(semanticSelectedSourceRefsMatched, "Semantic Gmail search results did not match selected-account Gmail source refs.");
+  const selectedGmailSourceRefs = selectedStatusSources
+    .map((source) => ({
+      connectorSourceId: source.id ?? "",
+      brainSourceId: source.brainSourceId ?? "",
+      sourceUri: source.sourceUri ?? "",
+    }))
+    .filter((sourceRef) => sourceRef.connectorSourceId || sourceRef.brainSourceId || sourceRef.sourceUri);
   const semanticMatchedSource = selectedStatusSources.find((source) =>
     semantic.data.results.some((result) =>
       matchesDeletedSourceRef(result.sourceRef, {
@@ -351,6 +358,9 @@ try {
       .map((result) => result.memoryRef?.id)
       .filter(Boolean),
   );
+  const selectedSemanticMemoryIds = new Set(semantic.data.results.map((result) => result.memoryRef?.id).filter(Boolean));
+  assert(selectedGmailSourceRefs.length > 0, "Gmail smoke found no selected-account source refs for Create evidence proof.");
+  assert(selectedSemanticMemoryIds.size > 0, "Semantic Gmail search returned no memory refs for Create evidence proof.");
   if (confirmMutations && confirmDelete) {
     assert(semanticMatchedSource, "Delete smoke could not match the delete target to a semantic Gmail result.");
     assert(deletedSemanticMemoryIds.size > 0, "Delete smoke found no tracked Gmail memory refs for the delete target.");
@@ -372,6 +382,7 @@ try {
     groundingLabels: [...new Set(semantic.data.results.map((result) => result.grounding))].sort(),
     rawScoreHidden: semanticRawScoreHidden,
     rawBodyAbsent: semantic.data.results.every(hasNoRawEmailFields),
+    selectedMemoryRefCount: selectedSemanticMemoryIds.size,
     deleteTargetMatchedSemanticResult: Boolean(semanticMatchedSource),
     deleteTargetMemoryIdCount: deletedSemanticMemoryIds.size,
   });
@@ -392,22 +403,48 @@ try {
   const criticalOptionPresent = createOptionLenses.includes("Critical");
   const gmailMemoryEvidencePresent = hasCreateMemoryEvidence(createFirst.data, createEvidenceNeedle);
   const gmailSourceEvidencePresent = hasCreateSourceEvidence(createFirst.data, createEvidenceNeedle);
+  const selectedSemanticMemoryRefsMatched = memoryRefsIncludeSelectedMemoryIds(
+    createMemoryRefs(createFirst.data),
+    selectedSemanticMemoryIds,
+  );
+  const selectedSemanticSourceRefsMatched = sourceRefsIncludeSelectedSourceRefs(
+    createSourceRefs(createFirst.data),
+    selectedGmailSourceRefs,
+  );
   const rankedCandidateCount = Array.isArray(createFirst.data?.optionSet?.rankedCandidates)
     ? createFirst.data.optionSet.rankedCandidates.length
     : 0;
   const nextBestMoveGrounded = createFirst.data?.optionSet?.nextBestMove?.grounded === true;
   const rankedCandidateGmailMemoryEvidencePresent = hasRankedCandidateMemoryEvidence(createFirst.data, createEvidenceNeedle);
   const rankedCandidateGmailSourceEvidencePresent = hasRankedCandidateSourceEvidence(createFirst.data, createEvidenceNeedle);
+  const rankedCandidateSelectedSemanticMemoryRefsMatched = memoryRefsIncludeSelectedMemoryIds(
+    createRankedCandidateMemoryRefs(createFirst.data),
+    selectedSemanticMemoryIds,
+  );
+  const rankedCandidateSelectedSemanticSourceRefsMatched = sourceRefsIncludeSelectedSourceRefs(
+    createRankedCandidateSourceRefs(createFirst.data),
+    selectedGmailSourceRefs,
+  );
   const personalOptionExpectedEvidencePresent = createLensExpectedEvidencePresent(createFirst.data, "Personal", createEvidenceNeedle);
   const criticalOptionExpectedEvidencePresent = createLensExpectedEvidencePresent(createFirst.data, "Critical", createEvidenceNeedle);
   assert(personalOptionPresent, "Create did not return a Personal option for Gmail evidence.");
   assert(criticalOptionPresent, "Create did not return a Critical option for Gmail evidence.");
   assert(gmailMemoryEvidencePresent, "Create did not include expected Gmail evidence in memory refs.");
   assert(gmailSourceEvidencePresent, "Create did not include expected Gmail evidence in source refs.");
+  assert(selectedSemanticMemoryRefsMatched, "Create did not use selected Gmail memory refs returned by semantic search.");
+  assert(selectedSemanticSourceRefsMatched, "Create did not use selected-account Gmail source refs.");
   assert(rankedCandidateCount >= 5, "Create did not expose the five Brain Ranker candidates.");
   assert(nextBestMoveGrounded, "Create Brain Ranker next-best move was not grounded after Gmail sync.");
   assert(rankedCandidateGmailMemoryEvidencePresent, "Create Brain Ranker candidates did not include expected Gmail memory evidence.");
   assert(rankedCandidateGmailSourceEvidencePresent, "Create Brain Ranker candidates did not include expected Gmail source evidence.");
+  assert(
+    rankedCandidateSelectedSemanticMemoryRefsMatched,
+    "Create Brain Ranker candidates did not use selected Gmail memory refs returned by semantic search.",
+  );
+  assert(
+    rankedCandidateSelectedSemanticSourceRefsMatched,
+    "Create Brain Ranker candidates did not use selected-account Gmail source refs.",
+  );
   assert(personalOptionExpectedEvidencePresent, "Create Personal option did not include expected Gmail evidence text.");
   assert(criticalOptionExpectedEvidencePresent, "Create Critical option did not include expected Gmail evidence text.");
   const selectedOptionRecords = createFirst.data.optionSet.options.filter((option) => option.lens === "Personal" || option.lens === "Critical");
@@ -422,10 +459,14 @@ try {
     criticalOptionPresent,
     gmailMemoryEvidencePresent,
     gmailSourceEvidencePresent,
+    selectedSemanticMemoryRefsMatched,
+    selectedSemanticSourceRefsMatched,
     rankedCandidateCount,
     nextBestMoveGrounded,
     rankedCandidateGmailMemoryEvidencePresent,
     rankedCandidateGmailSourceEvidencePresent,
+    rankedCandidateSelectedSemanticMemoryRefsMatched,
+    rankedCandidateSelectedSemanticSourceRefsMatched,
     personalOptionExpectedEvidencePresent,
     criticalOptionExpectedEvidencePresent,
     expectedEvidencePresent: includesNeedle(createText, createEvidenceNeedle),
@@ -443,6 +484,14 @@ try {
   const createRefinedText = JSON.stringify(createRefined.data);
   const refinedGmailMemoryEvidencePresent = hasCreateMemoryEvidence(createRefined.data, createEvidenceNeedle);
   const refinedGmailSourceEvidencePresent = hasCreateSourceEvidence(createRefined.data, createEvidenceNeedle);
+  const refinedSelectedSemanticMemoryRefsMatched = memoryRefsIncludeSelectedMemoryIds(
+    createMemoryRefs(createRefined.data),
+    selectedSemanticMemoryIds,
+  );
+  const refinedSelectedSemanticSourceRefsMatched = sourceRefsIncludeSelectedSourceRefs(
+    createSourceRefs(createRefined.data),
+    selectedGmailSourceRefs,
+  );
   const refinedSelectedOptionsMatched = sameStringSet(createRefined.data?.judgmentEvent?.selectedOptionIds, selectedOptions);
   const refinedArtifactExpectedEvidencePresent = includesNeedle(JSON.stringify(createRefined.data?.artifact ?? {}), createEvidenceNeedle);
   const refinedPrivacySafety = inspectExportPrivacySafety(createRefinedText);
@@ -453,6 +502,8 @@ try {
   assert(includesNeedle(createRefinedText, createEvidenceNeedle), "Create refinement did not include expected Gmail evidence text.");
   assert(refinedGmailMemoryEvidencePresent, "Create refinement did not include expected Gmail evidence in memory refs.");
   assert(refinedGmailSourceEvidencePresent, "Create refinement did not include expected Gmail evidence in source refs.");
+  assert(refinedSelectedSemanticMemoryRefsMatched, "Create refinement did not use selected Gmail memory refs returned by semantic search.");
+  assert(refinedSelectedSemanticSourceRefsMatched, "Create refinement did not use selected-account Gmail source refs.");
   assert(refinedArtifactExpectedEvidencePresent, "Create refinement artifact did not include expected Gmail evidence text.");
   assert(
     refinedPrivacySafety.safe,
@@ -467,6 +518,8 @@ try {
     selectedOptionsMatched: refinedSelectedOptionsMatched,
     gmailMemoryEvidencePresent: refinedGmailMemoryEvidencePresent,
     gmailSourceEvidencePresent: refinedGmailSourceEvidencePresent,
+    selectedSemanticMemoryRefsMatched: refinedSelectedSemanticMemoryRefsMatched,
+    selectedSemanticSourceRefsMatched: refinedSelectedSemanticSourceRefsMatched,
     expectedEvidencePresent: includesNeedle(createRefinedText, createEvidenceNeedle),
     artifactExpectedEvidencePresent: refinedArtifactExpectedEvidencePresent,
     rawEmailBodyAbsent: refinedPrivacySafety.rawEmailBodyAbsent,
@@ -873,6 +926,28 @@ function createRankedCandidateSourceRefs(data) {
   );
 }
 
+function memoryRefsIncludeSelectedMemoryIds(memoryRefs, selectedMemoryIds) {
+  const selected = new Set([...selectedMemoryIds].filter(Boolean));
+
+  return selected.size > 0 && Array.isArray(memoryRefs) && memoryRefs.some((memory) => selected.has(memoryRefId(memory)));
+}
+
+function memoryRefId(memory) {
+  const id = memory?.id ?? memory?.memoryId ?? memory?.refId;
+
+  return typeof id === "string" ? id : "";
+}
+
+function sourceRefsIncludeSelectedSourceRefs(sourceRefs, selectedSourceRefs) {
+  const selected = Array.isArray(selectedSourceRefs)
+    ? selectedSourceRefs.filter((sourceRef) => sourceRef.connectorSourceId || sourceRef.brainSourceId || sourceRef.sourceUri)
+    : [];
+
+  return selected.length > 0 && Array.isArray(sourceRefs) && sourceRefs.some((sourceRef) =>
+    selected.some((selectedSourceRef) => matchesDeletedSourceRef(sourceRef, selectedSourceRef)),
+  );
+}
+
 function createSourceRefs(data) {
   const optionSet = data?.optionSet ?? {};
   const optionSources = Array.isArray(optionSet.options) ? optionSet.options.flatMap((option) => (Array.isArray(option.sourcesUsed) ? option.sourcesUsed : [])) : [];
@@ -1126,12 +1201,20 @@ function safeUrlHost(value) {
 }
 
 function matchesDeletedSourceRef(sourceRef, deletedSourceRef) {
+  const sourceRefIds = [
+    sourceRef?.id,
+    sourceRef?.sourceId,
+    sourceRef?.brainSourceId,
+    sourceRef?.connectorSourceId,
+    sourceRef?.sourceNode?.id,
+  ].filter(Boolean);
+  const sourceUris = [sourceRef?.sourceUri, sourceRef?.url, sourceRef?.sourceNode?.sourceUri, sourceRef?.sourceNode?.url].filter(Boolean);
+
   return Boolean(
     sourceRef &&
-      ((deletedSourceRef.connectorSourceId && sourceRef.id === deletedSourceRef.connectorSourceId) ||
-        (deletedSourceRef.brainSourceId && sourceRef.id === deletedSourceRef.brainSourceId) ||
-        (deletedSourceRef.sourceUri && sourceRef.sourceUri === deletedSourceRef.sourceUri) ||
-        (deletedSourceRef.sourceUri && sourceRef.url === deletedSourceRef.sourceUri)),
+      ((deletedSourceRef.connectorSourceId && sourceRefIds.includes(deletedSourceRef.connectorSourceId)) ||
+        (deletedSourceRef.brainSourceId && sourceRefIds.includes(deletedSourceRef.brainSourceId)) ||
+        (deletedSourceRef.sourceUri && sourceUris.includes(deletedSourceRef.sourceUri))),
   );
 }
 
