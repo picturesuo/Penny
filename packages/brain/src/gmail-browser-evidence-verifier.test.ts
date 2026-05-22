@@ -113,6 +113,20 @@ test("Gmail browser evidence verifier rejects unsafe run ids without echoing the
   assert.doesNotMatch(failure, /staged-account@example\.com/);
 });
 
+test("Gmail browser evidence verifier rejects placeholder scope and invalid timestamps", () => {
+  const evidence = validBrowserEvidence();
+
+  evidence.userId = "REPLACE_WITH_USER_ID";
+  evidence.workspaceId = "REPLACE_WITH_WORKSPACE_ID";
+  evidence.capturedAt = "not-a-date";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Browser evidence userId must replace template placeholder values/);
+  assert.match(failure, /Browser evidence workspaceId must replace template placeholder values/);
+  assert.match(failure, /Browser evidence capturedAt must be a valid timestamp/);
+});
+
 test("Gmail browser evidence verifier rejects missing stable selector proof", () => {
   const evidence = validBrowserEvidence();
   const connectedResults = evidence.checks.find((check) => check.name === "brain.gmailConnectedResults") as Record<string, unknown>;
