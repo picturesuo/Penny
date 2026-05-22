@@ -200,6 +200,23 @@ Record this as a UI preflight only. The actual staging proof still requires OAut
 
 ## Automated Staging Smoke
 
+Before or after OAuth, run the optional connect-session preflight to prove Penny can ask Nango for a Gmail-only connect session. This creates a Nango connect session but does not complete OAuth:
+
+```bash
+BASE_URL=http://localhost:3000 \
+GMAIL_SMOKE_USER_ID=<same-user-id> \
+GMAIL_SMOKE_WORKSPACE_ID=<same-workspace-id> \
+GMAIL_SMOKE_PROJECT_ID=<same-project-id> \
+GMAIL_SMOKE_SPHERE_ID=<same-sphere-id> \
+GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true \
+GMAIL_SMOKE_EVIDENCE_FILE=tmp/gmail-connect-preflight-evidence.json \
+node scripts/smoke-gmail-staging.mjs
+```
+
+The preflight requires the Gmail status endpoint to be configured, then checks that `/api/connectors/google/gmail/connect` returns a Nango session with exactly `https://www.googleapis.com/auth/gmail.readonly`, `google_gmail` as the requested/requestable surface, `restrictedScope=true`, `gated=true`, `private=true`, and the Gmail scope audit reason. Smoke evidence records `connectLinkPresent`, `connectLinkHost`, `tokenPresent`, and `expiresAtPresent`; it must not record the raw connect link or session token.
+
+Use `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` for a standalone pre-OAuth check. Use `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` after OAuth if you want the full smoke to also verify that creating another connect session still returns Gmail-only scope metadata.
+
 After completing OAuth in the browser, run the non-destructive smoke against the same user/workspace scope:
 
 ```bash
@@ -281,6 +298,7 @@ Before marking Gmail staging ready, attach or record:
 
 - `pnpm typecheck`, `pnpm test`, and `pnpm build` output.
 - `node --check scripts/smoke-gmail-staging.mjs`.
+- Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` or `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output proving connect-session creation with only sanitized connect-link evidence.
 - Non-destructive `scripts/smoke-gmail-staging.mjs` output.
 - Destructive `scripts/smoke-gmail-staging.mjs` output from a disposable staged Gmail account, when revoke/delete are being certified.
 - Nango auth webhook delivery record showing Penny accepted the Gmail connection and started `google-gmail-messages`.
