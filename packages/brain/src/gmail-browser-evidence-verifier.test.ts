@@ -125,6 +125,19 @@ test("Gmail browser evidence verifier rejects missing staged account and Nango d
   assert.match(failure, /selected Gmail account state/);
 });
 
+test("Gmail browser evidence verifier rejects missing workflow action proof", () => {
+  const evidence = validBrowserEvidence();
+  const connectedResults = evidence.checks.find((check) => check.name === "brain.gmailConnectedResults") as Record<string, unknown>;
+
+  connectedResults.syncCompleted = false;
+  connectedResults.keywordSearchRan = false;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Sync now completed/);
+  assert.match(failure, /keyword search ran/);
+});
+
 test("Gmail browser evidence verifier rejects missing proof artifact coverage", () => {
   const evidence = validBrowserEvidence();
 
@@ -269,6 +282,8 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
         nangoIntegrationKeyPresent: true,
         nangoWebhookDeliveryStatusPresent: true,
         selectedAccountStateVisible: true,
+        syncCompleted: true,
+        keywordSearchRan: true,
         connectedStateVisible: true,
         gmailReadonlyVisible: true,
         messageCountVisible: true,
