@@ -31,6 +31,7 @@ test("Gmail staging readiness checker accepts strict env, safe status, and conne
       connectLinkHost?: string;
       tokenPresent?: boolean;
       nangoPublicPresent?: boolean;
+      missingRequirementKeys?: string[];
     }>;
   };
 
@@ -41,6 +42,7 @@ test("Gmail staging readiness checker accepts strict env, safe status, and conne
     ["env.requiredPresence", "env.gmail", "env.strictStaging", "api.googleProvider", "api.gmailStatus", "api.connectPreflight"],
   );
   assert.equal(payload.checks[0]?.nangoPublicPresent, true);
+  assert.deepEqual(payload.checks[0]?.missingRequirementKeys, []);
   assert.equal(payload.checks[2]?.baseUrlHttpsOrLoopback, true);
   assert.equal(payload.checks[2]?.corsIncludesBaseOrigin, true);
   assert.equal(payload.checks[2]?.corsWildcardAbsent, true);
@@ -104,7 +106,7 @@ test("Gmail staging readiness checker rejects missing NANGO_GMAIL_INTEGRATION_ID
     const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as {
       ok: boolean;
       error?: string;
-      checks: Array<{ name?: string; nangoGmailIntegrationIdPresent?: boolean; nangoPublicPresent?: boolean }>;
+      checks: Array<{ name?: string; nangoGmailIntegrationIdPresent?: boolean; nangoPublicPresent?: boolean; missingRequirementKeys?: string[] }>;
     };
 
     assert.equal(result.status, 1);
@@ -114,6 +116,7 @@ test("Gmail staging readiness checker rejects missing NANGO_GMAIL_INTEGRATION_ID
     assert.equal(evidence.checks[0]?.name, "env.requiredPresence");
     assert.equal(evidence.checks[0]?.nangoGmailIntegrationIdPresent, false);
     assert.equal(evidence.checks[0]?.nangoPublicPresent, true);
+    assert.deepEqual(evidence.checks[0]?.missingRequirementKeys, ["NANGO_GMAIL_INTEGRATION_ID"]);
     assert.match(result.stderr, /NANGO_GMAIL_INTEGRATION_ID must be set for Gmail staging readiness/);
     assert.match(evidence.error ?? "", /NANGO_GMAIL_INTEGRATION_ID must be set for Gmail staging readiness/);
     assert.doesNotMatch(result.stderr, /readiness-secret-value|readiness-public-value|strict-api-token|session-secret-value/i);
@@ -141,7 +144,13 @@ test("Gmail staging readiness checker records missing NANGO_PUBLIC_KEY before AP
     const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as {
       ok: boolean;
       error?: string;
-      checks: Array<{ name?: string; nangoSecretPresent?: boolean; nangoPublicPresent?: boolean; nangoGmailIntegrationIdPresent?: boolean }>;
+      checks: Array<{
+        name?: string;
+        nangoSecretPresent?: boolean;
+        nangoPublicPresent?: boolean;
+        nangoGmailIntegrationIdPresent?: boolean;
+        missingRequirementKeys?: string[];
+      }>;
     };
 
     assert.equal(result.status, 1);
@@ -152,6 +161,7 @@ test("Gmail staging readiness checker records missing NANGO_PUBLIC_KEY before AP
     assert.equal(evidence.checks[0]?.nangoSecretPresent, true);
     assert.equal(evidence.checks[0]?.nangoPublicPresent, false);
     assert.equal(evidence.checks[0]?.nangoGmailIntegrationIdPresent, true);
+    assert.deepEqual(evidence.checks[0]?.missingRequirementKeys, ["NANGO_PUBLIC_KEY"]);
     assert.match(result.stderr, /NANGO_PUBLIC_KEY must be set for Gmail staging readiness/);
     assert.match(evidence.error ?? "", /NANGO_PUBLIC_KEY must be set for Gmail staging readiness/);
     assert.doesNotMatch(result.stderr, /readiness-secret-value|readiness-public-value|strict-api-token|session-secret-value/i);
