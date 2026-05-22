@@ -182,7 +182,7 @@ GMAIL_SMOKE_KEYWORD_BEFORE=2026-05-22 \
 GMAIL_SMOKE_KEYWORD_HAS_ATTACHMENT=true
 ```
 
-The evidence file records the Gmail `q` string and the filters used, while still checking that keyword results are not stored unless `sync=true` is explicitly requested.
+The automated smoke also uses the keyword text and filters for the initial sync, so the run imports only the staged safe-message slice rather than the first arbitrary mailbox page. The evidence file records the Gmail `q` string, the sync filters, and the keyword filters used, while still checking that keyword results are not stored unless `sync=true` is explicitly requested.
 Smoke evidence intentionally omits raw HTTP response bodies and raw email content; failure records use route/status/error-code summaries so the evidence file can be shared without exposing mailbox text.
 
 If staging uses token auth, also pass:
@@ -201,7 +201,7 @@ GMAIL_SMOKE_PROVIDER_CONFIG_KEY=<nango-gmail-integration-id>
 The default smoke verifies:
 
 - Gmail status is configured, connected, private, and `gmail.readonly`.
-- Sync imports at least one message and returns cursor/history evidence.
+- Sync imports at least one message from the staged safe-message query/filter set and returns cursor/history evidence.
 - Keyword search uses the Gmail API and does not store results without `sync=true`.
 - Semantic search returns only synced Gmail memory and hides raw numeric scores.
 - Create uses the synced Gmail evidence.
