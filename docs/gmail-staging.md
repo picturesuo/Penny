@@ -117,7 +117,7 @@ Use `GMAIL_READINESS_EVIDENCE_FILE=tmp/gmail-readiness-evidence.json` to save th
 
 Every readiness run starts by recording an `env.requiredPresence` check. This check is intentionally limited to booleans such as `nangoPublicPresent`, `nangoGmailIntegrationIdPresent`, `databaseUrlPresent`, `sessionSecretPresent`, `corsOriginsPresent`, and `rateLimitPresent`, so failed setup evidence can identify missing staging requirements before any API call without exposing secret values.
 
-Readiness evidence `checks` are closed-world. Successful evidence must include `env.requiredPresence` once, may include only the generated readiness check names (`env.gmail`, `env.strictStaging`, `api.googleProvider`, `api.gmailStatus`, and `api.connectPreflight`), and must not include duplicate, legacy, or ad hoc rows. Failed setup evidence may include the same known partial checks, but unknown rows still fail the standalone verifier.
+Readiness evidence `checks` are closed-world. Successful evidence must include `env.requiredPresence` once, with every generated boolean field present; strict staging success must report the required Nango, database, auth, CORS, rate-limit, and trust-header settings as present and `databasePrepBypass=false`. Successful evidence may include only the generated readiness check names (`env.gmail`, `env.strictStaging`, `api.googleProvider`, `api.gmailStatus`, and `api.connectPreflight`), and must not include duplicate, legacy, or ad hoc rows. Failed setup evidence may include the same known partial checks, but unknown rows or malformed `env.requiredPresence` rows still fail the standalone verifier.
 
 The checker verifies:
 
