@@ -159,8 +159,10 @@ test("Gmail browser evidence verifier rejects mismatched proof artifact file kin
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-browser-artifacts-"));
   const evidence = validBrowserEvidence();
   const screenshots = evidence.screenshots as Array<Record<string, unknown>>;
+  const firstScreenshot = screenshots[0];
 
-  screenshots[0].file = "screenshots/gmail-pre-oauth.md";
+  assert.ok(firstScreenshot);
+  firstScreenshot.file = "screenshots/gmail-pre-oauth.md";
   evidence.notes = [
     {
       label: "Note accidentally saved as an image",
