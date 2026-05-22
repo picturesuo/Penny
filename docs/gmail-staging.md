@@ -205,6 +205,7 @@ The default smoke verifies:
 
 - Gmail status is configured, connected, private, and `gmail.readonly`.
 - Sync imports at least one message from the staged safe-message query/filter set and returns cursor/history evidence.
+- Repeating the same scoped sync does not change the Gmail source count or create duplicate source refs.
 - Keyword search uses the Gmail API and does not store results without `sync=true`.
 - Semantic search returns only synced Gmail memory and hides raw numeric scores.
 - Create uses the synced Gmail evidence.
@@ -238,7 +239,7 @@ Before marking Gmail staging ready, attach or record:
 - Non-destructive `scripts/smoke-gmail-staging.mjs` output.
 - Destructive `scripts/smoke-gmail-staging.mjs` output from a disposable staged Gmail account, when revoke/delete are being certified.
 - Gmail status response before and after OAuth.
-- Sync response showing imported count and cursor/historyId.
+- Sync and repeated-sync responses showing imported count, cursor/historyId, stable source counts, and no duplicate source refs.
 - Keyword search response proving Gmail `q` search.
 - Semantic search response proving synced Penny memory retrieval and no raw numeric score in normal UI.
 - Create export prompt showing real Gmail evidence only when selected and used.
