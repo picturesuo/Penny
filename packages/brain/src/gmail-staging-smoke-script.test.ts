@@ -106,6 +106,12 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         cursorPresent?: boolean;
         historyIdPresent?: boolean;
         maxResultsUsed?: number;
+        resultShapeVerified?: boolean;
+        messageRefPresent?: boolean;
+        threadRefPresent?: boolean;
+        sourceRefPresent?: boolean;
+        snippetPresent?: boolean;
+        rawBodyAbsent?: boolean;
         expectedEvidencePresent?: boolean;
         personalOptionPresent?: boolean;
         criticalOptionPresent?: boolean;
@@ -150,8 +156,20 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     );
     assert.equal(keyword?.query, '"launch partner evidence" from:alice@example.com subject:"Launch plan"');
     assert.equal(keyword?.stored, false);
+    assert.equal(keyword?.resultShapeVerified, true);
+    assert.equal(keyword?.messageRefPresent, true);
+    assert.equal(keyword?.threadRefPresent, true);
+    assert.equal(keyword?.sourceRefPresent, true);
+    assert.equal(keyword?.snippetPresent, true);
+    assert.equal(keyword?.rawBodyAbsent, true);
     assert.equal(keywordSync?.query, '"launch partner evidence" from:alice@example.com subject:"Launch plan"');
     assert.equal(keywordSync?.stored, true);
+    assert.equal(keywordSync?.resultShapeVerified, true);
+    assert.equal(keywordSync?.messageRefPresent, true);
+    assert.equal(keywordSync?.threadRefPresent, true);
+    assert.equal(keywordSync?.sourceRefPresent, true);
+    assert.equal(keywordSync?.snippetPresent, true);
+    assert.equal(keywordSync?.rawBodyAbsent, true);
     assert.equal(repeat?.cursorPresent, true);
     assert.equal(repeat?.historyIdPresent, true);
     assert.equal(repeat?.maxResultsUsed, 5);
@@ -233,7 +251,7 @@ test("Gmail staging smoke script verifies an expected sanitized partial failure"
     assert.equal(repeat?.cursorPresent, true);
     assert.equal(repeat?.historyIdPresent, true);
     assert.equal(verified.ok, true);
-    assert.doesNotMatch(JSON.stringify(evidence), /Private Gmail body|plainTextBody|rawBody/i);
+    assert.doesNotMatch(JSON.stringify(evidence), /Private Gmail body|"plainTextBody"\s*:|"rawBody"\s*:/i);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(tmp, { recursive: true, force: true });
