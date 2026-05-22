@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -16,6 +19,33 @@ test("Gmail UI preflight checker accepts ready Brain and Gmail routes", async ()
     payload.checks.map((check) => check.name),
     ["brain.documents", "brain.memoryProfile", "brain.recents", "google.provider", "gmail.status"],
   );
+});
+
+test("Gmail UI preflight checker writes sanitized evidence when requested", async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), "penny-gmail-ui-preflight-"));
+  const evidenceFile = join(tempDir, "evidence.json");
+
+  try {
+    const result = await runPreflight(routesReadyForUiPreflight(), {
+      GMAIL_UI_PREFLIGHT_API_TOKEN: "secret-token-that-must-not-be-written",
+      GMAIL_UI_PREFLIGHT_EVIDENCE_FILE: evidenceFile,
+    });
+    const stdoutPayload = JSON.parse(result.stdout) as { ok: boolean; checks: Array<{ name: string }> };
+    const evidenceText = await readFile(evidenceFile, "utf8");
+    const evidencePayload = JSON.parse(evidenceText) as { ok: boolean; checks: Array<{ name: string }> };
+
+    assert.equal(result.status, 0);
+    assert.equal(evidencePayload.ok, true);
+    assert.deepEqual(evidencePayload.checks, stdoutPayload.checks);
+    assert.deepEqual(
+      evidencePayload.checks.map((check) => check.name),
+      ["brain.documents", "brain.memoryProfile", "brain.recents", "google.provider", "gmail.status"],
+    );
+    assert.doesNotMatch(evidenceText, /secret-token-that-must-not-be-written/);
+    assert.doesNotMatch(evidenceText, /connectLink|credentialRef|accessToken|refreshToken|rawBody|plainTextBody/);
+  } finally {
+    await rm(tempDir, { force: true, recursive: true });
+  }
 });
 
 test("Gmail UI preflight checker rejects missing migrated database routes", async () => {
@@ -55,7 +85,7 @@ test("Gmail UI preflight checker rejects unsafe Gmail status internals", async (
   assert.match(result.stderr, /Gmail status\.sources exposed metadata/);
 });
 
-async function runPreflight(routes: Record<string, MockRoute>): Promise<{ status: number | null; stdout: string; stderr: string }> {
+async function runPreflight(routes: Record<string, MockRoute>, extraEnv: Record<string, string> = {}): Promise<{ status: number | null; stdout: string; stderr: string }> {
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
     const route = routes[request.url ?? ""];
 
@@ -78,6 +108,7 @@ async function runPreflight(routes: Record<string, MockRoute>): Promise<{ status
         GMAIL_UI_PREFLIGHT_WORKSPACE_ID: "ui-preflight-workspace",
         GMAIL_UI_PREFLIGHT_PROJECT_ID: "ui-preflight-project",
         GMAIL_UI_PREFLIGHT_SPHERE_ID: "ui-preflight-sphere",
+        ...extraEnv,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
