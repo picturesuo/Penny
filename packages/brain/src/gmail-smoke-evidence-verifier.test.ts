@@ -116,17 +116,31 @@ test("Gmail smoke evidence verifier rejects weak semantic result shape evidence"
   const semantic = evidence.steps.find((step) => step.step === "semanticSearch") as Record<string, unknown>;
 
   delete semantic.resultShapeVerified;
+  delete semantic.subjectPresent;
+  delete semantic.senderPresent;
+  delete semantic.dateFieldPresent;
+  delete semantic.messageRefPresent;
+  delete semantic.threadRefPresent;
+  delete semantic.snippetPresent;
   delete semantic.sourceRefPresent;
   delete semantic.memoryRefPresent;
   delete semantic.scoreReasonPresent;
+  delete semantic.rawBodyAbsent;
   delete semantic.groundingLabels;
 
   const failure = runVerifierExpectingFailure(evidence);
 
   assert.match(failure, /Semantic search evidence must prove the safe result shape/);
+  assert.match(failure, /Semantic search evidence must include subjects/);
+  assert.match(failure, /Semantic search evidence must include senders/);
+  assert.match(failure, /Semantic search evidence must include date fields/);
+  assert.match(failure, /Semantic search evidence must include Gmail message refs/);
+  assert.match(failure, /Semantic search evidence must include Gmail thread refs/);
+  assert.match(failure, /Semantic search evidence must include safe snippets/);
   assert.match(failure, /Semantic search evidence must include Gmail source refs/);
   assert.match(failure, /Semantic search evidence must include Brain memory refs/);
   assert.match(failure, /Semantic search evidence must include score reasons/);
+  assert.match(failure, /Semantic search evidence must not include raw Gmail body fields/);
   assert.match(failure, /Semantic search evidence must include groundingLabels/);
 });
 
@@ -320,11 +334,18 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         resultCount: 1,
         contextLight: false,
         resultShapeVerified: true,
+        subjectPresent: true,
+        senderPresent: true,
+        dateFieldPresent: true,
+        messageRefPresent: true,
+        threadRefPresent: true,
+        snippetPresent: true,
         sourceRefPresent: true,
         memoryRefPresent: true,
         scoreReasonPresent: true,
         groundingLabels: ["grounded"],
         rawScoreHidden: true,
+        rawBodyAbsent: true,
       },
       {
         step: "create.first",
