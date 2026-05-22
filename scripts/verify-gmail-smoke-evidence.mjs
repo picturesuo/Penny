@@ -170,6 +170,17 @@ assert(createRefined.unsupportedHumanReviewClaimAbsent === true, "Create refinem
 
 const exported = requireStep("create.export");
 assert(exported.expectedEvidencePresent === true, "Export prompt must include the expected Gmail-derived context.");
+assert(exported.selectedOptionHistoryPresent === true, "Export prompt must include selected option history.");
+assert(exported.personalContextSectionPresent === true, "Export prompt must include a personal context section.");
+assert(exported.sourceMemoryEvidenceSectionPresent === true, "Export prompt must include a source/memory evidence section.");
+assert(
+  exported.personalContextExpectedEvidencePresent === true,
+  "Export prompt personal context must include the expected Gmail-derived context.",
+);
+assert(
+  exported.sourceMemoryEvidenceExpectedEvidencePresent === true,
+  "Export prompt source/memory evidence must include the expected Gmail-derived context.",
+);
 assert(exported.unsafePrivacyClaimAbsent === true, "Export prompt must not include unsafe privacy claims.");
 assert(exported.rawEmailBodyAbsent === true, "Export prompt must not include raw Gmail body markers.");
 assert(exported.secretOrConnectTokenAbsent === true, "Export prompt must not include connect/session/token values.");
