@@ -13,7 +13,7 @@ import {
   handleGoogleConnectorSyncStatusRequest,
 } from "./google-connector-route.ts";
 import { createInMemoryBrainMemoryService } from "./brain-memory-route.ts";
-import { googleConnectorTagKeys, initializeGoogleConnectorConnection } from "./google-connector.ts";
+import { completeGoogleConnectorSync, googleConnectorTagKeys, initializeGoogleConnectorConnection } from "./google-connector.ts";
 import type { ConnectorCredentialRef, NangoAdapter, NangoConnectSessionInput, NangoStartSyncInput } from "./google-connector.ts";
 import type { BrainRankerRecorder, RecordBrainDevelopmentEventInput } from "./brain-ranker-persistence.ts";
 import { createInMemoryGoogleConnectorStateStore } from "./google-connector-state-store.ts";
@@ -90,6 +90,86 @@ test("GET /api/connectors/google shows persisted connected surface state", async
   assert.equal(payload.data.provider.surfaces.find((surface) => surface.id === "google_drive")?.status, "connected");
   assert.equal(payload.data.provider.surfaces.find((surface) => surface.id === "google_calendar")?.status, "connected");
   assert.deepEqual(payload.data.state.connections[0]?.surfaces, ["google_drive", "google_calendar"]);
+});
+
+test("GET /api/connectors/google returns a UI-safe state view", async () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const state = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      credentialRef: "nango:google-gmail:nango-gmail-1",
+      accountEmail: "founder@example.com",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_gmail"],
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    now: "2026-05-20T12:00:00.000Z",
+  });
+  const syncedState = completeGoogleConnectorSync({
+    state,
+    scope,
+    connectionId: state.connections[0]?.id ?? "",
+    jobId: state.syncJobs[0]?.id ?? "",
+    surface: "google_gmail",
+    cursor: "history-101",
+    nextSyncAt: "2026-05-20T18:00:00.000Z",
+    now: "2026-05-20T12:05:00.000Z",
+    sources: [
+      {
+        surface: "google_gmail",
+        kind: "google_gmail_message",
+        externalId: "msg-1",
+        sourceUri: "gmail:message:msg-1",
+        label: "Launch partner follow-up",
+        metadata: {
+          subject: "Launch partner follow-up",
+          from: "Alice <alice@example.com>",
+          snippet: "Project: Penny should remember launch partner email follow-ups.",
+          historyId: "history-101",
+        },
+        rawContentStored: false,
+      },
+    ],
+  });
+  const response = await handleGoogleConnectorProviderRequest(
+    new Request("http://localhost/api/connectors/google", {
+      method: "GET",
+      headers: {
+        "x-user-id": "user-1",
+        "x-workspace-id": "workspace-1",
+      },
+    }),
+    { env: configuredEnv, stateStore: createInMemoryGoogleConnectorStateStore(syncedState) },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      state: {
+        connections: Array<{ credential: Record<string, unknown> }>;
+        syncJobs: Array<Record<string, unknown>>;
+        sources: Array<Record<string, unknown> & { label: string }>;
+      };
+    };
+  };
+  const source = payload.data.state.sources[0];
+  const syncJob = payload.data.state.syncJobs[0];
+  const providerJson = JSON.stringify(payload.data);
+
+  assert.equal(response.status, 200);
+  assert.equal(source?.label, "Gmail message msg-1");
+  for (const field of ["metadata", "provenance", "sourceRef", "scope", "trainingUse", "rawContentStored"]) {
+    assert.equal(field in (source ?? {}), false, `Google provider source exposed ${field}.`);
+  }
+  assert.equal("credentialRef" in (payload.data.state.connections[0]?.credential ?? {}), false);
+  assert.equal("cursorBefore" in (syncJob ?? {}), false);
+  assert.equal("cursorAfter" in (syncJob ?? {}), false);
+  assert.doesNotMatch(
+    providerJson,
+    /Launch partner follow-up|Project: Penny should remember|Alice <alice@example\.com>|history-101|nango:google-gmail:nango-gmail-1/,
+  );
 });
 
 test("POST /api/connectors/google/connect-session uses scoped headers as Nango tags", async () => {
