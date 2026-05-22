@@ -61,6 +61,7 @@ try {
   const selectorUsed = Object.keys(selector).length > 0;
   assert(selectorUsed || connectedTargets.length <= 1, "Multiple Gmail connections found. Set GMAIL_SMOKE_CONNECTION_ID or GMAIL_SMOKE_PROVIDER_CONFIG_KEY.");
   assert(!selectorUsed || targetedConnection, "Configured Gmail smoke connection selector did not match a connected Gmail account.");
+  const targetConnectorConnectionId = targetedConnection?.id ?? connectedTargets[0]?.id ?? null;
   record("status.initial", {
     status: initialStatus.data.status,
     messageCount: initialStatus.data.messageCount,
@@ -101,7 +102,34 @@ try {
     firstSourceIdPresent: Boolean(firstSourceId),
   });
 
-  const beforeKeywordCount = statusAfterSync.data.messageCount;
+  const sourceUrisAfterSync = gmailSourceUris(statusAfterSync.data?.sources, targetConnectorConnectionId);
+  assert(hasUniqueValues(sourceUrisAfterSync), "Gmail sync produced duplicate source refs.");
+  const repeatSync = await request("POST", "/api/connectors/google/gmail/sync", {
+    ...selector,
+    ...syncInput,
+    maxResults,
+  });
+  assert(repeatSync.data?.partialFailureCount === 0, "Repeated Gmail sync reported partial failures.");
+  const statusAfterRepeatSync = await request("GET", "/api/connectors/google/gmail/status");
+  const sourceUrisAfterRepeatSync = gmailSourceUris(statusAfterRepeatSync.data?.sources, targetConnectorConnectionId);
+  assert(
+    statusAfterRepeatSync.data?.messageCount === statusAfterSync.data.messageCount,
+    "Repeated Gmail sync changed Gmail source count.",
+  );
+  assert(
+    sourceUrisAfterRepeatSync.length === sourceUrisAfterSync.length,
+    "Repeated Gmail sync changed selected account source count.",
+  );
+  assert(hasUniqueValues(sourceUrisAfterRepeatSync), "Repeated Gmail sync produced duplicate source refs.");
+  record("sync.repeat", {
+    messageCount: repeatSync.data.messageCount,
+    partialFailureCount: repeatSync.data.partialFailureCount ?? 0,
+    statusMessageCountUnchanged: statusAfterRepeatSync.data.messageCount === statusAfterSync.data.messageCount,
+    selectedSourceCountUnchanged: sourceUrisAfterRepeatSync.length === sourceUrisAfterSync.length,
+    duplicateSourceRefsAbsent: hasUniqueValues(sourceUrisAfterRepeatSync),
+  });
+
+  const beforeKeywordCount = statusAfterRepeatSync.data.messageCount;
   const keyword = await request("POST", "/api/connectors/google/gmail/search", {
     ...selector,
     ...keywordSearchInput(),
@@ -450,6 +478,17 @@ function hasSemanticResultShape(result) {
 
 function hasNoRawEmailFields(result) {
   return !["body", "plainTextBody", "raw", "rawBody", "html", "payload", "score"].some((field) => field in result);
+}
+
+function gmailSourceUris(sources, connectionId) {
+  return (Array.isArray(sources) ? sources : [])
+    .filter((source) => !connectionId || source?.connectionId === connectionId)
+    .map((source) => source?.sourceUri)
+    .filter((sourceUri) => typeof sourceUri === "string" && sourceUri.startsWith("gmail:"));
+}
+
+function hasUniqueValues(values) {
+  return new Set(values).size === values.length;
 }
 
 function includesNeedle(value, needle) {
