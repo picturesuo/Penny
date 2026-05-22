@@ -10,6 +10,7 @@ const requireConnectPreflight = args.includes("--connect-preflight");
 const connectPreflightOnly = args.includes("--connect-preflight-only");
 const requireKeywordFilters = args.includes("--require-keyword-filters");
 const minMessages = optionInt("--min-messages", 1);
+const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
 const errors = [];
 
 if (!file || args.includes("--help") || args.includes("-h")) {
@@ -25,6 +26,7 @@ assert(typeof evidence?.baseUrl === "string" && evidence.baseUrl.length > 0, "Ev
 assert(typeof evidence?.startedAt === "string" && evidence.startedAt.length > 0, "Evidence must include startedAt.");
 assert(typeof evidence?.completedAt === "string" && evidence.completedAt.length > 0, "Evidence must include completedAt.");
 assert(Array.isArray(evidence?.steps) && evidence.steps.length > 0, "Evidence must include steps.");
+assertSafeStagingRunId(evidence);
 assertNoUnsafeEvidence(evidence);
 
 if (requireConnectPreflight || steps.has("connect.preflight")) {
@@ -196,6 +198,20 @@ function requireStep(name) {
   assert(Boolean(step), `Evidence must include ${name}.`);
 
   return step ?? {};
+}
+
+function assertSafeStagingRunId(value) {
+  const runId = typeof value?.stagingRunId === "string" ? value.stagingRunId.trim() : "";
+
+  if (!runId) {
+    return;
+  }
+
+  assert(isSafeStagingRunId(runId), "Smoke evidence stagingRunId must be a safe opaque slug.");
+}
+
+function isSafeStagingRunId(value) {
+  return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
 }
 
 function assertConnectPreflight(step) {
@@ -373,6 +389,7 @@ function printResult(extra) {
       {
         ok: true,
         file,
+        stagingRunId: isSafeStagingRunId(evidence?.stagingRunId) ? evidence.stagingRunId.trim() : null,
         ...extra,
         stepCount: evidence.steps.length,
       },
