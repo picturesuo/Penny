@@ -259,6 +259,45 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
   assert.match(markup, /Feedback saved/);
 });
 
+test("Create UI smoke renders real Gmail evidence in details and prompt artifact", () => {
+  const option = gmailEvidenceOption();
+  const artifact = createComparisonArm("deterministic", [option]).artifact;
+  const markup = renderToStaticMarkup(
+    createElement("div", null, [
+      createElement(CreateOptionDetailsDrawer, {
+        key: "drawer",
+        option,
+        onClose: () => undefined,
+      }),
+      createElement(CreateArtifactPanel, {
+        key: "artifact",
+        artifact: {
+          ...artifact,
+          title: "Gmail-grounded coding prompt",
+          sections: [
+            {
+              id: "artifact-section-gmail-evidence",
+              title: "Source / Memory Evidence",
+              body: "Use the Launch partner evidence Gmail memory and source ref only because the selected option cited it.",
+              status: "updated",
+            },
+          ],
+        },
+      }),
+    ]),
+  );
+
+  assert.match(markup, /Personal details/);
+  assert.match(markup, /Memories used/);
+  assert.match(markup, /Sources used/);
+  assert.match(markup, /Launch partner Gmail memory/);
+  assert.match(markup, /Launch partner evidence/);
+  assert.match(markup, /gmail:message:gmail-create-msg-1/);
+  assert.match(markup, /Gmail-grounded coding prompt/);
+  assert.match(markup, /Source \/ Memory Evidence/);
+  assert.doesNotMatch(markup, /Private raw Gmail body|rawBody|plainTextBody|credentialRef|accessToken|refreshToken/i);
+});
+
 test("isCreateComparisonDevMode only exposes comparison in dev, test, or explicit flag", () => {
   assert.equal(isCreateComparisonDevMode({ DEV: true }), true);
   assert.equal(isCreateComparisonDevMode({ MODE: "test" }), true);
@@ -416,6 +455,37 @@ function contextLightOption(): CandidateOption {
         excerpt: "Build memory-grounded Create.",
       },
     ],
+  };
+}
+
+function gmailEvidenceOption(): CandidateOption {
+  return {
+    ...memoryGroundedOption(),
+    id: "create-option-gmail-personal",
+    title: "Use real Gmail launch-partner evidence",
+    oneLine: "Ground the Personal direction in synced Gmail memory.",
+    rationale: "Use only the selected private Gmail evidence that Penny synced into Brain.",
+    topReason: "This uses a real synced Gmail memory: Launch partner evidence.",
+    rankReasons: ["Gmail evidence is present because the staged account was synced before Create."],
+    memoryUsed: [
+      {
+        id: "memory-gmail-1",
+        label: "Launch partner Gmail memory",
+        kind: "brain",
+        summary: "Launch partner evidence says follow-up urgency matters, while generic CRM dashboards were rejected.",
+      },
+    ],
+    sourcesUsed: [
+      {
+        id: "source-gmail-1",
+        label: "Launch partner evidence",
+        kind: "source",
+        excerpt: "Synced Gmail message source ref gmail:message:gmail-create-msg-1 supports the selected Personal direction.",
+        sourceRange: "gmail:message:gmail-create-msg-1",
+      },
+    ],
+    memoryCount: 1,
+    sourceCount: 1,
   };
 }
 
