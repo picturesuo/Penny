@@ -10,6 +10,7 @@ const smokeFile = optionValue("--smoke");
 const destructiveFile = optionValue("--destructive-smoke");
 const requireReadinessConnect = args.includes("--readiness-connect-preflight");
 const requireSmokeConnect = args.includes("--smoke-connect-preflight");
+const requireKeywordFilters = args.includes("--require-keyword-filters");
 const requireDestructive = args.includes("--require-destructive");
 const minMessages = optionInt("--min-messages", 1);
 const errors = [];
@@ -34,6 +35,7 @@ runVerifier("smoke", [
   smokeFile,
   `--min-messages=${minMessages}`,
   ...(requireSmokeConnect ? ["--connect-preflight"] : []),
+  ...(requireKeywordFilters ? ["--require-keyword-filters"] : []),
 ]);
 
 if (destructiveFile) {
@@ -42,6 +44,7 @@ if (destructiveFile) {
     destructiveFile,
     "--destructive",
     `--min-messages=${minMessages}`,
+    ...(requireKeywordFilters ? ["--require-keyword-filters"] : []),
   ]);
 }
 
@@ -73,6 +76,7 @@ if (errors.length) {
         destructive: destructiveFile ? evidenceSummary(destructiveFile, destructive) : null,
         readinessConnectPreflightRequired: requireReadinessConnect,
         smokeConnectPreflightRequired: requireSmokeConnect,
+        keywordFilterCoverageRequired: requireKeywordFilters,
         destructiveRequired: requireDestructive,
         minMessages,
       },
@@ -158,6 +162,6 @@ function printErrors() {
 
 function printUsage() {
   console.error(
-    "Usage: node scripts/verify-gmail-staging-bundle.mjs --readiness=<readiness.json> --smoke=<smoke.json> [--destructive-smoke=<smoke-full.json>] [--require-destructive] [--readiness-connect-preflight] [--smoke-connect-preflight] [--min-messages=N]",
+    "Usage: node scripts/verify-gmail-staging-bundle.mjs --readiness=<readiness.json> --smoke=<smoke.json> [--destructive-smoke=<smoke-full.json>] [--require-destructive] [--readiness-connect-preflight] [--smoke-connect-preflight] [--require-keyword-filters] [--min-messages=N]",
   );
 }
