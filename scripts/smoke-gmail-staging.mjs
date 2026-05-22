@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const baseUrl = env("BASE_URL", "http://localhost:3000").replace(/\/+$/, "");
+const gmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly";
 const apiToken = env("GMAIL_SMOKE_API_TOKEN", env("PENNY_API_TOKEN", ""));
 const userId = env("GMAIL_SMOKE_USER_ID", env("PENNY_AUTH_USER_ID", env("PENNY_USER_ID", "gmail-smoke-user")));
 const workspaceId = env(
@@ -29,6 +30,7 @@ const createIdea = env(
 );
 const createEvidenceNeedle = env("GMAIL_SMOKE_EXPECT_CREATE_TEXT", semanticQuery);
 const minMessages = positiveInt(env("GMAIL_SMOKE_EXPECT_MIN_MESSAGES", "1"), 1);
+const connectPreflight = envFlag("GMAIL_SMOKE_CONNECT_PREFLIGHT");
 const confirmMutations = envFlag("GMAIL_SMOKE_CONFIRM_MUTATIONS");
 const confirmDelete = envFlag("GMAIL_SMOKE_CONFIRM_DELETE");
 const evidenceFile = env("GMAIL_SMOKE_EVIDENCE_FILE", "");
@@ -49,11 +51,7 @@ try {
   const selector = connectionSelector();
   const initialStatus = await request("GET", "/api/connectors/google/gmail/status");
   assert(initialStatus.data?.configured === true, "Gmail is not configured.");
-  assert(
-    Array.isArray(initialStatus.data?.scopes) &&
-      initialStatus.data.scopes.includes("https://www.googleapis.com/auth/gmail.readonly"),
-    "Gmail status did not report gmail.readonly.",
-  );
+  assertGmailReadonlyOnly(initialStatus.data?.scopes, "Gmail status");
   assert(initialStatus.data?.restrictedScope === true, "Gmail status did not report restrictedScope=true.");
   assert(initialStatus.data?.gated === true, "Gmail status did not report gated=true.");
   assert(initialStatus.data?.private === true, "Gmail status did not report private=true.");
@@ -63,6 +61,25 @@ try {
   assertConnectorStatePrivacy(initialStatus.data, "Initial Gmail status");
   const initialProvider = await request("GET", "/api/connectors/google");
   assertConnectorStatePrivacy(initialProvider.data, "Initial Google provider state");
+  if (connectPreflight) {
+    const connect = await request("POST", "/api/connectors/google/gmail/connect", {});
+    assertGmailConnectPreflight(connect.data);
+    record("connect.preflight", {
+      providerConfigKey: connect.data.providerConfigKey,
+      connectLinkPresent: typeof connect.data.connectLink === "string" && connect.data.connectLink.length > 0,
+      connectLinkHost: safeUrlHost(connect.data.connectLink),
+      tokenPresent: typeof connect.data.token === "string" && connect.data.token.length > 0,
+      expiresAtPresent: typeof connect.data.expiresAt === "string" && connect.data.expiresAt.length > 0,
+      requestedSurfaceIds: connect.data.requestedSurfaceIds,
+      requestableSurfaceIds: connect.data.requestableSurfaceIds,
+      requestableScopeUrls: connect.data.requestableScopeUrls,
+      restrictedScope: connect.data.restrictedScope,
+      gated: connect.data.gated,
+      private: connect.data.private,
+      scopeAuditReason: connect.data.scopeAuditReason,
+      warningsCount: Array.isArray(connect.data.warnings) ? connect.data.warnings.length : 0,
+    });
+  }
   assert((initialStatus.data?.connections ?? []).some((connection) => connection.status === "connected"), "Connect Gmail first.");
   const connectedTargets = (initialStatus.data?.connections ?? []).filter((connection) => connection.status === "connected");
   const targetedConnection = connectedTargets.find((connection) => matchesConnectionSelector(connection, selector));
@@ -530,6 +547,35 @@ function hasNoRawEmailFields(result) {
   return !["body", "plainTextBody", "raw", "rawBody", "html", "payload", "score"].some((field) => field in result);
 }
 
+function assertGmailConnectPreflight(data) {
+  assert(data?.providerConfigKey, "Gmail connect preflight did not return a providerConfigKey.");
+  assert(typeof data?.connectLink === "string" && data.connectLink.length > 0, "Gmail connect preflight did not return a connectLink.");
+  assert(typeof data?.token === "string" && data.token.length > 0, "Gmail connect preflight did not return a session token.");
+  assert(typeof data?.expiresAt === "string" && data.expiresAt.length > 0, "Gmail connect preflight did not return expiresAt.");
+  assertGmailReadonlyOnly(data?.requestableScopeUrls, "Gmail connect preflight");
+  assert(
+    Array.isArray(data?.requestedSurfaceIds) && data.requestedSurfaceIds.includes("google_gmail"),
+    "Gmail connect preflight did not request google_gmail.",
+  );
+  assert(
+    Array.isArray(data?.requestableSurfaceIds) && data.requestableSurfaceIds.includes("google_gmail"),
+    "Gmail connect preflight did not report google_gmail as requestable.",
+  );
+  assert(data?.restrictedScope === true, "Gmail connect preflight did not report restrictedScope=true.");
+  assert(data?.gated === true, "Gmail connect preflight did not report gated=true.");
+  assert(data?.private === true, "Gmail connect preflight did not report private=true.");
+  assert(
+    typeof data?.scopeAuditReason === "string" &&
+      data.scopeAuditReason.includes("read email for private Brain memory and email search"),
+    "Gmail connect preflight did not return the expected scope audit reason.",
+  );
+}
+
+function assertGmailReadonlyOnly(scopes, label) {
+  assert(Array.isArray(scopes), `${label} did not report Gmail scopes.`);
+  assert(scopes.length === 1 && scopes[0] === gmailReadonlyScope, `${label} did not report exactly gmail.readonly.`);
+}
+
 function assertConnectorStatePrivacy(data, label) {
   const state = data?.state;
 
@@ -599,6 +645,14 @@ function hasUniqueValues(values) {
 
 function includesNeedle(value, needle) {
   return value.toLowerCase().includes(needle.toLowerCase());
+}
+
+function safeUrlHost(value) {
+  try {
+    return new URL(value).host;
+  } catch {
+    return null;
+  }
 }
 
 function matchesDeletedSourceRef(sourceRef, deletedSourceRef) {
