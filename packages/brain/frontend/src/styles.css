@@ -2911,6 +2911,18 @@
     padding: 10px;
   }
 
+  .gmail-filter-details {
+    grid-column: 1 / -1;
+    padding-top: 6px;
+  }
+
+  .gmail-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+  }
+
   .gmail-search-form label {
     min-width: 0;
     display: grid;
@@ -2935,6 +2947,20 @@
     color: #111111;
     font: inherit;
     font-size: 12px;
+  }
+
+  .gmail-checkbox-field {
+    align-self: end;
+    display: flex !important;
+    min-height: 36px;
+    flex-direction: row !important;
+    align-items: center;
+    gap: 7px !important;
+  }
+
+  .gmail-checkbox-field input {
+    width: auto;
+    min-width: 16px;
   }
 
   .gmail-results-list {
