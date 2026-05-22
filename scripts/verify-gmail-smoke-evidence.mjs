@@ -7,6 +7,7 @@ const args = process.argv.slice(2);
 const file = args.find((arg) => !arg.startsWith("--"));
 const destructive = args.includes("--destructive");
 const requireConnectPreflight = args.includes("--connect-preflight");
+const connectPreflightOnly = args.includes("--connect-preflight-only");
 const minMessages = optionInt("--min-messages", 1);
 const errors = [];
 
@@ -27,6 +28,19 @@ assertNoUnsafeEvidence(evidence);
 
 if (requireConnectPreflight || steps.has("connect.preflight")) {
   assertConnectPreflight(requireStep("connect.preflight"));
+}
+
+if (connectPreflightOnly) {
+  const completed = requireStep("connect.preflightOnly.completed");
+
+  assert(!destructive, "Connect-preflight-only evidence cannot also be destructive evidence.");
+  assert(typeof completed.reason === "string" && completed.reason.length > 0, "Connect preflight-only evidence must include a completion reason.");
+  printResult({
+    connectPreflightOnly: true,
+    destructive: false,
+    connectPreflightVerified: true,
+  });
+  process.exit(errors.length ? 1 : 0);
 }
 
 const initial = requireStep("status.initial");
@@ -99,25 +113,12 @@ if (destructive) {
 }
 
 if (errors.length) {
-  console.error(`Gmail smoke evidence failed ${errors.length} check${errors.length === 1 ? "" : "s"}:`);
-  for (const error of errors) {
-    console.error(`- ${error}`);
-  }
-  process.exitCode = 1;
+  printErrors();
 } else {
-  console.log(
-    JSON.stringify(
-      {
-        ok: true,
-        file,
-        destructive,
-        connectPreflightVerified: requireConnectPreflight || steps.has("connect.preflight"),
-        stepCount: evidence.steps.length,
-      },
-      null,
-      2,
-    ),
-  );
+  printResult({
+    destructive,
+    connectPreflightVerified: requireConnectPreflight || steps.has("connect.preflight"),
+  });
 }
 
 function requireStep(name) {
@@ -229,6 +230,34 @@ function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : Number.NaN;
 }
 
+function printResult(extra) {
+  if (errors.length) {
+    printErrors();
+    return;
+  }
+
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        file,
+        ...extra,
+        stepCount: evidence.steps.length,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function printErrors() {
+  console.error(`Gmail smoke evidence failed ${errors.length} check${errors.length === 1 ? "" : "s"}:`);
+  for (const error of errors) {
+    console.error(`- ${error}`);
+  }
+  process.exitCode = 1;
+}
+
 async function readStdin() {
   let raw = "";
 
@@ -240,5 +269,5 @@ async function readStdin() {
 }
 
 function printUsage() {
-  console.error("Usage: node scripts/verify-gmail-smoke-evidence.mjs <evidence.json|-> [--connect-preflight] [--destructive] [--min-messages=N]");
+  console.error("Usage: node scripts/verify-gmail-smoke-evidence.mjs <evidence.json|-> [--connect-preflight] [--connect-preflight-only] [--destructive] [--min-messages=N]");
 }
