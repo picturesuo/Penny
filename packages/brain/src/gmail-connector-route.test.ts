@@ -214,6 +214,64 @@ test("Gmail status returns staging-safe views without message metadata", async (
   );
 });
 
+test("Gmail status is scoped and does not expose another user's connection or sources", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+      now: "2026-05-22T12:00:00.000Z",
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: gmailProxyAdapter(proxyCalls),
+    },
+  );
+  const crossUserResponse = await handleGoogleGmailStatusRequest(
+    new Request("http://localhost/api/connectors/google/gmail/status", {
+      method: "GET",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-2",
+        "x-workspace-id": "workspace-1",
+      },
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+    },
+  );
+  const crossUserPayload = (await crossUserResponse.json()) as {
+    data: {
+      status: string;
+      messageCount: number;
+      connections: unknown[];
+      sources: unknown[];
+      state: { connections: unknown[]; sources: unknown[] };
+    };
+  };
+  const ownerStatus = await handleGoogleGmailStatusRequest(gmailRequest("/api/connectors/google/gmail/status", {}, "GET"), {
+    env: configuredEnv,
+    stateStore,
+  });
+  const ownerPayload = (await ownerStatus.json()) as { data: { status: string; messageCount: number } };
+  const crossUserJson = JSON.stringify(crossUserPayload.data);
+
+  assert.equal(crossUserResponse.status, 200);
+  assert.equal(crossUserPayload.data.status, "available");
+  assert.equal(crossUserPayload.data.messageCount, 0);
+  assert.deepEqual(crossUserPayload.data.connections, []);
+  assert.deepEqual(crossUserPayload.data.sources, []);
+  assert.deepEqual(crossUserPayload.data.state.connections, []);
+  assert.deepEqual(crossUserPayload.data.state.sources, []);
+  assert.doesNotMatch(crossUserJson, /founder@example\.com|nango-gmail-1|gmail:message:msg-1|connector-gmail-connection-1/);
+  assert.equal(ownerPayload.data.status, "connected");
+  assert.equal(ownerPayload.data.messageCount, 1);
+});
+
 test("Gmail sync paginates safe messages and skips spam or trash by default", async () => {
   const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
   const response = await handleGoogleGmailSyncRequest(
