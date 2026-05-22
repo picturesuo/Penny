@@ -487,7 +487,7 @@ test("Gmail keyword search builds a Gmail q string and does not store content by
       adapter: gmailProxyAdapter(proxyCalls),
     },
   );
-  const payload = (await response.json()) as { data: { query: string; stored: boolean; results: Array<{ subject: string; snippet: string }> } };
+  const payload = (await response.json()) as { data: { query: string; stored: boolean; results: Array<Record<string, unknown> & { subject: string; snippet: string }> } };
   const profile = await brainMemoryService.getProfile(gmailRequest("/api/brain/memory/profile", {}, "GET"));
 
   assert.equal(response.status, 200);
@@ -497,6 +497,7 @@ test("Gmail keyword search builds a Gmail q string and does not store content by
   );
   assert.equal(payload.data.stored, false);
   assert.equal(payload.data.results[0]?.subject, "Launch partner follow-up");
+  assertNoRawEmailFields(payload.data.results[0] ?? {});
   assert.equal(profile.stats.sourceCount, 0);
   assert.equal(
     proxyCalls.find((call) => call.path === "users/me/messages")?.query?.q,
@@ -625,6 +626,7 @@ test("Gmail semantic search ranks synced email memory without leaking raw scores
   assert.equal(payload.data.results[0]?.subject, "Launch partner follow-up");
   assert.match(payload.data.results[0]?.scoreReason, /synced Gmail memory/);
   assert.equal("score" in (payload.data.results[0] ?? {}), false);
+  assertNoRawEmailFields(payload.data.results[0] ?? {});
   assert.equal(crossUserResponse.status, 409);
 });
 
@@ -1063,6 +1065,12 @@ test("parseGmailMessage keeps attachment metadata only and caps body size", () =
   assert.equal(parsed.plainTextBody.length, 100_000);
   assert.doesNotMatch(parsed.plainTextBody, /attachment-1/);
 });
+
+function assertNoRawEmailFields(result: Record<string, unknown>) {
+  for (const field of ["body", "plainTextBody", "raw", "rawBody", "html", "payload", "score"]) {
+    assert.equal(field in result, false, `Gmail result exposed ${field}.`);
+  }
+}
 
 function gmailFixture(input: { scopes?: string[] } = {}) {
   const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
