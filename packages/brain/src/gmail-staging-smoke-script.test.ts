@@ -67,6 +67,47 @@ test("Gmail staging smoke script writes sanitized connect preflight-only evidenc
   }
 });
 
+test("Gmail smoke evidence verifier rejects webhook signing key markers", () => {
+  const failure = verifySmokeFailure(
+    {
+      baseUrl: "http://127.0.0.1:8787",
+      startedAt: "2026-05-22T00:00:00.000Z",
+      completedAt: "2026-05-22T00:01:00.000Z",
+      userId: "gmail-smoke-user",
+      workspaceId: "gmail-smoke-workspace",
+      projectId: "gmail-smoke-project",
+      sphereId: "gmail-smoke-sphere",
+      steps: [
+        {
+          step: "connect.preflight",
+          providerConfigKey: "google-gmail",
+          connectLinkPresent: true,
+          connectLinkHost: "connect.nango.test",
+          tokenPresent: true,
+          expiresAtPresent: true,
+          requestedSurfaceIds: ["google_gmail"],
+          requestableSurfaceIds: ["google_gmail"],
+          requestableScopeUrls: [gmailReadonlyScope],
+          restrictedScope: true,
+          gated: true,
+          private: true,
+          scopeAuditReason: "read email for private Brain memory and email search",
+          NANGO_WEBHOOK_SIGNING_KEY: "present",
+        },
+        {
+          step: "connect.preflightOnly.completed",
+          reason: "Connect preflight completed before OAuth.",
+          note: "NANGO_WEBHOOK_SIGNING_KEY",
+        },
+      ],
+    },
+    "--connect-preflight-only",
+  );
+
+  assert.match(failure, /NANGO_WEBHOOK_SIGNING_KEY must not be present/);
+  assert.match(failure, /raw connect\/session\/token value/);
+});
+
 test("Gmail staging smoke script rejects unsafe run ids without writing them", async () => {
   const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
@@ -631,6 +672,54 @@ test("Gmail staging smoke script rejects unsafe export privacy content without l
   }
 });
 
+test("Gmail staging smoke script rejects webhook signing key markers in export privacy content", async () => {
+  const state = postOauthSmokeState({
+    exportText: "Build with launch partner evidence. NANGO_WEBHOOK_SIGNING_KEY",
+  });
+  const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+    const route = postOauthRouteFor(request, state);
+
+    response.writeHead(route.status, { "content-type": "application/json" });
+    response.end(JSON.stringify(route.body));
+  });
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-smoke-"));
+  const evidenceFile = join(tmp, "gmail-smoke-export-webhook-key.json");
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = server.address();
+
+    assert(address && typeof address === "object");
+
+    const result = await runSmoke({
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      evidenceFile,
+      env: {
+        GMAIL_SMOKE_KEYWORD_TEXT: "launch partner evidence",
+        GMAIL_SMOKE_KEYWORD_FROM: "alice@example.com",
+        GMAIL_SMOKE_KEYWORD_SUBJECT: "Launch plan",
+        GMAIL_SMOKE_SEMANTIC_QUERY: "launch partner evidence",
+        GMAIL_SMOKE_EXPECT_CREATE_TEXT: "launch partner evidence",
+      },
+    });
+    const evidenceText = await readFile(evidenceFile, "utf8");
+    const evidence = JSON.parse(evidenceText) as {
+      error?: string;
+      steps: Array<Record<string, unknown> & { step: string }>;
+    };
+
+    assert.equal(result.status, 1);
+    assert.match(evidence.error ?? "", /connect\/session\/token values/);
+    assert.doesNotMatch(evidence.error ?? "", /NANGO_WEBHOOK_SIGNING_KEY/);
+    assert.equal(evidence.steps.some((step) => step.step === "create.export"), false);
+    assert.doesNotMatch(`${result.stdout}\n${result.stderr}\n${evidenceText}`, /NANGO_WEBHOOK_SIGNING_KEY/i);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging smoke script verifies destructive revoke and delete postconditions", async () => {
   const state = postOauthSmokeState();
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
@@ -740,6 +829,23 @@ async function runSmoke(input: {
   const status = await new Promise<number | null>((resolve) => child.on("close", resolve));
 
   return { status, stdout, stderr };
+}
+
+function verifySmokeFailure(evidence: unknown, ...args: string[]): string {
+  try {
+    execFileSync(process.execPath, ["scripts/verify-gmail-smoke-evidence.mjs", "-", ...args], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      input: JSON.stringify(evidence),
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (error) {
+    const failure = error as { stdout?: string; stderr?: string };
+
+    return `${failure.stdout ?? ""}\n${failure.stderr ?? ""}`;
+  }
+
+  assert.fail("Expected Gmail smoke evidence verifier to reject unsafe evidence.");
 }
 
 function routeFor(request: IncomingMessage): { status: number; body: unknown } {
