@@ -413,7 +413,10 @@ function assertNoUnsafeEvidence(value) {
     "encryptedtoken",
     "html",
     "metadata",
+    "nangosecretkey",
+    "nangowebhooksigningkey",
     "payload",
+    "pennyapitoken",
     "plaintextbody",
     "provenance",
     "raw",
@@ -423,7 +426,7 @@ function assertNoUnsafeEvidence(value) {
   ]);
   const allowedKeys = new Set(["connectlinkhost", "connectlinkpresent", "rawretentiondefault", "rawscorehidden", "tokenpresent"]);
   const unsafeValuePattern =
-    /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token|plainTextBody|rawBody|private raw Gmail body|raw Gmail body|raw email body)/i;
+    /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token|NANGO_SECRET_KEY|NANGO_WEBHOOK_SIGNING_KEY|PENNY_API_TOKEN|plainTextBody|rawBody|private raw Gmail body|raw Gmail body|raw email body)/i;
 
   walk(value, "$", (item, path) => {
     if (item && typeof item === "object" && !Array.isArray(item)) {
