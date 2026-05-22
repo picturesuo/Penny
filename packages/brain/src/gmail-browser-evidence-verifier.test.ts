@@ -138,6 +138,30 @@ test("Gmail browser evidence verifier rejects missing workflow action proof", ()
   assert.match(failure, /keyword search ran/);
 });
 
+test("Gmail browser evidence verifier rejects missing downstream action proof", () => {
+  const evidence = validBrowserEvidence();
+  const semanticResults = evidence.checks.find((check) => check.name === "brain.gmailSemanticResults") as Record<string, unknown>;
+  const createEvidence = evidence.checks.find((check) => check.name === "create.gmailEvidenceDrawer") as Record<string, unknown>;
+  const exportEvidence = evidence.checks.find((check) => check.name === "create.gmailExport") as Record<string, unknown>;
+  const postRevokeDelete = evidence.checks.find((check) => check.name === "brain.gmailPostRevokeDelete") as Record<string, unknown>;
+
+  semanticResults.semanticSearchRan = false;
+  createEvidence.createRunCompleted = false;
+  createEvidence.evidenceDrawerOpened = false;
+  exportEvidence.exportPromptGenerated = false;
+  postRevokeDelete.revokeCompleted = false;
+  postRevokeDelete.deleteCompleted = false;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /semantic search ran/);
+  assert.match(failure, /Create run completed/);
+  assert.match(failure, /evidence drawer was opened/);
+  assert.match(failure, /prompt export was generated/);
+  assert.match(failure, /Gmail revoke completed/);
+  assert.match(failure, /Gmail source delete completed/);
+});
+
 test("Gmail browser evidence verifier rejects missing proof artifact coverage", () => {
   const evidence = validBrowserEvidence();
 
@@ -299,6 +323,7 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
       {
         name: "brain.gmailSemanticResults",
         selectorTargetsPresent: true,
+        semanticSearchRan: true,
         resultVisible: true,
         groundingLabelVisible: true,
         scoreReasonVisible: true,
@@ -309,6 +334,8 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
       {
         name: "create.gmailEvidenceDrawer",
         selectorTargetsPresent: true,
+        createRunCompleted: true,
+        evidenceDrawerOpened: true,
         drawerVisible: true,
         realGmailRefsOnlyWhenUsed: true,
         gmailSourceRefVisible: true,
@@ -317,6 +344,7 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
       {
         name: "create.gmailExport",
         selectorTargetsPresent: true,
+        exportPromptGenerated: true,
         exportVisible: true,
         gmailContextOnlyWhenUsed: true,
         unsafePrivacyClaimAbsent: true,
@@ -327,6 +355,8 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
       {
         name: "brain.gmailPostRevokeDelete",
         selectorTargetsPresent: true,
+        revokeCompleted: true,
+        deleteCompleted: true,
         postRevokeStateVisible: true,
         syncBlockedAfterRevoke: true,
         searchBlockedAfterRevoke: true,
