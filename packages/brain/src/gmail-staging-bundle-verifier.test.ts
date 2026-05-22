@@ -323,6 +323,56 @@ test("Gmail staging bundle verifier rejects duplicate UI preflight check rows", 
   }
 });
 
+test("Gmail staging bundle verifier rejects weak UI preflight route counts", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const uiPreflight = validUiPreflightEvidence() as { checks: Array<Record<string, unknown>> };
+    const documentsCheck = uiPreflight.checks.find((check) => check.name === "brain.documents");
+
+    assert.ok(documentsCheck);
+    delete documentsCheck.documentCount;
+
+    const files = await writeBundleFiles(tmp, {
+      uiPreflight,
+    });
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--ui-preflight=${files.uiPreflight}`,
+    ]);
+
+    assert.match(failure, /UI preflight Brain documents check must include documentCount/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Gmail staging bundle verifier rejects weak UI preflight Gmail status fields", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const uiPreflight = validUiPreflightEvidence() as { checks: Array<Record<string, unknown>> };
+    const gmailCheck = uiPreflight.checks.find((check) => check.name === "gmail.status");
+
+    assert.ok(gmailCheck);
+    gmailCheck.messageCount = "0";
+
+    const files = await writeBundleFiles(tmp, {
+      uiPreflight,
+    });
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--ui-preflight=${files.uiPreflight}`,
+    ]);
+
+    assert.match(failure, /UI preflight Gmail status check must include messageCount/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging bundle verifier requires browser evidence when requested", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
 
