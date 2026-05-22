@@ -58,6 +58,17 @@ test("Gmail readiness evidence verifier rejects raw connect links or session tok
   assert.match(failure, /raw connect\/session\/token value/);
 });
 
+test("Gmail readiness evidence verifier rejects unsafe run ids without echoing them", () => {
+  const evidence = validReadinessEvidence();
+
+  evidence.stagingRunId = "staged-account@example.com";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Readiness evidence stagingRunId must be a safe opaque slug/);
+  assert.doesNotMatch(failure, /staged-account@example\.com/);
+});
+
 test("Gmail readiness evidence verifier rejects weak staging evidence", () => {
   const evidence = validReadinessEvidence();
 
