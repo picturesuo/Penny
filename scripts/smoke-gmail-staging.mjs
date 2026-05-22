@@ -102,7 +102,10 @@ try {
   const selectorUsed = Object.keys(selector).length > 0;
   const matchedConnections = selectorUsed ? connectedTargets.filter((connection) => matchesConnectionSelector(connection, selector)) : [];
   const targetedConnection = selectorUsed ? matchedConnections[0] : connectedTargets[0];
-  assert(selectorUsed || connectedTargets.length <= 1, "Multiple Gmail connections found. Set GMAIL_SMOKE_CONNECTION_ID or GMAIL_SMOKE_PROVIDER_CONFIG_KEY.");
+  assert(
+    selectorUsed || connectedTargets.length <= 1,
+    "Multiple Gmail connections found. Set GMAIL_SMOKE_CONNECTION_ID or another selector that matches exactly one staged Gmail account.",
+  );
   assert(!selectorUsed || matchedConnections.length > 0, "Configured Gmail smoke connection selector did not match a connected Gmail account.");
   assert(
     !selectorUsed || matchedConnections.length === 1,
