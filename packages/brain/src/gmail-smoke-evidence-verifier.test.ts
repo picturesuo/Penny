@@ -231,6 +231,17 @@ test("Gmail smoke evidence verifier rejects unsafe key variants without raw valu
   assert.match(failure, /raw_body must not be present/);
 });
 
+test("Gmail smoke evidence verifier rejects raw body markers in harmless-looking values", () => {
+  const evidence = validEvidence();
+  const exported = evidence.steps.find((step) => step.step === "create.export") as Record<string, unknown>;
+
+  exported.operatorNote = "Copied row showed private raw Gmail body marker.";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /raw connect\/session\/token value/);
+});
+
 test("Gmail smoke evidence verifier rejects unsafe run ids without echoing them", () => {
   const evidence = validEvidence();
 
