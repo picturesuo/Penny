@@ -144,6 +144,11 @@ type GoogleConnectorProviderStateResponse = {
   };
 };
 
+export type GmailSearchConnectionCandidate = {
+  status: string;
+  surfaces: string[];
+};
+
 type GmailStatusView = GoogleGmailStatusResponse["data"];
 type GmailKeywordSearchData = GoogleGmailSearchResponse["data"];
 type GmailSemanticSearchData = GoogleGmailSemanticSearchResponse["data"];
@@ -2826,7 +2831,7 @@ export function GoogleConnectorControl({
   const canSync = Boolean(connection && connection.status !== "revoked") && status !== "syncing" && !disabled;
   const canRevoke = Boolean(connection && connection.status !== "revoked") && status !== "revoking" && !disabled;
   const canDelete = Boolean(deleteSource) && status !== "deleting" && !disabled;
-  const canSearchGmail = Boolean(connection && selectedHasGmail && connection.status !== "revoked") && !disabled;
+  const canSearchGmail = isGmailSearchAvailable({ connection, disabled });
   const gmailMessageCount = gmailStatus?.messageCount ?? enabledSources.filter((source) => source.kind === "google_gmail_message").length;
   const gmailLastSyncAt = gmailStatus?.lastSyncAt ?? connection?.lastSyncedAt ?? null;
   const gmailScopes = gmailStatus?.scopes.length ? gmailStatus.scopes : gmail?.scopes.map((scope) => scope.scope).filter((scope): scope is string => Boolean(scope)) ?? [];
@@ -3202,6 +3207,13 @@ function selectedGoogleConnection(state: GoogleConnectorStateView, selectedConne
   const selected = selectedConnectionId ? findGoogleConnection(state, selectedConnectionId) : null;
 
   return selected ?? state.connections.find((connection) => connection.status !== "revoked") ?? state.connections[0] ?? null;
+}
+
+export function isGmailSearchAvailable(input: {
+  connection: GmailSearchConnectionCandidate | null | undefined;
+  disabled?: boolean;
+}): boolean {
+  return Boolean(input.connection?.surfaces.includes("google_gmail") && input.connection.status !== "revoked" && input.disabled !== true);
 }
 
 function findGoogleConnection(state: GoogleConnectorStateView, connectionId: string): GoogleConnectorConnectionView | null {
