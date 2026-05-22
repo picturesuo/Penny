@@ -106,6 +106,30 @@ test("Gmail readiness evidence verifier rejects duplicate readiness check rows",
   assert.match(failure, /Readiness evidence must include env\.requiredPresence only once/);
 });
 
+test("Gmail readiness evidence verifier rejects malformed required env presence rows", () => {
+  const evidence = validReadinessEvidence();
+  const requiredPresence = evidence.checks.find((check) => check.name === "env.requiredPresence");
+
+  assert.ok(requiredPresence);
+  delete requiredPresence.nangoPublicPresent;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /env\.requiredPresence must include boolean nangoPublicPresent/);
+});
+
+test("Gmail readiness evidence verifier rejects missing strict env presence on success", () => {
+  const evidence = validReadinessEvidence();
+  const requiredPresence = evidence.checks.find((check) => check.name === "env.requiredPresence");
+
+  assert.ok(requiredPresence);
+  requiredPresence.sessionSecretPresent = false;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /env\.requiredPresence must report PENNY_SESSION_SECRET present for strict staging readiness/);
+});
+
 function runVerifierExpectingFailure(evidence: Record<string, unknown>): string {
   try {
     execFileSync(process.execPath, verifier, {
