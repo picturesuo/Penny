@@ -233,6 +233,25 @@ test("Gmail browser evidence verifier rejects weak Create export privacy proof",
   assert.match(failure, /Export evidence must prove unsafe Gmail privacy claims are absent/);
 });
 
+test("Gmail browser evidence verifier rejects missing export section proof", () => {
+  const evidence = validBrowserEvidence();
+  const exported = evidence.checks.find((check) => check.name === "create.gmailExport") as Record<string, unknown>;
+
+  delete exported.selectedOptionHistoryVisible;
+  delete exported.personalContextSectionVisible;
+  delete exported.sourceMemoryEvidenceSectionVisible;
+  delete exported.gmailEvidenceInPersonalContext;
+  delete exported.gmailEvidenceInSourceMemorySection;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Export evidence must show selected option history/);
+  assert.match(failure, /Export evidence must show the personal context section/);
+  assert.match(failure, /Export evidence must show the source\/memory evidence section/);
+  assert.match(failure, /Export evidence must prove Gmail evidence appears in the personal context section/);
+  assert.match(failure, /Export evidence must prove Gmail evidence appears in the source\/memory evidence section/);
+});
+
 function runVerifierExpectingFailure(evidence: Record<string, unknown>, ...args: string[]): string {
   try {
     execFileSync(process.execPath, ["scripts/verify-gmail-browser-evidence.mjs", "-", ...args], {
@@ -377,6 +396,11 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
         exportPromptGenerated: true,
         exportVisible: true,
         gmailContextOnlyWhenUsed: true,
+        selectedOptionHistoryVisible: true,
+        personalContextSectionVisible: true,
+        sourceMemoryEvidenceSectionVisible: true,
+        gmailEvidenceInPersonalContext: true,
+        gmailEvidenceInSourceMemorySection: true,
         unsafePrivacyClaimAbsent: true,
         rawEmailBodyAbsent: true,
         secretOrConnectTokenAbsent: true,
