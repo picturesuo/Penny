@@ -526,10 +526,19 @@ try {
       const createAfterDeleteOptionSet = createAfterDelete.data?.optionSet ?? {};
       assert(Array.isArray(createAfterDeleteOptionSet.sourcesUsed), "Create after delete did not return source refs.");
       assert(Array.isArray(createAfterDeleteOptionSet.memoryUsed), "Create after delete did not return memory refs.");
+      const createAfterDeleteRankedCandidateCount = Array.isArray(createAfterDeleteOptionSet.rankedCandidates)
+        ? createAfterDeleteOptionSet.rankedCandidates.length
+        : 0;
       const deletedCreateSourceStillPresent = createAfterDeleteOptionSet.sourcesUsed.some((source) =>
         matchesDeletedSourceRef(source, deletedSourceRef),
       );
       const deletedCreateMemoryStillPresent = createAfterDeleteOptionSet.memoryUsed.some((memory) =>
+        deletedSemanticMemoryIds.has(memory.id),
+      );
+      const deletedCreateRankedCandidateSourceStillPresent = createRankedCandidateSourceRefs(createAfterDelete.data).some((source) =>
+        matchesDeletedSourceRef(source, deletedSourceRef),
+      );
+      const deletedCreateRankedCandidateMemoryStillPresent = createRankedCandidateMemoryRefs(createAfterDelete.data).some((memory) =>
         deletedSemanticMemoryIds.has(memory.id),
       );
 
@@ -538,6 +547,9 @@ try {
       assert(!deletedSemanticResultStillPresent, "Deleted Gmail source still appears in semantic search results.");
       assert(!deletedCreateSourceStillPresent, "Deleted Gmail source still appears in Create source refs.");
       assert(!deletedCreateMemoryStillPresent, "Deleted Gmail memory still appears in Create memory refs.");
+      assert(createAfterDeleteRankedCandidateCount >= 5, "Create after delete did not expose Brain Ranker candidates.");
+      assert(!deletedCreateRankedCandidateSourceStillPresent, "Deleted Gmail source still appears in Create ranked candidates.");
+      assert(!deletedCreateRankedCandidateMemoryStillPresent, "Deleted Gmail memory still appears in Create ranked candidates.");
       record("deleteSource", {
         sourceIdPresent: Boolean(firstSourceId),
         brainSourceIdPresent: Boolean(firstBrainSourceId),
@@ -549,8 +561,11 @@ try {
         semanticDeletedSourceAbsent: !deletedSemanticResultStillPresent,
         createAfterDeleteMemoryCountUsed: createAfterDelete.data?.observability?.memoryCountUsed ?? 0,
         createAfterDeleteSourceCountUsed: createAfterDelete.data?.observability?.sourceCountUsed ?? 0,
+        createAfterDeleteRankedCandidateCount,
         createDeletedSourceAbsent: !deletedCreateSourceStillPresent,
         createDeletedMemoryAbsent: !deletedCreateMemoryStillPresent,
+        createRankedCandidateDeletedSourceAbsent: !deletedCreateRankedCandidateSourceStillPresent,
+        createRankedCandidateDeletedMemoryAbsent: !deletedCreateRankedCandidateMemoryStillPresent,
         trackedDeletedMemoryIdCount: deletedSemanticMemoryIds.size,
       });
     }
