@@ -2826,6 +2826,7 @@ export function GoogleConnectorControl({
   const canSync = Boolean(connection && connection.status !== "revoked") && status !== "syncing" && !disabled;
   const canRevoke = Boolean(connection && connection.status !== "revoked") && status !== "revoking" && !disabled;
   const canDelete = Boolean(deleteSource) && status !== "deleting" && !disabled;
+  const canSearchGmail = Boolean(connection && selectedHasGmail && connection.status !== "revoked") && !disabled;
   const gmailMessageCount = gmailStatus?.messageCount ?? enabledSources.filter((source) => source.kind === "google_gmail_message").length;
   const gmailLastSyncAt = gmailStatus?.lastSyncAt ?? connection?.lastSyncedAt ?? null;
   const gmailScopes = gmailStatus?.scopes.length ? gmailStatus.scopes : gmail?.scopes.map((scope) => scope.scope).filter((scope): scope is string => Boolean(scope)) ?? [];
@@ -2843,7 +2844,7 @@ export function GoogleConnectorControl({
     event.preventDefault();
     const text = keywordDraft.trim();
 
-    if (!keywordSearchReady || !onKeywordSearch) {
+    if (!canSearchGmail || !keywordSearchReady || !onKeywordSearch) {
       return;
     }
 
@@ -2880,7 +2881,7 @@ export function GoogleConnectorControl({
     event.preventDefault();
     const query = semanticDraft.trim();
 
-    if (!query || !onSemanticSearch) {
+    if (!canSearchGmail || !query || !onSemanticSearch) {
       return;
     }
 
@@ -3040,7 +3041,7 @@ export function GoogleConnectorControl({
               </label>
             </div>
           </details>
-          <button type="submit" className="secondary-command" disabled={disabled || !keywordSearchReady || !onKeywordSearch}>
+          <button type="submit" className="secondary-command" disabled={!canSearchGmail || !keywordSearchReady || !onKeywordSearch}>
             <Search size={15} aria-hidden="true" />
             <span>Search email</span>
           </button>
@@ -3050,7 +3051,7 @@ export function GoogleConnectorControl({
             <span>Semantic search</span>
             <input value={semanticDraft} onChange={(event) => setSemanticDraft(event.target.value)} placeholder="Meaning" />
           </label>
-          <button type="submit" className="secondary-command" disabled={disabled || !semanticDraft.trim() || !onSemanticSearch}>
+          <button type="submit" className="secondary-command" disabled={!canSearchGmail || !semanticDraft.trim() || !onSemanticSearch}>
             <Search size={15} aria-hidden="true" />
             <span>Semantic search</span>
           </button>
