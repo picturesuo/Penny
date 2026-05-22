@@ -125,6 +125,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     const verified = JSON.parse(verifyOutput) as { ok: boolean; stepCount: number };
     const keyword = evidence.steps.find((step) => step.step === "keywordSearch");
     const keywordSync = evidence.steps.find((step) => step.step === "keywordSearch.syncExplicit");
+    const repeat = evidence.steps.find((step) => step.step === "sync.repeat");
     const createFirst = evidence.steps.find((step) => step.step === "create.first");
     const createExport = evidence.steps.find((step) => step.step === "create.export");
 
@@ -148,6 +149,9 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(keyword?.stored, false);
     assert.equal(keywordSync?.query, '"launch partner evidence" from:alice@example.com subject:"Launch plan"');
     assert.equal(keywordSync?.stored, true);
+    assert.equal(repeat?.cursorPresent, true);
+    assert.equal(repeat?.historyIdPresent, true);
+    assert.equal(repeat?.maxResultsUsed, 5);
     assert.deepEqual(createFirst?.selectedLenses, ["Critical", "Personal"]);
     assert.equal(createFirst?.personalOptionPresent, true);
     assert.equal(createFirst?.criticalOptionPresent, true);
@@ -223,6 +227,8 @@ test("Gmail staging smoke script verifies an expected sanitized partial failure"
     assert.equal(sync?.partialFailuresSanitized, true);
     assert.equal(repeat?.partialFailureCount, 1);
     assert.equal(repeat?.partialFailureStageMatched, true);
+    assert.equal(repeat?.cursorPresent, true);
+    assert.equal(repeat?.historyIdPresent, true);
     assert.equal(verified.ok, true);
     assert.doesNotMatch(JSON.stringify(evidence), /Private Gmail body|plainTextBody|rawBody/i);
   } finally {
