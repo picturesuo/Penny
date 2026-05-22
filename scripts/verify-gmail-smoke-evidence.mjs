@@ -75,6 +75,7 @@ const keyword = requireStep("keywordSearch");
 assert(typeof keyword.query === "string" && keyword.query.trim().length > 0, "Keyword search evidence must include the Gmail q query.");
 assert(keyword.stored === false, "Keyword search must not store results unless sync=true.");
 assert(numberValue(keyword.resultCount) >= 1, "Keyword search must return at least one result.");
+assertKeywordResultShape(keyword, "Keyword search");
 assert(keyword.memoryCountUnchanged === true, "Keyword search without sync=true must not change Gmail memory count.");
 if (requireKeywordFilters) {
   assertKeywordFilterCoverage(keyword, "Keyword search");
@@ -84,6 +85,7 @@ const keywordSync = requireStep("keywordSearch.syncExplicit");
 assert(typeof keywordSync.query === "string" && keywordSync.query.trim().length > 0, "Keyword search sync evidence must include the Gmail q query.");
 assert(keywordSync.stored === true, "Keyword search with sync=true must report stored=true.");
 assert(numberValue(keywordSync.resultCount) >= 1, "Keyword search with sync=true must return at least one result.");
+assertKeywordResultShape(keywordSync, "Keyword search with sync=true");
 assert(keywordSync.partialFailureCount === 0, "Keyword search with sync=true must have zero partial failures.");
 assert(keywordSync.duplicateSourceRefsAbsent === true, "Keyword search with sync=true must not create duplicate source refs.");
 if (requireKeywordFilters) {
@@ -213,6 +215,15 @@ function assertKeywordFilterCoverage(step, label) {
 
   assert(filters.hasAttachment === true, `${label} must prove hasAttachment filter coverage.`);
   assert(numberValue(step.maxResultsUsed) >= minMessages, `${label} must include maxResultsUsed evidence.`);
+}
+
+function assertKeywordResultShape(step, label) {
+  assert(step.resultShapeVerified === true, `${label} evidence must prove the safe result shape.`);
+  assert(step.messageRefPresent === true, `${label} evidence must include Gmail message refs.`);
+  assert(step.threadRefPresent === true, `${label} evidence must include Gmail thread refs.`);
+  assert(step.sourceRefPresent === true, `${label} evidence must include Gmail source refs.`);
+  assert(step.snippetPresent === true, `${label} evidence must include safe snippets.`);
+  assert(step.rawBodyAbsent === true, `${label} evidence must not include raw Gmail body fields.`);
 }
 
 function assertSemanticGroundingLabels(step) {
