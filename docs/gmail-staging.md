@@ -177,6 +177,7 @@ Use a staged Gmail account with safe test messages. Include at least:
 - One message from `alice@example.com`.
 - One message with subject `Launch plan`.
 - One message with an attachment.
+- One oversized disposable message, if available, to confirm Penny reports a partial failure instead of importing it.
 - One spam or trash message that should not appear in default sync.
 - One message that contradicts or rejects a product direction, for Create Critical evidence.
 
@@ -193,19 +194,20 @@ Checklist:
 9. Click `Sync now`.
 10. Verify message count and Gmail source count increase.
 11. Verify spam/trash test messages are not imported by default.
-12. Run keyword search for `launch partner evidence`.
-13. Run keyword search using `from`, `to`, `subject`, `label`, `after`, `before`, and `hasAttachment`.
-14. Verify keyword results show refs/snippets and do not create Brain memory unless `sync=true` is explicitly tested.
-15. Run semantic search for the staged concept.
-16. Verify semantic results come only from synced Gmail memory and show subject, sender, date, snippet, messageId, threadId, sourceRef, memoryRef, grounded/inferred label, and scoreReason.
-17. Start Create with an idea that should use the staged email evidence.
-18. Select Personal and Critical options when relevant.
-19. Open the evidence/details drawer and verify Gmail source refs appear only when actually used.
-20. Export the prompt and verify Gmail-derived personal context appears only when the selected Create result used that Gmail evidence.
-21. Click `Revoke`.
-22. Verify Sync and Search return revoked/not connected behavior.
-23. Delete the Gmail source.
-24. Verify Gmail memory no longer appears in Brain retrieval, Create evidence, or prompt export.
+12. If the staged mailbox includes an oversized disposable message, verify sync reports it in `partialFailures` with `stage=message_oversized` and does not create a Gmail source or Brain memory for that message.
+13. Run keyword search for `launch partner evidence`.
+14. Run keyword search using `from`, `to`, `subject`, `label`, `after`, `before`, and `hasAttachment`.
+15. Verify keyword results show refs/snippets and do not create Brain memory unless `sync=true` is explicitly tested.
+16. Run semantic search for the staged concept.
+17. Verify semantic results come only from synced Gmail memory and show subject, sender, date, snippet, messageId, threadId, sourceRef, memoryRef, grounded/inferred label, and scoreReason.
+18. Start Create with an idea that should use the staged email evidence.
+19. Select Personal and Critical options when relevant.
+20. Open the evidence/details drawer and verify Gmail source refs appear only when actually used.
+21. Export the prompt and verify Gmail-derived personal context appears only when the selected Create result used that Gmail evidence.
+22. Click `Revoke`.
+23. Verify Sync and Search return revoked/not connected behavior.
+24. Delete the Gmail source.
+25. Verify Gmail memory no longer appears in Brain retrieval, Create evidence, or prompt export.
 
 Record the smoke result with:
 
@@ -364,6 +366,7 @@ The default smoke verifies:
 - Gmail status is configured, connected, restricted-scope gated, private, `gmail.readonly`, `trainingUse=false`, `rawRetentionDefault=false`, and `noHumanReview=true`.
 - Gmail status and Google provider page-load state views do not expose Gmail message metadata, provenance, credential refs, cursor internals, raw body fields, or per-source training/raw-retention flags.
 - Sync imports at least one message from the staged safe-message query/filter set and returns cursor/history evidence.
+- Sync skips messages whose Gmail `sizeEstimate` exceeds the staging message-size cap, reports `stage=message_oversized`, and does not create Brain memory for skipped messages.
 - Repeating the same scoped sync does not change the Gmail source count or create duplicate source refs.
 - Keyword search uses the Gmail API, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
 - Semantic search returns only synced Gmail memory and hides raw numeric scores.
