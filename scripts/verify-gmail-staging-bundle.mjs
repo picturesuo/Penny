@@ -21,6 +21,7 @@ const requireBrowserEvidence = finalStaging || args.includes("--require-browser-
 const requireBrowserArtifactFiles = finalStaging || args.includes("--require-browser-artifact-files");
 const minMessages = optionInt("--min-messages", 1);
 const maxEvidenceWindowHours = optionInt("--max-evidence-window-hours", 24);
+const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
 const errors = [];
 
 if (
@@ -235,8 +236,9 @@ function assertFinalStagingRunIds(entries) {
     const runId = typeof evidence.stagingRunId === "string" ? evidence.stagingRunId.trim() : "";
 
     assert(Boolean(runId), `Final staging ${label} evidence must include stagingRunId.`);
+    assert(isSafeStagingRunId(runId), `Final staging ${label} evidence stagingRunId must be a safe opaque slug.`);
 
-    if (runId) {
+    if (isSafeStagingRunId(runId)) {
       runIds.push([label, runId]);
     }
   }
@@ -250,6 +252,10 @@ function assertFinalStagingRunIds(entries) {
   for (const [label, runId] of runIds) {
     assert(runId === expected, `Final staging ${label} evidence stagingRunId must match readiness evidence.`);
   }
+}
+
+function isSafeStagingRunId(value) {
+  return typeof value === "string" && safeStagingRunIdPattern.test(value);
 }
 
 function assertFinalEvidenceWindow(entries, maxHours) {
@@ -304,7 +310,7 @@ function evidenceSummary(file, evidence) {
     workspaceId: evidence?.workspaceId ?? null,
     projectId: evidence?.projectId ?? null,
     sphereId: evidence?.sphereId ?? null,
-    stagingRunId: evidence?.stagingRunId ?? null,
+    stagingRunId: isSafeStagingRunId(evidence?.stagingRunId) ? evidence.stagingRunId : null,
     stepCount: Array.isArray(evidence?.steps) ? evidence.steps.length : null,
     checkCount: Array.isArray(evidence?.checks) ? evidence.checks.length : null,
   };
