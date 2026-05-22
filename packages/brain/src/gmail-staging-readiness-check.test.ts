@@ -22,7 +22,15 @@ test("Gmail staging readiness checker accepts strict env, safe status, and conne
   });
   const payload = JSON.parse(result.stdout) as {
     ok: boolean;
-    checks: Array<{ name: string; connectLinkHost?: string; tokenPresent?: boolean }>;
+    checks: Array<{
+      name: string;
+      baseUrlHttpsOrLoopback?: boolean;
+      corsIncludesBaseOrigin?: boolean;
+      corsWildcardAbsent?: boolean;
+      rateLimitMax?: number;
+      connectLinkHost?: string;
+      tokenPresent?: boolean;
+    }>;
   };
 
   assert.equal(result.status, 0);
@@ -31,6 +39,10 @@ test("Gmail staging readiness checker accepts strict env, safe status, and conne
     payload.checks.map((check) => check.name),
     ["env.gmail", "env.strictStaging", "api.googleProvider", "api.gmailStatus", "api.connectPreflight"],
   );
+  assert.equal(payload.checks[1]?.baseUrlHttpsOrLoopback, true);
+  assert.equal(payload.checks[1]?.corsIncludesBaseOrigin, true);
+  assert.equal(payload.checks[1]?.corsWildcardAbsent, true);
+  assert.equal(payload.checks[1]?.rateLimitMax, 120);
   assert.equal(payload.checks[4]?.connectLinkHost, "connect.nango.test");
   assert.equal(payload.checks[4]?.tokenPresent, true);
   assert.deepEqual(
@@ -88,6 +100,22 @@ test("Gmail staging readiness checker rejects dev auth in strict staging mode be
   assert.match(result.stderr, /PENNY_AUTH_MODE must be token for strict Gmail staging readiness/);
 });
 
+test("Gmail staging readiness checker rejects wildcard CORS in strict staging mode before API calls", async () => {
+  const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
+  const result = await runReadiness({
+    routes: readinessRoutes(),
+    requests,
+    env: readyStrictEnv({
+      GMAIL_READINESS_REQUIRE_STAGING: "true",
+      PENNY_CORS_ORIGINS: "*",
+    }),
+  });
+
+  assert.equal(result.status, 1);
+  assert.equal(requests.length, 0);
+  assert.match(result.stderr, /PENNY_CORS_ORIGINS must not include wildcard origins/);
+});
+
 test("Gmail staging readiness checker loads an env file without leaking values", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-readiness-"));
   const envFile = join(tmp, "gmail.env");
@@ -109,6 +137,7 @@ test("Gmail staging readiness checker loads an env file without leaking values",
       "PENNY_API_TOKEN=file-api-token-value-32-characters",
       "PENNY_SESSION_SECRET=file-session-secret-32-characters",
       "PENNY_TRUST_AUTH_HEADERS=false",
+      "PENNY_RATE_LIMIT_MAX=120",
       "",
     ].join("\n"),
   );
@@ -174,6 +203,7 @@ async function runReadiness(input: {
       env: {
         PATH: process.env.PATH ?? "",
         BASE_URL: `http://127.0.0.1:${address.port}`,
+        PENNY_CORS_ORIGINS: `http://127.0.0.1:${address.port}`,
         GMAIL_READINESS_USER_ID: "readiness-user",
         GMAIL_READINESS_WORKSPACE_ID: "readiness-workspace",
         GMAIL_READINESS_PROJECT_ID: "readiness-project",
@@ -214,6 +244,7 @@ function readyStrictEnv(overrides: Record<string, string> = {}): Record<string, 
     PENNY_API_TOKEN: "strict-api-token-value-32-characters",
     PENNY_SESSION_SECRET: "session-secret-value-32-characters",
     PENNY_TRUST_AUTH_HEADERS: "false",
+    PENNY_RATE_LIMIT_MAX: "120",
     ...overrides,
   };
 }
