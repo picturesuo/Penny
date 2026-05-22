@@ -11,13 +11,14 @@ const destructiveFile = optionValue("--destructive-smoke");
 const uiPreflightFile = optionValue("--ui-preflight");
 const browserEvidenceFile = optionValue("--browser-evidence");
 const browserArtifactRoot = optionValue("--browser-artifact-root");
-const requireReadinessConnect = args.includes("--readiness-connect-preflight");
+const finalStaging = args.includes("--final-staging");
+const requireReadinessConnect = finalStaging || args.includes("--readiness-connect-preflight");
 const requireSmokeConnect = args.includes("--smoke-connect-preflight");
-const requireKeywordFilters = args.includes("--require-keyword-filters");
-const requireDestructive = args.includes("--require-destructive");
-const requireUiPreflight = args.includes("--require-ui-preflight");
-const requireBrowserEvidence = args.includes("--require-browser-evidence");
-const requireBrowserArtifactFiles = args.includes("--require-browser-artifact-files");
+const requireKeywordFilters = finalStaging || args.includes("--require-keyword-filters");
+const requireDestructive = finalStaging || args.includes("--require-destructive");
+const requireUiPreflight = finalStaging || args.includes("--require-ui-preflight");
+const requireBrowserEvidence = finalStaging || args.includes("--require-browser-evidence");
+const requireBrowserArtifactFiles = finalStaging || args.includes("--require-browser-artifact-files");
 const minMessages = optionInt("--min-messages", 1);
 const errors = [];
 
@@ -129,6 +130,7 @@ if (errors.length) {
         uiPreflightRequired: requireUiPreflight,
         browserEvidenceRequired: requireBrowserEvidence,
         browserArtifactFilesRequired: requireBrowserArtifactFiles,
+        finalStaging,
         minMessages,
       },
       null,
@@ -245,6 +247,6 @@ function printErrors() {
 
 function printUsage() {
   console.error(
-    "Usage: node scripts/verify-gmail-staging-bundle.mjs --readiness=<readiness.json> --smoke=<smoke.json> [--destructive-smoke=<smoke-full.json>] [--ui-preflight=<ui-preflight.json>] [--browser-evidence=<browser-evidence.json>] [--browser-artifact-root=<dir>] [--require-destructive] [--require-ui-preflight] [--require-browser-evidence] [--require-browser-artifact-files] [--readiness-connect-preflight] [--smoke-connect-preflight] [--require-keyword-filters] [--min-messages=N]",
+    "Usage: node scripts/verify-gmail-staging-bundle.mjs --readiness=<readiness.json> --smoke=<smoke.json> [--destructive-smoke=<smoke-full.json>] [--ui-preflight=<ui-preflight.json>] [--browser-evidence=<browser-evidence.json>] [--browser-artifact-root=<dir>] [--final-staging] [--require-destructive] [--require-ui-preflight] [--require-browser-evidence] [--require-browser-artifact-files] [--readiness-connect-preflight] [--smoke-connect-preflight] [--require-keyword-filters] [--min-messages=N]",
   );
 }
