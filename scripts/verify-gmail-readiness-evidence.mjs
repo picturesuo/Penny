@@ -8,6 +8,7 @@ const file = args.find((arg) => !arg.startsWith("--"));
 const requireStrictStaging = args.includes("--strict-staging");
 const requireConnectPreflight = args.includes("--connect-preflight");
 const allowFailure = args.includes("--allow-failure");
+const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
 const errors = [];
 
 if (!file || args.includes("--help") || args.includes("-h")) {
@@ -27,6 +28,7 @@ assert(typeof evidence?.sphereId === "string" && evidence.sphereId.length > 0, "
 assert(typeof evidence?.requireStaging === "boolean", "Readiness evidence must include requireStaging.");
 assert(typeof evidence?.connectPreflight === "boolean", "Readiness evidence must include connectPreflight.");
 assert(Array.isArray(evidence?.checks), "Readiness evidence must include checks.");
+assertSafeStagingRunId(evidence);
 assertNoUnsafeEvidence(evidence);
 
 if (evidence?.ok === false) {
@@ -111,6 +113,20 @@ function requireCheck(name) {
   assert(Boolean(check), `Readiness evidence must include ${name}.`);
 
   return check ?? {};
+}
+
+function assertSafeStagingRunId(value) {
+  const runId = typeof value?.stagingRunId === "string" ? value.stagingRunId.trim() : "";
+
+  if (!runId) {
+    return;
+  }
+
+  assert(isSafeStagingRunId(runId), "Readiness evidence stagingRunId must be a safe opaque slug.");
+}
+
+function isSafeStagingRunId(value) {
+  return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
 }
 
 function assertConnectPreflight(check, expectedProviderConfigKey) {
@@ -217,6 +233,7 @@ function printResult(extra) {
       {
         ok: true,
         file,
+        stagingRunId: isSafeStagingRunId(evidence?.stagingRunId) ? evidence.stagingRunId.trim() : null,
         ...extra,
         checkCount: evidence.checks.length,
       },
