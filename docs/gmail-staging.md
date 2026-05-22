@@ -170,6 +170,20 @@ GMAIL_SMOKE_EVIDENCE_FILE=tmp/gmail-smoke-evidence.json \
 node scripts/smoke-gmail-staging.mjs
 ```
 
+To prove Gmail query filters against the staged mailbox, add any of these to the same command:
+
+```bash
+GMAIL_SMOKE_KEYWORD_FROM=alice@example.com \
+GMAIL_SMOKE_KEYWORD_TO=bob@example.com \
+GMAIL_SMOKE_KEYWORD_SUBJECT="Launch plan" \
+GMAIL_SMOKE_KEYWORD_LABEL=inbox \
+GMAIL_SMOKE_KEYWORD_AFTER=2026-05-01 \
+GMAIL_SMOKE_KEYWORD_BEFORE=2026-05-22 \
+GMAIL_SMOKE_KEYWORD_HAS_ATTACHMENT=true
+```
+
+The evidence file records the Gmail `q` string and the filters used, while still checking that keyword results are not stored unless `sync=true` is explicitly requested.
+
 If staging uses token auth, also pass:
 
 ```bash
