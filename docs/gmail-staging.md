@@ -128,6 +128,25 @@ GMAIL_READINESS_CONNECT_PREFLIGHT=true
 
 The connect-session readiness output records only sanitized facts such as `connectLinkHost`, `connectLinkPresent`, `tokenPresent`, and `expiresAtPresent`. It must not contain the raw connect link, session token, Nango secret, API token, or email body text.
 
+Verify readiness evidence before treating it as setup proof:
+
+```bash
+node --check scripts/verify-gmail-readiness-evidence.mjs
+node scripts/verify-gmail-readiness-evidence.mjs tmp/gmail-readiness-evidence.json --strict-staging
+```
+
+If the readiness run included `GMAIL_READINESS_CONNECT_PREFLIGHT=true`, require that evidence too:
+
+```bash
+node scripts/verify-gmail-readiness-evidence.mjs tmp/gmail-readiness-evidence.json --strict-staging --connect-preflight
+```
+
+For a failed setup gate that you need to attach as blocker evidence, verify only the sanitizer and failure shape:
+
+```bash
+node scripts/verify-gmail-readiness-evidence.mjs tmp/gmail-readiness-evidence.json --allow-failure
+```
+
 ## Local Staging Run
 
 ```bash
@@ -386,7 +405,9 @@ Before marking Gmail staging ready, attach or record:
 - `node --check scripts/smoke-gmail-staging.mjs`.
 - `node --check scripts/verify-gmail-smoke-evidence.mjs`.
 - `node --check scripts/check-gmail-staging-readiness.mjs`.
+- `node --check scripts/verify-gmail-readiness-evidence.mjs`.
 - `scripts/check-gmail-staging-readiness.mjs` output and `tmp/gmail-readiness-evidence.json` with `GMAIL_READINESS_REQUIRE_STAGING=true`, `GMAIL_READINESS_ENV_FILE=.env.local` when env is file-backed, and optional `GMAIL_READINESS_CONNECT_PREFLIGHT=true` output when certifying connect-session setup.
+- `scripts/verify-gmail-readiness-evidence.mjs tmp/gmail-readiness-evidence.json --strict-staging`, plus `--connect-preflight` when the readiness run created a Nango connect session.
 - `scripts/verify-gmail-smoke-evidence.mjs` output for every accepted non-destructive or destructive evidence file.
 - Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-connect-preflight-evidence.json --connect-preflight-only` output proving connect-session creation with only sanitized connect-link evidence.
 - Optional full-smoke `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --connect-preflight --min-messages=1` output.
