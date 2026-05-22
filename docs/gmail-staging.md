@@ -348,6 +348,12 @@ node --check scripts/verify-gmail-smoke-evidence.mjs
 node scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --min-messages=1
 ```
 
+When the smoke command included the full keyword filter set, require that coverage in the verifier:
+
+```bash
+node scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --min-messages=1 --require-keyword-filters
+```
+
 If the run included `GMAIL_SMOKE_CONNECT_PREFLIGHT=true`, require that evidence too:
 
 ```bash
@@ -416,6 +422,7 @@ node scripts/verify-gmail-staging-bundle.mjs \
   --readiness=tmp/gmail-readiness-evidence.json \
   --smoke=tmp/gmail-smoke-evidence.json \
   --readiness-connect-preflight \
+  --require-keyword-filters \
   --min-messages=1
 ```
 
