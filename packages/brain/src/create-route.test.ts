@@ -751,6 +751,28 @@ test("Gmail sync feeds private email evidence into Create ranking and export onl
   );
   const exportPayload = await responsePayload(exportResponse);
   const exported = exportPayload.data.export as PromptExport;
+  const gmailSourceId = syncPayload.data.state.sources[0]?.id as string | undefined;
+  const deleteResponse = await handleGoogleConnectorSourceDeleteRequest(
+    jsonRequest(
+      "http://localhost/api/connectors/google/source-delete",
+      {
+        sourceId: gmailSourceId,
+        now: "2026-05-22T12:30:00.000Z",
+      },
+      headers,
+    ),
+    { stateStore },
+  );
+  const deletePayload = await responsePayload(deleteResponse);
+  const afterDelete = await createNext(
+    createInMemoryCreateRouteService(),
+    {
+      rawIdea,
+      projectId: "gmail-create-project",
+      sessionId: "gmail-create-after-delete-session",
+    },
+    headers,
+  );
 
   assert.equal(syncResponse.status, 200);
   assert.equal(syncPayload.data.messageCount, 1);
@@ -778,6 +800,16 @@ test("Gmail sync feeds private email evidence into Create ranking and export onl
   assert.match(exported.text, /generic CRM dashboards|fake connector claims/i);
   assert.doesNotMatch(exported.text, /Instagram|social connector/i);
   assert.doesNotMatch(exported.text, /global training|hidden memory|private inbox/i);
+  assert.ok(gmailSourceId);
+  assert.equal(deleteResponse.status, 200);
+  assert.equal(deletePayload.data.brainSourceDeleted, true);
+  assert.equal(deletePayload.data.state.sources[0]?.privacy.retrievalAccess, "deleted");
+  assert.equal(afterDelete.observability.memoryCountUsed, 0);
+  assert.equal(
+    afterDelete.optionSet.sourcesUsed.some((source) => /Launch partner evidence|private Gmail evidence|gmail-create-msg-1/i.test(`${source.label} ${source.excerpt}`)),
+    false,
+  );
+  assert.doesNotMatch(JSON.stringify(afterDelete.optionSet), /private Gmail evidence|gmail-create-msg-1|Alice <alice@example\.com>|Launch partner evidence/i);
 });
 
 test("POST /api/create/next personalizes the same rough idea for different Brain profiles", async () => {
