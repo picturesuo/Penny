@@ -424,10 +424,12 @@ function hasSemanticResultShape(result) {
     result &&
       typeof result.subject === "string" &&
       typeof result.sender === "string" &&
+      (result.date === null || typeof result.date === "string") &&
       typeof result.snippet === "string" &&
       typeof result.messageId === "string" &&
-      "threadId" in result &&
+      (result.threadId === null || typeof result.threadId === "string") &&
       result.sourceRef?.surface === "google_gmail" &&
+      typeof result.sourceRef?.sourceUri === "string" &&
       result.memoryRef?.id &&
       (result.grounding === "grounded" || result.grounding === "inferred") &&
       typeof result.scoreReason === "string",
