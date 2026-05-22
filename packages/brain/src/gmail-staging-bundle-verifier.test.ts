@@ -339,6 +339,9 @@ function validSmokeEvidence(): Record<string, unknown> {
         step: "create.export",
         expectedEvidencePresent: true,
         unsafePrivacyClaimAbsent: true,
+        rawEmailBodyAbsent: true,
+        secretOrConnectTokenAbsent: true,
+        unsupportedHumanReviewClaimAbsent: true,
       },
       {
         step: "revoke.delete.skipped",
