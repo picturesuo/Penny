@@ -30,6 +30,7 @@ test("Gmail staging readiness checker accepts strict env, safe status, and conne
       rateLimitMax?: number;
       connectLinkHost?: string;
       tokenPresent?: boolean;
+      nangoPublicPresent?: boolean;
     }>;
   };
 
@@ -37,14 +38,15 @@ test("Gmail staging readiness checker accepts strict env, safe status, and conne
   assert.equal(payload.ok, true);
   assert.deepEqual(
     payload.checks.map((check) => check.name),
-    ["env.gmail", "env.strictStaging", "api.googleProvider", "api.gmailStatus", "api.connectPreflight"],
+    ["env.requiredPresence", "env.gmail", "env.strictStaging", "api.googleProvider", "api.gmailStatus", "api.connectPreflight"],
   );
-  assert.equal(payload.checks[1]?.baseUrlHttpsOrLoopback, true);
-  assert.equal(payload.checks[1]?.corsIncludesBaseOrigin, true);
-  assert.equal(payload.checks[1]?.corsWildcardAbsent, true);
-  assert.equal(payload.checks[1]?.rateLimitMax, 120);
-  assert.equal(payload.checks[4]?.connectLinkHost, "connect.nango.test");
-  assert.equal(payload.checks[4]?.tokenPresent, true);
+  assert.equal(payload.checks[0]?.nangoPublicPresent, true);
+  assert.equal(payload.checks[2]?.baseUrlHttpsOrLoopback, true);
+  assert.equal(payload.checks[2]?.corsIncludesBaseOrigin, true);
+  assert.equal(payload.checks[2]?.corsWildcardAbsent, true);
+  assert.equal(payload.checks[2]?.rateLimitMax, 120);
+  assert.equal(payload.checks[5]?.connectLinkHost, "connect.nango.test");
+  assert.equal(payload.checks[5]?.tokenPresent, true);
   assert.deepEqual(
     requests.map((request) => `${request.method} ${request.url}`),
     ["GET /api/connectors/google", "GET /api/connectors/google/gmail/status", "POST /api/connectors/google/gmail/connect"],
@@ -69,14 +71,59 @@ test("Gmail staging readiness checker rejects missing NANGO_GMAIL_INTEGRATION_ID
       requests,
       env,
     });
-    const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as { ok: boolean; error?: string; checks: unknown[] };
+    const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as {
+      ok: boolean;
+      error?: string;
+      checks: Array<{ name?: string; nangoGmailIntegrationIdPresent?: boolean; nangoPublicPresent?: boolean }>;
+    };
 
     assert.equal(result.status, 1);
     assert.equal(requests.length, 0);
     assert.equal(evidence.ok, false);
-    assert.equal(evidence.checks.length, 0);
+    assert.equal(evidence.checks.length, 1);
+    assert.equal(evidence.checks[0]?.name, "env.requiredPresence");
+    assert.equal(evidence.checks[0]?.nangoGmailIntegrationIdPresent, false);
+    assert.equal(evidence.checks[0]?.nangoPublicPresent, true);
     assert.match(result.stderr, /NANGO_GMAIL_INTEGRATION_ID must be set for Gmail staging readiness/);
     assert.match(evidence.error ?? "", /NANGO_GMAIL_INTEGRATION_ID must be set for Gmail staging readiness/);
+    assert.doesNotMatch(result.stderr, /readiness-secret-value|readiness-public-value|strict-api-token|session-secret-value/i);
+    assert.doesNotMatch(JSON.stringify(evidence), /readiness-secret-value|readiness-public-value|strict-api-token|session-secret-value/i);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Gmail staging readiness checker records missing NANGO_PUBLIC_KEY before API calls", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-readiness-"));
+  const evidenceFile = join(tmp, "missing-public-key-evidence.json");
+  const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
+  const env = readyStrictEnv();
+
+  delete env.NANGO_PUBLIC_KEY;
+  env.GMAIL_READINESS_EVIDENCE_FILE = evidenceFile;
+
+  try {
+    const result = await runReadiness({
+      routes: readinessRoutes(),
+      requests,
+      env,
+    });
+    const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as {
+      ok: boolean;
+      error?: string;
+      checks: Array<{ name?: string; nangoSecretPresent?: boolean; nangoPublicPresent?: boolean; nangoGmailIntegrationIdPresent?: boolean }>;
+    };
+
+    assert.equal(result.status, 1);
+    assert.equal(requests.length, 0);
+    assert.equal(evidence.ok, false);
+    assert.equal(evidence.checks.length, 1);
+    assert.equal(evidence.checks[0]?.name, "env.requiredPresence");
+    assert.equal(evidence.checks[0]?.nangoSecretPresent, true);
+    assert.equal(evidence.checks[0]?.nangoPublicPresent, false);
+    assert.equal(evidence.checks[0]?.nangoGmailIntegrationIdPresent, true);
+    assert.match(result.stderr, /NANGO_PUBLIC_KEY must be set for Gmail staging readiness/);
+    assert.match(evidence.error ?? "", /NANGO_PUBLIC_KEY must be set for Gmail staging readiness/);
     assert.doesNotMatch(result.stderr, /readiness-secret-value|readiness-public-value|strict-api-token|session-secret-value/i);
     assert.doesNotMatch(JSON.stringify(evidence), /readiness-secret-value|readiness-public-value|strict-api-token|session-secret-value/i);
   } finally {
@@ -155,16 +202,22 @@ test("Gmail staging readiness checker loads an env file without leaking values",
     });
     const payload = JSON.parse(result.stdout) as {
       ok: boolean;
-      checks: Array<{ name: string; envFileLoaded?: boolean }>;
+      checks: Array<{ name: string; envFileConfigured?: boolean; envFileLoaded?: boolean }>;
     };
     const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as typeof payload;
+    const presenceCheck = payload.checks.find((check) => check.name === "env.requiredPresence");
     const envCheck = payload.checks.find((check) => check.name === "env.gmail");
+    const evidencePresenceCheck = evidence.checks.find((check) => check.name === "env.requiredPresence");
     const evidenceEnvCheck = evidence.checks.find((check) => check.name === "env.gmail");
 
     assert.equal(result.status, 0);
     assert.equal(payload.ok, true);
     assert.equal(evidence.ok, true);
+    assert.equal(presenceCheck?.envFileConfigured, true);
+    assert.equal(presenceCheck?.envFileLoaded, true);
     assert.equal(envCheck?.envFileLoaded, true);
+    assert.equal(evidencePresenceCheck?.envFileConfigured, true);
+    assert.equal(evidencePresenceCheck?.envFileLoaded, true);
     assert.equal(evidenceEnvCheck?.envFileLoaded, true);
     assert.deepEqual(
       requests.map((request) => `${request.method} ${request.url}`),
