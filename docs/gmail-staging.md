@@ -112,6 +112,8 @@ Use `GMAIL_READINESS_ENV_FILE=.env.local` for local or staged hosts where Penny 
 
 Use `GMAIL_READINESS_EVIDENCE_FILE=tmp/gmail-readiness-evidence.json` to save the same sanitized JSON that the checker prints. Keep this file with the later smoke evidence so setup failures and successful connect-session preflight results are auditable without raw secrets.
 
+Every readiness run starts by recording an `env.requiredPresence` check. This check is intentionally limited to booleans such as `nangoPublicPresent`, `nangoGmailIntegrationIdPresent`, `databaseUrlPresent`, `sessionSecretPresent`, `corsOriginsPresent`, and `rateLimitPresent`, so failed setup evidence can identify missing staging requirements before any API call without exposing secret values.
+
 The checker verifies:
 
 - `ENABLE_GOOGLE_CONNECTOR`, `ENABLE_GMAIL_CONNECTOR`, and `ENABLE_RESTRICTED_GOOGLE_SCOPES` are true.
