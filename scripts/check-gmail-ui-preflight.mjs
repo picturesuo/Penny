@@ -21,9 +21,11 @@ const sphereId = env(
 );
 const stagingRunId = env("GMAIL_STAGING_RUN_ID", env("GMAIL_UI_PREFLIGHT_STAGING_RUN_ID", ""));
 const gmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly";
+const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
 const checks = [];
 
 try {
+  assertSafeStagingRunId();
   const documents = await request("GET", "/api/brain/documents");
   assert(documents.data?.sourceOfTruth === "sessions_sources_claims_claim_versions_edges_moves_artifacts", "Brain documents route returned an unexpected contract.");
   record("brain.documents", {
@@ -91,7 +93,7 @@ try {
     workspaceId,
     projectId,
     sphereId,
-    ...(stagingRunId ? { stagingRunId } : {}),
+    ...stagingRunIdEvidence(),
     checkedAt: new Date().toISOString(),
     checks,
   };
@@ -105,7 +107,7 @@ try {
     workspaceId,
     projectId,
     sphereId,
-    ...(stagingRunId ? { stagingRunId } : {}),
+    ...stagingRunIdEvidence(),
     failedAt: new Date().toISOString(),
     error: error instanceof Error ? error.message : String(error),
     checks,
@@ -122,6 +124,22 @@ function writeEvidence(result) {
 
   mkdirSync(dirname(evidenceFile), { recursive: true });
   writeFileSync(evidenceFile, `${JSON.stringify(result, null, 2)}\n`, "utf8");
+}
+
+function assertSafeStagingRunId() {
+  if (!stagingRunId) {
+    return;
+  }
+
+  assert(isSafeStagingRunId(stagingRunId), "GMAIL_STAGING_RUN_ID must be a safe opaque slug for Gmail UI preflight.");
+}
+
+function stagingRunIdEvidence() {
+  return isSafeStagingRunId(stagingRunId) ? { stagingRunId: stagingRunId.trim() } : {};
+}
+
+function isSafeStagingRunId(value) {
+  return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
 }
 
 async function request(method, path) {
