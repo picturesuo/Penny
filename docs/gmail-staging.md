@@ -247,6 +247,19 @@ GMAIL_SMOKE_KEYWORD_HAS_ATTACHMENT=true
 The automated smoke also uses the keyword text and filters for the initial sync, so the run imports only the staged safe-message slice rather than the first arbitrary mailbox page. The evidence file records the Gmail `q` string, the sync filters, and the keyword filters used, while checking both that keyword results are not stored by default and that `sync=true` explicitly stores through the same safe, duplicate-free import path.
 Smoke evidence intentionally omits raw HTTP response bodies and raw email content; failure records use route/status/error-code summaries so the evidence file can be shared without exposing mailbox text. The smoke also checks the Gmail status endpoint and the general Google provider endpoint that the Brain UI loads; their state views must expose only connection selectors, minimal sync job fields, and source ids/URIs, not Gmail metadata, provenance, credential refs, cursor internals, or raw-retention fields.
 
+Verify the non-destructive evidence file before treating it as acceptance evidence:
+
+```bash
+node --check scripts/verify-gmail-smoke-evidence.mjs
+node scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --min-messages=1
+```
+
+If the run included `GMAIL_SMOKE_CONNECT_PREFLIGHT=true`, require that evidence too:
+
+```bash
+node scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --connect-preflight --min-messages=1
+```
+
 If staging uses token auth, also pass:
 
 ```bash
@@ -292,12 +305,22 @@ node scripts/smoke-gmail-staging.mjs
 
 That destructive smoke revokes the Gmail connection, verifies sync, keyword search, and semantic search stop, deletes a synced Gmail source that appeared in semantic results, verifies Brain profile, `/api/brain/retrieve`, semantic search, and Create no longer reference the deleted source, and records a safe evidence summary without raw email body text. If the delete target cannot be tied to semantic Gmail memory, the destructive smoke fails instead of certifying a weaker delete.
 
+Verify destructive evidence with:
+
+```bash
+node scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence-full.json --destructive --min-messages=1
+```
+
+The verifier fails if required smoke steps are missing, if repeated sync/source counts are unstable, if keyword search stores without `sync=true`, if semantic search exposes raw scores, if Create/export do not include the expected Gmail evidence, if revoke/delete postconditions are missing for destructive runs, or if the evidence JSON contains unsafe raw fields such as tokens, credential refs, metadata/provenance, raw bodies, or raw connect links.
+
 ## Acceptance Evidence
 
 Before marking Gmail staging ready, attach or record:
 
 - `pnpm typecheck`, `pnpm test`, and `pnpm build` output.
 - `node --check scripts/smoke-gmail-staging.mjs`.
+- `node --check scripts/verify-gmail-smoke-evidence.mjs`.
+- `scripts/verify-gmail-smoke-evidence.mjs` output for every accepted non-destructive or destructive evidence file.
 - Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` or `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output proving connect-session creation with only sanitized connect-link evidence.
 - Non-destructive `scripts/smoke-gmail-staging.mjs` output.
 - Destructive `scripts/smoke-gmail-staging.mjs` output from a disposable staged Gmail account, when revoke/delete are being certified.
