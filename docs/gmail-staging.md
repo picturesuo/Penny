@@ -449,14 +449,15 @@ If staging uses token auth, also pass:
 GMAIL_SMOKE_API_TOKEN=<penny-api-token>
 ```
 
-If there are multiple Gmail connections in the same user/workspace scope, target one explicitly:
+If there are multiple Gmail connections in the same user/workspace scope, target the staged account explicitly:
 
 ```bash
 GMAIL_SMOKE_CONNECTION_ID=<nango-connection-id>
+# Optional confirmation only; not unique across multiple accounts.
 GMAIL_SMOKE_PROVIDER_CONFIG_KEY=<nango-gmail-integration-id>
 ```
 
-When a selector is provided, the automated smoke uses it for sync, keyword search, semantic search, revoke, and delete checks. If multiple connected Gmail accounts are present and no selector is provided, the smoke fails instead of mixing evidence across accounts.
+`GMAIL_SMOKE_CONNECTION_ID` is the preferred selector when more than one Gmail account is connected. `GMAIL_SMOKE_PROVIDER_CONFIG_KEY` can confirm the Nango integration key, but it is not unique when several Gmail accounts use the same integration. When a selector is provided, the automated smoke uses it for sync, keyword search, semantic search, revoke, and delete checks. If multiple connected Gmail accounts are present and no selector is provided, or if the selector matches more than one connected Gmail account, the smoke fails instead of mixing evidence across accounts.
 
 The default smoke verifies:
 
