@@ -8,6 +8,7 @@ const file = args.find((arg) => !arg.startsWith("--"));
 const destructive = args.includes("--destructive");
 const requireConnectPreflight = args.includes("--connect-preflight");
 const connectPreflightOnly = args.includes("--connect-preflight-only");
+const requireKeywordFilters = args.includes("--require-keyword-filters");
 const minMessages = optionInt("--min-messages", 1);
 const errors = [];
 
@@ -74,6 +75,9 @@ assert(typeof keyword.query === "string" && keyword.query.trim().length > 0, "Ke
 assert(keyword.stored === false, "Keyword search must not store results unless sync=true.");
 assert(numberValue(keyword.resultCount) >= 1, "Keyword search must return at least one result.");
 assert(keyword.memoryCountUnchanged === true, "Keyword search without sync=true must not change Gmail memory count.");
+if (requireKeywordFilters) {
+  assertKeywordFilterCoverage(keyword, "Keyword search");
+}
 
 const keywordSync = requireStep("keywordSearch.syncExplicit");
 assert(typeof keywordSync.query === "string" && keywordSync.query.trim().length > 0, "Keyword search sync evidence must include the Gmail q query.");
@@ -81,6 +85,9 @@ assert(keywordSync.stored === true, "Keyword search with sync=true must report s
 assert(numberValue(keywordSync.resultCount) >= 1, "Keyword search with sync=true must return at least one result.");
 assert(keywordSync.partialFailureCount === 0, "Keyword search with sync=true must have zero partial failures.");
 assert(keywordSync.duplicateSourceRefsAbsent === true, "Keyword search with sync=true must not create duplicate source refs.");
+if (requireKeywordFilters) {
+  assertKeywordFilterCoverage(keywordSync, "Keyword search with sync=true");
+}
 
 const semantic = requireStep("semanticSearch");
 assert(numberValue(semantic.resultCount) >= 1, "Semantic search must return at least one synced Gmail memory result.");
@@ -120,6 +127,7 @@ if (errors.length) {
   printResult({
     destructive,
     connectPreflightVerified: requireConnectPreflight || steps.has("connect.preflight"),
+    keywordFilterCoverageRequired: requireKeywordFilters,
   });
 }
 
@@ -165,6 +173,17 @@ function assertExpectedPartialFailures(step, label) {
   assert(numberValue(step.partialFailureCount) >= 1, `${label} must report at least one expected partial failure.`);
   assert(step.partialFailureStageMatched === true, `${label} must match the expected ${expectedStage} partial failure stage.`);
   assert(step.partialFailuresSanitized === true, `${label} partial failure evidence must be sanitized.`);
+}
+
+function assertKeywordFilterCoverage(step, label) {
+  const filters = step.filtersUsed && typeof step.filtersUsed === "object" ? step.filtersUsed : {};
+
+  for (const field of ["from", "to", "subject", "label", "after", "before"]) {
+    assert(typeof filters[field] === "string" && filters[field].trim().length > 0, `${label} must prove ${field} filter coverage.`);
+  }
+
+  assert(filters.hasAttachment === true, `${label} must prove hasAttachment filter coverage.`);
+  assert(numberValue(step.maxResultsUsed) >= minMessages, `${label} must include maxResultsUsed evidence.`);
 }
 
 function assertNoUnsafeEvidence(value) {
@@ -284,5 +303,5 @@ async function readStdin() {
 }
 
 function printUsage() {
-  console.error("Usage: node scripts/verify-gmail-smoke-evidence.mjs <evidence.json|-> [--connect-preflight] [--connect-preflight-only] [--destructive] [--min-messages=N]");
+  console.error("Usage: node scripts/verify-gmail-smoke-evidence.mjs <evidence.json|-> [--connect-preflight] [--connect-preflight-only] [--destructive] [--require-keyword-filters] [--min-messages=N]");
 }
