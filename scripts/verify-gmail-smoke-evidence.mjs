@@ -55,7 +55,7 @@ assert(numberValue(initial.connectionCount) >= 1, "Evidence must include at leas
 
 const sync = requireStep("sync");
 assert(numberValue(sync.messageCount) >= minMessages, `Sync must import at least ${minMessages} Gmail message(s).`);
-assert(sync.partialFailureCount === 0, "Sync must have zero partial failures.");
+assertExpectedPartialFailures(sync, "Sync");
 assert(sync.cursorPresent === true || sync.historyIdPresent === true, "Sync must include cursor or historyId evidence.");
 
 const afterSync = requireStep("status.afterSync");
@@ -64,7 +64,7 @@ assert(afterSync.statusStatePrivacySafe === true, "Status after sync must be pri
 assert(afterSync.providerStatePrivacySafe === true, "Provider state after sync must be privacy-safe.");
 
 const repeat = requireStep("sync.repeat");
-assert(repeat.partialFailureCount === 0, "Repeated sync must have zero partial failures.");
+assertExpectedPartialFailures(repeat, "Repeated sync");
 assert(repeat.statusMessageCountUnchanged === true, "Repeated sync must leave overall Gmail message count unchanged.");
 assert(repeat.selectedSourceCountUnchanged === true, "Repeated sync must leave selected account source count unchanged.");
 assert(repeat.duplicateSourceRefsAbsent === true, "Repeated sync must not create duplicate source refs.");
@@ -152,6 +152,19 @@ function assertConnectPreflight(step) {
 function assertGmailReadonlyOnly(scopes, label) {
   assert(Array.isArray(scopes), `${label} must include requestableScopeUrls.`);
   assert(scopes.length === 1 && scopes[0] === gmailReadonlyScope, `${label} must request exactly gmail.readonly.`);
+}
+
+function assertExpectedPartialFailures(step, label) {
+  const expectedStage = typeof step.expectedPartialFailureStage === "string" ? step.expectedPartialFailureStage.trim() : "";
+
+  if (!expectedStage) {
+    assert(step.partialFailureCount === 0, `${label} must have zero unexpected partial failures.`);
+    return;
+  }
+
+  assert(numberValue(step.partialFailureCount) >= 1, `${label} must report at least one expected partial failure.`);
+  assert(step.partialFailureStageMatched === true, `${label} must match the expected ${expectedStage} partial failure stage.`);
+  assert(step.partialFailuresSanitized === true, `${label} partial failure evidence must be sanitized.`);
 }
 
 function assertNoUnsafeEvidence(value) {
