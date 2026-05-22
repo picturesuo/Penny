@@ -63,6 +63,15 @@ const afterSync = requireStep("status.afterSync");
 assert(numberValue(afterSync.messageCount) >= minMessages, `Status after sync must report at least ${minMessages} Gmail message(s).`);
 assert(afterSync.statusStatePrivacySafe === true, "Status after sync must be privacy-safe.");
 assert(afterSync.providerStatePrivacySafe === true, "Provider state after sync must be privacy-safe.");
+assert(numberValue(afterSync.syncedSourceCount) >= minMessages, `Status after sync must prove at least ${minMessages} synced Gmail source privacy record(s).`);
+assert(afterSync.syncedSourceTrainingUseFalse === true, "Synced Gmail source privacy must prove trainingUse=false.");
+assert(afterSync.syncedSourceRawContentStoredFalse === true, "Synced Gmail source privacy must prove rawContentStored=false.");
+assert(afterSync.syncedSourcePrivateUserMemory === true, "Synced Gmail source privacy must prove private user memory visibility.");
+assert(afterSync.syncedSourceRetrievalEnabled === true, "Synced Gmail source privacy must prove retrieval access is enabled.");
+assert(numberValue(afterSync.brainProfileGmailSourceCount) >= minMessages, `Brain profile must prove at least ${minMessages} Gmail source privacy record(s).`);
+assert(afterSync.brainProfileTrainingUseFalse === true, "Brain profile Gmail source privacy must prove trainingUse=false.");
+assert(afterSync.brainProfileRawRetentionFalse === true, "Brain profile Gmail source privacy must prove rawRetention=false.");
+assert(afterSync.brainProfilePrivateVisibility === true, "Brain profile Gmail source privacy must prove private visibility.");
 
 const repeat = requireStep("sync.repeat");
 assertExpectedPartialFailures(repeat, "Repeated sync");
