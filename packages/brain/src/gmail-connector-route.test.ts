@@ -9,6 +9,7 @@ import {
   handleGoogleGmailSemanticSearchRequest,
   handleGoogleGmailStatusRequest,
   handleGoogleGmailSyncRequest,
+  parseGmailMessage,
 } from "./gmail-connector-route.ts";
 import { initializeGoogleConnectorConnection } from "./google-connector.ts";
 import type {
@@ -161,6 +162,174 @@ test("Gmail sync imports mocked messages into private Brain memory through Nango
   assert.ok(proxyCalls.some((call) => call.path === "users/me/messages/msg-1"));
 });
 
+test("Gmail sync does not duplicate connector refs or Brain sources on repeated sync", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  const options = {
+    env: configuredEnv,
+    stateStore,
+    brainMemoryService,
+    adapter: gmailProxyAdapter(proxyCalls),
+  };
+
+  await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+      now: "2026-05-22T12:00:00.000Z",
+    }),
+    options,
+  );
+  const secondResponse = await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+      now: "2026-05-22T13:00:00.000Z",
+    }),
+    options,
+  );
+  const payload = (await secondResponse.json()) as {
+    data: {
+      state: {
+        sources: Array<{ sourceUri: string; brainSourceId: string | null }>;
+        cursors: Array<{ surface: string; cursor: string | null }>;
+      };
+    };
+  };
+  const profile = await brainMemoryService.getProfile(gmailRequest("/api/brain/memory/profile", {}, "GET"));
+
+  assert.equal(secondResponse.status, 200);
+  assert.equal(payload.data.state.sources.filter((source) => source.sourceUri === "gmail:message:msg-1").length, 1);
+  assert.equal(profile.sources.filter((source) => source.sourceUri === "gmail:message:msg-1").length, 1);
+  assert.equal(profile.stats.sourceCount, 1);
+  assert.equal(payload.data.state.cursors.find((cursor) => cursor.surface === "google_gmail")?.cursor, "history-100");
+});
+
+test("Gmail sync reports partial message detail failures without failing the whole sync", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  const response = await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 2,
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: fakeAdapter({
+        async proxy(input) {
+          proxyCalls.push(input);
+
+          if (input.path === "users/me/profile") {
+            return gmailProxyOk({ emailAddress: "founder@example.com", historyId: "history-200" });
+          }
+
+          if (input.path === "users/me/messages") {
+            return gmailProxyOk({ messages: [{ id: "msg-1", threadId: "thread-1" }, { id: "msg-2", threadId: "thread-2" }] });
+          }
+
+          if (input.path === "users/me/messages/msg-1") {
+            return gmailProxyOk(gmailMessage());
+          }
+
+          if (input.path === "users/me/messages/msg-2") {
+            return {
+              ok: false,
+              error: {
+                code: "nango_request_failed",
+                message: "Gmail returned 403 for this message.",
+                retryable: false,
+                details: { status: 403 },
+              },
+            };
+          }
+
+          throw new Error(`Unexpected Gmail proxy path ${input.path}.`);
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      messageCount: number;
+      partialFailureCount: number;
+      partialFailures: Array<{ messageId: string; threadId: string | null; retryable: boolean; status: number | null; message: string }>;
+      state: { sources: Array<{ sourceUri: string }> };
+    };
+  };
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.messageCount, 1);
+  assert.equal(payload.data.partialFailureCount, 1);
+  assert.deepEqual(payload.data.partialFailures[0], {
+    messageId: "msg-2",
+    threadId: "thread-2",
+    stage: "message_detail",
+    retryable: false,
+    status: 403,
+    errorCode: "nango_request_failed",
+    message: "Gmail returned 403 for this message.",
+  });
+  assert.equal(payload.data.state.sources.some((source) => source.sourceUri === "gmail:message:msg-1"), true);
+  assert.equal(payload.data.state.sources.some((source) => source.sourceUri === "gmail:message:msg-2"), false);
+});
+
+test("Gmail sync retries retryable Gmail proxy failures before importing", async () => {
+  const { stateStore, brainMemoryService } = gmailFixture();
+  let detailAttempts = 0;
+  const response = await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: fakeAdapter({
+        async proxy(input) {
+          if (input.path === "users/me/profile") {
+            return gmailProxyOk({ emailAddress: "founder@example.com", historyId: "history-300" });
+          }
+
+          if (input.path === "users/me/messages") {
+            return gmailProxyOk({ messages: [{ id: "msg-1", threadId: "thread-1" }] });
+          }
+
+          if (input.path === "users/me/messages/msg-1") {
+            detailAttempts += 1;
+
+            if (detailAttempts < 3) {
+              return {
+                ok: false,
+                error: {
+                  code: "nango_request_failed",
+                  message: "Gmail rate limit.",
+                  retryable: true,
+                  details: { status: 429 },
+                },
+              };
+            }
+
+            return gmailProxyOk(gmailMessage());
+          }
+
+          throw new Error(`Unexpected Gmail proxy path ${input.path}.`);
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as { data: { messageCount: number; partialFailureCount: number } };
+
+  assert.equal(response.status, 200);
+  assert.equal(detailAttempts, 3);
+  assert.equal(payload.data.messageCount, 1);
+  assert.equal(payload.data.partialFailureCount, 0);
+});
+
 test("Gmail keyword search builds a Gmail q string and does not store content by default", async () => {
   const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
   const response = await handleGoogleGmailSearchRequest(
@@ -199,6 +368,50 @@ test("Gmail keyword search builds a Gmail q string and does not store content by
     proxyCalls.find((call) => call.path === "users/me/messages")?.query?.q,
     payload.data.query,
   );
+});
+
+test("Gmail keyword search is scoped and cannot use another user's connection", async () => {
+  const { stateStore, brainMemoryService } = gmailFixture();
+  const response = await handleGoogleGmailSearchRequest(
+    new Request("http://localhost/api/connectors/google/gmail/search", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-2",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({ text: "launch partners" }),
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: fakeAdapter({
+        async proxy() {
+          throw new Error("Cross-user search must not reach Gmail proxy.");
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as { error: { code: string; message: string } };
+
+  assert.equal(response.status, 404);
+  assert.equal(payload.error.code, "gmail_connection_not_found");
+});
+
+test("Gmail semantic search asks the user to sync before memory exists", async () => {
+  const { stateStore, brainMemoryService } = gmailFixture();
+  const response = await handleGoogleGmailSemanticSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/semantic-search", {
+      query: "launch partner private email evidence",
+    }),
+    { stateStore, brainMemoryService },
+  );
+  const payload = (await response.json()) as { error: { code: string; message: string } };
+
+  assert.equal(response.status, 409);
+  assert.equal(payload.error.code, "gmail_not_synced");
+  assert.equal(payload.error.message, "Sync Gmail first.");
 });
 
 test("Gmail semantic search ranks synced email memory without leaking raw scores or cross-user data", async () => {
@@ -299,6 +512,35 @@ test("Gmail revoke removes retrieval access for synced Gmail sources", async () 
   assert.equal(payload.data.state.connections[0]?.status, "revoked");
   assert.equal(payload.data.state.sources[0]?.privacy.retrievalAccess, "revoked");
   assert.equal(statusPayload.data.messageCount, 0);
+
+  const syncAfterRevoke = await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: gmailProxyAdapter([]),
+    },
+  );
+  const searchAfterRevoke = await handleGoogleGmailSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/search", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      text: "launch partners",
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: gmailProxyAdapter([]),
+    },
+  );
+
+  assert.equal(syncAfterRevoke.status, 409);
+  assert.equal(searchAfterRevoke.status, 409);
 });
 
 test("buildGmailSearchQuery omits unsupported send/modify scopes and formats exact Gmail search terms", () => {
@@ -311,6 +553,40 @@ test("buildGmailSearchQuery omits unsupported send/modify scopes and formats exa
     }),
     '"private beta" from:founder@example.com subject:"Beta notes" label:inbox label:penny',
   );
+});
+
+test("parseGmailMessage keeps attachment metadata only and caps body size", () => {
+  const parsed = parseGmailMessage({
+    ...gmailMessage(),
+    payload: {
+      mimeType: "multipart/mixed",
+      headers: [
+        { name: "Subject", value: "Launch plan with deck" },
+        { name: "From", value: "Alice <alice@example.com>" },
+        { name: "To", value: "Bob <bob@example.com>" },
+        { name: "Date", value: "Fri, 22 May 2026 12:00:00 +0000" },
+      ],
+      parts: [
+        {
+          mimeType: "text/plain",
+          body: { data: base64Url("a".repeat(120_000)) },
+        },
+        {
+          filename: "launch-plan.pdf",
+          mimeType: "application/pdf",
+          body: {
+            attachmentId: "attachment-1",
+          },
+        },
+      ],
+    },
+  });
+
+  assert.equal(parsed.hasAttachment, true);
+  assert.deepEqual(parsed.attachments, [{ filename: "launch-plan.pdf", mimeType: "application/pdf", attachmentId: "attachment-1" }]);
+  assert.equal(parsed.bodyTruncated, true);
+  assert.equal(parsed.plainTextBody.length, 100_000);
+  assert.doesNotMatch(parsed.plainTextBody, /attachment-1/);
 });
 
 function gmailFixture() {
@@ -399,6 +675,17 @@ function gmailProxyAdapter(proxyCalls: NangoProxyInput[]): NangoAdapter {
       throw new Error(`Unexpected Gmail proxy path ${input.path}.`);
     },
   });
+}
+
+function gmailProxyOk(body: unknown): ConnectorAdapterResult<NangoProxyResponse> {
+  return {
+    ok: true,
+    data: {
+      status: 200,
+      headers: {},
+      body,
+    },
+  };
 }
 
 function gmailMessage() {
