@@ -197,10 +197,10 @@ test("Nango adapter redacts upstream failure bodies from error details", async (
   const adapter = createNangoAdapter(readGoogleConnectorRuntimeConfig(configuredEnv), async () => ({
     status: 400,
     body: {
-      message: "Nango validation failed.",
+      message: "Private Gmail body should not become the public adapter error message.",
       rawBody: "Private Gmail body",
       accessToken: "secret-token",
-      errors: [{ path: "tags.end_user_email", message: "Invalid value." }],
+      errors: [{ path: "tags.end_user_email", message: "secret-token should not become a validation detail." }],
     },
   }));
 
@@ -211,9 +211,13 @@ test("Nango adapter redacts upstream failure bodies from error details", async (
   if (!result.ok) {
     assert.equal(result.error.code, "nango_request_failed");
     assert.equal(result.error.retryable, false);
+    assert.equal(result.error.message, "Nango request failed with status 400.");
     assert.deepEqual(result.error.details, { status: 400 });
+    const serializedError = JSON.stringify(result.error);
     const serializedDetails = JSON.stringify(result.error.details);
 
+    assert.equal(serializedError.includes("Private Gmail body should not become the public adapter error message."), false);
+    assert.equal(serializedError.includes("secret-token should not become a validation detail."), false);
     assert.equal(serializedDetails.includes("Private Gmail body"), false);
     assert.equal(serializedDetails.includes("secret-token"), false);
     assert.equal(serializedDetails.includes("rawBody"), false);
