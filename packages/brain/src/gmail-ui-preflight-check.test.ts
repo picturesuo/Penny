@@ -166,19 +166,21 @@ function routesReadyForUiPreflight(): Record<string, MockRoute> {
       status: 200,
       body: {
         data: {
-          configured: true,
-          surfaces: [
-            {
-              id: "google_gmail",
-              status: "available",
-              scopes: [
-                {
-                  scope: "https://www.googleapis.com/auth/gmail.readonly",
-                  gated: true,
-                },
-              ],
-            },
-          ],
+          provider: {
+            configured: true,
+            surfaces: [
+              {
+                id: "google_gmail",
+                status: "available",
+                scopes: [
+                  {
+                    scope: "https://www.googleapis.com/auth/gmail.readonly",
+                    gated: true,
+                  },
+                ],
+              },
+            ],
+          },
           state: {
             connections: [],
             sources: [],

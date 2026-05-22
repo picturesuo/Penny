@@ -43,19 +43,21 @@ try {
   });
 
   const provider = await request("GET", "/api/connectors/google");
-  assert(provider.data?.configured === true, "Google connector provider is not configured.");
-  assert(Array.isArray(provider.data?.surfaces), "Google provider did not return surfaces.");
-  const gmailSurface = provider.data.surfaces.find((surface) => surface?.id === "google_gmail");
+  const providerView = provider.data?.provider ?? provider.data;
+  const providerState = provider.data?.state ? provider.data : providerView;
+  assert(providerView?.configured === true, "Google connector provider is not configured.");
+  assert(Array.isArray(providerView?.surfaces), "Google provider did not return surfaces.");
+  const gmailSurface = providerView.surfaces.find((surface) => surface?.id === "google_gmail");
   assert(gmailSurface, "Google provider did not expose the Gmail surface.");
   assert(
     Array.isArray(gmailSurface?.scopes) &&
       gmailSurface.scopes.some((scope) => scope?.scope === gmailReadonlyScope && scope?.gated === true),
     "Google provider Gmail surface did not expose gated gmail.readonly scope.",
   );
-  assertConnectorStatePrivacy(provider.data, "Google provider");
+  assertConnectorStatePrivacy(providerState, "Google provider");
   record("google.provider", {
-    configured: provider.data.configured,
-    surfaceCount: provider.data.surfaces.length,
+    configured: providerView.configured,
+    surfaceCount: providerView.surfaces.length,
     gmailStatus: gmailSurface?.status ?? null,
     providerStatePrivacySafe: true,
   });
