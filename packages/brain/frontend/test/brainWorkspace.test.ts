@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BrainMemoryPanel, BrainWorkspace, GoogleConnectorControl, isGmailSearchAvailable } from "../src/components/BrainWorkspace";
+import { BrainMemoryPanel, BrainWorkspace, GoogleConnectorControl, isActiveGmailConnection, isGmailSearchAvailable } from "../src/components/BrainWorkspace";
 import type { BrainDocumentsData, BrainMemoryProfileData, BrainRecentIdea } from "../src/types/brain";
 
 test("BrainWorkspace renders persisted quick notes as the first sidebar folder", () => {
@@ -265,13 +265,65 @@ test("GoogleConnectorControl disables Gmail source deletion when only non-Gmail 
       onDeleteSource: async () => undefined,
     }),
   );
-  const labelIndex = markup.indexOf("<span>Delete Gmail source</span>");
-  const buttonStart = markup.lastIndexOf("<button", labelIndex);
-  const buttonEnd = markup.indexOf("</button>", labelIndex);
-  const buttonMarkup = markup.slice(buttonStart, buttonEnd);
+  const buttonMarkup = buttonMarkupForLabel(markup, "Delete Gmail source");
 
-  assert.notEqual(labelIndex, -1);
   assert.match(buttonMarkup, /disabled=""/);
+});
+
+test("GoogleConnectorControl disables Gmail sync and revoke for Drive-only connections", () => {
+  const markup = renderToStaticMarkup(
+    createElement(GoogleConnectorControl, {
+      provider: googleProviderView(),
+      connectorState: {
+        connections: [
+          {
+            id: "connector-google-drive-only",
+            status: "connected",
+            surfaces: ["google_drive"],
+            scopes: ["https://www.googleapis.com/auth/drive.file"],
+            lastSyncedAt: "2026-05-20T12:05:00.000Z",
+            nextSyncAt: "2026-05-20T18:05:00.000Z",
+            revokedAt: null,
+            sourceCounts: { google_doc: 1 },
+            credential: {
+              connectionId: "nango-google-drive-only",
+              providerConfigKey: "google",
+              accountEmail: "drive-only@example.com",
+            },
+          },
+        ],
+        syncJobs: [],
+        sources: [
+          {
+            id: "connector-source-drive-only",
+            connectionId: "connector-google-drive-only",
+            kind: "google_doc",
+            label: "Drive source",
+            sourceUri: "google-drive:file:doc-1",
+            brainSourceId: "brain-source-drive-only",
+            privacy: {
+              retrievalAccess: "enabled",
+            },
+          },
+        ],
+      },
+      status: "ready",
+      error: null,
+      warning: null,
+      connectLink: null,
+      disabled: false,
+      onConnect: async () => undefined,
+      onSyncNow: async () => undefined,
+      onRevoke: async () => undefined,
+      onDeleteSource: async () => undefined,
+    }),
+  );
+
+  assert.match(markup, /Google connected/);
+  assert.match(markup, /drive-only@example\.com is selected for Google Drive/);
+  assert.match(buttonMarkupForLabel(markup, "Sync now"), /disabled=""/);
+  assert.match(buttonMarkupForLabel(markup, "Revoke"), /disabled=""/);
+  assert.match(buttonMarkupForLabel(markup, "Delete Gmail source"), /disabled=""/);
 });
 
 test("GoogleConnectorControl renders Gmail keyword search filters for staging smoke", () => {
@@ -312,12 +364,29 @@ test("GoogleConnectorControl renders Gmail keyword search filters for staging sm
 });
 
 test("Gmail search availability requires an active Gmail connection", () => {
+  assert.equal(isActiveGmailConnection({ connection: null }), false);
+  assert.equal(isActiveGmailConnection({ connection: { status: "connected", surfaces: ["google_drive"] } }), false);
+  assert.equal(isActiveGmailConnection({ connection: { status: "revoked", surfaces: ["google_gmail"] } }), false);
+  assert.equal(isActiveGmailConnection({ connection: { status: "connected", surfaces: ["google_gmail"] }, disabled: true }), false);
+  assert.equal(isActiveGmailConnection({ connection: { status: "connected", surfaces: ["google_gmail"] } }), true);
   assert.equal(isGmailSearchAvailable({ connection: null }), false);
   assert.equal(isGmailSearchAvailable({ connection: { status: "connected", surfaces: ["google_drive"] } }), false);
   assert.equal(isGmailSearchAvailable({ connection: { status: "revoked", surfaces: ["google_gmail"] } }), false);
   assert.equal(isGmailSearchAvailable({ connection: { status: "connected", surfaces: ["google_gmail"] }, disabled: true }), false);
   assert.equal(isGmailSearchAvailable({ connection: { status: "connected", surfaces: ["google_gmail"] } }), true);
 });
+
+function buttonMarkupForLabel(markup: string, label: string): string {
+  const labelIndex = markup.indexOf(`<span>${label}</span>`);
+  const buttonStart = markup.lastIndexOf("<button", labelIndex);
+  const buttonEnd = markup.indexOf("</button>", labelIndex);
+
+  assert.notEqual(labelIndex, -1);
+  assert.notEqual(buttonStart, -1);
+  assert.notEqual(buttonEnd, -1);
+
+  return markup.slice(buttonStart, buttonEnd);
+}
 
 function emptyDocumentsData(): BrainDocumentsData {
   const document = documentSummary();
