@@ -161,6 +161,24 @@ test("Gmail staging bundle verifier requires browser artifact root when requeste
   }
 });
 
+test("Gmail staging bundle verifier requires browser evidence when artifact files are requested", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const files = await writeBundleFiles(tmp);
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--browser-artifact-root=${tmp}`,
+      "--require-browser-artifact-files",
+    ]);
+
+    assert.match(failure, /Usage: node scripts\/verify-gmail-staging-bundle\.mjs/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging bundle verifier rejects mismatched browser evidence scope", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
 
