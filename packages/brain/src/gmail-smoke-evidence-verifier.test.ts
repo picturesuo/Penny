@@ -33,6 +33,20 @@ test("Gmail smoke evidence verifier rejects raw connect links or session tokens"
   assert.match(failure, /raw connect\/session\/token value/);
 });
 
+test("Gmail smoke evidence verifier accepts connect preflight-only evidence", () => {
+  const output = execFileSync(process.execPath, ["scripts/verify-gmail-smoke-evidence.mjs", "-", "--connect-preflight-only"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    input: JSON.stringify(connectPreflightOnlyEvidence()),
+  });
+  const payload = JSON.parse(output) as { ok: boolean; connectPreflightOnly: boolean; connectPreflightVerified: boolean; stepCount: number };
+
+  assert.equal(payload.ok, true);
+  assert.equal(payload.connectPreflightOnly, true);
+  assert.equal(payload.connectPreflightVerified, true);
+  assert.equal(payload.stepCount, 2);
+});
+
 test("Gmail smoke evidence verifier accepts destructive revoke and delete evidence", () => {
   const output = execFileSync(process.execPath, [...verifier, "--destructive"], {
     cwd: repoRoot,
@@ -150,6 +164,36 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
       {
         step: "revoke.delete.skipped",
         reason: "non destructive",
+      },
+    ],
+  };
+}
+
+function connectPreflightOnlyEvidence(): Record<string, unknown> & { steps: Array<Record<string, unknown>> } {
+  return {
+    baseUrl: "http://localhost:3000",
+    startedAt: "2026-05-22T12:00:00.000Z",
+    completedAt: "2026-05-22T12:00:10.000Z",
+    steps: [
+      {
+        step: "connect.preflight",
+        providerConfigKey: "google-gmail",
+        connectLinkPresent: true,
+        connectLinkHost: "connect.nango.dev",
+        tokenPresent: true,
+        expiresAtPresent: true,
+        requestedSurfaceIds: ["google_gmail"],
+        requestableSurfaceIds: ["google_gmail"],
+        requestableScopeUrls: ["https://www.googleapis.com/auth/gmail.readonly"],
+        restrictedScope: true,
+        gated: true,
+        private: true,
+        scopeAuditReason: "read email for private Brain memory and email search.",
+        warningsCount: 0,
+      },
+      {
+        step: "connect.preflightOnly.completed",
+        reason: "Connect-session preflight completed without running post-OAuth Gmail smoke checks.",
       },
     ],
   };
