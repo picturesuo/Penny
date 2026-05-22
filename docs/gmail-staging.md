@@ -427,7 +427,7 @@ The default smoke verifies:
 - Gmail status and Google provider page-load state views do not expose Gmail message metadata, provenance, credential refs, cursor internals, raw body fields, or per-source training/raw-retention flags.
 - Sync imports at least one message from the staged safe-message query/filter set and returns cursor/history evidence.
 - By default, sync has zero partial failures. When `GMAIL_SMOKE_EXPECT_PARTIAL_FAILURE_STAGE=message_oversized` is set, sync proves the oversized message was skipped through a sanitized `stage=message_oversized` partial-failure summary while still importing the safe message slice.
-- Repeating the same scoped sync does not change the Gmail source count or create duplicate source refs.
+- Repeating the same scoped sync returns cursor/history evidence again, does not change the Gmail source count, and does not create duplicate source refs.
 - Keyword search uses the Gmail API, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
 - Semantic search returns only synced Gmail memory, hides raw numeric scores, and records safe shape evidence for Gmail source refs, Brain memory refs, grounded/inferred labels, and score reasons.
 - Create uses the synced Gmail evidence through memory refs and source refs, returns both Personal and Critical options for the refinement/export check, and both option texts include the expected staged Gmail evidence phrase.
