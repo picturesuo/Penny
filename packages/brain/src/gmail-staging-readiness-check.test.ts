@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -71,6 +74,60 @@ test("Gmail staging readiness checker rejects dev auth in strict staging mode be
   assert.equal(result.status, 1);
   assert.equal(requests.length, 0);
   assert.match(result.stderr, /PENNY_AUTH_MODE must be token for strict Gmail staging readiness/);
+});
+
+test("Gmail staging readiness checker loads an env file without leaking values", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-readiness-"));
+  const envFile = join(tmp, "gmail.env");
+  const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
+
+  await writeFile(
+    envFile,
+    [
+      "ENABLE_GOOGLE_CONNECTOR=true",
+      "ENABLE_GMAIL_CONNECTOR=true",
+      "ENABLE_RESTRICTED_GOOGLE_SCOPES=true",
+      "NANGO_SECRET_KEY=file-secret-value",
+      "NANGO_PUBLIC_KEY=file-public-value",
+      "NANGO_BASE_URL=https://api.nango.test",
+      "NANGO_GMAIL_INTEGRATION_ID=google-gmail-staging",
+      "DATABASE_URL='postgresql://penny:penny@db.example.test:5432/penny'",
+      "PENNY_AUTH_MODE=token",
+      "PENNY_API_TOKEN=file-api-token-value-32-characters",
+      "PENNY_SESSION_SECRET=file-session-secret-32-characters",
+      "PENNY_TRUST_AUTH_HEADERS=false",
+      "",
+    ].join("\n"),
+  );
+
+  try {
+    const result = await runReadiness({
+      routes: readinessRoutes(),
+      requests,
+      env: {
+        GMAIL_READINESS_ENV_FILE: envFile,
+        GMAIL_READINESS_REQUIRE_STAGING: "true",
+        GMAIL_READINESS_CONNECT_PREFLIGHT: "true",
+      },
+    });
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean;
+      checks: Array<{ name: string; envFileLoaded?: boolean }>;
+    };
+    const envCheck = payload.checks.find((check) => check.name === "env.gmail");
+
+    assert.equal(result.status, 0);
+    assert.equal(payload.ok, true);
+    assert.equal(envCheck?.envFileLoaded, true);
+    assert.deepEqual(
+      requests.map((request) => `${request.method} ${request.url}`),
+      ["GET /api/connectors/google", "GET /api/connectors/google/gmail/status", "POST /api/connectors/google/gmail/connect"],
+    );
+    assert.doesNotMatch(result.stdout, /file-secret-value|file-public-value|file-api-token|file-session-secret/i);
+    assert.doesNotMatch(result.stderr, /file-secret-value|file-public-value|file-api-token|file-session-secret/i);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
 });
 
 async function runReadiness(input: {
