@@ -124,6 +124,7 @@ export async function handleGoogleConnectorProviderRequest(
 
   const scope = scopeFromRequest(request);
   const state = await loadGoogleConnectorState(options, scope);
+  const stateView = googleConnectorStateView(state);
 
   return jsonResponse(
     {
@@ -133,7 +134,7 @@ export async function handleGoogleConnectorProviderRequest(
           ...(options.env ? { env: options.env } : {}),
           connections: state.connections,
         }),
-        state,
+        state: stateView,
       },
     },
     200,
@@ -921,6 +922,61 @@ function resolveAdapter(options: GoogleConnectorRouteOptions): NangoAdapter {
 
 function resolveBrainMemoryService(options: GoogleConnectorRouteOptions): BrainMemoryRouteService {
   return options.brainMemoryService ?? defaultBrainMemoryService;
+}
+
+function googleConnectorStateView(state: GoogleConnectorState) {
+  return {
+    connections: state.connections.map(googleConnectorConnectionView),
+    syncJobs: state.syncJobs.map(googleConnectorSyncJobView),
+    sources: state.sources.filter((source) => source.privacy.retrievalAccess === "enabled").map(googleConnectorSourceView),
+  };
+}
+
+function googleConnectorConnectionView(connection: ConnectorConnection) {
+  return {
+    id: connection.id,
+    status: connection.status,
+    surfaces: connection.surfaces,
+    scopes: connection.scopes,
+    lastSyncedAt: connection.lastSyncedAt,
+    nextSyncAt: connection.nextSyncAt,
+    revokedAt: connection.revokedAt,
+    sourceCounts: connection.sourceCounts,
+    credential: {
+      connectionId: connection.credential.connectionId,
+      providerConfigKey: connection.credential.providerConfigKey,
+      ...(connection.credential.accountEmail ? { accountEmail: connection.credential.accountEmail } : {}),
+      ...(connection.credential.accountLabel ? { accountLabel: connection.credential.accountLabel } : {}),
+      ...(connection.credential.accountId ? { accountId: connection.credential.accountId } : {}),
+      ...(connection.credential.endUserId ? { endUserId: connection.credential.endUserId } : {}),
+    },
+  };
+}
+
+function googleConnectorSyncJobView(job: GoogleConnectorState["syncJobs"][number]) {
+  return {
+    id: job.id,
+    connectionId: job.connectionId,
+    surface: job.surface,
+    status: job.status,
+    requestedAt: job.requestedAt,
+    startedAt: job.startedAt,
+    completedAt: job.completedAt,
+  };
+}
+
+function googleConnectorSourceView(source: ConnectorSource) {
+  return {
+    id: source.id,
+    connectionId: source.connectionId,
+    kind: source.kind,
+    label: source.surface === "google_gmail" ? `Gmail message ${source.sourceRef.externalId || source.id}` : source.label,
+    sourceUri: source.sourceUri,
+    brainSourceId: source.brainSourceId ?? null,
+    privacy: {
+      retrievalAccess: source.privacy.retrievalAccess,
+    },
+  };
 }
 
 async function loadGoogleConnectorState(
