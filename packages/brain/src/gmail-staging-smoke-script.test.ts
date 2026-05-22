@@ -187,6 +187,8 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         syncedSourcePrivateUserMemory?: boolean;
         syncedSourceRetrievalEnabled?: boolean;
         brainProfileGmailSourceCount?: number;
+        selectedSourceRefCount?: number;
+        brainProfileMatchedSelectedSourceRefs?: boolean;
         brainProfileTrainingUseFalse?: boolean;
         brainProfileRawRetentionFalse?: boolean;
         brainProfilePrivateVisibility?: boolean;
@@ -255,6 +257,8 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(afterSync?.syncedSourcePrivateUserMemory, true);
     assert.equal(afterSync?.syncedSourceRetrievalEnabled, true);
     assert.equal(afterSync?.brainProfileGmailSourceCount, 1);
+    assert.equal(afterSync?.selectedSourceRefCount, 1);
+    assert.equal(afterSync?.brainProfileMatchedSelectedSourceRefs, true);
     assert.equal(afterSync?.brainProfileTrainingUseFalse, true);
     assert.equal(afterSync?.brainProfileRawRetentionFalse, true);
     assert.equal(afterSync?.brainProfilePrivateVisibility, true);
