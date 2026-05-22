@@ -317,6 +317,12 @@ export async function handleGoogleGmailSearchRequest(
     return connection.response;
   }
 
+  const readonlyError = gmailReadonlyResponse(connection.value);
+
+  if (readonlyError) {
+    return readonlyError;
+  }
+
   const adapter = resolveAdapter(options);
   const q = buildGmailSearchQuery(body.value);
   const maxResults = boundedInt(body.value.maxResults, 10, 1, 50);
