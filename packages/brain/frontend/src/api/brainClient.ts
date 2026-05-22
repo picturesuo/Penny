@@ -368,6 +368,162 @@ export interface GoogleConnectorConnectSessionResponse {
   };
 }
 
+export interface GoogleGmailStatusResponse {
+  data: {
+    sourceOfTruth: "gmail_connector_state_and_private_brain_memory" | string;
+    configured: boolean;
+    message: string;
+    missingConfig: string[];
+    status: string;
+    scopes: string[];
+    scopeAuditReason: string;
+    restrictedScope: boolean;
+    gated: boolean;
+    private: boolean;
+    privacy: {
+      copy: string;
+      trainingUse: false;
+      rawRetentionDefault: boolean;
+      noHumanReview: boolean;
+    };
+    lastSyncAt: string | null;
+    messageCount: number;
+    surface: GoogleConnectorSurfaceView | null;
+    connections: Array<{
+      id: string;
+      status: string;
+      surfaces: string[];
+      scopes: string[];
+      lastSyncedAt: string | null;
+      nextSyncAt: string | null;
+      revokedAt: string | null;
+      sourceCounts: Record<string, number>;
+      credential: {
+        connectionId: string;
+        providerConfigKey: string;
+        accountEmail?: string;
+        accountLabel?: string;
+      };
+    }>;
+    sources: Array<{
+      id: string;
+      connectionId: string;
+      kind: string;
+      label: string;
+      sourceUri: string;
+      brainSourceId?: string | null;
+      privacy: {
+        retrievalAccess: string;
+      };
+    }>;
+    state?: {
+      connections: unknown[];
+      syncJobs: unknown[];
+      sources: unknown[];
+    };
+  };
+}
+
+export interface GoogleGmailConnectResponse extends GoogleConnectorConnectSessionResponse {
+  data: GoogleConnectorConnectSessionResponse["data"] & {
+    providerConfigKey: string;
+    restrictedScope: boolean;
+    gated: boolean;
+    private: boolean;
+    scopeAuditReason: string;
+  };
+}
+
+export interface GoogleGmailSyncResponse {
+  data: {
+    sourceOfTruth: "gmail_sync_via_nango_proxy_private_brain_memory" | string;
+    messageCount: number;
+    cursor: string | null;
+    nextPageToken?: string | null;
+    importedSources: Array<{
+      messageId: string;
+      brainSourceId: string;
+      memoryNodeCount: number;
+    }>;
+    state?: {
+      connections: unknown[];
+      syncJobs: unknown[];
+      sources: unknown[];
+    };
+  };
+}
+
+export interface GoogleGmailSearchInput {
+  text?: string;
+  from?: string;
+  to?: string;
+  subject?: string;
+  label?: string | string[];
+  after?: string;
+  before?: string;
+  hasAttachment?: boolean;
+  maxResults?: number;
+  sync?: boolean;
+}
+
+export interface GoogleGmailSearchResponse {
+  data: {
+    sourceOfTruth: "gmail_api_search_via_nango" | string;
+    query: string;
+    stored: boolean;
+    nextPageToken?: string | null;
+    results: Array<{
+      messageId: string;
+      threadId: string | null;
+      subject: string;
+      sender: string;
+      date: string | null;
+      labels: string[];
+      snippet: string;
+      sourceRef: {
+        providerId: "google";
+        surface: "google_gmail";
+        externalId: string;
+        sourceUri: string;
+        url: string | null;
+      };
+    }>;
+  };
+}
+
+export interface GoogleGmailSemanticSearchResponse {
+  data: {
+    sourceOfTruth: "synced_private_gmail_brain_memory" | string;
+    query: string;
+    engine: string;
+    contextLight: boolean;
+    results: Array<{
+      messageId: string;
+      threadId: string | null;
+      subject: string;
+      sender: string;
+      date: string | null;
+      snippet: string;
+      sourceRef: {
+        id: string;
+        providerId: "google";
+        surface: "google_gmail";
+        sourceUri: string;
+        externalId: string;
+        url: string | null;
+      };
+      memoryRef: {
+        id: string;
+        label: string;
+        kind: "brain" | "preference" | "context";
+        summary: string;
+      };
+      grounding: "grounded" | "inferred";
+      scoreReason: string;
+    }>;
+  };
+}
+
 export async function fetchGoogleConnectorProvider(): Promise<GoogleConnectorProviderResponse> {
   const response = await fetch("/api/connectors/google", {
     method: "GET",
@@ -395,6 +551,105 @@ export async function createGoogleConnectorConnectSession(): Promise<GoogleConne
   }
 
   return payload as GoogleConnectorConnectSessionResponse;
+}
+
+export async function fetchGoogleGmailStatus(): Promise<GoogleGmailStatusResponse> {
+  const response = await fetch("/api/connectors/google/gmail/status", {
+    method: "GET",
+    headers: requestHeaders(),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `GET /api/connectors/google/gmail/status failed with ${response.status}.`));
+  }
+
+  return payload as GoogleGmailStatusResponse;
+}
+
+export async function createGoogleGmailConnectSession(): Promise<GoogleGmailConnectResponse> {
+  const response = await fetch("/api/connectors/google/gmail/connect", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify({}),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/connectors/google/gmail/connect failed with ${response.status}.`));
+  }
+
+  return payload as GoogleGmailConnectResponse;
+}
+
+export async function syncGoogleGmail(input: {
+  connectionId?: string;
+  providerConfigKey?: string;
+  maxResults?: number;
+} = {}): Promise<GoogleGmailSyncResponse> {
+  const response = await fetch("/api/connectors/google/gmail/sync", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/connectors/google/gmail/sync failed with ${response.status}.`));
+  }
+
+  return payload as GoogleGmailSyncResponse;
+}
+
+export async function searchGoogleGmail(input: GoogleGmailSearchInput): Promise<GoogleGmailSearchResponse> {
+  const response = await fetch("/api/connectors/google/gmail/search", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/connectors/google/gmail/search failed with ${response.status}.`));
+  }
+
+  return payload as GoogleGmailSearchResponse;
+}
+
+export async function semanticSearchGoogleGmail(input: {
+  query: string;
+  limit?: number;
+}): Promise<GoogleGmailSemanticSearchResponse> {
+  const response = await fetch("/api/connectors/google/gmail/semantic-search", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/connectors/google/gmail/semantic-search failed with ${response.status}.`));
+  }
+
+  return payload as GoogleGmailSemanticSearchResponse;
+}
+
+export async function revokeGoogleGmail(input: {
+  connectionId?: string;
+  providerConfigKey?: string;
+} = {}): Promise<{ data: { revoked: true; state?: unknown } }> {
+  const response = await fetch("/api/connectors/google/gmail/revoke", {
+    method: "POST",
+    headers: requestHeaders(),
+    body: JSON.stringify(input),
+  });
+  const payload = await readJson(response);
+
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `POST /api/connectors/google/gmail/revoke failed with ${response.status}.`));
+  }
+
+  return payload as { data: { revoked: true; state?: unknown } };
 }
 
 export async function fetchBrainRecents(): Promise<BrainRecentsResponse> {
