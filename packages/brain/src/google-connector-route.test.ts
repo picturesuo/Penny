@@ -545,6 +545,104 @@ test("POST /api/connectors/google/nango-webhook resolves compact scope id tags",
   assert.deepEqual(capturedCallbacks[0]?.scopes, ["https://www.googleapis.com/auth/drive.file"]);
 });
 
+test("POST /api/connectors/google/nango-webhook records Gmail from endUser scope and compact tags", async () => {
+  const capturedCallbacks: Array<{ connectionId: string; providerConfigKey: string; endUserId?: string; scopes?: readonly string[] }> = [];
+  const capturedSyncs: NangoStartSyncInput[] = [];
+  const adapter = fakeAdapter({
+    async handleCallback(input) {
+      capturedCallbacks.push(input);
+
+      return {
+        ok: true,
+        data: {
+          providerId: "google",
+          adapter: "nango",
+          connectionId: input.connectionId,
+          providerConfigKey: input.providerConfigKey,
+          credentialRef: `nango:${input.providerConfigKey}:${input.connectionId}`,
+          ...(input.endUserId ? { endUserId: input.endUserId } : {}),
+        },
+      };
+    },
+    async startSync(input) {
+      capturedSyncs.push(input);
+
+      return { ok: true, data: { started: true } };
+    },
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore();
+  const rawBody = JSON.stringify({
+    type: "auth",
+    operation: "creation",
+    success: true,
+    connectionId: "nango-gmail-staged",
+    providerConfigKey: "google-gmail",
+    provider: "google",
+    endUser: {
+      endUserId: "gmail-user",
+      organizationId: "gmail-workspace",
+      email: "founder@example.com",
+      displayName: "Founder Gmail",
+    },
+    tags: {
+      [googleConnectorTagKeys.bundle]: "gmail",
+      [googleConnectorTagKeys.surfaces]: "google_gmail",
+      [googleConnectorTagKeys.scopeIds]: "google.gmail.readonly",
+      [googleConnectorTagKeys.projectId]: "gmail-project",
+      [googleConnectorTagKeys.sphereId]: "gmail-sphere",
+    },
+  });
+  const signature = createHmac("sha256", configuredEnv.NANGO_SECRET_KEY).update(rawBody).digest("hex");
+  const response = await handleGoogleConnectorNangoWebhookRequest(
+    new Request("http://localhost/api/connectors/google/nango-webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-nango-hmac-sha256": signature,
+      },
+      body: rawBody,
+    }),
+    {
+      env: {
+        ...configuredEnv,
+        ENABLE_RESTRICTED_GOOGLE_SCOPES: "true",
+        ENABLE_GMAIL_CONNECTOR: "true",
+      },
+      adapter,
+      stateStore,
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      credential: { accountEmail?: string; accountLabel?: string; endUserId?: string };
+      state: { connections: Array<{ surfaces: string[]; scopes: string[]; status: string }> };
+      autoSync: { attempted: boolean; started: boolean; syncNames: string[] };
+    };
+  };
+  const persisted = await stateStore.load({
+    userId: "gmail-user",
+    workspaceId: "gmail-workspace",
+    projectId: "gmail-project",
+    sphereId: "gmail-sphere",
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(capturedCallbacks[0]?.connectionId, "nango-gmail-staged");
+  assert.equal(capturedCallbacks[0]?.providerConfigKey, "google-gmail");
+  assert.equal(capturedCallbacks[0]?.endUserId, "gmail-user");
+  assert.deepEqual(capturedCallbacks[0]?.scopes, ["https://www.googleapis.com/auth/gmail.readonly"]);
+  assert.deepEqual(capturedSyncs[0]?.syncNames, ["google-gmail-messages"]);
+  assert.equal(payload.data.credential.accountEmail, "founder@example.com");
+  assert.equal(payload.data.credential.accountLabel, "Founder Gmail");
+  assert.equal(payload.data.credential.endUserId, "gmail-user");
+  assert.deepEqual(payload.data.state.connections[0]?.surfaces, ["google_gmail"]);
+  assert.deepEqual(payload.data.state.connections[0]?.scopes, ["https://www.googleapis.com/auth/gmail.readonly"]);
+  assert.equal(payload.data.autoSync.started, true);
+  assert.equal(persisted.connections[0]?.status, "syncing");
+  assert.deepEqual(persisted.connections[0]?.surfaces, ["google_gmail"]);
+  assert.equal(persisted.syncJobs.some((job) => job.surface === "google_gmail" && job.status === "running"), true);
+});
+
 test("POST /api/connectors/google/nango-webhook labels and syncs the new connection when multiple accounts exist", async () => {
   const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
   const existing = initializeGoogleConnectorConnection({
