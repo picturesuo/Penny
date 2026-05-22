@@ -153,11 +153,72 @@ Record the smoke result with:
 - Revoke/delete result.
 - Any failures or screenshots.
 
+## Automated Staging Smoke
+
+After completing OAuth in the browser, run the non-destructive smoke against the same user/workspace scope:
+
+```bash
+BASE_URL=http://localhost:3000 \
+GMAIL_SMOKE_USER_ID=<same-user-id> \
+GMAIL_SMOKE_WORKSPACE_ID=<same-workspace-id> \
+GMAIL_SMOKE_PROJECT_ID=<same-project-id> \
+GMAIL_SMOKE_SPHERE_ID=<same-sphere-id> \
+GMAIL_SMOKE_KEYWORD_TEXT="launch partner evidence" \
+GMAIL_SMOKE_SEMANTIC_QUERY="launch partner evidence" \
+GMAIL_SMOKE_EXPECT_CREATE_TEXT="launch partner evidence" \
+GMAIL_SMOKE_EVIDENCE_FILE=tmp/gmail-smoke-evidence.json \
+node scripts/smoke-gmail-staging.mjs
+```
+
+If staging uses token auth, also pass:
+
+```bash
+GMAIL_SMOKE_API_TOKEN=<penny-api-token>
+```
+
+If there are multiple Gmail connections in the same user/workspace scope, target one explicitly:
+
+```bash
+GMAIL_SMOKE_CONNECTION_ID=<nango-connection-id>
+GMAIL_SMOKE_PROVIDER_CONFIG_KEY=<nango-gmail-integration-id>
+```
+
+The default smoke verifies:
+
+- Gmail status is configured, connected, private, and `gmail.readonly`.
+- Sync imports at least one message and returns cursor/history evidence.
+- Keyword search uses the Gmail API and does not store results without `sync=true`.
+- Semantic search returns only synced Gmail memory and hides raw numeric scores.
+- Create uses the synced Gmail evidence.
+- Prompt export includes the Gmail-derived context only after Create uses it.
+
+The default smoke does not revoke or delete, because those are destructive for the staged connection. To run the full destructive end of the staging proof:
+
+```bash
+BASE_URL=http://localhost:3000 \
+GMAIL_SMOKE_USER_ID=<same-user-id> \
+GMAIL_SMOKE_WORKSPACE_ID=<same-workspace-id> \
+GMAIL_SMOKE_PROJECT_ID=<same-project-id> \
+GMAIL_SMOKE_SPHERE_ID=<same-sphere-id> \
+GMAIL_SMOKE_KEYWORD_TEXT="launch partner evidence" \
+GMAIL_SMOKE_SEMANTIC_QUERY="launch partner evidence" \
+GMAIL_SMOKE_EXPECT_CREATE_TEXT="launch partner evidence" \
+GMAIL_SMOKE_CONFIRM_MUTATIONS=true \
+GMAIL_SMOKE_CONFIRM_DELETE=true \
+GMAIL_SMOKE_EVIDENCE_FILE=tmp/gmail-smoke-evidence-full.json \
+node scripts/smoke-gmail-staging.mjs
+```
+
+That destructive smoke revokes the Gmail connection, verifies sync/search stop, deletes the first synced Gmail source, and records a safe evidence summary without raw email body text.
+
 ## Acceptance Evidence
 
 Before marking Gmail staging ready, attach or record:
 
 - `pnpm typecheck`, `pnpm test`, and `pnpm build` output.
+- `node --check scripts/smoke-gmail-staging.mjs`.
+- Non-destructive `scripts/smoke-gmail-staging.mjs` output.
+- Destructive `scripts/smoke-gmail-staging.mjs` output from a disposable staged Gmail account, when revoke/delete are being certified.
 - Gmail status response before and after OAuth.
 - Sync response showing imported count and cursor/historyId.
 - Keyword search response proving Gmail `q` search.
@@ -165,4 +226,3 @@ Before marking Gmail staging ready, attach or record:
 - Create export prompt showing real Gmail evidence only when selected and used.
 - Revoke response and post-revoke search/sync failure.
 - Source delete result and post-delete Brain/Create retrieval absence.
-
