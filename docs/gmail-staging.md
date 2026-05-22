@@ -386,7 +386,7 @@ The default smoke verifies:
 - Repeating the same scoped sync does not change the Gmail source count or create duplicate source refs.
 - Keyword search uses the Gmail API, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
 - Semantic search returns only synced Gmail memory, hides raw numeric scores, and records safe shape evidence for Gmail source refs, Brain memory refs, grounded/inferred labels, and score reasons.
-- Create uses the synced Gmail evidence.
+- Create uses the synced Gmail evidence through memory refs and source refs, and returns both Personal and Critical options for the refinement/export check.
 - Prompt export includes the Gmail-derived context only after Create uses it.
 
 The default smoke does not revoke or delete, because those are destructive for the staged connection. To run the full destructive end of the staging proof:
@@ -471,6 +471,6 @@ Before marking Gmail staging ready, attach or record:
 - Sync and repeated-sync responses showing imported count, cursor/historyId, stable source counts, and no duplicate source refs.
 - Keyword search responses proving Gmail `q` search, default no-store behavior, and explicit `sync=true` storage.
 - Semantic search response proving synced Penny memory retrieval, safe result shape, Gmail source refs, Brain memory refs, grounded/inferred labels, score reasons, and no raw numeric score in normal UI.
-- Create export prompt showing real Gmail evidence only when selected and used.
+- Create evidence showing real Gmail memory refs and source refs on Personal/Critical options, plus an export prompt showing Gmail evidence only when selected and used.
 - Revoke response and post-revoke sync, keyword search, and semantic search failure.
 - Source delete result and post-delete Brain profile, `/api/brain/retrieve`, semantic search, and Create retrieval absence.
