@@ -181,6 +181,8 @@ function assertUiPreflightEvidence(evidence) {
 
   const requiredChecks = ["brain.documents", "brain.memoryProfile", "brain.recents", "google.provider", "gmail.status"];
   const checks = Array.isArray(evidence.checks) ? evidence.checks : [];
+  assert(Array.isArray(evidence.checks), "UI preflight evidence must include checks.");
+  assertUiPreflightChecks(checks, requiredChecks);
   const checkNames = new Set(checks.map((check) => check?.name));
 
   for (const checkName of requiredChecks) {
@@ -196,6 +198,33 @@ function assertUiPreflightEvidence(evidence) {
   assert(gmailCheck?.gated === true, "UI preflight Gmail status must report gated=true.");
   assert(gmailCheck?.private === true, "UI preflight Gmail status must report private=true.");
   assert(gmailCheck?.statusStatePrivacySafe === true, "UI preflight Gmail status check must be privacy-safe.");
+}
+
+function assertUiPreflightChecks(checks, allowedNames) {
+  const allowed = new Set(allowedNames);
+  const seen = new Set();
+
+  for (const [index, check] of checks.entries()) {
+    const isObject = Boolean(check) && typeof check === "object" && !Array.isArray(check);
+
+    assert(isObject, `UI preflight evidence check ${index + 1} must be an object.`);
+
+    if (!isObject) {
+      continue;
+    }
+
+    const name = typeof check.name === "string" ? check.name.trim() : "";
+
+    assert(Boolean(name), `UI preflight evidence check ${index + 1} must include a name.`);
+
+    if (!name) {
+      continue;
+    }
+
+    assert(allowed.has(name), `UI preflight evidence check ${index + 1} name must match an allowed UI preflight check.`);
+    assert(!seen.has(name), `UI preflight evidence must include ${name} only once.`);
+    seen.add(name);
+  }
 }
 
 function assertNoUnsafeUiPreflightEvidence(evidence) {
