@@ -112,6 +112,21 @@ assert(createFirst.personalOptionExpectedEvidencePresent === true, "Create Perso
 assert(createFirst.criticalOptionExpectedEvidencePresent === true, "Create Critical option must include the expected Gmail evidence text.");
 assert(createFirst.expectedEvidencePresent === true, "Create must include the expected Gmail evidence text.");
 
+const createRefined = requireStep("create.refined");
+assert(createRefined.artifactPresent === true, "Create refinement must include an artifact.");
+assert(createRefined.verificationPresent === true, "Create refinement must include verification.");
+assert(createRefined.judgmentEventPresent === true, "Create refinement must include a judgment event.");
+assert(numberValue(createRefined.selectedOptionCount) >= 2, "Create refinement must select both Personal and Critical options.");
+assertCreateSelectedLenses(createRefined);
+assert(createRefined.selectedOptionsMatched === true, "Create refinement must preserve the selected Gmail option ids.");
+assert(createRefined.gmailMemoryEvidencePresent === true, "Create refinement must include Gmail evidence in memory refs.");
+assert(createRefined.gmailSourceEvidencePresent === true, "Create refinement must include Gmail evidence in source refs.");
+assert(createRefined.expectedEvidencePresent === true, "Create refinement must include the expected Gmail evidence text.");
+assert(createRefined.artifactExpectedEvidencePresent === true, "Create refinement artifact must include the expected Gmail evidence text.");
+assert(createRefined.rawEmailBodyAbsent === true, "Create refinement must not include raw Gmail body markers.");
+assert(createRefined.secretOrConnectTokenAbsent === true, "Create refinement must not include connect/session/token values.");
+assert(createRefined.unsupportedHumanReviewClaimAbsent === true, "Create refinement must not include unsupported human-review claims.");
+
 const exported = requireStep("create.export");
 assert(exported.expectedEvidencePresent === true, "Export prompt must include the expected Gmail-derived context.");
 assert(exported.unsafePrivacyClaimAbsent === true, "Export prompt must not include unsafe privacy claims.");
