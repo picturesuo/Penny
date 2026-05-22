@@ -254,6 +254,17 @@ function assertCreateExport(check) {
   assert(check.exportPromptGenerated === true, "Export evidence must prove the prompt export was generated.");
   assert(check.exportVisible === true, "Browser evidence must show the exported prompt.");
   assert(check.gmailContextOnlyWhenUsed === true, "Export evidence must prove Gmail context appears only when used.");
+  assert(check.selectedOptionHistoryVisible === true, "Export evidence must show selected option history.");
+  assert(check.personalContextSectionVisible === true, "Export evidence must show the personal context section.");
+  assert(check.sourceMemoryEvidenceSectionVisible === true, "Export evidence must show the source/memory evidence section.");
+  assert(
+    check.gmailEvidenceInPersonalContext === true,
+    "Export evidence must prove Gmail evidence appears in the personal context section.",
+  );
+  assert(
+    check.gmailEvidenceInSourceMemorySection === true,
+    "Export evidence must prove Gmail evidence appears in the source/memory evidence section.",
+  );
   assert(check.unsafePrivacyClaimAbsent === true, "Export evidence must prove unsafe Gmail privacy claims are absent.");
   assert(check.rawEmailBodyAbsent === true, "Export evidence must prove raw Gmail body markers are absent.");
   assert(check.secretOrConnectTokenAbsent === true, "Export evidence must prove connect/session/token values are absent.");
