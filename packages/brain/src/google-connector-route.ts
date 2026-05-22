@@ -1243,16 +1243,17 @@ function verifyNangoWebhookSignature(
   request: Request,
   env: Record<string, string | undefined> | undefined,
 ): Response | null {
-  const secret = readGoogleConnectorRuntimeConfig(env).nangoSecretKey;
+  const config = readGoogleConnectorRuntimeConfig(env);
+  const secret = firstNonEmpty((env ?? process.env).NANGO_WEBHOOK_SIGNING_KEY, config.nangoSecretKey);
 
   if (!secret) {
     return jsonResponse(
       {
         error: {
           code: "not_configured",
-          message: "Google connector Nango webhook verification requires NANGO_SECRET_KEY.",
+          message: "Google connector Nango webhook verification requires NANGO_WEBHOOK_SIGNING_KEY or NANGO_SECRET_KEY.",
           retryable: false,
-          details: { missingConfig: ["NANGO_SECRET_KEY"] },
+          details: { missingConfig: ["NANGO_WEBHOOK_SIGNING_KEY", "NANGO_SECRET_KEY"] },
         },
       },
       503,
