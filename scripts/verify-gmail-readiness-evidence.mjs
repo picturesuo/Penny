@@ -426,6 +426,7 @@ function printResult(extra) {
         file,
         stagingRunId: isSafeStagingRunId(evidence?.stagingRunId) ? evidence.stagingRunId.trim() : null,
         ...extra,
+        missingRequirementKeys: evidenceMissingRequirementKeys(),
         checkCount: evidence.checks.length,
       },
       null,
@@ -440,6 +441,17 @@ function printErrors() {
     console.error(`- ${error}`);
   }
   process.exitCode = 1;
+}
+
+function evidenceMissingRequirementKeys() {
+  const requiredPresence = checks.get("env.requiredPresence");
+  const keys = requiredPresence?.missingRequirementKeys;
+
+  if (!Array.isArray(keys)) {
+    return [];
+  }
+
+  return keys.filter((key) => typeof key === "string" && key.length > 0);
 }
 
 async function readStdin() {
