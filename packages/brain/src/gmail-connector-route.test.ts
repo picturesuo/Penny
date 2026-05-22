@@ -1199,6 +1199,32 @@ test("parseGmailMessage keeps attachment metadata only and caps body size", () =
   assert.doesNotMatch(parsed.plainTextBody, /attachment-1/);
 });
 
+test("parseGmailMessage caps oversized encoded body parts before decode", () => {
+  const body = "é".repeat(80_000);
+  const parsed = parseGmailMessage({
+    ...gmailMessage(),
+    payload: {
+      mimeType: "multipart/alternative",
+      headers: [
+        { name: "Subject", value: "Launch partner oversized body" },
+        { name: "From", value: "Alice <alice@example.com>" },
+        { name: "To", value: "Bob <bob@example.com>" },
+      ],
+      parts: [
+        {
+          mimeType: "text/plain",
+          body: { data: base64Url(body) },
+        },
+      ],
+    },
+  });
+
+  assert.equal(parsed.bodyTruncated, true);
+  assert.ok(parsed.plainTextBody.length > 0);
+  assert.ok(parsed.plainTextBody.length < body.length);
+  assert.equal(parsed.plainTextBody, "é".repeat(parsed.plainTextBody.length));
+});
+
 function assertNoRawEmailFields(result: Record<string, unknown>) {
   for (const field of ["body", "plainTextBody", "raw", "rawBody", "html", "payload", "score"]) {
     assert.equal(field in result, false, `Gmail result exposed ${field}.`);
