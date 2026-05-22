@@ -280,6 +280,8 @@ function assertPostRevokeDelete(check) {
   assert(check.revokeCompleted === true, "Post-revoke/delete evidence must prove Gmail revoke completed.");
   assert(check.deleteCompleted === true, "Post-revoke/delete evidence must prove Gmail source delete completed.");
   assert(check.postRevokeStateVisible === true, "Browser evidence must show post-revoke state.");
+  assert(check.revokedStateVisible === true, "Browser evidence must show the Gmail connection revoked state.");
+  assert(check.deletedSourceCountZero === true, "Browser evidence must show the Gmail source count is zero after delete.");
   assert(check.syncBlockedAfterRevoke === true, "Browser evidence must prove sync stops after revoke.");
   assert(check.searchBlockedAfterRevoke === true, "Browser evidence must prove keyword search stops after revoke.");
   assert(check.semanticBlockedAfterRevoke === true, "Browser evidence must prove semantic search stops after revoke.");
