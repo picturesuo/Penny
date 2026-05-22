@@ -32,6 +32,7 @@ const sphereId = env(
   "GMAIL_READINESS_SPHERE_ID",
   env("PENNY_AUTH_SPHERE_ID", env("PENNY_SPHERE_ID", "gmail-readiness-sphere")),
 );
+const stagingRunId = env("GMAIL_STAGING_RUN_ID", env("GMAIL_READINESS_STAGING_RUN_ID", ""));
 const evidenceFile = env("GMAIL_READINESS_EVIDENCE_FILE", "");
 const checks = [];
 
@@ -109,6 +110,7 @@ try {
     workspaceId,
     projectId,
     sphereId,
+    ...(stagingRunId ? { stagingRunId } : {}),
     requireStaging,
     connectPreflight,
     checkedAt: new Date().toISOString(),
@@ -125,6 +127,7 @@ try {
     workspaceId,
     projectId,
     sphereId,
+    ...(stagingRunId ? { stagingRunId } : {}),
     requireStaging,
     connectPreflight,
     failedAt: new Date().toISOString(),
