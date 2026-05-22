@@ -234,6 +234,17 @@ test("Gmail browser evidence verifier rejects unsafe run ids without echoing the
   assert.doesNotMatch(failure, /staged-account@example\.com/);
 });
 
+test("Gmail browser evidence verifier rejects unsafe scope ids without echoing them", () => {
+  const evidence = validBrowserEvidence();
+
+  evidence.userId = "staged-account@example.com";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Browser evidence userId must be a safe opaque scope id/);
+  assert.doesNotMatch(failure, /staged-account@example\.com/);
+});
+
 test("Gmail browser evidence verifier rejects placeholder scope and invalid timestamps", () => {
   const evidence = validBrowserEvidence();
 
