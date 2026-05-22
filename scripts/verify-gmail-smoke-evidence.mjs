@@ -173,6 +173,9 @@ if (destructive) {
   assert(deleted.semanticDeletedSourceAbsent === true, "Deleted Gmail source must be absent from semantic search.");
   assert(deleted.createDeletedSourceAbsent === true, "Deleted Gmail source must be absent from Create sources.");
   assert(deleted.createDeletedMemoryAbsent === true, "Deleted Gmail memory must be absent from Create memory refs.");
+  assert(numberValue(deleted.createAfterDeleteRankedCandidateCount) >= 5, "Create after delete must expose Brain Ranker candidates.");
+  assert(deleted.createRankedCandidateDeletedSourceAbsent === true, "Deleted Gmail source must be absent from Create ranked candidates.");
+  assert(deleted.createRankedCandidateDeletedMemoryAbsent === true, "Deleted Gmail memory must be absent from Create ranked candidates.");
 } else {
   requireStep("revoke.delete.skipped");
 }
