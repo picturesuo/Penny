@@ -92,6 +92,36 @@ PENNY_RATE_LIMIT_MAX=120
 
 Do not set `PENNY_SKIP_DATABASE_PREP=true` in staging or production.
 
+## Staging Readiness Check
+
+Before opening OAuth, run the sanitized readiness checker against the same API instance and same user/workspace scope that will perform the Gmail smoke:
+
+```bash
+BASE_URL=https://<staging-host> \
+GMAIL_READINESS_REQUIRE_STAGING=true \
+GMAIL_READINESS_USER_ID=<same-user-id> \
+GMAIL_READINESS_WORKSPACE_ID=<same-workspace-id> \
+GMAIL_READINESS_PROJECT_ID=<same-project-id> \
+GMAIL_READINESS_SPHERE_ID=<same-sphere-id> \
+node scripts/check-gmail-staging-readiness.mjs
+```
+
+The checker verifies:
+
+- `ENABLE_GOOGLE_CONNECTOR`, `ENABLE_GMAIL_CONNECTOR`, and `ENABLE_RESTRICTED_GOOGLE_SCOPES` are true.
+- `NANGO_SECRET_KEY`, `NANGO_PUBLIC_KEY`, `NANGO_BASE_URL`, and `NANGO_GMAIL_INTEGRATION_ID` are present, with no placeholder values.
+- `PENNY_SKIP_DATABASE_PREP` is not true.
+- In strict staging mode, `DATABASE_URL` is present, `PENNY_AUTH_MODE=token`, `PENNY_API_TOKEN` and `PENNY_SESSION_SECRET` are long enough, and `PENNY_TRUST_AUTH_HEADERS=false`.
+- `/api/connectors/google` and `/api/connectors/google/gmail/status` are configured, expose exactly `gmail.readonly`, report restricted/private/gated state, and do not leak connector internals or raw email-shaped fields.
+
+To also prove Penny can create a Gmail-only Nango connect session before the browser OAuth step, add:
+
+```bash
+GMAIL_READINESS_CONNECT_PREFLIGHT=true
+```
+
+The connect-session readiness output records only sanitized facts such as `connectLinkHost`, `connectLinkPresent`, `tokenPresent`, and `expiresAtPresent`. It must not contain the raw connect link, session token, Nango secret, API token, or email body text.
+
 ## Local Staging Run
 
 ```bash
@@ -349,6 +379,8 @@ Before marking Gmail staging ready, attach or record:
 - `pnpm typecheck`, `pnpm test`, and `pnpm build` output.
 - `node --check scripts/smoke-gmail-staging.mjs`.
 - `node --check scripts/verify-gmail-smoke-evidence.mjs`.
+- `node --check scripts/check-gmail-staging-readiness.mjs`.
+- `scripts/check-gmail-staging-readiness.mjs` output with `GMAIL_READINESS_REQUIRE_STAGING=true`, and optional `GMAIL_READINESS_CONNECT_PREFLIGHT=true` output when certifying connect-session setup.
 - `scripts/verify-gmail-smoke-evidence.mjs` output for every accepted non-destructive or destructive evidence file.
 - Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-connect-preflight-evidence.json --connect-preflight-only` output proving connect-session creation with only sanitized connect-link evidence.
 - Optional full-smoke `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --connect-preflight --min-messages=1` output.
