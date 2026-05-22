@@ -46,6 +46,7 @@ const evidence = {
 };
 
 try {
+  const selector = connectionSelector();
   const initialStatus = await request("GET", "/api/connectors/google/gmail/status");
   assert(initialStatus.data?.configured === true, "Gmail is not configured.");
   assert(
@@ -55,16 +56,23 @@ try {
   );
   assert(initialStatus.data?.privacy?.trainingUse === false, "Gmail privacy did not report trainingUse=false.");
   assert((initialStatus.data?.connections ?? []).some((connection) => connection.status === "connected"), "Connect Gmail first.");
+  const connectedTargets = (initialStatus.data?.connections ?? []).filter((connection) => connection.status === "connected");
+  const targetedConnection = connectedTargets.find((connection) => matchesConnectionSelector(connection, selector));
+  const selectorUsed = Object.keys(selector).length > 0;
+  assert(selectorUsed || connectedTargets.length <= 1, "Multiple Gmail connections found. Set GMAIL_SMOKE_CONNECTION_ID or GMAIL_SMOKE_PROVIDER_CONFIG_KEY.");
+  assert(!selectorUsed || targetedConnection, "Configured Gmail smoke connection selector did not match a connected Gmail account.");
   record("status.initial", {
     status: initialStatus.data.status,
     messageCount: initialStatus.data.messageCount,
     connectionCount: initialStatus.data.connections.length,
     sourceCount: initialStatus.data.sources.length,
+    selectorUsed,
+    targetConnectionMatched: selectorUsed ? Boolean(targetedConnection) : null,
   });
 
   const syncInput = keywordSearchInput();
   const sync = await request("POST", "/api/connectors/google/gmail/sync", {
-    ...connectionSelector(),
+    ...selector,
     ...syncInput,
     maxResults,
   });
@@ -95,7 +103,7 @@ try {
 
   const beforeKeywordCount = statusAfterSync.data.messageCount;
   const keyword = await request("POST", "/api/connectors/google/gmail/search", {
-    ...connectionSelector(),
+    ...selector,
     ...keywordSearchInput(),
     maxResults,
   });
@@ -113,6 +121,7 @@ try {
   });
 
   const semantic = await request("POST", "/api/connectors/google/gmail/semantic-search", {
+    ...selector,
     query: semanticQuery,
     limit: maxResults,
   });
@@ -203,14 +212,14 @@ try {
   });
 
   if (confirmMutations) {
-    const revoke = await request("POST", "/api/connectors/google/gmail/revoke", connectionSelector());
+    const revoke = await request("POST", "/api/connectors/google/gmail/revoke", selector);
     assert(revoke.data?.revoked === true, "Gmail revoke did not report revoked=true.");
     const syncAfterRevoke = await requestMaybeFail("POST", "/api/connectors/google/gmail/sync", {
-      ...connectionSelector(),
+      ...selector,
       maxResults: 1,
     });
     const searchAfterRevoke = await requestMaybeFail("POST", "/api/connectors/google/gmail/search", {
-      ...connectionSelector(),
+      ...selector,
       text: keywordText,
       maxResults: 1,
     });
@@ -233,6 +242,7 @@ try {
         (source) => (firstBrainSourceId && source.id === firstBrainSourceId) || (firstSourceUri && source.sourceUri === firstSourceUri),
       );
       const semanticAfterDelete = await requestMaybeFail("POST", "/api/connectors/google/gmail/semantic-search", {
+        ...selector,
         query: semanticQuery,
         limit: maxResults,
       });
@@ -329,6 +339,14 @@ function connectionSelector() {
     ...(connectionId ? { connectionId } : {}),
     ...(providerConfigKey ? { providerConfigKey } : {}),
   };
+}
+
+function matchesConnectionSelector(connection, selector) {
+  return Boolean(
+    connection &&
+      (!selector.connectionId || connection.id === selector.connectionId || connection.credential?.connectionId === selector.connectionId) &&
+      (!selector.providerConfigKey || connection.credential?.providerConfigKey === selector.providerConfigKey),
+  );
 }
 
 function keywordSearchInput() {
