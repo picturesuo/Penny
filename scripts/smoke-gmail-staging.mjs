@@ -166,6 +166,7 @@ try {
   });
   const repeatPartialFailures = expectedPartialFailureCheck(repeatSync.data, "Repeated Gmail sync");
   assert(repeatPartialFailures.ok, repeatPartialFailures.message);
+  assert(repeatSync.data?.cursor || repeatSync.data?.profile?.historyId, "Repeated Gmail sync did not report cursor/historyId.");
   const statusAfterRepeatSync = await request("GET", "/api/connectors/google/gmail/status");
   assertConnectorStatePrivacy(statusAfterRepeatSync.data, "Gmail status after repeated sync");
   const sourceUrisAfterRepeatSync = gmailSourceUris(statusAfterRepeatSync.data?.sources, targetConnectorConnectionId);
@@ -181,9 +182,13 @@ try {
   record("sync.repeat", {
     messageCount: repeatSync.data.messageCount,
     partialFailureCount: repeatSync.data.partialFailureCount ?? 0,
+    maxResultsUsed: maxResults,
     expectedPartialFailureStage: expectedPartialFailureStage || null,
     partialFailureStageMatched: repeatPartialFailures.stageMatched,
     partialFailuresSanitized: repeatPartialFailures.sanitized,
+    cursorPresent: Boolean(repeatSync.data.cursor),
+    historyIdPresent: Boolean(repeatSync.data.profile?.historyId),
+    filtersUsed: compactObject(syncInput),
     statusMessageCountUnchanged: statusAfterRepeatSync.data.messageCount === statusAfterSync.data.messageCount,
     selectedSourceCountUnchanged: sourceUrisAfterRepeatSync.length === sourceUrisAfterSync.length,
     duplicateSourceRefsAbsent: hasUniqueValues(sourceUrisAfterRepeatSync),
