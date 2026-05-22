@@ -15,6 +15,9 @@ const unsafePrivacyClaimPattern =
   /global training|hidden memory|private inbox|background Gmail|before consent|unrestricted mailbox scan/i;
 const minimumImageArtifactWidth = 320;
 const minimumImageArtifactHeight = 200;
+const allowedArtifactExtensions = new Set([".json", ".jpg", ".jpeg", ".md", ".png", ".txt", ".webp"]);
+const imageArtifactExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+const textArtifactExtensions = new Set([".json", ".md", ".txt"]);
 const errors = [];
 
 if (!file || args.includes("--help") || args.includes("-h")) {
@@ -52,6 +55,7 @@ assert(Array.isArray(evidence?.checks), "Browser evidence must include checks.")
 assertSafeStagingRunId(evidence, { required: !preOAuthOnly });
 assertNoUnsafeEvidence(evidence);
 assertProofArtifacts(proofArtifacts, requiredCheckNames);
+assertProofArtifactMetadata(proofArtifacts);
 await assertArtifactFiles(proofArtifacts, { artifactRoot, requireArtifactFiles });
 
 assertPreOAuthPanel(requireCheck("brain.gmailPanel.preOAuth"));
@@ -158,6 +162,25 @@ function assertProofArtifacts(artifacts, requiredNames) {
   }
 }
 
+function assertProofArtifactMetadata(artifacts) {
+  for (const [index, artifact] of artifacts.entries()) {
+    const artifactFile = proofArtifactFile(artifact);
+
+    assert(Boolean(artifactFile), `Browser evidence proof artifact ${index + 1} must include a file or path.`);
+
+    if (!artifactFile) {
+      continue;
+    }
+
+    assertSafeArtifactPath(artifactFile);
+
+    const extension = extname(artifactFile).toLowerCase();
+
+    assert(allowedArtifactExtensions.has(extension), `${artifactFile} must be a png, jpg, webp, txt, md, or json artifact.`);
+    assertArtifactKindMatchesExtension(artifact, artifactFile, extension);
+  }
+}
+
 async function assertArtifactFiles(artifacts, options) {
   if (!options.artifactRoot) {
     assert(!options.requireArtifactFiles, "Browser evidence artifact file validation requires --artifact-root=<directory>.");
@@ -165,12 +188,9 @@ async function assertArtifactFiles(artifacts, options) {
   }
 
   const root = resolve(options.artifactRoot);
-  const allowedExtensions = new Set([".json", ".jpg", ".jpeg", ".md", ".png", ".txt", ".webp"]);
-  const imageExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
-  const textExtensions = new Set([".json", ".md", ".txt"]);
 
   for (const [index, artifact] of artifacts.entries()) {
-    const artifactFile = typeof artifact.file === "string" ? artifact.file : typeof artifact.path === "string" ? artifact.path : "";
+    const artifactFile = proofArtifactFile(artifact);
 
     assert(Boolean(artifactFile), `Browser evidence proof artifact ${index + 1} must include a file or path when --artifact-root is used.`);
 
@@ -187,22 +207,19 @@ async function assertArtifactFiles(artifacts, options) {
     );
     const extension = extname(target).toLowerCase();
 
-    assert(allowedExtensions.has(extension), `${artifactFile} must be a png, jpg, webp, txt, md, or json artifact.`);
-    assertArtifactKindMatchesExtension(artifact, artifactFile, extension, { imageExtensions, textExtensions });
-
     try {
       const stats = await stat(target);
 
       assert(stats.isFile(), `${artifactFile} must be a file.`);
       assert(stats.size > 0, `${artifactFile} must not be empty.`);
 
-      if (textExtensions.has(extension)) {
+      if (textArtifactExtensions.has(extension)) {
         const artifactText = await readFile(target, "utf8");
 
         assertNoUnsafeArtifactText(artifactText, artifactFile);
       }
 
-      if (imageExtensions.has(extension)) {
+      if (imageArtifactExtensions.has(extension)) {
         const artifactBytes = await readFile(target);
 
         assertValidImageArtifact(artifactBytes, artifactFile, extension);
@@ -213,14 +230,24 @@ async function assertArtifactFiles(artifacts, options) {
   }
 }
 
-function assertArtifactKindMatchesExtension(artifact, artifactFile, extension, extensions) {
+function proofArtifactFile(artifact) {
+  return typeof artifact.file === "string" ? artifact.file.trim() : typeof artifact.path === "string" ? artifact.path.trim() : "";
+}
+
+function assertSafeArtifactPath(artifactFile) {
+  assert(!/^REPLACE_WITH_/i.test(artifactFile), `${artifactFile} must replace template placeholder values.`);
+  assert(!artifactFile.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(artifactFile), `${artifactFile} must be a relative artifact path.`);
+  assert(!artifactFile.split(/[\\/]/).includes(".."), `${artifactFile} must not include parent-directory segments.`);
+}
+
+function assertArtifactKindMatchesExtension(artifact, artifactFile, extension) {
   if (artifact.artifactKind === "screenshots") {
-    assert(extensions.imageExtensions.has(extension), `${artifactFile} is listed under screenshots and must be a png, jpg, or webp image.`);
+    assert(imageArtifactExtensions.has(extension), `${artifactFile} is listed under screenshots and must be a png, jpg, or webp image.`);
     return;
   }
 
   if (artifact.artifactKind === "notes" || artifact.artifactKind === "proofs") {
-    assert(extensions.textExtensions.has(extension), `${artifactFile} is listed under ${artifact.artifactKind} and must be a txt, md, or json file.`);
+    assert(textArtifactExtensions.has(extension), `${artifactFile} is listed under ${artifact.artifactKind} and must be a txt, md, or json file.`);
   }
 }
 
