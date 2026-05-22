@@ -81,6 +81,7 @@ const defaultGmailMaxResults = 25;
 const hardGmailMaxResults = 100;
 const hardGmailPageLimit = 5;
 const gmailBodyCharLimit = 100_000;
+const gmailBodyEncodedCharLimit = 150_000;
 const gmailSnippetCharLimit = 500;
 const gmailSubjectCharLimit = 300;
 const gmailAttachmentMetadataLimit = 25;
@@ -590,20 +591,10 @@ export function parseGmailMessage(message: Record<string, unknown>): GmailParsed
   const headers = gmailHeaders(payload);
   const labelIds = stringArray(message.labelIds);
   const parts = flattenMessageParts(payload);
-  const plainTextBodyRaw = parts
-    .filter((part) => part.mimeType === "text/plain")
-    .map((part) => decodeBase64Url(part.bodyData))
-    .filter(Boolean)
-    .join("\n\n")
-    .trim();
-  const htmlFallbackRaw = plainTextBodyRaw
-    ? ""
-    : parts
-        .filter((part) => part.mimeType === "text/html")
-        .map((part) => stripHtml(decodeBase64Url(part.bodyData)))
-        .filter(Boolean)
-        .join("\n\n")
-        .trim();
+  const plainTextBody = decodedMessageBody(parts, "text/plain");
+  const plainTextBodyRaw = plainTextBody.text;
+  const htmlFallback = plainTextBodyRaw ? { text: "", truncated: false } : decodedMessageBody(parts, "text/html", stripHtml);
+  const htmlFallbackRaw = htmlFallback.text;
   const bodyText = limitText(plainTextBodyRaw || htmlFallbackRaw || stringValue(message.snippet) || "", gmailBodyCharLimit);
   const subject = clipText(headerValue(headers, "subject") ?? "(no subject)", gmailSubjectCharLimit);
   const id = stringValue(message.id) ?? "";
@@ -633,7 +624,7 @@ export function parseGmailMessage(message: Record<string, unknown>): GmailParsed
     rfcMessageId: headerValue(headers, "message-id"),
     hasAttachment: attachments.length > 0,
     attachments,
-    bodyTruncated: bodyText.truncated,
+    bodyTruncated: plainTextBody.truncated || htmlFallback.truncated || bodyText.truncated,
   };
 }
 
@@ -1260,18 +1251,53 @@ function flattenMessageParts(payload: Record<string, unknown>): Array<{
   return parts;
 }
 
-function decodeBase64Url(value: string | null): string {
+function decodedMessageBody(
+  parts: Array<{ mimeType: string; bodyData: string | null }>,
+  mimeType: "text/plain" | "text/html",
+  transform: (value: string) => string = (value) => value,
+): { text: string; truncated: boolean } {
+  const texts: string[] = [];
+  let truncated = false;
+
+  for (const part of parts.filter((candidate) => candidate.mimeType === mimeType)) {
+    const decoded = decodeBase64Url(part.bodyData);
+    const text = transform(decoded.text);
+
+    if (text) {
+      texts.push(text);
+    }
+
+    truncated = truncated || decoded.truncated;
+  }
+
+  const limited = limitText(texts.join("\n\n").trim(), gmailBodyCharLimit);
+
+  return {
+    text: limited.text,
+    truncated: truncated || limited.truncated,
+  };
+}
+
+function decodeBase64Url(value: string | null): { text: string; truncated: boolean } {
   if (!value) {
-    return "";
+    return { text: "", truncated: false };
   }
 
   try {
     const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const clippedLength =
+      normalized.length > gmailBodyEncodedCharLimit
+        ? Math.max(0, gmailBodyEncodedCharLimit - (gmailBodyEncodedCharLimit % 4))
+        : normalized.length;
+    const clipped = normalized.slice(0, clippedLength);
+    const padded = clipped.padEnd(Math.ceil(clipped.length / 4) * 4, "=");
 
-    return Buffer.from(padded, "base64").toString("utf8");
+    return {
+      text: Buffer.from(padded, "base64").toString("utf8"),
+      truncated: clipped.length < normalized.length,
+    };
   } catch {
-    return "";
+    return { text: "", truncated: true };
   }
 }
 
