@@ -261,10 +261,12 @@ GMAIL_UI_PREFLIGHT_USER_ID=<same-user-id> \
 GMAIL_UI_PREFLIGHT_WORKSPACE_ID=<same-workspace-id> \
 GMAIL_UI_PREFLIGHT_PROJECT_ID=<same-project-id> \
 GMAIL_UI_PREFLIGHT_SPHERE_ID=<same-sphere-id> \
+GMAIL_UI_PREFLIGHT_EVIDENCE_FILE=tmp/gmail-ui-preflight-evidence.json \
 node scripts/check-gmail-ui-preflight.mjs
 ```
 
 The checker verifies that the Brain documents, Brain memory profile, Brain recents, Google provider, and Gmail status routes all load with the same scoped headers the browser will use. It fails fast if the local database is missing, if the Gmail connector is not configured, if Gmail does not expose exactly `gmail.readonly`, or if status/provider state exposes unsafe connector internals.
+When `GMAIL_UI_PREFLIGHT_EVIDENCE_FILE` is set, the checker writes the same sanitized success or failure JSON that it prints. Keep this file with manual browser screenshots or notes so UI preflight evidence records the exact API host and user/workspace/project/sphere scope without raw connect links, tokens, credential refs, or email body text.
 
 Open `http://localhost:3011` in a browser and verify:
 
@@ -454,6 +456,7 @@ Before marking Gmail staging ready, attach or record:
 - `scripts/verify-gmail-staging-bundle.mjs --readiness=tmp/gmail-readiness-evidence.json --smoke=tmp/gmail-smoke-evidence.json`, plus `--destructive-smoke=tmp/gmail-smoke-evidence-full.json --require-destructive` when certifying revoke/delete.
 - Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-connect-preflight-evidence.json --connect-preflight-only` output proving connect-session creation with only sanitized connect-link evidence.
 - Optional full-smoke `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --connect-preflight --min-messages=1` output.
+- UI preflight output from `scripts/check-gmail-ui-preflight.mjs` with `GMAIL_UI_PREFLIGHT_EVIDENCE_FILE=tmp/gmail-ui-preflight-evidence.json`, plus manual browser notes or screenshots for the Brain Gmail panel and Create evidence/export surfaces.
 - Non-destructive `scripts/smoke-gmail-staging.mjs` output.
 - Destructive `scripts/smoke-gmail-staging.mjs` output from a disposable staged Gmail account, when revoke/delete are being certified.
 - Nango auth webhook delivery record showing Penny accepted the Gmail connection and started `google-gmail-messages`.
