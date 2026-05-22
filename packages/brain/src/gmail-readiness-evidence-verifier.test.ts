@@ -80,7 +80,7 @@ test("Gmail readiness evidence verifier rejects raw body markers in harmless-loo
   const evidence = validReadinessEvidence();
   const status = evidence.checks.find((check) => check.name === "api.gmailStatus") as Record<string, unknown>;
 
-  status.operatorNote = "Copied setup note mentioned raw Gmail body marker without including the body.";
+  status.operatorNote = "Copied setup note mentioned raw email body marker without including the body.";
 
   const failure = runVerifierExpectingFailure(evidence);
 
