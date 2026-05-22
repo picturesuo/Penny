@@ -391,6 +391,46 @@ test("Gmail sync is scoped and cannot use another user's connection", async () =
   assert.equal(profile.stats.sourceCount, 0);
 });
 
+test("Gmail revoke is scoped and cannot revoke another user's connection", async () => {
+  const { stateStore } = gmailFixture();
+  let revokeCalled = false;
+  const response = await handleGoogleGmailRevokeRequest(
+    new Request("http://localhost/api/connectors/google/gmail/revoke", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-2",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        connectionId: "nango-gmail-1",
+        providerConfigKey: "google-gmail",
+      }),
+    }),
+    {
+      stateStore,
+      adapter: fakeAdapter({
+        async revokeConnection() {
+          revokeCalled = true;
+
+          return { ok: true, data: { revoked: true } };
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as { error: { code: string; message: string } };
+  const ownerStatus = await handleGoogleGmailStatusRequest(gmailRequest("/api/connectors/google/gmail/status", {}, "GET"), {
+    env: configuredEnv,
+    stateStore,
+  });
+  const ownerPayload = (await ownerStatus.json()) as { data: { connections: Array<{ status: string }> } };
+
+  assert.equal(response.status, 404);
+  assert.equal(payload.error.code, "gmail_connection_not_found");
+  assert.equal(revokeCalled, false);
+  assert.equal(ownerPayload.data.connections[0]?.status, "connected");
+});
+
 test("Gmail sync reports partial message detail failures without failing the whole sync", async () => {
   const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
   const response = await handleGoogleGmailSyncRequest(
@@ -1268,6 +1308,62 @@ test("Gmail source delete removes Brain retrieval access and semantic results", 
     ),
     false,
   );
+});
+
+test("Gmail source delete is scoped and cannot delete another user's Gmail memory", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  const syncResponse = await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: gmailProxyAdapter(proxyCalls),
+    },
+  );
+  const syncPayload = (await syncResponse.json()) as {
+    data: {
+      state: {
+        sources: Array<{ id: string; sourceUri: string; brainSourceId: string | null }>;
+      };
+    };
+  };
+  const source = syncPayload.data.state.sources.find((candidate) => candidate.sourceUri === "gmail:message:msg-1");
+  const response = await handleGoogleConnectorSourceDeleteRequest(
+    new Request("http://localhost/api/connectors/google/source-delete", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-2",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        sourceId: source?.id,
+        now: "2026-05-22T12:30:00.000Z",
+      }),
+    }),
+    { stateStore, brainMemoryService },
+  );
+  const payload = (await response.json()) as { error: { code: string; message: string } };
+  const ownerProfile = await brainMemoryService.getProfile(gmailRequest("/api/brain/memory/profile", {}, "GET"));
+  const ownerStatus = await handleGoogleGmailStatusRequest(gmailRequest("/api/connectors/google/gmail/status", {}, "GET"), {
+    env: configuredEnv,
+    stateStore,
+  });
+  const ownerPayload = (await ownerStatus.json()) as { data: { messageCount: number; sources: Array<{ sourceUri: string }> } };
+
+  assert.equal(syncResponse.status, 200);
+  assert.ok(source?.id);
+  assert.ok(source.brainSourceId);
+  assert.equal(response.status, 404);
+  assert.equal(payload.error.code, "connector_source_not_found");
+  assert.equal(ownerProfile.sources.some((profileSource) => profileSource.id === source.brainSourceId), true);
+  assert.equal(ownerPayload.data.messageCount, 1);
+  assert.equal(ownerPayload.data.sources.some((statusSource) => statusSource.sourceUri === "gmail:message:msg-1"), true);
 });
 
 test("buildGmailSearchQuery omits unsupported send/modify scopes and formats exact Gmail search terms", () => {
