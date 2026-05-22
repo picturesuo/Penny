@@ -35,10 +35,12 @@ const sphereId = env(
 const stagingRunId = env("GMAIL_STAGING_RUN_ID", env("GMAIL_READINESS_STAGING_RUN_ID", ""));
 const evidenceFile = env("GMAIL_READINESS_EVIDENCE_FILE", "");
 const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
+const safeEvidenceScopeIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const checks = [];
 
 try {
   assertSafeStagingRunId();
+  assertSafeEvidenceScopeIds();
   recordRequiredEnvPresence();
   assert(!envFileLoadError, envFileLoadError);
 
@@ -108,10 +110,7 @@ try {
   const payload = {
     ok: true,
     baseUrl,
-    userId,
-    workspaceId,
-    projectId,
-    sphereId,
+    ...safeScopeEvidence(),
     ...stagingRunIdEvidence(),
     requireStaging,
     connectPreflight,
@@ -125,10 +124,7 @@ try {
   const payload = {
     ok: false,
     baseUrl,
-    userId,
-    workspaceId,
-    projectId,
-    sphereId,
+    ...safeScopeEvidence(),
     ...stagingRunIdEvidence(),
     requireStaging,
     connectPreflight,
@@ -185,6 +181,33 @@ function stagingRunIdEvidence() {
 
 function isSafeStagingRunId(value) {
   return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
+}
+
+function assertSafeEvidenceScopeIds() {
+  for (const [field, name, value] of scopeIdEntries()) {
+    assert(isSafeEvidenceScopeId(value), `${name} must be a safe opaque slug for Gmail staging readiness.`);
+  }
+}
+
+function safeScopeEvidence() {
+  return Object.fromEntries(
+    scopeIdEntries()
+      .filter(([, , value]) => isSafeEvidenceScopeId(value))
+      .map(([field, , value]) => [field, value.trim()]),
+  );
+}
+
+function scopeIdEntries() {
+  return [
+    ["userId", "GMAIL_READINESS_USER_ID", userId],
+    ["workspaceId", "GMAIL_READINESS_WORKSPACE_ID", workspaceId],
+    ["projectId", "GMAIL_READINESS_PROJECT_ID", projectId],
+    ["sphereId", "GMAIL_READINESS_SPHERE_ID", sphereId],
+  ];
+}
+
+function isSafeEvidenceScopeId(value) {
+  return typeof value === "string" && safeEvidenceScopeIdPattern.test(value.trim());
 }
 
 function recordRequiredEnvPresence() {
