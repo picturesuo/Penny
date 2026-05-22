@@ -842,6 +842,7 @@ function validBrowserEvidence(): Record<string, unknown> {
         keywordMessageRefVisible: true,
         keywordThreadRefVisible: true,
         keywordSourceRefVisible: true,
+        keywordSelectedSourceRefsMatched: true,
       },
       {
         name: "brain.gmailSemanticResults",
@@ -852,6 +853,7 @@ function validBrowserEvidence(): Record<string, unknown> {
         scoreReasonVisible: true,
         sourceRefVisible: true,
         memoryRefVisible: true,
+        semanticSelectedSourceRefsMatched: true,
         rawNumericScoreHidden: true,
       },
       {
