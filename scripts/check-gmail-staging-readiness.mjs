@@ -144,6 +144,9 @@ function checkBaseEnv() {
   const nangoPublicPresent = Boolean(requiredEnv("NANGO_PUBLIC_KEY"));
   const nangoBaseUrl = requiredEnv("NANGO_BASE_URL");
   const nangoGmailIntegrationId = requiredEnv("NANGO_GMAIL_INTEGRATION_ID");
+  const nangoBase = parsedUrl(nangoBaseUrl, "NANGO_BASE_URL");
+
+  assert(nangoBase.protocol === "https:", "NANGO_BASE_URL must use https for Gmail staging readiness.");
 
   assert(!envFlag("PENNY_SKIP_DATABASE_PREP"), "PENNY_SKIP_DATABASE_PREP must not be true for Gmail staging readiness.");
 
@@ -154,7 +157,7 @@ function checkBaseEnv() {
     enableRestrictedGoogleScopes: true,
     nangoSecretPresent,
     nangoPublicPresent,
-    nangoBaseHost: safeUrlHost(nangoBaseUrl),
+    nangoBaseHost: nangoBase.host,
     nangoGmailIntegrationId,
     databasePrepBypass: false,
   });
@@ -166,11 +169,26 @@ function checkStrictStagingEnv() {
   const authMode = requiredEnv("PENNY_AUTH_MODE");
   const apiToken = requiredEnv("PENNY_API_TOKEN");
   const sessionSecret = requiredEnv("PENNY_SESSION_SECRET");
+  const corsOrigins = parseCorsOrigins(requiredEnv("PENNY_CORS_ORIGINS"));
+  const rateLimitMax = positiveInt(requiredEnv("PENNY_RATE_LIMIT_MAX"), "PENNY_RATE_LIMIT_MAX");
+  const base = parsedUrl(baseUrl, "BASE_URL");
 
   assert(requiredEnv("DATABASE_URL"), "DATABASE_URL must be set for strict Gmail staging readiness.");
+  assert(base.protocol === "https:" || isLoopbackHost(base.hostname), "BASE_URL must use https for strict Gmail staging readiness unless it is loopback.");
   assert(authMode === "token", "PENNY_AUTH_MODE must be token for strict Gmail staging readiness.");
   assert(apiToken.length >= 32, "PENNY_API_TOKEN must be at least 32 characters for strict Gmail staging readiness.");
   assert(sessionSecret.length >= 32, "PENNY_SESSION_SECRET must be at least 32 characters for strict Gmail staging readiness.");
+  assert(corsOrigins.includes(base.origin), "PENNY_CORS_ORIGINS must include the exact BASE_URL origin.");
+  assert(!corsOrigins.includes("*"), "PENNY_CORS_ORIGINS must not include wildcard origins for strict Gmail staging readiness.");
+  assert(
+    corsOrigins.every((origin) => {
+      const parsed = parsedUrl(origin, "PENNY_CORS_ORIGINS");
+
+      return parsed.protocol === "https:" || isLoopbackHost(parsed.hostname);
+    }),
+    "PENNY_CORS_ORIGINS must use https origins unless an origin is loopback.",
+  );
+  assert(rateLimitMax >= 1 && rateLimitMax <= 1000, "PENNY_RATE_LIMIT_MAX must be between 1 and 1000 for strict Gmail staging readiness.");
   assert(
     env("PENNY_TRUST_AUTH_HEADERS", "false").toLowerCase() === "false",
     "PENNY_TRUST_AUTH_HEADERS must be false for strict Gmail staging readiness.",
@@ -181,6 +199,12 @@ function checkStrictStagingEnv() {
     pennyAuthMode: authMode,
     apiTokenPresent: true,
     sessionSecretPresent: true,
+    baseUrlOrigin: base.origin,
+    baseUrlHttpsOrLoopback: true,
+    corsOriginCount: corsOrigins.length,
+    corsIncludesBaseOrigin: true,
+    corsWildcardAbsent: true,
+    rateLimitMax,
     trustAuthHeaders: false,
   });
 }
@@ -338,6 +362,38 @@ function requiredEnv(name) {
   assert(!/^<.*>$/.test(value), `${name} must be a real value, not a placeholder.`);
 
   return value;
+}
+
+function parseCorsOrigins(value) {
+  const origins = value
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+
+  assert(origins.length > 0, "PENNY_CORS_ORIGINS must include at least one origin for strict Gmail staging readiness.");
+
+  return origins;
+}
+
+function positiveInt(value, label) {
+  const parsed = Number.parseInt(value, 10);
+
+  assert(Number.isFinite(parsed) && String(parsed) === value, `${label} must be a positive integer.`);
+  assert(parsed > 0, `${label} must be a positive integer.`);
+
+  return parsed;
+}
+
+function parsedUrl(value, label) {
+  try {
+    return new URL(value);
+  } catch {
+    throw new Error(`${label} must be a valid URL.`);
+  }
+}
+
+function isLoopbackHost(hostname) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
 function loadEnvFile(path) {
