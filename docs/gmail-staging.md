@@ -196,6 +196,19 @@ pnpm dev
 
 Do not set `DATABASE_URL=` or `PENNY_SKIP_DATABASE_PREP=true` for this browser preflight. Those are useful for isolated route tests, but the real UI preflight should fail fast if the local database schema is missing. If the browser shows `DATABASE_URL is required` or a failed query against tables such as `sessions`, fix `DATABASE_URL` or run migrations before recording UI evidence.
 
+Before opening the browser, run the API readiness check against the same app:
+
+```bash
+BASE_URL=http://localhost:3011 \
+GMAIL_UI_PREFLIGHT_USER_ID=<same-user-id> \
+GMAIL_UI_PREFLIGHT_WORKSPACE_ID=<same-workspace-id> \
+GMAIL_UI_PREFLIGHT_PROJECT_ID=<same-project-id> \
+GMAIL_UI_PREFLIGHT_SPHERE_ID=<same-sphere-id> \
+node scripts/check-gmail-ui-preflight.mjs
+```
+
+The checker verifies that the Brain documents, Brain memory profile, Brain recents, Google provider, and Gmail status routes all load with the same scoped headers the browser will use. It fails fast if the local database is missing, if the Gmail connector is not configured, if Gmail does not expose exactly `gmail.readonly`, or if status/provider state exposes unsafe connector internals.
+
 Open `http://localhost:3011` in a browser and verify:
 
 - Brain opens and the Gmail card renders as configured/available.
