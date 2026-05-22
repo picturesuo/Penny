@@ -138,6 +138,17 @@ test("Gmail smoke evidence verifier rejects raw connect links or session tokens"
   assert.match(failure, /raw connect\/session\/token value/);
 });
 
+test("Gmail smoke evidence verifier rejects unsafe run ids without echoing them", () => {
+  const evidence = validEvidence();
+
+  evidence.stagingRunId = "staged-account@example.com";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Smoke evidence stagingRunId must be a safe opaque slug/);
+  assert.doesNotMatch(failure, /staged-account@example\.com/);
+});
+
 test("Gmail smoke evidence verifier rejects weak semantic result shape evidence", () => {
   const evidence = validEvidence();
   const semantic = evidence.steps.find((step) => step.step === "semanticSearch") as Record<string, unknown>;
