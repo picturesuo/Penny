@@ -34,9 +34,11 @@ const sphereId = env(
 );
 const stagingRunId = env("GMAIL_STAGING_RUN_ID", env("GMAIL_READINESS_STAGING_RUN_ID", ""));
 const evidenceFile = env("GMAIL_READINESS_EVIDENCE_FILE", "");
+const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
 const checks = [];
 
 try {
+  assertSafeStagingRunId();
   recordRequiredEnvPresence();
   assert(!envFileLoadError, envFileLoadError);
 
@@ -110,7 +112,7 @@ try {
     workspaceId,
     projectId,
     sphereId,
-    ...(stagingRunId ? { stagingRunId } : {}),
+    ...stagingRunIdEvidence(),
     requireStaging,
     connectPreflight,
     checkedAt: new Date().toISOString(),
@@ -127,7 +129,7 @@ try {
     workspaceId,
     projectId,
     sphereId,
-    ...(stagingRunId ? { stagingRunId } : {}),
+    ...stagingRunIdEvidence(),
     requireStaging,
     connectPreflight,
     failedAt: new Date().toISOString(),
@@ -167,6 +169,22 @@ function checkBaseEnv() {
   });
 
   return nangoGmailIntegrationId;
+}
+
+function assertSafeStagingRunId() {
+  if (!stagingRunId) {
+    return;
+  }
+
+  assert(isSafeStagingRunId(stagingRunId), "GMAIL_STAGING_RUN_ID must be a safe opaque slug for Gmail staging readiness.");
+}
+
+function stagingRunIdEvidence() {
+  return isSafeStagingRunId(stagingRunId) ? { stagingRunId: stagingRunId.trim() } : {};
+}
+
+function isSafeStagingRunId(value) {
+  return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
 }
 
 function recordRequiredEnvPresence() {
