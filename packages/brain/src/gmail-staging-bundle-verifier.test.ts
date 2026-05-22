@@ -114,6 +114,35 @@ test("Gmail staging bundle verifier accepts final staging mode", async () => {
   }
 });
 
+test("Gmail staging bundle verifier final staging mode rejects stale evidence windows", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const files = await writeBundleFiles(tmp, {
+      browserEvidence: {
+        capturedAt: "2026-05-24T12:06:00.000Z",
+      },
+    });
+    await writeBrowserArtifacts(tmp);
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--destructive-smoke=${files.destructive}`,
+      `--ui-preflight=${files.uiPreflight}`,
+      `--browser-evidence=${files.browserEvidence}`,
+      `--browser-artifact-root=${tmp}`,
+      "--final-staging",
+      "--min-messages=1",
+    ]);
+
+    assert.match(failure, /Final staging evidence timestamps must be within 24 hour/);
+    assert.match(failure, /earliest readiness\.checkedAt/);
+    assert.match(failure, /latest browser\.capturedAt/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging bundle verifier rejects mismatched scope evidence", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
 
