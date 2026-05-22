@@ -96,8 +96,10 @@ test("Gmail readiness evidence verifier rejects unknown readiness check rows", (
 
 test("Gmail readiness evidence verifier rejects duplicate readiness check rows", () => {
   const evidence = validReadinessEvidence();
+  const firstCheck = evidence.checks[0];
 
-  evidence.checks.push({ ...evidence.checks[0] });
+  assert.ok(firstCheck);
+  evidence.checks.push({ ...firstCheck });
 
   const failure = runVerifierExpectingFailure(evidence);
 
