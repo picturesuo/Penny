@@ -543,6 +543,9 @@ function validDestructiveEvidence(): Record<string, unknown> {
       semanticDeletedSourceAbsent: true,
       createDeletedSourceAbsent: true,
       createDeletedMemoryAbsent: true,
+      createAfterDeleteRankedCandidateCount: 5,
+      createRankedCandidateDeletedSourceAbsent: true,
+      createRankedCandidateDeletedMemoryAbsent: true,
       trackedDeletedMemoryIdCount: 1,
     },
   );
