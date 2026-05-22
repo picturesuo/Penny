@@ -14,11 +14,19 @@ test("Gmail browser evidence verifier accepts complete manual browser proof", ()
     encoding: "utf8",
     input: JSON.stringify(validBrowserEvidence()),
   });
-  const payload = JSON.parse(output) as { ok: boolean; browserEvidenceVerified: boolean; preOAuthOnly: boolean; checkCount: number; proofArtifactCount: number };
+  const payload = JSON.parse(output) as {
+    ok: boolean;
+    browserEvidenceVerified: boolean;
+    preOAuthOnly: boolean;
+    stagingRunId: string | null;
+    checkCount: number;
+    proofArtifactCount: number;
+  };
 
   assert.equal(payload.ok, true);
   assert.equal(payload.browserEvidenceVerified, true);
   assert.equal(payload.preOAuthOnly, false);
+  assert.equal(payload.stagingRunId, "gmail-staging-run-2026-05-22");
   assert.equal(payload.checkCount, 8);
   assert.equal(payload.proofArtifactCount, 3);
 });
@@ -82,6 +90,27 @@ test("Gmail browser evidence verifier rejects missing post-OAuth surfaces by def
   assert.match(failure, /Browser evidence must include create\.gmailEvidenceDrawer/);
   assert.match(failure, /Browser evidence must include create\.gmailExport/);
   assert.match(failure, /Browser evidence must include brain\.gmailPostRevokeDelete/);
+});
+
+test("Gmail browser evidence verifier requires a run id for full proof", () => {
+  const evidence = validBrowserEvidence();
+
+  delete evidence.stagingRunId;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Full browser evidence must include stagingRunId/);
+});
+
+test("Gmail browser evidence verifier rejects unsafe run ids without echoing them", () => {
+  const evidence = validBrowserEvidence();
+
+  evidence.stagingRunId = "staged-account@example.com";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Browser evidence stagingRunId must be a safe opaque slug/);
+  assert.doesNotMatch(failure, /staged-account@example\.com/);
 });
 
 test("Gmail browser evidence verifier rejects missing stable selector proof", () => {
@@ -278,6 +307,7 @@ function preOAuthEvidence(): Record<string, unknown> & { checks: Array<Record<st
 function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Record<string, unknown>> } {
   return {
     ...preOAuthEvidence(),
+    stagingRunId: "gmail-staging-run-2026-05-22",
     screenshots: [
       {
         label: "Brain Gmail pre-OAuth",
