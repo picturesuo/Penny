@@ -4,6 +4,7 @@ import {
   askPenny,
   createChallengeBrief,
   compareCreateProviders,
+  createGoogleGmailConnectSession,
   createNext,
   createLearnSession,
   decideVerifyConfidence,
@@ -14,6 +15,7 @@ import {
   fetchBrainHybridSearch,
   fetchBrainMemoryProfile,
   fetchBrainRecents,
+  fetchGoogleGmailStatus,
   fetchClaimDetail,
   fetchSessionCanvas,
   fetchSessionCockpit,
@@ -26,11 +28,15 @@ import {
   respondToChallenge,
   saveBrainObject,
   saveSessionNote,
+  searchGoogleGmail,
   selectAutopilotNode,
+  semanticSearchGoogleGmail,
   startAutopilotCandidate,
   submitCreateExportFeedback,
+  syncGoogleGmail,
   tickAutopilot,
   verifyClaim,
+  revokeGoogleGmail,
 } from "../src/api/brainClient";
 
 test("frontend brain client creates Learn sessions from landing prompts", async () => {
@@ -886,6 +892,148 @@ test("frontend brain client uses Brain memory import, profile, retrieval, and de
     assert.deepEqual(calls[4]?.body, { action: "correct" });
     assert.equal(calls[5]?.url, `/api/brain/sources/${source.id}`);
     assert.equal(calls[5]?.method, "DELETE");
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("frontend brain client uses Gmail connector status, sync, search, and revoke routes", async () => {
+  const calls: FetchCall[] = [];
+  const restoreFetch = mockFetch(calls, [
+    jsonResponse({
+      sourceOfTruth: "gmail_connector_state_and_private_brain_memory",
+      configured: true,
+      message: "Gmail ready.",
+      missingConfig: [],
+      status: "connected",
+      scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+      scopeAuditReason: "read email for private Brain memory and email search.",
+      restrictedScope: true,
+      gated: true,
+      private: true,
+      privacy: {
+        copy: "Penny reads Gmail only after consent. No human review. trainingUse=false. Delete/revoke removes retrieval access.",
+        trainingUse: false,
+        rawRetentionDefault: false,
+        noHumanReview: true,
+      },
+      lastSyncAt: "2026-05-21T12:00:00.000Z",
+      messageCount: 1,
+      surface: null,
+      connections: [],
+      sources: [],
+    }),
+    jsonResponse({
+      token: "connect-token",
+      expiresAt: "2026-05-21T12:05:00.000Z",
+      connectLink: "https://app.nango.dev/connect/session/connect-token",
+      requestedSurfaceIds: ["google_gmail"],
+      requestableSurfaceIds: ["google_gmail"],
+      requestableScopeUrls: ["https://www.googleapis.com/auth/gmail.readonly"],
+      warnings: [],
+      providerConfigKey: "google-gmail",
+      restrictedScope: true,
+      gated: true,
+      private: true,
+      scopeAuditReason: "read email for private Brain memory and email search.",
+    }),
+    jsonResponse({
+      sourceOfTruth: "gmail_sync_via_nango_proxy_private_brain_memory",
+      messageCount: 1,
+      cursor: "history-1",
+      importedSources: [{ messageId: "msg-1", brainSourceId: "brain-source-gmail-1", memoryNodeCount: 2 }],
+    }),
+    jsonResponse({
+      sourceOfTruth: "gmail_api_search_via_nango",
+      query: "launch partners",
+      stored: false,
+      results: [
+        {
+          messageId: "msg-1",
+          threadId: "thread-1",
+          subject: "Launch partners",
+          sender: "founder@example.com",
+          date: "2026-05-21T11:00:00.000Z",
+          labels: ["INBOX"],
+          snippet: "Two launch partners asked for pricing.",
+          sourceRef: {
+            providerId: "google",
+            surface: "google_gmail",
+            externalId: "msg-1",
+            sourceUri: "gmail:message:msg-1",
+            url: "https://mail.google.com/mail/u/0/#all/msg-1",
+          },
+        },
+      ],
+    }),
+    jsonResponse({
+      sourceOfTruth: "synced_private_gmail_brain_memory",
+      query: "launch partner evidence",
+      engine: "brain_memory_retrieval",
+      contextLight: false,
+      results: [
+        {
+          messageId: "msg-1",
+          threadId: "thread-1",
+          subject: "Launch partners",
+          sender: "founder@example.com",
+          date: "2026-05-21T11:00:00.000Z",
+          snippet: "Two launch partners asked for pricing.",
+          sourceRef: {
+            id: "connector-source-1",
+            providerId: "google",
+            surface: "google_gmail",
+            sourceUri: "gmail:message:msg-1",
+            externalId: "msg-1",
+            url: "https://mail.google.com/mail/u/0/#all/msg-1",
+          },
+          memoryRef: {
+            id: "memory-node-1",
+            label: "Launch partner evidence",
+            kind: "context",
+            summary: "Two launch partners asked for pricing.",
+          },
+          grounding: "grounded",
+          scoreReason: "Matched synced private Gmail memory.",
+        },
+      ],
+    }),
+    jsonResponse({ revoked: true, state: { connections: [] } }),
+  ]);
+
+  try {
+    const status = await fetchGoogleGmailStatus();
+    const connect = await createGoogleGmailConnectSession();
+    const synced = await syncGoogleGmail({ connectionId: "connector-google-gmail-1", maxResults: 10 });
+    const searched = await searchGoogleGmail({ text: "launch partners", maxResults: 5 });
+    const semantic = await semanticSearchGoogleGmail({ query: "launch partner evidence", limit: 5 });
+    const revoked = await revokeGoogleGmail({ connectionId: "connector-google-gmail-1", providerConfigKey: "google-gmail" });
+
+    assert.equal(status.data.configured, true);
+    assert.deepEqual(status.data.scopes, ["https://www.googleapis.com/auth/gmail.readonly"]);
+    assert.equal(status.data.privacy.trainingUse, false);
+    assert.equal(connect.data.providerConfigKey, "google-gmail");
+    assert.deepEqual(connect.data.requestableScopeUrls, ["https://www.googleapis.com/auth/gmail.readonly"]);
+    assert.equal(synced.data.importedSources[0]?.brainSourceId, "brain-source-gmail-1");
+    assert.equal(searched.data.stored, false);
+    assert.equal(searched.data.results[0]?.sourceRef.surface, "google_gmail");
+    assert.equal(semantic.data.results[0]?.scoreReason, "Matched synced private Gmail memory.");
+    assert.equal("score" in (semantic.data.results[0] ?? {}), false);
+    assert.equal(revoked.data.revoked, true);
+
+    assert.equal(calls[0]?.url, "/api/connectors/google/gmail/status");
+    assert.equal(calls[0]?.method, "GET");
+    assert.equal(calls[1]?.url, "/api/connectors/google/gmail/connect");
+    assert.equal(calls[1]?.method, "POST");
+    assert.deepEqual(calls[1]?.body, {});
+    assert.equal(calls[2]?.url, "/api/connectors/google/gmail/sync");
+    assert.deepEqual(calls[2]?.body, { connectionId: "connector-google-gmail-1", maxResults: 10 });
+    assert.equal(calls[3]?.url, "/api/connectors/google/gmail/search");
+    assert.deepEqual(calls[3]?.body, { text: "launch partners", maxResults: 5 });
+    assert.equal(calls[4]?.url, "/api/connectors/google/gmail/semantic-search");
+    assert.deepEqual(calls[4]?.body, { query: "launch partner evidence", limit: 5 });
+    assert.equal(calls[5]?.url, "/api/connectors/google/gmail/revoke");
+    assert.deepEqual(calls[5]?.body, { connectionId: "connector-google-gmail-1", providerConfigKey: "google-gmail" });
   } finally {
     restoreFetch();
   }
