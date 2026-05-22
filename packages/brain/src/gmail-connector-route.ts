@@ -65,6 +65,7 @@ export type GmailParsedMessage = {
   plainTextBody: string;
   messageId: string;
   rfcMessageId: string | null;
+  sizeEstimate: number | null;
   hasAttachment: boolean;
   attachments: Array<{
     filename: string;
@@ -80,6 +81,7 @@ const gmailApiBaseUrl = "https://gmail.googleapis.com/gmail/v1";
 const defaultGmailMaxResults = 25;
 const hardGmailMaxResults = 100;
 const hardGmailPageLimit = 5;
+const gmailMessageSizeByteLimit = 2_000_000;
 const gmailBodyCharLimit = 100_000;
 const gmailBodyEncodedCharLimit = 150_000;
 const gmailSnippetCharLimit = 500;
@@ -622,6 +624,7 @@ export function parseGmailMessage(message: Record<string, unknown>): GmailParsed
     plainTextBody: bodyText.text,
     messageId,
     rfcMessageId: headerValue(headers, "message-id"),
+    sizeEstimate: numberValue(message.sizeEstimate),
     hasAttachment: attachments.length > 0,
     attachments,
     bodyTruncated: plainTextBody.truncated || htmlFallback.truncated || bodyText.truncated,
@@ -719,7 +722,13 @@ async function syncGmailMessages(input: {
       if (detail.result.ok) {
         const parsed = parseGmailMessage(recordValue(detail.result.data.body));
 
-        if (parsed.id && (input.includeSpamTrash || !parsed.labels.some((label) => label === "SPAM" || label === "TRASH"))) {
+        if (!parsed.id || (!input.includeSpamTrash && parsed.labels.some((label) => label === "SPAM" || label === "TRASH"))) {
+          continue;
+        }
+
+        if (parsed.sizeEstimate !== null && parsed.sizeEstimate > gmailMessageSizeByteLimit) {
+          partialFailures.push(gmailOversizedFailure(parsed));
+        } else {
           messages.push(parsed);
         }
       } else {
@@ -839,6 +848,8 @@ function gmailMessageSourceDraft(message: GmailParsedMessage): GoogleConnectorSo
       cc: message.cc,
       date: message.date,
       labels: message.labels,
+      sizeEstimate: message.sizeEstimate,
+      messageSizeLimitBytes: gmailMessageSizeByteLimit,
       snippet: message.snippet,
       hasAttachment: message.hasAttachment,
       attachmentCount: message.attachments.length,
@@ -1117,7 +1128,7 @@ async function gmailProxy(
 type GmailSyncPartialFailure = {
   messageId: string;
   threadId: string | null;
-  stage: "message_detail";
+  stage: "message_detail" | "message_oversized";
   retryable: boolean;
   status: number | null;
   errorCode: string;
@@ -1136,6 +1147,18 @@ function gmailPartialFailure(
     status: numberValue(recordValue(error.details).status),
     errorCode: error.code,
     message: clipText(error.message, 240),
+  };
+}
+
+function gmailOversizedFailure(message: GmailParsedMessage): GmailSyncPartialFailure {
+  return {
+    messageId: message.id,
+    threadId: message.threadId,
+    stage: "message_oversized",
+    retryable: false,
+    status: null,
+    errorCode: "gmail_message_oversized",
+    message: `Gmail message sizeEstimate ${message.sizeEstimate} exceeded the ${gmailMessageSizeByteLimit} byte sync limit.`,
   };
 }
 
