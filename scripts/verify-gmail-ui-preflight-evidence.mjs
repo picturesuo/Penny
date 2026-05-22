@@ -141,7 +141,8 @@ function assertNoUnsafeEvidence(value) {
     "score",
     "token",
   ]);
-  const unsafeValuePattern = /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token|BEGIN PRIVATE KEY|private raw Gmail body)/i;
+  const unsafeValuePattern =
+    /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token|plainTextBody|rawBody|private raw Gmail body|raw Gmail body|BEGIN PRIVATE KEY)/i;
 
   walk(value, "$", (item, path) => {
     if (item && typeof item === "object" && !Array.isArray(item)) {
