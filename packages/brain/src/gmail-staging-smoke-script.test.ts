@@ -163,6 +163,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         memoryRefPresent?: boolean;
         scoreReasonPresent?: boolean;
         rawScoreHidden?: boolean;
+        selectedMemoryRefCount?: number;
         expectedEvidencePresent?: boolean;
         artifactExpectedEvidencePresent?: boolean;
         artifactPresent?: boolean;
@@ -174,10 +175,14 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         criticalOptionPresent?: boolean;
         gmailMemoryEvidencePresent?: boolean;
         gmailSourceEvidencePresent?: boolean;
+        selectedSemanticMemoryRefsMatched?: boolean;
+        selectedSemanticSourceRefsMatched?: boolean;
         rankedCandidateCount?: number;
         nextBestMoveGrounded?: boolean;
         rankedCandidateGmailMemoryEvidencePresent?: boolean;
         rankedCandidateGmailSourceEvidencePresent?: boolean;
+        rankedCandidateSelectedSemanticMemoryRefsMatched?: boolean;
+        rankedCandidateSelectedSemanticSourceRefsMatched?: boolean;
         selectedLenses?: string[];
         rawEmailBodyAbsent?: boolean;
         secretOrConnectTokenAbsent?: boolean;
@@ -282,6 +287,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(semantic?.memoryRefPresent, true);
     assert.equal(semantic?.scoreReasonPresent, true);
     assert.equal(semantic?.rawScoreHidden, true);
+    assert.equal(semantic?.selectedMemoryRefCount, 1);
     assert.equal(semantic?.rawBodyAbsent, true);
     assert.equal(repeat?.cursorPresent, true);
     assert.equal(repeat?.historyIdPresent, true);
@@ -291,10 +297,14 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(createFirst?.criticalOptionPresent, true);
     assert.equal(createFirst?.gmailMemoryEvidencePresent, true);
     assert.equal(createFirst?.gmailSourceEvidencePresent, true);
+    assert.equal(createFirst?.selectedSemanticMemoryRefsMatched, true);
+    assert.equal(createFirst?.selectedSemanticSourceRefsMatched, true);
     assert.equal(createFirst?.rankedCandidateCount, 5);
     assert.equal(createFirst?.nextBestMoveGrounded, true);
     assert.equal(createFirst?.rankedCandidateGmailMemoryEvidencePresent, true);
     assert.equal(createFirst?.rankedCandidateGmailSourceEvidencePresent, true);
+    assert.equal(createFirst?.rankedCandidateSelectedSemanticMemoryRefsMatched, true);
+    assert.equal(createFirst?.rankedCandidateSelectedSemanticSourceRefsMatched, true);
     assert.equal(createRefined?.artifactPresent, true);
     assert.equal(createRefined?.verificationPresent, true);
     assert.equal(createRefined?.judgmentEventPresent, true);
@@ -303,6 +313,8 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(createRefined?.selectedOptionsMatched, true);
     assert.equal(createRefined?.gmailMemoryEvidencePresent, true);
     assert.equal(createRefined?.gmailSourceEvidencePresent, true);
+    assert.equal(createRefined?.selectedSemanticMemoryRefsMatched, true);
+    assert.equal(createRefined?.selectedSemanticSourceRefsMatched, true);
     assert.equal(createRefined?.expectedEvidencePresent, true);
     assert.equal(createRefined?.artifactExpectedEvidencePresent, true);
     assert.equal(createRefined?.rawEmailBodyAbsent, true);
