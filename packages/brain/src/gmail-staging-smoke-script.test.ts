@@ -67,6 +67,50 @@ test("Gmail staging smoke script writes sanitized connect preflight-only evidenc
   }
 });
 
+test("Gmail staging smoke script rejects unsafe run ids without writing them", async () => {
+  const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
+  const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+    requests.push({ method: request.method, url: request.url });
+    const route = routeFor(request);
+
+    response.writeHead(route.status, { "content-type": "application/json" });
+    response.end(JSON.stringify(route.body));
+  });
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-smoke-"));
+  const evidenceFile = join(tmp, "unsafe-run-id-evidence.json");
+  const unsafeRunId = "staged-account@example.com";
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = server.address();
+
+    assert(address && typeof address === "object");
+
+    const result = await runSmoke({
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      evidenceFile,
+      env: {
+        GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY: "true",
+        GMAIL_STAGING_RUN_ID: unsafeRunId,
+      },
+    });
+    const evidenceText = await readFile(evidenceFile, "utf8");
+    const evidence = JSON.parse(evidenceText) as { stagingRunId?: string; error?: string };
+    const unsafeRunIdPattern = new RegExp(unsafeRunId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+    assert.equal(result.status, 1);
+    assert.equal(requests.length, 0);
+    assert.equal(evidence.stagingRunId, undefined);
+    assert.match(evidence.error ?? "", /GMAIL_STAGING_RUN_ID must be a safe opaque slug/);
+    assert.doesNotMatch(result.stderr, unsafeRunIdPattern);
+    assert.doesNotMatch(evidenceText, unsafeRunIdPattern);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging smoke script verifies the non-destructive post-OAuth path", async () => {
   const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
   const state = postOauthSmokeState();
