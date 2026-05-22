@@ -279,6 +279,11 @@ Open `http://localhost:3011` in a browser and verify:
 - Google source coverage is visible and clearly marks the selected account state.
 - Create opens from the top nav, shows context-light when no Brain memory exists, generates the five directions from a safe rough idea, renders Details buttons, artifact, verification, and enables Export prompt.
 
+The UI exposes stable browser-smoke selectors for this proof. Prefer these selectors in automation, and mention them in manual evidence when browser devtools or test output confirms them:
+
+- Gmail: `gmail-connector-card`, `gmail-connect-button`, `gmail-privacy-copy`, `gmail-keyword-search-form`, `gmail-keyword-filters`, `gmail-filter-from`, `gmail-filter-to`, `gmail-filter-subject`, `gmail-filter-label`, `gmail-filter-after`, `gmail-filter-before`, `gmail-filter-has-attachment`, `gmail-keyword-search-button`, `gmail-semantic-search-form`, `gmail-semantic-search-button`, `gmail-sync-button`, `gmail-revoke-button`, `gmail-delete-source-button`, `gmail-keyword-results`, `gmail-keyword-result`, `gmail-semantic-results`, and `gmail-semantic-result`.
+- Create: `create-workspace`, `create-brain-context`, `create-option-board`, `create-option-card`, `create-option-details-button`, `create-evidence-drawer`, `create-artifact-panel`, `create-export-panel`, and `create-export-prompt`.
+
 Browser evidence is acceptable only when the notes or screenshots prove the visible UI state, not just route responses. Capture or describe:
 
 - The Brain Gmail card with `gmail.readonly`, restricted/private copy, message count, and disabled Sync/Search/Revoke/Delete controls before OAuth.
@@ -310,7 +315,7 @@ The JSON evidence must include `baseUrl`, `userId`, `workspaceId`, `projectId`, 
 - `create.gmailExport`
 - `brain.gmailPostRevokeDelete`
 
-Each check records only booleans or safe field names, such as whether the Gmail card, keyword filters, message/source counts, safe refs, semantic grounding labels, Create evidence drawer, export prompt, and post-revoke/delete absence were visible. Store screenshot filenames or labels if helpful, but do not paste raw Gmail rows, connect links, tokens, or body text into the JSON.
+Each check records only booleans or safe field names, such as whether the Gmail card, keyword filters, message/source counts, safe refs, semantic grounding labels, Create evidence drawer, export prompt, selector targets, and post-revoke/delete absence were visible. Every required check must set `selectorTargetsPresent=true` after confirming the relevant stable selector target is present. Store screenshot filenames or labels if helpful, but do not paste raw Gmail rows, connect links, tokens, or body text into the JSON.
 
 When the browser evidence only covers the local pre-OAuth path, record it as a UI preflight only. The actual staging proof still requires OAuth, sync, keyword search, semantic search, Gmail evidence in Create, export, revoke, and delete against a staged Gmail account.
 
