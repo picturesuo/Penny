@@ -474,7 +474,7 @@ test("Gmail browser evidence verifier rejects raw Gmail, token, and score data",
 test("Gmail browser evidence verifier rejects raw body phrases in harmless-looking values", () => {
   const evidence = validBrowserEvidence();
 
-  evidence.notes = "Copied row included a private raw Gmail body marker without the body text.";
+  evidence.notes = "Copied row included a raw email body marker without the body text.";
 
   const failure = runVerifierExpectingFailure(evidence);
 
