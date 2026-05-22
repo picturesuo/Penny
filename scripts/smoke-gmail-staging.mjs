@@ -35,6 +35,7 @@ const connectPreflightOnly = envFlag("GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY");
 const connectPreflight = envFlag("GMAIL_SMOKE_CONNECT_PREFLIGHT") || connectPreflightOnly;
 const confirmMutations = envFlag("GMAIL_SMOKE_CONFIRM_MUTATIONS");
 const confirmDelete = envFlag("GMAIL_SMOKE_CONFIRM_DELETE");
+const stagingRunId = env("GMAIL_STAGING_RUN_ID", env("GMAIL_SMOKE_STAGING_RUN_ID", ""));
 const evidenceFile = env("GMAIL_SMOKE_EVIDENCE_FILE", "");
 
 const evidence = {
@@ -43,6 +44,7 @@ const evidence = {
   workspaceId,
   projectId,
   sphereId,
+  ...(stagingRunId ? { stagingRunId } : {}),
   connectPreflightEnabled: connectPreflight,
   connectPreflightOnly,
   destructiveRevokeEnabled: confirmMutations,
