@@ -19,7 +19,9 @@ import {
 const configuredEnv = {
   ENABLE_GOOGLE_CONNECTOR: "true",
   NANGO_SECRET_KEY: "nango-secret",
+  NANGO_PUBLIC_KEY: "nango-public",
   NANGO_BASE_URL: "https://api.nango.test",
+  NANGO_GMAIL_INTEGRATION_ID: "google-gmail",
 };
 
 test("Google connector provider shows an honest disabled state when the connector flag is off", () => {
@@ -96,7 +98,7 @@ test("Google scope planning keeps restricted scopes out of production by default
   assert.equal(gmailPlan.warnings.some((warning) => /ENABLE_GMAIL_CONNECTOR/i.test(warning)), true);
 });
 
-test("Gmail restricted scopes stay blocked in production even when explicit gates are enabled", () => {
+test("Gmail readonly is the only Gmail scope and is production-gated by explicit config", () => {
   const config = readGoogleConnectorRuntimeConfig({
     ...configuredEnv,
     ENABLE_GMAIL_CONNECTOR: "true",
@@ -113,12 +115,20 @@ test("Gmail restricted scopes stay blocked in production even when explicit gate
     config,
   });
 
-  assert.deepEqual(productionPlan.requestableScopeUrls, []);
-  assert.equal(productionPlan.warnings.every((warning) => /not production allowed/i.test(warning)), true);
-  assert.deepEqual(developmentPlan.requestableScopeUrls, [
-    "https://www.googleapis.com/auth/gmail.metadata",
-    "https://www.googleapis.com/auth/gmail.readonly",
-  ]);
+  assert.deepEqual(productionPlan.requestableScopeUrls, ["https://www.googleapis.com/auth/gmail.readonly"]);
+  assert.deepEqual(productionPlan.blockedScopes, []);
+  assert.deepEqual(developmentPlan.requestableScopeUrls, ["https://www.googleapis.com/auth/gmail.readonly"]);
+  assert.equal(
+    [...productionPlan.scopes, ...developmentPlan.scopes].every(
+      (scope) =>
+        scope.scope !== "https://www.googleapis.com/auth/gmail.metadata" &&
+        scope.scope !== "https://www.googleapis.com/auth/gmail.modify" &&
+        scope.scope !== "https://www.googleapis.com/auth/gmail.compose" &&
+        scope.scope !== "https://www.googleapis.com/auth/gmail.send" &&
+        scope.scope !== "https://mail.google.com/",
+    ),
+    true,
+  );
 });
 
 test("Nango adapter returns not configured instead of faking a connection", async () => {
