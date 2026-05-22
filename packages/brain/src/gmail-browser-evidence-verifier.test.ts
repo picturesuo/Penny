@@ -140,6 +140,21 @@ test("Gmail browser evidence verifier rejects non-image screenshot artifacts", a
   }
 });
 
+test("Gmail browser evidence verifier rejects tiny screenshot artifacts", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-browser-artifacts-"));
+
+  try {
+    await writeBrowserArtifacts(tmp);
+    await writeFile(join(tmp, "screenshots/gmail-pre-oauth.png"), pngWithDimensions(1, 1));
+
+    const failure = runVerifierExpectingFailure(validBrowserEvidence(), `--artifact-root=${tmp}`, "--require-artifact-files");
+
+    assert.match(failure, /screenshots\/gmail-pre-oauth\.png must be at least 320x200 pixels/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail browser evidence verifier rejects missing post-OAuth surfaces by default", () => {
   const failure = runVerifierExpectingFailure(preOAuthEvidence());
 
@@ -389,16 +404,21 @@ function runVerifierExpectingFailure(evidence: Record<string, unknown>, ...args:
 
 async function writeBrowserArtifacts(directory: string): Promise<void> {
   await mkdir(join(directory, "screenshots"), { recursive: true });
-  await writeFile(join(directory, "screenshots/gmail-pre-oauth.png"), onePixelPng());
-  await writeFile(join(directory, "screenshots/gmail-connected-results.png"), onePixelPng());
-  await writeFile(join(directory, "screenshots/gmail-create-export-post-delete.png"), onePixelPng());
+  await writeFile(join(directory, "screenshots/gmail-pre-oauth.png"), pngWithDimensions(640, 360));
+  await writeFile(join(directory, "screenshots/gmail-connected-results.png"), pngWithDimensions(640, 360));
+  await writeFile(join(directory, "screenshots/gmail-create-export-post-delete.png"), pngWithDimensions(640, 360));
 }
 
-function onePixelPng(): Buffer {
-  return Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
-    "base64",
-  );
+function pngWithDimensions(width: number, height: number): Buffer {
+  const header = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+  ]);
+  const dimensions = Buffer.alloc(8);
+
+  dimensions.writeUInt32BE(width, 0);
+  dimensions.writeUInt32BE(height, 4);
+
+  return Buffer.concat([header, dimensions]);
 }
 
 function preOAuthEvidence(): Record<string, unknown> & { checks: Array<Record<string, unknown>> } {
