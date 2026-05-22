@@ -54,7 +54,12 @@ try {
       initialStatus.data.scopes.includes("https://www.googleapis.com/auth/gmail.readonly"),
     "Gmail status did not report gmail.readonly.",
   );
+  assert(initialStatus.data?.restrictedScope === true, "Gmail status did not report restrictedScope=true.");
+  assert(initialStatus.data?.gated === true, "Gmail status did not report gated=true.");
+  assert(initialStatus.data?.private === true, "Gmail status did not report private=true.");
   assert(initialStatus.data?.privacy?.trainingUse === false, "Gmail privacy did not report trainingUse=false.");
+  assert(initialStatus.data?.privacy?.rawRetentionDefault === false, "Gmail privacy did not report rawRetentionDefault=false.");
+  assert(initialStatus.data?.privacy?.noHumanReview === true, "Gmail privacy did not report noHumanReview=true.");
   assert((initialStatus.data?.connections ?? []).some((connection) => connection.status === "connected"), "Connect Gmail first.");
   const connectedTargets = (initialStatus.data?.connections ?? []).filter((connection) => connection.status === "connected");
   const targetedConnection = connectedTargets.find((connection) => matchesConnectionSelector(connection, selector));
@@ -69,6 +74,11 @@ try {
     sourceCount: initialStatus.data.sources.length,
     selectorUsed,
     targetConnectionMatched: selectorUsed ? Boolean(targetedConnection) : null,
+    restrictedScope: initialStatus.data.restrictedScope,
+    gated: initialStatus.data.gated,
+    private: initialStatus.data.private,
+    rawRetentionDefault: initialStatus.data.privacy.rawRetentionDefault,
+    noHumanReview: initialStatus.data.privacy.noHumanReview,
   });
 
   const syncInput = keywordSearchInput();
