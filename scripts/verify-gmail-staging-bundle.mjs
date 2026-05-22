@@ -113,6 +113,13 @@ if (smoke && destructive) {
 }
 
 if (finalStaging) {
+  assertFinalStagingRunIds([
+    ["readiness", readiness],
+    ["smoke", smoke],
+    ["destructive smoke", destructive],
+    ["UI preflight", uiPreflight],
+    ["browser", browserEvidence],
+  ]);
   assertFinalEvidenceWindow(
     [
       ["readiness", readiness],
@@ -217,6 +224,34 @@ function assertMatchingScope(left, right, label) {
   }
 }
 
+function assertFinalStagingRunIds(entries) {
+  const runIds = [];
+
+  for (const [label, evidence] of entries) {
+    if (!evidence) {
+      continue;
+    }
+
+    const runId = typeof evidence.stagingRunId === "string" ? evidence.stagingRunId.trim() : "";
+
+    assert(Boolean(runId), `Final staging ${label} evidence must include stagingRunId.`);
+
+    if (runId) {
+      runIds.push([label, runId]);
+    }
+  }
+
+  const expected = runIds[0]?.[1];
+
+  if (!expected) {
+    return;
+  }
+
+  for (const [label, runId] of runIds) {
+    assert(runId === expected, `Final staging ${label} evidence stagingRunId must match readiness evidence.`);
+  }
+}
+
 function assertFinalEvidenceWindow(entries, maxHours) {
   const timestamps = [];
 
@@ -269,6 +304,7 @@ function evidenceSummary(file, evidence) {
     workspaceId: evidence?.workspaceId ?? null,
     projectId: evidence?.projectId ?? null,
     sphereId: evidence?.sphereId ?? null,
+    stagingRunId: evidence?.stagingRunId ?? null,
     stepCount: Array.isArray(evidence?.steps) ? evidence.steps.length : null,
     checkCount: Array.isArray(evidence?.checks) ? evidence.checks.length : null,
   };
