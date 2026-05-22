@@ -76,6 +76,17 @@ test("Gmail readiness evidence verifier rejects unsafe key variants without raw 
   assert.match(failure, /plain-text-body must not be present/);
 });
 
+test("Gmail readiness evidence verifier rejects raw body markers in harmless-looking values", () => {
+  const evidence = validReadinessEvidence();
+  const status = evidence.checks.find((check) => check.name === "api.gmailStatus") as Record<string, unknown>;
+
+  status.operatorNote = "Copied setup note mentioned raw Gmail body marker without including the body.";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /raw connect\/session\/token value/);
+});
+
 test("Gmail readiness evidence verifier rejects unsafe run ids without echoing them", () => {
   const evidence = validReadinessEvidence();
 
