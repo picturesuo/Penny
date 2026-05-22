@@ -494,7 +494,7 @@ node scripts/verify-gmail-staging-bundle.mjs \
   --min-messages=1
 ```
 
-This final bundle is the browser/manual proof gate: browser evidence must be full staged evidence, not `--pre-oauth-only`, and it must cover connected results, semantic refs, Create evidence/export, and post-revoke/delete absence. When local screenshots or notes are referenced by the browser evidence JSON, run the final bundle with `--browser-artifact-root` and `--require-browser-artifact-files`.
+This final bundle is the browser/manual proof gate: browser evidence must be full staged evidence, not `--pre-oauth-only`, and it must cover connected results, semantic refs, Create evidence/export, and post-revoke/delete absence. When local screenshots or notes are referenced by the browser evidence JSON, run the final bundle with `--browser-evidence`, `--browser-artifact-root`, and `--require-browser-artifact-files`; artifact-file verification is invalid without the browser evidence JSON.
 
 ## Acceptance Evidence
 
