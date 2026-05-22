@@ -207,6 +207,41 @@ test("Gmail sync does not duplicate connector refs or Brain sources on repeated 
   assert.equal(payload.data.state.cursors.find((cursor) => cursor.surface === "google_gmail")?.cursor, "history-100");
 });
 
+test("Gmail sync is scoped and cannot use another user's connection", async () => {
+  const { stateStore, brainMemoryService } = gmailFixture();
+  const response = await handleGoogleGmailSyncRequest(
+    new Request("http://localhost/api/connectors/google/gmail/sync", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-2",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        connectionId: "nango-gmail-1",
+        providerConfigKey: "google-gmail",
+        maxResults: 1,
+      }),
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: fakeAdapter({
+        async proxy() {
+          throw new Error("Cross-user sync must not reach Gmail proxy.");
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as { error: { code: string; message: string } };
+  const profile = await brainMemoryService.getProfile(gmailRequest("/api/brain/memory/profile", {}, "GET"));
+
+  assert.equal(response.status, 404);
+  assert.equal(payload.error.code, "gmail_connection_not_found");
+  assert.equal(profile.stats.sourceCount, 0);
+});
+
 test("Gmail sync reports partial message detail failures without failing the whole sync", async () => {
   const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
   const response = await handleGoogleGmailSyncRequest(
