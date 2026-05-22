@@ -13,6 +13,8 @@ const unsafeValuePattern =
   /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|access_token|refresh_token|credentialRef|plainTextBody|rawBody|payload|BEGIN PRIVATE KEY)/i;
 const unsafePrivacyClaimPattern =
   /global training|hidden memory|private inbox|background Gmail|before consent|unrestricted mailbox scan/i;
+const minimumImageArtifactWidth = 320;
+const minimumImageArtifactHeight = 200;
 const errors = [];
 
 if (!file || args.includes("--help") || args.includes("-h")) {
@@ -216,8 +218,42 @@ function assertNoUnsafeArtifactText(value, artifactFile) {
 }
 
 function assertValidImageArtifact(value, artifactFile, extension) {
-  const isPng =
-    value.length >= 8 &&
+  const dimensions = imageDimensions(value, extension);
+  const isPng = Boolean(dimensions) && extension === ".png";
+  const isJpeg = Boolean(dimensions) && (extension === ".jpg" || extension === ".jpeg");
+  const isWebp = Boolean(dimensions) && extension === ".webp";
+
+  assert(isPng || isJpeg || isWebp, `${artifactFile} must be a valid ${extension.slice(1)} image artifact.`);
+
+  if (!dimensions) {
+    return;
+  }
+
+  assert(
+    dimensions.width >= minimumImageArtifactWidth && dimensions.height >= minimumImageArtifactHeight,
+    `${artifactFile} must be at least ${minimumImageArtifactWidth}x${minimumImageArtifactHeight} pixels.`,
+  );
+}
+
+function imageDimensions(value, extension) {
+  if (extension === ".png") {
+    return pngDimensions(value);
+  }
+
+  if (extension === ".jpg" || extension === ".jpeg") {
+    return jpegDimensions(value);
+  }
+
+  if (extension === ".webp") {
+    return webpDimensions(value);
+  }
+
+  return null;
+}
+
+function pngDimensions(value) {
+  const hasSignature =
+    value.length >= 24 &&
     value[0] === 0x89 &&
     value[1] === 0x50 &&
     value[2] === 0x4e &&
@@ -225,17 +261,106 @@ function assertValidImageArtifact(value, artifactFile, extension) {
     value[4] === 0x0d &&
     value[5] === 0x0a &&
     value[6] === 0x1a &&
-    value[7] === 0x0a;
+    value[7] === 0x0a &&
+    value.subarray(12, 16).toString("ascii") === "IHDR";
+
+  if (!hasSignature) {
+    return null;
+  }
+
+  return { width: value.readUInt32BE(16), height: value.readUInt32BE(20) };
+}
+
+function jpegDimensions(value) {
   const isJpeg = value.length >= 3 && value[0] === 0xff && value[1] === 0xd8 && value[2] === 0xff;
+
+  if (!isJpeg) {
+    return null;
+  }
+
+  let offset = 2;
+
+  while (offset + 9 < value.length) {
+    if (value[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+
+    while (value[offset] === 0xff) {
+      offset += 1;
+    }
+
+    const marker = value[offset];
+    offset += 1;
+
+    if (marker === 0xd8 || marker === 0xd9) {
+      continue;
+    }
+
+    if (offset + 2 > value.length) {
+      return null;
+    }
+
+    const segmentLength = value.readUInt16BE(offset);
+
+    if (segmentLength < 2 || offset + segmentLength > value.length) {
+      return null;
+    }
+
+    const isStartOfFrame =
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7) ||
+      (marker >= 0xc9 && marker <= 0xcb) ||
+      (marker >= 0xcd && marker <= 0xcf);
+
+    if (isStartOfFrame && segmentLength >= 7) {
+      return { width: value.readUInt16BE(offset + 5), height: value.readUInt16BE(offset + 3) };
+    }
+
+    offset += segmentLength;
+  }
+
+  return null;
+}
+
+function webpDimensions(value) {
   const isWebp =
     value.length >= 12 && value.subarray(0, 4).toString("ascii") === "RIFF" && value.subarray(8, 12).toString("ascii") === "WEBP";
 
-  const valid =
-    (extension === ".png" && isPng) ||
-    ((extension === ".jpg" || extension === ".jpeg") && isJpeg) ||
-    (extension === ".webp" && isWebp);
+  if (!isWebp || value.length < 30) {
+    return null;
+  }
 
-  assert(valid, `${artifactFile} must be a valid ${extension.slice(1)} image artifact.`);
+  const chunkType = value.subarray(12, 16).toString("ascii");
+
+  if (chunkType === "VP8X" && value.length >= 30) {
+    return {
+      width: 1 + readUInt24LE(value, 24),
+      height: 1 + readUInt24LE(value, 27),
+    };
+  }
+
+  if (chunkType === "VP8L" && value.length >= 25 && value[20] === 0x2f) {
+    const bits = value.readUInt32LE(21);
+
+    return {
+      width: 1 + (bits & 0x3fff),
+      height: 1 + ((bits >> 14) & 0x3fff),
+    };
+  }
+
+  if (chunkType === "VP8 " && value.length >= 30 && value[23] === 0x9d && value[24] === 0x01 && value[25] === 0x2a) {
+    return {
+      width: value.readUInt16LE(26) & 0x3fff,
+      height: value.readUInt16LE(28) & 0x3fff,
+    };
+  }
+
+  return null;
+}
+
+function readUInt24LE(value, offset) {
+  return value[offset] + (value[offset + 1] << 8) + (value[offset + 2] << 16);
 }
 
 function assertPreOAuthPanel(check) {
