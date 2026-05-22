@@ -113,6 +113,9 @@ assert(createFirst.expectedEvidencePresent === true, "Create must include the ex
 const exported = requireStep("create.export");
 assert(exported.expectedEvidencePresent === true, "Export prompt must include the expected Gmail-derived context.");
 assert(exported.unsafePrivacyClaimAbsent === true, "Export prompt must not include unsafe privacy claims.");
+assert(exported.rawEmailBodyAbsent === true, "Export prompt must not include raw Gmail body markers.");
+assert(exported.secretOrConnectTokenAbsent === true, "Export prompt must not include connect/session/token values.");
+assert(exported.unsupportedHumanReviewClaimAbsent === true, "Export prompt must not include unsupported human-review claims.");
 
 if (destructive) {
   const revoke = requireStep("revoke");

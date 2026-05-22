@@ -109,6 +109,9 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         gmailMemoryEvidencePresent?: boolean;
         gmailSourceEvidencePresent?: boolean;
         selectedLenses?: string[];
+        rawEmailBodyAbsent?: boolean;
+        secretOrConnectTokenAbsent?: boolean;
+        unsupportedHumanReviewClaimAbsent?: boolean;
       }>;
     };
     const verifyOutput = execFileSync(
@@ -151,6 +154,9 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(createFirst?.gmailMemoryEvidencePresent, true);
     assert.equal(createFirst?.gmailSourceEvidencePresent, true);
     assert.equal(createExport?.expectedEvidencePresent, true);
+    assert.equal(createExport?.rawEmailBodyAbsent, true);
+    assert.equal(createExport?.secretOrConnectTokenAbsent, true);
+    assert.equal(createExport?.unsupportedHumanReviewClaimAbsent, true);
     assert.equal(verified.ok, true);
     assert.equal(verified.stepCount, 10);
     assert.equal(state.syncCalls, 2);
@@ -219,6 +225,55 @@ test("Gmail staging smoke script verifies an expected sanitized partial failure"
     assert.equal(repeat?.partialFailureStageMatched, true);
     assert.equal(verified.ok, true);
     assert.doesNotMatch(JSON.stringify(evidence), /Private Gmail body|plainTextBody|rawBody/i);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Gmail staging smoke script rejects unsafe export privacy content without leaking it", async () => {
+  const state = postOauthSmokeState({
+    exportText:
+      "Build with launch partner evidence. Private Gmail body: payroll text. Human review queues inspect Gmail. https://connect.nango.test/gmail-session-token",
+  });
+  const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+    const route = postOauthRouteFor(request, state);
+
+    response.writeHead(route.status, { "content-type": "application/json" });
+    response.end(JSON.stringify(route.body));
+  });
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-smoke-"));
+  const evidenceFile = join(tmp, "gmail-smoke-export-privacy.json");
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = server.address();
+
+    assert(address && typeof address === "object");
+
+    const result = await runSmoke({
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      evidenceFile,
+      env: {
+        GMAIL_SMOKE_KEYWORD_TEXT: "launch partner evidence",
+        GMAIL_SMOKE_KEYWORD_FROM: "alice@example.com",
+        GMAIL_SMOKE_KEYWORD_SUBJECT: "Launch plan",
+        GMAIL_SMOKE_SEMANTIC_QUERY: "launch partner evidence",
+        GMAIL_SMOKE_EXPECT_CREATE_TEXT: "launch partner evidence",
+      },
+    });
+    const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as {
+      error?: string;
+      steps: Array<Record<string, unknown> & { step: string }>;
+    };
+
+    assert.equal(result.status, 1);
+    assert.match(evidence.error ?? "", /raw Gmail body markers/);
+    assert.match(evidence.error ?? "", /connect\/session\/token values/);
+    assert.match(evidence.error ?? "", /unsupported human-review claims/);
+    assert.equal(evidence.steps.some((step) => step.step === "create.export"), false);
+    assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /payroll text|gmail-session-token|https:\/\/connect\.nango\.test/i);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(tmp, { recursive: true, force: true });
@@ -804,7 +859,7 @@ function postOauthRouteFor(
         data: {
           export: {
             id: "export-gmail-smoke",
-            text: "Build with launch partner evidence from synced Gmail memory.",
+            text: state.exportText,
           },
         },
       },
@@ -835,9 +890,10 @@ type PostOauthSmokeState = {
   revoked: boolean;
   deleted: boolean;
   partialFailureStage: string | null;
+  exportText: string;
 };
 
-function postOauthSmokeState(options: { partialFailureStage?: string } = {}): PostOauthSmokeState {
+function postOauthSmokeState(options: { partialFailureStage?: string; exportText?: string } = {}): PostOauthSmokeState {
   return {
     statusCalls: 0,
     syncCalls: 0,
@@ -852,6 +908,7 @@ function postOauthSmokeState(options: { partialFailureStage?: string } = {}): Po
     revoked: false,
     deleted: false,
     partialFailureStage: options.partialFailureStage ?? null,
+    exportText: options.exportText ?? "Build with launch partner evidence from synced Gmail memory. No human review. trainingUse=false.",
   };
 }
 

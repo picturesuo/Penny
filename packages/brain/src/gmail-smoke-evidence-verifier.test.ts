@@ -114,6 +114,21 @@ test("Gmail smoke evidence verifier rejects weak Create Gmail evidence", () => {
   assert.match(failure, /Create must include Gmail evidence in source refs/);
 });
 
+test("Gmail smoke evidence verifier rejects weak Create export privacy evidence", () => {
+  const evidence = validEvidence();
+  const exported = evidence.steps.find((step) => step.step === "create.export") as Record<string, unknown>;
+
+  exported.rawEmailBodyAbsent = false;
+  exported.secretOrConnectTokenAbsent = false;
+  exported.unsupportedHumanReviewClaimAbsent = false;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Export prompt must not include raw Gmail body markers/);
+  assert.match(failure, /Export prompt must not include connect\/session\/token values/);
+  assert.match(failure, /Export prompt must not include unsupported human-review claims/);
+});
+
 test("Gmail smoke evidence verifier accepts connect preflight-only evidence", () => {
   const output = execFileSync(process.execPath, ["scripts/verify-gmail-smoke-evidence.mjs", "-", "--connect-preflight-only"], {
     cwd: repoRoot,
@@ -254,6 +269,9 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         step: "create.export",
         expectedEvidencePresent: true,
         unsafePrivacyClaimAbsent: true,
+        rawEmailBodyAbsent: true,
+        secretOrConnectTokenAbsent: true,
+        unsupportedHumanReviewClaimAbsent: true,
       },
       {
         step: "revoke.delete.skipped",
