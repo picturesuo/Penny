@@ -1288,6 +1288,17 @@ export function validatePennyStartupEnvironment(
         message: "Strict deployments must keep PENNY_RATE_LIMIT_MAX above zero.",
       });
     }
+
+    if (
+      readEnvFlagFrom(env, "ENABLE_GMAIL_CONNECTOR", false) &&
+      readEnvFlagFrom(env, "ENABLE_RESTRICTED_GOOGLE_SCOPES", false) &&
+      !env.NANGO_WEBHOOK_SIGNING_KEY?.trim()
+    ) {
+      issues.push({
+        code: "gmail_webhook_signing_key_required",
+        message: "Strict deployments with Gmail enabled require NANGO_WEBHOOK_SIGNING_KEY for Nango webhook verification.",
+      });
+    }
   } else if (authMode === "dev") {
     warnings.push({
       code: "dev_auth_enabled",
