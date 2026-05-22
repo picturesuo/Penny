@@ -141,21 +141,41 @@ function isSafeStagingRunId(value) {
 }
 
 function assertProofArtifacts(artifacts, requiredNames) {
+  const required = new Set(requiredNames);
   const proved = new Set();
 
-  for (const artifact of artifacts) {
+  assert(artifacts.length > 0, "Browser evidence must include sanitized screenshots, notes, or proofs with proves lists.");
+
+  for (const [artifactIndex, artifact] of artifacts.entries()) {
     if (!Array.isArray(artifact.proves)) {
+      errors.push(`Browser evidence proof artifact ${artifactIndex + 1} must include a proves array.`);
       continue;
     }
 
-    for (const name of artifact.proves) {
-      if (typeof name === "string") {
+    assert(artifact.proves.length > 0, `Browser evidence proof artifact ${artifactIndex + 1} must prove at least one browser check.`);
+
+    for (const [proveIndex, value] of artifact.proves.entries()) {
+      const name = typeof value === "string" ? value.trim() : "";
+
+      assert(
+        Boolean(name),
+        `Browser evidence proof artifact ${artifactIndex + 1} proves entry ${proveIndex + 1} must be a non-empty string.`,
+      );
+
+      if (!name) {
+        continue;
+      }
+
+      assert(
+        required.has(name),
+        `Browser evidence proof artifact ${artifactIndex + 1} proves entry ${proveIndex + 1} must match a required browser check.`,
+      );
+
+      if (required.has(name)) {
         proved.add(name);
       }
     }
   }
-
-  assert(artifacts.length > 0, "Browser evidence must include sanitized screenshots, notes, or proofs with proves lists.");
 
   for (const name of requiredNames) {
     assert(proved.has(name), `Browser evidence proof artifacts must cover ${name}.`);
