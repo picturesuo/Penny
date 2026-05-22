@@ -451,6 +451,19 @@ export async function handleGoogleGmailSemanticSearchRequest(
     );
   }
 
+  if (!selectedConnection && new Set(gmailSources.map((source) => source.connectionId)).size > 1) {
+    return jsonResponse(
+      {
+        error: {
+          code: "gmail_connection_ambiguous",
+          message: "Select one Gmail connection before semantic search.",
+          retryable: false,
+        },
+      },
+      409,
+    );
+  }
+
   const sourceByBrainId = new Map(gmailSources.map((source) => [source.brainSourceId, source]));
   const retrieval = await resolveBrainMemoryService(options).retrieve(
     {
