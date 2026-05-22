@@ -57,7 +57,7 @@ References:
    ```
 
    For a local OAuth smoke, expose the local Penny API with a secure tunnel and use the tunnel URL for this webhook. Plain `localhost` will not receive Nango Cloud webhooks.
-8. Keep the Nango webhook signing secret aligned with Penny's `NANGO_SECRET_KEY`. Penny verifies the `x-nango-hmac-sha256` signature before accepting auth webhooks.
+8. Copy the Nango environment Webhooks signing key into Penny as `NANGO_WEBHOOK_SIGNING_KEY`. Penny verifies the `x-nango-hmac-sha256` signature before accepting auth webhooks. If this env var is absent, Penny falls back to `NANGO_SECRET_KEY` for older environments, but new staging setups should keep the API secret and webhook signing key separate.
 9. Use Nango's test connection flow once with the staged Gmail account before testing Penny.
 10. Confirm the Nango connection has the expected integration key and read-only Gmail scope.
 11. After a Penny-initiated OAuth completion, confirm Nango delivered an `auth` webhook with `operation=creation` or `operation=override`, `success=true`, the Gmail integration key, and tags or end-user data for the same Penny user/workspace scope.
@@ -71,6 +71,7 @@ ENABLE_GOOGLE_CONNECTOR=true
 ENABLE_GMAIL_CONNECTOR=true
 ENABLE_RESTRICTED_GOOGLE_SCOPES=true
 NANGO_SECRET_KEY=<nango-secret-key>
+NANGO_WEBHOOK_SIGNING_KEY=<nango-webhook-signing-key>
 NANGO_PUBLIC_KEY=<nango-public-key>
 NANGO_BASE_URL=https://api.nango.dev
 NANGO_GMAIL_INTEGRATION_ID=google-gmail-staging
