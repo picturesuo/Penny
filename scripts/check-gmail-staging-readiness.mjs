@@ -178,8 +178,8 @@ function checkStrictStagingEnv() {
   assert(authMode === "token", "PENNY_AUTH_MODE must be token for strict Gmail staging readiness.");
   assert(apiToken.length >= 32, "PENNY_API_TOKEN must be at least 32 characters for strict Gmail staging readiness.");
   assert(sessionSecret.length >= 32, "PENNY_SESSION_SECRET must be at least 32 characters for strict Gmail staging readiness.");
-  assert(corsOrigins.includes(base.origin), "PENNY_CORS_ORIGINS must include the exact BASE_URL origin.");
   assert(!corsOrigins.includes("*"), "PENNY_CORS_ORIGINS must not include wildcard origins for strict Gmail staging readiness.");
+  assert(corsOrigins.includes(base.origin), "PENNY_CORS_ORIGINS must include the exact BASE_URL origin.");
   assert(
     corsOrigins.every((origin) => {
       const parsed = parsedUrl(origin, "PENNY_CORS_ORIGINS");
