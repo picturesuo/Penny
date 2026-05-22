@@ -86,9 +86,14 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /Supports ChatGPT export ZIPs/i);
   assert.match(markup, /Google/);
   assert.match(markup, /Connect Gmail/);
+  assert.match(markup, /Penny reads Gmail only after consent/);
+  assert.match(markup, /trainingUse=false/);
+  assert.match(markup, /Search email/);
+  assert.match(markup, /Semantic search/);
+  assert.match(markup, /Connect or sync Gmail first/);
   assert.match(markup, /Sync now/);
   assert.match(markup, /Revoke/);
-  assert.match(markup, /Delete source/);
+  assert.match(markup, /Delete Gmail source/);
   assert.match(markup, /Memory updated/);
   assert.match(markup, /Source deleted\. Related chunks and source-backed memories were removed from retrieval and Create/);
   assert.match(markup, /Delete Founder workflow notes/);
@@ -195,8 +200,11 @@ test("GoogleConnectorControl renders statuses, scopes, sync counts, and honest g
   assert.match(markup, /Scopes: https:\/\/www\.googleapis\.com\/auth\/drive\.file/);
   assert.match(markup, /Gmail/);
   assert.match(markup, /Gated Verification Required/);
-  assert.match(markup, /Gated: google\.gmail\.metadata/);
+  assert.match(markup, /Gated: google\.gmail\.readonly/);
+  assert.match(markup, /https:\/\/www\.googleapis\.com\/auth\/gmail\.readonly/);
+  assert.match(markup, /private Brain memory/);
   assert.match(markup, /No hidden Gmail import/);
+  assert.match(markup, /No modify\/compose\/send mail access/);
   assert.match(markup, /Google Takeout/);
   assert.match(markup, /Manual Import Only/);
   assert.match(markup, /My Activity/);
@@ -206,7 +214,7 @@ test("GoogleConnectorControl renders statuses, scopes, sync counts, and honest g
   assert.match(markup, /Browser\/search: Extension Required/);
   assert.match(markup, /Sync now/);
   assert.match(markup, /Revoke/);
-  assert.match(markup, /Delete source/);
+  assert.match(markup, /Delete Gmail source/);
 });
 
 function emptyDocumentsData(): BrainDocumentsData {
@@ -247,15 +255,15 @@ function googleProviderView() {
     requiredEnvGate: null,
   };
   const gmailScope = {
-    id: "google.gmail.metadata",
+    id: "google.gmail.readonly",
     surface: "google_gmail",
-    scope: "https://www.googleapis.com/auth/gmail.metadata",
+    scope: "https://www.googleapis.com/auth/gmail.readonly",
     sensitivity: "restricted",
-    whyPennyNeedsIt: "Read Gmail labels and headers without message bodies for selective, metadata-first memory.",
-    userExplanation: "Penny will not request Gmail scopes unless Gmail and restricted-scope gates are enabled.",
+    whyPennyNeedsIt: "read email for private Brain memory and email search.",
+    userExplanation: "Penny reads Gmail only after consent, stores it as private Brain memory, and cannot modify, compose, or send mail.",
     gated: true,
     gatedStatus: "gated_verification_required",
-    productionAllowed: false,
+    productionAllowed: true,
     requiredEnvGate: "ENABLE_GMAIL_CONNECTOR,ENABLE_RESTRICTED_GOOGLE_SCOPES",
   };
 
@@ -287,10 +295,10 @@ function googleProviderView() {
         status: "gated_verification_required",
         sourceKinds: ["google_gmail_message"],
         scopes: [gmailScope],
-        whyPennyCanUseThis: "Email can be useful context only with metadata-first selection and approval.",
-        userExplanation: "Gmail is gated.",
-        supportedNow: ["Gated metadata-first scaffold"],
-        notFaked: ["No hidden Gmail import", "No unrestricted mailbox scan", "No message-body access by default"],
+        whyPennyCanUseThis: "Email can become private Brain memory and searchable context only after explicit user consent.",
+        userExplanation: "Gmail is restricted-scope, gated, and private.",
+        supportedNow: ["Consent through Nango", "Read-only private Brain memory sync", "Keyword and semantic email search"],
+        notFaked: ["No hidden Gmail import", "No unrestricted mailbox scan", "No modify/compose/send mail access", "No global training use"],
       },
       {
         id: "google_takeout",
