@@ -145,6 +145,10 @@ try {
       .map((result) => result.memoryRef?.id)
       .filter(Boolean),
   );
+  if (confirmMutations && confirmDelete) {
+    assert(semanticMatchedSource, "Delete smoke could not match the delete target to a semantic Gmail result.");
+    assert(deletedSemanticMemoryIds.size > 0, "Delete smoke found no tracked Gmail memory refs for the delete target.");
+  }
   record("semanticSearch", {
     resultCount: semantic.data.results.length,
     contextLight: semantic.data.contextLight,
