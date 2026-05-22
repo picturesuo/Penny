@@ -184,7 +184,7 @@ GMAIL_SMOKE_KEYWORD_HAS_ATTACHMENT=true
 ```
 
 The automated smoke also uses the keyword text and filters for the initial sync, so the run imports only the staged safe-message slice rather than the first arbitrary mailbox page. The evidence file records the Gmail `q` string, the sync filters, and the keyword filters used, while checking both that keyword results are not stored by default and that `sync=true` explicitly stores through the same safe, duplicate-free import path.
-Smoke evidence intentionally omits raw HTTP response bodies and raw email content; failure records use route/status/error-code summaries so the evidence file can be shared without exposing mailbox text.
+Smoke evidence intentionally omits raw HTTP response bodies and raw email content; failure records use route/status/error-code summaries so the evidence file can be shared without exposing mailbox text. The smoke also checks the Gmail status endpoint and the general Google provider endpoint that the Brain UI loads; their state views must expose only connection selectors, minimal sync job fields, and source ids/URIs, not Gmail metadata, provenance, credential refs, cursor internals, or raw-retention fields.
 
 If staging uses token auth, also pass:
 
@@ -204,6 +204,7 @@ When a selector is provided, the automated smoke uses it for sync, keyword searc
 The default smoke verifies:
 
 - Gmail status is configured, connected, restricted-scope gated, private, `gmail.readonly`, `trainingUse=false`, `rawRetentionDefault=false`, and `noHumanReview=true`.
+- Gmail status and Google provider page-load state views do not expose Gmail message metadata, provenance, credential refs, cursor internals, raw body fields, or per-source training/raw-retention flags.
 - Sync imports at least one message from the staged safe-message query/filter set and returns cursor/history evidence.
 - Repeating the same scoped sync does not change the Gmail source count or create duplicate source refs.
 - Keyword search uses the Gmail API, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
@@ -238,6 +239,7 @@ Before marking Gmail staging ready, attach or record:
 - `node --check scripts/smoke-gmail-staging.mjs`.
 - Non-destructive `scripts/smoke-gmail-staging.mjs` output.
 - Destructive `scripts/smoke-gmail-staging.mjs` output from a disposable staged Gmail account, when revoke/delete are being certified.
+- Smoke evidence showing `statusStatePrivacySafe=true` and `providerStatePrivacySafe=true`.
 - Gmail status response before and after OAuth.
 - Sync and repeated-sync responses showing imported count, cursor/historyId, stable source counts, and no duplicate source refs.
 - Keyword search responses proving Gmail `q` search, default no-store behavior, and explicit `sync=true` storage.
