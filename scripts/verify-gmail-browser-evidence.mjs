@@ -582,30 +582,32 @@ function assertPostRevokeDelete(check) {
 
 function assertNoUnsafeEvidence(value) {
   const unsafeKeys = new Set([
-    "accessToken",
+    "accesstoken",
     "body",
-    "connectLink",
-    "credentialRef",
-    "encryptedRefreshToken",
-    "encryptedToken",
+    "connectlink",
+    "credentialref",
+    "encryptedrefreshtoken",
+    "encryptedtoken",
     "html",
     "metadata",
     "payload",
-    "plainTextBody",
+    "plaintextbody",
     "provenance",
     "raw",
-    "rawBody",
-    "rawScore",
-    "refreshToken",
+    "rawbody",
+    "rawscore",
+    "refreshtoken",
     "score",
-    "sessionToken",
+    "sessiontoken",
     "token",
   ]);
-  const allowedKeys = new Set(["scoreReasonVisible", "rawNumericScoreHidden", "secretOrConnectTokenAbsent"]);
+  const allowedKeys = new Set(["scorereasonvisible", "rawnumericscorehidden", "secretorconnecttokenabsent"]);
   walk(value, "$", (item, path) => {
     if (item && typeof item === "object" && !Array.isArray(item)) {
       for (const key of Object.keys(item)) {
-        if (unsafeKeys.has(key) && !allowedKeys.has(key)) {
+        const normalizedKey = normalizeKey(key);
+
+        if (unsafeKeys.has(normalizedKey) && !allowedKeys.has(normalizedKey)) {
           errors.push(`${path}.${key} must not be present in browser evidence.`);
         }
       }
@@ -619,6 +621,10 @@ function assertNoUnsafeEvidence(value) {
       errors.push(`${path} looks like it contains an unsafe Gmail privacy claim.`);
     }
   });
+}
+
+function normalizeKey(value) {
+  return String(value).replace(/[-_\s]/g, "").toLowerCase();
 }
 
 function walk(value, path, visitor) {
