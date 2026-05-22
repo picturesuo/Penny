@@ -1639,7 +1639,7 @@ async function nangoRequest(
         code: "nango_request_failed",
         message: nangoErrorMessage(response.body, response.status),
         retryable: response.status >= 500 || response.status === 429,
-        details: { status: response.status, body: response.body },
+        details: { status: response.status },
       },
     };
   }
