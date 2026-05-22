@@ -286,7 +286,7 @@ function validReadinessEvidence(): Record<string, unknown> & { requireStaging: b
   };
 }
 
-function failedReadinessEvidence(): Record<string, unknown> {
+function failedReadinessEvidence(): Record<string, unknown> & { checks: Array<Record<string, unknown> & { name: string }> } {
   return {
     ok: false,
     baseUrl: "http://localhost:3000",
