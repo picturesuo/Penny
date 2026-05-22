@@ -190,6 +190,11 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         brainProfileTrainingUseFalse?: boolean;
         brainProfileRawRetentionFalse?: boolean;
         brainProfilePrivateVisibility?: boolean;
+        selectedAccountStateVisible?: boolean;
+        targetConnectionIdPresent?: boolean;
+        targetExternalConnectionIdPresent?: boolean;
+        targetProviderConfigKeyPresent?: boolean;
+        targetAccountAliasPresent?: boolean;
       }>;
     };
     const verifyOutput = execFileSync(
@@ -204,6 +209,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     const keyword = evidence.steps.find((step) => step.step === "keywordSearch");
     const keywordSync = evidence.steps.find((step) => step.step === "keywordSearch.syncExplicit");
     const semantic = evidence.steps.find((step) => step.step === "semanticSearch");
+    const initial = evidence.steps.find((step) => step.step === "status.initial");
     const repeat = evidence.steps.find((step) => step.step === "sync.repeat");
     const afterSync = evidence.steps.find((step) => step.step === "status.afterSync");
     const createFirst = evidence.steps.find((step) => step.step === "create.first");
@@ -252,6 +258,11 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(afterSync?.brainProfileTrainingUseFalse, true);
     assert.equal(afterSync?.brainProfileRawRetentionFalse, true);
     assert.equal(afterSync?.brainProfilePrivateVisibility, true);
+    assert.equal(initial?.selectedAccountStateVisible, true);
+    assert.equal(initial?.targetConnectionIdPresent, true);
+    assert.equal(initial?.targetExternalConnectionIdPresent, true);
+    assert.equal(initial?.targetProviderConfigKeyPresent, true);
+    assert.equal(initial?.targetAccountAliasPresent, true);
     assert.equal(semantic?.resultShapeVerified, true);
     assert.equal(semantic?.subjectPresent, true);
     assert.equal(semantic?.senderPresent, true);
@@ -651,6 +662,8 @@ function postOauthRouteFor(
               credential: {
                 providerConfigKey: "google-gmail",
                 connectionId: "nango-gmail-1",
+                accountEmail: "staged@example.com",
+                accountLabel: "Staged Gmail",
               },
             },
           ],
@@ -664,6 +677,8 @@ function postOauthRouteFor(
                 credential: {
                   providerConfigKey: "google-gmail",
                   connectionId: "nango-gmail-1",
+                  accountEmail: "staged@example.com",
+                  accountLabel: "Staged Gmail",
                 },
               },
             ],
@@ -703,6 +718,8 @@ function postOauthRouteFor(
                 credential: {
                   providerConfigKey: "google-gmail",
                   connectionId: "nango-gmail-1",
+                  accountEmail: "staged@example.com",
+                  accountLabel: "Staged Gmail",
                 },
               },
             ],

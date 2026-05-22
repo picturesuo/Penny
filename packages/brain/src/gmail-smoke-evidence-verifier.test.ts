@@ -124,6 +124,25 @@ test("Gmail smoke evidence verifier rejects missing synced source privacy eviden
   assert.match(failure, /Brain profile Gmail source privacy must prove private visibility/);
 });
 
+test("Gmail smoke evidence verifier rejects missing staged account identity proof", () => {
+  const evidence = validEvidence();
+  const initial = evidence.steps.find((step) => step.step === "status.initial") as Record<string, unknown>;
+
+  delete initial.selectedAccountStateVisible;
+  delete initial.targetConnectionIdPresent;
+  delete initial.targetExternalConnectionIdPresent;
+  delete initial.targetProviderConfigKeyPresent;
+  delete initial.targetAccountAliasPresent;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Initial status must prove the selected Gmail account state is visible/);
+  assert.match(failure, /Initial status must prove the target Penny Gmail connection id is present/);
+  assert.match(failure, /Initial status must prove the target Nango connection id is present/);
+  assert.match(failure, /Initial status must prove the target Nango provider config key is present/);
+  assert.match(failure, /Initial status must prove staged account alias metadata is present/);
+});
+
 test("Gmail smoke evidence verifier rejects raw connect links or session tokens", () => {
   const evidence = validEvidence();
   const connectStep = evidence.steps.find((step) => step.step === "connect.preflight") as Record<string, unknown>;
@@ -382,6 +401,11 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         statusStatePrivacySafe: true,
         providerStatePrivacySafe: true,
         connectionCount: 1,
+        selectedAccountStateVisible: true,
+        targetConnectionIdPresent: true,
+        targetExternalConnectionIdPresent: true,
+        targetProviderConfigKeyPresent: true,
+        targetAccountAliasPresent: true,
       },
       {
         step: "sync",
