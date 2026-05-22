@@ -191,6 +191,23 @@ test("Gmail browser evidence verifier rejects missing downstream action proof", 
   assert.match(failure, /Gmail source delete completed/);
 });
 
+test("Gmail browser evidence verifier rejects missing Create option evidence proof", () => {
+  const evidence = validBrowserEvidence();
+  const createEvidence = evidence.checks.find((check) => check.name === "create.gmailEvidenceDrawer") as Record<string, unknown>;
+
+  delete createEvidence.personalOptionVisible;
+  delete createEvidence.criticalOptionVisible;
+  delete createEvidence.selectedOptionGmailEvidenceVisible;
+  delete createEvidence.selectedOptionGmailRefsVisible;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Gmail-backed Personal option/);
+  assert.match(failure, /Gmail-backed Critical option/);
+  assert.match(failure, /selected-option Gmail evidence/);
+  assert.match(failure, /selected-option Gmail refs/);
+});
+
 test("Gmail browser evidence verifier rejects missing proof artifact coverage", () => {
   const evidence = validBrowserEvidence();
 
@@ -386,6 +403,10 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
         createRunCompleted: true,
         evidenceDrawerOpened: true,
         drawerVisible: true,
+        personalOptionVisible: true,
+        criticalOptionVisible: true,
+        selectedOptionGmailEvidenceVisible: true,
+        selectedOptionGmailRefsVisible: true,
         realGmailRefsOnlyWhenUsed: true,
         gmailSourceRefVisible: true,
         gmailMemoryRefVisible: true,
