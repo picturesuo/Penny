@@ -36,12 +36,12 @@ const proofArtifacts = collectProofArtifacts(evidence);
 
 assert(Boolean(evidence), "Browser evidence must be valid JSON.");
 assert(evidence?.ok !== false, "Browser evidence must not be failed evidence.");
-assert(typeof evidence?.baseUrl === "string" && evidence.baseUrl.length > 0, "Browser evidence must include baseUrl.");
-assert(typeof evidence?.userId === "string" && evidence.userId.length > 0, "Browser evidence must include userId.");
-assert(typeof evidence?.workspaceId === "string" && evidence.workspaceId.length > 0, "Browser evidence must include workspaceId.");
-assert(typeof evidence?.projectId === "string" && evidence.projectId.length > 0, "Browser evidence must include projectId.");
-assert(typeof evidence?.sphereId === "string" && evidence.sphereId.length > 0, "Browser evidence must include sphereId.");
-assert(typeof evidence?.capturedAt === "string" && evidence.capturedAt.length > 0, "Browser evidence must include capturedAt.");
+assertSafeRequiredString(evidence?.baseUrl, "baseUrl");
+assertSafeRequiredString(evidence?.userId, "userId");
+assertSafeRequiredString(evidence?.workspaceId, "workspaceId");
+assertSafeRequiredString(evidence?.projectId, "projectId");
+assertSafeRequiredString(evidence?.sphereId, "sphereId");
+assertValidTimestamp(evidence?.capturedAt, "capturedAt");
 assert(Array.isArray(evidence?.checks), "Browser evidence must include checks.");
 assertSafeStagingRunId(evidence, { required: !preOAuthOnly });
 assertNoUnsafeEvidence(evidence);
@@ -93,6 +93,21 @@ function collectProofArtifacts(value) {
   return ["screenshots", "notes", "proofs"]
     .flatMap((key) => (Array.isArray(value?.[key]) ? value[key] : []))
     .filter((item) => item && typeof item === "object" && !Array.isArray(item));
+}
+
+function assertSafeRequiredString(value, field) {
+  const text = typeof value === "string" ? value.trim() : "";
+
+  assert(Boolean(text), `Browser evidence must include ${field}.`);
+  assert(!/^REPLACE_WITH_/i.test(text), `Browser evidence ${field} must replace template placeholder values.`);
+}
+
+function assertValidTimestamp(value, field) {
+  const text = typeof value === "string" ? value.trim() : "";
+  const parsed = Date.parse(text);
+
+  assert(Boolean(text), `Browser evidence must include ${field}.`);
+  assert(Number.isFinite(parsed), `Browser evidence ${field} must be a valid timestamp.`);
 }
 
 function assertSafeStagingRunId(value, options) {
