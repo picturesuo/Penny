@@ -1225,7 +1225,8 @@ function sameStringSet(left, right) {
 function inspectExportPrivacySafety(text) {
   const unsafePrivacyClaimAbsent = !/global training|hidden memory|private inbox|background Gmail|before consent|unrestricted mailbox scan/i.test(text);
   const rawEmailBodyAbsent = !/plainTextBody|rawBody|Private Gmail body|raw email body|raw Gmail body/i.test(text);
-  const secretOrConnectTokenAbsent = !/(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token|NANGO_SECRET_KEY|PENNY_API_TOKEN)/i.test(text);
+  const secretOrConnectTokenAbsent =
+    !/(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token|NANGO_SECRET_KEY|NANGO_WEBHOOK_SIGNING_KEY|PENNY_API_TOKEN)/i.test(text);
   const unsupportedHumanReviewClaimAbsent = !hasUnsupportedHumanReviewClaim(text);
   const checks = [
     ["unsafe privacy claims", unsafePrivacyClaimAbsent],
