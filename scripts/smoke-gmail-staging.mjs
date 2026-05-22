@@ -103,7 +103,19 @@ try {
   const selectorUsed = Object.keys(selector).length > 0;
   assert(selectorUsed || connectedTargets.length <= 1, "Multiple Gmail connections found. Set GMAIL_SMOKE_CONNECTION_ID or GMAIL_SMOKE_PROVIDER_CONFIG_KEY.");
   assert(!selectorUsed || targetedConnection, "Configured Gmail smoke connection selector did not match a connected Gmail account.");
-  const targetConnectorConnectionId = targetedConnection?.id ?? connectedTargets[0]?.id ?? null;
+  const targetConnection = targetedConnection ?? connectedTargets[0] ?? null;
+  const targetCredential = targetConnection?.credential ?? {};
+  const targetConnectorConnectionId = targetConnection?.id ?? null;
+  const targetAccountAliasPresent = Boolean(
+    targetCredential.accountLabel ||
+      targetCredential.accountEmail ||
+      targetCredential.accountId ||
+      targetCredential.endUserId,
+  );
+  assert(targetConnectorConnectionId, "Gmail smoke could not identify the target Penny Gmail connection.");
+  assert(targetCredential.connectionId, "Gmail smoke target did not expose a Nango connection id.");
+  assert(targetCredential.providerConfigKey, "Gmail smoke target did not expose a Nango provider config key.");
+  assert(targetAccountAliasPresent, "Gmail smoke target did not expose staged account alias metadata.");
   record("status.initial", {
     status: initialStatus.data.status,
     messageCount: initialStatus.data.messageCount,
@@ -111,6 +123,11 @@ try {
     sourceCount: initialStatus.data.sources.length,
     selectorUsed,
     targetConnectionMatched: selectorUsed ? Boolean(targetedConnection) : null,
+    selectedAccountStateVisible: Boolean(targetConnection),
+    targetConnectionIdPresent: Boolean(targetConnectorConnectionId),
+    targetExternalConnectionIdPresent: Boolean(targetCredential.connectionId),
+    targetProviderConfigKeyPresent: Boolean(targetCredential.providerConfigKey),
+    targetAccountAliasPresent,
     restrictedScope: initialStatus.data.restrictedScope,
     gated: initialStatus.data.gated,
     private: initialStatus.data.private,
