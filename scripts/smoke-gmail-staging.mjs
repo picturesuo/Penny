@@ -412,10 +412,14 @@ function hasKeywordResultShape(result) {
   return Boolean(
     result &&
       typeof result.messageId === "string" &&
+      (result.threadId === null || typeof result.threadId === "string") &&
       typeof result.subject === "string" &&
       typeof result.sender === "string" &&
+      (result.date === null || typeof result.date === "string") &&
       typeof result.snippet === "string" &&
-      result.sourceRef?.surface === "google_gmail",
+      result.sourceRef?.surface === "google_gmail" &&
+      typeof result.sourceRef?.sourceUri === "string" &&
+      hasNoRawEmailFields(result),
   );
 }
 
@@ -432,8 +436,13 @@ function hasSemanticResultShape(result) {
       typeof result.sourceRef?.sourceUri === "string" &&
       result.memoryRef?.id &&
       (result.grounding === "grounded" || result.grounding === "inferred") &&
-      typeof result.scoreReason === "string",
+      typeof result.scoreReason === "string" &&
+      hasNoRawEmailFields(result),
   );
+}
+
+function hasNoRawEmailFields(result) {
+  return !["body", "plainTextBody", "raw", "rawBody", "html", "payload", "score"].some((field) => field in result);
 }
 
 function includesNeedle(value, needle) {
