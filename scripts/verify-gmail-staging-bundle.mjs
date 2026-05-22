@@ -8,21 +8,31 @@ const args = process.argv.slice(2);
 const readinessFile = optionValue("--readiness");
 const smokeFile = optionValue("--smoke");
 const destructiveFile = optionValue("--destructive-smoke");
+const uiPreflightFile = optionValue("--ui-preflight");
 const requireReadinessConnect = args.includes("--readiness-connect-preflight");
 const requireSmokeConnect = args.includes("--smoke-connect-preflight");
 const requireKeywordFilters = args.includes("--require-keyword-filters");
 const requireDestructive = args.includes("--require-destructive");
+const requireUiPreflight = args.includes("--require-ui-preflight");
 const minMessages = optionInt("--min-messages", 1);
 const errors = [];
 
-if (args.includes("--help") || args.includes("-h") || !readinessFile || !smokeFile || (requireDestructive && !destructiveFile)) {
+if (
+  args.includes("--help") ||
+  args.includes("-h") ||
+  !readinessFile ||
+  !smokeFile ||
+  (requireDestructive && !destructiveFile) ||
+  (requireUiPreflight && !uiPreflightFile)
+) {
   printUsage();
-  process.exit(readinessFile && smokeFile && (!requireDestructive || destructiveFile) ? 0 : 1);
+  process.exit(readinessFile && smokeFile && (!requireDestructive || destructiveFile) && (!requireUiPreflight || uiPreflightFile) ? 0 : 1);
 }
 
 const readiness = readEvidence(readinessFile, "readiness");
 const smoke = readEvidence(smokeFile, "smoke");
 const destructive = destructiveFile ? readEvidence(destructiveFile, "destructive smoke") : null;
+const uiPreflight = uiPreflightFile ? readEvidence(uiPreflightFile, "UI preflight") : null;
 
 runVerifier("readiness", [
   "scripts/verify-gmail-readiness-evidence.mjs",
@@ -60,6 +70,11 @@ if (readiness && destructive) {
   assert(Boolean(destructive.completedAt), "Destructive smoke evidence must include completedAt.");
 }
 
+if (readiness && uiPreflight) {
+  assertMatchingScope(readiness, uiPreflight, "UI preflight");
+  assertUiPreflightEvidence(uiPreflight);
+}
+
 if (smoke && destructive) {
   assertMatchingScope(smoke, destructive, "destructive smoke");
 }
@@ -74,10 +89,12 @@ if (errors.length) {
         readiness: evidenceSummary(readinessFile, readiness),
         smoke: evidenceSummary(smokeFile, smoke),
         destructive: destructiveFile ? evidenceSummary(destructiveFile, destructive) : null,
+        uiPreflight: uiPreflightFile ? evidenceSummary(uiPreflightFile, uiPreflight) : null,
         readinessConnectPreflightRequired: requireReadinessConnect,
         smokeConnectPreflightRequired: requireSmokeConnect,
         keywordFilterCoverageRequired: requireKeywordFilters,
         destructiveRequired: requireDestructive,
+        uiPreflightRequired: requireUiPreflight,
         minMessages,
       },
       null,
@@ -96,6 +113,38 @@ function runVerifier(label, verifierArgs) {
   if (result.status !== 0) {
     errors.push(`${label} verifier failed with status ${result.status ?? "unknown"}: ${summarizeFailure(result.stderr || result.stdout)}`);
   }
+}
+
+function assertUiPreflightEvidence(evidence) {
+  assert(evidence.ok !== false, "UI preflight evidence must not be failed evidence.");
+  assert(Boolean(evidence.checkedAt), "UI preflight evidence must include checkedAt.");
+  assertNoUnsafeUiPreflightEvidence(evidence);
+
+  const requiredChecks = ["brain.documents", "brain.memoryProfile", "brain.recents", "google.provider", "gmail.status"];
+  const checks = Array.isArray(evidence.checks) ? evidence.checks : [];
+  const checkNames = new Set(checks.map((check) => check?.name));
+
+  for (const checkName of requiredChecks) {
+    assert(checkNames.has(checkName), `UI preflight evidence must include ${checkName}.`);
+  }
+
+  const providerCheck = checks.find((check) => check?.name === "google.provider");
+  const gmailCheck = checks.find((check) => check?.name === "gmail.status");
+
+  assert(providerCheck?.configured === true, "UI preflight Google provider check must be configured.");
+  assert(providerCheck?.providerStatePrivacySafe === true, "UI preflight Google provider check must be privacy-safe.");
+  assert(gmailCheck?.restrictedScope === true, "UI preflight Gmail status must report restrictedScope=true.");
+  assert(gmailCheck?.gated === true, "UI preflight Gmail status must report gated=true.");
+  assert(gmailCheck?.private === true, "UI preflight Gmail status must report private=true.");
+  assert(gmailCheck?.statusStatePrivacySafe === true, "UI preflight Gmail status check must be privacy-safe.");
+}
+
+function assertNoUnsafeUiPreflightEvidence(evidence) {
+  const serialized = JSON.stringify(evidence);
+  const unsafePattern =
+    /connectLink|credentialRef|accessToken|refreshToken|encryptedToken|encryptedRefreshToken|rawBody|plainTextBody|private raw Gmail body/i;
+
+  assert(!unsafePattern.test(serialized), "UI preflight evidence includes unsafe Gmail, credential, or raw body fields.");
 }
 
 function readEvidence(file, label) {
@@ -162,6 +211,6 @@ function printErrors() {
 
 function printUsage() {
   console.error(
-    "Usage: node scripts/verify-gmail-staging-bundle.mjs --readiness=<readiness.json> --smoke=<smoke.json> [--destructive-smoke=<smoke-full.json>] [--require-destructive] [--readiness-connect-preflight] [--smoke-connect-preflight] [--require-keyword-filters] [--min-messages=N]",
+    "Usage: node scripts/verify-gmail-staging-bundle.mjs --readiness=<readiness.json> --smoke=<smoke.json> [--destructive-smoke=<smoke-full.json>] [--ui-preflight=<ui-preflight.json>] [--require-destructive] [--require-ui-preflight] [--readiness-connect-preflight] [--smoke-connect-preflight] [--require-keyword-filters] [--min-messages=N]",
   );
 }
