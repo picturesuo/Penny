@@ -223,12 +223,19 @@ try {
       text: keywordText,
       maxResults: 1,
     });
+    const semanticAfterRevoke = await requestMaybeFail("POST", "/api/connectors/google/gmail/semantic-search", {
+      ...selector,
+      query: semanticQuery,
+      limit: maxResults,
+    });
     assert(syncAfterRevoke.status >= 400, "Gmail sync unexpectedly succeeded after revoke.");
     assert(searchAfterRevoke.status >= 400, "Gmail keyword search unexpectedly succeeded after revoke.");
+    assert(semanticAfterRevoke.status >= 400, "Gmail semantic search unexpectedly succeeded after revoke.");
     record("revoke", {
       revoked: true,
       syncAfterRevokeStatus: syncAfterRevoke.status,
       searchAfterRevokeStatus: searchAfterRevoke.status,
+      semanticAfterRevokeStatus: semanticAfterRevoke.status,
     });
 
     if (confirmDelete) {
