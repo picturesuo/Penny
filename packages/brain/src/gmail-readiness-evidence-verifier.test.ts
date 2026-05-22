@@ -101,6 +101,17 @@ test("Gmail readiness evidence verifier rejects unsafe run ids without echoing t
   assert.doesNotMatch(failure, /staged-account@example\.com/);
 });
 
+test("Gmail readiness evidence verifier rejects unsafe scope ids without echoing them", () => {
+  const evidence = validReadinessEvidence();
+
+  evidence.userId = "staged-account@example.com";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Readiness evidence userId must be a safe opaque scope id/);
+  assert.doesNotMatch(failure, /staged-account@example\.com/);
+});
+
 test("Gmail readiness evidence verifier rejects weak staging evidence", () => {
   const evidence = validReadinessEvidence();
 
