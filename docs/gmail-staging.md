@@ -195,21 +195,22 @@ Checklist:
 8. If multiple Google accounts are connected in the same workspace, select the staged Gmail account before sync, search, revoke, or delete.
 9. Click `Sync now`.
 10. Verify message count and Gmail source count increase.
-11. Verify spam/trash test messages are not imported by default.
-12. If the staged mailbox includes an oversized disposable message, verify sync reports it in `partialFailures` with `stage=message_oversized` and does not create a Gmail source or Brain memory for that message.
-13. Run keyword search for `launch partner evidence`.
-14. Run keyword search using `from`, `to`, `subject`, `label`, `after`, `before`, and `hasAttachment`.
-15. Verify keyword results show refs/snippets and do not create Brain memory unless `sync=true` is explicitly tested.
-16. Run semantic search for the staged concept.
-17. Verify semantic results come only from synced Gmail memory and show subject, sender, date, snippet, messageId, threadId, sourceRef, memoryRef, grounded/inferred label, and scoreReason.
-18. Start Create with an idea that should use the staged email evidence.
-19. Select Personal and Critical options when relevant.
-20. Open the evidence/details drawer and verify Gmail source refs appear only when actually used.
-21. Export the prompt and verify Gmail-derived personal context appears only when the selected Create result used that Gmail evidence.
-22. Click `Revoke`.
-23. Verify Sync and Search return revoked/not connected behavior.
-24. Delete the Gmail source.
-25. Verify Gmail memory no longer appears in Brain retrieval, Create evidence, or prompt export.
+11. Verify imported Gmail source privacy is private, `trainingUse=false`, `rawContentStored=false`, and Brain profile `rawRetention=false`.
+12. Verify spam/trash test messages are not imported by default.
+13. If the staged mailbox includes an oversized disposable message, verify sync reports it in `partialFailures` with `stage=message_oversized` and does not create a Gmail source or Brain memory for that message.
+14. Run keyword search for `launch partner evidence`.
+15. Run keyword search using `from`, `to`, `subject`, `label`, `after`, `before`, and `hasAttachment`.
+16. Verify keyword results show refs/snippets and do not create Brain memory unless `sync=true` is explicitly tested.
+17. Run semantic search for the staged concept.
+18. Verify semantic results come only from synced Gmail memory and show subject, sender, date, snippet, messageId, threadId, sourceRef, memoryRef, grounded/inferred label, and scoreReason.
+19. Start Create with an idea that should use the staged email evidence.
+20. Select Personal and Critical options when relevant.
+21. Open the evidence/details drawer and verify Gmail source refs appear only when actually used.
+22. Export the prompt and verify Gmail-derived personal context appears only when the selected Create result used that Gmail evidence.
+23. Click `Revoke`.
+24. Verify Sync and Search return revoked/not connected behavior.
+25. Delete the Gmail source.
+26. Verify Gmail memory no longer appears in Brain retrieval, Create evidence, or prompt export.
 
 Record the smoke result with:
 
@@ -426,6 +427,7 @@ The default smoke verifies:
 - Gmail status is configured, connected, restricted-scope gated, private, `gmail.readonly`, `trainingUse=false`, `rawRetentionDefault=false`, and `noHumanReview=true`.
 - Gmail status and Google provider page-load state views do not expose Gmail message metadata, provenance, credential refs, cursor internals, raw body fields, or per-source training/raw-retention flags.
 - Sync imports at least one message from the staged safe-message query/filter set and returns cursor/history evidence.
+- Sync-state source privacy proves imported Gmail sources are private user memory with `trainingUse=false`, `rawContentStored=false`, and enabled retrieval; Brain profile proves the same Gmail sources have private visibility, `trainingUse=false`, and `rawRetention=false`.
 - By default, sync has zero partial failures. When `GMAIL_SMOKE_EXPECT_PARTIAL_FAILURE_STAGE=message_oversized` is set, sync proves the oversized message was skipped through a sanitized `stage=message_oversized` partial-failure summary while still importing the safe message slice.
 - Repeating the same scoped sync returns cursor/history evidence again, does not change the Gmail source count, and does not create duplicate source refs.
 - Keyword search uses the Gmail API, proves safe result shape with message/thread/source refs and snippets, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
@@ -458,7 +460,7 @@ Verify destructive evidence with:
 node scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence-full.json --destructive --min-messages=1
 ```
 
-The verifier fails if required smoke steps are missing, if repeated sync/source counts are unstable, if keyword search stores without `sync=true`, if keyword result-shape facts are missing, if semantic result-shape facts are missing, if semantic search exposes raw scores, if Create/refinement/export do not include the expected Gmail evidence, if Personal or Critical option text does not include the expected staged Gmail evidence phrase, if the selected-option refinement is missing its judgment event or selected-option match, if export privacy-safety facts are missing, if revoke/delete postconditions are missing for destructive runs, or if the evidence JSON contains unsafe raw fields such as tokens, credential refs, metadata/provenance, raw bodies, or raw connect links. Destructive verification also requires `semanticSearch.deleteTargetMatchedSemanticResult=true`, at least one tracked delete-target Gmail memory id, and source/Brain-source id presence in `deleteSource` evidence so delete proof is tied to the synced Gmail memory that Create and semantic search used.
+The verifier fails if required smoke steps are missing, if imported source privacy is not proven in sync state and Brain profile, if repeated sync/source counts are unstable, if keyword search stores without `sync=true`, if keyword result-shape facts are missing, if semantic result-shape facts are missing, if semantic search exposes raw scores, if Create/refinement/export do not include the expected Gmail evidence, if Personal or Critical option text does not include the expected staged Gmail evidence phrase, if the selected-option refinement is missing its judgment event or selected-option match, if export privacy-safety facts are missing, if revoke/delete postconditions are missing for destructive runs, or if the evidence JSON contains unsafe raw fields such as tokens, credential refs, metadata/provenance, raw bodies, or raw connect links. Destructive verification also requires `semanticSearch.deleteTargetMatchedSemanticResult=true`, at least one tracked delete-target Gmail memory id, and source/Brain-source id presence in `deleteSource` evidence so delete proof is tied to the synced Gmail memory that Create and semantic search used.
 
 After verifying individual files, verify the full staging evidence bundle so readiness and smoke files are from the same API and user/workspace/project/sphere scope:
 
@@ -519,6 +521,7 @@ Before marking Gmail staging ready, attach or record:
 - Destructive `scripts/smoke-gmail-staging.mjs` output from a disposable staged Gmail account, when revoke/delete are being certified.
 - Nango auth webhook delivery record showing Penny accepted the Gmail connection and started `google-gmail-messages`.
 - Smoke evidence showing `statusStatePrivacySafe=true` and `providerStatePrivacySafe=true`.
+- Smoke evidence showing synced Gmail source privacy with `syncedSourceTrainingUseFalse=true`, `syncedSourceRawContentStoredFalse=true`, `syncedSourcePrivateUserMemory=true`, `brainProfileTrainingUseFalse=true`, `brainProfileRawRetentionFalse=true`, and `brainProfilePrivateVisibility=true`.
 - Gmail status response before and after OAuth.
 - Sync and repeated-sync responses showing imported count, cursor/historyId, stable source counts, and no duplicate source refs.
 - Keyword search responses proving Gmail `q` search, default no-store behavior, and explicit `sync=true` storage.
