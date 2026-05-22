@@ -2822,6 +2822,9 @@ export function GoogleConnectorControl({
   const deleteSource = enabledSources.find((source) => source.kind === "google_gmail_message") ?? null;
   const sourceCount = connection ? googleConnectionSourceCount(connection) : 0;
   const activeConnectionCount = connectorState.connections.filter((candidate) => candidate.status !== "revoked").length;
+  const activeGmailConnectionCount = connectorState.connections.filter(
+    (candidate) => candidate.status !== "revoked" && candidate.surfaces.includes("google_gmail"),
+  ).length;
   const gmailConnectable =
     Boolean(gmailStatus?.configured) || !gmail || gmail.status === "available" || gmail.status === "connected" || gmail.status === "syncing";
   const selectedHasGmail = connection?.surfaces.includes("google_gmail") ?? false;
@@ -3010,6 +3013,9 @@ export function GoogleConnectorControl({
         </small>
       </section>
       {gmailMessageCount === 0 ? <p className="brain-memory-import-hint">Sync Gmail first.</p> : null}
+      {!connection && activeGmailConnectionCount > 1 ? (
+        <p className="brain-memory-import-hint">Select one Gmail account before sync, search, revoke, or delete.</p>
+      ) : null}
       <div className="gmail-search-grid">
         <form className="gmail-search-form" onSubmit={(event) => void handleKeywordSubmit(event)} data-testid="gmail-keyword-search-form">
           <label>
@@ -3268,8 +3274,22 @@ function isGoogleConnectorStateView(value: unknown): value is GoogleConnectorSta
 
 function selectedGoogleConnection(state: GoogleConnectorStateView, selectedConnectionId: string | null): GoogleConnectorConnectionView | null {
   const selected = selectedConnectionId ? findGoogleConnection(state, selectedConnectionId) : null;
+  const activeConnections = state.connections.filter((connection) => connection.status !== "revoked");
+  const activeGmailConnections = activeConnections.filter((connection) => connection.surfaces.includes("google_gmail"));
 
-  return selected ?? state.connections.find((connection) => connection.status !== "revoked") ?? state.connections[0] ?? null;
+  if (selected) {
+    return selected;
+  }
+
+  if (activeGmailConnections.length === 1) {
+    return activeGmailConnections[0]!;
+  }
+
+  if (activeGmailConnections.length > 1) {
+    return null;
+  }
+
+  return activeConnections[0] ?? state.connections[0] ?? null;
 }
 
 export function isActiveGmailConnection(input: {
