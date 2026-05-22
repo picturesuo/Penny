@@ -193,6 +193,11 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         step: "semanticSearch",
         resultCount: 1,
         contextLight: false,
+        resultShapeVerified: true,
+        sourceRefPresent: true,
+        memoryRefPresent: true,
+        scoreReasonPresent: true,
+        groundingLabels: ["grounded"],
         rawScoreHidden: true,
       },
       {
