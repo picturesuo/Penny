@@ -10,7 +10,7 @@ const artifactRoot = optionValue("--artifact-root");
 const requireArtifactFiles = args.includes("--require-artifact-files");
 const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
 const unsafeValuePattern =
-  /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|access_token|refresh_token|credentialRef|plainTextBody|rawBody|private raw Gmail body|raw Gmail body|payload|BEGIN PRIVATE KEY)/i;
+  /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|access_token|refresh_token|credentialRef|plainTextBody|rawBody|private raw Gmail body|raw Gmail body|raw email body|payload|BEGIN PRIVATE KEY)/i;
 const unsafePrivacyClaimPattern =
   /global training|hidden memory|private inbox|background Gmail|before consent|unrestricted mailbox scan/i;
 const minimumImageArtifactWidth = 320;
