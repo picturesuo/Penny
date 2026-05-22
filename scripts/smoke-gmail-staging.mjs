@@ -99,11 +99,16 @@ try {
   }
   assert((initialStatus.data?.connections ?? []).some((connection) => connection.status === "connected"), "Connect Gmail first.");
   const connectedTargets = (initialStatus.data?.connections ?? []).filter((connection) => connection.status === "connected");
-  const targetedConnection = connectedTargets.find((connection) => matchesConnectionSelector(connection, selector));
   const selectorUsed = Object.keys(selector).length > 0;
+  const matchedConnections = selectorUsed ? connectedTargets.filter((connection) => matchesConnectionSelector(connection, selector)) : [];
+  const targetedConnection = selectorUsed ? matchedConnections[0] : connectedTargets[0];
   assert(selectorUsed || connectedTargets.length <= 1, "Multiple Gmail connections found. Set GMAIL_SMOKE_CONNECTION_ID or GMAIL_SMOKE_PROVIDER_CONFIG_KEY.");
-  assert(!selectorUsed || targetedConnection, "Configured Gmail smoke connection selector did not match a connected Gmail account.");
-  const targetConnection = targetedConnection ?? connectedTargets[0] ?? null;
+  assert(!selectorUsed || matchedConnections.length > 0, "Configured Gmail smoke connection selector did not match a connected Gmail account.");
+  assert(
+    !selectorUsed || matchedConnections.length === 1,
+    "Configured Gmail smoke connection selector matched multiple connected Gmail accounts. Set GMAIL_SMOKE_CONNECTION_ID to the staged Gmail account.",
+  );
+  const targetConnection = targetedConnection ?? null;
   const targetCredential = targetConnection?.credential ?? {};
   const targetConnectorConnectionId = targetConnection?.id ?? null;
   const targetAccountAliasPresent = Boolean(
