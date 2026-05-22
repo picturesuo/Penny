@@ -1258,16 +1258,25 @@ function decodedMessageBody(
 ): { text: string; truncated: boolean } {
   const texts: string[] = [];
   let truncated = false;
+  let textLength = 0;
 
   for (const part of parts.filter((candidate) => candidate.mimeType === mimeType)) {
+    if (textLength >= gmailBodyCharLimit) {
+      truncated = true;
+      break;
+    }
+
     const decoded = decodeBase64Url(part.bodyData);
-    const text = transform(decoded.text);
+    const remaining = Math.max(0, gmailBodyCharLimit - textLength);
+    const transformed = transform(decoded.text);
+    const text = transformed.length > remaining ? transformed.slice(0, remaining).trim() : transformed;
 
     if (text) {
       texts.push(text);
+      textLength += text.length;
     }
 
-    truncated = truncated || decoded.truncated;
+    truncated = truncated || decoded.truncated || transformed.length > remaining;
   }
 
   const limited = limitText(texts.join("\n\n").trim(), gmailBodyCharLimit);
