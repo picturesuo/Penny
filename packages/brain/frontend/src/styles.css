@@ -2871,6 +2871,106 @@
     margin-top: 8px;
   }
 
+  .gmail-connector-privacy {
+    display: grid;
+    gap: 5px;
+    border: 1px solid #d7e0d0;
+    border-radius: 8px;
+    background: #fbfdf7;
+    padding: 10px;
+  }
+
+  .gmail-connector-privacy span {
+    color: #111111;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .gmail-connector-privacy small {
+    color: rgb(17 17 17 / 0.62);
+    font-size: 11px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .gmail-search-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px;
+  }
+
+  .gmail-search-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 8px;
+    border: 1px solid #d8e1e5;
+    border-radius: 8px;
+    background: #ffffff;
+    padding: 10px;
+  }
+
+  .gmail-search-form label {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+  }
+
+  .gmail-search-form label span {
+    color: rgb(17 17 17 / 0.6);
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .gmail-search-form input {
+    min-width: 0;
+    width: 100%;
+    border: 1px solid #cfd7dc;
+    border-radius: 7px;
+    background: #f8fbfd;
+    padding: 9px 10px;
+    color: #111111;
+    font: inherit;
+    font-size: 12px;
+  }
+
+  .gmail-results-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .gmail-results-list article {
+    display: grid;
+    gap: 4px;
+    border: 1px solid #e1ded6;
+    border-radius: 8px;
+    background: #ffffff;
+    padding: 10px;
+  }
+
+  .gmail-results-list strong {
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    line-height: 1.18;
+  }
+
+  .gmail-results-list span,
+  .gmail-results-list small {
+    color: rgb(17 17 17 / 0.58);
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .gmail-results-list p {
+    margin: 0;
+    color: rgb(17 17 17 / 0.72);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
   .google-connector-card .brain-memory-next-step {
     border-color: #c6d4bd;
     background: #f4fae8;
