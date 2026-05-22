@@ -154,6 +154,39 @@ Record the smoke result with:
 - Revoke/delete result.
 - Any failures or screenshots.
 
+## Local UI Preflight Without OAuth
+
+When a real Gmail account is not available, run a browser preflight before changing staging code so the UI path stays visible and honest. This does not replace the staged OAuth proof.
+
+Start Penny with Gmail configured but without real Nango credentials:
+
+```bash
+DATABASE_URL= \
+PENNY_SKIP_DATABASE_PREP=true \
+PENNY_DEPLOY_ENV=local \
+ENABLE_GOOGLE_CONNECTOR=true \
+ENABLE_GMAIL_CONNECTOR=true \
+ENABLE_RESTRICTED_GOOGLE_SCOPES=true \
+NANGO_SECRET_KEY=nango-secret \
+NANGO_PUBLIC_KEY=nango-public \
+NANGO_BASE_URL=https://api.nango.test \
+NANGO_GMAIL_INTEGRATION_ID=google-gmail \
+PENNY_AUTH_MODE=dev \
+PORT=3011 \
+pnpm dev
+```
+
+Open `http://localhost:3011` in a browser and verify:
+
+- Brain opens and the Gmail card renders as configured/available.
+- The Gmail card shows `gmail.readonly`, restricted scope, private, and the consent/privacy copy.
+- Keyword search, semantic search, Sync now, Revoke, and Delete Gmail source are disabled until a Gmail account is connected.
+- The keyword filter disclosure opens and shows `from`, `to`, `subject`, `label`, `after`, `before`, and `hasAttachment`.
+- Google source coverage is visible and clearly marks the selected account state.
+- Create opens from the top nav, shows context-light when no Brain memory exists, generates the five directions from a safe rough idea, renders Details buttons, artifact, verification, and enables Export prompt.
+
+Record this as a UI preflight only. The actual staging proof still requires OAuth, sync, keyword search, semantic search, Gmail evidence in Create, export, revoke, and delete against a staged Gmail account.
+
 ## Automated Staging Smoke
 
 After completing OAuth in the browser, run the non-destructive smoke against the same user/workspace scope:
