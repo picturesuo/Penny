@@ -29,6 +29,7 @@ if (
   (requireDestructive && !destructiveFile) ||
   (requireUiPreflight && !uiPreflightFile) ||
   (requireBrowserEvidence && !browserEvidenceFile) ||
+  (requireBrowserArtifactFiles && !browserEvidenceFile) ||
   (requireBrowserArtifactFiles && !browserArtifactRoot)
 ) {
   printUsage();
@@ -38,6 +39,7 @@ if (
       (!requireDestructive || destructiveFile) &&
       (!requireUiPreflight || uiPreflightFile) &&
       (!requireBrowserEvidence || browserEvidenceFile) &&
+      (!requireBrowserArtifactFiles || browserEvidenceFile) &&
       (!requireBrowserArtifactFiles || browserArtifactRoot)
       ? 0
       : 1,
