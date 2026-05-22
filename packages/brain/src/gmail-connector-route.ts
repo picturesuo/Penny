@@ -399,6 +399,12 @@ export async function handleGoogleGmailSemanticSearchRequest(
     return invalidJson(body.message);
   }
 
+  const configError = gmailConfigResponse(readGoogleConnectorRuntimeConfig(options.env));
+
+  if (configError) {
+    return configError;
+  }
+
   const query = stringValue(body.value.query) ?? stringValue(body.value.text);
 
   if (!query) {
