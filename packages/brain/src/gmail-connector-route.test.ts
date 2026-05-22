@@ -808,7 +808,27 @@ test("Gmail semantic search ranks synced email memory without leaking raw scores
     data: {
       sourceOfTruth: string;
       contextLight: boolean;
-      results: Array<Record<string, unknown> & { messageId: string; subject: string; grounding: string; scoreReason: string }>;
+      results: Array<
+        Record<string, unknown> & {
+          messageId: string;
+          threadId: string | null;
+          subject: string;
+          sender: string;
+          date: string | null;
+          snippet: string;
+          sourceRef: {
+            id: string;
+            providerId: string;
+            surface: string;
+            sourceUri: string;
+            externalId: string;
+            url: string | null;
+          };
+          memoryRef: { id: string };
+          grounding: string;
+          scoreReason: string;
+        }
+      >;
     };
   };
   const crossUserResponse = await handleGoogleGmailSemanticSearchRequest(
@@ -827,11 +847,24 @@ test("Gmail semantic search ranks synced email memory without leaking raw scores
   assert.equal(response.status, 200);
   assert.equal(payload.data.sourceOfTruth, "synced_private_gmail_brain_memory");
   assert.equal(payload.data.contextLight, false);
-  assert.equal(payload.data.results[0]?.messageId, "msg-1");
-  assert.equal(payload.data.results[0]?.subject, "Launch partner follow-up");
-  assert.match(payload.data.results[0]?.scoreReason, /synced Gmail memory/);
-  assert.equal("score" in (payload.data.results[0] ?? {}), false);
-  assertNoRawEmailFields(payload.data.results[0] ?? {});
+  const result = payload.data.results[0];
+  assert.ok(result);
+  assert.equal(result.messageId, "msg-1");
+  assert.equal(result.threadId, "thread-1");
+  assert.equal(result.subject, "Launch partner follow-up");
+  assert.equal(result.sender, "Alice <alice@example.com>");
+  assert.equal(result.date, "Fri, 22 May 2026 12:00:00 +0000");
+  assert.match(result.snippet, /launch partner email follow-ups/i);
+  assert.equal(result.sourceRef.providerId, "google");
+  assert.equal(result.sourceRef.surface, "google_gmail");
+  assert.equal(result.sourceRef.sourceUri, "gmail:message:msg-1");
+  assert.equal(result.sourceRef.externalId, "msg-1");
+  assert.equal(result.sourceRef.url, "https://mail.google.com/mail/u/0/#all/thread-1");
+  assert.match(result.memoryRef.id, /^memory-/);
+  assert.ok(result.grounding === "grounded" || result.grounding === "inferred");
+  assert.match(result.scoreReason, /(grounded|inferred) match from synced Gmail memory for "Launch partner follow-up"/);
+  assert.equal("score" in result, false);
+  assertNoRawEmailFields(result);
   assert.equal(crossUserResponse.status, 409);
 });
 
