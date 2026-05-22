@@ -188,7 +188,7 @@ function isSafeStagingRunId(value) {
 }
 
 function recordRequiredEnvPresence() {
-  record("env.requiredPresence", {
+  const presence = {
     envFileConfigured: Boolean(envFile),
     envFileLoaded: Boolean(envFile && !envFileLoadError),
     envFileLoadErrorPresent: Boolean(envFileLoadError),
@@ -209,7 +209,45 @@ function recordRequiredEnvPresence() {
     rateLimitPresent: hasEnv("PENNY_RATE_LIMIT_MAX"),
     trustAuthHeadersPresent: hasEnv("PENNY_TRUST_AUTH_HEADERS"),
     databasePrepBypass: envFlag("PENNY_SKIP_DATABASE_PREP"),
+  };
+
+  record("env.requiredPresence", {
+    ...presence,
+    missingRequirementKeys: missingRequirementKeys(presence),
   });
+}
+
+function missingRequirementKeys(presence) {
+  const requirements = [
+    ["enableGoogleConnector", "ENABLE_GOOGLE_CONNECTOR", true],
+    ["enableGmailConnector", "ENABLE_GMAIL_CONNECTOR", true],
+    ["enableRestrictedGoogleScopes", "ENABLE_RESTRICTED_GOOGLE_SCOPES", true],
+    ["nangoSecretPresent", "NANGO_SECRET_KEY", true],
+    ["nangoPublicPresent", "NANGO_PUBLIC_KEY", true],
+    ["nangoBaseUrlPresent", "NANGO_BASE_URL", true],
+    ["nangoGmailIntegrationIdPresent", "NANGO_GMAIL_INTEGRATION_ID", true],
+    ["databasePrepBypass", "PENNY_SKIP_DATABASE_PREP_FALSE", false],
+  ];
+
+  if (presence.envFileLoadErrorPresent) {
+    requirements.unshift(["envFileLoaded", "GMAIL_READINESS_ENV_FILE", true]);
+  }
+
+  if (presence.requireStaging) {
+    requirements.push(
+      ["databaseUrlPresent", "DATABASE_URL", true],
+      ["pennyAuthModePresent", "PENNY_AUTH_MODE", true],
+      ["apiTokenPresent", "PENNY_API_TOKEN", true],
+      ["sessionSecretPresent", "PENNY_SESSION_SECRET", true],
+      ["corsOriginsPresent", "PENNY_CORS_ORIGINS", true],
+      ["rateLimitPresent", "PENNY_RATE_LIMIT_MAX", true],
+      ["trustAuthHeadersPresent", "PENNY_TRUST_AUTH_HEADERS", true],
+    );
+  }
+
+  return requirements
+    .filter(([field, , expected]) => presence[field] !== expected)
+    .map(([, key]) => key);
 }
 
 function checkStrictStagingEnv() {
