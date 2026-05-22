@@ -251,7 +251,9 @@ try {
   assert(keyword.data?.stored === false, "Keyword search stored results without sync=true.");
   assert(Array.isArray(keyword.data?.results) && keyword.data.results.length > 0, "Keyword search returned no Gmail results.");
   const keywordResultShapeVerified = keyword.data.results.every(hasKeywordResultShape);
+  const keywordSelectedSourceRefsMatched = resultsMatchSelectedSourceRefs(keyword.data.results, sourceUrisAfterSync);
   assert(keywordResultShapeVerified, "Keyword search returned an unexpected result shape.");
+  assert(keywordSelectedSourceRefsMatched, "Keyword search results did not match selected-account Gmail source refs.");
   const statusAfterKeyword = await request("GET", "/api/connectors/google/gmail/status");
   assertConnectorStatePrivacy(statusAfterKeyword.data, "Gmail status after keyword search");
   assert(statusAfterKeyword.data?.messageCount === beforeKeywordCount, "Keyword search changed Gmail memory count without sync=true.");
@@ -265,6 +267,7 @@ try {
     messageRefPresent: keyword.data.results.every(hasKeywordMessageRef),
     threadRefPresent: keyword.data.results.every(hasKeywordThreadRef),
     sourceRefPresent: keyword.data.results.every(hasKeywordSourceRef),
+    selectedSourceRefsMatched: keywordSelectedSourceRefsMatched,
     snippetPresent: keyword.data.results.every(hasKeywordSnippet),
     rawBodyAbsent: keyword.data.results.every(hasNoRawEmailFields),
     memoryCountUnchanged: statusAfterKeyword.data.messageCount === beforeKeywordCount,
@@ -280,7 +283,9 @@ try {
   assert(keywordSync.data?.stored === true, "Keyword search with sync=true did not report stored=true.");
   assert(Array.isArray(keywordSync.data?.results) && keywordSync.data.results.length > 0, "Keyword search with sync=true returned no Gmail results.");
   const keywordSyncResultShapeVerified = keywordSync.data.results.every(hasKeywordResultShape);
+  const keywordSyncSelectedSourceRefsMatched = resultsMatchSelectedSourceRefs(keywordSync.data.results, sourceUrisAfterSync);
   assert(keywordSyncResultShapeVerified, "Keyword search with sync=true returned an unexpected result shape.");
+  assert(keywordSyncSelectedSourceRefsMatched, "Keyword search with sync=true results did not match selected-account Gmail source refs.");
   assert(keywordSync.data?.sync?.partialFailureCount === 0, "Keyword search with sync=true reported partial sync failures.");
   const statusAfterKeywordSync = await request("GET", "/api/connectors/google/gmail/status");
   assertConnectorStatePrivacy(statusAfterKeywordSync.data, "Gmail status after keyword search sync");
@@ -300,6 +305,7 @@ try {
     messageRefPresent: keywordSync.data.results.every(hasKeywordMessageRef),
     threadRefPresent: keywordSync.data.results.every(hasKeywordThreadRef),
     sourceRefPresent: keywordSync.data.results.every(hasKeywordSourceRef),
+    selectedSourceRefsMatched: keywordSyncSelectedSourceRefsMatched,
     snippetPresent: keywordSync.data.results.every(hasKeywordSnippet),
     rawBodyAbsent: keywordSync.data.results.every(hasNoRawEmailFields),
     partialFailureCount: keywordSync.data.sync?.partialFailureCount ?? null,
@@ -315,9 +321,11 @@ try {
   assert(Array.isArray(semantic.data?.results) && semantic.data.results.length > 0, "Semantic Gmail search returned no synced memory.");
   const semanticResultShapeVerified = semantic.data.results.every(hasSemanticResultShape);
   const semanticRawScoreHidden = semantic.data.results.every((result) => !("score" in result));
+  const semanticSelectedSourceRefsMatched = resultsMatchSelectedSourceRefs(semantic.data.results, sourceUrisAfterSync);
   assert(semanticResultShapeVerified, "Semantic Gmail search returned an unexpected result shape.");
   assert(semanticRawScoreHidden, "Semantic Gmail search exposed a raw score.");
-  const semanticMatchedSource = (statusAfterSync.data?.sources ?? []).find((source) =>
+  assert(semanticSelectedSourceRefsMatched, "Semantic Gmail search results did not match selected-account Gmail source refs.");
+  const semanticMatchedSource = selectedStatusSources.find((source) =>
     semantic.data.results.some((result) =>
       matchesDeletedSourceRef(result.sourceRef, {
         connectorSourceId: source.id ?? "",
@@ -358,6 +366,7 @@ try {
     threadRefPresent: semantic.data.results.every(hasSemanticThreadRef),
     snippetPresent: semantic.data.results.every(hasSemanticSnippet),
     sourceRefPresent: semantic.data.results.every(hasSemanticSourceRef),
+    selectedSourceRefsMatched: semanticSelectedSourceRefsMatched,
     memoryRefPresent: semantic.data.results.every(hasSemanticMemoryRef),
     scoreReasonPresent: semantic.data.results.every(hasSemanticScoreReason),
     groundingLabels: [...new Set(semantic.data.results.map((result) => result.grounding))].sort(),
@@ -737,6 +746,16 @@ function hasKeywordSourceRef(result) {
 
 function hasKeywordSnippet(result) {
   return typeof result?.snippet === "string" && result.snippet.length > 0;
+}
+
+function resultsMatchSelectedSourceRefs(results, sourceUris) {
+  const selected = new Set((Array.isArray(sourceUris) ? sourceUris : []).filter(Boolean));
+
+  return selected.size > 0 && Array.isArray(results) && results.length > 0 && results.every((result) => {
+    const sourceUri = result?.sourceRef?.sourceUri ?? result?.sourceRef?.url;
+
+    return typeof sourceUri === "string" && selected.has(sourceUri);
+  });
 }
 
 function hasSemanticResultShape(result) {
