@@ -42,6 +42,7 @@ The adapter uses Nango's connect-session, connections, sync-trigger, and sync-st
 Required environment placeholders:
 
 - `NANGO_SECRET_KEY`
+- `NANGO_WEBHOOK_SIGNING_KEY` for strict staging and production webhook verification
 - `NANGO_BASE_URL`
 - `ENABLE_GOOGLE_CONNECTOR`
 - `ENABLE_RESTRICTED_GOOGLE_SCOPES`
