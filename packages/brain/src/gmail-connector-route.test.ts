@@ -998,6 +998,7 @@ test("Gmail revoke removes retrieval access for synced Gmail sources", async () 
   assert.equal(payload.data.state.sources[0]?.privacy.retrievalAccess, "revoked");
   assert.equal(statusPayload.data.messageCount, 0);
 
+  const syncAfterRevokeProxyCalls: NangoProxyInput[] = [];
   const syncAfterRevoke = await handleGoogleGmailSyncRequest(
     gmailRequest("/api/connectors/google/gmail/sync", {
       connectionId: "nango-gmail-1",
@@ -1007,9 +1008,11 @@ test("Gmail revoke removes retrieval access for synced Gmail sources", async () 
       env: configuredEnv,
       stateStore,
       brainMemoryService,
-      adapter: gmailProxyAdapter([]),
+      adapter: gmailProxyAdapter(syncAfterRevokeProxyCalls),
     },
   );
+  const syncAfterPayload = (await syncAfterRevoke.json()) as { error: { code: string; message: string } };
+  const searchAfterRevokeProxyCalls: NangoProxyInput[] = [];
   const searchAfterRevoke = await handleGoogleGmailSearchRequest(
     gmailRequest("/api/connectors/google/gmail/search", {
       connectionId: "nango-gmail-1",
@@ -1020,9 +1023,10 @@ test("Gmail revoke removes retrieval access for synced Gmail sources", async () 
       env: configuredEnv,
       stateStore,
       brainMemoryService,
-      adapter: gmailProxyAdapter([]),
+      adapter: gmailProxyAdapter(searchAfterRevokeProxyCalls),
     },
   );
+  const searchAfterPayload = (await searchAfterRevoke.json()) as { error: { code: string; message: string } };
   const semanticAfterRevoke = await handleGoogleGmailSemanticSearchRequest(
     gmailRequest("/api/connectors/google/gmail/semantic-search", {
       query: "launch partner private email evidence",
@@ -1034,6 +1038,14 @@ test("Gmail revoke removes retrieval access for synced Gmail sources", async () 
   assert.equal(syncAfterRevoke.status, 409);
   assert.equal(searchAfterRevoke.status, 409);
   assert.equal(semanticAfterRevoke.status, 409);
+  assert.deepEqual(syncAfterPayload.error, {
+    code: "gmail_connection_revoked",
+    message: "Revoked Gmail connections cannot be used for sync or search.",
+    retryable: false,
+  });
+  assert.deepEqual(searchAfterPayload.error, syncAfterPayload.error);
+  assert.equal(syncAfterRevokeProxyCalls.length, 0);
+  assert.equal(searchAfterRevokeProxyCalls.length, 0);
 });
 
 test("Gmail source delete still removes Brain retrieval after revoke", async () => {
