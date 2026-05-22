@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BrainMemoryPanel, BrainWorkspace, GoogleConnectorControl } from "../src/components/BrainWorkspace";
+import { BrainMemoryPanel, BrainWorkspace, GoogleConnectorControl, isGmailSearchAvailable } from "../src/components/BrainWorkspace";
 import type { BrainDocumentsData, BrainMemoryProfileData, BrainRecentIdea } from "../src/types/brain";
 
 test("BrainWorkspace renders persisted quick notes as the first sidebar folder", () => {
@@ -309,6 +309,14 @@ test("GoogleConnectorControl renders Gmail keyword search filters for staging sm
   assert.match(markup, /After/);
   assert.match(markup, /Before/);
   assert.match(markup, /Has attachment/);
+});
+
+test("Gmail search availability requires an active Gmail connection", () => {
+  assert.equal(isGmailSearchAvailable({ connection: null }), false);
+  assert.equal(isGmailSearchAvailable({ connection: { status: "connected", surfaces: ["google_drive"] } }), false);
+  assert.equal(isGmailSearchAvailable({ connection: { status: "revoked", surfaces: ["google_gmail"] } }), false);
+  assert.equal(isGmailSearchAvailable({ connection: { status: "connected", surfaces: ["google_gmail"] }, disabled: true }), false);
+  assert.equal(isGmailSearchAvailable({ connection: { status: "connected", surfaces: ["google_gmail"] } }), true);
 });
 
 function emptyDocumentsData(): BrainDocumentsData {
