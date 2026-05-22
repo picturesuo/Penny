@@ -304,14 +304,27 @@ try {
     includesNeedle(createText, createEvidenceNeedle),
     "Create did not include expected Gmail evidence text.",
   );
-  const selectedOptions = createFirst.data.optionSet.options
-    .filter((option) => option.lens === "Personal" || option.lens === "Critical")
-    .map((option) => option.id);
-  assert(selectedOptions.length > 0, "Create did not return Personal/Critical options for refinement.");
+  const createOptionLenses = createFirst.data.optionSet.options.map((option) => option.lens).filter(Boolean).sort();
+  const personalOptionPresent = createOptionLenses.includes("Personal");
+  const criticalOptionPresent = createOptionLenses.includes("Critical");
+  const gmailMemoryEvidencePresent = hasCreateMemoryEvidence(createFirst.data, createEvidenceNeedle);
+  const gmailSourceEvidencePresent = hasCreateSourceEvidence(createFirst.data, createEvidenceNeedle);
+  assert(personalOptionPresent, "Create did not return a Personal option for Gmail evidence.");
+  assert(criticalOptionPresent, "Create did not return a Critical option for Gmail evidence.");
+  assert(gmailMemoryEvidencePresent, "Create did not include expected Gmail evidence in memory refs.");
+  assert(gmailSourceEvidencePresent, "Create did not include expected Gmail evidence in source refs.");
+  const selectedOptionRecords = createFirst.data.optionSet.options.filter((option) => option.lens === "Personal" || option.lens === "Critical");
+  const selectedOptions = selectedOptionRecords.map((option) => option.id);
+  const selectedLenses = [...new Set(selectedOptionRecords.map((option) => option.lens))].sort();
   record("create.first", {
     memoryCountUsed: createFirst.data.observability?.memoryCountUsed ?? 0,
     sourceCountUsed: createFirst.data.observability?.sourceCountUsed ?? 0,
     selectedOptionCount: selectedOptions.length,
+    selectedLenses,
+    personalOptionPresent,
+    criticalOptionPresent,
+    gmailMemoryEvidencePresent,
+    gmailSourceEvidencePresent,
     expectedEvidencePresent: includesNeedle(createText, createEvidenceNeedle),
   });
 
@@ -585,6 +598,30 @@ function hasSemanticMemoryRef(result) {
 
 function hasSemanticScoreReason(result) {
   return typeof result?.scoreReason === "string" && result.scoreReason.trim().length > 0;
+}
+
+function hasCreateMemoryEvidence(data, needle) {
+  return createMemoryRefs(data).some((memory) => includesNeedle(`${memory.label ?? ""} ${memory.summary ?? ""} ${memory.id ?? ""}`, needle));
+}
+
+function hasCreateSourceEvidence(data, needle) {
+  return createSourceRefs(data).some((source) =>
+    includesNeedle(`${source.label ?? ""} ${source.excerpt ?? ""} ${source.sourceRange ?? ""} ${source.url ?? ""} ${source.id ?? ""}`, needle),
+  );
+}
+
+function createMemoryRefs(data) {
+  const optionSet = data?.optionSet ?? {};
+  const optionMemories = Array.isArray(optionSet.options) ? optionSet.options.flatMap((option) => (Array.isArray(option.memoryUsed) ? option.memoryUsed : [])) : [];
+
+  return [...(Array.isArray(optionSet.memoryUsed) ? optionSet.memoryUsed : []), ...optionMemories];
+}
+
+function createSourceRefs(data) {
+  const optionSet = data?.optionSet ?? {};
+  const optionSources = Array.isArray(optionSet.options) ? optionSet.options.flatMap((option) => (Array.isArray(option.sourcesUsed) ? option.sourcesUsed : [])) : [];
+
+  return [...(Array.isArray(optionSet.sourcesUsed) ? optionSet.sourcesUsed : []), ...optionSources];
 }
 
 function hasNoRawEmailFields(result) {
