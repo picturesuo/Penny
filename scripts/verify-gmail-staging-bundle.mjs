@@ -79,6 +79,10 @@ if (destructiveFile) {
   ]);
 }
 
+if (uiPreflightFile) {
+  runVerifier("UI preflight", ["scripts/verify-gmail-ui-preflight-evidence.mjs", uiPreflightFile]);
+}
+
 if (browserEvidenceFile) {
   runVerifier("browser evidence", [
     "scripts/verify-gmail-browser-evidence.mjs",
