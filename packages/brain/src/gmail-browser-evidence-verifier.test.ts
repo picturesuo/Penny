@@ -191,6 +191,20 @@ test("Gmail browser evidence verifier rejects missing downstream action proof", 
   assert.match(failure, /Gmail source delete completed/);
 });
 
+test("Gmail browser evidence verifier rejects missing result provenance proof", () => {
+  const evidence = validBrowserEvidence();
+  const connectedResults = evidence.checks.find((check) => check.name === "brain.gmailConnectedResults") as Record<string, unknown>;
+  const semanticResults = evidence.checks.find((check) => check.name === "brain.gmailSemanticResults") as Record<string, unknown>;
+
+  delete connectedResults.keywordSelectedSourceRefsMatched;
+  delete semanticResults.semanticSelectedSourceRefsMatched;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /keyword result refs match the selected Gmail source/);
+  assert.match(failure, /semantic result refs match the selected Gmail source/);
+});
+
 test("Gmail browser evidence verifier rejects missing post-delete state proof", () => {
   const evidence = validBrowserEvidence();
   const postRevokeDelete = evidence.checks.find((check) => check.name === "brain.gmailPostRevokeDelete") as Record<string, unknown>;
@@ -398,6 +412,7 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
         keywordMessageRefVisible: true,
         keywordThreadRefVisible: true,
         keywordSourceRefVisible: true,
+        keywordSelectedSourceRefsMatched: true,
       },
       {
         name: "brain.gmailSemanticResults",
@@ -408,6 +423,7 @@ function validBrowserEvidence(): Record<string, unknown> & { checks: Array<Recor
         scoreReasonVisible: true,
         sourceRefVisible: true,
         memoryRefVisible: true,
+        semanticSelectedSourceRefsMatched: true,
         rawNumericScoreHidden: true,
       },
       {
