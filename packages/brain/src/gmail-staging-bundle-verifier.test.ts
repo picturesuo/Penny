@@ -662,6 +662,11 @@ function validSmokeEvidence(): Record<string, unknown> {
       {
         step: "create.export",
         expectedEvidencePresent: true,
+        selectedOptionHistoryPresent: true,
+        personalContextSectionPresent: true,
+        sourceMemoryEvidenceSectionPresent: true,
+        personalContextExpectedEvidencePresent: true,
+        sourceMemoryEvidenceExpectedEvidencePresent: true,
         unsafePrivacyClaimAbsent: true,
         rawEmailBodyAbsent: true,
         secretOrConnectTokenAbsent: true,
