@@ -1237,6 +1237,24 @@ test("buildGmailSearchQuery omits unsupported send/modify scopes and formats exa
   );
 });
 
+test("buildGmailSearchQuery omits invalid Gmail date filters", () => {
+  assert.equal(
+    buildGmailSearchQuery({
+      text: "private beta",
+      after: "not-a-date",
+      before: "2026-02-31",
+    }),
+    '"private beta"',
+  );
+  assert.equal(
+    buildGmailSearchQuery({
+      after: "2026/05/01",
+      before: "2026-05-22",
+    }),
+    "after:2026/05/01 before:2026/05/22",
+  );
+});
+
 test("parseGmailMessage keeps attachment metadata only and caps body size", () => {
   const parsed = parseGmailMessage({
     ...gmailMessage(),

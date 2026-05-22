@@ -1459,13 +1459,28 @@ function gmailDateValue(value: string | undefined): string | null {
     return null;
   }
 
-  const parsed = new Date(value);
+  const trimmed = value.trim();
+  const match = /^(\d{4})[-/](\d{2})[-/](\d{2})$/.exec(trimmed);
 
-  if (!Number.isNaN(parsed.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    return `${parsed.getUTCFullYear()}/${String(parsed.getUTCMonth() + 1).padStart(2, "0")}/${String(parsed.getUTCDate()).padStart(2, "0")}`;
+  if (!match) {
+    return null;
   }
 
-  return value.replace(/-/g, "/");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${year}/${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
 }
 
 function stripHtml(value: string): string {
