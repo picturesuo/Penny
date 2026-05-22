@@ -224,7 +224,7 @@ GMAIL_SMOKE_EVIDENCE_FILE=tmp/gmail-smoke-evidence-full.json \
 node scripts/smoke-gmail-staging.mjs
 ```
 
-That destructive smoke revokes the Gmail connection, verifies sync/search stop, deletes the first synced Gmail source, and records a safe evidence summary without raw email body text.
+That destructive smoke revokes the Gmail connection, verifies sync/search stop, deletes a synced Gmail source (preferring one that appeared in semantic results), verifies Brain, semantic search, and Create no longer reference the deleted source, and records a safe evidence summary without raw email body text.
 
 ## Acceptance Evidence
 
@@ -240,4 +240,4 @@ Before marking Gmail staging ready, attach or record:
 - Semantic search response proving synced Penny memory retrieval and no raw numeric score in normal UI.
 - Create export prompt showing real Gmail evidence only when selected and used.
 - Revoke response and post-revoke search/sync failure.
-- Source delete result and post-delete Brain/Create retrieval absence.
+- Source delete result and post-delete Brain, semantic search, and Create retrieval absence.
