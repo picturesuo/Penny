@@ -11,6 +11,7 @@ const connectPreflightOnly = args.includes("--connect-preflight-only");
 const requireKeywordFilters = args.includes("--require-keyword-filters");
 const minMessages = optionInt("--min-messages", 1);
 const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
+const safeEvidenceScopeIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const errors = [];
 
 if (!file || args.includes("--help") || args.includes("-h")) {
@@ -26,6 +27,10 @@ assert(typeof evidence?.baseUrl === "string" && evidence.baseUrl.length > 0, "Ev
 assert(typeof evidence?.startedAt === "string" && evidence.startedAt.length > 0, "Evidence must include startedAt.");
 assert(typeof evidence?.completedAt === "string" && evidence.completedAt.length > 0, "Evidence must include completedAt.");
 assert(Array.isArray(evidence?.steps) && evidence.steps.length > 0, "Evidence must include steps.");
+assertSafeScopeId(evidence?.userId, "userId");
+assertSafeScopeId(evidence?.workspaceId, "workspaceId");
+assertSafeScopeId(evidence?.projectId, "projectId");
+assertSafeScopeId(evidence?.sphereId, "sphereId");
 assertSmokeSteps(evidence?.steps, { destructive, connectPreflightOnly });
 assertSafeStagingRunId(evidence);
 assertNoUnsafeEvidence(evidence);
@@ -250,6 +255,18 @@ function assertSafeStagingRunId(value) {
 
 function isSafeStagingRunId(value) {
   return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
+}
+
+function assertSafeScopeId(value, field) {
+  const text = typeof value === "string" ? value.trim() : "";
+
+  assert(Boolean(text), `Smoke evidence must include ${field}.`);
+  assert(!/^REPLACE_WITH_/i.test(text), `Smoke evidence ${field} must not be a template placeholder.`);
+  assert(isSafeEvidenceScopeId(text), `Smoke evidence ${field} must be a safe opaque scope id.`);
+}
+
+function isSafeEvidenceScopeId(value) {
+  return typeof value === "string" && safeEvidenceScopeIdPattern.test(value.trim());
 }
 
 function assertSmokeSteps(value, options) {
