@@ -1,5 +1,19 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const envFile = process.env.GMAIL_READINESS_ENV_FILE?.trim() ?? "";
+let envFileLoadError = "";
+
+if (envFile) {
+  try {
+    loadEnvFile(envFile);
+  } catch (error) {
+    envFileLoadError = error instanceof Error ? error.message : String(error);
+  }
+}
+
 const baseUrl = env("BASE_URL", "http://localhost:3000").replace(/\/+$/, "");
 const gmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly";
 const requireStaging = envFlag("GMAIL_READINESS_REQUIRE_STAGING");
@@ -21,6 +35,8 @@ const sphereId = env(
 const checks = [];
 
 try {
+  assert(!envFileLoadError, envFileLoadError);
+
   const nangoGmailIntegrationId = checkBaseEnv();
 
   if (requireStaging) {
@@ -137,6 +153,7 @@ function checkBaseEnv() {
   assert(!envFlag("PENNY_SKIP_DATABASE_PREP"), "PENNY_SKIP_DATABASE_PREP must not be true for Gmail staging readiness.");
 
   record("env.gmail", {
+    envFileLoaded: Boolean(envFile),
     enableGoogleConnector: true,
     enableGmailConnector: true,
     enableRestrictedGoogleScopes: true,
@@ -326,6 +343,50 @@ function requiredEnv(name) {
   assert(!/^<.*>$/.test(value), `${name} must be a real value, not a placeholder.`);
 
   return value;
+}
+
+function loadEnvFile(path) {
+  let raw = "";
+
+  try {
+    raw = readFileSync(resolve(path), "utf8");
+  } catch (error) {
+    throw new Error(`GMAIL_READINESS_ENV_FILE could not be loaded: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  for (const [index, line] of raw.split(/\r?\n/).entries()) {
+    const trimmed = line.trim();
+
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(trimmed);
+
+    if (!match) {
+      throw new Error(`GMAIL_READINESS_ENV_FILE has an invalid assignment on line ${index + 1}.`);
+    }
+
+    const [, key, rawValue] = match;
+
+    if (process.env[key] !== undefined) {
+      continue;
+    }
+
+    process.env[key] = unquoteEnvValue(rawValue.trim());
+  }
+}
+
+function unquoteEnvValue(value) {
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    return value.slice(1, -1).replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  }
+
+  if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1);
+  }
+
+  return value.replace(/\s+#.*$/, "").trim();
 }
 
 function assertEnvFlag(name) {
