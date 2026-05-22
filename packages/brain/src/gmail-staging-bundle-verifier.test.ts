@@ -56,7 +56,7 @@ test("Gmail staging bundle verifier accepts matching readiness, smoke, and destr
     assert.equal(payload.uiPreflightRequired, true);
     assert.equal(payload.browserEvidenceRequired, true);
     assert.equal(payload.browserArtifactFilesRequired, true);
-    assert.equal(payload.readiness.checkCount, 5);
+    assert.equal(payload.readiness.checkCount, 6);
     assert.equal(payload.smoke.stepCount, 12);
     assert.equal(payload.destructive?.stepCount, 13);
     assert.equal(payload.uiPreflight?.checkCount, 5);
@@ -439,6 +439,29 @@ function validReadinessEvidence(): Record<string, unknown> {
     connectPreflight: true,
     checkedAt: "2026-05-22T12:00:00.000Z",
     checks: [
+      {
+        name: "env.requiredPresence",
+        envFileConfigured: true,
+        envFileLoaded: true,
+        envFileLoadErrorPresent: false,
+        requireStaging: true,
+        connectPreflight: true,
+        enableGoogleConnector: true,
+        enableGmailConnector: true,
+        enableRestrictedGoogleScopes: true,
+        nangoSecretPresent: true,
+        nangoPublicPresent: true,
+        nangoBaseUrlPresent: true,
+        nangoGmailIntegrationIdPresent: true,
+        databaseUrlPresent: true,
+        pennyAuthModePresent: true,
+        apiTokenPresent: true,
+        sessionSecretPresent: true,
+        corsOriginsPresent: true,
+        rateLimitPresent: true,
+        trustAuthHeadersPresent: true,
+        databasePrepBypass: false,
+      },
       {
         name: "env.gmail",
         envFileLoaded: true,
