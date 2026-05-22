@@ -223,6 +223,29 @@ test("Gmail smoke evidence verifier rejects unsafe run ids without echoing them"
   assert.doesNotMatch(failure, /staged-account@example\.com/);
 });
 
+test("Gmail smoke evidence verifier rejects unknown smoke step rows", () => {
+  const evidence = validEvidence();
+
+  evidence.steps.push({
+    step: "legacy.gmail.browserProof",
+    ok: true,
+  });
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Smoke evidence step 13 name must match an allowed smoke step/);
+});
+
+test("Gmail smoke evidence verifier rejects duplicate smoke step rows", () => {
+  const evidence = validEvidence();
+
+  evidence.steps.push({ ...evidence.steps[1] });
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Smoke evidence must include status\.initial only once/);
+});
+
 test("Gmail smoke evidence verifier rejects weak semantic result shape evidence", () => {
   const evidence = validEvidence();
   const semantic = evidence.steps.find((step) => step.step === "semanticSearch") as Record<string, unknown>;
