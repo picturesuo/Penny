@@ -3126,7 +3126,7 @@ export function GoogleConnectorControl({
   );
 }
 
-function GmailKeywordResults({ results }: { results: GmailKeywordSearchData["results"] }) {
+export function GmailKeywordResults({ results }: { results: GmailKeywordSearchData["results"] }) {
   return (
     <div className="gmail-results-list" aria-label="Gmail keyword results">
       {results.slice(0, 5).map((result) => (
@@ -3134,13 +3134,18 @@ function GmailKeywordResults({ results }: { results: GmailKeywordSearchData["res
           <strong>{result.subject}</strong>
           <span>{result.sender}</span>
           <p>{result.snippet}</p>
+          <small>
+            {result.messageId}
+            {result.threadId ? ` · ${result.threadId}` : ""}
+            {result.sourceRef.sourceUri ? ` · ${result.sourceRef.sourceUri}` : ""}
+          </small>
         </article>
       ))}
     </div>
   );
 }
 
-function GmailSemanticResults({ results }: { results: GmailSemanticSearchData["results"] }) {
+export function GmailSemanticResults({ results }: { results: GmailSemanticSearchData["results"] }) {
   return (
     <div className="gmail-results-list" aria-label="Gmail semantic results">
       {results.slice(0, 5).map((result) => (
@@ -3150,7 +3155,9 @@ function GmailSemanticResults({ results }: { results: GmailSemanticSearchData["r
             {result.grounding} · {result.sender}
           </span>
           <p>{result.snippet}</p>
-          <small>{result.scoreReason}</small>
+          <small>
+            {result.scoreReason} · {result.sourceRef.sourceUri} · {result.memoryRef.id}
+          </small>
         </article>
       ))}
     </div>
