@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BrainMemoryPanel, BrainWorkspace, GoogleConnectorControl, isActiveGmailConnection, isGmailSearchAvailable } from "../src/components/BrainWorkspace";
+import {
+  BrainMemoryPanel,
+  BrainWorkspace,
+  GmailKeywordResults,
+  GmailSemanticResults,
+  GoogleConnectorControl,
+  isActiveGmailConnection,
+  isGmailSearchAvailable,
+} from "../src/components/BrainWorkspace";
 import type { BrainDocumentsData, BrainMemoryProfileData, BrainRecentIdea } from "../src/types/brain";
 
 test("BrainWorkspace renders persisted quick notes as the first sidebar folder", () => {
@@ -444,6 +452,78 @@ test("GoogleConnectorControl renders Gmail keyword search filters for staging sm
   assert.match(markup, /After/);
   assert.match(markup, /Before/);
   assert.match(markup, /Has attachment/);
+});
+
+test("Gmail result rows expose safe refs without raw bodies or scores", () => {
+  const keywordMarkup = renderToStaticMarkup(
+    createElement(GmailKeywordResults, {
+      results: [
+        {
+          messageId: "msg-1",
+          threadId: "thread-1",
+          subject: "Launch partner follow-up",
+          sender: "Alice <alice@example.com>",
+          date: "Fri, 22 May 2026 12:00:00 +0000",
+          labels: ["INBOX"],
+          snippet: "Safe Gmail snippet for launch partner evidence.",
+          sourceRef: {
+            providerId: "google",
+            surface: "google_gmail",
+            externalId: "msg-1",
+            sourceUri: "gmail:message:msg-1",
+            url: "https://mail.google.com/mail/u/0/#all/thread-1",
+          },
+          body: "RAW PRIVATE EMAIL BODY",
+          score: 0.91,
+        } as never,
+      ],
+    }),
+  );
+  const semanticMarkup = renderToStaticMarkup(
+    createElement(GmailSemanticResults, {
+      results: [
+        {
+          messageId: "msg-1",
+          threadId: "thread-1",
+          subject: "Launch partner follow-up",
+          sender: "Alice <alice@example.com>",
+          date: "Fri, 22 May 2026 12:00:00 +0000",
+          snippet: "Safe synced-memory excerpt for launch partner evidence.",
+          sourceRef: {
+            id: "connector-source-gmail-1",
+            providerId: "google",
+            surface: "google_gmail",
+            sourceUri: "gmail:message:msg-1",
+            externalId: "msg-1",
+            url: "https://mail.google.com/mail/u/0/#all/thread-1",
+          },
+          memoryRef: {
+            id: "memory-gmail-1",
+            label: "Launch partner follow-up",
+            kind: "brain",
+            summary: "Gmail memory summary",
+          },
+          grounding: "grounded",
+          scoreReason: 'grounded match from synced Gmail memory for "Launch partner follow-up" (preference).',
+          body: "RAW PRIVATE EMAIL BODY",
+          rawScore: 0.91,
+        } as never,
+      ],
+    }),
+  );
+  const combined = `${keywordMarkup}\n${semanticMarkup}`;
+
+  assert.match(keywordMarkup, /Launch partner follow-up/);
+  assert.match(keywordMarkup, /Safe Gmail snippet for launch partner evidence/);
+  assert.match(keywordMarkup, /msg-1/);
+  assert.match(keywordMarkup, /thread-1/);
+  assert.match(keywordMarkup, /gmail:message:msg-1/);
+  assert.match(semanticMarkup, /grounded · Alice &lt;alice@example\.com&gt;/);
+  assert.match(semanticMarkup, /Safe synced-memory excerpt for launch partner evidence/);
+  assert.match(semanticMarkup, /grounded match from synced Gmail memory/);
+  assert.match(semanticMarkup, /memory-gmail-1/);
+  assert.match(semanticMarkup, /gmail:message:msg-1/);
+  assert.doesNotMatch(combined, /RAW PRIVATE EMAIL BODY|plainTextBody|rawBody|payload|0\.91/);
 });
 
 test("Gmail search availability requires an active Gmail connection", () => {
