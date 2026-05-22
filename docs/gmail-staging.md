@@ -105,10 +105,13 @@ GMAIL_READINESS_USER_ID=<same-user-id> \
 GMAIL_READINESS_WORKSPACE_ID=<same-workspace-id> \
 GMAIL_READINESS_PROJECT_ID=<same-project-id> \
 GMAIL_READINESS_SPHERE_ID=<same-sphere-id> \
+GMAIL_STAGING_RUN_ID=<shared-run-id> \
 node scripts/check-gmail-staging-readiness.mjs
 ```
 
 Use `GMAIL_READINESS_ENV_FILE=.env.local` for local or staged hosts where Penny env is stored in a file. Existing shell environment variables still win over values from the file. The checker reports only whether required secrets are present, never their values.
+
+Use one `GMAIL_STAGING_RUN_ID` value for the readiness check, UI preflight, non-destructive smoke, destructive smoke, and full browser evidence JSON. The final staging bundle rejects mixed artifacts when this run id is missing or does not match.
 
 Use `GMAIL_READINESS_EVIDENCE_FILE=tmp/gmail-readiness-evidence.json` to save the same sanitized JSON that the checker prints. Keep this file with the later smoke evidence so setup failures and successful connect-session preflight results are auditable without raw secrets.
 
@@ -264,6 +267,7 @@ GMAIL_UI_PREFLIGHT_USER_ID=<same-user-id> \
 GMAIL_UI_PREFLIGHT_WORKSPACE_ID=<same-workspace-id> \
 GMAIL_UI_PREFLIGHT_PROJECT_ID=<same-project-id> \
 GMAIL_UI_PREFLIGHT_SPHERE_ID=<same-sphere-id> \
+GMAIL_STAGING_RUN_ID=<shared-run-id> \
 GMAIL_UI_PREFLIGHT_EVIDENCE_FILE=tmp/gmail-ui-preflight-evidence.json \
 node scripts/check-gmail-ui-preflight.mjs
 ```
@@ -308,7 +312,7 @@ node scripts/verify-gmail-browser-evidence.mjs tmp/gmail-browser-evidence.json \
   --require-artifact-files
 ```
 
-The JSON evidence must include `baseUrl`, `userId`, `workspaceId`, `projectId`, `sphereId`, `capturedAt`, `checks`, and at least one sanitized proof artifact in `screenshots`, `notes`, or `proofs`. Each proof artifact must include a `proves` array listing the check names it supports. The full staged browser evidence must include and prove these check names:
+The JSON evidence must include `baseUrl`, `userId`, `workspaceId`, `projectId`, `sphereId`, `capturedAt`, `checks`, and at least one sanitized proof artifact in `screenshots`, `notes`, or `proofs`. Full staged browser evidence used in the final bundle must also include the same `stagingRunId` recorded by the readiness, UI preflight, and smoke evidence files. Each proof artifact must include a `proves` array listing the check names it supports. The full staged browser evidence must include and prove these check names:
 
 - `brain.gmailPanel.preOAuth`
 - `brain.gmailKeywordFilters`
@@ -357,6 +361,7 @@ GMAIL_SMOKE_USER_ID=<same-user-id> \
 GMAIL_SMOKE_WORKSPACE_ID=<same-workspace-id> \
 GMAIL_SMOKE_PROJECT_ID=<same-project-id> \
 GMAIL_SMOKE_SPHERE_ID=<same-sphere-id> \
+GMAIL_STAGING_RUN_ID=<shared-run-id> \
 GMAIL_SMOKE_KEYWORD_TEXT="launch partner evidence" \
 GMAIL_SMOKE_SEMANTIC_QUERY="launch partner evidence" \
 GMAIL_SMOKE_EXPECT_CREATE_TEXT="launch partner evidence" \
@@ -443,6 +448,7 @@ GMAIL_SMOKE_USER_ID=<same-user-id> \
 GMAIL_SMOKE_WORKSPACE_ID=<same-workspace-id> \
 GMAIL_SMOKE_PROJECT_ID=<same-project-id> \
 GMAIL_SMOKE_SPHERE_ID=<same-sphere-id> \
+GMAIL_STAGING_RUN_ID=<shared-run-id> \
 GMAIL_SMOKE_KEYWORD_TEXT="launch partner evidence" \
 GMAIL_SMOKE_SEMANTIC_QUERY="launch partner evidence" \
 GMAIL_SMOKE_EXPECT_CREATE_TEXT="launch partner evidence" \
@@ -492,7 +498,7 @@ node scripts/verify-gmail-staging-bundle.mjs \
   --min-messages=1
 ```
 
-This final bundle is the browser/manual proof gate. `--final-staging` requires readiness connect preflight, full keyword-filter coverage, destructive revoke/delete smoke, UI preflight, full browser evidence, browser artifact-file verification, and evidence timestamps inside one 24-hour staging window. Browser evidence must be full staged evidence, not `--pre-oauth-only`, and it must cover connected results, semantic refs, Create evidence/export, and post-revoke/delete absence. When local screenshots or notes are referenced by the browser evidence JSON, run the final bundle with `--browser-evidence`, `--browser-artifact-root`, and `--final-staging`; artifact-file verification is invalid without the browser evidence JSON. If a supervised staging run legitimately takes longer, pass `--max-evidence-window-hours=<hours>` and record why the wider window was needed.
+This final bundle is the browser/manual proof gate. `--final-staging` requires readiness connect preflight, full keyword-filter coverage, destructive revoke/delete smoke, UI preflight, full browser evidence, browser artifact-file verification, matching `stagingRunId` values, and evidence timestamps inside one 24-hour staging window. Browser evidence must be full staged evidence, not `--pre-oauth-only`, and it must cover connected results, semantic refs, Create evidence/export, and post-revoke/delete absence. When local screenshots or notes are referenced by the browser evidence JSON, run the final bundle with `--browser-evidence`, `--browser-artifact-root`, and `--final-staging`; artifact-file verification is invalid without the browser evidence JSON. If a supervised staging run legitimately takes longer, pass `--max-evidence-window-hours=<hours>` and record why the wider window was needed.
 
 ## Acceptance Evidence
 
@@ -509,7 +515,7 @@ Before marking Gmail staging ready, attach or record:
 - `scripts/verify-gmail-readiness-evidence.mjs tmp/gmail-readiness-evidence.json --strict-staging`, plus `--connect-preflight` when the readiness run created a Nango connect session.
 - `scripts/verify-gmail-smoke-evidence.mjs` output for every accepted non-destructive or destructive evidence file.
 - `scripts/verify-gmail-browser-evidence.mjs tmp/gmail-browser-evidence.json` output for full staged browser proof, with `--artifact-root=tmp/gmail-browser-artifacts --require-artifact-files` when evidence references local proof files, or `--pre-oauth-only` for local UI preflight proof that is not being used as final OAuth evidence.
-- `scripts/verify-gmail-staging-bundle.mjs --readiness=tmp/gmail-readiness-evidence.json --smoke=tmp/gmail-smoke-evidence.json --destructive-smoke=tmp/gmail-smoke-evidence-full.json --ui-preflight=tmp/gmail-ui-preflight-evidence.json --browser-evidence=tmp/gmail-browser-evidence.json --browser-artifact-root=tmp/gmail-browser-artifacts --final-staging`, with all evidence timestamps inside the default 24-hour final-staging window unless an explicit wider window is justified.
+- `scripts/verify-gmail-staging-bundle.mjs --readiness=tmp/gmail-readiness-evidence.json --smoke=tmp/gmail-smoke-evidence.json --destructive-smoke=tmp/gmail-smoke-evidence-full.json --ui-preflight=tmp/gmail-ui-preflight-evidence.json --browser-evidence=tmp/gmail-browser-evidence.json --browser-artifact-root=tmp/gmail-browser-artifacts --final-staging`, with matching `stagingRunId` values and all evidence timestamps inside the default 24-hour final-staging window unless an explicit wider window is justified.
 - Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-connect-preflight-evidence.json --connect-preflight-only` output proving connect-session creation with only sanitized connect-link evidence.
 - Optional full-smoke `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --connect-preflight --min-messages=1` output.
 - UI preflight output from `scripts/check-gmail-ui-preflight.mjs` with `GMAIL_UI_PREFLIGHT_EVIDENCE_FILE=tmp/gmail-ui-preflight-evidence.json`, plus `tmp/gmail-browser-evidence.json` and screenshots or notes for the Brain Gmail panel and Create evidence/export surfaces.
