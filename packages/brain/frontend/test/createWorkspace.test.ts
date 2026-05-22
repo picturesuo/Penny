@@ -6,6 +6,7 @@ import {
   buildCreateNextInput,
   CreateArtifactPanel,
   CreateBrainOnboardingPanel,
+  CreateWorkspace,
   CreateComparisonPanel,
   CreateExportFeedbackPanel,
   CreateOptionBoard,
@@ -28,6 +29,11 @@ test("CreateOptionBoard shows memory and source grounding counts on option cards
   );
 
   assert.match(markup, /Next-best move/);
+  assert.match(markup, /data-testid="create-option-board"/);
+  assert.match(markup, /data-testid="create-option-card"/);
+  assert.match(markup, /data-create-lens="Personal"/);
+  assert.match(markup, /data-create-lens="Practical"/);
+  assert.match(markup, /data-testid="create-option-details-button"/);
   assert.match(markup, /Advance through Personal/);
   assert.match(markup, /2 memories/);
   assert.match(markup, /2 sources/);
@@ -47,6 +53,8 @@ test("CreateOptionDetailsDrawer renders rationale, memories, sources, and ground
   );
 
   assert.match(markup, /Why suggested/);
+  assert.match(markup, /data-testid="create-evidence-drawer"/);
+  assert.match(markup, /data-create-lens="Personal"/);
   assert.match(markup, /Rank reasons/);
   assert.match(markup, /Memories used/);
   assert.match(markup, /Sources used/);
@@ -62,8 +70,12 @@ test("CreateBrainOnboardingPanel shows context-light and imported Brain states",
   const usingBrain = renderToStaticMarkup(createElement(CreateBrainOnboardingPanel, { profile: brainProfile() }));
 
   assert.match(contextLight, /Context-light/);
+  assert.match(contextLight, /data-testid="create-brain-context"/);
+  assert.match(contextLight, /data-create-context="context-light"/);
   assert.match(contextLight, /No imported Brain memories yet/);
   assert.match(usingBrain, /Using your Brain/);
+  assert.match(usingBrain, /data-testid="create-brain-context"/);
+  assert.match(usingBrain, /data-create-context="using-brain"/);
   assert.match(usingBrain, /1 memories/);
   assert.match(usingBrain, /1 sources/);
   assert.match(usingBrain, /Small reversible builds/);
@@ -241,7 +253,11 @@ test("Create UI smoke covers Brain state, five options, evidence, verification, 
   );
 
   assert.match(markup, /Using your Brain/);
+  assert.match(markup, /data-testid="create-brain-context"/);
   assert.match(markup, /Next-best move/);
+  assert.match(markup, /data-testid="create-option-board"/);
+  assert.match(markup, /data-testid="create-evidence-drawer"/);
+  assert.match(markup, /data-testid="create-artifact-panel"/);
   assert.match(markup, /Personal/);
   assert.match(markup, /Practical/);
   assert.match(markup, /Valuable/);
@@ -288,6 +304,9 @@ test("Create UI smoke renders real Gmail evidence in details and prompt artifact
   );
 
   assert.match(markup, /Personal details/);
+  assert.match(markup, /data-testid="create-evidence-drawer"/);
+  assert.match(markup, /data-create-lens="Personal"/);
+  assert.match(markup, /data-testid="create-artifact-panel"/);
   assert.match(markup, /Memories used/);
   assert.match(markup, /Sources used/);
   assert.match(markup, /Launch partner Gmail memory/);
@@ -296,6 +315,16 @@ test("Create UI smoke renders real Gmail evidence in details and prompt artifact
   assert.match(markup, /Gmail-grounded coding prompt/);
   assert.match(markup, /Source \/ Memory Evidence/);
   assert.doesNotMatch(markup, /Private raw Gmail body|rawBody|plainTextBody|credentialRef|accessToken|refreshToken/i);
+});
+
+test("CreateWorkspace exposes stable browser smoke selectors", () => {
+  const markup = renderToStaticMarkup(createElement(CreateWorkspace, { data: null, status: "ready", isThinking: false }));
+
+  assert.match(markup, /data-testid="create-workspace"/);
+  assert.match(markup, /data-testid="create-brain-context"/);
+  assert.match(markup, /data-create-context="context-light"/);
+  assert.match(markup, /data-testid="create-option-board"/);
+  assert.match(markup, /data-testid="create-export-panel"/);
 });
 
 test("isCreateComparisonDevMode only exposes comparison in dev, test, or explicit flag", () => {

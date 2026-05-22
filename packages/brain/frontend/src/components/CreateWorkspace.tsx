@@ -290,7 +290,7 @@ export function CreateWorkspace({
   }
 
   return (
-    <main className="check-workspace-shell" aria-label="Create workspace">
+    <main className="check-workspace-shell" aria-label="Create workspace" data-testid="create-workspace">
       <CreatePathSidebar activeIndex={activeStepIndex} status={displayStatus} onOpenBrain={onOpenBrain} />
 
       <section className="check-center-stage" aria-label="Penny Create flow">
@@ -364,7 +364,7 @@ export function CreateWorkspace({
             <CreateVerificationPanel verification={verification} />
           </div>
 
-          <section className="create-export-panel" aria-label="Export coding prompt">
+          <section className="create-export-panel" aria-label="Export coding prompt" data-testid="create-export-panel">
             <header>
               <span>Export</span>
               <strong>{promptExport ? promptExport.fileName : "Coding-agent prompt"}</strong>
@@ -373,7 +373,9 @@ export function CreateWorkspace({
               <Download size={15} />
               Export prompt
             </button>
-            {promptExport ? <textarea readOnly value={promptExport.text} aria-label="Exported coding-agent prompt" /> : null}
+            {promptExport ? (
+              <textarea readOnly value={promptExport.text} aria-label="Exported coding-agent prompt" data-testid="create-export-prompt" />
+            ) : null}
             <CreateExportFeedbackPanel
               artifact={artifact}
               promptExport={promptExport}
@@ -540,7 +542,7 @@ export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryPr
 
   if (!memoryCount) {
     return (
-      <section className="create-brain-panel is-context-light" aria-label="Create Brain context">
+      <section className="create-brain-panel is-context-light" aria-label="Create Brain context" data-testid="create-brain-context" data-create-context="context-light">
         <div>
           <span>Context-light</span>
           <strong>No imported Brain memories yet</strong>
@@ -551,7 +553,7 @@ export function CreateBrainOnboardingPanel({ profile }: { profile: BrainMemoryPr
   }
 
   return (
-    <section className="create-brain-panel is-using-brain" aria-label="Create Brain context">
+    <section className="create-brain-panel is-using-brain" aria-label="Create Brain context" data-testid="create-brain-context" data-create-context="using-brain">
       <div>
         <span>Using your Brain</span>
         <strong>
@@ -723,7 +725,7 @@ export function CreateOptionBoard({
 
   if (!options.length) {
     return (
-      <section className="create-option-board is-empty" aria-label="Create directions">
+      <section className="create-option-board is-empty" aria-label="Create directions" data-testid="create-option-board">
         <header>
           <span>Directions</span>
           <strong>Personal / Practical / Valuable / Critical / Weird</strong>
@@ -734,7 +736,7 @@ export function CreateOptionBoard({
   }
 
   return (
-    <section className="create-option-board" aria-label="Create directions">
+    <section className="create-option-board" aria-label="Create directions" data-testid="create-option-board">
       <header>
         <span>Directions</span>
         <strong>Choose the mix Penny should build from</strong>
@@ -749,7 +751,12 @@ export function CreateOptionBoard({
       ) : null}
       <div className="create-option-grid">
         {options.map((option) => (
-          <article key={option.id} className={`create-option-card${selectedOptionIds.includes(option.id) ? " is-selected" : ""}`}>
+          <article
+            key={option.id}
+            className={`create-option-card${selectedOptionIds.includes(option.id) ? " is-selected" : ""}`}
+            data-testid="create-option-card"
+            data-create-lens={option.lens}
+          >
             <button
               type="button"
               className="create-option-select-button"
@@ -771,7 +778,12 @@ export function CreateOptionBoard({
               <p>{option.rationale}</p>
               <small>{option.nextMove}</small>
             </div>
-            <button type="button" className="create-option-detail-button" onClick={() => setDetailOptionId(option.id)}>
+            <button
+              type="button"
+              className="create-option-detail-button"
+              onClick={() => setDetailOptionId(option.id)}
+              data-testid="create-option-details-button"
+            >
               <Info size={14} />
               Details
             </button>
@@ -794,7 +806,12 @@ export function CreateOptionDetailsDrawer({ option, onClose }: { option: Candida
   const inferredClaims = [option.rationale, ...option.risks].filter(Boolean);
 
   return (
-    <aside className="create-option-detail-drawer" aria-label={`${option.lens} option details`}>
+    <aside
+      className="create-option-detail-drawer"
+      aria-label={`${option.lens} option details`}
+      data-testid="create-evidence-drawer"
+      data-create-lens={option.lens}
+    >
       <header>
         <div>
           <span>{option.lens} details</span>
@@ -890,7 +907,7 @@ export function CreateOptionDetailsDrawer({ option, onClose }: { option: Candida
 export function CreateArtifactPanel({ artifact }: { artifact: CodingPromptArtifact | null }) {
   if (!artifact) {
     return (
-      <section className="create-artifact-panel" aria-label="Coding prompt artifact">
+      <section className="create-artifact-panel" aria-label="Coding prompt artifact" data-testid="create-artifact-panel">
         <header>
           <span>Artifact</span>
           <strong>CodingPromptArtifact</strong>
@@ -901,7 +918,7 @@ export function CreateArtifactPanel({ artifact }: { artifact: CodingPromptArtifa
   }
 
   return (
-    <section className="create-artifact-panel" aria-label="Coding prompt artifact">
+    <section className="create-artifact-panel" aria-label="Coding prompt artifact" data-testid="create-artifact-panel">
       <header>
         <span>Artifact v{artifact.version}</span>
         <strong>{artifact.title}</strong>
