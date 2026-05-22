@@ -333,6 +333,28 @@ test("startup env validation rejects database prep bypass in strict deploys", ()
   assert.ok(result.issues.some((issue) => issue.code === "database_prep_skip_forbidden"));
 });
 
+test("startup env validation requires webhook signing key for strict Gmail deploys", () => {
+  const strictGmailEnv = {
+    ...validStrictEnv(),
+    ENABLE_GOOGLE_CONNECTOR: "true",
+    ENABLE_GMAIL_CONNECTOR: "true",
+    ENABLE_RESTRICTED_GOOGLE_SCOPES: "true",
+    NANGO_SECRET_KEY: "nango-secret",
+    NANGO_PUBLIC_KEY: "nango-public",
+    NANGO_BASE_URL: "https://api.nango.test",
+    NANGO_GMAIL_INTEGRATION_ID: "google-gmail-staging",
+  };
+  const missingKey = validatePennyStartupEnvironment(strictGmailEnv);
+  const withKey = assertValidPennyStartupEnvironment({
+    ...strictGmailEnv,
+    NANGO_WEBHOOK_SIGNING_KEY: "nango-webhook-signing-key",
+  });
+
+  assert.equal(missingKey.strict, true);
+  assert.ok(missingKey.issues.some((issue) => issue.code === "gmail_webhook_signing_key_required"));
+  assert.deepEqual(withKey.issues, []);
+});
+
 test("startup env validation allows explicit local in-memory startup without a database", () => {
   const result = assertValidPennyStartupEnvironment({
     NODE_ENV: "development",
