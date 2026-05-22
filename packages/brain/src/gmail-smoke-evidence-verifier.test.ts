@@ -95,6 +95,25 @@ test("Gmail smoke evidence verifier rejects weak semantic result shape evidence"
   assert.match(failure, /Semantic search evidence must include groundingLabels/);
 });
 
+test("Gmail smoke evidence verifier rejects weak Create Gmail evidence", () => {
+  const evidence = validEvidence();
+  const create = evidence.steps.find((step) => step.step === "create.first") as Record<string, unknown>;
+
+  create.selectedOptionCount = 1;
+  create.selectedLenses = ["Personal"];
+  create.criticalOptionPresent = false;
+  create.gmailMemoryEvidencePresent = false;
+  create.gmailSourceEvidencePresent = false;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Create must select both Personal and Critical options/);
+  assert.match(failure, /Create selectedLenses must include Critical/);
+  assert.match(failure, /Create must include a Critical option/);
+  assert.match(failure, /Create must include Gmail evidence in memory refs/);
+  assert.match(failure, /Create must include Gmail evidence in source refs/);
+});
+
 test("Gmail smoke evidence verifier accepts connect preflight-only evidence", () => {
   const output = execFileSync(process.execPath, ["scripts/verify-gmail-smoke-evidence.mjs", "-", "--connect-preflight-only"], {
     cwd: repoRoot,

@@ -102,6 +102,12 @@ assert(semantic.rawScoreHidden === true, "Semantic search must hide raw numeric 
 const createFirst = requireStep("create.first");
 assert(numberValue(createFirst.memoryCountUsed) >= 1, "Create must use at least one memory.");
 assert(numberValue(createFirst.sourceCountUsed) >= 1, "Create must use at least one source.");
+assert(numberValue(createFirst.selectedOptionCount) >= 2, "Create must select both Personal and Critical options for refinement.");
+assertCreateSelectedLenses(createFirst);
+assert(createFirst.personalOptionPresent === true, "Create must include a Personal option for Gmail evidence.");
+assert(createFirst.criticalOptionPresent === true, "Create must include a Critical option for Gmail evidence.");
+assert(createFirst.gmailMemoryEvidencePresent === true, "Create must include Gmail evidence in memory refs.");
+assert(createFirst.gmailSourceEvidencePresent === true, "Create must include Gmail evidence in source refs.");
 assert(createFirst.expectedEvidencePresent === true, "Create must include the expected Gmail evidence text.");
 
 const exported = requireStep("create.export");
@@ -198,6 +204,13 @@ function assertSemanticGroundingLabels(step) {
   for (const label of labels) {
     assert(label === "grounded" || label === "inferred", "Semantic search groundingLabels must contain only grounded or inferred.");
   }
+}
+
+function assertCreateSelectedLenses(step) {
+  const selectedLenses = Array.isArray(step.selectedLenses) ? step.selectedLenses : [];
+
+  assert(selectedLenses.includes("Personal"), "Create selectedLenses must include Personal.");
+  assert(selectedLenses.includes("Critical"), "Create selectedLenses must include Critical.");
 }
 
 function assertNoUnsafeEvidence(value) {
