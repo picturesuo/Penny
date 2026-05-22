@@ -183,7 +183,7 @@ GMAIL_SMOKE_KEYWORD_BEFORE=2026-05-22 \
 GMAIL_SMOKE_KEYWORD_HAS_ATTACHMENT=true
 ```
 
-The automated smoke also uses the keyword text and filters for the initial sync, so the run imports only the staged safe-message slice rather than the first arbitrary mailbox page. The evidence file records the Gmail `q` string, the sync filters, and the keyword filters used, while still checking that keyword results are not stored unless `sync=true` is explicitly requested.
+The automated smoke also uses the keyword text and filters for the initial sync, so the run imports only the staged safe-message slice rather than the first arbitrary mailbox page. The evidence file records the Gmail `q` string, the sync filters, and the keyword filters used, while checking both that keyword results are not stored by default and that `sync=true` explicitly stores through the same safe, duplicate-free import path.
 Smoke evidence intentionally omits raw HTTP response bodies and raw email content; failure records use route/status/error-code summaries so the evidence file can be shared without exposing mailbox text.
 
 If staging uses token auth, also pass:
@@ -206,7 +206,7 @@ The default smoke verifies:
 - Gmail status is configured, connected, private, and `gmail.readonly`.
 - Sync imports at least one message from the staged safe-message query/filter set and returns cursor/history evidence.
 - Repeating the same scoped sync does not change the Gmail source count or create duplicate source refs.
-- Keyword search uses the Gmail API and does not store results without `sync=true`.
+- Keyword search uses the Gmail API, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
 - Semantic search returns only synced Gmail memory and hides raw numeric scores.
 - Create uses the synced Gmail evidence.
 - Prompt export includes the Gmail-derived context only after Create uses it.
@@ -240,7 +240,7 @@ Before marking Gmail staging ready, attach or record:
 - Destructive `scripts/smoke-gmail-staging.mjs` output from a disposable staged Gmail account, when revoke/delete are being certified.
 - Gmail status response before and after OAuth.
 - Sync and repeated-sync responses showing imported count, cursor/historyId, stable source counts, and no duplicate source refs.
-- Keyword search response proving Gmail `q` search.
+- Keyword search responses proving Gmail `q` search, default no-store behavior, and explicit `sync=true` storage.
 - Semantic search response proving synced Penny memory retrieval and no raw numeric score in normal UI.
 - Create export prompt showing real Gmail evidence only when selected and used.
 - Revoke response and post-revoke sync, keyword search, and semantic search failure.
