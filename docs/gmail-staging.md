@@ -430,6 +430,7 @@ When a selector is provided, the automated smoke uses it for sync, keyword searc
 The default smoke verifies:
 
 - Gmail status is configured, connected, restricted-scope gated, private, `gmail.readonly`, `trainingUse=false`, `rawRetentionDefault=false`, and `noHumanReview=true`.
+- Gmail status proves the selected staged account state is visible, with a Penny connection id, Nango connection id, Nango provider config key, and staged account alias metadata present. Smoke evidence records only booleans for this identity proof, not the raw account email.
 - Gmail status and Google provider page-load state views do not expose Gmail message metadata, provenance, credential refs, cursor internals, raw body fields, or per-source training/raw-retention flags.
 - Sync imports at least one message from the staged safe-message query/filter set and returns cursor/history evidence.
 - Sync-state source privacy proves imported Gmail sources are private user memory with `trainingUse=false`, `rawContentStored=false`, and enabled retrieval; Brain profile proves the same Gmail sources have private visibility, `trainingUse=false`, and `rawRetention=false`.
@@ -525,7 +526,7 @@ Before marking Gmail staging ready, attach or record:
 - Smoke evidence showing `statusStatePrivacySafe=true` and `providerStatePrivacySafe=true`.
 - Smoke evidence showing synced Gmail source privacy with `syncedSourceTrainingUseFalse=true`, `syncedSourceRawContentStoredFalse=true`, `syncedSourcePrivateUserMemory=true`, `brainProfileTrainingUseFalse=true`, `brainProfileRawRetentionFalse=true`, and `brainProfilePrivateVisibility=true`.
 - Gmail status response before and after OAuth.
-- Sync and repeated-sync responses showing imported count, cursor/historyId, stable source counts, and no duplicate source refs.
+- Sync and repeated-sync responses showing imported count, cursor/historyId, stable source counts, no duplicate source refs, and selected staged-account identity proof with only boolean account/Nango identity facts in the evidence file.
 - Keyword search responses proving Gmail `q` search, default no-store behavior, and explicit `sync=true` storage.
 - Semantic search response proving synced Penny memory retrieval, safe result shape, message/thread/source refs, Brain memory refs, snippets, grounded/inferred labels, score reasons, and no raw numeric score in normal UI.
 - Create evidence showing grounded Brain Ranker output with five ranked candidates, Gmail memory refs and source refs in ranked candidates, real Gmail memory/source refs in Create options, Personal and Critical option text with the expected staged Gmail evidence phrase, selected-option refinement evidence with matching option ids and artifact/verification output, plus an export prompt showing Gmail evidence only when selected and used.
