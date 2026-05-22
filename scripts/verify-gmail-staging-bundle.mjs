@@ -247,7 +247,7 @@ function assertUiPreflightChecks(checks, allowedNames) {
 function assertNoUnsafeUiPreflightEvidence(evidence) {
   const serialized = JSON.stringify(evidence);
   const unsafePattern =
-    /connectLink|credentialRef|accessToken|refreshToken|encryptedToken|encryptedRefreshToken|rawBody|plainTextBody|private raw Gmail body|raw Gmail body/i;
+    /connectLink|credentialRef|accessToken|refreshToken|encryptedToken|encryptedRefreshToken|rawBody|plainTextBody|private raw Gmail body|raw Gmail body|raw email body/i;
 
   assert(!unsafePattern.test(serialized), "UI preflight evidence includes unsafe Gmail, credential, or raw body fields.");
 }
