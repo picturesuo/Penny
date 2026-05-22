@@ -890,6 +890,8 @@ function validBrowserEvidence(): Record<string, unknown> {
         revokeCompleted: true,
         deleteCompleted: true,
         postRevokeStateVisible: true,
+        revokedStateVisible: true,
+        deletedSourceCountZero: true,
         syncBlockedAfterRevoke: true,
         searchBlockedAfterRevoke: true,
         semanticBlockedAfterRevoke: true,
