@@ -424,7 +424,7 @@ test("Gmail sync reports partial message detail failures without failing the who
               ok: false,
               error: {
                 code: "nango_request_failed",
-                message: "Gmail returned 403 for this message.",
+                message: "Gmail returned 403 with raw body: Private Gmail body should not leak.",
                 retryable: false,
                 details: { status: 403 },
               },
@@ -455,8 +455,9 @@ test("Gmail sync reports partial message detail failures without failing the who
     retryable: false,
     status: 403,
     errorCode: "nango_request_failed",
-    message: "Gmail returned 403 for this message.",
+    message: "Gmail message detail fetch failed with status 403.",
   });
+  assert.equal(JSON.stringify(payload.data.partialFailures).includes("Private Gmail body"), false);
   assert.equal(payload.data.state.sources.some((source) => source.sourceUri === "gmail:message:msg-1"), true);
   assert.equal(payload.data.state.sources.some((source) => source.sourceUri === "gmail:message:msg-2"), false);
 });

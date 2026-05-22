@@ -1139,14 +1139,16 @@ function gmailPartialFailure(
   ref: { id: string; threadId: string | null },
   error: ConnectorError,
 ): GmailSyncPartialFailure {
+  const status = numberValue(recordValue(error.details).status);
+
   return {
     messageId: ref.id,
     threadId: ref.threadId,
     stage: "message_detail",
     retryable: error.retryable,
-    status: numberValue(recordValue(error.details).status),
+    status,
     errorCode: error.code,
-    message: clipText(error.message, 240),
+    message: gmailPartialFailureMessage(status),
   };
 }
 
@@ -1160,6 +1162,12 @@ function gmailOversizedFailure(message: GmailParsedMessage): GmailSyncPartialFai
     errorCode: "gmail_message_oversized",
     message: `Gmail message sizeEstimate ${message.sizeEstimate} exceeded the ${gmailMessageSizeByteLimit} byte sync limit.`,
   };
+}
+
+function gmailPartialFailureMessage(status: number | null): string {
+  return status === null
+    ? "Gmail message detail fetch failed."
+    : `Gmail message detail fetch failed with status ${status}.`;
 }
 
 function delay(ms: number): Promise<void> {
