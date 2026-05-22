@@ -146,6 +146,15 @@ type GoogleConnectorProviderStateResponse = {
 type GmailStatusView = GoogleGmailStatusResponse["data"];
 type GmailKeywordSearchData = GoogleGmailSearchResponse["data"];
 type GmailSemanticSearchData = GoogleGmailSemanticSearchResponse["data"];
+type GmailKeywordFilterDraft = {
+  from: string;
+  to: string;
+  subject: string;
+  label: string;
+  after: string;
+  before: string;
+  hasAttachment: boolean;
+};
 
 interface BrainWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -2786,6 +2795,15 @@ export function GoogleConnectorControl({
   const extension = visibleSurfaces.find((surface) => surface.id === "chrome_extension_history");
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [keywordDraft, setKeywordDraft] = useState("");
+  const [keywordFilters, setKeywordFilters] = useState<GmailKeywordFilterDraft>({
+    from: "",
+    to: "",
+    subject: "",
+    label: "",
+    after: "",
+    before: "",
+    hasAttachment: false,
+  });
   const [semanticDraft, setSemanticDraft] = useState("");
   const [keywordResults, setKeywordResults] = useState<GmailKeywordSearchData | null>(null);
   const [semanticResults, setSemanticResults] = useState<GmailSemanticSearchData | null>(null);
@@ -2811,12 +2829,20 @@ export function GoogleConnectorControl({
   const gmailLastSyncAt = gmailStatus?.lastSyncAt ?? connection?.lastSyncedAt ?? null;
   const gmailScopes = gmailStatus?.scopes.length ? gmailStatus.scopes : gmail?.scopes.map((scope) => scope.scope).filter((scope): scope is string => Boolean(scope)) ?? [];
   const gmailConfigured = gmailStatus?.configured ?? false;
+  const keywordSearchReady =
+    Boolean(keywordDraft.trim()) ||
+    keywordFilters.hasAttachment ||
+    Boolean(keywordFilters.from.trim() || keywordFilters.to.trim() || keywordFilters.subject.trim() || keywordFilters.label.trim() || keywordFilters.after.trim() || keywordFilters.before.trim());
+
+  function setKeywordFilter<K extends keyof GmailKeywordFilterDraft>(key: K, value: GmailKeywordFilterDraft[K]) {
+    setKeywordFilters((current) => ({ ...current, [key]: value }));
+  }
 
   async function handleKeywordSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = keywordDraft.trim();
 
-    if (!text || !onKeywordSearch) {
+    if (!keywordSearchReady || !onKeywordSearch) {
       return;
     }
 
@@ -2824,7 +2850,17 @@ export function GoogleConnectorControl({
     setKeywordResults(null);
 
     try {
-      const result = await onKeywordSearch({ text, maxResults: 5 });
+      const result = await onKeywordSearch({
+        ...(text ? { text } : {}),
+        ...(keywordFilters.from.trim() ? { from: keywordFilters.from.trim() } : {}),
+        ...(keywordFilters.to.trim() ? { to: keywordFilters.to.trim() } : {}),
+        ...(keywordFilters.subject.trim() ? { subject: keywordFilters.subject.trim() } : {}),
+        ...(keywordFilters.label.trim() ? { label: keywordFilters.label.trim() } : {}),
+        ...(keywordFilters.after.trim() ? { after: keywordFilters.after.trim() } : {}),
+        ...(keywordFilters.before.trim() ? { before: keywordFilters.before.trim() } : {}),
+        ...(keywordFilters.hasAttachment ? { hasAttachment: true } : {}),
+        maxResults: 5,
+      });
 
       setKeywordResults(result);
       setGmailSearchStatus(`${result.results.length} email result${result.results.length === 1 ? "" : "s"}`);
@@ -2951,7 +2987,44 @@ export function GoogleConnectorControl({
             <span>Search email</span>
             <input value={keywordDraft} onChange={(event) => setKeywordDraft(event.target.value)} placeholder="Exact words" />
           </label>
-          <button type="submit" className="secondary-command" disabled={disabled || !keywordDraft.trim() || !onKeywordSearch}>
+          <details className="google-connector-details gmail-filter-details">
+            <summary>Filters</summary>
+            <div className="gmail-filter-grid">
+              <label>
+                <span>From</span>
+                <input value={keywordFilters.from} onChange={(event) => setKeywordFilter("from", event.target.value)} placeholder="alice@example.com" />
+              </label>
+              <label>
+                <span>To</span>
+                <input value={keywordFilters.to} onChange={(event) => setKeywordFilter("to", event.target.value)} placeholder="bob@example.com" />
+              </label>
+              <label>
+                <span>Subject</span>
+                <input value={keywordFilters.subject} onChange={(event) => setKeywordFilter("subject", event.target.value)} placeholder="Launch plan" />
+              </label>
+              <label>
+                <span>Label</span>
+                <input value={keywordFilters.label} onChange={(event) => setKeywordFilter("label", event.target.value)} placeholder="inbox" />
+              </label>
+              <label>
+                <span>After</span>
+                <input type="date" value={keywordFilters.after} onChange={(event) => setKeywordFilter("after", event.target.value)} />
+              </label>
+              <label>
+                <span>Before</span>
+                <input type="date" value={keywordFilters.before} onChange={(event) => setKeywordFilter("before", event.target.value)} />
+              </label>
+              <label className="gmail-checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={keywordFilters.hasAttachment}
+                  onChange={(event) => setKeywordFilter("hasAttachment", event.target.checked)}
+                />
+                <span>Has attachment</span>
+              </label>
+            </div>
+          </details>
+          <button type="submit" className="secondary-command" disabled={disabled || !keywordSearchReady || !onKeywordSearch}>
             <Search size={15} aria-hidden="true" />
             <span>Search email</span>
           </button>
