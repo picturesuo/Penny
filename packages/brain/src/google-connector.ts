@@ -235,12 +235,16 @@ export type ConnectorEvent =
 
 export type GoogleConnectorRuntimeConfig = {
   nangoSecretKey: string | null;
+  nangoPublicKey: string | null;
   nangoBaseUrl: string;
+  nangoGmailIntegrationId: string | null;
   enableGoogleConnector: boolean;
   enableRestrictedGoogleScopes: boolean;
   enableGmailConnector: boolean;
   missingConfig: string[];
+  missingGmailConfig: string[];
   configured: boolean;
+  gmailConfigured: boolean;
 };
 
 export type ConnectorStateScope = {
@@ -460,6 +464,21 @@ export type NangoSyncStatus = {
   }>;
 };
 
+export type NangoProxyInput = NangoConnectionInput & {
+  method: NangoHttpRequest["method"];
+  path: string;
+  query?: Record<string, string | number | boolean | null | undefined>;
+  headers?: Record<string, string>;
+  body?: unknown;
+  baseUrlOverride?: string;
+};
+
+export type NangoProxyResponse = {
+  status: number;
+  body: unknown;
+  headers: Record<string, string>;
+};
+
 export type ConnectorAdapterResult<T> = { ok: true; data: T } | { ok: false; error: ConnectorError };
 
 export type NangoAdapter = {
@@ -471,6 +490,7 @@ export type NangoAdapter = {
   startSync(input: NangoStartSyncInput): Promise<ConnectorAdapterResult<{ started: true }>>;
   getSyncStatus(input: NangoSyncStatusInput): Promise<ConnectorAdapterResult<NangoSyncStatus>>;
   refreshConnection(input: NangoConnectionInput): Promise<ConnectorAdapterResult<NangoCredentialPayload>>;
+  proxy(input: NangoProxyInput): Promise<ConnectorAdapterResult<NangoProxyResponse>>;
 };
 
 export type NangoHttpRequest = {
@@ -483,6 +503,7 @@ export type NangoHttpRequest = {
 export type NangoHttpResponse = {
   status: number;
   body: unknown;
+  headers?: Record<string, string>;
 };
 
 export type NangoHttpClient = (request: NangoHttpRequest) => Promise<NangoHttpResponse>;
@@ -570,27 +591,15 @@ const baseGoogleScopeRegistry = [
     requiredEnvGate: null,
   },
   {
-    id: "google.gmail.metadata",
-    surface: "google_gmail",
-    scope: "https://www.googleapis.com/auth/gmail.metadata",
-    sensitivity: "restricted",
-    whyPennyNeedsIt: "Read Gmail labels and headers without message bodies for selective, metadata-first memory.",
-    userExplanation: "Penny would see message metadata only, and Gmail access stays off until restricted-scope approval is enabled.",
-    gated: true,
-    gatedStatus: "gated_verification_required",
-    productionAllowed: false,
-    requiredEnvGate: "ENABLE_GMAIL_CONNECTOR,ENABLE_RESTRICTED_GOOGLE_SCOPES",
-  },
-  {
     id: "google.gmail.readonly",
     surface: "google_gmail",
     scope: "https://www.googleapis.com/auth/gmail.readonly",
     sensitivity: "restricted",
-    whyPennyNeedsIt: "Read selected Gmail threads only when the product has explicit verification and user-scoped filters.",
-    userExplanation: "Penny will not request Gmail message access unless Gmail and restricted-scope gates are enabled.",
+    whyPennyNeedsIt: "read email for private Brain memory and email search.",
+    userExplanation: "Penny reads Gmail only after consent, stores it as private Brain memory, and cannot modify, compose, or send mail.",
     gated: true,
     gatedStatus: "gated_verification_required",
-    productionAllowed: false,
+    productionAllowed: true,
     requiredEnvGate: "ENABLE_GMAIL_CONNECTOR,ENABLE_RESTRICTED_GOOGLE_SCOPES",
   },
   {
@@ -680,10 +689,10 @@ const surfaceDefinitions = [
     id: "google_gmail",
     label: "Gmail",
     sourceKinds: ["google_gmail_message"],
-    whyPennyCanUseThis: "Email can be useful context only with metadata-first selection and explicit restricted-scope approval.",
-    userExplanation: "Gmail is gated. Penny will not request Gmail scopes unless restricted Google scopes and Gmail are explicitly enabled.",
-    supportedNow: ["Gated metadata-first scaffold"],
-    notFaked: ["No hidden Gmail import", "No unrestricted mailbox scan", "No message-body access by default"],
+    whyPennyCanUseThis: "Email can become private Brain memory only after explicit consent, restricted-scope enablement, and user-scoped retrieval.",
+    userExplanation: "Gmail is restricted-scope, gated, and private. Penny requests gmail.readonly only and never asks for send, compose, modify, or full mail access.",
+    supportedNow: ["Consent through Nango", "Read-only private Brain memory sync", "Keyword and semantic email search"],
+    notFaked: ["No hidden Gmail import", "No unrestricted mailbox scan", "No modify/compose/send mail access", "No global training use"],
   },
   {
     id: "google_youtube",
@@ -727,20 +736,37 @@ export function readGoogleConnectorRuntimeConfig(
   env: Record<string, string | undefined> = process.env,
 ): GoogleConnectorRuntimeConfig {
   const nangoSecretKey = readEnv(env, "NANGO_SECRET_KEY");
+  const nangoPublicKey = readEnv(env, "NANGO_PUBLIC_KEY");
+  const nangoBaseUrlConfigured = readEnv(env, "NANGO_BASE_URL");
   const nangoBaseUrl = readEnv(env, "NANGO_BASE_URL") ?? defaultNangoBaseUrl;
+  const nangoGmailIntegrationId = readEnv(env, "NANGO_GMAIL_INTEGRATION_ID");
   const enableGoogleConnector = readFlag(env, "ENABLE_GOOGLE_CONNECTOR");
+  const enableRestrictedGoogleScopes = readFlag(env, "ENABLE_RESTRICTED_GOOGLE_SCOPES");
+  const enableGmailConnector = readFlag(env, "ENABLE_GMAIL_CONNECTOR");
   const missingConfig = [
     nangoSecretKey ? null : "NANGO_SECRET_KEY",
+  ].filter((value): value is string => Boolean(value));
+  const missingGmailConfig = [
+    enableGmailConnector ? null : "ENABLE_GMAIL_CONNECTOR",
+    enableRestrictedGoogleScopes ? null : "ENABLE_RESTRICTED_GOOGLE_SCOPES",
+    nangoSecretKey ? null : "NANGO_SECRET_KEY",
+    nangoPublicKey ? null : "NANGO_PUBLIC_KEY",
+    nangoBaseUrlConfigured ? null : "NANGO_BASE_URL",
+    nangoGmailIntegrationId ? null : "NANGO_GMAIL_INTEGRATION_ID",
   ].filter((value): value is string => Boolean(value));
 
   return {
     nangoSecretKey,
+    nangoPublicKey,
     nangoBaseUrl,
+    nangoGmailIntegrationId,
     enableGoogleConnector,
-    enableRestrictedGoogleScopes: readFlag(env, "ENABLE_RESTRICTED_GOOGLE_SCOPES"),
-    enableGmailConnector: readFlag(env, "ENABLE_GMAIL_CONNECTOR"),
+    enableRestrictedGoogleScopes,
+    enableGmailConnector,
     missingConfig,
+    missingGmailConfig,
     configured: enableGoogleConnector && missingConfig.length === 0,
+    gmailConfigured: enableGoogleConnector && missingGmailConfig.length === 0,
   };
 }
 
@@ -1438,6 +1464,81 @@ export function createNangoAdapter(
 
       return getNangoCredentials(config, http, { ...input, forceRefresh: true });
     },
+    async proxy(input) {
+      const configured = nangoConfigured(config);
+
+      if (!configured.ok) {
+        return configured;
+      }
+
+      return nangoProxyRequest(config, http, input);
+    },
+  };
+}
+
+async function nangoProxyRequest(
+  config: GoogleConnectorRuntimeConfig,
+  http: NangoHttpClient,
+  input: NangoProxyInput,
+): Promise<ConnectorAdapterResult<NangoProxyResponse>> {
+  const secret = config.nangoSecretKey;
+
+  if (!secret) {
+    return notConfigured(["NANGO_SECRET_KEY"]);
+  }
+
+  const proxyPath = input.path.replace(/^\/+/, "");
+  const url = new URL(`/proxy/${proxyPath}`, ensureTrailingSlash(config.nangoBaseUrl));
+
+  for (const [key, value] of Object.entries(input.query ?? {})) {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${secret}`,
+    "Connection-Id": input.connectionId,
+    "Provider-Config-Key": input.providerConfigKey,
+    ...(input.baseUrlOverride ? { "Base-Url-Override": input.baseUrlOverride } : {}),
+    ...(input.headers ?? {}),
+  };
+
+  if (input.body !== undefined && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const request: NangoHttpRequest = {
+    method: input.method,
+    url: url.toString(),
+    headers,
+  };
+
+  if (input.body !== undefined) {
+    request.body = input.body;
+  }
+
+  const response = await http(request);
+
+  if (response.status < 200 || response.status >= 300) {
+    return {
+      ok: false,
+      error: {
+        code: "nango_request_failed",
+        message: nangoErrorMessage(response.body, response.status),
+        retryable: response.status >= 500 || response.status === 429,
+        details: { status: response.status },
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      status: response.status,
+      body: response.body,
+      headers: response.headers ?? {},
+    },
   };
 }
 
@@ -1561,8 +1662,17 @@ async function defaultNangoHttpClient(request: NangoHttpRequest): Promise<NangoH
 
   return {
     status: response.status,
-    body: text.trim() ? JSON.parse(text) : null,
+    body: text.trim() ? parseJsonBodyOrText(text) : null,
+    headers: Object.fromEntries(response.headers.entries()),
   };
+}
+
+function parseJsonBodyOrText(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 }
 
 function buildSurface(
@@ -1599,7 +1709,7 @@ function defaultSurfaceStatus(surfaceId: GoogleSurfaceId, config: GoogleConnecto
     case "google_youtube":
       return "available";
     case "google_gmail":
-      return config.enableGmailConnector && config.enableRestrictedGoogleScopes
+      return config.gmailConfigured
         ? "available"
         : "gated_verification_required";
     case "google_takeout":
@@ -1795,6 +1905,10 @@ function blockedScopeReason(
 
   if (scope.surface === "google_gmail" && !config.enableGmailConnector) {
     return `${scope.id} is blocked until ENABLE_GMAIL_CONNECTOR is true.`;
+  }
+
+  if (scope.surface === "google_gmail" && config.missingGmailConfig.length > 0) {
+    return `${scope.id} is blocked because Gmail is not configured. Missing: ${config.missingGmailConfig.join(", ")}.`;
   }
 
   if (scope.sensitivity === "restricted" && !config.enableRestrictedGoogleScopes) {
