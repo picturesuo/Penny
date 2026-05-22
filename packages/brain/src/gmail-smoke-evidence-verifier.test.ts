@@ -33,6 +33,18 @@ test("Gmail smoke evidence verifier rejects raw connect links or session tokens"
   assert.match(failure, /raw connect\/session\/token value/);
 });
 
+test("Gmail smoke evidence verifier accepts destructive revoke and delete evidence", () => {
+  const output = execFileSync(process.execPath, [...verifier, "--destructive"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    input: JSON.stringify(destructiveEvidence()),
+  });
+  const payload = JSON.parse(output) as { ok: boolean; destructive: boolean };
+
+  assert.equal(payload.ok, true);
+  assert.equal(payload.destructive, true);
+});
+
 function runVerifierExpectingFailure(evidence: Record<string, unknown>): string {
   try {
     execFileSync(process.execPath, verifier, {
@@ -52,7 +64,7 @@ function runVerifierExpectingFailure(evidence: Record<string, unknown>): string 
   assert.fail("Expected verifier to reject unsafe evidence.");
 }
 
-function validEvidence() {
+function validEvidence(): Record<string, unknown> & { steps: Array<Record<string, unknown>> } {
   return {
     baseUrl: "http://localhost:3000",
     startedAt: "2026-05-22T12:00:00.000Z",
@@ -141,4 +153,30 @@ function validEvidence() {
       },
     ],
   };
+}
+
+function destructiveEvidence(): Record<string, unknown> & { steps: Array<Record<string, unknown>> } {
+  const evidence = validEvidence();
+
+  evidence.steps = evidence.steps.filter((step) => step.step !== "revoke.delete.skipped");
+  evidence.steps.push(
+    {
+      step: "revoke",
+      revoked: true,
+      syncAfterRevokeStatus: 409,
+      searchAfterRevokeStatus: 409,
+      semanticAfterRevokeStatus: 409,
+    },
+    {
+      step: "deleteSource",
+      brainSourceDeleted: true,
+      brainProfileSourceAbsent: true,
+      brainRetrieveDeletedSourceAbsent: true,
+      semanticDeletedSourceAbsent: true,
+      createDeletedSourceAbsent: true,
+      createDeletedMemoryAbsent: true,
+    },
+  );
+
+  return evidence;
 }
