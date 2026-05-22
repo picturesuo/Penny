@@ -9,6 +9,10 @@ const preOAuthOnly = args.includes("--pre-oauth-only");
 const artifactRoot = optionValue("--artifact-root");
 const requireArtifactFiles = args.includes("--require-artifact-files");
 const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
+const unsafeValuePattern =
+  /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|access_token|refresh_token|credentialRef|plainTextBody|rawBody|payload|BEGIN PRIVATE KEY)/i;
+const unsafePrivacyClaimPattern =
+  /global training|hidden memory|private inbox|background Gmail|before consent|unrestricted mailbox scan/i;
 const errors = [];
 
 if (!file || args.includes("--help") || args.includes("-h")) {
@@ -156,6 +160,7 @@ async function assertArtifactFiles(artifacts, options) {
 
   const root = resolve(options.artifactRoot);
   const allowedExtensions = new Set([".json", ".jpg", ".jpeg", ".md", ".png", ".txt", ".webp"]);
+  const textExtensions = new Set([".json", ".md", ".txt"]);
 
   for (const [index, artifact] of artifacts.entries()) {
     const artifactFile = typeof artifact.file === "string" ? artifact.file : typeof artifact.path === "string" ? artifact.path : "";
@@ -176,13 +181,30 @@ async function assertArtifactFiles(artifacts, options) {
     assert(allowedExtensions.has(extname(target).toLowerCase()), `${artifactFile} must be a png, jpg, webp, txt, md, or json artifact.`);
 
     try {
+      const extension = extname(target).toLowerCase();
       const stats = await stat(target);
 
       assert(stats.isFile(), `${artifactFile} must be a file.`);
       assert(stats.size > 0, `${artifactFile} must not be empty.`);
+
+      if (textExtensions.has(extension)) {
+        const artifactText = await readFile(target, "utf8");
+
+        assertNoUnsafeArtifactText(artifactText, artifactFile);
+      }
     } catch (error) {
       errors.push(`${artifactFile} could not be read from artifact root: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+}
+
+function assertNoUnsafeArtifactText(value, artifactFile) {
+  if (unsafeValuePattern.test(value)) {
+    errors.push(`${artifactFile} looks like it contains raw Gmail, credential, connect, or token data.`);
+  }
+
+  if (unsafePrivacyClaimPattern.test(value)) {
+    errors.push(`${artifactFile} looks like it contains an unsafe Gmail privacy claim.`);
   }
 }
 
@@ -329,11 +351,6 @@ function assertNoUnsafeEvidence(value) {
     "token",
   ]);
   const allowedKeys = new Set(["scoreReasonVisible", "rawNumericScoreHidden", "secretOrConnectTokenAbsent"]);
-  const unsafeValuePattern =
-    /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|access_token|refresh_token|credentialRef|plainTextBody|rawBody|BEGIN PRIVATE KEY)/i;
-  const unsafePrivacyClaimPattern =
-    /global training|hidden memory|private inbox|background Gmail|before consent|unrestricted mailbox scan/i;
-
   walk(value, "$", (item, path) => {
     if (item && typeof item === "object" && !Array.isArray(item)) {
       for (const key of Object.keys(item)) {
