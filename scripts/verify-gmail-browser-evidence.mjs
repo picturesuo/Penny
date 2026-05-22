@@ -8,6 +8,7 @@ const file = args.find((arg) => !arg.startsWith("--"));
 const preOAuthOnly = args.includes("--pre-oauth-only");
 const artifactRoot = optionValue("--artifact-root");
 const requireArtifactFiles = args.includes("--require-artifact-files");
+const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
 const errors = [];
 
 if (!file || args.includes("--help") || args.includes("-h")) {
@@ -42,6 +43,7 @@ assert(typeof evidence?.projectId === "string" && evidence.projectId.length > 0,
 assert(typeof evidence?.sphereId === "string" && evidence.sphereId.length > 0, "Browser evidence must include sphereId.");
 assert(typeof evidence?.capturedAt === "string" && evidence.capturedAt.length > 0, "Browser evidence must include capturedAt.");
 assert(Array.isArray(evidence?.checks), "Browser evidence must include checks.");
+assertSafeStagingRunId(evidence, { required: !preOAuthOnly });
 assertNoUnsafeEvidence(evidence);
 assertProofArtifacts(proofArtifacts, requiredCheckNames);
 await assertArtifactFiles(proofArtifacts, { artifactRoot, requireArtifactFiles });
@@ -68,6 +70,7 @@ if (errors.length) {
         file,
         browserEvidenceVerified: true,
         preOAuthOnly,
+        stagingRunId: isSafeStagingRunId(evidence?.stagingRunId) ? evidence.stagingRunId.trim() : null,
         checkCount: evidence.checks.length,
         proofArtifactCount: proofArtifacts.length,
         artifactFilesVerified: Boolean(artifactRoot),
@@ -90,6 +93,22 @@ function collectProofArtifacts(value) {
   return ["screenshots", "notes", "proofs"]
     .flatMap((key) => (Array.isArray(value?.[key]) ? value[key] : []))
     .filter((item) => item && typeof item === "object" && !Array.isArray(item));
+}
+
+function assertSafeStagingRunId(value, options) {
+  const runId = typeof value?.stagingRunId === "string" ? value.stagingRunId.trim() : "";
+
+  assert(Boolean(runId) || !options.required, "Full browser evidence must include stagingRunId.");
+
+  if (!runId) {
+    return;
+  }
+
+  assert(isSafeStagingRunId(runId), "Browser evidence stagingRunId must be a safe opaque slug.");
+}
+
+function isSafeStagingRunId(value) {
+  return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
 }
 
 function assertProofArtifacts(artifacts, requiredNames) {
