@@ -124,22 +124,23 @@ Checklist:
 4. Click `Connect Gmail`.
 5. Complete Google OAuth for the staged test user.
 6. Return to Penny and verify Gmail status is connected with only the `gmail.readonly` scope.
-7. Click `Sync now`.
-8. Verify message count and Gmail source count increase.
-9. Verify spam/trash test messages are not imported by default.
-10. Run keyword search for `launch partner evidence`.
-11. Run keyword search using `from`, `to`, `subject`, `label`, `after`, `before`, and `hasAttachment`.
-12. Verify keyword results show refs/snippets and do not create Brain memory unless `sync=true` is explicitly tested.
-13. Run semantic search for the staged concept.
-14. Verify semantic results come only from synced Gmail memory and show subject, sender, date, snippet, messageId, threadId, sourceRef, memoryRef, grounded/inferred label, and scoreReason.
-15. Start Create with an idea that should use the staged email evidence.
-16. Select Personal and Critical options when relevant.
-17. Open the evidence/details drawer and verify Gmail source refs appear only when actually used.
-18. Export the prompt and verify Gmail-derived personal context appears only when the selected Create result used that Gmail evidence.
-19. Click `Revoke`.
-20. Verify Sync and Search return revoked/not connected behavior.
-21. Delete the Gmail source.
-22. Verify Gmail memory no longer appears in Brain retrieval, Create evidence, or prompt export.
+7. If multiple Google accounts are connected in the same workspace, select the staged Gmail account before sync, search, revoke, or delete.
+8. Click `Sync now`.
+9. Verify message count and Gmail source count increase.
+10. Verify spam/trash test messages are not imported by default.
+11. Run keyword search for `launch partner evidence`.
+12. Run keyword search using `from`, `to`, `subject`, `label`, `after`, `before`, and `hasAttachment`.
+13. Verify keyword results show refs/snippets and do not create Brain memory unless `sync=true` is explicitly tested.
+14. Run semantic search for the staged concept.
+15. Verify semantic results come only from synced Gmail memory and show subject, sender, date, snippet, messageId, threadId, sourceRef, memoryRef, grounded/inferred label, and scoreReason.
+16. Start Create with an idea that should use the staged email evidence.
+17. Select Personal and Critical options when relevant.
+18. Open the evidence/details drawer and verify Gmail source refs appear only when actually used.
+19. Export the prompt and verify Gmail-derived personal context appears only when the selected Create result used that Gmail evidence.
+20. Click `Revoke`.
+21. Verify Sync and Search return revoked/not connected behavior.
+22. Delete the Gmail source.
+23. Verify Gmail memory no longer appears in Brain retrieval, Create evidence, or prompt export.
 
 Record the smoke result with:
 
