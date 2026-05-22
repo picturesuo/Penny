@@ -1198,6 +1198,14 @@ test("Gmail semantic search can target one selected Gmail connection", async () 
     assert.equal(syncResponse.status, 200);
   }
 
+  const ambiguousResponse = await handleGoogleGmailSemanticSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/semantic-search", {
+      query: "private Gmail evidence launch partners",
+      limit: 5,
+    }),
+    { env: configuredEnv, stateStore, brainMemoryService },
+  );
+  const ambiguousPayload = (await ambiguousResponse.json()) as { error: { code: string; message: string; retryable: boolean } };
   const selectedResponse = await handleGoogleGmailSemanticSearchRequest(
     gmailRequest("/api/connectors/google/gmail/semantic-search", {
       connectionId: "nango-gmail-2",
@@ -1218,6 +1226,12 @@ test("Gmail semantic search can target one selected Gmail connection", async () 
     { env: configuredEnv, stateStore, brainMemoryService },
   );
 
+  assert.equal(ambiguousResponse.status, 409);
+  assert.deepEqual(ambiguousPayload.error, {
+    code: "gmail_connection_ambiguous",
+    message: "Select one Gmail connection before semantic search.",
+    retryable: false,
+  });
   assert.equal(selectedResponse.status, 200);
   assert.ok(selectedPayload.data.results.length > 0);
   assert.equal(selectedPayload.data.results.every((result) => result.messageId === "msg-2"), true);
