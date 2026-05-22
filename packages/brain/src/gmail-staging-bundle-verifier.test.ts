@@ -719,6 +719,8 @@ function validBrowserEvidence(): Record<string, unknown> {
         nangoIntegrationKeyPresent: true,
         nangoWebhookDeliveryStatusPresent: true,
         selectedAccountStateVisible: true,
+        syncCompleted: true,
+        keywordSearchRan: true,
         connectedStateVisible: true,
         gmailReadonlyVisible: true,
         messageCountVisible: true,
