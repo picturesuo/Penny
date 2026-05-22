@@ -160,6 +160,7 @@ async function assertArtifactFiles(artifacts, options) {
 
   const root = resolve(options.artifactRoot);
   const allowedExtensions = new Set([".json", ".jpg", ".jpeg", ".md", ".png", ".txt", ".webp"]);
+  const imageExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
   const textExtensions = new Set([".json", ".md", ".txt"]);
 
   for (const [index, artifact] of artifacts.entries()) {
@@ -192,6 +193,12 @@ async function assertArtifactFiles(artifacts, options) {
 
         assertNoUnsafeArtifactText(artifactText, artifactFile);
       }
+
+      if (imageExtensions.has(extension)) {
+        const artifactBytes = await readFile(target);
+
+        assertValidImageArtifact(artifactBytes, artifactFile, extension);
+      }
     } catch (error) {
       errors.push(`${artifactFile} could not be read from artifact root: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -206,6 +213,29 @@ function assertNoUnsafeArtifactText(value, artifactFile) {
   if (unsafePrivacyClaimPattern.test(value)) {
     errors.push(`${artifactFile} looks like it contains an unsafe Gmail privacy claim.`);
   }
+}
+
+function assertValidImageArtifact(value, artifactFile, extension) {
+  const isPng =
+    value.length >= 8 &&
+    value[0] === 0x89 &&
+    value[1] === 0x50 &&
+    value[2] === 0x4e &&
+    value[3] === 0x47 &&
+    value[4] === 0x0d &&
+    value[5] === 0x0a &&
+    value[6] === 0x1a &&
+    value[7] === 0x0a;
+  const isJpeg = value.length >= 3 && value[0] === 0xff && value[1] === 0xd8 && value[2] === 0xff;
+  const isWebp =
+    value.length >= 12 && value.subarray(0, 4).toString("ascii") === "RIFF" && value.subarray(8, 12).toString("ascii") === "WEBP";
+
+  const valid =
+    (extension === ".png" && isPng) ||
+    ((extension === ".jpg" || extension === ".jpeg") && isJpeg) ||
+    (extension === ".webp" && isWebp);
+
+  assert(valid, `${artifactFile} must be a valid ${extension.slice(1)} image artifact.`);
 }
 
 function assertPreOAuthPanel(check) {
