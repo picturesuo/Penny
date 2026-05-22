@@ -169,11 +169,18 @@ Record the smoke result with:
 
 When a real Gmail account is not available, run a browser preflight before changing staging code so the UI path stays visible and honest. This does not replace the staged OAuth proof.
 
-Start Penny with Gmail configured but without real Nango credentials:
+Start Penny with Gmail configured but without real Nango credentials. This preflight still needs a migrated local or staging database because the first screen loads session, Brain, and Create routes before the Gmail card is inspected.
+
+If the local database has not been migrated yet, run:
 
 ```bash
-DATABASE_URL= \
-PENNY_SKIP_DATABASE_PREP=true \
+DATABASE_URL=<local-or-staging-postgres-url> pnpm db:migrate
+```
+
+Then start the app:
+
+```bash
+DATABASE_URL=<local-or-staging-postgres-url> \
 PENNY_DEPLOY_ENV=local \
 ENABLE_GOOGLE_CONNECTOR=true \
 ENABLE_GMAIL_CONNECTOR=true \
@@ -186,6 +193,8 @@ PENNY_AUTH_MODE=dev \
 PORT=3011 \
 pnpm dev
 ```
+
+Do not set `DATABASE_URL=` or `PENNY_SKIP_DATABASE_PREP=true` for this browser preflight. Those are useful for isolated route tests, but the real UI preflight should fail fast if the local database schema is missing. If the browser shows `DATABASE_URL is required` or a failed query against tables such as `sessions`, fix `DATABASE_URL` or run migrations before recording UI evidence.
 
 Open `http://localhost:3011` in a browser and verify:
 
