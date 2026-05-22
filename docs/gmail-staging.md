@@ -330,6 +330,14 @@ GMAIL_SMOKE_KEYWORD_BEFORE=2026-05-22 \
 GMAIL_SMOKE_KEYWORD_HAS_ATTACHMENT=true
 ```
 
+To prove an oversized-message skip or another expected partial failure against a staged mailbox that still imports at least one safe message, add the expected sanitized failure stage:
+
+```bash
+GMAIL_SMOKE_EXPECT_PARTIAL_FAILURE_STAGE=message_oversized
+```
+
+Without this opt-in, the smoke treats any sync partial failure as unexpected and fails. With this opt-in, both the first sync and repeated sync must report at least one sanitized partial failure with that exact `stage`; the evidence records only count/stage-match/sanitizer facts, not message bodies or raw failure payloads.
+
 The automated smoke also uses the keyword text and filters for the initial sync, so the run imports only the staged safe-message slice rather than the first arbitrary mailbox page. The evidence file records the Gmail `q` string, the sync filters, and the keyword filters used, while checking both that keyword results are not stored by default and that `sync=true` explicitly stores through the same safe, duplicate-free import path.
 Smoke evidence intentionally omits raw HTTP response bodies and raw email content; failure records use route/status/error-code summaries so the evidence file can be shared without exposing mailbox text. The smoke also checks the Gmail status endpoint and the general Google provider endpoint that the Brain UI loads; their state views must expose only connection selectors, minimal sync job fields, and source ids/URIs, not Gmail metadata, provenance, credential refs, cursor internals, or raw-retention fields.
 
@@ -366,7 +374,7 @@ The default smoke verifies:
 - Gmail status is configured, connected, restricted-scope gated, private, `gmail.readonly`, `trainingUse=false`, `rawRetentionDefault=false`, and `noHumanReview=true`.
 - Gmail status and Google provider page-load state views do not expose Gmail message metadata, provenance, credential refs, cursor internals, raw body fields, or per-source training/raw-retention flags.
 - Sync imports at least one message from the staged safe-message query/filter set and returns cursor/history evidence.
-- Sync skips messages whose Gmail `sizeEstimate` exceeds the staging message-size cap, reports `stage=message_oversized`, and does not create Brain memory for skipped messages.
+- By default, sync has zero partial failures. When `GMAIL_SMOKE_EXPECT_PARTIAL_FAILURE_STAGE=message_oversized` is set, sync proves the oversized message was skipped through a sanitized `stage=message_oversized` partial-failure summary while still importing the safe message slice.
 - Repeating the same scoped sync does not change the Gmail source count or create duplicate source refs.
 - Keyword search uses the Gmail API, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
 - Semantic search returns only synced Gmail memory and hides raw numeric scores.
