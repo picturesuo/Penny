@@ -471,6 +471,25 @@ test("Gmail browser evidence verifier rejects raw Gmail, token, and score data",
   assert.match(failure, /unsafe Gmail privacy claim/);
 });
 
+test("Gmail browser evidence verifier rejects unsafe key variants without raw values", () => {
+  const evidence = validBrowserEvidence();
+  const connectedResults = evidence.checks.find((check) => check.name === "brain.gmailConnectedResults") as Record<string, unknown>;
+  const semantic = evidence.checks.find((check) => check.name === "brain.gmailSemanticResults") as Record<string, unknown>;
+  const exported = evidence.checks.find((check) => check.name === "create.gmailExport") as Record<string, unknown>;
+
+  connectedResults.access_token = "present";
+  connectedResults.CREDENTIAL_REF = "present";
+  semantic.raw_score = "hidden";
+  exported["plain-text-body"] = "absent";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /access_token must not be present/);
+  assert.match(failure, /CREDENTIAL_REF must not be present/);
+  assert.match(failure, /raw_score must not be present/);
+  assert.match(failure, /plain-text-body must not be present/);
+});
+
 test("Gmail browser evidence verifier rejects weak Create export privacy proof", () => {
   const evidence = validBrowserEvidence();
   const exported = evidence.checks.find((check) => check.name === "create.gmailExport") as Record<string, unknown>;
