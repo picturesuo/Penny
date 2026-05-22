@@ -78,6 +78,14 @@ import {
   handleGoogleConnectorSyncNowRequest,
   handleGoogleConnectorSyncStatusRequest,
 } from "./google-connector-route.ts";
+import {
+  handleGoogleGmailConnectRequest,
+  handleGoogleGmailRevokeRequest,
+  handleGoogleGmailSearchRequest,
+  handleGoogleGmailSemanticSearchRequest,
+  handleGoogleGmailStatusRequest,
+  handleGoogleGmailSyncRequest,
+} from "./gmail-connector-route.ts";
 import { handleAskPennyRequest, handleInlineLearnRequest, handleInlineLearnSaveRequest } from "./inline-learn-route.ts";
 import { handleLearnSessionRequest } from "./learn-session-route.ts";
 import { emitPennyLog } from "./observability.ts";
@@ -333,6 +341,36 @@ export function createPennyServer(): ReturnType<typeof createServer> {
 
     if (url.pathname === "/api/connectors/google/revoke") {
       await writeWebResponse(outgoing, await handleGoogleConnectorRevokeRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/gmail/connect") {
+      await writeWebResponse(outgoing, await handleGoogleGmailConnectRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/gmail/status") {
+      await writeWebResponse(outgoing, await handleGoogleGmailStatusRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/gmail/sync") {
+      await writeWebResponse(outgoing, await handleGoogleGmailSyncRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/gmail/search") {
+      await writeWebResponse(outgoing, await handleGoogleGmailSearchRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/gmail/semantic-search") {
+      await writeWebResponse(outgoing, await handleGoogleGmailSemanticSearchRequest(request));
+      return;
+    }
+
+    if (url.pathname === "/api/connectors/google/gmail/revoke") {
+      await writeWebResponse(outgoing, await handleGoogleGmailRevokeRequest(request));
       return;
     }
 
