@@ -20,6 +20,27 @@ test("safeLogPayload removes raw private text-shaped fields", () => {
   });
 });
 
+test("safeLogPayload removes Gmail-shaped private fields", () => {
+  const safe = safeLogPayload({
+    sourceId: "connector-source-1",
+    jobId: "gmail-sync-1",
+    messageCount: 1,
+    accountEmail: "founder@example.com",
+    from: "Alice <alice@example.com>",
+    to: "Founder <founder@example.com>",
+    cc: "Team <team@example.com>",
+    subject: "Launch partner evidence",
+    snippet: "Private launch partner snippet.",
+    body: "Private raw Gmail body.",
+  });
+
+  assert.deepEqual(safe, {
+    sourceId: "connector-source-1",
+    jobId: "gmail-sync-1",
+    messageCount: 1,
+  });
+});
+
 test("emitPennyLog is enabled for strict deploy envs and uses the safe payload", () => {
   const events: PennyLogEvent[] = [];
 
