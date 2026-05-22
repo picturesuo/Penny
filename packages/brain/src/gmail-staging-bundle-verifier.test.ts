@@ -20,10 +20,12 @@ test("Gmail staging bundle verifier accepts matching readiness, smoke, and destr
         `--readiness=${files.readiness}`,
         `--smoke=${files.smoke}`,
         `--destructive-smoke=${files.destructive}`,
+        `--ui-preflight=${files.uiPreflight}`,
         "--readiness-connect-preflight",
         "--smoke-connect-preflight",
         "--require-keyword-filters",
         "--require-destructive",
+        "--require-ui-preflight",
         "--min-messages=1",
       ],
       {
@@ -36,14 +38,18 @@ test("Gmail staging bundle verifier accepts matching readiness, smoke, and destr
       readiness: { checkCount: number };
       smoke: { stepCount: number };
       destructive: { stepCount: number } | null;
+      uiPreflight: { checkCount: number } | null;
       keywordFilterCoverageRequired: boolean;
+      uiPreflightRequired: boolean;
     };
 
     assert.equal(payload.ok, true);
     assert.equal(payload.keywordFilterCoverageRequired, true);
+    assert.equal(payload.uiPreflightRequired, true);
     assert.equal(payload.readiness.checkCount, 5);
     assert.equal(payload.smoke.stepCount, 11);
     assert.equal(payload.destructive?.stepCount, 12);
+    assert.equal(payload.uiPreflight?.checkCount, 5);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
@@ -71,6 +77,44 @@ test("Gmail staging bundle verifier rejects mismatched scope evidence", async ()
   }
 });
 
+test("Gmail staging bundle verifier requires UI preflight evidence when requested", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const files = await writeBundleFiles(tmp);
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      "--require-ui-preflight",
+    ]);
+
+    assert.match(failure, /Usage: node scripts\/verify-gmail-staging-bundle\.mjs/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Gmail staging bundle verifier rejects mismatched UI preflight scope", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const files = await writeBundleFiles(tmp, {
+      uiPreflight: {
+        projectId: "other-project",
+      },
+    });
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--ui-preflight=${files.uiPreflight}`,
+    ]);
+
+    assert.match(failure, /UI preflight evidence projectId must match readiness evidence/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging bundle verifier requires destructive evidence when requested", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
 
@@ -90,17 +134,19 @@ test("Gmail staging bundle verifier requires destructive evidence when requested
 
 async function writeBundleFiles(
   directory: string,
-  overrides: { readiness?: Record<string, unknown>; smoke?: Record<string, unknown>; destructive?: Record<string, unknown> } = {},
-): Promise<{ readiness: string; smoke: string; destructive: string }> {
+  overrides: { readiness?: Record<string, unknown>; smoke?: Record<string, unknown>; destructive?: Record<string, unknown>; uiPreflight?: Record<string, unknown> } = {},
+): Promise<{ readiness: string; smoke: string; destructive: string; uiPreflight: string }> {
   const readiness = join(directory, "readiness.json");
   const smoke = join(directory, "smoke.json");
   const destructive = join(directory, "destructive.json");
+  const uiPreflight = join(directory, "ui-preflight.json");
 
   await writeFile(readiness, `${JSON.stringify({ ...validReadinessEvidence(), ...overrides.readiness }, null, 2)}\n`, "utf8");
   await writeFile(smoke, `${JSON.stringify({ ...validSmokeEvidence(), ...overrides.smoke }, null, 2)}\n`, "utf8");
   await writeFile(destructive, `${JSON.stringify({ ...validDestructiveEvidence(), ...overrides.destructive }, null, 2)}\n`, "utf8");
+  await writeFile(uiPreflight, `${JSON.stringify({ ...validUiPreflightEvidence(), ...overrides.uiPreflight }, null, 2)}\n`, "utf8");
 
-  return { readiness, smoke, destructive };
+  return { readiness, smoke, destructive, uiPreflight };
 }
 
 function runBundleExpectingFailure(args: string[]): string {
@@ -329,6 +375,47 @@ function validDestructiveEvidence(): Record<string, unknown> {
   );
 
   return evidence;
+}
+
+function validUiPreflightEvidence(): Record<string, unknown> {
+  return {
+    ok: true,
+    ...scope(),
+    checkedAt: "2026-05-22T12:00:00.000Z",
+    checks: [
+      {
+        name: "brain.documents",
+        documentCount: 1,
+      },
+      {
+        name: "brain.memoryProfile",
+        sourceCount: 0,
+        memoryNodeCount: 0,
+      },
+      {
+        name: "brain.recents",
+        recentCount: 0,
+      },
+      {
+        name: "google.provider",
+        configured: true,
+        surfaceCount: 1,
+        gmailStatus: "available",
+        providerStatePrivacySafe: true,
+      },
+      {
+        name: "gmail.status",
+        status: "available",
+        connectionCount: 0,
+        sourceCount: 0,
+        messageCount: 0,
+        restrictedScope: true,
+        gated: true,
+        private: true,
+        statusStatePrivacySafe: true,
+      },
+    ],
+  };
 }
 
 function scope() {
