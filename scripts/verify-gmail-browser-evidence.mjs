@@ -97,7 +97,11 @@ function requireCheck(name) {
 
 function collectProofArtifacts(value) {
   return ["screenshots", "notes", "proofs"]
-    .flatMap((key) => (Array.isArray(value?.[key]) ? value[key] : []))
+    .flatMap((key) =>
+      Array.isArray(value?.[key])
+        ? value[key].map((artifact) => (artifact && typeof artifact === "object" ? { ...artifact, artifactKind: key } : artifact))
+        : [],
+    )
     .filter((item) => item && typeof item === "object" && !Array.isArray(item));
 }
 
@@ -181,10 +185,12 @@ async function assertArtifactFiles(artifacts, options) {
       Boolean(relativePath) && !relativePath.split(/[\\/]/).includes(".."),
       `${artifactFile} must stay inside the browser artifact root.`,
     );
-    assert(allowedExtensions.has(extname(target).toLowerCase()), `${artifactFile} must be a png, jpg, webp, txt, md, or json artifact.`);
+    const extension = extname(target).toLowerCase();
+
+    assert(allowedExtensions.has(extension), `${artifactFile} must be a png, jpg, webp, txt, md, or json artifact.`);
+    assertArtifactKindMatchesExtension(artifact, artifactFile, extension, { imageExtensions, textExtensions });
 
     try {
-      const extension = extname(target).toLowerCase();
       const stats = await stat(target);
 
       assert(stats.isFile(), `${artifactFile} must be a file.`);
@@ -204,6 +210,17 @@ async function assertArtifactFiles(artifacts, options) {
     } catch (error) {
       errors.push(`${artifactFile} could not be read from artifact root: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+}
+
+function assertArtifactKindMatchesExtension(artifact, artifactFile, extension, extensions) {
+  if (artifact.artifactKind === "screenshots") {
+    assert(extensions.imageExtensions.has(extension), `${artifactFile} is listed under screenshots and must be a png, jpg, or webp image.`);
+    return;
+  }
+
+  if (artifact.artifactKind === "notes" || artifact.artifactKind === "proofs") {
+    assert(extensions.textExtensions.has(extension), `${artifactFile} is listed under ${artifact.artifactKind} and must be a txt, md, or json file.`);
   }
 }
 
