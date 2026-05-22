@@ -70,7 +70,10 @@ try {
 
   const statusAfterSync = await request("GET", "/api/connectors/google/gmail/status");
   assert(statusAfterSync.data?.messageCount >= minMessages, "Gmail status did not show synced message count.");
-  const firstSourceId = statusAfterSync.data?.sources?.[0]?.id ?? sync.data?.state?.sources?.[0]?.id ?? "";
+  const firstSource = statusAfterSync.data?.sources?.[0] ?? sync.data?.state?.sources?.[0] ?? null;
+  const firstSourceId = firstSource?.id ?? "";
+  const firstBrainSourceId = firstSource?.brainSourceId ?? "";
+  const firstSourceUri = firstSource?.sourceUri ?? "";
   record("status.afterSync", {
     status: statusAfterSync.data.status,
     messageCount: statusAfterSync.data.messageCount,
@@ -180,9 +183,30 @@ try {
         sourceId: firstSourceId,
       });
       assert(deleted.data?.brainSourceDeleted === true, "Gmail source delete did not delete the Brain source.");
+      const profileAfterDelete = await request("GET", "/api/brain/memory/profile");
+      const deletedBrainSourceStillPresent = (profileAfterDelete.data?.sources ?? []).some(
+        (source) => (firstBrainSourceId && source.id === firstBrainSourceId) || (firstSourceUri && source.sourceUri === firstSourceUri),
+      );
+      const semanticAfterDelete = await requestMaybeFail("POST", "/api/connectors/google/gmail/semantic-search", {
+        query: semanticQuery,
+        limit: maxResults,
+      });
+      const semanticResultsAfterDelete = semanticAfterDelete.payload?.data?.results ?? [];
+      const deletedSemanticResultStillPresent =
+        Array.isArray(semanticResultsAfterDelete) &&
+        semanticResultsAfterDelete.some(
+          (result) => result.sourceRef?.id === firstSourceId || (firstSourceUri && result.sourceRef?.sourceUri === firstSourceUri),
+        );
+
+      assert(!deletedBrainSourceStillPresent, "Deleted Gmail source still appears in Brain profile.");
+      assert(!deletedSemanticResultStillPresent, "Deleted Gmail source still appears in semantic search results.");
       record("deleteSource", {
         sourceIdPresent: Boolean(firstSourceId),
+        brainSourceIdPresent: Boolean(firstBrainSourceId),
         brainSourceDeleted: deleted.data.brainSourceDeleted,
+        brainProfileSourceAbsent: !deletedBrainSourceStillPresent,
+        semanticAfterDeleteStatus: semanticAfterDelete.status,
+        semanticDeletedSourceAbsent: !deletedSemanticResultStillPresent,
       });
     }
   } else {
