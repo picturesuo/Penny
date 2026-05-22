@@ -13,6 +13,15 @@ const connectionId = env("GMAIL_SMOKE_CONNECTION_ID", "");
 const providerConfigKey = env("GMAIL_SMOKE_PROVIDER_CONFIG_KEY", "");
 const maxResults = positiveInt(env("GMAIL_SMOKE_MAX_RESULTS", "5"), 5);
 const keywordText = env("GMAIL_SMOKE_KEYWORD_TEXT", "launch partner evidence");
+const keywordFilters = {
+  from: env("GMAIL_SMOKE_KEYWORD_FROM", ""),
+  to: env("GMAIL_SMOKE_KEYWORD_TO", ""),
+  subject: env("GMAIL_SMOKE_KEYWORD_SUBJECT", ""),
+  label: env("GMAIL_SMOKE_KEYWORD_LABEL", ""),
+  after: env("GMAIL_SMOKE_KEYWORD_AFTER", ""),
+  before: env("GMAIL_SMOKE_KEYWORD_BEFORE", ""),
+  hasAttachment: envFlag("GMAIL_SMOKE_KEYWORD_HAS_ATTACHMENT"),
+};
 const semanticQuery = env("GMAIL_SMOKE_SEMANTIC_QUERY", keywordText);
 const createIdea = env(
   "GMAIL_SMOKE_CREATE_IDEA",
@@ -84,7 +93,7 @@ try {
   const beforeKeywordCount = statusAfterSync.data.messageCount;
   const keyword = await request("POST", "/api/connectors/google/gmail/search", {
     ...connectionSelector(),
-    text: keywordText,
+    ...keywordSearchInput(),
     maxResults,
   });
   assert(keyword.data?.stored === false, "Keyword search stored results without sync=true.");
@@ -95,6 +104,7 @@ try {
   record("keywordSearch", {
     query: keyword.data.query,
     stored: keyword.data.stored,
+    filtersUsed: compactObject(keywordFilters),
     resultCount: keyword.data.results.length,
     memoryCountUnchanged: statusAfterKeyword.data.messageCount === beforeKeywordCount,
   });
@@ -250,6 +260,19 @@ function connectionSelector() {
   };
 }
 
+function keywordSearchInput() {
+  return {
+    ...(keywordText ? { text: keywordText } : {}),
+    ...(keywordFilters.from ? { from: keywordFilters.from } : {}),
+    ...(keywordFilters.to ? { to: keywordFilters.to } : {}),
+    ...(keywordFilters.subject ? { subject: keywordFilters.subject } : {}),
+    ...(keywordFilters.label ? { label: keywordFilters.label } : {}),
+    ...(keywordFilters.after ? { after: keywordFilters.after } : {}),
+    ...(keywordFilters.before ? { before: keywordFilters.before } : {}),
+    ...(keywordFilters.hasAttachment ? { hasAttachment: true } : {}),
+  };
+}
+
 async function request(method, path, body) {
   const response = await requestMaybeFail(method, path, body);
 
@@ -324,6 +347,10 @@ function hasSemanticResultShape(result) {
 
 function includesNeedle(value, needle) {
   return value.toLowerCase().includes(needle.toLowerCase());
+}
+
+function compactObject(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => Boolean(item)));
 }
 
 function record(step, data) {
