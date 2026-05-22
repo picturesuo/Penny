@@ -115,7 +115,7 @@ test("Gmail UI preflight evidence verifier rejects raw body markers in harmless-
   const gmailCheck = evidence.checks.find((check) => check.name === "gmail.status");
 
   assert.ok(gmailCheck);
-  gmailCheck.operatorNote = "Copied route output mentioned plainTextBody in a sanitized note.";
+  gmailCheck.operatorNote = "Copied route output mentioned raw email body in a sanitized note.";
 
   const failure = runVerifierExpectingFailure(evidence);
 
