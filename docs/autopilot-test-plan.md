@@ -4,6 +4,7 @@ Artifact ID: `AUTOPILOT-TEST-PLAN`
 Latency update: 2026-05-05
 Repository completion update: 2026-05-20
 Smoke gate update: 2026-05-20
+Repository verification refresh: 2026-05-22
 
 ## Purpose
 
@@ -90,7 +91,7 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 ## Current Verification Surface
 
 - Test framework: Node built-in test runner through `tsx --test`.
-- Current suite: `pnpm test`, which runs `packages/brain/src/*.test.ts`, `packages/brain/frontend/test/*.test.ts`, and `test/brain/nextMoveEngine.test.ts`. As of 2026-05-20, that glob also exercises the expanded Create, context-layer, memory, deployment-readiness, recipe, and graph/search test surface; those tests strengthen repository readiness without broadening this Autopilot artifact's scope.
+- Current suite: `pnpm test`, which runs `packages/brain/src/*.test.ts`, `packages/brain/frontend/test/*.test.ts`, and `test/brain/nextMoveEngine.test.ts`. As of 2026-05-22, that glob passes 455 tests and also exercises the expanded Create, context-layer, memory, Brain Ranker, Google connector, codebase, deployment-readiness, recipe, and graph/search test surface; those tests strengthen repository readiness without broadening this Autopilot artifact's scope.
 - Typecheck: `pnpm typecheck`.
 - Local API: `pnpm dev:api`, serving `http://localhost:3000`.
 - DB setup: `DATABASE_URL` must be exported before `pnpm db:migrate` or DB-backed API smoke tests.
@@ -109,6 +110,7 @@ The backend remains the source of canonical thinking state. Tests must verify Mo
 - CS4: Remaining latency work is intentionally deferred: add a focused provider metadata regression and optional timing script only when implementing latency instrumentation, not as part of this artifact completion pass.
 - CS5: Before a demo, the gate remains `pnpm typecheck`, `pnpm test`, `pnpm build`, and the isolated dev-auth smoke script when PostgreSQL tooling is available.
 - CS6: As of 2026-05-20, repository completion for this artifact means the plan is synchronized with the current default test command and expanded matching test files while still treating latency instrumentation as future work.
+- CS7: As of 2026-05-22, repository completion refresh means the default test command passes 455 tests with no skipped or TODO tests in the default globs; latency metadata remains intentionally deferred to TM19 and LG6.
 
 ## Test Mapping
 
@@ -180,3 +182,4 @@ If a live provider is enabled for a demo, add a separate note for provider, mode
 - ST6: 2026-05-20 smoke gate update documented the previously verified isolated dev-auth smoke command and clarified when the bare smoke command is environment-blocked.
 - ST7: 2026-05-20 repository refresh corrected SC13 so the current BrainRun audit proof no longer claims deferred latency metadata, and noted that the default test glob now covers the broader repository readiness surface.
 - ST8: 2026-05-20 verification passed: `git diff --check -- docs/autopilot-test-plan.md`, `pnpm typecheck`, `pnpm test` with 405 passing tests, and `pnpm build` with no generated asset diff.
+- ST9: 2026-05-22 verification refresh passed: `git diff --check -- docs/autopilot-test-plan.md`, `pnpm typecheck`, `pnpm test` with 455 passing tests, 0 failed, 0 skipped, and 0 todo, and `pnpm build` with no generated asset diff; no skipped or TODO test declarations were found in the default test globs.
