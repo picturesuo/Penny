@@ -97,6 +97,7 @@ assert(typeof keyword.query === "string" && keyword.query.trim().length > 0, "Ke
 assert(keyword.stored === false, "Keyword search must not store results unless sync=true.");
 assert(numberValue(keyword.resultCount) >= 1, "Keyword search must return at least one result.");
 assertKeywordResultShape(keyword, "Keyword search");
+assert(keyword.selectedSourceRefsMatched === true, "Keyword search result refs must match selected Gmail source refs.");
 assert(keyword.memoryCountUnchanged === true, "Keyword search without sync=true must not change Gmail memory count.");
 if (requireKeywordFilters) {
   assertKeywordFilterCoverage(keyword, "Keyword search");
@@ -107,6 +108,7 @@ assert(typeof keywordSync.query === "string" && keywordSync.query.trim().length 
 assert(keywordSync.stored === true, "Keyword search with sync=true must report stored=true.");
 assert(numberValue(keywordSync.resultCount) >= 1, "Keyword search with sync=true must return at least one result.");
 assertKeywordResultShape(keywordSync, "Keyword search with sync=true");
+assert(keywordSync.selectedSourceRefsMatched === true, "Keyword search with sync=true result refs must match selected Gmail source refs.");
 assert(keywordSync.partialFailureCount === 0, "Keyword search with sync=true must have zero partial failures.");
 assert(keywordSync.duplicateSourceRefsAbsent === true, "Keyword search with sync=true must not create duplicate source refs.");
 if (requireKeywordFilters) {
@@ -118,6 +120,7 @@ assert(numberValue(semantic.resultCount) >= 1, "Semantic search must return at l
 assert(semantic.contextLight === false, "Semantic search evidence must not be context-light after sync.");
 assertSemanticResultShape(semantic);
 assertSemanticGroundingLabels(semantic);
+assert(semantic.selectedSourceRefsMatched === true, "Semantic search result refs must match selected Gmail source refs.");
 assert(semantic.rawScoreHidden === true, "Semantic search must hide raw numeric scores.");
 
 const createFirst = requireStep("create.first");
