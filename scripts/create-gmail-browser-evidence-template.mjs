@@ -67,7 +67,7 @@ function buildEvidenceTemplate(options) {
     workspaceId: options.workspaceId,
     projectId: options.projectId,
     sphereId: options.sphereId,
-    stagingRunId: options.stagingRunId,
+    stagingRunId: options.stagingRunId || undefined,
     capturedAt: new Date().toISOString(),
     notes: [
       {
