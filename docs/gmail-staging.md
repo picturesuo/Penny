@@ -225,7 +225,7 @@ GMAIL_SMOKE_EVIDENCE_FILE=tmp/gmail-smoke-evidence-full.json \
 node scripts/smoke-gmail-staging.mjs
 ```
 
-That destructive smoke revokes the Gmail connection, verifies sync/search stop, deletes a synced Gmail source (preferring one that appeared in semantic results), verifies Brain profile, `/api/brain/retrieve`, semantic search, and Create no longer reference the deleted source, and records a safe evidence summary without raw email body text.
+That destructive smoke revokes the Gmail connection, verifies sync/search stop, deletes a synced Gmail source that appeared in semantic results, verifies Brain profile, `/api/brain/retrieve`, semantic search, and Create no longer reference the deleted source, and records a safe evidence summary without raw email body text. If the delete target cannot be tied to semantic Gmail memory, the destructive smoke fails instead of certifying a weaker delete.
 
 ## Acceptance Evidence
 
