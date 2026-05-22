@@ -207,6 +207,8 @@ function assertRequiredPresence(check, options) {
     assert(typeof check?.[field] === "boolean", `env.requiredPresence must include boolean ${field}.`);
   }
 
+  assertMissingRequirementKeys(check);
+
   if (!options.successful) {
     return;
   }
@@ -232,6 +234,83 @@ function assertRequiredPresence(check, options) {
     assert(check.rateLimitPresent === true, "env.requiredPresence must report PENNY_RATE_LIMIT_MAX present for strict staging readiness.");
     assert(check.trustAuthHeadersPresent === true, "env.requiredPresence must report PENNY_TRUST_AUTH_HEADERS present for strict staging readiness.");
   }
+}
+
+function assertMissingRequirementKeys(check) {
+  const keys = check?.missingRequirementKeys;
+  const allowedKeys = new Set([
+    "GMAIL_READINESS_ENV_FILE",
+    "ENABLE_GOOGLE_CONNECTOR",
+    "ENABLE_GMAIL_CONNECTOR",
+    "ENABLE_RESTRICTED_GOOGLE_SCOPES",
+    "NANGO_SECRET_KEY",
+    "NANGO_PUBLIC_KEY",
+    "NANGO_BASE_URL",
+    "NANGO_GMAIL_INTEGRATION_ID",
+    "PENNY_SKIP_DATABASE_PREP_FALSE",
+    "DATABASE_URL",
+    "PENNY_AUTH_MODE",
+    "PENNY_API_TOKEN",
+    "PENNY_SESSION_SECRET",
+    "PENNY_CORS_ORIGINS",
+    "PENNY_RATE_LIMIT_MAX",
+    "PENNY_TRUST_AUTH_HEADERS",
+  ]);
+
+  assert(Array.isArray(keys), "env.requiredPresence must include missingRequirementKeys.");
+
+  if (!Array.isArray(keys)) {
+    return;
+  }
+
+  const seen = new Set();
+
+  for (const [index, key] of keys.entries()) {
+    assert(typeof key === "string" && key.length > 0, `env.requiredPresence missingRequirementKeys entry ${index + 1} must be a string.`);
+    assert(allowedKeys.has(key), `env.requiredPresence missingRequirementKeys entry ${index + 1} must match an allowed requirement key.`);
+    assert(!seen.has(key), `env.requiredPresence missingRequirementKeys must include ${key} only once.`);
+    seen.add(key);
+  }
+
+  const expected = expectedMissingRequirementKeys(check);
+
+  assert(
+    keys.length === expected.length && keys.every((key, index) => key === expected[index]),
+    "env.requiredPresence missingRequirementKeys must match the missing requirement booleans.",
+  );
+}
+
+function expectedMissingRequirementKeys(check) {
+  const requirements = [
+    ["enableGoogleConnector", "ENABLE_GOOGLE_CONNECTOR", true],
+    ["enableGmailConnector", "ENABLE_GMAIL_CONNECTOR", true],
+    ["enableRestrictedGoogleScopes", "ENABLE_RESTRICTED_GOOGLE_SCOPES", true],
+    ["nangoSecretPresent", "NANGO_SECRET_KEY", true],
+    ["nangoPublicPresent", "NANGO_PUBLIC_KEY", true],
+    ["nangoBaseUrlPresent", "NANGO_BASE_URL", true],
+    ["nangoGmailIntegrationIdPresent", "NANGO_GMAIL_INTEGRATION_ID", true],
+    ["databasePrepBypass", "PENNY_SKIP_DATABASE_PREP_FALSE", false],
+  ];
+
+  if (check?.envFileLoadErrorPresent === true) {
+    requirements.unshift(["envFileLoaded", "GMAIL_READINESS_ENV_FILE", true]);
+  }
+
+  if (check?.requireStaging === true || evidence?.requireStaging === true) {
+    requirements.push(
+      ["databaseUrlPresent", "DATABASE_URL", true],
+      ["pennyAuthModePresent", "PENNY_AUTH_MODE", true],
+      ["apiTokenPresent", "PENNY_API_TOKEN", true],
+      ["sessionSecretPresent", "PENNY_SESSION_SECRET", true],
+      ["corsOriginsPresent", "PENNY_CORS_ORIGINS", true],
+      ["rateLimitPresent", "PENNY_RATE_LIMIT_MAX", true],
+      ["trustAuthHeadersPresent", "PENNY_TRUST_AUTH_HEADERS", true],
+    );
+  }
+
+  return requirements
+    .filter(([field, , expected]) => check?.[field] !== expected)
+    .map(([, key]) => key);
 }
 
 function assertConnectPreflight(check, expectedProviderConfigKey) {
