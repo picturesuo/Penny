@@ -19,6 +19,7 @@ const sphereId = env(
   "GMAIL_UI_PREFLIGHT_SPHERE_ID",
   env("PENNY_AUTH_SPHERE_ID", env("PENNY_SPHERE_ID", "gmail-ui-preflight-sphere")),
 );
+const stagingRunId = env("GMAIL_STAGING_RUN_ID", env("GMAIL_UI_PREFLIGHT_STAGING_RUN_ID", ""));
 const gmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly";
 const checks = [];
 
@@ -90,6 +91,7 @@ try {
     workspaceId,
     projectId,
     sphereId,
+    ...(stagingRunId ? { stagingRunId } : {}),
     checkedAt: new Date().toISOString(),
     checks,
   };
@@ -103,6 +105,7 @@ try {
     workspaceId,
     projectId,
     sphereId,
+    ...(stagingRunId ? { stagingRunId } : {}),
     failedAt: new Date().toISOString(),
     error: error instanceof Error ? error.message : String(error),
     checks,
