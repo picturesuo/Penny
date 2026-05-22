@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -32,6 +35,43 @@ test("Gmail browser evidence verifier accepts pre-OAuth UI preflight proof", () 
   assert.equal(payload.preOAuthOnly, true);
   assert.equal(payload.checkCount, 3);
   assert.equal(payload.proofArtifactCount, 1);
+});
+
+test("Gmail browser evidence verifier validates local proof artifact files", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-browser-artifacts-"));
+
+  try {
+    await writeBrowserArtifacts(tmp);
+    const output = execFileSync(
+      process.execPath,
+      ["scripts/verify-gmail-browser-evidence.mjs", "-", `--artifact-root=${tmp}`, "--require-artifact-files"],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+        input: JSON.stringify(validBrowserEvidence()),
+      },
+    );
+    const payload = JSON.parse(output) as { ok: boolean; artifactFilesVerified: boolean; proofArtifactCount: number };
+
+    assert.equal(payload.ok, true);
+    assert.equal(payload.artifactFilesVerified, true);
+    assert.equal(payload.proofArtifactCount, 3);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Gmail browser evidence verifier rejects missing local proof artifact files", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-browser-artifacts-"));
+
+  try {
+    const failure = runVerifierExpectingFailure(validBrowserEvidence(), `--artifact-root=${tmp}`, "--require-artifact-files");
+
+    assert.match(failure, /screenshots\/gmail-pre-oauth\.png could not be read/);
+    assert.match(failure, /screenshots\/gmail-connected-results\.png could not be read/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
 });
 
 test("Gmail browser evidence verifier rejects missing post-OAuth surfaces by default", () => {
@@ -85,9 +125,9 @@ test("Gmail browser evidence verifier rejects raw Gmail, token, and score data",
   assert.match(failure, /raw Gmail, credential, connect, or token data/);
 });
 
-function runVerifierExpectingFailure(evidence: Record<string, unknown>): string {
+function runVerifierExpectingFailure(evidence: Record<string, unknown>, ...args: string[]): string {
   try {
-    execFileSync(process.execPath, ["scripts/verify-gmail-browser-evidence.mjs", "-"], {
+    execFileSync(process.execPath, ["scripts/verify-gmail-browser-evidence.mjs", "-", ...args], {
       cwd: repoRoot,
       encoding: "utf8",
       input: JSON.stringify(evidence),
@@ -102,6 +142,13 @@ function runVerifierExpectingFailure(evidence: Record<string, unknown>): string 
   }
 
   assert.fail("Expected browser evidence verifier to reject evidence.");
+}
+
+async function writeBrowserArtifacts(directory: string): Promise<void> {
+  await mkdir(join(directory, "screenshots"), { recursive: true });
+  await writeFile(join(directory, "screenshots/gmail-pre-oauth.png"), "safe screenshot placeholder\n", "utf8");
+  await writeFile(join(directory, "screenshots/gmail-connected-results.png"), "safe screenshot placeholder\n", "utf8");
+  await writeFile(join(directory, "screenshots/gmail-create-export-post-delete.png"), "safe screenshot placeholder\n", "utf8");
 }
 
 function preOAuthEvidence(): Record<string, unknown> & { checks: Array<Record<string, unknown>> } {

@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
+import { extname, relative, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const file = args.find((arg) => !arg.startsWith("--"));
 const preOAuthOnly = args.includes("--pre-oauth-only");
+const artifactRoot = optionValue("--artifact-root");
+const requireArtifactFiles = args.includes("--require-artifact-files");
 const errors = [];
 
 if (!file || args.includes("--help") || args.includes("-h")) {
@@ -41,6 +44,7 @@ assert(typeof evidence?.capturedAt === "string" && evidence.capturedAt.length > 
 assert(Array.isArray(evidence?.checks), "Browser evidence must include checks.");
 assertNoUnsafeEvidence(evidence);
 assertProofArtifacts(proofArtifacts, requiredCheckNames);
+await assertArtifactFiles(proofArtifacts, { artifactRoot, requireArtifactFiles });
 
 assertPreOAuthPanel(requireCheck("brain.gmailPanel.preOAuth"));
 assertKeywordFilters(requireCheck("brain.gmailKeywordFilters"));
@@ -66,6 +70,7 @@ if (errors.length) {
         preOAuthOnly,
         checkCount: evidence.checks.length,
         proofArtifactCount: proofArtifacts.length,
+        artifactFilesVerified: Boolean(artifactRoot),
       },
       null,
       2,
@@ -106,6 +111,44 @@ function assertProofArtifacts(artifacts, requiredNames) {
 
   for (const name of requiredNames) {
     assert(proved.has(name), `Browser evidence proof artifacts must cover ${name}.`);
+  }
+}
+
+async function assertArtifactFiles(artifacts, options) {
+  if (!options.artifactRoot) {
+    assert(!options.requireArtifactFiles, "Browser evidence artifact file validation requires --artifact-root=<directory>.");
+    return;
+  }
+
+  const root = resolve(options.artifactRoot);
+  const allowedExtensions = new Set([".json", ".jpg", ".jpeg", ".md", ".png", ".txt", ".webp"]);
+
+  for (const [index, artifact] of artifacts.entries()) {
+    const artifactFile = typeof artifact.file === "string" ? artifact.file : typeof artifact.path === "string" ? artifact.path : "";
+
+    assert(Boolean(artifactFile), `Browser evidence proof artifact ${index + 1} must include a file or path when --artifact-root is used.`);
+
+    if (!artifactFile) {
+      continue;
+    }
+
+    const target = resolve(root, artifactFile);
+    const relativePath = relative(root, target);
+
+    assert(
+      Boolean(relativePath) && !relativePath.split(/[\\/]/).includes(".."),
+      `${artifactFile} must stay inside the browser artifact root.`,
+    );
+    assert(allowedExtensions.has(extname(target).toLowerCase()), `${artifactFile} must be a png, jpg, webp, txt, md, or json artifact.`);
+
+    try {
+      const stats = await stat(target);
+
+      assert(stats.isFile(), `${artifactFile} must be a file.`);
+      assert(stats.size > 0, `${artifactFile} must not be empty.`);
+    } catch (error) {
+      errors.push(`${artifactFile} could not be read from artifact root: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }
 
@@ -286,5 +329,9 @@ function printErrors() {
 }
 
 function printUsage() {
-  console.error("Usage: node scripts/verify-gmail-browser-evidence.mjs <evidence.json|-> [--pre-oauth-only]");
+  console.error("Usage: node scripts/verify-gmail-browser-evidence.mjs <evidence.json|-> [--pre-oauth-only] [--artifact-root=<dir>] [--require-artifact-files]");
+}
+
+function optionValue(name) {
+  return args.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1) ?? "";
 }
