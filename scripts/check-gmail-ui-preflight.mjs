@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+
 const baseUrl = env("BASE_URL", "http://localhost:3011").replace(/\/+$/, "");
 const apiToken = env("GMAIL_UI_PREFLIGHT_API_TOKEN", env("PENNY_API_TOKEN", ""));
+const evidenceFile = env("GMAIL_UI_PREFLIGHT_EVIDENCE_FILE", "");
 const userId = env("GMAIL_UI_PREFLIGHT_USER_ID", env("PENNY_AUTH_USER_ID", env("PENNY_USER_ID", "gmail-ui-preflight-user")));
 const workspaceId = env(
   "GMAIL_UI_PREFLIGHT_WORKSPACE_ID",
@@ -77,41 +81,42 @@ try {
     statusStatePrivacySafe: true,
   });
 
-  console.log(
-    JSON.stringify(
-      {
-        ok: true,
-        baseUrl,
-        userId,
-        workspaceId,
-        projectId,
-        sphereId,
-        checkedAt: new Date().toISOString(),
-        checks,
-      },
-      null,
-      2,
-    ),
-  );
+  const result = {
+    ok: true,
+    baseUrl,
+    userId,
+    workspaceId,
+    projectId,
+    sphereId,
+    checkedAt: new Date().toISOString(),
+    checks,
+  };
+  writeEvidence(result);
+  console.log(JSON.stringify(result, null, 2));
 } catch (error) {
-  console.error(
-    JSON.stringify(
-      {
-        ok: false,
-        baseUrl,
-        userId,
-        workspaceId,
-        projectId,
-        sphereId,
-        failedAt: new Date().toISOString(),
-        error: error instanceof Error ? error.message : String(error),
-        checks,
-      },
-      null,
-      2,
-    ),
-  );
+  const result = {
+    ok: false,
+    baseUrl,
+    userId,
+    workspaceId,
+    projectId,
+    sphereId,
+    failedAt: new Date().toISOString(),
+    error: error instanceof Error ? error.message : String(error),
+    checks,
+  };
+  writeEvidence(result);
+  console.error(JSON.stringify(result, null, 2));
   process.exitCode = 1;
+}
+
+function writeEvidence(result) {
+  if (!evidenceFile) {
+    return;
+  }
+
+  mkdirSync(dirname(evidenceFile), { recursive: true });
+  writeFileSync(evidenceFile, `${JSON.stringify(result, null, 2)}\n`, "utf8");
 }
 
 async function request(method, path) {
