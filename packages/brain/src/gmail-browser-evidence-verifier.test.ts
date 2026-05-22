@@ -49,21 +49,34 @@ test("Gmail browser evidence verifier validates local proof artifact files", asy
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-browser-artifacts-"));
 
   try {
+    const evidence = validBrowserEvidence();
+
+    evidence.notes = [
+      {
+        label: "Sanitized browser evidence note",
+        file: "notes/gmail-browser-evidence.md",
+        proves: ["brain.gmailPanel.preOAuth"],
+      },
+    ];
+
     await writeBrowserArtifacts(tmp);
+    await mkdir(join(tmp, "notes"), { recursive: true });
+    await writeFile(join(tmp, "notes/gmail-browser-evidence.md"), "Sanitized note: selectors and safe refs were visible.\n", "utf8");
+
     const output = execFileSync(
       process.execPath,
       ["scripts/verify-gmail-browser-evidence.mjs", "-", `--artifact-root=${tmp}`, "--require-artifact-files"],
       {
         cwd: repoRoot,
         encoding: "utf8",
-        input: JSON.stringify(validBrowserEvidence()),
+        input: JSON.stringify(evidence),
       },
     );
     const payload = JSON.parse(output) as { ok: boolean; artifactFilesVerified: boolean; proofArtifactCount: number };
 
     assert.equal(payload.ok, true);
     assert.equal(payload.artifactFilesVerified, true);
-    assert.equal(payload.proofArtifactCount, 3);
+    assert.equal(payload.proofArtifactCount, 4);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
@@ -77,6 +90,36 @@ test("Gmail browser evidence verifier rejects missing local proof artifact files
 
     assert.match(failure, /screenshots\/gmail-pre-oauth\.png could not be read/);
     assert.match(failure, /screenshots\/gmail-connected-results\.png could not be read/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Gmail browser evidence verifier rejects unsafe local proof artifact text", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-browser-artifacts-"));
+  const evidence = validBrowserEvidence();
+
+  evidence.notes = [
+    {
+      label: "Unsafe copied browser note",
+      file: "notes/gmail-browser-evidence.md",
+      proves: ["brain.gmailPanel.preOAuth"],
+    },
+  ];
+
+  try {
+    await writeBrowserArtifacts(tmp);
+    await mkdir(join(tmp, "notes"), { recursive: true });
+    await writeFile(
+      join(tmp, "notes/gmail-browser-evidence.md"),
+      "Copied row included plainTextBody, https://connect.nango.dev/session-token, and global training.\n",
+      "utf8",
+    );
+
+    const failure = runVerifierExpectingFailure(evidence, `--artifact-root=${tmp}`, "--require-artifact-files");
+
+    assert.match(failure, /notes\/gmail-browser-evidence\.md looks like it contains raw Gmail, credential, connect, or token data/);
+    assert.match(failure, /notes\/gmail-browser-evidence\.md looks like it contains an unsafe Gmail privacy claim/);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
