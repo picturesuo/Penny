@@ -31,6 +31,7 @@ test("Gmail staging readiness checker accepts strict env, safe status, and conne
       connectLinkHost?: string;
       tokenPresent?: boolean;
       nangoPublicPresent?: boolean;
+      nangoWebhookSigningKeyPresent?: boolean;
       missingRequirementKeys?: string[];
     }>;
   };
@@ -42,6 +43,7 @@ test("Gmail staging readiness checker accepts strict env, safe status, and conne
     ["env.requiredPresence", "env.gmail", "env.strictStaging", "api.googleProvider", "api.gmailStatus", "api.connectPreflight"],
   );
   assert.equal(payload.checks[0]?.nangoPublicPresent, true);
+  assert.equal(payload.checks[0]?.nangoWebhookSigningKeyPresent, true);
   assert.deepEqual(payload.checks[0]?.missingRequirementKeys, []);
   assert.equal(payload.checks[2]?.baseUrlHttpsOrLoopback, true);
   assert.equal(payload.checks[2]?.corsIncludesBaseOrigin, true);
@@ -201,6 +203,45 @@ test("Gmail staging readiness checker records missing NANGO_PUBLIC_KEY before AP
   }
 });
 
+test("Gmail staging readiness checker requires NANGO_WEBHOOK_SIGNING_KEY for strict staging", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-readiness-"));
+  const evidenceFile = join(tmp, "missing-webhook-key-evidence.json");
+  const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
+  const env = readyStrictEnv({
+    GMAIL_READINESS_REQUIRE_STAGING: "true",
+    GMAIL_READINESS_EVIDENCE_FILE: evidenceFile,
+  });
+
+  delete env.NANGO_WEBHOOK_SIGNING_KEY;
+
+  try {
+    const result = await runReadiness({
+      routes: readinessRoutes(),
+      requests,
+      env,
+    });
+    const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as {
+      ok: boolean;
+      error?: string;
+      checks: Array<{ name?: string; nangoWebhookSigningKeyPresent?: boolean; missingRequirementKeys?: string[] }>;
+    };
+
+    assert.equal(result.status, 1);
+    assert.equal(requests.length, 0);
+    assert.equal(evidence.ok, false);
+    assert.equal(evidence.checks.length, 1);
+    assert.equal(evidence.checks[0]?.name, "env.requiredPresence");
+    assert.equal(evidence.checks[0]?.nangoWebhookSigningKeyPresent, false);
+    assert.deepEqual(evidence.checks[0]?.missingRequirementKeys, ["NANGO_WEBHOOK_SIGNING_KEY"]);
+    assert.match(result.stderr, /NANGO_WEBHOOK_SIGNING_KEY must be set for Gmail staging readiness/);
+    assert.match(evidence.error ?? "", /NANGO_WEBHOOK_SIGNING_KEY must be set for Gmail staging readiness/);
+    assert.doesNotMatch(result.stderr, /readiness-webhook-signing-key|readiness-secret-value|readiness-public-value/i);
+    assert.doesNotMatch(JSON.stringify(evidence), /readiness-webhook-signing-key|readiness-secret-value|readiness-public-value/i);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging readiness checker rejects dev auth in strict staging mode before API calls", async () => {
   const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
   const result = await runReadiness({
@@ -282,6 +323,7 @@ test("Gmail staging readiness checker loads an env file without leaking values",
       "ENABLE_GMAIL_CONNECTOR=true",
       "ENABLE_RESTRICTED_GOOGLE_SCOPES=true",
       "NANGO_SECRET_KEY=file-secret-value",
+      "NANGO_WEBHOOK_SIGNING_KEY=file-webhook-signing-key",
       "NANGO_PUBLIC_KEY=file-public-value",
       "NANGO_BASE_URL=https://api.nango.test",
       "NANGO_GMAIL_INTEGRATION_ID=google-gmail-staging",
@@ -329,9 +371,9 @@ test("Gmail staging readiness checker loads an env file without leaking values",
       requests.map((request) => `${request.method} ${request.url}`),
       ["GET /api/connectors/google", "GET /api/connectors/google/gmail/status", "POST /api/connectors/google/gmail/connect"],
     );
-    assert.doesNotMatch(result.stdout, /file-secret-value|file-public-value|file-api-token|file-session-secret/i);
-    assert.doesNotMatch(result.stderr, /file-secret-value|file-public-value|file-api-token|file-session-secret/i);
-    assert.doesNotMatch(JSON.stringify(evidence), /file-secret-value|file-public-value|file-api-token|file-session-secret/i);
+    assert.doesNotMatch(result.stdout, /file-secret-value|file-webhook-signing-key|file-public-value|file-api-token|file-session-secret/i);
+    assert.doesNotMatch(result.stderr, /file-secret-value|file-webhook-signing-key|file-public-value|file-api-token|file-session-secret/i);
+    assert.doesNotMatch(JSON.stringify(evidence), /file-secret-value|file-webhook-signing-key|file-public-value|file-api-token|file-session-secret/i);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
@@ -395,6 +437,7 @@ function readyStrictEnv(overrides: Record<string, string> = {}): Record<string, 
     ENABLE_GMAIL_CONNECTOR: "true",
     ENABLE_RESTRICTED_GOOGLE_SCOPES: "true",
     NANGO_SECRET_KEY: "readiness-secret-value",
+    NANGO_WEBHOOK_SIGNING_KEY: "readiness-webhook-signing-key",
     NANGO_PUBLIC_KEY: "readiness-public-value",
     NANGO_BASE_URL: "https://api.nango.test",
     NANGO_GMAIL_INTEGRATION_ID: "google-gmail-staging",
