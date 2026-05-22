@@ -488,15 +488,11 @@ node scripts/verify-gmail-staging-bundle.mjs \
   --ui-preflight=tmp/gmail-ui-preflight-evidence.json \
   --browser-evidence=tmp/gmail-browser-evidence.json \
   --browser-artifact-root=tmp/gmail-browser-artifacts \
-  --readiness-connect-preflight \
-  --require-destructive \
-  --require-ui-preflight \
-  --require-browser-evidence \
-  --require-browser-artifact-files \
+  --final-staging \
   --min-messages=1
 ```
 
-This final bundle is the browser/manual proof gate: browser evidence must be full staged evidence, not `--pre-oauth-only`, and it must cover connected results, semantic refs, Create evidence/export, and post-revoke/delete absence. When local screenshots or notes are referenced by the browser evidence JSON, run the final bundle with `--browser-evidence`, `--browser-artifact-root`, and `--require-browser-artifact-files`; artifact-file verification is invalid without the browser evidence JSON.
+This final bundle is the browser/manual proof gate. `--final-staging` requires readiness connect preflight, full keyword-filter coverage, destructive revoke/delete smoke, UI preflight, full browser evidence, and browser artifact-file verification. Browser evidence must be full staged evidence, not `--pre-oauth-only`, and it must cover connected results, semantic refs, Create evidence/export, and post-revoke/delete absence. When local screenshots or notes are referenced by the browser evidence JSON, run the final bundle with `--browser-evidence`, `--browser-artifact-root`, and `--final-staging`; artifact-file verification is invalid without the browser evidence JSON.
 
 ## Acceptance Evidence
 
@@ -513,7 +509,7 @@ Before marking Gmail staging ready, attach or record:
 - `scripts/verify-gmail-readiness-evidence.mjs tmp/gmail-readiness-evidence.json --strict-staging`, plus `--connect-preflight` when the readiness run created a Nango connect session.
 - `scripts/verify-gmail-smoke-evidence.mjs` output for every accepted non-destructive or destructive evidence file.
 - `scripts/verify-gmail-browser-evidence.mjs tmp/gmail-browser-evidence.json` output for full staged browser proof, with `--artifact-root=tmp/gmail-browser-artifacts --require-artifact-files` when evidence references local proof files, or `--pre-oauth-only` for local UI preflight proof that is not being used as final OAuth evidence.
-- `scripts/verify-gmail-staging-bundle.mjs --readiness=tmp/gmail-readiness-evidence.json --smoke=tmp/gmail-smoke-evidence.json --ui-preflight=tmp/gmail-ui-preflight-evidence.json --browser-evidence=tmp/gmail-browser-evidence.json --browser-artifact-root=tmp/gmail-browser-artifacts --require-ui-preflight --require-browser-evidence --require-browser-artifact-files`, plus `--destructive-smoke=tmp/gmail-smoke-evidence-full.json --require-destructive` when certifying revoke/delete.
+- `scripts/verify-gmail-staging-bundle.mjs --readiness=tmp/gmail-readiness-evidence.json --smoke=tmp/gmail-smoke-evidence.json --destructive-smoke=tmp/gmail-smoke-evidence-full.json --ui-preflight=tmp/gmail-ui-preflight-evidence.json --browser-evidence=tmp/gmail-browser-evidence.json --browser-artifact-root=tmp/gmail-browser-artifacts --final-staging`.
 - Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-connect-preflight-evidence.json --connect-preflight-only` output proving connect-session creation with only sanitized connect-link evidence.
 - Optional full-smoke `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --connect-preflight --min-messages=1` output.
 - UI preflight output from `scripts/check-gmail-ui-preflight.mjs` with `GMAIL_UI_PREFLIGHT_EVIDENCE_FILE=tmp/gmail-ui-preflight-evidence.json`, plus `tmp/gmail-browser-evidence.json` and screenshots or notes for the Brain Gmail panel and Create evidence/export surfaces.
