@@ -203,6 +203,42 @@ test("Gmail staging readiness checker rejects wildcard CORS in strict staging mo
   assert.match(result.stderr, /PENNY_CORS_ORIGINS must not include wildcard origins/);
 });
 
+test("Gmail staging readiness checker rejects missing trust-header env before API calls", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-readiness-"));
+  const evidenceFile = join(tmp, "missing-trust-headers-evidence.json");
+  const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
+  const env = readyStrictEnv({
+    GMAIL_READINESS_REQUIRE_STAGING: "true",
+    GMAIL_READINESS_EVIDENCE_FILE: evidenceFile,
+  });
+
+  delete env.PENNY_TRUST_AUTH_HEADERS;
+
+  try {
+    const result = await runReadiness({
+      routes: readinessRoutes(),
+      requests,
+      env,
+    });
+    const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as {
+      ok: boolean;
+      error?: string;
+      checks: Array<{ name?: string; trustAuthHeadersPresent?: boolean; missingRequirementKeys?: string[] }>;
+    };
+
+    assert.equal(result.status, 1);
+    assert.equal(requests.length, 0);
+    assert.equal(evidence.ok, false);
+    assert.equal(evidence.checks[0]?.name, "env.requiredPresence");
+    assert.equal(evidence.checks[0]?.trustAuthHeadersPresent, false);
+    assert.deepEqual(evidence.checks[0]?.missingRequirementKeys, ["PENNY_TRUST_AUTH_HEADERS"]);
+    assert.match(result.stderr, /PENNY_TRUST_AUTH_HEADERS must be set for Gmail staging readiness/);
+    assert.match(evidence.error ?? "", /PENNY_TRUST_AUTH_HEADERS must be set for Gmail staging readiness/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging readiness checker loads an env file without leaking values", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-readiness-"));
   const envFile = join(tmp, "gmail.env");
