@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -13,6 +13,7 @@ test("Gmail staging bundle verifier accepts matching readiness, smoke, and destr
 
   try {
     const files = await writeBundleFiles(tmp);
+    await writeBrowserArtifacts(tmp);
     const output = execFileSync(
       process.execPath,
       [
@@ -22,12 +23,14 @@ test("Gmail staging bundle verifier accepts matching readiness, smoke, and destr
         `--destructive-smoke=${files.destructive}`,
         `--ui-preflight=${files.uiPreflight}`,
         `--browser-evidence=${files.browserEvidence}`,
+        `--browser-artifact-root=${tmp}`,
         "--readiness-connect-preflight",
         "--smoke-connect-preflight",
         "--require-keyword-filters",
         "--require-destructive",
         "--require-ui-preflight",
         "--require-browser-evidence",
+        "--require-browser-artifact-files",
         "--min-messages=1",
       ],
       {
@@ -45,12 +48,14 @@ test("Gmail staging bundle verifier accepts matching readiness, smoke, and destr
       keywordFilterCoverageRequired: boolean;
       uiPreflightRequired: boolean;
       browserEvidenceRequired: boolean;
+      browserArtifactFilesRequired: boolean;
     };
 
     assert.equal(payload.ok, true);
     assert.equal(payload.keywordFilterCoverageRequired, true);
     assert.equal(payload.uiPreflightRequired, true);
     assert.equal(payload.browserEvidenceRequired, true);
+    assert.equal(payload.browserArtifactFilesRequired, true);
     assert.equal(payload.readiness.checkCount, 5);
     assert.equal(payload.smoke.stepCount, 11);
     assert.equal(payload.destructive?.stepCount, 12);
@@ -138,6 +143,24 @@ test("Gmail staging bundle verifier requires browser evidence when requested", a
   }
 });
 
+test("Gmail staging bundle verifier requires browser artifact root when requested", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const files = await writeBundleFiles(tmp);
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--browser-evidence=${files.browserEvidence}`,
+      "--require-browser-artifact-files",
+    ]);
+
+    assert.match(failure, /Usage: node scripts\/verify-gmail-staging-bundle\.mjs/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging bundle verifier rejects mismatched browser evidence scope", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
 
@@ -199,6 +222,15 @@ async function writeBundleFiles(
   await writeFile(browserEvidence, `${JSON.stringify({ ...validBrowserEvidence(), ...overrides.browserEvidence }, null, 2)}\n`, "utf8");
 
   return { readiness, smoke, destructive, uiPreflight, browserEvidence };
+}
+
+async function writeBrowserArtifacts(directory: string): Promise<void> {
+  const screenshots = join(directory, "screenshots");
+
+  await mkdir(screenshots, { recursive: true });
+  await writeFile(join(screenshots, "gmail-pre-oauth.png"), "safe screenshot placeholder\n", "utf8");
+  await writeFile(join(screenshots, "gmail-connected-results.png"), "safe screenshot placeholder\n", "utf8");
+  await writeFile(join(screenshots, "gmail-create-export-post-delete.png"), "safe screenshot placeholder\n", "utf8");
 }
 
 function runBundleExpectingFailure(args: string[]): string {
