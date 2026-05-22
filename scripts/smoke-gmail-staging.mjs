@@ -356,12 +356,22 @@ try {
   const criticalOptionPresent = createOptionLenses.includes("Critical");
   const gmailMemoryEvidencePresent = hasCreateMemoryEvidence(createFirst.data, createEvidenceNeedle);
   const gmailSourceEvidencePresent = hasCreateSourceEvidence(createFirst.data, createEvidenceNeedle);
+  const rankedCandidateCount = Array.isArray(createFirst.data?.optionSet?.rankedCandidates)
+    ? createFirst.data.optionSet.rankedCandidates.length
+    : 0;
+  const nextBestMoveGrounded = createFirst.data?.optionSet?.nextBestMove?.grounded === true;
+  const rankedCandidateGmailMemoryEvidencePresent = hasRankedCandidateMemoryEvidence(createFirst.data, createEvidenceNeedle);
+  const rankedCandidateGmailSourceEvidencePresent = hasRankedCandidateSourceEvidence(createFirst.data, createEvidenceNeedle);
   const personalOptionExpectedEvidencePresent = createLensExpectedEvidencePresent(createFirst.data, "Personal", createEvidenceNeedle);
   const criticalOptionExpectedEvidencePresent = createLensExpectedEvidencePresent(createFirst.data, "Critical", createEvidenceNeedle);
   assert(personalOptionPresent, "Create did not return a Personal option for Gmail evidence.");
   assert(criticalOptionPresent, "Create did not return a Critical option for Gmail evidence.");
   assert(gmailMemoryEvidencePresent, "Create did not include expected Gmail evidence in memory refs.");
   assert(gmailSourceEvidencePresent, "Create did not include expected Gmail evidence in source refs.");
+  assert(rankedCandidateCount >= 5, "Create did not expose the five Brain Ranker candidates.");
+  assert(nextBestMoveGrounded, "Create Brain Ranker next-best move was not grounded after Gmail sync.");
+  assert(rankedCandidateGmailMemoryEvidencePresent, "Create Brain Ranker candidates did not include expected Gmail memory evidence.");
+  assert(rankedCandidateGmailSourceEvidencePresent, "Create Brain Ranker candidates did not include expected Gmail source evidence.");
   assert(personalOptionExpectedEvidencePresent, "Create Personal option did not include expected Gmail evidence text.");
   assert(criticalOptionExpectedEvidencePresent, "Create Critical option did not include expected Gmail evidence text.");
   const selectedOptionRecords = createFirst.data.optionSet.options.filter((option) => option.lens === "Personal" || option.lens === "Critical");
@@ -376,6 +386,10 @@ try {
     criticalOptionPresent,
     gmailMemoryEvidencePresent,
     gmailSourceEvidencePresent,
+    rankedCandidateCount,
+    nextBestMoveGrounded,
+    rankedCandidateGmailMemoryEvidencePresent,
+    rankedCandidateGmailSourceEvidencePresent,
     personalOptionExpectedEvidencePresent,
     criticalOptionExpectedEvidencePresent,
     expectedEvidencePresent: includesNeedle(createText, createEvidenceNeedle),
@@ -758,11 +772,44 @@ function createLensExpectedEvidencePresent(data, lens, needle) {
   return includesNeedle(JSON.stringify(option ?? {}), needle);
 }
 
+function hasRankedCandidateMemoryEvidence(data, needle) {
+  return createRankedCandidateMemoryRefs(data).some((memory) =>
+    includesNeedle(`${memory.label ?? ""} ${memory.title ?? ""} ${memory.summary ?? ""} ${memory.text ?? ""} ${memory.id ?? ""}`, needle),
+  );
+}
+
+function hasRankedCandidateSourceEvidence(data, needle) {
+  return createRankedCandidateSourceRefs(data).some((source) =>
+    includesNeedle(
+      `${source.label ?? ""} ${source.excerpt ?? ""} ${source.sourceRange ?? ""} ${source.url ?? ""} ${source.id ?? ""} ${source.sourceUri ?? ""}`,
+      needle,
+    ),
+  );
+}
+
 function createMemoryRefs(data) {
   const optionSet = data?.optionSet ?? {};
   const optionMemories = Array.isArray(optionSet.options) ? optionSet.options.flatMap((option) => (Array.isArray(option.memoryUsed) ? option.memoryUsed : [])) : [];
 
   return [...(Array.isArray(optionSet.memoryUsed) ? optionSet.memoryUsed : []), ...optionMemories];
+}
+
+function createRankedCandidateMemoryRefs(data) {
+  const rankedCandidates = Array.isArray(data?.optionSet?.rankedCandidates) ? data.optionSet.rankedCandidates : [];
+
+  return rankedCandidates.flatMap((candidate) => (Array.isArray(candidate?.memoryRefs) ? candidate.memoryRefs : []));
+}
+
+function createRankedCandidateSourceRefs(data) {
+  const rankedCandidates = Array.isArray(data?.optionSet?.rankedCandidates) ? data.optionSet.rankedCandidates : [];
+
+  return rankedCandidates.flatMap((candidate) =>
+    (Array.isArray(candidate?.sourceReferences) ? candidate.sourceReferences : []).flatMap((reference) => [
+      reference,
+      reference?.sourceNode,
+      reference?.chunk,
+    ]),
+  );
 }
 
 function createSourceRefs(data) {
