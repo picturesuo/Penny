@@ -143,6 +143,33 @@ test("Gmail staging bundle verifier final staging mode rejects stale evidence wi
   }
 });
 
+test("Gmail staging bundle verifier final staging mode rejects mismatched run ids", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const files = await writeBundleFiles(tmp, {
+      browserEvidence: {
+        stagingRunId: "other-gmail-run",
+      },
+    });
+    await writeBrowserArtifacts(tmp);
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--destructive-smoke=${files.destructive}`,
+      `--ui-preflight=${files.uiPreflight}`,
+      `--browser-evidence=${files.browserEvidence}`,
+      `--browser-artifact-root=${tmp}`,
+      "--final-staging",
+      "--min-messages=1",
+    ]);
+
+    assert.match(failure, /browser evidence stagingRunId must match readiness evidence/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging bundle verifier rejects mismatched scope evidence", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
 
@@ -367,6 +394,7 @@ function validReadinessEvidence(): Record<string, unknown> {
   return {
     ok: true,
     ...scope(),
+    stagingRunId: "gmail-staging-run-2026-05-22",
     requireStaging: true,
     connectPreflight: true,
     checkedAt: "2026-05-22T12:00:00.000Z",
@@ -435,6 +463,7 @@ function validReadinessEvidence(): Record<string, unknown> {
 function validSmokeEvidence(): Record<string, unknown> {
   return {
     ...scope(),
+    stagingRunId: "gmail-staging-run-2026-05-22",
     connectPreflightEnabled: true,
     connectPreflightOnly: false,
     destructiveRevokeEnabled: false,
@@ -651,6 +680,7 @@ function validUiPreflightEvidence(): Record<string, unknown> {
   return {
     ok: true,
     ...scope(),
+    stagingRunId: "gmail-staging-run-2026-05-22",
     checkedAt: "2026-05-22T12:00:00.000Z",
     checks: [
       {
@@ -692,6 +722,7 @@ function validBrowserEvidence(): Record<string, unknown> {
   return {
     ok: true,
     ...scope(),
+    stagingRunId: "gmail-staging-run-2026-05-22",
     capturedAt: "2026-05-22T12:06:00.000Z",
     mode: "manual",
     screenshots: [
