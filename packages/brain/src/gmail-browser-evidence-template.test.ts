@@ -92,6 +92,16 @@ test("Gmail browser evidence template requires safe run ids for full proof", () 
   assert.doesNotMatch(unsafe, /staged-account@example\.com/);
 });
 
+test("Gmail browser evidence template requires safe scope ids", () => {
+  const unsafe = runTemplateExpectingFailure(
+    "--staging-run-id=gmail-staging-template-test",
+    "--user-id=staged-account@example.com",
+  );
+
+  assert.match(unsafe, /--user-id must be a safe opaque scope id/);
+  assert.doesNotMatch(unsafe, /staged-account@example\.com/);
+});
+
 function runTemplate(...args: string[]) {
   const output = execFileSync(process.execPath, ["scripts/create-gmail-browser-evidence-template.mjs", ...args], {
     cwd: repoRoot,
