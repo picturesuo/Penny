@@ -66,6 +66,12 @@ if (requireStrictStaging) {
   assert(strict.pennyAuthMode === "token", "env.strictStaging must report PENNY_AUTH_MODE=token.");
   assert(strict.apiTokenPresent === true, "env.strictStaging must report PENNY_API_TOKEN present.");
   assert(strict.sessionSecretPresent === true, "env.strictStaging must report PENNY_SESSION_SECRET present.");
+  assert(typeof strict.baseUrlOrigin === "string" && strict.baseUrlOrigin.length > 0, "env.strictStaging must report baseUrlOrigin.");
+  assert(strict.baseUrlHttpsOrLoopback === true, "env.strictStaging must report baseUrlHttpsOrLoopback=true.");
+  assert(numberValue(strict.corsOriginCount) >= 1, "env.strictStaging must report at least one CORS origin.");
+  assert(strict.corsIncludesBaseOrigin === true, "env.strictStaging must report corsIncludesBaseOrigin=true.");
+  assert(strict.corsWildcardAbsent === true, "env.strictStaging must report corsWildcardAbsent=true.");
+  assert(numberValue(strict.rateLimitMax) >= 1 && numberValue(strict.rateLimitMax) <= 1000, "env.strictStaging must report a bounded rateLimitMax.");
   assert(strict.trustAuthHeaders === false, "env.strictStaging must report trustAuthHeaders=false.");
 }
 
