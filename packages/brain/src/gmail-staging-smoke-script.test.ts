@@ -111,6 +111,133 @@ test("Gmail staging smoke script rejects unsafe run ids without writing them", a
   }
 });
 
+test("Gmail staging smoke script rejects provider-only selectors that match multiple accounts", async () => {
+  const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
+  const connections = [
+    {
+      id: "connector-gmail-connection-1",
+      status: "connected",
+      surfaces: ["google_gmail"],
+      credential: {
+        providerConfigKey: "google-gmail",
+        connectionId: "nango-gmail-1",
+        accountEmail: "first-staged@example.com",
+        accountLabel: "First staged Gmail",
+      },
+    },
+    {
+      id: "connector-gmail-connection-2",
+      status: "connected",
+      surfaces: ["google_gmail"],
+      credential: {
+        providerConfigKey: "google-gmail",
+        connectionId: "nango-gmail-2",
+        accountEmail: "second-staged@example.com",
+        accountLabel: "Second staged Gmail",
+      },
+    },
+  ];
+  const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+    requests.push({ method: request.method, url: request.url });
+    const route =
+      request.method === "GET" && request.url === "/api/connectors/google/gmail/status"
+        ? {
+            status: 200,
+            body: {
+              data: {
+                configured: true,
+                status: "connected",
+                scopes: [gmailReadonlyScope],
+                restrictedScope: true,
+                gated: true,
+                private: true,
+                privacy: {
+                  trainingUse: false,
+                  rawRetentionDefault: false,
+                  noHumanReview: true,
+                },
+                connections,
+                sources: [],
+                state: {
+                  connections,
+                  sources: [],
+                  syncJobs: [],
+                },
+                messageCount: 0,
+              },
+            },
+          }
+        : request.method === "GET" && request.url === "/api/connectors/google"
+          ? {
+              status: 200,
+              body: {
+                data: {
+                  configured: true,
+                  surfaces: [
+                    {
+                      id: "google_gmail",
+                      status: "connected",
+                      scopes: [
+                        {
+                          scope: gmailReadonlyScope,
+                          gated: true,
+                        },
+                      ],
+                    },
+                  ],
+                  state: {
+                    connections,
+                    sources: [],
+                    syncJobs: [],
+                  },
+                },
+              },
+            }
+          : {
+              status: 500,
+              body: {
+                error: {
+                  message: "Ambiguous selector smoke test must fail before workflow API calls.",
+                },
+              },
+            };
+
+    response.writeHead(route.status, { "content-type": "application/json" });
+    response.end(JSON.stringify(route.body));
+  });
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-smoke-"));
+  const evidenceFile = join(tmp, "ambiguous-provider-selector.json");
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = server.address();
+
+    assert(address && typeof address === "object");
+
+    const result = await runSmoke({
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      evidenceFile,
+      env: {
+        GMAIL_SMOKE_PROVIDER_CONFIG_KEY: "google-gmail",
+      },
+    });
+    const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as { error?: string; steps?: unknown[] };
+
+    assert.equal(result.status, 1);
+    assert.match(evidence.error ?? "", /selector matched multiple connected Gmail accounts/);
+    assert.deepEqual(evidence.steps, []);
+    assert.deepEqual(
+      requests.map((request) => `${request.method} ${request.url}`),
+      ["GET /api/connectors/google/gmail/status", "GET /api/connectors/google"],
+    );
+    assert.doesNotMatch(result.stderr, /first-staged@example\.com|second-staged@example\.com|nango-gmail-[12]/);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging smoke script verifies the non-destructive post-OAuth path", async () => {
   const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
   const state = postOauthSmokeState();
