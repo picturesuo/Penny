@@ -305,6 +305,21 @@ test("Gmail smoke evidence verifier rejects destructive delete evidence without 
   assert.match(failure, /Delete evidence must include tracked Gmail memory ids/);
 });
 
+test("Gmail smoke evidence verifier rejects destructive delete evidence without Create ranker absence proof", () => {
+  const evidence = destructiveEvidence();
+  const deleted = evidence.steps.find((step) => step.step === "deleteSource") as Record<string, unknown>;
+
+  deleted.createAfterDeleteRankedCandidateCount = 4;
+  deleted.createRankedCandidateDeletedSourceAbsent = false;
+  deleted.createRankedCandidateDeletedMemoryAbsent = false;
+
+  const failure = runVerifierExpectingFailure(evidence, [...verifier, "--destructive"]);
+
+  assert.match(failure, /Create after delete must expose Brain Ranker candidates/);
+  assert.match(failure, /Deleted Gmail source must be absent from Create ranked candidates/);
+  assert.match(failure, /Deleted Gmail memory must be absent from Create ranked candidates/);
+});
+
 function runVerifierExpectingFailure(evidence: Record<string, unknown>, args = verifier): string {
   try {
     execFileSync(process.execPath, args, {
@@ -572,6 +587,9 @@ function destructiveEvidence(): Record<string, unknown> & { steps: Array<Record<
       semanticDeletedSourceAbsent: true,
       createDeletedSourceAbsent: true,
       createDeletedMemoryAbsent: true,
+      createAfterDeleteRankedCandidateCount: 5,
+      createRankedCandidateDeletedSourceAbsent: true,
+      createRankedCandidateDeletedMemoryAbsent: true,
       trackedDeletedMemoryIdCount: 1,
     },
   );
