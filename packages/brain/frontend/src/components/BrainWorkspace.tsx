@@ -2907,7 +2907,7 @@ export function GoogleConnectorControl({
       });
 
       setSemanticResults(result);
-      setGmailSearchStatus(result.contextLight ? "Connect or sync Gmail first." : `${result.results.length} semantic result${result.results.length === 1 ? "" : "s"}`);
+      setGmailSearchStatus(result.contextLight ? "Sync Gmail first." : `${result.results.length} semantic result${result.results.length === 1 ? "" : "s"}`);
     } catch (caught) {
       setGmailSearchStatus(caught instanceof Error ? caught.message : String(caught));
     }
@@ -3003,7 +3003,7 @@ export function GoogleConnectorControl({
           Last sync {formatNullableDate(gmailLastSyncAt)} · {gmailMessageCount} messages
         </small>
       </section>
-      {gmailMessageCount === 0 ? <p className="brain-memory-import-hint">Connect or sync Gmail first.</p> : null}
+      {gmailMessageCount === 0 ? <p className="brain-memory-import-hint">Sync Gmail first.</p> : null}
       <div className="gmail-search-grid">
         <form className="gmail-search-form" onSubmit={(event) => void handleKeywordSubmit(event)}>
           <label>

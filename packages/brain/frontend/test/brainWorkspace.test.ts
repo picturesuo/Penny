@@ -98,7 +98,7 @@ test("BrainMemoryPanel renders imported sources, profile summary, and recent mem
   assert.match(markup, /trainingUse=false/);
   assert.match(markup, /Search email/);
   assert.match(markup, /Semantic search/);
-  assert.match(markup, /Connect or sync Gmail first/);
+  assert.match(markup, /Sync Gmail first/);
   assert.match(markup, /Sync now/);
   assert.match(markup, /Revoke/);
   assert.match(markup, /Delete Gmail source/);
