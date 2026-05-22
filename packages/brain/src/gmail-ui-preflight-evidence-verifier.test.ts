@@ -53,6 +53,17 @@ test("Gmail UI preflight evidence verifier rejects unsafe run ids without echoin
   assert.doesNotMatch(failure, /staged-account@example\.com/);
 });
 
+test("Gmail UI preflight evidence verifier rejects unsafe scope ids without echoing them", () => {
+  const evidence = validUiPreflightEvidence();
+
+  evidence.userId = "staged-account@example.com";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /UI preflight evidence userId must be a safe opaque scope id/);
+  assert.doesNotMatch(failure, /staged-account@example\.com/);
+});
+
 test("Gmail UI preflight evidence verifier rejects unknown check rows", () => {
   const evidence = validUiPreflightEvidence();
 
