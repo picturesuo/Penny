@@ -525,6 +525,11 @@ function validSmokeEvidence(): Record<string, unknown> {
         statusStatePrivacySafe: true,
         providerStatePrivacySafe: true,
         connectionCount: 1,
+        selectedAccountStateVisible: true,
+        targetConnectionIdPresent: true,
+        targetExternalConnectionIdPresent: true,
+        targetProviderConfigKeyPresent: true,
+        targetAccountAliasPresent: true,
       },
       {
         step: "sync",
