@@ -304,6 +304,15 @@ Reject the browser evidence if a screenshot, note, console log, or copied row in
 Record manual browser proof as sanitized JSON when it is part of the staging bundle. Use `--pre-oauth-only` only for the local UI preflight; omit it for full staged OAuth proof:
 
 ```bash
+node --check scripts/create-gmail-browser-evidence-template.mjs
+node scripts/create-gmail-browser-evidence-template.mjs \
+  --staging-run-id="$GMAIL_STAGING_RUN_ID" \
+  --base-url="$GMAIL_STAGING_BASE_URL" \
+  --out=tmp/gmail-browser-evidence.json
+node scripts/create-gmail-browser-evidence-template.mjs \
+  --pre-oauth-only \
+  --base-url="$GMAIL_STAGING_BASE_URL" \
+  --out=tmp/gmail-browser-evidence-preoauth.json
 node --check scripts/verify-gmail-browser-evidence.mjs
 node scripts/verify-gmail-browser-evidence.mjs tmp/gmail-browser-evidence.json --pre-oauth-only
 node scripts/verify-gmail-browser-evidence.mjs tmp/gmail-browser-evidence.json
@@ -312,7 +321,9 @@ node scripts/verify-gmail-browser-evidence.mjs tmp/gmail-browser-evidence.json \
   --require-artifact-files
 ```
 
-The JSON evidence must include `baseUrl`, `userId`, `workspaceId`, `projectId`, `sphereId`, `capturedAt`, `checks`, and at least one sanitized proof artifact in `screenshots`, `notes`, or `proofs`. Full staged browser evidence must include the same safe opaque `stagingRunId` recorded by the readiness, UI preflight, and smoke evidence files; the standalone browser verifier rejects full proof when this run id is missing or unsafe. Each proof artifact must include a `proves` array listing the check names it supports. The full staged browser evidence must include and prove these check names:
+The template generator creates every required check with boolean proof fields set to `false`, plus one note and per-check screenshot placeholders whose `proves` arrays already cover the verifier requirements. Replace the placeholder scope ids, attach sanitized screenshot or note files, and flip a boolean to `true` only after the visible browser proof or sanitized note proves it. The verifier remains the acceptance gate.
+
+The JSON evidence must include `baseUrl`, `userId`, `workspaceId`, `projectId`, `sphereId`, `capturedAt`, `checks`, and at least one sanitized proof artifact in `screenshots`, `notes`, or `proofs`. Full staged browser evidence must include the same safe opaque `stagingRunId` recorded by the readiness, UI preflight, and smoke evidence files; the template generator and standalone browser verifier reject full proof when this run id is missing or unsafe. Each proof artifact must include a `proves` array listing the check names it supports. The full staged browser evidence must include and prove these check names:
 
 - `brain.gmailPanel.preOAuth`
 - `brain.gmailKeywordFilters`
