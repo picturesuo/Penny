@@ -736,6 +736,7 @@ function validBrowserEvidence(): Record<string, unknown> {
       {
         name: "brain.gmailSemanticResults",
         selectorTargetsPresent: true,
+        semanticSearchRan: true,
         resultVisible: true,
         groundingLabelVisible: true,
         scoreReasonVisible: true,
@@ -746,6 +747,8 @@ function validBrowserEvidence(): Record<string, unknown> {
       {
         name: "create.gmailEvidenceDrawer",
         selectorTargetsPresent: true,
+        createRunCompleted: true,
+        evidenceDrawerOpened: true,
         drawerVisible: true,
         realGmailRefsOnlyWhenUsed: true,
         gmailSourceRefVisible: true,
@@ -754,6 +757,7 @@ function validBrowserEvidence(): Record<string, unknown> {
       {
         name: "create.gmailExport",
         selectorTargetsPresent: true,
+        exportPromptGenerated: true,
         exportVisible: true,
         gmailContextOnlyWhenUsed: true,
         unsafePrivacyClaimAbsent: true,
@@ -764,6 +768,8 @@ function validBrowserEvidence(): Record<string, unknown> {
       {
         name: "brain.gmailPostRevokeDelete",
         selectorTargetsPresent: true,
+        revokeCompleted: true,
+        deleteCompleted: true,
         postRevokeStateVisible: true,
         syncBlockedAfterRevoke: true,
         searchBlockedAfterRevoke: true,
