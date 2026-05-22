@@ -28,6 +28,7 @@ assert(typeof evidence?.sphereId === "string" && evidence.sphereId.length > 0, "
 assert(typeof evidence?.requireStaging === "boolean", "Readiness evidence must include requireStaging.");
 assert(typeof evidence?.connectPreflight === "boolean", "Readiness evidence must include connectPreflight.");
 assert(Array.isArray(evidence?.checks), "Readiness evidence must include checks.");
+assertReadinessChecks(evidence?.checks, { successful: evidence?.ok === true });
 assertSafeStagingRunId(evidence);
 assertNoUnsafeEvidence(evidence);
 
@@ -46,6 +47,7 @@ if (evidence?.ok === false) {
 assert(evidence?.ok === true, "Readiness evidence must include ok=true.");
 assert(typeof evidence?.checkedAt === "string" && evidence.checkedAt.length > 0, "Readiness evidence must include checkedAt.");
 assert(checks.size > 0, "Successful readiness evidence must include checks.");
+assert(checks.has("env.requiredPresence"), "Successful readiness evidence must include env.requiredPresence.");
 
 const envGmail = requireCheck("env.gmail");
 assert(envGmail.enableGoogleConnector === true, "env.gmail must report ENABLE_GOOGLE_CONNECTOR=true.");
@@ -127,6 +129,48 @@ function assertSafeStagingRunId(value) {
 
 function isSafeStagingRunId(value) {
   return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
+}
+
+function assertReadinessChecks(value, options) {
+  if (!Array.isArray(value)) {
+    return;
+  }
+
+  const allowed = new Set([
+    "env.requiredPresence",
+    "env.gmail",
+    "env.strictStaging",
+    "api.googleProvider",
+    "api.gmailStatus",
+    "api.connectPreflight",
+  ]);
+  const seen = new Set();
+
+  for (const [index, check] of value.entries()) {
+    const isObject = Boolean(check) && typeof check === "object" && !Array.isArray(check);
+
+    assert(isObject, `Readiness evidence check ${index + 1} must be an object.`);
+
+    if (!isObject) {
+      continue;
+    }
+
+    const name = typeof check.name === "string" ? check.name.trim() : "";
+
+    assert(Boolean(name), `Readiness evidence check ${index + 1} must include a name.`);
+
+    if (!name) {
+      continue;
+    }
+
+    assert(allowed.has(name), `Readiness evidence check ${index + 1} name must match an allowed readiness check.`);
+    assert(!seen.has(name), `Readiness evidence must include ${name} only once.`);
+    seen.add(name);
+  }
+
+  if (options.successful) {
+    assert(seen.has("env.requiredPresence"), "Successful readiness evidence must include env.requiredPresence.");
+  }
 }
 
 function assertConnectPreflight(check, expectedProviderConfigKey) {
