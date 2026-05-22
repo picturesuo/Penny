@@ -199,6 +199,8 @@ GMAIL_SMOKE_CONNECTION_ID=<nango-connection-id>
 GMAIL_SMOKE_PROVIDER_CONFIG_KEY=<nango-gmail-integration-id>
 ```
 
+When a selector is provided, the automated smoke uses it for sync, keyword search, semantic search, revoke, and delete checks. If multiple connected Gmail accounts are present and no selector is provided, the smoke fails instead of mixing evidence across accounts.
+
 The default smoke verifies:
 
 - Gmail status is configured, connected, private, and `gmail.readonly`.
