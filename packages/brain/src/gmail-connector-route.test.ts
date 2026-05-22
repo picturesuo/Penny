@@ -816,9 +816,17 @@ test("Gmail revoke removes retrieval access for synced Gmail sources", async () 
       adapter: gmailProxyAdapter([]),
     },
   );
+  const semanticAfterRevoke = await handleGoogleGmailSemanticSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/semantic-search", {
+      query: "launch partner private email evidence",
+      limit: 5,
+    }),
+    { stateStore, brainMemoryService },
+  );
 
   assert.equal(syncAfterRevoke.status, 409);
   assert.equal(searchAfterRevoke.status, 409);
+  assert.equal(semanticAfterRevoke.status, 409);
 });
 
 test("Gmail source delete still removes Brain retrieval after revoke", async () => {
