@@ -424,6 +424,8 @@ function validSmokeEvidence(): Record<string, unknown> {
         scoreReasonPresent: true,
         groundingLabels: ["grounded"],
         rawScoreHidden: true,
+        deleteTargetMatchedSemanticResult: true,
+        deleteTargetMemoryIdCount: 1,
       },
       {
         step: "create.first",
@@ -483,12 +485,15 @@ function validDestructiveEvidence(): Record<string, unknown> {
     },
     {
       step: "deleteSource",
+      sourceIdPresent: true,
+      brainSourceIdPresent: true,
       brainSourceDeleted: true,
       brainProfileSourceAbsent: true,
       brainRetrieveDeletedSourceAbsent: true,
       semanticDeletedSourceAbsent: true,
       createDeletedSourceAbsent: true,
       createDeletedMemoryAbsent: true,
+      trackedDeletedMemoryIdCount: 1,
     },
   );
 
