@@ -58,6 +58,24 @@ test("Gmail readiness evidence verifier rejects raw connect links or session tok
   assert.match(failure, /raw connect\/session\/token value/);
 });
 
+test("Gmail readiness evidence verifier rejects unsafe key variants without raw values", () => {
+  const evidence = validReadinessEvidence();
+  const env = evidence.checks.find((check) => check.name === "env.gmail") as Record<string, unknown>;
+  const connect = evidence.checks.find((check) => check.name === "api.connectPreflight") as Record<string, unknown>;
+
+  env.NANGO_SECRET_KEY = "present";
+  env.database_url = "present";
+  connect.access_token = "present";
+  connect["plain-text-body"] = "absent";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /NANGO_SECRET_KEY must not be present/);
+  assert.match(failure, /database_url must not be present/);
+  assert.match(failure, /access_token must not be present/);
+  assert.match(failure, /plain-text-body must not be present/);
+});
+
 test("Gmail readiness evidence verifier rejects unsafe run ids without echoing them", () => {
   const evidence = validReadinessEvidence();
 
