@@ -99,7 +99,17 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
       },
     });
     const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as {
-      steps: Array<{ step: string; query?: string; stored?: boolean; expectedEvidencePresent?: boolean }>;
+      steps: Array<{
+        step: string;
+        query?: string;
+        stored?: boolean;
+        expectedEvidencePresent?: boolean;
+        personalOptionPresent?: boolean;
+        criticalOptionPresent?: boolean;
+        gmailMemoryEvidencePresent?: boolean;
+        gmailSourceEvidencePresent?: boolean;
+        selectedLenses?: string[];
+      }>;
     };
     const verifyOutput = execFileSync(
       process.execPath,
@@ -112,6 +122,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     const verified = JSON.parse(verifyOutput) as { ok: boolean; stepCount: number };
     const keyword = evidence.steps.find((step) => step.step === "keywordSearch");
     const keywordSync = evidence.steps.find((step) => step.step === "keywordSearch.syncExplicit");
+    const createFirst = evidence.steps.find((step) => step.step === "create.first");
     const createExport = evidence.steps.find((step) => step.step === "create.export");
 
     assert.equal(result.status, 0);
@@ -134,6 +145,11 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(keyword?.stored, false);
     assert.equal(keywordSync?.query, '"launch partner evidence" from:alice@example.com subject:"Launch plan"');
     assert.equal(keywordSync?.stored, true);
+    assert.deepEqual(createFirst?.selectedLenses, ["Critical", "Personal"]);
+    assert.equal(createFirst?.personalOptionPresent, true);
+    assert.equal(createFirst?.criticalOptionPresent, true);
+    assert.equal(createFirst?.gmailMemoryEvidencePresent, true);
+    assert.equal(createFirst?.gmailSourceEvidencePresent, true);
     assert.equal(createExport?.expectedEvidencePresent, true);
     assert.equal(verified.ok, true);
     assert.equal(verified.stepCount, 10);

@@ -327,6 +327,12 @@ function validSmokeEvidence(): Record<string, unknown> {
         step: "create.first",
         memoryCountUsed: 1,
         sourceCountUsed: 1,
+        selectedOptionCount: 2,
+        selectedLenses: ["Critical", "Personal"],
+        personalOptionPresent: true,
+        criticalOptionPresent: true,
+        gmailMemoryEvidencePresent: true,
+        gmailSourceEvidencePresent: true,
         expectedEvidencePresent: true,
       },
       {
