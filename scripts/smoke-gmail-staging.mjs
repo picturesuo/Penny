@@ -148,6 +148,33 @@ try {
     memoryCountUnchanged: statusAfterKeyword.data.messageCount === beforeKeywordCount,
   });
 
+  const beforeKeywordSyncCount = statusAfterKeyword.data.messageCount;
+  const keywordSync = await request("POST", "/api/connectors/google/gmail/search", {
+    ...selector,
+    ...keywordSearchInput(),
+    maxResults,
+    sync: true,
+  });
+  assert(keywordSync.data?.stored === true, "Keyword search with sync=true did not report stored=true.");
+  assert(Array.isArray(keywordSync.data?.results) && keywordSync.data.results.length > 0, "Keyword search with sync=true returned no Gmail results.");
+  assert(keywordSync.data.results.every(hasKeywordResultShape), "Keyword search with sync=true returned an unexpected result shape.");
+  assert(keywordSync.data?.sync?.partialFailureCount === 0, "Keyword search with sync=true reported partial sync failures.");
+  const statusAfterKeywordSync = await request("GET", "/api/connectors/google/gmail/status");
+  const sourceUrisAfterKeywordSync = gmailSourceUris(statusAfterKeywordSync.data?.sources, targetConnectorConnectionId);
+  assert(
+    statusAfterKeywordSync.data?.messageCount === beforeKeywordSyncCount,
+    "Keyword search with sync=true changed already synced Gmail source count.",
+  );
+  assert(hasUniqueValues(sourceUrisAfterKeywordSync), "Keyword search with sync=true produced duplicate source refs.");
+  record("keywordSearch.syncExplicit", {
+    query: keywordSync.data.query,
+    stored: keywordSync.data.stored,
+    resultCount: keywordSync.data.results.length,
+    partialFailureCount: keywordSync.data.sync?.partialFailureCount ?? null,
+    statusMessageCountUnchanged: statusAfterKeywordSync.data.messageCount === beforeKeywordSyncCount,
+    duplicateSourceRefsAbsent: hasUniqueValues(sourceUrisAfterKeywordSync),
+  });
+
   const semantic = await request("POST", "/api/connectors/google/gmail/semantic-search", {
     ...selector,
     query: semanticQuery,
