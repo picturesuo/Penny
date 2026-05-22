@@ -9,11 +9,13 @@ const readinessFile = optionValue("--readiness");
 const smokeFile = optionValue("--smoke");
 const destructiveFile = optionValue("--destructive-smoke");
 const uiPreflightFile = optionValue("--ui-preflight");
+const browserEvidenceFile = optionValue("--browser-evidence");
 const requireReadinessConnect = args.includes("--readiness-connect-preflight");
 const requireSmokeConnect = args.includes("--smoke-connect-preflight");
 const requireKeywordFilters = args.includes("--require-keyword-filters");
 const requireDestructive = args.includes("--require-destructive");
 const requireUiPreflight = args.includes("--require-ui-preflight");
+const requireBrowserEvidence = args.includes("--require-browser-evidence");
 const minMessages = optionInt("--min-messages", 1);
 const errors = [];
 
@@ -23,16 +25,26 @@ if (
   !readinessFile ||
   !smokeFile ||
   (requireDestructive && !destructiveFile) ||
-  (requireUiPreflight && !uiPreflightFile)
+  (requireUiPreflight && !uiPreflightFile) ||
+  (requireBrowserEvidence && !browserEvidenceFile)
 ) {
   printUsage();
-  process.exit(readinessFile && smokeFile && (!requireDestructive || destructiveFile) && (!requireUiPreflight || uiPreflightFile) ? 0 : 1);
+  process.exit(
+    readinessFile &&
+      smokeFile &&
+      (!requireDestructive || destructiveFile) &&
+      (!requireUiPreflight || uiPreflightFile) &&
+      (!requireBrowserEvidence || browserEvidenceFile)
+      ? 0
+      : 1,
+  );
 }
 
 const readiness = readEvidence(readinessFile, "readiness");
 const smoke = readEvidence(smokeFile, "smoke");
 const destructive = destructiveFile ? readEvidence(destructiveFile, "destructive smoke") : null;
 const uiPreflight = uiPreflightFile ? readEvidence(uiPreflightFile, "UI preflight") : null;
+const browserEvidence = browserEvidenceFile ? readEvidence(browserEvidenceFile, "browser evidence") : null;
 
 runVerifier("readiness", [
   "scripts/verify-gmail-readiness-evidence.mjs",
@@ -58,6 +70,13 @@ if (destructiveFile) {
   ]);
 }
 
+if (browserEvidenceFile) {
+  runVerifier("browser evidence", [
+    "scripts/verify-gmail-browser-evidence.mjs",
+    browserEvidenceFile,
+  ]);
+}
+
 if (readiness && smoke) {
   assertMatchingScope(readiness, smoke, "smoke");
   assert(smoke.ok !== false, "Smoke evidence must not be failed evidence.");
@@ -75,6 +94,10 @@ if (readiness && uiPreflight) {
   assertUiPreflightEvidence(uiPreflight);
 }
 
+if (readiness && browserEvidence) {
+  assertMatchingScope(readiness, browserEvidence, "browser evidence");
+}
+
 if (smoke && destructive) {
   assertMatchingScope(smoke, destructive, "destructive smoke");
 }
@@ -90,11 +113,13 @@ if (errors.length) {
         smoke: evidenceSummary(smokeFile, smoke),
         destructive: destructiveFile ? evidenceSummary(destructiveFile, destructive) : null,
         uiPreflight: uiPreflightFile ? evidenceSummary(uiPreflightFile, uiPreflight) : null,
+        browserEvidence: browserEvidenceFile ? evidenceSummary(browserEvidenceFile, browserEvidence) : null,
         readinessConnectPreflightRequired: requireReadinessConnect,
         smokeConnectPreflightRequired: requireSmokeConnect,
         keywordFilterCoverageRequired: requireKeywordFilters,
         destructiveRequired: requireDestructive,
         uiPreflightRequired: requireUiPreflight,
+        browserEvidenceRequired: requireBrowserEvidence,
         minMessages,
       },
       null,
@@ -211,6 +236,6 @@ function printErrors() {
 
 function printUsage() {
   console.error(
-    "Usage: node scripts/verify-gmail-staging-bundle.mjs --readiness=<readiness.json> --smoke=<smoke.json> [--destructive-smoke=<smoke-full.json>] [--ui-preflight=<ui-preflight.json>] [--require-destructive] [--require-ui-preflight] [--readiness-connect-preflight] [--smoke-connect-preflight] [--require-keyword-filters] [--min-messages=N]",
+    "Usage: node scripts/verify-gmail-staging-bundle.mjs --readiness=<readiness.json> --smoke=<smoke.json> [--destructive-smoke=<smoke-full.json>] [--ui-preflight=<ui-preflight.json>] [--browser-evidence=<browser-evidence.json>] [--require-destructive] [--require-ui-preflight] [--require-browser-evidence] [--readiness-connect-preflight] [--smoke-connect-preflight] [--require-keyword-filters] [--min-messages=N]",
   );
 }
