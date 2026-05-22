@@ -32,6 +32,25 @@ test("Gmail smoke evidence verifier accepts expected sanitized partial failure e
   assert.equal(payload.stepCount, 11);
 });
 
+test("Gmail smoke evidence verifier can require full keyword filter coverage", () => {
+  const output = execFileSync(process.execPath, [...verifier, "--require-keyword-filters"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    input: JSON.stringify(keywordFilterEvidence()),
+  });
+  const payload = JSON.parse(output) as { ok: boolean; keywordFilterCoverageRequired: boolean };
+
+  assert.equal(payload.ok, true);
+  assert.equal(payload.keywordFilterCoverageRequired, true);
+});
+
+test("Gmail smoke evidence verifier rejects missing keyword filter coverage when required", () => {
+  const failure = runVerifierExpectingFailure(validEvidence(), [...verifier, "--require-keyword-filters"]);
+
+  assert.match(failure, /Keyword search must prove from filter coverage/);
+  assert.match(failure, /Keyword search with sync=true must prove from filter coverage/);
+});
+
 test("Gmail smoke evidence verifier rejects unexpected partial failures", () => {
   const evidence = validEvidence();
   const sync = evidence.steps.find((step) => step.step === "sync") as Record<string, unknown>;
@@ -83,9 +102,9 @@ test("Gmail smoke evidence verifier accepts destructive revoke and delete eviden
   assert.equal(payload.destructive, true);
 });
 
-function runVerifierExpectingFailure(evidence: Record<string, unknown>): string {
+function runVerifierExpectingFailure(evidence: Record<string, unknown>, args = verifier): string {
   try {
-    execFileSync(process.execPath, verifier, {
+    execFileSync(process.execPath, args, {
       cwd: repoRoot,
       encoding: "utf8",
       input: JSON.stringify(evidence),
@@ -233,6 +252,26 @@ function expectedPartialFailureEvidence(): Record<string, unknown> & { steps: Ar
     step.expectedPartialFailureStage = "message_oversized";
     step.partialFailureStageMatched = true;
     step.partialFailuresSanitized = true;
+  }
+
+  return evidence;
+}
+
+function keywordFilterEvidence(): Record<string, unknown> & { steps: Array<Record<string, unknown>> } {
+  const evidence = validEvidence();
+  const filtersUsed = {
+    from: "alice@example.com",
+    to: "bob@example.com",
+    subject: "Launch plan",
+    label: "inbox",
+    after: "2026-05-01",
+    before: "2026-05-22",
+    hasAttachment: true,
+  };
+
+  for (const step of evidence.steps.filter((item) => item.step === "keywordSearch" || item.step === "keywordSearch.syncExplicit")) {
+    step.filtersUsed = filtersUsed;
+    step.maxResultsUsed = 5;
   }
 
   return evidence;
