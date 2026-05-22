@@ -235,7 +235,7 @@ test("Gmail smoke evidence verifier rejects raw body markers in harmless-looking
   const evidence = validEvidence();
   const exported = evidence.steps.find((step) => step.step === "create.export") as Record<string, unknown>;
 
-  exported.operatorNote = "Copied row showed private raw Gmail body marker.";
+  exported.operatorNote = "Copied row showed raw email body marker.";
 
   const failure = runVerifierExpectingFailure(evidence);
 
