@@ -471,6 +471,8 @@ async function writeEvidence() {
     return;
   }
 
-  const { writeFile } = await import("node:fs/promises");
+  const { dirname } = await import("node:path");
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  await mkdir(dirname(evidenceFile), { recursive: true });
   await writeFile(evidenceFile, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
 }
