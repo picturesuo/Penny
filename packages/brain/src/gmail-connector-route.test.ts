@@ -163,6 +163,57 @@ test("Gmail sync imports mocked messages into private Brain memory through Nango
   assert.ok(proxyCalls.some((call) => call.path === "users/me/messages/msg-1"));
 });
 
+test("Gmail status returns staging-safe views without message metadata", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+      now: "2026-05-22T12:00:00.000Z",
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: gmailProxyAdapter(proxyCalls),
+    },
+  );
+  const response = await handleGoogleGmailStatusRequest(gmailRequest("/api/connectors/google/gmail/status", {}, "GET"), {
+    env: configuredEnv,
+    stateStore,
+  });
+  const payload = (await response.json()) as {
+    data: {
+      connections: Array<{ credential: Record<string, unknown> }>;
+      sources: Array<Record<string, unknown> & { label: string }>;
+      state: {
+        syncJobs: Array<Record<string, unknown>>;
+        sources: Array<Record<string, unknown> & { label: string }>;
+      };
+    };
+  };
+  const source = payload.data.sources[0];
+  const stateSource = payload.data.state.sources[0];
+  const syncJob = payload.data.state.syncJobs[0];
+  const statusJson = JSON.stringify(payload.data);
+
+  assert.equal(response.status, 200);
+  assert.equal(source?.label, "Gmail message msg-1");
+  assert.equal(stateSource?.label, "Gmail message msg-1");
+  for (const field of ["metadata", "provenance", "sourceRef", "scope", "trainingUse", "rawContentStored"]) {
+    assert.equal(field in (source ?? {}), false, `Gmail status source exposed ${field}.`);
+    assert.equal(field in (stateSource ?? {}), false, `Gmail status state source exposed ${field}.`);
+  }
+  assert.equal("credentialRef" in (payload.data.connections[0]?.credential ?? {}), false);
+  assert.equal("cursorBefore" in (syncJob ?? {}), false);
+  assert.equal("cursorAfter" in (syncJob ?? {}), false);
+  assert.doesNotMatch(
+    statusJson,
+    /Launch partner follow-up|Project: Penny should remember|Alice <alice@example\.com>|Bob <bob@example\.com>|history-101|<msg-1@example\.com>/,
+  );
+});
+
 test("Gmail sync paginates safe messages and skips spam or trash by default", async () => {
   const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
   const response = await handleGoogleGmailSyncRequest(
