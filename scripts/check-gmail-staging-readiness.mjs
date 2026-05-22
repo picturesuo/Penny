@@ -36,6 +36,7 @@ const evidenceFile = env("GMAIL_READINESS_EVIDENCE_FILE", "");
 const checks = [];
 
 try {
+  recordRequiredEnvPresence();
   assert(!envFileLoadError, envFileLoadError);
 
   const nangoGmailIntegrationId = checkBaseEnv();
@@ -163,6 +164,31 @@ function checkBaseEnv() {
   });
 
   return nangoGmailIntegrationId;
+}
+
+function recordRequiredEnvPresence() {
+  record("env.requiredPresence", {
+    envFileConfigured: Boolean(envFile),
+    envFileLoaded: Boolean(envFile && !envFileLoadError),
+    envFileLoadErrorPresent: Boolean(envFileLoadError),
+    requireStaging,
+    connectPreflight,
+    enableGoogleConnector: envFlag("ENABLE_GOOGLE_CONNECTOR"),
+    enableGmailConnector: envFlag("ENABLE_GMAIL_CONNECTOR"),
+    enableRestrictedGoogleScopes: envFlag("ENABLE_RESTRICTED_GOOGLE_SCOPES"),
+    nangoSecretPresent: hasEnv("NANGO_SECRET_KEY"),
+    nangoPublicPresent: hasEnv("NANGO_PUBLIC_KEY"),
+    nangoBaseUrlPresent: hasEnv("NANGO_BASE_URL"),
+    nangoGmailIntegrationIdPresent: hasEnv("NANGO_GMAIL_INTEGRATION_ID"),
+    databaseUrlPresent: hasEnv("DATABASE_URL"),
+    pennyAuthModePresent: hasEnv("PENNY_AUTH_MODE"),
+    apiTokenPresent: hasEnv("PENNY_API_TOKEN"),
+    sessionSecretPresent: hasEnv("PENNY_SESSION_SECRET"),
+    corsOriginsPresent: hasEnv("PENNY_CORS_ORIGINS"),
+    rateLimitPresent: hasEnv("PENNY_RATE_LIMIT_MAX"),
+    trustAuthHeadersPresent: hasEnv("PENNY_TRUST_AUTH_HEADERS"),
+    databasePrepBypass: envFlag("PENNY_SKIP_DATABASE_PREP"),
+  });
 }
 
 function checkStrictStagingEnv() {
@@ -456,6 +482,10 @@ function envFlag(name) {
   const value = process.env[name]?.trim().toLowerCase();
 
   return value === "true" || value === "1" || value === "yes";
+}
+
+function hasEnv(name) {
+  return Boolean(env(name, ""));
 }
 
 function env(name, fallback) {
