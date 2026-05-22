@@ -433,6 +433,9 @@ test("Gmail staging smoke script verifies destructive revoke and delete postcond
     assert.equal(deleted?.semanticDeletedSourceAbsent, true);
     assert.equal(deleted?.createDeletedSourceAbsent, true);
     assert.equal(deleted?.createDeletedMemoryAbsent, true);
+    assert.equal(deleted?.createAfterDeleteRankedCandidateCount, 5);
+    assert.equal(deleted?.createRankedCandidateDeletedSourceAbsent, true);
+    assert.equal(deleted?.createRankedCandidateDeletedMemoryAbsent, true);
     assert.equal(verified.ok, true);
     assert.equal(verified.destructive, true);
     assert.equal(state.revokeCalls, 1);
@@ -795,6 +798,10 @@ function postOauthRouteFor(
         id: "create-option-set-after-delete",
         projectId: "gmail-smoke-project",
         sessionId: "gmail-smoke-session-after-delete",
+        nextBestMove: {
+          grounded: false,
+        },
+        rankedCandidates: rankedNonGmailCandidates(),
         options: [],
         memoryUsed: [],
         sourcesUsed: [],
@@ -1079,6 +1086,31 @@ function rankedGmailCandidates() {
           id: "chunk-gmail-1",
           excerpt: "launch partner evidence",
         },
+      },
+    ],
+  }));
+}
+
+function rankedNonGmailCandidates() {
+  return ["Personal", "Practical", "Valuable", "Critical", "Weird"].map((lens) => ({
+    id: `ranked-after-delete-${lens.toLowerCase()}`,
+    lens,
+    title: `${lens} context-light candidate`,
+    memoryRefs: [
+      {
+        id: "memory-non-gmail-1",
+        summary: "Non-Gmail context after source deletion.",
+      },
+    ],
+    sourceReferences: [
+      {
+        id: "source-ref-non-gmail-1",
+        sourceNode: {
+          id: "brain-source-non-gmail-1",
+          label: "Non-Gmail source",
+          excerpt: "Context that is not from the deleted Gmail source.",
+        },
+        chunk: null,
       },
     ],
   }));
