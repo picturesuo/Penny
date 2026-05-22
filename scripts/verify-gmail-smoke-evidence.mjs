@@ -108,6 +108,8 @@ assert(createFirst.personalOptionPresent === true, "Create must include a Person
 assert(createFirst.criticalOptionPresent === true, "Create must include a Critical option for Gmail evidence.");
 assert(createFirst.gmailMemoryEvidencePresent === true, "Create must include Gmail evidence in memory refs.");
 assert(createFirst.gmailSourceEvidencePresent === true, "Create must include Gmail evidence in source refs.");
+assert(createFirst.personalOptionExpectedEvidencePresent === true, "Create Personal option must include the expected Gmail evidence text.");
+assert(createFirst.criticalOptionExpectedEvidencePresent === true, "Create Critical option must include the expected Gmail evidence text.");
 assert(createFirst.expectedEvidencePresent === true, "Create must include the expected Gmail evidence text.");
 
 const exported = requireStep("create.export");

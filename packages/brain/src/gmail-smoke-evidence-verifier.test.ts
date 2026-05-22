@@ -104,6 +104,8 @@ test("Gmail smoke evidence verifier rejects weak Create Gmail evidence", () => {
   create.criticalOptionPresent = false;
   create.gmailMemoryEvidencePresent = false;
   create.gmailSourceEvidencePresent = false;
+  create.personalOptionExpectedEvidencePresent = false;
+  create.criticalOptionExpectedEvidencePresent = false;
 
   const failure = runVerifierExpectingFailure(evidence);
 
@@ -112,6 +114,8 @@ test("Gmail smoke evidence verifier rejects weak Create Gmail evidence", () => {
   assert.match(failure, /Create must include a Critical option/);
   assert.match(failure, /Create must include Gmail evidence in memory refs/);
   assert.match(failure, /Create must include Gmail evidence in source refs/);
+  assert.match(failure, /Create Personal option must include the expected Gmail evidence text/);
+  assert.match(failure, /Create Critical option must include the expected Gmail evidence text/);
 });
 
 test("Gmail smoke evidence verifier rejects weak Create export privacy evidence", () => {
@@ -263,6 +267,8 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         criticalOptionPresent: true,
         gmailMemoryEvidencePresent: true,
         gmailSourceEvidencePresent: true,
+        personalOptionExpectedEvidencePresent: true,
+        criticalOptionExpectedEvidencePresent: true,
         expectedEvidencePresent: true,
       },
       {

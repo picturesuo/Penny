@@ -385,6 +385,8 @@ function validSmokeEvidence(): Record<string, unknown> {
         criticalOptionPresent: true,
         gmailMemoryEvidencePresent: true,
         gmailSourceEvidencePresent: true,
+        personalOptionExpectedEvidencePresent: true,
+        criticalOptionExpectedEvidencePresent: true,
         expectedEvidencePresent: true,
       },
       {
