@@ -95,7 +95,7 @@ if (readiness && uiPreflight) {
 }
 
 if (readiness && browserEvidence) {
-  assertMatchingScope(readiness, browserEvidence, "browser evidence");
+  assertMatchingScope(readiness, browserEvidence, "browser");
 }
 
 if (smoke && destructive) {
