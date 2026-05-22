@@ -533,14 +533,43 @@ try {
   });
   const exportText = exportResult.data?.export?.text ?? "";
   const exportPrivacySafety = inspectExportPrivacySafety(exportText);
+  const exportSelectedOptionHistoryPresent = promptSectionPresent(exportText, "Selected Option History");
+  const exportPersonalContextPresent = promptSectionPresent(exportText, "Personal Context Used");
+  const exportSourceMemoryEvidencePresent = promptSectionPresent(exportText, "Source / Memory Evidence");
+  const exportPersonalContextExpectedEvidencePresent = promptSectionIncludes(
+    exportText,
+    "Personal Context Used",
+    createEvidenceNeedle,
+  );
+  const exportSourceMemoryEvidenceExpectedEvidencePresent = promptSectionIncludes(
+    exportText,
+    "Source / Memory Evidence",
+    createEvidenceNeedle,
+  );
   assert(includesNeedle(exportText, createEvidenceNeedle), "Export prompt did not include the expected Gmail-derived context.");
   assert(
     exportPrivacySafety.safe,
     `Export prompt included unsafe Gmail privacy content: ${exportPrivacySafety.failedChecks.join(", ")}.`,
   );
+  assert(exportSelectedOptionHistoryPresent, "Export prompt did not include selected option history.");
+  assert(exportPersonalContextPresent, "Export prompt did not include a personal context section.");
+  assert(exportSourceMemoryEvidencePresent, "Export prompt did not include a source/memory evidence section.");
+  assert(
+    exportPersonalContextExpectedEvidencePresent,
+    "Export prompt personal context did not include the expected Gmail-derived context.",
+  );
+  assert(
+    exportSourceMemoryEvidenceExpectedEvidencePresent,
+    "Export prompt source/memory evidence did not include the expected Gmail-derived context.",
+  );
   record("create.export", {
     exportId: exportResult.data?.export?.id ?? null,
     expectedEvidencePresent: includesNeedle(exportText, createEvidenceNeedle),
+    selectedOptionHistoryPresent: exportSelectedOptionHistoryPresent,
+    personalContextSectionPresent: exportPersonalContextPresent,
+    sourceMemoryEvidenceSectionPresent: exportSourceMemoryEvidencePresent,
+    personalContextExpectedEvidencePresent: exportPersonalContextExpectedEvidencePresent,
+    sourceMemoryEvidenceExpectedEvidencePresent: exportSourceMemoryEvidenceExpectedEvidencePresent,
     unsafePrivacyClaimAbsent: exportPrivacySafety.unsafePrivacyClaimAbsent,
     rawEmailBodyAbsent: exportPrivacySafety.rawEmailBodyAbsent,
     secretOrConnectTokenAbsent: exportPrivacySafety.secretOrConnectTokenAbsent,
@@ -1190,6 +1219,30 @@ function hasUnsupportedHumanReviewClaim(text) {
 
 function includesNeedle(value, needle) {
   return value.toLowerCase().includes(needle.toLowerCase());
+}
+
+function promptSectionPresent(text, title) {
+  return promptSectionText(text, title).trim().length > 0;
+}
+
+function promptSectionIncludes(text, title, needle) {
+  const section = promptSectionText(text, title);
+
+  return section.length > 0 && includesNeedle(section, needle);
+}
+
+function promptSectionText(text, title) {
+  const marker = `## ${title}`;
+  const start = text.indexOf(marker);
+
+  if (start < 0) {
+    return "";
+  }
+
+  const rest = text.slice(start + marker.length).trim();
+  const next = rest.search(/\n##\s/u);
+
+  return next >= 0 ? rest.slice(0, next).trim() : rest.trim();
 }
 
 function safeUrlHost(value) {
