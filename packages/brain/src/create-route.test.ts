@@ -792,14 +792,31 @@ test("Gmail sync feeds private email evidence into Create ranking and export onl
   );
   assert.match(optionText(first, "Personal"), /launch partner email evidence|private Gmail evidence|visible evidence/i);
   assert.match(optionText(first, "Critical"), /generic CRM dashboards|fake connector claims|rejected/i);
+  const critical = optionsByLens(first.optionSet.options, ["Critical"])[0]!;
+  assert.ok(
+    critical.memoryUsed.some((memory) =>
+      /private Gmail evidence|generic CRM dashboards|fake connector claims|rejected direction/i.test(memory.summary),
+    ),
+  );
+  assert.ok(
+    critical.sourcesUsed.some((source) =>
+      /Launch partner evidence|launch partner email evidence|private Gmail evidence|gmail-create-msg-1/i.test(
+        `${source.label} ${source.excerpt} ${source.sourceRange ?? ""}`,
+      ),
+    ),
+  );
   assert.ok(first.optionSet.options.every((option) => option.memoryCount >= 1 && option.sourceCount >= 1));
+  assert.doesNotMatch(JSON.stringify(first.optionSet), /plainTextBody|rawBody|credentialRef|accessToken|refreshToken/i);
   assert.equal(exportResponse.status, 200);
   assert.match(exported.text, /## Personal Context Used/);
+  assert.match(exported.text, /## Repeated Rejected Directions/);
   assert.match(exported.text, /## Source \/ Memory Evidence/);
   assert.match(exported.text, /Launch partner evidence|launch partner email evidence|private Gmail evidence/i);
   assert.match(exported.text, /generic CRM dashboards|fake connector claims/i);
+  assert.equal(exported.qualitySignals.hasRepeatedRejectedDirections, true);
   assert.doesNotMatch(exported.text, /Instagram|social connector/i);
   assert.doesNotMatch(exported.text, /global training|hidden memory|private inbox/i);
+  assert.doesNotMatch(exported.text, /plainTextBody|rawBody|credentialRef|accessToken|refreshToken/i);
   assert.ok(gmailSourceId);
   assert.equal(deleteResponse.status, 200);
   assert.equal(deletePayload.data.brainSourceDeleted, true);
