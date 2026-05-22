@@ -28,7 +28,7 @@ import type {
   NangoSyncStatus,
   NangoSyncStatusInput,
 } from "./google-connector.ts";
-import { createInMemoryGoogleConnectorStateStore } from "./google-connector-state-store.ts";
+import { createInMemoryGoogleConnectorStateStore, mergeGoogleConnectorStates } from "./google-connector-state-store.ts";
 
 const configuredEnv = {
   ENABLE_GOOGLE_CONNECTOR: "true",
@@ -530,6 +530,124 @@ test("Gmail semantic search ranks synced email memory without leaking raw scores
   assert.equal(crossUserResponse.status, 409);
 });
 
+test("Gmail semantic search can target one selected Gmail connection", async () => {
+  const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
+  const firstState = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      credentialRef: "nango:google-gmail:nango-gmail-1",
+      accountEmail: "first@example.com",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_gmail"],
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    now: "2026-05-22T11:00:00.000Z",
+  });
+  const secondState = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-gmail-2",
+      providerConfigKey: "google-gmail",
+      credentialRef: "nango:google-gmail:nango-gmail-2",
+      accountEmail: "second@example.com",
+      endUserId: "user-1",
+    },
+    surfaces: ["google_gmail"],
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    now: "2026-05-22T11:00:00.000Z",
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore(mergeGoogleConnectorStates(firstState, secondState));
+  const brainMemoryService = createInMemoryBrainMemoryService();
+  const adapter = fakeAdapter({
+    async proxy(input) {
+      const selected = input.connectionId === "nango-gmail-2"
+        ? {
+            id: "msg-2",
+            threadId: "thread-2",
+            historyId: "history-202",
+            subject: "Second account launch evidence",
+            from: "Second <second@example.com>",
+            snippet: "Second account private Gmail evidence for launch partners.",
+            body: "Project: Penny should use second account private Gmail evidence for launch partners.",
+          }
+        : {
+            id: "msg-1",
+            threadId: "thread-1",
+            historyId: "history-101",
+            subject: "First account launch evidence",
+            from: "First <first@example.com>",
+            snippet: "First account private Gmail evidence for launch partners.",
+            body: "Project: Penny should use first account private Gmail evidence for launch partners.",
+          };
+
+      if (input.path === "users/me/profile") {
+        return gmailProxyOk({ emailAddress: input.connectionId === "nango-gmail-2" ? "second@example.com" : "first@example.com", historyId: selected.historyId });
+      }
+
+      if (input.path === "users/me/messages") {
+        return gmailProxyOk({ messages: [{ id: selected.id, threadId: selected.threadId }] });
+      }
+
+      if (input.path === `users/me/messages/${selected.id}`) {
+        return gmailProxyOk(gmailMessageVariant(selected));
+      }
+
+      throw new Error(`Unexpected Gmail proxy path ${input.path}.`);
+    },
+  });
+
+  for (const connectionId of ["nango-gmail-1", "nango-gmail-2"]) {
+    const syncResponse = await handleGoogleGmailSyncRequest(
+      gmailRequest("/api/connectors/google/gmail/sync", {
+        connectionId,
+        providerConfigKey: "google-gmail",
+        text: "private Gmail evidence",
+        maxResults: 1,
+      }),
+      {
+        env: configuredEnv,
+        stateStore,
+        brainMemoryService,
+        adapter,
+      },
+    );
+
+    assert.equal(syncResponse.status, 200);
+  }
+
+  const selectedResponse = await handleGoogleGmailSemanticSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/semantic-search", {
+      connectionId: "nango-gmail-2",
+      providerConfigKey: "google-gmail",
+      query: "private Gmail evidence launch partners",
+      limit: 5,
+    }),
+    { stateStore, brainMemoryService },
+  );
+  const selectedPayload = (await selectedResponse.json()) as { data: { results: Array<{ messageId: string; sender: string }> } };
+  const missingResponse = await handleGoogleGmailSemanticSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/semantic-search", {
+      connectionId: "nango-gmail-missing",
+      providerConfigKey: "google-gmail",
+      query: "private Gmail evidence launch partners",
+      limit: 5,
+    }),
+    { stateStore, brainMemoryService },
+  );
+
+  assert.equal(selectedResponse.status, 200);
+  assert.ok(selectedPayload.data.results.length > 0);
+  assert.equal(selectedPayload.data.results.every((result) => result.messageId === "msg-2"), true);
+  assert.equal(selectedPayload.data.results.every((result) => /second@example\.com/i.test(result.sender)), true);
+  assert.equal(missingResponse.status, 404);
+});
+
 test("Gmail revoke removes retrieval access for synced Gmail sources", async () => {
   const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
   await handleGoogleGmailSyncRequest(
@@ -964,6 +1082,43 @@ function gmailMessage() {
             data: base64Url(
               "Project: Penny should remember launch partner email follow-ups. Preference: keep private email evidence visible in Create.",
             ),
+          },
+        },
+      ],
+    },
+  };
+}
+
+function gmailMessageVariant(input: {
+  id: string;
+  threadId: string;
+  historyId: string;
+  subject: string;
+  from: string;
+  snippet: string;
+  body: string;
+}) {
+  return {
+    id: input.id,
+    threadId: input.threadId,
+    historyId: input.historyId,
+    labelIds: ["INBOX"],
+    snippet: input.snippet,
+    internalDate: "1779451200000",
+    payload: {
+      mimeType: "multipart/alternative",
+      headers: [
+        { name: "Subject", value: input.subject },
+        { name: "From", value: input.from },
+        { name: "To", value: "Bob <bob@example.com>" },
+        { name: "Date", value: "Fri, 22 May 2026 12:00:00 +0000" },
+        { name: "Message-ID", value: `<${input.id}@example.com>` },
+      ],
+      parts: [
+        {
+          mimeType: "text/plain",
+          body: {
+            data: base64Url(input.body),
           },
         },
       ],

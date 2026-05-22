@@ -406,11 +406,26 @@ export async function handleGoogleGmailSemanticSearchRequest(
 
   const scope = scopeFromRequest(request);
   const state = await loadGoogleConnectorState(options, scope);
+  const selectedConnection = hasGmailConnectionSelector(body.value) ? findGmailConnection(state, scope, body.value) : null;
+
+  if (selectedConnection && !selectedConnection.ok) {
+    return selectedConnection.response;
+  }
+
+  if (selectedConnection?.ok) {
+    const readonlyError = gmailReadonlyResponse(selectedConnection.value);
+
+    if (readonlyError) {
+      return readonlyError;
+    }
+  }
+
   const gmailSources = state.sources.filter(
     (source) =>
       source.surface === "google_gmail" &&
       source.privacy.retrievalAccess === "enabled" &&
-      source.brainSourceId,
+      source.brainSourceId &&
+      (!selectedConnection?.ok || source.connectionId === selectedConnection.value.id),
   );
 
   if (!gmailSources.length) {
@@ -1039,6 +1054,10 @@ function findGmailConnection(
   }
 
   return { ok: true, value: connection };
+}
+
+function hasGmailConnectionSelector(input: Record<string, unknown>): boolean {
+  return Boolean(stringValue(input.connectionId) || stringValue(input.providerConfigKey));
 }
 
 function gmailReadonlyResponse(connection: ConnectorConnection): Response | null {
