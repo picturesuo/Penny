@@ -2795,7 +2795,7 @@ export function GoogleConnectorControl({
   const enabledSources = connectorState.sources.filter(
     (source) => source.privacy.retrievalAccess === "enabled" && (!connection || source.connectionId === connection.id),
   );
-  const deleteSource = enabledSources[0] ?? null;
+  const deleteSource = enabledSources.find((source) => source.kind === "google_gmail_message") ?? null;
   const sourceCount = connection ? googleConnectionSourceCount(connection) : 0;
   const activeConnectionCount = connectorState.connections.filter((candidate) => candidate.status !== "revoked").length;
   const gmailConnectable =
