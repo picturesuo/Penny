@@ -163,6 +163,104 @@ test("Gmail sync imports mocked messages into private Brain memory through Nango
   assert.ok(proxyCalls.some((call) => call.path === "users/me/messages/msg-1"));
 });
 
+test("Gmail sync paginates safe messages and skips spam or trash by default", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  const response = await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      text: "launch partner evidence",
+      maxResults: 2,
+      pageLimit: 2,
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: fakeAdapter({
+        async proxy(input) {
+          proxyCalls.push(input);
+
+          if (input.path === "users/me/profile") {
+            return gmailProxyOk({ emailAddress: "founder@example.com", historyId: "history-400" });
+          }
+
+          if (input.path === "users/me/messages" && !input.query?.pageToken) {
+            return gmailProxyOk({
+              messages: [
+                { id: "msg-spam", threadId: "thread-spam" },
+                { id: "msg-1", threadId: "thread-1" },
+              ],
+              nextPageToken: "page-2",
+            });
+          }
+
+          if (input.path === "users/me/messages" && input.query?.pageToken === "page-2") {
+            return gmailProxyOk({ messages: [{ id: "msg-2", threadId: "thread-2" }] });
+          }
+
+          if (input.path === "users/me/messages/msg-spam") {
+            return gmailProxyOk({
+              ...gmailMessageVariant({
+                id: "msg-spam",
+                threadId: "thread-spam",
+                historyId: "history-spam",
+                subject: "Spam launch evidence",
+                from: "Spam <spam@example.com>",
+                snippet: "This spam message must not enter Penny memory.",
+                body: "This spam message must not enter Penny memory.",
+              }),
+              labelIds: ["SPAM"],
+            });
+          }
+
+          if (input.path === "users/me/messages/msg-1") {
+            return gmailProxyOk(gmailMessage());
+          }
+
+          if (input.path === "users/me/messages/msg-2") {
+            return gmailProxyOk(
+              gmailMessageVariant({
+                id: "msg-2",
+                threadId: "thread-2",
+                historyId: "history-402",
+                subject: "Second launch partner follow-up",
+                from: "Carol <carol@example.com>",
+                snippet: "Second safe Gmail evidence for launch partners.",
+                body: "Second safe Gmail evidence for launch partners.",
+              }),
+            );
+          }
+
+          throw new Error(`Unexpected Gmail proxy path ${input.path}.`);
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      messageCount: number;
+      nextPageToken: string | null;
+      importedSources: Array<{ messageId: string }>;
+      state: { sources: Array<{ sourceUri: string }> };
+    };
+  };
+  const listCalls = proxyCalls.filter((call) => call.path === "users/me/messages");
+  const profile = await brainMemoryService.getProfile(gmailRequest("/api/brain/memory/profile", {}, "GET"));
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.messageCount, 2);
+  assert.deepEqual(
+    payload.data.importedSources.map((source) => source.messageId).sort(),
+    ["msg-1", "msg-2"],
+  );
+  assert.equal(payload.data.state.sources.some((source) => source.sourceUri === "gmail:message:msg-spam"), false);
+  assert.equal(profile.sources.some((source) => source.sourceUri === "gmail:message:msg-spam"), false);
+  assert.equal(listCalls.length, 2);
+  assert.equal(listCalls[0]?.query?.includeSpamTrash, false);
+  assert.equal(listCalls[1]?.query?.pageToken, "page-2");
+});
+
 test("Gmail sync does not duplicate connector refs or Brain sources on repeated sync", async () => {
   const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
   const options = {
