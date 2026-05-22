@@ -119,6 +119,12 @@ function validReadinessEvidence(): Record<string, unknown> & { requireStaging: b
         pennyAuthMode: "token",
         apiTokenPresent: true,
         sessionSecretPresent: true,
+        baseUrlOrigin: "https://penny-staging.example.test",
+        baseUrlHttpsOrLoopback: true,
+        corsOriginCount: 1,
+        corsIncludesBaseOrigin: true,
+        corsWildcardAbsent: true,
+        rateLimitMax: 120,
         trustAuthHeaders: false,
       },
       {
