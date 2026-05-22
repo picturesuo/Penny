@@ -309,10 +309,14 @@ try {
   const criticalOptionPresent = createOptionLenses.includes("Critical");
   const gmailMemoryEvidencePresent = hasCreateMemoryEvidence(createFirst.data, createEvidenceNeedle);
   const gmailSourceEvidencePresent = hasCreateSourceEvidence(createFirst.data, createEvidenceNeedle);
+  const personalOptionExpectedEvidencePresent = createLensExpectedEvidencePresent(createFirst.data, "Personal", createEvidenceNeedle);
+  const criticalOptionExpectedEvidencePresent = createLensExpectedEvidencePresent(createFirst.data, "Critical", createEvidenceNeedle);
   assert(personalOptionPresent, "Create did not return a Personal option for Gmail evidence.");
   assert(criticalOptionPresent, "Create did not return a Critical option for Gmail evidence.");
   assert(gmailMemoryEvidencePresent, "Create did not include expected Gmail evidence in memory refs.");
   assert(gmailSourceEvidencePresent, "Create did not include expected Gmail evidence in source refs.");
+  assert(personalOptionExpectedEvidencePresent, "Create Personal option did not include expected Gmail evidence text.");
+  assert(criticalOptionExpectedEvidencePresent, "Create Critical option did not include expected Gmail evidence text.");
   const selectedOptionRecords = createFirst.data.optionSet.options.filter((option) => option.lens === "Personal" || option.lens === "Critical");
   const selectedOptions = selectedOptionRecords.map((option) => option.id);
   const selectedLenses = [...new Set(selectedOptionRecords.map((option) => option.lens))].sort();
@@ -325,6 +329,8 @@ try {
     criticalOptionPresent,
     gmailMemoryEvidencePresent,
     gmailSourceEvidencePresent,
+    personalOptionExpectedEvidencePresent,
+    criticalOptionExpectedEvidencePresent,
     expectedEvidencePresent: includesNeedle(createText, createEvidenceNeedle),
   });
 
@@ -615,6 +621,13 @@ function hasCreateSourceEvidence(data, needle) {
   return createSourceRefs(data).some((source) =>
     includesNeedle(`${source.label ?? ""} ${source.excerpt ?? ""} ${source.sourceRange ?? ""} ${source.url ?? ""} ${source.id ?? ""}`, needle),
   );
+}
+
+function createLensExpectedEvidencePresent(data, lens, needle) {
+  const options = Array.isArray(data?.optionSet?.options) ? data.optionSet.options : [];
+  const option = options.find((candidate) => candidate?.lens === lens);
+
+  return includesNeedle(JSON.stringify(option ?? {}), needle);
 }
 
 function createMemoryRefs(data) {
