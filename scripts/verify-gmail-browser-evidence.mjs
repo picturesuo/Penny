@@ -224,6 +224,7 @@ function assertConnectedKeywordResults(check) {
   assert(check.keywordMessageRefVisible === true, "Post-OAuth browser evidence must show a keyword message ref.");
   assert(check.keywordThreadRefVisible === true, "Post-OAuth browser evidence must show a keyword thread ref.");
   assert(check.keywordSourceRefVisible === true, "Post-OAuth browser evidence must show a keyword source ref.");
+  assert(check.keywordSelectedSourceRefsMatched === true, "Post-OAuth browser evidence must prove keyword result refs match the selected Gmail source.");
 }
 
 function assertSemanticResults(check) {
@@ -234,6 +235,7 @@ function assertSemanticResults(check) {
   assert(check.scoreReasonVisible === true, "Browser evidence must show a semantic score reason.");
   assert(check.sourceRefVisible === true, "Browser evidence must show a semantic Gmail source ref.");
   assert(check.memoryRefVisible === true, "Browser evidence must show a semantic Brain memory ref.");
+  assert(check.semanticSelectedSourceRefsMatched === true, "Browser evidence must prove semantic result refs match the selected Gmail source.");
   assert(check.rawNumericScoreHidden === true, "Browser evidence must prove raw numeric semantic scores are hidden.");
 }
 
