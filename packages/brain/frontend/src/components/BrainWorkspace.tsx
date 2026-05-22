@@ -58,16 +58,25 @@ import type {
   WorkStructure,
 } from "../types/brain";
 import {
-  createGoogleConnectorConnectSession,
+  createGoogleGmailConnectSession,
   deleteBrainSource,
   fetchBrainDemoFixtureImport,
   fetchBrainMemoryProfile,
+  fetchGoogleGmailStatus,
   fetchGoogleConnectorProvider,
   fetchClaimDetail,
   fetchSessionNote,
   importBrainSource,
   reviewBrainMemory,
+  revokeGoogleGmail,
   saveSessionNote,
+  searchGoogleGmail,
+  semanticSearchGoogleGmail,
+  syncGoogleGmail,
+  type GoogleGmailSearchInput,
+  type GoogleGmailSearchResponse,
+  type GoogleGmailSemanticSearchResponse,
+  type GoogleGmailStatusResponse,
   type GoogleConnectorProviderView,
   type GoogleConnectorSurfaceView,
 } from "../api/brainClient";
@@ -133,6 +142,10 @@ type GoogleConnectorProviderStateResponse = {
     state?: GoogleConnectorStateView;
   };
 };
+
+type GmailStatusView = GoogleGmailStatusResponse["data"];
+type GmailKeywordSearchData = GoogleGmailSearchResponse["data"];
+type GmailSemanticSearchData = GoogleGmailSemanticSearchResponse["data"];
 
 interface BrainWorkspaceProps {
   documentsData: BrainDocumentsData | null;
@@ -2375,6 +2388,7 @@ export function BrainMemoryPanel({
   const [mimeType, setMimeType] = useState<string | null>(null);
   const [googleProvider, setGoogleProvider] = useState<GoogleConnectorProviderView | null>(null);
   const [googleConnectorState, setGoogleConnectorState] = useState<GoogleConnectorStateView>(emptyGoogleConnectorStateView());
+  const [gmailConnectorStatus, setGmailConnectorStatus] = useState<GmailStatusView | null>(null);
   const [googleStatus, setGoogleStatus] = useState<GoogleConnectorUiStatus>("idle");
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [googleWarning, setGoogleWarning] = useState<string | null>(null);
@@ -2395,19 +2409,27 @@ export function BrainMemoryPanel({
     setGoogleConnectorState(normalizeGoogleConnectorState(response.data.state));
   }
 
+  function applyGmailStatusResponse(response: GoogleGmailStatusResponse) {
+    setGmailConnectorStatus(response.data);
+    if (isGoogleConnectorStateView(response.data.state)) {
+      setGoogleConnectorState(normalizeGoogleConnectorState(response.data.state));
+    }
+  }
+
   useEffect(() => {
     let canceled = false;
 
     setGoogleStatus("loading");
     setGoogleError(null);
     setGoogleWarning(null);
-    fetchGoogleConnectorProvider()
-      .then((response) => {
+    Promise.all([fetchGoogleConnectorProvider(), fetchGoogleGmailStatus()])
+      .then(([providerResponse, gmailResponse]) => {
         if (canceled) {
           return;
         }
 
-        applyGoogleConnectorResponse(response as unknown as GoogleConnectorProviderStateResponse);
+        applyGoogleConnectorResponse(providerResponse as unknown as GoogleConnectorProviderStateResponse);
+        applyGmailStatusResponse(gmailResponse);
         setGoogleStatus("ready");
       })
       .catch((error) => {
@@ -2486,7 +2508,7 @@ export function BrainMemoryPanel({
     setGoogleWarning(null);
 
     try {
-      const response = await createGoogleConnectorConnectSession();
+      const response = await createGoogleGmailConnectSession();
 
       setGoogleConnectLink(response.data.connectLink);
       setGoogleWarning(response.data.warnings.length ? response.data.warnings.join(" ") : null);
@@ -2502,9 +2524,10 @@ export function BrainMemoryPanel({
   }
 
   async function refreshGoogleConnector() {
-    const response = await fetchGoogleConnectorProvider();
+    const [response, gmailResponse] = await Promise.all([fetchGoogleConnectorProvider(), fetchGoogleGmailStatus()]);
 
     applyGoogleConnectorResponse(response as unknown as GoogleConnectorProviderStateResponse);
+    applyGmailStatusResponse(gmailResponse);
   }
 
   async function handleGoogleSyncNow(connectionId: string) {
@@ -2519,13 +2542,14 @@ export function BrainMemoryPanel({
     setGoogleWarning(null);
 
     try {
-      const response = await postGoogleConnectorAction("/api/connectors/google/sync-now", {
+      const response = await syncGoogleGmail({
         connectionId: connection.credential.connectionId,
         providerConfigKey: connection.credential.providerConfigKey,
+        maxResults: 25,
       });
 
       if (response.data.state) {
-        setGoogleConnectorState(response.data.state);
+        setGoogleConnectorState(normalizeGoogleConnectorState(response.data.state as GoogleConnectorStateView));
       }
 
       await refreshGoogleConnector();
@@ -2548,13 +2572,13 @@ export function BrainMemoryPanel({
     setGoogleWarning(null);
 
     try {
-      const response = await postGoogleConnectorAction("/api/connectors/google/revoke", {
+      const response = await revokeGoogleGmail({
         connectionId: connection.credential.connectionId,
         providerConfigKey: connection.credential.providerConfigKey,
       });
 
       if (response.data.state) {
-        setGoogleConnectorState(response.data.state);
+        setGoogleConnectorState(normalizeGoogleConnectorState(response.data.state as GoogleConnectorStateView));
       }
 
       await refreshGoogleConnector();
@@ -2582,6 +2606,14 @@ export function BrainMemoryPanel({
       setGoogleStatus("error");
       setGoogleError(error instanceof Error ? error.message : String(error));
     }
+  }
+
+  async function handleGmailKeywordSearch(input: GoogleGmailSearchInput): Promise<GmailKeywordSearchData> {
+    return (await searchGoogleGmail(input)).data;
+  }
+
+  async function handleGmailSemanticSearch(query: string): Promise<GmailSemanticSearchData> {
+    return (await semanticSearchGoogleGmail({ query, limit: 5 })).data;
   }
 
   return (
@@ -2617,6 +2649,7 @@ export function BrainMemoryPanel({
       <GoogleConnectorControl
         provider={googleProvider}
         connectorState={googleConnectorState}
+        gmailStatus={gmailConnectorStatus}
         status={googleStatus}
         error={googleError}
         warning={googleWarning}
@@ -2626,6 +2659,8 @@ export function BrainMemoryPanel({
         onSyncNow={handleGoogleSyncNow}
         onRevoke={handleGoogleRevoke}
         onDeleteSource={handleGoogleDeleteSource}
+        onKeywordSearch={handleGmailKeywordSearch}
+        onSemanticSearch={handleGmailSemanticSearch}
       />
       {error ? <p className="brain-memory-error">{error}</p> : null}
       {demoFixtureVisible && onDemoFixtureImport ? (
@@ -2718,6 +2753,7 @@ export function BrainMemoryPanel({
 export function GoogleConnectorControl({
   provider,
   connectorState,
+  gmailStatus,
   status,
   error,
   warning,
@@ -2727,9 +2763,12 @@ export function GoogleConnectorControl({
   onSyncNow,
   onRevoke,
   onDeleteSource,
+  onKeywordSearch,
+  onSemanticSearch,
 }: {
   provider: GoogleConnectorProviderView | null;
   connectorState: GoogleConnectorStateView;
+  gmailStatus?: GmailStatusView | null | undefined;
   status: GoogleConnectorUiStatus;
   error: string | null;
   warning: string | null;
@@ -2739,11 +2778,18 @@ export function GoogleConnectorControl({
   onSyncNow: (connectionId: string) => Promise<void>;
   onRevoke: (connectionId: string) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
+  onKeywordSearch?: ((input: GoogleGmailSearchInput) => Promise<GmailKeywordSearchData>) | undefined;
+  onSemanticSearch?: ((query: string) => Promise<GmailSemanticSearchData>) | undefined;
 }) {
   const visibleSurfaces = provider?.surfaces ?? [];
   const gmail = visibleSurfaces.find((surface) => surface.id === "google_gmail");
   const extension = visibleSurfaces.find((surface) => surface.id === "chrome_extension_history");
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const [keywordDraft, setKeywordDraft] = useState("");
+  const [semanticDraft, setSemanticDraft] = useState("");
+  const [keywordResults, setKeywordResults] = useState<GmailKeywordSearchData | null>(null);
+  const [semanticResults, setSemanticResults] = useState<GmailSemanticSearchData | null>(null);
+  const [gmailSearchStatus, setGmailSearchStatus] = useState<string | null>(null);
   const connection = selectedGoogleConnection(connectorState, selectedConnectionId);
   const latestJob = latestGoogleSyncJob(connectorState, connection?.id ?? null);
   const enabledSources = connectorState.sources.filter(
@@ -2752,14 +2798,61 @@ export function GoogleConnectorControl({
   const deleteSource = enabledSources[0] ?? null;
   const sourceCount = connection ? googleConnectionSourceCount(connection) : 0;
   const activeConnectionCount = connectorState.connections.filter((candidate) => candidate.status !== "revoked").length;
-  const gmailConnectable = !gmail || gmail.status === "available" || gmail.status === "connected" || gmail.status === "syncing";
+  const gmailConnectable =
+    Boolean(gmailStatus?.configured) || !gmail || gmail.status === "available" || gmail.status === "connected" || gmail.status === "syncing";
   const selectedHasGmail = connection?.surfaces.includes("google_gmail") ?? false;
-  const canConnect = Boolean(provider?.configured) && status !== "connecting" && !disabled;
+  const canConnect = Boolean(gmailStatus?.configured ?? provider?.configured) && status !== "connecting" && !disabled;
   const connectLabel =
-    connectorState.connections.length > 0 ? (gmailConnectable ? "Add Gmail account" : "Add Google account") : gmailConnectable ? "Connect Gmail" : "Connect Google";
+    connectorState.connections.length > 0 ? (gmailConnectable ? "Add Gmail account" : "Add Google account") : "Connect Gmail";
   const canSync = Boolean(connection && connection.status !== "revoked") && status !== "syncing" && !disabled;
   const canRevoke = Boolean(connection && connection.status !== "revoked") && status !== "revoking" && !disabled;
   const canDelete = Boolean(deleteSource) && status !== "deleting" && !disabled;
+  const gmailMessageCount = gmailStatus?.messageCount ?? enabledSources.filter((source) => source.kind === "google_gmail_message").length;
+  const gmailLastSyncAt = gmailStatus?.lastSyncAt ?? connection?.lastSyncedAt ?? null;
+  const gmailScopes = gmailStatus?.scopes.length ? gmailStatus.scopes : gmail?.scopes.map((scope) => scope.scope).filter((scope): scope is string => Boolean(scope)) ?? [];
+  const gmailConfigured = gmailStatus?.configured ?? false;
+
+  async function handleKeywordSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const text = keywordDraft.trim();
+
+    if (!text || !onKeywordSearch) {
+      return;
+    }
+
+    setGmailSearchStatus("Searching email");
+    setKeywordResults(null);
+
+    try {
+      const result = await onKeywordSearch({ text, maxResults: 5 });
+
+      setKeywordResults(result);
+      setGmailSearchStatus(`${result.results.length} email result${result.results.length === 1 ? "" : "s"}`);
+    } catch (caught) {
+      setGmailSearchStatus(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+
+  async function handleSemanticSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = semanticDraft.trim();
+
+    if (!query || !onSemanticSearch) {
+      return;
+    }
+
+    setGmailSearchStatus("Searching synced Gmail memory");
+    setSemanticResults(null);
+
+    try {
+      const result = await onSemanticSearch(query);
+
+      setSemanticResults(result);
+      setGmailSearchStatus(result.contextLight ? "Connect or sync Gmail first." : `${result.results.length} semantic result${result.results.length === 1 ? "" : "s"}`);
+    } catch (caught) {
+      setGmailSearchStatus(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
 
   return (
     <section className="brain-memory-card google-connector-card" aria-label="Google Workspace connector">
@@ -2776,15 +2869,17 @@ export function GoogleConnectorControl({
             <p>
               {connection
                 ? `${googleConnectionAccountLabel(connection)} is selected for ${connection.surfaces.map(formatLabel).join(", ")}.`
-                : provider?.configured
+                : gmailConfigured
                   ? gmailConnectable
-                    ? "Bring Gmail and Google Workspace into private Brain context."
-                    : "Gmail is waiting on restricted-scope approval; Google Workspace is available."
-                  : "Google connector is not configured for this environment."}
+                    ? "Gmail can sync into private Brain memory."
+                    : "Gmail is waiting on restricted-scope approval."
+                  : "Gmail not configured."}
             </p>
             <div className="google-connector-chips" aria-label="Google connector status">
               <span>{connectorState.connections.length ? `${activeConnectionCount} active` : formatLabel(provider?.configurationLabel ?? status)}</span>
               {gmail ? <span>Gmail {formatLabel(gmail.status)}</span> : null}
+              <span>Restricted scope</span>
+              <span>Private</span>
               {connection ? <span>{sourceCount} indexed</span> : null}
             </div>
           </div>
@@ -2835,9 +2930,46 @@ export function GoogleConnectorControl({
       {provider?.missingConfig.length ? (
         <p className="brain-memory-import-hint">Missing config: {provider.missingConfig.join(", ")}</p>
       ) : null}
+      {gmailStatus?.missingConfig.length ? (
+        <p className="brain-memory-import-hint">Gmail not configured. Missing: {gmailStatus.missingConfig.join(", ")}</p>
+      ) : null}
       {error ? <p className="brain-memory-error">{error}</p> : null}
       {warning ? <p className="brain-memory-import-hint">{warning}</p> : null}
-      {connectLink ? <p className="brain-memory-import-hint">Connect session created. Redirecting to Google consent for Workspace scopes.</p> : null}
+      {connectLink ? <p className="brain-memory-import-hint">Connect session created. Redirecting to Google consent for Gmail.</p> : null}
+      <section className="gmail-connector-privacy" aria-label="Gmail privacy">
+        <span>{gmailStatus?.privacy.copy ?? "Penny reads Gmail only after consent. No human review. trainingUse=false. Delete/revoke removes retrieval access."}</span>
+        <small>Scopes: {gmailScopes.join(", ") || "gmail.readonly gated"}</small>
+        <small>Reason: {gmailStatus?.scopeAuditReason ?? "read email for private Brain memory and email search."}</small>
+        <small>
+          Last sync {formatNullableDate(gmailLastSyncAt)} · {gmailMessageCount} messages
+        </small>
+      </section>
+      {gmailMessageCount === 0 ? <p className="brain-memory-import-hint">Connect or sync Gmail first.</p> : null}
+      <div className="gmail-search-grid">
+        <form className="gmail-search-form" onSubmit={(event) => void handleKeywordSubmit(event)}>
+          <label>
+            <span>Search email</span>
+            <input value={keywordDraft} onChange={(event) => setKeywordDraft(event.target.value)} placeholder="Exact words" />
+          </label>
+          <button type="submit" className="secondary-command" disabled={disabled || !keywordDraft.trim() || !onKeywordSearch}>
+            <Search size={15} aria-hidden="true" />
+            <span>Search email</span>
+          </button>
+        </form>
+        <form className="gmail-search-form" onSubmit={(event) => void handleSemanticSubmit(event)}>
+          <label>
+            <span>Semantic search</span>
+            <input value={semanticDraft} onChange={(event) => setSemanticDraft(event.target.value)} placeholder="Meaning" />
+          </label>
+          <button type="submit" className="secondary-command" disabled={disabled || !semanticDraft.trim() || !onSemanticSearch}>
+            <Search size={15} aria-hidden="true" />
+            <span>Semantic search</span>
+          </button>
+        </form>
+      </div>
+      {gmailSearchStatus ? <p className="brain-memory-import-hint">{gmailSearchStatus}</p> : null}
+      {keywordResults?.results.length ? <GmailKeywordResults results={keywordResults.results} /> : null}
+      {semanticResults?.results.length ? <GmailSemanticResults results={semanticResults.results} /> : null}
       <details className="google-connector-details">
         <summary>Google source coverage</summary>
         <div className="brain-memory-source-list">
@@ -2891,10 +3023,41 @@ export function GoogleConnectorControl({
           }}
         >
           <Trash2 size={15} aria-hidden="true" />
-          <span>{status === "deleting" ? "Deleting..." : "Delete source"}</span>
+          <span>{status === "deleting" ? "Deleting..." : "Delete Gmail source"}</span>
         </button>
       </div>
     </section>
+  );
+}
+
+function GmailKeywordResults({ results }: { results: GmailKeywordSearchData["results"] }) {
+  return (
+    <div className="gmail-results-list" aria-label="Gmail keyword results">
+      {results.slice(0, 5).map((result) => (
+        <article key={result.messageId}>
+          <strong>{result.subject}</strong>
+          <span>{result.sender}</span>
+          <p>{result.snippet}</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function GmailSemanticResults({ results }: { results: GmailSemanticSearchData["results"] }) {
+  return (
+    <div className="gmail-results-list" aria-label="Gmail semantic results">
+      {results.slice(0, 5).map((result) => (
+        <article key={`${result.messageId}-${result.memoryRef.id}`}>
+          <strong>{result.subject}</strong>
+          <span>
+            {result.grounding} · {result.sender}
+          </span>
+          <p>{result.snippet}</p>
+          <small>{result.scoreReason}</small>
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -2933,6 +3096,16 @@ function normalizeGoogleConnectorState(state: GoogleConnectorStateView | undefin
     syncJobs: state?.syncJobs ?? [],
     sources: state?.sources ?? [],
   };
+}
+
+function isGoogleConnectorStateView(value: unknown): value is GoogleConnectorStateView {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      Array.isArray((value as GoogleConnectorStateView).connections) &&
+      Array.isArray((value as GoogleConnectorStateView).syncJobs) &&
+      Array.isArray((value as GoogleConnectorStateView).sources),
+  );
 }
 
 function selectedGoogleConnection(state: GoogleConnectorStateView, selectedConnectionId: string | null): GoogleConnectorConnectionView | null {
