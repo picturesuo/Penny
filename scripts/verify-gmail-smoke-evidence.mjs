@@ -121,6 +121,7 @@ assert(semantic.contextLight === false, "Semantic search evidence must not be co
 assertSemanticResultShape(semantic);
 assertSemanticGroundingLabels(semantic);
 assert(semantic.selectedSourceRefsMatched === true, "Semantic search result refs must match selected Gmail source refs.");
+assert(numberValue(semantic.selectedMemoryRefCount) >= 1, "Semantic search must record selected Gmail memory refs for Create proof.");
 assert(semantic.rawScoreHidden === true, "Semantic search must hide raw numeric scores.");
 
 const createFirst = requireStep("create.first");
@@ -132,10 +133,20 @@ assert(createFirst.personalOptionPresent === true, "Create must include a Person
 assert(createFirst.criticalOptionPresent === true, "Create must include a Critical option for Gmail evidence.");
 assert(createFirst.gmailMemoryEvidencePresent === true, "Create must include Gmail evidence in memory refs.");
 assert(createFirst.gmailSourceEvidencePresent === true, "Create must include Gmail evidence in source refs.");
+assert(createFirst.selectedSemanticMemoryRefsMatched === true, "Create memory refs must match selected semantic Gmail memory refs.");
+assert(createFirst.selectedSemanticSourceRefsMatched === true, "Create source refs must match selected Gmail source refs.");
 assert(numberValue(createFirst.rankedCandidateCount) >= 5, "Create must expose five Brain Ranker candidates.");
 assert(createFirst.nextBestMoveGrounded === true, "Create Brain Ranker next-best move must be grounded by Gmail memory.");
 assert(createFirst.rankedCandidateGmailMemoryEvidencePresent === true, "Create Brain Ranker candidates must include Gmail memory evidence.");
 assert(createFirst.rankedCandidateGmailSourceEvidencePresent === true, "Create Brain Ranker candidates must include Gmail source evidence.");
+assert(
+  createFirst.rankedCandidateSelectedSemanticMemoryRefsMatched === true,
+  "Create Brain Ranker candidates must match selected semantic Gmail memory refs.",
+);
+assert(
+  createFirst.rankedCandidateSelectedSemanticSourceRefsMatched === true,
+  "Create Brain Ranker candidates must match selected Gmail source refs.",
+);
 assert(createFirst.personalOptionExpectedEvidencePresent === true, "Create Personal option must include the expected Gmail evidence text.");
 assert(createFirst.criticalOptionExpectedEvidencePresent === true, "Create Critical option must include the expected Gmail evidence text.");
 assert(createFirst.expectedEvidencePresent === true, "Create must include the expected Gmail evidence text.");
@@ -149,6 +160,8 @@ assertCreateSelectedLenses(createRefined);
 assert(createRefined.selectedOptionsMatched === true, "Create refinement must preserve the selected Gmail option ids.");
 assert(createRefined.gmailMemoryEvidencePresent === true, "Create refinement must include Gmail evidence in memory refs.");
 assert(createRefined.gmailSourceEvidencePresent === true, "Create refinement must include Gmail evidence in source refs.");
+assert(createRefined.selectedSemanticMemoryRefsMatched === true, "Create refinement memory refs must match selected semantic Gmail memory refs.");
+assert(createRefined.selectedSemanticSourceRefsMatched === true, "Create refinement source refs must match selected Gmail source refs.");
 assert(createRefined.expectedEvidencePresent === true, "Create refinement must include the expected Gmail evidence text.");
 assert(createRefined.artifactExpectedEvidencePresent === true, "Create refinement artifact must include the expected Gmail evidence text.");
 assert(createRefined.rawEmailBodyAbsent === true, "Create refinement must not include raw Gmail body markers.");
