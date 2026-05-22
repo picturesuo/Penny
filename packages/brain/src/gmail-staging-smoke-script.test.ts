@@ -111,6 +111,50 @@ test("Gmail staging smoke script rejects unsafe run ids without writing them", a
   }
 });
 
+test("Gmail staging smoke script rejects unsafe scope ids without writing them", async () => {
+  const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
+  const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+    requests.push({ method: request.method, url: request.url });
+    const route = routeFor(request);
+
+    response.writeHead(route.status, { "content-type": "application/json" });
+    response.end(JSON.stringify(route.body));
+  });
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-smoke-"));
+  const evidenceFile = join(tmp, "unsafe-scope-id-evidence.json");
+  const unsafeUserId = "staged-account@example.com";
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = server.address();
+
+    assert(address && typeof address === "object");
+
+    const result = await runSmoke({
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      evidenceFile,
+      env: {
+        GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY: "true",
+        GMAIL_SMOKE_USER_ID: unsafeUserId,
+      },
+    });
+    const evidenceText = await readFile(evidenceFile, "utf8");
+    const evidence = JSON.parse(evidenceText) as { userId?: string; error?: string };
+    const unsafeUserIdPattern = new RegExp(unsafeUserId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+    assert.equal(result.status, 1);
+    assert.equal(requests.length, 0);
+    assert.equal(evidence.userId, undefined);
+    assert.match(evidence.error ?? "", /GMAIL_SMOKE_USER_ID must be a safe opaque slug/);
+    assert.doesNotMatch(result.stderr, unsafeUserIdPattern);
+    assert.doesNotMatch(evidenceText, unsafeUserIdPattern);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging smoke script rejects provider-only selectors that match multiple accounts", async () => {
   const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
   const connections = [
