@@ -344,6 +344,25 @@ test("Gmail smoke evidence verifier rejects weak Create export privacy evidence"
   assert.match(failure, /Export prompt must not include unsupported human-review claims/);
 });
 
+test("Gmail smoke evidence verifier rejects missing export context proof", () => {
+  const evidence = validEvidence();
+  const exported = evidence.steps.find((step) => step.step === "create.export") as Record<string, unknown>;
+
+  delete exported.selectedOptionHistoryPresent;
+  delete exported.personalContextSectionPresent;
+  delete exported.sourceMemoryEvidenceSectionPresent;
+  delete exported.personalContextExpectedEvidencePresent;
+  delete exported.sourceMemoryEvidenceExpectedEvidencePresent;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Export prompt must include selected option history/);
+  assert.match(failure, /Export prompt must include a personal context section/);
+  assert.match(failure, /Export prompt must include a source\/memory evidence section/);
+  assert.match(failure, /Export prompt personal context must include the expected Gmail-derived context/);
+  assert.match(failure, /Export prompt source\/memory evidence must include the expected Gmail-derived context/);
+});
+
 test("Gmail smoke evidence verifier accepts connect preflight-only evidence", () => {
   const output = execFileSync(process.execPath, ["scripts/verify-gmail-smoke-evidence.mjs", "-", "--connect-preflight-only"], {
     cwd: repoRoot,
@@ -587,6 +606,11 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
       {
         step: "create.export",
         expectedEvidencePresent: true,
+        selectedOptionHistoryPresent: true,
+        personalContextSectionPresent: true,
+        sourceMemoryEvidenceSectionPresent: true,
+        personalContextExpectedEvidencePresent: true,
+        sourceMemoryEvidenceExpectedEvidencePresent: true,
         unsafePrivacyClaimAbsent: true,
         rawEmailBodyAbsent: true,
         secretOrConnectTokenAbsent: true,
