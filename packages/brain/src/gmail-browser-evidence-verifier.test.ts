@@ -155,6 +155,35 @@ test("Gmail browser evidence verifier rejects tiny screenshot artifacts", async 
   }
 });
 
+test("Gmail browser evidence verifier rejects mismatched proof artifact file kinds", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-browser-artifacts-"));
+  const evidence = validBrowserEvidence();
+  const screenshots = evidence.screenshots as Array<Record<string, unknown>>;
+
+  screenshots[0].file = "screenshots/gmail-pre-oauth.md";
+  evidence.notes = [
+    {
+      label: "Note accidentally saved as an image",
+      file: "notes/gmail-note.png",
+      proves: ["brain.gmailPanel.preOAuth"],
+    },
+  ];
+
+  try {
+    await writeBrowserArtifacts(tmp);
+    await writeFile(join(tmp, "screenshots/gmail-pre-oauth.md"), "Sanitized screenshot note, not an image.\n", "utf8");
+    await mkdir(join(tmp, "notes"), { recursive: true });
+    await writeFile(join(tmp, "notes/gmail-note.png"), pngWithDimensions(640, 360));
+
+    const failure = runVerifierExpectingFailure(evidence, `--artifact-root=${tmp}`, "--require-artifact-files");
+
+    assert.match(failure, /screenshots\/gmail-pre-oauth\.md is listed under screenshots and must be a png, jpg, or webp image/);
+    assert.match(failure, /notes\/gmail-note\.png is listed under notes and must be a txt, md, or json file/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail browser evidence verifier rejects missing post-OAuth surfaces by default", () => {
   const failure = runVerifierExpectingFailure(preOAuthEvidence());
 
