@@ -62,6 +62,18 @@ test("Gmail smoke evidence verifier rejects unexpected partial failures", () => 
   assert.match(failure, /Sync must have zero unexpected partial failures/);
 });
 
+test("Gmail smoke evidence verifier rejects repeated sync without cursor evidence", () => {
+  const evidence = validEvidence();
+  const repeat = evidence.steps.find((step) => step.step === "sync.repeat") as Record<string, unknown>;
+
+  delete repeat.cursorPresent;
+  delete repeat.historyIdPresent;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Repeated sync must include cursor or historyId evidence/);
+});
+
 test("Gmail smoke evidence verifier rejects raw connect links or session tokens", () => {
   const evidence = validEvidence();
   const connectStep = evidence.steps.find((step) => step.step === "connect.preflight") as Record<string, unknown>;
@@ -247,6 +259,8 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
       {
         step: "sync.repeat",
         partialFailureCount: 0,
+        cursorPresent: true,
+        historyIdPresent: false,
         statusMessageCountUnchanged: true,
         selectedSourceCountUnchanged: true,
         duplicateSourceRefsAbsent: true,
