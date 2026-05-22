@@ -30,7 +30,13 @@ import {
   handleGoogleConnectorSourceDeleteRequest,
   handleGoogleConnectorSyncCompleteRequest,
 } from "./google-connector-route.ts";
-import { initializeGoogleConnectorConnection } from "./google-connector.ts";
+import { handleGoogleGmailSyncRequest } from "./gmail-connector-route.ts";
+import {
+  initializeGoogleConnectorConnection,
+  type ConnectorAdapterResult,
+  type NangoAdapter,
+  type NangoProxyResponse,
+} from "./google-connector.ts";
 import { createInMemoryGoogleConnectorStateStore } from "./google-connector-state-store.ts";
 import type { BrainRankerRecorder, RecordBrainDevelopmentEventInput, RecordBrainRankerRunInput } from "./brain-ranker-persistence.ts";
 
@@ -656,6 +662,124 @@ test("Google sync feeds private Brain memory into Create ranking, export, and de
   assert.ok(!afterDelete.optionSet.sourcesUsed.some((source) => source.label === "Google Create strategy doc"));
 });
 
+test("Gmail sync feeds private email evidence into Create ranking and export only when real", async () => {
+  const headers = requestHeaders({
+    "x-user-id": "gmail-create-user",
+    "x-workspace-id": "gmail-create-workspace",
+    "x-project-id": "gmail-create-project",
+    "x-sphere-id": "gmail-create-sphere",
+  });
+  const scope = {
+    userId: "gmail-create-user",
+    workspaceId: "gmail-create-workspace",
+    projectId: "gmail-create-project",
+    sphereId: "gmail-create-sphere",
+  };
+  const connectorState = initializeGoogleConnectorConnection({
+    scope,
+    credential: {
+      providerId: "google",
+      adapter: "nango",
+      connectionId: "nango-gmail-create-1",
+      providerConfigKey: "google-gmail",
+      credentialRef: "nango:google-gmail:nango-gmail-create-1",
+      accountEmail: "founder@example.com",
+      endUserId: "gmail-create-user",
+    },
+    surfaces: ["google_gmail"],
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    now: "2026-05-22T12:00:00.000Z",
+  });
+  const stateStore = createInMemoryGoogleConnectorStateStore(connectorState);
+  const syncResponse = await handleGoogleGmailSyncRequest(
+    jsonRequest(
+      "http://localhost/api/connectors/google/gmail/sync",
+      {
+        connectionId: "nango-gmail-create-1",
+        providerConfigKey: "google-gmail",
+        maxResults: 1,
+        now: "2026-05-22T12:05:00.000Z",
+      },
+      headers,
+    ),
+    {
+      env: gmailConfiguredEnv(),
+      stateStore,
+      adapter: gmailCreateAdapter(),
+    },
+  );
+  const syncPayload = await responsePayload(syncResponse);
+  const profileResponse = await handleBrainMemoryProfileRequest(getRequest("http://localhost/api/brain/memory/profile", headers));
+  const profilePayload = await responsePayload(profileResponse);
+  const profile = profilePayload.data as BrainMemoryProfile;
+  const service = createInMemoryCreateRouteService();
+  const rawIdea = "Build Create around launch partner email evidence and avoid generic CRM dashboards.";
+  const first = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId: "gmail-create-project",
+      sessionId: "gmail-create-session",
+    },
+    headers,
+  );
+  const selected = optionsByLens(first.optionSet.options, ["Personal", "Critical"]);
+  const refined = await createNext(
+    service,
+    {
+      rawIdea,
+      projectId: first.optionSet.projectId,
+      sessionId: first.optionSet.sessionId,
+      optionSetId: first.optionSet.id,
+      selectedOptionIds: selected.map((option) => option.id),
+      userComment: "Use the real Gmail launch partner evidence and preserve the rejected CRM direction.",
+      artifact: first.artifact,
+    },
+    headers,
+  );
+  const exportResponse = await handleExportCodingPromptRequest(
+    jsonRequest(
+      "http://localhost/api/create/export-coding-prompt",
+      {
+        artifact: refined.artifact,
+        verification: refined.verification,
+        judgmentEvent: refined.judgmentEvent,
+      },
+      headers,
+    ),
+    { service },
+  );
+  const exportPayload = await responsePayload(exportResponse);
+  const exported = exportPayload.data.export as PromptExport;
+
+  assert.equal(syncResponse.status, 200);
+  assert.equal(syncPayload.data.messageCount, 1);
+  assert.equal(syncPayload.data.partialFailureCount, 0);
+  assert.equal(syncPayload.data.state.sources[0]?.kind, "google_gmail_message");
+  assert.equal(syncPayload.data.state.sources[0]?.privacy.trainingUse, false);
+  assert.equal(syncPayload.data.state.sources[0]?.privacy.rawContentStored, false);
+  assert.equal(profile.sources[0]?.sourceUri, "gmail:message:gmail-create-msg-1");
+  assert.equal(profile.sources[0]?.privacy.rawRetention, false);
+  assert.equal(profile.sources[0]?.privacy.trainingUse, false);
+  assert.equal(first.optionSet.nextBestMove.grounded, true);
+  assert.ok(first.optionSet.memoryUsed.some((memory) => /launch partner email evidence|private Gmail evidence/i.test(memory.summary)));
+  assert.ok(
+    first.optionSet.sourcesUsed.some((source) =>
+      /Launch partner evidence|launch partner email evidence|private Gmail evidence/i.test(`${source.label} ${source.excerpt}`),
+    ),
+  );
+  assert.match(optionText(first, "Personal"), /launch partner email evidence|private Gmail evidence|visible evidence/i);
+  assert.match(optionText(first, "Critical"), /generic CRM dashboards|fake connector claims|rejected/i);
+  assert.ok(first.optionSet.options.every((option) => option.memoryCount >= 1 && option.sourceCount >= 1));
+  assert.equal(exportResponse.status, 200);
+  assert.match(exported.text, /## Personal Context Used/);
+  assert.match(exported.text, /## Source \/ Memory Evidence/);
+  assert.match(exported.text, /Launch partner evidence|launch partner email evidence|private Gmail evidence/i);
+  assert.match(exported.text, /generic CRM dashboards|fake connector claims/i);
+  assert.doesNotMatch(exported.text, /Instagram|social connector/i);
+  assert.doesNotMatch(exported.text, /global training|hidden memory|private inbox/i);
+});
+
 test("POST /api/create/next personalizes the same rough idea for different Brain profiles", async () => {
   const rawIdea = "Build a memory-grounded app that turns rough project notes into an agent-ready implementation plan.";
   const studio = await createNext(createInMemoryCreateRouteService(), {
@@ -1207,6 +1331,113 @@ function optionText(result: CreateNextResult, lens: CandidateOption["lens"]): st
 function assertNoFakePositiveClaims(text: string): void {
   assert.doesNotMatch(text, /\b(imported|connected|read|pulled from|synced|scanned|analyzed)\b.{0,80}\b(gmail|slack|messages?|oauth)\b/i);
   assert.doesNotMatch(text, /\b(global training|shared training|trained on your data|hidden memory|background import|secret memory|private inbox)\b/i);
+}
+
+function gmailConfiguredEnv(): Record<string, string> {
+  return {
+    ENABLE_GOOGLE_CONNECTOR: "true",
+    ENABLE_GMAIL_CONNECTOR: "true",
+    ENABLE_RESTRICTED_GOOGLE_SCOPES: "true",
+    NANGO_SECRET_KEY: "nango-secret",
+    NANGO_PUBLIC_KEY: "nango-public",
+    NANGO_BASE_URL: "https://api.nango.test",
+    NANGO_GMAIL_INTEGRATION_ID: "google-gmail",
+  };
+}
+
+function gmailCreateAdapter(): NangoAdapter {
+  return {
+    async createConnectSession() {
+      throw new Error("Unexpected createConnectSession call.");
+    },
+    async handleCallback() {
+      throw new Error("Unexpected handleCallback call.");
+    },
+    async listConnections() {
+      throw new Error("Unexpected listConnections call.");
+    },
+    async getCredentials() {
+      throw new Error("Unexpected getCredentials call.");
+    },
+    async revokeConnection() {
+      throw new Error("Unexpected revokeConnection call.");
+    },
+    async startSync() {
+      throw new Error("Unexpected startSync call.");
+    },
+    async getSyncStatus() {
+      throw new Error("Unexpected getSyncStatus call.");
+    },
+    async refreshConnection() {
+      throw new Error("Unexpected refreshConnection call.");
+    },
+    async proxy(input) {
+      if (input.path === "users/me/profile") {
+        return gmailProxyOk({
+          emailAddress: "founder@example.com",
+          messagesTotal: 1,
+          threadsTotal: 1,
+          historyId: "gmail-create-history-1",
+        });
+      }
+
+      if (input.path === "users/me/messages") {
+        return gmailProxyOk({ messages: [{ id: "gmail-create-msg-1", threadId: "gmail-create-thread-1" }] });
+      }
+
+      if (input.path === "users/me/messages/gmail-create-msg-1") {
+        return gmailProxyOk(gmailCreateMessage());
+      }
+
+      throw new Error(`Unexpected Gmail proxy path ${input.path}.`);
+    },
+  };
+}
+
+function gmailProxyOk(body: unknown): ConnectorAdapterResult<NangoProxyResponse> {
+  return {
+    ok: true,
+    data: {
+      status: 200,
+      headers: {},
+      body,
+    },
+  };
+}
+
+function gmailCreateMessage() {
+  return {
+    id: "gmail-create-msg-1",
+    threadId: "gmail-create-thread-1",
+    historyId: "gmail-create-history-2",
+    labelIds: ["INBOX"],
+    snippet: "Project: Penny Create should use launch partner email evidence.",
+    internalDate: "1779451200000",
+    payload: {
+      mimeType: "multipart/alternative",
+      headers: [
+        { name: "Subject", value: "Launch partner evidence" },
+        { name: "From", value: "Alice <alice@example.com>" },
+        { name: "To", value: "Founder <founder@example.com>" },
+        { name: "Date", value: "Fri, 22 May 2026 12:00:00 +0000" },
+        { name: "Message-ID", value: "<gmail-create-msg-1@example.com>" },
+      ],
+      parts: [
+        {
+          mimeType: "text/plain",
+          body: {
+            data: base64Url(
+              "Project: Penny Create should use launch partner email evidence. Preference: keep private Gmail evidence visible in Create. Rejected direction: generic CRM dashboards and fake connector claims.",
+            ),
+          },
+        },
+      ],
+    },
+  };
+}
+
+function base64Url(value: string): string {
+  return Buffer.from(value, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function optionSetQualityScore(options: CandidateOption[]): number {
