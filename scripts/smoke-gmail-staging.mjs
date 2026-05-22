@@ -130,6 +130,7 @@ try {
     messageCount: sync.data.messageCount,
     importedCount: sync.data.importedSources?.length ?? 0,
     partialFailureCount: sync.data.partialFailureCount ?? 0,
+    maxResultsUsed: maxResults,
     expectedPartialFailureStage: expectedPartialFailureStage || null,
     partialFailureStageMatched: syncPartialFailures.stageMatched,
     partialFailuresSanitized: syncPartialFailures.sanitized,
@@ -204,6 +205,7 @@ try {
     query: keyword.data.query,
     stored: keyword.data.stored,
     filtersUsed: compactObject(keywordFilters),
+    maxResultsUsed: maxResults,
     resultCount: keyword.data.results.length,
     memoryCountUnchanged: statusAfterKeyword.data.messageCount === beforeKeywordCount,
   });
@@ -230,6 +232,8 @@ try {
   record("keywordSearch.syncExplicit", {
     query: keywordSync.data.query,
     stored: keywordSync.data.stored,
+    filtersUsed: compactObject(keywordFilters),
+    maxResultsUsed: maxResults,
     resultCount: keywordSync.data.results.length,
     partialFailureCount: keywordSync.data.sync?.partialFailureCount ?? null,
     statusMessageCountUnchanged: statusAfterKeywordSync.data.messageCount === beforeKeywordSyncCount,
