@@ -584,6 +584,7 @@ function validReadinessEvidence(): Record<string, unknown> {
         rateLimitPresent: true,
         trustAuthHeadersPresent: true,
         databasePrepBypass: false,
+        missingRequirementKeys: [],
       },
       {
         name: "env.gmail",
