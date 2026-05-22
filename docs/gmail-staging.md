@@ -276,6 +276,7 @@ node scripts/check-gmail-ui-preflight.mjs
 
 The checker verifies that the Brain documents, Brain memory profile, Brain recents, Google provider, and Gmail status routes all load with the same scoped headers the browser will use. It fails fast if the local database is missing, if the Gmail connector is not configured, if Gmail does not expose exactly `gmail.readonly`, or if status/provider state exposes unsafe connector internals.
 When `GMAIL_UI_PREFLIGHT_EVIDENCE_FILE` is set, the checker writes the same sanitized success or failure JSON that it prints. Keep this file with manual browser screenshots or notes so UI preflight evidence records the exact API host and user/workspace/project/sphere scope without raw connect links, tokens, credential refs, or email body text.
+UI preflight evidence `checks` are closed-world in the final bundle verifier. The evidence must include each generated check exactly once (`brain.documents`, `brain.memoryProfile`, `brain.recents`, `google.provider`, and `gmail.status`) and must not include duplicate, legacy, or ad hoc rows.
 
 Open `http://localhost:3011` in a browser and verify:
 
@@ -498,7 +499,7 @@ node scripts/verify-gmail-staging-bundle.mjs \
   --min-messages=1
 ```
 
-This command verifies readiness, non-destructive Gmail smoke, and UI preflight evidence are from the same API and user/workspace/project/sphere scope. It also requires the UI preflight evidence to include Brain documents, Brain memory profile, Brain recents, Google provider, and Gmail status checks with privacy-safe provider/status state.
+This command verifies readiness, non-destructive Gmail smoke, and UI preflight evidence are from the same API and user/workspace/project/sphere scope. It also requires the UI preflight evidence to include Brain documents, Brain memory profile, Brain recents, Google provider, and Gmail status checks exactly once, with privacy-safe provider/status state and no legacy or ad hoc check rows.
 
 When certifying the destructive end-to-end path, require the destructive evidence too:
 
