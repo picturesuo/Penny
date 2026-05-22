@@ -22,6 +22,7 @@ const requireBrowserArtifactFiles = finalStaging || args.includes("--require-bro
 const minMessages = optionInt("--min-messages", 1);
 const maxEvidenceWindowHours = optionInt("--max-evidence-window-hours", 24);
 const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
+const safeEvidenceScopeIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const errors = [];
 
 if (
@@ -54,6 +55,18 @@ const smoke = readEvidence(smokeFile, "smoke");
 const destructive = destructiveFile ? readEvidence(destructiveFile, "destructive smoke") : null;
 const uiPreflight = uiPreflightFile ? readEvidence(uiPreflightFile, "UI preflight") : null;
 const browserEvidence = browserEvidenceFile ? readEvidence(browserEvidenceFile, "browser evidence") : null;
+
+for (const [label, evidence] of [
+  ["readiness", readiness],
+  ["smoke", smoke],
+  ["destructive smoke", destructive],
+  ["UI preflight", uiPreflight],
+  ["browser", browserEvidence],
+]) {
+  if (evidence) {
+    assertSafeEvidenceScopeIds(evidence, label);
+  }
+}
 
 runVerifier("readiness", [
   "scripts/verify-gmail-readiness-evidence.mjs",
@@ -304,6 +317,20 @@ function isSafeStagingRunId(value) {
   return typeof value === "string" && safeStagingRunIdPattern.test(value);
 }
 
+function assertSafeEvidenceScopeIds(evidence, label) {
+  for (const field of ["userId", "workspaceId", "projectId", "sphereId"]) {
+    const value = typeof evidence?.[field] === "string" ? evidence[field].trim() : "";
+
+    assert(Boolean(value), `${label} evidence ${field} must be present.`);
+    assert(!/^REPLACE_WITH_/i.test(value), `${label} evidence ${field} must not be a template placeholder.`);
+    assert(isSafeEvidenceScopeId(value), `${label} evidence ${field} must be a safe opaque scope id.`);
+  }
+}
+
+function isSafeEvidenceScopeId(value) {
+  return typeof value === "string" && safeEvidenceScopeIdPattern.test(value.trim());
+}
+
 function assertFinalEvidenceWindow(entries, maxHours) {
   const timestamps = [];
 
@@ -352,10 +379,10 @@ function evidenceSummary(file, evidence) {
     file: basename(file),
     ok: evidence?.ok ?? null,
     baseUrl: evidence?.baseUrl ?? null,
-    userId: evidence?.userId ?? null,
-    workspaceId: evidence?.workspaceId ?? null,
-    projectId: evidence?.projectId ?? null,
-    sphereId: evidence?.sphereId ?? null,
+    userId: isSafeEvidenceScopeId(evidence?.userId) ? evidence.userId : null,
+    workspaceId: isSafeEvidenceScopeId(evidence?.workspaceId) ? evidence.workspaceId : null,
+    projectId: isSafeEvidenceScopeId(evidence?.projectId) ? evidence.projectId : null,
+    sphereId: isSafeEvidenceScopeId(evidence?.sphereId) ? evidence.sphereId : null,
     stagingRunId: isSafeStagingRunId(evidence?.stagingRunId) ? evidence.stagingRunId : null,
     stepCount: Array.isArray(evidence?.steps) ? evidence.steps.length : null,
     checkCount: Array.isArray(evidence?.checks) ? evidence.checks.length : null,
