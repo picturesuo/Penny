@@ -202,7 +202,8 @@ try {
   });
   assert(keyword.data?.stored === false, "Keyword search stored results without sync=true.");
   assert(Array.isArray(keyword.data?.results) && keyword.data.results.length > 0, "Keyword search returned no Gmail results.");
-  assert(keyword.data.results.every(hasKeywordResultShape), "Keyword search returned an unexpected result shape.");
+  const keywordResultShapeVerified = keyword.data.results.every(hasKeywordResultShape);
+  assert(keywordResultShapeVerified, "Keyword search returned an unexpected result shape.");
   const statusAfterKeyword = await request("GET", "/api/connectors/google/gmail/status");
   assertConnectorStatePrivacy(statusAfterKeyword.data, "Gmail status after keyword search");
   assert(statusAfterKeyword.data?.messageCount === beforeKeywordCount, "Keyword search changed Gmail memory count without sync=true.");
@@ -212,6 +213,12 @@ try {
     filtersUsed: compactObject(keywordFilters),
     maxResultsUsed: maxResults,
     resultCount: keyword.data.results.length,
+    resultShapeVerified: keywordResultShapeVerified,
+    messageRefPresent: keyword.data.results.every(hasKeywordMessageRef),
+    threadRefPresent: keyword.data.results.every(hasKeywordThreadRef),
+    sourceRefPresent: keyword.data.results.every(hasKeywordSourceRef),
+    snippetPresent: keyword.data.results.every(hasKeywordSnippet),
+    rawBodyAbsent: keyword.data.results.every(hasNoRawEmailFields),
     memoryCountUnchanged: statusAfterKeyword.data.messageCount === beforeKeywordCount,
   });
 
@@ -224,7 +231,8 @@ try {
   });
   assert(keywordSync.data?.stored === true, "Keyword search with sync=true did not report stored=true.");
   assert(Array.isArray(keywordSync.data?.results) && keywordSync.data.results.length > 0, "Keyword search with sync=true returned no Gmail results.");
-  assert(keywordSync.data.results.every(hasKeywordResultShape), "Keyword search with sync=true returned an unexpected result shape.");
+  const keywordSyncResultShapeVerified = keywordSync.data.results.every(hasKeywordResultShape);
+  assert(keywordSyncResultShapeVerified, "Keyword search with sync=true returned an unexpected result shape.");
   assert(keywordSync.data?.sync?.partialFailureCount === 0, "Keyword search with sync=true reported partial sync failures.");
   const statusAfterKeywordSync = await request("GET", "/api/connectors/google/gmail/status");
   assertConnectorStatePrivacy(statusAfterKeywordSync.data, "Gmail status after keyword search sync");
@@ -240,6 +248,12 @@ try {
     filtersUsed: compactObject(keywordFilters),
     maxResultsUsed: maxResults,
     resultCount: keywordSync.data.results.length,
+    resultShapeVerified: keywordSyncResultShapeVerified,
+    messageRefPresent: keywordSync.data.results.every(hasKeywordMessageRef),
+    threadRefPresent: keywordSync.data.results.every(hasKeywordThreadRef),
+    sourceRefPresent: keywordSync.data.results.every(hasKeywordSourceRef),
+    snippetPresent: keywordSync.data.results.every(hasKeywordSnippet),
+    rawBodyAbsent: keywordSync.data.results.every(hasNoRawEmailFields),
     partialFailureCount: keywordSync.data.sync?.partialFailureCount ?? null,
     statusMessageCountUnchanged: statusAfterKeywordSync.data.messageCount === beforeKeywordSyncCount,
     duplicateSourceRefsAbsent: hasUniqueValues(sourceUrisAfterKeywordSync),
@@ -586,6 +600,26 @@ function hasKeywordResultShape(result) {
       typeof result.sourceRef?.sourceUri === "string" &&
       hasNoRawEmailFields(result),
   );
+}
+
+function hasKeywordMessageRef(result) {
+  return typeof result?.messageId === "string" && result.messageId.length > 0;
+}
+
+function hasKeywordThreadRef(result) {
+  return typeof result?.threadId === "string" && result.threadId.length > 0;
+}
+
+function hasKeywordSourceRef(result) {
+  return Boolean(
+    result?.sourceRef?.surface === "google_gmail" &&
+      typeof result.sourceRef?.sourceUri === "string" &&
+      result.sourceRef.sourceUri.length > 0,
+  );
+}
+
+function hasKeywordSnippet(result) {
+  return typeof result?.snippet === "string" && result.snippet.length > 0;
 }
 
 function hasSemanticResultShape(result) {
