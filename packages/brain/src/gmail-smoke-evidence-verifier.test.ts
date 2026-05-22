@@ -76,6 +76,25 @@ test("Gmail smoke evidence verifier rejects raw connect links or session tokens"
   assert.match(failure, /raw connect\/session\/token value/);
 });
 
+test("Gmail smoke evidence verifier rejects weak semantic result shape evidence", () => {
+  const evidence = validEvidence();
+  const semantic = evidence.steps.find((step) => step.step === "semanticSearch") as Record<string, unknown>;
+
+  delete semantic.resultShapeVerified;
+  delete semantic.sourceRefPresent;
+  delete semantic.memoryRefPresent;
+  delete semantic.scoreReasonPresent;
+  delete semantic.groundingLabels;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Semantic search evidence must prove the safe result shape/);
+  assert.match(failure, /Semantic search evidence must include Gmail source refs/);
+  assert.match(failure, /Semantic search evidence must include Brain memory refs/);
+  assert.match(failure, /Semantic search evidence must include score reasons/);
+  assert.match(failure, /Semantic search evidence must include groundingLabels/);
+});
+
 test("Gmail smoke evidence verifier accepts connect preflight-only evidence", () => {
   const output = execFileSync(process.execPath, ["scripts/verify-gmail-smoke-evidence.mjs", "-", "--connect-preflight-only"], {
     cwd: repoRoot,
