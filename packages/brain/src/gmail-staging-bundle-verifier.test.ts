@@ -391,6 +391,8 @@ function validSmokeEvidence(): Record<string, unknown> {
       {
         step: "sync.repeat",
         partialFailureCount: 0,
+        cursorPresent: true,
+        historyIdPresent: false,
         statusMessageCountUnchanged: true,
         selectedSourceCountUnchanged: true,
         duplicateSourceRefsAbsent: true,
