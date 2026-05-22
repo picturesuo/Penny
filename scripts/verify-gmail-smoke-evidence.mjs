@@ -55,6 +55,14 @@ assert(initial.noHumanReview === true, "Initial status must report noHumanReview
 assert(initial.statusStatePrivacySafe === true, "Initial Gmail status state must be privacy-safe.");
 assert(initial.providerStatePrivacySafe === true, "Initial Google provider state must be privacy-safe.");
 assert(numberValue(initial.connectionCount) >= 1, "Evidence must include at least one connected Gmail account.");
+assert(initial.selectedAccountStateVisible === true, "Initial status must prove the selected Gmail account state is visible.");
+assert(initial.targetConnectionIdPresent === true, "Initial status must prove the target Penny Gmail connection id is present.");
+assert(initial.targetExternalConnectionIdPresent === true, "Initial status must prove the target Nango connection id is present.");
+assert(initial.targetProviderConfigKeyPresent === true, "Initial status must prove the target Nango provider config key is present.");
+assert(initial.targetAccountAliasPresent === true, "Initial status must prove staged account alias metadata is present.");
+if (initial.selectorUsed === true) {
+  assert(initial.targetConnectionMatched === true, "Initial status must prove the configured Gmail connection selector matched.");
+}
 
 const sync = requireStep("sync");
 assert(numberValue(sync.messageCount) >= minMessages, `Sync must import at least ${minMessages} Gmail message(s).`);
