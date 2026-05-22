@@ -124,6 +124,19 @@ test("Gmail smoke evidence verifier rejects missing synced source privacy eviden
   assert.match(failure, /Brain profile Gmail source privacy must prove private visibility/);
 });
 
+test("Gmail smoke evidence verifier rejects missing selected source proof", () => {
+  const evidence = validEvidence();
+  const afterSync = evidence.steps.find((step) => step.step === "status.afterSync") as Record<string, unknown>;
+
+  delete afterSync.selectedSourceRefCount;
+  delete afterSync.brainProfileMatchedSelectedSourceRefs;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Status after sync must prove at least 1 selected Gmail source ref/);
+  assert.match(failure, /Brain profile Gmail source privacy must match selected Gmail source refs/);
+});
+
 test("Gmail smoke evidence verifier rejects missing staged account identity proof", () => {
   const evidence = validEvidence();
   const initial = evidence.steps.find((step) => step.step === "status.initial") as Record<string, unknown>;
@@ -419,12 +432,14 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         messageCount: 1,
         statusStatePrivacySafe: true,
         providerStatePrivacySafe: true,
+        selectedSourceRefCount: 1,
         syncedSourceCount: 1,
         syncedSourceTrainingUseFalse: true,
         syncedSourceRawContentStoredFalse: true,
         syncedSourcePrivateUserMemory: true,
         syncedSourceRetrievalEnabled: true,
         brainProfileGmailSourceCount: 1,
+        brainProfileMatchedSelectedSourceRefs: true,
         brainProfileTrainingUseFalse: true,
         brainProfileRawRetentionFalse: true,
         brainProfilePrivateVisibility: true,
