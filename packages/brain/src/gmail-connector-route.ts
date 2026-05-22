@@ -1007,21 +1007,31 @@ function findGmailConnection(
 ): { ok: true; value: ConnectorConnection } | { ok: false; response: Response } {
   const connectionId = stringValue(input.connectionId);
   const providerConfigKey = stringValue(input.providerConfigKey);
-  const connection = state.connections.find(
+  const matchesSelector = (candidate: ConnectorConnection) =>
+    (!connectionId || candidate.id === connectionId || candidate.credential.connectionId === connectionId) &&
+    (!providerConfigKey || candidate.credential.providerConfigKey === providerConfigKey);
+  const scopedMatches = state.connections.filter(
     (candidate) =>
       candidate.surfaces.includes("google_gmail") &&
-      (!connectionId || candidate.id === connectionId || candidate.credential.connectionId === connectionId) &&
-      (!providerConfigKey || candidate.credential.providerConfigKey === providerConfigKey),
+      candidate.scope.userId === scope.userId &&
+      candidate.scope.workspaceId === scope.workspaceId &&
+      matchesSelector(candidate),
+  );
+  const crossScopeMatch = state.connections.some(
+    (candidate) =>
+      candidate.surfaces.includes("google_gmail") &&
+      (candidate.scope.userId !== scope.userId || candidate.scope.workspaceId !== scope.workspaceId) &&
+      matchesSelector(candidate),
   );
 
-  if (!connection) {
+  if (!scopedMatches.length) {
     return {
       ok: false,
       response: jsonResponse(
         {
           error: {
             code: "gmail_connection_not_found",
-            message: "Connect or sync Gmail first.",
+            message: crossScopeMatch ? "No Gmail connection matched this user and workspace scope." : "Connect or sync Gmail first.",
             retryable: false,
           },
         },
@@ -1029,6 +1039,24 @@ function findGmailConnection(
       ),
     };
   }
+
+  if (scopedMatches.length > 1) {
+    return {
+      ok: false,
+      response: jsonResponse(
+        {
+          error: {
+            code: "gmail_connection_ambiguous",
+            message: "Select one Gmail connection before sync, search, or revoke.",
+            retryable: false,
+          },
+        },
+        409,
+      ),
+    };
+  }
+
+  const connection = scopedMatches[0]!;
 
   if (connection.status === "revoked") {
     return {
@@ -1042,22 +1070,6 @@ function findGmailConnection(
           },
         },
         409,
-      ),
-    };
-  }
-
-  if (connection.scope.userId !== scope.userId || connection.scope.workspaceId !== scope.workspaceId) {
-    return {
-      ok: false,
-      response: jsonResponse(
-        {
-          error: {
-            code: "gmail_connection_not_found",
-            message: "No Gmail connection matched this user and workspace scope.",
-            retryable: false,
-          },
-        },
-        404,
       ),
     };
   }
