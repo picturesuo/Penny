@@ -26,6 +26,7 @@ assert(typeof evidence?.baseUrl === "string" && evidence.baseUrl.length > 0, "Ev
 assert(typeof evidence?.startedAt === "string" && evidence.startedAt.length > 0, "Evidence must include startedAt.");
 assert(typeof evidence?.completedAt === "string" && evidence.completedAt.length > 0, "Evidence must include completedAt.");
 assert(Array.isArray(evidence?.steps) && evidence.steps.length > 0, "Evidence must include steps.");
+assertSmokeSteps(evidence?.steps, { destructive, connectPreflightOnly });
 assertSafeStagingRunId(evidence);
 assertNoUnsafeEvidence(evidence);
 
@@ -249,6 +250,54 @@ function assertSafeStagingRunId(value) {
 
 function isSafeStagingRunId(value) {
   return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
+}
+
+function assertSmokeSteps(value, options) {
+  if (!Array.isArray(value)) {
+    return;
+  }
+
+  const allowed = new Set(
+    options.connectPreflightOnly
+      ? ["connect.preflight", "connect.preflightOnly.completed"]
+      : [
+          "connect.preflight",
+          "status.initial",
+          "sync",
+          "status.afterSync",
+          "sync.repeat",
+          "keywordSearch",
+          "keywordSearch.syncExplicit",
+          "semanticSearch",
+          "create.first",
+          "create.refined",
+          "create.export",
+          ...(options.destructive ? ["revoke", "deleteSource"] : ["revoke.delete.skipped"]),
+        ],
+  );
+  const seen = new Set();
+
+  for (const [index, step] of value.entries()) {
+    const isObject = Boolean(step) && typeof step === "object" && !Array.isArray(step);
+
+    assert(isObject, `Smoke evidence step ${index + 1} must be an object.`);
+
+    if (!isObject) {
+      continue;
+    }
+
+    const name = typeof step.step === "string" ? step.step.trim() : "";
+
+    assert(Boolean(name), `Smoke evidence step ${index + 1} must include a step name.`);
+
+    if (!name) {
+      continue;
+    }
+
+    assert(allowed.has(name), `Smoke evidence step ${index + 1} name must match an allowed smoke step.`);
+    assert(!seen.has(name), `Smoke evidence must include ${name} only once.`);
+    seen.add(name);
+  }
 }
 
 function assertConnectPreflight(step) {
