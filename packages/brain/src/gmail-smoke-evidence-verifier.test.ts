@@ -19,6 +19,30 @@ test("Gmail smoke evidence verifier accepts sanitized non-destructive evidence",
   assert.equal(payload.stepCount, 11);
 });
 
+test("Gmail smoke evidence verifier accepts expected sanitized partial failure evidence", () => {
+  const output = execFileSync(process.execPath, verifier, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    input: JSON.stringify(expectedPartialFailureEvidence()),
+  });
+  const payload = JSON.parse(output) as { ok: boolean; connectPreflightVerified: boolean; stepCount: number };
+
+  assert.equal(payload.ok, true);
+  assert.equal(payload.connectPreflightVerified, true);
+  assert.equal(payload.stepCount, 11);
+});
+
+test("Gmail smoke evidence verifier rejects unexpected partial failures", () => {
+  const evidence = validEvidence();
+  const sync = evidence.steps.find((step) => step.step === "sync") as Record<string, unknown>;
+
+  sync.partialFailureCount = 1;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Sync must have zero unexpected partial failures/);
+});
+
 test("Gmail smoke evidence verifier rejects raw connect links or session tokens", () => {
   const evidence = validEvidence();
   const connectStep = evidence.steps.find((step) => step.step === "connect.preflight") as Record<string, unknown>;
@@ -199,6 +223,19 @@ function connectPreflightOnlyEvidence(): Record<string, unknown> & { steps: Arra
       },
     ],
   };
+}
+
+function expectedPartialFailureEvidence(): Record<string, unknown> & { steps: Array<Record<string, unknown>> } {
+  const evidence = validEvidence();
+
+  for (const step of evidence.steps.filter((item) => item.step === "sync" || item.step === "sync.repeat")) {
+    step.partialFailureCount = 1;
+    step.expectedPartialFailureStage = "message_oversized";
+    step.partialFailureStageMatched = true;
+    step.partialFailuresSanitized = true;
+  }
+
+  return evidence;
 }
 
 function destructiveEvidence(): Record<string, unknown> & { steps: Array<Record<string, unknown>> } {
