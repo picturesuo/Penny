@@ -57,7 +57,7 @@ Penny does not:
 - Claim human review.
 - Claim hidden or background Gmail access before consent.
 - Search across another user's Gmail connection or Brain memory.
-- Use unsynced keyword search results as Brain memory unless `sync=true` is explicitly requested.
+- Store keyword search results as Brain memory unless `sync=true` is explicitly requested.
 
 ## Raw Retention
 
@@ -132,4 +132,3 @@ Before public production Gmail use:
 - Keep delete/revoke behavior test evidence.
 - Keep production auth, rate limits, and structured safe logging enabled.
 - Keep no-training and no-human-review claims aligned with actual subprocessors and operations.
-
