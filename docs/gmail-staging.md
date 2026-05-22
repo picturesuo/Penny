@@ -397,6 +397,29 @@ node scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence-full.json 
 
 The verifier fails if required smoke steps are missing, if repeated sync/source counts are unstable, if keyword search stores without `sync=true`, if semantic search exposes raw scores, if Create/export do not include the expected Gmail evidence, if revoke/delete postconditions are missing for destructive runs, or if the evidence JSON contains unsafe raw fields such as tokens, credential refs, metadata/provenance, raw bodies, or raw connect links.
 
+After verifying individual files, verify the full staging evidence bundle so readiness and smoke files are from the same API and user/workspace/project/sphere scope:
+
+```bash
+node --check scripts/verify-gmail-staging-bundle.mjs
+node scripts/verify-gmail-staging-bundle.mjs \
+  --readiness=tmp/gmail-readiness-evidence.json \
+  --smoke=tmp/gmail-smoke-evidence.json \
+  --readiness-connect-preflight \
+  --min-messages=1
+```
+
+When certifying the destructive end-to-end path, require the destructive evidence too:
+
+```bash
+node scripts/verify-gmail-staging-bundle.mjs \
+  --readiness=tmp/gmail-readiness-evidence.json \
+  --smoke=tmp/gmail-smoke-evidence.json \
+  --destructive-smoke=tmp/gmail-smoke-evidence-full.json \
+  --readiness-connect-preflight \
+  --require-destructive \
+  --min-messages=1
+```
+
 ## Acceptance Evidence
 
 Before marking Gmail staging ready, attach or record:
@@ -406,9 +429,11 @@ Before marking Gmail staging ready, attach or record:
 - `node --check scripts/verify-gmail-smoke-evidence.mjs`.
 - `node --check scripts/check-gmail-staging-readiness.mjs`.
 - `node --check scripts/verify-gmail-readiness-evidence.mjs`.
+- `node --check scripts/verify-gmail-staging-bundle.mjs`.
 - `scripts/check-gmail-staging-readiness.mjs` output and `tmp/gmail-readiness-evidence.json` with `GMAIL_READINESS_REQUIRE_STAGING=true`, `GMAIL_READINESS_ENV_FILE=.env.local` when env is file-backed, and optional `GMAIL_READINESS_CONNECT_PREFLIGHT=true` output when certifying connect-session setup.
 - `scripts/verify-gmail-readiness-evidence.mjs tmp/gmail-readiness-evidence.json --strict-staging`, plus `--connect-preflight` when the readiness run created a Nango connect session.
 - `scripts/verify-gmail-smoke-evidence.mjs` output for every accepted non-destructive or destructive evidence file.
+- `scripts/verify-gmail-staging-bundle.mjs --readiness=tmp/gmail-readiness-evidence.json --smoke=tmp/gmail-smoke-evidence.json`, plus `--destructive-smoke=tmp/gmail-smoke-evidence-full.json --require-destructive` when certifying revoke/delete.
 - Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-connect-preflight-evidence.json --connect-preflight-only` output proving connect-session creation with only sanitized connect-link evidence.
 - Optional full-smoke `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --connect-preflight --min-messages=1` output.
 - Non-destructive `scripts/smoke-gmail-staging.mjs` output.
