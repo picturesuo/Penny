@@ -66,6 +66,7 @@ assert(afterSync.providerStatePrivacySafe === true, "Provider state after sync m
 
 const repeat = requireStep("sync.repeat");
 assertExpectedPartialFailures(repeat, "Repeated sync");
+assert(repeat.cursorPresent === true || repeat.historyIdPresent === true, "Repeated sync must include cursor or historyId evidence.");
 assert(repeat.statusMessageCountUnchanged === true, "Repeated sync must leave overall Gmail message count unchanged.");
 assert(repeat.selectedSourceCountUnchanged === true, "Repeated sync must leave selected account source count unchanged.");
 assert(repeat.duplicateSourceRefsAbsent === true, "Repeated sync must not create duplicate source refs.");
