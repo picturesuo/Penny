@@ -149,6 +149,66 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
   }
 });
 
+test("Gmail staging smoke script verifies an expected sanitized partial failure", async () => {
+  const state = postOauthSmokeState({ partialFailureStage: "message_oversized" });
+  const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+    const route = postOauthRouteFor(request, state);
+
+    response.writeHead(route.status, { "content-type": "application/json" });
+    response.end(JSON.stringify(route.body));
+  });
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-smoke-"));
+  const evidenceFile = join(tmp, "gmail-smoke-partial.json");
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+  try {
+    const address = server.address();
+
+    assert(address && typeof address === "object");
+
+    const result = await runSmoke({
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      evidenceFile,
+      env: {
+        GMAIL_SMOKE_KEYWORD_TEXT: "launch partner evidence",
+        GMAIL_SMOKE_KEYWORD_FROM: "alice@example.com",
+        GMAIL_SMOKE_KEYWORD_SUBJECT: "Launch plan",
+        GMAIL_SMOKE_SEMANTIC_QUERY: "launch partner evidence",
+        GMAIL_SMOKE_EXPECT_CREATE_TEXT: "launch partner evidence",
+        GMAIL_SMOKE_EXPECT_PARTIAL_FAILURE_STAGE: "message_oversized",
+      },
+    });
+    const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as {
+      steps: Array<Record<string, unknown> & { step: string }>;
+    };
+    const verifyOutput = execFileSync(
+      process.execPath,
+      ["scripts/verify-gmail-smoke-evidence.mjs", evidenceFile, "--min-messages=1"],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+      },
+    );
+    const verified = JSON.parse(verifyOutput) as { ok: boolean };
+    const sync = evidence.steps.find((step) => step.step === "sync");
+    const repeat = evidence.steps.find((step) => step.step === "sync.repeat");
+
+    assert.equal(result.status, 0);
+    assert.equal(sync?.partialFailureCount, 1);
+    assert.equal(sync?.expectedPartialFailureStage, "message_oversized");
+    assert.equal(sync?.partialFailureStageMatched, true);
+    assert.equal(sync?.partialFailuresSanitized, true);
+    assert.equal(repeat?.partialFailureCount, 1);
+    assert.equal(repeat?.partialFailureStageMatched, true);
+    assert.equal(verified.ok, true);
+    assert.doesNotMatch(JSON.stringify(evidence), /Private Gmail body|plainTextBody|rawBody/i);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging smoke script verifies destructive revoke and delete postconditions", async () => {
   const state = postOauthSmokeState();
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
@@ -448,12 +508,15 @@ function postOauthRouteFor(
       return connectorUnavailable("gmail_connection_revoked", "Revoked Gmail connections cannot be used for sync or search.");
     }
 
+    const partialFailures = state.partialFailureStage ? [safePartialFailure(state.partialFailureStage)] : [];
+
     return {
       status: 200,
       body: {
         data: {
           messageCount: 1,
-          partialFailureCount: 0,
+          partialFailureCount: partialFailures.length,
+          partialFailures,
           cursor: "history-101",
           profile: {
             historyId: "history-101",
@@ -755,9 +818,10 @@ type PostOauthSmokeState = {
   brainRetrieveCalls: number;
   revoked: boolean;
   deleted: boolean;
+  partialFailureStage: string | null;
 };
 
-function postOauthSmokeState(): PostOauthSmokeState {
+function postOauthSmokeState(options: { partialFailureStage?: string } = {}): PostOauthSmokeState {
   return {
     statusCalls: 0,
     syncCalls: 0,
@@ -771,6 +835,7 @@ function postOauthSmokeState(): PostOauthSmokeState {
     brainRetrieveCalls: 0,
     revoked: false,
     deleted: false,
+    partialFailureStage: options.partialFailureStage ?? null,
   };
 }
 
@@ -796,6 +861,18 @@ function safeGmailSource() {
     privacy: {
       retrievalAccess: "enabled",
     },
+  };
+}
+
+function safePartialFailure(stage: string) {
+  return {
+    messageId: "oversized-message",
+    threadId: "oversized-thread",
+    stage,
+    retryable: false,
+    status: null,
+    errorCode: stage,
+    message: "Gmail message skipped by staging safety limits.",
   };
 }
 
