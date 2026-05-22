@@ -148,6 +148,19 @@ try {
   let firstSourceId = firstSource?.id ?? "";
   let firstBrainSourceId = firstSource?.brainSourceId ?? "";
   let firstSourceUri = firstSource?.sourceUri ?? "";
+  const sourceUrisAfterSync = gmailSourceUris(statusAfterSync.data?.sources, targetConnectorConnectionId);
+  const syncedSourcePrivacy = connectorSourcePrivacySummary(sync.data?.state?.sources, targetConnectorConnectionId);
+  assert(syncedSourcePrivacy.sourceCount >= minMessages, "Gmail sync did not expose synced source privacy evidence.");
+  assert(syncedSourcePrivacy.trainingUseFalse, "Gmail sync source privacy did not report trainingUse=false.");
+  assert(syncedSourcePrivacy.rawContentStoredFalse, "Gmail sync source privacy did not report rawContentStored=false.");
+  assert(syncedSourcePrivacy.privateUserMemory, "Gmail sync source privacy did not report private user memory visibility.");
+  assert(syncedSourcePrivacy.retrievalEnabled, "Gmail sync source privacy did not report retrieval access enabled.");
+  const brainProfileAfterSync = await request("GET", "/api/brain/memory/profile");
+  const brainProfilePrivacy = brainProfileSourcePrivacySummary(brainProfileAfterSync.data?.sources, sourceUrisAfterSync);
+  assert(brainProfilePrivacy.sourceCount >= minMessages, "Brain profile did not expose synced Gmail source privacy evidence.");
+  assert(brainProfilePrivacy.trainingUseFalse, "Brain profile Gmail source privacy did not report trainingUse=false.");
+  assert(brainProfilePrivacy.rawRetentionFalse, "Brain profile Gmail source privacy did not report rawRetention=false.");
+  assert(brainProfilePrivacy.privateVisibility, "Brain profile Gmail source privacy did not report private visibility.");
   record("status.afterSync", {
     status: statusAfterSync.data.status,
     messageCount: statusAfterSync.data.messageCount,
@@ -155,9 +168,17 @@ try {
     firstSourceIdPresent: Boolean(firstSourceId),
     statusStatePrivacySafe: true,
     providerStatePrivacySafe: true,
+    syncedSourceCount: syncedSourcePrivacy.sourceCount,
+    syncedSourceTrainingUseFalse: syncedSourcePrivacy.trainingUseFalse,
+    syncedSourceRawContentStoredFalse: syncedSourcePrivacy.rawContentStoredFalse,
+    syncedSourcePrivateUserMemory: syncedSourcePrivacy.privateUserMemory,
+    syncedSourceRetrievalEnabled: syncedSourcePrivacy.retrievalEnabled,
+    brainProfileGmailSourceCount: brainProfilePrivacy.sourceCount,
+    brainProfileTrainingUseFalse: brainProfilePrivacy.trainingUseFalse,
+    brainProfileRawRetentionFalse: brainProfilePrivacy.rawRetentionFalse,
+    brainProfilePrivateVisibility: brainProfilePrivacy.privateVisibility,
   });
 
-  const sourceUrisAfterSync = gmailSourceUris(statusAfterSync.data?.sources, targetConnectorConnectionId);
   assert(hasUniqueValues(sourceUrisAfterSync), "Gmail sync produced duplicate source refs.");
   const repeatSync = await request("POST", "/api/connectors/google/gmail/sync", {
     ...selector,
@@ -881,6 +902,39 @@ function gmailSourceUris(sources, connectionId) {
     .filter((source) => !connectionId || source?.connectionId === connectionId)
     .map((source) => source?.sourceUri)
     .filter((sourceUri) => typeof sourceUri === "string" && sourceUri.startsWith("gmail:"));
+}
+
+function connectorSourcePrivacySummary(sources, connectionId) {
+  const gmailSources = (Array.isArray(sources) ? sources : []).filter(
+    (source) =>
+      (!connectionId || source?.connectionId === connectionId) &&
+      (source?.surface === "google_gmail" || source?.kind === "google_gmail_message" || String(source?.sourceUri ?? "").startsWith("gmail:")),
+  );
+
+  return {
+    sourceCount: gmailSources.length,
+    trainingUseFalse: gmailSources.length > 0 && gmailSources.every((source) => source?.privacy?.trainingUse === false),
+    rawContentStoredFalse: gmailSources.length > 0 && gmailSources.every((source) => source?.privacy?.rawContentStored === false),
+    privateUserMemory:
+      gmailSources.length > 0 && gmailSources.every((source) => source?.privacy?.visibility === "private_user_memory"),
+    retrievalEnabled: gmailSources.length > 0 && gmailSources.every((source) => source?.privacy?.retrievalAccess === "enabled"),
+  };
+}
+
+function brainProfileSourcePrivacySummary(sources, sourceUris) {
+  const sourceUriSet = new Set((Array.isArray(sourceUris) ? sourceUris : []).filter(Boolean));
+  const gmailSources = (Array.isArray(sources) ? sources : []).filter((source) => {
+    const sourceUri = source?.sourceUri;
+
+    return typeof sourceUri === "string" && sourceUri.startsWith("gmail:") && (!sourceUriSet.size || sourceUriSet.has(sourceUri));
+  });
+
+  return {
+    sourceCount: gmailSources.length,
+    trainingUseFalse: gmailSources.length > 0 && gmailSources.every((source) => source?.privacy?.trainingUse === false),
+    rawRetentionFalse: gmailSources.length > 0 && gmailSources.every((source) => source?.privacy?.rawRetention === false),
+    privateVisibility: gmailSources.length > 0 && gmailSources.every((source) => source?.privacy?.visibility === "private"),
+  };
 }
 
 function hasUniqueValues(values) {
