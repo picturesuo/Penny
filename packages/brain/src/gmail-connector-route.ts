@@ -7,6 +7,7 @@ import {
   completeGoogleConnectorSync,
   connectorSourceToBrainImport,
   createNangoAdapter,
+  type ConnectorError,
   googleConnectorCredentialLabel,
   googleConnectorTagKeys,
   planGoogleScopeRequest,
@@ -21,6 +22,7 @@ import {
   type GoogleConnectorSourceDraft,
   type NangoAdapter,
   type NangoConnectSessionInput,
+  type NangoProxyResponse,
 } from "./google-connector.ts";
 import {
   mergeGoogleConnectorStates,
@@ -64,6 +66,12 @@ export type GmailParsedMessage = {
   messageId: string;
   rfcMessageId: string | null;
   hasAttachment: boolean;
+  attachments: Array<{
+    filename: string;
+    mimeType: string;
+    attachmentId: string | null;
+  }>;
+  bodyTruncated: boolean;
 };
 
 const gmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly";
@@ -71,6 +79,13 @@ const gmailScopeAuditReason = "read email for private Brain memory and email sea
 const gmailApiBaseUrl = "https://gmail.googleapis.com/gmail/v1";
 const defaultGmailMaxResults = 25;
 const hardGmailMaxResults = 100;
+const hardGmailPageLimit = 5;
+const gmailBodyCharLimit = 100_000;
+const gmailSnippetCharLimit = 500;
+const gmailSubjectCharLimit = 300;
+const gmailAttachmentMetadataLimit = 25;
+const gmailProxyMaxAttempts = 3;
+const gmailProxyRetryBaseDelayMs = 100;
 
 export async function handleGoogleGmailConnectRequest(
   request: Request,
@@ -261,7 +276,7 @@ export async function handleGoogleGmailSyncRequest(
     body: body.value,
     q: stringValue(body.value.q) ?? buildGmailSearchQuery(body.value),
     maxResults: boundedInt(body.value.maxResults, defaultGmailMaxResults, 1, hardGmailMaxResults),
-    pageLimit: boundedInt(body.value.pageLimit, 1, 1, 5),
+    pageLimit: boundedInt(body.value.pageLimit, 1, 1, hardGmailPageLimit),
     includeSpamTrash: body.value.includeSpamTrash === true,
   };
   const pageToken = stringValue(body.value.pageToken);
@@ -397,7 +412,7 @@ export async function handleGoogleGmailSemanticSearchRequest(
       {
         error: {
           code: "gmail_not_synced",
-          message: "Connect or sync Gmail first.",
+          message: "Sync Gmail first.",
           retryable: false,
         },
       },
@@ -547,13 +562,13 @@ export function parseGmailMessage(message: Record<string, unknown>): GmailParsed
   const headers = gmailHeaders(payload);
   const labelIds = stringArray(message.labelIds);
   const parts = flattenMessageParts(payload);
-  const plainTextBody = parts
+  const plainTextBodyRaw = parts
     .filter((part) => part.mimeType === "text/plain")
     .map((part) => decodeBase64Url(part.bodyData))
     .filter(Boolean)
     .join("\n\n")
     .trim();
-  const htmlFallback = plainTextBody
+  const htmlFallbackRaw = plainTextBodyRaw
     ? ""
     : parts
         .filter((part) => part.mimeType === "text/html")
@@ -561,9 +576,18 @@ export function parseGmailMessage(message: Record<string, unknown>): GmailParsed
         .filter(Boolean)
         .join("\n\n")
         .trim();
-  const subject = headerValue(headers, "subject") ?? "(no subject)";
+  const bodyText = limitText(plainTextBodyRaw || htmlFallbackRaw || stringValue(message.snippet) || "", gmailBodyCharLimit);
+  const subject = clipText(headerValue(headers, "subject") ?? "(no subject)", gmailSubjectCharLimit);
   const id = stringValue(message.id) ?? "";
   const messageId = id;
+  const attachments = parts
+    .filter((part) => Boolean(part.filename || part.attachmentId))
+    .slice(0, gmailAttachmentMetadataLimit)
+    .map((part) => ({
+      filename: clipText(part.filename ?? "(unnamed attachment)", 240),
+      mimeType: clipText(part.mimeType || "application/octet-stream", 120),
+      attachmentId: part.attachmentId,
+    }));
 
   return {
     id,
@@ -575,11 +599,13 @@ export function parseGmailMessage(message: Record<string, unknown>): GmailParsed
     cc: splitAddressHeader(headerValue(headers, "cc")),
     date: headerValue(headers, "date") ?? dateFromInternalDate(message.internalDate),
     labels: labelIds,
-    snippet: stringValue(message.snippet) ?? "",
-    plainTextBody: plainTextBody || htmlFallback || stringValue(message.snippet) || "",
+    snippet: clipText(stringValue(message.snippet) ?? "", gmailSnippetCharLimit),
+    plainTextBody: bodyText.text,
     messageId,
     rfcMessageId: headerValue(headers, "message-id"),
-    hasAttachment: parts.some((part) => Boolean(part.filename || part.attachmentId)),
+    hasAttachment: attachments.length > 0,
+    attachments,
+    bodyTruncated: bodyText.truncated,
   };
 }
 
@@ -638,6 +664,7 @@ async function syncGmailMessages(input: {
 
   const profile = recordValue(profileResult.data.body);
   const messages: GmailParsedMessage[] = [];
+  const partialFailures: GmailSyncPartialFailure[] = [];
   let nextPageToken = input.pageToken;
 
   for (let page = 0; page < input.pageLimit && messages.length < input.maxResults; page += 1) {
@@ -661,20 +688,23 @@ async function syncGmailMessages(input: {
     }
 
     const details = await Promise.all(
-      refs.map((ref) =>
-        gmailProxy(adapter, connection.value, "GET", `users/me/messages/${encodeURIComponent(ref.id)}`, {
+      refs.map(async (ref) => ({
+        ref,
+        result: await gmailProxy(adapter, connection.value, "GET", `users/me/messages/${encodeURIComponent(ref.id)}`, {
           format: "full",
         }),
-      ),
+      })),
     );
 
     for (const detail of details) {
-      if (detail.ok) {
-        const parsed = parseGmailMessage(recordValue(detail.data.body));
+      if (detail.result.ok) {
+        const parsed = parseGmailMessage(recordValue(detail.result.data.body));
 
         if (parsed.id && (input.includeSpamTrash || !parsed.labels.some((label) => label === "SPAM" || label === "TRASH"))) {
           messages.push(parsed);
         }
+      } else {
+        partialFailures.push(gmailPartialFailure(detail.ref, detail.result.error));
       }
     }
 
@@ -718,6 +748,8 @@ async function syncGmailMessages(input: {
       },
       importedSources: imported.importedSources,
       messageCount: messages.length,
+      partialFailureCount: partialFailures.length,
+      partialFailures,
       nextPageToken,
       cursor: imported.cursor,
       state: saved,
@@ -790,7 +822,11 @@ function gmailMessageSourceDraft(message: GmailParsedMessage): GoogleConnectorSo
       labels: message.labels,
       snippet: message.snippet,
       hasAttachment: message.hasAttachment,
+      attachmentCount: message.attachments.length,
+      attachments: message.attachments,
       historyId: message.historyId,
+      bodyTruncated: message.bodyTruncated,
+      bodyCharLimit: gmailBodyCharLimit,
       scopeAuditReason: gmailScopeAuditReason,
       trainingUse: false,
       rawRetention: false,
@@ -853,7 +889,11 @@ function gmailMessageContent(message: GmailParsedMessage): string {
     `Gmail message ID: ${message.messageId}`,
     message.rfcMessageId ? `RFC Message-ID: ${message.rfcMessageId}` : null,
     message.snippet ? `Snippet: ${message.snippet}` : null,
+    message.attachments.length
+      ? `Attachments: ${message.attachments.map((attachment) => `${attachment.filename} (${attachment.mimeType})`).join(", ")}`
+      : null,
     message.plainTextBody ? `Body:\n${message.plainTextBody}` : null,
+    message.bodyTruncated ? `[Body truncated at ${gmailBodyCharLimit} characters]` : null,
   ]
     .filter((part): part is string => Boolean(part?.trim()))
     .join("\n");
@@ -1019,16 +1059,65 @@ async function gmailProxy(
   path: string,
   query: Record<string, string | number | boolean | null | undefined> = {},
   body?: unknown,
-) {
-  return adapter.proxy({
-    connectionId: connection.credential.connectionId,
-    providerConfigKey: connection.credential.providerConfigKey,
-    method,
-    path,
-    query,
-    ...(body !== undefined ? { body } : {}),
-    baseUrlOverride: gmailApiBaseUrl,
-  });
+): Promise<ConnectorAdapterResult<NangoProxyResponse>> {
+  let lastResult: ConnectorAdapterResult<NangoProxyResponse> | null = null;
+
+  for (let attempt = 1; attempt <= gmailProxyMaxAttempts; attempt += 1) {
+    const result = await adapter.proxy({
+      connectionId: connection.credential.connectionId,
+      providerConfigKey: connection.credential.providerConfigKey,
+      method,
+      path,
+      query,
+      ...(body !== undefined ? { body } : {}),
+      baseUrlOverride: gmailApiBaseUrl,
+    });
+
+    if (result.ok || !result.error.retryable || attempt === gmailProxyMaxAttempts) {
+      return result;
+    }
+
+    lastResult = result;
+    await delay(gmailProxyRetryBaseDelayMs * attempt);
+  }
+
+  return lastResult ?? {
+    ok: false,
+    error: {
+      code: "nango_request_failed",
+      message: "Gmail proxy request failed before completion.",
+      retryable: true,
+    },
+  };
+}
+
+type GmailSyncPartialFailure = {
+  messageId: string;
+  threadId: string | null;
+  stage: "message_detail";
+  retryable: boolean;
+  status: number | null;
+  errorCode: string;
+  message: string;
+};
+
+function gmailPartialFailure(
+  ref: { id: string; threadId: string | null },
+  error: ConnectorError,
+): GmailSyncPartialFailure {
+  return {
+    messageId: ref.id,
+    threadId: ref.threadId,
+    stage: "message_detail",
+    retryable: error.retryable,
+    status: numberValue(recordValue(error.details).status),
+    errorCode: error.code,
+    message: clipText(error.message, 240),
+  };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function resolveAdapter(options: GoogleGmailConnectorRouteOptions): NangoAdapter {
@@ -1255,6 +1344,16 @@ function clipText(value: string, maxLength: number): string {
   const compacted = value.replace(/\s+/g, " ").trim();
 
   return compacted.length <= maxLength ? compacted : `${compacted.slice(0, Math.max(0, maxLength - 1)).trim()}...`;
+}
+
+function limitText(value: string, maxLength: number): { text: string; truncated: boolean } {
+  const text = value.trim();
+
+  if (text.length <= maxLength) {
+    return { text, truncated: false };
+  }
+
+  return { text: text.slice(0, maxLength).trim(), truncated: true };
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
