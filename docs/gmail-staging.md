@@ -277,6 +277,18 @@ Open `http://localhost:3011` in a browser and verify:
 - Google source coverage is visible and clearly marks the selected account state.
 - Create opens from the top nav, shows context-light when no Brain memory exists, generates the five directions from a safe rough idea, renders Details buttons, artifact, verification, and enables Export prompt.
 
+Browser evidence is acceptable only when the notes or screenshots prove the visible UI state, not just route responses. Capture or describe:
+
+- The Brain Gmail card with `gmail.readonly`, restricted/private copy, message count, and disabled Sync/Search/Revoke/Delete controls before OAuth.
+- The keyword filter disclosure open with `from`, `to`, `subject`, `label`, `after`, `before`, and `hasAttachment`.
+- After OAuth and sync, the connected Gmail card with message/source counts, enabled Sync/Revoke/Delete controls, and a keyword result row showing a safe snippet plus message/thread/source refs.
+- A semantic result row showing the grounded/inferred label, score reason, Gmail source ref, and Brain memory ref without any raw numeric score.
+- The Create details/evidence drawer showing real Gmail source or memory refs only when the selected option used synced Gmail evidence.
+- The exported prompt section that includes Gmail-derived context only when the selected option used it.
+- The post-revoke or post-delete state showing access removed, with Brain retrieval/Create/export no longer surfacing the deleted Gmail source.
+
+Reject the browser evidence if a screenshot, note, console log, or copied row includes raw email body text, `plainTextBody`, `rawBody`, `payload`, `credentialRef`, access/refresh tokens, raw Nango connect links, raw numeric scores, global-training claims, or human-review claims beyond the approved privacy copy.
+
 Record this as a UI preflight only. The actual staging proof still requires OAuth, sync, keyword search, semantic search, Gmail evidence in Create, export, revoke, and delete against a staged Gmail account.
 
 ## Automated Staging Smoke
