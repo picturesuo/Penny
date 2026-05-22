@@ -67,6 +67,7 @@ test("Gmail readiness evidence verifier rejects unsafe key variants without raw 
   const connect = evidence.checks.find((check) => check.name === "api.connectPreflight") as Record<string, unknown>;
 
   env.NANGO_SECRET_KEY = "present";
+  env.NANGO_WEBHOOK_SIGNING_KEY = "present";
   env.database_url = "present";
   connect.access_token = "present";
   connect["plain-text-body"] = "absent";
@@ -74,6 +75,7 @@ test("Gmail readiness evidence verifier rejects unsafe key variants without raw 
   const failure = runVerifierExpectingFailure(evidence);
 
   assert.match(failure, /NANGO_SECRET_KEY must not be present/);
+  assert.match(failure, /NANGO_WEBHOOK_SIGNING_KEY must not be present/);
   assert.match(failure, /database_url must not be present/);
   assert.match(failure, /access_token must not be present/);
   assert.match(failure, /plain-text-body must not be present/);
@@ -226,6 +228,7 @@ function validReadinessEvidence(): Record<string, unknown> & { requireStaging: b
         enableGmailConnector: true,
         enableRestrictedGoogleScopes: true,
         nangoSecretPresent: true,
+        nangoWebhookSigningKeyPresent: true,
         nangoPublicPresent: true,
         nangoBaseUrlPresent: true,
         nangoGmailIntegrationIdPresent: true,
@@ -246,6 +249,7 @@ function validReadinessEvidence(): Record<string, unknown> & { requireStaging: b
         enableGmailConnector: true,
         enableRestrictedGoogleScopes: true,
         nangoSecretPresent: true,
+        nangoWebhookSigningKeyPresent: true,
         nangoPublicPresent: true,
         nangoBaseHost: "api.nango.dev",
         nangoGmailIntegrationId: "google-gmail-staging",
@@ -324,6 +328,7 @@ function failedReadinessEvidence(): Record<string, unknown> & { checks: Array<Re
         enableGmailConnector: true,
         enableRestrictedGoogleScopes: true,
         nangoSecretPresent: true,
+        nangoWebhookSigningKeyPresent: true,
         nangoPublicPresent: false,
         nangoBaseUrlPresent: true,
         nangoGmailIntegrationIdPresent: true,
