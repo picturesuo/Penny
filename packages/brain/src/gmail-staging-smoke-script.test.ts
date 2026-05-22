@@ -154,6 +154,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         messageRefPresent?: boolean;
         threadRefPresent?: boolean;
         sourceRefPresent?: boolean;
+        selectedSourceRefsMatched?: boolean;
         snippetPresent?: boolean;
         rawBodyAbsent?: boolean;
         subjectPresent?: boolean;
@@ -241,6 +242,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(keyword?.messageRefPresent, true);
     assert.equal(keyword?.threadRefPresent, true);
     assert.equal(keyword?.sourceRefPresent, true);
+    assert.equal(keyword?.selectedSourceRefsMatched, true);
     assert.equal(keyword?.snippetPresent, true);
     assert.equal(keyword?.rawBodyAbsent, true);
     assert.equal(keywordSync?.query, '"launch partner evidence" from:alice@example.com subject:"Launch plan"');
@@ -249,6 +251,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(keywordSync?.messageRefPresent, true);
     assert.equal(keywordSync?.threadRefPresent, true);
     assert.equal(keywordSync?.sourceRefPresent, true);
+    assert.equal(keywordSync?.selectedSourceRefsMatched, true);
     assert.equal(keywordSync?.snippetPresent, true);
     assert.equal(keywordSync?.rawBodyAbsent, true);
     assert.equal(afterSync?.syncedSourceCount, 1);
@@ -275,6 +278,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(semantic?.threadRefPresent, true);
     assert.equal(semantic?.snippetPresent, true);
     assert.equal(semantic?.sourceRefPresent, true);
+    assert.equal(semantic?.selectedSourceRefsMatched, true);
     assert.equal(semantic?.memoryRefPresent, true);
     assert.equal(semantic?.scoreReasonPresent, true);
     assert.equal(semantic?.rawScoreHidden, true);

@@ -137,6 +137,23 @@ test("Gmail smoke evidence verifier rejects missing selected source proof", () =
   assert.match(failure, /Brain profile Gmail source privacy must match selected Gmail source refs/);
 });
 
+test("Gmail smoke evidence verifier rejects missing search source proof", () => {
+  const evidence = validEvidence();
+  const keyword = evidence.steps.find((step) => step.step === "keywordSearch") as Record<string, unknown>;
+  const keywordSync = evidence.steps.find((step) => step.step === "keywordSearch.syncExplicit") as Record<string, unknown>;
+  const semantic = evidence.steps.find((step) => step.step === "semanticSearch") as Record<string, unknown>;
+
+  delete keyword.selectedSourceRefsMatched;
+  delete keywordSync.selectedSourceRefsMatched;
+  delete semantic.selectedSourceRefsMatched;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Keyword search result refs must match selected Gmail source refs/);
+  assert.match(failure, /Keyword search with sync=true result refs must match selected Gmail source refs/);
+  assert.match(failure, /Semantic search result refs must match selected Gmail source refs/);
+});
+
 test("Gmail smoke evidence verifier rejects missing staged account identity proof", () => {
   const evidence = validEvidence();
   const initial = evidence.steps.find((step) => step.step === "status.initial") as Record<string, unknown>;
@@ -462,6 +479,7 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         messageRefPresent: true,
         threadRefPresent: true,
         sourceRefPresent: true,
+        selectedSourceRefsMatched: true,
         snippetPresent: true,
         rawBodyAbsent: true,
         memoryCountUnchanged: true,
@@ -475,6 +493,7 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         messageRefPresent: true,
         threadRefPresent: true,
         sourceRefPresent: true,
+        selectedSourceRefsMatched: true,
         snippetPresent: true,
         rawBodyAbsent: true,
         partialFailureCount: 0,
@@ -492,6 +511,7 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         threadRefPresent: true,
         snippetPresent: true,
         sourceRefPresent: true,
+        selectedSourceRefsMatched: true,
         memoryRefPresent: true,
         scoreReasonPresent: true,
         groundingLabels: ["grounded"],
