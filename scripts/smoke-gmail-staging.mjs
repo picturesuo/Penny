@@ -30,7 +30,8 @@ const createIdea = env(
 );
 const createEvidenceNeedle = env("GMAIL_SMOKE_EXPECT_CREATE_TEXT", semanticQuery);
 const minMessages = positiveInt(env("GMAIL_SMOKE_EXPECT_MIN_MESSAGES", "1"), 1);
-const connectPreflight = envFlag("GMAIL_SMOKE_CONNECT_PREFLIGHT");
+const connectPreflightOnly = envFlag("GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY");
+const connectPreflight = envFlag("GMAIL_SMOKE_CONNECT_PREFLIGHT") || connectPreflightOnly;
 const confirmMutations = envFlag("GMAIL_SMOKE_CONFIRM_MUTATIONS");
 const confirmDelete = envFlag("GMAIL_SMOKE_CONFIRM_DELETE");
 const evidenceFile = env("GMAIL_SMOKE_EVIDENCE_FILE", "");
@@ -41,6 +42,8 @@ const evidence = {
   workspaceId,
   projectId,
   sphereId,
+  connectPreflightEnabled: connectPreflight,
+  connectPreflightOnly,
   destructiveRevokeEnabled: confirmMutations,
   destructiveDeleteEnabled: confirmDelete,
   startedAt: new Date().toISOString(),
@@ -79,6 +82,15 @@ try {
       scopeAuditReason: connect.data.scopeAuditReason,
       warningsCount: Array.isArray(connect.data.warnings) ? connect.data.warnings.length : 0,
     });
+    if (connectPreflightOnly) {
+      record("connect.preflightOnly.completed", {
+        reason: "Connect-session preflight completed without running post-OAuth Gmail smoke checks.",
+      });
+      evidence.completedAt = new Date().toISOString();
+      await writeEvidence();
+      console.log(JSON.stringify(evidence, null, 2));
+      process.exit(0);
+    }
   }
   assert((initialStatus.data?.connections ?? []).some((connection) => connection.status === "connected"), "Connect Gmail first.");
   const connectedTargets = (initialStatus.data?.connections ?? []).filter((connection) => connection.status === "connected");
