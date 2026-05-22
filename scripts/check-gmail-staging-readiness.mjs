@@ -143,6 +143,7 @@ function checkBaseEnv() {
   assertEnvFlag("ENABLE_GMAIL_CONNECTOR");
   assertEnvFlag("ENABLE_RESTRICTED_GOOGLE_SCOPES");
   const nangoSecretPresent = Boolean(requiredEnv("NANGO_SECRET_KEY"));
+  const nangoWebhookSigningKeyPresent = Boolean(requireStaging ? requiredEnv("NANGO_WEBHOOK_SIGNING_KEY") : env("NANGO_WEBHOOK_SIGNING_KEY", ""));
   const nangoPublicPresent = Boolean(requiredEnv("NANGO_PUBLIC_KEY"));
   const nangoBaseUrl = requiredEnv("NANGO_BASE_URL");
   const nangoGmailIntegrationId = requiredEnv("NANGO_GMAIL_INTEGRATION_ID");
@@ -158,6 +159,7 @@ function checkBaseEnv() {
     enableGmailConnector: true,
     enableRestrictedGoogleScopes: true,
     nangoSecretPresent,
+    nangoWebhookSigningKeyPresent,
     nangoPublicPresent,
     nangoBaseHost: nangoBase.host,
     nangoGmailIntegrationId,
@@ -221,6 +223,7 @@ function recordRequiredEnvPresence() {
     enableGmailConnector: envFlag("ENABLE_GMAIL_CONNECTOR"),
     enableRestrictedGoogleScopes: envFlag("ENABLE_RESTRICTED_GOOGLE_SCOPES"),
     nangoSecretPresent: hasEnv("NANGO_SECRET_KEY"),
+    nangoWebhookSigningKeyPresent: hasEnv("NANGO_WEBHOOK_SIGNING_KEY"),
     nangoPublicPresent: hasEnv("NANGO_PUBLIC_KEY"),
     nangoBaseUrlPresent: hasEnv("NANGO_BASE_URL"),
     nangoGmailIntegrationIdPresent: hasEnv("NANGO_GMAIL_INTEGRATION_ID"),
@@ -246,6 +249,7 @@ function missingRequirementKeys(presence) {
     ["enableGmailConnector", "ENABLE_GMAIL_CONNECTOR", true],
     ["enableRestrictedGoogleScopes", "ENABLE_RESTRICTED_GOOGLE_SCOPES", true],
     ["nangoSecretPresent", "NANGO_SECRET_KEY", true],
+    ...(presence.requireStaging ? [["nangoWebhookSigningKeyPresent", "NANGO_WEBHOOK_SIGNING_KEY", true]] : []),
     ["nangoPublicPresent", "NANGO_PUBLIC_KEY", true],
     ["nangoBaseUrlPresent", "NANGO_BASE_URL", true],
     ["nangoGmailIntegrationIdPresent", "NANGO_GMAIL_INTEGRATION_ID", true],
