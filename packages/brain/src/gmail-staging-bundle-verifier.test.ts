@@ -285,7 +285,7 @@ function validSmokeEvidence(): Record<string, unknown> {
 }
 
 function validDestructiveEvidence(): Record<string, unknown> {
-  const evidence = validSmokeEvidence() as { steps: Array<Record<string, unknown>> };
+  const evidence = validSmokeEvidence() as Record<string, unknown> & { steps: Array<Record<string, unknown>> };
 
   evidence.destructiveRevokeEnabled = true;
   evidence.destructiveDeleteEnabled = true;
