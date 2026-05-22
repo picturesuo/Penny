@@ -103,6 +103,9 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         step: string;
         query?: string;
         stored?: boolean;
+        cursorPresent?: boolean;
+        historyIdPresent?: boolean;
+        maxResultsUsed?: number;
         expectedEvidencePresent?: boolean;
         personalOptionPresent?: boolean;
         criticalOptionPresent?: boolean;
