@@ -133,6 +133,15 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
         rawEmailBodyAbsent?: boolean;
         secretOrConnectTokenAbsent?: boolean;
         unsupportedHumanReviewClaimAbsent?: boolean;
+        syncedSourceCount?: number;
+        syncedSourceTrainingUseFalse?: boolean;
+        syncedSourceRawContentStoredFalse?: boolean;
+        syncedSourcePrivateUserMemory?: boolean;
+        syncedSourceRetrievalEnabled?: boolean;
+        brainProfileGmailSourceCount?: number;
+        brainProfileTrainingUseFalse?: boolean;
+        brainProfileRawRetentionFalse?: boolean;
+        brainProfilePrivateVisibility?: boolean;
       }>;
     };
     const verifyOutput = execFileSync(
@@ -148,6 +157,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     const keywordSync = evidence.steps.find((step) => step.step === "keywordSearch.syncExplicit");
     const semantic = evidence.steps.find((step) => step.step === "semanticSearch");
     const repeat = evidence.steps.find((step) => step.step === "sync.repeat");
+    const afterSync = evidence.steps.find((step) => step.step === "status.afterSync");
     const createFirst = evidence.steps.find((step) => step.step === "create.first");
     const createRefined = evidence.steps.find((step) => step.step === "create.refined");
     const createExport = evidence.steps.find((step) => step.step === "create.export");
@@ -185,6 +195,15 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(keywordSync?.sourceRefPresent, true);
     assert.equal(keywordSync?.snippetPresent, true);
     assert.equal(keywordSync?.rawBodyAbsent, true);
+    assert.equal(afterSync?.syncedSourceCount, 1);
+    assert.equal(afterSync?.syncedSourceTrainingUseFalse, true);
+    assert.equal(afterSync?.syncedSourceRawContentStoredFalse, true);
+    assert.equal(afterSync?.syncedSourcePrivateUserMemory, true);
+    assert.equal(afterSync?.syncedSourceRetrievalEnabled, true);
+    assert.equal(afterSync?.brainProfileGmailSourceCount, 1);
+    assert.equal(afterSync?.brainProfileTrainingUseFalse, true);
+    assert.equal(afterSync?.brainProfileRawRetentionFalse, true);
+    assert.equal(afterSync?.brainProfilePrivateVisibility, true);
     assert.equal(semantic?.resultShapeVerified, true);
     assert.equal(semantic?.subjectPresent, true);
     assert.equal(semantic?.senderPresent, true);
@@ -229,6 +248,7 @@ test("Gmail staging smoke script verifies the non-destructive post-OAuth path", 
     assert.equal(state.semanticCalls, 1);
     assert.equal(state.createCalls, 2);
     assert.equal(state.exportCalls, 1);
+    assert.equal(state.brainProfileCalls, 1);
     assert.ok(requests.some((request) => `${request.method} ${request.url}` === "POST /api/connectors/google/gmail/search"));
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -413,7 +433,7 @@ test("Gmail staging smoke script verifies destructive revoke and delete postcond
     assert.equal(state.searchCalls, 3);
     assert.equal(state.semanticCalls, 3);
     assert.equal(state.createCalls, 3);
-    assert.equal(state.brainProfileCalls, 1);
+    assert.equal(state.brainProfileCalls, 2);
     assert.equal(state.brainRetrieveCalls, 1);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -667,7 +687,7 @@ function postOauthRouteFor(
             },
           ],
           state: {
-            sources: [safeGmailSource()],
+            sources: [fullGmailSource()],
           },
         },
       },
@@ -1010,6 +1030,20 @@ function safeGmailSource() {
   };
 }
 
+function fullGmailSource() {
+  return {
+    ...safeGmailSource(),
+    kind: "google_gmail_message",
+    privacy: {
+      trainingUse: false,
+      visibility: "private_user_memory",
+      rawContentStored: false,
+      productionLogSafe: false,
+      retrievalAccess: "enabled",
+    },
+  };
+}
+
 function safePartialFailure(stage: string) {
   return {
     messageId: "oversized-message",
@@ -1026,5 +1060,10 @@ function safeBrainSource() {
   return {
     id: "brain-source-gmail-1",
     sourceUri: "gmail:message:gmail-message-1",
+    privacy: {
+      visibility: "private",
+      trainingUse: false,
+      rawRetention: false,
+    },
   };
 }
