@@ -9,6 +9,7 @@ const preOAuthOnly = args.includes("--pre-oauth-only");
 const artifactRoot = optionValue("--artifact-root");
 const requireArtifactFiles = args.includes("--require-artifact-files");
 const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
+const safeEvidenceScopeIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const unsafeValuePattern =
   /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|access_token|refresh_token|credentialRef|plainTextBody|rawBody|private raw Gmail body|raw Gmail body|raw email body|payload|BEGIN PRIVATE KEY)/i;
 const unsafePrivacyClaimPattern =
@@ -46,10 +47,10 @@ const proofArtifacts = collectProofArtifacts(evidence);
 assert(Boolean(evidence), "Browser evidence must be valid JSON.");
 assert(evidence?.ok !== false, "Browser evidence must not be failed evidence.");
 assertSafeRequiredString(evidence?.baseUrl, "baseUrl");
-assertSafeRequiredString(evidence?.userId, "userId");
-assertSafeRequiredString(evidence?.workspaceId, "workspaceId");
-assertSafeRequiredString(evidence?.projectId, "projectId");
-assertSafeRequiredString(evidence?.sphereId, "sphereId");
+assertSafeScopeId(evidence?.userId, "userId");
+assertSafeScopeId(evidence?.workspaceId, "workspaceId");
+assertSafeScopeId(evidence?.projectId, "projectId");
+assertSafeScopeId(evidence?.sphereId, "sphereId");
 assertValidTimestamp(evidence?.capturedAt, "capturedAt");
 assert(Array.isArray(evidence?.checks), "Browser evidence must include checks.");
 assertBrowserChecks(evidence?.checks, requiredCheckNames);
@@ -115,6 +116,18 @@ function assertSafeRequiredString(value, field) {
 
   assert(Boolean(text), `Browser evidence must include ${field}.`);
   assert(!/^REPLACE_WITH_/i.test(text), `Browser evidence ${field} must replace template placeholder values.`);
+}
+
+function assertSafeScopeId(value, field) {
+  assertSafeRequiredString(value, field);
+
+  const text = typeof value === "string" ? value.trim() : "";
+
+  assert(isSafeEvidenceScopeId(text), `Browser evidence ${field} must be a safe opaque scope id.`);
+}
+
+function isSafeEvidenceScopeId(value) {
+  return typeof value === "string" && safeEvidenceScopeIdPattern.test(value.trim());
 }
 
 function assertValidTimestamp(value, field) {
