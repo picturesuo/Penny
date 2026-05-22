@@ -147,6 +147,17 @@ test("Gmail readiness evidence verifier rejects malformed required env presence 
   assert.match(failure, /env\.requiredPresence must include boolean nangoPublicPresent/);
 });
 
+test("Gmail readiness evidence verifier rejects mismatched missing requirement keys", () => {
+  const evidence = failedReadinessEvidence();
+  const requiredPresence = evidence.checks.find((check) => check.name === "env.requiredPresence") as Record<string, unknown>;
+
+  requiredPresence.missingRequirementKeys = [];
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /missingRequirementKeys must match the missing requirement booleans/);
+});
+
 test("Gmail readiness evidence verifier rejects missing strict env presence on success", () => {
   const evidence = validReadinessEvidence();
   const requiredPresence = evidence.checks.find((check) => check.name === "env.requiredPresence");
@@ -212,6 +223,7 @@ function validReadinessEvidence(): Record<string, unknown> & { requireStaging: b
         rateLimitPresent: true,
         trustAuthHeadersPresent: true,
         databasePrepBypass: false,
+        missingRequirementKeys: [],
       },
       {
         name: "env.gmail",
@@ -309,6 +321,7 @@ function failedReadinessEvidence(): Record<string, unknown> {
         rateLimitPresent: true,
         trustAuthHeadersPresent: true,
         databasePrepBypass: false,
+        missingRequirementKeys: ["NANGO_PUBLIC_KEY"],
       },
     ],
   };
