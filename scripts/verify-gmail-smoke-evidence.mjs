@@ -120,6 +120,15 @@ assert(exported.secretOrConnectTokenAbsent === true, "Export prompt must not inc
 assert(exported.unsupportedHumanReviewClaimAbsent === true, "Export prompt must not include unsupported human-review claims.");
 
 if (destructive) {
+  assert(
+    semantic.deleteTargetMatchedSemanticResult === true,
+    "Destructive evidence must prove the delete target matched a semantic Gmail result.",
+  );
+  assert(
+    numberValue(semantic.deleteTargetMemoryIdCount) >= 1,
+    "Destructive evidence must track at least one semantic Gmail memory id for the delete target.",
+  );
+
   const revoke = requireStep("revoke");
   assert(revoke.revoked === true, "Destructive evidence must include revoked=true.");
   assert(numberValue(revoke.syncAfterRevokeStatus) >= 400, "Sync must fail after revoke.");
@@ -127,6 +136,9 @@ if (destructive) {
   assert(numberValue(revoke.semanticAfterRevokeStatus) >= 400, "Semantic search must fail after revoke.");
 
   const deleted = requireStep("deleteSource");
+  assert(deleted.sourceIdPresent === true, "Delete evidence must include a staged Gmail source id.");
+  assert(deleted.brainSourceIdPresent === true, "Delete evidence must include the linked Brain source id.");
+  assert(numberValue(deleted.trackedDeletedMemoryIdCount) >= 1, "Delete evidence must include tracked Gmail memory ids.");
   assert(deleted.brainSourceDeleted === true, "Delete evidence must report brainSourceDeleted=true.");
   assert(deleted.brainProfileSourceAbsent === true, "Deleted Gmail source must be absent from Brain profile.");
   assert(deleted.brainRetrieveDeletedSourceAbsent === true, "Deleted Gmail source must be absent from Brain retrieval.");
