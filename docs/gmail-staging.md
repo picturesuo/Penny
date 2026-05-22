@@ -342,6 +342,7 @@ Without this opt-in, the smoke treats any sync partial failure as unexpected and
 
 The automated smoke also uses the keyword text and filters for the initial sync, so the run imports only the staged safe-message slice rather than the first arbitrary mailbox page. The evidence file records the Gmail `q` string, the sync filters, and the keyword filters used, while checking both that keyword results are not stored by default and that `sync=true` explicitly stores through the same safe, duplicate-free import path.
 Smoke evidence intentionally omits raw HTTP response bodies and raw email content; failure records use route/status/error-code summaries so the evidence file can be shared without exposing mailbox text. The smoke also checks the Gmail status endpoint and the general Google provider endpoint that the Brain UI loads; their state views must expose only connection selectors, minimal sync job fields, and source ids/URIs, not Gmail metadata, provenance, credential refs, cursor internals, or raw-retention fields.
+The Create export check records explicit privacy-safety facts: no unsafe training/hidden-access claims, no raw Gmail body markers, no connect/session/token values, and no unsupported human-review claim beyond the allowed `No human review` privacy copy.
 
 Verify the non-destructive evidence file before treating it as acceptance evidence:
 
@@ -387,7 +388,7 @@ The default smoke verifies:
 - Keyword search uses the Gmail API, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
 - Semantic search returns only synced Gmail memory, hides raw numeric scores, and records safe shape evidence for Gmail source refs, Brain memory refs, grounded/inferred labels, and score reasons.
 - Create uses the synced Gmail evidence through memory refs and source refs, and returns both Personal and Critical options for the refinement/export check.
-- Prompt export includes the Gmail-derived context only after Create uses it.
+- Prompt export includes the Gmail-derived context only after Create uses it and records the export privacy-safety facts.
 
 The default smoke does not revoke or delete, because those are destructive for the staged connection. To run the full destructive end of the staging proof:
 
@@ -414,7 +415,7 @@ Verify destructive evidence with:
 node scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence-full.json --destructive --min-messages=1
 ```
 
-The verifier fails if required smoke steps are missing, if repeated sync/source counts are unstable, if keyword search stores without `sync=true`, if semantic search exposes raw scores, if Create/export do not include the expected Gmail evidence, if revoke/delete postconditions are missing for destructive runs, or if the evidence JSON contains unsafe raw fields such as tokens, credential refs, metadata/provenance, raw bodies, or raw connect links.
+The verifier fails if required smoke steps are missing, if repeated sync/source counts are unstable, if keyword search stores without `sync=true`, if semantic search exposes raw scores, if Create/export do not include the expected Gmail evidence, if export privacy-safety facts are missing, if revoke/delete postconditions are missing for destructive runs, or if the evidence JSON contains unsafe raw fields such as tokens, credential refs, metadata/provenance, raw bodies, or raw connect links.
 
 After verifying individual files, verify the full staging evidence bundle so readiness and smoke files are from the same API and user/workspace/project/sphere scope:
 

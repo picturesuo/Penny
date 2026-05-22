@@ -67,6 +67,8 @@ Gmail import sets `rawRetention=false`. The connector imports normalized content
 
 Connector source refs keep enough provenance to explain retrieval and support delete/revoke. Production logs must not include raw email body text. Logs may include safe operational facts such as counts, source ids, job ids, status, and error codes.
 
+Create prompt export must not include raw Gmail body markers, connect links, session tokens, hidden-access claims, global-training claims, or human-review claims beyond the allowed `No human review` privacy copy.
+
 ## Search Behavior
 
 Keyword search uses Gmail's `users.messages.list` query string and returns message refs/snippets. Supported filters:
