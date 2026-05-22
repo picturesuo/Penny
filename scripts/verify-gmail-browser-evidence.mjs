@@ -242,6 +242,10 @@ function assertCreateEvidenceDrawer(check) {
   assert(check.createRunCompleted === true, "Create evidence must prove a Create run completed with Gmail memory available.");
   assert(check.evidenceDrawerOpened === true, "Create evidence must prove the evidence drawer was opened.");
   assert(check.drawerVisible === true, "Browser evidence must show the Create evidence/details drawer.");
+  assert(check.personalOptionVisible === true, "Create evidence must show the Gmail-backed Personal option.");
+  assert(check.criticalOptionVisible === true, "Create evidence must show the Gmail-backed Critical option.");
+  assert(check.selectedOptionGmailEvidenceVisible === true, "Create evidence must show selected-option Gmail evidence.");
+  assert(check.selectedOptionGmailRefsVisible === true, "Create evidence must show selected-option Gmail refs.");
   assert(check.realGmailRefsOnlyWhenUsed === true, "Create evidence must show Gmail refs only when the option actually used them.");
   assert(
     check.gmailSourceRefVisible === true || check.gmailMemoryRefVisible === true,
