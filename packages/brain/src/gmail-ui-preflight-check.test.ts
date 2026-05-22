@@ -74,6 +74,33 @@ test("Gmail UI preflight checker rejects unsafe run ids without writing them", a
   }
 });
 
+test("Gmail UI preflight checker rejects unsafe scope ids without writing them", async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), "penny-gmail-ui-preflight-"));
+  const evidenceFile = join(tempDir, "unsafe-scope-id-evidence.json");
+  const unsafeUserId = "staged-account@example.com";
+
+  try {
+    const result = await runPreflight(routesReadyForUiPreflight(), {
+      GMAIL_UI_PREFLIGHT_EVIDENCE_FILE: evidenceFile,
+      GMAIL_UI_PREFLIGHT_USER_ID: unsafeUserId,
+    });
+    const evidenceText = await readFile(evidenceFile, "utf8");
+    const evidence = JSON.parse(evidenceText) as { ok: boolean; userId?: string; error?: string; checks: unknown[] };
+    const unsafeUserIdPattern = new RegExp(unsafeUserId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+    assert.equal(result.status, 1);
+    assert.equal(result.requests.length, 0);
+    assert.equal(evidence.ok, false);
+    assert.equal(evidence.userId, undefined);
+    assert.deepEqual(evidence.checks, []);
+    assert.match(evidence.error ?? "", /GMAIL_UI_PREFLIGHT_USER_ID must be a safe opaque slug/);
+    assert.doesNotMatch(result.stderr, unsafeUserIdPattern);
+    assert.doesNotMatch(evidenceText, unsafeUserIdPattern);
+  } finally {
+    await rm(tempDir, { force: true, recursive: true });
+  }
+});
+
 test("Gmail UI preflight checker rejects missing migrated database routes", async () => {
   const result = await runPreflight({
     "/api/brain/documents": {
@@ -111,8 +138,13 @@ test("Gmail UI preflight checker rejects unsafe Gmail status internals", async (
   assert.match(result.stderr, /Gmail status\.sources exposed metadata/);
 });
 
-async function runPreflight(routes: Record<string, MockRoute>, extraEnv: Record<string, string> = {}): Promise<{ status: number | null; stdout: string; stderr: string }> {
+async function runPreflight(
+  routes: Record<string, MockRoute>,
+  extraEnv: Record<string, string> = {},
+): Promise<{ status: number | null; stdout: string; stderr: string; requests: string[] }> {
+  const requests: string[] = [];
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
+    requests.push(`${request.method ?? "GET"} ${request.url ?? ""}`);
     const route = routes[request.url ?? ""];
 
     response.writeHead(route?.status ?? 404, { "content-type": "application/json" });
@@ -149,7 +181,7 @@ async function runPreflight(routes: Record<string, MockRoute>, extraEnv: Record<
     });
     const status = await new Promise<number | null>((resolve) => child.on("close", resolve));
 
-    return { status, stdout, stderr };
+    return { status, stdout, stderr, requests };
   } finally {
     server.close();
   }
