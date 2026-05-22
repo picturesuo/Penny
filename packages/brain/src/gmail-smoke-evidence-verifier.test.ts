@@ -194,6 +194,23 @@ test("Gmail smoke evidence verifier rejects weak Create Gmail evidence", () => {
   assert.match(failure, /Create Critical option must include the expected Gmail evidence text/);
 });
 
+test("Gmail smoke evidence verifier rejects weak Brain Ranker evidence", () => {
+  const evidence = validEvidence();
+  const create = evidence.steps.find((step) => step.step === "create.first") as Record<string, unknown>;
+
+  create.rankedCandidateCount = 4;
+  create.nextBestMoveGrounded = false;
+  create.rankedCandidateGmailMemoryEvidencePresent = false;
+  create.rankedCandidateGmailSourceEvidencePresent = false;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Create must expose five Brain Ranker candidates/);
+  assert.match(failure, /Create Brain Ranker next-best move must be grounded by Gmail memory/);
+  assert.match(failure, /Create Brain Ranker candidates must include Gmail memory evidence/);
+  assert.match(failure, /Create Brain Ranker candidates must include Gmail source evidence/);
+});
+
 test("Gmail smoke evidence verifier rejects weak Create refinement evidence", () => {
   const evidence = validEvidence();
   const refined = evidence.steps.find((step) => step.step === "create.refined") as Record<string, unknown>;
@@ -426,6 +443,10 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         criticalOptionPresent: true,
         gmailMemoryEvidencePresent: true,
         gmailSourceEvidencePresent: true,
+        rankedCandidateCount: 5,
+        nextBestMoveGrounded: true,
+        rankedCandidateGmailMemoryEvidencePresent: true,
+        rankedCandidateGmailSourceEvidencePresent: true,
         personalOptionExpectedEvidencePresent: true,
         criticalOptionExpectedEvidencePresent: true,
         expectedEvidencePresent: true,
