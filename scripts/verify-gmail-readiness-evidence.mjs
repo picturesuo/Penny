@@ -9,6 +9,7 @@ const requireStrictStaging = args.includes("--strict-staging");
 const requireConnectPreflight = args.includes("--connect-preflight");
 const allowFailure = args.includes("--allow-failure");
 const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
+const safeEvidenceScopeIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const errors = [];
 
 if (!file || args.includes("--help") || args.includes("-h")) {
@@ -21,10 +22,10 @@ const checks = new Map(Array.isArray(evidence?.checks) ? evidence.checks.map((ch
 
 assert(Boolean(evidence), "Readiness evidence must be valid JSON.");
 assert(typeof evidence?.baseUrl === "string" && evidence.baseUrl.length > 0, "Readiness evidence must include baseUrl.");
-assert(typeof evidence?.userId === "string" && evidence.userId.length > 0, "Readiness evidence must include userId.");
-assert(typeof evidence?.workspaceId === "string" && evidence.workspaceId.length > 0, "Readiness evidence must include workspaceId.");
-assert(typeof evidence?.projectId === "string" && evidence.projectId.length > 0, "Readiness evidence must include projectId.");
-assert(typeof evidence?.sphereId === "string" && evidence.sphereId.length > 0, "Readiness evidence must include sphereId.");
+assertSafeScopeId(evidence?.userId, "userId");
+assertSafeScopeId(evidence?.workspaceId, "workspaceId");
+assertSafeScopeId(evidence?.projectId, "projectId");
+assertSafeScopeId(evidence?.sphereId, "sphereId");
 assert(typeof evidence?.requireStaging === "boolean", "Readiness evidence must include requireStaging.");
 assert(typeof evidence?.connectPreflight === "boolean", "Readiness evidence must include connectPreflight.");
 assert(Array.isArray(evidence?.checks), "Readiness evidence must include checks.");
@@ -135,6 +136,18 @@ function assertSafeStagingRunId(value) {
 
 function isSafeStagingRunId(value) {
   return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
+}
+
+function assertSafeScopeId(value, field) {
+  const text = typeof value === "string" ? value.trim() : "";
+
+  assert(Boolean(text), `Readiness evidence must include ${field}.`);
+  assert(!/^REPLACE_WITH_/i.test(text), `Readiness evidence ${field} must not be a template placeholder.`);
+  assert(isSafeEvidenceScopeId(text), `Readiness evidence ${field} must be a safe opaque scope id.`);
+}
+
+function isSafeEvidenceScopeId(value) {
+  return typeof value === "string" && safeEvidenceScopeIdPattern.test(value.trim());
 }
 
 function assertReadinessChecks(value, options) {
