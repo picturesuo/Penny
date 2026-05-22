@@ -50,8 +50,17 @@ References:
 4. Client ID and client secret: use the Google OAuth client from the previous section.
 5. Scopes: exactly `https://www.googleapis.com/auth/gmail.readonly`.
 6. Verify the callback URL shown in the Nango settings is also listed on the Google OAuth client.
-7. Use Nango's test connection flow once with the staged Gmail account before testing Penny.
-8. Confirm the Nango connection has the expected integration key and read-only Gmail scope.
+7. Configure the Nango environment auth webhook URL to Penny:
+
+   ```text
+   https://<penny-staging-host>/api/connectors/google/nango-webhook
+   ```
+
+   For a local OAuth smoke, expose the local Penny API with a secure tunnel and use the tunnel URL for this webhook. Plain `localhost` will not receive Nango Cloud webhooks.
+8. Keep the Nango webhook signing secret aligned with Penny's `NANGO_SECRET_KEY`. Penny verifies the `x-nango-hmac-sha256` signature before accepting auth webhooks.
+9. Use Nango's test connection flow once with the staged Gmail account before testing Penny.
+10. Confirm the Nango connection has the expected integration key and read-only Gmail scope.
+11. After a Penny-initiated OAuth completion, confirm Nango delivered an `auth` webhook with `operation=creation` or `operation=override`, `success=true`, the Gmail integration key, and tags or end-user data for the same Penny user/workspace scope.
 
 ## Penny Env
 
@@ -123,30 +132,32 @@ Checklist:
 3. Verify the privacy copy is visible: `Penny reads Gmail only after consent. No human review. trainingUse=false. Delete/revoke removes retrieval access.`
 4. Click `Connect Gmail`.
 5. Complete Google OAuth for the staged test user.
-6. Return to Penny and verify Gmail status is connected with only the `gmail.readonly` scope.
-7. If multiple Google accounts are connected in the same workspace, select the staged Gmail account before sync, search, revoke, or delete.
-8. Click `Sync now`.
-9. Verify message count and Gmail source count increase.
-10. Verify spam/trash test messages are not imported by default.
-11. Run keyword search for `launch partner evidence`.
-12. Run keyword search using `from`, `to`, `subject`, `label`, `after`, `before`, and `hasAttachment`.
-13. Verify keyword results show refs/snippets and do not create Brain memory unless `sync=true` is explicitly tested.
-14. Run semantic search for the staged concept.
-15. Verify semantic results come only from synced Gmail memory and show subject, sender, date, snippet, messageId, threadId, sourceRef, memoryRef, grounded/inferred label, and scoreReason.
-16. Start Create with an idea that should use the staged email evidence.
-17. Select Personal and Critical options when relevant.
-18. Open the evidence/details drawer and verify Gmail source refs appear only when actually used.
-19. Export the prompt and verify Gmail-derived personal context appears only when the selected Create result used that Gmail evidence.
-20. Click `Revoke`.
-21. Verify Sync and Search return revoked/not connected behavior.
-22. Delete the Gmail source.
-23. Verify Gmail memory no longer appears in Brain retrieval, Create evidence, or prompt export.
+6. Confirm the Nango auth webhook was delivered to `/api/connectors/google/nango-webhook`; Penny should persist the connection and start `google-gmail-messages`.
+7. Return to Penny and verify Gmail status is connected with only the `gmail.readonly` scope.
+8. If multiple Google accounts are connected in the same workspace, select the staged Gmail account before sync, search, revoke, or delete.
+9. Click `Sync now`.
+10. Verify message count and Gmail source count increase.
+11. Verify spam/trash test messages are not imported by default.
+12. Run keyword search for `launch partner evidence`.
+13. Run keyword search using `from`, `to`, `subject`, `label`, `after`, `before`, and `hasAttachment`.
+14. Verify keyword results show refs/snippets and do not create Brain memory unless `sync=true` is explicitly tested.
+15. Run semantic search for the staged concept.
+16. Verify semantic results come only from synced Gmail memory and show subject, sender, date, snippet, messageId, threadId, sourceRef, memoryRef, grounded/inferred label, and scoreReason.
+17. Start Create with an idea that should use the staged email evidence.
+18. Select Personal and Critical options when relevant.
+19. Open the evidence/details drawer and verify Gmail source refs appear only when actually used.
+20. Export the prompt and verify Gmail-derived personal context appears only when the selected Create result used that Gmail evidence.
+21. Click `Revoke`.
+22. Verify Sync and Search return revoked/not connected behavior.
+23. Delete the Gmail source.
+24. Verify Gmail memory no longer appears in Brain retrieval, Create evidence, or prompt export.
 
 Record the smoke result with:
 
 - Date and environment.
 - Staged Gmail account alias, not the real email if unnecessary.
 - Nango integration key.
+- Nango auth webhook delivery id/status, if available.
 - Message count synced.
 - Keyword query used.
 - Semantic query used.
@@ -272,6 +283,7 @@ Before marking Gmail staging ready, attach or record:
 - `node --check scripts/smoke-gmail-staging.mjs`.
 - Non-destructive `scripts/smoke-gmail-staging.mjs` output.
 - Destructive `scripts/smoke-gmail-staging.mjs` output from a disposable staged Gmail account, when revoke/delete are being certified.
+- Nango auth webhook delivery record showing Penny accepted the Gmail connection and started `google-gmail-messages`.
 - Smoke evidence showing `statusStatePrivacySafe=true` and `providerStatePrivacySafe=true`.
 - Gmail status response before and after OAuth.
 - Sync and repeated-sync responses showing imported count, cursor/historyId, stable source counts, and no duplicate source refs.
