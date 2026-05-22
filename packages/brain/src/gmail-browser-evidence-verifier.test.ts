@@ -387,6 +387,53 @@ test("Gmail browser evidence verifier rejects missing proof artifact coverage", 
   assert.match(failure, /proof artifacts must cover create\.gmailExport/);
 });
 
+test("Gmail browser evidence verifier rejects proof artifacts without their own proves list", () => {
+  const evidence = validBrowserEvidence();
+  const screenshots = evidence.screenshots as Array<Record<string, unknown>>;
+  const firstScreenshot = screenshots[0];
+
+  assert.ok(firstScreenshot);
+  delete firstScreenshot.proves;
+  evidence.notes = [
+    {
+      label: "Full fallback browser proof",
+      file: "notes/full-browser-proof.md",
+      proves: [
+        "brain.gmailPanel.preOAuth",
+        "brain.gmailKeywordFilters",
+        "create.contextLightSurface",
+        "brain.gmailConnectedResults",
+        "brain.gmailSemanticResults",
+        "create.gmailEvidenceDrawer",
+        "create.gmailExport",
+        "brain.gmailPostRevokeDelete",
+      ],
+    },
+  ];
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /proof artifact 1 must include a proves array/);
+});
+
+test("Gmail browser evidence verifier rejects stale proof names for pre-OAuth evidence", () => {
+  const evidence = preOAuthEvidence();
+  const screenshots = evidence.screenshots as Array<Record<string, unknown>>;
+  const firstScreenshot = screenshots[0];
+
+  assert.ok(firstScreenshot);
+  firstScreenshot.proves = [
+    "brain.gmailPanel.preOAuth",
+    "brain.gmailKeywordFilters",
+    "create.contextLightSurface",
+    "brain.gmailConnectedResults",
+  ];
+
+  const failure = runVerifierExpectingFailure(evidence, "--pre-oauth-only");
+
+  assert.match(failure, /proof artifact 1 proves entry 4 must match a required browser check/);
+});
+
 test("Gmail browser evidence verifier rejects raw Gmail, token, and score data", () => {
   const evidence = validBrowserEvidence();
   const semantic = evidence.checks.find((check) => check.name === "brain.gmailSemanticResults") as Record<string, unknown>;
