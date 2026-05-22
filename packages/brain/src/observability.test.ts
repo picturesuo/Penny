@@ -71,6 +71,48 @@ test("emitPennyLog is enabled for strict deploy envs and uses the safe payload",
   assert.equal("rawContent" in (events[0]?.payload ?? {}), false);
 });
 
+test("emitPennyLog strips Gmail raw payload fields in production logs", () => {
+  const events: PennyLogEvent[] = [];
+
+  setPennyLogSinkForTests((event) => events.push(event));
+  try {
+    emitPennyLog(
+      "brain.import",
+      {
+        status: "completed",
+        sourceId: "connector-source-1",
+        jobId: "gmail-sync-1",
+        messageCount: 1,
+        accountEmail: "founder@example.com",
+        headers: "Subject: Launch partner evidence\nFrom: Alice <alice@example.com>",
+        metadata: "gmail metadata with private labels",
+        payload: "raw Gmail API payload with Private Gmail body",
+        plainTextBody: "Private raw Gmail body.",
+        rawBody: "Private raw Gmail body.",
+        html: "<p>Private raw Gmail body.</p>",
+        provenance: "gmail message provenance",
+        token: "gmail-session-token",
+      },
+      {
+        env: {
+          NODE_ENV: "production",
+        },
+      },
+    );
+  } finally {
+    setPennyLogSinkForTests(null);
+  }
+
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0]?.payload, {
+    status: "completed",
+    sourceId: "connector-source-1",
+    jobId: "gmail-sync-1",
+    messageCount: 1,
+  });
+  assert.doesNotMatch(JSON.stringify(events[0]?.payload), /Private Gmail body|plainTextBody|rawBody|headers|metadata|provenance|gmail-session-token/i);
+});
+
 test("emitPennyLog stays quiet in local env unless enabled", () => {
   const events: PennyLogEvent[] = [];
 
