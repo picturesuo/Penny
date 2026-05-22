@@ -192,6 +192,8 @@ function assertConnectedKeywordResults(check) {
   assert(check.nangoIntegrationKeyPresent === true, "Post-OAuth browser evidence must record the Nango Gmail integration key.");
   assert(check.nangoWebhookDeliveryStatusPresent === true, "Post-OAuth browser evidence must record Nango auth webhook delivery status.");
   assert(check.selectedAccountStateVisible === true, "Post-OAuth browser evidence must show the selected Gmail account state.");
+  assert(check.syncCompleted === true, "Post-OAuth browser evidence must prove Sync now completed.");
+  assert(check.keywordSearchRan === true, "Post-OAuth browser evidence must prove keyword search ran.");
   assert(check.connectedStateVisible === true, "Post-OAuth browser evidence must show Gmail connected state.");
   assert(check.gmailReadonlyVisible === true, "Post-OAuth browser evidence must show gmail.readonly.");
   assert(check.messageCountVisible === true, "Post-OAuth browser evidence must show message count.");
