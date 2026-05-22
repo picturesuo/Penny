@@ -30,6 +30,7 @@ const createIdea = env(
 );
 const createEvidenceNeedle = env("GMAIL_SMOKE_EXPECT_CREATE_TEXT", semanticQuery);
 const minMessages = positiveInt(env("GMAIL_SMOKE_EXPECT_MIN_MESSAGES", "1"), 1);
+const expectedPartialFailureStage = env("GMAIL_SMOKE_EXPECT_PARTIAL_FAILURE_STAGE", "");
 const connectPreflightOnly = envFlag("GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY");
 const connectPreflight = envFlag("GMAIL_SMOKE_CONNECT_PREFLIGHT") || connectPreflightOnly;
 const confirmMutations = envFlag("GMAIL_SMOKE_CONFIRM_MUTATIONS");
@@ -122,12 +123,16 @@ try {
     maxResults,
   });
   assert(sync.data?.messageCount >= minMessages, `Expected at least ${minMessages} synced Gmail message(s).`);
-  assert(sync.data?.partialFailureCount === 0, "Gmail sync reported partial failures.");
+  const syncPartialFailures = expectedPartialFailureCheck(sync.data, "Gmail sync");
+  assert(syncPartialFailures.ok, syncPartialFailures.message);
   assert(sync.data?.cursor || sync.data?.profile?.historyId, "Gmail sync did not report cursor/historyId.");
   record("sync", {
     messageCount: sync.data.messageCount,
     importedCount: sync.data.importedSources?.length ?? 0,
     partialFailureCount: sync.data.partialFailureCount ?? 0,
+    expectedPartialFailureStage: expectedPartialFailureStage || null,
+    partialFailureStageMatched: syncPartialFailures.stageMatched,
+    partialFailuresSanitized: syncPartialFailures.sanitized,
     cursorPresent: Boolean(sync.data.cursor),
     historyIdPresent: Boolean(sync.data.profile?.historyId),
     filtersUsed: compactObject(syncInput),
@@ -158,7 +163,8 @@ try {
     ...syncInput,
     maxResults,
   });
-  assert(repeatSync.data?.partialFailureCount === 0, "Repeated Gmail sync reported partial failures.");
+  const repeatPartialFailures = expectedPartialFailureCheck(repeatSync.data, "Repeated Gmail sync");
+  assert(repeatPartialFailures.ok, repeatPartialFailures.message);
   const statusAfterRepeatSync = await request("GET", "/api/connectors/google/gmail/status");
   assertConnectorStatePrivacy(statusAfterRepeatSync.data, "Gmail status after repeated sync");
   const sourceUrisAfterRepeatSync = gmailSourceUris(statusAfterRepeatSync.data?.sources, targetConnectorConnectionId);
@@ -174,6 +180,9 @@ try {
   record("sync.repeat", {
     messageCount: repeatSync.data.messageCount,
     partialFailureCount: repeatSync.data.partialFailureCount ?? 0,
+    expectedPartialFailureStage: expectedPartialFailureStage || null,
+    partialFailureStageMatched: repeatPartialFailures.stageMatched,
+    partialFailuresSanitized: repeatPartialFailures.sanitized,
     statusMessageCountUnchanged: statusAfterRepeatSync.data.messageCount === statusAfterSync.data.messageCount,
     selectedSourceCountUnchanged: sourceUrisAfterRepeatSync.length === sourceUrisAfterSync.length,
     duplicateSourceRefsAbsent: hasUniqueValues(sourceUrisAfterRepeatSync),
@@ -557,6 +566,42 @@ function hasSemanticResultShape(result) {
 
 function hasNoRawEmailFields(result) {
   return !["body", "plainTextBody", "raw", "rawBody", "html", "payload", "score"].some((field) => field in result);
+}
+
+function expectedPartialFailureCheck(data, label) {
+  const count = typeof data?.partialFailureCount === "number" ? data.partialFailureCount : 0;
+  const failures = Array.isArray(data?.partialFailures) ? data.partialFailures : [];
+
+  if (!expectedPartialFailureStage) {
+    return {
+      ok: count === 0,
+      message: `${label} reported partial failures.`,
+      stageMatched: null,
+      sanitized: true,
+    };
+  }
+
+  const stageMatched = failures.some((failure) => failure?.stage === expectedPartialFailureStage);
+  const sanitized = failures.every(hasSafePartialFailureShape);
+
+  return {
+    ok: count >= 1 && stageMatched && sanitized,
+    message: `${label} did not report a sanitized ${expectedPartialFailureStage} partial failure.`,
+    stageMatched,
+    sanitized,
+  };
+}
+
+function hasSafePartialFailureShape(failure) {
+  return Boolean(
+    failure &&
+      typeof failure.stage === "string" &&
+      typeof failure.retryable === "boolean" &&
+      (failure.status === null || typeof failure.status === "number") &&
+      typeof failure.errorCode === "string" &&
+      typeof failure.message === "string" &&
+      hasNoRawEmailFields(failure),
+  );
 }
 
 function assertGmailConnectPreflight(data) {
