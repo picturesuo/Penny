@@ -98,6 +98,7 @@ Before opening OAuth, run the sanitized readiness checker against the same API i
 
 ```bash
 BASE_URL=https://<staging-host> \
+GMAIL_READINESS_ENV_FILE=.env.local \
 GMAIL_READINESS_REQUIRE_STAGING=true \
 GMAIL_READINESS_USER_ID=<same-user-id> \
 GMAIL_READINESS_WORKSPACE_ID=<same-workspace-id> \
@@ -105,6 +106,8 @@ GMAIL_READINESS_PROJECT_ID=<same-project-id> \
 GMAIL_READINESS_SPHERE_ID=<same-sphere-id> \
 node scripts/check-gmail-staging-readiness.mjs
 ```
+
+Use `GMAIL_READINESS_ENV_FILE=.env.local` for local or staged hosts where Penny env is stored in a file. Existing shell environment variables still win over values from the file. The checker reports only whether required secrets are present, never their values.
 
 The checker verifies:
 
@@ -380,7 +383,7 @@ Before marking Gmail staging ready, attach or record:
 - `node --check scripts/smoke-gmail-staging.mjs`.
 - `node --check scripts/verify-gmail-smoke-evidence.mjs`.
 - `node --check scripts/check-gmail-staging-readiness.mjs`.
-- `scripts/check-gmail-staging-readiness.mjs` output with `GMAIL_READINESS_REQUIRE_STAGING=true`, and optional `GMAIL_READINESS_CONNECT_PREFLIGHT=true` output when certifying connect-session setup.
+- `scripts/check-gmail-staging-readiness.mjs` output with `GMAIL_READINESS_REQUIRE_STAGING=true`, `GMAIL_READINESS_ENV_FILE=.env.local` when env is file-backed, and optional `GMAIL_READINESS_CONNECT_PREFLIGHT=true` output when certifying connect-session setup.
 - `scripts/verify-gmail-smoke-evidence.mjs` output for every accepted non-destructive or destructive evidence file.
 - Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-connect-preflight-evidence.json --connect-preflight-only` output proving connect-session creation with only sanitized connect-link evidence.
 - Optional full-smoke `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --connect-preflight --min-messages=1` output.
