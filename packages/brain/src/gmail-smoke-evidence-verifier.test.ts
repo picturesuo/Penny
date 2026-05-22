@@ -212,6 +212,25 @@ test("Gmail smoke evidence verifier rejects raw connect links or session tokens"
   assert.match(failure, /raw connect\/session\/token value/);
 });
 
+test("Gmail smoke evidence verifier rejects unsafe key variants without raw values", () => {
+  const evidence = validEvidence();
+  const connectStep = evidence.steps.find((step) => step.step === "connect.preflight") as Record<string, unknown>;
+  const semantic = evidence.steps.find((step) => step.step === "semanticSearch") as Record<string, unknown>;
+  const exported = evidence.steps.find((step) => step.step === "create.export") as Record<string, unknown>;
+
+  connectStep.access_token = "present";
+  connectStep.CREDENTIAL_REF = "present";
+  semantic["plain-text-body"] = "absent";
+  exported.raw_body = "absent";
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /access_token must not be present/);
+  assert.match(failure, /CREDENTIAL_REF must not be present/);
+  assert.match(failure, /plain-text-body must not be present/);
+  assert.match(failure, /raw_body must not be present/);
+});
+
 test("Gmail smoke evidence verifier rejects unsafe run ids without echoing them", () => {
   const evidence = validEvidence();
 
