@@ -57,8 +57,8 @@ test("Gmail staging bundle verifier accepts matching readiness, smoke, and destr
     assert.equal(payload.browserEvidenceRequired, true);
     assert.equal(payload.browserArtifactFilesRequired, true);
     assert.equal(payload.readiness.checkCount, 5);
-    assert.equal(payload.smoke.stepCount, 11);
-    assert.equal(payload.destructive?.stepCount, 12);
+    assert.equal(payload.smoke.stepCount, 12);
+    assert.equal(payload.destructive?.stepCount, 13);
     assert.equal(payload.uiPreflight?.checkCount, 5);
     assert.equal(payload.browserEvidence?.checkCount, 8);
   } finally {
@@ -461,6 +461,22 @@ function validSmokeEvidence(): Record<string, unknown> {
         personalOptionExpectedEvidencePresent: true,
         criticalOptionExpectedEvidencePresent: true,
         expectedEvidencePresent: true,
+      },
+      {
+        step: "create.refined",
+        artifactPresent: true,
+        verificationPresent: true,
+        judgmentEventPresent: true,
+        selectedOptionCount: 2,
+        selectedLenses: ["Critical", "Personal"],
+        selectedOptionsMatched: true,
+        gmailMemoryEvidencePresent: true,
+        gmailSourceEvidencePresent: true,
+        expectedEvidencePresent: true,
+        artifactExpectedEvidencePresent: true,
+        rawEmailBodyAbsent: true,
+        secretOrConnectTokenAbsent: true,
+        unsupportedHumanReviewClaimAbsent: true,
       },
       {
         step: "create.export",
