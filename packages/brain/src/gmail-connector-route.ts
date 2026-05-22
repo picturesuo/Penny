@@ -222,6 +222,7 @@ export async function handleGoogleGmailStatusRequest(
   const enabledGmailSources = state.sources.filter(
     (source) => source.surface === "google_gmail" && source.privacy.retrievalAccess === "enabled",
   );
+  const statusState = gmailStatusStateView(state, gmailConnections, enabledGmailSources);
 
   return jsonResponse({
     data: {
@@ -243,9 +244,9 @@ export async function handleGoogleGmailStatusRequest(
       lastSyncAt: latestIso(gmailConnections.map((connection) => connection.lastSyncedAt)),
       messageCount: enabledGmailSources.length,
       surface: gmailSurface,
-      connections: gmailConnections,
-      sources: enabledGmailSources,
-      state,
+      connections: statusState.connections,
+      sources: statusState.sources,
+      state: statusState,
     },
   });
 }
@@ -1301,6 +1302,65 @@ function gmailPrivacyCopy() {
     trainingUse: false,
     rawRetentionDefault: false,
     noHumanReview: true,
+  };
+}
+
+function gmailStatusStateView(
+  state: GoogleConnectorState,
+  gmailConnections: readonly ConnectorConnection[],
+  enabledGmailSources: readonly ConnectorSource[],
+) {
+  return {
+    connections: gmailConnections.map(gmailStatusConnectionView),
+    syncJobs: state.syncJobs.filter((job) => job.surface === "google_gmail").map(gmailStatusSyncJobView),
+    sources: enabledGmailSources.map(gmailStatusSourceView),
+  };
+}
+
+function gmailStatusConnectionView(connection: ConnectorConnection) {
+  return {
+    id: connection.id,
+    status: connection.status,
+    surfaces: connection.surfaces,
+    scopes: connection.scopes,
+    lastSyncedAt: connection.lastSyncedAt,
+    nextSyncAt: connection.nextSyncAt,
+    revokedAt: connection.revokedAt,
+    sourceCounts: connection.sourceCounts,
+    credential: {
+      connectionId: connection.credential.connectionId,
+      providerConfigKey: connection.credential.providerConfigKey,
+      ...(connection.credential.accountEmail ? { accountEmail: connection.credential.accountEmail } : {}),
+      ...(connection.credential.accountLabel ? { accountLabel: connection.credential.accountLabel } : {}),
+      ...(connection.credential.accountId ? { accountId: connection.credential.accountId } : {}),
+      ...(connection.credential.endUserId ? { endUserId: connection.credential.endUserId } : {}),
+    },
+  };
+}
+
+function gmailStatusSyncJobView(job: GoogleConnectorState["syncJobs"][number]) {
+  return {
+    id: job.id,
+    connectionId: job.connectionId,
+    surface: job.surface,
+    status: job.status,
+    requestedAt: job.requestedAt,
+    startedAt: job.startedAt,
+    completedAt: job.completedAt,
+  };
+}
+
+function gmailStatusSourceView(source: ConnectorSource) {
+  return {
+    id: source.id,
+    connectionId: source.connectionId,
+    kind: source.kind,
+    label: `Gmail message ${source.sourceRef.externalId || source.id}`,
+    sourceUri: source.sourceUri,
+    brainSourceId: source.brainSourceId ?? null,
+    privacy: {
+      retrievalAccess: source.privacy.retrievalAccess,
+    },
   };
 }
 
