@@ -35,6 +35,8 @@ After explicit user consent and sync, Penny stores private Brain memory derived 
 - Brain chunks and memory nodes derived from that normalized text.
 - Sync cursor/historyId when Gmail returns it.
 
+Penny caps Gmail sync by message count, page count, encoded body size, normalized body size, and total Gmail `sizeEstimate`. Oversized messages are reported as partial sync failures and are not imported into Brain memory.
+
 All Gmail imports use:
 
 ```text
