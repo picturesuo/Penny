@@ -274,6 +274,43 @@ test("GoogleConnectorControl disables Gmail source deletion when only non-Gmail 
   assert.match(buttonMarkup, /disabled=""/);
 });
 
+test("GoogleConnectorControl renders Gmail keyword search filters for staging smoke", () => {
+  const markup = renderToStaticMarkup(
+    createElement(GoogleConnectorControl, {
+      provider: googleProviderView(),
+      connectorState: {
+        connections: [],
+        syncJobs: [],
+        sources: [],
+      },
+      status: "ready",
+      error: null,
+      warning: null,
+      connectLink: null,
+      disabled: false,
+      onConnect: async () => undefined,
+      onSyncNow: async () => undefined,
+      onRevoke: async () => undefined,
+      onDeleteSource: async () => undefined,
+      onKeywordSearch: async () => ({
+        sourceOfTruth: "gmail_api_search_via_nango",
+        query: "",
+        stored: false,
+        results: [],
+      }),
+    }),
+  );
+
+  assert.match(markup, /Filters/);
+  assert.match(markup, /From/);
+  assert.match(markup, /To/);
+  assert.match(markup, /Subject/);
+  assert.match(markup, /Label/);
+  assert.match(markup, /After/);
+  assert.match(markup, /Before/);
+  assert.match(markup, /Has attachment/);
+});
+
 function emptyDocumentsData(): BrainDocumentsData {
   const document = documentSummary();
 
