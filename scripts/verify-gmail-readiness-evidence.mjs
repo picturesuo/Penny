@@ -61,6 +61,7 @@ assert(envGmail.enableGoogleConnector === true, "env.gmail must report ENABLE_GO
 assert(envGmail.enableGmailConnector === true, "env.gmail must report ENABLE_GMAIL_CONNECTOR=true.");
 assert(envGmail.enableRestrictedGoogleScopes === true, "env.gmail must report ENABLE_RESTRICTED_GOOGLE_SCOPES=true.");
 assert(envGmail.nangoSecretPresent === true, "env.gmail must report NANGO_SECRET_KEY present.");
+assert(envGmail.nangoWebhookSigningKeyPresent === true, "env.gmail must report NANGO_WEBHOOK_SIGNING_KEY present.");
 assert(envGmail.nangoPublicPresent === true, "env.gmail must report NANGO_PUBLIC_KEY present.");
 assert(typeof envGmail.nangoBaseHost === "string" && envGmail.nangoBaseHost.length > 0, "env.gmail must include a sanitized Nango base host.");
 assert(
@@ -203,6 +204,7 @@ function assertRequiredPresence(check, options) {
     "enableGmailConnector",
     "enableRestrictedGoogleScopes",
     "nangoSecretPresent",
+    "nangoWebhookSigningKeyPresent",
     "nangoPublicPresent",
     "nangoBaseUrlPresent",
     "nangoGmailIntegrationIdPresent",
@@ -233,6 +235,7 @@ function assertRequiredPresence(check, options) {
   assert(check.enableGmailConnector === true, "env.requiredPresence must report ENABLE_GMAIL_CONNECTOR present and true.");
   assert(check.enableRestrictedGoogleScopes === true, "env.requiredPresence must report ENABLE_RESTRICTED_GOOGLE_SCOPES present and true.");
   assert(check.nangoSecretPresent === true, "env.requiredPresence must report NANGO_SECRET_KEY present.");
+  assert(check.nangoWebhookSigningKeyPresent === true, "env.requiredPresence must report NANGO_WEBHOOK_SIGNING_KEY present.");
   assert(check.nangoPublicPresent === true, "env.requiredPresence must report NANGO_PUBLIC_KEY present.");
   assert(check.nangoBaseUrlPresent === true, "env.requiredPresence must report NANGO_BASE_URL present.");
   assert(check.nangoGmailIntegrationIdPresent === true, "env.requiredPresence must report NANGO_GMAIL_INTEGRATION_ID present.");
@@ -257,6 +260,7 @@ function assertMissingRequirementKeys(check) {
     "ENABLE_GMAIL_CONNECTOR",
     "ENABLE_RESTRICTED_GOOGLE_SCOPES",
     "NANGO_SECRET_KEY",
+    "NANGO_WEBHOOK_SIGNING_KEY",
     "NANGO_PUBLIC_KEY",
     "NANGO_BASE_URL",
     "NANGO_GMAIL_INTEGRATION_ID",
@@ -299,6 +303,9 @@ function expectedMissingRequirementKeys(check) {
     ["enableGmailConnector", "ENABLE_GMAIL_CONNECTOR", true],
     ["enableRestrictedGoogleScopes", "ENABLE_RESTRICTED_GOOGLE_SCOPES", true],
     ["nangoSecretPresent", "NANGO_SECRET_KEY", true],
+    ...(check?.requireStaging === true || evidence?.requireStaging === true
+      ? [["nangoWebhookSigningKeyPresent", "NANGO_WEBHOOK_SIGNING_KEY", true]]
+      : []),
     ["nangoPublicPresent", "NANGO_PUBLIC_KEY", true],
     ["nangoBaseUrlPresent", "NANGO_BASE_URL", true],
     ["nangoGmailIntegrationIdPresent", "NANGO_GMAIL_INTEGRATION_ID", true],
@@ -357,6 +364,7 @@ function assertNoUnsafeEvidence(value) {
     "metadata",
     "nangopublickey",
     "nangosecretkey",
+    "nangowebhooksigningkey",
     "payload",
     "plaintextbody",
     "provenance",
@@ -366,7 +374,15 @@ function assertNoUnsafeEvidence(value) {
     "sessionsecret",
     "token",
   ]);
-  const allowedKeys = new Set(["connectlinkhost", "connectlinkpresent", "nangopublicpresent", "nangosecretpresent", "sessionsecretpresent", "tokenpresent"]);
+  const allowedKeys = new Set([
+    "connectlinkhost",
+    "connectlinkpresent",
+    "nangopublicpresent",
+    "nangosecretpresent",
+    "nangowebhooksigningkeypresent",
+    "sessionsecretpresent",
+    "tokenpresent",
+  ]);
   const unsafeValuePattern =
     /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token|plainTextBody|rawBody|private raw Gmail body|raw Gmail body|raw email body|BEGIN PRIVATE KEY)/i;
 
