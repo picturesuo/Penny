@@ -133,12 +133,14 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
       },
       {
         step: "keywordSearch",
+        query: '"launch partner evidence" from:alice@example.com subject:"Launch plan"',
         stored: false,
         resultCount: 1,
         memoryCountUnchanged: true,
       },
       {
         step: "keywordSearch.syncExplicit",
+        query: '"launch partner evidence" from:alice@example.com subject:"Launch plan"',
         stored: true,
         resultCount: 1,
         partialFailureCount: 0,
