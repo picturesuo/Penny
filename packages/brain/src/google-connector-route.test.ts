@@ -21,7 +21,9 @@ import { createInMemoryGoogleConnectorStateStore } from "./google-connector-stat
 const configuredEnv = {
   ENABLE_GOOGLE_CONNECTOR: "true",
   NANGO_SECRET_KEY: "nango-secret",
+  NANGO_PUBLIC_KEY: "nango-public",
   NANGO_BASE_URL: "https://api.nango.test",
+  NANGO_GMAIL_INTEGRATION_ID: "google-gmail",
 };
 
 test("GET /api/connectors/google returns provider status without Nango calls", async () => {
