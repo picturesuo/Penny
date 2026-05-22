@@ -657,6 +657,42 @@ test("Gmail keyword search refuses connections missing gmail.readonly before pro
   assert.equal(payload.error.message, "Gmail connection is missing gmail.readonly scope.");
 });
 
+test("Gmail semantic search is disabled when Gmail connector env is not configured", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  const syncResponse = await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: gmailProxyAdapter(proxyCalls),
+    },
+  );
+  const response = await handleGoogleGmailSemanticSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/semantic-search", {
+      query: "launch partner private email evidence",
+    }),
+    {
+      env: {
+        ENABLE_GOOGLE_CONNECTOR: "true",
+        ENABLE_RESTRICTED_GOOGLE_SCOPES: "true",
+      },
+      stateStore,
+      brainMemoryService,
+    },
+  );
+  const payload = (await response.json()) as { error: { code: string; message: string } };
+
+  assert.equal(syncResponse.status, 200);
+  assert.equal(response.status, 503);
+  assert.equal(payload.error.code, "gmail_not_configured");
+  assert.equal(payload.error.message, "Gmail not configured.");
+});
+
 test("Gmail semantic search asks the user to sync before memory exists", async () => {
   const { stateStore, brainMemoryService } = gmailFixture();
   const response = await handleGoogleGmailSemanticSearchRequest(
@@ -1070,7 +1106,7 @@ test("Gmail source delete removes Brain retrieval access and semantic results", 
       query: "launch partner private email evidence",
       limit: 5,
     }),
-    { stateStore, brainMemoryService },
+    { env: configuredEnv, stateStore, brainMemoryService },
   );
   const semanticAfterPayload = (await semanticAfterDelete.json()) as { error: { code: string; message: string } };
   const brainRetrieveAfterDelete = await handleBrainRetrieveRequest(
