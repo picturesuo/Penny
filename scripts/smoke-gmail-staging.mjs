@@ -131,7 +131,7 @@ try {
   const createText = JSON.stringify(createFirst.data);
   assert(
     includesNeedle(createText, createEvidenceNeedle),
-    `Create did not include expected Gmail evidence text: ${createEvidenceNeedle}`,
+    "Create did not include expected Gmail evidence text.",
   );
   const selectedOptions = createFirst.data.optionSet.options
     .filter((option) => option.lens === "Personal" || option.lens === "Critical")
@@ -277,7 +277,7 @@ async function request(method, path, body) {
   const response = await requestMaybeFail(method, path, body);
 
   if (response.status < 200 || response.status >= 300) {
-    throw new Error(`${method} ${path} failed with ${response.status}: ${response.error?.message ?? response.raw}`);
+    throw new Error(`${method} ${path} failed with ${response.status}${response.error?.code ? ` (${response.error.code})` : ""}.`);
   }
 
   return response.payload;
@@ -296,7 +296,7 @@ async function requestMaybeFail(method, path, body) {
     status: response.status,
     payload,
     error: payload.error,
-    raw,
+    rawLength: raw.length,
   };
 }
 
@@ -315,7 +315,7 @@ function safeJson(raw) {
   try {
     return JSON.parse(raw);
   } catch {
-    return { raw };
+    return { nonJson: true, rawLength: raw.length };
   }
 }
 
