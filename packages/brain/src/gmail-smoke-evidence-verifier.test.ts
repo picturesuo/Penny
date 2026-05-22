@@ -51,6 +51,29 @@ test("Gmail smoke evidence verifier rejects missing keyword filter coverage when
   assert.match(failure, /Keyword search with sync=true must prove from filter coverage/);
 });
 
+test("Gmail smoke evidence verifier rejects weak keyword result shape evidence", () => {
+  const evidence = validEvidence();
+
+  for (const step of evidence.steps.filter((item) => item.step === "keywordSearch" || item.step === "keywordSearch.syncExplicit")) {
+    delete step.resultShapeVerified;
+    delete step.messageRefPresent;
+    delete step.threadRefPresent;
+    delete step.sourceRefPresent;
+    delete step.snippetPresent;
+    delete step.rawBodyAbsent;
+  }
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Keyword search evidence must prove the safe result shape/);
+  assert.match(failure, /Keyword search with sync=true evidence must prove the safe result shape/);
+  assert.match(failure, /Keyword search evidence must include Gmail message refs/);
+  assert.match(failure, /Keyword search evidence must include Gmail thread refs/);
+  assert.match(failure, /Keyword search evidence must include Gmail source refs/);
+  assert.match(failure, /Keyword search evidence must include safe snippets/);
+  assert.match(failure, /Keyword search evidence must not include raw Gmail body fields/);
+});
+
 test("Gmail smoke evidence verifier rejects unexpected partial failures", () => {
   const evidence = validEvidence();
   const sync = evidence.steps.find((step) => step.step === "sync") as Record<string, unknown>;
@@ -270,6 +293,12 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         query: '"launch partner evidence" from:alice@example.com subject:"Launch plan"',
         stored: false,
         resultCount: 1,
+        resultShapeVerified: true,
+        messageRefPresent: true,
+        threadRefPresent: true,
+        sourceRefPresent: true,
+        snippetPresent: true,
+        rawBodyAbsent: true,
         memoryCountUnchanged: true,
       },
       {
@@ -277,6 +306,12 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         query: '"launch partner evidence" from:alice@example.com subject:"Launch plan"',
         stored: true,
         resultCount: 1,
+        resultShapeVerified: true,
+        messageRefPresent: true,
+        threadRefPresent: true,
+        sourceRefPresent: true,
+        snippetPresent: true,
+        rawBodyAbsent: true,
         partialFailureCount: 0,
         duplicateSourceRefsAbsent: true,
       },
