@@ -92,6 +92,11 @@ if (requireKeywordFilters) {
 const semantic = requireStep("semanticSearch");
 assert(numberValue(semantic.resultCount) >= 1, "Semantic search must return at least one synced Gmail memory result.");
 assert(semantic.contextLight === false, "Semantic search evidence must not be context-light after sync.");
+assert(semantic.resultShapeVerified === true, "Semantic search evidence must prove the safe result shape.");
+assert(semantic.sourceRefPresent === true, "Semantic search evidence must include Gmail source refs.");
+assert(semantic.memoryRefPresent === true, "Semantic search evidence must include Brain memory refs.");
+assert(semantic.scoreReasonPresent === true, "Semantic search evidence must include score reasons.");
+assertSemanticGroundingLabels(semantic);
 assert(semantic.rawScoreHidden === true, "Semantic search must hide raw numeric scores.");
 
 const createFirst = requireStep("create.first");
@@ -184,6 +189,15 @@ function assertKeywordFilterCoverage(step, label) {
 
   assert(filters.hasAttachment === true, `${label} must prove hasAttachment filter coverage.`);
   assert(numberValue(step.maxResultsUsed) >= minMessages, `${label} must include maxResultsUsed evidence.`);
+}
+
+function assertSemanticGroundingLabels(step) {
+  const labels = Array.isArray(step.groundingLabels) ? step.groundingLabels : [];
+
+  assert(labels.length > 0, "Semantic search evidence must include groundingLabels.");
+  for (const label of labels) {
+    assert(label === "grounded" || label === "inferred", "Semantic search groundingLabels must contain only grounded or inferred.");
+  }
 }
 
 function assertNoUnsafeEvidence(value) {

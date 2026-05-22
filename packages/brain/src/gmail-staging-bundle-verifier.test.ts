@@ -316,6 +316,11 @@ function validSmokeEvidence(): Record<string, unknown> {
         step: "semanticSearch",
         resultCount: 1,
         contextLight: false,
+        resultShapeVerified: true,
+        sourceRefPresent: true,
+        memoryRefPresent: true,
+        scoreReasonPresent: true,
+        groundingLabels: ["grounded"],
         rawScoreHidden: true,
       },
       {
