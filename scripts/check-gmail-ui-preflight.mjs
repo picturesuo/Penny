@@ -22,10 +22,12 @@ const sphereId = env(
 const stagingRunId = env("GMAIL_STAGING_RUN_ID", env("GMAIL_UI_PREFLIGHT_STAGING_RUN_ID", ""));
 const gmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly";
 const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
+const safeEvidenceScopeIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const checks = [];
 
 try {
   assertSafeStagingRunId();
+  assertSafeEvidenceScopeIds();
   const documents = await request("GET", "/api/brain/documents");
   assert(documents.data?.sourceOfTruth === "sessions_sources_claims_claim_versions_edges_moves_artifacts", "Brain documents route returned an unexpected contract.");
   record("brain.documents", {
@@ -89,10 +91,7 @@ try {
   const result = {
     ok: true,
     baseUrl,
-    userId,
-    workspaceId,
-    projectId,
-    sphereId,
+    ...safeScopeEvidence(),
     ...stagingRunIdEvidence(),
     checkedAt: new Date().toISOString(),
     checks,
@@ -103,10 +102,7 @@ try {
   const result = {
     ok: false,
     baseUrl,
-    userId,
-    workspaceId,
-    projectId,
-    sphereId,
+    ...safeScopeEvidence(),
     ...stagingRunIdEvidence(),
     failedAt: new Date().toISOString(),
     error: error instanceof Error ? error.message : String(error),
@@ -140,6 +136,33 @@ function stagingRunIdEvidence() {
 
 function isSafeStagingRunId(value) {
   return typeof value === "string" && safeStagingRunIdPattern.test(value.trim());
+}
+
+function assertSafeEvidenceScopeIds() {
+  for (const [field, name, value] of scopeIdEntries()) {
+    assert(isSafeEvidenceScopeId(value), `${name} must be a safe opaque slug for Gmail UI preflight.`);
+  }
+}
+
+function safeScopeEvidence() {
+  return Object.fromEntries(
+    scopeIdEntries()
+      .filter(([, , value]) => isSafeEvidenceScopeId(value))
+      .map(([field, , value]) => [field, value.trim()]),
+  );
+}
+
+function scopeIdEntries() {
+  return [
+    ["userId", "GMAIL_UI_PREFLIGHT_USER_ID", userId],
+    ["workspaceId", "GMAIL_UI_PREFLIGHT_WORKSPACE_ID", workspaceId],
+    ["projectId", "GMAIL_UI_PREFLIGHT_PROJECT_ID", projectId],
+    ["sphereId", "GMAIL_UI_PREFLIGHT_SPHERE_ID", sphereId],
+  ];
+}
+
+function isSafeEvidenceScopeId(value) {
+  return typeof value === "string" && safeEvidenceScopeIdPattern.test(value.trim());
 }
 
 async function request(method, path) {
