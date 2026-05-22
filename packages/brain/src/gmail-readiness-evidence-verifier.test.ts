@@ -24,7 +24,7 @@ test("Gmail readiness evidence verifier accepts sanitized strict connect preflig
   assert.equal(payload.readinessOk, true);
   assert.equal(payload.strictStagingVerified, true);
   assert.equal(payload.connectPreflightVerified, true);
-  assert.equal(payload.checkCount, 5);
+  assert.equal(payload.checkCount, 6);
 });
 
 test("Gmail readiness evidence verifier accepts sanitized failure evidence only when requested", () => {
@@ -37,7 +37,7 @@ test("Gmail readiness evidence verifier accepts sanitized failure evidence only 
 
   assert.equal(payload.ok, true);
   assert.equal(payload.readinessOk, false);
-  assert.equal(payload.checkCount, 0);
+  assert.equal(payload.checkCount, 1);
 
   const failure = runVerifierExpectingFailure(failedReadinessEvidence());
 
@@ -81,6 +81,29 @@ test("Gmail readiness evidence verifier rejects weak staging evidence", () => {
   assert.match(failure, /Readiness evidence must include env.strictStaging/);
 });
 
+test("Gmail readiness evidence verifier rejects unknown readiness check rows", () => {
+  const evidence = validReadinessEvidence();
+
+  evidence.checks.push({
+    name: "legacy.gmailReady",
+    ok: true,
+  });
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Readiness evidence check 7 name must match an allowed readiness check/);
+});
+
+test("Gmail readiness evidence verifier rejects duplicate readiness check rows", () => {
+  const evidence = validReadinessEvidence();
+
+  evidence.checks.push({ ...evidence.checks[0] });
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Readiness evidence must include env\.requiredPresence only once/);
+});
+
 function runVerifierExpectingFailure(evidence: Record<string, unknown>): string {
   try {
     execFileSync(process.execPath, verifier, {
@@ -112,6 +135,29 @@ function validReadinessEvidence(): Record<string, unknown> & { requireStaging: b
     connectPreflight: true,
     checkedAt: "2026-05-22T12:00:00.000Z",
     checks: [
+      {
+        name: "env.requiredPresence",
+        envFileConfigured: true,
+        envFileLoaded: true,
+        envFileLoadErrorPresent: false,
+        requireStaging: true,
+        connectPreflight: true,
+        enableGoogleConnector: true,
+        enableGmailConnector: true,
+        enableRestrictedGoogleScopes: true,
+        nangoSecretPresent: true,
+        nangoPublicPresent: true,
+        nangoBaseUrlPresent: true,
+        nangoGmailIntegrationIdPresent: true,
+        databaseUrlPresent: true,
+        pennyAuthModePresent: true,
+        apiTokenPresent: true,
+        sessionSecretPresent: true,
+        corsOriginsPresent: true,
+        rateLimitPresent: true,
+        trustAuthHeadersPresent: true,
+        databasePrepBypass: false,
+      },
       {
         name: "env.gmail",
         envFileLoaded: true,
@@ -185,6 +231,30 @@ function failedReadinessEvidence(): Record<string, unknown> {
     connectPreflight: false,
     failedAt: "2026-05-22T12:00:00.000Z",
     error: "NANGO_PUBLIC_KEY must be set for Gmail staging readiness.",
-    checks: [],
+    checks: [
+      {
+        name: "env.requiredPresence",
+        envFileConfigured: true,
+        envFileLoaded: true,
+        envFileLoadErrorPresent: false,
+        requireStaging: true,
+        connectPreflight: false,
+        enableGoogleConnector: true,
+        enableGmailConnector: true,
+        enableRestrictedGoogleScopes: true,
+        nangoSecretPresent: true,
+        nangoPublicPresent: false,
+        nangoBaseUrlPresent: true,
+        nangoGmailIntegrationIdPresent: true,
+        databaseUrlPresent: true,
+        pennyAuthModePresent: true,
+        apiTokenPresent: true,
+        sessionSecretPresent: true,
+        corsOriginsPresent: true,
+        rateLimitPresent: true,
+        trustAuthHeadersPresent: true,
+        databasePrepBypass: false,
+      },
+    ],
   };
 }
