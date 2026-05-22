@@ -117,6 +117,10 @@ assert(createFirst.personalOptionPresent === true, "Create must include a Person
 assert(createFirst.criticalOptionPresent === true, "Create must include a Critical option for Gmail evidence.");
 assert(createFirst.gmailMemoryEvidencePresent === true, "Create must include Gmail evidence in memory refs.");
 assert(createFirst.gmailSourceEvidencePresent === true, "Create must include Gmail evidence in source refs.");
+assert(numberValue(createFirst.rankedCandidateCount) >= 5, "Create must expose five Brain Ranker candidates.");
+assert(createFirst.nextBestMoveGrounded === true, "Create Brain Ranker next-best move must be grounded by Gmail memory.");
+assert(createFirst.rankedCandidateGmailMemoryEvidencePresent === true, "Create Brain Ranker candidates must include Gmail memory evidence.");
+assert(createFirst.rankedCandidateGmailSourceEvidencePresent === true, "Create Brain Ranker candidates must include Gmail source evidence.");
 assert(createFirst.personalOptionExpectedEvidencePresent === true, "Create Personal option must include the expected Gmail evidence text.");
 assert(createFirst.criticalOptionExpectedEvidencePresent === true, "Create Critical option must include the expected Gmail evidence text.");
 assert(createFirst.expectedEvidencePresent === true, "Create must include the expected Gmail evidence text.");
