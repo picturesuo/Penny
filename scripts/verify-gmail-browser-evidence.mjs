@@ -209,6 +209,7 @@ function assertConnectedKeywordResults(check) {
 
 function assertSemanticResults(check) {
   assert(check.selectorTargetsPresent === true, "Browser evidence must prove stable Gmail semantic result selector targets are present.");
+  assert(check.semanticSearchRan === true, "Browser evidence must prove Gmail semantic search ran.");
   assert(check.resultVisible === true, "Browser evidence must show a Gmail semantic result row.");
   assert(check.groundingLabelVisible === true, "Browser evidence must show a semantic grounding label.");
   assert(check.scoreReasonVisible === true, "Browser evidence must show a semantic score reason.");
@@ -219,6 +220,8 @@ function assertSemanticResults(check) {
 
 function assertCreateEvidenceDrawer(check) {
   assert(check.selectorTargetsPresent === true, "Create evidence must prove stable evidence drawer selector targets are present.");
+  assert(check.createRunCompleted === true, "Create evidence must prove a Create run completed with Gmail memory available.");
+  assert(check.evidenceDrawerOpened === true, "Create evidence must prove the evidence drawer was opened.");
   assert(check.drawerVisible === true, "Browser evidence must show the Create evidence/details drawer.");
   assert(check.realGmailRefsOnlyWhenUsed === true, "Create evidence must show Gmail refs only when the option actually used them.");
   assert(
@@ -229,6 +232,7 @@ function assertCreateEvidenceDrawer(check) {
 
 function assertCreateExport(check) {
   assert(check.selectorTargetsPresent === true, "Export evidence must prove stable export selector targets are present.");
+  assert(check.exportPromptGenerated === true, "Export evidence must prove the prompt export was generated.");
   assert(check.exportVisible === true, "Browser evidence must show the exported prompt.");
   assert(check.gmailContextOnlyWhenUsed === true, "Export evidence must prove Gmail context appears only when used.");
   assert(check.unsafePrivacyClaimAbsent === true, "Export evidence must prove unsafe Gmail privacy claims are absent.");
@@ -239,6 +243,8 @@ function assertCreateExport(check) {
 
 function assertPostRevokeDelete(check) {
   assert(check.selectorTargetsPresent === true, "Post-revoke/delete evidence must prove stable Gmail state selector targets are present.");
+  assert(check.revokeCompleted === true, "Post-revoke/delete evidence must prove Gmail revoke completed.");
+  assert(check.deleteCompleted === true, "Post-revoke/delete evidence must prove Gmail source delete completed.");
   assert(check.postRevokeStateVisible === true, "Browser evidence must show post-revoke state.");
   assert(check.syncBlockedAfterRevoke === true, "Browser evidence must prove sync stops after revoke.");
   assert(check.searchBlockedAfterRevoke === true, "Browser evidence must prove keyword search stops after revoke.");
