@@ -7,6 +7,7 @@ const preOAuthOnly = args.includes("--pre-oauth-only");
 const outFile = optionValue("--out");
 const stagingRunId = optionValue("--staging-run-id");
 const safeStagingRunIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
+const safeEvidenceScopeIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const errors = [];
 
 if (args.includes("--help") || args.includes("-h")) {
@@ -20,6 +21,10 @@ if (!preOAuthOnly) {
 
 if (stagingRunId) {
   assert(safeStagingRunIdPattern.test(stagingRunId), "stagingRunId must be a safe opaque slug.");
+}
+
+for (const option of ["--user-id", "--workspace-id", "--project-id", "--sphere-id"]) {
+  assertSafeScopeOption(option);
 }
 
 if (errors.length) {
@@ -88,6 +93,20 @@ function buildEvidenceTemplate(options) {
       ...(options.preOAuthOnly ? [] : [connectedResults(), semanticResults(), createEvidenceDrawer(), createExport(), postRevokeDelete()]),
     ],
   });
+}
+
+function assertSafeScopeOption(option) {
+  const value = optionValue(option);
+
+  if (!value) {
+    return;
+  }
+
+  assert(isSafeEvidenceScopeId(value) && !/^REPLACE_WITH_/i.test(value), `${option} must be a safe opaque scope id.`);
+}
+
+function isSafeEvidenceScopeId(value) {
+  return typeof value === "string" && safeEvidenceScopeIdPattern.test(value.trim());
 }
 
 function preOAuthPanel() {
