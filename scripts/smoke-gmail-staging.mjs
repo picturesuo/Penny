@@ -62,8 +62,10 @@ try {
     sourceCount: initialStatus.data.sources.length,
   });
 
+  const syncInput = keywordSearchInput();
   const sync = await request("POST", "/api/connectors/google/gmail/sync", {
     ...connectionSelector(),
+    ...syncInput,
     maxResults,
   });
   assert(sync.data?.messageCount >= minMessages, `Expected at least ${minMessages} synced Gmail message(s).`);
@@ -75,6 +77,7 @@ try {
     partialFailureCount: sync.data.partialFailureCount ?? 0,
     cursorPresent: Boolean(sync.data.cursor),
     historyIdPresent: Boolean(sync.data.profile?.historyId),
+    filtersUsed: compactObject(syncInput),
   });
 
   const statusAfterSync = await request("GET", "/api/connectors/google/gmail/status");
