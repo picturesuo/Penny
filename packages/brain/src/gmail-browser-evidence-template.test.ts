@@ -15,9 +15,16 @@ const fullCheckNames = [
   "brain.gmailPostRevokeDelete",
 ];
 const preOAuthCheckNames = ["brain.gmailPanel.preOAuth", "brain.gmailKeywordFilters", "create.contextLightSurface"];
+const scopeArgs = [
+  "--base-url=https://penny-staging.example.test",
+  "--user-id=gmail-smoke-user",
+  "--workspace-id=gmail-smoke-workspace",
+  "--project-id=gmail-smoke-project",
+  "--sphere-id=gmail-smoke-sphere",
+];
 
 test("Gmail browser evidence template generates full proof scaffold that matches the verifier", () => {
-  const evidence = runTemplate("--staging-run-id=gmail-staging-template-test");
+  const evidence = runTemplate("--staging-run-id=gmail-staging-template-test", ...scopeArgs);
 
   assert.equal(evidence.stagingRunId, "gmail-staging-template-test");
   assert.deepEqual(
@@ -51,7 +58,7 @@ test("Gmail browser evidence template generates full proof scaffold that matches
 });
 
 test("Gmail browser evidence template generates pre-OAuth scaffold without requiring a run id", () => {
-  const evidence = runTemplate("--pre-oauth-only");
+  const evidence = runTemplate("--pre-oauth-only", ...scopeArgs);
 
   assert.equal(Object.hasOwn(evidence, "stagingRunId"), false);
   assert.deepEqual(
