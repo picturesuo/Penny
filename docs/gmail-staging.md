@@ -239,6 +239,13 @@ The preflight requires the Gmail status endpoint to be configured, then checks t
 
 Use `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` for a standalone pre-OAuth check. Use `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` after OAuth if you want the full smoke to also verify that creating another connect session still returns Gmail-only scope metadata.
 
+Verify standalone pre-OAuth evidence before treating it as setup evidence:
+
+```bash
+node --check scripts/verify-gmail-smoke-evidence.mjs
+node scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-connect-preflight-evidence.json --connect-preflight-only
+```
+
 After completing OAuth in the browser, run the non-destructive smoke against the same user/workspace scope:
 
 ```bash
@@ -343,7 +350,8 @@ Before marking Gmail staging ready, attach or record:
 - `node --check scripts/smoke-gmail-staging.mjs`.
 - `node --check scripts/verify-gmail-smoke-evidence.mjs`.
 - `scripts/verify-gmail-smoke-evidence.mjs` output for every accepted non-destructive or destructive evidence file.
-- Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` or `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output proving connect-session creation with only sanitized connect-link evidence.
+- Optional `GMAIL_SMOKE_CONNECT_PREFLIGHT_ONLY=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-connect-preflight-evidence.json --connect-preflight-only` output proving connect-session creation with only sanitized connect-link evidence.
+- Optional full-smoke `GMAIL_SMOKE_CONNECT_PREFLIGHT=true` output plus `scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence.json --connect-preflight --min-messages=1` output.
 - Non-destructive `scripts/smoke-gmail-staging.mjs` output.
 - Destructive `scripts/smoke-gmail-staging.mjs` output from a disposable staged Gmail account, when revoke/delete are being certified.
 - Nango auth webhook delivery record showing Penny accepted the Gmail connection and started `google-gmail-messages`.
