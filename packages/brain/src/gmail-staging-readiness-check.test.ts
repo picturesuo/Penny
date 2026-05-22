@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -43,21 +43,33 @@ test("Gmail staging readiness checker accepts strict env, safe status, and conne
 });
 
 test("Gmail staging readiness checker rejects missing NANGO_GMAIL_INTEGRATION_ID before API calls", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-readiness-"));
+  const evidenceFile = join(tmp, "missing-integration-evidence.json");
   const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
   const env = readyStrictEnv();
 
   delete env.NANGO_GMAIL_INTEGRATION_ID;
+  env.GMAIL_READINESS_EVIDENCE_FILE = evidenceFile;
 
-  const result = await runReadiness({
-    routes: readinessRoutes(),
-    requests,
-    env,
-  });
+  try {
+    const result = await runReadiness({
+      routes: readinessRoutes(),
+      requests,
+      env,
+    });
+    const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as { ok: boolean; error?: string; checks: unknown[] };
 
-  assert.equal(result.status, 1);
-  assert.equal(requests.length, 0);
-  assert.match(result.stderr, /NANGO_GMAIL_INTEGRATION_ID must be set for Gmail staging readiness/);
-  assert.doesNotMatch(result.stderr, /readiness-secret-value|readiness-public-value|strict-api-token|session-secret-value/i);
+    assert.equal(result.status, 1);
+    assert.equal(requests.length, 0);
+    assert.equal(evidence.ok, false);
+    assert.equal(evidence.checks.length, 0);
+    assert.match(result.stderr, /NANGO_GMAIL_INTEGRATION_ID must be set for Gmail staging readiness/);
+    assert.match(evidence.error ?? "", /NANGO_GMAIL_INTEGRATION_ID must be set for Gmail staging readiness/);
+    assert.doesNotMatch(result.stderr, /readiness-secret-value|readiness-public-value|strict-api-token|session-secret-value/i);
+    assert.doesNotMatch(JSON.stringify(evidence), /readiness-secret-value|readiness-public-value|strict-api-token|session-secret-value/i);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
 });
 
 test("Gmail staging readiness checker rejects dev auth in strict staging mode before API calls", async () => {
@@ -79,6 +91,7 @@ test("Gmail staging readiness checker rejects dev auth in strict staging mode be
 test("Gmail staging readiness checker loads an env file without leaking values", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-readiness-"));
   const envFile = join(tmp, "gmail.env");
+  const evidenceFile = join(tmp, "readiness-evidence.json");
   const requests: Array<{ method: string | undefined; url: string | undefined }> = [];
 
   await writeFile(
@@ -106,6 +119,7 @@ test("Gmail staging readiness checker loads an env file without leaking values",
       requests,
       env: {
         GMAIL_READINESS_ENV_FILE: envFile,
+        GMAIL_READINESS_EVIDENCE_FILE: evidenceFile,
         GMAIL_READINESS_REQUIRE_STAGING: "true",
         GMAIL_READINESS_CONNECT_PREFLIGHT: "true",
       },
@@ -114,17 +128,22 @@ test("Gmail staging readiness checker loads an env file without leaking values",
       ok: boolean;
       checks: Array<{ name: string; envFileLoaded?: boolean }>;
     };
+    const evidence = JSON.parse(await readFile(evidenceFile, "utf8")) as typeof payload;
     const envCheck = payload.checks.find((check) => check.name === "env.gmail");
+    const evidenceEnvCheck = evidence.checks.find((check) => check.name === "env.gmail");
 
     assert.equal(result.status, 0);
     assert.equal(payload.ok, true);
+    assert.equal(evidence.ok, true);
     assert.equal(envCheck?.envFileLoaded, true);
+    assert.equal(evidenceEnvCheck?.envFileLoaded, true);
     assert.deepEqual(
       requests.map((request) => `${request.method} ${request.url}`),
       ["GET /api/connectors/google", "GET /api/connectors/google/gmail/status", "POST /api/connectors/google/gmail/connect"],
     );
     assert.doesNotMatch(result.stdout, /file-secret-value|file-public-value|file-api-token|file-session-secret/i);
     assert.doesNotMatch(result.stderr, /file-secret-value|file-public-value|file-api-token|file-session-secret/i);
+    assert.doesNotMatch(JSON.stringify(evidence), /file-secret-value|file-public-value|file-api-token|file-session-secret/i);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
