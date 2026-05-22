@@ -505,6 +505,52 @@ test("Gmail keyword search builds a Gmail q string and does not store content by
   );
 });
 
+test("Gmail keyword search stores search results only when sync is explicit", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  const response = await handleGoogleGmailSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/search", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      text: "launch partners",
+      sync: true,
+      maxResults: 1,
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: gmailProxyAdapter(proxyCalls),
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      query: string;
+      stored: boolean;
+      results: Array<Record<string, unknown> & { subject: string }>;
+      sync: {
+        messageCount: number;
+        importedSources: Array<{ messageId: string; brainSourceId: string; memoryNodeCount: number }>;
+      };
+    };
+  };
+  const profile = await brainMemoryService.getProfile(gmailRequest("/api/brain/memory/profile", {}, "GET"));
+  const listCalls = proxyCalls.filter((call) => call.path === "users/me/messages");
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.query, '"launch partners"');
+  assert.equal(payload.data.stored, true);
+  assert.equal(payload.data.results[0]?.subject, "Launch partner follow-up");
+  assertNoRawEmailFields(payload.data.results[0] ?? {});
+  assert.equal(payload.data.sync.messageCount, 1);
+  assert.equal(payload.data.sync.importedSources[0]?.messageId, "msg-1");
+  assert.ok((payload.data.sync.importedSources[0]?.memoryNodeCount ?? 0) >= 1);
+  assert.equal(profile.sources.some((source) => source.sourceUri === "gmail:message:msg-1"), true);
+  assert.equal(profile.sources.find((source) => source.sourceUri === "gmail:message:msg-1")?.privacy.rawRetention, false);
+  assert.equal(listCalls.length, 2);
+  assert.equal(listCalls.every((call) => call.query?.q === payload.data.query), true);
+  assert.equal(listCalls.every((call) => call.query?.includeSpamTrash === false), true);
+});
+
 test("Gmail keyword search is scoped and cannot use another user's connection", async () => {
   const { stateStore, brainMemoryService } = gmailFixture();
   const response = await handleGoogleGmailSearchRequest(
