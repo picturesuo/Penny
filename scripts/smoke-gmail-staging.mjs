@@ -79,10 +79,10 @@ try {
 
   const statusAfterSync = await request("GET", "/api/connectors/google/gmail/status");
   assert(statusAfterSync.data?.messageCount >= minMessages, "Gmail status did not show synced message count.");
-  const firstSource = statusAfterSync.data?.sources?.[0] ?? sync.data?.state?.sources?.[0] ?? null;
-  const firstSourceId = firstSource?.id ?? "";
-  const firstBrainSourceId = firstSource?.brainSourceId ?? "";
-  const firstSourceUri = firstSource?.sourceUri ?? "";
+  let firstSource = statusAfterSync.data?.sources?.[0] ?? sync.data?.state?.sources?.[0] ?? null;
+  let firstSourceId = firstSource?.id ?? "";
+  let firstBrainSourceId = firstSource?.brainSourceId ?? "";
+  let firstSourceUri = firstSource?.sourceUri ?? "";
   record("status.afterSync", {
     status: statusAfterSync.data.status,
     messageCount: statusAfterSync.data.messageCount,
@@ -116,10 +116,38 @@ try {
   assert(Array.isArray(semantic.data?.results) && semantic.data.results.length > 0, "Semantic Gmail search returned no synced memory.");
   assert(semantic.data.results.every(hasSemanticResultShape), "Semantic Gmail search returned an unexpected result shape.");
   assert(semantic.data.results.every((result) => !("score" in result)), "Semantic Gmail search exposed a raw score.");
+  const semanticMatchedSource = (statusAfterSync.data?.sources ?? []).find((source) =>
+    semantic.data.results.some((result) =>
+      matchesDeletedSourceRef(result.sourceRef, {
+        connectorSourceId: source.id ?? "",
+        brainSourceId: source.brainSourceId ?? "",
+        sourceUri: source.sourceUri ?? "",
+      }),
+    ),
+  );
+  if (semanticMatchedSource) {
+    firstSource = semanticMatchedSource;
+    firstSourceId = firstSource?.id ?? "";
+    firstBrainSourceId = firstSource?.brainSourceId ?? "";
+    firstSourceUri = firstSource?.sourceUri ?? "";
+  }
+  const deletedSourceRef = {
+    connectorSourceId: firstSourceId,
+    brainSourceId: firstBrainSourceId,
+    sourceUri: firstSourceUri,
+  };
+  const deletedSemanticMemoryIds = new Set(
+    semantic.data.results
+      .filter((result) => matchesDeletedSourceRef(result.sourceRef, deletedSourceRef))
+      .map((result) => result.memoryRef?.id)
+      .filter(Boolean),
+  );
   record("semanticSearch", {
     resultCount: semantic.data.results.length,
     contextLight: semantic.data.contextLight,
     rawScoreHidden: semantic.data.results.every((result) => !("score" in result)),
+    deleteTargetMatchedSemanticResult: Boolean(semanticMatchedSource),
+    deleteTargetMemoryIdCount: deletedSemanticMemoryIds.size,
   });
 
   const createFirst = await request("POST", "/api/create/next", {
@@ -205,11 +233,27 @@ try {
       const deletedSemanticResultStillPresent =
         Array.isArray(semanticResultsAfterDelete) &&
         semanticResultsAfterDelete.some(
-          (result) => result.sourceRef?.id === firstSourceId || (firstSourceUri && result.sourceRef?.sourceUri === firstSourceUri),
+          (result) => matchesDeletedSourceRef(result.sourceRef, deletedSourceRef),
         );
+      const createAfterDelete = await request("POST", "/api/create/next", {
+        rawIdea: createIdea,
+        projectId,
+        sessionId: `gmail-smoke-after-delete-session-${Date.now()}`,
+      });
+      const createAfterDeleteOptionSet = createAfterDelete.data?.optionSet ?? {};
+      assert(Array.isArray(createAfterDeleteOptionSet.sourcesUsed), "Create after delete did not return source refs.");
+      assert(Array.isArray(createAfterDeleteOptionSet.memoryUsed), "Create after delete did not return memory refs.");
+      const deletedCreateSourceStillPresent = createAfterDeleteOptionSet.sourcesUsed.some((source) =>
+        matchesDeletedSourceRef(source, deletedSourceRef),
+      );
+      const deletedCreateMemoryStillPresent = createAfterDeleteOptionSet.memoryUsed.some((memory) =>
+        deletedSemanticMemoryIds.has(memory.id),
+      );
 
       assert(!deletedBrainSourceStillPresent, "Deleted Gmail source still appears in Brain profile.");
       assert(!deletedSemanticResultStillPresent, "Deleted Gmail source still appears in semantic search results.");
+      assert(!deletedCreateSourceStillPresent, "Deleted Gmail source still appears in Create source refs.");
+      assert(!deletedCreateMemoryStillPresent, "Deleted Gmail memory still appears in Create memory refs.");
       record("deleteSource", {
         sourceIdPresent: Boolean(firstSourceId),
         brainSourceIdPresent: Boolean(firstBrainSourceId),
@@ -217,6 +261,11 @@ try {
         brainProfileSourceAbsent: !deletedBrainSourceStillPresent,
         semanticAfterDeleteStatus: semanticAfterDelete.status,
         semanticDeletedSourceAbsent: !deletedSemanticResultStillPresent,
+        createAfterDeleteMemoryCountUsed: createAfterDelete.data?.observability?.memoryCountUsed ?? 0,
+        createAfterDeleteSourceCountUsed: createAfterDelete.data?.observability?.sourceCountUsed ?? 0,
+        createDeletedSourceAbsent: !deletedCreateSourceStillPresent,
+        createDeletedMemoryAbsent: !deletedCreateMemoryStillPresent,
+        trackedDeletedMemoryIdCount: deletedSemanticMemoryIds.size,
       });
     }
   } else {
@@ -347,6 +396,16 @@ function hasSemanticResultShape(result) {
 
 function includesNeedle(value, needle) {
   return value.toLowerCase().includes(needle.toLowerCase());
+}
+
+function matchesDeletedSourceRef(sourceRef, deletedSourceRef) {
+  return Boolean(
+    sourceRef &&
+      ((deletedSourceRef.connectorSourceId && sourceRef.id === deletedSourceRef.connectorSourceId) ||
+        (deletedSourceRef.brainSourceId && sourceRef.id === deletedSourceRef.brainSourceId) ||
+        (deletedSourceRef.sourceUri && sourceRef.sourceUri === deletedSourceRef.sourceUri) ||
+        (deletedSourceRef.sourceUri && sourceRef.url === deletedSourceRef.sourceUri)),
+  );
 }
 
 function compactObject(value) {
