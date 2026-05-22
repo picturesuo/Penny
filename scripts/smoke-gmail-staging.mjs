@@ -235,6 +235,18 @@ try {
         semanticResultsAfterDelete.some(
           (result) => matchesDeletedSourceRef(result.sourceRef, deletedSourceRef),
         );
+      const brainRetrieveAfterDelete = await request("POST", "/api/brain/retrieve", {
+        query: semanticQuery,
+        limit: maxResults,
+      });
+      const brainRetrieveResultsAfterDelete = brainRetrieveAfterDelete.data?.results ?? [];
+      assert(Array.isArray(brainRetrieveResultsAfterDelete), "Brain retrieval after delete did not return results.");
+      const deletedBrainRetrievalStillPresent = brainRetrieveResultsAfterDelete.some(
+        (result) =>
+          matchesDeletedSourceRef(result.sourceRef, deletedSourceRef) ||
+          (firstBrainSourceId && result.sourceId === firstBrainSourceId) ||
+          deletedSemanticMemoryIds.has(result.memoryRef?.id),
+      );
       const createAfterDelete = await request("POST", "/api/create/next", {
         rawIdea: createIdea,
         projectId,
@@ -251,6 +263,7 @@ try {
       );
 
       assert(!deletedBrainSourceStillPresent, "Deleted Gmail source still appears in Brain profile.");
+      assert(!deletedBrainRetrievalStillPresent, "Deleted Gmail source still appears in Brain retrieval.");
       assert(!deletedSemanticResultStillPresent, "Deleted Gmail source still appears in semantic search results.");
       assert(!deletedCreateSourceStillPresent, "Deleted Gmail source still appears in Create source refs.");
       assert(!deletedCreateMemoryStillPresent, "Deleted Gmail memory still appears in Create memory refs.");
@@ -259,6 +272,8 @@ try {
         brainSourceIdPresent: Boolean(firstBrainSourceId),
         brainSourceDeleted: deleted.data.brainSourceDeleted,
         brainProfileSourceAbsent: !deletedBrainSourceStillPresent,
+        brainRetrieveDeletedSourceAbsent: !deletedBrainRetrievalStillPresent,
+        brainRetrieveAfterDeleteResultCount: brainRetrieveResultsAfterDelete.length,
         semanticAfterDeleteStatus: semanticAfterDelete.status,
         semanticDeletedSourceAbsent: !deletedSemanticResultStillPresent,
         createAfterDeleteMemoryCountUsed: createAfterDelete.data?.observability?.memoryCountUsed ?? 0,
