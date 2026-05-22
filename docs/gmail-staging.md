@@ -117,7 +117,7 @@ The checker verifies:
 - `ENABLE_GOOGLE_CONNECTOR`, `ENABLE_GMAIL_CONNECTOR`, and `ENABLE_RESTRICTED_GOOGLE_SCOPES` are true.
 - `NANGO_SECRET_KEY`, `NANGO_PUBLIC_KEY`, `NANGO_BASE_URL`, and `NANGO_GMAIL_INTEGRATION_ID` are present, with no placeholder values.
 - `PENNY_SKIP_DATABASE_PREP` is not true.
-- In strict staging mode, `DATABASE_URL` is present, `PENNY_AUTH_MODE=token`, `PENNY_API_TOKEN` and `PENNY_SESSION_SECRET` are long enough, and `PENNY_TRUST_AUTH_HEADERS=false`.
+- In strict staging mode, `BASE_URL` is HTTPS unless loopback, `DATABASE_URL` is present, `PENNY_AUTH_MODE=token`, `PENNY_API_TOKEN` and `PENNY_SESSION_SECRET` are long enough, `PENNY_CORS_ORIGINS` includes the exact `BASE_URL` origin without wildcards, `PENNY_RATE_LIMIT_MAX` is bounded, and `PENNY_TRUST_AUTH_HEADERS=false`.
 - `/api/connectors/google` and `/api/connectors/google/gmail/status` are configured, expose exactly `gmail.readonly`, report restricted/private/gated state, and do not leak connector internals or raw email-shaped fields.
 
 To also prove Penny can create a Gmail-only Nango connect session before the browser OAuth step, add:
