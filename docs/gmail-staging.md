@@ -154,6 +154,8 @@ For a failed setup gate that you need to attach as blocker evidence, verify only
 node scripts/verify-gmail-readiness-evidence.mjs tmp/gmail-readiness-evidence.json --allow-failure
 ```
 
+The verifier summary includes the same safe `missingRequirementKeys` array from `env.requiredPresence`, so staging logs can name missing requirements such as `NANGO_PUBLIC_KEY` or `PENNY_SESSION_SECRET` without printing secret values.
+
 ## Local Staging Run
 
 ```bash
