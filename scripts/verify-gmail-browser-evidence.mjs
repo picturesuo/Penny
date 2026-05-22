@@ -223,6 +223,7 @@ function assertCreateExport(check) {
   assert(check.selectorTargetsPresent === true, "Export evidence must prove stable export selector targets are present.");
   assert(check.exportVisible === true, "Browser evidence must show the exported prompt.");
   assert(check.gmailContextOnlyWhenUsed === true, "Export evidence must prove Gmail context appears only when used.");
+  assert(check.unsafePrivacyClaimAbsent === true, "Export evidence must prove unsafe Gmail privacy claims are absent.");
   assert(check.rawEmailBodyAbsent === true, "Export evidence must prove raw Gmail body markers are absent.");
   assert(check.secretOrConnectTokenAbsent === true, "Export evidence must prove connect/session/token values are absent.");
   assert(check.unsupportedHumanReviewClaimAbsent === true, "Export evidence must prove unsupported human-review claims are absent.");
@@ -263,6 +264,8 @@ function assertNoUnsafeEvidence(value) {
   const allowedKeys = new Set(["scoreReasonVisible", "rawNumericScoreHidden", "secretOrConnectTokenAbsent"]);
   const unsafeValuePattern =
     /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|access_token|refresh_token|credentialRef|plainTextBody|rawBody|BEGIN PRIVATE KEY)/i;
+  const unsafePrivacyClaimPattern =
+    /global training|hidden memory|private inbox|background Gmail|before consent|unrestricted mailbox scan/i;
 
   walk(value, "$", (item, path) => {
     if (item && typeof item === "object" && !Array.isArray(item)) {
@@ -275,6 +278,10 @@ function assertNoUnsafeEvidence(value) {
 
     if (typeof item === "string" && unsafeValuePattern.test(item)) {
       errors.push(`${path} looks like it contains raw Gmail, credential, connect, or token data.`);
+    }
+
+    if (typeof item === "string" && unsafePrivacyClaimPattern.test(item)) {
+      errors.push(`${path} looks like it contains an unsafe Gmail privacy claim.`);
     }
   });
 }
