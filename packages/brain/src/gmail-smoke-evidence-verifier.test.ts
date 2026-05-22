@@ -154,6 +154,31 @@ test("Gmail smoke evidence verifier rejects missing search source proof", () => 
   assert.match(failure, /Semantic search result refs must match selected Gmail source refs/);
 });
 
+test("Gmail smoke evidence verifier rejects missing Create selected-ref proof", () => {
+  const evidence = validEvidence();
+  const semantic = evidence.steps.find((step) => step.step === "semanticSearch") as Record<string, unknown>;
+  const create = evidence.steps.find((step) => step.step === "create.first") as Record<string, unknown>;
+  const refined = evidence.steps.find((step) => step.step === "create.refined") as Record<string, unknown>;
+
+  delete semantic.selectedMemoryRefCount;
+  delete create.selectedSemanticMemoryRefsMatched;
+  delete create.selectedSemanticSourceRefsMatched;
+  delete create.rankedCandidateSelectedSemanticMemoryRefsMatched;
+  delete create.rankedCandidateSelectedSemanticSourceRefsMatched;
+  delete refined.selectedSemanticMemoryRefsMatched;
+  delete refined.selectedSemanticSourceRefsMatched;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Semantic search must record selected Gmail memory refs for Create proof/);
+  assert.match(failure, /Create memory refs must match selected semantic Gmail memory refs/);
+  assert.match(failure, /Create source refs must match selected Gmail source refs/);
+  assert.match(failure, /Create Brain Ranker candidates must match selected semantic Gmail memory refs/);
+  assert.match(failure, /Create Brain Ranker candidates must match selected Gmail source refs/);
+  assert.match(failure, /Create refinement memory refs must match selected semantic Gmail memory refs/);
+  assert.match(failure, /Create refinement source refs must match selected Gmail source refs/);
+});
+
 test("Gmail smoke evidence verifier rejects missing staged account identity proof", () => {
   const evidence = validEvidence();
   const initial = evidence.steps.find((step) => step.step === "status.initial") as Record<string, unknown>;
@@ -517,6 +542,7 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         groundingLabels: ["grounded"],
         rawScoreHidden: true,
         rawBodyAbsent: true,
+        selectedMemoryRefCount: 1,
       },
       {
         step: "create.first",
@@ -528,10 +554,14 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         criticalOptionPresent: true,
         gmailMemoryEvidencePresent: true,
         gmailSourceEvidencePresent: true,
+        selectedSemanticMemoryRefsMatched: true,
+        selectedSemanticSourceRefsMatched: true,
         rankedCandidateCount: 5,
         nextBestMoveGrounded: true,
         rankedCandidateGmailMemoryEvidencePresent: true,
         rankedCandidateGmailSourceEvidencePresent: true,
+        rankedCandidateSelectedSemanticMemoryRefsMatched: true,
+        rankedCandidateSelectedSemanticSourceRefsMatched: true,
         personalOptionExpectedEvidencePresent: true,
         criticalOptionExpectedEvidencePresent: true,
         expectedEvidencePresent: true,
@@ -546,6 +576,8 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         selectedOptionsMatched: true,
         gmailMemoryEvidencePresent: true,
         gmailSourceEvidencePresent: true,
+        selectedSemanticMemoryRefsMatched: true,
+        selectedSemanticSourceRefsMatched: true,
         expectedEvidencePresent: true,
         artifactExpectedEvidencePresent: true,
         rawEmailBodyAbsent: true,
