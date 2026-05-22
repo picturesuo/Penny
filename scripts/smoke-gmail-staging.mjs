@@ -246,8 +246,10 @@ try {
     limit: maxResults,
   });
   assert(Array.isArray(semantic.data?.results) && semantic.data.results.length > 0, "Semantic Gmail search returned no synced memory.");
-  assert(semantic.data.results.every(hasSemanticResultShape), "Semantic Gmail search returned an unexpected result shape.");
-  assert(semantic.data.results.every((result) => !("score" in result)), "Semantic Gmail search exposed a raw score.");
+  const semanticResultShapeVerified = semantic.data.results.every(hasSemanticResultShape);
+  const semanticRawScoreHidden = semantic.data.results.every((result) => !("score" in result));
+  assert(semanticResultShapeVerified, "Semantic Gmail search returned an unexpected result shape.");
+  assert(semanticRawScoreHidden, "Semantic Gmail search exposed a raw score.");
   const semanticMatchedSource = (statusAfterSync.data?.sources ?? []).find((source) =>
     semantic.data.results.some((result) =>
       matchesDeletedSourceRef(result.sourceRef, {
@@ -281,7 +283,12 @@ try {
   record("semanticSearch", {
     resultCount: semantic.data.results.length,
     contextLight: semantic.data.contextLight,
-    rawScoreHidden: semantic.data.results.every((result) => !("score" in result)),
+    resultShapeVerified: semanticResultShapeVerified,
+    sourceRefPresent: semantic.data.results.every(hasSemanticSourceRef),
+    memoryRefPresent: semantic.data.results.every(hasSemanticMemoryRef),
+    scoreReasonPresent: semantic.data.results.every(hasSemanticScoreReason),
+    groundingLabels: [...new Set(semantic.data.results.map((result) => result.grounding))].sort(),
+    rawScoreHidden: semanticRawScoreHidden,
     deleteTargetMatchedSemanticResult: Boolean(semanticMatchedSource),
     deleteTargetMemoryIdCount: deletedSemanticMemoryIds.size,
   });
@@ -566,6 +573,18 @@ function hasSemanticResultShape(result) {
       typeof result.scoreReason === "string" &&
       hasNoRawEmailFields(result),
   );
+}
+
+function hasSemanticSourceRef(result) {
+  return Boolean(result?.sourceRef?.surface === "google_gmail" && typeof result.sourceRef?.sourceUri === "string");
+}
+
+function hasSemanticMemoryRef(result) {
+  return typeof result?.memoryRef?.id === "string" && result.memoryRef.id.length > 0;
+}
+
+function hasSemanticScoreReason(result) {
+  return typeof result?.scoreReason === "string" && result.scoreReason.trim().length > 0;
 }
 
 function hasNoRawEmailFields(result) {
