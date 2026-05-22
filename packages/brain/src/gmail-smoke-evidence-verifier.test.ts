@@ -159,6 +159,26 @@ test("Gmail smoke evidence verifier accepts destructive revoke and delete eviden
   assert.equal(payload.destructive, true);
 });
 
+test("Gmail smoke evidence verifier rejects destructive delete evidence without semantic target proof", () => {
+  const evidence = destructiveEvidence();
+  const semantic = evidence.steps.find((step) => step.step === "semanticSearch") as Record<string, unknown>;
+  const deleted = evidence.steps.find((step) => step.step === "deleteSource") as Record<string, unknown>;
+
+  semantic.deleteTargetMatchedSemanticResult = false;
+  semantic.deleteTargetMemoryIdCount = 0;
+  deleted.sourceIdPresent = false;
+  deleted.brainSourceIdPresent = false;
+  deleted.trackedDeletedMemoryIdCount = 0;
+
+  const failure = runVerifierExpectingFailure(evidence, [...verifier, "--destructive"]);
+
+  assert.match(failure, /Destructive evidence must prove the delete target matched a semantic Gmail result/);
+  assert.match(failure, /Destructive evidence must track at least one semantic Gmail memory id/);
+  assert.match(failure, /Delete evidence must include a staged Gmail source id/);
+  assert.match(failure, /Delete evidence must include the linked Brain source id/);
+  assert.match(failure, /Delete evidence must include tracked Gmail memory ids/);
+});
+
 function runVerifierExpectingFailure(evidence: Record<string, unknown>, args = verifier): string {
   try {
     execFileSync(process.execPath, args, {
@@ -352,6 +372,10 @@ function keywordFilterEvidence(): Record<string, unknown> & { steps: Array<Recor
 
 function destructiveEvidence(): Record<string, unknown> & { steps: Array<Record<string, unknown>> } {
   const evidence = validEvidence();
+  const semantic = evidence.steps.find((step) => step.step === "semanticSearch") as Record<string, unknown>;
+
+  semantic.deleteTargetMatchedSemanticResult = true;
+  semantic.deleteTargetMemoryIdCount = 1;
 
   evidence.steps = evidence.steps.filter((step) => step.step !== "revoke.delete.skipped");
   evidence.steps.push(
@@ -364,12 +388,15 @@ function destructiveEvidence(): Record<string, unknown> & { steps: Array<Record<
     },
     {
       step: "deleteSource",
+      sourceIdPresent: true,
+      brainSourceIdPresent: true,
       brainSourceDeleted: true,
       brainProfileSourceAbsent: true,
       brainRetrieveDeletedSourceAbsent: true,
       semanticDeletedSourceAbsent: true,
       createDeletedSourceAbsent: true,
       createDeletedMemoryAbsent: true,
+      trackedDeletedMemoryIdCount: 1,
     },
   );
 
