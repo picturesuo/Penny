@@ -97,6 +97,33 @@ test("Gmail smoke evidence verifier rejects repeated sync without cursor evidenc
   assert.match(failure, /Repeated sync must include cursor or historyId evidence/);
 });
 
+test("Gmail smoke evidence verifier rejects missing synced source privacy evidence", () => {
+  const evidence = validEvidence();
+  const afterSync = evidence.steps.find((step) => step.step === "status.afterSync") as Record<string, unknown>;
+
+  afterSync.syncedSourceCount = 0;
+  afterSync.syncedSourceTrainingUseFalse = false;
+  afterSync.syncedSourceRawContentStoredFalse = false;
+  afterSync.syncedSourcePrivateUserMemory = false;
+  afterSync.syncedSourceRetrievalEnabled = false;
+  afterSync.brainProfileGmailSourceCount = 0;
+  afterSync.brainProfileTrainingUseFalse = false;
+  afterSync.brainProfileRawRetentionFalse = false;
+  afterSync.brainProfilePrivateVisibility = false;
+
+  const failure = runVerifierExpectingFailure(evidence);
+
+  assert.match(failure, /Status after sync must prove at least 1 synced Gmail source privacy record/);
+  assert.match(failure, /Synced Gmail source privacy must prove trainingUse=false/);
+  assert.match(failure, /Synced Gmail source privacy must prove rawContentStored=false/);
+  assert.match(failure, /Synced Gmail source privacy must prove private user memory visibility/);
+  assert.match(failure, /Synced Gmail source privacy must prove retrieval access is enabled/);
+  assert.match(failure, /Brain profile must prove at least 1 Gmail source privacy record/);
+  assert.match(failure, /Brain profile Gmail source privacy must prove trainingUse=false/);
+  assert.match(failure, /Brain profile Gmail source privacy must prove rawRetention=false/);
+  assert.match(failure, /Brain profile Gmail source privacy must prove private visibility/);
+});
+
 test("Gmail smoke evidence verifier rejects raw connect links or session tokens", () => {
   const evidence = validEvidence();
   const connectStep = evidence.steps.find((step) => step.step === "connect.preflight") as Record<string, unknown>;
@@ -325,6 +352,15 @@ function validEvidence(): Record<string, unknown> & { steps: Array<Record<string
         messageCount: 1,
         statusStatePrivacySafe: true,
         providerStatePrivacySafe: true,
+        syncedSourceCount: 1,
+        syncedSourceTrainingUseFalse: true,
+        syncedSourceRawContentStoredFalse: true,
+        syncedSourcePrivateUserMemory: true,
+        syncedSourceRetrievalEnabled: true,
+        brainProfileGmailSourceCount: 1,
+        brainProfileTrainingUseFalse: true,
+        brainProfileRawRetentionFalse: true,
+        brainProfilePrivateVisibility: true,
       },
       {
         step: "sync.repeat",
