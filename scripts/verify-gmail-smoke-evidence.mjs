@@ -95,10 +95,7 @@ if (requireKeywordFilters) {
 const semantic = requireStep("semanticSearch");
 assert(numberValue(semantic.resultCount) >= 1, "Semantic search must return at least one synced Gmail memory result.");
 assert(semantic.contextLight === false, "Semantic search evidence must not be context-light after sync.");
-assert(semantic.resultShapeVerified === true, "Semantic search evidence must prove the safe result shape.");
-assert(semantic.sourceRefPresent === true, "Semantic search evidence must include Gmail source refs.");
-assert(semantic.memoryRefPresent === true, "Semantic search evidence must include Brain memory refs.");
-assert(semantic.scoreReasonPresent === true, "Semantic search evidence must include score reasons.");
+assertSemanticResultShape(semantic);
 assertSemanticGroundingLabels(semantic);
 assert(semantic.rawScoreHidden === true, "Semantic search must hide raw numeric scores.");
 
@@ -224,6 +221,20 @@ function assertKeywordResultShape(step, label) {
   assert(step.sourceRefPresent === true, `${label} evidence must include Gmail source refs.`);
   assert(step.snippetPresent === true, `${label} evidence must include safe snippets.`);
   assert(step.rawBodyAbsent === true, `${label} evidence must not include raw Gmail body fields.`);
+}
+
+function assertSemanticResultShape(step) {
+  assert(step.resultShapeVerified === true, "Semantic search evidence must prove the safe result shape.");
+  assert(step.subjectPresent === true, "Semantic search evidence must include subjects.");
+  assert(step.senderPresent === true, "Semantic search evidence must include senders.");
+  assert(step.dateFieldPresent === true, "Semantic search evidence must include date fields.");
+  assert(step.messageRefPresent === true, "Semantic search evidence must include Gmail message refs.");
+  assert(step.threadRefPresent === true, "Semantic search evidence must include Gmail thread refs.");
+  assert(step.snippetPresent === true, "Semantic search evidence must include safe snippets.");
+  assert(step.sourceRefPresent === true, "Semantic search evidence must include Gmail source refs.");
+  assert(step.memoryRefPresent === true, "Semantic search evidence must include Brain memory refs.");
+  assert(step.scoreReasonPresent === true, "Semantic search evidence must include score reasons.");
+  assert(step.rawBodyAbsent === true, "Semantic search evidence must not include raw Gmail body fields.");
 }
 
 function assertSemanticGroundingLabels(step) {
