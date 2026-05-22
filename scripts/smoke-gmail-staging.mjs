@@ -343,12 +343,19 @@ try {
     judgmentEvent: createRefined.data.judgmentEvent,
   });
   const exportText = exportResult.data?.export?.text ?? "";
+  const exportPrivacySafety = inspectExportPrivacySafety(exportText);
   assert(includesNeedle(exportText, createEvidenceNeedle), "Export prompt did not include the expected Gmail-derived context.");
-  assert(!/global training|hidden memory|private inbox/i.test(exportText), "Export prompt included an unsafe privacy claim.");
+  assert(
+    exportPrivacySafety.safe,
+    `Export prompt included unsafe Gmail privacy content: ${exportPrivacySafety.failedChecks.join(", ")}.`,
+  );
   record("create.export", {
     exportId: exportResult.data?.export?.id ?? null,
     expectedEvidencePresent: includesNeedle(exportText, createEvidenceNeedle),
-    unsafePrivacyClaimAbsent: !/global training|hidden memory|private inbox/i.test(exportText),
+    unsafePrivacyClaimAbsent: exportPrivacySafety.unsafePrivacyClaimAbsent,
+    rawEmailBodyAbsent: exportPrivacySafety.rawEmailBodyAbsent,
+    secretOrConnectTokenAbsent: exportPrivacySafety.secretOrConnectTokenAbsent,
+    unsupportedHumanReviewClaimAbsent: exportPrivacySafety.unsupportedHumanReviewClaimAbsent,
   });
 
   if (confirmMutations) {
@@ -758,6 +765,35 @@ function gmailSourceUris(sources, connectionId) {
 
 function hasUniqueValues(values) {
   return new Set(values).size === values.length;
+}
+
+function inspectExportPrivacySafety(text) {
+  const unsafePrivacyClaimAbsent = !/global training|hidden memory|private inbox|background Gmail|before consent|unrestricted mailbox scan/i.test(text);
+  const rawEmailBodyAbsent = !/plainTextBody|rawBody|Private Gmail body|raw email body|raw Gmail body/i.test(text);
+  const secretOrConnectTokenAbsent = !/(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token|NANGO_SECRET_KEY|PENNY_API_TOKEN)/i.test(text);
+  const unsupportedHumanReviewClaimAbsent = !hasUnsupportedHumanReviewClaim(text);
+  const checks = [
+    ["unsafe privacy claims", unsafePrivacyClaimAbsent],
+    ["raw Gmail body markers", rawEmailBodyAbsent],
+    ["connect/session/token values", secretOrConnectTokenAbsent],
+    ["unsupported human-review claims", unsupportedHumanReviewClaimAbsent],
+  ];
+
+  return {
+    unsafePrivacyClaimAbsent,
+    rawEmailBodyAbsent,
+    secretOrConnectTokenAbsent,
+    unsupportedHumanReviewClaimAbsent,
+    safe: checks.every(([, passed]) => passed),
+    failedChecks: checks.filter(([, passed]) => !passed).map(([label]) => label),
+  };
+}
+
+function hasUnsupportedHumanReviewClaim(text) {
+  return text
+    .split(/[.!?\n;]/)
+    .filter((segment) => /human review/i.test(segment))
+    .some((segment) => !/\b(no|without|zero)\s+human review\b/i.test(segment));
 }
 
 function includesNeedle(value, needle) {
