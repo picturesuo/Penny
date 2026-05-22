@@ -373,6 +373,31 @@ test("Gmail staging bundle verifier rejects weak UI preflight Gmail status field
   }
 });
 
+test("Gmail staging bundle verifier rejects UI preflight raw body phrase values", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
+
+  try {
+    const uiPreflight = validUiPreflightEvidence() as { checks: Array<Record<string, unknown>> };
+    const gmailCheck = uiPreflight.checks.find((check) => check.name === "gmail.status");
+
+    assert.ok(gmailCheck);
+    gmailCheck.operatorNote = "Copied setup note mentioned raw Gmail body marker without the body.";
+
+    const files = await writeBundleFiles(tmp, {
+      uiPreflight,
+    });
+    const failure = runBundleExpectingFailure([
+      `--readiness=${files.readiness}`,
+      `--smoke=${files.smoke}`,
+      `--ui-preflight=${files.uiPreflight}`,
+    ]);
+
+    assert.match(failure, /UI preflight evidence includes unsafe Gmail, credential, or raw body fields/);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Gmail staging bundle verifier requires browser evidence when requested", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "penny-gmail-bundle-"));
 
