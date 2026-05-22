@@ -423,6 +423,103 @@ test("GoogleConnectorControl renders connected Gmail smoke controls enabled", ()
   assert.doesNotMatch(buttonMarkupForLabel(markup, "Delete Gmail source"), /disabled=""/);
 });
 
+test("GoogleConnectorControl requires explicit selection when multiple Gmail accounts are active", () => {
+  const markup = renderToStaticMarkup(
+    createElement(GoogleConnectorControl, {
+      provider: googleProviderView(),
+      connectorState: {
+        connections: [
+          {
+            id: "connector-gmail-1",
+            status: "connected",
+            surfaces: ["google_gmail"],
+            scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+            lastSyncedAt: "2026-05-22T12:05:00.000Z",
+            nextSyncAt: "2026-05-22T18:05:00.000Z",
+            revokedAt: null,
+            sourceCounts: { google_gmail_message: 1 },
+            credential: {
+              connectionId: "nango-gmail-1",
+              providerConfigKey: "google-gmail",
+              accountEmail: "first-staged-gmail@example.com",
+            },
+          },
+          {
+            id: "connector-gmail-2",
+            status: "connected",
+            surfaces: ["google_gmail"],
+            scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+            lastSyncedAt: "2026-05-22T12:10:00.000Z",
+            nextSyncAt: "2026-05-22T18:10:00.000Z",
+            revokedAt: null,
+            sourceCounts: { google_gmail_message: 1 },
+            credential: {
+              connectionId: "nango-gmail-2",
+              providerConfigKey: "google-gmail",
+              accountEmail: "second-staged-gmail@example.com",
+            },
+          },
+        ],
+        syncJobs: [],
+        sources: [
+          {
+            id: "connector-source-gmail-1",
+            connectionId: "connector-gmail-1",
+            kind: "google_gmail_message",
+            label: "First Gmail source",
+            sourceUri: "gmail:message:msg-1",
+            brainSourceId: "brain-source-gmail-1",
+            privacy: {
+              retrievalAccess: "enabled",
+            },
+          },
+          {
+            id: "connector-source-gmail-2",
+            connectionId: "connector-gmail-2",
+            kind: "google_gmail_message",
+            label: "Second Gmail source",
+            sourceUri: "gmail:message:msg-2",
+            brainSourceId: "brain-source-gmail-2",
+            privacy: {
+              retrievalAccess: "enabled",
+            },
+          },
+        ],
+      },
+      status: "ready",
+      error: null,
+      warning: null,
+      connectLink: null,
+      disabled: false,
+      onConnect: async () => undefined,
+      onSyncNow: async () => undefined,
+      onRevoke: async () => undefined,
+      onDeleteSource: async () => undefined,
+      onKeywordSearch: async () => ({
+        sourceOfTruth: "gmail_api_search_via_nango",
+        query: "\"launch partner evidence\"",
+        stored: false,
+        results: [],
+      }),
+      onSemanticSearch: async () => ({
+        sourceOfTruth: "synced_private_gmail_brain_memory",
+        contextLight: false,
+        results: [],
+      }),
+    }),
+  );
+
+  assert.match(markup, /Select one Gmail account before sync, search, revoke, or delete\./);
+  assert.match(markup, /first-staged-gmail@example\.com/);
+  assert.match(markup, /second-staged-gmail@example\.com/);
+  assert.doesNotMatch(markup, /is selected for Google Gmail/);
+  assert.match(buttonMarkupForLabel(markup, "Sync now"), /disabled=""/);
+  assert.match(buttonMarkupForLabel(markup, "Revoke"), /disabled=""/);
+  assert.match(buttonMarkupForLabel(markup, "Delete Gmail source"), /disabled=""/);
+  assert.match(buttonMarkupForLabel(markup, "Search email"), /disabled=""/);
+  assert.match(buttonMarkupForLabel(markup, "Semantic search"), /disabled=""/);
+});
+
 test("GoogleConnectorControl renders Gmail keyword search filters for staging smoke", () => {
   const markup = renderToStaticMarkup(
     createElement(GoogleConnectorControl, {
