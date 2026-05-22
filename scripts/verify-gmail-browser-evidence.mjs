@@ -52,6 +52,7 @@ assertSafeRequiredString(evidence?.projectId, "projectId");
 assertSafeRequiredString(evidence?.sphereId, "sphereId");
 assertValidTimestamp(evidence?.capturedAt, "capturedAt");
 assert(Array.isArray(evidence?.checks), "Browser evidence must include checks.");
+assertBrowserChecks(evidence?.checks, requiredCheckNames);
 assertSafeStagingRunId(evidence, { required: !preOAuthOnly });
 assertNoUnsafeEvidence(evidence);
 assertProofArtifacts(proofArtifacts, requiredCheckNames);
@@ -122,6 +123,37 @@ function assertValidTimestamp(value, field) {
 
   assert(Boolean(text), `Browser evidence must include ${field}.`);
   assert(Number.isFinite(parsed), `Browser evidence ${field} must be a valid timestamp.`);
+}
+
+function assertBrowserChecks(value, requiredNames) {
+  if (!Array.isArray(value)) {
+    return;
+  }
+
+  const required = new Set(requiredNames);
+  const seen = new Set();
+
+  for (const [index, check] of value.entries()) {
+    const isObject = Boolean(check) && typeof check === "object" && !Array.isArray(check);
+
+    assert(isObject, `Browser evidence check ${index + 1} must be an object.`);
+
+    if (!isObject) {
+      continue;
+    }
+
+    const name = typeof check.name === "string" ? check.name.trim() : "";
+
+    assert(Boolean(name), `Browser evidence check ${index + 1} must include a name.`);
+
+    if (!name) {
+      continue;
+    }
+
+    assert(required.has(name), `Browser evidence check ${index + 1} name must match a required browser check.`);
+    assert(!seen.has(name), `Browser evidence must include ${name} only once.`);
+    seen.add(name);
+  }
 }
 
 function assertSafeStagingRunId(value, options) {
