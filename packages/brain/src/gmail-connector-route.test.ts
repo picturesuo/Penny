@@ -966,6 +966,60 @@ test("Gmail semantic search ranks synced email memory without leaking raw scores
   assert.equal(crossUserResponse.status, 409);
 });
 
+test("Gmail semantic search is scoped and cannot target another user's connection", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+      now: "2026-05-22T12:00:00.000Z",
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: gmailProxyAdapter(proxyCalls),
+    },
+  );
+
+  const crossUserResponse = await handleGoogleGmailSemanticSearchRequest(
+    new Request("http://localhost/api/connectors/google/gmail/semantic-search", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-user-id": "user-2",
+        "x-workspace-id": "workspace-1",
+      },
+      body: JSON.stringify({
+        connectionId: "nango-gmail-1",
+        providerConfigKey: "google-gmail",
+        query: "launch partner private email evidence",
+      }),
+    }),
+    { env: configuredEnv, stateStore, brainMemoryService },
+  );
+  const crossUserPayload = (await crossUserResponse.json()) as { error: { code: string; message: string } };
+  const ownerResponse = await handleGoogleGmailSemanticSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/semantic-search", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      query: "launch partner private email evidence",
+      limit: 5,
+    }),
+    { env: configuredEnv, stateStore, brainMemoryService },
+  );
+  const ownerPayload = (await ownerResponse.json()) as { data: { results: Array<{ messageId: string; sourceRef: { sourceUri: string } }> } };
+  const crossUserJson = JSON.stringify(crossUserPayload);
+
+  assert.equal(crossUserResponse.status, 404);
+  assert.equal(crossUserPayload.error.code, "gmail_connection_not_found");
+  assert.doesNotMatch(crossUserJson, /founder@example\.com|nango-gmail-1|gmail:message:msg-1|connector-gmail-connection-1|Launch partner follow-up/);
+  assert.equal(ownerResponse.status, 200);
+  assert.equal(ownerPayload.data.results.some((result) => result.messageId === "msg-1"), true);
+  assert.equal(ownerPayload.data.results.some((result) => result.sourceRef.sourceUri === "gmail:message:msg-1"), true);
+});
+
 test("Gmail semantic search can target one selected Gmail connection", async () => {
   const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
   const firstState = initializeGoogleConnectorConnection({
