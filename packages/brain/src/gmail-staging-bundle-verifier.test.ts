@@ -395,9 +395,16 @@ async function writeBrowserArtifacts(directory: string): Promise<void> {
   const screenshots = join(directory, "screenshots");
 
   await mkdir(screenshots, { recursive: true });
-  await writeFile(join(screenshots, "gmail-pre-oauth.png"), "safe screenshot placeholder\n", "utf8");
-  await writeFile(join(screenshots, "gmail-connected-results.png"), "safe screenshot placeholder\n", "utf8");
-  await writeFile(join(screenshots, "gmail-create-export-post-delete.png"), "safe screenshot placeholder\n", "utf8");
+  await writeFile(join(screenshots, "gmail-pre-oauth.png"), onePixelPng());
+  await writeFile(join(screenshots, "gmail-connected-results.png"), onePixelPng());
+  await writeFile(join(screenshots, "gmail-create-export-post-delete.png"), onePixelPng());
+}
+
+function onePixelPng(): Buffer {
+  return Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+    "base64",
+  );
 }
 
 function runBundleExpectingFailure(args: string[]): string {
