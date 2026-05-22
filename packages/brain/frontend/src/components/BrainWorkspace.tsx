@@ -75,6 +75,7 @@ import {
   syncGoogleGmail,
   type GoogleGmailSearchInput,
   type GoogleGmailSearchResponse,
+  type GoogleGmailSemanticSearchInput,
   type GoogleGmailSemanticSearchResponse,
   type GoogleGmailStatusResponse,
   type GoogleConnectorProviderView,
@@ -2621,8 +2622,8 @@ export function BrainMemoryPanel({
     return (await searchGoogleGmail(input)).data;
   }
 
-  async function handleGmailSemanticSearch(query: string): Promise<GmailSemanticSearchData> {
-    return (await semanticSearchGoogleGmail({ query, limit: 5 })).data;
+  async function handleGmailSemanticSearch(input: GoogleGmailSemanticSearchInput): Promise<GmailSemanticSearchData> {
+    return (await semanticSearchGoogleGmail(input)).data;
   }
 
   return (
@@ -2788,7 +2789,7 @@ export function GoogleConnectorControl({
   onRevoke: (connectionId: string) => Promise<void>;
   onDeleteSource: (sourceId: string) => Promise<void>;
   onKeywordSearch?: ((input: GoogleGmailSearchInput) => Promise<GmailKeywordSearchData>) | undefined;
-  onSemanticSearch?: ((query: string) => Promise<GmailSemanticSearchData>) | undefined;
+  onSemanticSearch?: ((input: GoogleGmailSemanticSearchInput) => Promise<GmailSemanticSearchData>) | undefined;
 }) {
   const visibleSurfaces = provider?.surfaces ?? [];
   const gmail = visibleSurfaces.find((surface) => surface.id === "google_gmail");
@@ -2851,6 +2852,12 @@ export function GoogleConnectorControl({
 
     try {
       const result = await onKeywordSearch({
+        ...(connection
+          ? {
+              connectionId: connection.credential.connectionId,
+              providerConfigKey: connection.credential.providerConfigKey,
+            }
+          : {}),
         ...(text ? { text } : {}),
         ...(keywordFilters.from.trim() ? { from: keywordFilters.from.trim() } : {}),
         ...(keywordFilters.to.trim() ? { to: keywordFilters.to.trim() } : {}),
@@ -2881,7 +2888,16 @@ export function GoogleConnectorControl({
     setSemanticResults(null);
 
     try {
-      const result = await onSemanticSearch(query);
+      const result = await onSemanticSearch({
+        ...(connection
+          ? {
+              connectionId: connection.credential.connectionId,
+              providerConfigKey: connection.credential.providerConfigKey,
+            }
+          : {}),
+        query,
+        limit: 5,
+      });
 
       setSemanticResults(result);
       setGmailSearchStatus(result.contextLight ? "Connect or sync Gmail first." : `${result.results.length} semantic result${result.results.length === 1 ? "" : "s"}`);

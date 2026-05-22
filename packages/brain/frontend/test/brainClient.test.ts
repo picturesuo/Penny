@@ -1005,8 +1005,18 @@ test("frontend brain client uses Gmail connector status, sync, search, and revok
     const status = await fetchGoogleGmailStatus();
     const connect = await createGoogleGmailConnectSession();
     const synced = await syncGoogleGmail({ connectionId: "connector-google-gmail-1", maxResults: 10 });
-    const searched = await searchGoogleGmail({ text: "launch partners", maxResults: 5 });
-    const semantic = await semanticSearchGoogleGmail({ query: "launch partner evidence", limit: 5 });
+    const searched = await searchGoogleGmail({
+      connectionId: "connector-google-gmail-1",
+      providerConfigKey: "google-gmail",
+      text: "launch partners",
+      maxResults: 5,
+    });
+    const semantic = await semanticSearchGoogleGmail({
+      connectionId: "connector-google-gmail-1",
+      providerConfigKey: "google-gmail",
+      query: "launch partner evidence",
+      limit: 5,
+    });
     const revoked = await revokeGoogleGmail({ connectionId: "connector-google-gmail-1", providerConfigKey: "google-gmail" });
 
     assert.equal(status.data.configured, true);
@@ -1029,9 +1039,19 @@ test("frontend brain client uses Gmail connector status, sync, search, and revok
     assert.equal(calls[2]?.url, "/api/connectors/google/gmail/sync");
     assert.deepEqual(calls[2]?.body, { connectionId: "connector-google-gmail-1", maxResults: 10 });
     assert.equal(calls[3]?.url, "/api/connectors/google/gmail/search");
-    assert.deepEqual(calls[3]?.body, { text: "launch partners", maxResults: 5 });
+    assert.deepEqual(calls[3]?.body, {
+      connectionId: "connector-google-gmail-1",
+      providerConfigKey: "google-gmail",
+      text: "launch partners",
+      maxResults: 5,
+    });
     assert.equal(calls[4]?.url, "/api/connectors/google/gmail/semantic-search");
-    assert.deepEqual(calls[4]?.body, { query: "launch partner evidence", limit: 5 });
+    assert.deepEqual(calls[4]?.body, {
+      connectionId: "connector-google-gmail-1",
+      providerConfigKey: "google-gmail",
+      query: "launch partner evidence",
+      limit: 5,
+    });
     assert.equal(calls[5]?.url, "/api/connectors/google/gmail/revoke");
     assert.deepEqual(calls[5]?.body, { connectionId: "connector-google-gmail-1", providerConfigKey: "google-gmail" });
   } finally {

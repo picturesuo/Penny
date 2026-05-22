@@ -454,6 +454,8 @@ export interface GoogleGmailSyncResponse {
 }
 
 export interface GoogleGmailSearchInput {
+  connectionId?: string;
+  providerConfigKey?: string;
   text?: string;
   from?: string;
   to?: string;
@@ -489,6 +491,13 @@ export interface GoogleGmailSearchResponse {
       };
     }>;
   };
+}
+
+export interface GoogleGmailSemanticSearchInput {
+  connectionId?: string;
+  providerConfigKey?: string;
+  query: string;
+  limit?: number;
 }
 
 export interface GoogleGmailSemanticSearchResponse {
@@ -616,10 +625,7 @@ export async function searchGoogleGmail(input: GoogleGmailSearchInput): Promise<
   return payload as GoogleGmailSearchResponse;
 }
 
-export async function semanticSearchGoogleGmail(input: {
-  query: string;
-  limit?: number;
-}): Promise<GoogleGmailSemanticSearchResponse> {
+export async function semanticSearchGoogleGmail(input: GoogleGmailSemanticSearchInput): Promise<GoogleGmailSemanticSearchResponse> {
   const response = await fetch("/api/connectors/google/gmail/semantic-search", {
     method: "POST",
     headers: requestHeaders(),
