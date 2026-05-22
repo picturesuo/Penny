@@ -303,11 +303,18 @@ try {
     resultCount: semantic.data.results.length,
     contextLight: semantic.data.contextLight,
     resultShapeVerified: semanticResultShapeVerified,
+    subjectPresent: semantic.data.results.every(hasSemanticSubject),
+    senderPresent: semantic.data.results.every(hasSemanticSender),
+    dateFieldPresent: semantic.data.results.every(hasSemanticDateField),
+    messageRefPresent: semantic.data.results.every(hasSemanticMessageRef),
+    threadRefPresent: semantic.data.results.every(hasSemanticThreadRef),
+    snippetPresent: semantic.data.results.every(hasSemanticSnippet),
     sourceRefPresent: semantic.data.results.every(hasSemanticSourceRef),
     memoryRefPresent: semantic.data.results.every(hasSemanticMemoryRef),
     scoreReasonPresent: semantic.data.results.every(hasSemanticScoreReason),
     groundingLabels: [...new Set(semantic.data.results.map((result) => result.grounding))].sort(),
     rawScoreHidden: semanticRawScoreHidden,
+    rawBodyAbsent: semantic.data.results.every(hasNoRawEmailFields),
     deleteTargetMatchedSemanticResult: Boolean(semanticMatchedSource),
     deleteTargetMemoryIdCount: deletedSemanticMemoryIds.size,
   });
@@ -641,11 +648,39 @@ function hasSemanticResultShape(result) {
 }
 
 function hasSemanticSourceRef(result) {
-  return Boolean(result?.sourceRef?.surface === "google_gmail" && typeof result.sourceRef?.sourceUri === "string");
+  return Boolean(
+    result?.sourceRef?.surface === "google_gmail" &&
+      typeof result.sourceRef?.sourceUri === "string" &&
+      result.sourceRef.sourceUri.length > 0,
+  );
 }
 
 function hasSemanticMemoryRef(result) {
   return typeof result?.memoryRef?.id === "string" && result.memoryRef.id.length > 0;
+}
+
+function hasSemanticSubject(result) {
+  return typeof result?.subject === "string" && result.subject.length > 0;
+}
+
+function hasSemanticSender(result) {
+  return typeof result?.sender === "string" && result.sender.length > 0;
+}
+
+function hasSemanticDateField(result) {
+  return Object.hasOwn(result ?? {}, "date") && (result.date === null || typeof result.date === "string");
+}
+
+function hasSemanticMessageRef(result) {
+  return typeof result?.messageId === "string" && result.messageId.length > 0;
+}
+
+function hasSemanticThreadRef(result) {
+  return typeof result?.threadId === "string" && result.threadId.length > 0;
+}
+
+function hasSemanticSnippet(result) {
+  return typeof result?.snippet === "string" && result.snippet.length > 0;
 }
 
 function hasSemanticScoreReason(result) {
