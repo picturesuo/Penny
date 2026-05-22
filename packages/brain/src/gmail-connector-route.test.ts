@@ -461,6 +461,77 @@ test("Gmail sync reports partial message detail failures without failing the who
   assert.equal(payload.data.state.sources.some((source) => source.sourceUri === "gmail:message:msg-2"), false);
 });
 
+test("Gmail sync reports oversized messages without importing them into Brain memory", async () => {
+  const { stateStore, brainMemoryService, proxyCalls } = gmailFixture();
+  const response = await handleGoogleGmailSyncRequest(
+    gmailRequest("/api/connectors/google/gmail/sync", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      maxResults: 1,
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: fakeAdapter({
+        async proxy(input) {
+          proxyCalls.push(input);
+
+          if (input.path === "users/me/profile") {
+            return gmailProxyOk({ emailAddress: "founder@example.com", historyId: "history-oversized" });
+          }
+
+          if (input.path === "users/me/messages") {
+            return gmailProxyOk({ messages: [{ id: "msg-huge", threadId: "thread-huge" }] });
+          }
+
+          if (input.path === "users/me/messages/msg-huge") {
+            return gmailProxyOk({
+              ...gmailMessageVariant({
+                id: "msg-huge",
+                threadId: "thread-huge",
+                historyId: "history-huge",
+                subject: "Oversized Gmail evidence",
+                from: "Huge <huge@example.com>",
+                snippet: "This message is too large for Penny Gmail staging sync.",
+                body: "This message is too large for Penny Gmail staging sync.",
+              }),
+              sizeEstimate: 2_000_001,
+            });
+          }
+
+          throw new Error(`Unexpected Gmail proxy path ${input.path}.`);
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as {
+    data: {
+      messageCount: number;
+      partialFailureCount: number;
+      partialFailures: Array<{ messageId: string; threadId: string | null; stage: string; retryable: boolean; status: number | null; errorCode: string; message: string }>;
+      state: { sources: Array<{ sourceUri: string }> };
+    };
+  };
+  const profile = await brainMemoryService.getProfile(gmailRequest("/api/brain/memory/profile", {}, "GET"));
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.data.messageCount, 0);
+  assert.equal(payload.data.partialFailureCount, 1);
+  assert.deepEqual(payload.data.partialFailures[0], {
+    messageId: "msg-huge",
+    threadId: "thread-huge",
+    stage: "message_oversized",
+    retryable: false,
+    status: null,
+    errorCode: "gmail_message_oversized",
+    message: "Gmail message sizeEstimate 2000001 exceeded the 2000000 byte sync limit.",
+  });
+  assert.equal(payload.data.state.sources.some((source) => source.sourceUri === "gmail:message:msg-huge"), false);
+  assert.equal(profile.sources.some((source) => source.sourceUri === "gmail:message:msg-huge"), false);
+  assert.equal(profile.stats.sourceCount, 0);
+});
+
 test("Gmail sync retries retryable Gmail proxy failures before importing", async () => {
   const { stateStore, brainMemoryService } = gmailFixture();
   let detailAttempts = 0;
