@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const envFile = process.env.GMAIL_READINESS_ENV_FILE?.trim() ?? "";
@@ -32,6 +32,7 @@ const sphereId = env(
   "GMAIL_READINESS_SPHERE_ID",
   env("PENNY_AUTH_SPHERE_ID", env("PENNY_SPHERE_ID", "gmail-readiness-sphere")),
 );
+const evidenceFile = env("GMAIL_READINESS_EVIDENCE_FILE", "");
 const checks = [];
 
 try {
@@ -100,44 +101,38 @@ try {
     });
   }
 
-  console.log(
-    JSON.stringify(
-      {
-        ok: true,
-        baseUrl,
-        userId,
-        workspaceId,
-        projectId,
-        sphereId,
-        requireStaging,
-        connectPreflight,
-        checkedAt: new Date().toISOString(),
-        checks,
-      },
-      null,
-      2,
-    ),
-  );
+  const payload = {
+    ok: true,
+    baseUrl,
+    userId,
+    workspaceId,
+    projectId,
+    sphereId,
+    requireStaging,
+    connectPreflight,
+    checkedAt: new Date().toISOString(),
+    checks,
+  };
+
+  writeEvidence(payload);
+  console.log(JSON.stringify(payload, null, 2));
 } catch (error) {
-  console.error(
-    JSON.stringify(
-      {
-        ok: false,
-        baseUrl,
-        userId,
-        workspaceId,
-        projectId,
-        sphereId,
-        requireStaging,
-        connectPreflight,
-        failedAt: new Date().toISOString(),
-        error: error instanceof Error ? error.message : String(error),
-        checks,
-      },
-      null,
-      2,
-    ),
-  );
+  const payload = {
+    ok: false,
+    baseUrl,
+    userId,
+    workspaceId,
+    projectId,
+    sphereId,
+    requireStaging,
+    connectPreflight,
+    failedAt: new Date().toISOString(),
+    error: error instanceof Error ? error.message : String(error),
+    checks,
+  };
+
+  writeEvidence(payload);
+  console.error(JSON.stringify(payload, null, 2));
   process.exitCode = 1;
 }
 
@@ -375,6 +370,14 @@ function loadEnvFile(path) {
 
     process.env[key] = unquoteEnvValue(rawValue.trim());
   }
+}
+
+function writeEvidence(payload) {
+  if (!evidenceFile) {
+    return;
+  }
+
+  writeFileSync(resolve(evidenceFile), `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
 function unquoteEnvValue(value) {
