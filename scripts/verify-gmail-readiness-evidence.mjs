@@ -254,33 +254,35 @@ function assertGmailReadonlyOnly(scopes, label) {
 
 function assertNoUnsafeEvidence(value) {
   const unsafeKeys = new Set([
-    "accessToken",
+    "accesstoken",
     "body",
-    "connectLink",
-    "credentialRef",
-    "databaseUrl",
-    "encryptedRefreshToken",
-    "encryptedToken",
+    "connectlink",
+    "credentialref",
+    "databaseurl",
+    "encryptedrefreshtoken",
+    "encryptedtoken",
     "html",
     "metadata",
-    "nangoPublicKey",
-    "nangoSecretKey",
+    "nangopublickey",
+    "nangosecretkey",
     "payload",
-    "plainTextBody",
+    "plaintextbody",
     "provenance",
     "raw",
-    "rawBody",
-    "refreshToken",
-    "sessionSecret",
+    "rawbody",
+    "refreshtoken",
+    "sessionsecret",
     "token",
   ]);
-  const allowedKeys = new Set(["connectLinkHost", "connectLinkPresent", "nangoPublicPresent", "nangoSecretPresent", "sessionSecretPresent", "tokenPresent"]);
+  const allowedKeys = new Set(["connectlinkhost", "connectlinkpresent", "nangopublicpresent", "nangosecretpresent", "sessionsecretpresent", "tokenpresent"]);
   const unsafeValuePattern = /(https:\/\/connect\.[^\s"]+|session-token|gmail-session-token|ya29\.|refresh_token|BEGIN PRIVATE KEY)/i;
 
   walk(value, "$", (item, path) => {
     if (item && typeof item === "object" && !Array.isArray(item)) {
       for (const key of Object.keys(item)) {
-        if (unsafeKeys.has(key) && !allowedKeys.has(key)) {
+        const normalizedKey = normalizeKey(key);
+
+        if (unsafeKeys.has(normalizedKey) && !allowedKeys.has(normalizedKey)) {
           errors.push(`${path}.${key} must not be present in readiness evidence.`);
         }
       }
@@ -290,6 +292,10 @@ function assertNoUnsafeEvidence(value) {
       errors.push(`${path} looks like it contains a raw connect/session/token value.`);
     }
   });
+}
+
+function normalizeKey(value) {
+  return String(value).replace(/[-_\s]/g, "").toLowerCase();
 }
 
 function walk(value, path, visitor) {
