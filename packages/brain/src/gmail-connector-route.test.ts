@@ -400,6 +400,32 @@ test("Gmail keyword search is scoped and cannot use another user's connection", 
   assert.equal(payload.error.code, "gmail_connection_not_found");
 });
 
+test("Gmail keyword search refuses connections missing gmail.readonly before proxy access", async () => {
+  const { stateStore, brainMemoryService } = gmailFixture({ scopes: ["https://www.googleapis.com/auth/drive.file"] });
+  const response = await handleGoogleGmailSearchRequest(
+    gmailRequest("/api/connectors/google/gmail/search", {
+      connectionId: "nango-gmail-1",
+      providerConfigKey: "google-gmail",
+      text: "launch partners",
+    }),
+    {
+      env: configuredEnv,
+      stateStore,
+      brainMemoryService,
+      adapter: fakeAdapter({
+        async proxy() {
+          throw new Error("Gmail search must not reach the proxy without gmail.readonly.");
+        },
+      }),
+    },
+  );
+  const payload = (await response.json()) as { error: { code: string; message: string } };
+
+  assert.equal(response.status, 409);
+  assert.equal(payload.error.code, "gmail_scope_invalid");
+  assert.equal(payload.error.message, "Gmail connection is missing gmail.readonly scope.");
+});
+
 test("Gmail semantic search asks the user to sync before memory exists", async () => {
   const { stateStore, brainMemoryService } = gmailFixture();
   const response = await handleGoogleGmailSemanticSearchRequest(
@@ -666,7 +692,7 @@ test("parseGmailMessage keeps attachment metadata only and caps body size", () =
   assert.doesNotMatch(parsed.plainTextBody, /attachment-1/);
 });
 
-function gmailFixture() {
+function gmailFixture(input: { scopes?: string[] } = {}) {
   const scope = { userId: "user-1", workspaceId: "workspace-1", projectId: null, sphereId: null };
   const state = initializeGoogleConnectorConnection({
     scope,
@@ -680,7 +706,7 @@ function gmailFixture() {
       endUserId: "user-1",
     },
     surfaces: ["google_gmail"],
-    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    scopes: input.scopes ?? ["https://www.googleapis.com/auth/gmail.readonly"],
     now: "2026-05-22T11:00:00.000Z",
   });
 
