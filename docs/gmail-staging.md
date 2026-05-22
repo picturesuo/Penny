@@ -430,8 +430,8 @@ The default smoke verifies:
 - Repeating the same scoped sync returns cursor/history evidence again, does not change the Gmail source count, and does not create duplicate source refs.
 - Keyword search uses the Gmail API, proves safe result shape with message/thread/source refs and snippets, does not store results without `sync=true`, and explicitly stores safely with `sync=true`.
 - Semantic search returns only synced Gmail memory, hides raw numeric scores, and records safe shape evidence for subjects, senders, date fields, message/thread/source refs, Brain memory refs, snippets, grounded/inferred labels, score reasons, and absence of raw body fields.
-- Create uses the synced Gmail evidence through memory refs and source refs, returns both Personal and Critical options for the refinement/export check, and both option texts include the expected staged Gmail evidence phrase.
-- Prompt export includes the Gmail-derived context only after Create uses it and records the export privacy-safety facts.
+- Create uses the synced Gmail evidence through memory refs and source refs, returns both Personal and Critical options for the refinement/export check, both option texts include the expected staged Gmail evidence phrase, and the selected-option refinement returns a judgment event plus artifact/verification that still contain the real Gmail evidence.
+- Prompt export includes the Gmail-derived context only after the selected Create refinement uses it and records the export privacy-safety facts.
 
 The default smoke does not revoke or delete, because those are destructive for the staged connection. To run the full destructive end of the staging proof:
 
@@ -458,7 +458,7 @@ Verify destructive evidence with:
 node scripts/verify-gmail-smoke-evidence.mjs tmp/gmail-smoke-evidence-full.json --destructive --min-messages=1
 ```
 
-The verifier fails if required smoke steps are missing, if repeated sync/source counts are unstable, if keyword search stores without `sync=true`, if keyword result-shape facts are missing, if semantic result-shape facts are missing, if semantic search exposes raw scores, if Create/export do not include the expected Gmail evidence, if Personal or Critical option text does not include the expected staged Gmail evidence phrase, if export privacy-safety facts are missing, if revoke/delete postconditions are missing for destructive runs, or if the evidence JSON contains unsafe raw fields such as tokens, credential refs, metadata/provenance, raw bodies, or raw connect links. Destructive verification also requires `semanticSearch.deleteTargetMatchedSemanticResult=true`, at least one tracked delete-target Gmail memory id, and source/Brain-source id presence in `deleteSource` evidence so delete proof is tied to the synced Gmail memory that Create and semantic search used.
+The verifier fails if required smoke steps are missing, if repeated sync/source counts are unstable, if keyword search stores without `sync=true`, if keyword result-shape facts are missing, if semantic result-shape facts are missing, if semantic search exposes raw scores, if Create/refinement/export do not include the expected Gmail evidence, if Personal or Critical option text does not include the expected staged Gmail evidence phrase, if the selected-option refinement is missing its judgment event or selected-option match, if export privacy-safety facts are missing, if revoke/delete postconditions are missing for destructive runs, or if the evidence JSON contains unsafe raw fields such as tokens, credential refs, metadata/provenance, raw bodies, or raw connect links. Destructive verification also requires `semanticSearch.deleteTargetMatchedSemanticResult=true`, at least one tracked delete-target Gmail memory id, and source/Brain-source id presence in `deleteSource` evidence so delete proof is tied to the synced Gmail memory that Create and semantic search used.
 
 After verifying individual files, verify the full staging evidence bundle so readiness and smoke files are from the same API and user/workspace/project/sphere scope:
 
@@ -523,6 +523,6 @@ Before marking Gmail staging ready, attach or record:
 - Sync and repeated-sync responses showing imported count, cursor/historyId, stable source counts, and no duplicate source refs.
 - Keyword search responses proving Gmail `q` search, default no-store behavior, and explicit `sync=true` storage.
 - Semantic search response proving synced Penny memory retrieval, safe result shape, message/thread/source refs, Brain memory refs, snippets, grounded/inferred labels, score reasons, and no raw numeric score in normal UI.
-- Create evidence showing real Gmail memory refs and source refs plus Personal and Critical option text with the expected staged Gmail evidence phrase, plus an export prompt showing Gmail evidence only when selected and used.
+- Create evidence showing real Gmail memory refs and source refs plus Personal and Critical option text with the expected staged Gmail evidence phrase, selected-option refinement evidence with matching option ids and artifact/verification output, plus an export prompt showing Gmail evidence only when selected and used.
 - Revoke response and post-revoke sync, keyword search, and semantic search failure.
 - Source delete result and post-delete Brain profile, `/api/brain/retrieve`, semantic search, and Create retrieval absence.
