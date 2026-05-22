@@ -1066,6 +1066,9 @@ function fakeAdapter(overrides: Partial<NangoAdapter>): NangoAdapter {
     async refreshConnection() {
       throw new Error("Unexpected refreshConnection call.");
     },
+    async proxy() {
+      throw new Error("Unexpected proxy call.");
+    },
     ...overrides,
   };
 }
